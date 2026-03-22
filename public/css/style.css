@@ -82,8 +82,10 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .leaflet-popup-content-wrapper{background:rgba(17,24,39,.96)!important;color:var(--ua-text)!important;border:1px solid var(--ua-border)!important;border-radius:8px!important;box-shadow:0 8px 32px rgba(0,0,0,.6)!important;backdrop-filter:blur(12px)!important;font-family:var(--mono)!important}
 .leaflet-popup-tip{background:rgba(17,24,39,.96)!important}
 .leaflet-popup-content{margin:0!important;font-size:11px!important;min-width:280px!important}
+.leaflet-popup-close-button{top:4px!important;right:4px!important;font-size:18px!important;color:var(--ua-muted)!important;width:44px!important;height:44px!important;display:flex!important;align-items:center;justify-content:center;z-index:10}
+.leaflet-popup-close-button:hover{color:var(--ua-text)!important}
 .popup-card{padding:12px}
-.popup-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--ua-border)}
+.popup-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--ua-border);padding-right:20px}
 .popup-callsign{font-size:18px;font-weight:700;color:var(--ua-accent)}
 .popup-route{font-size:13px;color:#fff;margin-top:2px}
 .popup-route-est{font-size:9px;color:var(--ua-muted);font-style:italic}
@@ -130,7 +132,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .ac-seat-bar{display:flex;height:18px;border-radius:4px;overflow:hidden;margin-top:4px}
 .ac-seat-bar>div{display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;min-width:20px}
 .ac-modal-footer{padding:10px 20px;border-top:1px solid var(--ua-border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex-shrink:0}
-.ac-action-btn{background:rgba(0,93,170,.15);border:1px solid rgba(0,93,170,.3);color:var(--ua-accent);padding:4px 10px;border-radius:4px;font-size:10px;font-family:var(--font-mono);cursor:pointer;text-decoration:none;transition:background .2s}
+.ac-action-btn{background:rgba(0,93,170,.15);border:1px solid rgba(0,93,170,.3);color:var(--ua-accent);padding:4px 10px;border-radius:4px;font-size:10px;font-family:var(--font-mono);cursor:pointer;text-decoration:none;transition:background .2s;display:inline-flex;align-items:center;gap:4px}
 .ac-action-btn:hover{background:rgba(0,93,170,.25)}
 .delay-explain-text{font-size:12px;line-height:1.8;color:var(--ua-text);padding:12px 14px;background:rgba(0,93,170,.06);border:1px solid rgba(0,93,170,.12);border-radius:6px;margin-bottom:12px}
 .delay-explain-factors{padding-top:10px;margin-top:10px}
@@ -155,9 +157,9 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .popup-times .time-delta.ontime{color:var(--ua-muted)}
 .popup-times-loading{font-size:10px;color:var(--ua-muted);text-align:center;padding:6px;animation:pulse 1.5s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.popup-links{display:flex;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--ua-border)}
-.popup-links a{color:var(--ua-accent);text-decoration:none;font-size:10px;opacity:.7;transition:opacity .2s}
-.popup-links a:hover{opacity:1}
+.popup-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--ua-border);align-items:center}
+.popup-links a{color:var(--ua-accent);text-decoration:none;font-size:10px;padding:3px 8px;background:rgba(0,93,170,.1);border:1px solid rgba(0,93,170,.2);border-radius:3px;transition:background .15s,border-color .15s;display:inline-flex;align-items:center;gap:4px}
+.popup-links a:hover{background:rgba(0,93,170,.2);border-color:rgba(0,93,170,.4)}
 .hub-tooltip{background:rgba(10,14,20,.85)!important;border:1px solid var(--ua-blue)!important;color:var(--ua-accent)!important;font-size:10px!important;font-weight:700!important;padding:2px 6px!important;border-radius:3px!important;font-family:var(--mono)!important}
 
 /* ═══ MY FLIGHTS ═══ */
@@ -678,12 +680,12 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .faa-delay-context{font-size:9px;color:#f59e0b;font-style:italic;margin-top:2px;opacity:.85}
 
 /* Flight Watch */
-.watch-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;font-family:var(--font-ui);transition:border-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1),background-color .15s cubic-bezier(.4,0,.2,1)}
-.watch-btn:hover{border-color:var(--ua-accent);color:var(--ua-accent)}
-.watch-btn.watching{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.1)}
-.share-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:10px;font-family:var(--font-ui);transition:border-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1)}
-.share-btn:hover{border-color:var(--ua-accent);color:var(--ua-accent)}
-.share-btn.copied{border-color:#22c55e;color:#22c55e}
+.watch-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 8px;border-radius:3px;cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:border-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1),background-color .15s cubic-bezier(.4,0,.2,1);display:inline-flex;align-items:center;gap:4px}
+.watch-btn:hover{border-color:var(--ua-accent);color:var(--ua-accent);background:rgba(0,93,170,.06)}
+.watch-btn.watching{border-color:var(--ua-blue);color:var(--ua-accent);background:var(--ua-blue-soft)}
+.share-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 8px;border-radius:3px;cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:border-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1),background-color .15s cubic-bezier(.4,0,.2,1);display:inline-flex;align-items:center;gap:4px}
+.share-btn:hover{border-color:var(--ua-accent);color:var(--ua-accent);background:rgba(0,93,170,.06)}
+.share-btn.copied{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.06)}
 #push-prompt{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:8px;padding:12px 16px;font-size:11px;color:var(--ua-text);z-index:10001;display:none;align-items:center;gap:10px;backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:400px;font-family:var(--font-ui)}
 #push-prompt.show{display:flex}
 #push-prompt button{padding:4px 10px;border-radius:3px;cursor:pointer;font-family:var(--font-ui);font-size:10px;border:1px solid}
