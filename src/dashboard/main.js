@@ -3,6 +3,14 @@ import { normalizeMetarPayload } from '../lib/metar.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, WIFI_DISPLAY, sortFleetData, filterFleetData, parseFleetDeepLink, TAB_MAP, VALID_FLEET_VIEWS } from '../lib/fleet-utils.js';
 
 // ═══════════════════════════════════════════════
+// SVG ICON CONSTANTS — clean icons for buttons
+// ═══════════════════════════════════════════════
+const ICO_WATCH = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const ICO_WATCHING = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3" fill="var(--ua-dark)"/></svg>';
+const ICO_SHARE = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>';
+const ICO_EXTLINK = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+
+// ═══════════════════════════════════════════════
 // HUB LIST — CANONICAL REFERENCE
 // All 9 United hubs: ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, GUM
 // When adding/removing a hub, update ALL of these locations:
@@ -1240,16 +1248,16 @@ function showFlightPopup(f, marker) {
 
   html += `<div class="popup-links">`;
   const fltLink = flightNum.replace(/^UA/, '');
-  if (fltLink) html += `<a href="https://flightaware.com/live/flight/UAL${encodeURIComponent(fltLink)}" target="_blank" rel="noopener noreferrer">FlightAware ↗</a>`;
+  if (fltLink) html += `<a href="https://flightaware.com/live/flight/UAL${encodeURIComponent(fltLink)}" target="_blank" rel="noopener noreferrer">FlightAware ${ICO_EXTLINK}</a>`;
   const regLink = aircraft?.r || f.reg;
-  if (regLink) html += `<a href="https://www.planespotters.net/search?q=${encodeURIComponent(regLink)}" target="_blank" rel="noopener noreferrer">Planespotters ↗</a>`;
-  html += `<a href="https://globe.adsbexchange.com/?icao=${encodeURIComponent(f.icao24)}" target="_blank" rel="noopener noreferrer">ADS-B ↗</a>`;
+  if (regLink) html += `<a href="https://www.planespotters.net/search?q=${encodeURIComponent(regLink)}" target="_blank" rel="noopener noreferrer">Planespotters ${ICO_EXTLINK}</a>`;
+  html += `<a href="https://globe.adsbexchange.com/?icao=${encodeURIComponent(f.icao24)}" target="_blank" rel="noopener noreferrer">ADS-B ${ICO_EXTLINK}</a>`;
   // Watch button in popup
   const popupFlt = displayFlight;
   const popupRoute = (f.origin||'?') + '→' + (f.dest||'?');
   const popupWatched = isFlightWatched(popupFlt);
-  html += `<button class="watch-btn${popupWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(popupFlt)}" data-route="${escapeHtml(popupRoute)}" data-status="airborne" aria-label="${popupWatched ? 'Unwatch flight' : 'Watch flight'}" style="margin-left:auto">${popupWatched ? '👁️ Watching' : '👁 Watch'}</button>`;
-  html += `<button class="share-btn" data-action="share-flight" data-flight="${escapeHtml(popupFlt)}" aria-label="Share flight link" title="Copy shareable link">📤 Share</button>`;
+  html += `<button class="watch-btn${popupWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(popupFlt)}" data-route="${escapeHtml(popupRoute)}" data-status="airborne" aria-label="${popupWatched ? 'Unwatch flight' : 'Watch flight'}" style="margin-left:auto">${popupWatched ? ICO_WATCHING + ' Watching' : ICO_WATCH + ' Watch'}</button>`;
+  html += `<button class="share-btn" data-action="share-flight" data-flight="${escapeHtml(popupFlt)}" aria-label="Share flight link" title="Copy shareable link">${ICO_SHARE} Share</button>`;
   html += `</div></div>`;
 
   if (marker.getPopup()) marker.unbindPopup();
@@ -2607,7 +2615,8 @@ async function initWeatherTab() {
 
   // Initialize radar map IMMEDIATELY — don't wait for data fetches
   const basemapTileOptions = getBasemapTileOptions();
-  const radarMap = L.map('radar-map', {center:[39,-98],zoom:4,zoomControl:true,attributionControl:false});
+  const radarMap = L.map('radar-map', {center:[39,-97],zoom:3,zoomControl:false,attributionControl:false});
+  L.control.zoom({ position: 'bottomleft' }).addTo(radarMap);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', basemapTileOptions).addTo(radarMap);
   L.tileLayer('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png',{opacity:0.6}).addTo(radarMap);
   setTimeout(() => radarMap.invalidateSize(), 200);
@@ -3763,7 +3772,7 @@ function renderScheduleTable() {
     const origCode = fl.airport?.origin?.code?.iata || '?';
     const destCode = fl.airport?.destination?.code?.iata || '?';
     const watchRoute = `${origCode}→${destCode}`;
-    const watchBtn = ident !== '—' ? `<button class="watch-btn${isWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(watchRoute)}" data-status="${escapeHtml(status.text)}" data-stop-prop="1" aria-label="${isWatched ? 'Unwatch flight' : 'Watch flight'}" title="${isWatched ? 'Unwatch' : 'Watch'} this flight">${isWatched ? '👁️' : '👁'}</button>` : '';
+    const watchBtn = ident !== '—' ? `<button class="watch-btn${isWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(watchRoute)}" data-status="${escapeHtml(status.text)}" data-stop-prop="1" aria-label="${isWatched ? 'Unwatch flight' : 'Watch flight'}" title="${isWatched ? 'Unwatch' : 'Watch'} this flight">${isWatched ? ICO_WATCHING : ICO_WATCH}</button>` : '';
 
     // Delay risk scoring
     const dRisk = computeDelayRiskForScheduleFlight(fl, hub);
@@ -4534,7 +4543,7 @@ function renderWatchPanel() {
   const watched = getWatchedFlights();
   const list = document.getElementById('watch-panel-list');
   if (watched.length === 0) {
-    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ua-muted);font-size:10px">No watched flights<br>Click 👁️ on any flight to watch it</div>';
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ua-muted);font-size:10px">No watched flights<br>Click the watch icon on any flight to track it</div>';
     return;
   }
   list.innerHTML = watched.map(w => `<div class="watch-flight-item">
@@ -5451,10 +5460,12 @@ document.addEventListener('click', function(e) {
       const shareUrl = new URL(window.location);
       shareUrl.searchParams.set('flight', flightId);
       shareUrl.hash = '';
+      // ICO_SHARE is a hardcoded SVG constant — safe for innerHTML
+      const shareResetHtml = ICO_SHARE + ' Share';
       navigator.clipboard.writeText(shareUrl.toString()).then(() => {
         actionEl.classList.add('copied');
-        actionEl.textContent = '✓ Copied!';
-        setTimeout(() => { actionEl.classList.remove('copied'); actionEl.textContent = '📤 Share'; }, 2000);
+        actionEl.textContent = '\u2713 Copied!';
+        setTimeout(() => { actionEl.classList.remove('copied'); actionEl.innerHTML = shareResetHtml; }, 2000);
       }).catch(() => {
         // Fallback for older browsers
         const ta = document.createElement('textarea');
@@ -5464,8 +5475,8 @@ document.addEventListener('click', function(e) {
         document.execCommand('copy');
         document.body.removeChild(ta);
         actionEl.classList.add('copied');
-        actionEl.textContent = '✓ Copied!';
-        setTimeout(() => { actionEl.classList.remove('copied'); actionEl.textContent = '📤 Share'; }, 2000);
+        actionEl.textContent = '\u2713 Copied!';
+        setTimeout(() => { actionEl.classList.remove('copied'); actionEl.innerHTML = shareResetHtml; }, 2000);
       });
       break;
     }
@@ -5600,9 +5611,11 @@ document.addEventListener('click', function(e) {
       if (shareReg) {
         const shareUrl = new URL(window.location);
         shareUrl.searchParams.set('aircraft', shareReg);
+        // ICO_SHARE is a hardcoded SVG constant — safe for innerHTML
+        const acShareResetHtml = ICO_SHARE + ' Share';
         navigator.clipboard.writeText(shareUrl.toString()).then(function() {
-          actionEl.textContent = '✓ Copied!';
-          setTimeout(function() { actionEl.textContent = '📤 Share'; }, 2000);
+          actionEl.textContent = '\u2713 Copied!';
+          setTimeout(function() { actionEl.innerHTML = acShareResetHtml; }, 2000);
         }).catch(function() {
           const ta = document.createElement('textarea');
           ta.value = shareUrl.toString();
@@ -5610,8 +5623,8 @@ document.addEventListener('click', function(e) {
           ta.select();
           document.execCommand('copy');
           document.body.removeChild(ta);
-          actionEl.textContent = '✓ Copied!';
-          setTimeout(function() { actionEl.textContent = '📤 Share'; }, 2000);
+          actionEl.textContent = '\u2713 Copied!';
+          setTimeout(function() { actionEl.innerHTML = acShareResetHtml; }, 2000);
         });
       }
       break;
@@ -6220,7 +6233,7 @@ function showAircraftDetail(reg) {
       '<div style="text-align:center;padding:20px;color:var(--ua-muted);font-size:11px">' +
       'This aircraft is not in the United mainline fleet database.<br>It may be a United Express (regional) aircraft.</div>' +
       '</div><div class="ac-modal-footer">' +
-      '<a class="ac-action-btn" href="https://www.planespotters.net/search?q=' + encodeURIComponent(reg) + '" target="_blank" rel="noopener noreferrer">Planespotters ↗</a>' +
+      '<a class="ac-action-btn" href="https://www.planespotters.net/search?q=' + encodeURIComponent(reg) + '" target="_blank" rel="noopener noreferrer">Planespotters ' + ICO_EXTLINK + '</a>' +
       '</div></div>';
     return;
   }
@@ -6340,11 +6353,11 @@ function buildAircraftDetailHTML(ac, reg) {
     var watchFlt = liveFlight.flightIATA || liveFlight.callsign || '';
     var watchRoute = (liveFlight.origin || '?') + '→' + (liveFlight.dest || '?');
     var watched = watchFlt ? isFlightWatched(watchFlt) : false;
-    html += '<button class="ac-action-btn watch-btn' + (watched ? ' watching' : '') + '" data-action="toggle-watch-flight" data-flight="' + escapeHtml(watchFlt) + '" data-route="' + escapeHtml(watchRoute) + '" data-status="airborne">' + (watched ? '👁️ Watching' : '👁 Watch') + '</button>';
+    html += '<button class="ac-action-btn watch-btn' + (watched ? ' watching' : '') + '" data-action="toggle-watch-flight" data-flight="' + escapeHtml(watchFlt) + '" data-route="' + escapeHtml(watchRoute) + '" data-status="airborne">' + (watched ? ICO_WATCHING + ' Watching' : ICO_WATCH + ' Watch') + '</button>';
   }
-  html += '<a class="ac-action-btn" href="https://www.planespotters.net/search?q=' + encodeURIComponent(reg) + '" target="_blank" rel="noopener noreferrer">Planespotters ↗</a>';
-  html += '<a class="ac-action-btn" href="https://flightaware.com/resources/registration/' + encodeURIComponent(reg) + '" target="_blank" rel="noopener noreferrer">FlightAware ↗</a>';
-  html += '<button class="ac-action-btn" data-action="share-aircraft" data-reg="' + escapeHtml(reg) + '">📤 Share</button>';
+  html += '<a class="ac-action-btn" href="https://www.planespotters.net/search?q=' + encodeURIComponent(reg) + '" target="_blank" rel="noopener noreferrer">Planespotters ' + ICO_EXTLINK + '</a>';
+  html += '<a class="ac-action-btn" href="https://flightaware.com/resources/registration/' + encodeURIComponent(reg) + '" target="_blank" rel="noopener noreferrer">FlightAware ' + ICO_EXTLINK + '</a>';
+  html += '<button class="ac-action-btn" data-action="share-aircraft" data-reg="' + escapeHtml(reg) + '">' + ICO_SHARE + ' Share</button>';
   html += '</div>';
 
   html += '</div>'; // end card
@@ -6456,7 +6469,7 @@ function renderFR24Modal(f, source, cached) {
   // Footer
   html += '<div style="padding:10px 20px;border-top:1px solid var(--ua-border);display:flex;justify-content:space-between;align-items:center">';
   html += '<div style="font-size:8px;color:var(--ua-muted)">Powered by Flightradar24 Official API' + (cached ? ' • cached' : '') + '</div>';
-  html += '<button class="share-btn" data-action="share-flight" data-flight="' + escapeHtml(f.flightNumber || '') + '" aria-label="Share flight link" title="Copy shareable link">📤 Share</button>';
+  html += '<button class="share-btn" data-action="share-flight" data-flight="' + escapeHtml(f.flightNumber || '') + '" aria-label="Share flight link" title="Copy shareable link">' + ICO_SHARE + ' Share</button>';
   html += '</div>';
   html += '</div>';
 
