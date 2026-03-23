@@ -267,6 +267,13 @@ nav.jump-nav a:hover{border-color:var(--ua-accent);color:var(--ua-accent);text-d
 
   <Fragment set:html={data.contentHtml} />
 
+  <!-- TSA Cross-link (domestic hubs only) -->
+  {['ord','den','iah','ewr','sfo','iad','lax'].includes(iataLower) && (
+    <div style="background:var(--ua-panel);border-left:3px solid var(--ua-amber);padding:10px 14px;border-radius:0 6px 6px 0;font-size:12px;color:var(--ua-text);margin-bottom:24px">
+      <span style="color:var(--ua-amber);font-family:var(--font-ui);font-weight:600">TSA Wait Times</span> — Check live checkpoint wait times at United terminals. <a href={`/tsa#${iataLower}`} style="color:var(--ua-accent)">View {iata} TSA status &rarr;</a>
+    </div>
+  )}
+
   <!-- Other Hubs -->
   <div class="section">
     <h2 id="all-hubs">All United Hubs</h2>

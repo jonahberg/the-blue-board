@@ -1,0 +1,503 @@
+---
+import { unitedTerminals, tsaHubOrder, getAllFaqEntries } from '../data/tsa/united-terminals.js';
+import Footer from '../components/Footer.astro';
+
+const faqEntries = getAllFaqEntries();
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0B1018">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E">
+<title>United Airlines TSA Wait Times — Checkpoint Status at All 7 Hubs | The Blue Board</title>
+<meta name="description" content="Live TSA checkpoint wait times at United Airlines terminals. Pre✓, CLEAR, and standard lane status at ORD, DEN, IAH, EWR, SFO, IAD, and LAX. Checkpoint hours, tips, and security line info — updated every 5 minutes.">
+<meta name="author" content="The Blue Board">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://theblueboard.co/tsa">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="United Airlines TSA Wait Times — All 7 Hubs | The Blue Board">
+<meta property="og:description" content="Live TSA checkpoint wait times at United terminals. Pre✓, CLEAR, standard lanes at ORD, DEN, IAH, EWR, SFO, IAD, LAX.">
+<meta property="og:url" content="https://theblueboard.co/tsa">
+<meta property="og:site_name" content="The Blue Board">
+<meta property="og:image" content="https://theblueboard.co/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Blue Board — United Airlines TSA Wait Times">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@theblueboard">
+<meta name="twitter:title" content="United Airlines TSA Wait Times — All 7 Hubs | The Blue Board">
+<meta name="twitter:description" content="Live TSA checkpoint wait times at United terminals. Pre✓, CLEAR, standard lanes at all 7 domestic hubs.">
+<meta name="twitter:image" content="https://theblueboard.co/og-image.png">
+<meta name="twitter:site" content="@theblueboard">
+
+<!-- Schema: BreadcrumbList -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "The Blue Board", "item": "https://theblueboard.co"},
+    {"@type": "ListItem", "position": 2, "name": "TSA Wait Times", "item": "https://theblueboard.co/tsa"}
+  ]
+}
+</script>
+
+<!-- Schema: FAQPage -->
+<script type="application/ld+json" set:html={JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": faqEntries.map((e) => ({
+    "@type": "Question",
+    "name": e.question,
+    "acceptedAnswer": { "@type": "Answer", "text": e.answer }
+  }))
+})} />
+
+<link rel="stylesheet" href="/css/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+  /* TSA page-specific styles */
+  .tsa-page { max-width: 900px; margin: 0 auto; padding: 20px 16px 0; }
+  .tsa-breadcrumb { font-family: var(--font-ui); font-size: 11px; font-weight: 500; color: var(--ua-muted); margin-bottom: 20px; }
+  .tsa-breadcrumb a { color: var(--ua-accent); text-decoration: none; }
+  .tsa-breadcrumb a:hover { text-decoration: underline; }
+
+  .tsa-hero { margin-bottom: 32px; }
+  .tsa-hero h1 { font-family: var(--font-ui); font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: var(--ua-text); margin: 0 0 8px; }
+  .tsa-hero p { font-family: var(--font-body); font-size: 13px; color: var(--ua-muted); line-height: 1.7; margin: 0; }
+
+  .tsa-jump-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 32px; }
+  .tsa-jump-pill { font-family: var(--font-mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ua-muted); background: var(--ua-panel); border: 1px solid var(--ua-border); border-radius: 20px; padding: 6px 14px; text-decoration: none; transition: all 150ms ease; }
+  .tsa-jump-pill:hover { color: var(--ua-blue); border-color: var(--ua-blue); background: rgba(0,93,170,0.08); transform: translateY(-1px); }
+
+  .tsa-hub-card { background: linear-gradient(180deg, var(--ua-panel) 0%, rgba(17,26,39,0.6) 100%); border: 1px solid var(--ua-border); border-radius: 6px; padding: 20px; margin-bottom: 24px; }
+  .tsa-hub-label { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ua-amber); margin-bottom: 6px; }
+  .tsa-hub-title { font-family: var(--font-ui); font-size: 16px; font-weight: 700; color: var(--ua-text); margin: 0 0 4px; }
+  .tsa-hub-subtitle { font-family: var(--font-body); font-size: 12px; color: var(--ua-muted); margin: 0 0 16px; }
+
+  .tsa-wait-summary { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--ua-border-subtle, var(--ua-border)); }
+  .tsa-wait-stat { flex: 1; min-width: 120px; }
+  .tsa-wait-stat-label { font-family: var(--font-mono); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ua-muted); margin-bottom: 4px; }
+  .tsa-wait-stat-value { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--ua-amber); }
+  .tsa-wait-stat-value.tsa-blurred { filter: blur(8px); user-select: none; pointer-events: none; }
+  .tsa-wait-unit { font-size: 12px; font-weight: 500; color: var(--ua-muted); margin-left: 2px; }
+  .tsa-wait-no-data { font-family: var(--font-mono); font-size: 11px; color: var(--ua-dim); }
+  .tsa-wait-green { color: #22C55E; }
+  .tsa-wait-amber { color: #C4A35A; }
+  .tsa-wait-yellow { color: #EAB308; }
+  .tsa-wait-red { color: #EF4444; }
+
+  .tsa-live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #22C55E; margin-right: 6px; animation: tsa-pulse 2s ease-in-out infinite; }
+  @keyframes tsa-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .tsa-stale-dot { background: #EAB308; animation: none; }
+
+  .tsa-checkpoint-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  .tsa-checkpoint-table th { font-family: var(--font-mono); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ua-muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--ua-border); }
+  .tsa-checkpoint-table td { font-family: var(--font-body); font-size: 12px; color: var(--ua-text); padding: 8px 10px; border-bottom: 1px solid var(--ua-border-subtle, var(--ua-border)); vertical-align: middle; }
+  .tsa-checkpoint-table tr:last-child td { border-bottom: none; }
+  .tsa-checkpoint-name { font-family: var(--font-ui); font-weight: 600; font-size: 13px; }
+
+  .tsa-lane-badge { font-family: var(--font-mono); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; padding: 3px 8px; border-radius: 3px; display: inline-block; margin: 2px 4px 2px 0; white-space: nowrap; }
+  .tsa-lane-standard { background: rgba(226,232,240,0.1); color: var(--ua-text); }
+  .tsa-lane-precheck { background: rgba(34,197,94,0.1); color: #22C55E; border: 1px solid rgba(34,197,94,0.2); }
+  .tsa-lane-clear { background: rgba(107,170,237,0.1); color: var(--ua-accent); border: 1px solid rgba(107,170,237,0.2); }
+  .tsa-lane-priority { background: rgba(196,163,90,0.1); color: var(--ua-amber); border: 1px solid rgba(196,163,90,0.2); }
+  .tsa-lane-na { opacity: 0.35; text-decoration: line-through; }
+
+  .tsa-tip { background: var(--ua-panel); border-left: 3px solid var(--ua-amber); padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 12px; color: var(--ua-text); margin-bottom: 8px; }
+  .tsa-tip-icon { margin-right: 6px; }
+
+  .tsa-hub-footer { font-family: var(--font-mono); font-size: 10px; color: var(--ua-dim); margin-top: 12px; }
+  .tsa-hub-crosslink { font-family: var(--font-ui); font-size: 11px; margin-top: 8px; }
+  .tsa-hub-crosslink a { color: var(--ua-accent); text-decoration: none; }
+  .tsa-hub-crosslink a:hover { text-decoration: underline; }
+
+  .tsa-faq-section { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--ua-border); }
+  .tsa-faq-section h2 { font-family: var(--font-ui); font-size: 16px; font-weight: 700; color: var(--ua-text); margin: 0 0 16px; }
+  .tsa-faq-item { margin-bottom: 16px; }
+  .tsa-faq-q { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--ua-text); margin: 0 0 4px; }
+  .tsa-faq-a { font-family: var(--font-body); font-size: 12px; color: var(--ua-muted); line-height: 1.7; margin: 0; }
+  .tsa-faq-hub-label { font-family: var(--font-mono); font-size: 9px; font-weight: 600; color: var(--ua-amber); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+
+  /* Email gate modal */
+  .tsa-gate-overlay { position: fixed; inset: 0; background: rgba(11,16,24,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .tsa-gate-overlay.tsa-hidden { display: none; }
+  .tsa-gate-modal { background: var(--ua-panel); border: 1px solid var(--ua-border); border-radius: 10px; padding: 32px 28px; max-width: 420px; width: 100%; text-align: center; }
+  .tsa-gate-logo { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ua-blue); margin-bottom: 16px; }
+  .tsa-gate-title { font-family: var(--font-ui); font-size: 18px; font-weight: 700; color: var(--ua-text); margin: 0 0 8px; }
+  .tsa-gate-text { font-family: var(--font-body); font-size: 13px; color: var(--ua-muted); line-height: 1.6; margin: 0 0 20px; }
+  .tsa-gate-input { width: 100%; padding: 10px 14px; font-family: var(--font-body); font-size: 14px; background: var(--ua-panel-elevated, #152032); border: 1px solid var(--ua-border); border-radius: 6px; color: var(--ua-text); outline: none; box-sizing: border-box; margin-bottom: 12px; }
+  .tsa-gate-input:focus { border-color: var(--ua-blue); }
+  .tsa-gate-input::placeholder { color: var(--ua-dim); }
+  .tsa-gate-btn { width: 100%; padding: 10px; font-family: var(--font-ui); font-size: 14px; font-weight: 600; background: var(--ua-blue); color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 150ms ease; }
+  .tsa-gate-btn:hover { opacity: 0.9; }
+  .tsa-gate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tsa-gate-privacy { font-family: var(--font-body); font-size: 9px; color: var(--ua-dim); margin-top: 10px; }
+  .tsa-gate-dismiss { font-family: var(--font-body); font-size: 11px; color: var(--ua-dim); text-decoration: underline; text-underline-offset: 2px; background: none; border: none; cursor: pointer; margin-top: 14px; transition: color 150ms ease; }
+  .tsa-gate-dismiss:hover { color: var(--ua-muted); }
+  .tsa-gate-error { font-family: var(--font-body); font-size: 11px; color: var(--ua-red); margin-top: 8px; display: none; }
+
+  @media (max-width: 600px) {
+    .tsa-hero h1 { font-size: 18px; }
+    .tsa-hub-card { padding: 16px; }
+    .tsa-wait-stat-value { font-size: 18px; }
+    .tsa-checkpoint-table { font-size: 11px; }
+    .tsa-checkpoint-table th, .tsa-checkpoint-table td { padding: 6px 6px; }
+    .tsa-wait-summary { flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+<main class="tsa-page">
+
+  <!-- Breadcrumb -->
+  <nav class="tsa-breadcrumb" aria-label="Breadcrumb">
+    <a href="/">&larr; The Blue Board</a> / TSA Wait Times
+  </nav>
+
+  <!-- Hero -->
+  <div class="tsa-hero">
+    <h1>TSA Security Wait Times</h1>
+    <p>Live checkpoint wait times at United Airlines terminals across all 7 domestic hubs. Standard, Pre✓, CLEAR, and Priority lane availability — updated every 5 minutes.</p>
+  </div>
+
+  <!-- Jump nav -->
+  <nav class="tsa-jump-nav" aria-label="Hub navigation">
+    {tsaHubOrder.map((code) => (
+      <a class="tsa-jump-pill" href={`#${code.toLowerCase()}`}>{code}</a>
+    ))}
+  </nav>
+
+  <!-- Hub cards -->
+  {tsaHubOrder.map((code) => {
+    const hub = unitedTerminals[code];
+    return (
+      <section class="tsa-hub-card" id={code.toLowerCase()}>
+        <div class="tsa-hub-label">TSA Wait Times</div>
+        <h2 class="tsa-hub-title">{code} — {hub.name.replace(/Airport$/i, '').replace(/International$/i, 'Intl').trim()}</h2>
+        <p class="tsa-hub-subtitle">{hub.terminals}{hub.terminalNote ? ` · ${hub.terminalNote}` : ''}</p>
+
+        <!-- Wait time summary (filled by JS) -->
+        <div class="tsa-wait-summary" data-hub={code}>
+          <div class="tsa-wait-stat">
+            <div class="tsa-wait-stat-label">Standard Wait</div>
+            <div class="tsa-wait-stat-value tsa-blurred" data-wait-type="standard" data-hub-code={code}>
+              --<span class="tsa-wait-unit">min</span>
+            </div>
+          </div>
+          <div class="tsa-wait-stat">
+            <div class="tsa-wait-stat-label">Pre✓ Wait</div>
+            <div class="tsa-wait-stat-value tsa-blurred" data-wait-type="precheck" data-hub-code={code}>
+              --<span class="tsa-wait-unit">min</span>
+            </div>
+          </div>
+          <div class="tsa-wait-stat">
+            <div class="tsa-wait-stat-label">Status</div>
+            <div class="tsa-wait-stat-value" style="font-size:12px" data-wait-type="status" data-hub-code={code}>
+              <span class="tsa-wait-no-data">Loading...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Checkpoint table -->
+        <table class="tsa-checkpoint-table">
+          <thead>
+            <tr>
+              <th>Checkpoint</th>
+              <th>Hours</th>
+              <th>Lanes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hub.checkpoints.map((cp) => (
+              <tr>
+                <td>
+                  <div class="tsa-checkpoint-name">{cp.name}</div>
+                  <div style="font-size:10px;color:var(--ua-dim)">{cp.terminal}</div>
+                </td>
+                <td>
+                  <div style="font-family:var(--font-mono);font-size:11px">{cp.hours}</div>
+                  {cp.precheckHours && cp.precheckHours !== cp.hours && (
+                    <div style="font-size:10px;color:var(--ua-dim)">Pre✓: {cp.precheckHours}</div>
+                  )}
+                </td>
+                <td>
+                  <span class="tsa-lane-badge tsa-lane-standard">Standard</span>
+                  <span class={`tsa-lane-badge tsa-lane-precheck ${cp.lanes.precheck ? '' : 'tsa-lane-na'}`}>Pre✓</span>
+                  <span class={`tsa-lane-badge tsa-lane-clear ${cp.lanes.clear ? '' : 'tsa-lane-na'}`}>CLEAR</span>
+                  {cp.lanes.priority && (
+                    <span class="tsa-lane-badge tsa-lane-priority">Priority</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <!-- Tips -->
+        {hub.tips.slice(0, 2).map((tip) => (
+          <div class="tsa-tip"><span class="tsa-tip-icon">💡</span>{tip}</div>
+        ))}
+
+        <!-- Footer -->
+        <div class="tsa-hub-footer" data-last-updated={code}>
+          <span class="tsa-live-dot" style="display:none" data-live-dot={code}></span>
+          <span data-timestamp={code}>Waiting for data...</span>
+        </div>
+        <div class="tsa-hub-crosslink">
+          <a href={`/hubs/${code.toLowerCase()}`}>View {code} hub status &rarr;</a>
+        </div>
+      </section>
+    );
+  })}
+
+  <!-- FAQ Section -->
+  <section class="tsa-faq-section">
+    <h2>Frequently Asked Questions</h2>
+    {tsaHubOrder.map((code) => {
+      const hub = unitedTerminals[code];
+      return (
+        <div style="margin-bottom:24px">
+          <div class="tsa-faq-hub-label">{code} — {hub.city}</div>
+          {hub.faq.slice(0, 3).map((entry) => (
+            <div class="tsa-faq-item">
+              <h3 class="tsa-faq-q">{entry.question}</h3>
+              <p class="tsa-faq-a">{entry.answer}</p>
+            </div>
+          ))}
+        </div>
+      );
+    })}
+  </section>
+
+</main>
+
+<Footer />
+
+<!-- Email gate modal -->
+<div class="tsa-gate-overlay tsa-hidden" id="tsa-gate">
+  <div class="tsa-gate-modal">
+    <div class="tsa-gate-logo">The Blue Board</div>
+    <h2 class="tsa-gate-title">Unlock Live TSA Wait Times</h2>
+    <p class="tsa-gate-text">Enter your email for live checkpoint wait times at United terminals — plus delay alerts, fleet updates, and hub intel.</p>
+    <input class="tsa-gate-input" type="email" id="tsa-gate-email" placeholder="you@airline.com" autocomplete="email">
+    <button class="tsa-gate-btn" id="tsa-gate-submit">Get Free Access &rarr;</button>
+    <div class="tsa-gate-error" id="tsa-gate-error"></div>
+    <div class="tsa-gate-privacy">No spam. Unsubscribe anytime.</div>
+    <button class="tsa-gate-dismiss" id="tsa-gate-dismiss">No thanks, I'll just guess</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var STORAGE_KEY = 'tsa_email_unlocked';
+  var DISMISS_KEY = 'tsa_gate_dismissed';
+  var REFRESH_INTERVAL = 60000;
+
+  var isUnlocked = localStorage.getItem(STORAGE_KEY) === 'true';
+  var isDismissed = localStorage.getItem(DISMISS_KEY) === 'true';
+
+  function unblurAll() {
+    var els = document.querySelectorAll('.tsa-blurred');
+    for (var i = 0; i < els.length; i++) els[i].classList.remove('tsa-blurred');
+  }
+
+  function showGate() {
+    var overlay = document.getElementById('tsa-gate');
+    if (overlay) overlay.classList.remove('tsa-hidden');
+  }
+
+  function hideGate() {
+    var overlay = document.getElementById('tsa-gate');
+    if (overlay) overlay.classList.add('tsa-hidden');
+  }
+
+  if (isUnlocked) {
+    unblurAll();
+  } else if (!isDismissed) {
+    setTimeout(showGate, 2000);
+  }
+
+  // Submit email
+  var submitBtn = document.getElementById('tsa-gate-submit');
+  var emailInput = document.getElementById('tsa-gate-email');
+  var errorEl = document.getElementById('tsa-gate-error');
+
+  if (submitBtn && emailInput) {
+    submitBtn.addEventListener('click', function() {
+      var email = emailInput.value.trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errorEl.textContent = 'Please enter a valid email address.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing up...';
+      errorEl.style.display = 'none';
+
+      fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, source: 'tsa-page' }),
+      })
+        .then(function(resp) {
+          if (resp.ok || resp.status === 409) {
+            localStorage.setItem(STORAGE_KEY, 'true');
+            isUnlocked = true;
+            unblurAll();
+            hideGate();
+          } else {
+            return resp.json().catch(function() { return {}; }).then(function(data) {
+              errorEl.textContent = data.error || 'Something went wrong. Try again.';
+              errorEl.style.display = 'block';
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Get Free Access \u2192';
+            });
+          }
+        })
+        .catch(function() {
+          errorEl.textContent = 'Network error. Please try again.';
+          errorEl.style.display = 'block';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Get Free Access \u2192';
+        });
+    });
+
+    emailInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') submitBtn.click();
+    });
+  }
+
+  // Dismiss gate
+  var dismissBtn = document.getElementById('tsa-gate-dismiss');
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', function() {
+      localStorage.setItem(DISMISS_KEY, 'true');
+      isDismissed = true;
+      unblurAll();
+      hideGate();
+    });
+  }
+
+  // --- Live data ---
+  function getWaitColor(minutes) {
+    if (minutes === null || minutes === undefined) return '';
+    if (minutes < 10) return 'tsa-wait-green';
+    if (minutes <= 20) return 'tsa-wait-amber';
+    if (minutes <= 30) return 'tsa-wait-yellow';
+    return 'tsa-wait-red';
+  }
+
+  function setWaitValue(el, minutes) {
+    if (minutes === null || minutes === undefined) {
+      el.textContent = '';
+      var noData = document.createElement('span');
+      noData.className = 'tsa-wait-no-data';
+      noData.textContent = 'No data';
+      el.appendChild(noData);
+      return;
+    }
+    el.textContent = '';
+    var val = minutes === 0 ? '< 1' : minutes >= 120 ? '2+' : String(minutes);
+    el.appendChild(document.createTextNode(val));
+    var unit = document.createElement('span');
+    unit.className = 'tsa-wait-unit';
+    unit.textContent = minutes >= 120 ? 'hrs' : 'min';
+    el.appendChild(unit);
+  }
+
+  function isStale(lastUpdated) {
+    if (!lastUpdated) return true;
+    return (Date.now() - new Date(lastUpdated).getTime()) > 600000;
+  }
+
+  function fetchTsaData() {
+    return fetch('/api/tsa').then(function(r) {
+      if (!r.ok) throw new Error('API error');
+      return r.json();
+    }).catch(function() { return null; });
+  }
+
+  function updateUI(data) {
+    if (!data || !data.hubs) return;
+
+    var codes = Object.keys(data.hubs);
+    for (var i = 0; i < codes.length; i++) {
+      var code = codes[i];
+      var hub = data.hubs[code];
+
+      // Standard wait
+      var stdEl = document.querySelector('[data-wait-type="standard"][data-hub-code="' + code + '"]');
+      if (stdEl) {
+        var stdColor = getWaitColor(hub.standardWait);
+        stdEl.className = 'tsa-wait-stat-value' + (stdColor ? ' ' + stdColor : '');
+        if (!isUnlocked && !isDismissed) stdEl.classList.add('tsa-blurred');
+        setWaitValue(stdEl, hub.standardWait);
+      }
+
+      // PreCheck wait
+      var preEl = document.querySelector('[data-wait-type="precheck"][data-hub-code="' + code + '"]');
+      if (preEl) {
+        var preColor = getWaitColor(hub.precheckWait);
+        preEl.className = 'tsa-wait-stat-value' + (preColor ? ' ' + preColor : '');
+        if (!isUnlocked && !isDismissed) preEl.classList.add('tsa-blurred');
+        setWaitValue(preEl, hub.precheckWait);
+      }
+
+      // Status
+      var statusEl = document.querySelector('[data-wait-type="status"][data-hub-code="' + code + '"]');
+      if (statusEl) {
+        statusEl.textContent = '';
+        if (hub.standardWait !== null || hub.precheckWait !== null) {
+          var stale = isStale(hub.lastUpdated);
+          var dot = document.createElement('span');
+          dot.className = stale ? 'tsa-live-dot tsa-stale-dot' : 'tsa-live-dot';
+          statusEl.appendChild(dot);
+          var label = document.createElement('span');
+          label.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--ua-muted)';
+          label.textContent = stale ? 'Stale' : 'Live';
+          statusEl.appendChild(label);
+        } else {
+          var nd = document.createElement('span');
+          nd.className = 'tsa-wait-no-data';
+          nd.textContent = 'No data available';
+          statusEl.appendChild(nd);
+        }
+      }
+
+      // Live dot in footer
+      var liveDot = document.querySelector('[data-live-dot="' + code + '"]');
+      if (liveDot && (hub.standardWait !== null || hub.precheckWait !== null)) {
+        liveDot.style.display = 'inline-block';
+        if (isStale(hub.lastUpdated)) liveDot.classList.add('tsa-stale-dot');
+        else liveDot.classList.remove('tsa-stale-dot');
+      }
+
+      // Timestamp
+      var tsEl = document.querySelector('[data-timestamp="' + code + '"]');
+      if (tsEl && hub.lastUpdated) {
+        var d = new Date(hub.lastUpdated);
+        var timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        var ago = Math.round((Date.now() - d.getTime()) / 60000);
+        tsEl.textContent = ago <= 1 ? 'Updated just now' : 'Updated ' + ago + ' min ago \u00b7 ' + timeStr;
+      } else if (tsEl) {
+        tsEl.textContent = 'No data available';
+      }
+    }
+  }
+
+  // Initial fetch
+  fetchTsaData().then(updateUI);
+
+  // Auto-refresh
+  setInterval(function() { fetchTsaData().then(updateUI); }, REFRESH_INTERVAL);
+})();
+</script>
+</body>
+</html>
