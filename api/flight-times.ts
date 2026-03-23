@@ -3,6 +3,7 @@
 // Returns scheduled, estimated, and actual gate/takeoff/landing times
 
 import type { VercelRequest, VercelResponse } from './types.js';
+import { icaoToIata } from '../src/lib/airport-metadata.js';
 
 const CACHE_TTL_MS = 60_000; // 1 minute
 const cache = new Map<string, { data: any; ts: number }>();
@@ -134,14 +135,6 @@ async function tryFR24Summary(req: VercelRequest, res: VercelResponse, flight: s
       source: 'fr24-summary',
       cached: false,
     };
-    // Map ICAO to IATA for origin/dest (strip leading K for US airports, else use ICAO as-is)
-    function icaoToIata(icao: string): string {
-      if (!icao) return '';
-      if (icao.length === 4 && icao.startsWith('K')) return icao.slice(1);
-      // Common international mappings
-      const map: Record<string, string> = { RJAA: 'NRT', RJTT: 'HND', PGUM: 'GUM', EGLL: 'LHR', LFPG: 'CDG', EDDF: 'FRA', RCKH: 'KHH', VHHH: 'HKG', WSSS: 'SIN', NZAA: 'AKL', YSSY: 'SYD', LEMD: 'MAD', EHAM: 'AMS', OMDB: 'DXB', ZBAA: 'PEK' };
-      return map[icao] || icao;
-    }
     if (f.orig_icao) result.origin.iata = icaoToIata(f.orig_icao);
     if (f.dest_icao_actual || f.dest_icao) result.destination.iata = icaoToIata(f.dest_icao_actual || f.dest_icao);
     setCache(cacheKey, result);

@@ -3,6 +3,7 @@ import { createRateLimiter } from './_rate-limit.js';
 import { loadScheduleSnapshot, saveScheduleSnapshot } from './_schedule-snapshots.js';
 import { getStartOfDayForHub } from './irops.js';
 import { waitUntil } from '@vercel/functions';
+import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
 
 const isRateLimited = createRateLimiter('schedule', 30);
 
@@ -44,26 +45,6 @@ const UNITED_HUB_TERMINALS: Record<string, { domestic: string; international: st
   NRT: { domestic: '1', international: '1' },       // Terminal 1
   GUM: { domestic: '1', international: '1' },       // Single terminal
 };
-
-// US airport IATA codes (3-letter codes starting from common US airports)
-// Used to determine if a route is domestic or international for terminal assignment
-const US_AIRPORTS = new Set([
-  // United hubs
-  'ORD','DEN','EWR','IAH','SFO','LAX','IAD','GUM',
-  // Major US airports
-  'ATL','JFK','LGA','DFW','CLT','MIA','FLL','TPA','MCO','SEA','MSP','DTW','PHL','BOS',
-  'DCA','BWI','SAN','PHX','SLC','AUS','SAT','HOU','DAL','MDW','OAK','SJC','SMF','PDX',
-  'MCI','MSY','STL','IND','CLE','CVG','CMH','PIT','RDU','BNA','MKE','OMA','RSW',
-  // Hawaii (treated as domestic for terminal purposes)
-  'HNL','OGG','LIH','KOA',
-]);
-
-function isInternationalRoute(origIata: string, destIata: string): boolean {
-  if (!origIata || !destIata) return false;
-  const origUS = US_AIRPORTS.has(origIata.toUpperCase());
-  const destUS = US_AIRPORTS.has(destIata.toUpperCase());
-  return !(origUS && destUS);
-}
 
 function getHubTerminal(iata: string, isIntl: boolean): string {
   const hub = UNITED_HUB_TERMINALS[iata.toUpperCase()];
@@ -289,22 +270,6 @@ const FR24_API_BASE = 'https://fr24api.flightradar24.com';
 function formatForFR24(date: Date): string {
   // FR24 API expects YYYY-MM-DDTHH:MM:SSZ format (with trailing Z, no milliseconds)
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
-}
-
-function icaoToIata(icao: string): string {
-  if (!icao) return '';
-  if (icao.length === 4 && icao.startsWith('K')) return icao.slice(1);
-  const map: Record<string, string> = { RJAA:'NRT', RJTT:'HND', PGUM:'GUM', EGLL:'LHR', LFPG:'CDG',
-                EDDF:'FRA', VHHH:'HKG', WSSS:'SIN', NZAA:'AKL', YSSY:'SYD',
-                LEMD:'MAD', EHAM:'AMS', OMDB:'DXB', ZBAA:'PEK', RCTP:'TPE',
-                RJBB:'KIX', RKSI:'ICN', VTBS:'BKK', WMKK:'KUL', CYYZ:'YYZ',
-                CYUL:'YUL', CYVR:'YVR', MMMX:'MEX', MMUN:'CUN', TNCM:'SXM',
-                TXKF:'BDA', MUHA:'HAV', LIRF:'FCO', EGKK:'LGW', EIDW:'DUB',
-                LSZH:'ZRH', LOWW:'VIE', EKCH:'CPH', ENGM:'OSL', ESSA:'ARN',
-                EFHK:'HEL', LPPT:'LIS', LEBL:'BCN', LGAV:'ATH', LTFM:'IST',
-                VIDP:'DEL', VABB:'BOM', RPLL:'MNL', ZUUU:'CTU', ZSPD:'PVG',
-                ZSSS:'SHA', VVNB:'HAN', VVTS:'SGN' };
-  return map[icao] || icao;
 }
 
 const ICAO_TO_IATA_AIRLINE: Record<string, string> = { UAL:'UA', AAL:'AA', DAL:'DL', SWA:'WN', JBU:'B6', ASA:'AS', SKW:'OO', RPA:'YX', ENY:'MQ', GJS:'G7', ACA:'AC', BAW:'BA', DLH:'LH', AFR:'AF', KLM:'KL' };

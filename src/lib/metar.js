@@ -14,6 +14,10 @@ function firstFiniteNumber(...values) {
   return null;
 }
 
+function normalizeStationId(station) {
+  return firstNonEmptyString(station).toUpperCase();
+}
+
 function normalizeCloudLayer(layer) {
   if (!layer || typeof layer !== 'object') return null;
   const cover = firstNonEmptyString(layer.cover, layer.skyCover, layer.sky_cover).toUpperCase();
@@ -123,4 +127,33 @@ export function normalizeMetarPayload(payload) {
   return rows
     .map(normalizeMetarRecord)
     .filter(Boolean);
+}
+
+export function chunkMetarStationIds(stations, maxQueryLength = 180) {
+  const stationList = Array.isArray(stations)
+    ? stations
+    : String(stations || '').split(',');
+
+  const chunks = [];
+  let current = [];
+  let currentLength = 0;
+
+  stationList.forEach((station) => {
+    const id = normalizeStationId(station);
+    if (!id) return;
+
+    const nextLength = currentLength ? currentLength + 1 + id.length : id.length;
+    if (nextLength > maxQueryLength && current.length) {
+      chunks.push(current.join(','));
+      current = [id];
+      currentLength = id.length;
+      return;
+    }
+
+    current.push(id);
+    currentLength = nextLength;
+  });
+
+  if (current.length) chunks.push(current.join(','));
+  return chunks;
 }

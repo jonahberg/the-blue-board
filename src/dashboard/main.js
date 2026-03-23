@@ -1,5 +1,7 @@
 import { computeDelayRiskModel, HUB_COORDINATES, HUB_RISK_PROFILES } from '../lib/delay-risk.js';
-import { normalizeMetarPayload } from '../lib/metar.js';
+import { formatDelayExplainFAAStatus, getScheduleRiskContext } from '../lib/delay-explain-context.js';
+import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
+import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, WIFI_DISPLAY, sortFleetData, filterFleetData, parseFleetDeepLink, TAB_MAP, VALID_FLEET_VIEWS } from '../lib/fleet-utils.js';
 
 // ═══════════════════════════════════════════════
@@ -233,7 +235,6 @@ const TERMINAL_WALK_TIMES = {
   IAH:{'A-B':8,'A-C':12,'A-D':15,'A-E':20,'B-C':8,'B-D':12,'B-E':15,'C-D':8,'C-E':12,'D-E':8,default:12},
   SFO:{default:12},IAD:{default:10},LAX:{'7-8':5,'7-B':15,'8-B':12,default:10},NRT:{default:15},GUM:{default:5}
 };
-const INTL_AIRPORTS = new Set(['NRT','GUM','HND','LHR','FRA','CDG','AMS','ZRH','FCO','MAD','BCN','DUB','IST','TLV','MUC','EDI','BRU','LIS','CPH','ARN','HEL','OSL','SIN','HKG','SYD','PEK','ICN','TPE','BKK','DEL','MEL','AKL','PVG','CAN','BOM','NAN','PPT','KIX','CTU','XIY','CKG','SNN','MAN','GLA']);
 // Known United Airlines terminals at each hub (fallback when API doesn't provide terminal data)
 const UNITED_HUB_TERMINALS = {
   ORD:{domestic:'1',international:'1'},       // Terminal 1 (B & C); Express uses T2
@@ -2595,9 +2596,16 @@ function hasRenderableMetarData(metar) {
 }
 
 async function fetchMetarBatch(allStations) {
-  const response = await fetch(`/api/metar?ids=${allStations}`);
-  if (!response.ok) throw new Error(`metar-${response.status}`);
-  return normalizeMetarPayload(await response.json());
+  const stationChunks = chunkMetarStationIds(allStations);
+  if (!stationChunks.length) return [];
+
+  const payloads = await Promise.all(stationChunks.map(async (stationIds) => {
+    const response = await fetch(`/api/metar?ids=${stationIds}`);
+    if (!response.ok) throw new Error(`metar-${response.status}`);
+    return normalizeMetarPayload(await response.json());
+  }));
+
+  return payloads.flat();
 }
 
 async function initWeatherTab() {
@@ -3444,6 +3452,7 @@ async function loadScheduleData() {
 
     schedAllFlights = allUAFlights;
     schedRawByHub[hubKey] = allUAFlights;
+    preloadWeatherAndFAA();
     detectEquipmentSwaps(allUAFlights, schedCurrentHub, schedCurrentDir, schedCurrentDay);
     populateAircraftFilter();
     // Reset advanced filters on hub/direction/day change
@@ -3769,18 +3778,18 @@ function renderScheduleTable() {
 
     // Watch button
     const isWatched = isFlightWatched(ident);
-    const origCode = fl.airport?.origin?.code?.iata || '?';
-    const destCode = fl.airport?.destination?.code?.iata || '?';
+    const { origCode, destCode, depHub, arrHub } = getScheduleRiskContext(fl, hub, schedCurrentDir);
     const watchRoute = `${origCode}→${destCode}`;
     const watchBtn = ident !== '—' ? `<button class="watch-btn${isWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(watchRoute)}" data-status="${escapeHtml(status.text)}" data-stop-prop="1" aria-label="${isWatched ? 'Unwatch flight' : 'Watch flight'}" title="${isWatched ? 'Unwatch' : 'Watch'} this flight">${isWatched ? ICO_WATCHING : ICO_WATCH}</button>` : '';
 
     // Delay risk scoring
     const dRisk = computeDelayRiskForScheduleFlight(fl, hub);
-    const schedRiskOtp = hubHealthData[hub];
-    const schedRiskWxOrig = weatherOpsByHub[hub];
-    const schedRiskWxDest = weatherOpsByHub[destCode];
-    const schedRiskIrops = iropsHubData[hub];
-    const riskCell = dRisk ? `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(status.text)}" data-risk-label="${dRisk.label}" data-risk-score="${dRisk.score}" data-risk-factors="${escapeHtml(dRisk.factors.join('|'))}" data-hub="${escapeHtml(hub)}"${schedRiskOtp !== undefined ? ' data-otp="' + schedRiskOtp + '"' : ''}${schedRiskWxOrig ? ' data-weather="' + escapeHtml(schedRiskWxOrig.level + (schedRiskWxOrig.reasons.length ? ': ' + schedRiskWxOrig.reasons.join(', ') : '')) + '"' : ''}${schedRiskWxDest ? ' data-dest-weather="' + escapeHtml(schedRiskWxDest.level + (schedRiskWxDest.reasons.length ? ': ' + schedRiskWxDest.reasons.join(', ') : '')) + '"' : ''}${schedRiskIrops ? ' data-irops="' + escapeHtml(schedRiskIrops.cancellationRate + '% cancelled, ' + (schedRiskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''} style="background:${dRisk.color}20;color:${dRisk.color};cursor:pointer" title="Click for AI analysis">${dRisk.label}</span>` : '';
+    const schedRiskOtp = hubHealthData[depHub];
+    const schedRiskWxOrig = weatherOpsByHub[depHub];
+    const schedRiskWxDest = weatherOpsByHub[arrHub];
+    const schedRiskIrops = iropsHubData[depHub];
+    const schedRiskFaa = formatDelayExplainFAAStatus(depHub, arrHub, faaDelayIndex);
+    const riskCell = dRisk ? `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(status.text)}" data-risk-label="${dRisk.label}" data-risk-score="${dRisk.score}" data-risk-factors="${escapeHtml(dRisk.factors.join('|'))}" data-hub="${escapeHtml(depHub)}"${schedRiskOtp !== undefined ? ' data-otp="' + schedRiskOtp + '"' : ''}${schedRiskWxOrig ? ' data-weather="' + escapeHtml(schedRiskWxOrig.level + (schedRiskWxOrig.reasons.length ? ': ' + schedRiskWxOrig.reasons.join(', ') : '')) + '"' : ''}${schedRiskWxDest ? ' data-dest-weather="' + escapeHtml(schedRiskWxDest.level + (schedRiskWxDest.reasons.length ? ': ' + schedRiskWxDest.reasons.join(', ') : '')) + '"' : ''}${schedRiskIrops ? ' data-irops="' + escapeHtml(schedRiskIrops.cancellationRate + '% cancelled, ' + (schedRiskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${schedRiskFaa ? ' data-faa-status="' + escapeHtml(schedRiskFaa) + '"' : ''} style="background:${dRisk.color}20;color:${dRisk.color};cursor:pointer" title="Click for AI analysis">${dRisk.label}</span>` : '';
 
     return `<tr>
       <td>${escapeHtml(timeStr)}${timeExtra}</td>
@@ -4231,27 +4240,42 @@ async function _doPreloadWeatherAndFAA() {
     const stationToHub = {};
     for (const [hub, station] of Object.entries(hubStations)) stationToHub[station] = hub;
 
-    // Collect non-hub destinations from watched flights for destination weather
-    const watchedDests = new Set();
+    const extraAirports = new Map();
+    const addExtraAirport = (iata) => {
+      const code = (iata || '').trim().toUpperCase();
+      if (!code || code.length !== 3 || hubStations[code]) return;
+      const station = getMetarStationForIata(code);
+      if (!station) return;
+      extraAirports.set(code, station);
+    };
+
+    // Collect non-hub airports from watched flights for origin/destination weather
     try {
       const watchedRaw = localStorage.getItem('bb_watched_flights') || localStorage.getItem('watchedFlights');
       if (watchedRaw) {
         const wf = JSON.parse(watchedRaw);
         wf.forEach(w => {
-          const dest = (w.route || '').split('\u2192')[1]?.trim() || (w.route || '').split('→')[1]?.trim();
-          if (dest && dest.length === 3 && !hubStations[dest]) watchedDests.add(dest);
+          const route = w.route || '';
+          const parts = route.split('\u2192').length > 1 ? route.split('\u2192') : route.split('→');
+          addExtraAirport(parts[0]);
+          addExtraAirport(parts[1]);
         });
       }
     } catch(e) {}
 
+    Object.values(schedRawByHub).forEach(flights => {
+      if (!Array.isArray(flights)) return;
+      flights.forEach(fl => {
+        addExtraAirport(fl.airport?.origin?.code?.iata);
+        addExtraAirport(fl.airport?.destination?.code?.iata);
+      });
+    });
+
     // Map non-hub IATA to ICAO for METAR API (US airports = K + IATA)
     const extraStations = {};
-    watchedDests.forEach(iata => {
-      // US domestic: prepend K. International would need a lookup table,
-      // but most United destinations are US domestic
-      const icao = iata.length === 3 ? 'K' + iata : iata;
-      extraStations[iata] = icao;
-      stationToHub[icao] = iata;
+    extraAirports.forEach((station, iata) => {
+      extraStations[iata] = station;
+      stationToHub[station] = iata;
     });
 
     const allStations = [...Object.values(hubStations), ...Object.values(extraStations)].join(',');
@@ -4267,7 +4291,7 @@ async function _doPreloadWeatherAndFAA() {
         const key = stationToHub[m.icaoId || m.stationId] || stationToHub[m.id];
         if (key) metarByHub[key] = m;
       });
-      [...hubs, ...watchedDests].forEach(apt => {
+      [...hubs, ...extraAirports.keys()].forEach(apt => {
         const data = metarByHub[apt];
         if (!data) return;
         const raw = data.rawOb || '';
@@ -4297,6 +4321,11 @@ async function _doPreloadWeatherAndFAA() {
         else if (d.type === 'closure') faaIndex[code].closure = true;
       });
       faaDelayIndex = faaIndex;
+    }
+
+    if (document.getElementById('tab-schedule')?.classList.contains('active') && schedAllFlights.length) {
+      renderScheduleTable();
+      renderScheduleStats();
     }
   } catch(e) {
     console.error('Weather/FAA preload error:', e);
@@ -4459,6 +4488,11 @@ function renderIropsFromAPI(data) {
   html += '</div>';
 
   content.innerHTML = html;
+
+  if (document.getElementById('tab-schedule')?.classList.contains('active') && schedAllFlights.length) {
+    renderScheduleTable();
+    renderScheduleStats();
+  }
 }
 
 // ═══ FAA DELAY CONTEXT ═══
@@ -4945,12 +4979,13 @@ function buildMyFlightCard(watched, td) {
   const riskWx = weatherOpsByHub[origCode];
   const riskWxDest = weatherOpsByHub[destCode];
   const riskIrops = iropsHubData[origCode];
+  const riskFaaStatus = formatDelayExplainFAAStatus(origCode, destCode, faaDelayIndex);
   const riskConn = connectionIndex[flightNum];
   const riskConnStr = riskConn ? (riskConn.isOutbound
     ? 'Connecting from ' + riskConn.connFlight + ' via ' + riskConn.hub + ', ' + riskConn.minutes + 'min layover (' + riskConn.risk + ')'
     : 'Connects to ' + riskConn.connFlight + ' ' + riskConn.hub + '\u2192' + (riskConn.dest || '?') + ', ' + riskConn.minutes + 'min layover (' + riskConn.risk + ')') : '';
   if (risk && (resolvedStatus === 'scheduled' || resolvedStatus === 'delayed' || resolvedStatus === '' || !resolvedStatus)) {
-    riskHtml = `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIrops ? ' data-irops="' + escapeHtml(riskIrops.cancellationRate + '% cancelled, ' + (riskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''} style="background:${risk.color}20;color:${risk.color};cursor:pointer" title="Click for AI analysis">${risk.label} RISK</span>`;
+    riskHtml = `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIrops ? ' data-irops="' + escapeHtml(riskIrops.cancellationRate + '% cancelled, ' + (riskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${riskFaaStatus ? ' data-faa-status="' + escapeHtml(riskFaaStatus) + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''} style="background:${risk.color}20;color:${risk.color};cursor:pointer" title="Click for AI analysis">${risk.label} RISK</span>`;
   }
 
   // Departure/arrival time data attributes for countdown timer
@@ -4978,7 +5013,7 @@ function buildMyFlightCard(watched, td) {
     <div class="mf-actions">
       ${liveFlight ? `<button data-action="focus-flight" data-icao24="${escapeHtml(liveFlight.icao24)}">View on Map</button>` : ''}
       ${reg ? `<button data-action="aircraft-detail" data-reg="${escapeHtml(reg)}">Aircraft Details</button>` : ''}
-      ${risk ? `<button class="delay-explain-btn" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIrops ? ' data-irops="' + escapeHtml(riskIrops.cancellationRate + '% cancelled, ' + (riskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''}>Explain Delay Risk</button>` : ''}
+      ${risk ? `<button class="delay-explain-btn" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIrops ? ' data-irops="' + escapeHtml(riskIrops.cancellationRate + '% cancelled, ' + (riskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${riskFaaStatus ? ' data-faa-status="' + escapeHtml(riskFaaStatus) + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''}>Explain Delay Risk</button>` : ''}
       <button data-action="toggle-watch-flight" data-flight="${flightNum}" data-route="${escapeHtml(watched.route)}" data-status="${escapeHtml(watched.status)}" data-stop-prop="1">Unwatch</button>
     </div>
   </div>`;
@@ -5098,15 +5133,10 @@ function computeDelayRisk(watched, origHub, destHub, timeData, liveFlight) {
 }
 
 function computeDelayRiskForScheduleFlight(fl, hub) {
-  const orig = fl.airport?.origin?.code?.iata || hub;
-  const dest = fl.airport?.destination?.code?.iata || '';
+  const { depHub, arrHub } = getScheduleRiskContext(fl, hub, schedCurrentDir);
   const status = classifySchedStatus(fl);
   // Only score not-yet-departed flights
   if (status.key !== 'scheduled' && status.key !== 'estimated' && status.key !== 'delayed') return null;
-
-  const dir = schedCurrentDir;
-  const depHub = dir === 'departures' ? hub : orig;
-  const arrHub = dir === 'departures' ? dest : hub;
 
   const schedTime = fl.time?.scheduled?.departure || fl.time?.scheduled?.arrival;
   const estTime = fl.time?.estimated?.departure || fl.time?.estimated?.arrival;
@@ -5575,6 +5605,7 @@ document.addEventListener('click', function(e) {
         otp: el.dataset.otp,
         weather: el.dataset.weather,
         destWeather: el.dataset.destWeather,
+        faaStatus: el.dataset.faaStatus,
         inbound: el.dataset.inbound,
         irops: el.dataset.irops,
         hubTime: el.dataset.hubTime,
@@ -6185,6 +6216,7 @@ async function fetchDelayExplanation(ctx) {
         otp: ctx.otp,
         weather: ctx.weather,
         destWeather: ctx.destWeather,
+        faaStatus: ctx.faaStatus,
         inbound: ctx.inbound,
         irops: ctx.irops,
         hubTime: ctx.hubTime,
