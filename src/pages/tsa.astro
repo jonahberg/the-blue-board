@@ -341,28 +341,36 @@ const faqEntries = getAllFaqEntries();
       submitBtn.textContent = 'Signing up...';
       errorEl.style.display = 'none';
 
+      var controller = new AbortController();
+      var fetchTimeout = setTimeout(function() { controller.abort(); }, 10000);
+
       fetch('/api/waitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email, source: 'tsa-page' }),
+        signal: controller.signal,
       })
         .then(function(resp) {
+          clearTimeout(fetchTimeout);
           if (resp.ok || resp.status === 409) {
             localStorage.setItem(STORAGE_KEY, 'true');
             isUnlocked = true;
             unblurAll();
             hideGate();
           } else {
-            return resp.json().catch(function() { return {}; }).then(function(data) {
+            resp.json().catch(function() { return {}; }).then(function(data) {
               errorEl.textContent = data.error || 'Something went wrong. Try again.';
               errorEl.style.display = 'block';
-              submitBtn.disabled = false;
-              submitBtn.textContent = 'Get Free Access \u2192';
             });
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Get Free Access \u2192';
           }
         })
-        .catch(function() {
-          errorEl.textContent = 'Network error. Please try again.';
+        .catch(function(err) {
+          clearTimeout(fetchTimeout);
+          errorEl.textContent = err.name === 'AbortError'
+            ? 'Request timed out. Please try again.'
+            : 'Network error. Please try again.';
           errorEl.style.display = 'block';
           submitBtn.disabled = false;
           submitBtn.textContent = 'Get Free Access \u2192';
