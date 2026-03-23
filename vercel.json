@@ -18,11 +18,14 @@
         "api/cron/sync-starlink.ts": { "maxDuration": 30 },
         "api/starlink-data.ts": { "maxDuration": 20 },
         "api/predict-flight.ts": { "maxDuration": 15 },
-        "api/news-notify.ts": { "maxDuration": 15 }
+        "api/news-notify.ts": { "maxDuration": 15 },
+        "api/tsa.ts": { "maxDuration": 30 },
+        "api/cron/refresh-tsa.ts": { "maxDuration": 30 }
     },
     "crons": [
         { "path": "/api/cron/warm-schedules", "schedule": "*/15 * * * *" },
-        { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" }
+        { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" },
+        { "path": "/api/cron/refresh-tsa", "schedule": "*/5 * * * *" }
     ],
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
@@ -67,6 +70,12 @@
       "source": "/hubs/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=600" }
+      ]
+    },
+    {
+      "source": "/tsa",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=300, s-maxage=3600, stale-while-revalidate=600" }
       ]
     },
     {

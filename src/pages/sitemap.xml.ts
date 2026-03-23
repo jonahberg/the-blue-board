@@ -30,6 +30,7 @@ export function GET() {
   const fleetKeys = fleetOrder as Array<keyof typeof fleetTypes>;
   const urls = [
     renderUrl('/', getLastModified(homeLastmodPaths), 'daily', '1.0'),
+    renderUrl('/tsa', new Date().toISOString().split('T')[0], 'hourly', '0.9'),
     renderUrl('/fleet', getLastModified(fleetIndexLastmodPaths), 'daily', '0.9'),
     ...fleetKeys.map((key) =>
       renderUrl(
