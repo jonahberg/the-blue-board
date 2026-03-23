@@ -11,8 +11,8 @@ const faqEntries = getAllFaqEntries();
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0B1018">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E">
-<title>United Airlines TSA Wait Times — Checkpoint Status at All 7 Hubs | The Blue Board</title>
-<meta name="description" content="Live TSA checkpoint wait times at United Airlines terminals. Pre✓, CLEAR, and standard lane status at ORD, DEN, IAH, EWR, SFO, IAD, and LAX. Checkpoint hours, tips, and security line info — updated every 5 minutes.">
+<title>United Airlines TSA Checkpoints — Pre✓, CLEAR & Lane Guide at All 7 Hubs | The Blue Board</title>
+<meta name="description" content="Complete TSA checkpoint guide for United Airlines terminals. Pre✓, CLEAR, Priority, and standard lane availability at ORD, DEN, IAH, EWR, SFO, IAD, and LAX. Checkpoint hours, tips, and which security line to use.">
 <meta name="author" content="The Blue Board">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://theblueboard.co/tsa">
@@ -160,8 +160,8 @@ const faqEntries = getAllFaqEntries();
 
   <!-- Hero -->
   <div class="tsa-hero">
-    <h1>TSA Security Wait Times</h1>
-    <p>Live checkpoint wait times at United Airlines terminals across all 7 domestic hubs. Standard, Pre✓, CLEAR, and Priority lane availability — updated every 5 minutes.</p>
+    <h1>TSA Security Checkpoints</h1>
+    <p>Complete checkpoint guide for United Airlines terminals at all 7 domestic hubs. Standard, Pre✓, CLEAR, and Priority lane availability — hours, tips, and which checkpoint to use.</p>
   </div>
 
   <!-- Jump nav -->
@@ -179,28 +179,6 @@ const faqEntries = getAllFaqEntries();
         <div class="tsa-hub-label">TSA Wait Times</div>
         <h2 class="tsa-hub-title">{code} — {hub.name.replace(/Airport$/i, '').replace(/International$/i, 'Intl').trim()}</h2>
         <p class="tsa-hub-subtitle">{hub.terminals}{hub.terminalNote ? ` · ${hub.terminalNote}` : ''}</p>
-
-        <!-- Wait time summary (filled by JS) -->
-        <div class="tsa-wait-summary" data-hub={code}>
-          <div class="tsa-wait-stat">
-            <div class="tsa-wait-stat-label">Standard Wait</div>
-            <div class="tsa-wait-stat-value tsa-blurred" data-wait-type="standard" data-hub-code={code}>
-              --<span class="tsa-wait-unit">min</span>
-            </div>
-          </div>
-          <div class="tsa-wait-stat">
-            <div class="tsa-wait-stat-label">Pre✓ Wait</div>
-            <div class="tsa-wait-stat-value tsa-blurred" data-wait-type="precheck" data-hub-code={code}>
-              --<span class="tsa-wait-unit">min</span>
-            </div>
-          </div>
-          <div class="tsa-wait-stat">
-            <div class="tsa-wait-stat-label">Status</div>
-            <div class="tsa-wait-stat-value" style="font-size:12px" data-wait-type="status" data-hub-code={code}>
-              <span class="tsa-wait-no-data">Loading...</span>
-            </div>
-          </div>
-        </div>
 
         <!-- Checkpoint table -->
         <table class="tsa-checkpoint-table">
@@ -243,9 +221,8 @@ const faqEntries = getAllFaqEntries();
         ))}
 
         <!-- Footer -->
-        <div class="tsa-hub-footer" data-last-updated={code}>
-          <span class="tsa-live-dot" style="display:none" data-live-dot={code}></span>
-          <span data-timestamp={code}>Waiting for data...</span>
+        <div class="tsa-hub-footer">
+          <span>Checkpoint data verified March 2026</span>
         </div>
         <div class="tsa-hub-crosslink">
           <a href={`/hubs/${code.toLowerCase()}`}>View {code} hub status &rarr;</a>
@@ -287,7 +264,7 @@ const faqEntries = getAllFaqEntries();
     <button class="tsa-gate-btn" id="tsa-gate-submit">Get Free Access &rarr;</button>
     <div class="tsa-gate-error" id="tsa-gate-error"></div>
     <div class="tsa-gate-privacy">No spam. Unsubscribe anytime.</div>
-    <button class="tsa-gate-dismiss" id="tsa-gate-dismiss">No thanks, I'll just guess</button>
+    <button class="tsa-gate-dismiss" id="tsa-gate-dismiss">Skip for now</button>
   </div>
 </div>
 
@@ -297,15 +274,9 @@ const faqEntries = getAllFaqEntries();
 
   var STORAGE_KEY = 'tsa_email_unlocked';
   var DISMISS_KEY = 'tsa_gate_dismissed';
-  var REFRESH_INTERVAL = 60000;
 
   var isUnlocked = localStorage.getItem(STORAGE_KEY) === 'true';
   var isDismissed = localStorage.getItem(DISMISS_KEY) === 'true';
-
-  function unblurAll() {
-    var els = document.querySelectorAll('.tsa-blurred');
-    for (var i = 0; i < els.length; i++) els[i].classList.remove('tsa-blurred');
-  }
 
   function showGate() {
     var overlay = document.getElementById('tsa-gate');
@@ -317,9 +288,7 @@ const faqEntries = getAllFaqEntries();
     if (overlay) overlay.classList.add('tsa-hidden');
   }
 
-  if (isUnlocked) {
-    unblurAll();
-  } else if (!isDismissed) {
+  if (!isUnlocked && !isDismissed) {
     setTimeout(showGate, 2000);
   }
 
@@ -341,28 +310,35 @@ const faqEntries = getAllFaqEntries();
       submitBtn.textContent = 'Signing up...';
       errorEl.style.display = 'none';
 
+      var controller = new AbortController();
+      var fetchTimeout = setTimeout(function() { controller.abort(); }, 10000);
+
       fetch('/api/waitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email, source: 'tsa-page' }),
+        signal: controller.signal,
       })
         .then(function(resp) {
+          clearTimeout(fetchTimeout);
           if (resp.ok || resp.status === 409) {
             localStorage.setItem(STORAGE_KEY, 'true');
             isUnlocked = true;
-            unblurAll();
             hideGate();
           } else {
-            return resp.json().catch(function() { return {}; }).then(function(data) {
+            resp.json().catch(function() { return {}; }).then(function(data) {
               errorEl.textContent = data.error || 'Something went wrong. Try again.';
               errorEl.style.display = 'block';
-              submitBtn.disabled = false;
-              submitBtn.textContent = 'Get Free Access \u2192';
             });
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Get Free Access \u2192';
           }
         })
-        .catch(function() {
-          errorEl.textContent = 'Network error. Please try again.';
+        .catch(function(err) {
+          clearTimeout(fetchTimeout);
+          errorEl.textContent = err.name === 'AbortError'
+            ? 'Request timed out. Please try again.'
+            : 'Network error. Please try again.';
           errorEl.style.display = 'block';
           submitBtn.disabled = false;
           submitBtn.textContent = 'Get Free Access \u2192';
@@ -380,123 +356,12 @@ const faqEntries = getAllFaqEntries();
     dismissBtn.addEventListener('click', function() {
       localStorage.setItem(DISMISS_KEY, 'true');
       isDismissed = true;
-      unblurAll();
       hideGate();
     });
   }
 
-  // --- Live data ---
-  function getWaitColor(minutes) {
-    if (minutes === null || minutes === undefined) return '';
-    if (minutes < 10) return 'tsa-wait-green';
-    if (minutes <= 20) return 'tsa-wait-amber';
-    if (minutes <= 30) return 'tsa-wait-yellow';
-    return 'tsa-wait-red';
-  }
-
-  function setWaitValue(el, minutes) {
-    if (minutes === null || minutes === undefined) {
-      el.textContent = '';
-      var noData = document.createElement('span');
-      noData.className = 'tsa-wait-no-data';
-      noData.textContent = 'No data';
-      el.appendChild(noData);
-      return;
-    }
-    el.textContent = '';
-    var val = minutes === 0 ? '< 1' : minutes >= 120 ? '2+' : String(minutes);
-    el.appendChild(document.createTextNode(val));
-    var unit = document.createElement('span');
-    unit.className = 'tsa-wait-unit';
-    unit.textContent = minutes >= 120 ? 'hrs' : 'min';
-    el.appendChild(unit);
-  }
-
-  function isStale(lastUpdated) {
-    if (!lastUpdated) return true;
-    return (Date.now() - new Date(lastUpdated).getTime()) > 600000;
-  }
-
-  function fetchTsaData() {
-    return fetch('/api/tsa').then(function(r) {
-      if (!r.ok) throw new Error('API error');
-      return r.json();
-    }).catch(function() { return null; });
-  }
-
-  function updateUI(data) {
-    if (!data || !data.hubs) return;
-
-    var codes = Object.keys(data.hubs);
-    for (var i = 0; i < codes.length; i++) {
-      var code = codes[i];
-      var hub = data.hubs[code];
-
-      // Standard wait
-      var stdEl = document.querySelector('[data-wait-type="standard"][data-hub-code="' + code + '"]');
-      if (stdEl) {
-        var stdColor = getWaitColor(hub.standardWait);
-        stdEl.className = 'tsa-wait-stat-value' + (stdColor ? ' ' + stdColor : '');
-        if (!isUnlocked && !isDismissed) stdEl.classList.add('tsa-blurred');
-        setWaitValue(stdEl, hub.standardWait);
-      }
-
-      // PreCheck wait
-      var preEl = document.querySelector('[data-wait-type="precheck"][data-hub-code="' + code + '"]');
-      if (preEl) {
-        var preColor = getWaitColor(hub.precheckWait);
-        preEl.className = 'tsa-wait-stat-value' + (preColor ? ' ' + preColor : '');
-        if (!isUnlocked && !isDismissed) preEl.classList.add('tsa-blurred');
-        setWaitValue(preEl, hub.precheckWait);
-      }
-
-      // Status
-      var statusEl = document.querySelector('[data-wait-type="status"][data-hub-code="' + code + '"]');
-      if (statusEl) {
-        statusEl.textContent = '';
-        if (hub.standardWait !== null || hub.precheckWait !== null) {
-          var stale = isStale(hub.lastUpdated);
-          var dot = document.createElement('span');
-          dot.className = stale ? 'tsa-live-dot tsa-stale-dot' : 'tsa-live-dot';
-          statusEl.appendChild(dot);
-          var label = document.createElement('span');
-          label.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--ua-muted)';
-          label.textContent = stale ? 'Stale' : 'Live';
-          statusEl.appendChild(label);
-        } else {
-          var nd = document.createElement('span');
-          nd.className = 'tsa-wait-no-data';
-          nd.textContent = 'No data available';
-          statusEl.appendChild(nd);
-        }
-      }
-
-      // Live dot in footer
-      var liveDot = document.querySelector('[data-live-dot="' + code + '"]');
-      if (liveDot && (hub.standardWait !== null || hub.precheckWait !== null)) {
-        liveDot.style.display = 'inline-block';
-        if (isStale(hub.lastUpdated)) liveDot.classList.add('tsa-stale-dot');
-        else liveDot.classList.remove('tsa-stale-dot');
-      }
-
-      // Timestamp
-      var tsEl = document.querySelector('[data-timestamp="' + code + '"]');
-      if (tsEl && hub.lastUpdated) {
-        var d = new Date(hub.lastUpdated);
-        var timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-        var ago = Math.round((Date.now() - d.getTime()) / 60000);
-        tsEl.textContent = ago <= 1 ? 'Updated just now' : 'Updated ' + ago + ' min ago \u00b7 ' + timeStr;
-      } else if (tsEl) {
-        tsEl.textContent = 'No data available';
-      }
-    }
-  }
-
-  // Initial fetch
-  fetchTsaData().then(updateUI);
-
-  // Auto-refresh
-  setInterval(function() { fetchTsaData().then(updateUI); }, REFRESH_INTERVAL);
+  // No live data fetching — MyTSA API is currently unavailable.
+  // The API proxy and cron remain in place for when the data source returns.
 })();
 </script>
 </body>
