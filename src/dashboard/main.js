@@ -5920,6 +5920,8 @@ function hideDisclaimer() {
     if (waitlistSubmitted) return;
     if (!force && waitlistShownThisSession) return;
     if (!force && isDismissedRecently('bb_waitlist_dismissed')) return;
+    // Don't stack on top of onboarding overlay (Codex P2 finding)
+    if (!force && overlay && overlay.style.display !== 'none' && !overlay.classList.contains('ob-hidden')) return;
     if (document.getElementById('waitlist-modal')) {
       document.getElementById('waitlist-modal').style.display = 'flex';
       waitlistShownThisSession = true;
