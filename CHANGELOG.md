@@ -4,6 +4,74 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-03-25
+
+**6 weeks, 300+ commits, and 70 merged PRs since launch day.** This is everything that shipped between v1.0 (Feb 12) and v1.5.
+
+### Network & Coverage
+- **9 hubs** (was 7) — added Tokyo Narita (NRT) and Guam (GUM) with full schedule, weather, and fleet support
+- **Pacific view toggle** — transpacific route visualization with antimeridian-crossing fix
+- **SEO-optimized hub pages** for all 9 hubs (`/hubs/ord`, `/hubs/den`, etc.) with structured data and canonical URLs
+- **TSA Checkpoint Guide** (`/tsa`) — terminal-by-terminal Pre✓, CLEAR, Priority, and standard lane reference for all 7 domestic hubs
+
+### Intelligence
+- **AI-Powered Delay Explanations** — Claude Haiku explains why a flight is delayed in plain language, with inbound aircraft context and weather correlation
+- **Delay Risk Engine v3** — 8-signal scoring: phenomena-aware weather, IROPS stress, ETA-based turnaround, historical OTP, hub congestion, equipment age, route complexity, and time-of-day patterns
+- **Aircraft Journey Chain Tracking** — see where an aircraft has been and predict downstream delay propagation
+- **Ops Impact Assessment** — flags snow, gusts ≥30kt, freezing precip, and thunderstorms even when VFR
+
+### Fleet
+- **Fleet Health Dashboard** — live fleet status with health categories, pie chart, and aircraft count by type
+- **Fleet tab redesigned** — 3-zone layout with family grouping, fleet stats chips, and Starlink WiFi status
+- **19 SEO-optimized fleet type pages** (`/fleet/737-max-9`, `/fleet/a321neo`, etc.) with structured data, full aircraft registry tables, and inter-type navigation
+- **Special Aircraft Tracker** — named and special-livery aircraft panel
+- **Aircraft Detail Modal** — click any tail number for registration, type, engine, status, live flight, and history
+- **Equipment Swap Impact Analysis** — schedule tab highlights equipment changes with seat and amenity impact
+- **Live Starlink Data** — replaced static database with live API feed and flight connectivity predictions
+
+### Schedule & Data
+- **Schedule Filters** — filter by route type (domestic/international), Starlink-equipped, time range, and delay risk level
+- **Scrape-first FR24 routing** with circuit breaker — projected ~96-99% API credit savings vs. official-first
+- **Background cache warming** — Vercel cron pre-warms schedule data for faster tab loads
+- **Schedule resilience** — partial data instead of 502s, stale-complete fallback, retry with backoff
+
+### News & Content
+- **News Hub** (`/news`) — curated United Airlines articles with SEO-optimized pages, NewsArticle structured data, and OG/Twitter previews
+- **Google News sitemap** (`/news-sitemap.xml`) and **dynamic RSS feed** (`/feed.xml`)
+- **Email news digest** — waitlist subscribers receive a Resend-powered email when new articles are published
+- **Rotating news banner** with crossfade animation on the dashboard
+
+### Design & UX
+- **Typography and color redesign** — Satoshi + DM Sans typefaces, amber accent palette, self-hosted fonts (zero FOUT)
+- **Mobile-first redesign** — map-maximized layout, bottom tab bar, collapsible filters, touch-optimized controls
+- **Weather tab** — 60/40 desktop split layout with compact IROPS stats bar
+- **SVG plane icons** replace emoji for cross-platform accuracy
+- **Onboarding overlay** — first-time welcome with home hub selection
+- **Supporter Wall** — dashboard section recognizing project supporters
+
+### Email & Engagement
+- **Email signup with smart triggers** — new visitors: 90s / 8 clicks; returning visitors: 5min / 30 clicks; 7-day dismiss persistence
+- **Welcome email** via Resend on first waitlist signup with de-duplication
+- **Shareable flight links** (`?flight=UA1234`) with push notification watch alerts
+- **PWA support** — installable home screen app with service worker
+
+### Infrastructure
+- **Astro migration** — hub pages built from shared templates (3,001 lines of duplicated HTML → 1,555 lines of templates)
+- **TypeScript migration** — core API modules migrated for type safety
+- **CSS extraction** — styles extracted from inline to dedicated stylesheets
+- **JS modularization** — monolithic scripts split into focused modules
+- **Automated sitemap** with build-time lastmod stamps
+- **CI/CD** — `npm test` on all pushes and PRs
+- **100+ unit tests** across schedule, fleet, weather, news, popup, and API endpoints
+
+### Security & Performance
+- **API rate limiting** — all endpoints protected with per-IP limits
+- **XSS hardening** — innerHTML replaced with DOM node construction, all interpolations escaped
+- **Supabase RLS** on waitlist table, prompt injection sanitization on AI endpoint
+- **CORS hardening**, handler-level API timeouts, Anthropic SDK key isolation
+- **Homepage speed** — deferred non-critical scripts, preloaded LCP tile, fixed Core Web Vitals
+- **9 critical Codex code review findings** resolved across APIs, dashboard, and CI
+
 ## [1.4.0] - 2026-03-19
 
 ### Added
@@ -298,6 +366,7 @@ Initial public launch.
 - JSON-LD structured data, Open Graph metadata
 - Vercel hosting with edge caching
 
+[1.5.0]: https://github.com/notjbg/the-blue-board/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/notjbg/the-blue-board/compare/v1.3.8...v1.4.0
 [1.3.8]: https://github.com/notjbg/the-blue-board/compare/v1.3.7...v1.3.8
 [1.3.7]: https://github.com/notjbg/the-blue-board/compare/v1.3.6...v1.3.7

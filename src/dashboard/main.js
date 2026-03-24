@@ -5920,6 +5920,8 @@ function hideDisclaimer() {
     if (waitlistSubmitted) return;
     if (!force && waitlistShownThisSession) return;
     if (!force && isDismissedRecently('bb_waitlist_dismissed')) return;
+    // Don't stack on top of onboarding overlay (Codex P2 finding)
+    if (!force && overlay && overlay.style.display !== 'none' && !overlay.classList.contains('ob-hidden')) return;
     if (document.getElementById('waitlist-modal')) {
       document.getElementById('waitlist-modal').style.display = 'flex';
       waitlistShownThisSession = true;
@@ -6101,17 +6103,22 @@ function hideDisclaimer() {
     setTimeout(function() { emailInput.focus(); }, 100);
   }
 
-  // Trigger 1: After 5 minutes of active use
+  // Trigger thresholds: aggressive for new visitors, gentle for returning
+  var isNewVisitor = !localStorage.getItem('bb-visited');
+  var TRIGGER_TIME_MS = isNewVisitor ? 90 * 1000 : 5 * 60 * 1000;    // 90s new, 5min returning
+  var TRIGGER_CLICKS  = isNewVisitor ? 8 : 30;                         // 8 new, 30 returning
+
+  // Trigger 1: After time threshold of active use
   setTimeout(function() {
     if (!waitlistShownThisSession && !waitlistSubmitted) {
       showWaitlistModal();
     }
-  }, 5 * 60 * 1000);
+  }, TRIGGER_TIME_MS);
 
-  // Trigger 2: After 30+ interactions (tab switches, searches, flight clicks)
+  // Trigger 2: After click threshold interactions (tab switches, searches, flight clicks)
   document.addEventListener('click', function() {
     engagementInteractions++;
-    if (engagementInteractions === 30 && !waitlistShownThisSession && !waitlistSubmitted) {
+    if (engagementInteractions === TRIGGER_CLICKS && !waitlistShownThisSession && !waitlistSubmitted) {
       showWaitlistModal();
     }
   });
