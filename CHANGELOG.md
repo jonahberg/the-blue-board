@@ -4,6 +4,35 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-03-25
+
+### Added
+- **TSA Checkpoint Guide** (`/tsa`) — static terminal-by-terminal checkpoint reference for all 7 United hubs (Pre✓, CLEAR, Priority, standard lane availability, hours, and tips)
+- **Supporter Wall** — dashboard section recognizing project supporters
+- **Smart email signup triggers** — new visitors see the signup prompt after 90 seconds or 8 clicks; returning visitors keep the original 5-minute / 30-click thresholds
+- **News articles** — "United's First Polaris Studio 787-9 Enters Fleet" and "Kirby's Playbook for $175 Oil"
+- **News banner crossfade** — rotating animation on the dashboard news banner
+
+### Changed
+- **Typography and color redesign** — Satoshi + DM Sans typefaces, amber accent palette, updated design tokens across the entire app
+- **Fleet tab redesigned** — 3-zone layout with family grouping for easier navigation
+- **Fleet pages redesigned** — improved information hierarchy for SEO and user experience
+- **Mobile UX polish** — weather map zoom controls, popup overlap fixes, SVG icons replacing emoji
+- **Email signup UX** — popup dismissal now persists for 7 days, prevents stacking on the onboarding overlay
+- Fleet Site links updated to new domain (unitedfleetsite.com)
+- Updated README screenshot and OG image
+
+### Fixed
+- 9 critical findings from Codex code review across APIs, dashboard, and CI
+- Weather delay context not propagating to delay explanation engine
+- Fleet page schema type (Product → SoftwareApplication)
+- Waitlist popup could fire on top of the onboarding overlay for new visitors
+- Homepage page speed bottlenecks (deferred non-critical scripts)
+
+### Removed
+- TSA link from homepage navigation (MyTSA live API was shut down; page kept as static reference)
+- `/tsa` removed from sitemap, page set to `noindex`
+
 ## [1.4.0] - 2026-03-19
 
 ### Added
@@ -298,6 +327,7 @@ Initial public launch.
 - JSON-LD structured data, Open Graph metadata
 - Vercel hosting with edge caching
 
+[1.5.0]: https://github.com/notjbg/the-blue-board/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/notjbg/the-blue-board/compare/v1.3.8...v1.4.0
 [1.3.8]: https://github.com/notjbg/the-blue-board/compare/v1.3.7...v1.3.8
 [1.3.7]: https://github.com/notjbg/the-blue-board/compare/v1.3.6...v1.3.7

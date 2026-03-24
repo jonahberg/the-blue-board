@@ -6,7 +6,7 @@
   "repository": "notjbg/the-blue-board",
   "private": true,
   "type": "module",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "scripts": {
     "dev": "node scripts/run-astro-dev.mjs",
     "build": "vite build --config vite.dashboard.config.js && astro build && node scripts/stamp-seo-build-date.mjs",
