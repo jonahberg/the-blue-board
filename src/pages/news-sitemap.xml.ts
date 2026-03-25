@@ -18,7 +18,13 @@ export function GET() {
   twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
   const cutoff = twoDaysAgo.toISOString().slice(0, 10);
 
-  const recent = articles.filter((a) => a.date >= cutoff);
+  let recent = articles.filter((a) => a.date >= cutoff);
+
+  // Google requires at least one <url> in a sitemap — fall back to the
+  // most recent article so the XML is always valid.
+  if (recent.length === 0 && articles.length > 0) {
+    recent = [articles[0]];
+  }
 
   const entries = recent.map(
     (a) => `  <url>
