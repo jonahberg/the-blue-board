@@ -3,6 +3,8 @@ import { formatDelayExplainFAAStatus, getScheduleRiskContext } from '../lib/dela
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, WIFI_DISPLAY, sortFleetData, filterFleetData, parseFleetDeepLink, TAB_MAP, VALID_FLEET_VIEWS } from '../lib/fleet-utils.js';
+import { getFlightPopupMetrics } from '../lib/flight-popup.js';
+import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
 
 // ═══════════════════════════════════════════════
 // SVG ICON CONSTANTS — clean icons for buttons
@@ -1185,10 +1187,7 @@ function showFlightPopup(f, marker) {
   const flightNum = f.flightIATA || f.callsign.replace(/^UAL/, '');
   const displayFlight = f.flightIATA || f.callsign || 'N/A';
 
-  const altFt = f.alt ? Math.round(f.alt * 3.28084) : null;
-  const spdKts = f.spd ? Math.round(f.spd * 1.944) : null;
-  const altPct = altFt ? Math.min(100, (altFt / 41000) * 100) : 0;
-  const mach = altFt && altFt > 28000 && spdKts ? (spdKts / 661).toFixed(2) : null;
+  const { altFt, altPct, speedText } = getFlightPopupMetrics(f);
 
   const origCode = f.origin || originObj?.iata || '???';
   const destCode = f.dest || destObj?.iata || '???';
@@ -1211,7 +1210,7 @@ function showFlightPopup(f, marker) {
   html += `<div class="popup-grid">`;
   html += `<div class="popup-field"><span class="popup-field-label">Altitude</span><span class="popup-field-value">${altFt ? altFt.toLocaleString() + ' ft' : 'N/A'}</span>`;
   html += `<div class="alt-bar"><div class="alt-bar-fill" style="width:${altPct}%"></div></div></div>`;
-  html += `<div class="popup-field"><span class="popup-field-label">Speed</span><span class="popup-field-value">${spdKts ? spdKts + ' kts' : 'N/A'}${mach ? ' / M' + mach : ''}</span></div>`;
+  html += `<div class="popup-field"><span class="popup-field-label">Speed</span><span class="popup-field-value">${speedText}</span></div>`;
   html += `<div class="popup-field"><span class="popup-field-label">Heading</span><span class="popup-field-value">${f.hdg ? Math.round(f.hdg) + '°' : 'N/A'}</span></div>`;
   html += `<div class="popup-field"><span class="popup-field-label">V/S</span><span class="popup-field-value">${f.vr ? Math.round(f.vr * 196.85) + ' fpm' : 'N/A'}</span></div>`;
   html += `</div>`;
@@ -1257,8 +1256,8 @@ function showFlightPopup(f, marker) {
   const popupFlt = displayFlight;
   const popupRoute = (f.origin||'?') + '→' + (f.dest||'?');
   const popupWatched = isFlightWatched(popupFlt);
-  html += `<button class="watch-btn${popupWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(popupFlt)}" data-route="${escapeHtml(popupRoute)}" data-status="airborne" aria-label="${popupWatched ? 'Unwatch flight' : 'Watch flight'}" style="margin-left:auto">${popupWatched ? ICO_WATCHING + ' Watching' : ICO_WATCH + ' Watch'}</button>`;
-  html += `<button class="share-btn" data-action="share-flight" data-flight="${escapeHtml(popupFlt)}" aria-label="Share flight link" title="Copy shareable link">${ICO_SHARE} Share</button>`;
+  html += `<button class="watch-btn${popupWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(popupFlt)}" data-route="${escapeHtml(popupRoute)}" data-status="airborne" data-stop-prop="1" aria-label="${popupWatched ? 'Unwatch flight' : 'Watch flight'}" style="margin-left:auto">${popupWatched ? ICO_WATCHING + ' Watching' : ICO_WATCH + ' Watch'}</button>`;
+  html += `<button class="share-btn" data-action="share-flight" data-flight="${escapeHtml(popupFlt)}" data-stop-prop="1" aria-label="Share flight link" title="Copy shareable link">${ICO_SHARE} Share</button>`;
   html += `</div></div>`;
 
   if (marker.getPopup()) marker.unbindPopup();
@@ -3256,6 +3255,7 @@ function initScheduleTab() {
     const schedFilterChanged = () => { debouncedSchedRender(); updateAdvFilterBtnText(); };
     document.getElementById('sched-status').addEventListener('change', schedFilterChanged);
     document.getElementById('sched-aircraft').addEventListener('change', schedFilterChanged);
+    document.getElementById('sched-fleet-family').addEventListener('change', schedFilterChanged);
     document.getElementById('sched-route-type').addEventListener('change', schedFilterChanged);
     document.getElementById('sched-starlink').addEventListener('change', schedFilterChanged);
     document.getElementById('sched-timerange').addEventListener('change', schedFilterChanged);
@@ -3535,6 +3535,7 @@ function formatSchedTime(utcTimestamp, hub) {
 function getFilteredScheduleFlights() {
   const statusFilter = document.getElementById('sched-status').value;
   const aircraftFilter = document.getElementById('sched-aircraft').value;
+  const fleetFamilyFilter = document.getElementById('sched-fleet-family').value;
   const routeTypeFilter = document.getElementById('sched-route-type').value;
   const starlinkFilter = document.getElementById('sched-starlink').value;
   const timeRangeFilter = document.getElementById('sched-timerange').value;
@@ -3549,6 +3550,11 @@ function getFilteredScheduleFlights() {
     }
     // Aircraft filter
     if (aircraftFilter && fl.aircraft?.model?.code !== aircraftFilter) return false;
+    // Fleet family filter
+    if (fleetFamilyFilter) {
+      const family = getScheduleFleetFamily(fl.aircraft?.model?.code, fl.aircraft?.model?.text);
+      if (family !== fleetFamilyFilter) return false;
+    }
     // Route type filter (domestic / international)
     if (routeTypeFilter) {
       const endpoint = schedCurrentDir === 'departures'
@@ -4535,10 +4541,13 @@ function isFlightWatched(flightNum) {
 function toggleWatchFlight(flightNum, route, currentStatus) {
   let watched = getWatchedFlights();
   const idx = watched.findIndex(w => w.flight === flightNum);
+  let isWatched;
   if (idx >= 0) {
     watched.splice(idx, 1);
+    isWatched = false;
   } else {
     watched.push({ flight: flightNum, route: route || '', status: currentStatus || '', ts: Date.now() });
+    isWatched = true;
     // Show push notification prompt if not yet asked
     const prompted = localStorage.getItem('bb_push_prompted');
     if (!prompted && 'Notification' in window && Notification.permission === 'default') {
@@ -4554,6 +4563,25 @@ function toggleWatchFlight(flightNum, route, currentStatus) {
   updateMarkers();
   // Re-render MY FLIGHTS if that tab is active
   if (document.getElementById('tab-myflight')?.classList.contains('active')) renderMyFlights();
+  syncWatchButtons(flightNum, isWatched);
+  showWatchNotification(isWatched ? `👁️ Watching ${flightNum}` : `✕ Removed ${flightNum} from watched flights`);
+  return isWatched;
+}
+
+function syncWatchButtons(flightNum, isWatched) {
+  document.querySelectorAll('[data-action="toggle-watch-flight"]').forEach(el => {
+    if (el.dataset.flight !== flightNum || el.classList.contains('watch-remove')) return;
+    if (!el.classList.contains('watch-btn')) return;
+
+    el.classList.toggle('watching', isWatched);
+    el.setAttribute('aria-label', isWatched ? 'Unwatch flight' : 'Watch flight');
+    if (el.title) el.title = isWatched ? 'Unwatch this flight' : 'Watch this flight';
+
+    const showLabel = el.closest('.popup-links') || el.closest('.ac-modal-footer');
+    el.innerHTML = showLabel
+      ? (isWatched ? ICO_WATCHING + ' Watching' : ICO_WATCH + ' Watch')
+      : (isWatched ? ICO_WATCHING : ICO_WATCH);
+  });
 }
 
 function updateWatchBadge() {
@@ -5385,6 +5413,7 @@ function getActiveAdvFilterCount() {
   let count = 0;
   if (document.getElementById('sched-status')?.value) count++;
   if (document.getElementById('sched-aircraft')?.value) count++;
+  if (document.getElementById('sched-fleet-family')?.value) count++;
   if (document.getElementById('sched-route-type')?.value) count++;
   if (document.getElementById('sched-starlink')?.value) count++;
   if (document.getElementById('sched-timerange')?.value) count++;
@@ -5402,7 +5431,7 @@ function updateAdvFilterBtnText() {
     btn.textContent = `Filters (${count} active) ${isOpen ? '▴' : '▾'}`;
     btn.style.color = 'var(--ua-accent)';
   } else {
-    btn.textContent = isOpen ? 'Less Filters ▴' : 'Filter: Aircraft, Starlink, Delay… ▾';
+    btn.textContent = isOpen ? 'Less Filters ▴' : 'Filter: Fleet, Aircraft, Starlink… ▾';
     btn.style.color = 'var(--ua-muted)';
   }
 }
@@ -5687,7 +5716,7 @@ document.addEventListener('click', function(e) {
       'Toggle the weather radar overlay with the rain cloud button on the map'
     ],
     'tab-schedule': [
-      'Use "Filter: Aircraft, Starlink, Delay…" to find Starlink-equipped flights on your route',
+      'Use "Filter: Fleet, Aircraft, Starlink…" to narrow by family, equipment, or WiFi',
       'Click any registration in the schedule table to see full aircraft details'
     ],
     'tab-myflight': [
@@ -6392,7 +6421,7 @@ function buildAircraftDetailHTML(ac, reg) {
     var watchFlt = liveFlight.flightIATA || liveFlight.callsign || '';
     var watchRoute = (liveFlight.origin || '?') + '→' + (liveFlight.dest || '?');
     var watched = watchFlt ? isFlightWatched(watchFlt) : false;
-    html += '<button class="ac-action-btn watch-btn' + (watched ? ' watching' : '') + '" data-action="toggle-watch-flight" data-flight="' + escapeHtml(watchFlt) + '" data-route="' + escapeHtml(watchRoute) + '" data-status="airborne">' + (watched ? ICO_WATCHING + ' Watching' : ICO_WATCH + ' Watch') + '</button>';
+    html += '<button class="ac-action-btn watch-btn' + (watched ? ' watching' : '') + '" data-action="toggle-watch-flight" data-flight="' + escapeHtml(watchFlt) + '" data-route="' + escapeHtml(watchRoute) + '" data-status="airborne" data-stop-prop="1">' + (watched ? ICO_WATCHING + ' Watching' : ICO_WATCH + ' Watch') + '</button>';
   }
   html += '<a class="ac-action-btn" href="https://www.planespotters.net/search?q=' + encodeURIComponent(reg) + '" target="_blank" rel="noopener noreferrer">Planespotters ' + ICO_EXTLINK + '</a>';
   html += '<a class="ac-action-btn" href="https://flightaware.com/resources/registration/' + encodeURIComponent(reg) + '" target="_blank" rel="noopener noreferrer">FlightAware ' + ICO_EXTLINK + '</a>';

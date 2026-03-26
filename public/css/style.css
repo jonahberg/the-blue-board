@@ -540,6 +540,11 @@ tbody td{padding:5px 8px;white-space:nowrap}
   .hub-row{padding:10px 12px}
   .phase-row{padding:8px 6px}
   .search-result{padding:10px 12px}
+  .watch-btn,.share-btn,#watch-header-btn,.watch-remove,.mf-actions button{min-height:40px}
+  .watch-btn,.share-btn,.mf-actions button{padding:8px 12px;font-size:12px}
+  .watch-remove{min-width:40px;display:inline-flex;align-items:center;justify-content:center}
+  .popup-links .watch-btn,.popup-links .share-btn,.popup-links a{flex:1 1 calc(50% - 6px);justify-content:center}
+  .mf-actions{flex-wrap:wrap}
   /* Footer mobile */
   #disclaimer-modal > div{margin:10px;padding:16px}
   /* ── Ticker: static single-line with fade rotation (Change 3) ── */
@@ -680,10 +685,10 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .faa-delay-context{font-size:9px;color:#f59e0b;font-style:italic;margin-top:2px;opacity:.85}
 
 /* Flight Watch */
-.watch-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 8px;border-radius:3px;cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:border-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1),background-color .15s cubic-bezier(.4,0,.2,1);display:inline-flex;align-items:center;gap:4px}
+.watch-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 8px;border-radius:3px;cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:border-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1),background-color .15s cubic-bezier(.4,0,.2,1);display:inline-flex;align-items:center;gap:4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .watch-btn:hover{border-color:var(--ua-accent);color:var(--ua-accent);background:rgba(0,93,170,.06)}
 .watch-btn.watching{border-color:var(--ua-blue);color:var(--ua-accent);background:var(--ua-blue-soft)}
-.share-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 8px;border-radius:3px;cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:border-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1),background-color .15s cubic-bezier(.4,0,.2,1);display:inline-flex;align-items:center;gap:4px}
+.share-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 8px;border-radius:3px;cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:border-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1),background-color .15s cubic-bezier(.4,0,.2,1);display:inline-flex;align-items:center;gap:4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .share-btn:hover{border-color:var(--ua-accent);color:var(--ua-accent);background:rgba(0,93,170,.06)}
 .share-btn.copied{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.06)}
 #push-prompt{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:8px;padding:12px 16px;font-size:11px;color:var(--ua-text);z-index:10001;display:none;align-items:center;gap:10px;backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:400px;font-family:var(--font-ui)}
@@ -702,7 +707,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .watch-flight-info .wf-num{font-weight:700;color:var(--ua-accent);font-size:11px}
 .watch-flight-info .wf-route{color:var(--ua-muted)}
 .watch-flight-status{text-align:right}
-.watch-remove{background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:12px;margin-left:6px;padding:2px}
+.watch-remove{background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:12px;margin-left:6px;padding:2px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .watch-remove:hover{color:var(--ua-red)}
 #watch-notification{position:fixed;top:0;left:0;right:0;background:rgba(0,93,170,.95);color:#fff;padding:10px 16px;font-size:12px;font-weight:600;z-index:10000;display:none;align-items:center;justify-content:space-between;backdrop-filter:blur(8px)}
 #watch-notification.show{display:flex}
