@@ -7,15 +7,16 @@
   "private": true,
   "type": "module",
   "version": "1.5.0",
+  "packageManager": "bun@1.3.11",
   "scripts": {
-    "dev": "node scripts/run-astro-dev.mjs",
-    "build": "vite build --config vite.dashboard.config.js && astro build && node scripts/stamp-seo-build-date.mjs",
+    "dev": "bun scripts/run-astro-dev.mjs",
+    "build": "vite build --config vite.dashboard.config.js && astro build && bun scripts/stamp-seo-build-date.mjs",
     "build:dashboard": "vite build --config vite.dashboard.config.js",
     "preview": "astro preview",
-    "seed:schedules": "node scripts/seed-schedules.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "ui-audit": "node scripts/ui-audit.mjs"
+    "seed:schedules": "bun scripts/seed-schedules.mjs",
+    "test": "bunx vitest run",
+    "test:watch": "bunx vitest",
+    "ui-audit": "bun scripts/ui-audit.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
+    "@types/bun": "^1.3.11",
     "@vercel/node": "^5.6.12",
     "playwright": "^1.58.2",
     "typescript": "^5.9.3",

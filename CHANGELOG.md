@@ -4,6 +4,28 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-26
+
+### Changed
+- **Migrated from npm to Bun** as package manager and script runner (25x faster installs)
+- Replaced `package-lock.json` with `bun.lock`
+- Updated all `package.json` scripts from `node` to `bun`
+- Vitest now runs under Bun via `bunx vitest run` (test files unchanged)
+- GitHub Actions CI uses `oven-sh/setup-bun@v2` with pinned Bun 1.3.11
+- Vercel build command updated to `bun run build`
+- Dev script uses `bunx` instead of `npx` for Astro dev server
+- Converted `prewarm-cache.sh` bash script to TypeScript with native `fetch`
+- Converted `fix-fleet.cjs` and `rebuild-fleet.cjs` from CommonJS to ESM
+
+### Added
+- `@types/bun` for TypeScript support of Bun-specific APIs
+- `scripts/prewarm-cache.ts` (TypeScript replacement for bash script)
+
+### Removed
+- `scripts/prewarm-cache.sh` (replaced by TypeScript version)
+- `fix-fleet.cjs` and `rebuild-fleet.cjs` (replaced by ESM versions)
+- `package-lock.json` (replaced by `bun.lock`)
+
 ## [1.5.0] - 2026-03-25
 
 **6 weeks, 300+ commits, and 70 merged PRs since launch day.** This is everything that shipped between v1.0 (Feb 12) and v1.5.

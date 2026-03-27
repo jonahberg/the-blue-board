@@ -46,7 +46,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`Usage: npm run seed:schedules -- [options]
+  console.log(`Usage: bun run seed:schedules -- [options]
 
 Options:
   --base-url=https://theblueboard.co   Target site to seed

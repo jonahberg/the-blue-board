@@ -27,7 +27,7 @@
         { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" },
         { "path": "/api/cron/refresh-tsa", "schedule": "*/5 * * * *" }
     ],
-  "buildCommand": "npm run build",
+  "buildCommand": "bun run build",
   "outputDirectory": "dist",
   "headers": [
     {
