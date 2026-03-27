@@ -16,10 +16,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 - Dev script uses `bunx` instead of `npx` for Astro dev server
 - Converted `prewarm-cache.sh` bash script to TypeScript with native `fetch`
 - Converted `fix-fleet.cjs` and `rebuild-fleet.cjs` from CommonJS to ESM
+- Added `@vercel/speed-insights` v2.0.0 and moved Speed Insights loading to shared Astro wrappers plus the dashboard bundle, replacing the hardcoded homepage script
 
 ### Added
 - `@types/bun` for TypeScript support of Bun-specific APIs
 - `scripts/prewarm-cache.ts` (TypeScript replacement for bash script)
+- Regression coverage for the Speed Insights integration points across the dashboard entrypoint and static Astro documents
 
 ### Removed
 - `scripts/prewarm-cache.sh` (replaced by TypeScript version)
