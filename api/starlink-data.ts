@@ -3,6 +3,7 @@
 // Fallback: fetches directly from upstream if cache is empty
 
 import type { VercelRequest, VercelResponse } from './types.js';
+import { createRateLimiter } from './_rate-limit.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/data';
 const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
@@ -15,6 +16,8 @@ interface StarlinkCache {
   lastUpdated: string;
   syncedAt: string;
 }
+
+const isRateLimited = createRateLimiter('starlink-data', 30);
 
 let inMemoryCache: StarlinkCache | null = null;
 let lastFetch = 0;
@@ -77,17 +80,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Check cron-populated global cache first
+    // Serve cached responses without rate limiting
     const cronCache = (globalThis as any).__starlinkCache as StarlinkCache | undefined;
     if (cronCache) {
       res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
       return res.status(200).json(cronCache);
     }
 
-    // Fall back to in-memory cache with TTL
     if (inMemoryCache && Date.now() - lastFetch < CACHE_TTL) {
       res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
       return res.status(200).json(inMemoryCache);
+    }
+
+    // Rate limit only upstream fetches, not cache hits
+    if (isRateLimited(req)) {
+      return res.status(429).json({ error: 'Too many requests' });
     }
 
     // Fetch fresh
