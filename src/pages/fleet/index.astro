@@ -1,5 +1,6 @@
 ---
 import { fleetOrder, fleetNavLabels, fleetTypes } from '../../data/fleet/index.js';
+import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
 
 // Build type summaries for the grid
 const typeSummaries: Record<string, { displayName: string; count: number; role: string; bodyType: string; seatTotal: string; slug: string }> = {};
@@ -454,6 +455,8 @@ p{margin-bottom:12px}
     <span style="white-space:nowrap">Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Jonah Berg</a> · <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Follow @theblueboard</a></span>
   </div>
 </div>
+
+<VercelSpeedInsights />
 
 </body>
 </html>

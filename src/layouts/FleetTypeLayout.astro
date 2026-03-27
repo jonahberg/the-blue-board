@@ -1,6 +1,7 @@
 ---
 import { fleetOrder, fleetNavLabels } from '../data/fleet/index.js';
 import Footer from '../components/Footer.astro';
+import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
 import fleetDb from '../../public/data/fleet.json';
 
 const { data } = Astro.props;
@@ -286,6 +287,8 @@ a:hover{text-decoration:underline}
 </main>
 
 <Footer />
+
+<VercelSpeedInsights />
 
 <!-- Scroll Hint Script -->
 <script is:inline>

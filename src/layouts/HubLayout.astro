@@ -1,6 +1,7 @@
 ---
 import { hubOrder, hubNavLabels } from '../data/hubs/index.js';
 import Footer from '../components/Footer.astro';
+import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
 
 const { data } = Astro.props;
 const iata = data.iata;
@@ -287,6 +288,8 @@ nav.jump-nav a:hover{border-color:var(--ua-accent);color:var(--ua-accent);text-d
 </main>
 
 <Footer />
+
+<VercelSpeedInsights />
 
 <!-- Live Data Script -->
 <script is:inline define:vars={{ iata }}>

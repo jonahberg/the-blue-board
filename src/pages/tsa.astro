@@ -1,6 +1,7 @@
 ---
 import { unitedTerminals, tsaHubOrder, getAllFaqEntries } from '../data/tsa/united-terminals.js';
 import Footer from '../components/Footer.astro';
+import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
 
 const faqEntries = getAllFaqEntries();
 ---
@@ -364,5 +365,6 @@ const faqEntries = getAllFaqEntries();
   // The API proxy and cron remain in place for when the data source returns.
 })();
 </script>
+<VercelSpeedInsights />
 </body>
 </html>

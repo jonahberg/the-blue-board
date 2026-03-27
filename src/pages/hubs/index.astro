@@ -1,5 +1,6 @@
 ---
 import { hubOrder, hubNavLabels, hubs } from '../../data/hubs/index.js';
+import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
 
 const hubSummaries: Record<string, { name: string; city: string; subtitle: string; iata: string }> = {};
 for (const key of hubOrder) {
@@ -244,6 +245,8 @@ p{margin-bottom:12px}
     <span style="white-space:nowrap">Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Jonah Berg</a> · <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Follow @theblueboard</a></span>
   </div>
 </div>
+
+<VercelSpeedInsights />
 
 </body>
 </html>
