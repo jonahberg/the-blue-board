@@ -2,8 +2,10 @@
 // Calls upstream unitedstarlinktracker.com/api/predict-flight
 
 import type { VercelRequest, VercelResponse } from './types.js';
+import { createRateLimiter } from './_rate-limit.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/predict-flight';
+const isRateLimited = createRateLimiter('predict-flight', 20);
 
 // Simple in-memory cache: predictions don't change frequently
 const cache = new Map<string, { data: any; ts: number }>();
@@ -25,11 +27,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : 'UA' + flightNumber.replace(/^UAL/i, '');
 
   try {
-    // Check cache
+    // Check cache — serve cached responses without rate limiting
     const cached = cache.get(normalized);
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
       res.setHeader('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=300');
       return res.status(200).json(cached.data);
+    }
+
+    // Rate limit only upstream fetches, not cache hits
+    if (isRateLimited(req)) {
+      return res.status(429).json({ error: 'Too many requests' });
     }
 
     const controller = new AbortController();
