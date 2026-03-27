@@ -1,5 +1,6 @@
 ---
 import Footer from '../components/Footer.astro';
+import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
 import { resolveTag } from '../data/news/index.js';
 
 const { article } = Astro.props;
@@ -195,6 +196,8 @@ a:hover{text-decoration:underline}
 </main>
 
 <Footer />
+
+<VercelSpeedInsights />
 
 </body>
 </html>

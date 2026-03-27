@@ -1,3 +1,4 @@
+import { injectSpeedInsights } from '@vercel/speed-insights';
 import { computeDelayRiskModel, HUB_COORDINATES, HUB_RISK_PROFILES } from '../lib/delay-risk.js';
 import { formatDelayExplainFAAStatus, getScheduleRiskContext } from '../lib/delay-explain-context.js';
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
@@ -5,6 +6,8 @@ import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, WIFI_DISPLAY, sortFleetData, filterFleetData, parseFleetDeepLink, TAB_MAP, VALID_FLEET_VIEWS } from '../lib/fleet-utils.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
+
+injectSpeedInsights();
 
 // ═══════════════════════════════════════════════
 // SVG ICON CONSTANTS — clean icons for buttons
