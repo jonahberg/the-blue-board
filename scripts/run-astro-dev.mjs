@@ -25,7 +25,7 @@ function restoreSource() {
   writeFileSync(indexPath, originalHtml);
 }
 
-const child = spawn('npx', ['astro', 'dev', ...process.argv.slice(2)], {
+const child = spawn('bunx', ['astro', 'dev', ...process.argv.slice(2)], {
   stdio: 'inherit',
 });
 

@@ -12,3 +12,4 @@ public/js/dashboard.js
 
 audit-output
 .gstack/
+package-lock.json

@@ -1,7 +1,7 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // Rebuild FLEET_DB from Google Sheet CSV tabs
-const fs = require('fs');
-const path = require('path');
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 // GID → type mapping
 const GID_TYPE_MAP = {
@@ -87,14 +87,14 @@ const fleet = [];
 const seenRegs = new Set();
 
 for (const [gid, baseType] of Object.entries(GID_TYPE_MAP)) {
-  const csvFile = path.join(__dirname, `csv_gid_${gid}.csv`);
-  if (!fs.existsSync(csvFile)) {
+  const csvFile = join(import.meta.dirname, `csv_gid_${gid}.csv`);
+  if (!existsSync(csvFile)) {
     console.error(`Missing CSV: ${csvFile}`);
     continue;
   }
-  
-  const lines = fs.readFileSync(csvFile, 'utf8').split('\n');
-  
+
+  const lines = readFileSync(csvFile, 'utf8').split('\n');
+
   // Find header row
   let headerIdx = -1;
   let headers = [];
@@ -107,16 +107,15 @@ for (const [gid, baseType] of Object.entries(GID_TYPE_MAP)) {
       break;
     }
   }
-  
+
   if (headerIdx < 0) {
     console.error(`No header found for GID ${gid} (${baseType})`);
     continue;
   }
-  
+
   // Map column indices
   const colMap = {};
   headers.forEach((h, i) => {
-    const hl = h.toLowerCase().trim();
     if (/reg\s*#/i.test(h)) colMap.reg = i;
     if (/ac\s*#/i.test(h)) colMap.ac = i;
     if (/deliver|delvr/i.test(h)) colMap.delivery = i;
@@ -125,22 +124,18 @@ for (const [gid, baseType] of Object.entries(GID_TYPE_MAP)) {
     if (/status/i.test(h)) colMap.status = i;
     if (/ife/i.test(h)) colMap.ife = i;
     if (/power/i.test(h)) colMap.power = i;
-    if (/seat\s*map/i.test(h)) colMap.seatmap = i;
   });
-  
-  // GID 1855629492 has different columns (no seat map cols at end)
-  // It has: Reg #, AC #, Winglets, Delivery, SEAT MAP, Configuration, IFE, Chnl 9, WiFi, Power, Livery/Yr, Status, Status #2
-  
+
   let count = 0;
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    
+
     const cols = parseCSVLine(line);
     const reg = (cols[colMap.reg] || '').replace(/\s/g, '');
-    
+
     if (!isValidReg(reg)) continue;
-    
+
     // For GID 1855629492 (newer MAX 9 deliveries), prefer newer data over GID 70572532
     if (seenRegs.has(reg)) {
       if (gid === '1855629492') {
@@ -151,7 +146,7 @@ for (const [gid, baseType] of Object.entries(GID_TYPE_MAP)) {
         continue;
       }
     }
-    
+
     const ac = (cols[colMap.ac] || '').replace(/\s/g, '');
     const delivery = (cols[colMap.delivery] || '').replace(/\s/g, '');
     const wifi = cols[colMap.wifi] || '';
@@ -160,7 +155,7 @@ for (const [gid, baseType] of Object.entries(GID_TYPE_MAP)) {
     const ife = cols[colMap.ife] || '';
     const power = cols[colMap.power] || '';
     const model = (cols[0] || '').trim();
-    
+
     // Determine type
     let type = baseType;
     if (baseType === '767') {
@@ -177,24 +172,24 @@ for (const [gid, baseType] of Object.entries(GID_TYPE_MAP)) {
         type = (yr && yr >= 2008) ? '737-900ER' : '737-900';
       }
     }
-    
+
     let year = '';
     const yrMatch = delivery.match(/(\d{4})/);
     if (yrMatch) year = yrMatch[1];
-    
+
     const { seats, tot } = parseSeats(config);
-    
+
     const entry = { r: reg, t: type, a: ac, w: wifi, c: config, s: status, d: year, i: ife, p: power };
     if (Object.keys(seats).length > 0) {
       entry.seats = seats;
       entry.tot = tot;
     }
-    
+
     fleet.push(entry);
     seenRegs.add(reg);
     count++;
   }
-  
+
   console.log(`GID ${gid} (${baseType}): ${count} aircraft`);
 }
 
@@ -227,8 +222,8 @@ for (const t of typeOrder) {
 const json = JSON.stringify(fleet);
 
 // Now update index.html
-const htmlPath = path.join(__dirname, 'public', 'index.html');
-let html = fs.readFileSync(htmlPath, 'utf8');
+const htmlPath = join(import.meta.dirname, 'public', 'index.html');
+let html = readFileSync(htmlPath, 'utf8');
 
 // Replace FLEET_DB
 const fleetMatch = html.match(/const FLEET_DB = \[.*?\];/s);
@@ -274,7 +269,7 @@ const newGidMap = `const gidMap = {
 
 html = html.replace(/const gidMap = \{[^}]+\}/s, newGidMap);
 
-fs.writeFileSync(htmlPath, html);
+writeFileSync(htmlPath, html);
 console.log(`\nUpdated index.html with ${total} aircraft`);
 
 // Validate

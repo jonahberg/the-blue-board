@@ -141,6 +141,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 - **Database:** [Supabase](https://supabase.com) (waitlist, schedule snapshots, news notifications)
 - **Email:** [Resend](https://resend.com) (waitlist welcome emails, news digest broadcasts)
 - **AI:** [Anthropic Claude](https://anthropic.com) (delay risk explanations)
+- **Runtime:** [Bun](https://bun.sh) (package manager + script runner)
 - **Testing:** [Vitest](https://vitest.dev) + [Playwright](https://playwright.dev)
 - **Analytics:** Vercel Web Analytics + Speed Insights
 - **Design:** Dark NOC theme, inspired by Bloomberg terminals and airline ops centers ([design system](DESIGN.md))
