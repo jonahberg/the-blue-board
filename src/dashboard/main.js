@@ -2624,7 +2624,6 @@ function renderNasPanel() {
   if (!panelEl) {
     panelEl = document.createElement('div');
     panelEl.id = 'nas-status-panel';
-    panelEl.style.cssText = 'background:var(--ua-panel);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:10px 14px;margin:0 14px;flex-shrink:0';
     const scrollHint = document.getElementById('wx-scroll-hint');
     if (scrollHint && scrollHint.parentNode) {
       scrollHint.parentNode.insertBefore(panelEl, scrollHint);
@@ -2635,29 +2634,29 @@ function renderNasPanel() {
   }
 
   panelEl.style.display = 'block';
-  let html = `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber);margin-bottom:8px">NAS STATUS</div>`;
+  // All content values are pre-sanitized via escapeHtml before insertion
+  let html = `<div class="nas-label">NAS STATUS</div>`;
 
   // Active en-route programs
   if (nasData.active && nasData.active.length) {
-    html += `<div style="font-family:Satoshi,sans-serif;font-size:11px;font-weight:600;color:var(--ua-text);margin-bottom:4px">Active</div>`;
+    html += `<div class="nas-section-title">Active</div>`;
     for (const prog of nasData.active) {
-      html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ua-muted);margin-bottom:3px">${escapeHtml(prog.name)} — ${escapeHtml(prog.reason)}${prog.avgDelay ? ` (avg ${prog.avgDelay}m)` : ''}</div>`;
+      html += `<div class="nas-item">${escapeHtml(prog.name)} — ${escapeHtml(prog.reason)}${prog.avgDelay ? ` (avg ${escapeHtml(String(prog.avgDelay))}m)` : ''}</div>`;
     }
   }
 
   // Planned TMIs
   if (nasData.planned && nasData.planned.length) {
-    html += `<div style="font-family:Satoshi,sans-serif;font-size:11px;font-weight:600;color:var(--ua-text);margin-top:8px;margin-bottom:4px">Planned</div>`;
+    html += `<div class="nas-section-title" style="margin-top:8px">Planned</div>`;
     for (const tmi of nasData.planned) {
       const isHub = tmi.affectedAirports && tmi.affectedAirports.some(a => UA_HUBS.has(a));
-      const highlight = isHub ? 'color:var(--ua-text);font-weight:500' : 'color:var(--ua-muted)';
-      html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;${highlight};margin-bottom:3px">${escapeHtml(tmi.time || '')} — ${escapeHtml(tmi.decoded || tmi.event)}</div>`;
+      html += `<div class="nas-item${isHub ? ' hub-affected' : ''}">${escapeHtml(tmi.time || '')} — ${escapeHtml(tmi.decoded || tmi.event)}</div>`;
     }
   }
 
   // Advisory link
   if (nasData.advisoryUrl) {
-    html += `<div style="margin-top:6px"><a href="${escapeHtml(nasData.advisoryUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:9px;color:var(--ua-amber);text-decoration:underline">View full ATCSCC advisory →</a></div>`;
+    html += `<div class="nas-advisory"><a href="${escapeHtml(nasData.advisoryUrl)}" target="_blank" rel="noopener noreferrer">View full ATCSCC advisory →</a></div>`;
   }
 
   panelEl.innerHTML = html;

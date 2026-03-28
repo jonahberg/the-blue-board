@@ -678,6 +678,14 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .irops-score.med{background:rgba(245,158,11,.15);color:#f59e0b}
 .irops-score.high{background:rgba(239,68,68,.15);color:#ef4444}
 .irops-empty{text-align:center;padding:12px;color:var(--ua-muted);font-size:10px}
+/* NAS Status Panel — highlight box in detail panel */
+#nas-status-panel{background:var(--ua-panel);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:12px 16px;margin:0 14px;flex-shrink:0;font-size:12px}
+#nas-status-panel .nas-label{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber);margin-bottom:8px}
+#nas-status-panel .nas-section-title{font-family:var(--font-display);font-size:11px;font-weight:600;color:var(--ua-text);margin-bottom:4px}
+#nas-status-panel .nas-item{font-family:var(--font-mono);font-size:10px;color:var(--ua-muted);margin-bottom:3px}
+#nas-status-panel .nas-item.hub-affected{color:var(--ua-text);font-weight:500}
+#nas-status-panel .nas-advisory{margin-top:6px}
+#nas-status-panel .nas-advisory a{font-size:9px;color:var(--ua-amber);text-decoration:underline}
 .hub-cards{position:relative}
 .hub-cards::after{content:'';position:sticky;bottom:0;left:0;right:0;height:24px;background:linear-gradient(to bottom,transparent,var(--bg-body));pointer-events:none;display:block}
 
