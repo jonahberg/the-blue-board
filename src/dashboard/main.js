@@ -2610,6 +2610,66 @@ async function fetchMetarBatch(allStations) {
   return payloads.flat();
 }
 
+const UA_HUBS = new Set(['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM']);
+
+function renderNasPanel() {
+  let panelEl = document.getElementById('nas-status-panel');
+  if (!nasData || ((!nasData.active || !nasData.active.length) && (!nasData.planned || !nasData.planned.length))) {
+    if (panelEl) panelEl.style.display = 'none';
+    return;
+  }
+
+  // Create panel if it doesn't exist — insert after radar map
+  if (!panelEl) {
+    panelEl = document.createElement('div');
+    panelEl.id = 'nas-status-panel';
+    panelEl.style.cssText = 'background:var(--ua-panel);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:10px 14px;margin-top:12px';
+    const radarMap = document.getElementById('radar-map');
+    if (radarMap && radarMap.parentNode) {
+      radarMap.parentNode.insertBefore(panelEl, radarMap.nextSibling);
+    } else {
+      const hubCards = document.getElementById('hub-cards');
+      if (hubCards) hubCards.parentNode.insertBefore(panelEl, hubCards);
+    }
+  }
+
+  panelEl.style.display = 'block';
+  let html = `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber);margin-bottom:8px">NAS STATUS</div>`;
+
+  // Active en-route programs
+  if (nasData.active && nasData.active.length) {
+    html += `<div style="font-family:Satoshi,sans-serif;font-size:11px;font-weight:600;color:var(--ua-text);margin-bottom:4px">Active</div>`;
+    for (const prog of nasData.active) {
+      html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ua-muted);margin-bottom:3px">${escapeHtml(prog.name)} — ${escapeHtml(prog.reason)}${prog.avgDelay ? ` (avg ${prog.avgDelay}m)` : ''}</div>`;
+    }
+  }
+
+  // Planned TMIs
+  if (nasData.planned && nasData.planned.length) {
+    html += `<div style="font-family:Satoshi,sans-serif;font-size:11px;font-weight:600;color:var(--ua-text);margin-top:8px;margin-bottom:4px">Planned</div>`;
+    for (const tmi of nasData.planned) {
+      const isHub = tmi.affectedAirports && tmi.affectedAirports.some(a => UA_HUBS.has(a));
+      const highlight = isHub ? 'color:var(--ua-text);font-weight:500' : 'color:var(--ua-muted)';
+      html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;${highlight};margin-bottom:3px">${escapeHtml(tmi.time || '')} — ${escapeHtml(tmi.decoded || tmi.event)}</div>`;
+    }
+  }
+
+  // Advisory link
+  if (nasData.advisoryUrl) {
+    html += `<div style="margin-top:6px"><a href="${escapeHtml(nasData.advisoryUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:9px;color:var(--ua-amber);text-decoration:underline">View full ATCSCC advisory →</a></div>`;
+  }
+
+  panelEl.innerHTML = html;
+}
+
+function trendIndicator(trend) {
+  if (!trend) return '';
+  const t = String(trend).toLowerCase();
+  if (t === 'increasing') return '<span style="color:var(--ua-red)">↑ Increasing</span>';
+  if (t === 'decreasing') return '<span style="color:var(--ua-green)">↓ Decreasing</span>';
+  return '<span style="color:var(--ua-muted)">→ Stable</span>';
+}
+
 async function initWeatherTab() {
   if (weatherInitialized) return;
   weatherInitialized = true;
@@ -2651,14 +2711,16 @@ async function initWeatherTab() {
     }
   });
 
-  // Fetch ALL METARs in a single request + FAA in parallel (2 requests instead of 8)
+  // Fetch ALL METARs + FAA + NAS in parallel (3 requests)
   const allStations = Object.values(hubStations).join(',');
-  const [metarResult, faaResult] = await Promise.allSettled([
+  const [metarResult, faaResult, nasResult] = await Promise.allSettled([
     fetchMetarBatch(allStations),
-    fetch('/api/faa').then(r => r.ok ? r.json() : Promise.reject(new Error(`faa-${r.status}`)))
+    fetch('/api/faa').then(r => r.ok ? r.json() : Promise.reject(new Error(`faa-${r.status}`))),
+    fetch('/api/nas').then(r => r.ok ? r.json() : Promise.reject(new Error(`nas-${r.status}`)))
   ]);
   const metarData = metarResult.status === 'fulfilled' ? metarResult.value : [];
   const faaData = faaResult.status === 'fulfilled' ? faaResult.value : [];
+  nasData = nasResult.status === 'fulfilled' ? nasResult.value : null;
 
   // Index METAR results by station ID → hub
   const stationToHub = {};
@@ -2671,21 +2733,8 @@ async function initWeatherTab() {
   const metarResults = hubs.map(hub => ({hub, data: metarByHub[hub] || null}));
   const loadedMetars = metarResults.filter(({ data }) => hasRenderableMetarData(data)).length;
 
-  // Index FAA delays by airport code — merge multiple entries per airport
-  const faaIndex = {};
-  if (Array.isArray(faaData)) faaData.forEach(d => {
-    const code = d.airportCode || d.airport;
-    if (!code) return;
-    if (!faaIndex[code]) faaIndex[code] = { delays: [] };
-    faaIndex[code].delays.push(...(d.delays || []));
-    // Set typed boolean flags the delay engine expects
-    if (d.type === 'ground_stop') faaIndex[code].groundStop = true;
-    else if (d.type === 'ground_delay') { faaIndex[code].groundDelay = true; faaIndex[code].avgDelay = d.avgDelay; }
-    else if (d.type === 'departure_delay') { faaIndex[code].departureDelay = true; faaIndex[code].minDelay = d.minDelay; faaIndex[code].maxDelay = d.maxDelay; }
-    else if (d.type === 'arrival_delay') { faaIndex[code].arrivalDelay = true; }
-    else if (d.type === 'closure') faaIndex[code].closure = true;
-  });
-  // Store globally for IROPS & schedule cross-reference
+  // Index FAA data by airport code
+  const faaIndex = buildFaaIndex(faaData);
   faaDelayIndex = faaIndex;
 
   // Build cards + map markers
@@ -2714,7 +2763,25 @@ async function initWeatherTab() {
     // Status line: FAA delays take priority, then ops impact, then normal
     let faaLine;
     if (hasDelay) {
-      faaLine = `<div class="hub-faa delay">⚠ ${faa.delays.map(d=>d.reason||d.type||'Delay').join(', ')}</div>`;
+      // Build enhanced FAA status with programs data
+      const statusParts = [];
+      if (faa.programs && faa.programs.length) {
+        for (const prog of faa.programs) {
+          let text = prog.reason || prog.type || 'Delay';
+          if (prog.type === 'ground_stop') {
+            text = 'Ground Stop';
+            if (prog.endTime) text += ` until ${prog.endTime}`;
+            if (prog.probabilityOfExtension) text += ` · ext: ${prog.probabilityOfExtension}`;
+          } else if (prog.type === 'ground_delay' && prog.avgDelay) {
+            text = `GDP (avg ${prog.avgDelay}m)`;
+          }
+          if (prog.trend) text += ` ${trendIndicator(prog.trend)}`;
+          statusParts.push(text);
+        }
+      } else {
+        statusParts.push(...faa.delays.map(d => d.reason || d.type || 'Delay'));
+      }
+      faaLine = `<div class="hub-faa delay">⚠ ${statusParts.join(', ')}</div>`;
     } else if (ops.level === 'severe') {
       faaLine = `<div class="hub-faa delay">⚠ Severe Weather Impact — ${ops.reasons.join(', ')}</div>`;
     } else if (ops.level === 'warning') {
@@ -2725,6 +2792,19 @@ async function initWeatherTab() {
       faaLine = `<div class="hub-faa normal">✓ Normal Operations</div>`;
     }
 
+    // Runway config summary line (scan tier)
+    let rwyLine = '';
+    if (faa && faa.runwayConfig && faa.runwayConfig.arrivalRate > 0) {
+      const rc = faa.runwayConfig;
+      rwyLine = `<div class="hub-rwy" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ua-muted);margin-top:4px">RWY: ${escapeHtml(rc.arrivalRunways)}/${escapeHtml(rc.departureRunways)} · ${rc.arrivalRate}/hr</div>`;
+    }
+
+    // De-icing badge (scan tier, next to flight category)
+    const deiceBadge = faa && faa.deicing
+      ? `<span style="background:var(--ua-amber-soft);color:var(--ua-amber);font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;padding:2px 6px;border-radius:3px;margin-left:4px">DE-ICE</span>`
+      : '';
+
+    // Detail tier content (expandable)
     const explainer = raw ? explainMETAR(raw, hub, cat) : '';
     const faaExplainer = faa ? explainFAAStatus(hub, faa.delays||[], faa) : '';
     const unavailable = !hasRenderableMetarData(data);
@@ -2732,8 +2812,25 @@ async function initWeatherTab() {
       ? '<div class="hub-explainer">Current METAR observation unavailable. Retry in a moment.</div>'
       : '';
 
+    // Advisory links from programs
+    let advisoryLinks = '';
+    if (faa && faa.programs) {
+      const urls = faa.programs.filter(p => p.advisoryUrl).map(p =>
+        `<a href="${escapeHtml(p.advisoryUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:9px;color:var(--ua-amber);text-decoration:underline">Advisory</a>`
+      );
+      if (urls.length) advisoryLinks = `<div style="margin-top:4px">${urls.join(' · ')}</div>`;
+    }
+
+    // NOTAM text
+    let notamHtml = '';
+    if (faa && faa.notam) {
+      notamHtml = `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ua-muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--ua-border-subtle)">${escapeHtml(faa.notam)}</div>`;
+    }
+
+    const hasDetailContent = explainer || faaExplainer || raw || advisoryLinks || notamHtml;
+
     cardsHtml += `<div class="hub-card" data-hub="${hub}" style="border-top:3px solid ${borderColor}">
-      <div class="hub-card-top"><span class="hub-card-code">${hub}</span><span class="cat-badge" style="background:${catColor};color:#000">${cat}</span></div>
+      <div class="hub-card-top"><span class="hub-card-code">${hub}</span>${deiceBadge}<span class="cat-badge" style="background:${catColor};color:#000">${cat}</span></div>
       <div class="hub-card-name">${HUB_NAMES[hub]||hub}</div>
       <div class="hub-metrics">
         <div class="hub-metric"><div class="hub-metric-label">Temperature</div><div class="hub-metric-val">${m.temp}</div></div>
@@ -2741,11 +2838,17 @@ async function initWeatherTab() {
         <div class="hub-metric"><div class="hub-metric-label">Visibility</div><div class="hub-metric-val">${m.vis}</div></div>
         <div class="hub-metric"><div class="hub-metric-label">Ceiling</div><div class="hub-metric-val">${m.clouds}</div></div>
       </div>
+      ${rwyLine}
       ${faaLine}
       ${availabilityLine}
-      ${explainer?`<div class="hub-explainer">${explainer}</div>`:''}
-      ${faaExplainer?`<div class="hub-explainer">${faaExplainer}</div>`:''}
-      ${raw?`<div class="hub-raw">${escapeHtml(raw)}</div>`:''}
+      ${hasDetailContent ? `<div class="hub-card-expand" tabindex="0" role="button" aria-expanded="false" style="text-align:center;padding:4px 0;cursor:pointer;color:var(--ua-dim);font-size:10px;font-family:'JetBrains Mono',monospace;transition:color 150ms ease;outline:none" onfocus="this.style.outline='2px solid var(--ua-accent)';this.style.outlineOffset='2px'" onblur="this.style.outline='none'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="const d=this.nextElementSibling;const open=d.style.display!=='none';d.style.display=open?'none':'block';this.textContent=open?'▾ Details':'▴ Details';this.setAttribute('aria-expanded',!open)">▾ Details</div>
+      <div class="hub-card-detail" style="display:none">
+        ${explainer?`<div class="hub-explainer">${explainer}</div>`:''}
+        ${faaExplainer?`<div class="hub-explainer">${faaExplainer}</div>`:''}
+        ${advisoryLinks}
+        ${notamHtml}
+        ${raw?`<div class="hub-raw">${escapeHtml(raw)}</div>`:''}
+      </div>` : ''}
     </div>`;
 
     // Update radar map marker — use ops impact color for operational awareness
@@ -2762,6 +2865,9 @@ async function initWeatherTab() {
   }
   document.getElementById('hub-cards').innerHTML = cardsHtml;
 
+  // Render NAS STATUS panel below radar map
+  renderNasPanel();
+
   // Auto-hide scroll hint once hub cards are visible
   const wxHint = document.getElementById('wx-scroll-hint');
   if (wxHint) {
@@ -2771,15 +2877,17 @@ async function initWeatherTab() {
     observer.observe(document.getElementById('hub-cards'));
   }
 
-  // Refresh weather + FAA data every 5 minutes so the tab stays current
+  // Refresh weather + FAA + NAS data every 5 minutes so the tab stays current
   setInterval(async () => {
     try {
-      const [newMetar, newFaa] = await Promise.allSettled([
+      const [newMetar, newFaa, newNas] = await Promise.allSettled([
         fetchMetarBatch(allStations),
-        fetch('/api/faa').then(r => r.ok ? r.json() : Promise.reject(new Error(`faa-${r.status}`)))
+        fetch('/api/faa').then(r => r.ok ? r.json() : Promise.reject(new Error(`faa-${r.status}`))),
+        fetch('/api/nas').then(r => r.ok ? r.json() : Promise.reject(new Error(`nas-${r.status}`)))
       ]);
       const freshMetar = newMetar.status === 'fulfilled' ? newMetar.value : [];
       const freshFaa = newFaa.status === 'fulfilled' ? newFaa.value : [];
+      if (newNas.status === 'fulfilled') { nasData = newNas.value; renderNasPanel(); }
       if (!Array.isArray(freshMetar) || freshMetar.length === 0) return;
 
       // Rebuild METAR index
@@ -2790,19 +2898,7 @@ async function initWeatherTab() {
       });
 
       // Rebuild FAA index
-      const freshFaaIndex = {};
-      if (Array.isArray(freshFaa)) freshFaa.forEach(d => {
-        const code = d.airportCode || d.airport;
-        if (!code) return;
-        if (!freshFaaIndex[code]) freshFaaIndex[code] = { delays: [] };
-        freshFaaIndex[code].delays.push(...(d.delays || []));
-        if (d.type === 'ground_stop') freshFaaIndex[code].groundStop = true;
-        else if (d.type === 'ground_delay') { freshFaaIndex[code].groundDelay = true; freshFaaIndex[code].avgDelay = d.avgDelay; }
-        else if (d.type === 'departure_delay') { freshFaaIndex[code].departureDelay = true; freshFaaIndex[code].minDelay = d.minDelay; freshFaaIndex[code].maxDelay = d.maxDelay; }
-        else if (d.type === 'arrival_delay') { freshFaaIndex[code].arrivalDelay = true; }
-        else if (d.type === 'closure') freshFaaIndex[code].closure = true;
-      });
-      faaDelayIndex = freshFaaIndex;
+      faaDelayIndex = buildFaaIndex(freshFaa);
 
       // Update weatherOpsByHub + hub card colors/statuses
       hubs.forEach(hub => {
@@ -4226,7 +4322,22 @@ function updateHubHealth() {
 
 // ═══ IROPS DASHBOARD ═══
 let faaDelayIndex = {};
+let nasData = null;       // Global NAS status (en-route programs + planned TMIs) — populated by initWeatherTab
 let weatherOpsByHub = {};  // Global METAR-derived ops impact per hub — populated by preloadWeatherAndFAA or initWeatherTab
+
+/** Build faaDelayIndex from the /api/faa response (new per-airport shape with programs[]) */
+function buildFaaIndex(faaResponse) {
+  const index = {};
+  if (!Array.isArray(faaResponse)) return index;
+  for (const airport of faaResponse) {
+    const code = airport.airportCode;
+    if (!code) continue;
+    // The new API returns per-airport objects directly — store them as-is
+    // with backward-compat fields already populated by the server
+    index[code] = airport;
+  }
+  return index;
+}
 let iropsHubData = {};    // Global IROPS cancellation/delay rates per hub — for delay risk engine
 let aircraftJourneyCache = {};  // { reg: { segments, ts } } — aircraft history cache (5min TTL)
 let connectionIndex = {};  // { flightNum: { connFlight, hub, minutes, risk } } — connection context for AI
@@ -4317,19 +4428,7 @@ async function _doPreloadWeatherAndFAA() {
 
     // Parse FAA data (covers ALL airports with active delays, not just hubs)
     if (faaResult.status === 'fulfilled' && Array.isArray(faaResult.value)) {
-      const faaIndex = {};
-      faaResult.value.forEach(d => {
-        const code = d.airportCode || d.airport;
-        if (!code) return;
-        if (!faaIndex[code]) faaIndex[code] = { delays: [] };
-        faaIndex[code].delays.push(...(d.delays || []));
-        if (d.type === 'ground_stop') faaIndex[code].groundStop = true;
-        else if (d.type === 'ground_delay') { faaIndex[code].groundDelay = true; faaIndex[code].avgDelay = d.avgDelay; }
-        else if (d.type === 'departure_delay') { faaIndex[code].departureDelay = true; faaIndex[code].minDelay = d.minDelay; faaIndex[code].maxDelay = d.maxDelay; }
-        else if (d.type === 'arrival_delay') { faaIndex[code].arrivalDelay = true; }
-        else if (d.type === 'closure') faaIndex[code].closure = true;
-      });
-      faaDelayIndex = faaIndex;
+      faaDelayIndex = buildFaaIndex(faaResult.value);
     }
 
     if (document.getElementById('tab-schedule')?.classList.contains('active') && schedAllFlights.length) {
@@ -5160,6 +5259,7 @@ function computeDelayRisk(watched, origHub, destHub, timeData, liveFlight) {
     hubProfile: HUB_RISK_PROFILES[origHub],
     originIrops: iropsHubData[origHub],
     destinationIrops: iropsHubData[destHub],
+    plannedTmis: nasData?.planned || null,
   });
 }
 
@@ -5190,6 +5290,7 @@ function computeDelayRiskForScheduleFlight(fl, hub) {
     hubProfile: HUB_RISK_PROFILES[depHub],
     originIrops: iropsHubData[depHub],
     destinationIrops: iropsHubData[arrHub],
+    plannedTmis: nasData?.planned || null,
   });
 
   return result.score === 0 ? null : result;
