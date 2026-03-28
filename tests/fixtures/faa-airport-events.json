@@ -1,0 +1,414 @@
+[
+    {
+        "airportId": "LAS",
+        "groundStop": null,
+        "groundDelay": null,
+        "airportClosure": null,
+        "freeForm": {
+            "id": "f848253d-ca96-412e-bd30-9955c18e550c",
+            "airportId": "LAS",
+            "createdAt": null,
+            "updatedAt": "2026-01-27T19:26:04Z",
+            "startTime": "2026-01-27T19:12:00Z",
+            "endTime": "2026-04-29T23:00:00Z",
+            "simpleText": "!LAS 01/129 LAS AD AP CLSD TO NON SKED TRANSIENT GA ACFT EXC 24HR PPR 702-261-7775 2601271912-2604292300",
+            "text": "TO NON SKED TRANSIENT GA ACFT EXC 24HR PPR 702-261-7775",
+            "notamNumber": 129,
+            "issuedDate": "2026-01-27T19:12:00Z"
+        },
+        "arrivalDelay": null,
+        "departureDelay": null,
+        "airportConfig": {
+            "id": "e85a0875-fdc2-49a0-9fd1-07874fd9e6c2",
+            "createdAt": "2026-03-28T12:53:54Z",
+            "airportId": "LAS",
+            "arrivalRunwayConfig": "19R/26L",
+            "departureRunwayConfig": "19L/26R",
+            "arrivalRate": 56,
+            "sourceTimeStamp": "2026-03-28T12:53:53Z"
+        },
+        "deicing": null,
+        "airportLongName": "Harry Reid International",
+        "latitude": "36.0840",
+        "longitude": "-115.1537"
+    },
+    {
+        "airportId": "LGA",
+        "groundStop": null,
+        "groundDelay": {
+            "id": "c0dafb47-fdb9-44e8-8ed2-30edee765baf",
+            "createdAt": "2026-03-28T10:50:49Z",
+            "airportId": "LGA",
+            "sourceTimeStamp": "2026-03-28T10:50:07Z",
+            "updatedAt": "2026-03-28T10:50:49Z",
+            "impactingCondition": "other",
+            "avgDelay": 18.0,
+            "maxDelay": 54,
+            "startTime": "2026-03-28T13:00:00Z",
+            "endTime": "2026-03-28T22:59:00Z",
+            "center": "ZNY",
+            "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=38&adv_date=03282026&facId=LGA&title=ATCSCC ADVZY 038 LGA/ZNY 03/28/2026 CDM GROUND DELAY PROGRAM&titleDate=03/28/2026",
+            "departureScope": null,
+            "includedFacilities": [
+                "ZLA",
+                "ZAU",
+                "ZLC",
+                "ZTL",
+                "ZDC",
+                "ZNY",
+                "ZHU",
+                "ZJX",
+                "ZFW",
+                "ZOB",
+                "ZDV",
+                "ZOA",
+                "ZSE",
+                "ZBW",
+                "ZMA",
+                "ZKC",
+                "ZME",
+                "ZID",
+                "ZAB",
+                "ZMP",
+                "CYHZ",
+                "CYOW",
+                "CYUL",
+                "CYYZ",
+                "CYTZ",
+                "CYQB"
+            ],
+            "fuelFlowAdvisoryDelayTime": {
+                "id": "324b1883-2e21-4a15-aa26-51609e669379",
+                "controlElement": "LGA",
+                "delayProgramType": "GDP",
+                "startTime": "2026-03-28T13:00:00Z",
+                "endTime": "2026-03-28T22:59:00Z",
+                "dasDelays": {
+                    "delayTimeAmount": "2026-03-28T13:00:00.000+00:00",
+                    "dasDelay": [
+                        {
+                            "delay": 4,
+                            "seq": 1
+                        },
+                        {
+                            "delay": 18,
+                            "seq": 2
+                        },
+                        {
+                            "delay": 21,
+                            "seq": 3
+                        },
+                        {
+                            "delay": 22,
+                            "seq": 4
+                        },
+                        {
+                            "delay": 15,
+                            "seq": 5
+                        },
+                        {
+                            "delay": 14,
+                            "seq": 6
+                        },
+                        {
+                            "delay": 12,
+                            "seq": 7
+                        },
+                        {
+                            "delay": 18,
+                            "seq": 8
+                        },
+                        {
+                            "delay": 11,
+                            "seq": 9
+                        },
+                        {
+                            "delay": 16,
+                            "seq": 10
+                        },
+                        {
+                            "delay": 18,
+                            "seq": 11
+                        },
+                        {
+                            "delay": 15,
+                            "seq": 12
+                        },
+                        {
+                            "delay": 6,
+                            "seq": 13
+                        },
+                        {
+                            "delay": 0,
+                            "seq": 14
+                        },
+                        {
+                            "delay": 0,
+                            "seq": 15
+                        },
+                        {
+                            "delay": 5,
+                            "seq": 16
+                        },
+                        {
+                            "delay": 0,
+                            "seq": 17
+                        },
+                        {
+                            "delay": 4,
+                            "seq": 18
+                        },
+                        {
+                            "delay": 1,
+                            "seq": 19
+                        },
+                        {
+                            "delay": 2,
+                            "seq": 20
+                        },
+                        {
+                            "delay": 4,
+                            "seq": 21
+                        },
+                        {
+                            "delay": 9,
+                            "seq": 22
+                        },
+                        {
+                            "delay": 11,
+                            "seq": 23
+                        },
+                        {
+                            "delay": 11,
+                            "seq": 24
+                        },
+                        {
+                            "delay": 5,
+                            "seq": 25
+                        },
+                        {
+                            "delay": 17,
+                            "seq": 26
+                        },
+                        {
+                            "delay": 27,
+                            "seq": 27
+                        },
+                        {
+                            "delay": 27,
+                            "seq": 28
+                        },
+                        {
+                            "delay": 36,
+                            "seq": 29
+                        },
+                        {
+                            "delay": 37,
+                            "seq": 30
+                        },
+                        {
+                            "delay": 40,
+                            "seq": 31
+                        },
+                        {
+                            "delay": 34,
+                            "seq": 32
+                        },
+                        {
+                            "delay": 34,
+                            "seq": 33
+                        },
+                        {
+                            "delay": 36,
+                            "seq": 34
+                        },
+                        {
+                            "delay": 33,
+                            "seq": 35
+                        },
+                        {
+                            "delay": 28,
+                            "seq": 36
+                        },
+                        {
+                            "delay": 25,
+                            "seq": 37
+                        },
+                        {
+                            "delay": 18,
+                            "seq": 38
+                        },
+                        {
+                            "delay": 13,
+                            "seq": 39
+                        },
+                        {
+                            "delay": 4,
+                            "seq": 40
+                        }
+                    ]
+                },
+                "sourceTimeStamp": "2026-03-28T10:50:07Z",
+                "createdAt": "2026-03-03T21:15:49Z",
+                "updatedAt": "2026-03-28T10:51:41Z"
+            },
+            "includedFlights": ": ALL CONTIGUOUS US DEP",
+            "fadtParamType": "GDP",
+            "gsCancelReceivedTs": null,
+            "gsCancelSourceTs": null,
+            "compression": false,
+            "blanket": false
+        },
+        "airportClosure": null,
+        "freeForm": null,
+        "arrivalDelay": null,
+        "departureDelay": null,
+        "airportConfig": {
+            "id": "5761f06f-1a9e-41b0-955b-f2375760b2e6",
+            "createdAt": "2026-03-28T11:25:30Z",
+            "airportId": "LGA",
+            "arrivalRunwayConfig": "RNAV  X 31",
+            "departureRunwayConfig": "04",
+            "arrivalRate": 25,
+            "sourceTimeStamp": "2026-03-28T11:25:29Z"
+        },
+        "deicing": null,
+        "airportLongName": "La Guardia",
+        "latitude": "40.7769",
+        "longitude": "-73.8740"
+    },
+    {
+        "airportId": "RSW",
+        "groundStop": null,
+        "groundDelay": null,
+        "airportClosure": null,
+        "freeForm": null,
+        "arrivalDelay": null,
+        "departureDelay": {
+            "airportId": "RSW",
+            "reason": "VOL:Volume",
+            "arrivalDeparture": {
+                "type": "Departure",
+                "min": "31 minutes",
+                "max": "45 minutes",
+                "trend": "Increasing"
+            },
+            "updateTime": "2026-03-28T16:12:00Z",
+            "averageDelay": "30",
+            "trend": "increasing"
+        },
+        "airportConfig": {
+            "id": "073f7cfc-f033-4a81-b2e1-38a6bd38e2ac",
+            "createdAt": "2026-03-28T10:32:55Z",
+            "airportId": "RSW",
+            "arrivalRunwayConfig": "06",
+            "departureRunwayConfig": "06",
+            "arrivalRate": 25,
+            "sourceTimeStamp": "2026-03-28T10:32:54Z"
+        },
+        "deicing": null,
+        "airportLongName": "Southwest Florida International",
+        "latitude": "26.5337",
+        "longitude": "-81.7553"
+    },
+    {
+        "airportId": "SAN",
+        "groundStop": null,
+        "groundDelay": null,
+        "airportClosure": null,
+        "freeForm": {
+            "id": "f2f51852-e2ae-4954-8d47-f068cc6f752e",
+            "airportId": "SAN",
+            "createdAt": null,
+            "updatedAt": "2026-03-18T14:00:33Z",
+            "startTime": "2026-03-18T13:00:00Z",
+            "endTime": "2026-10-01T08:00:00Z",
+            "simpleText": "!SAN 03/071 SAN AD AP CLSD TO NON SKED TRANSIENT GA ACFT EXC PPR 619-298-7704 2603181300-2610010800",
+            "text": "TO NON SKED TRANSIENT GA ACFT EXC PPR 619-298-7704",
+            "notamNumber": 71,
+            "issuedDate": "2026-03-18T13:49:00Z"
+        },
+        "arrivalDelay": null,
+        "departureDelay": null,
+        "airportConfig": {
+            "id": "4a56e746-b06c-4c01-bc23-54cbe0017867",
+            "createdAt": "2026-03-28T16:37:56Z",
+            "airportId": "SAN",
+            "arrivalRunwayConfig": "27",
+            "departureRunwayConfig": "27",
+            "arrivalRate": 24,
+            "sourceTimeStamp": "2026-03-28T16:37:52Z"
+        },
+        "deicing": null,
+        "airportLongName": "San Diego-Lindbergh Field",
+        "latitude": "32.7338",
+        "longitude": "-117.1933"
+    },
+    {
+        "airportId": "SLC",
+        "groundStop": null,
+        "groundDelay": null,
+        "airportClosure": null,
+        "freeForm": null,
+        "arrivalDelay": null,
+        "departureDelay": {
+            "airportId": "SLC",
+            "reason": "RWY:Maintenance",
+            "arrivalDeparture": {
+                "type": "Departure",
+                "min": "16 minutes",
+                "max": "30 minutes",
+                "trend": "Increasing"
+            },
+            "updateTime": "2026-03-28T16:20:00Z",
+            "averageDelay": "15",
+            "trend": "increasing"
+        },
+        "airportConfig": {
+            "id": "51ff50f9-146e-49da-a9e6-7eb3aa2b67e4",
+            "createdAt": "2026-03-28T17:41:47Z",
+            "airportId": "SLC",
+            "arrivalRunwayConfig": "17",
+            "departureRunwayConfig": "16L",
+            "arrivalRate": 40,
+            "sourceTimeStamp": "2026-03-28T17:41:43Z"
+        },
+        "deicing": null,
+        "airportLongName": "Salt Lake City International",
+        "latitude": "40.7899",
+        "longitude": "-111.9791"
+    },
+    {
+        "airportId": "STX",
+        "groundStop": null,
+        "groundDelay": null,
+        "airportClosure": null,
+        "freeForm": {
+            "id": "400103a2-8069-4564-962d-47c4f5d11f04",
+            "airportId": "STX",
+            "createdAt": null,
+            "updatedAt": "2026-02-27T22:39:29Z",
+            "startTime": "2026-02-27T22:22:00Z",
+            "endTime": "2026-04-30T21:00:00Z",
+            "simpleText": "!TISX 02/050 STX AD AP CLSD TO NON SKED TRANSIENT GA ACFT EXC PPR 340-201-4645 2602272222-2604302100",
+            "text": "TO NON SKED TRANSIENT GA ACFT EXC PPR 340-201-4645",
+            "notamNumber": 50,
+            "issuedDate": "2026-02-27T22:32:00Z"
+        },
+        "arrivalDelay": null,
+        "departureDelay": null,
+        "airportConfig": {
+            "id": "bcd06cb0-42a5-468c-ae35-40f89be949d8",
+            "createdAt": "2026-03-28T10:11:29Z",
+            "airportId": "STX",
+            "arrivalRunwayConfig": "10",
+            "departureRunwayConfig": "10",
+            "arrivalRate": 18,
+            "sourceTimeStamp": "2026-03-28T10:11:28Z"
+        },
+        "deicing": null,
+        "airportLongName": "Henry E. Rohlsen International Airport",
+        "latitude": "17.699169349916396",
+        "longitude": "-64.79710263171633"
+    }
+]

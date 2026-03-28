@@ -170,6 +170,7 @@ function collectFaaSignals(state, airportCode, faa, role) {
   if (!airportCode || !faa) return;
 
   const roleLabel = role === 'origin' ? 'at' : 'at';
+  // parseDelayNumber handles both numeric (from JSON) and string (from XML fallback) inputs
   const severityWindow = Math.max(
     parseDelayNumber(faa.avgDelay),
     parseDelayNumber(faa.minDelay),
@@ -182,6 +183,10 @@ function collectFaaSignals(state, airportCode, faa, role) {
   }
   if (faa.groundStop) {
     addPoints(state, `${role}-faa-gs`, role === 'origin' ? 30 : 20, `Ground stop ${roleLabel} ${airportCode}`);
+    // Probability of extension signal (ground stops only)
+    const ext = faa.probabilityOfExtension || (faa.programs && faa.programs.find(p => p.type === 'ground_stop')?.probabilityOfExtension);
+    if (ext === 'HIGH') addPoints(state, `${role}-faa-gs-ext`, 5, `GS extension likely at ${airportCode}`);
+    else if (ext === 'MEDIUM') addPoints(state, `${role}-faa-gs-ext`, 3, `GS extension possible at ${airportCode}`);
     return;
   }
   if (faa.groundDelay) {
@@ -205,6 +210,26 @@ function collectFaaSignals(state, airportCode, faa, role) {
     if (severityWindow >= 90) points += 3;
     const detail = severityWindow ? ` (up to ${severityWindow}m)` : '';
     addPoints(state, `${role}-faa-arr`, points, `Arrival delays ${roleLabel} ${airportCode}${detail}`);
+  }
+
+  // Arrival rate signal — reduced capacity means higher delay risk
+  const arrivalRate = faa.runwayConfig?.arrivalRate;
+  if (typeof arrivalRate === 'number' && arrivalRate > 0 && arrivalRate < 25) {
+    addPoints(state, `${role}-faa-rate`, role === 'origin' ? 4 : 2, `Reduced arrival rate at ${airportCode} (${arrivalRate}/hr)`);
+  }
+}
+
+function collectPlannedTmiSignals(state, airportCode, plannedTmis, role) {
+  if (!airportCode || !Array.isArray(plannedTmis) || !plannedTmis.length) return;
+  for (const tmi of plannedTmis) {
+    if (tmi.type !== 'terminal') continue;
+    if (!tmi.affectedAirports || !tmi.affectedAirports.includes(airportCode)) continue;
+    const event = (tmi.event || '').toUpperCase();
+    if (event.includes('GS') || event.includes('GROUND STOP')) {
+      addPoints(state, `${role}-planned-gs`, 3, `Planned ground stop at ${airportCode} (${tmi.time || 'later'})`);
+    } else if (event.includes('GDP') || event.includes('GROUND DELAY')) {
+      addPoints(state, `${role}-planned-gdp`, 2, `Planned ground delay at ${airportCode} (${tmi.time || 'later'})`);
+    }
   }
 }
 
@@ -404,6 +429,13 @@ export function computeDelayRiskModel(input) {
 
   collectIropsSignals(state, input.originHub, input.originIrops, 'origin');
   collectIropsSignals(state, input.destinationHub, input.destinationIrops, 'destination');
+
+  // Planned TMI signals (forward-looking NAS operations plan)
+  if (input.plannedTmis) {
+    collectPlannedTmiSignals(state, input.originHub, input.plannedTmis, 'origin');
+    collectPlannedTmiSignals(state, input.destinationHub, input.plannedTmis, 'destination');
+  }
+
   collectCompoundSignal(state, input);
 
   return finalize(state);

@@ -1,0 +1,1096 @@
+[
+    {
+        "airspaceFlowProgram": {
+            "id": "38886545-e05d-4ddb-8542-778b46fcb738",
+            "createdAt": "2026-03-28T09:35:51Z",
+            "afpName": "FCAMUN",
+            "impactingCondition": "airport volume",
+            "startTime": "2026-03-28T14:00:00Z",
+            "endTime": "2026-03-28T21:59:00Z",
+            "sourceTimeStamp": "2026-03-28T09:34:09Z",
+            "avgDelay": 99.30000305175781,
+            "lowerAltitude": "000",
+            "upperAltitude": "600",
+            "updatedAt": "2026-03-28T09:35:51Z",
+            "fuelFlowAdvisoryDelayTime": {
+                "id": "4d5b4ff9-3844-4e33-a56c-0563e9fa2fea",
+                "controlElement": "FCAMUN",
+                "delayProgramType": "AFP",
+                "startTime": "2026-03-28T14:00:00Z",
+                "endTime": "2026-03-28T21:59:00Z",
+                "dasDelays": {
+                    "delayTimeAmount": "2026-03-28T14:00:00.000+00:00",
+                    "dasDelay": [
+                        {
+                            "delay": 17,
+                            "seq": 1
+                        },
+                        {
+                            "delay": 26,
+                            "seq": 2
+                        },
+                        {
+                            "delay": 35,
+                            "seq": 3
+                        },
+                        {
+                            "delay": 45,
+                            "seq": 4
+                        },
+                        {
+                            "delay": 54,
+                            "seq": 5
+                        },
+                        {
+                            "delay": 61,
+                            "seq": 6
+                        },
+                        {
+                            "delay": 65,
+                            "seq": 7
+                        },
+                        {
+                            "delay": 69,
+                            "seq": 8
+                        },
+                        {
+                            "delay": 73,
+                            "seq": 9
+                        },
+                        {
+                            "delay": 78,
+                            "seq": 10
+                        },
+                        {
+                            "delay": 86,
+                            "seq": 11
+                        },
+                        {
+                            "delay": 93,
+                            "seq": 12
+                        },
+                        {
+                            "delay": 101,
+                            "seq": 13
+                        },
+                        {
+                            "delay": 109,
+                            "seq": 14
+                        },
+                        {
+                            "delay": 117,
+                            "seq": 15
+                        },
+                        {
+                            "delay": 123,
+                            "seq": 16
+                        },
+                        {
+                            "delay": 126,
+                            "seq": 17
+                        },
+                        {
+                            "delay": 131,
+                            "seq": 18
+                        },
+                        {
+                            "delay": 135,
+                            "seq": 19
+                        },
+                        {
+                            "delay": 134,
+                            "seq": 20
+                        },
+                        {
+                            "delay": 135,
+                            "seq": 21
+                        },
+                        {
+                            "delay": 138,
+                            "seq": 22
+                        },
+                        {
+                            "delay": 141,
+                            "seq": 23
+                        },
+                        {
+                            "delay": 141,
+                            "seq": 24
+                        },
+                        {
+                            "delay": 142,
+                            "seq": 25
+                        },
+                        {
+                            "delay": 147,
+                            "seq": 26
+                        },
+                        {
+                            "delay": 152,
+                            "seq": 27
+                        },
+                        {
+                            "delay": 152,
+                            "seq": 28
+                        },
+                        {
+                            "delay": 149,
+                            "seq": 29
+                        },
+                        {
+                            "delay": 144,
+                            "seq": 30
+                        },
+                        {
+                            "delay": 136,
+                            "seq": 31
+                        },
+                        {
+                            "delay": 129,
+                            "seq": 32
+                        }
+                    ]
+                },
+                "sourceTimeStamp": "2026-03-28T09:34:09Z",
+                "createdAt": "2026-02-15T10:12:44Z",
+                "updatedAt": "2026-03-28T09:36:01Z"
+            },
+            "fadtParamType": "AFP",
+            "compression": false
+        },
+        "arrivesNone": "",
+        "arrivesAny": "MMUN",
+        "departsNone": "",
+        "departsAny": "",
+        "isAnyConditions": false,
+        "polygon": null,
+        "circle": {
+            "ceiling": 600,
+            "floor": 0,
+            "points": {
+                "point": [
+                    {
+                        "latitude": "21.0333333",
+                        "longitude": "-86.8833333"
+                    }
+                ]
+            },
+            "center": {
+                "latitude": "21.0333333",
+                "longitude": "-86.8833333"
+            },
+            "radius": 10
+        },
+        "line": null,
+        "comments": null,
+        "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=30&adv_date=03282026&facId=ATCSCC&title=ATCSCC ADVZY 030 FCAMUN 03/28/2026 CDM AIRSPACE FLOW PROGRAM&titleDate=03/28/2026",
+        "fcaAirport": null,
+        "fcaArtcc": null,
+        "fcaSectorName": null,
+        "fcaBaseSector": null,
+        "fcaSuaName": null,
+        "fcaFixName": null,
+        "fcaTraconName": null,
+        "fcaBaseTracon": null,
+        "fcaHeadingDirection": null
+    },
+    {
+        "airspaceFlowProgram": {
+            "id": "5a335b5a-a89a-4381-93f6-466c098c5284",
+            "createdAt": "2026-03-28T10:56:01Z",
+            "afpName": "FCAPV2",
+            "impactingCondition": "airport volume",
+            "startTime": "2026-03-28T14:00:00Z",
+            "endTime": "2026-03-28T20:59:00Z",
+            "sourceTimeStamp": "2026-03-28T10:55:06Z",
+            "avgDelay": 35.099998474121094,
+            "lowerAltitude": "000",
+            "upperAltitude": "600",
+            "updatedAt": "2026-03-28T10:56:01Z",
+            "fuelFlowAdvisoryDelayTime": {
+                "id": "e7ef547a-3b95-4748-9994-3e20163ebb34",
+                "controlElement": "FCAPV2",
+                "delayProgramType": "AFP",
+                "startTime": "2026-03-28T14:00:00Z",
+                "endTime": "2026-03-28T20:59:00Z",
+                "dasDelays": {
+                    "delayTimeAmount": "2026-03-28T14:00:00.000+00:00",
+                    "dasDelay": [
+                        {
+                            "delay": 87,
+                            "seq": 1
+                        },
+                        {
+                            "delay": 84,
+                            "seq": 2
+                        },
+                        {
+                            "delay": 72,
+                            "seq": 3
+                        },
+                        {
+                            "delay": 60,
+                            "seq": 4
+                        },
+                        {
+                            "delay": 52,
+                            "seq": 5
+                        },
+                        {
+                            "delay": 46,
+                            "seq": 6
+                        },
+                        {
+                            "delay": 42,
+                            "seq": 7
+                        },
+                        {
+                            "delay": 40,
+                            "seq": 8
+                        },
+                        {
+                            "delay": 38,
+                            "seq": 9
+                        },
+                        {
+                            "delay": 37,
+                            "seq": 10
+                        },
+                        {
+                            "delay": 34,
+                            "seq": 11
+                        },
+                        {
+                            "delay": 32,
+                            "seq": 12
+                        },
+                        {
+                            "delay": 31,
+                            "seq": 13
+                        },
+                        {
+                            "delay": 30,
+                            "seq": 14
+                        },
+                        {
+                            "delay": 30,
+                            "seq": 15
+                        },
+                        {
+                            "delay": 30,
+                            "seq": 16
+                        },
+                        {
+                            "delay": 30,
+                            "seq": 17
+                        },
+                        {
+                            "delay": 29,
+                            "seq": 18
+                        },
+                        {
+                            "delay": 28,
+                            "seq": 19
+                        },
+                        {
+                            "delay": 25,
+                            "seq": 20
+                        },
+                        {
+                            "delay": 22,
+                            "seq": 21
+                        },
+                        {
+                            "delay": 17,
+                            "seq": 22
+                        },
+                        {
+                            "delay": 13,
+                            "seq": 23
+                        },
+                        {
+                            "delay": 11,
+                            "seq": 24
+                        },
+                        {
+                            "delay": 9,
+                            "seq": 25
+                        },
+                        {
+                            "delay": 6,
+                            "seq": 26
+                        },
+                        {
+                            "delay": 6,
+                            "seq": 27
+                        },
+                        {
+                            "delay": 7,
+                            "seq": 28
+                        }
+                    ]
+                },
+                "sourceTimeStamp": "2026-03-28T10:55:06Z",
+                "createdAt": "2026-03-28T10:56:09Z",
+                "updatedAt": "2026-03-28T10:56:09Z"
+            },
+            "fadtParamType": "AFP",
+            "compression": false
+        },
+        "arrivesNone": "",
+        "arrivesAny": "MBPV",
+        "departsNone": "",
+        "departsAny": "",
+        "isAnyConditions": false,
+        "polygon": null,
+        "circle": {
+            "ceiling": 600,
+            "floor": 0,
+            "points": {
+                "point": [
+                    {
+                        "latitude": "21.7666667",
+                        "longitude": "-72.2666667"
+                    }
+                ]
+            },
+            "center": {
+                "latitude": "21.7666667",
+                "longitude": "-72.2666667"
+            },
+            "radius": 7
+        },
+        "line": null,
+        "comments": null,
+        "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=40&adv_date=03282026&facId=ATCSCC&title=ATCSCC ADVZY 040 FCAPV2 03/28/2026 CDM AIRSPACE FLOW PROGRAM&titleDate=03/28/2026",
+        "fcaAirport": null,
+        "fcaArtcc": null,
+        "fcaSectorName": null,
+        "fcaBaseSector": null,
+        "fcaSuaName": null,
+        "fcaFixName": null,
+        "fcaTraconName": null,
+        "fcaBaseTracon": null,
+        "fcaHeadingDirection": null
+    },
+    {
+        "airspaceFlowProgram": {
+            "id": "8dae13a0-3ae4-46cc-ad7e-e28b40b2310a",
+            "createdAt": "2026-03-28T10:57:34Z",
+            "afpName": "FCAPV3",
+            "impactingCondition": "airport volume",
+            "startTime": "2026-03-28T14:00:00Z",
+            "endTime": "2026-03-28T20:59:00Z",
+            "sourceTimeStamp": "2026-03-28T10:56:38Z",
+            "avgDelay": 224.10000610351562,
+            "lowerAltitude": "000",
+            "upperAltitude": "600",
+            "updatedAt": "2026-03-28T10:57:34Z",
+            "fuelFlowAdvisoryDelayTime": {
+                "id": "c5f87362-8bb8-45b5-863e-8e9b7cc4fa6b",
+                "controlElement": "FCAPV3",
+                "delayProgramType": "AFP",
+                "startTime": "2026-03-28T14:00:00Z",
+                "endTime": "2026-03-28T20:59:00Z",
+                "dasDelays": {
+                    "delayTimeAmount": "2026-03-28T14:00:00.000+00:00",
+                    "dasDelay": [
+                        {
+                            "delay": 316,
+                            "seq": 1
+                        },
+                        {
+                            "delay": 317,
+                            "seq": 2
+                        },
+                        {
+                            "delay": 320,
+                            "seq": 3
+                        },
+                        {
+                            "delay": 323,
+                            "seq": 4
+                        },
+                        {
+                            "delay": 326,
+                            "seq": 5
+                        },
+                        {
+                            "delay": 327,
+                            "seq": 6
+                        },
+                        {
+                            "delay": 324,
+                            "seq": 7
+                        },
+                        {
+                            "delay": 316,
+                            "seq": 8
+                        },
+                        {
+                            "delay": 306,
+                            "seq": 9
+                        },
+                        {
+                            "delay": 295,
+                            "seq": 10
+                        },
+                        {
+                            "delay": 281,
+                            "seq": 11
+                        },
+                        {
+                            "delay": 268,
+                            "seq": 12
+                        },
+                        {
+                            "delay": 254,
+                            "seq": 13
+                        },
+                        {
+                            "delay": 242,
+                            "seq": 14
+                        },
+                        {
+                            "delay": 229,
+                            "seq": 15
+                        },
+                        {
+                            "delay": 217,
+                            "seq": 16
+                        },
+                        {
+                            "delay": 205,
+                            "seq": 17
+                        },
+                        {
+                            "delay": 194,
+                            "seq": 18
+                        },
+                        {
+                            "delay": 183,
+                            "seq": 19
+                        },
+                        {
+                            "delay": 172,
+                            "seq": 20
+                        },
+                        {
+                            "delay": 161,
+                            "seq": 21
+                        },
+                        {
+                            "delay": 152,
+                            "seq": 22
+                        },
+                        {
+                            "delay": 147,
+                            "seq": 23
+                        },
+                        {
+                            "delay": 147,
+                            "seq": 24
+                        },
+                        {
+                            "delay": 146,
+                            "seq": 25
+                        },
+                        {
+                            "delay": 146,
+                            "seq": 26
+                        },
+                        {
+                            "delay": 145,
+                            "seq": 27
+                        },
+                        {
+                            "delay": 145,
+                            "seq": 28
+                        }
+                    ]
+                },
+                "sourceTimeStamp": "2026-03-28T10:56:38Z",
+                "createdAt": "2026-03-28T10:57:55Z",
+                "updatedAt": "2026-03-28T10:57:55Z"
+            },
+            "fadtParamType": "AFP",
+            "compression": false
+        },
+        "arrivesNone": "",
+        "arrivesAny": "MBPV",
+        "departsNone": "",
+        "departsAny": "",
+        "isAnyConditions": false,
+        "polygon": null,
+        "circle": {
+            "ceiling": 600,
+            "floor": 0,
+            "points": {
+                "point": [
+                    {
+                        "latitude": "21.7666667",
+                        "longitude": "-72.2666667"
+                    }
+                ]
+            },
+            "center": {
+                "latitude": "21.7666667",
+                "longitude": "-72.2666667"
+            },
+            "radius": 7
+        },
+        "line": null,
+        "comments": null,
+        "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=41&adv_date=03282026&facId=ATCSCC&title=ATCSCC ADVZY 041 FCAPV3 03/28/2026 CDM AIRSPACE FLOW PROGRAM&titleDate=03/28/2026",
+        "fcaAirport": null,
+        "fcaArtcc": null,
+        "fcaSectorName": null,
+        "fcaBaseSector": null,
+        "fcaSuaName": null,
+        "fcaFixName": null,
+        "fcaTraconName": null,
+        "fcaBaseTracon": null,
+        "fcaHeadingDirection": null
+    },
+    {
+        "airspaceFlowProgram": {
+            "id": "c3f8aa6e-2a73-4280-ac82-6473f711fcec",
+            "createdAt": "2026-03-28T13:07:34Z",
+            "afpName": "FCASD1",
+            "impactingCondition": "airport volume",
+            "startTime": "2026-03-28T17:00:00Z",
+            "endTime": "2026-03-28T21:59:00Z",
+            "sourceTimeStamp": "2026-03-28T13:07:05Z",
+            "avgDelay": 20.299999237060547,
+            "lowerAltitude": "000",
+            "upperAltitude": "600",
+            "updatedAt": "2026-03-28T13:07:34Z",
+            "fuelFlowAdvisoryDelayTime": {
+                "id": "0da5bf09-d7eb-4930-802b-139666db1160",
+                "controlElement": "FCASD1",
+                "delayProgramType": "AFP",
+                "startTime": "2026-03-28T17:00:00Z",
+                "endTime": "2026-03-28T21:59:00Z",
+                "dasDelays": {
+                    "delayTimeAmount": "2026-03-28T17:00:00.000+00:00",
+                    "dasDelay": [
+                        {
+                            "delay": 12,
+                            "seq": 1
+                        },
+                        {
+                            "delay": 9,
+                            "seq": 2
+                        },
+                        {
+                            "delay": 12,
+                            "seq": 3
+                        },
+                        {
+                            "delay": 17,
+                            "seq": 4
+                        },
+                        {
+                            "delay": 22,
+                            "seq": 5
+                        },
+                        {
+                            "delay": 21,
+                            "seq": 6
+                        },
+                        {
+                            "delay": 16,
+                            "seq": 7
+                        },
+                        {
+                            "delay": 19,
+                            "seq": 8
+                        },
+                        {
+                            "delay": 26,
+                            "seq": 9
+                        },
+                        {
+                            "delay": 33,
+                            "seq": 10
+                        },
+                        {
+                            "delay": 34,
+                            "seq": 11
+                        },
+                        {
+                            "delay": 34,
+                            "seq": 12
+                        },
+                        {
+                            "delay": 24,
+                            "seq": 13
+                        },
+                        {
+                            "delay": 27,
+                            "seq": 14
+                        },
+                        {
+                            "delay": 24,
+                            "seq": 15
+                        },
+                        {
+                            "delay": 18,
+                            "seq": 16
+                        },
+                        {
+                            "delay": 15,
+                            "seq": 17
+                        },
+                        {
+                            "delay": 9,
+                            "seq": 18
+                        },
+                        {
+                            "delay": 10,
+                            "seq": 19
+                        },
+                        {
+                            "delay": 12,
+                            "seq": 20
+                        }
+                    ]
+                },
+                "sourceTimeStamp": "2026-03-28T13:07:05Z",
+                "createdAt": "2026-03-28T13:07:56Z",
+                "updatedAt": "2026-03-28T13:07:57Z"
+            },
+            "fadtParamType": "AFP",
+            "compression": false
+        },
+        "arrivesNone": "",
+        "arrivesAny": "MMSD",
+        "departsNone": "",
+        "departsAny": "",
+        "isAnyConditions": false,
+        "polygon": null,
+        "circle": {
+            "ceiling": 600,
+            "floor": 0,
+            "points": {
+                "point": [
+                    {
+                        "latitude": "23.15",
+                        "longitude": "-109.7166667"
+                    }
+                ]
+            },
+            "center": {
+                "latitude": "23.15",
+                "longitude": "-109.7166667"
+            },
+            "radius": 25
+        },
+        "line": null,
+        "comments": null,
+        "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=56&adv_date=03282026&facId=ATCSCC&title=ATCSCC ADVZY 056 FCASD1 03/28/2026 CDM AIRSPACE FLOW PROGRAM&titleDate=03/28/2026",
+        "fcaAirport": null,
+        "fcaArtcc": null,
+        "fcaSectorName": null,
+        "fcaBaseSector": null,
+        "fcaSuaName": null,
+        "fcaFixName": null,
+        "fcaTraconName": null,
+        "fcaBaseTracon": null,
+        "fcaHeadingDirection": null
+    },
+    {
+        "airspaceFlowProgram": {
+            "id": "de85416e-6b4c-41fb-bddd-cc592f251a85",
+            "createdAt": "2026-03-28T10:59:38Z",
+            "afpName": "FCAMA5",
+            "impactingCondition": "airspace volume",
+            "startTime": "2026-03-28T15:30:00Z",
+            "endTime": "2026-03-28T23:59:00Z",
+            "sourceTimeStamp": "2026-03-28T10:59:01Z",
+            "avgDelay": 121.9000015258789,
+            "lowerAltitude": "000",
+            "upperAltitude": "600",
+            "updatedAt": "2026-03-28T10:59:38Z",
+            "fuelFlowAdvisoryDelayTime": {
+                "id": "3836de51-d082-423d-995f-572e7d5de9ec",
+                "controlElement": "FCAMA5",
+                "delayProgramType": "AFP",
+                "startTime": "2026-03-28T15:30:00Z",
+                "endTime": "2026-03-28T23:59:00Z",
+                "dasDelays": {
+                    "delayTimeAmount": "2026-03-28T15:30:00.000+00:00",
+                    "dasDelay": [
+                        {
+                            "delay": 77,
+                            "seq": 1
+                        },
+                        {
+                            "delay": 83,
+                            "seq": 2
+                        },
+                        {
+                            "delay": 90,
+                            "seq": 3
+                        },
+                        {
+                            "delay": 99,
+                            "seq": 4
+                        },
+                        {
+                            "delay": 108,
+                            "seq": 5
+                        },
+                        {
+                            "delay": 117,
+                            "seq": 6
+                        },
+                        {
+                            "delay": 126,
+                            "seq": 7
+                        },
+                        {
+                            "delay": 135,
+                            "seq": 8
+                        },
+                        {
+                            "delay": 144,
+                            "seq": 9
+                        },
+                        {
+                            "delay": 154,
+                            "seq": 10
+                        },
+                        {
+                            "delay": 164,
+                            "seq": 11
+                        },
+                        {
+                            "delay": 174,
+                            "seq": 12
+                        },
+                        {
+                            "delay": 183,
+                            "seq": 13
+                        },
+                        {
+                            "delay": 191,
+                            "seq": 14
+                        },
+                        {
+                            "delay": 197,
+                            "seq": 15
+                        },
+                        {
+                            "delay": 200,
+                            "seq": 16
+                        },
+                        {
+                            "delay": 201,
+                            "seq": 17
+                        },
+                        {
+                            "delay": 198,
+                            "seq": 18
+                        },
+                        {
+                            "delay": 193,
+                            "seq": 19
+                        },
+                        {
+                            "delay": 185,
+                            "seq": 20
+                        },
+                        {
+                            "delay": 175,
+                            "seq": 21
+                        },
+                        {
+                            "delay": 162,
+                            "seq": 22
+                        },
+                        {
+                            "delay": 147,
+                            "seq": 23
+                        },
+                        {
+                            "delay": 132,
+                            "seq": 24
+                        },
+                        {
+                            "delay": 117,
+                            "seq": 25
+                        },
+                        {
+                            "delay": 102,
+                            "seq": 26
+                        },
+                        {
+                            "delay": 89,
+                            "seq": 27
+                        },
+                        {
+                            "delay": 78,
+                            "seq": 28
+                        },
+                        {
+                            "delay": 67,
+                            "seq": 29
+                        },
+                        {
+                            "delay": 57,
+                            "seq": 30
+                        },
+                        {
+                            "delay": 49,
+                            "seq": 31
+                        },
+                        {
+                            "delay": 43,
+                            "seq": 32
+                        },
+                        {
+                            "delay": 38,
+                            "seq": 33
+                        },
+                        {
+                            "delay": 33,
+                            "seq": 34
+                        }
+                    ]
+                },
+                "sourceTimeStamp": "2026-03-28T10:59:01Z",
+                "createdAt": "2026-02-21T11:52:54Z",
+                "updatedAt": "2026-03-28T10:59:55Z"
+            },
+            "fadtParamType": "AFP",
+            "compression": false
+        },
+        "arrivesNone": "MBPV",
+        "arrivesAny": "",
+        "departsNone": "",
+        "departsAny": "",
+        "isAnyConditions": false,
+        "polygon": null,
+        "circle": null,
+        "line": {
+            "ceiling": 600,
+            "floor": 0,
+            "points": {
+                "point": [
+                    {
+                        "latitude": "19.93",
+                        "longitude": "-73.42"
+                    },
+                    {
+                        "latitude": "25.0",
+                        "longitude": "-70.88"
+                    },
+                    {
+                        "latitude": "25.0",
+                        "longitude": "-68.5"
+                    }
+                ]
+            },
+            "direction": 0,
+            "speed": 0,
+            "drawing": "TRUE"
+        },
+        "comments": null,
+        "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=42&adv_date=03282026&facId=ATCSCC&title=ATCSCC ADVZY 042 FCAMA5 03/28/2026 CDM AIRSPACE FLOW PROGRAM&titleDate=03/28/2026",
+        "fcaAirport": null,
+        "fcaArtcc": null,
+        "fcaSectorName": null,
+        "fcaBaseSector": null,
+        "fcaSuaName": null,
+        "fcaFixName": null,
+        "fcaTraconName": null,
+        "fcaBaseTracon": null,
+        "fcaHeadingDirection": "southeast"
+    },
+    {
+        "airspaceFlowProgram": {
+            "id": "e59fe237-1494-47be-8e4c-f2960b2ae909",
+            "createdAt": "2026-03-28T12:13:04Z",
+            "afpName": "FCAJX1",
+            "impactingCondition": "airspace volume",
+            "startTime": "2026-03-28T14:00:00Z",
+            "endTime": "2026-03-28T20:59:00Z",
+            "sourceTimeStamp": "2026-03-28T12:11:58Z",
+            "avgDelay": 22.100000381469727,
+            "lowerAltitude": "180",
+            "upperAltitude": "600",
+            "updatedAt": "2026-03-28T12:13:12Z",
+            "fuelFlowAdvisoryDelayTime": {
+                "id": "c35851f7-052b-426d-9c24-9a1e908c37b3",
+                "controlElement": "FCAJX1",
+                "delayProgramType": "AFP",
+                "startTime": "2026-03-28T14:00:00Z",
+                "endTime": "2026-03-28T20:59:00Z",
+                "dasDelays": {
+                    "delayTimeAmount": "2026-03-28T14:00:00.000+00:00",
+                    "dasDelay": [
+                        {
+                            "delay": 12,
+                            "seq": 1
+                        },
+                        {
+                            "delay": 20,
+                            "seq": 2
+                        },
+                        {
+                            "delay": 22,
+                            "seq": 3
+                        },
+                        {
+                            "delay": 21,
+                            "seq": 4
+                        },
+                        {
+                            "delay": 22,
+                            "seq": 5
+                        },
+                        {
+                            "delay": 19,
+                            "seq": 6
+                        },
+                        {
+                            "delay": 13,
+                            "seq": 7
+                        },
+                        {
+                            "delay": 22,
+                            "seq": 8
+                        },
+                        {
+                            "delay": 31,
+                            "seq": 9
+                        },
+                        {
+                            "delay": 36,
+                            "seq": 10
+                        },
+                        {
+                            "delay": 39,
+                            "seq": 11
+                        },
+                        {
+                            "delay": 37,
+                            "seq": 12
+                        },
+                        {
+                            "delay": 40,
+                            "seq": 13
+                        },
+                        {
+                            "delay": 38,
+                            "seq": 14
+                        },
+                        {
+                            "delay": 32,
+                            "seq": 15
+                        },
+                        {
+                            "delay": 30,
+                            "seq": 16
+                        },
+                        {
+                            "delay": 27,
+                            "seq": 17
+                        },
+                        {
+                            "delay": 29,
+                            "seq": 18
+                        },
+                        {
+                            "delay": 21,
+                            "seq": 19
+                        },
+                        {
+                            "delay": 23,
+                            "seq": 20
+                        },
+                        {
+                            "delay": 21,
+                            "seq": 21
+                        },
+                        {
+                            "delay": 12,
+                            "seq": 22
+                        },
+                        {
+                            "delay": 11,
+                            "seq": 23
+                        },
+                        {
+                            "delay": 10,
+                            "seq": 24
+                        },
+                        {
+                            "delay": 3,
+                            "seq": 25
+                        },
+                        {
+                            "delay": 2,
+                            "seq": 26
+                        },
+                        {
+                            "delay": 3,
+                            "seq": 27
+                        },
+                        {
+                            "delay": 2,
+                            "seq": 28
+                        }
+                    ]
+                },
+                "sourceTimeStamp": "2026-03-28T12:11:58Z",
+                "createdAt": "2026-02-27T20:57:32Z",
+                "updatedAt": "2026-03-28T12:13:16Z"
+            },
+            "fadtParamType": "AFP",
+            "compression": false
+        },
+        "arrivesNone": "",
+        "arrivesAny": "",
+        "departsNone": "",
+        "departsAny": "",
+        "isAnyConditions": false,
+        "polygon": null,
+        "circle": null,
+        "line": {
+            "ceiling": 600,
+            "floor": 180,
+            "points": {
+                "point": [
+                    {
+                        "latitude": "30.55",
+                        "longitude": "-79.68"
+                    },
+                    {
+                        "latitude": "29.97",
+                        "longitude": "-82.02"
+                    },
+                    {
+                        "latitude": "28.52",
+                        "longitude": "-83.9"
+                    }
+                ]
+            },
+            "direction": 0,
+            "speed": 0,
+            "drawing": "TRUE"
+        },
+        "comments": null,
+        "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=53&adv_date=03282026&facId=ATCSCC&title=ATCSCC ADVZY 053 FCAJX1 03/28/2026 CDM AIRSPACE FLOW PROGRAM&titleDate=03/28/2026",
+        "fcaAirport": null,
+        "fcaArtcc": null,
+        "fcaSectorName": null,
+        "fcaBaseSector": null,
+        "fcaSuaName": null,
+        "fcaFixName": null,
+        "fcaTraconName": null,
+        "fcaBaseTracon": null,
+        "fcaHeadingDirection": "southbound"
+    }
+]

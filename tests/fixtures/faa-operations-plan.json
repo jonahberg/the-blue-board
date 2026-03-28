@@ -1,0 +1,10 @@
+{
+    "link": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=75&adv_date=03282026&facId=ATCSCC&title=ATCSCC ADVZY 075 DCC 03/28/2026 OPERATIONS PLAN&titleDate=03/28/2026",
+    "terminalPlanned": [],
+    "enRoutePlanned": [
+        {
+            "time": "AFTER 1800",
+            "event": "-SOUTH FLORIDA CDRS/SWAP POSSIBLE"
+        }
+    ]
+}
