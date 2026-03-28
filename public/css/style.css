@@ -527,6 +527,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #radar-map{height:260px}
   .wx-detail-panel{flex:1;border-left:none;border-top:1px solid var(--ua-border)}
   .hub-cards{padding:10px}
+  #nas-status-panel{margin:0 10px}
   .irops-bar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:4px 10px;gap:0}
   .irops-bar::-webkit-scrollbar{display:none}
   .irops-bar-sep{display:none}
