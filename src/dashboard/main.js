@@ -2619,14 +2619,15 @@ function renderNasPanel() {
     return;
   }
 
-  // Create panel if it doesn't exist — insert after radar map
+  // Create panel if it doesn't exist — insert into the detail panel (right side)
+  // between the IROPS section and the hub-cards scroll hint
   if (!panelEl) {
     panelEl = document.createElement('div');
     panelEl.id = 'nas-status-panel';
-    panelEl.style.cssText = 'background:var(--ua-panel);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:10px 14px;margin-top:12px';
-    const radarMap = document.getElementById('radar-map');
-    if (radarMap && radarMap.parentNode) {
-      radarMap.parentNode.insertBefore(panelEl, radarMap.nextSibling);
+    panelEl.style.cssText = 'background:var(--ua-panel);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:10px 14px;margin:0 14px;flex-shrink:0';
+    const scrollHint = document.getElementById('wx-scroll-hint');
+    if (scrollHint && scrollHint.parentNode) {
+      scrollHint.parentNode.insertBefore(panelEl, scrollHint);
     } else {
       const hubCards = document.getElementById('hub-cards');
       if (hubCards) hubCards.parentNode.insertBefore(panelEl, hubCards);
