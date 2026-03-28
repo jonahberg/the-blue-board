@@ -4,6 +4,14 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-03-28
+
+### Fixed
+- **NAS Status panel now visible** in the weather tab. The panel was rendered but hidden inside the radar map container (`overflow:hidden` clipping). Moved to the scrollable detail panel between IROPS bar and hub cards.
+- NAS panel styling moved from inline styles to proper CSS classes using design system variables (`--font-mono`, `--font-display`, `--ua-amber`). Padding matches DESIGN.md highlight box spec.
+- Added mobile responsive margin for NAS panel (10px to match hub card padding on small screens).
+- Fixed CSS cascade bug where desktop `#nas-status-panel` margin rule overrode the mobile media query override (caught by Codex review).
+
 ## [Unreleased] - 2026-03-26
 
 ### Changed
