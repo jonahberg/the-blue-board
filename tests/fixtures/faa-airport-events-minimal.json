@@ -1,0 +1,51 @@
+[
+  {
+    "airportId": "EWR",
+    "groundStop": {
+      "id": "test-gs-1",
+      "airportId": "EWR",
+      "createdAt": "2026-03-28T10:00:00Z",
+      "sourceTimeStamp": "2026-03-28T10:00:00Z",
+      "updatedAt": "2026-03-28T10:00:00Z",
+      "impactingCondition": "weather",
+      "startTime": "2026-03-28T10:00:00Z",
+      "endTime": "2026-03-28T14:00:00Z",
+      "center": "ZNY",
+      "advisoryUrl": "https://www.fly.faa.gov/adv/test",
+      "probabilityOfExtension": "HIGH",
+      "includedFacilities": ["ZNY", "ZBW"],
+      "includedFlights": ""
+    },
+    "groundDelay": null,
+    "airportClosure": null,
+    "freeForm": null,
+    "arrivalDelay": null,
+    "departureDelay": null,
+    "airportConfig": null,
+    "deicing": null,
+    "airportLongName": "Newark Liberty International",
+    "latitude": "40.6895",
+    "longitude": "-74.1745"
+  },
+  {
+    "airportId": "ORD",
+    "groundStop": null,
+    "groundDelay": null,
+    "airportClosure": null,
+    "freeForm": null,
+    "arrivalDelay": null,
+    "departureDelay": null,
+    "airportConfig": {
+      "id": "test-config-1",
+      "airportId": "ORD",
+      "arrivalRunwayConfig": "10L/10C",
+      "departureRunwayConfig": "10R/10C",
+      "arrivalRate": 76,
+      "sourceTimeStamp": "2026-03-28T10:00:00Z"
+    },
+    "deicing": true,
+    "airportLongName": "O'Hare International",
+    "latitude": "41.9742",
+    "longitude": "-87.9073"
+  }
+]

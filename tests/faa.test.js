@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toArray } from '../api/faa.js';
+import { toArray, parseDelayMinutes } from '../api/faa.js';
 
 describe('toArray', () => {
   it('returns empty array for undefined', () => {
@@ -34,5 +34,53 @@ describe('toArray', () => {
 
   it('wraps a number in an array', () => {
     expect(toArray(42)).toEqual([42]);
+  });
+});
+
+describe('parseDelayMinutes', () => {
+  it('returns null for null/undefined/empty', () => {
+    expect(parseDelayMinutes(null)).toBe(null);
+    expect(parseDelayMinutes(undefined)).toBe(null);
+    expect(parseDelayMinutes('')).toBe(null);
+  });
+
+  it('parses numeric values directly', () => {
+    expect(parseDelayMinutes(18)).toBe(18);
+    expect(parseDelayMinutes(18.7)).toBe(19);
+    expect(parseDelayMinutes(0)).toBe(0);
+  });
+
+  it('parses numeric strings', () => {
+    expect(parseDelayMinutes('30')).toBe(30);
+    expect(parseDelayMinutes('45')).toBe(45);
+  });
+
+  it('parses "X minutes" format (XML fallback)', () => {
+    expect(parseDelayMinutes('31 minutes')).toBe(31);
+    expect(parseDelayMinutes('45 minutes')).toBe(45);
+  });
+
+  it('parses "X hours and Y minutes" format (XML fallback)', () => {
+    expect(parseDelayMinutes('5 hours and 45 minutes')).toBe(345);
+    expect(parseDelayMinutes('1 hour and 30 minutes')).toBe(90);
+    expect(parseDelayMinutes('24 hours')).toBe(1440);
+  });
+
+  it('returns null for NaN/Infinity', () => {
+    expect(parseDelayMinutes(NaN)).toBe(null);
+    expect(parseDelayMinutes(Infinity)).toBe(null);
+  });
+
+  it('returns null for non-parseable strings', () => {
+    expect(parseDelayMinutes('hello')).toBe(null);
+    expect(parseDelayMinutes('N/A')).toBe(null);
+  });
+
+  it('handles JSON numeric avgDelay (18.0)', () => {
+    expect(parseDelayMinutes(18.0)).toBe(18);
+  });
+
+  it('handles JSON numeric maxDelay (54)', () => {
+    expect(parseDelayMinutes(54)).toBe(54);
   });
 });

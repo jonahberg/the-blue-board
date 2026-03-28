@@ -93,4 +93,96 @@ describe('computeDelayRiskModel', () => {
 
     expect(result.factors).toContain('Late evening - high cascade risk');
   });
+
+  it('handles numeric avgDelay from JSON endpoint', () => {
+    const result = computeDelayRiskModel({
+      nowMs: Date.parse('2026-03-18T17:00:00Z'),
+      scheduledTime: '2026-03-18T18:00:00Z',
+      originHub: 'LGA',
+      destinationHub: 'ORD',
+      timeZone: 'America/New_York',
+      originFaa: { groundDelay: true, avgDelay: 95, maxDelay: 120 },
+    });
+
+    expect(result.score).toBeGreaterThanOrEqual(25);
+    expect(result.factors.some(f => f.includes('Ground delay program'))).toBe(true);
+    expect(result.factors.some(f => f.includes('120m'))).toBe(true);
+  });
+
+  it('handles string avgDelay from XML fallback', () => {
+    // parseDelayNumber extracts max number from string: "5 hours and 45 minutes" → 45
+    // In new API, server normalizes to numeric minutes. Old parseDelayNumber is defensive fallback.
+    const result = computeDelayRiskModel({
+      nowMs: Date.parse('2026-03-18T17:00:00Z'),
+      scheduledTime: '2026-03-18T18:00:00Z',
+      originHub: 'LGA',
+      destinationHub: 'ORD',
+      timeZone: 'America/New_York',
+      originFaa: { groundDelay: true, avgDelay: '5 hours and 45 minutes' },
+    });
+
+    expect(result.score).toBeGreaterThanOrEqual(20);
+    expect(result.factors.some(f => f.includes('Ground delay program'))).toBe(true);
+  });
+
+  it('handles null avgDelay gracefully', () => {
+    const result = computeDelayRiskModel({
+      nowMs: Date.parse('2026-03-18T17:00:00Z'),
+      scheduledTime: '2026-03-18T18:00:00Z',
+      originHub: 'LGA',
+      destinationHub: 'ORD',
+      timeZone: 'America/New_York',
+      originFaa: { groundDelay: true, avgDelay: null, maxDelay: null },
+    });
+
+    expect(result.factors.some(f => f.includes('Ground delay program'))).toBe(true);
+  });
+
+  it('adds probability-of-extension signal for ground stops', () => {
+    const result = computeDelayRiskModel({
+      nowMs: Date.parse('2026-03-18T17:00:00Z'),
+      scheduledTime: '2026-03-18T18:00:00Z',
+      originHub: 'EWR',
+      destinationHub: 'ORD',
+      timeZone: 'America/New_York',
+      originFaa: {
+        groundStop: true,
+        probabilityOfExtension: 'HIGH',
+        programs: [{ type: 'ground_stop', probabilityOfExtension: 'HIGH' }],
+      },
+    });
+
+    expect(result.factors.some(f => f.includes('GS extension likely'))).toBe(true);
+    expect(result.components.some(c => c.id === 'origin-faa-gs-ext')).toBe(true);
+  });
+
+  it('adds arrival rate signal for reduced capacity', () => {
+    const result = computeDelayRiskModel({
+      nowMs: Date.parse('2026-03-18T17:00:00Z'),
+      scheduledTime: '2026-03-18T18:00:00Z',
+      originHub: 'SFO',
+      destinationHub: 'ORD',
+      timeZone: 'America/Los_Angeles',
+      originFaa: { runwayConfig: { arrivalRunways: '28L', departureRunways: '28R', arrivalRate: 20 } },
+    });
+
+    expect(result.factors.some(f => f.includes('Reduced arrival rate'))).toBe(true);
+    expect(result.components.some(c => c.id === 'origin-faa-rate')).toBe(true);
+  });
+
+  it('adds planned TMI signals for hub airports', () => {
+    const result = computeDelayRiskModel({
+      nowMs: Date.parse('2026-03-18T17:00:00Z'),
+      scheduledTime: '2026-03-18T18:00:00Z',
+      originHub: 'EWR',
+      destinationHub: 'ORD',
+      timeZone: 'America/New_York',
+      plannedTmis: [
+        { time: 'AFTER 1800', event: 'EWR GDP POSSIBLE', type: 'terminal', affectedAirports: ['EWR'] },
+      ],
+    });
+
+    expect(result.factors.some(f => f.includes('Planned ground delay'))).toBe(true);
+    expect(result.components.some(c => c.id === 'origin-planned-gdp')).toBe(true);
+  });
 });
