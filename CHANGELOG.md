@@ -4,6 +4,16 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2026-03-29
+
+### Changed
+- **NAS Status panel redesigned as Priority Stack layout.** Items sorted by severity into CRITICAL / ACTIVE / MONITORING tiers with color-coded backgrounds. Most urgent restrictions (ground stops) always appear at the top. Replaces the flat active/planned list.
+- Severity badges (GS, GDP, AFP, MIT, CDR, etc.) on every NAS item with color-coded pill matching the restriction type.
+- Inline hub tags highlight which UA hubs are affected by each restriction.
+- Header shows active/planned/hub counts at a glance.
+- Added detection for DSP (Departure Spacing Program) restrictions.
+- Hub deduplication prevents duplicate hub tags when the same airport appears in both departsAny and arrivesAny.
+
 ## [1.5.1] - 2026-03-28
 
 ### Fixed
