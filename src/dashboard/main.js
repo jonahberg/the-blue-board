@@ -2634,29 +2634,137 @@ function renderNasPanel() {
   }
 
   panelEl.style.display = 'block';
-  // All content values are pre-sanitized via escapeHtml before insertion
-  let html = `<div class="nas-label">NAS STATUS</div>`;
+
+  // --- Severity detection & classification helpers ---
+  // All user-facing text is sanitized via escapeHtml before DOM insertion.
+
+  const SEV_LABELS = {
+    GS: 'Ground Stop', GDP: 'Ground Delay Program', AFP: 'Airspace Flow Program',
+    MIT: 'Miles-in-Trail', MINIT: 'Minutes-in-Trail', CDR: 'Coded Departure Routes',
+    SWAP: 'Severe Weather Avoidance', EDCT: 'Expect Departure Clearance Time',
+    FCA: 'Flow Constrained Area', DSP: 'Departure Spacing Program',
+  };
+
+  function detectSevType(text) {
+    const t = text.toUpperCase();
+    if (t.includes('GROUND STOP') || /\bGS\b/.test(t) || /\bGDS\b/.test(t)) return 'GS';
+    if (t.includes('GROUND DELAY') || /\bGDP\b/.test(t)) return 'GDP';
+    if (t.includes('AIRSPACE FLOW') || /\bAFP\b/.test(t)) return 'AFP';
+    if (t.includes('MILES-IN-TRAIL') || t.includes('MINUTES-IN-TRAIL') || /\bMINIT\b/.test(t) || /\bMIT\b/.test(t)) return 'MIT';
+    if (t.includes('CODED DEPARTURE') || /\bCDRS?\b/.test(t)) return 'CDR';
+    if (t.includes('SEVERE WEATHER') || /\bSWAP\b/.test(t)) return 'SWAP';
+    if (/\bEDCT\b/.test(t)) return 'EDCT';
+    if (/\bFCA\b/.test(t)) return 'FCA';
+    if (/\bDSP\b/.test(t)) return 'DSP';
+    return 'OTHER';
+  }
+
+  // Map severity types to CSS badge classes (known safe string values)
+  function sevBadgeClass(sevType) {
+    const map = { GS:'gs', GDP:'gdp', AFP:'afp', MIT:'mit', SWAP:'mit', MINIT:'mit', CDR:'cdr', EDCT:'cdr', FCA:'cdr', DSP:'cdr' };
+    return 'sev-' + (map[sevType] || 'other');
+  }
+
+  // --- Build unified, classified items list ---
+
+  const items = [];
+  const allHubs = new Set();
 
   // Active en-route programs
-  if (nasData.active && nasData.active.length) {
-    html += `<div class="nas-section-title">Active</div>`;
-    for (const prog of nasData.active) {
-      html += `<div class="nas-item">${escapeHtml(prog.name)} — ${escapeHtml(prog.reason)}${prog.avgDelay ? ` (avg ${escapeHtml(String(prog.avgDelay))}m)` : ''}</div>`;
+  for (const prog of (nasData.active || [])) {
+    const sevType = detectSevType(prog.name);
+    const nameParts = prog.name.split('-');
+    const typeCode = nameParts[0] || '';
+    const facility = nameParts.length > 1 && /^[A-Z]{3}$/.test(nameParts[1]) ? nameParts[1] : '';
+    const typeName = SEV_LABELS[sevType] || typeCode;
+    const hubs = [...new Set((prog.affectedFacilities || []).filter(a => UA_HUBS.has(a)))];
+    hubs.forEach(h => allHubs.add(h));
+
+    const detailParts = [];
+    if (prog.reason) detailParts.push(escapeHtml(prog.reason));
+    if (prog.avgDelay) detailParts.push('avg <span class="nas-delay-val">' + escapeHtml(String(prog.avgDelay)) + 'm</span>');
+    if (prog.endTime) {
+      const endZ = prog.endTime.includes('T') ? prog.endTime.split('T')[1].slice(0, 5) + 'Z' : prog.endTime;
+      detailParts.push('ends ' + escapeHtml(endZ));
     }
+
+    items.push({
+      tier: sevType === 'GS' ? 'critical' : 'active',
+      sevType,
+      title: facility ? escapeHtml(facility) + ' ' + escapeHtml(typeName) : escapeHtml(prog.name),
+      detail: detailParts.join(' \u00b7 '),
+      hubs,
+    });
   }
 
   // Planned TMIs
-  if (nasData.planned && nasData.planned.length) {
-    html += `<div class="nas-section-title" style="margin-top:8px">Planned</div>`;
-    for (const tmi of nasData.planned) {
-      const isHub = tmi.affectedAirports && tmi.affectedAirports.some(a => UA_HUBS.has(a));
-      html += `<div class="nas-item${isHub ? ' hub-affected' : ''}">${escapeHtml(tmi.time || '')} — ${escapeHtml(tmi.decoded || tmi.event)}</div>`;
-    }
+  for (const tmi of (nasData.planned || [])) {
+    const sevType = detectSevType(tmi.event);
+    const hubs = (tmi.affectedAirports || []).filter(a => UA_HUBS.has(a));
+    hubs.forEach(h => allHubs.add(h));
+
+    let tier;
+    if (sevType === 'GS') tier = 'critical';
+    else if (sevType === 'GDP' || sevType === 'AFP') tier = 'active';
+    else tier = 'monitoring';
+
+    items.push({
+      tier,
+      sevType,
+      title: escapeHtml(tmi.decoded || tmi.event),
+      detail: tmi.time ? escapeHtml(tmi.time) : '',
+      hubs,
+    });
   }
 
-  // Advisory link
+  // Group by tier
+  const tiers = {
+    critical: items.filter(i => i.tier === 'critical'),
+    active: items.filter(i => i.tier === 'active'),
+    monitoring: items.filter(i => i.tier === 'monitoring'),
+  };
+
+  // --- Render Priority Stack ---
+  // All values inserted below are pre-escaped via escapeHtml or derived from
+  // known safe constants (CSS class names, tier labels, unicode literals).
+
+  const activeCount = (nasData.active || []).length;
+  const plannedCount = (nasData.planned || []).length;
+  const hubCount = allHubs.size;
+  const countParts = [];
+  if (activeCount) countParts.push(activeCount + ' active');
+  if (plannedCount) countParts.push(plannedCount + ' planned');
+  if (hubCount) countParts.push(hubCount + ' hub' + (hubCount !== 1 ? 's' : ''));
+
+  let html = '<div class="nas-header">';
+  html += '<div class="nas-label">NAS STATUS</div>';
+  html += '<div class="nas-count">' + escapeHtml(countParts.join(' \u00b7 ')) + '</div>';
+  html += '</div>';
+
+  function renderTier(tierClass, label, tierItems) {
+    if (!tierItems.length) return '';
+    let h = '<div class="nas-tier ' + tierClass + '">';
+    h += '<div class="nas-tier-header"><span class="nas-tier-label">' + escapeHtml(label) + '</span><div class="nas-tier-line"></div></div>';
+    for (const item of tierItems) {
+      const badgeCls = sevBadgeClass(item.sevType);
+      const hubTags = item.hubs.map(hub => ' <span class="nas-hub-tag">' + escapeHtml(hub) + '</span>').join('');
+      h += '<div class="nas-tier-item">';
+      h += '<div class="nas-item-badge"><span class="nas-sev-badge ' + badgeCls + '">' + escapeHtml(item.sevType) + '</span></div>';
+      h += '<div class="nas-item-content">';
+      h += '<div class="nas-item-title">' + item.title + hubTags + '</div>';
+      if (item.detail) h += '<div class="nas-item-detail">' + item.detail + '</div>';
+      h += '</div></div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  html += renderTier('tier-critical', 'CRITICAL', tiers.critical);
+  html += renderTier('tier-active', 'ACTIVE / LIKELY', tiers.active);
+  html += renderTier('tier-monitoring', 'MONITORING', tiers.monitoring);
+
   if (nasData.advisoryUrl) {
-    html += `<div class="nas-advisory"><a href="${escapeHtml(nasData.advisoryUrl)}" target="_blank" rel="noopener noreferrer">View full ATCSCC advisory →</a></div>`;
+    html += '<div class="nas-advisory"><a href="' + escapeHtml(nasData.advisoryUrl) + '" target="_blank" rel="noopener noreferrer">View full ATCSCC advisory \u2192</a></div>';
   }
 
   panelEl.innerHTML = html;
