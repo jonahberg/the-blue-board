@@ -14,7 +14,7 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 // Guard against createClient throwing when env vars are empty (e.g. in tests or misconfigured deploys).
-// Consumers should handle Supabase errors gracefully — this prevents the entire module from crashing.
+// Uses a non-routable URL so misconfigured deploys fail fast on network instead of hitting a real domain.
 export const supabase = supabaseUrl && supabaseKey
   ? createClient(supabaseUrl, supabaseKey)
-  : createClient('https://placeholder.supabase.co', 'placeholder');
+  : createClient('http://localhost:0', 'unconfigured');
