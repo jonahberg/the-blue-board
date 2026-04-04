@@ -184,9 +184,9 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .mf-label{font-size:9px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px}
 .mf-value{font-size:12px;color:var(--ua-text);font-family:var(--font-mono)}
 .mf-inbound{background:rgba(0,93,170,.08);border:1px solid rgba(0,93,170,.15);border-radius:4px;padding:8px 10px;font-size:11px}
-.mf-inbound-title{font-size:9px;color:var(--ua-blue);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:700}
+.mf-inbound-title{font-size:9px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:700}
 .mf-journey{background:rgba(0,93,170,.06);border:1px solid rgba(0,93,170,.12);border-radius:6px;padding:10px 12px;font-size:11px;margin-top:6px}
-.mf-journey-title{font-size:9px;color:var(--ua-blue);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:700}
+.mf-journey-title{font-size:9px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:700}
 .mf-journey-seg{display:flex;align-items:center;gap:8px;padding:4px 0;border-left:2px solid var(--ua-border);padding-left:10px;margin-left:4px;position:relative}
 .mf-journey-seg::before{content:'';position:absolute;left:-5px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:var(--ua-border)}
 .mf-journey-seg.current{border-left-color:var(--ua-blue)}.mf-journey-seg.current::before{background:var(--ua-blue)}
@@ -208,7 +208,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .delay-risk-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;font-family:var(--font-ui);letter-spacing:.5px;cursor:help}
 .conn-risk-card{border-left:3px solid;border-radius:6px;background:var(--ua-panel);border-top:1px solid var(--ua-border);border-right:1px solid var(--ua-border);border-bottom:1px solid var(--ua-border);padding:14px;margin-bottom:14px}
 .conn-risk-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.conn-risk-label{font-size:10px;color:var(--ua-blue);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.conn-risk-label{font-size:10px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;font-weight:700}
 .conn-risk-badge{padding:3px 10px;border-radius:3px;font-size:11px;font-weight:700;font-family:var(--font-ui)}
 .conn-risk-flights{font-size:11px;line-height:1.8}
 .conn-risk-detail{font-size:10px;color:var(--ua-muted);margin-top:6px}
