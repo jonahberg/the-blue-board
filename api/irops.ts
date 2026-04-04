@@ -225,9 +225,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (fetching) {
-      const result = await fetching;
-      res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=300');
-      return res.status(200).json({ ...result, cached: true });
+      try {
+        const result = await fetching;
+        res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=300');
+        return res.status(200).json({ ...result, cached: true });
+      } catch (e) {
+        console.error('IROPS concurrent fetch error:', e);
+        const stale = iropsCache.getStale('irops', 60 * 60 * 1000);
+        if (stale) {
+          res.setHeader('Cache-Control', 's-maxage=60');
+          return res.status(200).json({ ...stale, cached: true, stale: true });
+        }
+        return res.status(502).json({ error: 'Failed to compute IROPS data' });
+      }
     }
 
     try {

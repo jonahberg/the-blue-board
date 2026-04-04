@@ -90,7 +90,6 @@ async function fetchHubWaitTimes(
       `https://apps.tsa.dhs.gov/MyTSAWebService/GetTSOWaitTimes.ashx?${params}`,
       { signal: controller.signal }
     );
-    clearTimeout(timeout);
 
     if (!resp.ok) return [];
 
@@ -108,8 +107,9 @@ async function fetchHubWaitTimes(
         createdAt: entry.Created_Datetime || new Date().toISOString(),
       }));
   } catch {
-    clearTimeout(timeout);
     return [];
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
