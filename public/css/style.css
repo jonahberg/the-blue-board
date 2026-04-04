@@ -452,7 +452,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .source-icon{font-size:24px;flex-shrink:0}
 .source-name{font-weight:700;color:var(--ua-accent);font-size:13px}
 .source-desc{color:var(--ua-muted);font-size:11px;margin-top:2px}
-.source-link{color:var(--ua-blue);text-decoration:none;font-size:10px;margin-top:4px;display:inline-block}
+.source-link{color:var(--ua-accent);text-decoration:none;font-size:10px;margin-top:4px;display:inline-block}
 .source-link:hover{text-decoration:underline}
 .freshness{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;margin-left:6px}
 .fresh-live{background:rgba(34,197,94,.15);color:var(--ua-green)}
