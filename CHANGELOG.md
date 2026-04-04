@@ -4,6 +4,40 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.3] - 2026-04-04
+
+### Added
+- Skip-to-content link for keyboard navigation.
+- ARIA tab roles on mobile bottom navigation, map control toolbar, and modals.
+- Accessible label on Leaflet map container.
+- `prefers-reduced-motion` support for all animations and transitions.
+- Focus-visible indicators replacing blanket `outline:none`.
+- 4 new test suites: NAS status, TSA wait times, predict-flight proxy, warm-schedules cron (60 new tests).
+- Supabase module mock to unblock 26 previously crashing tests.
+
+### Changed
+- Parallelized fleet + Starlink data fetches with `Promise.all` for faster dashboard load.
+- Upgraded basemap tile CDNs from `dns-prefetch` to `preconnect` for faster LCP.
+- Added CSS containment to tab panels and sidebar to reduce layout recalculation.
+- Optimized `fetchpriority` hints on CSS and fonts.
+- Standardized CSS variables: `--mono` → `--font-mono`, `--bg-card` → `--ua-panel`, `--bg-body` → design system values.
+- Standardized all accent colors to `--ua-accent` across 21 components, replacing hardcoded rgba values and off-palette colors.
+- Improved contrast on hub health bar labels, watch panel headers, type badges, and small text.
+- Replaced `transition:all` with explicit property transitions for performance.
+- Standardized CTA hover color to `#0070cc` across all pages.
+
+### Fixed
+- Mobile search toggle and sidebar toggle visibility restored.
+- Undefined text rendering in UI, fleet event listener leak, and weather interval leak.
+- Missing `r.ok` check on FR24 flight lookup fetch.
+- Concurrent IROPS rejection, TSA timeout leak, and cron URL handling.
+- Origin validation on predict-flight endpoint.
+- Undefined `--bg-body` and `--font-body` CSS variables.
+- Waitlist modal design inconsistencies.
+- Off-palette error status dot and flight marker colors.
+- Supabase client fallback uses non-routable `localhost:0` instead of placeholder domain.
+- Dead CSS aliases and old accent color remnants removed.
+
 ## [1.5.2] - 2026-03-29
 
 ### Changed
