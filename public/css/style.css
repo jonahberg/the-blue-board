@@ -45,7 +45,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 /* Tabs */
 #tab-bar{display:flex;background:var(--ua-panel);border-bottom:2px solid var(--ua-border);flex-shrink:0}
 .tab-btn{flex:1;padding:10px 8px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--ua-muted);cursor:pointer;border:none;background:none;transition:color .25s cubic-bezier(.4,0,.2,1),border-color .25s cubic-bezier(.4,0,.2,1),background-color .25s cubic-bezier(.4,0,.2,1);border-bottom:2px solid transparent}
-.tab-btn:hover{color:#94a3b8;background:rgba(30,41,59,.5)}
+.tab-btn:hover{color:var(--ua-muted);background:rgba(30,41,59,.5)}
 .tab-btn.active{color:var(--ua-text);border-bottom-color:var(--ua-blue);background:rgba(0,93,170,.08)}
 main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .tab-content{display:none;position:relative;z-index:1;flex:1;min-height:0;overflow-y:auto;contain:layout style paint}
@@ -294,7 +294,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .zone-title{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px}
 .fleet-families{margin-bottom:14px}
 .fleet-family{margin-bottom:16px}
-.fleet-family[role="group"]:focus-visible{outline:2px solid var(--ua-blue);outline-offset:2px}
+.fleet-family[role="group"]:focus-visible{outline:2px solid var(--ua-accent);outline-offset:2px}
 .fleet-family-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;border-bottom:1px solid var(--ua-border);padding-bottom:6px}
 .fleet-family-name{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--ua-accent);font-weight:700}
 .fleet-family-count{font-size:11px;color:var(--ua-accent);font-family:var(--font-mono);font-weight:700}
