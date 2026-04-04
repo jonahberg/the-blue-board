@@ -638,8 +638,8 @@ tbody td{padding:5px 8px;white-space:nowrap}
 #mobile-bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--ua-panel);border-top:1px solid var(--ua-border);z-index:9998;align-items:stretch;justify-content:space-around}
 #mobile-bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--ua-muted);font-family:var(--font-ui);font-size:11px;cursor:pointer;padding:4px 0;transition:color .2s cubic-bezier(.4,0,.2,1);min-height:44px}
 #mobile-bottom-nav button .bnav-icon{font-size:18px;line-height:1}
-#mobile-bottom-nav button.active{color:var(--ua-blue)}
-#mobile-bottom-nav button.active .bnav-label{color:var(--ua-blue)}
+#mobile-bottom-nav button.active{color:var(--ua-accent)}
+#mobile-bottom-nav button.active .bnav-label{color:var(--ua-accent)}
 #mobile-more-btn{display:none}
 #mobile-more-menu{display:none}
 /* ── Mobile search toggle (hidden on desktop) ── */
