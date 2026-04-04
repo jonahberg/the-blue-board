@@ -59,27 +59,22 @@ const FLEET_BY_REG = {};
 
 async function loadFleetData() {
   try {
-    // Fetch fleet data and try live Starlink API (fall back to static file)
-    const fleetRes = await fetch('/data/fleet.json');
+    // Fetch fleet + Starlink data in parallel (saves one network round trip)
+    const [fleetRes, starlinkResult] = await Promise.all([
+      fetch('/data/fleet.json'),
+      fetch('/api/starlink-data').then(r => r.ok ? r.json() : null).catch(() => null)
+    ]);
     if (!fleetRes.ok) throw new Error('Fleet data load failed');
     FLEET_DB = await fleetRes.json();
 
-    // Try live API first for always-current Starlink data
+    // Use live Starlink data if available
     let starlinkLoaded = false;
-    try {
-      const liveRes = await fetch('/api/starlink-data');
-      if (liveRes.ok) {
-        const liveData = await liveRes.json();
-        if (Array.isArray(liveData.aircraft) && liveData.aircraft.length > 0) {
-          STARLINK_DB = liveData.aircraft;
-          STARLINK_FLIGHTS_BY_TAIL = liveData.flightsByTail || {};
-          STARLINK_FLEET_STATS = liveData.fleetStats || null;
-          STARLINK_LAST_UPDATED = liveData.lastUpdated || null;
-          starlinkLoaded = true;
-        }
-      }
-    } catch (e) {
-      console.warn('Live Starlink API unavailable, falling back to static file');
+    if (starlinkResult && Array.isArray(starlinkResult.aircraft) && starlinkResult.aircraft.length > 0) {
+      STARLINK_DB = starlinkResult.aircraft;
+      STARLINK_FLIGHTS_BY_TAIL = starlinkResult.flightsByTail || {};
+      STARLINK_FLEET_STATS = starlinkResult.fleetStats || null;
+      STARLINK_LAST_UPDATED = starlinkResult.lastUpdated || null;
+      starlinkLoaded = true;
     }
 
     // Fallback to static file
