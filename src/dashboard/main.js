@@ -6195,7 +6195,7 @@ function hideDisclaimer() {
 
     // Heading
     var heading = document.createElement('div');
-    heading.style.cssText = 'font-size:22px;font-weight:700;color:var(--ua-text);margin-bottom:8px';
+    heading.style.cssText = 'font-size:22px;font-weight:700;color:var(--ua-text);margin-bottom:8px;font-family:var(--font-display)';
     heading.textContent = '\u2708 Enjoying The Blue Board?';
     content.appendChild(heading);
 
@@ -6216,7 +6216,7 @@ function hideDisclaimer() {
     emailInput.setAttribute('autocomplete', 'email');
     emailInput.setAttribute('aria-label', 'Email address');
     emailInput.style.cssText = 'width:100%;padding:12px 14px;background:var(--ua-dark);border:1px solid var(--ua-border);border-radius:8px;color:var(--ua-text);font-size:14px;font-family:var(--font-ui);outline:none;box-sizing:border-box;margin-bottom:12px;transition:border-color .2s';
-    emailInput.addEventListener('focus', function() { emailInput.style.borderColor = 'var(--ua-blue)'; });
+    emailInput.addEventListener('focus', function() { emailInput.style.borderColor = 'var(--ua-accent)'; });
     emailInput.addEventListener('blur', function() { emailInput.style.borderColor = 'var(--ua-border)'; });
     formWrap.appendChild(emailInput);
 
@@ -6226,7 +6226,7 @@ function hideDisclaimer() {
     featureInput.setAttribute('aria-label', 'Feature request');
     featureInput.rows = 3;
     featureInput.style.cssText = 'width:100%;padding:12px 14px;background:var(--ua-dark);border:1px solid var(--ua-border);border-radius:8px;color:var(--ua-text);font-size:14px;font-family:var(--font-ui);outline:none;box-sizing:border-box;margin-bottom:16px;resize:vertical;min-height:60px;transition:border-color .2s';
-    featureInput.addEventListener('focus', function() { featureInput.style.borderColor = 'var(--ua-blue)'; });
+    featureInput.addEventListener('focus', function() { featureInput.style.borderColor = 'var(--ua-accent)'; });
     featureInput.addEventListener('blur', function() { featureInput.style.borderColor = 'var(--ua-border)'; });
     formWrap.appendChild(featureInput);
 
@@ -6238,9 +6238,9 @@ function hideDisclaimer() {
     // Submit button
     var submitBtn = document.createElement('button');
     submitBtn.textContent = 'Stay in the Loop';
-    submitBtn.style.cssText = 'width:100%;padding:14px;background:#005DAA;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;font-family:var(--font-ui);cursor:pointer;transition:background .2s';
-    submitBtn.addEventListener('mouseenter', function() { submitBtn.style.background = '#004a8a'; });
-    submitBtn.addEventListener('mouseleave', function() { submitBtn.style.background = '#005DAA'; });
+    submitBtn.style.cssText = 'width:100%;padding:14px;background:var(--ua-blue);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;font-family:var(--font-ui);cursor:pointer;transition:background .2s';
+    submitBtn.addEventListener('mouseenter', function() { submitBtn.style.background = '#0070cc'; });
+    submitBtn.addEventListener('mouseleave', function() { submitBtn.style.background = 'var(--ua-blue)'; });
 
     submitBtn.addEventListener('click', function() {
       var email = emailInput.value.trim();
