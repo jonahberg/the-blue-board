@@ -13,4 +13,8 @@ if (!supabaseUrl || !supabaseKey) {
   console.warn('SUPABASE_SERVICE_ROLE_KEY missing — falling back to anon key (RLS will apply)');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Guard against createClient throwing when env vars are empty (e.g. in tests or misconfigured deploys).
+// Consumers should handle Supabase errors gracefully — this prevents the entire module from crashing.
+export const supabase = supabaseUrl && supabaseKey
+  ? createClient(supabaseUrl, supabaseKey)
+  : createClient('https://placeholder.supabase.co', 'placeholder');
