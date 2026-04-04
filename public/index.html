@@ -316,7 +316,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <select id="sched-hub" aria-label="Schedule hub filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
+        <select id="sched-hub" aria-label="Schedule hub filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Hubs</option>
           <option value="ORD" selected>ORD — Chicago O'Hare</option>
           <option value="DEN">DEN — Denver</option>
@@ -328,14 +328,14 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
           <option value="NRT">NRT — Tokyo Narita</option>
           <option value="GUM">GUM — Guam</option>
         </select>
-        <select id="sched-dir" aria-label="Schedule direction filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
+        <select id="sched-dir" aria-label="Schedule direction filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="departures">Departures</option>
           <option value="arrivals">Arrivals</option>
         </select>
         <button id="sched-refresh-btn" data-action="schedule-refresh" style="background:var(--ua-blue);color:white;border:none;padding:4px 10px;font-family:var(--font-ui);font-size:10px;border-radius:3px;cursor:pointer">↻ Refresh</button>
         <button id="sched-more-filters-btn" data-action="schedule-more-filters" style="background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:4px 10px;font-family:var(--font-ui);font-size:10px;border-radius:3px;cursor:pointer">Filter: Aircraft, Starlink, Delay… ▾</button>
         <div id="sched-adv-filters" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
-        <select id="sched-status" aria-label="Schedule status filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
+        <select id="sched-status" aria-label="Schedule status filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Status</option>
           <option value="scheduled">Scheduled</option>
           <option value="estimated">Estimated</option>
@@ -346,10 +346,10 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
           <option value="canceled">Canceled</option>
           <option value="diverted">Diverted</option>
         </select>
-        <select id="sched-aircraft" aria-label="Schedule aircraft filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
+        <select id="sched-aircraft" aria-label="Schedule aircraft filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Aircraft</option>
         </select>
-        <select id="sched-fleet-family" aria-label="Schedule fleet family filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
+        <select id="sched-fleet-family" aria-label="Schedule fleet family filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Fleet Families</option>
           <option value="737">737 Family</option>
           <option value="A320">A320 Family</option>
@@ -358,30 +358,30 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
           <option value="777">777 Family</option>
           <option value="787">787 Family</option>
         </select>
-        <select id="sched-route-type" aria-label="Schedule route type filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
+        <select id="sched-route-type" aria-label="Schedule route type filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Routes</option>
           <option value="domestic">Domestic Only</option>
           <option value="international">International Only</option>
         </select>
-        <select id="sched-starlink" aria-label="Schedule Starlink filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
+        <select id="sched-starlink" aria-label="Schedule Starlink filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All WiFi</option>
           <option value="starlink">⚡ Starlink Only</option>
           <option value="no-starlink">Non-Starlink</option>
         </select>
-        <select id="sched-timerange" aria-label="Schedule time range filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
+        <select id="sched-timerange" aria-label="Schedule time range filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Day</option>
           <option value="morning">Morning (5a–12p)</option>
           <option value="afternoon">Afternoon (12p–5p)</option>
           <option value="evening">Evening (5p–10p)</option>
           <option value="redeye">Red-eye (10p–5a)</option>
         </select>
-        <select id="sched-risk" aria-label="Schedule delay risk filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
+        <select id="sched-risk" aria-label="Schedule delay risk filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Delay</option>
           <option value="high">High Delay</option>
           <option value="moderate">Moderate+</option>
           <option value="low">Low Only</option>
         </select>
-        <input type="text" id="sched-search" aria-label="Schedule search" placeholder="Flight, city, reg..." style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px;width:140px">
+        <input type="text" id="sched-search" aria-label="Schedule search" placeholder="Flight, city, reg..." style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px;width:140px">
         </div>
       </div>
     </div>

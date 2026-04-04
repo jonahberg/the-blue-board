@@ -650,7 +650,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sched-day-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 10px;font-family:var(--font-ui);font-size:10px;cursor:pointer;border-radius:3px;transition:color .2s cubic-bezier(.4,0,.2,1),border-color .2s cubic-bezier(.4,0,.2,1),background-color .2s cubic-bezier(.4,0,.2,1),transform .15s cubic-bezier(.4,0,.2,1)}
 .sched-day-btn:hover{color:var(--ua-text);border-color:var(--ua-blue)}
 .sched-day-btn.active{background:var(--ua-blue);color:white;border-color:var(--ua-blue)}
-#sched-table th{position:sticky;top:0;background:var(--bg-card);z-index:2;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-muted);padding:8px 10px;border-bottom:1px solid var(--ua-border);white-space:nowrap}
+#sched-table th{position:sticky;top:0;background:var(--ua-panel);z-index:2;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-muted);padding:8px 10px;border-bottom:1px solid var(--ua-border);white-space:nowrap}
 #sched-table td{padding:6px 10px;font-size:11px;border-bottom:1px solid rgba(51,65,85,.3);white-space:nowrap}
 #sched-table tr:hover{background:rgba(0,93,170,.06)}
 .sched-status{display:inline-block;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:.3px}
