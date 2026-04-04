@@ -2793,7 +2793,7 @@ async function initWeatherTab() {
 
   // Show loading skeletons for hub cards immediately
   const hubCardsEl = document.getElementById('hub-cards');
-  hubCardsEl.innerHTML = hubs.map(h => `<div class="hub-card" style="border-top:3px solid #334155;opacity:0.5"><div class="hub-card-top"><span class="hub-card-code">${escapeHtml(h)}</span><span class="cat-badge" style="background:#334155;color:#94a3b8">…</span></div><div class="hub-card-name">${escapeHtml(HUB_NAMES[h]||h)}</div><div style="padding:20px;text-align:center;color:var(--ua-muted);font-size:10px">Loading…</div></div>`).join('');
+  hubCardsEl.innerHTML = hubs.map(h => `<div class="hub-card" style="border-top:3px solid #334155;opacity:0.5"><div class="hub-card-top"><span class="hub-card-code">${escapeHtml(h)}</span><span class="cat-badge" style="background:#334155;color:var(--ua-muted)">…</span></div><div class="hub-card-name">${escapeHtml(HUB_NAMES[h]||h)}</div><div style="padding:20px;text-align:center;color:var(--ua-muted);font-size:10px">Loading…</div></div>`).join('');
 
   // Initialize radar map IMMEDIATELY — don't wait for data fetches
   const basemapTileOptions = getBasemapTileOptions();
@@ -2899,7 +2899,7 @@ async function initWeatherTab() {
     } else if (ops.level === 'warning') {
       faaLine = `<div class="hub-faa delay">⚠ Weather Advisory — ${ops.reasons.join(', ')}</div>`;
     } else if (ops.level === 'caution') {
-      faaLine = `<div class="hub-faa" style="color:#eab308">⚠ Weather Caution — ${ops.reasons.join(', ')}</div>`;
+      faaLine = `<div class="hub-faa" style="color:var(--ua-yellow)">⚠ Weather Caution — ${ops.reasons.join(', ')}</div>`;
     } else {
       faaLine = `<div class="hub-faa normal">✓ Normal Operations</div>`;
     }
@@ -4084,7 +4084,7 @@ function renderScheduleStats(filtered) {
       <span class="metric-label">Late</span>
     </div>
     <div class="metric-card">
-      <span class="metric-val" style="color:#94a3b8">${scheduled}</span>
+      <span class="metric-val" style="color:var(--ua-muted)">${scheduled}</span>
       <span class="metric-label">Upcoming</span>
     </div>
   `;
@@ -5111,7 +5111,7 @@ function buildMyFlightCard(watched, td) {
         countdownClass = 'landed';
         break;
       case 'en-route':
-        statusHtml = '<span class="mf-status" style="background:rgba(59,130,246,.2);color:#3b82f6">EN ROUTE</span>';
+        statusHtml = '<span class="mf-status" style="background:var(--ua-blue-soft);color:var(--ua-accent)">EN ROUTE</span>';
         if (arrTime) {
           const eta = new Date(arrTime);
           const diff = eta - Date.now();
