@@ -233,7 +233,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <h3 style="color:var(--ua-text);font-size:14px;margin-bottom:8px">No Flights Tracked Yet</h3>
     <p style="font-size:11px;max-width:360px;margin:0 auto 16px;line-height:1.6">Search for a flight and tap 👁️ to watch it. You'll see countdown timers, gate info, equipment details, delay risk, and inbound aircraft tracking — all in one place.</p>
     <div style="max-width:300px;margin:0 auto">
-      <input type="text" id="myflight-search" placeholder="Add a flight (e.g. UA 1234)" style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:8px 12px;border-radius:4px;font-family:var(--font-mono);font-size:12px;text-align:center">
+      <input type="text" id="myflight-search" aria-label="Add a flight to track" placeholder="Add a flight (e.g. UA 1234)" style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:8px 12px;border-radius:4px;font-family:var(--font-mono);font-size:12px;text-align:center">
     </div>
     <div style="margin:20px auto 0;max-width:360px;display:flex;align-items:center;gap:12px;color:var(--ua-border)"><div style="flex:1;height:1px;background:var(--ua-border)"></div><span style="font-size:9px;letter-spacing:1px;color:var(--ua-muted)">OR</span><div style="flex:1;height:1px;background:var(--ua-border)"></div></div>
   </div>
@@ -242,8 +242,8 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div id="myflight-check" style="display:none;margin-top:16px;padding:14px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px">
     <h4 style="font-size:10px;color:var(--ua-blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Check a Connection</h4>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <input type="text" id="conn-inbound" placeholder="Inbound (UA 1234)" style="flex:1;min-width:120px;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--font-mono);font-size:11px">
-      <input type="text" id="conn-outbound" placeholder="Outbound (UA 567)" style="flex:1;min-width:120px;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--font-mono);font-size:11px">
+      <input type="text" id="conn-inbound" aria-label="Inbound flight number" placeholder="Inbound (UA 1234)" style="flex:1;min-width:120px;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--font-mono);font-size:11px">
+      <input type="text" id="conn-outbound" aria-label="Outbound flight number" placeholder="Outbound (UA 567)" style="flex:1;min-width:120px;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--font-mono);font-size:11px">
       <button data-action="check-connection" style="background:var(--ua-blue);color:#fff;border:none;padding:6px 14px;border-radius:4px;font-family:var(--font-ui);font-size:11px;cursor:pointer;white-space:nowrap">Check</button>
     </div>
     <div id="conn-manual-result" style="margin-top:10px"></div>
