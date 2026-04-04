@@ -172,7 +172,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .hub-tooltip{background:rgba(10,14,20,.85)!important;border:1px solid var(--ua-blue)!important;color:var(--ua-accent)!important;font-size:10px!important;font-weight:700!important;padding:2px 6px!important;border-radius:3px!important;font-family:var(--font-mono)!important}
 
 /* ═══ MY FLIGHTS ═══ */
-.mf-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;margin-bottom:14px;overflow:hidden}
+.mf-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;margin-bottom:14px;overflow:hidden;contain:content}
 .mf-card-header{background:linear-gradient(135deg,rgba(0,93,170,.25),rgba(0,50,100,.15));padding:12px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--ua-border)}
 .mf-flight-num{font-size:18px;font-weight:700;color:var(--ua-accent);font-family:var(--font-mono)}
 .mf-route{font-size:11px;color:var(--ua-muted);margin-top:2px}
@@ -381,7 +381,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .scroll-hint-arrow{animation:bounce 1.5s ease-in-out infinite;font-size:14px}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
 .hub-cards{display:flex;flex-direction:column;gap:10px;padding:12px;flex-shrink:0}
-.hub-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;overflow:hidden;transition:border-color .2s}
+.hub-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;overflow:hidden;transition:border-color .2s;contain:content}
 .hub-card:hover{border-color:var(--ua-accent)}
 .hub-card-top{padding:12px 14px 8px;display:flex;align-items:center;justify-content:space-between}
 .hub-card-code{font-size:22px;font-weight:700;color:#fff}
@@ -447,7 +447,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 
 /* ═══ TAB 5: SOURCES ═══ */
 #tab-sources{padding:20px;flex:1;min-height:0;overflow-y:auto}
-.source-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;margin-bottom:10px;transition:border-color .2s}
+.source-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;margin-bottom:10px;transition:border-color .2s;contain:content}
 .source-item:hover{border-color:var(--ua-blue)}
 .source-icon{font-size:24px;flex-shrink:0}
 .source-name{font-weight:700;color:var(--ua-accent);font-size:13px}
