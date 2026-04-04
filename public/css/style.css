@@ -249,7 +249,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .fleet-pulse-zone{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:14px;margin-bottom:14px;position:relative;flex-shrink:0}
 .fleet-pulse-shimmer{position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--ua-green),var(--ua-blue),var(--ua-green));background-size:200% 100%;animation:liveShimmer 2s linear infinite;z-index:1;border-radius:6px 6px 0 0}
 .fleet-pulse-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.fleet-pulse-title{font-size:10px;color:var(--ua-blue);text-transform:uppercase;letter-spacing:1.5px;margin:0}
+.fleet-pulse-title{font-size:10px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1.5px;margin:0}
 .fleet-pulse-badges{display:flex;align-items:center;gap:8px}
 .fleet-pulse-time{font-size:9px;color:var(--ua-muted)}
 .fleet-pulse-panels{display:flex;gap:20px}
@@ -291,12 +291,12 @@ tbody td{padding:5px 8px;white-space:nowrap}
 
 /* ═══ ZONE 2: FLEET COMPOSITION ═══ */
 .fleet-composition-zone{margin-bottom:14px}
-.zone-title{font-size:11px;color:var(--ua-blue);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px}
+.zone-title{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px}
 .fleet-families{margin-bottom:14px}
 .fleet-family{margin-bottom:16px}
 .fleet-family[role="group"]:focus-visible{outline:2px solid var(--ua-blue);outline-offset:2px}
 .fleet-family-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;border-bottom:1px solid var(--ua-border);padding-bottom:6px}
-.fleet-family-name{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--ua-blue);font-weight:700}
+.fleet-family-name{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--ua-accent);font-weight:700}
 .fleet-family-count{font-size:11px;color:var(--ua-accent);font-family:var(--font-mono);font-weight:700}
 .fleet-family-role{font-size:9px;color:var(--ua-muted);margin-left:auto;font-style:italic}
 .fleet-family-route{font-size:9px;color:var(--ua-muted);font-style:italic;margin-top:2px;margin-bottom:6px}
