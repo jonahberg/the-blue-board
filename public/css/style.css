@@ -693,7 +693,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 #hub-health-bar .hh-info{color:var(--ua-muted);font-size:9px;cursor:pointer;margin-right:8px;opacity:.6;position:relative;border:1px solid var(--ua-border);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1}
 #hub-health-bar .hh-info:hover{opacity:1;color:var(--ua-accent)}
 #hub-health-bar .hh-tooltip{display:none;position:absolute;top:20px;left:0;background:rgba(17,24,39,.95);border:1px solid var(--ua-border);border-radius:4px;padding:8px 10px;font-size:9px;color:var(--ua-text);white-space:normal;width:260px;z-index:9999;line-height:1.4;backdrop-filter:blur(8px)}
-#hub-health-bar .hh-info:hover .hh-tooltip{display:block}
+#hub-health-bar .hh-info:hover .hh-tooltip,#hub-health-bar .hh-info:focus .hh-tooltip,#hub-health-bar .hh-info:focus-within .hh-tooltip{display:block}
 .hh-hub{display:inline-flex;align-items:center;gap:3px;padding:4px 8px;border-radius:3px;white-space:nowrap;min-height:28px}
 .hh-hub .hh-code{font-weight:700;color:var(--ua-text)}
 .hh-hub .hh-pct{font-weight:600}
