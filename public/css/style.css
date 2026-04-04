@@ -739,7 +739,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .irops-score.high{background:rgba(239,68,68,.15);color:#ef4444}
 .irops-empty{text-align:center;padding:12px;color:var(--ua-muted);font-size:10px}
 .hub-cards{position:relative}
-.hub-cards::after{content:'';position:sticky;bottom:0;left:0;right:0;height:24px;background:linear-gradient(to bottom,transparent,var(--bg-body));pointer-events:none;display:block}
+.hub-cards::after{content:'';position:sticky;bottom:0;left:0;right:0;height:24px;background:linear-gradient(to bottom,transparent,var(--ua-dark));pointer-events:none;display:block}
 
 /* FAA Delay Context */
 .faa-delay-context{font-size:9px;color:#f59e0b;font-style:italic;margin-top:2px;opacity:.85}
