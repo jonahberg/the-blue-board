@@ -6496,6 +6496,9 @@ function showAircraftDetail(reg) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'aircraft-detail-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Aircraft detail');
     modal.style.display = 'none';
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
     document.addEventListener('keydown', function(e) {
