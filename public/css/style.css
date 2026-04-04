@@ -44,7 +44,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 
 /* Tabs */
 #tab-bar{display:flex;background:var(--ua-panel);border-bottom:2px solid var(--ua-border);flex-shrink:0}
-.tab-btn{flex:1;padding:10px 8px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--ua-muted);cursor:pointer;border:none;background:none;transition:color .25s cubic-bezier(.4,0,.2,1),border-color .25s cubic-bezier(.4,0,.2,1),background-color .25s cubic-bezier(.4,0,.2,1);border-bottom:2px solid transparent;font-family:var(--font-ui)}
+.tab-btn{flex:1;padding:10px 8px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--ua-muted);cursor:pointer;border:none;background:none;transition:color .25s cubic-bezier(.4,0,.2,1),border-color .25s cubic-bezier(.4,0,.2,1),background-color .25s cubic-bezier(.4,0,.2,1);border-bottom:2px solid transparent}
 .tab-btn:hover{color:#94a3b8;background:rgba(30,41,59,.5)}
 .tab-btn.active{color:var(--ua-text);border-bottom-color:var(--ua-blue);background:rgba(0,93,170,.08)}
 main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
