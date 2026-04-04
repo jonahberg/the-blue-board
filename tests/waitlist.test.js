@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockEmailSend = vi.fn();
 
+// Mock @supabase/supabase-js to prevent createClient from throwing
+// when env vars are missing in test environment
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({ from: vi.fn() })),
+}));
+
 // Mock Supabase before importing handler
 vi.mock('../api/_supabase.js', () => ({
   supabase: {
