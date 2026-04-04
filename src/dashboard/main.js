@@ -38,7 +38,7 @@ function debounce(fn, ms) { let t; return function(...a) { clearTimeout(t); t = 
 
 // ═══ HTML SANITIZATION ═══
 function escapeHtml(str) {
-  if (typeof str !== 'string') return str;
+  if (typeof str !== 'string') return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
@@ -59,27 +59,22 @@ const FLEET_BY_REG = {};
 
 async function loadFleetData() {
   try {
-    // Fetch fleet data and try live Starlink API (fall back to static file)
-    const fleetRes = await fetch('/data/fleet.json');
+    // Fetch fleet + Starlink data in parallel (saves one network round trip)
+    const [fleetRes, starlinkResult] = await Promise.all([
+      fetch('/data/fleet.json'),
+      fetch('/api/starlink-data').then(r => r.ok ? r.json() : null).catch(() => null)
+    ]);
     if (!fleetRes.ok) throw new Error('Fleet data load failed');
     FLEET_DB = await fleetRes.json();
 
-    // Try live API first for always-current Starlink data
+    // Use live Starlink data if available
     let starlinkLoaded = false;
-    try {
-      const liveRes = await fetch('/api/starlink-data');
-      if (liveRes.ok) {
-        const liveData = await liveRes.json();
-        if (Array.isArray(liveData.aircraft) && liveData.aircraft.length > 0) {
-          STARLINK_DB = liveData.aircraft;
-          STARLINK_FLIGHTS_BY_TAIL = liveData.flightsByTail || {};
-          STARLINK_FLEET_STATS = liveData.fleetStats || null;
-          STARLINK_LAST_UPDATED = liveData.lastUpdated || null;
-          starlinkLoaded = true;
-        }
-      }
-    } catch (e) {
-      console.warn('Live Starlink API unavailable, falling back to static file');
+    if (starlinkResult && Array.isArray(starlinkResult.aircraft) && starlinkResult.aircraft.length > 0) {
+      STARLINK_DB = starlinkResult.aircraft;
+      STARLINK_FLIGHTS_BY_TAIL = starlinkResult.flightsByTail || {};
+      STARLINK_FLEET_STATS = starlinkResult.fleetStats || null;
+      STARLINK_LAST_UPDATED = starlinkResult.lastUpdated || null;
+      starlinkLoaded = true;
     }
 
     // Fallback to static file
@@ -526,8 +521,9 @@ function applyFleetDeepLinkFilter(filter, { render = true } = {}) {
   // Direct tab buttons (not More, not overflow)
   document.querySelectorAll('#mobile-bottom-nav button[data-tab]:not(.bnav-overflow-item)').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
       btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
       if (moreMenu) moreMenu.classList.remove('open');
       switchToTab(btn.dataset.tab);
     });
@@ -542,8 +538,9 @@ function applyFleetDeepLinkFilter(filter, { render = true } = {}) {
     moreMenu.querySelectorAll('button[data-tab]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         moreMenu.classList.remove('open');
-        document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
         moreBtn.classList.add('active');
+        moreBtn.setAttribute('aria-selected', 'true');
         switchToTab(btn.dataset.tab);
       });
     });
@@ -933,11 +930,11 @@ function drawHubs() {
   });
 }
 
-function toggleHubs() { showHubs = !showHubs; drawHubs(); document.getElementById('btn-hubs').classList.toggle('active'); }
-function toggleLonghaul() { showLonghaul = !showLonghaul; document.getElementById('btn-longhaul').classList.toggle('active'); updateMarkers(); }
+function toggleHubs() { showHubs = !showHubs; drawHubs(); const el = document.getElementById('btn-hubs'); el.classList.toggle('active'); el.setAttribute('aria-pressed', String(showHubs)); }
+function toggleLonghaul() { showLonghaul = !showLonghaul; const el = document.getElementById('btn-longhaul'); el.classList.toggle('active'); el.setAttribute('aria-pressed', String(showLonghaul)); updateMarkers(); }
 function toggleWeather() {
   showWeather = !showWeather;
-  document.getElementById('btn-wx').classList.toggle('active');
+  const wxBtn = document.getElementById('btn-wx'); wxBtn.classList.toggle('active'); wxBtn.setAttribute('aria-pressed', String(showWeather));
   if (showWeather && !wxLayer) {
     wxLayer = L.tileLayer('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png', {
       opacity: 0.5, maxZoom: 18
@@ -1000,7 +997,7 @@ async function refreshFlights() {
   } catch (e) {
     console.error('FR24 error:', e);
     document.getElementById('status-dot').className = 'status-dot';
-    document.getElementById('status-dot').style.background = '#ff9800';
+    document.getElementById('status-dot').style.background = '#EAB308';
     document.getElementById('status-text').textContent = 'ERROR';
     if (allFlights.length === 0) {
       const mapEl = document.getElementById('map');
@@ -1073,7 +1070,7 @@ function createPlaneIcon(hdg, isLonghaul, phase, isWatched) {
   const hdgRounded = Math.round((hdg || 0) / 5) * 5;
   const cacheKey = `${hdgRounded}|${isLonghaul?1:0}|${phase}|${isWatched?1:0}`;
   if (_iconCache[cacheKey]) return _iconCache[cacheKey];
-  const color = isWatched ? '#22c55e' : (isLonghaul ? '#fbbf24' : (phase === 'Ground' ? '#6b7280' : '#60a5fa'));
+  const color = isWatched ? '#22c55e' : (isLonghaul ? '#fbbf24' : (phase === 'Ground' ? '#64748B' : '#6BAAED'));
   const size = isWatched ? 16 : (isLonghaul ? 14 : 10);
   // SVG plane pointing north (0°) — classic top-down aircraft silhouette, cross-platform consistent
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="filter:drop-shadow(0 0 2px ${color})"><path d="M128 16c-4 0-8 3-9 7l-15 72-88 34c-3 1-4 4-4 7s2 5 5 6l87 20 4 52-28 18c-2 1-3 3-3 5v8c0 2 1 4 3 4l20-6h28l20 6c2 0 3-2 3-4v-8c0-2-1-4-3-5l-28-18 4-52 87-20c3-1 5-3 5-6s-1-6-4-7l-88-34-15-72c-1-4-5-7-9-7z"/></svg>`;
@@ -1759,7 +1756,10 @@ function initTickerAnimation(tickerEl) {
 let activeFleetType = '';
 let activeFleetView = 'all';
 
+let _fleetTabInitialized = false;
 function initFleetTab() {
+  if (_fleetTabInitialized) return;
+  _fleetTabInitialized = true;
   // Set dynamic fleet count in title
   document.getElementById('fleet-overview-title').textContent = 'Fleet Overview — ' + FLEET_DB.length + ' Mainline Aircraft';
 
@@ -2446,6 +2446,7 @@ function refreshFleetData() {
 
 // ═══ WEATHER TAB ═══
 let weatherInitialized = false;
+let _weatherRefreshInterval = null;
 const HUB_NAMES = {EWR:"Newark Liberty",IAH:"Houston Intercontinental",ORD:"O'Hare International",DEN:"Denver International",SFO:"San Francisco Int'l",LAX:"Los Angeles Int'l",IAD:"Washington Dulles",NRT:"Tokyo Narita",GUM:"Guam Int'l"};
 const CAT_COLORS = {VFR:'#22c55e',MVFR:'#eab308',IFR:'#ef4444',LIFR:'#c026d3'};
 
@@ -2986,7 +2987,8 @@ async function initWeatherTab() {
   }
 
   // Refresh weather + FAA + NAS data every 5 minutes so the tab stays current
-  setInterval(async () => {
+  if (_weatherRefreshInterval) clearInterval(_weatherRefreshInterval);
+  _weatherRefreshInterval = setInterval(async () => {
     try {
       const [newMetar, newFaa, newNas] = await Promise.allSettled([
         fetchMetarBatch(allStations),
@@ -3145,7 +3147,7 @@ function updateAnalytics() {
   let matrixMax = 1;
   hubCodes.forEach(o => hubCodes.forEach(d => { if (matrix[o][d] > matrixMax) matrixMax = matrix[o][d]; }));
 
-  let mHtml = `<table style="border-collapse:collapse;width:100%;font-family:var(--mono);font-size:10px">`;
+  let mHtml = `<table style="border-collapse:collapse;width:100%;font-family:var(--font-mono);font-size:10px">`;
   mHtml += `<thead><tr><th style="padding:4px 6px;color:var(--ua-muted);font-size:9px">FROM \\ TO</th>`;
   hubCodes.forEach(d => { mHtml += `<th style="padding:4px 6px;color:var(--ua-accent);text-align:center">${d}</th>`; });
   mHtml += `<th style="padding:4px 6px;color:var(--ua-muted);text-align:center;font-size:9px">TOTAL</th></tr></thead><tbody>`;
@@ -4009,7 +4011,7 @@ function renderScheduleTable() {
       <td style="font-weight:600;color:var(--ua-accent)">${escapeHtml(ident)}</td>
       <td>${routeStr}</td>
       <td title="${escapeHtml(acText)}">${escapeHtml(acCode)}${acShort ? `<div style="font-size:9px;color:var(--ua-muted)">${escapeHtml(acShort)}</div>` : ''}${equipBadge}</td>
-      <td style="font-family:var(--mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}">${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
+      <td style="font-family:var(--font-mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}">${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
       <td>${escapeHtml(gate)}</td>
       <td><span class="sched-status ${escapeHtml(status.cls)}">${escapeHtml(status.text)}</span>${faaContext}</td>
       <td>${riskCell}</td>
@@ -5129,7 +5131,7 @@ function buildMyFlightCard(watched, td) {
         countdownClass = '';
         break;
       default:
-        statusHtml = '<span class="mf-status" style="background:rgba(138,180,248,.15);color:var(--ua-accent)">SCHEDULED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(107,170,237,.15);color:var(--ua-accent)">SCHEDULED</span>';
         if (depTime) {
           const dep = new Date(depTime);
           const diff = dep - Date.now();
@@ -6193,7 +6195,7 @@ function hideDisclaimer() {
 
     // Heading
     var heading = document.createElement('div');
-    heading.style.cssText = 'font-size:22px;font-weight:700;color:var(--ua-text);margin-bottom:8px';
+    heading.style.cssText = 'font-size:22px;font-weight:700;color:var(--ua-text);margin-bottom:8px;font-family:var(--font-display)';
     heading.textContent = '\u2708 Enjoying The Blue Board?';
     content.appendChild(heading);
 
@@ -6214,7 +6216,7 @@ function hideDisclaimer() {
     emailInput.setAttribute('autocomplete', 'email');
     emailInput.setAttribute('aria-label', 'Email address');
     emailInput.style.cssText = 'width:100%;padding:12px 14px;background:var(--ua-dark);border:1px solid var(--ua-border);border-radius:8px;color:var(--ua-text);font-size:14px;font-family:var(--font-ui);outline:none;box-sizing:border-box;margin-bottom:12px;transition:border-color .2s';
-    emailInput.addEventListener('focus', function() { emailInput.style.borderColor = 'var(--ua-blue)'; });
+    emailInput.addEventListener('focus', function() { emailInput.style.borderColor = 'var(--ua-accent)'; });
     emailInput.addEventListener('blur', function() { emailInput.style.borderColor = 'var(--ua-border)'; });
     formWrap.appendChild(emailInput);
 
@@ -6224,7 +6226,7 @@ function hideDisclaimer() {
     featureInput.setAttribute('aria-label', 'Feature request');
     featureInput.rows = 3;
     featureInput.style.cssText = 'width:100%;padding:12px 14px;background:var(--ua-dark);border:1px solid var(--ua-border);border-radius:8px;color:var(--ua-text);font-size:14px;font-family:var(--font-ui);outline:none;box-sizing:border-box;margin-bottom:16px;resize:vertical;min-height:60px;transition:border-color .2s';
-    featureInput.addEventListener('focus', function() { featureInput.style.borderColor = 'var(--ua-blue)'; });
+    featureInput.addEventListener('focus', function() { featureInput.style.borderColor = 'var(--ua-accent)'; });
     featureInput.addEventListener('blur', function() { featureInput.style.borderColor = 'var(--ua-border)'; });
     formWrap.appendChild(featureInput);
 
@@ -6236,9 +6238,9 @@ function hideDisclaimer() {
     // Submit button
     var submitBtn = document.createElement('button');
     submitBtn.textContent = 'Stay in the Loop';
-    submitBtn.style.cssText = 'width:100%;padding:14px;background:#005DAA;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;font-family:var(--font-ui);cursor:pointer;transition:background .2s';
-    submitBtn.addEventListener('mouseenter', function() { submitBtn.style.background = '#004a8a'; });
-    submitBtn.addEventListener('mouseleave', function() { submitBtn.style.background = '#005DAA'; });
+    submitBtn.style.cssText = 'width:100%;padding:14px;background:var(--ua-blue);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;font-family:var(--font-ui);cursor:pointer;transition:background .2s';
+    submitBtn.addEventListener('mouseenter', function() { submitBtn.style.background = '#0070cc'; });
+    submitBtn.addEventListener('mouseleave', function() { submitBtn.style.background = 'var(--ua-blue)'; });
 
     submitBtn.addEventListener('click', function() {
       var email = emailInput.value.trim();
@@ -6494,6 +6496,9 @@ function showAircraftDetail(reg) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'aircraft-detail-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Aircraft detail');
     modal.style.display = 'none';
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
     document.addEventListener('keydown', function(e) {
@@ -6660,20 +6665,20 @@ function lookupFR24Flight(query) {
     document.body.appendChild(modal);
   }
   modal.style.display = 'flex';
-  modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--mono);position:relative"><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>Looking up ' + escapeHtml(q) + '...</div></div>';
+  modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>Looking up ' + escapeHtml(q) + '...</div></div>';
 
   fetch('/api/fr24-flight?flight=' + encodeURIComponent(q))
-    .then(r => r.json())
+    .then(r => r.ok ? r.json() : r.json().catch(() => ({})).then(b => Promise.reject(new Error(b.error || 'HTTP ' + r.status))))
     .then(data => {
       if (!data.success || !data.flight) {
-        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
+        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
         return;
       }
       renderFR24Modal(data.flight, data.source, data.cached);
     })
     .catch(err => {
       console.error('FR24 lookup error:', err);
-      modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
+      modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
     });
 }
 
@@ -6712,7 +6717,7 @@ function renderFR24Modal(f, source, cached) {
     catch(e) { return String(t); }
   }
 
-  var html = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:0;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--mono);position:relative;overflow:hidden">';
+  var html = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:0;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative;overflow:hidden">';
   // Header
   html += '<div style="background:linear-gradient(135deg,rgba(0,93,170,.3),rgba(0,50,100,.2));padding:16px 20px;border-bottom:1px solid var(--ua-border)">';
   html += '<button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button>';

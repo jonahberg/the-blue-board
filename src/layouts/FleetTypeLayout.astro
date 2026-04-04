@@ -85,7 +85,7 @@ const aircraftGuideSchema = {
 
 <link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin fetchpriority="low">
 
 <style is:inline>
 @font-face{font-family:'Satoshi';font-style:normal;font-weight:300 900;font-display:swap;src:url(/fonts/satoshi-latin.woff2) format('woff2')}
@@ -107,7 +107,7 @@ a:hover{text-decoration:underline}
 .fleet-header .nav a{color:var(--ua-accent);font-size:11px}
 .fleet-header h1{font-size:22px;font-weight:700;color:var(--ua-text);letter-spacing:-.5px;margin-bottom:4px;text-wrap:balance}
 .fleet-header .subtitle{font-size:12px;color:var(--ua-muted)}
-.fleet-header .type-badge{color:var(--ua-blue);font-weight:700}
+.fleet-header .type-badge{color:var(--ua-accent);font-weight:700}
 
 /* Stats Row */
 .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:20px 0}
@@ -117,7 +117,7 @@ a:hover{text-decoration:underline}
 
 /* CTA */
 .cta{display:inline-block;background:var(--ua-blue);color:#fff;padding:10px 24px;border-radius:5px;font-family:var(--font-ui);font-size:12px;font-weight:600;text-decoration:none;transition:background .2s}
-.cta:hover{background:#0069c0;text-decoration:none}
+.cta:hover{background:#0070cc;text-decoration:none}
 .cta:active{transform:scale(.97)}
 
 /* Content Sections */
@@ -161,7 +161,7 @@ a:hover{text-decoration:underline}
 .fleet-nav{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}
 .fleet-nav a{background:var(--ua-panel);border:1px solid var(--ua-border);padding:6px 14px;border-radius:4px;font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--ua-muted);text-decoration:none;transition:border-color .2s,color .2s}
 .fleet-nav a:hover{border-color:var(--ua-blue);color:var(--ua-accent);text-decoration:none}
-.fleet-nav a.active{border-color:var(--ua-blue);color:var(--ua-blue);background:rgba(0,93,170,.1)}
+.fleet-nav a.active{border-color:var(--ua-blue);color:var(--ua-accent);background:rgba(0,93,170,.1)}
 .fleet-nav a:active{transform:scale(.97)}
 
 /* Scroll Hint */
@@ -177,6 +177,7 @@ a:hover{text-decoration:underline}
   .registry-table{font-size:9px}
   .registry-table td{padding:4px 6px}
 }
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}}
 </style>
 </head>
 <body>

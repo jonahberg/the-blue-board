@@ -12,6 +12,12 @@ const cache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const origin = req.headers.origin as string | undefined;
+  if (origin && origin !== 'https://theblueboard.co' && !/^http:\/\/localhost(:\d+)?$/.test(origin)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  res.setHeader('Access-Control-Allow-Origin', origin || 'https://theblueboard.co');
+
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

@@ -1,0 +1,47 @@
+timestamp	iteration	track	commit	result	description
+2026-04-04T03:27:11Z	1	test	bfaa01c	KEPT	Fix @supabase/supabase-js mock in news-notify and waitlist tests (26 failures fixed)
+2026-04-04T03:29:46Z	2	test	c58cbf2	KEPT	Add 13-test suite for NAS status API endpoint
+2026-04-04T03:32:06Z	3	test	7337785	KEPT	Add 6-test suite for TSA wait times API endpoint
+2026-04-04T03:32:48Z	4	test	a0c0157	KEPT	Add 9-test suite for predict-flight Starlink proxy endpoint
+2026-04-04T03:33:27Z	5	test	73d03f9	KEPT	Add 6-test suite for warm-schedules cron buildWarmPlan
+2026-04-04T03:36:07Z	6	quality	b5886d2	KEPT	Prevent _supabase module crash when env vars missing (use placeholder)
+2026-04-04T03:39:35Z	7	bug	429e5fe	KEPT	fix(mobile): restore search and sidebar toggle visibility on mobile - CSS !important cascade override
+2026-04-04T03:44:50Z	8	bug	2bdb227	KEPT	fix: escapeHtml returns '' for non-strings (prevents 'undefined' in UI), fleet tab listener leak guard, weather interval leak on retry
+2026-04-04T03:45:52Z	9	bug	7fc7b99	KEPT	fix: add r.ok check to FR24 flight lookup fetch - was only fetch call in codebase without error status check
+2026-04-04T03:49:42Z	10	bug	59f6d7b	KEPT	fix(api): irops concurrent rejection handling, tsa clearTimeout leak in finally, cron refresh-tsa uses production URL
+2026-04-04T03:50:48Z	11	bug	0657759	KEPT	fix(api): add origin validation to predict-flight endpoint - was only endpoint without origin check
+2026-04-04T03:22:15Z	12	a11y	4b422b7	KEPT	add skip-to-content link for keyboard navigation
+2026-04-04T03:22:55Z	13	a11y	ab82d23	KEPT	fix focus indicators — replace outline:none with focus-visible
+2026-04-04T03:23:28Z	14	a11y	5c8e9bc	KEPT	respect prefers-reduced-motion for all animations
+2026-04-04T03:23:59Z	15	perf	fc274ed	KEPT	upgrade basemap CDNs from dns-prefetch to preconnect
+2026-04-04T03:24:59Z	16	a11y	24adaea	KEPT	add ARIA tab roles to mobile bottom navigation
+2026-04-04T03:26:11Z	17	a11y	0a74264	KEPT	add ARIA pressed states to map control toolbar
+2026-04-04T03:27:26Z	18	perf	3ac7cc2	KEPT	parallelize fleet + starlink data fetches
+2026-04-04T03:28:19Z	19	a11y	6261be0	KEPT	improve table headers and decorative emoji accessibility
+2026-04-04T03:29:01Z	20	perf	b4eb44e	KEPT	optimize fetchpriority hints for CSS and fonts
+2026-04-04T03:30:00Z	21	perf	11434e4	KEPT	add CSS containment to tab panels and sidebar
+2026-04-04T03:32:06Z	22	a11y	4cd13cc	KEPT	add ARIA dialog roles to modals (aircraft, disclaimer, onboarding)
+2026-04-04T03:32:31Z	23	a11y	bf988a7	KEPT	add accessible label to Leaflet map container
+2026-04-04T03:36:18Z	24	a11y	8fcd3b8	KEPT	add reduced-motion + font priority to Astro layouts
+2026-04-04T03:37:18Z	25	perf	f151e82	KEPT	chore: update overnight results log with 13 perf/a11y iterations
+2026-04-04T03:24:27Z	26	design	bbc34ad	KEPT	Fix tab button font-family override (DM Sans → Satoshi per DESIGN.md)
+2026-04-04T03:25:06Z	27	design	3094c1d	KEPT	Add JetBrains Mono font-family to .stat-val per DESIGN.md data typography spec
+2026-04-04T03:25:38Z	28	design	cec99e8	KEPT	Fix .source-link color from --ua-blue to --ua-accent for proper contrast
+2026-04-04T03:27:08Z	29	design	867e43e	KEPT	Fix .sched-load-more and .fleet-clear-filters to use --ua-accent for contrast
+2026-04-04T03:27:57Z	30	design	8e2b8b2	KEPT	Replace old accent rgba(138,180,248) with current rgba(107,170,237) in CSS+JS
+2026-04-04T03:28:28Z	31	design	0604d2e	KEPT	Fix hub health bar .hh-label contrast from --ua-blue to --ua-accent
+2026-04-04T03:31:08Z	32	design	5f8e9fb	KEPT	Fix off-palette error status dot from #ff9800 to --ua-yellow (#EAB308)
+2026-04-04T03:31:31Z	33	design	bc58593	KEPT	Fix watch panel header contrast from --ua-blue to --ua-accent
+2026-04-04T03:32:19Z	34	design	d81a1ef	KEPT	Align flight marker colors with design system tokens (--ua-accent, --ua-dim)
+2026-04-04T03:33:28Z	35	design	ea66ab0	KEPT	Fix undefined --bg-body CSS variable → --ua-dark for hub cards scroll fade
+2026-04-04T03:34:11Z	36	design	5d28fd1	KEPT	Standardize var(--mono) to var(--font-mono) across CSS+HTML (28 instances) [CONFLICT RESOLVED]
+2026-04-04T03:34:50Z	37	design	6aa5447	KEPT	Standardize var(--bg-card) to var(--ua-panel) across CSS+HTML (11 instances)
+2026-04-04T03:38:39Z	38	design	d9357ce	KEPT	Fix focus states from --ua-blue to --ua-accent per DESIGN.md a11y spec [CONFLICT RESOLVED]
+2026-04-04T03:39:45Z	39	design	d104ac9	KEPT	Fix waitlist modal: Satoshi heading, --ua-accent focus, CSS variable buttons
+2026-04-04T03:41:49Z	40	design	7a91d0a	KEPT	Standardize remaining var(--mono) in 404.astro, hubs/index.astro, main.js
+2026-04-04T03:43:57Z	41	design	53f8761	KEPT	Replace transition:all with explicit properties in 404.astro and tsa.astro
+2026-04-04T03:45:31Z	42	design	9d9a37b	KEPT	Remove dead --mono and --bg-card CSS aliases from :root; replace old accent in NewsLayout
+2026-04-04T03:49:03Z	43	design	b15e4e2	KEPT	Fix news category, TSA, fleet heading contrast: --ua-blue to --ua-accent
+2026-04-04T03:49:57Z	44	design	16af570	KEPT	Fix type-badge and active nav text contrast: --ua-blue to --ua-accent
+2026-04-04T03:50:34Z	45	design	4b69564	KEPT	Replace 9 undefined var(--font-body) references with var(--font-ui) in tsa.astro
+2026-04-04T03:51:31Z	46	design	ee922dd	KEPT	Standardize CTA hover color: #0069c0 → #0070cc across fleet, hubs, layouts
