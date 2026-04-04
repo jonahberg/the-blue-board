@@ -5664,6 +5664,7 @@ function toggleScheduleMoreFilters() {
   if (!panel || !btn) return;
   const isHidden = panel.style.display === 'none' || panel.style.display === '';
   panel.style.display = isHidden ? 'flex' : 'none';
+  btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
   updateAdvFilterBtnText();
 }
 

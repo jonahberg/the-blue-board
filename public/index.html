@@ -333,7 +333,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
           <option value="arrivals">Arrivals</option>
         </select>
         <button id="sched-refresh-btn" data-action="schedule-refresh" style="background:var(--ua-blue);color:white;border:none;padding:4px 10px;font-family:var(--font-ui);font-size:10px;border-radius:3px;cursor:pointer">↻ Refresh</button>
-        <button id="sched-more-filters-btn" data-action="schedule-more-filters" style="background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:4px 10px;font-family:var(--font-ui);font-size:10px;border-radius:3px;cursor:pointer">Filter: Aircraft, Starlink, Delay… ▾</button>
+        <button id="sched-more-filters-btn" data-action="schedule-more-filters" aria-expanded="false" aria-controls="sched-adv-filters" style="background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:4px 10px;font-family:var(--font-ui);font-size:10px;border-radius:3px;cursor:pointer">Filter: Aircraft, Starlink, Delay… ▾</button>
         <div id="sched-adv-filters" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
         <select id="sched-status" aria-label="Schedule status filter" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Status</option>
