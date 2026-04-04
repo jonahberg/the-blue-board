@@ -3906,7 +3906,7 @@ function renderScheduleTable() {
       const diff = Math.round((actualTime - schedTime) / 60);
       const actualStr = formatSchedTime(actualTime, hub);
       if (diff > 5) timeExtra = `<div class="sched-time-actual">→ ${actualStr} (+${diff}m)</div>`;
-      else if (diff < -5) timeExtra = `<div class="sched-time-actual" style="color:#22c55e">→ ${actualStr} (${diff}m)</div>`;
+      else if (diff < -5) timeExtra = `<div class="sched-time-actual" style="color:var(--ua-green)">→ ${actualStr} (${diff}m)</div>`;
     }
 
     const dest = fl.airport?.destination;
@@ -3974,7 +3974,7 @@ function renderScheduleTable() {
       const hasUp = impacts.some(i => i.cls === 'upgrade');
       const icon = hasDown ? '🔴' : hasUp ? '🟢' : '⚠️';
       const regLink = reg !== '—' ? ` <span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}" style="font-size:8px">${escapeHtml(reg)}</span>` : '';
-      equipBadge = `<div class="equip-change-badge" style="background:${hasDown ? 'rgba(239,68,68,.15);color:#ef4444' : hasUp ? 'rgba(34,197,94,.15);color:#22c55e' : ''}">${icon} ${escapeHtml(oldType)} → ${escapeHtml(newType)}${regLink}</div>`;
+      equipBadge = `<div class="equip-change-badge" style="background:${hasDown ? 'rgba(239,68,68,.15);color:var(--ua-red)' : hasUp ? 'rgba(34,197,94,.15);color:var(--ua-green)' : ''}">${icon} ${escapeHtml(oldType)} → ${escapeHtml(newType)}${regLink}</div>`;
       if (impacts.length) {
         equipBadge += `<div class="equip-swap-detail">`;
         impacts.forEach(i => {
@@ -4076,11 +4076,11 @@ function renderScheduleStats(filtered) {
       <span class="metric-label">On-Time (${totalOperated} opr)</span>
     </div>
     <div class="metric-card">
-      <span class="metric-val" style="color:#22c55e">${depOnTime}</span>
+      <span class="metric-val" style="color:var(--ua-green)">${depOnTime}</span>
       <span class="metric-label">On Time</span>
     </div>
     <div class="metric-card">
-      <span class="metric-val" style="color:#f59e0b">${depDelayed}</span>
+      <span class="metric-val" style="color:var(--ua-yellow)">${depDelayed}</span>
       <span class="metric-label">Late</span>
     </div>
     <div class="metric-card">
@@ -4347,8 +4347,8 @@ function updateEquipChangeSummary() {
       else if (impacts.some(i => i.cls === 'upgrade')) ups++;
     });
     let detail = '';
-    if (downs) detail += ` · <span style="color:#ef4444">${downs} downgrade${downs > 1 ? 's' : ''}</span>`;
-    if (ups) detail += ` · <span style="color:#22c55e">${ups} upgrade${ups > 1 ? 's' : ''}</span>`;
+    if (downs) detail += ` · <span style="color:var(--ua-red)">${downs} downgrade${downs > 1 ? 's' : ''}</span>`;
+    if (ups) detail += ` · <span style="color:var(--ua-green)">${ups} upgrade${ups > 1 ? 's' : ''}</span>`;
     el.innerHTML = `⚠️ ${equipmentChanges.length} equipment swap${equipmentChanges.length > 1 ? 's' : ''} detected${detail}`;
   } else {
     el.style.display = 'none';
@@ -4608,11 +4608,11 @@ function updateIrops() {
   let html = '<div class="irops-bar">';
   html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${score}</span><span class="irops-bar-label">${scoreLabel}</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#ef4444">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#f59e0b">${delayed30}</span><span class="irops-bar-label">&gt;30m</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-yellow)">${delayed30}</span><span class="irops-bar-label">&gt;30m</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#ef4444">${delayed60}</span><span class="irops-bar-label">&gt;60m</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${delayed60}</span><span class="irops-bar-label">&gt;60m</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#c026d3">${diversions}</span><span class="irops-bar-label">Diversions</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -4699,11 +4699,11 @@ function renderIropsFromAPI(data) {
   let html = '<div class="irops-bar">';
   html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${score}</span><span class="irops-bar-label">${scoreLabel}</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#ef4444">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#f59e0b">${data.delayed30}</span><span class="irops-bar-label">&gt;30m</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-yellow)">${data.delayed30}</span><span class="irops-bar-label">&gt;30m</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#ef4444">${data.delayed60}</span><span class="irops-bar-label">&gt;60m</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.delayed60}</span><span class="irops-bar-label">&gt;60m</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#c026d3">${data.diversions}</span><span class="irops-bar-label">Diversions</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -5098,7 +5098,7 @@ function buildMyFlightCard(watched, td) {
 
     switch (resolvedStatus) {
       case 'cancelled':
-        statusHtml = '<span class="mf-status" style="background:rgba(239,68,68,.2);color:#ef4444">CANCELLED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(239,68,68,.2);color:var(--ua-red)">CANCELLED</span>';
         countdownClass = 'landed';
         break;
       case 'diverted':
@@ -5106,7 +5106,7 @@ function buildMyFlightCard(watched, td) {
         countdownClass = 'landed';
         break;
       case 'landed':
-        statusHtml = '<span class="mf-status" style="background:rgba(34,197,94,.2);color:#22c55e">LANDED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(34,197,94,.2);color:var(--ua-green)">LANDED</span>';
         countdownHtml = 'Landed';
         countdownClass = 'landed';
         break;
@@ -5120,7 +5120,7 @@ function buildMyFlightCard(watched, td) {
         countdownClass = 'departed';
         break;
       case 'departed':
-        statusHtml = '<span class="mf-status" style="background:rgba(34,197,94,.2);color:#22c55e">DEPARTED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(34,197,94,.2);color:var(--ua-green)">DEPARTED</span>';
         countdownClass = 'departed';
         if (arrTime) {
           const eta = new Date(arrTime);
@@ -5129,7 +5129,7 @@ function buildMyFlightCard(watched, td) {
         }
         break;
       case 'delayed':
-        statusHtml = '<span class="mf-status" style="background:rgba(245,158,11,.2);color:#f59e0b">DELAYED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(245,158,11,.2);color:var(--ua-yellow)">DELAYED</span>';
         if (depTime) {
           const dep = new Date(depTime);
           const diff = dep - Date.now();
@@ -5524,13 +5524,13 @@ async function checkManualConnection() {
       fetch('/api/flight-times?flight=' + encodeURIComponent(normalize(outFlt))).then(r => r.ok ? r.json() : null)
     ]);
     if (!r1 || !r2 || r1.success === false || r2.success === false) {
-      resultEl.innerHTML = '<div style="color:#ef4444;font-size:11px">Could not find one or both flights. Check the flight numbers.</div>';
+      resultEl.innerHTML = '<div style="color:var(--ua-red);font-size:11px">Could not find one or both flights. Check the flight numbers.</div>';
       return;
     }
     const arrHub = r1.destination?.iata;
     const depHub = r2.origin?.iata;
     if (arrHub !== depHub) {
-      resultEl.innerHTML = `<div style="color:#ef4444;font-size:11px">These flights don't connect — ${escapeHtml(normalize(inFlt))} arrives at ${escapeHtml(arrHub || '?')}, ${escapeHtml(normalize(outFlt))} departs from ${escapeHtml(depHub || '?')}.</div>`;
+      resultEl.innerHTML = `<div style="color:var(--ua-red);font-size:11px">These flights don't connect — ${escapeHtml(normalize(inFlt))} arrives at ${escapeHtml(arrHub || '?')}, ${escapeHtml(normalize(outFlt))} departs from ${escapeHtml(depHub || '?')}.</div>`;
       return;
     }
     const conn = {
@@ -5541,7 +5541,7 @@ async function checkManualConnection() {
     const risk = computeConnectionRisk(conn);
     resultEl.innerHTML = renderConnectionRiskCard(conn, risk);
   } catch(e) {
-    resultEl.innerHTML = '<div style="color:#ef4444;font-size:11px">Error checking connection. Try again.</div>';
+    resultEl.innerHTML = '<div style="color:var(--ua-red);font-size:11px">Error checking connection. Try again.</div>';
   }
 }
 
