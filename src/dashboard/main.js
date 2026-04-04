@@ -526,8 +526,9 @@ function applyFleetDeepLinkFilter(filter, { render = true } = {}) {
   // Direct tab buttons (not More, not overflow)
   document.querySelectorAll('#mobile-bottom-nav button[data-tab]:not(.bnav-overflow-item)').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
       btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
       if (moreMenu) moreMenu.classList.remove('open');
       switchToTab(btn.dataset.tab);
     });
@@ -542,8 +543,9 @@ function applyFleetDeepLinkFilter(filter, { render = true } = {}) {
     moreMenu.querySelectorAll('button[data-tab]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         moreMenu.classList.remove('open');
-        document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
         moreBtn.classList.add('active');
+        moreBtn.setAttribute('aria-selected', 'true');
         switchToTab(btn.dataset.tab);
       });
     });
