@@ -517,7 +517,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <!-- All Aircraft table -->
     <div class="fleet-table-wrap fleet-view-panel active" id="fleet-view-all">
       <table id="fleet-table" aria-label="United Airlines fleet database">
-        <thead><tr><th data-sort="r" aria-sort="none">Reg</th><th data-sort="t" aria-sort="none">Type</th><th data-sort="a" aria-sort="none">AC#</th><th data-sort="c">Config</th><th data-sort="tot" aria-sort="none">Seats</th><th data-sort="w">WiFi</th><th data-sort="i">IFE</th><th data-sort="d" aria-sort="none">Del</th><th data-sort="s">Status</th><th>SL</th></tr></thead>
+        <thead><tr><th scope="col" data-sort="r" aria-sort="none">Reg</th><th scope="col" data-sort="t" aria-sort="none">Type</th><th scope="col" data-sort="a" aria-sort="none">AC#</th><th scope="col" data-sort="c">Config</th><th scope="col" data-sort="tot" aria-sort="none">Seats</th><th scope="col" data-sort="w">WiFi</th><th scope="col" data-sort="i">IFE</th><th scope="col" data-sort="d" aria-sort="none">Del</th><th scope="col" data-sort="s">Status</th><th scope="col">SL</th></tr></thead>
         <tbody id="fleet-tbody"></tbody>
       </table>
       <div class="fleet-zero-results" id="fleet-zero-results" style="display:none">No aircraft match your filters. <button class="fleet-clear-filters" data-action="fleet-clear-filters">Clear Filters</button></div>
@@ -525,14 +525,14 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <!-- Airborne Now table -->
     <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-airborne" style="display:none">
       <table id="airborne-table" aria-label="Currently airborne United aircraft">
-        <thead><tr><th data-airborne-sort="reg">Reg</th><th data-airborne-sort="type">Type</th><th data-airborne-sort="flight">Flight</th><th>Route</th><th data-airborne-sort="alt">Alt</th><th data-airborne-sort="phase">Phase</th><th>SL</th><th></th></tr></thead>
+        <thead><tr><th scope="col" data-airborne-sort="reg">Reg</th><th scope="col" data-airborne-sort="type">Type</th><th scope="col" data-airborne-sort="flight">Flight</th><th scope="col">Route</th><th scope="col" data-airborne-sort="alt">Alt</th><th scope="col" data-airborne-sort="phase">Phase</th><th scope="col">SL</th><th scope="col"></th></tr></thead>
         <tbody id="airborne-tbody"></tbody>
       </table>
     </div>
     <!-- Starlink table -->
     <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-starlink" style="display:none">
       <table id="starlink-table" aria-label="Starlink-equipped aircraft">
-        <thead><tr><th data-starlink-sort="tail">Tail</th><th data-starlink-sort="fleet">Fleet</th><th data-starlink-sort="type">Type</th><th data-starlink-sort="operator">Operator</th><th id="starlink-next-flight-th" style="display:none">Next Flight</th></tr></thead>
+        <thead><tr><th scope="col" data-starlink-sort="tail">Tail</th><th scope="col" data-starlink-sort="fleet">Fleet</th><th scope="col" data-starlink-sort="type">Type</th><th scope="col" data-starlink-sort="operator">Operator</th><th scope="col" id="starlink-next-flight-th" style="display:none">Next Flight</th></tr></thead>
         <tbody id="starlink-tbody"></tbody>
       </table>
     </div>
