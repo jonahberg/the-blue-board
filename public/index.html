@@ -93,12 +93,12 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <h2>Welcome to The Blue Board ✈️</h2>
     <p class="onboarding-subtitle">Your real-time command center for United flights</p>
     <div class="onboarding-features">
-      <div class="onboarding-feature"><span class="onboarding-icon">📡</span><div><strong>Live Map</strong><span class="onboarding-desc">See where every United flight is right now — updated every 30 seconds</span></div></div>
-      <div class="onboarding-feature"><span class="onboarding-icon">⚠️</span><div><strong>AI Delay Prediction</strong><span class="onboarding-desc">8-signal risk scoring with AI-powered explanations — plus hub delays, cancellations, and ground stops</span></div></div>
-      <div class="onboarding-feature"><span class="onboarding-icon">📅</span><div><strong>Schedules</strong><span class="onboarding-desc">Departures &amp; arrivals at all 9 hubs with on-time stats and equipment swap alerts</span></div></div>
-      <div class="onboarding-feature"><span class="onboarding-icon">🌦</span><div><strong>Weather &amp; Hub Status</strong><span class="onboarding-desc">Conditions at every hub airport — radar, visibility, wind, and how it's affecting flights</span></div></div>
-      <div class="onboarding-feature"><span class="onboarding-icon">✈️</span><div><strong>Fleet &amp; WiFi</strong><span class="onboarding-desc">Check if your plane has Starlink WiFi, seat config, and aircraft details</span></div></div>
-      <div class="onboarding-feature"><span class="onboarding-icon">📊</span><div><strong>Stats</strong><span class="onboarding-desc">Fleet utilization, route patterns, and network health — the truly nerdy stuff</span></div></div>
+      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📡</span><div><strong>Live Map</strong><span class="onboarding-desc">See where every United flight is right now — updated every 30 seconds</span></div></div>
+      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">⚠️</span><div><strong>AI Delay Prediction</strong><span class="onboarding-desc">8-signal risk scoring with AI-powered explanations — plus hub delays, cancellations, and ground stops</span></div></div>
+      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📅</span><div><strong>Schedules</strong><span class="onboarding-desc">Departures &amp; arrivals at all 9 hubs with on-time stats and equipment swap alerts</span></div></div>
+      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">🌦</span><div><strong>Weather &amp; Hub Status</strong><span class="onboarding-desc">Conditions at every hub airport — radar, visibility, wind, and how it's affecting flights</span></div></div>
+      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">✈️</span><div><strong>Fleet &amp; WiFi</strong><span class="onboarding-desc">Check if your plane has Starlink WiFi, seat config, and aircraft details</span></div></div>
+      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📊</span><div><strong>Stats</strong><span class="onboarding-desc">Fleet utilization, route patterns, and network health — the truly nerdy stuff</span></div></div>
     </div>
     <div class="onboarding-home-airport" style="margin:16px 0 12px;text-align:center">
       <label for="onboarding-home-hub" style="font-size:11px;color:var(--ua-muted);display:block;margin-bottom:6px">Set your home hub for a personalized experience</label>
@@ -397,16 +397,16 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <table id="sched-table">
         <thead>
           <tr>
-            <th data-sort="time" style="cursor:pointer;min-width:100px">Time ↕</th>
-            <th data-sort="flight" style="cursor:pointer">Flight ↕</th>
-            <th data-sort="route" style="cursor:pointer;min-width:140px">Route</th>
-            <th data-sort="aircraft" style="cursor:pointer">Aircraft</th>
-            <th data-sort="reg" style="cursor:pointer">Reg</th>
-            <th>Gate</th>
-            <th data-sort="status" style="cursor:pointer;min-width:130px">Status ↕</th>
-            <th style="width:45px">Delay</th>
-            <th>Fleet</th>
-            <th>👁️</th>
+            <th scope="col" data-sort="time" style="cursor:pointer;min-width:100px">Time ↕</th>
+            <th scope="col" data-sort="flight" style="cursor:pointer">Flight ↕</th>
+            <th scope="col" data-sort="route" style="cursor:pointer;min-width:140px">Route</th>
+            <th scope="col" data-sort="aircraft" style="cursor:pointer">Aircraft</th>
+            <th scope="col" data-sort="reg" style="cursor:pointer">Reg</th>
+            <th scope="col">Gate</th>
+            <th scope="col" data-sort="status" style="cursor:pointer;min-width:130px">Status ↕</th>
+            <th scope="col" style="width:45px">Delay</th>
+            <th scope="col">Fleet</th>
+            <th scope="col"><span aria-hidden="true">👁️</span><span class="sr-only">Watch</span></th>
           </tr>
         </thead>
         <tbody id="sched-tbody"></tbody>
