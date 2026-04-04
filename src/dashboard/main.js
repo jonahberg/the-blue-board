@@ -997,7 +997,7 @@ async function refreshFlights() {
   } catch (e) {
     console.error('FR24 error:', e);
     document.getElementById('status-dot').className = 'status-dot';
-    document.getElementById('status-dot').style.background = '#ff9800';
+    document.getElementById('status-dot').style.background = '#EAB308';
     document.getElementById('status-text').textContent = 'ERROR';
     if (allFlights.length === 0) {
       const mapEl = document.getElementById('map');
