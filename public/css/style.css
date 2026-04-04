@@ -69,7 +69,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #tab-live #controls{position:absolute;top:10px;right:10px;z-index:1000}
 #ctrl-panel{display:flex;flex-direction:column;gap:5px}
 #mobile-ctrl-toggle{display:none}
-.ctrl-btn{background:rgba(10,14,20,.9);border:1px solid var(--ua-border);color:#ccc;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-family:var(--font-mono);backdrop-filter:blur(8px);transition:background-color .2s cubic-bezier(.4,0,.2,1),border-color .2s cubic-bezier(.4,0,.2,1),color .2s cubic-bezier(.4,0,.2,1),transform .15s cubic-bezier(.4,0,.2,1)}
+.ctrl-btn{background:rgba(10,14,20,.9);border:1px solid var(--ua-border);color:var(--ua-muted);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-family:var(--font-mono);backdrop-filter:blur(8px);transition:background-color .2s cubic-bezier(.4,0,.2,1),border-color .2s cubic-bezier(.4,0,.2,1),color .2s cubic-bezier(.4,0,.2,1),transform .15s cubic-bezier(.4,0,.2,1)}
 .ctrl-btn:hover{background:rgba(0,93,170,.3);border-color:var(--ua-blue)}
 .ctrl-btn.active{border-color:var(--ua-accent);color:var(--ua-accent)}
 #search-box{position:absolute;top:10px;left:10px;z-index:1000}
