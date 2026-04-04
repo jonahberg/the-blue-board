@@ -146,9 +146,9 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 </noscript>
 <div class="sr-only">The Blue Board is an independent United Airlines flight tracker and operations dashboard for United flyers. Use the live dashboard to check flight status, hub delays, fleet data, and Starlink availability.</div>
 <!-- TICKER -->
-<div class="ticker-wrap">
+<div class="ticker-wrap" role="marquee" aria-label="Flight alerts ticker">
   <span class="ticker-label">▌ALERTS</span>
-  <div class="ticker" id="ticker"></div>
+  <div class="ticker" id="ticker" aria-live="off"></div>
 </div>
 
 <!-- HUB HEALTH BAR -->
@@ -282,7 +282,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       </div>
     </div>
   </div>
-  <div id="stats-bar" aria-live="polite">
+  <div id="stats-bar" role="status" aria-live="polite" aria-label="Flight statistics">
     <div class="stat-item"><span class="stat-val" id="st-airborne">--</span><span class="stat-label">Airborne</span></div>
     <span class="stat-sep">│</span>
     <div class="stat-item"><span class="stat-val" id="st-util">--</span><span class="stat-label">Utilization</span></div>
