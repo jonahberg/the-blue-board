@@ -4068,7 +4068,7 @@ function renderScheduleStats(filtered) {
 
   document.getElementById('sched-stats').innerHTML = `
     <div class="metric-card">
-      <span class="metric-val" style="color:var(--ua-blue)">${showing}</span>
+      <span class="metric-val">${showing}</span>
       <span class="metric-label">UA ${dirLabel} · ${dayLabel}</span>
     </div>
     <div class="metric-card">
@@ -4616,7 +4616,7 @@ function updateIrops() {
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#c026d3">${diversions}</span><span class="irops-bar-label">Diversions</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-blue)">${totalFlights}</span><span class="irops-bar-label">Total Flights</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-accent)">${totalFlights}</span><span class="irops-bar-label">Total Flights</span></span>`;
   html += '</div>';
 
   // FAA alerts — separate line below bar (escapeHtml for safety)
@@ -4707,7 +4707,7 @@ function renderIropsFromAPI(data) {
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#c026d3">${data.diversions}</span><span class="irops-bar-label">Diversions</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-blue)">${data.totalFlights}</span><span class="irops-bar-label">Total Flights</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-accent)">${data.totalFlights}</span><span class="irops-bar-label">Total Flights</span></span>`;
   html += '</div>';
 
   content.innerHTML = html;
