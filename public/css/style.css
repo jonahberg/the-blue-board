@@ -256,7 +256,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .fleet-pulse-left{flex:1;min-width:0}
 .fleet-pulse-right{flex:1;min-width:0;border-left:1px solid var(--ua-border);padding-left:20px}
 .fleet-pulse-hero{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.fleet-pulse-airborne-count{font-size:36px;font-weight:700;color:var(--ua-blue);line-height:1;font-family:var(--font-mono)}
+.fleet-pulse-airborne-count{font-size:36px;font-weight:700;color:var(--ua-accent);line-height:1;font-family:var(--font-mono)}
 .fleet-pulse-airborne-label{font-size:10px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:1px}
 .fleet-pulse-subtitle{font-size:10px;color:var(--ua-muted);margin-bottom:8px}
 .fleet-pulse-util{font-size:10px;color:var(--ua-green);margin-bottom:10px;font-weight:600}
@@ -309,7 +309,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .variant-card:hover{border-color:var(--ua-blue);background:rgba(0,93,170,.1)}
 .variant-card:focus-visible{outline:2px solid var(--ua-accent);outline-offset:2px}
 .variant-card.active{border-color:var(--ua-blue);background:rgba(0,93,170,.15);border-left:3px solid var(--ua-blue)}
-.variant-count{font-size:20px;font-weight:700;color:var(--ua-blue);font-family:var(--font-mono)}
+.variant-count{font-size:20px;font-weight:700;color:var(--ua-accent);font-family:var(--font-mono)}
 .variant-name{font-size:9px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
 .fleet-widebody-divider{display:flex;align-items:center;gap:12px;margin:16px 0 12px;font-size:9px;color:var(--ua-muted);letter-spacing:2px;text-transform:uppercase}
 .fleet-widebody-divider::before,.fleet-widebody-divider::after{content:'';flex:1;height:1px;background:var(--ua-border)}
@@ -442,7 +442,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 @media(max-width:900px){.metric-row{flex-wrap:wrap}}
 .metric-card{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 10px;border-right:1px solid var(--ua-border);min-width:0}
 .metric-card:last-child{border-right:none}
-.metric-val{font-size:16px;font-weight:700;color:var(--ua-blue);line-height:1}
+.metric-val{font-size:16px;font-weight:700;color:var(--ua-accent);line-height:1}
 .metric-label{font-size:9px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
 
 /* ═══ TAB 5: SOURCES ═══ */
@@ -473,7 +473,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .live-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,.15);color:var(--ua-green);font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;letter-spacing:1px}
 .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--ua-green);animation:pulse 1.5s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.4)}50%{opacity:.7;box-shadow:0 0 0 6px rgba(34,197,94,0)}}
-.big-number{font-size:36px;font-weight:700;color:var(--ua-blue);line-height:1}
+.big-number{font-size:36px;font-weight:700;color:var(--ua-accent);line-height:1}
 .big-number-label{font-size:10px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:1px}
 
 /* Weather Explainer */
