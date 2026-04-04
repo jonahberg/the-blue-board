@@ -1,0 +1,14 @@
+timestamp	iteration	track	commit	result	description
+2026-04-04T03:22:15Z	1	a11y	4b422b7	KEPT	add skip-to-content link for keyboard navigation
+2026-04-04T03:22:55Z	2	a11y	ab82d23	KEPT	fix focus indicators — replace outline:none with focus-visible
+2026-04-04T03:23:28Z	3	a11y	5c8e9bc	KEPT	respect prefers-reduced-motion for all animations
+2026-04-04T03:23:59Z	4	perf	fc274ed	KEPT	upgrade basemap CDNs from dns-prefetch to preconnect
+2026-04-04T03:24:59Z	5	a11y	24adaea	KEPT	add ARIA tab roles to mobile bottom navigation
+2026-04-04T03:26:11Z	6	a11y	0a74264	KEPT	add ARIA pressed states to map control toolbar
+2026-04-04T03:27:26Z	7	perf	3ac7cc2	KEPT	parallelize fleet + starlink data fetches
+2026-04-04T03:28:19Z	8	a11y	6261be0	KEPT	improve table headers and decorative emoji accessibility
+2026-04-04T03:29:01Z	9	perf	b4eb44e	KEPT	optimize fetchpriority hints for CSS and fonts
+2026-04-04T03:30:00Z	10	perf	11434e4	KEPT	add CSS containment to tab panels and sidebar
+2026-04-04T03:32:06Z	11	a11y	4cd13cc	KEPT	add ARIA dialog roles to modals (aircraft, disclaimer, onboarding)
+2026-04-04T03:32:31Z	12	a11y	bf988a7	KEPT	add accessible label to Leaflet map container
+2026-04-04T03:36:18Z	13	a11y	8fcd3b8	KEPT	add reduced-motion + font priority to Astro layouts
