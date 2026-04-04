@@ -48,13 +48,13 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .tab-btn:hover{color:#94a3b8;background:rgba(30,41,59,.5)}
 .tab-btn.active{color:var(--ua-text);border-bottom-color:var(--ua-blue);background:rgba(0,93,170,.08)}
 main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.tab-content{display:none;position:relative;z-index:1;flex:1;min-height:0;overflow-y:auto}
+.tab-content{display:none;position:relative;z-index:1;flex:1;min-height:0;overflow-y:auto;contain:layout style paint}
 .tab-content.active{display:flex;flex-direction:column}
 
 /* ═══ TAB 1: LIVE OPS ═══ */
 #tab-live{flex:1;min-height:0}
 #tab-live .ops-layout{display:flex;height:100%;overflow:hidden}
-#tab-live .sidebar{width:260px;background:var(--ua-panel);border-right:1px solid var(--ua-border);overflow-y:auto;flex-shrink:0}
+#tab-live .sidebar{width:260px;background:var(--ua-panel);border-right:1px solid var(--ua-border);overflow-y:auto;flex-shrink:0;contain:layout style paint}
 #sidebar-filters-toggle{display:none}
 #tab-live .sidebar h3{font-size:11px;color:var(--ua-blue);text-transform:uppercase;letter-spacing:1px;padding:12px 12px 6px;border-bottom:1px solid var(--ua-border)}
 .hub-row{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-bottom:1px solid rgba(30,41,59,.4);transition:background .15s;cursor:default}
