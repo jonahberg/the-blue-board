@@ -30,7 +30,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 /* Header */
 #header{display:flex;align-items:center;justify-content:space-between;padding:6px 16px;background:linear-gradient(90deg,var(--ua-dark),#0d1520);border-bottom:1px solid rgba(0,93,170,.3);flex-shrink:0}
 #header h1{font-size:16px;font-weight:700;color:#fff;letter-spacing:1px}
-#header h1 .ua{color:var(--ua-blue)}
+#header h1 .ua{color:var(--ua-accent)}
 #header-right{display:flex;align-items:center;gap:16px;font-size:11px}
 #brand-strip{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 16px;background:rgba(17,24,39,.9);border-bottom:1px solid rgba(0,93,170,.25);font-size:10px;color:var(--ua-muted);flex-shrink:0}
 #brand-strip p{margin:0;line-height:1.5;max-width:760px}
@@ -111,7 +111,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .alt-bar{height:6px;background:var(--ua-border);border-radius:3px;margin:3px 0;overflow:hidden}
 .alt-bar-fill{height:100%;background:linear-gradient(90deg,var(--ua-blue),var(--ua-accent));border-radius:3px;transition:width .3s}
 .popup-aircraft{background:rgba(0,93,170,.08);border:1px solid rgba(0,93,170,.2);border-radius:4px;padding:6px 8px;margin:8px 0}
-.popup-aircraft-type{font-size:13px;font-weight:700;color:var(--ua-blue)}
+.popup-aircraft-type{font-size:13px;font-weight:700;color:var(--ua-accent)}
 .popup-seats{display:flex;gap:4px;margin-top:4px}
 .seat-block{padding:1px 5px;border-radius:2px;font-size:9px;font-weight:600}
 .seat-J{background:rgba(0,93,170,.3);color:#60a5fa}
@@ -228,7 +228,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .fleet-table-wrap{max-height:500px;overflow-y:auto;border:1px solid var(--ua-border);border-radius:4px;contain:strict}
 table{width:100%;border-collapse:collapse;font-size:11px}
 thead th{position:sticky;top:0;background:var(--ua-panel);color:var(--ua-muted);text-align:left;padding:7px 8px;border-bottom:2px solid var(--ua-blue);cursor:pointer;user-select:none;font-size:9px;text-transform:uppercase;letter-spacing:.5px}
-thead th:hover{color:var(--ua-blue)}
+thead th:hover{color:var(--ua-accent)}
 tbody tr{border-bottom:1px solid rgba(30,41,59,.4);transition:background .15s}
 tbody tr:hover{background:rgba(30,41,59,.4)}
 tbody td{padding:5px 8px;white-space:nowrap}
