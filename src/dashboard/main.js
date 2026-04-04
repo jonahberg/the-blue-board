@@ -6412,6 +6412,9 @@ function showDelayExplanation(ctx) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'delay-explain-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'AI delay risk explanation');
     modal.style.cssText = 'position:fixed;inset:0;z-index:10001;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px)';
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
     document.addEventListener('keydown', function(e) {
