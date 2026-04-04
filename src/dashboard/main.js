@@ -38,7 +38,7 @@ function debounce(fn, ms) { let t; return function(...a) { clearTimeout(t); t = 
 
 // ═══ HTML SANITIZATION ═══
 function escapeHtml(str) {
-  if (typeof str !== 'string') return str;
+  if (typeof str !== 'string') return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
@@ -1759,7 +1759,10 @@ function initTickerAnimation(tickerEl) {
 let activeFleetType = '';
 let activeFleetView = 'all';
 
+let _fleetTabInitialized = false;
 function initFleetTab() {
+  if (_fleetTabInitialized) return;
+  _fleetTabInitialized = true;
   // Set dynamic fleet count in title
   document.getElementById('fleet-overview-title').textContent = 'Fleet Overview — ' + FLEET_DB.length + ' Mainline Aircraft';
 
@@ -2446,6 +2449,7 @@ function refreshFleetData() {
 
 // ═══ WEATHER TAB ═══
 let weatherInitialized = false;
+let _weatherRefreshInterval = null;
 const HUB_NAMES = {EWR:"Newark Liberty",IAH:"Houston Intercontinental",ORD:"O'Hare International",DEN:"Denver International",SFO:"San Francisco Int'l",LAX:"Los Angeles Int'l",IAD:"Washington Dulles",NRT:"Tokyo Narita",GUM:"Guam Int'l"};
 const CAT_COLORS = {VFR:'#22c55e',MVFR:'#eab308',IFR:'#ef4444',LIFR:'#c026d3'};
 
@@ -2986,7 +2990,8 @@ async function initWeatherTab() {
   }
 
   // Refresh weather + FAA + NAS data every 5 minutes so the tab stays current
-  setInterval(async () => {
+  if (_weatherRefreshInterval) clearInterval(_weatherRefreshInterval);
+  _weatherRefreshInterval = setInterval(async () => {
     try {
       const [newMetar, newFaa, newNas] = await Promise.allSettled([
         fetchMetarBatch(allStations),
