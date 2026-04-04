@@ -501,6 +501,15 @@ tbody td{padding:5px 8px;white-space:nowrap}
 #sched-table-wrap{max-height:calc(100vh - 260px)}
 /* Prevent overflow:hidden on card from trapping scroll events when table is short */
 #tab-schedule .card[style*="overflow:hidden"]{overflow:visible!important}
+/* ═══ REDUCED MOTION (a11y) ═══ */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important}
+  .ticker{animation:none!important}
+  .ticker-cycle{animation:none!important}
+  .pulse-dot{animation:none!important}
+  .tab-content.active{animation:none!important}
+}
+
 /* ═══ MOBILE RESPONSIVE ═══ */
 @media(max-width:768px){
   body{font-size:14px;height:calc(100vh - 56px);height:calc(100dvh - 56px)}
