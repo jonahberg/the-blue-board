@@ -165,14 +165,14 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 <div id="header">
   <h1><a href="#" data-action="go-home" style="text-decoration:none;color:inherit;cursor:pointer"><span class="ua">THE BLUE BOARD</span></a> <span style="font-size:9px;color:var(--ua-muted);font-weight:400;letter-spacing:0.5px">FOR UNITED FLYERS, BY UNITED FLYERS</span></h1>
   <div id="global-search-wrap" style="position:relative;flex:0 1 300px">
-    <input type="text" id="global-search-input" aria-label="Global flight search" placeholder="Track a flight (UA 1234, N12345, ORD...)" style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--mono);font-size:11px">
+    <input type="text" id="global-search-input" aria-label="Global flight search" placeholder="Track a flight (UA 1234, N12345, ORD...)" style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--font-mono);font-size:11px">
     <div id="global-search-results" style="position:absolute;top:34px;left:0;right:0;background:rgba(17,24,39,.95);border:1px solid var(--ua-border);border-radius:4px;max-height:300px;overflow-y:auto;display:none;z-index:9999;backdrop-filter:blur(8px)"></div>
   </div>
   <div id="header-right">
     <span><span class="status-dot live" id="status-dot"></span><span id="status-text">LIVE</span> <span id="header-flight-count" style="color:var(--ua-muted);font-size:10px"></span></span>
     <span id="countdown">Next refresh: --:--</span>
     <span id="clock" style="color:var(--ua-muted)"></span>
-    <div style="position:relative"><button id="watch-header-btn" data-action="toggle-watch-panel" title="Watched flights" aria-label="Toggle watched flights panel">👁️<span class="watch-badge" id="watch-badge" style="display:none">0</span></button><div id="watch-panel"><div class="watch-panel-header"><span>👁️ Watched Flights</span><button data-action="clear-all-watched" style="background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:9px;font-family:var(--mono)">Clear All</button></div><div id="watch-panel-list"></div></div></div>
+    <div style="position:relative"><button id="watch-header-btn" data-action="toggle-watch-panel" title="Watched flights" aria-label="Toggle watched flights panel">👁️<span class="watch-badge" id="watch-badge" style="display:none">0</span></button><div id="watch-panel"><div class="watch-panel-header"><span>👁️ Watched Flights</span><button data-action="clear-all-watched" style="background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:9px;font-family:var(--font-mono)">Clear All</button></div><div id="watch-panel-list"></div></div></div>
     <button id="mobile-search-toggle" aria-label="Toggle search" title="Search">🔍</button>
     <button id="home-hub-btn" data-action="cycle-home-hub" title="Home hub (click to change)" aria-label="Change home hub" style="font-size:10px;font-family:var(--font-ui);cursor:pointer;background:none;border:1px solid var(--ua-border);color:var(--ua-accent);padding:2px 6px;border-radius:3px">🏠 <span id="home-hub-display">—</span></button>
     <button id="onboarding-help" title="About this dashboard" aria-label="About this dashboard">?</button>
@@ -233,7 +233,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <h3 style="color:var(--ua-text);font-size:14px;margin-bottom:8px">No Flights Tracked Yet</h3>
     <p style="font-size:11px;max-width:360px;margin:0 auto 16px;line-height:1.6">Search for a flight and tap 👁️ to watch it. You'll see countdown timers, gate info, equipment details, delay risk, and inbound aircraft tracking — all in one place.</p>
     <div style="max-width:300px;margin:0 auto">
-      <input type="text" id="myflight-search" placeholder="Add a flight (e.g. UA 1234)" style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:8px 12px;border-radius:4px;font-family:var(--mono);font-size:12px;text-align:center">
+      <input type="text" id="myflight-search" placeholder="Add a flight (e.g. UA 1234)" style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:8px 12px;border-radius:4px;font-family:var(--font-mono);font-size:12px;text-align:center">
     </div>
     <div style="margin:20px auto 0;max-width:360px;display:flex;align-items:center;gap:12px;color:var(--ua-border)"><div style="flex:1;height:1px;background:var(--ua-border)"></div><span style="font-size:9px;letter-spacing:1px;color:var(--ua-muted)">OR</span><div style="flex:1;height:1px;background:var(--ua-border)"></div></div>
   </div>
@@ -242,8 +242,8 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div id="myflight-check" style="display:none;margin-top:16px;padding:14px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px">
     <h4 style="font-size:10px;color:var(--ua-blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Check a Connection</h4>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <input type="text" id="conn-inbound" placeholder="Inbound (UA 1234)" style="flex:1;min-width:120px;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--mono);font-size:11px">
-      <input type="text" id="conn-outbound" placeholder="Outbound (UA 567)" style="flex:1;min-width:120px;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--mono);font-size:11px">
+      <input type="text" id="conn-inbound" placeholder="Inbound (UA 1234)" style="flex:1;min-width:120px;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--font-mono);font-size:11px">
+      <input type="text" id="conn-outbound" placeholder="Outbound (UA 567)" style="flex:1;min-width:120px;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--font-mono);font-size:11px">
       <button data-action="check-connection" style="background:var(--ua-blue);color:#fff;border:none;padding:6px 14px;border-radius:4px;font-family:var(--font-ui);font-size:11px;cursor:pointer;white-space:nowrap">Check</button>
     </div>
     <div id="conn-manual-result" style="margin-top:10px"></div>
@@ -261,7 +261,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <div id="sidebar-extra-filters">
       <h3 style="margin-top:4px">🔍 Search</h3>
       <div style="padding:8px 12px">
-        <input type="text" id="search-input-side" aria-label="Sidebar flight search" placeholder="Flight #, tail, airport..." style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:10px">
+        <input type="text" id="search-input-side" aria-label="Sidebar flight search" placeholder="Flight #, tail, airport..." style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 8px;border-radius:4px;font-family:var(--font-mono);font-size:10px">
         <div id="search-results-side" style="max-height:400px;overflow-y:auto;margin-top:4px"></div>
       </div>
       <h3>📊 Phase Breakdown</h3>
@@ -316,7 +316,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <select id="sched-hub" aria-label="Schedule hub filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px">
+        <select id="sched-hub" aria-label="Schedule hub filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Hubs</option>
           <option value="ORD" selected>ORD — Chicago O'Hare</option>
           <option value="DEN">DEN — Denver</option>
@@ -328,14 +328,14 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
           <option value="NRT">NRT — Tokyo Narita</option>
           <option value="GUM">GUM — Guam</option>
         </select>
-        <select id="sched-dir" aria-label="Schedule direction filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px">
+        <select id="sched-dir" aria-label="Schedule direction filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="departures">Departures</option>
           <option value="arrivals">Arrivals</option>
         </select>
         <button id="sched-refresh-btn" data-action="schedule-refresh" style="background:var(--ua-blue);color:white;border:none;padding:4px 10px;font-family:var(--font-ui);font-size:10px;border-radius:3px;cursor:pointer">↻ Refresh</button>
         <button id="sched-more-filters-btn" data-action="schedule-more-filters" style="background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:4px 10px;font-family:var(--font-ui);font-size:10px;border-radius:3px;cursor:pointer">Filter: Aircraft, Starlink, Delay… ▾</button>
         <div id="sched-adv-filters" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
-        <select id="sched-status" aria-label="Schedule status filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px">
+        <select id="sched-status" aria-label="Schedule status filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Status</option>
           <option value="scheduled">Scheduled</option>
           <option value="estimated">Estimated</option>
@@ -346,10 +346,10 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
           <option value="canceled">Canceled</option>
           <option value="diverted">Diverted</option>
         </select>
-        <select id="sched-aircraft" aria-label="Schedule aircraft filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px">
+        <select id="sched-aircraft" aria-label="Schedule aircraft filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Aircraft</option>
         </select>
-        <select id="sched-fleet-family" aria-label="Schedule fleet family filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px">
+        <select id="sched-fleet-family" aria-label="Schedule fleet family filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Fleet Families</option>
           <option value="737">737 Family</option>
           <option value="A320">A320 Family</option>
@@ -358,30 +358,30 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
           <option value="777">777 Family</option>
           <option value="787">787 Family</option>
         </select>
-        <select id="sched-route-type" aria-label="Schedule route type filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px">
+        <select id="sched-route-type" aria-label="Schedule route type filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Routes</option>
           <option value="domestic">Domestic Only</option>
           <option value="international">International Only</option>
         </select>
-        <select id="sched-starlink" aria-label="Schedule Starlink filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px">
+        <select id="sched-starlink" aria-label="Schedule Starlink filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All WiFi</option>
           <option value="starlink">⚡ Starlink Only</option>
           <option value="no-starlink">Non-Starlink</option>
         </select>
-        <select id="sched-timerange" aria-label="Schedule time range filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px">
+        <select id="sched-timerange" aria-label="Schedule time range filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Day</option>
           <option value="morning">Morning (5a–12p)</option>
           <option value="afternoon">Afternoon (12p–5p)</option>
           <option value="evening">Evening (5p–10p)</option>
           <option value="redeye">Red-eye (10p–5a)</option>
         </select>
-        <select id="sched-risk" aria-label="Schedule delay risk filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px">
+        <select id="sched-risk" aria-label="Schedule delay risk filter" style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px">
           <option value="">All Delay</option>
           <option value="high">High Delay</option>
           <option value="moderate">Moderate+</option>
           <option value="low">Low Only</option>
         </select>
-        <input type="text" id="sched-search" aria-label="Schedule search" placeholder="Flight, city, reg..." style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px;width:140px">
+        <input type="text" id="sched-search" aria-label="Schedule search" placeholder="Flight, city, reg..." style="background:var(--bg-card);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px;width:140px">
         </div>
       </div>
     </div>
@@ -789,7 +789,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   </nav>
   <div class="footer-data-sources" style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 12px;margin-top:4px">
     <span>Data: <a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-muted);text-decoration:none">FR24</a> · <a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer" style="color:var(--ua-muted);text-decoration:none">AWC</a> · <a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer" style="color:var(--ua-muted);text-decoration:none">FAA</a></span>
-    <a href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer" style="background:var(--ua-blue);color:white;padding:3px 10px;border-radius:3px;text-decoration:none;font-size:9px;font-family:var(--mono);white-space:nowrap">☕ Support Server Costs</a>
+    <a href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer" style="background:var(--ua-blue);color:white;padding:3px 10px;border-radius:3px;text-decoration:none;font-size:9px;font-family:var(--font-mono);white-space:nowrap">☕ Support Server Costs</a>
     <span style="white-space:nowrap">Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Jonah Berg</a> · <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Follow @theblueboard</a></span>
   </div>
 </footer>
