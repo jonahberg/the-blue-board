@@ -149,11 +149,11 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .delay-explain-factor{font-size:10px;color:var(--ua-text);padding:4px 8px;margin:3px 0;background:rgba(0,93,170,.04);border-left:2px solid var(--ua-accent);border-radius:0 3px 3px 0}
 .delay-explain-footer{font-size:9px;color:var(--ua-muted);text-align:center;padding:10px 20px;border-top:1px solid var(--ua-border)}
 .delay-explain-loading{text-align:center;padding:24px;color:var(--ua-muted);font-size:11px}
-.delay-explain-loading .shimmer{display:inline-block;width:60%;height:10px;background:linear-gradient(90deg,transparent,rgba(138,180,248,.15),transparent);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;margin:6px 0}
+.delay-explain-loading .shimmer{display:inline-block;width:60%;height:10px;background:linear-gradient(90deg,transparent,rgba(107,170,237,.15),transparent);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;margin:6px 0}
 .delay-explain-error{text-align:center;padding:16px;color:#f59e0b;font-size:11px}
-.delay-explain-btn{background:rgba(138,180,248,.1);border:1px solid rgba(138,180,248,.2);color:var(--ua-accent);padding:3px 8px;border-radius:3px;font-size:9px;font-family:var(--font-mono);cursor:pointer}
-.delay-explain-btn:hover{background:rgba(138,180,248,.2)}
-.ac-reg-link{color:var(--ua-accent);cursor:pointer;text-decoration:none;border-bottom:1px dotted rgba(138,180,248,.3);transition:border-color .2s}
+.delay-explain-btn{background:rgba(107,170,237,.1);border:1px solid rgba(107,170,237,.2);color:var(--ua-accent);padding:3px 8px;border-radius:3px;font-size:9px;font-family:var(--font-mono);cursor:pointer}
+.delay-explain-btn:hover{background:rgba(107,170,237,.2)}
+.ac-reg-link{color:var(--ua-accent);cursor:pointer;text-decoration:none;border-bottom:1px dotted rgba(107,170,237,.3);transition:border-color .2s}
 .ac-reg-link:hover{border-bottom-color:var(--ua-accent)}
 .starlink-badge{background:rgba(34,197,94,.2);color:var(--ua-green);padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700}
 .squawk-alert{background:var(--ua-red);color:#fff;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;animation:blink 1s infinite}

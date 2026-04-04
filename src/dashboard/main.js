@@ -5131,7 +5131,7 @@ function buildMyFlightCard(watched, td) {
         countdownClass = '';
         break;
       default:
-        statusHtml = '<span class="mf-status" style="background:rgba(138,180,248,.15);color:var(--ua-accent)">SCHEDULED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(107,170,237,.15);color:var(--ua-accent)">SCHEDULED</span>';
         if (depTime) {
           const dep = new Date(depTime);
           const diff = dep - Date.now();
