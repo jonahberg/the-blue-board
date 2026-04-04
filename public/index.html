@@ -218,12 +218,12 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button data-tab="tab-myflight" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-myflight"><span class="bnav-icon" aria-hidden="true">🎫</span><span class="bnav-label">My Flights</span></button>
   <button data-tab="tab-analytics" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-analytics"><span class="bnav-icon" aria-hidden="true">📊</span><span class="bnav-label">Stats</span></button>
   <button data-tab="tab-sources" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-sources"><span class="bnav-icon" aria-hidden="true">ℹ️</span><span class="bnav-label">Sources</span></button>
-  <button id="mobile-more-btn" aria-label="More tabs"><span class="bnav-icon" aria-hidden="true">▾</span><span class="bnav-label">More</span></button>
+  <button id="mobile-more-btn" aria-label="More tabs" aria-expanded="false" aria-controls="mobile-more-menu"><span class="bnav-icon" aria-hidden="true">▾</span><span class="bnav-label">More</span></button>
 </nav>
-<div id="mobile-more-menu">
-  <button data-tab="tab-myflight"><span class="bnav-icon">🎫</span> My Flights</button>
-  <button data-tab="tab-analytics"><span class="bnav-icon">📊</span> Stats</button>
-  <button data-tab="tab-sources"><span class="bnav-icon">ℹ️</span> Sources</button>
+<div id="mobile-more-menu" role="menu" aria-label="Additional navigation tabs">
+  <button data-tab="tab-myflight" role="menuitem"><span class="bnav-icon" aria-hidden="true">🎫</span> My Flights</button>
+  <button data-tab="tab-analytics" role="menuitem"><span class="bnav-icon" aria-hidden="true">📊</span> Stats</button>
+  <button data-tab="tab-sources" role="menuitem"><span class="bnav-icon" aria-hidden="true">ℹ️</span> Sources</button>
 </div>
 
 <!-- TAB 0: MY FLIGHTS -->

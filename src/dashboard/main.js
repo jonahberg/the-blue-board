@@ -533,11 +533,13 @@ function applyFleetDeepLinkFilter(filter, { render = true } = {}) {
     moreBtn.addEventListener('click', function(e) {
       e.stopPropagation();
       moreMenu.classList.toggle('open');
+      moreBtn.setAttribute('aria-expanded', moreMenu.classList.contains('open') ? 'true' : 'false');
     });
     // More menu items
     moreMenu.querySelectorAll('button[data-tab]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         moreMenu.classList.remove('open');
+        moreBtn.setAttribute('aria-expanded', 'false');
         document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
         moreBtn.classList.add('active');
         moreBtn.setAttribute('aria-selected', 'true');
@@ -548,6 +550,7 @@ function applyFleetDeepLinkFilter(filter, { render = true } = {}) {
     document.addEventListener('click', function(e) {
       if (!moreMenu.contains(e.target) && e.target !== moreBtn) {
         moreMenu.classList.remove('open');
+        moreBtn.setAttribute('aria-expanded', 'false');
       }
     });
   }
