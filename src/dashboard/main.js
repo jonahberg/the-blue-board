@@ -3147,7 +3147,7 @@ function updateAnalytics() {
   let matrixMax = 1;
   hubCodes.forEach(o => hubCodes.forEach(d => { if (matrix[o][d] > matrixMax) matrixMax = matrix[o][d]; }));
 
-  let mHtml = `<table style="border-collapse:collapse;width:100%;font-family:var(--mono);font-size:10px">`;
+  let mHtml = `<table style="border-collapse:collapse;width:100%;font-family:var(--font-mono);font-size:10px">`;
   mHtml += `<thead><tr><th style="padding:4px 6px;color:var(--ua-muted);font-size:9px">FROM \\ TO</th>`;
   hubCodes.forEach(d => { mHtml += `<th style="padding:4px 6px;color:var(--ua-accent);text-align:center">${d}</th>`; });
   mHtml += `<th style="padding:4px 6px;color:var(--ua-muted);text-align:center;font-size:9px">TOTAL</th></tr></thead><tbody>`;
@@ -4011,7 +4011,7 @@ function renderScheduleTable() {
       <td style="font-weight:600;color:var(--ua-accent)">${escapeHtml(ident)}</td>
       <td>${routeStr}</td>
       <td title="${escapeHtml(acText)}">${escapeHtml(acCode)}${acShort ? `<div style="font-size:9px;color:var(--ua-muted)">${escapeHtml(acShort)}</div>` : ''}${equipBadge}</td>
-      <td style="font-family:var(--mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}">${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
+      <td style="font-family:var(--font-mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}">${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
       <td>${escapeHtml(gate)}</td>
       <td><span class="sched-status ${escapeHtml(status.cls)}">${escapeHtml(status.text)}</span>${faaContext}</td>
       <td>${riskCell}</td>
@@ -6665,20 +6665,20 @@ function lookupFR24Flight(query) {
     document.body.appendChild(modal);
   }
   modal.style.display = 'flex';
-  modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--mono);position:relative"><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>Looking up ' + escapeHtml(q) + '...</div></div>';
+  modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>Looking up ' + escapeHtml(q) + '...</div></div>';
 
   fetch('/api/fr24-flight?flight=' + encodeURIComponent(q))
     .then(r => r.ok ? r.json() : r.json().catch(() => ({})).then(b => Promise.reject(new Error(b.error || 'HTTP ' + r.status))))
     .then(data => {
       if (!data.success || !data.flight) {
-        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
+        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
         return;
       }
       renderFR24Modal(data.flight, data.source, data.cached);
     })
     .catch(err => {
       console.error('FR24 lookup error:', err);
-      modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
+      modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
     });
 }
 
@@ -6717,7 +6717,7 @@ function renderFR24Modal(f, source, cached) {
     catch(e) { return String(t); }
   }
 
-  var html = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:0;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--mono);position:relative;overflow:hidden">';
+  var html = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:0;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative;overflow:hidden">';
   // Header
   html += '<div style="background:linear-gradient(135deg,rgba(0,93,170,.3),rgba(0,50,100,.2));padding:16px 20px;border-bottom:1px solid var(--ua-border)">';
   html += '<button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button>';
