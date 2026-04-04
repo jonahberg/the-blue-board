@@ -191,7 +191,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .mf-journey-seg::before{content:'';position:absolute;left:-5px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:var(--ua-border)}
 .mf-journey-seg.current{border-left-color:var(--ua-blue)}.mf-journey-seg.current::before{background:var(--ua-blue)}
 .mf-journey-seg.landed::before{background:#22c55e}
-.mf-journey-seg.airborne::before{background:#3b82f6}
+.mf-journey-seg.airborne::before{background:var(--ua-accent)}
 .mf-journey-flt{font-weight:700;color:var(--ua-accent);min-width:48px;font-family:var(--font-mono);font-size:10px}
 .mf-journey-route{color:var(--ua-text);min-width:70px;font-size:10px}
 .mf-journey-delay{font-weight:600;font-size:10px;font-family:var(--font-mono)}
@@ -655,7 +655,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 #sched-table tr:hover{background:rgba(0,93,170,.06)}
 .sched-status{display:inline-block;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:.3px}
 .sched-status.on-time,.sched-status.scheduled,.sched-status.estimated{background:rgba(34,197,94,.12);color:var(--ua-green)}
-.sched-status.landed{background:rgba(59,130,246,.12);color:#3b82f6}
+.sched-status.landed{background:var(--ua-blue-soft);color:var(--ua-accent)}
 .sched-status.departed,.sched-status.enroute{background:rgba(14,165,233,.12);color:#0ea5e9}
 .sched-status.delayed{background:rgba(245,158,11,.15);color:var(--ua-yellow)}
 .sched-status.canceled,.sched-status.diverted{background:rgba(239,68,68,.15);color:var(--ua-red)}
