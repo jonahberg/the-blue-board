@@ -670,7 +670,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 /* Onboarding Overlay */
 #onboarding-overlay{position:fixed;inset:0;background:rgba(10,14,20,.85);z-index:10000;display:flex;align-items:center;justify-content:center;opacity:0;animation:obFadeIn .4s ease forwards;backdrop-filter:blur(4px);pointer-events:none}
 #onboarding-overlay.ob-hidden{opacity:0;pointer-events:none;transition:opacity .3s ease}
-#onboarding-card{pointer-events:auto;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:12px;max-width:480px;width:90%;padding:32px;text-align:center;box-shadow:0 0 60px rgba(0,93,170,.15)}
+#onboarding-card{pointer-events:auto;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;max-width:480px;width:90%;padding:32px;text-align:center;box-shadow:0 0 60px rgba(0,93,170,.15)}
 #onboarding-card h2{font-size:20px;color:#fff;margin-bottom:6px;letter-spacing:.5px}
 .onboarding-subtitle{color:var(--ua-muted);font-size:12px;margin-bottom:24px}
 .onboarding-features{text-align:left;display:flex;flex-direction:column;gap:12px;margin-bottom:24px}

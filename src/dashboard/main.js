@@ -6189,7 +6189,7 @@ function hideDisclaimer() {
     backdrop.addEventListener('click', function(e) { if (e.target === backdrop) closeWaitlistModal(); });
 
     var card = document.createElement('div');
-    card.style.cssText = 'background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:12px;max-width:480px;width:100%;color:var(--ua-text);font-family:var(--font-ui);position:relative;overflow:hidden;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.6)';
+    card.style.cssText = 'background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;max-width:480px;width:100%;color:var(--ua-text);font-family:var(--font-ui);position:relative;overflow:hidden;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.6)';
 
     // Close button
     var closeBtn = document.createElement('button');
@@ -6678,20 +6678,20 @@ function lookupFR24Flight(query) {
     document.body.appendChild(modal);
   }
   modal.style.display = 'flex';
-  modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>Looking up ' + escapeHtml(q) + '...</div></div>';
+  modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>Looking up ' + escapeHtml(q) + '...</div></div>';
 
   fetch('/api/fr24-flight?flight=' + encodeURIComponent(q))
     .then(r => r.ok ? r.json() : r.json().catch(() => ({})).then(b => Promise.reject(new Error(b.error || 'HTTP ' + r.status))))
     .then(data => {
       if (!data.success || !data.flight) {
-        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
+        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
         return;
       }
       renderFR24Modal(data.flight, data.source, data.cached);
     })
     .catch(err => {
       console.error('FR24 lookup error:', err);
-      modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
+      modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
     });
 }
 
@@ -6730,7 +6730,7 @@ function renderFR24Modal(f, source, cached) {
     catch(e) { return String(t); }
   }
 
-  var html = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:0;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative;overflow:hidden">';
+  var html = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:0;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative;overflow:hidden">';
   // Header
   html += '<div style="background:linear-gradient(135deg,rgba(0,93,170,.3),rgba(0,50,100,.2));padding:16px 20px;border-bottom:1px solid var(--ua-border)">';
   html += '<button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button>';
