@@ -3882,10 +3882,12 @@ function renderScheduleTable() {
   const hub = schedCurrentHub;
   updateSchedTzFooter();
 
-  // Update sort indicators
+  // Update sort indicators and aria-sort
   document.querySelectorAll('#sched-table th[data-sort]').forEach(th => {
-    const arrow = th.dataset.sort === schedSortCol ? (schedSortAsc ? ' ↑' : ' ↓') : ' ↕';
+    const isActive = th.dataset.sort === schedSortCol;
+    const arrow = isActive ? (schedSortAsc ? ' ↑' : ' ↓') : ' ↕';
     th.textContent = th.textContent.replace(/\s[↑↓↕]$/, '') + arrow;
+    th.setAttribute('aria-sort', isActive ? (schedSortAsc ? 'ascending' : 'descending') : 'none');
   });
 
   if (sorted.length === 0) {
@@ -5623,7 +5625,9 @@ function toggleSidebarFilters() {
   const btn = document.getElementById('sidebar-filters-toggle');
   if (!panel || !btn) return;
   panel.classList.toggle('show');
-  btn.textContent = panel.classList.contains('show') ? 'Filters ▴' : 'Filters ▾';
+  const expanded = panel.classList.contains('show');
+  btn.textContent = expanded ? 'Filters ▴' : 'Filters ▾';
+  btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 }
 
 function getActiveAdvFilterCount() {
