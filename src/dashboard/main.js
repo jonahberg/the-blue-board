@@ -4815,6 +4815,8 @@ function updateWatchBadge() {
 function toggleWatchPanel() {
   const panel = document.getElementById('watch-panel');
   panel.classList.toggle('show');
+  const btn = document.getElementById('watch-header-btn');
+  if (btn) btn.setAttribute('aria-expanded', panel.classList.contains('show') ? 'true' : 'false');
   renderWatchPanel();
 }
 
@@ -5919,7 +5921,7 @@ document.addEventListener('click', function(e) {
 document.addEventListener('click', function(e) {
   const wp = document.getElementById('watch-panel');
   const wb = document.getElementById('watch-header-btn');
-  if (wp && wb && !wp.contains(e.target) && !wb.contains(e.target)) wp.classList.remove('show');
+  if (wp && wb && !wp.contains(e.target) && !wb.contains(e.target)) { wp.classList.remove('show'); wb.setAttribute('aria-expanded', 'false'); }
 });
 
 document.addEventListener('click', function(e) {
