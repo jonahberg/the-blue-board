@@ -91,7 +91,7 @@ airportSchemaObj.url = airport.url;
 
 <link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin fetchpriority="low">
 
 {variant === 'full' ? (
 <style is:inline>
@@ -171,6 +171,7 @@ a:hover{text-decoration:underline}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
 .stat-card .value,.iata{font-family:var(--font-mono)}
 .jump-nav a:active,.hub-nav a:active,.live-panel .cta:active{transform:scale(.97)}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}}
 </style>
 ) : (
 <style is:inline>
@@ -214,6 +215,7 @@ nav.jump-nav a:hover{border-color:var(--ua-accent);color:var(--ua-accent);text-d
 }
 .stat-card .value{font-family:var(--font-mono)}
 .hub-nav a:active,.jump-nav a:active{transform:scale(.97)}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}}
 </style>
 )}
 </head>
