@@ -94,6 +94,7 @@ const faqEntries = getAllFaqEntries();
   .tsa-live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #22C55E; margin-right: 6px; animation: tsa-pulse 2s ease-in-out infinite; }
   @keyframes tsa-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
   .tsa-stale-dot { background: #EAB308; animation: none; }
+  @media (prefers-reduced-motion: reduce) { .tsa-live-dot { animation: none; } }
 
   .tsa-checkpoint-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
   .tsa-checkpoint-table th { font-family: var(--font-mono); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ua-muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--ua-border); }
