@@ -935,11 +935,11 @@ function drawHubs() {
   });
 }
 
-function toggleHubs() { showHubs = !showHubs; drawHubs(); document.getElementById('btn-hubs').classList.toggle('active'); }
-function toggleLonghaul() { showLonghaul = !showLonghaul; document.getElementById('btn-longhaul').classList.toggle('active'); updateMarkers(); }
+function toggleHubs() { showHubs = !showHubs; drawHubs(); const el = document.getElementById('btn-hubs'); el.classList.toggle('active'); el.setAttribute('aria-pressed', String(showHubs)); }
+function toggleLonghaul() { showLonghaul = !showLonghaul; const el = document.getElementById('btn-longhaul'); el.classList.toggle('active'); el.setAttribute('aria-pressed', String(showLonghaul)); updateMarkers(); }
 function toggleWeather() {
   showWeather = !showWeather;
-  document.getElementById('btn-wx').classList.toggle('active');
+  const wxBtn = document.getElementById('btn-wx'); wxBtn.classList.toggle('active'); wxBtn.setAttribute('aria-pressed', String(showWeather));
   if (showWeather && !wxLayer) {
     wxLayer = L.tileLayer('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png', {
       opacity: 0.5, maxZoom: 18

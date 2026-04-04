@@ -271,12 +271,12 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <div class="map-area">
       <div id="map"></div>
       <div id="controls">
-        <div id="ctrl-panel">
-          <button class="ctrl-btn" data-action="toggle-hubs" id="btn-hubs">🏢 Hubs</button>
-          <button class="ctrl-btn" data-action="toggle-longhaul" id="btn-longhaul">🌍 Long-haul</button>
-          <button class="ctrl-btn" data-action="toggle-weather" id="btn-wx">🌧 Weather</button>
-          <button class="ctrl-btn" data-action="view-pacific" id="btn-pacific">🌏 Pacific</button>
-          <button class="ctrl-btn" data-action="refresh-flights" id="btn-refresh">🔄 Refresh</button>
+        <div id="ctrl-panel" role="toolbar" aria-label="Map controls">
+          <button class="ctrl-btn" data-action="toggle-hubs" id="btn-hubs" aria-pressed="false"><span aria-hidden="true">🏢</span> Hubs</button>
+          <button class="ctrl-btn" data-action="toggle-longhaul" id="btn-longhaul" aria-pressed="false"><span aria-hidden="true">🌍</span> Long-haul</button>
+          <button class="ctrl-btn" data-action="toggle-weather" id="btn-wx" aria-pressed="false"><span aria-hidden="true">🌧</span> Weather</button>
+          <button class="ctrl-btn" data-action="view-pacific" id="btn-pacific" aria-label="Pan to Pacific view"><span aria-hidden="true">🌏</span> Pacific</button>
+          <button class="ctrl-btn" data-action="refresh-flights" id="btn-refresh" aria-label="Refresh flight data"><span aria-hidden="true">🔄</span> Refresh</button>
         </div>
         <button id="mobile-ctrl-toggle" aria-label="Map layers"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></button>
       </div>
