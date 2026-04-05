@@ -24,7 +24,7 @@ let warnedMissingConfig = false;
 let warnedInitFailure = false;
 let supabaseClientPromise: Promise<any | null> | null = null;
 
-function getSnapshotCompleteness(data: any): number {
+export function getSnapshotCompleteness(data: any): number {
   const completeness = Number(data?.meta?.completeness);
   if (Number.isFinite(completeness)) {
     return Math.max(0, Math.min(1, completeness));
@@ -32,13 +32,13 @@ function getSnapshotCompleteness(data: any): number {
   return data?.partial ? 0 : 1;
 }
 
-function shouldPersistPartialSnapshot(data: any): boolean {
+export function shouldPersistPartialSnapshot(data: any): boolean {
   if (!data?.partial) return false;
   const total = Number(data?.total || 0);
   return total > 0 && getSnapshotCompleteness(data) >= MIN_PARTIAL_SNAPSHOT_COMPLETENESS;
 }
 
-function isSnapshotCandidateBetter(candidate: any, existing: any): boolean {
+export function isSnapshotCandidateBetter(candidate: any, existing: any): boolean {
   if (!existing) return true;
   if (!candidate?.partial) return true;
   if (!existing?.partial) return false;

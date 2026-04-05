@@ -53,7 +53,7 @@ const cabinShortLabel: Record<string, string> = {
 };
 ---
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -195,7 +195,7 @@ a{color:var(--ua-accent);text-decoration:none}a:hover{text-decoration:underline}
 
 .header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(90deg,var(--ua-dark),#0d1520);border-bottom:1px solid rgba(0,93,170,.3)}
 .header h1{font-size:16px;font-weight:700;color:#fff;letter-spacing:1.5px}
-.header h1 .ua{color:var(--ua-blue)}
+.header h1 .ua{color:var(--ua-accent)}
 .header a{font-size:11px;color:var(--ua-accent)}
 .breadcrumb{font-size:10px;color:var(--ua-muted);margin-bottom:20px}
 .breadcrumb a{color:var(--ua-accent)}
@@ -212,7 +212,7 @@ a{color:var(--ua-accent);text-decoration:none}a:hover{text-decoration:underline}
 
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}
 .stat-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:14px;text-align:center}
-.stat-card .val{font-size:26px;font-weight:700;color:var(--ua-blue);font-family:var(--font-mono)}
+.stat-card .val{font-size:26px;font-weight:700;color:var(--ua-accent);font-family:var(--font-mono)}
 .stat-card .label{font-size:9px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
 
 h3{font-size:14px;font-weight:600;color:var(--ua-accent);margin:28px 0 12px;text-transform:uppercase;letter-spacing:1px}
@@ -228,9 +228,9 @@ p{margin-bottom:12px}
 
 /* Type Grid */
 .type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:16px}
-.type-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:16px;transition:border-color .2s,transform .2s}
+.type-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:16px;transition:border-color .2s,transform .2s}
 .type-card:hover{border-color:var(--ua-blue);transform:translateY(-2px)}
-.type-card .type-count{font-size:28px;font-weight:700;color:var(--ua-blue);font-family:var(--font-mono);letter-spacing:1px}
+.type-card .type-count{font-size:28px;font-weight:700;color:var(--ua-accent);font-family:var(--font-mono);letter-spacing:1px}
 .type-card .type-name{font-size:13px;font-weight:600;margin:4px 0 2px}
 .type-card .type-info{font-size:10px;color:var(--ua-muted);margin-bottom:10px}
 .type-card .type-badge{display:inline-block;font-size:9px;padding:2px 6px;border-radius:3px;font-weight:600;margin-right:4px}
@@ -256,7 +256,7 @@ p{margin-bottom:12px}
 /* Fleet grid */
 .fleet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:16px 0}
 .fleet-item{background:rgba(15,23,41,.8);border:1px solid var(--ua-border);border-radius:6px;padding:10px;text-align:center}
-.fleet-item .count{font-size:22px;font-weight:700;color:var(--ua-blue);font-family:var(--font-mono)}
+.fleet-item .count{font-size:22px;font-weight:700;color:var(--ua-accent);font-family:var(--font-mono)}
 .fleet-item .type{font-size:10px;color:var(--ua-muted);margin-top:2px}
 
 /* Family table */
@@ -267,7 +267,7 @@ p{margin-bottom:12px}
 
 /* FAQ */
 .faq-item{margin-bottom:16px}
-.faq-q{font-size:13px;font-weight:700;color:#fff;margin-bottom:6px}
+.faq-q{font-size:13px;font-weight:700;color:var(--ua-text);margin-bottom:6px}
 .faq-a{font-size:12px;color:var(--ua-text);line-height:1.7}
 
 /* Hub links */

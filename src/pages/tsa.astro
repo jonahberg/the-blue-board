@@ -6,7 +6,7 @@ import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
 const faqEntries = getAllFaqEntries();
 ---
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -72,7 +72,7 @@ const faqEntries = getAllFaqEntries();
 
   .tsa-jump-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 32px; }
   .tsa-jump-pill { font-family: var(--font-mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ua-muted); background: var(--ua-panel); border: 1px solid var(--ua-border); border-radius: 20px; padding: 6px 14px; text-decoration: none; transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 150ms ease; }
-  .tsa-jump-pill:hover { color: var(--ua-blue); border-color: var(--ua-blue); background: rgba(0,93,170,0.08); transform: translateY(-1px); }
+  .tsa-jump-pill:hover { color: #fff; border-color: var(--ua-blue); background: var(--ua-blue); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,93,170,.3); }
 
   .tsa-hub-card { background: linear-gradient(180deg, var(--ua-panel) 0%, rgba(17,26,39,0.6) 100%); border: 1px solid var(--ua-border); border-radius: 6px; padding: 20px; margin-bottom: 24px; }
   .tsa-hub-label { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ua-amber); margin-bottom: 6px; }
@@ -94,6 +94,7 @@ const faqEntries = getAllFaqEntries();
   .tsa-live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #22C55E; margin-right: 6px; animation: tsa-pulse 2s ease-in-out infinite; }
   @keyframes tsa-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
   .tsa-stale-dot { background: #EAB308; animation: none; }
+  @media (prefers-reduced-motion: reduce) { .tsa-live-dot { animation: none; } }
 
   .tsa-checkpoint-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
   .tsa-checkpoint-table th { font-family: var(--font-mono); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ua-muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--ua-border); }

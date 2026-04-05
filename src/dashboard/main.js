@@ -533,11 +533,13 @@ function applyFleetDeepLinkFilter(filter, { render = true } = {}) {
     moreBtn.addEventListener('click', function(e) {
       e.stopPropagation();
       moreMenu.classList.toggle('open');
+      moreBtn.setAttribute('aria-expanded', moreMenu.classList.contains('open') ? 'true' : 'false');
     });
     // More menu items
     moreMenu.querySelectorAll('button[data-tab]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         moreMenu.classList.remove('open');
+        moreBtn.setAttribute('aria-expanded', 'false');
         document.querySelectorAll('#mobile-bottom-nav button').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
         moreBtn.classList.add('active');
         moreBtn.setAttribute('aria-selected', 'true');
@@ -548,6 +550,7 @@ function applyFleetDeepLinkFilter(filter, { render = true } = {}) {
     document.addEventListener('click', function(e) {
       if (!moreMenu.contains(e.target) && e.target !== moreBtn) {
         moreMenu.classList.remove('open');
+        moreBtn.setAttribute('aria-expanded', 'false');
       }
     });
   }
@@ -2790,7 +2793,7 @@ async function initWeatherTab() {
 
   // Show loading skeletons for hub cards immediately
   const hubCardsEl = document.getElementById('hub-cards');
-  hubCardsEl.innerHTML = hubs.map(h => `<div class="hub-card" style="border-top:3px solid #334155;opacity:0.5"><div class="hub-card-top"><span class="hub-card-code">${escapeHtml(h)}</span><span class="cat-badge" style="background:#334155;color:#94a3b8">…</span></div><div class="hub-card-name">${escapeHtml(HUB_NAMES[h]||h)}</div><div style="padding:20px;text-align:center;color:var(--ua-muted);font-size:10px">Loading…</div></div>`).join('');
+  hubCardsEl.innerHTML = hubs.map(h => `<div class="hub-card" style="border-top:3px solid #334155;opacity:0.5"><div class="hub-card-top"><span class="hub-card-code">${escapeHtml(h)}</span><span class="cat-badge" style="background:#334155;color:var(--ua-muted)">…</span></div><div class="hub-card-name">${escapeHtml(HUB_NAMES[h]||h)}</div><div style="padding:20px;text-align:center;color:var(--ua-muted);font-size:10px">Loading…</div></div>`).join('');
 
   // Initialize radar map IMMEDIATELY — don't wait for data fetches
   const basemapTileOptions = getBasemapTileOptions();
@@ -2896,7 +2899,7 @@ async function initWeatherTab() {
     } else if (ops.level === 'warning') {
       faaLine = `<div class="hub-faa delay">⚠ Weather Advisory — ${ops.reasons.join(', ')}</div>`;
     } else if (ops.level === 'caution') {
-      faaLine = `<div class="hub-faa" style="color:#eab308">⚠ Weather Caution — ${ops.reasons.join(', ')}</div>`;
+      faaLine = `<div class="hub-faa" style="color:var(--ua-yellow)">⚠ Weather Caution — ${ops.reasons.join(', ')}</div>`;
     } else {
       faaLine = `<div class="hub-faa normal">✓ Normal Operations</div>`;
     }
@@ -3879,10 +3882,12 @@ function renderScheduleTable() {
   const hub = schedCurrentHub;
   updateSchedTzFooter();
 
-  // Update sort indicators
+  // Update sort indicators and aria-sort
   document.querySelectorAll('#sched-table th[data-sort]').forEach(th => {
-    const arrow = th.dataset.sort === schedSortCol ? (schedSortAsc ? ' ↑' : ' ↓') : ' ↕';
+    const isActive = th.dataset.sort === schedSortCol;
+    const arrow = isActive ? (schedSortAsc ? ' ↑' : ' ↓') : ' ↕';
     th.textContent = th.textContent.replace(/\s[↑↓↕]$/, '') + arrow;
+    th.setAttribute('aria-sort', isActive ? (schedSortAsc ? 'ascending' : 'descending') : 'none');
   });
 
   if (sorted.length === 0) {
@@ -3901,7 +3906,7 @@ function renderScheduleTable() {
       const diff = Math.round((actualTime - schedTime) / 60);
       const actualStr = formatSchedTime(actualTime, hub);
       if (diff > 5) timeExtra = `<div class="sched-time-actual">→ ${actualStr} (+${diff}m)</div>`;
-      else if (diff < -5) timeExtra = `<div class="sched-time-actual" style="color:#22c55e">→ ${actualStr} (${diff}m)</div>`;
+      else if (diff < -5) timeExtra = `<div class="sched-time-actual" style="color:var(--ua-green)">→ ${actualStr} (${diff}m)</div>`;
     }
 
     const dest = fl.airport?.destination;
@@ -3969,7 +3974,7 @@ function renderScheduleTable() {
       const hasUp = impacts.some(i => i.cls === 'upgrade');
       const icon = hasDown ? '🔴' : hasUp ? '🟢' : '⚠️';
       const regLink = reg !== '—' ? ` <span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}" style="font-size:8px">${escapeHtml(reg)}</span>` : '';
-      equipBadge = `<div class="equip-change-badge" style="background:${hasDown ? 'rgba(239,68,68,.15);color:#ef4444' : hasUp ? 'rgba(34,197,94,.15);color:#22c55e' : ''}">${icon} ${escapeHtml(oldType)} → ${escapeHtml(newType)}${regLink}</div>`;
+      equipBadge = `<div class="equip-change-badge" style="background:${hasDown ? 'rgba(239,68,68,.15);color:var(--ua-red)' : hasUp ? 'rgba(34,197,94,.15);color:var(--ua-green)' : ''}">${icon} ${escapeHtml(oldType)} → ${escapeHtml(newType)}${regLink}</div>`;
       if (impacts.length) {
         equipBadge += `<div class="equip-swap-detail">`;
         impacts.forEach(i => {
@@ -4063,7 +4068,7 @@ function renderScheduleStats(filtered) {
 
   document.getElementById('sched-stats').innerHTML = `
     <div class="metric-card">
-      <span class="metric-val" style="color:var(--ua-blue)">${showing}</span>
+      <span class="metric-val">${showing}</span>
       <span class="metric-label">UA ${dirLabel} · ${dayLabel}</span>
     </div>
     <div class="metric-card">
@@ -4071,15 +4076,15 @@ function renderScheduleStats(filtered) {
       <span class="metric-label">On-Time (${totalOperated} opr)</span>
     </div>
     <div class="metric-card">
-      <span class="metric-val" style="color:#22c55e">${depOnTime}</span>
+      <span class="metric-val" style="color:var(--ua-green)">${depOnTime}</span>
       <span class="metric-label">On Time</span>
     </div>
     <div class="metric-card">
-      <span class="metric-val" style="color:#f59e0b">${depDelayed}</span>
+      <span class="metric-val" style="color:var(--ua-yellow)">${depDelayed}</span>
       <span class="metric-label">Late</span>
     </div>
     <div class="metric-card">
-      <span class="metric-val" style="color:#94a3b8">${scheduled}</span>
+      <span class="metric-val" style="color:var(--ua-muted)">${scheduled}</span>
       <span class="metric-label">Upcoming</span>
     </div>
   `;
@@ -4342,8 +4347,8 @@ function updateEquipChangeSummary() {
       else if (impacts.some(i => i.cls === 'upgrade')) ups++;
     });
     let detail = '';
-    if (downs) detail += ` · <span style="color:#ef4444">${downs} downgrade${downs > 1 ? 's' : ''}</span>`;
-    if (ups) detail += ` · <span style="color:#22c55e">${ups} upgrade${ups > 1 ? 's' : ''}</span>`;
+    if (downs) detail += ` · <span style="color:var(--ua-red)">${downs} downgrade${downs > 1 ? 's' : ''}</span>`;
+    if (ups) detail += ` · <span style="color:var(--ua-green)">${ups} upgrade${ups > 1 ? 's' : ''}</span>`;
     el.innerHTML = `⚠️ ${equipmentChanges.length} equipment swap${equipmentChanges.length > 1 ? 's' : ''} detected${detail}`;
   } else {
     el.style.display = 'none';
@@ -4603,15 +4608,15 @@ function updateIrops() {
   let html = '<div class="irops-bar">';
   html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${score}</span><span class="irops-bar-label">${scoreLabel}</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#ef4444">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#f59e0b">${delayed30}</span><span class="irops-bar-label">&gt;30m</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-yellow)">${delayed30}</span><span class="irops-bar-label">&gt;30m</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#ef4444">${delayed60}</span><span class="irops-bar-label">&gt;60m</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${delayed60}</span><span class="irops-bar-label">&gt;60m</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#c026d3">${diversions}</span><span class="irops-bar-label">Diversions</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-blue)">${totalFlights}</span><span class="irops-bar-label">Total Flights</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-accent)">${totalFlights}</span><span class="irops-bar-label">Total Flights</span></span>`;
   html += '</div>';
 
   // FAA alerts — separate line below bar (escapeHtml for safety)
@@ -4694,15 +4699,15 @@ function renderIropsFromAPI(data) {
   let html = '<div class="irops-bar">';
   html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${score}</span><span class="irops-bar-label">${scoreLabel}</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#ef4444">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#f59e0b">${data.delayed30}</span><span class="irops-bar-label">&gt;30m</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-yellow)">${data.delayed30}</span><span class="irops-bar-label">&gt;30m</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#ef4444">${data.delayed60}</span><span class="irops-bar-label">&gt;60m</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.delayed60}</span><span class="irops-bar-label">&gt;60m</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:#c026d3">${data.diversions}</span><span class="irops-bar-label">Diversions</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-blue)">${data.totalFlights}</span><span class="irops-bar-label">Total Flights</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-accent)">${data.totalFlights}</span><span class="irops-bar-label">Total Flights</span></span>`;
   html += '</div>';
 
   content.innerHTML = html;
@@ -4810,6 +4815,8 @@ function updateWatchBadge() {
 function toggleWatchPanel() {
   const panel = document.getElementById('watch-panel');
   panel.classList.toggle('show');
+  const btn = document.getElementById('watch-header-btn');
+  if (btn) btn.setAttribute('aria-expanded', panel.classList.contains('show') ? 'true' : 'false');
   renderWatchPanel();
 }
 
@@ -5091,7 +5098,7 @@ function buildMyFlightCard(watched, td) {
 
     switch (resolvedStatus) {
       case 'cancelled':
-        statusHtml = '<span class="mf-status" style="background:rgba(239,68,68,.2);color:#ef4444">CANCELLED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(239,68,68,.2);color:var(--ua-red)">CANCELLED</span>';
         countdownClass = 'landed';
         break;
       case 'diverted':
@@ -5099,12 +5106,12 @@ function buildMyFlightCard(watched, td) {
         countdownClass = 'landed';
         break;
       case 'landed':
-        statusHtml = '<span class="mf-status" style="background:rgba(34,197,94,.2);color:#22c55e">LANDED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(34,197,94,.2);color:var(--ua-green)">LANDED</span>';
         countdownHtml = 'Landed';
         countdownClass = 'landed';
         break;
       case 'en-route':
-        statusHtml = '<span class="mf-status" style="background:rgba(59,130,246,.2);color:#3b82f6">EN ROUTE</span>';
+        statusHtml = '<span class="mf-status" style="background:var(--ua-blue-soft);color:var(--ua-accent)">EN ROUTE</span>';
         if (arrTime) {
           const eta = new Date(arrTime);
           const diff = eta - Date.now();
@@ -5113,7 +5120,7 @@ function buildMyFlightCard(watched, td) {
         countdownClass = 'departed';
         break;
       case 'departed':
-        statusHtml = '<span class="mf-status" style="background:rgba(34,197,94,.2);color:#22c55e">DEPARTED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(34,197,94,.2);color:var(--ua-green)">DEPARTED</span>';
         countdownClass = 'departed';
         if (arrTime) {
           const eta = new Date(arrTime);
@@ -5122,7 +5129,7 @@ function buildMyFlightCard(watched, td) {
         }
         break;
       case 'delayed':
-        statusHtml = '<span class="mf-status" style="background:rgba(245,158,11,.2);color:#f59e0b">DELAYED</span>';
+        statusHtml = '<span class="mf-status" style="background:rgba(245,158,11,.2);color:var(--ua-yellow)">DELAYED</span>';
         if (depTime) {
           const dep = new Date(depTime);
           const diff = dep - Date.now();
@@ -5517,13 +5524,13 @@ async function checkManualConnection() {
       fetch('/api/flight-times?flight=' + encodeURIComponent(normalize(outFlt))).then(r => r.ok ? r.json() : null)
     ]);
     if (!r1 || !r2 || r1.success === false || r2.success === false) {
-      resultEl.innerHTML = '<div style="color:#ef4444;font-size:11px">Could not find one or both flights. Check the flight numbers.</div>';
+      resultEl.innerHTML = '<div style="color:var(--ua-red);font-size:11px">Could not find one or both flights. Check the flight numbers.</div>';
       return;
     }
     const arrHub = r1.destination?.iata;
     const depHub = r2.origin?.iata;
     if (arrHub !== depHub) {
-      resultEl.innerHTML = `<div style="color:#ef4444;font-size:11px">These flights don't connect — ${escapeHtml(normalize(inFlt))} arrives at ${escapeHtml(arrHub || '?')}, ${escapeHtml(normalize(outFlt))} departs from ${escapeHtml(depHub || '?')}.</div>`;
+      resultEl.innerHTML = `<div style="color:var(--ua-red);font-size:11px">These flights don't connect — ${escapeHtml(normalize(inFlt))} arrives at ${escapeHtml(arrHub || '?')}, ${escapeHtml(normalize(outFlt))} departs from ${escapeHtml(depHub || '?')}.</div>`;
       return;
     }
     const conn = {
@@ -5534,7 +5541,7 @@ async function checkManualConnection() {
     const risk = computeConnectionRisk(conn);
     resultEl.innerHTML = renderConnectionRiskCard(conn, risk);
   } catch(e) {
-    resultEl.innerHTML = '<div style="color:#ef4444;font-size:11px">Error checking connection. Try again.</div>';
+    resultEl.innerHTML = '<div style="color:var(--ua-red);font-size:11px">Error checking connection. Try again.</div>';
   }
 }
 
@@ -5620,7 +5627,9 @@ function toggleSidebarFilters() {
   const btn = document.getElementById('sidebar-filters-toggle');
   if (!panel || !btn) return;
   panel.classList.toggle('show');
-  btn.textContent = panel.classList.contains('show') ? 'Filters ▴' : 'Filters ▾';
+  const expanded = panel.classList.contains('show');
+  btn.textContent = expanded ? 'Filters ▴' : 'Filters ▾';
+  btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 }
 
 function getActiveAdvFilterCount() {
@@ -5655,6 +5664,7 @@ function toggleScheduleMoreFilters() {
   if (!panel || !btn) return;
   const isHidden = panel.style.display === 'none' || panel.style.display === '';
   panel.style.display = isHidden ? 'flex' : 'none';
+  btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
   updateAdvFilterBtnText();
 }
 
@@ -5912,7 +5922,7 @@ document.addEventListener('click', function(e) {
 document.addEventListener('click', function(e) {
   const wp = document.getElementById('watch-panel');
   const wb = document.getElementById('watch-header-btn');
-  if (wp && wb && !wp.contains(e.target) && !wb.contains(e.target)) wp.classList.remove('show');
+  if (wp && wb && !wp.contains(e.target) && !wb.contains(e.target)) { wp.classList.remove('show'); wb.setAttribute('aria-expanded', 'false'); }
 });
 
 document.addEventListener('click', function(e) {
@@ -6179,7 +6189,7 @@ function hideDisclaimer() {
     backdrop.addEventListener('click', function(e) { if (e.target === backdrop) closeWaitlistModal(); });
 
     var card = document.createElement('div');
-    card.style.cssText = 'background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:12px;max-width:480px;width:100%;color:var(--ua-text);font-family:var(--font-ui);position:relative;overflow:hidden;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.6)';
+    card.style.cssText = 'background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;max-width:480px;width:100%;color:var(--ua-text);font-family:var(--font-ui);position:relative;overflow:hidden;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.6)';
 
     // Close button
     var closeBtn = document.createElement('button');
@@ -6403,6 +6413,9 @@ function showDelayExplanation(ctx) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'delay-explain-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'AI delay risk explanation');
     modal.style.cssText = 'position:fixed;inset:0;z-index:10001;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px)';
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
     document.addEventListener('keydown', function(e) {
@@ -6665,20 +6678,20 @@ function lookupFR24Flight(query) {
     document.body.appendChild(modal);
   }
   modal.style.display = 'flex';
-  modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>Looking up ' + escapeHtml(q) + '...</div></div>';
+  modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>Looking up ' + escapeHtml(q) + '...</div></div>';
 
   fetch('/api/fr24-flight?flight=' + encodeURIComponent(q))
     .then(r => r.ok ? r.json() : r.json().catch(() => ({})).then(b => Promise.reject(new Error(b.error || 'HTTP ' + r.status))))
     .then(data => {
       if (!data.success || !data.flight) {
-        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
+        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
         return;
       }
       renderFR24Modal(data.flight, data.source, data.cached);
     })
     .catch(err => {
       console.error('FR24 lookup error:', err);
-      modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
+      modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
     });
 }
 
@@ -6717,7 +6730,7 @@ function renderFR24Modal(f, source, cached) {
     catch(e) { return String(t); }
   }
 
-  var html = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:0;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative;overflow:hidden">';
+  var html = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:0;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative;overflow:hidden">';
   // Header
   html += '<div style="background:linear-gradient(135deg,rgba(0,93,170,.3),rgba(0,50,100,.2));padding:16px 20px;border-bottom:1px solid var(--ua-border)">';
   html += '<button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button>';

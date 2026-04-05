@@ -4,6 +4,46 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] - 2026-04-04
+
+### Added
+- ARIA `aria-expanded` on sidebar filters toggle, watch panel, schedule advanced filters, and mobile more menu.
+- ARIA `role=marquee` on ticker, `role=status` on stats bar, `aria-sort` on schedule table headers.
+- ARIA dialog role on delay explain modal, `role` and `aria-label` on radar map container.
+- Hub health tooltip now keyboard accessible.
+- `scope=col` on all data table headers (fleet, airborne, starlink).
+- `aria-label` on My Flights search, connection search inputs.
+- `prefers-reduced-motion` on TSA page pulse animation and standalone Astro pages.
+- `text-wrap:balance` on headings across hubs, news, fleet, TSA, and onboarding.
+- `focus-visible` states on fleet, hubs, news, TSA, and 404 pages.
+- `color-scheme:dark` meta on standalone pages.
+- 8 new test suites: aircraft-history (19), delay-explain (14), starlink-data (6), cron endpoints (13), fleet-utils (36), buildMetadata (14), schedule snapshots (19), schedule-filters + flight-popup (expanded).
+- 131 new passing tests (total: 495).
+
+### Changed
+- `font-display:optional` reverted to `font-display:swap` for JetBrains Mono to prevent permanent fallback on slow connections.
+- Design system token migration: replaced 23+ hardcoded status and accent colors with CSS custom properties throughout `main.js`, `style.css`, and Astro pages.
+- Border-radius values aligned with DESIGN.md spec (6px cards, 10px modals, 20px pills).
+- Typography: `font-weight:600` on h3, heading font-families on breadcrumbs and hub links, `--font-display` on TSA headings.
+- `contain:strict` on `.fleet-table-wrap` changed to `contain:content` to prevent 0-height collapse.
+- Removed `will-change:transform` from static `body::before` grid overlay (unnecessary GPU promotion).
+- Removed incomplete ARIA patterns: `role="listbox"` without `role="option"` children, `role="menu"` without keyboard navigation contract.
+- CSS containment added to hub-card, mf-card, and source-item.
+- GPU compositor promotion for body::before grid overlay.
+- Stat value text contrast improved across dashboard, fleet, and sidebar.
+
+### Fixed
+- Schedule snapshot mock path resolved for worktree test environments.
+- Fleet-family focus state and tab hover tokenization.
+- TSA jump pill hover aligned with DESIGN.md spec.
+- Hub card code and 404 page number contrast.
+- Highlight box border-left changed from `--ua-blue` to `--ua-amber` per design spec.
+- CTA button border-radius fixed to 6px (card scale).
+- IROPS bar item border-radius fixed to 20px (pill scale).
+- Off-palette `#3b82f6` replaced with design tokens.
+- Modal border-radius standardized to 10px per DESIGN.md.
+- News h3 weight corrected (700 to 600), fleet FAQ text color tokenized.
+
 ## [1.5.3] - 2026-04-04
 
 ### Added

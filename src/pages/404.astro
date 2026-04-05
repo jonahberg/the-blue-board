@@ -3,7 +3,7 @@ import { hubOrder, hubNavLabels } from '../data/hubs/index.js';
 import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
 ---
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,7 +20,7 @@ body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-mono)
 main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
 a{color:var(--ua-accent);text-decoration:none}
 a:hover{text-decoration:underline}
-.code{font-size:120px;font-weight:700;color:var(--ua-blue);line-height:1;margin-bottom:8px;letter-spacing:-4px}
+.code{font-size:120px;font-weight:700;color:var(--ua-accent);line-height:1;margin-bottom:8px;letter-spacing:-4px}
 .title{font-size:18px;font-weight:600;margin-bottom:8px}
 .subtitle{font-size:12px;color:var(--ua-muted);margin-bottom:32px;max-width:400px;line-height:1.6}
 .cta{display:inline-block;background:var(--ua-blue);color:#fff;padding:10px 24px;border-radius:6px;font-size:12px;font-weight:600;font-family:var(--font-mono);text-decoration:none;margin-bottom:32px;transition:opacity .2s}

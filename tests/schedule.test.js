@@ -9,7 +9,7 @@ const vercelFunctionMocks = vi.hoisted(() => ({
   waitUntil: vi.fn(),
 }));
 
-vi.mock('../api/_schedule-snapshots.js', () => scheduleSnapshotMocks);
+vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => scheduleSnapshotMocks);
 vi.mock('@vercel/functions', () => vercelFunctionMocks);
 
 import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker } from '../api/schedule.js';
