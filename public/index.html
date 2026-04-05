@@ -81,7 +81,7 @@
 <style>
 @font-face{font-family:'Satoshi';font-style:normal;font-weight:300 900;font-display:swap;src:url(/fonts/satoshi-latin.woff2) format('woff2')}
 @font-face{font-family:'DM Sans';font-style:normal;font-weight:100 900;font-display:swap;src:url(/fonts/dm-sans-latin.woff2) format('woff2')}
-@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:optional;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM Sans',system-ui,-apple-system,sans-serif}
 </style>
 </head>
@@ -166,7 +166,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <h1><a href="#" data-action="go-home" style="text-decoration:none;color:inherit;cursor:pointer"><span class="ua">THE BLUE BOARD</span></a> <span style="font-size:9px;color:var(--ua-muted);font-weight:400;letter-spacing:0.5px">FOR UNITED FLYERS, BY UNITED FLYERS</span></h1>
   <div id="global-search-wrap" style="position:relative;flex:0 1 300px">
     <input type="text" id="global-search-input" aria-label="Global flight search" placeholder="Track a flight (UA 1234, N12345, ORD...)" style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--font-mono);font-size:11px">
-    <div id="global-search-results" role="listbox" aria-label="Search results" style="position:absolute;top:34px;left:0;right:0;background:rgba(17,24,39,.95);border:1px solid var(--ua-border);border-radius:4px;max-height:300px;overflow-y:auto;display:none;z-index:9999;backdrop-filter:blur(8px)"></div>
+    <div id="global-search-results" aria-label="Search results" style="position:absolute;top:34px;left:0;right:0;background:rgba(17,24,39,.95);border:1px solid var(--ua-border);border-radius:4px;max-height:300px;overflow-y:auto;display:none;z-index:9999;backdrop-filter:blur(8px)"></div>
   </div>
   <div id="header-right">
     <span><span class="status-dot live" id="status-dot"></span><span id="status-text">LIVE</span> <span id="header-flight-count" style="color:var(--ua-muted);font-size:10px"></span></span>
@@ -220,10 +220,10 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button data-tab="tab-sources" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-sources"><span class="bnav-icon" aria-hidden="true">ℹ️</span><span class="bnav-label">Sources</span></button>
   <button id="mobile-more-btn" aria-label="More tabs" aria-expanded="false" aria-controls="mobile-more-menu"><span class="bnav-icon" aria-hidden="true">▾</span><span class="bnav-label">More</span></button>
 </nav>
-<div id="mobile-more-menu" role="menu" aria-label="Additional navigation tabs">
-  <button data-tab="tab-myflight" role="menuitem"><span class="bnav-icon" aria-hidden="true">🎫</span> My Flights</button>
-  <button data-tab="tab-analytics" role="menuitem"><span class="bnav-icon" aria-hidden="true">📊</span> Stats</button>
-  <button data-tab="tab-sources" role="menuitem"><span class="bnav-icon" aria-hidden="true">ℹ️</span> Sources</button>
+<div id="mobile-more-menu" aria-label="Additional navigation tabs">
+  <button data-tab="tab-myflight"><span class="bnav-icon" aria-hidden="true">🎫</span> My Flights</button>
+  <button data-tab="tab-analytics"><span class="bnav-icon" aria-hidden="true">📊</span> Stats</button>
+  <button data-tab="tab-sources"><span class="bnav-icon" aria-hidden="true">ℹ️</span> Sources</button>
 </div>
 
 <!-- TAB 0: MY FLIGHTS -->
@@ -262,7 +262,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <h3 style="margin-top:4px">🔍 Search</h3>
       <div style="padding:8px 12px">
         <input type="text" id="search-input-side" aria-label="Sidebar flight search" placeholder="Flight #, tail, airport..." style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 8px;border-radius:4px;font-family:var(--font-mono);font-size:10px">
-        <div id="search-results-side" role="listbox" aria-label="Sidebar search results" style="max-height:400px;overflow-y:auto;margin-top:4px"></div>
+        <div id="search-results-side" aria-label="Sidebar search results" style="max-height:400px;overflow-y:auto;margin-top:4px"></div>
       </div>
       <h3>📊 Phase Breakdown</h3>
       <div id="phase-stats" style="padding:8px 12px"></div>
