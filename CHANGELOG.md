@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.5] - 2026-04-16
+
+### Fixed
+- `www.theblueboard.co/` (homepage) now redirects to apex `theblueboard.co/`. The existing `/:path*` rule in `vercel.json` doesn't match the empty root segment, so the homepage on `www` was serving 200 directly and duplicating the canonical URL. All non-root paths (`/fleet`, `/hubs/*`, `/news/*`) were already redirecting correctly. Adds an explicit `/` redirect alongside the catch-all. Caught by the 2026-04-17 canary run.
+
 ## [1.5.4] - 2026-04-04
 
 ### Added
