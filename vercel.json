@@ -2,6 +2,14 @@
   "cleanUrls": true,
     "redirects": [
         {
+            "source": "/",
+            "has": [
+                { "type": "host", "value": "www.theblueboard.co" }
+            ],
+            "destination": "https://theblueboard.co/",
+            "permanent": true
+        },
+        {
             "source": "/:path*",
             "has": [
                 { "type": "host", "value": "www.theblueboard.co" }
