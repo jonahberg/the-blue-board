@@ -219,7 +219,7 @@ nav.jump-nav a:hover{border-color:var(--ua-accent);color:var(--ua-accent);text-d
 </style>
 )}
 </head>
-<body>
+<body data-hub-iata={iata}>
 
 <main class="container">
 
@@ -293,15 +293,9 @@ nav.jump-nav a:hover{border-color:var(--ua-accent);color:var(--ua-accent);text-d
 
 <VercelSpeedInsights />
 
-<!-- Live Data Script -->
-<script is:inline define:vars={{ iata }}>
-async function loadLiveData(){try{const r=await fetch('/api/fr24-feed?airline=UAL');if(!r.ok)throw new Error('Feed unavailable');const d=await r.json();let a=0;const f=d.result?.response?.data||d;const e=Array.isArray(f)?f:(typeof f==='object'?Object.values(f):[]);e.forEach(x=>{const o=Array.isArray(x)?x[11]:x?.origin;const ds=Array.isArray(x)?x[12]:x?.dest;if(o===iata||ds===iata)a++});document.getElementById('active').textContent=a;const as=document.getElementById('active-stat');if(as)as.textContent=a;document.getElementById('updated-time').textContent='Updated '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}catch(e){document.getElementById('updated-time').textContent='Live data temporarily unavailable'}}
-loadLiveData();setInterval(loadLiveData,30000);
-</script>
-
-
-<script is:inline>
-(function(){var h=document.getElementById('scrollHint');if(h){var done=false;window.addEventListener('scroll',function(){if(!done&&window.scrollY>100){h.style.opacity='0';done=true;setTimeout(function(){h.style.display='none'},500)}});}})();
-</script>
+<!-- Live Data + Scroll Hint — extracted to external files so CSP can drop
+     'unsafe-inline' from script-src. Scripts read data-hub-iata from <body>. -->
+<script defer src="/js/hub-live-data.js"></script>
+<script defer src="/js/scroll-hint.js"></script>
 </body>
 </html>

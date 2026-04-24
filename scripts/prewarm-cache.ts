@@ -37,7 +37,9 @@ for (const hub of HUBS) {
   }
 }
 
-// Also warm IROPS and METAR
+// Also warm IROPS and METAR. Count failures in both branches so the script's
+// exit code reflects genuine outages (CI alerting relies on non-zero exit for
+// FAIL in this loop, which was previously silent).
 for (const [label, path] of [
   ["IROPS", "/irops"],
   ["METAR", "/metar?ids=KORD,KDEN,KIAH,KEWR,KSFO,KLAX,KIAD,RJAA,PGUM"],
@@ -45,10 +47,17 @@ for (const [label, path] of [
 ] as const) {
   try {
     const res = await fetch(`${BASE}${path}`, { signal: AbortSignal.timeout(60000) });
-    console.log(`  OK  ${label} — ${res.status}`);
+    if (res.ok) {
+      console.log(`  OK  ${label} — ${res.status}`);
+    } else {
+      console.log(`  FAIL ${label} — ${res.status}`);
+      failed++;
+    }
   } catch (e: unknown) {
     console.log(`  FAIL ${label} — ${(e as Error).message}`);
+    failed++;
   }
 }
 
 console.log(`Done: ${warmed} warmed, ${failed} failed`);
+if (failed > 0) process.exit(1);

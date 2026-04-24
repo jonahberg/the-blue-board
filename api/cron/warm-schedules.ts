@@ -6,7 +6,12 @@ import type { VercelRequest, VercelResponse } from '../types.js';
 import { getStartOfDayForHub } from '../irops.js';
 
 const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
-const WARM_TASKS_PER_RUN = Math.max(1, Math.min(8, Number(process.env.SCHEDULE_WARM_TASKS_PER_RUN || 4) || 4));
+// Serialized with INTER_TASK_DELAY_MS between tasks. Budget math: each task
+// worst-case is ~58s (55s schedule fetch + 3s gap). maxDuration for this cron
+// is 300s in vercel.json, so hard-cap at 4 tasks → 4 × 58s = 232s, under the
+// Lambda limit. Keeping this serial rather than Promise.allSettled avoids
+// fanning 8 parallel requests at FR24's per-IP rate limit.
+const WARM_TASKS_PER_RUN = Math.max(1, Math.min(4, Number(process.env.SCHEDULE_WARM_TASKS_PER_RUN || 4) || 4));
 const INTER_TASK_DELAY_MS = Math.max(0, Number(process.env.SCHEDULE_WARM_DELAY_MS || 3000) || 3000);
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`

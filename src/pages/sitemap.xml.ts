@@ -9,7 +9,6 @@ import {
   homeLastmodPaths,
   hubIndexLastmodPaths,
   newsIndexLastmodPaths,
-  getNewsRouteLastmodPaths,
   xmlEscape,
 } from '../lib/buildMetadata.js';
 
@@ -44,9 +43,11 @@ export function GET() {
       renderUrl(`/hubs/${key}`, getLastModified(getHubRouteLastmodPaths(key)), 'weekly', '0.8')
     ),
     renderUrl('/news', getLastModified(newsIndexLastmodPaths), 'daily', '0.9'),
-    ...articles.map((a) =>
-      renderUrl(`/news/${a.slug}`, getLastModified(getNewsRouteLastmodPaths(a.slug)), 'weekly', '0.7')
-    ),
+    // Per-article lastmod — use the article's own publication date so each
+    // entry has a distinct value. The previous getNewsRouteLastmodPaths call
+    // hashed against shared template files, producing identical lastmod for
+    // every article which hurt Google indexing signals.
+    ...articles.map((a) => renderUrl(`/news/${a.slug}`, a.date, 'weekly', '0.7')),
   ];
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;

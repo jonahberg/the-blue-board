@@ -4,6 +4,40 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.6] - 2026-04-24
+
+### Security
+- Dashboard flight popup no longer renders unescaped gate/terminal strings from FlightAware/FR24. A malicious gate label in upstream data can no longer execute in the browser.
+- News digest emails now escape article title and category, and strip control characters from the subject line. Authors can no longer inject HTML into the broadcast or inject SMTP headers via a crafted title.
+- Content-Security-Policy `script-src` no longer allows `'unsafe-inline'`. All previously inline scripts and event handlers on the homepage have been moved to external files or delegated event listeners. `style-src 'unsafe-inline'` is retained pending a v1.6 inline-style audit.
+- Waitlist writes now require `SUPABASE_SERVICE_ROLE_KEY` in production. The previous anon-key fallback silently sent a welcome email on every re-submission because anon had no SELECT policy on the waitlist table. The new lazy factory throws on first use instead of taking down unrelated API routes.
+- Waitlist table now enforces email format, feature-request length, and source enum at the database level (`sql/006_waitlist_checks.sql`). Closes the anon-key end-run where someone could POST directly via `supabase-js` and bypass the API's validation and rate limit.
+
+### Fixed
+- News-digest broadcasts are atomic. The previous read → upsert → verify pattern allowed two concurrent calls for the same article to both broadcast. Now a single conditional `UPDATE ... WHERE slug != $new RETURNING *` serializes on the row lock (requires the seed row in `sql/005_news_notifications_seed.sql`).
+- Waitlist welcome-email de-duplication now derives from the upsert's `created_at` timestamp within a 10-second window, instead of a pre-upsert SELECT that raced with concurrent first-time signups.
+- Dashboard day-label buttons now use a shared hub-timezone helper (`src/lib/hubTz.js`). Previously, NRT/GUM viewed from the Americas could show the wrong day, and Pacific/Mountain/Central viewers would see a ±1 hour drift on DST spring-forward and fall-back days.
+- News sitemap `<news:publication_date>` now emits full ISO 8601 (`YYYY-MM-DDT12:00:00Z`). Bare date was silently rejected by Google News.
+- Anthropic delay-explain calls now enforce a 12s AbortController timeout. Previously, a slow upstream would keep billing tokens after Vercel killed the Lambda at 15s.
+- FR24 flight lookup shares a single deadline across its two sequential calls — worst-case wall time is bounded regardless of how slow the first call runs.
+- FlightAware HTML response is bounded to 500kb with a bounded regex capture, preventing catastrophic backtracking on malformed pages.
+- `api/predict-flight.ts` rate limit now fires before the cache lookup, shielding upstream from 500+ unique flight-number floods.
+- Dashboard refresh timer now chains off `refreshFlights().finally()`, avoiding no-op refresh attempts during in-flight fetches.
+- Dashboard weather `IntersectionObserver` is disconnected before each recreate; the waitlist modal Escape listener is tied to an `AbortController` scoped to modal lifecycle.
+- Clipboard share fallback now checks `execCommand` return value and prompts the user when the command silently fails, instead of flashing a false "Copied!".
+- `news-notify.ts` no longer leaks raw `err.message` in 500 responses — errors are logged server-side and the client gets a generic message.
+- Fleet filter no longer crashes on records with missing `r`/`c`/`t` fields.
+- Fleet overview build no longer crashes when a fleet-type key is renamed (optional chaining).
+- News sitemap `lastmod` is now per-article (uses the article date), improving Google indexing signals.
+- `scripts/prewarm-cache.ts` now increments `failed++` for the IROPS/METAR/FAA loop too and exits non-zero on failure, so CI alerts fire on real outages.
+- Schedule cron `WARM_TASKS_PER_RUN` capped at 4 (was 8). 8 × 58s would exceed the 300s Lambda limit; 4 × 58s = 232s, safely under.
+
+### Added
+- `src/lib/escape.js` — shared `escapeHtml` and `sanitizeHeaderValue`, reused by the dashboard popup and email builders.
+- `src/lib/hubTz.js` — DST-safe hub-local date math used by both client and server.
+- `tests/escape.test.js`, `tests/hubTz.test.js`, `tests/csp.test.js` — new regression coverage for the classes of bug above.
+- `TODOS.md` — v1.6 "Trust Infrastructure" sprint backlog: integration tests for RLS, CI lint for inline scripts, circuit breakers, cost alerting, feature kill-switches, full CSP tightening.
+
 ## [1.5.5] - 2026-04-16
 
 ### Fixed

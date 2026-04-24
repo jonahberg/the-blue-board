@@ -91,7 +91,15 @@ export function filterFleetData(fleetDb, { type, wifi, status, search, starlinkT
     if (status === 'stored' && !a.s) return false;
     if (status === 'starlink' && !(starlinkTails && starlinkTails.has(a.r))) return false;
     if (status === 'special' && !(specialAircraftSet && specialAircraftSet.has(a.r))) return false;
-    if (searchUpper && !a.r.toUpperCase().includes(searchUpper) && !a.c.toUpperCase().includes(searchUpper) && !a.t.toUpperCase().includes(searchUpper)) return false;
+    if (searchUpper) {
+      // Records from the fleet DB occasionally arrive with missing fields;
+      // .toUpperCase() on undefined throws. Coerce defensively so a partial
+      // row is filtered out cleanly instead of crashing the whole list.
+      const r = (a.r || '').toUpperCase();
+      const c = (a.c || '').toUpperCase();
+      const t = (a.t || '').toUpperCase();
+      if (!r.includes(searchUpper) && !c.includes(searchUpper) && !t.includes(searchUpper)) return false;
+    }
     return true;
   });
 }

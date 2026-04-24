@@ -33,16 +33,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : 'UA' + flightNumber.replace(/^UAL/i, '');
 
   try {
-    // Check cache — serve cached responses without rate limiting
+    // Rate limit every request — including cache hits. An attacker sending 500+
+    // unique flight-number strings would always miss cache and burn upstream
+    // quota; limiting before cache lookup also bounds the per-IP invocation
+    // cost on this endpoint.
+    if (isRateLimited(req)) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
+
     const cached = cache.get(normalized);
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
       res.setHeader('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=300');
       return res.status(200).json(cached.data);
-    }
-
-    // Rate limit only upstream fetches, not cache hits
-    if (isRateLimited(req)) {
-      return res.status(429).json({ error: 'Too many requests' });
     }
 
     const controller = new AbortController();

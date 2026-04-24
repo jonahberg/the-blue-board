@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
-import { supabase } from './_supabase.js';
+import { getSupabase } from './_supabase.js';
 
 // 5 submissions per IP per hour → ~5 per 60 minutes
 // Rate limiter works in 60s windows, so allow 5 per 60s window
@@ -8,6 +8,32 @@ import { supabase } from './_supabase.js';
 const isRateLimited = createRateLimiter('waitlist', 5);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Matches the CHECK constraint in sql/006_waitlist_checks.sql. The API coerces
+// out-of-whitelist values to 'popup' (attribution degrades, signup doesn't
+// break); the DB is the backstop for writers that bypass the API (anon-key
+// direct inserts).
+//
+// Existing callers: 'popup' (main.js waitlist modal), 'tsa-page' (tsa.astro
+// gate). If you add a new callsite that passes a different source, add it
+// here AND in sql/006_waitlist_checks.sql — both must allow it.
+const VALID_SOURCES = new Set([
+  'popup',
+  'hero',
+  'footer',
+  'news',
+  'hub',
+  'fleet',
+  'dashboard',
+  'tsa-page',
+]);
+
+// Window for classifying a signup as "new" rather than a re-submission. After
+// the upsert returns, if created_at is within this window of now, the row was
+// just inserted (not updated-in-place by conflict). 10s absorbs clock skew
+// between Supabase and the serverless instance while still catching
+// re-submissions on the order of seconds.
+const NEW_SIGNUP_WINDOW_MS = 10_000;
 
 const FROM_ADDRESS = 'Jonah @ The Blue Board <hello@theblueboard.co>';
 const REPLY_TO = 'hello@theblueboard.co';
@@ -207,32 +233,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
+  const safeSource = typeof source === 'string' && VALID_SOURCES.has(source) ? source : 'popup';
+  const safeFeatureRequest =
+    typeof featureRequest === 'string' ? featureRequest.slice(0, 500) : null;
 
   try {
-    // Check if this email already exists (skip welcome email for re-submissions)
-    const { data: existing } = await supabase
-      .from('waitlist')
-      .select('email')
-      .eq('email', normalizedEmail)
-      .limit(1);
-
-    const isNewSignup = !existing || existing.length === 0;
-
-    const { error } = await supabase
+    // Atomic classification: use the upsert's returned created_at to decide if
+    // this was a fresh insert or a conflict-triggered update. The previous
+    // SELECT-before-upsert pattern had two failure modes:
+    //   1. With anon key + no SELECT policy, SELECT returned [] and every
+    //      resubmission sent a welcome email (ultrareview bug #1).
+    //   2. Two concurrent first-time submissions both saw existing=[], both
+    //      upserted, both sent email.
+    // Reading created_at from the upsert's returning-row closes both.
+    const { data, error } = await getSupabase()
       .from('waitlist')
       .upsert(
         {
           email: normalizedEmail,
-          source: typeof source === 'string' ? source.slice(0, 50) : 'popup',
-          feature_request: typeof featureRequest === 'string' ? featureRequest.slice(0, 500) : null,
+          source: safeSource,
+          feature_request: safeFeatureRequest,
         },
         { onConflict: 'email' }
-      );
+      )
+      .select('created_at')
+      .single();
 
     if (error) {
       console.error('Waitlist upsert error:', error.message);
       return res.status(500).json({ error: 'Something went wrong — please try again' });
     }
+
+    const createdAtMs = data?.created_at ? new Date(data.created_at).getTime() : 0;
+    const isNewSignup = createdAtMs > 0 && Date.now() - createdAtMs < NEW_SIGNUP_WINDOW_MS;
 
     // Await the send in serverless runtimes so the function does not exit
     // before Resend receives the outbound request.

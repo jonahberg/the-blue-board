@@ -188,10 +188,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return await tryFR24Summary(req, res, flight, cacheKey);
     }
 
-    const html = await resp.text();
+    // Cap response body size to prevent a misbehaving or malicious FlightAware
+    // response from burning memory/time. The bootstrap blob is typically
+    // <80KB; 500KB is generous without letting a runaway page loop consume
+    // the Lambda.
+    const rawHtml = await resp.text();
+    const html = rawHtml.length > 500_000 ? rawHtml.slice(0, 500_000) : rawHtml;
 
-    // Extract trackpollBootstrap JSON
-    const match = html.match(/trackpollBootstrap\s*=\s*(\{.+?\});\s*(?:var|<\/script)/s);
+    // Extract trackpollBootstrap JSON. Bound the {...} capture to avoid
+    // catastrophic regex backtracking on unexpected input shapes.
+    const match = html.match(/trackpollBootstrap\s*=\s*(\{[\s\S]{1,200000}?\});\s*(?:var|<\/script)/);
     if (!match) {
       // FlightAware blocked — try FR24 summary as fallback
       return await tryFR24Summary(req, res, flight, cacheKey);

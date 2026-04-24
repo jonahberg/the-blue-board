@@ -106,9 +106,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (ctx.connection) lines.push(`Passenger connection: ${sanitize(ctx.connection, 100)}`);
     if (ctx.inbound) lines.push(`Aircraft journey: ${sanitize(ctx.inbound, 300)}`);
 
-    const message = await getClient().messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 400,
+    // vercel.json caps this function at maxDuration: 15. Without a signal the
+    // SDK call would keep running past the Lambda kill, Anthropic keeps
+    // billing tokens, and the user sees a generic 5xx. 12s leaves a 3s
+    // budget for handler teardown and response formatting.
+    const anthropicAbort = new AbortController();
+    const anthropicTimer = setTimeout(() => anthropicAbort.abort(), 12_000);
+
+    let message;
+    try {
+      message = await getClient().messages.create(
+        {
+          model: 'claude-haiku-4-5',
+          max_tokens: 400,
       system: `You are a senior flight operations analyst briefing for The Blue Board, a third-party United Airlines flight tracker. You are NOT United Airlines — never say "we" or "our" when referring to the airline.
 
 CRITICAL RULE: You may ONLY discuss data that is explicitly provided in the user message below. Do NOT invent, assume, or speculate about information that is not present. Specifically:
@@ -131,8 +141,13 @@ Analysis framework — discuss ONLY topics where data is provided:
 For LOW-risk flights with clean conditions, say so positively and briefly.
 
 Deliver 2-4 sentences of direct, specific analysis grounded in the provided data. Write in plain text only — no markdown, no headers, no bold, no bullet points.`,
-      messages: [{ role: 'user', content: lines.join('\n') }],
-    });
+          messages: [{ role: 'user', content: lines.join('\n') }],
+        },
+        { signal: anthropicAbort.signal }
+      );
+    } finally {
+      clearTimeout(anthropicTimer);
+    }
 
     const text = message.content[0]?.type === 'text' ? message.content[0].text : 'Unable to generate analysis.';
 
@@ -143,6 +158,9 @@ Deliver 2-4 sentences of direct, specific analysis grounded in the provided data
     return res.status(200).json({ explanation: text, cached: false });
   } catch (e: any) {
     console.error('Delay explain API error:', e);
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) {
+      return res.status(504).json({ error: 'AI analysis timed out' });
+    }
     if (e.status === 401) return res.status(503).json({ error: 'Invalid API key' });
     if (e.status === 429) return res.status(429).json({ error: 'AI rate limited — try again shortly' });
     return res.status(502).json({ error: 'AI analysis temporarily unavailable' });
