@@ -21,6 +21,10 @@ export const HUB_TZ = {
 function partsToObj(parts) {
   const o = {};
   for (const p of parts) o[p.type] = p.value;
+  // Some Node/ICU versions emit hour="24" for midnight in en-US + hour12:false,
+  // which would poison every downstream "seconds since midnight" calculation
+  // (pushing it 24h past and making drift detection misclassify). Normalize to 0.
+  if (o.hour === '24') o.hour = '00';
   return o;
 }
 
