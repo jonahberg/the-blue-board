@@ -9,10 +9,24 @@ const isRateLimited = createRateLimiter('waitlist', 5);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Matches the CHECK constraint in sql/006_waitlist_checks.sql. The API rejects
-// out-of-whitelist values early with a clear 400; the DB is the backstop for
-// writers that bypass the API (anon-key direct inserts).
-const VALID_SOURCES = new Set(['popup', 'hero', 'footer', 'news', 'hub', 'fleet', 'dashboard']);
+// Matches the CHECK constraint in sql/006_waitlist_checks.sql. The API coerces
+// out-of-whitelist values to 'popup' (attribution degrades, signup doesn't
+// break); the DB is the backstop for writers that bypass the API (anon-key
+// direct inserts).
+//
+// Existing callers: 'popup' (main.js waitlist modal), 'tsa-page' (tsa.astro
+// gate). If you add a new callsite that passes a different source, add it
+// here AND in sql/006_waitlist_checks.sql — both must allow it.
+const VALID_SOURCES = new Set([
+  'popup',
+  'hero',
+  'footer',
+  'news',
+  'hub',
+  'fleet',
+  'dashboard',
+  'tsa-page',
+]);
 
 // Window for classifying a signup as "new" rather than a re-submission. After
 // the upsert returns, if created_at is within this window of now, the row was

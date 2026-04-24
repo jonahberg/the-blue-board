@@ -18,7 +18,12 @@ function build(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+  // Use VERCEL_ENV only — not NODE_ENV. Vercel sets NODE_ENV=production on ALL
+  // deployed environments (including preview), so checking NODE_ENV would force
+  // preview deploys to require SUPABASE_SERVICE_ROLE_KEY and 500 on Supabase
+  // routes if the preview env only has the anon key.
+  //   VERCEL_ENV = 'production' | 'preview' | 'development' | undefined
+  const isProd = process.env.VERCEL_ENV === 'production';
 
   if (!url) {
     throw new Error('Supabase not configured: NEXT_PUBLIC_SUPABASE_URL is missing');
