@@ -6,6 +6,7 @@ import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, WIFI_DISPLAY, sortFleetData, filterFleetData, parseFleetDeepLink, TAB_MAP, VALID_FLEET_VIEWS } from '../lib/fleet-utils.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
+import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
 
 injectSpeedInsights();
 
@@ -901,14 +902,16 @@ function initMap() {
   }
   startRefreshTimer();
 
-  // Pause polling when tab is hidden to save API credits
+  // Pause polling when tab is hidden to save API credits. Chain the timer
+  // off refreshFlights().finally() so the countdown starts when we have
+  // fresh data, not during the in-flight fetch — avoids wasted no-op refresh
+  // attempts that the isRefreshing gate would reject anyway.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
       document.getElementById('countdown').textContent = 'Paused (tab hidden)';
     } else {
-      refreshFlights();
-      startRefreshTimer();
+      refreshFlights().finally(() => startRefreshTimer());
     }
   });
 }
@@ -1341,8 +1344,11 @@ function showFlightPopup(f, marker) {
 
         let h = '<div class="popup-times">';
 
-        // Departure column
-        h += '<div class="popup-field"><span class="popup-field-label">Departure' + (orig.terminal ? ' · T' + orig.terminal : '') + (orig.gate ? ' G' + orig.gate : '') + '</span><span class="popup-field-value">';
+        // Departure column. orig.terminal and orig.gate come from FlightAware/FR24
+        // responses. Wrap every interpolation in escapeHtml — upstream can return
+        // arbitrary strings (e.g. a gate label with an HTML tag in it), and this
+        // value lands in innerHTML at the end of the block.
+        h += '<div class="popup-field"><span class="popup-field-label">Departure' + (orig.terminal ? ' · T' + escapeHtml(String(orig.terminal)) : '') + (orig.gate ? ' G' + escapeHtml(String(orig.gate)) : '') + '</span><span class="popup-field-value">';
         if (depActual) {
           h += (fmtTimeInTz(depActual, orig.tz) || 'N/A') + deltaBadge(deltaMin(depSched, depActual));
         } else if (depEst) {
@@ -1357,8 +1363,8 @@ function showFlightPopup(f, marker) {
         }
         h += '</div>';
 
-        // Arrival column
-        h += '<div class="popup-field"><span class="popup-field-label">Arrival' + (dest.terminal ? ' · T' + dest.terminal : '') + (dest.gate ? ' G' + dest.gate : '') + '</span><span class="popup-field-value">';
+        // Arrival column. Same upstream-untrusted escape treatment as Departure.
+        h += '<div class="popup-field"><span class="popup-field-label">Arrival' + (dest.terminal ? ' · T' + escapeHtml(String(dest.terminal)) : '') + (dest.gate ? ' G' + escapeHtml(String(dest.gate)) : '') + '</span><span class="popup-field-value">';
         if (arrActual) {
           h += (fmtTimeWithTz(arrActual, dest.tz) || 'N/A') + deltaBadge(deltaMin(arrSched, arrActual));
         } else if (arrEst) {
@@ -2450,6 +2456,10 @@ function refreshFleetData() {
 // ═══ WEATHER TAB ═══
 let weatherInitialized = false;
 let _weatherRefreshInterval = null;
+// Module-level ref so weather-retry can disconnect the prior observer before
+// creating a new one. AbortController does not work on observers — the only
+// way to release the observed nodes is an explicit disconnect().
+let _wxHintObserver = null;
 const HUB_NAMES = {EWR:"Newark Liberty",IAH:"Houston Intercontinental",ORD:"O'Hare International",DEN:"Denver International",SFO:"San Francisco Int'l",LAX:"Los Angeles Int'l",IAD:"Washington Dulles",NRT:"Tokyo Narita",GUM:"Guam Int'l"};
 const CAT_COLORS = {VFR:'#22c55e',MVFR:'#eab308',IFR:'#ef4444',LIFR:'#c026d3'};
 
@@ -2953,7 +2963,7 @@ async function initWeatherTab() {
       ${rwyLine}
       ${faaLine}
       ${availabilityLine}
-      ${hasDetailContent ? `<div class="hub-card-expand" tabindex="0" role="button" aria-expanded="false" style="text-align:center;padding:4px 0;cursor:pointer;color:var(--ua-dim);font-size:10px;font-family:'JetBrains Mono',monospace;transition:color 150ms ease;outline:none" onfocus="this.style.outline='2px solid var(--ua-accent)';this.style.outlineOffset='2px'" onblur="this.style.outline='none'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="const d=this.nextElementSibling;const open=d.style.display!=='none';d.style.display=open?'none':'block';this.textContent=open?'▾ Details':'▴ Details';this.setAttribute('aria-expanded',!open)">▾ Details</div>
+      ${hasDetailContent ? `<div class="hub-card-expand" data-action="hub-card-toggle" tabindex="0" role="button" aria-expanded="false" style="text-align:center;padding:4px 0;cursor:pointer;color:var(--ua-dim);font-size:10px;font-family:'JetBrains Mono',monospace;transition:color 150ms ease">▾ Details</div>
       <div class="hub-card-detail" style="display:none">
         ${explainer?`<div class="hub-explainer">${explainer}</div>`:''}
         ${faaExplainer?`<div class="hub-explainer">${faaExplainer}</div>`:''}
@@ -2980,13 +2990,18 @@ async function initWeatherTab() {
   // Render NAS STATUS panel below radar map
   renderNasPanel();
 
-  // Auto-hide scroll hint once hub cards are visible
+  // Auto-hide scroll hint once hub cards are visible. Disconnect the prior
+  // observer before creating a new one — initWeatherTab can be called again
+  // via the weather-retry data-action and each call would otherwise leak an
+  // observer still holding references to detached hint/hub-cards nodes.
+  if (_wxHintObserver) { _wxHintObserver.disconnect(); _wxHintObserver = null; }
   const wxHint = document.getElementById('wx-scroll-hint');
-  if (wxHint) {
-    const observer = new IntersectionObserver(([entry]) => {
+  const hubCards = document.getElementById('hub-cards');
+  if (wxHint && hubCards) {
+    _wxHintObserver = new IntersectionObserver(([entry]) => {
       wxHint.style.opacity = entry.isIntersecting ? '0' : '1';
     }, {root: document.getElementById('wx-detail-panel'), threshold: 0.1});
-    observer.observe(document.getElementById('hub-cards'));
+    _wxHintObserver.observe(hubCards);
   }
 
   // Refresh weather + FAA + NAS data every 5 minutes so the tab stays current
@@ -3492,30 +3507,17 @@ function initScheduleTab() {
   }
 }
 
+// Delegate to the shared hubTz helper so client and server agree on hub-local
+// date math. The previous inline implementation added dayOffset * 86400 seconds,
+// which is wrong on DST transition days (spring-forward = 23h, fall-back = 25h),
+// and constructed labels with new Date(y, m-1, d+offset) in browser-local time,
+// which lied for NRT/GUM viewed from the Americas.
 function getSchedDayTimestamp(dayOffset) {
-  // Use formatToParts for reliable hub-local time extraction (same approach as server-side getStartOfDayForHub)
-  const tz = SCHED_HUB_TZ[schedCurrentHub] || 'America/Chicago';
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-  }).formatToParts(now);
-  const get = (type) => parseInt(parts.find(p => p.type === type)?.value || '0');
-  const hour = get('hour'), minute = get('minute'), second = get('second');
-  const secondsSinceMidnight = hour * 3600 + minute * 60 + second;
-  const startOfToday = Math.floor(now.getTime() / 1000) - secondsSinceMidnight;
-  return startOfToday + (dayOffset * 86400);
+  return getStartOfHubDay(schedCurrentHub, dayOffset);
 }
 
 function getSchedDayLabel(dayOffset) {
-  const tz = SCHED_HUB_TZ[schedCurrentHub] || 'America/Chicago';
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour12: false
-  }).formatToParts(now);
-  const get = (type) => parseInt(parts.find(p => p.type === type)?.value || '0');
-  const target = new Date(get('year'), get('month') - 1, get('day') + dayOffset);
-  return target.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return getHubDayLabel(schedCurrentHub, dayOffset);
 }
 
 function getHubTzAbbrev(hub) {
@@ -3701,7 +3703,7 @@ async function loadScheduleData() {
       const borderColor = result.degraded ? 'rgba(78,205,196,.3)' : 'rgba(234,179,8,.3)';
       const textColor = result.degraded ? '#4ecdc4' : '#eab308';
       const icon = result.degraded ? '⏳' : '⚠️';
-      loadEl.innerHTML = `<div style="padding:4px 12px;background:${bgColor};border:1px solid ${borderColor};border-radius:4px;font-size:11px;color:${textColor};margin:0">${icon} ${msg}${pct} <button onclick="delete schedCache['agg-${schedCurrentHub}-${schedCurrentDir}-${getSchedDayTimestamp(schedCurrentDay)}']; loadScheduleData()" style="background:none;border:none;color:var(--ua-accent);cursor:pointer;font-family:var(--font-ui);font-size:11px;text-decoration:underline">↻ Retry</button></div>`;
+      loadEl.innerHTML = `<div style="padding:4px 12px;background:${bgColor};border:1px solid ${borderColor};border-radius:4px;font-size:11px;color:${textColor};margin:0">${icon} ${msg}${pct} <button data-action="schedule-retry-cached" style="background:none;border:none;color:var(--ua-accent);cursor:pointer;font-family:var(--font-ui);font-size:11px;text-decoration:underline">↻ Retry</button></div>`;
       loadEl.style.display = 'block';
     } else {
       loadEl.style.display = 'none';
@@ -3714,7 +3716,7 @@ async function loadScheduleData() {
     checkWatchedFlightChanges(allUAFlights);
   } catch (err) {
     console.error('Schedule load error:', err);
-    loadEl.innerHTML = `<div style="font-size:24px;margin-bottom:8px">⚠️</div>Error loading schedule: ${escapeHtml(err.message)}<br><span style="font-size:10px">Try again in a moment</span><br><button onclick="loadScheduleData()" style="margin-top:8px;padding:4px 12px;background:var(--ua-blue);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">↻ Retry</button>`;
+    loadEl.innerHTML = `<div style="font-size:24px;margin-bottom:8px">⚠️</div>Error loading schedule: ${escapeHtml(err.message)}<br><span style="font-size:10px">Try again in a moment</span><br><button data-action="schedule-retry-reload" style="margin-top:8px;padding:4px 12px;background:var(--ua-blue);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">↻ Retry</button>`;
   } finally {
     schedLoading = false;
     btn.disabled = false;
@@ -5716,6 +5718,29 @@ document.addEventListener('click', function(e) {
         delete schedCache[`agg-${schedCurrentHub}-${schedCurrentDir}-${ts}`]; }
       loadScheduleData();
       break;
+    case 'schedule-retry-cached':
+      // Same as schedule-refresh: clear the cache key for the current day and
+      // reload. Replaces an inline onclick that drove XSS amplification risk
+      // via CSP 'unsafe-inline'.
+      { const ts = getSchedDayTimestamp(schedCurrentDay);
+        delete schedCache[`agg-${schedCurrentHub}-${schedCurrentDir}-${ts}`]; }
+      loadScheduleData();
+      break;
+    case 'schedule-retry-reload':
+      // Post-error retry — no cache to clear, just reload.
+      loadScheduleData();
+      break;
+    case 'hub-card-toggle': {
+      // Migrated from inline onclick at the hub-card-expand element. Toggles
+      // the sibling detail panel's visibility and flips the expander glyph.
+      const d = actionEl.nextElementSibling;
+      if (!d) break;
+      const open = d.style.display !== 'none';
+      d.style.display = open ? 'none' : 'block';
+      actionEl.textContent = open ? '▾ Details' : '▴ Details';
+      actionEl.setAttribute('aria-expanded', String(!open));
+      break;
+    }
     case 'schedule-more-filters':
       toggleScheduleMoreFilters();
       break;
@@ -5750,13 +5775,20 @@ document.addEventListener('click', function(e) {
         actionEl.textContent = '\u2713 Copied!';
         setTimeout(() => { actionEl.classList.remove('copied'); actionEl.innerHTML = shareResetHtml; }, 2000);
       }).catch(() => {
-        // Fallback for older browsers
+        // Fallback for older browsers. execCommand is deprecated; check its
+        // boolean return and, on failure, prompt the user so they can copy
+        // manually rather than seeing a lying "Copied!" state.
         const ta = document.createElement('textarea');
         ta.value = shareUrl.toString();
         document.body.appendChild(ta);
         ta.select();
-        document.execCommand('copy');
+        let copied = false;
+        try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
         document.body.removeChild(ta);
+        if (!copied) {
+          try { window.prompt('Copy this link:', shareUrl.toString()); } catch (e) {}
+          return;
+        }
         actionEl.classList.add('copied');
         actionEl.textContent = '\u2713 Copied!';
         setTimeout(() => { actionEl.classList.remove('copied'); actionEl.innerHTML = shareResetHtml; }, 2000);
@@ -5901,12 +5933,19 @@ document.addEventListener('click', function(e) {
           actionEl.textContent = '\u2713 Copied!';
           setTimeout(function() { actionEl.innerHTML = acShareResetHtml; }, 2000);
         }).catch(function() {
+          // Fallback clipboard path \u2014 verify execCommand's return value and
+          // prompt the user on failure instead of flashing a false "Copied!".
           const ta = document.createElement('textarea');
           ta.value = shareUrl.toString();
           document.body.appendChild(ta);
           ta.select();
-          document.execCommand('copy');
+          let copied = false;
+          try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
           document.body.removeChild(ta);
+          if (!copied) {
+            try { window.prompt('Copy this link:', shareUrl.toString()); } catch (e) {}
+            return;
+          }
           actionEl.textContent = '\u2713 Copied!';
           setTimeout(function() { actionEl.innerHTML = acShareResetHtml; }, 2000);
         });
@@ -6162,9 +6201,18 @@ function hideDisclaimer() {
     } catch(e) { return false; }
   }
 
+  // AbortController for the modal's document-level Escape listener. Tying it
+  // to modal lifecycle means the listener is torn down on close rather than
+  // staying live on document for the rest of the session.
+  var waitlistEscController = null;
+
   function closeWaitlistModal() {
     var modal = document.getElementById('waitlist-modal');
     if (modal) modal.style.display = 'none';
+    if (waitlistEscController) {
+      waitlistEscController.abort();
+      waitlistEscController = null;
+    }
     waitlistShownThisSession = true;
     try { localStorage.setItem('bb_waitlist_dismissed', String(Date.now())); } catch(e) {}
   }
@@ -6178,6 +6226,19 @@ function hideDisclaimer() {
     if (document.getElementById('waitlist-modal')) {
       document.getElementById('waitlist-modal').style.display = 'flex';
       waitlistShownThisSession = true;
+      // Re-arm Escape handler — the previous controller was aborted on close.
+      if (waitlistEscController) waitlistEscController.abort();
+      waitlistEscController = new AbortController();
+      document.addEventListener(
+        'keydown',
+        function (e) {
+          if (e.key === 'Escape') {
+            var modal = document.getElementById('waitlist-modal');
+            if (modal && modal.style.display !== 'none') closeWaitlistModal();
+          }
+        },
+        { signal: waitlistEscController.signal }
+      );
       return;
     }
     waitlistShownThisSession = true;
@@ -6344,13 +6405,19 @@ function hideDisclaimer() {
     backdrop.appendChild(card);
     document.body.appendChild(backdrop);
 
-    // Escape key handler
-    document.addEventListener('keydown', function waitlistEsc(e) {
-      if (e.key === 'Escape') {
-        var modal = document.getElementById('waitlist-modal');
-        if (modal && modal.style.display !== 'none') closeWaitlistModal();
-      }
-    });
+    // Escape key handler scoped to modal lifecycle via AbortController.
+    if (waitlistEscController) waitlistEscController.abort();
+    waitlistEscController = new AbortController();
+    document.addEventListener(
+      'keydown',
+      function waitlistEsc(e) {
+        if (e.key === 'Escape') {
+          var modal = document.getElementById('waitlist-modal');
+          if (modal && modal.style.display !== 'none') closeWaitlistModal();
+        }
+      },
+      { signal: waitlistEscController.signal }
+    );
 
     // Focus email input
     setTimeout(function() { emailInput.focus(); }, 100);

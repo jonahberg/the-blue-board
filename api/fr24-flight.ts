@@ -86,24 +86,40 @@ export function normalizeFlightNumber(raw: string): string {
   return q;
 }
 
-async function fr24Fetch(path: string, params: Record<string, string>): Promise<Response> {
+// Per-call timeout cap. The handler enforces a shared deadline across both
+// calls (live + summary) so worst-case wall time stays bounded.
+const FR24_PER_CALL_TIMEOUT_MS = 15_000;
+
+async function fr24Fetch(
+  path: string,
+  params: Record<string, string>,
+  deadlineMs?: number
+): Promise<Response> {
   const url = new URL(FR24_BASE + path);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  // When a deadline is provided, use whichever is sooner: remaining budget or
+  // the per-call cap. Without a deadline, fall back to per-call cap.
+  const remaining = typeof deadlineMs === 'number' ? Math.max(0, deadlineMs - Date.now()) : FR24_PER_CALL_TIMEOUT_MS;
+  const timeoutMs = Math.min(remaining, FR24_PER_CALL_TIMEOUT_MS);
 
-  const resp = await fetch(url.toString(), {
-    signal: controller.signal,
-    headers: {
-      'Authorization': `Bearer ${process.env.FR24_API_TOKEN}`,
-      'Accept': 'application/json',
-      'Accept-Version': API_VERSION,
-      'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
-    },
-  });
-  clearTimeout(timeout);
-  return resp;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
+
+  try {
+    const resp = await fetch(url.toString(), {
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${process.env.FR24_API_TOKEN}`,
+        'Accept': 'application/json',
+        'Accept-Version': API_VERSION,
+        'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
+      },
+    });
+    return resp;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function normalizeLiveResponse(data: any, flightNumber: string): any | null {
@@ -223,11 +239,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Shared deadline for this handler. Both fr24Fetch calls (live + summary)
+    // share the same budget, so a slow first call shortens the second rather
+    // than doubling the user-facing wait.
+    const handlerDeadline = Date.now() + 18_000;
+
     // 1. Try live positions first
     let flightData: any = null;
     let source = 'live';
 
-    const liveResp = await fr24Fetch(LIVE_PATH, { flights: flight });
+    const liveResp = await fr24Fetch(LIVE_PATH, { flights: flight }, handlerDeadline);
     if (liveResp.ok) {
       const liveData = await liveResp.json();
       console.log(`FR24 live response for ${flight}: status=${liveResp.status}, entries=${liveData?.data?.length || 0}`);
@@ -243,11 +264,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const now = new Date();
       const from = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24h ago
       const to = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24h ahead
-      const summaryResp = await fr24Fetch(SUMMARY_PATH, {
-        flights: flight,
-        flight_datetime_from: from.toISOString(),
-        flight_datetime_to: to.toISOString(),
-      });
+      const summaryResp = await fr24Fetch(
+        SUMMARY_PATH,
+        {
+          flights: flight,
+          flight_datetime_from: from.toISOString(),
+          flight_datetime_to: to.toISOString(),
+        },
+        handlerDeadline
+      );
       if (summaryResp.ok) {
         const summaryData = await summaryResp.json();
         console.log(`FR24 summary response for ${flight}: status=${summaryResp.status}, entries=${summaryData?.data?.length || 0}`);

@@ -26,7 +26,9 @@ const fleetFamilies = [
   { name: 'Boeing 767', types: ['767-300er', '767-400er'], role: 'Transatlantic / Medium-haul', count: 0 },
 ];
 for (const fam of fleetFamilies) {
-  fam.count = fam.types.reduce((sum, key) => sum + fleetTypes[key].count, 0);
+  // Use optional chaining so a renamed or removed type key degrades to 0
+  // rather than crashing the build with "cannot read properties of undefined".
+  fam.count = fam.types.reduce((sum, key) => sum + (fleetTypes[key]?.count ?? 0), 0);
 }
 
 // Compute fleet-wide stats

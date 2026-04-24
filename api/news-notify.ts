@@ -2,44 +2,31 @@
  * POST /api/news-notify
  *
  * Deploy hook endpoint that checks if there's a new article since the last
- * notification, and sends a broadcast to the Resend Audience if so.
+ * notification and sends a broadcast to the Resend Audience if so.
  *
  * Auth: requires CRON_SECRET header (same pattern as cron endpoints).
  *
- * Idempotency: uses claim-before-send pattern. The slug is written to
- * Supabase BEFORE broadcasting. If the slug is already claimed (same value),
- * the endpoint returns already_sent without sending. This is atomic — even
- * concurrent calls are safe because only one can successfully update the row
- * to a new slug value.
+ * Idempotency: atomic claim-by-CAS. A single UPDATE ... WHERE slug != $new
+ * RETURNING * serializes concurrent callers on the row lock. If the UPDATE
+ * affects 1 row, we claimed it and proceed to send. If it affects 0 rows,
+ * another caller already claimed the same slug (or this slug was already
+ * sent) and we bail out silently.
  *
  * Requires:
  *   - RESEND_API_KEY env var
  *   - RESEND_AUDIENCE_ID env var (create in Resend dashboard)
  *   - Supabase news_notifications table (sql/004_news_notifications.sql)
+ *   - Seeded last_sent row (sql/005_news_notifications_seed.sql) — without
+ *     the seed, the first-run UPDATE affects 0 rows and the INSERT fallback
+ *     has a cross-request race.
  */
 
 import type { VercelRequest, VercelResponse } from './types.js';
-import { supabase } from './_supabase.js';
+import { getSupabase } from './_supabase.js';
+import { escapeHtml, sanitizeHeaderValue } from '../src/lib/escape.js';
 
 const FROM_ADDRESS = 'Jonah @ The Blue Board <hello@theblueboard.co>';
 const BASE_URL = 'https://theblueboard.co';
-
-/** Rollback a claimed slug to the previous value so future attempts can retry */
-async function rollbackClaim(previousSlug: string | undefined) {
-  try {
-    if (previousSlug) {
-      await supabase
-        .from('news_notifications')
-        .update({ slug: previousSlug, sent_at: new Date().toISOString() })
-        .eq('key', 'last_sent');
-    } else {
-      // First-run case: delete the row so the next attempt starts fresh
-      await supabase.from('news_notifications').delete().eq('key', 'last_sent');
-    }
-  } catch (e) {
-    console.error('news-notify: rollback failed (manual intervention may be needed):', e);
-  }
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -60,6 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const supabase = getSupabase();
+
     // Fetch the latest article from the build-time JSON
     const latestRes = await fetch(`${BASE_URL}/data/news-latest.json`);
     if (!latestRes.ok) {
@@ -73,64 +62,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const article = latest[0];
     const { slug, title, category } = article;
 
-    // ── Claim-before-send: atomic idempotency ───────────────────────
-    //
-    // Read the current slug, then conditionally update only if it differs.
-    // Two concurrent requests for the same new slug: only one will see
-    // the old value and proceed; the other will see the new slug (written
-    // by the first) and bail out.
-    //
-    // First run (no row exists): insert. Subsequent: check-then-update.
+    if (!slug || typeof slug !== 'string') {
+      return res.status(500).json({ error: 'Latest article has no slug' });
+    }
 
-    const { data: existing, error: readErr } = await supabase
+    // ── Atomic claim via conditional UPDATE ─────────────────────────
+    //
+    // UPDATE news_notifications SET slug = $new ... WHERE key = 'last_sent'
+    //   AND slug != $new RETURNING *
+    //
+    // Postgres takes a row lock on key='last_sent'. Concurrent callers for
+    // the SAME new slug serialize on that lock; exactly one sees slug != $new
+    // and updates (RETURNING 1 row). The rest see slug == $new post-commit
+    // and affect 0 rows → bail out as "already sent."
+    //
+    // Concurrent callers for DIFFERENT new slugs is a rare case (cron schedules
+    // article publication; two articles are not "next" simultaneously). When
+    // it happens, both can succeed and both broadcast — acceptable for v1.5.5;
+    // tracked in TODOS.md for a broadcast-ID idempotency key if needed.
+
+    const { data: claimed, error: claimErr } = await supabase
       .from('news_notifications')
-      .select('slug')
+      .update({ slug, sent_at: new Date().toISOString() })
       .eq('key', 'last_sent')
-      .single();
-
-    // PGRST116 = "no rows" — expected on first run
-    if (readErr && readErr.code !== 'PGRST116') {
-      throw new Error(`Supabase read failed: ${readErr.message}`);
-    }
-
-    if (existing?.slug === slug) {
-      return res.status(200).json({ status: 'already_sent', slug });
-    }
-
-    // Claim the slug atomically before sending. Use upsert so it works
-    // for both first-run (INSERT) and subsequent runs (UPDATE).
-    const { error: claimErr } = await supabase
-      .from('news_notifications')
-      .upsert(
-        { key: 'last_sent', slug, sent_at: new Date().toISOString() },
-        { onConflict: 'key' }
-      );
+      .neq('slug', slug)
+      .select('slug');
 
     if (claimErr) {
-      throw new Error(`Supabase claim failed — aborting before send: ${claimErr.message}`);
+      console.error('news-notify: claim UPDATE failed:', claimErr.message);
+      return res.status(500).json({ error: 'Failed to send notification' });
     }
 
-    // Verify our claim landed (guards against concurrent upserts — the last
-    // writer wins in Postgres, so re-read to confirm we hold the slug)
-    const { data: verify, error: verifyErr } = await supabase
-      .from('news_notifications')
-      .select('slug')
-      .eq('key', 'last_sent')
-      .single();
+    if (!claimed || claimed.length === 0) {
+      // Either the seed row is missing, or slug was already claimed. Distinguish
+      // by reading: if the row exists with slug = our slug, it's already sent.
+      // If the row doesn't exist, the seed migration (sql/005) didn't run.
+      const { data: existing } = await supabase
+        .from('news_notifications')
+        .select('slug')
+        .eq('key', 'last_sent')
+        .maybeSingle();
 
-    if (verifyErr) {
-      throw new Error(`Supabase verify failed: ${verifyErr.message}`);
-    }
+      if (!existing) {
+        console.error('news-notify: last_sent row missing — run sql/005_news_notifications_seed.sql');
+        return res.status(500).json({ error: 'Failed to send notification' });
+      }
 
-    if (verify?.slug !== slug) {
-      // Another concurrent request overwrote our claim — they'll handle the send
-      return res.status(200).json({ status: 'already_sent', slug, note: 'lost claim race' });
+      return res.status(200).json({ status: 'already_sent', slug });
     }
 
     // ── Send broadcast ──────────────────────────────────────────────
 
-    const articleUrl = `${BASE_URL}/news/${slug}`;
-    const emailHtml = buildDigestEmail(title, category, articleUrl);
+    const articleUrl = `${BASE_URL}/news/${encodeURIComponent(slug)}`;
+    const safeTitle = typeof title === 'string' ? title : '';
+    const safeCategory = typeof category === 'string' ? category : '';
+    const emailHtml = buildDigestEmail(safeTitle, safeCategory, articleUrl);
+    // Subject is an email header — escapeHtml would inject HTML entities into
+    // the displayed subject. Strip control chars to prevent SMTP injection and
+    // cap length defensively.
+    const subject = `📰 ${sanitizeHeaderValue(safeTitle).slice(0, 180)} — The Blue Board`;
 
     const { Resend } = await import('resend');
     const resend = new Resend(RESEND_API_KEY);
@@ -138,33 +128,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data: broadcast, error: createErr } = await resend.broadcasts.create({
       audienceId: AUDIENCE_ID,
       from: FROM_ADDRESS,
-      subject: `📰 ${title} — The Blue Board`,
+      subject,
       html: emailHtml,
       replyTo: 'hello@theblueboard.co',
     });
 
     if (createErr || !broadcast?.id) {
-      // Rollback claim so future attempts can retry
-      await rollbackClaim(existing?.slug);
-      throw new Error(`Broadcast create failed: ${createErr?.message || 'no broadcast ID returned'}`);
+      // Broadcast create failed. The claim is retained; it points to this slug
+      // so a retry for the same slug correctly bails out as already_sent. If
+      // the failure is transient and the operator wants to retry, they must
+      // manually reset the row. Not rolling back avoids the "overwrite newer
+      // successful claim" hazard the prior rollback had.
+      console.error(
+        'news-notify: broadcast create failed (claim retained, manual reset to retry):',
+        createErr?.message || 'no broadcast ID'
+      );
+      return res.status(500).json({ error: 'Failed to send notification' });
     }
 
     const { error: sendErr } = await resend.broadcasts.send(broadcast.id);
     if (sendErr) {
-      // Rollback claim so future attempts can retry
-      await rollbackClaim(existing?.slug);
-      throw new Error(`Broadcast send failed: ${sendErr.message}`);
+      console.error('news-notify: broadcast send failed (claim retained):', sendErr.message);
+      return res.status(500).json({ error: 'Failed to send notification' });
     }
 
-    return res.status(200).json({ status: 'sent', slug, title });
+    return res.status(200).json({ status: 'sent', slug, title: safeTitle });
   } catch (err: any) {
+    // Never surface err.message to the client — can leak schema / audience IDs.
     console.error('news-notify error:', err);
-    return res.status(500).json({ error: 'Failed to send notification', detail: err.message });
+    return res.status(500).json({ error: 'Failed to send notification' });
   }
 }
 
 function buildDigestEmail(title: string, category: string, articleUrl: string): string {
   const p = 'font-size:16px;line-height:1.7;color:#b0b0b0;margin:0 0 16px';
+  const escTitle = escapeHtml(title);
+  const escCategory = escapeHtml(category);
+  const escUrl = escapeHtml(articleUrl);
 
   return `<!DOCTYPE html>
 <html>
@@ -176,7 +176,7 @@ function buildDigestEmail(title: string, category: string, articleUrl: string): 
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background-color:#0a0e1a;color:#e0e0e0;padding:0;margin:0;">
   <div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#0a0e1a;">
-    ${title} — read the latest on The Blue Board.
+    ${escTitle} — read the latest on The Blue Board.
   </div>
 
   <div style="max-width:560px;margin:0 auto;padding:40px 24px;">
@@ -186,11 +186,11 @@ function buildDigestEmail(title: string, category: string, articleUrl: string): 
     </p>
 
     <h1 style="color:#e0e0e0;font-size:22px;font-weight:600;margin:0 0 8px;line-height:1.3;">
-      ${title}
+      ${escTitle}
     </h1>
 
     <p style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 24px;">
-      ${category}
+      ${escCategory}
     </p>
 
     <p style="${p}">
@@ -198,7 +198,7 @@ function buildDigestEmail(title: string, category: string, articleUrl: string): 
     </p>
 
     <div style="text-align:center;margin:32px 0;">
-      <a href="${articleUrl}" style="background-color:#4a90d9;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:6px;font-size:16px;font-weight:600;display:inline-block;">
+      <a href="${escUrl}" style="background-color:#4a90d9;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:6px;font-size:16px;font-weight:600;display:inline-block;">
         Read the Article →
       </a>
     </div>

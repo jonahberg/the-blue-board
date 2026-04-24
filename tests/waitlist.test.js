@@ -2,18 +2,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockEmailSend = vi.fn();
 
-// Mock @supabase/supabase-js to prevent createClient from throwing
-// when env vars are missing in test environment
+// Mock @supabase/supabase-js so the real getSupabase() in api/_supabase.ts
+// returns a mockable client. Env vars below satisfy the production-mode
+// assertEnv check. The handler calls supabase.from(...) through the real
+// getSupabase(); replacing the client happens via this createClient mock.
+const mockFrom = vi.fn();
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({ from: vi.fn() })),
+  createClient: vi.fn(() => ({ from: mockFrom })),
 }));
 
-// Mock Supabase before importing handler
-vi.mock('../api/_supabase.js', () => ({
-  supabase: {
-    from: vi.fn(),
-  },
-}));
+// Set env BEFORE the handler module loads; getSupabase() reads these lazily
+// but some tests trigger module-load paths that assert on them.
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://test.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+// Force non-production so the strict env check in api/_supabase.ts doesn't
+// trip during tests — the handler still exercises the full flow.
+process.env.NODE_ENV = 'test';
+delete process.env.VERCEL_ENV;
 
 vi.mock('resend', () => ({
   Resend: vi.fn(() => ({
@@ -24,18 +29,18 @@ vi.mock('resend', () => ({
 }));
 
 import handler from '../api/waitlist.js';
-import { supabase } from '../api/_supabase.js';
 
 // Use unique IPs per test to avoid rate limiter collisions
 let ipCounter = 100;
 function uniqueIp() { return '10.0.0.' + (ipCounter++); }
 
-let existingRows = [];
-let upsertError = null;
+// Mock upsert().select('created_at').single() chain. Tests adjust createdAt
+// to simulate fresh vs returning signups (see NEW_SIGNUP_WINDOW_MS = 10_000
+// in api/waitlist.ts).
+let upsertResult;
+let mockSingle;
+let mockUpsertSelect;
 let mockUpsert;
-let mockSelect;
-let mockEq;
-let mockLimit;
 
 function makeReq(overrides = {}) {
   return {
@@ -62,19 +67,15 @@ function makeRes() {
 describe('waitlist API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    existingRows = [];
-    upsertError = null;
+    // Default: simulate a fresh signup — created_at right now. Tests that need
+    // a "returning visitor" override createdAt to be older than 10 seconds ago.
+    upsertResult = { data: { created_at: new Date().toISOString(), id: 1 }, error: null };
     mockEmailSend.mockResolvedValue({ data: { id: 'email_123' }, error: null });
 
-    mockUpsert = vi.fn(() => Promise.resolve({ error: upsertError }));
-    mockLimit = vi.fn(() => Promise.resolve({ data: existingRows, error: null }));
-    mockEq = vi.fn(() => ({ limit: mockLimit }));
-    mockSelect = vi.fn(() => ({ eq: mockEq }));
-
-    supabase.from.mockReturnValue({
-      select: mockSelect,
-      upsert: mockUpsert,
-    });
+    mockSingle = vi.fn(() => Promise.resolve(upsertResult));
+    mockUpsertSelect = vi.fn(() => ({ single: mockSingle }));
+    mockUpsert = vi.fn(() => ({ select: mockUpsertSelect }));
+    mockFrom.mockReturnValue({ upsert: mockUpsert });
 
     delete process.env.RESEND_API_KEY;
   });
@@ -114,20 +115,22 @@ describe('waitlist API', () => {
     expect(res._json).toEqual({ success: true });
   });
 
-  it('upserts with correct data', async () => {
+  it('upserts with correct data and normalizes email', async () => {
     const res = makeRes();
     await handler(makeReq({ body: { email: 'Test@Example.com', source: 'footer', featureRequest: 'Dark mode' } }), res);
 
-    expect(supabase.from).toHaveBeenCalledWith('waitlist');
+    expect(mockFrom).toHaveBeenCalledWith('waitlist');
     expect(mockUpsert).toHaveBeenCalledWith(
       { email: 'test@example.com', source: 'footer', feature_request: 'Dark mode' },
       { onConflict: 'email' }
     );
+    // Handler uses the returning-row's created_at to classify as new vs repeat.
+    expect(mockUpsertSelect).toHaveBeenCalledWith('created_at');
     expect(res._status).toBe(200);
   });
 
   it('returns 500 on Supabase error', async () => {
-    upsertError = { message: 'db error' };
+    upsertResult = { data: null, error: { message: 'db error' } };
 
     const res = makeRes();
     await handler(makeReq(), res);
@@ -146,7 +149,10 @@ describe('waitlist API', () => {
     expect(res._status).toBe(403);
   });
 
-  it('truncates long source and feature_request', async () => {
+  it('whitelists source and falls back to popup for out-of-enum values', async () => {
+    // With the DB CHECK constraint in sql/006_waitlist_checks.sql, only values
+    // from VALID_SOURCES are allowed. Out-of-enum values fall back to 'popup'
+    // instead of being passed through and tripping a constraint error.
     const res = makeRes();
     await handler(makeReq({
       body: {
@@ -157,7 +163,7 @@ describe('waitlist API', () => {
     }), res);
 
     const upsertArg = mockUpsert.mock.calls[0][0];
-    expect(upsertArg.source.length).toBe(50);
+    expect(upsertArg.source).toBe('popup');
     expect(upsertArg.feature_request.length).toBe(500);
   });
 
@@ -179,9 +185,13 @@ describe('waitlist API', () => {
     expect(res._status).toBe(200);
   });
 
-  it('skips the welcome email for repeat signups', async () => {
+  it('skips the welcome email for repeat signups (created_at older than the new-signup window)', async () => {
     process.env.RESEND_API_KEY = 're_test_key';
-    existingRows = [{ email: 'test@example.com' }];
+    // Simulate a returning visitor — created_at is well outside the 10s window.
+    upsertResult = {
+      data: { created_at: new Date(Date.now() - 60_000).toISOString(), id: 1 },
+      error: null,
+    };
 
     const res = makeRes();
     await handler(makeReq(), res);

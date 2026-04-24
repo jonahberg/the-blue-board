@@ -34,7 +34,7 @@ export function GET() {
         <news:name>The Blue Board</news:name>
         <news:language>en</news:language>
       </news:publication>
-      <news:publication_date>${a.date}</news:publication_date>
+      <news:publication_date>${a.date}T12:00:00Z</news:publication_date>
       <news:title>${xmlEscape(a.title)}</news:title>
     </news:news>
   </url>`
