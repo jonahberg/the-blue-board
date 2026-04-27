@@ -1,0 +1,35 @@
+---
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const config = JSON.stringify({ url: supabaseUrl, anonKey: supabaseAnonKey });
+---
+<!DOCTYPE html>
+<html lang="en" style="color-scheme:dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0B1018">
+<meta name="robots" content="noindex, nofollow">
+<title>Signing you in… — The Blue Board</title>
+<link rel="canonical" href="https://theblueboard.co/auth/callback">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .pro-auth-shell { max-width: 440px; margin: 0 auto; padding: 96px 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #e0e0e0; text-align: center; }
+  .pro-auth-status { font-size: 16px; color: #b0b0b0; }
+  .pro-auth-error { display: none; color: #f87171; font-size: 15px; padding: 16px; border: 1px solid rgba(248, 113, 113, 0.3); border-radius: 6px; background: rgba(248, 113, 113, 0.05); }
+  .pro-auth-cta { display: inline-block; margin-top: 16px; color: #4a90d9; text-decoration: none; font-size: 15px; }
+</style>
+</head>
+<body style="background:#0a0e14;margin:0;">
+  <main class="pro-auth-shell">
+    <p id="pro-callback-status" class="pro-auth-status">Signing you in…</p>
+    <div id="pro-callback-error" class="pro-auth-error" role="alert">
+      <p id="pro-callback-error-text"></p>
+      <a class="pro-auth-cta" href="/auth/login">Request a new link &rarr;</a>
+    </div>
+  </main>
+
+  <script id="supabase-config" type="application/json" set:html={config}></script>
+  <script defer src="/js/pro-auth-callback.js"></script>
+</body>
+</html>

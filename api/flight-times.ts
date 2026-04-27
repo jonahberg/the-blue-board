@@ -21,6 +21,24 @@ function setCache(key: string, data: any): void {
 
 // Rate limiting: 30 req/min per IP
 const rateLimitByIp = new Map<string, number[]>();
+
+// Internal callers (the risk-monitor cron) include the Bearer cron secret to
+// bypass the per-IP rate limit. We import isAuthorizedCronRequest lazily to
+// avoid pulling crypto.timingSafeEqual into edge-cold-start path for normal
+// public requests.
+function hasCronAuth(req: VercelRequest): boolean {
+  try {
+    const auth = req.headers?.authorization;
+    const value = Array.isArray(auth) ? auth[0] : auth;
+    if (typeof value !== 'string' || !value.startsWith('Bearer ')) return false;
+    // Reuse the cron-auth helper for timing-safe compare.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { isAuthorizedCronRequest } = require('./_cron-auth.js');
+    return isAuthorizedCronRequest(req);
+  } catch (_e) {
+    return false;
+  }
+}
 export function getClientIp(req: VercelRequest): string {
   const realIp = req.headers?.['x-real-ip'];
   if (realIp) return Array.isArray(realIp) ? realIp[0] : realIp;
@@ -166,7 +184,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ...cached, cached: true });
   }
 
-  if (isRateLimited(req)) {
+  // Internal cron callers bypass the per-IP limiter (proven via CRON_SECRET
+  // Bearer header). Without this, /api/cron/risk-monitor would 429 for every
+  // flight after the 30th in a single tick because the cron's outbound calls
+  // share its single Vercel-region IP.
+  if (!hasCronAuth(req) && isRateLimited(req)) {
     return res.status(429).json({ success: false, error: 'Rate limited' });
   }
 

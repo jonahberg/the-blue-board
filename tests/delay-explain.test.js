@@ -9,6 +9,8 @@ vi.mock('@anthropic-ai/sdk', () => ({
 }));
 
 import handler from '../api/delay-explain.js';
+import { createDailyCounter } from '../api/_daily-counter.js';
+const _gateCounter = createDailyCounter('delay-explain-daily');
 
 function createRes() {
   return {
@@ -41,6 +43,8 @@ describe('delay-explain API', () => {
     mockCreate.mockResolvedValue({
       content: [{ type: 'text', text: 'This flight is delayed due to weather.' }],
     });
+    // 3/day free-tier counter persists across tests; reset before each.
+    _gateCounter.resetForTesting();
   });
 
   // --- Validation ---

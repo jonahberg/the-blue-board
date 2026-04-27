@@ -1,4 +1,8 @@
-const CACHE_VERSION = 'v8';
+// CACHE_VERSION is replaced at build time by scripts/stamp-sw-version.mjs.
+// The placeholder string in the constant below must remain unchanged in source.
+// Local dev (no build step) sees the unreplaced literal; the SW activates on
+// install regardless, and the dev value is stable across reloads.
+const CACHE_VERSION = 'v9-__BUILD_SHA__';
 const PAGE_CACHE = `blueboard-pages-${CACHE_VERSION}`;
 const DATA_CACHE = `blueboard-data-${CACHE_VERSION}`;
 const STATIC_CACHE = `blueboard-static-${CACHE_VERSION}`;
@@ -61,6 +65,14 @@ self.addEventListener('fetch', (event) => {
 
   // Let the browser handle all cross-origin resources directly (Leaflet/CDNs/tiles/etc).
   if (url.origin !== self.location.origin) return;
+
+  // Per-user authenticated Pro endpoints — never cache. Letting these into
+  // DATA_CACHE risks serving one user's flights / subscription state to
+  // another session on the same device. Skip the SW entirely so the browser
+  // honors the Cache-Control: no-store header from the API.
+  if (url.pathname.startsWith('/api/pro/') || url.pathname.startsWith('/api/auth/') || url.pathname.startsWith('/api/stripe/')) {
+    return;
+  }
 
   const isNavigation = request.mode === 'navigate' || request.destination === 'document' || url.pathname === '/' || url.pathname.endsWith('.html');
   const isDataRequest = url.pathname.startsWith('/api/') || url.pathname.startsWith('/data/');
@@ -141,23 +153,51 @@ self.addEventListener('fetch', (event) => {
   })());
 });
 
+// ═══ PUSH EVENT HANDLER ═══
+// Receives VAPID-signed push payloads from api/_alert-dispatcher.ts.
+// Payload shape: { title, body, url, flight }
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      // Treat as plain text
+      try { data = { title: 'The Blue Board', body: event.data.text() }; } catch (_) { data = {}; }
+    }
+  }
+  const title = data.title || 'The Blue Board';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: data.url || '/pro/flights', flight: data.flight || '' },
+    tag: data.flight ? 'tbb-' + data.flight : 'tbb',
+    renotify: true,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
 // ═══ NOTIFICATION CLICK HANDLER ═══
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const flight = event.notification.data?.flight || '';
-  const urlPath = flight ? '/?flight=' + encodeURIComponent(flight) : '/';
+  const data = event.notification.data || {};
+  // Pro alerts pass an explicit URL; legacy notifications use ?flight=...
+  const targetPath = data.url
+    ? new URL(data.url, self.location.origin).pathname + new URL(data.url, self.location.origin).search
+    : data.flight
+      ? '/?flight=' + encodeURIComponent(data.flight)
+      : '/';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      // Focus existing window if available
       for (const client of clients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          if (flight) client.navigate(self.location.origin + urlPath);
+          if (targetPath && targetPath !== '/') client.navigate(self.location.origin + targetPath);
           return client.focus();
         }
       }
-      // Open new window if no existing client
-      return self.clients.openWindow(urlPath);
+      return self.clients.openWindow(targetPath);
     })
   );
 });

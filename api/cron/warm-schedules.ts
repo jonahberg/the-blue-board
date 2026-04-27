@@ -4,6 +4,7 @@
 
 import type { VercelRequest, VercelResponse } from '../types.js';
 import { getStartOfDayForHub } from '../irops.js';
+import { isAuthorizedCronRequest } from '../_cron-auth.js';
 
 const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
 // Serialized with INTER_TASK_DELAY_MS between tasks. Budget math: each task
@@ -80,8 +81,7 @@ async function warmOne(hub: string, dir: string, timestamp: number, label: strin
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Vercel cron sends authorization header with CRON_SECRET
-  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCronRequest(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

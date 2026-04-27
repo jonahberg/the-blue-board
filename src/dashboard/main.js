@@ -6532,9 +6532,26 @@ async function fetchDelayExplanation(ctx) {
   if (!contentEl) return;
 
   try {
+    // Attach Pro auth if a Supabase session is in localStorage so paid users
+    // bypass the 3/day free cap. Read the token directly from the well-known
+    // Supabase storage key — avoids loading the supabase-js bundle just to
+    // grab the access_token. Format key: 'sb-{project-ref}-auth-token'.
+    var headers = { 'Content-Type': 'application/json' };
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && /^sb-.*-auth-token$/.test(k)) {
+          var stored = JSON.parse(localStorage.getItem(k) || 'null');
+          var accessToken = stored && stored.access_token;
+          if (accessToken) headers.Authorization = 'Bearer ' + accessToken;
+          break;
+        }
+      }
+    } catch (_e) { /* localStorage disabled / parse error → free tier */ }
+
     const resp = await fetch('/api/delay-explain', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify({
         flight: ctx.flight,
         route: ctx.route,

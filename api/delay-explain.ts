@@ -2,8 +2,20 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
+import { createDailyCounter } from './_daily-counter.js';
+import { getProSession } from './_auth.js';
 
 const isRateLimited = createRateLimiter('delay-explain', 20);
+const FREE_DAILY_LIMIT = 3;
+const dailyCounter = createDailyCounter('delay-explain-daily');
+
+function getClientIp(req: VercelRequest): string {
+  const realIp = req.headers?.['x-real-ip'];
+  if (realIp) return Array.isArray(realIp) ? realIp[0] : realIp;
+  const xff = req.headers?.['x-forwarded-for'];
+  const raw = Array.isArray(xff) ? xff[0] : (typeof xff === 'string' ? xff : '');
+  return raw.split(',')[0]?.trim() || 'unknown';
+}
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -68,17 +80,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ error: 'AI analysis unavailable — no API key configured' });
   }
 
+  // Check Pro status (silently — no auth header is fine, just means free tier).
+  // Pro session bypasses the daily cap; cache hits also don't burn quota
+  // (handled below — counter only increments on a genuine Anthropic call).
+  let isPro = false;
+  if (req.headers?.authorization) {
+    try {
+      const session = await getProSession(req as any);
+      if (session?.pro) isPro = true;
+    } catch (_) {
+      // Silently fall through to free tier
+    }
+  }
+
   try {
     const ctx: DelayContext = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     if (!ctx || !ctx.flight) {
       return res.status(400).json({ error: 'Missing flight context' });
     }
 
-    // Check cache
+    // Check cache (cached responses don't burn the daily quota)
     const key = getCacheKey(ctx);
     const cached = cache.get(key);
     if (cached) {
       return res.status(200).json({ explanation: cached, cached: true });
+    }
+
+    // Free-tier daily cap (Pro bypasses entirely).
+    if (!isPro) {
+      const ip = getClientIp(req);
+      if (dailyCounter.isOverLimit(ip, FREE_DAILY_LIMIT)) {
+        return res.status(429).json({
+          error: `Free tier limited to ${FREE_DAILY_LIMIT} AI explanations per day. Upgrade to Pro for unlimited.`,
+          upgrade_url: '/pro',
+          limit: FREE_DAILY_LIMIT,
+        });
+      }
     }
 
     // Build context prompt with aircraft journey chain
@@ -153,6 +190,13 @@ Deliver 2-4 sentences of direct, specific analysis grounded in the provided data
 
     // Cache the result
     cache.set(key, text);
+
+    // Burn 1 from the daily quota only after a successful Anthropic call.
+    // Cached responses (handled above) and errors do not count.
+    if (!isPro) {
+      const ip = getClientIp(req);
+      dailyCounter.increment(ip);
+    }
 
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({ explanation: text, cached: false });

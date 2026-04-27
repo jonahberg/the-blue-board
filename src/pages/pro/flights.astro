@@ -1,0 +1,111 @@
+---
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
+const config = JSON.stringify({ url: supabaseUrl, anonKey: supabaseAnonKey });
+---
+<!DOCTYPE html>
+<html lang="en" style="color-scheme:dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0B1018">
+<meta name="robots" content="noindex, nofollow">
+<title>My Flights — The Blue Board Pro</title>
+<link rel="canonical" href="https://theblueboard.co/pro/flights">
+<link rel="manifest" href="/manifest.json">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .pro-page { max-width: 560px; margin: 0 auto; padding: 48px 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #e0e0e0; }
+  .pro-eyebrow { font-size: 13px; color: #4a90d9; letter-spacing: 0.5px; margin: 0 0 16px; text-transform: uppercase; }
+  .pro-h1 { font-size: 28px; font-weight: 600; margin: 0 0 8px; line-height: 1.25; }
+  .pro-sub { font-size: 15px; color: #b0b0b0; line-height: 1.55; margin: 0 0 32px; }
+  .pro-flights-form { display: flex; gap: 8px; margin: 0 0 24px; }
+  .pro-input { flex: 1; background: #0a0e1a; border: 1px solid #1a2035; color: #e0e0e0; padding: 12px 14px; border-radius: 6px; font-size: 16px; text-transform: uppercase; }
+  .pro-input:focus { outline: 2px solid #4a90d9; outline-offset: 0; border-color: transparent; }
+  .pro-btn { background: #4a90d9; color: #fff; border: 0; padding: 12px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .pro-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .pro-error { color: #f87171; font-size: 14px; margin: 0 0 16px; display: none; }
+  .pro-status { font-size: 13px; color: #6b7280; margin: 0 0 16px; }
+  .pro-flight-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  .pro-flight-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #0e1422; border: 1px solid #1a2035; border-radius: 6px; }
+  .pro-flight-label { font-size: 16px; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .pro-flight-remove { background: transparent; border: 1px solid #1a2035; color: #b0b0b0; padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; }
+  .pro-flight-remove:hover { color: #f87171; border-color: #f87171; }
+  .pro-empty { padding: 40px 20px; text-align: center; color: #6b7280; font-size: 14px; background: #0e1422; border: 1px dashed #1a2035; border-radius: 6px; display: none; }
+  .pro-foot { margin-top: 40px; display: flex; justify-content: space-between; font-size: 13px; color: #6b7280; }
+  .pro-foot a, .pro-foot button { color: #4a90d9; text-decoration: none; background: none; border: 0; cursor: pointer; font-size: 13px; padding: 0; font-family: inherit; }
+  .pro-install-card { display: none; padding: 20px; background: #0e1422; border: 1px solid #1a2035; border-radius: 8px; margin: 0 0 24px; }
+  .pro-install-h3 { font-size: 16px; font-weight: 600; margin: 0 0 8px; color: #e0e0e0; }
+  .pro-install-step { font-size: 14px; color: #b0b0b0; line-height: 1.55; margin: 0 0 8px; padding-left: 24px; position: relative; }
+  .pro-install-step::before { content: counter(step) '.'; counter-increment: step; position: absolute; left: 0; color: #4a90d9; font-weight: 600; }
+  .pro-install-steps { counter-reset: step; padding: 0; margin: 12px 0 16px; list-style: none; }
+  .pro-install-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .pro-install-btn-primary { background: #4a90d9; color: #fff; border: 0; padding: 10px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .pro-install-btn-secondary { background: transparent; color: #b0b0b0; border: 1px solid #1a2035; padding: 10px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+  .pro-install-success { display: none; padding: 12px 16px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 6px; color: #86efac; font-size: 14px; margin: 0 0 16px; }
+  .pro-install-error { display: none; padding: 12px 16px; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.3); border-radius: 6px; color: #f87171; font-size: 14px; margin: 0 0 16px; }
+</style>
+</head>
+<body style="background:#0a0e14;margin:0;">
+  <main class="pro-page">
+    <p class="pro-eyebrow">THE BLUE BOARD &middot; PRO</p>
+    <h1 class="pro-h1">My Flights</h1>
+    <p class="pro-sub">
+      Add up to 10 flights. We'll watch them every 15 minutes and ping you when delay risk spikes.
+    </p>
+
+    <form id="pro-flights-form" class="pro-flights-form" novalidate>
+      <input
+        id="pro-flights-input"
+        class="pro-input"
+        type="text"
+        placeholder="UA1234"
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+        maxlength="8"
+        required
+      />
+      <button id="pro-flights-submit" class="pro-btn" type="submit">Add flight</button>
+    </form>
+
+    <p id="pro-flights-error" class="pro-error" role="alert"></p>
+    <p id="pro-flights-status" class="pro-status"></p>
+
+    <div id="pro-install-success" class="pro-install-success" role="status"></div>
+    <div id="pro-install-error" class="pro-install-error" role="alert"></div>
+
+    <div id="pro-install-walkthrough" class="pro-install-card">
+      <h3 class="pro-install-h3">One step to get push alerts on iPhone</h3>
+      <p style="color:#b0b0b0;font-size:14px;margin:0 0 8px;">Apple only delivers push notifications to installed home-screen apps. Two taps:</p>
+      <ol class="pro-install-steps">
+        <li class="pro-install-step">Tap the <strong>Share</strong> icon at the bottom of Safari</li>
+        <li class="pro-install-step">Choose <strong>Add to Home Screen</strong>, then open The Blue Board from your home screen</li>
+        <li class="pro-install-step">You'll be back here automatically — push will turn on</li>
+      </ol>
+      <div class="pro-install-actions">
+        <button id="pro-install-enable" type="button" class="pro-install-btn-primary">I installed it — turn on push</button>
+        <button id="pro-install-email-fallback" type="button" class="pro-install-btn-secondary">Email me alerts instead</button>
+      </div>
+    </div>
+
+    <ul id="pro-flights-list" class="pro-flight-list"></ul>
+    <div id="pro-flights-empty" class="pro-empty">No flights yet. Add one above to start tracking.</div>
+
+    <div class="pro-foot">
+      <a href="/">&larr; Back to dashboard</a>
+      <button id="pro-flights-signout" type="button">Sign out</button>
+    </div>
+  </main>
+
+  <script id="supabase-config" type="application/json" set:html={config}></script>
+  <script id="vapid-public-key" type="text/plain" set:html={vapidPublicKey}></script>
+  <!-- Service worker registration: required for navigator.serviceWorker.ready
+       in pro-install.js to resolve. Without this, push subscription hangs
+       forever for users landing directly on /pro/flights from auth or Stripe. -->
+  <script defer src="/js/sw-register.js"></script>
+  <script defer src="/js/pro-flights.js"></script>
+  <script defer src="/js/pro-install.js"></script>
+</body>
+</html>

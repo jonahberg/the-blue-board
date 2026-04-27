@@ -1,0 +1,118 @@
+---
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const config = JSON.stringify({ url: supabaseUrl, anonKey: supabaseAnonKey });
+---
+<!DOCTYPE html>
+<html lang="en" style="color-scheme:dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0B1018">
+<title>Blue Board Pro — Personal flight intelligence for United flyers</title>
+<meta name="description" content="Get warned before United does. Personal flight monitoring, push alerts on delay risk, unlimited AI delay explanations. Founding pricing $5.99/mo for the first 100.">
+<link rel="canonical" href="https://theblueboard.co/pro">
+<link rel="manifest" href="/manifest.json">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Blue Board Pro — Personal flight intelligence for United flyers">
+<meta property="og:description" content="Get warned before United does. $5.99/mo founding price.">
+<meta property="og:url" content="https://theblueboard.co/pro">
+<meta property="og:image" content="https://theblueboard.co/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Blue Board Pro">
+<meta name="twitter:description" content="Get warned before United does.">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .pro-landing { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #e0e0e0; background: #0a0e14; min-height: 100vh; }
+  .pro-shell { max-width: 720px; margin: 0 auto; padding: 64px 24px; }
+  .pro-eyebrow { font-size: 13px; color: #4a90d9; letter-spacing: 0.5px; margin: 0 0 16px; text-transform: uppercase; }
+  .pro-hero-h1 { font-size: 40px; font-weight: 700; margin: 0 0 16px; line-height: 1.15; text-wrap: balance; }
+  .pro-hero-sub { font-size: 18px; color: #b0b0b0; line-height: 1.55; margin: 0 0 32px; }
+  .pro-cta-wrap { margin: 0 0 48px; }
+  .pro-cta-btn { background: #4a90d9; color: #fff; border: 0; padding: 16px 32px; border-radius: 6px; font-size: 18px; font-weight: 600; cursor: pointer; }
+  .pro-cta-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .pro-cta-meta { font-size: 13px; color: #6b7280; margin: 12px 0 0; }
+  .pro-section { padding: 32px 0; border-top: 1px solid #1a2035; }
+  .pro-section-h2 { font-size: 22px; font-weight: 600; margin: 0 0 16px; }
+  .pro-feature-table { width: 100%; border-collapse: collapse; margin: 0 0 24px; font-size: 14px; }
+  .pro-feature-table th { text-align: left; padding: 12px 8px; color: #b0b0b0; font-weight: 500; border-bottom: 1px solid #1a2035; }
+  .pro-feature-table td { padding: 12px 8px; border-bottom: 1px solid #1a2035; }
+  .pro-feature-table th:nth-child(2), .pro-feature-table td:nth-child(2) { text-align: center; color: #6b7280; }
+  .pro-feature-table th:nth-child(3), .pro-feature-table td:nth-child(3) { text-align: center; color: #4a90d9; font-weight: 600; }
+  .pro-quote { background: #0e1422; border-left: 3px solid #4a90d9; padding: 16px 20px; margin: 0 0 16px; font-size: 15px; line-height: 1.55; color: #e0e0e0; }
+  .pro-quote-attr { font-size: 13px; color: #6b7280; margin: 8px 0 0; }
+  .pro-error { color: #f87171; font-size: 14px; margin: 12px 0 0; display: none; }
+  .pro-foot { margin-top: 48px; font-size: 13px; color: #6b7280; }
+  .pro-foot a { color: #4a90d9; text-decoration: none; }
+</style>
+</head>
+<body class="pro-landing">
+  <main class="pro-shell">
+    <p class="pro-eyebrow">THE BLUE BOARD &middot; PRO</p>
+    <h1 class="pro-hero-h1">Get warned before United does.</h1>
+    <p class="pro-hero-sub">
+      Add your upcoming flights. We watch your aircraft, your hubs, and the FAA every 15 minutes. When delay risk spikes, we ping you with the operational reason — the kind United's app tells you 90 minutes after the gate agent already knows.
+    </p>
+
+    <div class="pro-cta-wrap">
+      <button id="pro-subscribe-btn" class="pro-cta-btn" type="button">Subscribe — $5.99/mo</button>
+      <p class="pro-cta-meta">Founding pricing — first 100 subscribers. Regular price $7.99/mo. Cancel anytime.</p>
+      <p id="pro-landing-error" class="pro-error" role="alert"></p>
+    </div>
+
+    <section class="pro-section">
+      <h2 class="pro-section-h2">What you get</h2>
+      <table class="pro-feature-table">
+        <thead>
+          <tr><th>Feature</th><th>Free</th><th>Pro</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Live ops map (600+ flights)</td><td>Full</td><td>Full</td></tr>
+          <tr><td>Hub health, weather, FAA NAS</td><td>Full</td><td>Full</td></tr>
+          <tr><td>AI delay explanations</td><td>3/day</td><td>Unlimited</td></tr>
+          <tr><td>My Flights dashboard</td><td>—</td><td>Up to 10</td></tr>
+          <tr><td>Personalized risk monitoring</td><td>—</td><td>Every 15 min</td></tr>
+          <tr><td>Push notifications on risk spikes</td><td>—</td><td>Yes</td></tr>
+          <tr><td>Ads</td><td>None</td><td>None</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="pro-section">
+      <h2 class="pro-section-h2">Built with the people who use it</h2>
+      <div class="pro-quote">
+        "I have incorporated Blue Board into my preflight flow to see which hubs are having irops, quick glance at wx and atc constraints. If this ends up making its way into an app with live activities, widgets and push notifications that would be great!"
+        <p class="pro-quote-attr">— UAL pilot, March 2026</p>
+      </div>
+      <div class="pro-quote">
+        "I do work at United NOC so a ton of eyes."
+        <p class="pro-quote-attr">— UAL operations center employee, on the original launch post</p>
+      </div>
+      <div class="pro-quote">
+        "I'd love your info and map view integrated into Flighty so I could choose United as my primary airline, and view a 30,000 ft view of the entire operation."
+        <p class="pro-quote-attr">— UAL pilot, comparing to Flighty</p>
+      </div>
+    </section>
+
+    <section class="pro-section">
+      <h2 class="pro-section-h2">How push works on iPhone</h2>
+      <p style="font-size:15px;color:#b0b0b0;line-height:1.55;margin:0 0 12px;">
+        After you subscribe, we'll walk you through adding The Blue Board to your home screen — that's an Apple requirement for push notifications. If you'd rather skip install, you can opt into email alerts instead.
+      </p>
+      <p style="font-size:15px;color:#b0b0b0;line-height:1.55;margin:0;">
+        On Android and desktop, push works without install.
+      </p>
+    </section>
+
+    <p class="pro-foot">
+      <a href="/">&larr; Back to dashboard</a> &middot; Already a subscriber? <a href="/pro/flights">Open My Flights</a>
+    </p>
+  </main>
+
+  <script id="supabase-config" type="application/json" set:html={config}></script>
+  <!-- Register the SW here too so push subscription works on the post-auth
+       redirect from /pro to /pro/flights. -->
+  <script defer src="/js/sw-register.js"></script>
+  <script defer src="/js/pro-landing.js"></script>
+</body>
+</html>

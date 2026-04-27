@@ -1,13 +1,12 @@
 import type { VercelRequest, VercelResponse } from '../types.js';
+import { isAuthorizedCronRequest } from '../_cron-auth.js';
 
 /**
  * Cron job to warm the TSA wait times cache every 5 minutes.
  * Calls the /api/tsa endpoint internally to trigger a fresh fetch.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Verify cron secret
-  const authHeader = req.headers['authorization'];
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCronRequest(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

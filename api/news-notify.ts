@@ -23,6 +23,7 @@
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { getSupabase } from './_supabase.js';
+import { isAuthorizedCronRequest } from './_cron-auth.js';
 import { escapeHtml, sanitizeHeaderValue } from '../src/lib/escape.js';
 
 const FROM_ADDRESS = 'Jonah @ The Blue Board <hello@theblueboard.co>';
@@ -33,9 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Auth: verify CRON_SECRET
-  const secret = req.headers['authorization']?.replace('Bearer ', '');
-  if (!secret || secret !== process.env.CRON_SECRET) {
+  if (!isAuthorizedCronRequest(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

@@ -4,6 +4,37 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-05-05 — Pro launch
+
+### Added — Pro tier
+- **My Flights dashboard** at `/pro/flights` — track up to 10 upcoming flights, with personalized risk monitoring every 15 minutes via `api/cron/risk-monitor.ts`. Per-user staggered batching (`user.id % 15`) keeps the cron under the Vercel task budget at scale.
+- **Push notifications** on delay-risk threshold crosses. Web Push (VAPID-signed) for installed PWAs, Resend email fallback for iOS users who skip install. Routed through `api/_alert-dispatcher.ts`. Run `bun scripts/generate-vapid-keys.mjs` once to generate keys.
+- **AI delay explanations** — free tier capped at 3/day per IP via `api/_daily-counter.ts`; Pro is unlimited. Cached responses don't burn quota. The cap returns 429 with `upgrade_url: '/pro'` for the upsell path.
+- **Magic-link auth** at `/auth/login` and `/auth/callback` via Supabase Auth. Client-side session in localStorage; API endpoints verify via `Bearer` token in `api/_auth.ts`.
+- **Stripe Checkout** at `api/stripe/checkout.ts` with founding-100 price gating ($5.99/mo) and regular pricing fallback ($7.99/mo).
+- **Stripe webhook** at `api/stripe/webhook.ts` with `crypto.timingSafeEqual` signature verification, idempotency via the new `stripe_events` table (PRIMARY KEY on event.id), and four lifecycle handlers: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`.
+- **RLS policies** on all new Pro tables (`subscriptions`, `user_flights`, `risk_state`, `push_subscriptions`, `stripe_events`) in `sql/009_pro_rls.sql`. User-scoped via `auth.uid() = user_id`. Integration-test scaffold at `tests/pro-rls.integration.test.js` runs against a real Supabase project when `TEST_SUPABASE_*` env vars are set.
+- **Pro landing page** at `/pro` with feature comparison table, pilot/NOC social proof, and Stripe checkout CTA.
+- **Pro launch email blast** at `scripts/send-pro-launch-blast.mjs` — Resend broadcast template with `--dry-run` mode for preview before send.
+
+### Added — Engineering hygiene (bundled with Pro work)
+- `api/_cron-auth.ts` with `crypto.timingSafeEqual` for the CRON_SECRET check. Migrated 4 existing cron endpoints (`refresh-tsa`, `sync-starlink`, `warm-schedules`, `news-notify`) to use it. Closes TODOs.md item #6.
+- `api/_kill-switch.ts` master + per-feature env flags (`PRO_ENABLED`, `PRO_FEATURE_CHECKOUT_ENABLED`, `PRO_FEATURE_PUSH_ENABLED`, `PRO_FEATURE_RISK_MONITOR_ENABLED`). Triage capability for partial-failure scenarios.
+- `api/_risk-monitor-utils.ts` pure helpers — `assignBucket`, `computeSignalsHash`, `shouldCallAnthropic`, `crossedAlertThreshold`, `isValidFlightNumber` (regex-based prompt-injection defense per the deferred TODO from v1.5.6).
+- `public/sw.js` push event handler + notification-click routing. CACHE_VERSION wired to `VERCEL_GIT_COMMIT_SHA` at build time via `scripts/stamp-sw-version.mjs` — fixes the v1.5.6 cache-break class permanently (returning users with stale cached pages auto-recover on next visit).
+
+### Fixed
+- Service worker caches no longer outlive deploys silently. `CACHE_VERSION` now includes the deploy commit SHA, so any header/CSP/script change forces a fresh fetch on the next visit. Suspected cause of the Apr 23-26 visitor decline from ~95/day to ~50/day after the v1.5.6 CSP tightening.
+
+### CSP
+- `connect-src` extended to allow `https://*.supabase.co` and `wss://*.supabase.co` for client-side Supabase Auth.
+
+### Configuration — new env vars
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_FOUNDING`, `STRIPE_PRICE_ID_REGULAR`
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (already needed for client-side auth)
+- Optional kill-switches: `PRO_ENABLED`, `PRO_FEATURE_CHECKOUT_ENABLED`, `PRO_FEATURE_PUSH_ENABLED`, `PRO_FEATURE_RISK_MONITOR_ENABLED` (default to enabled if unset)
+
 ## [1.5.6] - 2026-04-24
 
 ### Security
