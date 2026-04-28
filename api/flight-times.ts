@@ -4,6 +4,7 @@
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
+import { isAuthorizedCronRequest } from './_cron-auth.js';
 
 const CACHE_TTL_MS = 60_000; // 1 minute
 const cache = new Map<string, { data: any; ts: number }>();
@@ -23,21 +24,15 @@ function setCache(key: string, data: any): void {
 const rateLimitByIp = new Map<string, number[]>();
 
 // Internal callers (the risk-monitor cron) include the Bearer cron secret to
-// bypass the per-IP rate limit. We import isAuthorizedCronRequest lazily to
-// avoid pulling crypto.timingSafeEqual into edge-cold-start path for normal
-// public requests.
+// bypass the per-IP rate limit. The project is `type: "module"` so the
+// isAuthorizedCronRequest import lives at the top of the file (static ESM)
+// — CommonJS require() would silently return undefined and bypass would
+// fail open.
 function hasCronAuth(req: VercelRequest): boolean {
-  try {
-    const auth = req.headers?.authorization;
-    const value = Array.isArray(auth) ? auth[0] : auth;
-    if (typeof value !== 'string' || !value.startsWith('Bearer ')) return false;
-    // Reuse the cron-auth helper for timing-safe compare.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { isAuthorizedCronRequest } = require('./_cron-auth.js');
-    return isAuthorizedCronRequest(req);
-  } catch (_e) {
-    return false;
-  }
+  const auth = req.headers?.authorization;
+  const value = Array.isArray(auth) ? auth[0] : auth;
+  if (typeof value !== 'string' || !value.startsWith('Bearer ')) return false;
+  return isAuthorizedCronRequest(req);
 }
 export function getClientIp(req: VercelRequest): string {
   const realIp = req.headers?.['x-real-ip'];

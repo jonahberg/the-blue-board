@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://test.supabase.co';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
@@ -61,12 +61,42 @@ function mockRiskStateUpsert() {
   });
 }
 
+// risk_state SELECT for the active bucket (the JS-side merge step). Returns
+// no prior state — so processFlight treats every flight as first-observation.
+function mockRiskStateLookup(rows = []) {
+  const result = Promise.resolve({ data: rows, error: null });
+  const chain = {
+    select: vi.fn(() => chain),
+    in: vi.fn(() => result),
+    then: result.then.bind(result),
+  };
+  mockFrom.mockReturnValueOnce(chain);
+}
+
+// Global fetch mock — fetchSignals calls /api/flight-times. Default to "upstream
+// unavailable" (returns null), which causes processFlight to record the error
+// and continue. Per-test overrides can replace this.
+const originalFetch = globalThis.fetch;
+globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 503 }));
+
 describe('GET /api/cron/risk-monitor', () => {
   beforeEach(() => {
     mockFrom.mockReset();
+    globalThis.fetch.mockClear();
     delete process.env.PRO_ENABLED;
     delete process.env.PRO_FEATURE_RISK_MONITOR_ENABLED;
   });
+
+  afterEach(() => {
+    delete process.env.RISK_MONITOR_BUCKET_OVERRIDE;
+  });
+
+  // Compute the bucket for a known user ID, then pin it for tests that need
+  // the handler to actually iterate over that user's flights.
+  async function pinBucketFor(userId) {
+    const { assignBucket } = await import('../api/_risk-monitor-utils.js');
+    process.env.RISK_MONITOR_BUCKET_OVERRIDE = String(assignBucket(userId));
+  }
 
   it('returns 401 when CRON_SECRET is missing or wrong', async () => {
     const res = makeRes();
@@ -96,38 +126,36 @@ describe('GET /api/cron/risk-monitor', () => {
     expect(res.body).toMatchObject({ processed: 0 });
   });
 
-  it('processes each flight in the current bucket and records to risk_state', async () => {
-    // 2 active Pro users, both in current bucket (we'll just trust assignBucket here)
-    mockActiveSubs(['user-a', 'user-b']);
-    mockFlightsQuery([
-      { user_id: 'user-a', flight_number: 'UA100' },
-      { user_id: 'user-b', flight_number: 'UA200' },
-    ]);
-    mockRiskStateUpsert();
-    mockRiskStateUpsert();
+  it('processes flights in the active bucket and records to risk_state', async () => {
+    await pinBucketFor('user-a');
+    mockActiveSubs(['user-a']);
+    mockFlightsQuery([{ user_id: 'user-a', flight_number: 'UA100' }]);
+    mockRiskStateLookup([]);
+    mockRiskStateUpsert(); // 'upstream_unavailable' upsert (fetch returns 503)
 
     const res = makeRes();
     await handler(makeReq(), res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.processed).toBeGreaterThanOrEqual(0);
+    expect(res.body.processed).toBe(1);
+    expect(res.body.alerted).toBe(0);
   });
 
   it('caps processed flights to MAX_FLIGHTS_PER_TICK to stay under task budget', async () => {
+    await pinBucketFor('u');
     mockActiveSubs(['u']);
-    // Return way too many flights
     const manyFlights = [];
     for (let i = 0; i < 200; i++) {
       manyFlights.push({ user_id: 'u', flight_number: `UA${i}` });
     }
     mockFlightsQuery(manyFlights);
-    // Risk-state upserts for each processed flight (cap-limited)
-    for (let i = 0; i < 100; i++) mockRiskStateUpsert();
+    mockRiskStateLookup([]);
+    // Risk-state upserts for each processed flight (cap-limited to 50)
+    for (let i = 0; i < 60; i++) mockRiskStateUpsert();
 
     const res = makeRes();
     await handler(makeReq(), res);
     expect(res.statusCode).toBe(200);
-    // Cap is 50 by default
     expect(res.body.processed).toBeLessThanOrEqual(50);
   });
 });

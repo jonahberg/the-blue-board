@@ -53,6 +53,14 @@ interface PriorRiskState {
 }
 
 function currentBucket(now: Date = new Date()): number {
+  // Test-only override (set via env var) so cron tests don't depend on the
+  // wall clock — `assignBucket(userId)` and `currentBucket()` must agree for
+  // the handler to take the processing path, and the tests use fixed user IDs.
+  const override = process.env.RISK_MONITOR_BUCKET_OVERRIDE;
+  if (override !== undefined) {
+    const n = Number.parseInt(override, 10);
+    if (Number.isFinite(n) && n >= 0 && n < BUCKET_COUNT) return n;
+  }
   return now.getMinutes() % BUCKET_COUNT;
 }
 
@@ -211,11 +219,20 @@ async function processFlight(
     ctx.callsRemaining.count -= 1;
   }
 
+  // If the budget was exhausted (shouldRecompute=false but signals DID change),
+  // keep the PRIOR signals_hash so the next tick sees the change as still
+  // pending. Updating to currHash here would mark this change as "already
+  // processed" and the alert would never fire.
+  const persistedHash =
+    !shouldRecompute && prior.signals_hash !== null && prior.signals_hash !== currHash
+      ? prior.signals_hash
+      : currHash;
+
   const { error } = await supabase.from('risk_state').upsert(
     {
       user_id: flight.user_id,
       flight_number: flight.flight_number,
-      signals_hash: currHash,
+      signals_hash: persistedHash,
       risk_level: nextRiskLevel,
       last_checked: new Date().toISOString(),
       last_alerted: didAlert ? new Date().toISOString() : undefined,
