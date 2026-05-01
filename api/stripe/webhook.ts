@@ -82,6 +82,13 @@ function assertWriteOk(label: string, error: { message: string } | null) {
   }
 }
 
+function assertUpdatedRows(label: string, rows: any[] | null | undefined, error: { message: string } | null) {
+  assertWriteOk(label, error);
+  if (!rows || rows.length === 0) {
+    throw new Error(`${label} failed: no matching subscription row`);
+  }
+}
+
 async function handleCheckoutCompleted(event: Stripe.Event) {
   const session = event.data.object as Stripe.Checkout.Session;
   const userId = session.metadata?.user_id;
@@ -113,7 +120,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
   const sub = event.data.object as Stripe.Subscription;
   const supabase = getSupabase();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('subscriptions')
     .update({
       status: sub.status,
@@ -122,23 +129,25 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
       price_id: sub.items.data[0]?.price.id ?? null,
       updated_at: new Date().toISOString(),
     })
-    .eq('stripe_subscription_id', sub.id);
-  assertWriteOk('subscriptions update (customer.subscription.updated)', error);
+    .eq('stripe_subscription_id', sub.id)
+    .select('id');
+  assertUpdatedRows('subscriptions update (customer.subscription.updated)', data as any[] | null, error);
 }
 
 async function handleSubscriptionDeleted(event: Stripe.Event) {
   const sub = event.data.object as Stripe.Subscription;
   const supabase = getSupabase();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('subscriptions')
     .update({
       status: 'canceled',
       cancel_at_period_end: false,
       updated_at: new Date().toISOString(),
     })
-    .eq('stripe_subscription_id', sub.id);
-  assertWriteOk('subscriptions update (customer.subscription.deleted)', error);
+    .eq('stripe_subscription_id', sub.id)
+    .select('id');
+  assertUpdatedRows('subscriptions update (customer.subscription.deleted)', data as any[] | null, error);
 }
 
 async function handlePaymentFailed(event: Stripe.Event) {
@@ -147,14 +156,15 @@ async function handlePaymentFailed(event: Stripe.Event) {
   if (!subscriptionId) return;
 
   const supabase = getSupabase();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('subscriptions')
     .update({
       status: 'past_due',
       updated_at: new Date().toISOString(),
     })
-    .eq('stripe_subscription_id', subscriptionId);
-  assertWriteOk('subscriptions update (invoice.payment_failed)', error);
+    .eq('stripe_subscription_id', subscriptionId)
+    .select('id');
+  assertUpdatedRows('subscriptions update (invoice.payment_failed)', data as any[] | null, error);
 
   // TODO v1.1: queue an email to the user via Resend
 }

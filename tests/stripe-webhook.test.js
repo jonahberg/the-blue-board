@@ -70,9 +70,14 @@ function mockSubscriptionUpsert(success = true) {
   mockFrom.mockReturnValueOnce({ upsert: mockUpsert });
 }
 
-function mockSubscriptionUpdate(success = true) {
-  const mockUpdateEq = vi.fn(() => Promise.resolve({ data: success ? [{ id: 1 }] : null, error: success ? null : { message: 'fail' } }));
-  const mockUpdate = vi.fn(() => ({ eq: mockUpdateEq }));
+function mockSubscriptionUpdate(success = true, rows = success ? [{ id: 1 }] : null) {
+  const result = Promise.resolve({ data: rows, error: success ? null : { message: 'fail' } });
+  const chain = {
+    eq: vi.fn(() => chain),
+    select: vi.fn(() => result),
+    then: result.then.bind(result),
+  };
+  const mockUpdate = vi.fn(() => chain);
   mockFrom.mockReturnValueOnce({ update: mockUpdate });
 }
 
@@ -211,6 +216,32 @@ describe('POST /api/stripe/webhook', () => {
     await handler(req, res);
 
     expect(res.statusCode).toBe(200);
+  });
+
+  it('returns 500 and does not mark processed when subscription update matches no rows', async () => {
+    mockConstructEvent.mockReturnValueOnce({
+      id: 'evt_missing_row',
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_missing',
+          status: 'active',
+          cancel_at_period_end: false,
+          current_period_end: 1735689600,
+          items: { data: [{ price: { id: 'price_x' } }] },
+        },
+      },
+    });
+    mockStripeEventLookup(false);
+    mockSubscriptionUpdate(true, []);
+
+    const req = makeRawReq('raw');
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(500);
+    const stripeEventCalls = mockFrom.mock.calls.filter(c => c[0] === 'stripe_events');
+    expect(stripeEventCalls).toHaveLength(1);
   });
 
   it('processes customer.subscription.deleted: marks status canceled', async () => {

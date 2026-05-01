@@ -22,25 +22,38 @@ CREATE POLICY "subscriptions_select_own" ON subscriptions
 ALTER TABLE stripe_events ENABLE ROW LEVEL SECURITY;
 -- No policies = no anon/authenticated access = service-role-only.
 
--- user_flights: full CRUD for own
+-- Helper used by paid-tier policies. Keep this in SQL so direct supabase-js
+-- calls with the anon key cannot bypass app-layer Pro checks.
+CREATE OR REPLACE FUNCTION is_active_pro_user(uid UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM subscriptions
+    WHERE user_id = uid
+      AND status = 'active'
+      AND current_period_end > NOW()
+  );
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public;
+
+-- user_flights: full CRUD for own active Pro users
 ALTER TABLE user_flights ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "user_flights_select_own" ON user_flights
   FOR SELECT
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id AND is_active_pro_user(auth.uid()));
 
 CREATE POLICY "user_flights_insert_own" ON user_flights
   FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (auth.uid() = user_id AND is_active_pro_user(auth.uid()));
 
 CREATE POLICY "user_flights_update_own" ON user_flights
   FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING (auth.uid() = user_id AND is_active_pro_user(auth.uid()))
+  WITH CHECK (auth.uid() = user_id AND is_active_pro_user(auth.uid()));
 
 CREATE POLICY "user_flights_delete_own" ON user_flights
   FOR DELETE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id AND is_active_pro_user(auth.uid()));
 
 -- risk_state: read-only for user; writes only via service role (cron)
 ALTER TABLE risk_state ENABLE ROW LEVEL SECURITY;
@@ -49,22 +62,22 @@ CREATE POLICY "risk_state_select_own" ON risk_state
   FOR SELECT
   USING (auth.uid() = user_id);
 
--- push_subscriptions: full CRUD for own
+-- push_subscriptions: full CRUD for own active Pro users
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "push_subscriptions_select_own" ON push_subscriptions
   FOR SELECT
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id AND is_active_pro_user(auth.uid()));
 
 CREATE POLICY "push_subscriptions_insert_own" ON push_subscriptions
   FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (auth.uid() = user_id AND is_active_pro_user(auth.uid()));
 
 CREATE POLICY "push_subscriptions_update_own" ON push_subscriptions
   FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING (auth.uid() = user_id AND is_active_pro_user(auth.uid()))
+  WITH CHECK (auth.uid() = user_id AND is_active_pro_user(auth.uid()));
 
 CREATE POLICY "push_subscriptions_delete_own" ON push_subscriptions
   FOR DELETE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id AND is_active_pro_user(auth.uid()));

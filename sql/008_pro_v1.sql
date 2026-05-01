@@ -55,6 +55,33 @@ CREATE TABLE IF NOT EXISTS user_flights (
 
 CREATE INDEX IF NOT EXISTS idx_user_flights_user_id ON user_flights(user_id);
 
+-- Enforce the same 10-flight cap at the database layer. The API checks this
+-- too, but direct Supabase access with the user's JWT must not bypass it.
+CREATE OR REPLACE FUNCTION enforce_user_flights_limit()
+RETURNS TRIGGER AS $$
+DECLARE
+  MAX_FLIGHTS_PER_USER CONSTANT INTEGER := 10;
+  existing_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO existing_count
+  FROM user_flights
+  WHERE user_id = NEW.user_id;
+
+  IF existing_count >= MAX_FLIGHTS_PER_USER THEN
+    RAISE EXCEPTION 'user_flights limit exceeded: max % flights per user', MAX_FLIGHTS_PER_USER
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS enforce_user_flights_limit ON user_flights;
+CREATE TRIGGER enforce_user_flights_limit
+  BEFORE INSERT ON user_flights
+  FOR EACH ROW
+  EXECUTE FUNCTION enforce_user_flights_limit();
+
 -- ── risk_state: per-flight delta tracking + error visibility ────────────────
 -- The risk_monitor cron writes here. Delta-based gating compares signals_hash
 -- before calling Anthropic. error column surfaces "alerts paused" UX.

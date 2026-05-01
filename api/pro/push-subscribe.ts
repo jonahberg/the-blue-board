@@ -97,5 +97,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  if (delivery === 'push') {
+    // A real push subscription supersedes the email fallback. Without this,
+    // users who first chose email and later installed the PWA get duplicate alerts.
+    const { error: deleteErr } = await supabase
+      .from('push_subscriptions')
+      .delete()
+      .eq('user_id', session.userId)
+      .eq('delivery', 'email');
+    if (deleteErr) {
+      console.error('email fallback cleanup failed:', deleteErr.message);
+      res.status(500).json({ error: 'Could not update preferred delivery channel' });
+      return;
+    }
+  }
+
   res.status(201).json({ ok: true, delivery });
 }

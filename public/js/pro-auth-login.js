@@ -58,7 +58,9 @@
       try {
         var sp = new URLSearchParams(window.location.search);
         var n = sp.get('next');
-        if (n && /^\//.test(n)) nextParam = '?next=' + encodeURIComponent(n);
+        if (n && n.startsWith('/') && !n.startsWith('//')) {
+          nextParam = '?next=' + encodeURIComponent(n);
+        }
       } catch (_e) { /* ignore */ }
 
       supabase.auth

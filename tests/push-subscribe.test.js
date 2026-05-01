@@ -50,6 +50,16 @@ function mockUpsertOk() {
   const mockUpsert = vi.fn(() => Promise.resolve({ data: [{ id: 1 }], error: null }));
   mockFrom.mockReturnValueOnce({ upsert: mockUpsert });
 }
+function mockDeleteEmailFallbackOk() {
+  const result = Promise.resolve({ data: null, error: null });
+  const chain = {
+    delete: vi.fn(() => chain),
+    eq: vi.fn(() => chain),
+    then: result.then.bind(result),
+  };
+  mockFrom.mockReturnValueOnce(chain);
+  return chain;
+}
 
 describe('POST /api/pro/push-subscribe', () => {
   beforeEach(() => {
@@ -97,6 +107,7 @@ describe('POST /api/pro/push-subscribe', () => {
     mockAuthOk('user-1');
     mockProSubscription();
     mockUpsertOk();
+    const deleteChain = mockDeleteEmailFallbackOk();
     const res = makeRes();
     await handler(
       makeReq({
@@ -112,6 +123,9 @@ describe('POST /api/pro/push-subscribe', () => {
       res
     );
     expect(res.statusCode).toBe(201);
+    expect(deleteChain.delete).toHaveBeenCalled();
+    expect(deleteChain.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(deleteChain.eq).toHaveBeenCalledWith('delivery', 'email');
   });
 
   it('upserts an email-fallback subscription (iOS non-installer)', async () => {

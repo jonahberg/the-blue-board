@@ -109,6 +109,21 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
+async function deleteDeadPushEndpoint(endpoint: string) {
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .delete()
+    .eq('endpoint', endpoint);
+  if (error) {
+    console.error('dead push subscription cleanup failed:', error.message);
+  }
+}
+
+function isDeadPushEndpointError(err: any): boolean {
+  return err?.statusCode === 404 || err?.statusCode === 410;
+}
+
 export async function dispatchAlert(payload: AlertPayload): Promise<DispatchResult> {
   const supabase = getSupabase();
   const { data: subs, error } = await supabase
@@ -138,6 +153,9 @@ export async function dispatchAlert(payload: AlertPayload): Promise<DispatchResu
       }
     } catch (err: any) {
       console.error('alert dispatch failed for endpoint:', sub.endpoint, err.message);
+      if (sub.delivery === 'push' && isDeadPushEndpointError(err)) {
+        await deleteDeadPushEndpoint(sub.endpoint);
+      }
       failures++;
     }
   }

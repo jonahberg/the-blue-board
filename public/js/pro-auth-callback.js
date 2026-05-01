@@ -17,12 +17,11 @@
 
   var statusEl = document.getElementById('pro-callback-status');
   var errorEl = document.getElementById('pro-callback-error');
+  var errorTextEl = document.getElementById('pro-callback-error-text');
   function setStatus(msg) { if (statusEl) statusEl.textContent = msg; }
   function setError(msg) {
-    if (errorEl) {
-      errorEl.textContent = msg || '';
-      errorEl.style.display = msg ? 'block' : 'none';
-    }
+    if (errorTextEl) errorTextEl.textContent = msg || '';
+    if (errorEl) errorEl.style.display = msg ? 'block' : 'none';
     if (statusEl) statusEl.style.display = 'none';
   }
 
@@ -32,7 +31,9 @@
   try {
     var sp = new URLSearchParams(window.location.search);
     var n = sp.get('next');
-    if (n && /^\/[A-Za-z0-9_/?=&%.-]*$/.test(n)) redirect = n;
+    if (n && n.startsWith('/') && !n.startsWith('//') && /^\/[A-Za-z0-9_/?=&%.-]*$/.test(n)) {
+      redirect = n;
+    }
   } catch (_e) { /* ignore */ }
 
   import('https://unpkg.com/@supabase/supabase-js@2/+esm').then(function (mod) {

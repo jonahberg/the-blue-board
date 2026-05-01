@@ -26,6 +26,8 @@ import {
 import { dispatchAlert } from '../_alert-dispatcher.js';
 
 const MAX_FLIGHTS_PER_TICK = 50;
+const PROCESS_CONCURRENCY = Number(process.env.RISK_MONITOR_CONCURRENCY || 8);
+const CRON_TIME_BUDGET_MS = Number(process.env.RISK_MONITOR_TIME_BUDGET_MS || 52_000);
 // Per Eng Review D12: cap downstream work per tick. Currently Anthropic isn't
 // called from the cron (delay-explain stays user-pull) but the gate is wired
 // so v1.1 can flip it on without changing the per-tick cost ceiling.
@@ -194,13 +196,35 @@ async function processFlight(
 
   let nextRiskLevel: RiskLevel = prior.risk_level ?? 'low';
   let didAlert = false;
+  let claimedAlertAt: string | undefined;
 
   if (shouldRecompute) {
     nextRiskLevel = classifyRisk(signals);
     if (crossedAlertThreshold(prior.risk_level, nextRiskLevel)) {
+      // Claim the alert in the same state row before external delivery. If the
+      // server crashes after push/email succeeds, the next cron tick sees the
+      // new hash/risk state and will not double-send the same transition.
+      claimedAlertAt = new Date().toISOString();
+      const { error: claimErr } = await supabase.from('risk_state').upsert(
+        {
+          user_id: flight.user_id,
+          flight_number: flight.flight_number,
+          signals_hash: currHash,
+          risk_level: nextRiskLevel,
+          last_checked: claimedAlertAt,
+          last_alerted: claimedAlertAt,
+          error: null,
+        },
+        { onConflict: 'user_id,flight_number' }
+      );
+      if (claimErr) {
+        console.error('risk_state alert claim failed:', claimErr.message);
+        return { processed: false, alerted: false };
+      }
+
       const email = ctx.emailByUserId.get(flight.user_id) ?? '';
       try {
-        await dispatchAlert({
+        const result = await dispatchAlert({
           userId: flight.user_id,
           email,
           flightNumber: flight.flight_number,
@@ -209,7 +233,7 @@ async function processFlight(
             `Status: ${signals.status ?? 'changed'}. Tap for the AI breakdown of why.`,
           url: `https://theblueboard.co/?flight=${encodeURIComponent(flight.flight_number)}`,
         });
-        didAlert = true;
+        didAlert = result.pushSent + result.emailSent > 0;
       } catch (err: any) {
         console.error('dispatchAlert failed:', err.message);
       }
@@ -235,7 +259,7 @@ async function processFlight(
       signals_hash: persistedHash,
       risk_level: nextRiskLevel,
       last_checked: new Date().toISOString(),
-      last_alerted: didAlert ? new Date().toISOString() : undefined,
+      last_alerted: claimedAlertAt,
       error: null,
     },
     { onConflict: 'user_id,flight_number' }
@@ -262,7 +286,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: subs, error: subsErr } = await supabase
     .from('subscriptions')
     .select('user_id')
-    .eq('status', 'active');
+    .eq('status', 'active')
+    .gt('current_period_end', new Date().toISOString());
 
   if (subsErr) {
     console.error('subscriptions query failed:', subsErr.message);
@@ -290,14 +315,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: flights, error: flightsErr } = await supabase
     .from('user_flights')
     .select('user_id, flight_number')
-    .in('user_id', bucketUserIds)
-    .limit(MAX_FLIGHTS_PER_TICK * 4);
+    .in('user_id', bucketUserIds);
 
   // Fetch matching risk_state rows for the same users
-  const { data: riskRows } = await supabase
+  const { data: riskRows, error: riskErr } = await supabase
     .from('risk_state')
     .select('user_id, flight_number, last_checked, signals_hash, risk_level')
     .in('user_id', bucketUserIds);
+
+  if (riskErr) {
+    console.error('risk_state query failed:', riskErr.message);
+    return res.status(500).json({ error: 'Could not load prior risk state' });
+  }
 
   // Index risk_state by composite key for O(1) merge
   const riskByKey = new Map<string, { last_checked: string; signals_hash: string | null; risk_level: RiskLevel | null }>();
@@ -340,16 +369,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     callsRemaining: { count: ANTHROPIC_CALL_CEILING },
   };
 
-  // 5. Process each flight (sequential — keeps total cron time predictable
-  // and matches the warm-schedules pattern that already proved out the budget
-  // math at the same task limit).
+  // 5. Process flights with bounded concurrency and a global time budget. This
+  // keeps the 60s Vercel maxDuration safe even when /api/flight-times is slow.
   let processed = 0;
   let alerted = 0;
-  for (const flight of cappedFlights) {
-    const result = await processFlight(flight as UserFlight, ctx);
-    if (result.processed) processed++;
-    if (result.alerted) alerted++;
+  let nextIndex = 0;
+  const deadline = Date.now() + CRON_TIME_BUDGET_MS;
+  const workerCount = Math.max(1, Math.min(PROCESS_CONCURRENCY, cappedFlights.length));
+
+  async function worker() {
+    while (Date.now() < deadline) {
+      const flight = cappedFlights[nextIndex++];
+      if (!flight) return;
+      const result = await processFlight(flight as UserFlight, ctx);
+      if (result.processed) processed++;
+      if (result.alerted) alerted++;
+    }
   }
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   return res.status(200).json({
     bucket,

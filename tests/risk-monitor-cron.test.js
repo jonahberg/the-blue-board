@@ -48,7 +48,8 @@ function mockActiveSubs(userIds) {
   });
   const chain = {
     select: vi.fn(() => chain),
-    eq: vi.fn(() => result),
+    eq: vi.fn(() => chain),
+    gt: vi.fn(() => result),
     then: result.then.bind(result),
   };
   mockFrom.mockReturnValueOnce(chain);
@@ -65,6 +66,16 @@ function mockRiskStateUpsert() {
 // no prior state — so processFlight treats every flight as first-observation.
 function mockRiskStateLookup(rows = []) {
   const result = Promise.resolve({ data: rows, error: null });
+  const chain = {
+    select: vi.fn(() => chain),
+    in: vi.fn(() => result),
+    then: result.then.bind(result),
+  };
+  mockFrom.mockReturnValueOnce(chain);
+}
+
+function mockRiskStateLookupError() {
+  const result = Promise.resolve({ data: null, error: { message: 'risk_state down' } });
   const chain = {
     select: vi.fn(() => chain),
     in: vi.fn(() => result),
@@ -157,5 +168,28 @@ describe('GET /api/cron/risk-monitor', () => {
     await handler(makeReq(), res);
     expect(res.statusCode).toBe(200);
     expect(res.body.processed).toBeLessThanOrEqual(50);
+  });
+
+  it('filters active subscriptions by unexpired current_period_end', async () => {
+    mockActiveSubs([]);
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    const subsChain = mockFrom.mock.results[0].value;
+    expect(subsChain.eq).toHaveBeenCalledWith('status', 'active');
+    expect(subsChain.gt).toHaveBeenCalledWith('current_period_end', expect.any(String));
+  });
+
+  it('returns 500 and does not process flights when risk_state lookup fails', async () => {
+    await pinBucketFor('user-a');
+    mockActiveSubs(['user-a']);
+    mockFlightsQuery([{ user_id: 'user-a', flight_number: 'UA100' }]);
+    mockRiskStateLookupError();
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(500);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

@@ -42,6 +42,17 @@ function mockSubscriptionsLookup(rows) {
   mockFrom.mockReturnValueOnce(chain);
 }
 
+function mockDeleteEndpointOk() {
+  const result = Promise.resolve({ data: null, error: null });
+  const chain = {
+    delete: vi.fn(() => chain),
+    eq: vi.fn(() => result),
+    then: result.then.bind(result),
+  };
+  mockFrom.mockReturnValueOnce(chain);
+  return chain;
+}
+
 function mockUserEmailLookup(email) {
   // .from('subscriptions').select('user_id').eq(...).maybeSingle() — actually we look up via auth admin
   // Simpler: pass email in via the alert payload
@@ -156,5 +167,28 @@ describe('dispatchAlert', () => {
     });
     expect(result.pushSent).toBe(1);
     expect(result.failures).toBe(1);
+  });
+
+  it('deletes expired push subscriptions when web-push returns 410', async () => {
+    mockSubscriptionsLookup([
+      { endpoint: 'https://fcm.test/dead', keys: { p256dh: 'k', auth: 'a' }, delivery: 'push' },
+    ]);
+    const deleteChain = mockDeleteEndpointOk();
+    const gone = new Error('gone');
+    gone.statusCode = 410;
+    mockSendNotification.mockRejectedValueOnce(gone);
+
+    const result = await dispatchAlert({
+      userId: 'u1',
+      email: 'a@b.com',
+      flightNumber: 'UA1',
+      title: 'x',
+      body: 'y',
+      url: 'z',
+    });
+
+    expect(result.failures).toBe(1);
+    expect(deleteChain.delete).toHaveBeenCalled();
+    expect(deleteChain.eq).toHaveBeenCalledWith('endpoint', 'https://fcm.test/dead');
   });
 });
