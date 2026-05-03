@@ -1246,7 +1246,12 @@ function showFlightPopup(f, marker) {
     let acInfo = [];
     if (f.acType) acInfo.push(f.acType);
     if (f.reg) acInfo.push(f.reg);
-    if (acInfo.length) html += `<div style="font-size:10px;color:var(--ua-muted);margin:4px 0">${escapeHtml(acInfo.join(' · '))} (not in mainline fleet DB — likely United Express)</div>`;
+    if (acInfo.length) {
+      const note = FLEET_DB.length === 0
+        ? 'Loading aircraft data…'
+        : 'not in mainline fleet DB — likely United Express';
+      html += `<div style="font-size:10px;color:var(--ua-muted);margin:4px 0">${escapeHtml(acInfo.join(' · '))} (${note})</div>`;
+    }
   }
 
   // Departure/Arrival times — placeholder, filled async
@@ -6074,35 +6079,36 @@ async function initApp() {
     rotator(document.getElementById('global-search-input'), hints);
     rotator(document.getElementById('myflight-search'), mfHints);
   })();
-  // Init map immediately — defer fleet data loading to reduce initial network contention
+  // Init map immediately so the user sees something
   initMap();
-  // Fleet data is ~194 KB; load it on idle unless a deep link requires it immediately
+  // Always await fleet data before init returns. The previous requestIdleCallback
+  // deferral created a race where flight popups opened before FLEET_BY_REG
+  // populated showed "(not in mainline fleet DB — likely United Express)" for
+  // valid mainline tails. Edge cache (24h) + browser cache (1h) make the FCP
+  // cost of this ~194KB fetch negligible for repeat visitors.
   var acDeepLink = new URLSearchParams(location.search).get('aircraft');
   const loadFleetAndInit = async () => {
     await loadFleetData();
-    // Flights can render before the idle-loaded fleet DB arrives, so refresh
-    // any fleet-dependent live UI as soon as the fleet data finishes loading.
     if (allFlights.length > 0) {
       updateStats();
       updateAnalytics();
       updateLiveFleetPanel();
     }
-    updateTicker(); // Re-render ticker now that fleet data is available (avoids 30s gap with missing fleet counts)
+    // If a popup is open from before fleet loaded (race window), re-render it
+    // so it shows the matched aircraft instead of "Loading aircraft data…".
+    const openMarker = Object.values(flightMarkers).find(m => m.isPopupOpen && m.isPopupOpen());
+    if (openMarker) {
+      const f = allFlights.find(fl => fl.icao24 === openMarker._icao24);
+      if (f) showFlightPopup(f, openMarker);
+    }
+    updateTicker();
     initFleetTab();
     var onboardingEl = document.getElementById('onboarding-overlay');
     if (acDeepLink && FLEET_DB.length > 0 && (!onboardingEl || onboardingEl.style.display === 'none')) setTimeout(function() { showAircraftDetail(acDeepLink); }, 500);
-    // Show config for deep-linked type, otherwise show empty state
     if (activeFleetType) showConfigGallery(activeFleetType);
     else showConfigEmpty();
   };
-  if (acDeepLink) {
-    // Deep link needs fleet data now
-    await loadFleetAndInit();
-  } else if ('requestIdleCallback' in window) {
-    requestIdleCallback(() => loadFleetAndInit());
-  } else {
-    setTimeout(() => loadFleetAndInit(), 2000);
-  }
+  await loadFleetAndInit();
   updateTicker();
   // Now that map + fleet data are ready, activate the hash-linked tab's data layer.
   // The hash IIFE only set the visual state; this triggers the actual data loads.

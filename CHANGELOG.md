@@ -4,6 +4,16 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.7] - 2026-05-03
+
+### Fixed
+- Flight popups no longer mislabel mainline aircraft as "(not in mainline fleet DB — likely United Express)" when opened during the brief window before the fleet database finishes loading. The fleet DB load was deferred via `requestIdleCallback`, so flights that rendered first could be clicked before `FLEET_BY_REG` populated, causing every `matchAircraft` call to return null. Fleet load now blocks `initApp` so the lookup is always ready by the time popups can open.
+- Any popup left open across the (now near-impossible) race window auto-rerenders once fleet data arrives, so users never see stale "Loading aircraft data…" text.
+- The fallback popup string is honest: `Loading aircraft data…` while the DB is empty, and `not in mainline fleet DB — likely United Express` only when the lookup actually misses (genuine United Express tails).
+
+### Added
+- `tests/fleet-data.test.js` — fleet.json data integrity (1000+ entries, valid N-numbers, unique regs) and a regression test that asserts N66808 resolves to a 737-900ER mainline entry through the same lookup path the dashboard uses.
+
 ## [1.5.6] - 2026-04-24
 
 ### Security
