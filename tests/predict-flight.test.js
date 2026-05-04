@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import handler from '../api/predict-flight.js';
+import handler, { _resetCacheForTest } from '../api/predict-flight.js';
 
 function createRes() {
   return {
@@ -24,6 +24,7 @@ function makeReq(overrides = {}) {
 describe('predict-flight API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    _resetCacheForTest();
   });
 
   it('rejects non-GET requests', async () => {
@@ -84,6 +85,25 @@ describe('predict-flight API', () => {
     );
   });
 
+  it('strips ICAO UAL prefix and sends UA-prefixed callsign upstream', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ flightNumber: 'UA123' }),
+    });
+
+    const res = createRes();
+    await handler(makeReq({ query: { flight_number: 'UAL123' } }), res);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('flight_number=UA123'),
+      expect.any(Object)
+    );
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('flight_number=UAL'),
+      expect.any(Object)
+    );
+  });
+
   it('uppercases existing UA prefix', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
@@ -127,5 +147,53 @@ describe('predict-flight API', () => {
         headers: { 'User-Agent': 'BlueBoard-PredictFlight/1.0' },
       })
     );
+  });
+
+  it('short-circuits to 502 without re-fetching after upstream connection failure', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));
+
+    // First call: upstream errors, sets unhealthy flag
+    const res1 = createRes();
+    await handler(makeReq({ query: { flight_number: 'UA400' } }), res1);
+    expect(res1.statusCode).toBe(502);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Second call (different flight, same module state): must short-circuit
+    // without hitting the network again
+    const res2 = createRes();
+    await handler(makeReq({ query: { flight_number: 'UA401' } }), res2);
+    expect(res2.statusCode).toBe(502);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('probes upstream again once the negative-cache window expires', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch')
+        .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({ flight_number: 'UA502', probability: 0.8 }),
+        });
+
+      // Failure poisons the negative cache
+      await handler(makeReq({ query: { flight_number: 'UA500' } }), createRes());
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      // Inside the 60s window: short-circuit to 502, no upstream call
+      const resInside = createRes();
+      await handler(makeReq({ query: { flight_number: 'UA501' } }), resInside);
+      expect(resInside.statusCode).toBe(502);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      // After 61s: window expired, next call probes upstream (which now succeeds)
+      vi.advanceTimersByTime(61 * 1000);
+      const resOk = createRes();
+      await handler(makeReq({ query: { flight_number: 'UA502' } }), resOk);
+      expect(resOk.statusCode).toBe(200);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
