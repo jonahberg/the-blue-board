@@ -4,6 +4,20 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.8] - 2026-05-03
+
+### Fixed
+- Starlink badges no longer waste 10s of function time per request when the upstream is unreachable. `api/predict-flight.ts` now keeps a 60s negative cache: the first connect failure poisons the in-memory flag, and every subsequent call inside that window returns 502 immediately without re-attempting the dead host. Upstream timeout tightened from 10s to 4s. The flag clears on the first successful response, so recovery is automatic.
+- ICAO callsigns like `UAL123` now normalize to `UA123` before being forwarded upstream. Previous logic treated `UAL123` as already prefixed and sent it through unchanged, which the upstream rejects. Same fix applied to both `api/predict-flight.ts` and the new `api/check-flight.ts`.
+- Dashboard Starlink-badge fetcher now uses local-date formatting (`toLocaleDateString('en-CA')`) instead of UTC. Users west of UTC after roughly 5 PM local were silently sending tomorrow's date and getting no matches every evening.
+- Dashboard prediction cache is now keyed on `flight|date`, so leaving the tab open across midnight or revisiting a recurring flight number on consecutive days no longer reuses yesterday's result.
+
+### Added
+- `api/check-flight.ts` — a new proxy targeting upstream's documented `/api/check-flight` endpoint (the contract the upstream maintainer has committed to keeping stable). Server-side adapter maps `{hasStarlink, confidence: "verified"|"likely"}` to a probability score so existing badge UI renders without changes. Same defenses as predict-flight: origin gate, per-IP rate limit (20/min), 4s timeout, 30-min positive cache, 60s negative cache.
+- Dashboard now calls `/api/check-flight` instead of `/api/predict-flight`. Predict-flight stays in place (with the new defenses) for any external consumers; the dashboard migration moves us off an undocumented upstream endpoint.
+- `tests/check-flight.test.js` — 14 tests covering the proxy: 405/400 paths, upstream connection failure, status forwarding, the three adapter cases (verified/likely/no-match), UAL prefix normalization, User-Agent header, both negative-cache behaviors (in-window short-circuit and post-window probe).
+- `tests/predict-flight.test.js` — 3 new tests: UAL prefix normalization, in-window negative-cache short-circuit, and post-window upstream probe via `vi.useFakeTimers`.
+
 ## [1.5.7] - 2026-05-03
 
 ### Fixed

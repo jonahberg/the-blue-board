@@ -1474,25 +1474,29 @@ function splitAtAntimeridian(pts) {
 const starlinkPredictionCache = new Map();
 
 function fetchStarlinkPredictions() {
+  // en-CA emits YYYY-MM-DD in the user's local timezone, which matches the
+  // operational date of the displayed flights. Plain toISOString() is UTC and
+  // would query tomorrow's date for west-of-UTC users after local afternoon.
+  const today = new Date().toLocaleDateString('en-CA');
   document.querySelectorAll('.starlink-predict').forEach(el => {
     const flight = el.getAttribute('data-flight');
     if (!flight || flight === 'N/A') { el.style.display = 'none'; return; }
 
-    // Check cache first
-    const cached = starlinkPredictionCache.get(flight);
+    const cacheKey = flight + '|' + today;
+    const cached = starlinkPredictionCache.get(cacheKey);
     if (cached) {
       applyStarlinkPrediction(el, cached);
       return;
     }
 
-    fetch('/api/predict-flight?flight_number=' + encodeURIComponent(flight))
+    fetch('/api/check-flight?flight_number=' + encodeURIComponent(flight) + '&date=' + today)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data || data.probability === undefined) {
           el.style.display = 'none';
           return;
         }
-        starlinkPredictionCache.set(flight, data);
+        starlinkPredictionCache.set(cacheKey, data);
         applyStarlinkPrediction(el, data);
       })
       .catch(() => { el.style.display = 'none'; });

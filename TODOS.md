@@ -11,7 +11,7 @@
 - [ ] Migrate inline event handlers (`onclick`, `onkeydown`, `onload`) at `public/index.html:75`, `src/dashboard/main.js:2956/3704/3717` to delegated `data-action` attributes.
 - [ ] Tighten CSP: drop `style-src 'unsafe-inline'` after inline-style audit.
 - [ ] Cost alerting: Anthropic + FR24 spend anomaly detection via Vercel log drain.
-- [ ] Circuit breakers / graceful degradation for FR24, Anthropic, Resend, Supabase.
+- [ ] Circuit breakers / graceful degradation for FR24, Anthropic, Resend, Supabase. (partial: 60s negative cache + 4s timeout shipped for `api/predict-flight.ts` and `api/check-flight.ts` in v1.5.8)
 - [ ] Feature kill-switches for non-core (waitlist, news-notify, delay-explain) via env flags.
 
 ### Security hygiene (backlog)
