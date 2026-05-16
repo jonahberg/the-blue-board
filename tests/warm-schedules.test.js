@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildWarmPlan } from '../api/cron/warm-schedules.js';
+import { buildScheduleWarmUrl, buildWarmPlan } from '../api/cron/warm-schedules.js';
 
 describe('warm-schedules buildWarmPlan', () => {
   const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
@@ -62,5 +62,14 @@ describe('warm-schedules buildWarmPlan', () => {
     // Default is 4 tasks per run
     expect(plan.length).toBeLessThanOrEqual(8);
     expect(plan.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('disables official FR24 fallback for background schedule warming', () => {
+    const url = buildScheduleWarmUrl('ORD', 'departures', 1778907600);
+    expect(url).toContain('/api/schedule?');
+    expect(url).toContain('hub=ORD');
+    expect(url).toContain('dir=departures');
+    expect(url).toContain('timestamp=1778907600');
+    expect(url).toContain('officialFallback=0');
   });
 });

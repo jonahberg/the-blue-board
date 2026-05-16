@@ -57,9 +57,19 @@ export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
   return plan;
 }
 
+export function buildScheduleWarmUrl(hub: string, dir: string, timestamp: number): string {
+  const params = new URLSearchParams({
+    hub,
+    dir,
+    timestamp: String(timestamp),
+    officialFallback: '0',
+  });
+  return `${BASE_URL}/api/schedule?${params}`;
+}
+
 async function warmOne(hub: string, dir: string, timestamp: number, label: string): Promise<{ key: string; result: any }> {
   const key = `${hub}-${dir}-${label}`;
-  const url = `${BASE_URL}/api/schedule?hub=${hub}&dir=${dir}&timestamp=${timestamp}`;
+  const url = buildScheduleWarmUrl(hub, dir, timestamp);
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 55000);
@@ -71,7 +81,23 @@ async function warmOne(hub: string, dir: string, timestamp: number, label: strin
     const cdnStatus = resp.headers.get('x-vercel-cache') || 'unknown';
     if (resp.ok) {
       const data = await resp.json() as any;
-      return { key, result: { status: 'ok', flights: data.total || 0, partial: data.partial || false, cached: data.cached || false, cdn: cdnStatus } };
+      const flights = Number(data.total || 0);
+      const partial = data.partial === true;
+      const status = partial
+        ? flights > 0 ? 'degraded_partial' : 'degraded_empty'
+        : 'ok';
+      return {
+        key,
+        result: {
+          status,
+          flights,
+          partial,
+          cached: data.cached || false,
+          cdn: cdnStatus,
+          partialReason: data.meta?.partialReason,
+          completeness: data.meta?.completeness,
+        }
+      };
     }
     return { key, result: { status: `http_${resp.status}`, cdn: cdnStatus } };
   } catch (e: any) {

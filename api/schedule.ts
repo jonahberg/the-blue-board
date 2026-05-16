@@ -9,6 +9,7 @@ const isRateLimited = createRateLimiter('schedule', 30);
 
 type ScheduleFetchOptions = {
   allowTargetedOfficialRescue?: boolean;
+  disableOfficialSource?: boolean;
 };
 
 // In-memory LRU cache for FR24 schedule data
@@ -164,11 +165,14 @@ function buildDegradedResponse(
 
 function shouldAttemptTargetedOfficialRescue(hub: string, ts: number, options?: ScheduleFetchOptions): boolean {
   if (!options?.allowTargetedOfficialRescue || !process.env.FR24_API_TOKEN) return false;
+  if (!['1', 'true', 'yes', 'on'].includes(String(process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED || '').toLowerCase())) {
+    return false;
+  }
   const hubUpper = hub.toUpperCase();
   if (!TARGETED_OFFICIAL_RESCUE_HUBS.has(hubUpper)) return false;
 
   const startOfToday = getStartOfDayForHub(hubUpper);
-  return ts === startOfToday || ts === startOfToday + 86400;
+  return ts === startOfToday;
 }
 
 function cacheSet(key: string, data: any, ttlMs: number): void {
@@ -177,6 +181,23 @@ function cacheSet(key: string, data: any, ttlMs: number): void {
     if (firstKey !== undefined) cache.delete(firstKey);
   }
   cache.set(key, { data, expires: Date.now() + ttlMs, time: Date.now() });
+}
+
+function setAggregateCacheHeader(res: VercelResponse, data: any, cdnMaxAge: number, swr: number): void {
+  const isPartial = data?.partial === true;
+  const maxAge = isPartial ? 30 : cdnMaxAge;
+  const stale = isPartial ? 60 : swr;
+  res.setHeader('Cache-Control', `s-maxage=${maxAge}, stale-while-revalidate=${stale}`);
+}
+
+function getSingleQueryValue(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] || '' : value || '';
+}
+
+function shouldDisableOfficialFallback(req: VercelRequest): boolean {
+  const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.officialFallback).toLowerCase();
+  const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-official-fallback'] as string | string[] | undefined).toLowerCase();
+  return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
 }
 
 async function fetchWithTimeout(url: string, deadlineMs?: number): Promise<Response> {
@@ -384,6 +405,8 @@ function normalizeSummaryFlight(f: any) {
 }
 
 const OFFICIAL_API_PAGE_SIZE = 10000; // FR24 API allows up to 20,000 per request; use 10k to get most hubs in a single page
+const OFFICIAL_QUOTA_BLOCK_MS = 30 * 60 * 1000;
+let officialQuotaBlockedUntil = 0;
 
 function parseRetryAfterMs(headerValue: string | null): number {
   if (!headerValue) return 0;
@@ -397,11 +420,25 @@ function parseRetryAfterMs(headerValue: string | null): number {
   return 0;
 }
 
+function isOfficialQuotaBlocked(): boolean {
+  return Date.now() < officialQuotaBlockedUntil;
+}
+
+function blockOfficialQuota(reason: string): void {
+  officialQuotaBlockedUntil = Date.now() + OFFICIAL_QUOTA_BLOCK_MS;
+  console.warn(`Official FR24 API quota blocked for 30m: ${reason}`);
+}
+
 async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeoutMs?: number) {
   const logHub = String(hub);
   const token = process.env.FR24_API_TOKEN;
   if (!token) {
     console.log('Official FR24 API: no FR24_API_TOKEN configured');
+    return null;
+  }
+  if (isOfficialQuotaBlocked()) {
+    const secondsRemaining = Math.ceil((officialQuotaBlockedUntil - Date.now()) / 1000);
+    console.warn(`Official FR24 API: quota block active for ${logHub}, skipping for ${secondsRemaining}s`);
     return null;
   }
 
@@ -460,6 +497,15 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
       if (!resp.ok) {
         const body = await resp.text().catch(() => '');
         console.error(`Official FR24 API returned ${resp.status} for ${logHub} (page ${page}): ${body.slice(0, 200)}`);
+
+        if (resp.status === 402) {
+          blockOfficialQuota(body || `HTTP ${resp.status}`);
+          return null;
+        }
+
+        if ([400, 401, 403].includes(resp.status)) {
+          return null;
+        }
 
         if ([429, 503].includes(resp.status) && Date.now() < deadline - 2500) {
           const retryAfterMs = parseRetryAfterMs(resp.headers.get('retry-after'));
@@ -666,6 +712,11 @@ const FALLBACK_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_FALLBACKS_PER_WINDOW = 5;
 
 export function shouldAttemptOfficialFallback(): boolean {
+  if (isOfficialQuotaBlocked()) {
+    const secondsRemaining = Math.ceil((officialQuotaBlockedUntil - Date.now()) / 1000);
+    console.warn(`Circuit breaker tripped: official API quota block active for ${secondsRemaining}s, skipping`);
+    return false;
+  }
   const now = Date.now();
   while (fallbackLog.length && fallbackLog[0] < now - FALLBACK_WINDOW_MS) fallbackLog.shift();
   if (fallbackLog.length >= MAX_FALLBACKS_PER_WINDOW) {
@@ -681,6 +732,7 @@ export function recordFallback(): void {
 
 export function resetFallbackBreaker(): void {
   fallbackLog.length = 0;
+  officialQuotaBlockedUntil = 0;
 }
 
 async function tryOfficialFallback(
@@ -715,7 +767,9 @@ async function fetchAllPages(
   const allowTargetedOfficialRescue = shouldAttemptTargetedOfficialRescue(logHub, ts, options);
 
   // ── Source routing decision tree ──
-  const srcPriority = (process.env.SCHEDULE_SOURCE_PRIORITY || 'scrape').toLowerCase();
+  const srcPriority = options.disableOfficialSource
+    ? 'scrape-only'
+    : (process.env.SCHEDULE_SOURCE_PRIORITY || 'scrape').toLowerCase();
 
   if (!['scrape', 'official', 'scrape-only'].includes(srcPriority)) {
     console.warn(`Unrecognized SCHEDULE_SOURCE_PRIORITY: '${srcPriority}', using scrape-only`);
@@ -981,6 +1035,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ttl = isOld ? 600000 : 900000;
     const cdnMaxAge = isOld ? 3600 : 900;
     swr = 600;
+    const allowOfficialFallback = !shouldDisableOfficialFallback(req);
 
     // Single page mode (backward compat)
     if (page !== undefined) {
@@ -1009,13 +1064,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const cached = cacheGet(currentAggKey);
     if (cached) {
-      res.setHeader('Cache-Control', `s-maxage=${cdnMaxAge}, stale-while-revalidate=${swr}`);
+      setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr);
       return res.status(200).json({ ...cached.data, cached: true });
     }
 
     const stale = cacheGetStale(currentAggKey);
     if (stale && !stale.data.partial) {
-      triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, { allowTargetedOfficialRescue: false });
+      triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
+        allowTargetedOfficialRescue: false,
+        disableOfficialSource: !allowOfficialFallback,
+      });
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
       return res.status(200).json({ ...stale.data, cached: true, stale: true });
     }
@@ -1023,7 +1081,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const exactLastComplete = getLastComplete(currentAggKey);
     const fallbackComplete = exactLastComplete || getLastCompleteByHubDir(hub, dir, ts);
     if (fallbackComplete) {
-      triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, { allowTargetedOfficialRescue: false });
+      triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
+        allowTargetedOfficialRescue: false,
+        disableOfficialSource: !allowOfficialFallback,
+      });
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
       return res.status(200).json(buildDegradedResponse(fallbackComplete, exactLastComplete ? 'exact' : 'hub_dir'));
     }
@@ -1031,7 +1092,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const persistentFallback = await getPersistentFallback(currentAggKey);
     if (persistentFallback) {
       triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
-        allowTargetedOfficialRescue: persistentFallback.fallbackScope === 'persistent_partial'
+        allowTargetedOfficialRescue: allowOfficialFallback && persistentFallback.fallbackScope === 'persistent_partial',
+        disableOfficialSource: !allowOfficialFallback,
       });
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
       return res.status(200).json(buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope));
@@ -1040,13 +1102,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (pendingAggs.has(currentAggKey)) {
       const result = await pendingAggs.get(currentAggKey);
       if (result) {
-        res.setHeader('Cache-Control', `s-maxage=${cdnMaxAge}, stale-while-revalidate=${swr}`);
+        setAggregateCacheHeader(res, result, cdnMaxAge, swr);
         return res.status(200).json({ ...result, cached: true });
       }
     }
 
     const aggPromise = fetchAllPages(hub, dir, ts, undefined, functionDeadline, {
-      allowTargetedOfficialRescue: true
+      allowTargetedOfficialRescue: allowOfficialFallback,
+      disableOfficialSource: !allowOfficialFallback,
     }).then(async result => {
       cacheSet(currentAggKey, result, result.partial ? 60000 : ttl);
       saveComplete(currentAggKey, result);
@@ -1071,7 +1134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(200).json(buildDegradedResponse(persistentResult, 'persistent'));
         }
       }
-      res.setHeader('Cache-Control', `s-maxage=${cdnMaxAge}, stale-while-revalidate=${swr}`);
+      setAggregateCacheHeader(res, result, cdnMaxAge, swr);
       return res.status(200).json(result);
     } finally {
       pendingAggs.delete(currentAggKey);

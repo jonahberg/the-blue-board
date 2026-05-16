@@ -3655,8 +3655,10 @@ async function loadScheduleData() {
         }
         result = await fetchScheduleAggregated(schedCurrentHub, schedCurrentDir, timestamp);
         lastErr = null;
-        // Auto-retry partial results silently (don't accept partial until last attempt)
-        if (result.partial && attempt < MAX_RETRIES - 1) {
+        // Retry partial page/deadline fetches, but do not hammer a known first-page outage.
+        const partialReason = result.meta?.partialReason || '';
+        const failedBeforeAnyFlight = partialReason === 'first_page_failed' && Number(result.total || 0) === 0;
+        if (result.partial && !failedBeforeAnyFlight && attempt < MAX_RETRIES - 1) {
           delete schedCache[`agg-${schedCurrentHub}-${schedCurrentDir}-${timestamp}`];
           continue;
         }

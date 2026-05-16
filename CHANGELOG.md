@@ -4,6 +4,14 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.9] - 2026-05-16
+
+### Fixed
+- Schedule outages no longer burn FR24 official API credits from background warming. The cron warmer now requests schedule data with official fallback disabled, so a public FR24 scrape outage cannot silently drain paid credits across every hub and day window.
+- Empty partial schedule responses now cache briefly and report as degraded. Users still see the upstream outage state, but Vercel no longer keeps 0% schedule payloads around like healthy data, and cron no longer counts partial empty schedules as successfully warmed.
+- Official FR24 fallback now stops immediately on exhausted credits or invalid summary windows instead of retrying. The schedule fallback is opt-in via `SCHEDULE_OFFICIAL_FALLBACK_ENABLED`, limited to same-day windows, and guarded by a 30-minute quota block after a 402.
+- The dashboard no longer retries known first-page schedule outages three times in the browser. It still retries partial page/deadline failures, but it does not multiply traffic when the upstream source fails before returning any flights.
+
 ## [1.5.8] - 2026-05-03
 
 ### Fixed
