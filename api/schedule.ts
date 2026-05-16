@@ -32,7 +32,7 @@ const MAX_COMPLETE_CACHE_SIZE = 128;
 const COMPLETE_CACHE_MAX_AGE = 21600000; // 6 hours
 const BATCH_DELAY = 500; // 500ms pause between parallel batches
 const STALE_GRACE = 120000; // serve stale data for up to 2min past expiry
-const TARGETED_OFFICIAL_RESCUE_HUBS = new Set(['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX']);
+const TARGETED_OFFICIAL_RESCUE_HUBS = new Set(['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM']);
 
 // Busy hubs get more time to fetch all pages (capped at 55s for Vercel's 60s maxDuration)
 const HUB_TIMEOUT_MS: Record<string, number> = { ORD: 55000, EWR: 55000, IAH: 55000, SFO: 55000, LAX: 55000, DEN: 55000, IAD: 55000, NRT: 55000, GUM: 55000 };
