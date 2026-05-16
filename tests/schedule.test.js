@@ -407,9 +407,8 @@ describe('schedule API', () => {
     }
   });
 
-  it('scrape-first: today uses official fallback when explicitly enabled and scraping fails', async () => {
+  it('scrape-first: today uses official fallback by default when scraping fails', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '1';
 
     let officialUrl = '';
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -449,6 +448,100 @@ describe('schedule API', () => {
     expect(res.body.meta.fallbackFrom).toBe('scraping');
     expect(officialUrl).toContain(`flight_datetime_from=${encodeURIComponent(formatForFR24Test(new Date(ts * 1000)))}`);
     expect(officialUrl).toContain(`flight_datetime_to=${encodeURIComponent(formatForFR24Test(new Date((ts + 86400 - 1) * 1000)))}`);
+  });
+
+  it('scrape-first: official fallback can still be disabled by env', async () => {
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '0';
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        throw new Error('Official API should not be called when fallback is disabled');
+      }
+      return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
+    });
+
+    const ts = getStartOfDayForHub('EWR');
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'EWR', dir: 'departures', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.partial).toBe(true);
+    expect(res.body.meta.source).toBe('scraping');
+    expect(res.body.meta.partialReason).toBe('first_page_failed');
+    for (const call of fetchSpy.mock.calls) {
+      expect(String(call[0])).not.toContain('fr24api.flightradar24.com');
+    }
+  });
+
+  it('scrape-first: renders actual-only official summary rows as degraded same-day data', async () => {
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+
+    const ts = getStartOfDayForHub('ORD');
+    const takeoff = ts + (10 * 60 * 60);
+    const landed = takeoff + (94 * 60);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{
+              fr24_id: '3fb86069',
+              flight: 'UA795',
+              callsign: 'UAL795',
+              operating_as: 'UAL',
+              type: 'A21N',
+              reg: 'N44550',
+              orig_icao: 'KORD',
+              datetime_takeoff: new Date(takeoff * 1000).toISOString().replace('.000Z', 'Z'),
+              dest_icao: 'KEWR',
+              dest_icao_actual: 'KEWR',
+              datetime_landed: new Date(landed * 1000).toISOString().replace('.000Z', 'Z'),
+              flight_ended: true
+            }]
+          }),
+        };
+      }
+      return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.partial).toBe(true);
+    expect(res.body.meta.source).toBe('official-api');
+    expect(res.body.meta.fallbackFrom).toBe('scraping');
+    expect(res.body.meta.partialReason).toBe('actual_only_official');
+    expect(res.body.meta.actualTimeFallbackCount).toBe(1);
+    expect(res.body.meta.completeness).toBeGreaterThanOrEqual(0.25);
+
+    const flight = res.body.flights[0];
+    expect(flight.identification.number.default).toBe('UA795');
+    expect(flight.identification.callsign).toBe('UAL795');
+    expect(flight.airport.origin.code.iata).toBe('ORD');
+    expect(flight.airport.destination.code.iata).toBe('EWR');
+    expect(flight.aircraft.model.code).toBe('A21N');
+    expect(flight.aircraft.registration).toBe('N44550');
+    expect(flight.time.scheduled.departure).toBe(takeoff);
+    expect(flight.time.real.departure).toBe(takeoff);
+    expect(flight.time.real.arrival).toBe(landed);
+    expect(flight._source.scheduleTimeDerivedFromActual.departure).toBe(true);
   });
 
   it('does not retry official API while FR24 credits are exhausted', async () => {
