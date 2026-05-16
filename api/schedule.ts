@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadScheduleSnapshot, saveScheduleSnapshot } from './_schedule-snapshots.js';
+import { fetchViaAeroDataBox } from './_schedule-aerodatabox.js';
 import { getStartOfDayForHub } from './irops.js';
 import { waitUntil } from '@vercel/functions';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
@@ -10,6 +11,7 @@ const isRateLimited = createRateLimiter('schedule', 30);
 type ScheduleFetchOptions = {
   allowTargetedOfficialRescue?: boolean;
   disableOfficialSource?: boolean;
+  disableProviderFallback?: boolean;
 };
 
 // In-memory LRU cache for FR24 schedule data
@@ -198,6 +200,12 @@ function getSingleQueryValue(value: string | string[] | undefined): string {
 function shouldDisableOfficialFallback(req: VercelRequest): boolean {
   const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.officialFallback).toLowerCase();
   const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-official-fallback'] as string | string[] | undefined).toLowerCase();
+  return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
+}
+
+function shouldDisableProviderFallback(req: VercelRequest): boolean {
+  const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.providerFallback).toLowerCase();
+  const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-provider-fallback'] as string | string[] | undefined).toLowerCase();
   return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
 }
 
@@ -791,6 +799,42 @@ async function tryOfficialFallback(
   return null;
 }
 
+async function tryScheduleProviderFallback(
+  logHub: string, dir: string, ts: number, effectiveDeadline: number
+): Promise<any | null> {
+  if (!process.env.AERODATABOX_API_KEY) return null;
+  try {
+    const remaining = Math.max(0, effectiveDeadline - Date.now() - 1000);
+    if (remaining < 2000) return null;
+    const result = await fetchViaAeroDataBox(logHub, dir, ts, Math.min(remaining, 12000));
+    if (result && result.total > 0) {
+      result.meta = { ...(result.meta as any), fallbackFrom: 'scraping' };
+      return result;
+    }
+  } catch (e: any) {
+    console.error(`AeroDataBox schedule fallback failed for ${logHub}:`, e.message);
+  }
+  return null;
+}
+
+async function tryScheduleRescue(
+  logHub: string,
+  dir: string,
+  ts: number,
+  effectiveDeadline: number,
+  allowProviderFallback: boolean,
+  allowOfficialFallback: boolean
+): Promise<any | null> {
+  if (allowProviderFallback) {
+    const providerFallback = await tryScheduleProviderFallback(logHub, dir, ts, effectiveDeadline);
+    if (providerFallback) return providerFallback;
+  }
+  if (allowOfficialFallback) {
+    return await tryOfficialFallback(logHub, dir, ts, effectiveDeadline);
+  }
+  return null;
+}
+
 async function fetchAllPages(
   hub: string,
   dir: string,
@@ -803,6 +847,7 @@ async function fetchAllPages(
   const now = Date.now();
   const effectiveDeadline = overallDeadline || (now + (timeoutMs || HUB_TIMEOUT_MS[logHub.toUpperCase()] || 45000));
   const allowTargetedOfficialRescue = shouldAttemptTargetedOfficialRescue(logHub, ts, options);
+  const allowProviderFallback = !options.disableProviderFallback;
 
   // ── Source routing decision tree ──
   const srcPriority = options.disableOfficialSource
@@ -857,10 +902,9 @@ async function fetchAllPages(
   const startTime = Date.now();
   const firstPage = await fetchOnePage(logHub, dir, ts, 1, deadline);
   if (!firstPage || firstPage._rateLimited) {
-    // Targeted rescue: only spend official credits for missing high-priority windows.
-    if (srcPriority === 'scrape' && allowTargetedOfficialRescue) {
-      console.log(`Scraping failed on first page for ${logHub} ${dir}, trying official API fallback`);
-      const fallback = await tryOfficialFallback(logHub, dir, ts, effectiveDeadline);
+    if (srcPriority === 'scrape' && (allowProviderFallback || allowTargetedOfficialRescue)) {
+      console.log(`Scraping failed on first page for ${logHub} ${dir}, trying schedule fallback`);
+      const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
       if (fallback) return fallback;
     }
     return { flights: [], total: 0, totalFetched: 0, pagesScanned: 0, totalPages: 1, cached: false, partial: true, hub: logHub, dir,
@@ -1019,15 +1063,15 @@ async function fetchAllPages(
     Date.now() < deadline - MIN_REMAINING_MS_FOR_OFFICIAL_RESCUE
   ) {
     attemptedOfficialRescue = true;
-    console.log(`Scraping hit repeated FR24 rate limits for ${logHub} ${dir}, trying official API fallback`);
-    const fallback = await tryOfficialFallback(logHub, dir, ts, effectiveDeadline);
+    console.log(`Scraping hit repeated FR24 rate limits for ${logHub} ${dir}, trying schedule fallback`);
+    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
     if (fallback) return fallback;
   }
 
   // Scrape-first fallback: if scraping failed completely, try official API (with circuit breaker)
-  if (!attemptedOfficialRescue && srcPriority === 'scrape' && allowTargetedOfficialRescue && scrapeResult.total === 0 && scrapeResult.partial) {
-    console.log(`Scraping returned 0 flights for ${logHub} ${dir}, trying official API fallback`);
-    const fallback = await tryOfficialFallback(logHub, dir, ts, effectiveDeadline);
+  if (!attemptedOfficialRescue && srcPriority === 'scrape' && (allowProviderFallback || allowTargetedOfficialRescue) && scrapeResult.total === 0 && scrapeResult.partial) {
+    console.log(`Scraping returned 0 flights for ${logHub} ${dir}, trying schedule fallback`);
+    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
     if (fallback) return fallback;
   }
 
@@ -1074,6 +1118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const cdnMaxAge = isOld ? 3600 : 900;
     swr = 600;
     const allowOfficialFallback = !shouldDisableOfficialFallback(req);
+    const allowProviderFallback = !shouldDisableProviderFallback(req);
 
     // Single page mode (backward compat)
     if (page !== undefined) {
@@ -1101,7 +1146,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     aggKey = currentAggKey;
 
     const cached = cacheGet(currentAggKey);
-    if (cached) {
+    const shouldBypassEmptyPartialCache = cached?.data?.partial === true && Number(cached?.data?.total || 0) === 0 && allowProviderFallback && !!process.env.AERODATABOX_API_KEY;
+    if (cached && !shouldBypassEmptyPartialCache) {
       setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr);
       return res.status(200).json({ ...cached.data, cached: true });
     }
@@ -1111,6 +1157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
         allowTargetedOfficialRescue: false,
         disableOfficialSource: !allowOfficialFallback,
+        disableProviderFallback: true,
       });
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
       return res.status(200).json({ ...stale.data, cached: true, stale: true });
@@ -1122,19 +1169,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
         allowTargetedOfficialRescue: false,
         disableOfficialSource: !allowOfficialFallback,
+        disableProviderFallback: true,
       });
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
       return res.status(200).json(buildDegradedResponse(fallbackComplete, exactLastComplete ? 'exact' : 'hub_dir'));
     }
 
+    let partialPersistentFallback: Awaited<ReturnType<typeof getPersistentFallback>> | null = null;
     const persistentFallback = await getPersistentFallback(currentAggKey);
     if (persistentFallback) {
-      triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
-        allowTargetedOfficialRescue: allowOfficialFallback && persistentFallback.fallbackScope === 'persistent_partial',
-        disableOfficialSource: !allowOfficialFallback,
-      });
-      res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-      return res.status(200).json(buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope));
+      const canAttemptProviderNow = persistentFallback.fallbackScope === 'persistent_partial' && allowProviderFallback && !!process.env.AERODATABOX_API_KEY;
+      if (canAttemptProviderNow) {
+        partialPersistentFallback = persistentFallback;
+      } else {
+        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
+          allowTargetedOfficialRescue: allowOfficialFallback && persistentFallback.fallbackScope === 'persistent_partial',
+          disableOfficialSource: !allowOfficialFallback,
+          disableProviderFallback: true,
+        });
+        res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
+        return res.status(200).json(buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope));
+      }
     }
 
     if (pendingAggs.has(currentAggKey)) {
@@ -1148,6 +1203,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const aggPromise = fetchAllPages(hub, dir, ts, undefined, functionDeadline, {
       allowTargetedOfficialRescue: allowOfficialFallback,
       disableOfficialSource: !allowOfficialFallback,
+      disableProviderFallback: !allowProviderFallback,
     }).then(async result => {
       cacheSet(currentAggKey, result, result.partial ? 60000 : ttl);
       saveComplete(currentAggKey, result);
@@ -1170,6 +1226,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (persistentResult && persistentResult.fallbackScope === 'persistent') {
           res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
           return res.status(200).json(buildDegradedResponse(persistentResult, 'persistent'));
+        }
+        if (partialPersistentFallback) {
+          res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
+          return res.status(200).json(buildDegradedResponse(partialPersistentFallback, 'persistent_partial'));
         }
       }
       setAggregateCacheHeader(res, result, cdnMaxAge, swr);

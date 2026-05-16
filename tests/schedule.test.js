@@ -50,6 +50,8 @@ describe('schedule API', () => {
 
   afterEach(() => {
     delete process.env.FR24_API_TOKEN;
+    delete process.env.AERODATABOX_API_KEY;
+    delete process.env.AERODATABOX_BASE_URL;
     delete process.env.SCHEDULE_SOURCE_PRIORITY;
     delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
     resetFallbackBreaker();
@@ -639,6 +641,112 @@ describe('schedule API', () => {
     expect(res.body.meta.partialReason).toBe('first_page_failed');
     for (const call of fetchSpy.mock.calls) {
       expect(String(call[0])).not.toContain('fr24api.flightradar24.com');
+    }
+  });
+
+  it('uses AeroDataBox schedule fallback before FR24 official fallback when scraping fails', async () => {
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+
+    const ts = getStartOfDayForHub('GUM') + 86400;
+    const depTime = ts + 9 * 3600;
+    const arrTime = ts + 12 * 3600;
+    let aeroCalls = 0;
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const urlStr = String(url);
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        throw new Error('Official API should not be called after provider success');
+      }
+      if (urlStr.includes('prod.api.market/api/v1/aedbx/aerodatabox')) {
+        aeroCalls++;
+        expect(init?.headers?.['x-magicapi-key']).toBe('adb-test-key');
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            departures: aeroCalls === 1 ? [{
+              number: 'UA150',
+              callSign: 'UAL150',
+              status: 'Expected',
+              codeshareStatus: 'IsOperator',
+              isCargo: false,
+              airline: { iata: 'UA', icao: 'UAL', name: 'United Airlines' },
+              departure: {
+                airport: { iata: 'GUM', icao: 'PGUM', name: 'Guam' },
+                scheduledTime: { utc: new Date(depTime * 1000).toISOString(), local: '2026-05-17T09:00:00+10:00' },
+                terminal: '1',
+                gate: '4',
+                quality: ['Basic'],
+              },
+              arrival: {
+                airport: { iata: 'NRT', icao: 'RJAA', name: 'Tokyo Narita' },
+                scheduledTime: { utc: new Date(arrTime * 1000).toISOString(), local: '2026-05-17T12:00:00+09:00' },
+                quality: ['Basic'],
+              },
+              aircraft: { model: 'Boeing 737-800', reg: 'N37267' },
+            }] : [],
+          }),
+        };
+      }
+      return { ok: false, status: 500, text: async () => 'FR24 unavailable', headers: { get: () => null } };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'GUM', dir: 'departures', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.partial).toBe(false);
+    expect(res.body.meta.source).toBe('aerodatabox');
+    expect(res.body.meta.fallbackFrom).toBe('scraping');
+    expect(aeroCalls).toBe(2);
+    expect(fetchSpy.mock.calls.some(call => String(call[0]).includes('fr24api.flightradar24.com'))).toBe(false);
+
+    const flight = res.body.flights[0];
+    expect(flight.identification.number.default).toBe('UA150');
+    expect(flight.airport.origin.code.iata).toBe('GUM');
+    expect(flight.airport.destination.code.iata).toBe('NRT');
+    expect(flight.airport.origin.info.gate).toBe('4');
+    expect(flight.airport.origin.info.terminal).toBe('1');
+    expect(flight.aircraft.registration).toBe('N37267');
+    expect(flight.time.scheduled.departure).toBe(depTime);
+    expect(flight.time.scheduled.arrival).toBe(arrTime);
+  });
+
+  it('honors providerFallback=0 when scraping fails', async () => {
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('prod.api.market/api/v1/aedbx/aerodatabox')) {
+        throw new Error('AeroDataBox should not be called when providerFallback=0');
+      }
+      return { ok: false, status: 500, text: async () => 'FR24 unavailable', headers: { get: () => null } };
+    });
+
+    const ts = getStartOfDayForHub('LAX') + 2 * 86400;
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'LAX', dir: 'arrivals', timestamp: String(ts), providerFallback: '0' }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.partial).toBe(true);
+    expect(res.body.meta.source).toBe('scraping');
+    expect(res.body.meta.partialReason).toBe('first_page_failed');
+    for (const call of fetchSpy.mock.calls) {
+      expect(String(call[0])).not.toContain('prod.api.market/api/v1/aedbx/aerodatabox');
     }
   });
 
