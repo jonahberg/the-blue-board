@@ -4,6 +4,15 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.11] - 2026-05-16
+
+### Added
+- Schedule recovery now has an optional AeroDataBox airport FIDS fallback. When public FR24 scraping fails on a direct user request, the API can fetch structured scheduled departures/arrivals, normalize them into the existing dashboard flight shape, and persist them through the normal schedule snapshot cache.
+
+### Fixed
+- Background schedule warming now also disables provider fallback with `providerFallback=0`, so the free AeroDataBox tier is reserved for users who are actively loading schedules.
+- Empty partial schedule cache entries are bypassed when a provider key is available, so users are not kept on a known-bad 0-flight outage response while a structured fallback could recover rows.
+
 ## [1.5.10] - 2026-05-16
 
 ### Fixed

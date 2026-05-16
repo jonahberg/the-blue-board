@@ -1,0 +1,352 @@
+import { HUB_TZ } from './irops.js';
+import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
+
+const AERODATABOX_BASE_URL = 'https://prod.api.market/api/v1/aedbx/aerodatabox';
+
+const UNITED_HUB_TERMINALS: Record<string, { domestic: string; international: string }> = {
+  ORD: { domestic: '1', international: '1' },
+  DEN: { domestic: 'B', international: 'B' },
+  EWR: { domestic: 'C', international: 'C' },
+  IAH: { domestic: 'C', international: 'E' },
+  SFO: { domestic: '3', international: 'G' },
+  LAX: { domestic: '7', international: '7' },
+  IAD: { domestic: 'C', international: 'D' },
+  NRT: { domestic: '1', international: '1' },
+  GUM: { domestic: '1', international: '1' },
+};
+
+function getHubTerminal(iata: string, isIntl: boolean): string {
+  const hub = UNITED_HUB_TERMINALS[iata.toUpperCase()];
+  if (!hub) return '';
+  return isIntl ? hub.international : hub.domestic;
+}
+
+function partsToObj(parts: Intl.DateTimeFormatPart[]): Record<string, string> {
+  const o: Record<string, string> = {};
+  for (const p of parts) o[p.type] = p.value;
+  if (o.hour === '24') o.hour = '00';
+  return o;
+}
+
+function hubLocalDate(hub: string, ts: number): string {
+  const tz = HUB_TZ[hub.toUpperCase()] || 'America/New_York';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(ts * 1000));
+  const p = partsToObj(parts);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+function normalizeAirportCode(airport: any): string {
+  const iata = String(airport?.iata || '').trim().toUpperCase();
+  if (iata) return iata;
+  return icaoToIata(String(airport?.icao || '').trim().toUpperCase());
+}
+
+function airportName(airport: any): string {
+  return String(airport?.name || airport?.shortName || airport?.municipalityName || '').trim();
+}
+
+function normalizeFlightId(value: any): string {
+  return String(value || '').trim().replace(/\s+/g, '').toUpperCase();
+}
+
+function normalizeUnitedFlightNumber(number: any, callSign?: any): string {
+  const primary = normalizeFlightId(number);
+  const fallback = normalizeFlightId(callSign);
+  const value = primary || fallback;
+  if (!value) return '';
+  const ual = /^UAL(\d+[A-Z]?)$/.exec(value);
+  if (ual) return `UA${ual[1]}`;
+  const ua = /^UA(\d+[A-Z]?)$/.exec(value);
+  if (ua) return `UA${ua[1]}`;
+  return value;
+}
+
+function toUnixDateTime(value: any): number | null {
+  if (!value) return null;
+  if (typeof value === 'number') return value > 1e12 ? Math.floor(value / 1000) : Math.floor(value);
+  if (typeof value === 'string') {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric > 1e12 ? Math.floor(numeric / 1000) : Math.floor(numeric);
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : null;
+  }
+  return toUnixDateTime(value.utc || value.local);
+}
+
+function mapAeroStatus(status: any) {
+  const s = String(status || '').trim();
+  let text = 'scheduled';
+  let type = '';
+  let diverted = false;
+  let live = false;
+  let icon = '';
+
+  if (s === 'Canceled' || s === 'CanceledUncertain') {
+    type = 'canceled';
+    text = 'canceled';
+    icon = 'red';
+  } else if (s === 'Diverted') {
+    diverted = true;
+    text = 'landed';
+    icon = 'red';
+  } else if (s === 'Arrived') {
+    text = 'landed';
+    icon = 'green';
+  } else if (s === 'EnRoute' || s === 'Approaching') {
+    text = 'en-route';
+    live = true;
+    icon = 'green';
+  } else if (s === 'Departed') {
+    text = 'departed';
+    live = true;
+    icon = 'green';
+  } else if (s === 'Delayed') {
+    text = 'estimated';
+    icon = 'yellow';
+  }
+
+  return {
+    generic: { status: { text, diverted }, type },
+    text: s.toLowerCase(),
+    icon,
+    live,
+  };
+}
+
+function isUnitedFlight(flight: any): boolean {
+  if (flight?.isCargo === true) return false;
+  const airlineIata = normalizeFlightId(flight?.airline?.iata);
+  const airlineIcao = normalizeFlightId(flight?.airline?.icao);
+  const number = normalizeFlightId(flight?.number);
+  const callSign = normalizeFlightId(flight?.callSign);
+  return (
+    airlineIata === 'UA' ||
+    airlineIcao === 'UAL' ||
+    /^UA\d/.test(number) ||
+    /^UAL\d/.test(number) ||
+    /^UAL\d/.test(callSign)
+  );
+}
+
+function normalizeFlight(flight: any, hub: string, dir: string) {
+  if (!isUnitedFlight(flight)) return null;
+
+  const hubUpper = hub.toUpperCase();
+  const isDeparture = dir === 'departures';
+  const departure = flight?.departure;
+  const arrival = flight?.arrival;
+  const movement = flight?.movement;
+
+  let originAirport = departure?.airport || (isDeparture && departure ? { iata: hubUpper, name: hubUpper } : null);
+  let destinationAirport = arrival?.airport || (!isDeparture && arrival ? { iata: hubUpper, name: hubUpper } : null);
+  let departureMovement = departure;
+  let arrivalMovement = arrival;
+
+  if (!departure && !arrival && movement) {
+    if (isDeparture) {
+      originAirport = { iata: hubUpper, name: hubUpper };
+      destinationAirport = movement.airport;
+      departureMovement = movement;
+      arrivalMovement = null;
+    } else {
+      originAirport = movement.airport;
+      destinationAirport = { iata: hubUpper, name: hubUpper };
+      departureMovement = null;
+      arrivalMovement = movement;
+    }
+  }
+
+  const origIata = normalizeAirportCode(originAirport);
+  const destIata = normalizeAirportCode(destinationAirport);
+  if (isDeparture && origIata !== hubUpper) return null;
+  if (!isDeparture && destIata !== hubUpper) return null;
+
+  const flightNum = normalizeUnitedFlightNumber(flight?.number, flight?.callSign);
+  if (!flightNum) return null;
+
+  const schedDep = toUnixDateTime(departureMovement?.scheduledTime);
+  const schedArr = toUnixDateTime(arrivalMovement?.scheduledTime);
+  const revisedDep = toUnixDateTime(departureMovement?.revisedTime);
+  const revisedArr = toUnixDateTime(arrivalMovement?.revisedTime);
+  const runwayDep = toUnixDateTime(departureMovement?.runwayTime);
+  const runwayArr = toUnixDateTime(arrivalMovement?.runwayTime);
+
+  const status = String(flight?.status || '');
+  const departedLike = ['Departed', 'EnRoute', 'Approaching', 'Arrived', 'Diverted'].includes(status);
+  const arrivedLike = ['Arrived', 'Diverted'].includes(status);
+  const realDep = departedLike ? (runwayDep || revisedDep) : null;
+  const realArr = arrivedLike ? (runwayArr || revisedArr) : null;
+  const estDep = !realDep ? (revisedDep || toUnixDateTime(departureMovement?.predictedTime)) : null;
+  const estArr = !realArr ? (revisedArr || toUnixDateTime(arrivalMovement?.predictedTime)) : null;
+
+  const origGate = String(departureMovement?.gate || '').trim();
+  const destGate = String(arrivalMovement?.gate || '').trim();
+  const origTerminalRaw = String(departureMovement?.terminal || '').trim();
+  const destTerminalRaw = String(arrivalMovement?.terminal || '').trim();
+  const intl = isInternationalRoute(origIata, destIata);
+  const origTerminal = origTerminalRaw || getHubTerminal(origIata, intl);
+  const destTerminal = destTerminalRaw || getHubTerminal(destIata, intl);
+
+  return {
+    identification: { number: { default: flightNum }, callsign: normalizeFlightId(flight?.callSign) },
+    airline: { code: { iata: 'UA' }, name: flight?.airline?.name || 'United Airlines' },
+    status: mapAeroStatus(status),
+    time: {
+      scheduled: { departure: schedDep, arrival: schedArr },
+      real: { departure: realDep, arrival: realArr },
+      estimated: { departure: estDep, arrival: estArr },
+    },
+    airport: {
+      origin: {
+        code: { iata: origIata },
+        name: airportName(originAirport),
+        info: { gate: origGate, terminal: origTerminal },
+      },
+      destination: {
+        code: { iata: destIata },
+        name: airportName(destinationAirport),
+        info: { gate: destGate, terminal: destTerminal },
+      },
+    },
+    aircraft: {
+      model: { code: '', text: flight?.aircraft?.model || '' },
+      registration: flight?.aircraft?.reg || '',
+    },
+    _source: {
+      provider: 'aerodatabox',
+      quality: [
+        ...(departureMovement?.quality || []),
+        ...(arrivalMovement?.quality || []),
+        ...(movement?.quality || []),
+      ],
+    },
+  };
+}
+
+async function fetchWindow(
+  hub: string,
+  dir: string,
+  fromLocal: string,
+  toLocal: string,
+  timeoutMs: number
+): Promise<{ ok: true; flights: any[] } | { ok: false }> {
+  const token = process.env.AERODATABOX_API_KEY;
+  if (!token) return { ok: false };
+
+  const base = (process.env.AERODATABOX_BASE_URL || AERODATABOX_BASE_URL).replace(/\/+$/, '');
+  const direction = dir === 'departures' ? 'Departure' : 'Arrival';
+  const url = new URL(
+    `${base}/flights/airports/iata/${encodeURIComponent(hub.toUpperCase())}/${encodeURIComponent(fromLocal)}/${encodeURIComponent(toLocal)}`
+  );
+  url.searchParams.set('direction', direction);
+  url.searchParams.set('withLeg', 'true');
+  url.searchParams.set('withCancelled', 'true');
+  url.searchParams.set('withCodeshared', 'true');
+  url.searchParams.set('withCargo', 'false');
+  url.searchParams.set('withPrivate', 'false');
+  url.searchParams.set('withLocation', 'false');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'x-magicapi-key': token,
+        'Accept': 'application/json',
+        'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
+      },
+    });
+    clearTimeout(timeout);
+
+    if (resp.status === 204) return { ok: true, flights: [] };
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      console.error(`AeroDataBox schedule returned ${resp.status} for ${hub} ${dir}: ${body.slice(0, 200)}`);
+      return { ok: false };
+    }
+
+    const data = await resp.json() as any;
+    const flights = dir === 'departures' ? (data?.departures || []) : (data?.arrivals || []);
+    return { ok: true, flights: Array.isArray(flights) ? flights : [] };
+  } catch (e: any) {
+    clearTimeout(timeout);
+    if (e.name === 'AbortError') {
+      console.error(`AeroDataBox schedule timeout for ${hub} ${dir}`);
+    } else {
+      console.error(`AeroDataBox schedule error for ${hub} ${dir}:`, e.message);
+    }
+    return { ok: false };
+  }
+}
+
+export async function fetchViaAeroDataBox(hub: string, dir: string, ts: number, timeoutMs = 12000) {
+  if (!process.env.AERODATABOX_API_KEY) return null;
+
+  const startTime = Date.now();
+  const date = hubLocalDate(hub, ts);
+  const windows = [
+    [`${date}T00:00`, `${date}T11:59`],
+    [`${date}T12:00`, `${date}T23:59`],
+  ];
+
+  const rawFlights: any[] = [];
+  const failedWindows: number[] = [];
+  const perWindowTimeout = Math.max(2000, Math.floor(timeoutMs / windows.length));
+
+  for (let i = 0; i < windows.length; i++) {
+    const [fromLocal, toLocal] = windows[i];
+    const result = await fetchWindow(hub, dir, fromLocal, toLocal, perWindowTimeout);
+    if (result.ok) {
+      rawFlights.push(...result.flights);
+    } else {
+      failedWindows.push(i + 1);
+    }
+  }
+
+  const seen = new Set<string>();
+  const flights: any[] = [];
+  for (const raw of rawFlights) {
+    const normalized = normalizeFlight(raw, hub, dir);
+    if (!normalized) continue;
+    const scheduleKey = dir === 'departures'
+      ? normalized.time?.scheduled?.departure
+      : normalized.time?.scheduled?.arrival;
+    const key = `${normalized.identification?.number?.default || ''}:${scheduleKey || ''}:${normalized.airport?.origin?.code?.iata || ''}:${normalized.airport?.destination?.code?.iata || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    flights.push(normalized);
+  }
+
+  const partial = failedWindows.length > 0;
+  const pagesRequested = windows.length;
+  const pagesFailed = failedWindows.length;
+  const pagesSucceeded = pagesRequested - pagesFailed;
+
+  return {
+    flights,
+    total: flights.length,
+    totalFetched: rawFlights.length,
+    pagesScanned: pagesRequested,
+    totalPages: pagesRequested,
+    cached: false,
+    partial,
+    hub,
+    dir,
+    meta: {
+      partialReason: partial ? 'provider_partial' : null,
+      pagesRequested,
+      pagesSucceeded,
+      pagesFailed,
+      missingPages: failedWindows,
+      completeness: pagesRequested > 0 ? Math.round((pagesSucceeded / pagesRequested) * 100) / 100 : 1,
+      elapsedMs: Date.now() - startTime,
+      source: 'aerodatabox',
+    },
+  };
+}

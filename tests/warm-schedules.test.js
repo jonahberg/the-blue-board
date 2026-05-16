@@ -64,12 +64,13 @@ describe('warm-schedules buildWarmPlan', () => {
     expect(plan.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('disables official FR24 fallback for background schedule warming', () => {
+  it('disables paid/provider fallbacks for background schedule warming', () => {
     const url = buildScheduleWarmUrl('ORD', 'departures', 1778907600);
     expect(url).toContain('/api/schedule?');
     expect(url).toContain('hub=ORD');
     expect(url).toContain('dir=departures');
     expect(url).toContain('timestamp=1778907600');
     expect(url).toContain('officialFallback=0');
+    expect(url).toContain('providerFallback=0');
   });
 });
