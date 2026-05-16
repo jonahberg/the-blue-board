@@ -51,6 +51,7 @@ describe('schedule API', () => {
   afterEach(() => {
     delete process.env.FR24_API_TOKEN;
     delete process.env.SCHEDULE_SOURCE_PRIORITY;
+    delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
     resetFallbackBreaker();
   });
 
@@ -406,8 +407,9 @@ describe('schedule API', () => {
     }
   });
 
-  it('scrape-first: tomorrow uses official fallback when scraping fails', async () => {
+  it('scrape-first: today uses official fallback when explicitly enabled and scraping fails', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '1';
 
     let officialUrl = '';
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -432,7 +434,7 @@ describe('schedule API', () => {
       return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
     });
 
-    const ts = getStartOfDayForHub('LAX') + 86400;
+    const ts = getStartOfDayForHub('LAX');
     const req = {
       method: 'GET',
       headers: { origin: 'http://localhost:3000' },
@@ -447,6 +449,104 @@ describe('schedule API', () => {
     expect(res.body.meta.fallbackFrom).toBe('scraping');
     expect(officialUrl).toContain(`flight_datetime_from=${encodeURIComponent(formatForFR24Test(new Date(ts * 1000)))}`);
     expect(officialUrl).toContain(`flight_datetime_to=${encodeURIComponent(formatForFR24Test(new Date((ts + 86400 - 1) * 1000)))}`);
+  });
+
+  it('does not retry official API while FR24 credits are exhausted', async () => {
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
+
+    let officialCalls = 0;
+    let scrapeCalls = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        officialCalls++;
+        return {
+          ok: false,
+          status: 402,
+          text: async () => '{"message":"Forbidden","details":"Credit limit reached. Please top up your account."}',
+        };
+      }
+
+      scrapeCalls++;
+      return {
+        ok: true,
+        json: async () => ({
+          result: {
+            response: {
+              airport: {
+                pluginData: {
+                  schedule: {
+                    arrivals: {
+                      page: { current: 1, total: 1 },
+                      data: []
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }),
+      };
+    });
+
+    const ts1 = Math.floor(Date.now() / 1000) - 42000;
+    const req1 = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'DEN', dir: 'arrivals', timestamp: String(ts1) }
+    };
+    const res1 = createRes();
+
+    await handler(req1, res1);
+
+    const ts2 = ts1 + 60;
+    const req2 = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'EWR', dir: 'arrivals', timestamp: String(ts2) }
+    };
+    const res2 = createRes();
+
+    await handler(req2, res2);
+
+    expect(res1.statusCode).toBe(200);
+    expect(res2.statusCode).toBe(200);
+    expect(officialCalls).toBe(1);
+    expect(scrapeCalls).toBe(2);
+    expect(res2.body.meta.source).toBe('scraping');
+  });
+
+  it('honors officialFallback=0 when scraping fails', async () => {
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '1';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        throw new Error('Official API should not be called when officialFallback=0');
+      }
+      return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
+    });
+
+    const ts = getStartOfDayForHub('IAH') + 86400;
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'IAH', dir: 'departures', timestamp: String(ts), officialFallback: '0' }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.partial).toBe(true);
+    expect(res.body.meta.source).toBe('scraping');
+    expect(res.body.meta.partialReason).toBe('first_page_failed');
+    for (const call of fetchSpy.mock.calls) {
+      expect(String(call[0])).not.toContain('fr24api.flightradar24.com');
+    }
   });
 
   it('circuit breaker trips after repeated fallbacks', () => {
@@ -821,6 +921,7 @@ describe('schedule API', () => {
         })
       })
     }));
+    expect(res.headers['Cache-Control']).toContain('s-maxage=30');
   });
 
   it('scrape-first: rate-limited mid-loop pauses and continues fetching', { timeout: 15000 }, async () => {
@@ -951,8 +1052,9 @@ describe('schedule API', () => {
     expect(pagesFetched).not.toContain(8);
   });
 
-  it('scrape-first: heavy rate limiting uses official rescue on targeted windows', { timeout: 15000 }, async () => {
+  it('scrape-first: heavy rate limiting uses official rescue on targeted windows when explicitly enabled', { timeout: 15000 }, async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '1';
 
     let pagesFetched = [];
     let officialCalls = 0;
@@ -1015,7 +1117,7 @@ describe('schedule API', () => {
       };
     });
 
-    const ts = getStartOfDayForHub('DEN') + 86400;
+    const ts = getStartOfDayForHub('DEN');
     const req = {
       method: 'GET',
       headers: { origin: 'http://localhost:3000' },
