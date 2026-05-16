@@ -4,6 +4,15 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.12] - 2026-05-16
+
+### Added
+- Schedule scraping now has a production scraper transport for FR24 blocks. When the direct FR24 schedule JSON scrape hits a Cloudflare/rate-limit block, the API can fetch the same FR24 endpoint through a configured scraping transport, normalize the returned schedule, and keep provider APIs as later fallbacks rather than the primary rescue path.
+
+### Fixed
+- Background schedule warming now also disables scraper fallback with `scraperFallback=0`, so paid scraping credits are reserved for users actively loading schedules.
+- Empty partial schedule cache entries are bypassed when a scraper transport is configured, so users are not kept on a known-bad 0-flight response while the FR24 scraper can recover rows.
+
 ## [1.5.11] - 2026-05-16
 
 ### Added

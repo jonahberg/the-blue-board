@@ -118,7 +118,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 
 | Source | Data | Freshness | Notes |
 |--------|------|-----------|-------|
-| [Flightradar24](https://flightradar24.com) | Live positions, schedules, flight lookup | ~15s–60s | Server-side proxy with caching |
+| [Flightradar24](https://flightradar24.com) | Live positions, schedules, flight lookup | ~15s–60s | Server-side proxy with caching; schedules can recover through a configured FR24 scraper transport when direct fetches are blocked |
 | [Aviation Weather Center](https://aviationweather.gov) | METAR observations | ~5min | NOAA/CORS proxy, batched |
 | [FAA NAS Status](https://nasstatus.faa.gov) | Delays & ground stops | ~5min | XML→JSON proxy |
 | [United Fleet Site](https://unitedfleetsite.com/) | Fleet database | Daily | Community-maintained |

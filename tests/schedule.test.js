@@ -52,6 +52,13 @@ describe('schedule API', () => {
     delete process.env.FR24_API_TOKEN;
     delete process.env.AERODATABOX_API_KEY;
     delete process.env.AERODATABOX_BASE_URL;
+    delete process.env.SCRAPINGBEE_API_KEY;
+    delete process.env.SCHEDULE_SCRAPER_MODE;
+    delete process.env.SCHEDULE_SCRAPER_RENDER_JS;
+    delete process.env.SCHEDULE_SCRAPER_PREMIUM_PROXY;
+    delete process.env.SCHEDULE_SCRAPER_COUNTRY;
+    delete process.env.SCHEDULE_SCRAPER_URL;
+    delete process.env.SCHEDULE_SCRAPER_TOKEN;
     delete process.env.SCHEDULE_SOURCE_PRIORITY;
     delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
     resetFallbackBreaker();
@@ -718,6 +725,126 @@ describe('schedule API', () => {
     expect(flight.aircraft.registration).toBe('N37267');
     expect(flight.time.scheduled.departure).toBe(depTime);
     expect(flight.time.scheduled.arrival).toBe(arrTime);
+  });
+
+  it('uses configured FR24 scraper transport before provider fallbacks when direct scraping is blocked', async () => {
+    process.env.SCRAPINGBEE_API_KEY = 'bee-test-key';
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+
+    const ts = getStartOfDayForHub('SFO') + 86400;
+    const depTime = ts + 7 * 3600;
+    const arrTime = ts + 11 * 3600;
+    let scrapingBeeCalls = 0;
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('app.scrapingbee.com/api/v1')) {
+        scrapingBeeCalls++;
+        expect(urlStr).toContain('api_key=bee-test-key');
+        expect(urlStr).toContain('premium_proxy=true');
+        expect(urlStr).toContain('render_js=true');
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            result: {
+              response: {
+                airport: {
+                  pluginData: {
+                    schedule: {
+                      departures: {
+                        page: { current: 1, total: 1 },
+                        data: [{
+                          flight: {
+                            airline: { code: { iata: 'UA' } },
+                            identification: { number: { default: 'UA900' }, callsign: 'UAL900' },
+                            time: { scheduled: { departure: depTime, arrival: arrTime } },
+                            airport: {
+                              origin: { code: { iata: 'SFO' }, info: { gate: 'F12', terminal: '3' } },
+                              destination: { code: { iata: 'NRT' }, info: { gate: '', terminal: '' } }
+                            },
+                            aircraft: { registration: 'N26902' }
+                          }
+                        }]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }),
+        };
+      }
+      if (urlStr.includes('prod.api.market/api/v1/aedbx/aerodatabox')) {
+        throw new Error('AeroDataBox should not be called after scraper transport success');
+      }
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        throw new Error('Official API should not be called after scraper transport success');
+      }
+      return {
+        ok: false,
+        status: 403,
+        text: async () => 'Cloudflare challenge',
+        headers: { get: (name) => String(name).toLowerCase() === 'cf-mitigated' ? 'challenge' : null },
+      };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'SFO', dir: 'departures', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.partial).toBe(false);
+    expect(res.body.meta.source).toBe('scraping');
+    expect(res.body.meta.scrapeTransport).toBe('scrapingbee');
+    expect(res.body.meta.scraperRecoveredPages).toBe(1);
+    expect(res.body.meta.fallbackFrom).toBeUndefined();
+    expect(scrapingBeeCalls).toBe(1);
+    expect(fetchSpy.mock.calls.some(call => String(call[0]).includes('prod.api.market/api/v1/aedbx/aerodatabox'))).toBe(false);
+    expect(fetchSpy.mock.calls.some(call => String(call[0]).includes('fr24api.flightradar24.com'))).toBe(false);
+  });
+
+  it('honors scraperFallback=0 when direct FR24 scraping is blocked', async () => {
+    process.env.SCRAPINGBEE_API_KEY = 'bee-test-key';
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('app.scrapingbee.com/api/v1')) {
+        throw new Error('Scraper transport should not be called when scraperFallback=0');
+      }
+      return {
+        ok: false,
+        status: 403,
+        text: async () => 'Cloudflare challenge',
+        headers: { get: (name) => String(name).toLowerCase() === 'cf-mitigated' ? 'challenge' : null },
+      };
+    });
+
+    const ts = getStartOfDayForHub('NRT') + 86400;
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'NRT', dir: 'arrivals', timestamp: String(ts), scraperFallback: '0' }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.partial).toBe(true);
+    expect(res.body.total).toBe(0);
+    expect(res.body.meta.source).toBe('scraping');
+    expect(res.body.meta.partialReason).toBe('first_page_failed');
+    for (const call of fetchSpy.mock.calls) {
+      expect(String(call[0])).not.toContain('app.scrapingbee.com/api/v1');
+    }
   });
 
   it('honors providerFallback=0 when scraping fails', async () => {

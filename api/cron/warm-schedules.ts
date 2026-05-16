@@ -64,6 +64,7 @@ export function buildScheduleWarmUrl(hub: string, dir: string, timestamp: number
     timestamp: String(timestamp),
     officialFallback: '0',
     providerFallback: '0',
+    scraperFallback: '0',
   });
   return `${BASE_URL}/api/schedule?${params}`;
 }
