@@ -64,7 +64,7 @@ describe('warm-schedules buildWarmPlan', () => {
     expect(plan.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('disables paid/provider fallbacks for background schedule warming', () => {
+  it('disables paid/provider/scraper fallbacks for background schedule warming', () => {
     const url = buildScheduleWarmUrl('ORD', 'departures', 1778907600);
     expect(url).toContain('/api/schedule?');
     expect(url).toContain('hub=ORD');
@@ -72,5 +72,6 @@ describe('warm-schedules buildWarmPlan', () => {
     expect(url).toContain('timestamp=1778907600');
     expect(url).toContain('officialFallback=0');
     expect(url).toContain('providerFallback=0');
+    expect(url).toContain('scraperFallback=0');
   });
 });
