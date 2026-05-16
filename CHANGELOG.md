@@ -4,6 +4,12 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.13] - 2026-05-16
+
+### Fixed
+- Same-day official schedule rescue now covers NRT and GUM too, so every United hub can recover visible rows when direct FR24 schedule scraping fails and paid FR24 credits are available.
+- ScrapingBee schedule recovery now defaults to `render_js=false`, reducing scraper credit burn for the FR24 JSON endpoint once the ScrapingBee quota is available.
+
 ## [1.5.12] - 2026-05-16
 
 ### Added

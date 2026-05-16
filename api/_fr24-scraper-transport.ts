@@ -98,7 +98,7 @@ async function fetchViaScrapingBee(targetUrl: string, deadlineMs?: number): Prom
   const url = new URL('https://app.scrapingbee.com/api/v1');
   url.searchParams.set('api_key', apiKey);
   url.searchParams.set('url', targetUrl);
-  url.searchParams.set('render_js', String(process.env.SCHEDULE_SCRAPER_RENDER_JS || 'true'));
+  url.searchParams.set('render_js', String(process.env.SCHEDULE_SCRAPER_RENDER_JS || 'false'));
   url.searchParams.set('premium_proxy', String(process.env.SCHEDULE_SCRAPER_PREMIUM_PROXY || 'true'));
   url.searchParams.set('country_code', process.env.SCHEDULE_SCRAPER_COUNTRY || 'us');
 

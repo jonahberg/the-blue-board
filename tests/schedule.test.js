@@ -416,7 +416,7 @@ describe('schedule API', () => {
     }
   });
 
-  it('scrape-first: today uses official fallback by default when scraping fails', async () => {
+  it('scrape-first: today uses official fallback by default for any hub when scraping fails', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
 
     let officialUrl = '';
@@ -431,8 +431,8 @@ describe('schedule API', () => {
               flight_icao: 'UAL201',
               flight_iata: 'UA201',
               status: 'scheduled',
-              orig_iata: 'LAX',
-              dest_iata: 'ORD',
+              orig_iata: 'GUM',
+              dest_iata: 'NRT',
               scheduled_departure: 1741653600,
               scheduled_arrival: 1741660800,
             }]
@@ -442,11 +442,11 @@ describe('schedule API', () => {
       return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
     });
 
-    const ts = getStartOfDayForHub('LAX');
+    const ts = getStartOfDayForHub('GUM');
     const req = {
       method: 'GET',
       headers: { origin: 'http://localhost:3000' },
-      query: { hub: 'LAX', dir: 'departures', timestamp: String(ts) }
+      query: { hub: 'GUM', dir: 'departures', timestamp: String(ts) }
     };
     const res = createRes();
 
@@ -743,7 +743,7 @@ describe('schedule API', () => {
         scrapingBeeCalls++;
         expect(urlStr).toContain('api_key=bee-test-key');
         expect(urlStr).toContain('premium_proxy=true');
-        expect(urlStr).toContain('render_js=true');
+        expect(urlStr).toContain('render_js=false');
         return {
           ok: true,
           status: 200,
