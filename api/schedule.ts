@@ -165,7 +165,8 @@ function buildDegradedResponse(
 
 function shouldAttemptTargetedOfficialRescue(hub: string, ts: number, options?: ScheduleFetchOptions): boolean {
   if (!options?.allowTargetedOfficialRescue || !process.env.FR24_API_TOKEN) return false;
-  if (!['1', 'true', 'yes', 'on'].includes(String(process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED || '').toLowerCase())) {
+  const fallbackSetting = String(process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED || 'true').toLowerCase();
+  if (['0', 'false', 'off', 'no'].includes(fallbackSetting)) {
     return false;
   }
   const hubUpper = hub.toUpperCase();
@@ -302,6 +303,11 @@ function icaoFlightToIata(icaoFlight: string): string {
   return iataAirline ? iataAirline + match[2] : icaoFlight;
 }
 
+function normalizeFlightId(value: any): string {
+  if (!value) return '';
+  return String(value).trim().replace(/\s+/g, '').toUpperCase();
+}
+
 function toUnix(val: any): number | null {
   if (!val) return null;
   if (typeof val === 'number') return val > 1e12 ? Math.floor(val / 1000) : val;
@@ -358,23 +364,28 @@ function mapStatus(f: any) {
 }
 
 function normalizeSummaryFlight(f: any) {
-  const flightNum = f.flight_iata || f.flight_number?.iata || icaoFlightToIata(f.flight_icao || f.callsign || f.flight_number?.icao || '') || '';
-  const callsign = f.callsign || f.flight_icao || f.flight_number?.icao || '';
+  const rawFlightId = normalizeFlightId(f.flight_iata || f.flight_number?.iata || f.flight || f.flight_icao || f.callsign || f.flight_number?.icao || '');
+  const flightNum = icaoFlightToIata(rawFlightId);
+  const callsign = normalizeFlightId(f.callsign || f.flight_icao || f.flight_number?.icao || f.flight || '');
 
   const origIata = f.orig_iata || f.origin?.iata || icaoToIata(f.orig_icao || f.origin?.icao || '');
   const destIata = f.dest_iata || f.destination?.iata || icaoToIata(f.dest_icao_actual || f.dest_icao || f.destination?.icao || '');
   const origName = f.origin?.name || f.orig_name || '';
   const destName = f.destination?.name || f.dest_name || '';
 
-  const schedDep = toUnix(f.departure?.scheduled || f.scheduled_departure || f.datetime_scheduled_departure);
-  const schedArr = toUnix(f.arrival?.scheduled || f.scheduled_arrival || f.datetime_scheduled_arrival);
+  const rawSchedDep = toUnix(f.departure?.scheduled || f.scheduled_departure || f.datetime_scheduled_departure);
+  const rawSchedArr = toUnix(f.arrival?.scheduled || f.scheduled_arrival || f.datetime_scheduled_arrival);
   const realDep = toUnix(f.departure?.actual || f.actual_departure || f.datetime_takeoff || f.datetime_actual_departure);
   const realArr = toUnix(f.arrival?.actual || f.actual_arrival || f.datetime_landed || f.datetime_actual_arrival);
   const estDep = toUnix(f.departure?.estimated || f.estimated_departure || f.datetime_estimated_departure);
   const estArr = toUnix(f.arrival?.estimated || f.estimated_arrival || f.datetime_estimated_arrival);
+  const derivedScheduledDeparture = !rawSchedDep && !!realDep;
+  const derivedScheduledArrival = !rawSchedArr && !!realArr;
+  const schedDep = rawSchedDep || (derivedScheduledDeparture ? realDep : null);
+  const schedArr = rawSchedArr || (derivedScheduledArrival ? realArr : null);
 
   const acType = f.aircraft?.type || f.aircraft_type || f.type || '';
-  const acReg = f.aircraft?.registration || f.registration || '';
+  const acReg = f.aircraft?.registration || f.registration || f.reg || '';
 
   // Extract gate/terminal from API response if available (try multiple field name conventions)
   const origGate = f.origin?.gate || f.orig_gate || f.departure_gate || '';
@@ -400,7 +411,18 @@ function normalizeSummaryFlight(f: any) {
       origin: { code: { iata: origIata }, name: origName, info: { gate: origGate, terminal: fallbackOrigTerminal } },
       destination: { code: { iata: destIata }, name: destName, info: { gate: destGate, terminal: fallbackDestTerminal } }
     },
-    aircraft: { model: { code: acType, text: '' }, registration: acReg }
+    aircraft: { model: { code: acType, text: '' }, registration: acReg },
+    _source: {
+      officialApi: true,
+      hasOfficialScheduledTime: {
+        departure: !!rawSchedDep,
+        arrival: !!rawSchedArr
+      },
+      scheduleTimeDerivedFromActual: {
+        departure: derivedScheduledDeparture,
+        arrival: derivedScheduledArrival
+      }
+    }
   };
 }
 
@@ -623,26 +645,40 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
     allUAFlights.push(normalizeSummaryFlight(f));
   }
 
-  // Quality gate: reject sparse payloads where most flights lack scheduled times
+  // Quality gate: reject sparse payloads where most flights lack any usable time,
+  // but keep FR24's actual-only summary rows as a degraded same-day fallback.
   const dirTimeKey = dir === 'departures' ? 'departure' : 'arrival';
   let sparseCount = 0;
+  let derivedScheduleCount = 0;
+  let officialScheduleCount = 0;
   const qualityFiltered: any[] = [];
   for (const fl of allUAFlights) {
     const schedTime = fl.time?.scheduled?.[dirTimeKey];
     if (schedTime && schedTime > 0) {
       qualityFiltered.push(fl);
+      if (fl._source?.scheduleTimeDerivedFromActual?.[dirTimeKey]) derivedScheduleCount++;
+      else officialScheduleCount++;
     } else {
       sparseCount++;
     }
   }
 
-  if (allUAFlights.length > 0 && sparseCount / allUAFlights.length > 0.5) {
+  if (allUAFlights.length > 0 && qualityFiltered.length === 0) {
+    console.warn(`Official FR24 API: ${allUAFlights.length} flights for ${logHub} ${dir} lack usable ${dirTimeKey} times — rejecting as sparse`);
+    return null;
+  }
+
+  if (allUAFlights.length > 0 && sparseCount / allUAFlights.length > 0.5 && derivedScheduleCount === 0) {
     console.warn(`Official FR24 API: ${sparseCount}/${allUAFlights.length} flights for ${logHub} ${dir} lack scheduled times — rejecting as sparse`);
     return null; // fall through to scraping fallback
   }
 
   const elapsedMs = Date.now() - startTime;
-  console.log(`Official FR24 API: ${allRawFlights.length} total flights (${totalPages} pages), ${qualityFiltered.length} ${dir} for ${logHub} in ${elapsedMs}ms${sparseCount > 0 ? ` (${sparseCount} sparse filtered)` : ''}`);
+  const hasDerivedScheduleTimes = derivedScheduleCount > 0;
+  const responsePartial = officialPartial || hasDerivedScheduleTimes;
+  const responsePartialReason = partialReason || (hasDerivedScheduleTimes ? 'actual_only_official' : null);
+  const completeness = hasDerivedScheduleTimes ? Math.max(0.25, Math.min(1, officialScheduleCount / qualityFiltered.length || 0.25)) : (officialPartial ? 0.9 : 1);
+  console.log(`Official FR24 API: ${allRawFlights.length} total flights (${totalPages} pages), ${qualityFiltered.length} ${dir} for ${logHub} in ${elapsedMs}ms${sparseCount > 0 ? ` (${sparseCount} sparse filtered)` : ''}${derivedScheduleCount > 0 ? ` (${derivedScheduleCount} actual-time fallback)` : ''}`);
 
   return {
     flights: qualityFiltered,
@@ -651,19 +687,21 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
     pagesScanned: totalPages,
     totalPages,
     cached: false,
-    partial: officialPartial,
+    partial: responsePartial,
     hub: logHub,
     dir,
     meta: {
-      partialReason,
+      partialReason: responsePartialReason,
       pagesRequested: totalPages,
       pagesSucceeded: Math.max(0, totalPages - pagesFailed),
       pagesFailed,
       missingPages: [] as number[],
-      completeness: officialPartial ? 0.9 : 1,
+      completeness,
       elapsedMs,
       source: 'official-api',
-      sparseFiltered: sparseCount
+      sparseFiltered: sparseCount,
+      actualTimeFallbackCount: derivedScheduleCount,
+      officialScheduleCount
     }
   };
 }

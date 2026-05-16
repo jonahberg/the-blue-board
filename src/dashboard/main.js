@@ -3698,12 +3698,14 @@ async function loadScheduleData() {
         msg = 'The request timed out before all pages were fetched.';
       } else if (meta.partialReason === 'first_page_failed') {
         msg = 'The upstream data source is not responding.';
+      } else if (meta.partialReason === 'actual_only_official') {
+        msg = 'Showing same-day actual flight times; scheduled times are unavailable.';
       } else if (meta.partialReason === 'page_fetch_failed') {
         msg = `${meta.pagesFailed || 'Some'} page(s) failed to load.`;
       } else {
         msg = 'Some flights may be missing.';
       }
-      const pct = meta.completeness != null
+      const pct = meta.completeness != null && meta.partialReason !== 'actual_only_official'
         ? result.degraded && result.partial
           ? ` ${Math.round(meta.completeness * 100)}% previously loaded.`
           : !result.degraded
@@ -3913,9 +3915,12 @@ function renderScheduleTable() {
     const ident = fl.identification?.number?.default || '—';
     const schedTime = schedCurrentDir === 'departures' ? fl.time?.scheduled?.departure : fl.time?.scheduled?.arrival;
     const actualTime = schedCurrentDir === 'departures' ? (fl.time?.real?.departure || fl.time?.estimated?.departure) : (fl.time?.real?.arrival || fl.time?.estimated?.arrival);
+    const derivedScheduleTime = schedCurrentDir === 'departures' ? fl._source?.scheduleTimeDerivedFromActual?.departure : fl._source?.scheduleTimeDerivedFromActual?.arrival;
     const timeStr = formatSchedTime(schedTime, hub);
     let timeExtra = '';
-    if (actualTime && schedTime && actualTime !== schedTime) {
+    if (derivedScheduleTime) {
+      timeExtra = `<div class="sched-time-actual">actual</div>`;
+    } else if (actualTime && schedTime && actualTime !== schedTime) {
       const diff = Math.round((actualTime - schedTime) / 60);
       const actualStr = formatSchedTime(actualTime, hub);
       if (diff > 5) timeExtra = `<div class="sched-time-actual">→ ${actualStr} (+${diff}m)</div>`;
@@ -4064,9 +4069,10 @@ function renderScheduleStats(filtered) {
       return;
     }
     const schedT = schedCurrentDir === 'departures' ? fl.time?.scheduled?.departure : fl.time?.scheduled?.arrival;
+    const derivedScheduleTime = schedCurrentDir === 'departures' ? fl._source?.scheduleTimeDerivedFromActual?.departure : fl._source?.scheduleTimeDerivedFromActual?.arrival;
     const realT = fl.time?.real?.departure || fl.time?.real?.arrival;
     const actT = realT || (schedCurrentDir === 'departures' ? fl.time?.estimated?.departure : fl.time?.estimated?.arrival);
-    if (!schedT || !actT) return; // skip flights without usable timestamps
+    if (!schedT || !actT || derivedScheduleTime) return; // skip flights without a real schedule baseline
     if (actT > schedT + 1800) depDelayed++;
     else depOnTime++;
   });

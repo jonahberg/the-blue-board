@@ -4,6 +4,13 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.10] - 2026-05-16
+
+### Fixed
+- Same-day schedules now recover visible rows when public FR24 scraping is challenged and the official FR24 summary API only returns actual takeoff/landing data. The API normalizes those actual-only records into degraded schedule rows with flight number, route, aircraft, registration, status, and time instead of returning 0 flights.
+- Actual-only schedule rows are marked as degraded and no longer feed the dashboard on-time calculation as if actual time equaled scheduled time. The banner now explains that same-day actual flight times are being shown because scheduled times are unavailable.
+- User-triggered same-day official fallback is enabled by default again, while cron warmers still opt out and `SCHEDULE_OFFICIAL_FALLBACK_ENABLED=0` remains a kill switch.
+
 ## [1.5.9] - 2026-05-16
 
 ### Fixed
