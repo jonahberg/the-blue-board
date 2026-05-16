@@ -485,6 +485,24 @@ const OFFICIAL_API_PAGE_SIZE = 10000; // FR24 API allows up to 20,000 per reques
 const OFFICIAL_QUOTA_BLOCK_MS = 30 * 60 * 1000;
 let officialQuotaBlockedUntil = 0;
 
+const LIVE_FEED_URL = 'https://data-cloud.flightradar24.com/zones/fcgi/feed.js?airline=UAL';
+const LIVE_FEED_CACHE_TTL_MS = 15_000;
+const LIVE_FEED_TIMEOUT_MS = 10_000;
+const HUB_COORDS: Record<string, { lat: number; lon: number }> = {
+  ORD: { lat: 41.974, lon: -87.907 },
+  DEN: { lat: 39.856, lon: -104.674 },
+  IAH: { lat: 29.99, lon: -95.336 },
+  EWR: { lat: 40.693, lon: -74.169 },
+  SFO: { lat: 37.621, lon: -122.379 },
+  IAD: { lat: 38.953, lon: -77.456 },
+  LAX: { lat: 33.942, lon: -118.408 },
+  NRT: { lat: 35.764, lon: 140.386 },
+  GUM: { lat: 13.484, lon: 144.797 },
+};
+
+let liveFeedCache: { data: any; expires: number } | null = null;
+let liveFeedInFlight: Promise<any | null> | null = null;
+
 function parseRetryAfterMs(headerValue: string | null): number {
   if (!headerValue) return 0;
   const numeric = Number.parseInt(headerValue, 10);
@@ -504,6 +522,275 @@ function isOfficialQuotaBlocked(): boolean {
 function blockOfficialQuota(reason: string): void {
   officialQuotaBlockedUntil = Date.now() + OFFICIAL_QUOTA_BLOCK_MS;
   console.warn(`Official FR24 API quota blocked for 30m: ${reason}`);
+}
+
+function isLiveFeedFallbackEnabled(): boolean {
+  const setting = String(process.env.SCHEDULE_LIVE_FEED_FALLBACK_ENABLED || 'true').toLowerCase();
+  return !['0', 'false', 'off', 'no'].includes(setting);
+}
+
+function shouldAttemptLiveFeedFallback(hub: string, ts: number): boolean {
+  if (!isLiveFeedFallbackEnabled()) return false;
+  const hubUpper = hub.toUpperCase();
+  return ts === getStartOfDayForHub(hubUpper);
+}
+
+function toFiniteNumber(value: any): number | null {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function haversineNm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (deg: number) => deg * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 3440.065 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function estimateLiveArrivalTime(flight: any, hub: string, lastSeen: number): number {
+  if (flight.onGround) return lastSeen;
+  const coords = HUB_COORDS[hub.toUpperCase()];
+  const lat = toFiniteNumber(flight.lat);
+  const lon = toFiniteNumber(flight.lon);
+  const speedKt = toFiniteNumber(flight.spdKt);
+  if (!coords || lat === null || lon === null || !speedKt || speedKt < 120) {
+    return lastSeen;
+  }
+  const distanceNm = haversineNm(lat, lon, coords.lat, coords.lon);
+  const etaMinutes = Math.max(5, Math.min(18 * 60, (distanceNm / speedKt) * 60 + 12));
+  return lastSeen + Math.round(etaMinutes * 60);
+}
+
+async function fetchUnitedLiveFeed(deadlineMs?: number): Promise<any | null> {
+  if (liveFeedCache && Date.now() < liveFeedCache.expires) {
+    return liveFeedCache.data;
+  }
+  if (liveFeedInFlight) return liveFeedInFlight;
+
+  liveFeedInFlight = (async () => {
+    const remaining = deadlineMs ? Math.max(500, deadlineMs - Date.now()) : LIVE_FEED_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.min(remaining, LIVE_FEED_TIMEOUT_MS));
+    try {
+      const resp = await fetch(LIVE_FEED_URL, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
+          'Accept': 'application/json',
+        },
+      });
+      if (!resp.ok) {
+        console.warn(`FR24 live feed fallback returned ${resp.status}`);
+        return null;
+      }
+      const data = await resp.json();
+      liveFeedCache = { data, expires: Date.now() + LIVE_FEED_CACHE_TTL_MS };
+      return data;
+    } catch (error: any) {
+      console.warn('FR24 live feed fallback failed:', error?.message || error);
+      return null;
+    } finally {
+      clearTimeout(timeout);
+      liveFeedInFlight = null;
+    }
+  })();
+
+  return liveFeedInFlight;
+}
+
+function normalizeLiveFeedFlight(id: string, arr: any[], hub: string, dir: string, ts: number): any | null {
+  if (!Array.isArray(arr) || arr.length < 19) return null;
+
+  const origin = String(arr[11] || '').toUpperCase();
+  const destination = String(arr[12] || '').toUpperCase();
+  const hubUpper = hub.toUpperCase();
+  if (dir === 'departures' && origin !== hubUpper) return null;
+  if (dir === 'arrivals' && destination !== hubUpper) return null;
+
+  const rawFlightId = normalizeFlightId(arr[13] || arr[16] || '');
+  const flightNum = icaoFlightToIata(rawFlightId);
+  const callsign = normalizeFlightId(arr[16] || rawFlightId);
+  if (!flightNum && !callsign) return null;
+
+  const lastSeen = toFiniteNumber(arr[10]) || Math.floor(Date.now() / 1000);
+  const dayEnd = ts + 86400;
+  if (lastSeen < ts - 6 * 3600 || lastSeen >= dayEnd + 6 * 3600) return null;
+
+  const onGround = arr[14] === 1;
+  const acType = String(arr[8] || '');
+  const acReg = String(arr[9] || '');
+  const arrivalEstimate = dir === 'arrivals'
+    ? estimateLiveArrivalTime({
+        lat: arr[1],
+        lon: arr[2],
+        spdKt: arr[5],
+        onGround,
+      }, hubUpper, lastSeen)
+    : null;
+
+  const statusText = onGround
+    ? (dir === 'arrivals' ? 'landed' : 'scheduled')
+    : (dir === 'arrivals' ? 'en-route' : 'departed');
+
+  const isIntl = isInternationalRoute(origin, destination);
+  const scheduledDeparture = dir === 'departures' ? lastSeen : null;
+  const scheduledArrival = dir === 'arrivals' ? arrivalEstimate : null;
+
+  return {
+    identification: { number: { default: flightNum }, callsign },
+    airline: { code: { iata: 'UA' } },
+    status: {
+      generic: { status: { text: statusText, diverted: false }, type: '' },
+      text: statusText,
+      icon: onGround && dir === 'departures' ? '' : 'green',
+      live: !onGround,
+    },
+    time: {
+      scheduled: { departure: scheduledDeparture, arrival: scheduledArrival },
+      real: {
+        departure: dir === 'departures' && !onGround ? lastSeen : null,
+        arrival: dir === 'arrivals' && onGround ? lastSeen : null,
+      },
+      estimated: {
+        departure: dir === 'departures' && onGround ? lastSeen : null,
+        arrival: dir === 'arrivals' && !onGround ? arrivalEstimate : null,
+      },
+    },
+    airport: {
+      origin: {
+        code: { iata: origin },
+        name: '',
+        info: { gate: '', terminal: getHubTerminal(origin, isIntl) },
+      },
+      destination: {
+        code: { iata: destination },
+        name: '',
+        info: { gate: '', terminal: getHubTerminal(destination, isIntl) },
+      },
+    },
+    aircraft: { model: { code: acType, text: '' }, registration: acReg },
+    _source: {
+      liveFeedFallback: true,
+      fr24Id: id,
+      lastSeen,
+      scheduleTimeDerivedFromActual: {
+        departure: dir === 'departures' && !onGround,
+        arrival: dir === 'arrivals' && onGround,
+      },
+      scheduleTimeDerivedFromLiveEstimate: {
+        departure: false,
+        arrival: dir === 'arrivals' && !onGround,
+      },
+    },
+  };
+}
+
+async function fetchViaLiveFeedFallback(hub: string, dir: string, ts: number, effectiveDeadline: number): Promise<any | null> {
+  const logHub = hub.toUpperCase();
+  if (!shouldAttemptLiveFeedFallback(logHub, ts)) return null;
+  const feed = await fetchUnitedLiveFeed(effectiveDeadline);
+  if (!feed) return null;
+
+  const flights: any[] = [];
+  let totalFetched = 0;
+  for (const [id, arr] of Object.entries(feed)) {
+    if (!Array.isArray(arr)) continue;
+    totalFetched++;
+    const normalized = normalizeLiveFeedFlight(id, arr, logHub, dir, ts);
+    if (normalized) flights.push(normalized);
+  }
+
+  if (!flights.length) return null;
+  const dirTimeKey = dir === 'departures' ? 'departure' : 'arrival';
+  flights.sort((a, b) => {
+    const aTime = a.time?.scheduled?.[dirTimeKey] || 0;
+    const bTime = b.time?.scheduled?.[dirTimeKey] || 0;
+    return aTime - bTime;
+  });
+
+  return {
+    flights,
+    total: flights.length,
+    totalFetched,
+    pagesScanned: 1,
+    totalPages: 1,
+    cached: false,
+    partial: true,
+    hub: logHub,
+    dir,
+    meta: {
+      partialReason: 'live_feed_fallback',
+      pagesRequested: 1,
+      pagesSucceeded: 1,
+      pagesFailed: 0,
+      missingPages: [] as number[],
+      completeness: 0.35,
+      elapsedMs: 0,
+      source: 'live-feed',
+      liveFeedFallbackTotal: flights.length,
+      liveFeedFetched: totalFetched,
+    },
+  };
+}
+
+function scheduleFlightKey(flight: any): string {
+  const ident = normalizeFlightId(flight?.identification?.number?.default || flight?.identification?.callsign || '');
+  const origin = String(flight?.airport?.origin?.code?.iata || '').toUpperCase();
+  const dest = String(flight?.airport?.destination?.code?.iata || '').toUpperCase();
+  return `${ident}|${origin}|${dest}`;
+}
+
+function mergeLiveFeedFallback(base: any, live: any): any {
+  const existing = new Set((base.flights || []).map(scheduleFlightKey).filter(Boolean));
+  const additions = (live.flights || []).filter((flight: any) => {
+    const key = scheduleFlightKey(flight);
+    if (!key || existing.has(key)) return false;
+    existing.add(key);
+    return true;
+  });
+  if (!additions.length) return base;
+
+  const dirTimeKey = base.dir === 'departures' ? 'departure' : 'arrival';
+  const flights = [...(base.flights || []), ...additions].sort((a, b) => {
+    const aTime = a.time?.scheduled?.[dirTimeKey] || 0;
+    const bTime = b.time?.scheduled?.[dirTimeKey] || 0;
+    return aTime - bTime;
+  });
+
+  return {
+    ...base,
+    flights,
+    total: flights.length,
+    totalFetched: Number(base.totalFetched || base.total || 0) + additions.length,
+    partial: true,
+    meta: {
+      ...(base.meta || {}),
+      partialReason: base.meta?.partialReason || 'live_feed_augmented',
+      liveFeedFallbackAdded: additions.length,
+      liveFeedFallbackTotal: live.total,
+      liveFeedFallbackSource: live.meta?.source || 'live-feed',
+    },
+  };
+}
+
+async function maybeAugmentWithLiveFeedFallback(result: any, hub: string, dir: string, ts: number, effectiveDeadline: number): Promise<any> {
+  if (!result?.partial) return result;
+  const live = await fetchViaLiveFeedFallback(hub, dir, ts, effectiveDeadline);
+  if (!live) return result;
+  if (Number(result.total || 0) === 0) {
+    return {
+      ...live,
+      meta: {
+        ...live.meta,
+        fallbackFrom: result.meta?.source || 'schedule',
+        fallbackFromReason: result.meta?.partialReason || null,
+      },
+    };
+  }
+  return mergeLiveFeedFallback(result, live);
 }
 
 async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeoutMs?: number) {
@@ -826,6 +1113,8 @@ export function recordFallback(): void {
 export function resetFallbackBreaker(): void {
   fallbackLog.length = 0;
   officialQuotaBlockedUntil = 0;
+  liveFeedCache = null;
+  liveFeedInFlight = null;
 }
 
 async function tryOfficialFallback(
@@ -877,9 +1166,19 @@ async function tryScheduleRescue(
     if (providerFallback) return providerFallback;
   }
   if (allowOfficialFallback) {
-    return await tryOfficialFallback(logHub, dir, ts, effectiveDeadline);
+    const officialFallback = await tryOfficialFallback(logHub, dir, ts, effectiveDeadline);
+    if (officialFallback) {
+      return await maybeAugmentWithLiveFeedFallback(officialFallback, logHub, dir, ts, effectiveDeadline);
+    }
   }
-  return null;
+  const liveFallback = await fetchViaLiveFeedFallback(logHub, dir, ts, effectiveDeadline);
+  if (liveFallback) {
+    liveFallback.meta = {
+      ...(liveFallback.meta || {}),
+      fallbackFrom: 'scraping',
+    };
+  }
+  return liveFallback;
 }
 
 async function fetchAllPages(
@@ -910,7 +1209,9 @@ async function fetchAllPages(
     try {
       const officialTimeout = Math.min(Math.floor((effectiveDeadline - Date.now()) * 0.7), 45000);
       const officialResult = await fetchViaOfficialAPI(logHub, dir, ts, officialTimeout);
-      if (officialResult) return officialResult;
+      if (officialResult) {
+        return await maybeAugmentWithLiveFeedFallback(officialResult, logHub, dir, ts, effectiveDeadline);
+      }
     } catch (e: any) {
       console.error(`Official FR24 API failed for ${logHub}, falling back to scraping:`, e.message);
     }
@@ -963,9 +1264,10 @@ async function fetchAllPages(
       const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
       if (fallback) return fallback;
     }
-    return { flights: [], total: 0, totalFetched: 0, pagesScanned: 0, totalPages: 1, cached: false, partial: true, hub: logHub, dir,
+    const failedResult = { flights: [], total: 0, totalFetched: 0, pagesScanned: 0, totalPages: 1, cached: false, partial: true, hub: logHub, dir,
       meta: { partialReason: 'first_page_failed', pagesRequested: 1, pagesSucceeded: 0, pagesFailed: 1, missingPages: [1], completeness: 0, elapsedMs: Date.now() - startTime, source: 'scraping' as const }
     };
+    return await maybeAugmentWithLiveFeedFallback(failedResult, logHub, dir, ts, effectiveDeadline);
   }
   totalPages = firstPage.page?.total || 1;
   pagesScanned = 1;
@@ -1137,7 +1439,7 @@ async function fetchAllPages(
     if (fallback) return fallback;
   }
 
-  return scrapeResult;
+  return await maybeAugmentWithLiveFeedFallback(scrapeResult, logHub, dir, ts, effectiveDeadline);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -1215,7 +1517,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const cached = cacheGet(currentAggKey);
     const hasImmediateScheduleRecovery =
       (allowScraperFallback && hasConfiguredFr24ScraperTransport()) ||
-      (allowProviderFallback && !!process.env.AERODATABOX_API_KEY);
+      (allowProviderFallback && !!process.env.AERODATABOX_API_KEY) ||
+      shouldAttemptLiveFeedFallback(hub, ts);
     const shouldBypassEmptyPartialCache = cached?.data?.partial === true && Number(cached?.data?.total || 0) === 0 && hasImmediateScheduleRecovery;
     if (cached && !shouldBypassEmptyPartialCache) {
       setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr);

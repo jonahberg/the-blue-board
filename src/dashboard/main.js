@@ -3694,6 +3694,10 @@ async function loadScheduleData() {
         msg = result.partial
           ? `Showing cached partial data from ${ageMin}m ago while refreshing.`
           : `Showing cached complete data from ${ageMin}m ago while refreshing.`;
+      } else if (meta.liveFeedFallbackAdded) {
+        msg = `Added ${meta.liveFeedFallbackAdded} live active flight(s) while the full schedule feed recovers.`;
+      } else if (meta.partialReason === 'live_feed_fallback') {
+        msg = 'Showing live active flights while the full schedule feed recovers.';
       } else if (meta.partialReason === 'deadline_exceeded') {
         msg = 'The request timed out before all pages were fetched.';
       } else if (meta.partialReason === 'first_page_failed') {
@@ -4070,6 +4074,7 @@ function renderScheduleStats(filtered) {
     }
     const schedT = schedCurrentDir === 'departures' ? fl.time?.scheduled?.departure : fl.time?.scheduled?.arrival;
     const derivedScheduleTime = schedCurrentDir === 'departures' ? fl._source?.scheduleTimeDerivedFromActual?.departure : fl._source?.scheduleTimeDerivedFromActual?.arrival;
+    if (fl._source?.liveFeedFallback) return; // live rescue rows have last-seen/ETA times, not true schedule baselines
     const realT = fl.time?.real?.departure || fl.time?.real?.arrival;
     const actT = realT || (schedCurrentDir === 'departures' ? fl.time?.estimated?.departure : fl.time?.estimated?.arrival);
     if (!schedT || !actT || derivedScheduleTime) return; // skip flights without a real schedule baseline

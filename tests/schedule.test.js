@@ -61,6 +61,7 @@ describe('schedule API', () => {
     delete process.env.SCHEDULE_SCRAPER_TOKEN;
     delete process.env.SCHEDULE_SOURCE_PRIORITY;
     delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
+    delete process.env.SCHEDULE_LIVE_FEED_FALLBACK_ENABLED;
     resetFallbackBreaker();
   });
 
@@ -875,6 +876,75 @@ describe('schedule API', () => {
     for (const call of fetchSpy.mock.calls) {
       expect(String(call[0])).not.toContain('prod.api.market/api/v1/aedbx/aerodatabox');
     }
+  });
+
+  it('uses same-day live FR24 feed as a degraded schedule fallback when scraping is blocked', async () => {
+    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '0';
+
+    const ts = getStartOfDayForHub('IAH');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('data-cloud.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            full_count: 1,
+            version: 4,
+            '3fb-test': [
+              'A2A3B5',
+              30.2,
+              -91.4,
+              270,
+              33000,
+              430,
+              '',
+              '',
+              'B38M',
+              'N27263',
+              ts + 13 * 3600,
+              'BOS',
+              'IAH',
+              'UA1976',
+              0,
+              -500,
+              'UAL1976',
+              '',
+              'UAL'
+            ],
+          }),
+        };
+      }
+      return {
+        ok: false,
+        status: 403,
+        text: async () => 'Cloudflare challenge',
+        headers: { get: (name) => String(name).toLowerCase() === 'cf-mitigated' ? 'challenge' : null },
+      };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'IAH', dir: 'arrivals', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.partial).toBe(true);
+    expect(res.body.meta.source).toBe('live-feed');
+    expect(res.body.meta.partialReason).toBe('live_feed_fallback');
+    expect(res.body.meta.fallbackFrom).toBe('scraping');
+    const flight = res.body.flights[0];
+    expect(flight.identification.number.default).toBe('UA1976');
+    expect(flight.airport.origin.code.iata).toBe('BOS');
+    expect(flight.airport.destination.code.iata).toBe('IAH');
+    expect(flight.aircraft.registration).toBe('N27263');
+    expect(flight._source.liveFeedFallback).toBe(true);
+    expect(flight.time.scheduled.arrival).toBeGreaterThan(ts);
+    expect(flight.time.estimated.arrival).toBe(flight.time.scheduled.arrival);
   });
 
   it('circuit breaker trips after repeated fallbacks', () => {
