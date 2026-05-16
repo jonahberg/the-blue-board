@@ -4,6 +4,12 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.14] - 2026-05-16
+
+### Fixed
+- Same-day schedule requests now have a no-credit live FR24 feed rescue. If the full schedule scrape and paid scraper/provider fallbacks are unavailable, the API returns active United flights for the selected hub/direction instead of a 0-flight board.
+- The dashboard now labels live-feed schedule rescue rows as degraded active-flight data and excludes them from on-time percentage calculations because their times are last-seen/ETA values, not true schedule baselines.
+
 ## [1.5.13] - 2026-05-16
 
 ### Fixed
