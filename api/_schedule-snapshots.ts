@@ -124,6 +124,13 @@ export async function saveScheduleSnapshot({ cacheKey, hub, dir, ts, data }: Sav
   if (!data) return;
 
   const isCompleteSnapshot = !data.partial;
+  // Never persist an empty board (total===0) as a "complete" snapshot. Otherwise a transient
+  // empty 200 is stored in Supabase for the full 72h TTL, served as the degraded "good"
+  // fallback, and reloaded into the in-memory complete cache on every cold start — a
+  // self-sustaining 0-flight board that survives instance recycling. Partial snapshots already
+  // require total>0 via shouldPersistPartialSnapshot; this closes the same gap on the complete
+  // path. (Audit P0: empty-complete-poisons-fallback)
+  if (isCompleteSnapshot && Number(data?.total || 0) === 0) return;
   if (!isCompleteSnapshot && !shouldPersistPartialSnapshot(data)) return;
 
   const supabase = await getSupabaseAdmin();
