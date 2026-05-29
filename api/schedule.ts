@@ -209,8 +209,13 @@ function cacheSet(key: string, data: any, ttlMs: number): void {
 
 function setAggregateCacheHeader(res: VercelResponse, data: any, cdnMaxAge: number, swr: number): void {
   const isPartial = data?.partial === true;
-  const maxAge = isPartial ? 30 : cdnMaxAge;
-  const stale = isPartial ? 60 : swr;
+  const total = Number(data?.total || 0);
+  // A degraded-but-NON-EMPTY board is still useful to show; re-validating it every 30s at the CDN
+  // just hammers FR24 and burns paid fallback credits during a block. Serve it for 120s and only
+  // fall back to the aggressive 30s window when the partial board is also EMPTY (total===0), where
+  // fast recovery matters more than cost. (Audit P7: partial-response-short-cdn-ttl-rescrape-loop.)
+  const maxAge = isPartial ? (total > 0 ? 120 : 30) : cdnMaxAge;
+  const stale = isPartial ? (total > 0 ? 120 : 60) : swr;
   res.setHeader('Cache-Control', `s-maxage=${maxAge}, stale-while-revalidate=${stale}`);
 }
 
