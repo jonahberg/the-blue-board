@@ -3,9 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockCreate = vi.fn();
 
 vi.mock('@anthropic-ai/sdk', () => ({
-  default: vi.fn(() => ({
-    messages: { create: mockCreate },
-  })),
+  default: vi.fn(function () {
+    return {
+      messages: { create: mockCreate },
+    };
+  }),
 }));
 
 import handler from '../api/delay-explain.js';

@@ -18,12 +18,14 @@ process.env.NODE_ENV = 'test';
 delete process.env.VERCEL_ENV;
 
 vi.mock('resend', () => ({
-  Resend: vi.fn(() => ({
-    broadcasts: {
-      create: mockBroadcastCreate,
-      send: mockBroadcastSend,
-    },
-  })),
+  Resend: vi.fn(function () {
+    return {
+      broadcasts: {
+        create: mockBroadcastCreate,
+        send: mockBroadcastSend,
+      },
+    };
+  }),
 }));
 
 import handler from '../api/news-notify.js';
