@@ -4440,6 +4440,13 @@ function updateHubHealth() {
       const status = classifySchedStatus(fl);
       const hasOp = status.key === 'departed' || status.key === 'enroute' || status.key === 'landed';
       if (!hasOp) return;
+      // Exclude degraded synthetic rows, exactly as the per-board OTP card does (updateSchedStats):
+      // live-feed rescue rows carry last-seen/ETA times (not a true schedule baseline), and rows
+      // whose schedule time was derived from the actual time always score on-time (delay 0) —
+      // inflating hub OTP toward 100% precisely when the FR24 feed is degraded.
+      // (Audit P1: degraded-rows-inflate-hub-otp.)
+      if (fl._source?.liveFeedFallback) return;
+      if (fl._source?.scheduleTimeDerivedFromActual?.departure || fl._source?.scheduleTimeDerivedFromActual?.arrival) return;
       const schedT = fl.time?.scheduled?.departure || fl.time?.scheduled?.arrival;
       const realT = fl.time?.real?.departure || fl.time?.real?.arrival;
       if (!realT || !schedT) return; // skip flights without real timestamps
