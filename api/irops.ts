@@ -91,6 +91,13 @@ export function computeMetrics(flightsByHub: Record<string, any[]>) {
       const schedT = fl.time?.scheduled?.departure;
       if (!schedT) continue;
 
+      // Exclude degraded synthetic rows (live-feed rescue / schedule-derived-from-actual): their
+      // scheduled time equals the actual, so they always score on-time and inflate hub OTP exactly
+      // when the FR24 feed is degraded — mirrors the dashboard's per-board exclusion.
+      // (Audit P1: degraded-rows-inflate-hub-otp.)
+      if (fl._source?.liveFeedFallback) continue;
+      if (fl._source?.scheduleTimeDerivedFromActual?.departure || fl._source?.scheduleTimeDerivedFromActual?.arrival) continue;
+
       hubMetrics[hub].operated++;
       if (realDep <= schedT + 1800) {
         hubMetrics[hub].onTime++;
