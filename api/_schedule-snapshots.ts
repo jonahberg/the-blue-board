@@ -70,7 +70,7 @@ function getSupabaseConfig(): { url: string; key: string } | null {
   return { url, key };
 }
 
-async function getSupabaseAdmin(): Promise<any | null> {
+export async function getSupabaseAdmin(): Promise<any | null> {
   const config = getSupabaseConfig();
   if (!config) return null;
   if (!supabaseClientPromise) {
