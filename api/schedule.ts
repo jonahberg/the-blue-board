@@ -101,6 +101,14 @@ function cacheGetStale(key: string) {
 
 function saveComplete(key: string, data: any, savedAtMs = Date.now()): void {
   if (data.partial) return;
+  // Never record an empty board (total===0) as authoritative "complete" truth. A transient
+  // empty 200 (FR24 throttle interstitial, clean-empty scrape, or the official-priority empty
+  // path) would otherwise be pinned for COMPLETE_CACHE_MAX_AGE, re-served as the "good" degraded
+  // fallback, and reloaded into memory on every cold start via getPersistentFallback — a
+  // self-sustaining 0-flight board. United hubs are never legitimately empty same-day, so
+  // recomputing an empty board is far cheaper than serving a poisoned one.
+  // (Audit P0: empty-complete-poisons-fallback)
+  if (Number(data?.total || 0) === 0) return;
   if (lastCompleteCache.size >= MAX_COMPLETE_CACHE_SIZE) {
     lastCompleteCache.delete(lastCompleteCache.keys().next().value!);
   }
