@@ -22,7 +22,21 @@ const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
     : 'https://theblueboard.co';
 
 async function fetchHubFromScheduleAPI(hub: string, timestamp: number): Promise<any[]> {
-  const url = `${BASE_URL}/api/schedule?hub=${hub}&dir=departures&timestamp=${timestamp}`;
+  // IROPS only needs aggregate departure counts and tolerates empty per-hub results, so it must
+  // NOT trigger the paid FR24/AeroDataBox/ScrapingBee fallbacks. Disabling them also makes this
+  // request's query string byte-identical to the warm cron's buildScheduleWarmUrl(), so IROPS
+  // reuses cron-warmed CDN snapshots instead of paying to recompute on every miss.
+  // (We replicate the param string inline rather than importing buildScheduleWarmUrl to avoid a
+  // circular import: warm-schedules.ts already imports getStartOfDayForHub from this file.)
+  const params = new URLSearchParams({
+    hub,
+    dir: 'departures',
+    timestamp: String(timestamp),
+    officialFallback: '0',
+    providerFallback: '0',
+    scraperFallback: '0',
+  });
+  const url = `${BASE_URL}/api/schedule?${params}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 55000);
   try {
