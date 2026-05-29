@@ -4,6 +4,7 @@
 
 import type { VercelRequest, VercelResponse } from '../types.js';
 import { getStartOfDayForHub } from '../irops.js';
+import { sendAlert } from '../_alert.js';
 
 const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
 // Serialized with INTER_TASK_DELAY_MS between tasks. Budget math: each task
@@ -148,6 +149,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   console.log(`Cron warm-schedules: ${warmed} warmed, ${failed} failed`, { warmPlan, results });
+
+  // Operational alerting (env-gated; no-op without ALERT_WEBHOOK_URL). The warm cron is the
+  // natural heartbeat for the schedule pipeline: if warming is mostly failing, returning
+  // 0-flight ("degraded_empty") boards, or starlink is down, the live site is degraded RIGHT
+  // NOW. Surface it proactively instead of waiting for a user to complain.
+  // (Audit P1: no-alerting-blind-pipeline.)
+  const degradedEmptyHubs = Object.entries(results)
+    .filter(([, r]) => r?.status === 'degraded_empty')
+    .map(([k]) => k);
+  const erroredKeys = Object.entries(results)
+    .filter(([, r]) => r?.status === 'error' || String(r?.status || '').startsWith('http_'))
+    .map(([k]) => k);
+  const starlinkStatus = results['starlink-data']?.status;
+  if (failed > warmed || degradedEmptyHubs.length > 0 || (starlinkStatus && starlinkStatus !== 'ok')) {
+    await sendAlert('⚠️ Blue Board schedule warm degraded', [
+      `warmed=${warmed} failed=${failed} (plan size ${warmPlan.length})`,
+      degradedEmptyHubs.length ? `0-flight boards: ${degradedEmptyHubs.join(', ')}` : '',
+      erroredKeys.length ? `errors/http: ${erroredKeys.join(', ')}` : '',
+      `starlink: ${starlinkStatus || 'n/a'}`,
+    ].filter(Boolean));
+  }
+
   return res.status(200).json({
     warmed,
     failed,
