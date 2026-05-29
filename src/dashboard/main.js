@@ -972,7 +972,7 @@ async function refreshFlights() {
     const res = await fetch('/api/fr24-feed?airline=UAL');
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
-    allFlights = [];
+    const parsed = [];
     for (const [id, arr] of Object.entries(data)) {
       if (id === 'full_count' || id === 'version' || id === 'stats' || !Array.isArray(arr)) continue;
       const f = {
@@ -992,14 +992,42 @@ async function refreshFlights() {
         callsign: arr[16] || '',
         airline: arr[18] || ''
       };
-      if (f.lat && f.lon) allFlights.push(f);
+      if (f.lat && f.lon) parsed.push(f);
     }
 
-    document.getElementById('status-dot').className = 'status-dot live';
-    document.getElementById('status-text').textContent = 'LIVE';
-    document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights';
-    const errOverlay = document.getElementById('map-error-overlay');
-    if (errOverlay) errOverlay.remove();
+    if (parsed.length > 0) {
+      // Healthy live feed: commit the new flights and show LIVE.
+      allFlights = parsed;
+      document.getElementById('status-dot').className = 'status-dot live';
+      document.getElementById('status-text').textContent = 'LIVE';
+      document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights';
+      const errOverlay = document.getElementById('map-error-overlay');
+      if (errOverlay) errOverlay.remove();
+    } else {
+      // A 200 with ZERO UA flights is never legitimate — United always has hundreds airborne, so
+      // this is a degraded feed (FR24 rate-limit interstitial / empty body). Do NOT blank the map
+      // by overwriting allFlights, and do NOT show a healthy green LIVE. Keep the last-good markers
+      // and tell the truth with a STALE/NO-DATA label. (Audit P1: empty-feed-blank-map-no-degraded-state.)
+      document.getElementById('status-dot').className = 'status-dot';
+      document.getElementById('status-dot').style.background = '#EAB308';
+      if (allFlights.length > 0) {
+        document.getElementById('status-text').textContent = 'STALE';
+        document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights (stale)';
+      } else {
+        // No prior data to keep showing — surface the unavailable overlay (same affordance as the
+        // network-error path) so the user isn't left staring at an empty "LIVE" map.
+        document.getElementById('status-text').textContent = 'NO DATA';
+        const mapEl = document.getElementById('map');
+        if (mapEl && !document.getElementById('map-error-overlay')) {
+          const overlay = document.createElement('div');
+          overlay.id = 'map-error-overlay';
+          overlay.style.cssText = 'position:absolute;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(10,14,20,.85);pointer-events:auto';
+          overlay.innerHTML = '<div class="error-state"><div class="error-icon">📡</div><div style="color:var(--ua-text);font-size:13px;margin-bottom:4px">Live feed returned no flights</div><div style="color:var(--ua-muted);font-size:11px">Retrying automatically…</div><button class="retry-btn" data-action="map-error-retry">↻ Retry</button></div>';
+          mapEl.parentElement.style.position = 'relative';
+          mapEl.parentElement.appendChild(overlay);
+        }
+      }
+    }
   } catch (e) {
     console.error('FR24 error:', e);
     document.getElementById('status-dot').className = 'status-dot';
@@ -2464,6 +2492,7 @@ function refreshFleetData() {
 
 // ═══ WEATHER TAB ═══
 let weatherInitialized = false;
+let radarMap = null; // module-level so weather-retry can tear down the prior Leaflet map before re-init
 let _weatherRefreshInterval = null;
 // Module-level ref so weather-retry can disconnect the prior observer before
 // creating a new one. AbortController does not work on observers — the only
@@ -2816,7 +2845,11 @@ async function initWeatherTab() {
 
   // Initialize radar map IMMEDIATELY — don't wait for data fetches
   const basemapTileOptions = getBasemapTileOptions();
-  const radarMap = L.map('radar-map', {center:[39,-97],zoom:3,zoomControl:false,attributionControl:false});
+  // Tear down any prior Leaflet instance before re-creating — initWeatherTab can run again via the
+  // weather-retry action (which resets weatherInitialized), and L.map() on an already-initialized
+  // container throws "Map container is already initialized." (Audit P1: weather-retry-double-map-init.)
+  if (radarMap) { try { radarMap.remove(); } catch (e) { /* already removed */ } radarMap = null; }
+  radarMap = L.map('radar-map', {center:[39,-97],zoom:3,zoomControl:false,attributionControl:false});
   L.control.zoom({ position: 'bottomleft' }).addTo(radarMap);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', basemapTileOptions).addTo(radarMap);
   L.tileLayer('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png',{opacity:0.6}).addTo(radarMap);
@@ -5780,7 +5813,8 @@ document.addEventListener('click', function(e) {
     }
     case 'weather-retry':
       weatherInitialized = false;
-      initWeatherTab();
+      // initWeatherTab is async; surface (don't swallow) any re-init failure.
+      initWeatherTab().catch(e => console.error('weather-retry failed:', e));
       break;
     case 'toggle-watch-flight':
       toggleWatchFlight(actionEl.dataset.flight, actionEl.dataset.route, actionEl.dataset.status);
