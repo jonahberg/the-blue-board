@@ -10,6 +10,7 @@ import {
 import { getStartOfDayForHub } from './irops.js';
 import { waitUntil } from '@vercel/functions';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
+import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
 const isRateLimited = createRateLimiter('schedule', 30);
 
@@ -188,8 +189,14 @@ function shouldAttemptTargetedOfficialRescue(hub: string, ts: number, options?: 
   const hubUpper = hub.toUpperCase();
   if (!TARGETED_OFFICIAL_RESCUE_HUBS.has(hubUpper)) return false;
 
+  // Accept BOTH the IROPS display value (getStartOfDayForHub rolls back to yesterday before 6 AM
+  // hub-local) AND the canonical hub-local start-of-today the dashboard actually sends
+  // (getStartOfHubDay(hub, 0)). Before 6 AM the two differ, which previously disabled this
+  // same-day official rescue for the genuinely-current board — and because the 9 hubs span 6
+  // timezones, some hub is always in that dead-zone. Widening only: never suppresses a rescue.
+  // (Audit P1: client/server start-of-day divergence.)
   const startOfToday = getStartOfDayForHub(hubUpper);
-  return ts === startOfToday;
+  return ts === startOfToday || ts === getStartOfHubDay(hubUpper, 0);
 }
 
 function cacheSet(key: string, data: any, ttlMs: number): void {
@@ -540,7 +547,9 @@ function isLiveFeedFallbackEnabled(): boolean {
 function shouldAttemptLiveFeedFallback(hub: string, ts: number): boolean {
   if (!isLiveFeedFallbackEnabled()) return false;
   const hubUpper = hub.toUpperCase();
-  return ts === getStartOfDayForHub(hubUpper);
+  // Same start-of-day fix as the official rescue gate: also accept the dashboard's canonical
+  // hub-local today, so the no-credit live-feed rescue isn't disabled before 6 AM hub-local.
+  return ts === getStartOfDayForHub(hubUpper) || ts === getStartOfHubDay(hubUpper, 0);
 }
 
 function toFiniteNumber(value: any): number | null {
