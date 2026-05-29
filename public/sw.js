@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9'; // bumped to purge the v8 precache that pinned the old dashboard.js / style.css
 const PAGE_CACHE = `blueboard-pages-${CACHE_VERSION}`;
 const DATA_CACHE = `blueboard-data-${CACHE_VERSION}`;
 const STATIC_CACHE = `blueboard-static-${CACHE_VERSION}`;
@@ -8,7 +8,10 @@ const PAGE_MAX = 20;
 const DATA_MAX = 80;
 const STATIC_MAX = 120;
 
-const APP_SHELL = ['/', '/index.html', '/css/style.css?v=1', '/js/dashboard.js'];
+// Only the navigation shell is precached. The app's own code (dashboard.js / style.css) is served
+// network-first in the fetch handler so a new deploy reaches returning users immediately, instead
+// of being pinned here until CACHE_VERSION is manually bumped. (Audit critic #1.)
+const APP_SHELL = ['/', '/index.html'];
 
 async function trimCache(cacheName, maxEntries) {
   const cache = await caches.open(cacheName);
@@ -109,6 +112,33 @@ self.addEventListener('fetch', (event) => {
           status: 503,
           headers: { 'content-type': 'application/json' }
         });
+      }
+    })());
+    return;
+  }
+
+  // The app's own code (dashboard bundle + stylesheet) is NOT content-hashed, so serve it
+  // network-first: always fetch the latest when online so shipped fixes reach returning users,
+  // falling back to cache only when offline. Other static assets (fonts, images) stay
+  // stale-while-revalidate below. (Audit critic #1: immutable + non-hashed + SW precache pinning
+  // meant deploys never reached users.)
+  const isAppCode = url.pathname === '/js/dashboard.js' || url.pathname === '/css/style.css';
+  if (isAppCode) {
+    event.respondWith((async () => {
+      try {
+        const networkResponse = await fetch(new Request(request, { cache: 'no-cache' }));
+        if (isCacheable(networkResponse)) {
+          event.waitUntil((async () => {
+            const cache = await caches.open(STATIC_CACHE);
+            await cache.put(request, networkResponse.clone());
+            await trimCache(STATIC_CACHE, STATIC_MAX);
+          })());
+        }
+        return networkResponse;
+      } catch (_err) {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        return new Response('Offline', { status: 503, headers: { 'content-type': 'text/plain' } });
       }
     })());
     return;
