@@ -20,7 +20,7 @@
     "ui-audit": "bun scripts/ui-audit.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "@anthropic-ai/sdk": "^0.100.1",
     "@supabase/supabase-js": "^2.49.1",
     "@vercel/functions": "^3.4.3",
     "@vercel/speed-insights": "^2.0.0",
