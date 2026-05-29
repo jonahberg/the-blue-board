@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadScheduleSnapshot, saveScheduleSnapshot } from './_schedule-snapshots.js';
+import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock } from './_cost-state.js';
 import { fetchViaAeroDataBox } from './_schedule-aerodatabox.js';
 import {
   FR24_SCHEDULE_HEADERS,
@@ -531,12 +532,16 @@ function parseRetryAfterMs(headerValue: string | null): number {
 }
 
 function isOfficialQuotaBlocked(): boolean {
-  return Date.now() < officialQuotaBlockedUntil;
+  // Honour BOTH this instance's block and the global block mirrored from Supabase, so a 402 hit by
+  // any other lambda also stops this one from calling the paid official API. (Audit: global guard.)
+  return Date.now() < Math.max(officialQuotaBlockedUntil, getMirroredQuotaBlockedUntil());
 }
 
 function blockOfficialQuota(reason: string): void {
   officialQuotaBlockedUntil = Date.now() + OFFICIAL_QUOTA_BLOCK_MS;
   console.warn(`Official FR24 API quota blocked for 30m: ${reason}`);
+  // Propagate the block to all other instances (fire-and-forget; never throws).
+  void persistQuotaBlock(officialQuotaBlockedUntil, reason);
 }
 
 function isLiveFeedFallbackEnabled(): boolean {
@@ -1132,6 +1137,7 @@ export function resetFallbackBreaker(): void {
   officialQuotaBlockedUntil = 0;
   liveFeedCache = null;
   liveFeedInFlight = null;
+  resetMirroredQuotaBlock();
 }
 
 async function tryOfficialFallback(
@@ -1477,6 +1483,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const functionDeadline = Date.now() + 57000;
+
+    // Pull the latest cross-instance FR24 quota block (rate-limited to ~one read per 10s) so a 402
+    // "credit limit reached" hit by ANY other lambda is honoured here before we decide to call the
+    // paid official API. (Audit P1: per-lambda cost guards do not bound global spend.)
+    await hydrateQuotaBlock();
 
     const { hub, dir = 'departures', timestamp, page } = req.query as Record<string, string>;
     if (!hub || !timestamp) {

@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+/// <reference types="bun" />
 // Prewarm Vercel CDN cache for schedule data
 // Run every 4-6 hours via cron to keep schedule endpoints hot
 // This ensures real users always hit CDN cache, never cold serverless functions
