@@ -16,6 +16,7 @@
     "seed:schedules": "bun scripts/seed-schedules.mjs",
     "test": "bunx vitest run",
     "test:watch": "bunx vitest",
+    "typecheck": "tsc --noEmit",
     "ui-audit": "bun scripts/ui-audit.mjs"
   },
   "dependencies": {
