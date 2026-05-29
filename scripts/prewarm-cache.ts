@@ -3,6 +3,10 @@
 // Run every 4-6 hours via cron to keep schedule endpoints hot
 // This ensures real users always hit CDN cache, never cold serverless functions
 
+// Marks this file as an ES module so TypeScript permits the top-level `await` below (fixes
+// TS1375). Harmless at runtime under `bun scripts/prewarm-cache.ts`.
+export {};
+
 const BASE = "https://theblueboard.co/api";
 const HUBS = ["ORD", "DEN", "IAH", "EWR", "SFO", "LAX", "IAD", "NRT", "GUM"];
 const DIRS = ["departures", "arrivals"];
