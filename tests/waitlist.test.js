@@ -21,11 +21,13 @@ process.env.NODE_ENV = 'test';
 delete process.env.VERCEL_ENV;
 
 vi.mock('resend', () => ({
-  Resend: vi.fn(() => ({
-    emails: {
-      send: mockEmailSend,
-    },
-  })),
+  Resend: vi.fn(function () {
+    return {
+      emails: {
+        send: mockEmailSend,
+      },
+    };
+  }),
 }));
 
 import handler from '../api/waitlist.js';
