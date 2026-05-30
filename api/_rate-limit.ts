@@ -55,3 +55,14 @@ export function createRateLimiter(name: string, maxPerMinute: number = 60): (req
     return false;
   };
 }
+
+/**
+ * Test helper: clear all in-memory rate-limit state. Without this, every test request shares the
+ * same `unknown` IP bucket and the per-60s window accumulates across a suite run, intermittently
+ * tipping later tests into a spurious 429. Production never calls this.
+ */
+export function __resetRateLimitersForTests(): void {
+  // Clear each named store's per-IP buckets, but keep the store entries themselves — the limiter
+  // closure captured by createRateLimiter does `stores.get(name)!` and assumes the entry exists.
+  for (const [, store] of stores) store.clear();
+}

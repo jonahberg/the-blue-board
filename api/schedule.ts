@@ -1145,6 +1145,17 @@ export function resetFallbackBreaker(): void {
   resetMirroredQuotaBlock();
 }
 
+/**
+ * Test helper: clear the in-memory schedule caches so a board cached by one test does not leak
+ * into another that happens to use the same hub/dir/day cache key. Production never calls this.
+ */
+export function __resetScheduleCachesForTests(): void {
+  cache.clear();
+  lastCompleteCache.clear();
+  lastCompleteByHubDir.clear();
+  pendingAggs.clear();
+}
+
 async function tryOfficialFallback(
   logHub: string, dir: string, ts: number, effectiveDeadline: number
 ): Promise<any | null> {
@@ -1446,6 +1457,25 @@ async function fetchAllPages(
       scraperRecoveredPages,
     }
   };
+
+  // An empty-but-200 scrape for a same-day TARGETED United hub is never legitimate: United always
+  // has a full day of flights, so a clean HTTP 200 with 0 rows (no 403/429/cf-mitigated) almost
+  // always means FR24/Cloudflare returned a soft-blocked empty schedule page to our datacenter IP.
+  // The official-rescue gate just below requires `partial`, but a clean empty page leaves
+  // partial=false, so official was never attempted and the board fell through to a stale live-feed
+  // snapshot. Mark it partial so it enters the rescue and fetches the FULL day from the paid FR24
+  // official API. Scoped to allowTargetedOfficialRescue (the 9 hubs, FR24 token present, current
+  // day, and USER requests only — the warm cron passes officialFallback=0 so allowTargetedOfficial-
+  // Rescue is false there), keeping background credit spend untouched and the breaker/402 cap in
+  // force. (Audit: empty-200 scrape treated as authoritative-empty, bypassing official rescue.)
+  if (scrapeResult.total === 0 && !scrapeResult.partial && allowTargetedOfficialRescue) {
+    scrapeResult.partial = true;
+    scrapeResult.meta = {
+      ...(scrapeResult.meta as any),
+      partialReason: 'empty_200_suspected_block',
+      completeness: 0,
+    };
+  }
 
   let attemptedOfficialRescue = false;
   if (
