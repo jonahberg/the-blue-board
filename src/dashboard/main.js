@@ -386,7 +386,12 @@ function switchToTab(tabId, updateHash) {
   btn.classList.add('active');
   btn.setAttribute('aria-selected', 'true');
   btn.setAttribute('tabindex', '0');
-  document.getElementById(tabId).classList.add('active');
+  // STARLINK is a top-level shortcut tab: the Starlink table lives inside #tab-fleet (as a
+  // fleet sub-view), so map the virtual tab-starlink to the fleet content panel and auto-select
+  // the Starlink sub-view below. Null-guard keeps every other tab's behaviour identical.
+  const contentId = tabId === 'tab-starlink' ? 'tab-fleet' : tabId;
+  const contentEl = document.getElementById(contentId);
+  if (contentEl) contentEl.classList.add('active');
   if (updateHash !== false && TAB_HASHES[tabId]) history.replaceState(null, '', TAB_HASHES[tabId]);
   // Defer heavy tab-specific init to next frame so the click event completes fast (INP fix)
   requestAnimationFrame(() => {
@@ -394,6 +399,7 @@ function switchToTab(tabId, updateHash) {
     if (tabId === 'tab-live' && map) map.invalidateSize();
     if (tabId === 'tab-schedule') { initScheduleTab(); if (schedInitialized && !schedAllFlights.length && !schedLoading) loadScheduleData(); }
     if (tabId === 'tab-fleet') { if (!allFlights.length && !flightsLoading) refreshFlights(); updateLiveFleetPanel(); }
+    if (tabId === 'tab-starlink') { if (!allFlights.length && !flightsLoading) refreshFlights(); updateLiveFleetPanel(); if (typeof switchFleetView === 'function') switchFleetView('starlink'); document.getElementById('fleet-subtab-bar')?.scrollIntoView({ block: 'start' }); }
     if (tabId === 'tab-weather') initWeatherTab();
     if (tabId === 'tab-analytics') updateAnalytics();
   });
