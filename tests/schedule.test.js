@@ -1003,6 +1003,67 @@ describe('schedule API', () => {
     expect(flight.time.estimated.arrival).toBe(flight.time.scheduled.arrival);
   });
 
+  it('scrape-first: merges official actual-only board with live-feed and ranks it above bare live-feed', async () => {
+    // Regression for the live degradation (boards stuck on stale live-feed despite the official API
+    // being called): when the scrape is blocked, the official actual-only board is merged with
+    // live-feed active flights into the richest board. mergeLiveFeedFallback must recompute
+    // completeness ABOVE the 0.35 live-feed baseline so the combined board wins and is served,
+    // instead of being discarded for a bare live-feed snapshot. (FR24-economy fix.)
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+    const ts = getStartOfDayForHub('ORD');
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      // Official API: one COMPLETED ORD departure (actual times only, no scheduled) -> actual-only board.
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{
+              fr24_id: 'aaa111', flight: 'UA795', callsign: 'UAL795', operating_as: 'UAL',
+              type: 'A21N', reg: 'N44550', orig_icao: 'KORD',
+              datetime_takeoff: new Date((ts + 10 * 3600) * 1000).toISOString().replace('.000Z', 'Z'),
+              dest_icao: 'KEWR', dest_icao_actual: 'KEWR',
+              datetime_landed: new Date((ts + 12 * 3600) * 1000).toISOString().replace('.000Z', 'Z'),
+              flight_ended: true,
+            }],
+          }),
+        };
+      }
+      // Live feed: a DIFFERENT active flight departing ORD -> added in the merge.
+      if (urlStr.includes('data-cloud.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            full_count: 1, version: 4,
+            'live-1': ['B1', 41.97, -87.9, 270, 35000, 430, '', '', 'B38M', 'N12345',
+              ts + 14 * 3600, 'ORD', 'SFO', 'UA999', 0, -500, 'UAL999', '', 'UAL'],
+          }),
+        };
+      }
+      // Direct scrape: Cloudflare-blocked.
+      return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    // Combined: official completed flight + live-feed active flight (deduped, both kept).
+    expect(res.body.total).toBeGreaterThanOrEqual(2);
+    expect(res.body.meta.liveFeedFallbackAdded).toBeGreaterThanOrEqual(1);
+    // Change 1: completeness recomputed above the 0.35 live-feed baseline so the merged board wins.
+    expect(res.body.meta.completeness).toBeGreaterThan(0.35);
+    // It's the official-base merged board, NOT bare live-feed.
+    expect(res.body.meta.source).toBe('official-api');
+  });
+
   it('circuit breaker trips after repeated fallbacks', () => {
     // Record 5 fallbacks — breaker should trip
     for (let i = 0; i < 5; i++) recordFallback();
