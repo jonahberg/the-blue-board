@@ -12,8 +12,9 @@ const vercelFunctionMocks = vi.hoisted(() => ({
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => scheduleSnapshotMocks);
 vi.mock('@vercel/functions', () => vercelFunctionMocks);
 
-import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker } from '../api/schedule.js';
+import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker, __resetScheduleCachesForTests } from '../api/schedule.js';
 import { getStartOfDayForHub } from '../api/irops.js';
+import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 
 function formatForFR24Test(date) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -41,6 +42,8 @@ function createRes() {
 describe('schedule API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    __resetRateLimitersForTests();
+    __resetScheduleCachesForTests();
     scheduleSnapshotMocks.loadScheduleSnapshot.mockReset();
     scheduleSnapshotMocks.saveScheduleSnapshot.mockReset();
     scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
@@ -458,6 +461,59 @@ describe('schedule API', () => {
     expect(res.body.meta.fallbackFrom).toBe('scraping');
     expect(officialUrl).toContain(`flight_datetime_from=${encodeURIComponent(formatForFR24Test(new Date(ts * 1000)))}`);
     expect(officialUrl).toContain(`flight_datetime_to=${encodeURIComponent(formatForFR24Test(new Date((ts + 86400 - 1) * 1000)))}`);
+  });
+
+  it('scrape-first: empty-200 scrape (suspected Cloudflare block) escalates to the official rescue', async () => {
+    // Regression for the live "0-flight board" bug: a direct FR24 scrape that returns a clean
+    // HTTP 200 with an empty schedule block (a soft datacenter-IP block, NOT a 403/429) used to be
+    // treated as an authoritative empty board (partial:false), so the official rescue was skipped
+    // and the user got a stale live-feed snapshot. For a same-day TARGETED hub with a token, the
+    // empty board must now be flagged partial and escalate to the official API for a full schedule.
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+
+    let officialCalled = false;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        officialCalled = true;
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{
+              flight_icao: 'UAL100',
+              flight_iata: 'UA100',
+              status: 'scheduled',
+              orig_iata: 'ORD',
+              dest_iata: 'LAX',
+              scheduled_departure: 1741653600,
+              scheduled_arrival: 1741660800,
+            }]
+          }),
+        };
+      }
+      // Direct FR24 scrape: clean HTTP 200, valid airport payload, but NO schedule block → 0 flights.
+      return {
+        ok: true,
+        json: async () => ({ result: { response: { airport: { pluginData: {} } } } }),
+        headers: { get: () => null },
+      };
+    });
+
+    const ts = getStartOfDayForHub('ORD'); // today; ORD is a TARGETED_OFFICIAL_RESCUE_HUB
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(officialCalled).toBe(true);
+    expect(res.body.meta.source).toBe('official-api');
+    expect(res.body.meta.fallbackFrom).toBe('scraping');
+    expect(res.body.total).toBeGreaterThan(0);
   });
 
   it('scrape-first: official fallback can still be disabled by env', async () => {
