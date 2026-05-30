@@ -1319,7 +1319,9 @@ describe('schedule API', () => {
         })
       })
     }));
-    expect(res.headers['Cache-Control']).toContain('s-maxage=30');
+    // Partial-but-NON-EMPTY boards now get a 120s CDN TTL (not 30s) so a degraded board isn't
+    // re-scraped every 30s during an FR24 block. 30s is reserved for partial AND empty. (Audit P7.)
+    expect(res.headers['Cache-Control']).toContain('s-maxage=120');
   });
 
   it('scrape-first: rate-limited mid-loop pauses and continues fetching', { timeout: 15000 }, async () => {
