@@ -266,34 +266,54 @@ async function fetchWindow(
     headers['x-magicapi-key'] = token;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const resp = await fetch(url, {
-      signal: controller.signal,
-      headers,
-    });
-    clearTimeout(timeout);
+  // Free RapidAPI plans throttle by requests-per-second, so a busy hub's window can get a 429 even
+  // with the inter-window gap (concurrent cron/user traffic competes for the same per-second budget).
+  // Retry 429/503 a couple of times, honoring Retry-After, so a transient throttle doesn't leave the
+  // board permanently half-empty.
+  const deadline = Date.now() + timeoutMs;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const remaining = deadline - Date.now();
+    if (remaining < 800) break;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.min(remaining, 15000));
+    try {
+      const resp = await fetch(url, { signal: controller.signal, headers });
+      clearTimeout(timer);
 
-    if (resp.status === 204) return { ok: true, flights: [] };
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => '');
-      console.error(`AeroDataBox schedule returned ${resp.status} for ${hub} ${dir}: ${body.slice(0, 200)}`);
+      if (resp.status === 204) return { ok: true, flights: [] };
+      if (resp.status === 429 || resp.status === 503) {
+        await resp.text().catch(() => '');
+        const retryAfter = Number(resp.headers.get('retry-after'));
+        const backoff = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1500 * attempt;
+        if (attempt < maxAttempts && deadline - Date.now() > backoff + 800) {
+          console.warn(`AeroDataBox ${resp.status} for ${hub} ${dir} (attempt ${attempt}); retrying in ${backoff}ms`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        console.error(`AeroDataBox schedule returned ${resp.status} for ${hub} ${dir} after ${attempt} attempt(s)`);
+        return { ok: false };
+      }
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        console.error(`AeroDataBox schedule returned ${resp.status} for ${hub} ${dir}: ${body.slice(0, 200)}`);
+        return { ok: false };
+      }
+
+      const data = await resp.json() as any;
+      const flights = dir === 'departures' ? (data?.departures || []) : (data?.arrivals || []);
+      return { ok: true, flights: Array.isArray(flights) ? flights : [] };
+    } catch (e: any) {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') {
+        console.error(`AeroDataBox schedule timeout for ${hub} ${dir}`);
+        return { ok: false };
+      }
+      console.error(`AeroDataBox schedule error for ${hub} ${dir}:`, e.message);
       return { ok: false };
     }
-
-    const data = await resp.json() as any;
-    const flights = dir === 'departures' ? (data?.departures || []) : (data?.arrivals || []);
-    return { ok: true, flights: Array.isArray(flights) ? flights : [] };
-  } catch (e: any) {
-    clearTimeout(timeout);
-    if (e.name === 'AbortError') {
-      console.error(`AeroDataBox schedule timeout for ${hub} ${dir}`);
-    } else {
-      console.error(`AeroDataBox schedule error for ${hub} ${dir}:`, e.message);
-    }
-    return { ok: false };
   }
+  return { ok: false };
 }
 
 export async function fetchViaAeroDataBox(hub: string, dir: string, ts: number, timeoutMs = 12000) {
