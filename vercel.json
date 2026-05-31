@@ -32,7 +32,7 @@
         "api/cron/refresh-tsa.ts": { "maxDuration": 30 }
     },
     "crons": [
-        { "path": "/api/cron/warm-schedules", "schedule": "*/15 * * * *" },
+        { "path": "/api/cron/warm-schedules", "schedule": "0 */2 * * *" },
         { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" },
         { "path": "/api/cron/refresh-tsa", "schedule": "*/5 * * * *" }
     ],

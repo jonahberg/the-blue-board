@@ -44,6 +44,7 @@ describe('schedule API', () => {
     vi.restoreAllMocks();
     __resetRateLimitersForTests();
     __resetScheduleCachesForTests();
+    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
     scheduleSnapshotMocks.loadScheduleSnapshot.mockReset();
     scheduleSnapshotMocks.saveScheduleSnapshot.mockReset();
     scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
@@ -63,6 +64,7 @@ describe('schedule API', () => {
     delete process.env.SCHEDULE_SCRAPER_URL;
     delete process.env.SCHEDULE_SCRAPER_TOKEN;
     delete process.env.SCHEDULE_SOURCE_PRIORITY;
+    delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
     delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
     delete process.env.SCHEDULE_LIVE_FEED_FALLBACK_ENABLED;
     resetFallbackBreaker();
