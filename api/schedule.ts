@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
-import { loadScheduleSnapshot, saveScheduleSnapshot } from './_schedule-snapshots.js';
+import { loadScheduleSnapshot, saveScheduleSnapshot, isSnapshotCandidateBetter } from './_schedule-snapshots.js';
 import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock } from './_cost-state.js';
 import { fetchViaAeroDataBox } from './_schedule-aerodatabox.js';
 import {
@@ -787,6 +787,17 @@ function mergeLiveFeedFallback(base: any, live: any): any {
     return aTime - bTime;
   });
 
+  // Recompute completeness for the MERGED board instead of inheriting the official base's value.
+  // An actual-only official base carries completeness ~0.25, but the combined board (official
+  // completed/scheduled + deduped live-feed active flights) is the richest single board available,
+  // so it must rank ABOVE the bare live-feed snapshot (0.35) — otherwise the handler discards it and
+  // serves stale live-feed, and it can never overwrite the live-feed snapshot. Floor just above 0.35
+  // so a genuinely-merged board always beats live-feed, while preserving a higher official base when
+  // the official board already had many real scheduled (upcoming) flights. It stays partial
+  // (degraded), so we do NOT claim full completeness. Pure arithmetic — ZERO additional FR24 calls.
+  const baseCompleteness = Number(base.meta?.completeness) || 0;
+  const mergedCompleteness = Math.max(baseCompleteness, 0.4);
+
   return {
     ...base,
     flights,
@@ -796,6 +807,7 @@ function mergeLiveFeedFallback(base: any, live: any): any {
     meta: {
       ...(base.meta || {}),
       partialReason: base.meta?.partialReason || 'live_feed_augmented',
+      completeness: mergedCompleteness,
       liveFeedFallbackAdded: additions.length,
       liveFeedFallbackTotal: live.total,
       liveFeedFallbackSource: live.meta?.source || 'live-feed',
@@ -1236,12 +1248,43 @@ async function fetchAllPages(
   const allowScraperFallback = !options.disableScraperFallback;
 
   // ── Source routing decision tree ──
-  const srcPriority = options.disableOfficialSource
+  // 'provider' = AeroDataBox-first (the only source that still returns the FULL forward board —
+  // scheduled + active + completed incl. upcoming — from Vercel datacenter IPs, since FR24's web
+  // schedule is Cloudflare-challenge-dead and the FR24 official API has no schedule endpoint).
+  // Legacy 'scrape'/'official'/'scrape-only' are kept for the test suite and as a re-enable path
+  // if FR24 ever drops the challenge. NOTE: officialFallback=0 (cron / disableOfficialSource) used
+  // to force 'scrape-only'; we no longer let it override 'provider', so background warming can use
+  // the working provider without burning FR24 credits.
+  const envPriority = (process.env.SCHEDULE_SOURCE_PRIORITY || 'scrape').toLowerCase();
+  const srcPriority = (options.disableOfficialSource && envPriority !== 'provider')
     ? 'scrape-only'
-    : (process.env.SCHEDULE_SOURCE_PRIORITY || 'scrape').toLowerCase();
+    : envPriority;
 
-  if (!['scrape', 'official', 'scrape-only'].includes(srcPriority)) {
+  if (!['scrape', 'official', 'scrape-only', 'provider'].includes(srcPriority)) {
     console.warn(`Unrecognized SCHEDULE_SOURCE_PRIORITY: '${srcPriority}', using scrape-only`);
+  }
+
+  if (srcPriority === 'provider') {
+    // Primary: AeroDataBox returns the full forward schedule (incl. not-yet-departed flights).
+    if (allowProviderFallback && process.env.AERODATABOX_API_KEY) {
+      try {
+        const providerTimeout = Math.min(Math.floor((effectiveDeadline - Date.now()) * 0.7), 30000);
+        const providerResult = await fetchViaAeroDataBox(logHub, dir, ts, providerTimeout);
+        if (providerResult && providerResult.total > 0) {
+          // Overlay the free live feed for active flights only when the provider board is partial.
+          return await maybeAugmentWithLiveFeedFallback(providerResult, logHub, dir, ts, effectiveDeadline);
+        }
+      } catch (e: any) {
+        console.error(`Provider (AeroDataBox) primary failed for ${logHub}:`, e.message);
+      }
+    }
+    // Provider unavailable/empty -> FR24 official (active+completed, breaker-gated) + free live feed.
+    // disableOfficialSource (officialFallback=0, e.g. cron) keeps official off so background warming
+    // never burns FR24 credits; it then degrades to the free live feed.
+    const fallback = await tryScheduleRescue(
+      logHub, dir, ts, effectiveDeadline, false, !options.disableOfficialSource
+    );
+    if (fallback) return fallback;
   }
 
   if (srcPriority === 'official' && process.env.FR24_API_TOKEN) {
@@ -1541,8 +1584,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid timestamp' });
     }
     const isOld = (now - ts) > 86400;
-    const ttl = isOld ? 600000 : 900000;
-    const cdnMaxAge = isOld ? 3600 : 900;
+    // A given day's schedule is stable, so a clean (non-partial) today board can be reused for hours.
+    // Reuse it for 3h in-memory + at the edge so one ~29-credit official refresh is amortized across
+    // the whole warm window instead of re-fetched every 15 min. Partial boards are unaffected:
+    // setAggregateCacheHeader overrides cdnMaxAge to 120s/30s for partial responses. (FR24-economy.)
+    const ttl = isOld ? 600000 : 10800000;     // 3h for today's clean board (was 15m)
+    const cdnMaxAge = isOld ? 3600 : 10800;    // 3h per-edge for today's clean board (was 15m)
     swr = 600;
     const allowOfficialFallback = !shouldDisableOfficialFallback(req);
     const allowProviderFallback = !shouldDisableProviderFallback(req);
@@ -1667,7 +1714,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
           return res.status(200).json(buildDegradedResponse(persistentResult, 'persistent'));
         }
-        if (partialPersistentFallback) {
+        // Only prefer the stale persisted partial snapshot when it genuinely outranks the board we
+        // just built. The fresh board may be an official+live-feed merge (richer, higher completeness
+        // after Change 1) that should be served NOW instead of the older live-feed-only snapshot.
+        // Reuses the exact ranking the snapshot writer uses, so serve-path and persist-path agree.
+        if (partialPersistentFallback && !isSnapshotCandidateBetter(result, partialPersistentFallback.data)) {
           res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
           return res.status(200).json(buildDegradedResponse(partialPersistentFallback, 'persistent_partial'));
         }

@@ -251,16 +251,27 @@ async function fetchWindow(
   url.searchParams.set('withPrivate', 'false');
   url.searchParams.set('withLocation', 'false');
 
+  // Support both AeroDataBox gateways: RapidAPI (x-rapidapi-key + x-rapidapi-host) and
+  // api.market (x-magicapi-key). Detected from the base host so a single AERODATABOX_API_KEY +
+  // AERODATABOX_BASE_URL pair works for either.
+  const isRapidApi = /rapidapi\.com/i.test(base);
+  const headers: Record<string, string> = {
+    'Accept': 'application/json',
+    'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
+  };
+  if (isRapidApi) {
+    headers['x-rapidapi-key'] = token;
+    try { headers['x-rapidapi-host'] = new URL(base).host; } catch { headers['x-rapidapi-host'] = 'aerodatabox.p.rapidapi.com'; }
+  } else {
+    headers['x-magicapi-key'] = token;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const resp = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        'x-magicapi-key': token,
-        'Accept': 'application/json',
-        'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
-      },
+      headers,
     });
     clearTimeout(timeout);
 
@@ -297,9 +308,16 @@ export async function fetchViaAeroDataBox(hub: string, dir: string, ts: number, 
 
   const rawFlights: any[] = [];
   const failedWindows: number[] = [];
-  const perWindowTimeout = Math.max(2000, Math.floor(timeoutMs / windows.length));
+  // Free RapidAPI plans throttle by requests-per-second, so pause between the sequential window
+  // calls. Reserve that pause out of the budget when sizing each window's timeout.
+  const interWindowDelayMs = Math.max(0, Number(process.env.AERODATABOX_INTER_WINDOW_DELAY_MS ?? 1100) || 0);
+  const reserved = interWindowDelayMs * (windows.length - 1);
+  const perWindowTimeout = Math.max(2000, Math.floor((timeoutMs - reserved) / windows.length));
 
   for (let i = 0; i < windows.length; i++) {
+    if (i > 0 && interWindowDelayMs > 0) {
+      await new Promise((r) => setTimeout(r, interWindowDelayMs));
+    }
     const [fromLocal, toLocal] = windows[i];
     const result = await fetchWindow(hub, dir, fromLocal, toLocal, perWindowTimeout);
     if (result.ok) {

@@ -64,14 +64,16 @@ describe('warm-schedules buildWarmPlan', () => {
     expect(plan.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('disables paid/provider/scraper fallbacks for background schedule warming', () => {
+  it('warms via the provider (AeroDataBox) while keeping paid FR24 + dead scrape off', () => {
     const url = buildScheduleWarmUrl('ORD', 'departures', 1778907600);
     expect(url).toContain('/api/schedule?');
     expect(url).toContain('hub=ORD');
     expect(url).toContain('dir=departures');
     expect(url).toContain('timestamp=1778907600');
+    // Background warming uses the provider (the only working full-board source) ...
+    expect(url).toContain('providerFallback=1');
+    // ... but never burns FR24 official credits, and skips the Cloudflare-dead scrape.
     expect(url).toContain('officialFallback=0');
-    expect(url).toContain('providerFallback=0');
     expect(url).toContain('scraperFallback=0');
   });
 });

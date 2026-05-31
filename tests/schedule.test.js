@@ -44,6 +44,7 @@ describe('schedule API', () => {
     vi.restoreAllMocks();
     __resetRateLimitersForTests();
     __resetScheduleCachesForTests();
+    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
     scheduleSnapshotMocks.loadScheduleSnapshot.mockReset();
     scheduleSnapshotMocks.saveScheduleSnapshot.mockReset();
     scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
@@ -63,6 +64,7 @@ describe('schedule API', () => {
     delete process.env.SCHEDULE_SCRAPER_URL;
     delete process.env.SCHEDULE_SCRAPER_TOKEN;
     delete process.env.SCHEDULE_SOURCE_PRIORITY;
+    delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
     delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
     delete process.env.SCHEDULE_LIVE_FEED_FALLBACK_ENABLED;
     resetFallbackBreaker();
@@ -784,23 +786,25 @@ describe('schedule API', () => {
     expect(flight.time.scheduled.arrival).toBe(arrTime);
   });
 
-  it('uses configured FR24 scraper transport before provider fallbacks when direct scraping is blocked', async () => {
-    process.env.SCRAPINGBEE_API_KEY = 'bee-test-key';
+  it('uses configured FR24 scraper transport (http-json proxy) before provider fallbacks when direct scraping is blocked', async () => {
+    // ScrapingBee was removed; the surviving generic transport is the http-json proxy (SCHEDULE_SCRAPER_URL).
+    process.env.SCHEDULE_SCRAPER_URL = 'https://proxy.example.com/fetch';
+    process.env.SCHEDULE_SCRAPER_TOKEN = 'proxy-secret';
     process.env.AERODATABOX_API_KEY = 'adb-test-key';
     process.env.FR24_API_TOKEN = 'test-token-12345678';
 
     const ts = getStartOfDayForHub('SFO') + 86400;
     const depTime = ts + 7 * 3600;
     const arrTime = ts + 11 * 3600;
-    let scrapingBeeCalls = 0;
+    let proxyCalls = 0;
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       const urlStr = String(url);
-      if (urlStr.includes('app.scrapingbee.com/api/v1')) {
-        scrapingBeeCalls++;
-        expect(urlStr).toContain('api_key=bee-test-key');
-        expect(urlStr).toContain('premium_proxy=true');
-        expect(urlStr).toContain('render_js=false');
+      if (urlStr.includes('proxy.example.com/fetch')) {
+        proxyCalls++;
+        expect(init?.headers?.Authorization).toBe('Bearer proxy-secret');
+        const sent = JSON.parse(init.body);
+        expect(sent.url).toContain('api.flightradar24.com/common/v1/airport.json');
         return {
           ok: true,
           status: 200,
@@ -860,20 +864,20 @@ describe('schedule API', () => {
     expect(res.body.total).toBe(1);
     expect(res.body.partial).toBe(false);
     expect(res.body.meta.source).toBe('scraping');
-    expect(res.body.meta.scrapeTransport).toBe('scrapingbee');
+    expect(res.body.meta.scrapeTransport).toBe('http-json');
     expect(res.body.meta.scraperRecoveredPages).toBe(1);
     expect(res.body.meta.fallbackFrom).toBeUndefined();
-    expect(scrapingBeeCalls).toBe(1);
+    expect(proxyCalls).toBe(1);
     expect(fetchSpy.mock.calls.some(call => String(call[0]).includes('prod.api.market/api/v1/aedbx/aerodatabox'))).toBe(false);
     expect(fetchSpy.mock.calls.some(call => String(call[0]).includes('fr24api.flightradar24.com'))).toBe(false);
   });
 
   it('honors scraperFallback=0 when direct FR24 scraping is blocked', async () => {
-    process.env.SCRAPINGBEE_API_KEY = 'bee-test-key';
+    process.env.SCHEDULE_SCRAPER_URL = 'https://proxy.example.com/fetch';
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('app.scrapingbee.com/api/v1')) {
+      if (urlStr.includes('proxy.example.com/fetch')) {
         throw new Error('Scraper transport should not be called when scraperFallback=0');
       }
       return {
@@ -900,7 +904,7 @@ describe('schedule API', () => {
     expect(res.body.meta.source).toBe('scraping');
     expect(res.body.meta.partialReason).toBe('first_page_failed');
     for (const call of fetchSpy.mock.calls) {
-      expect(String(call[0])).not.toContain('app.scrapingbee.com/api/v1');
+      expect(String(call[0])).not.toContain('proxy.example.com/fetch');
     }
   });
 
@@ -932,6 +936,123 @@ describe('schedule API', () => {
     for (const call of fetchSpy.mock.calls) {
       expect(String(call[0])).not.toContain('prod.api.market/api/v1/aedbx/aerodatabox');
     }
+  });
+
+  it('provider mode: serves the full AeroDataBox board (incl. upcoming) and skips the dead FR24 scrape + official API', async () => {
+    // The production fix: SCHEDULE_SOURCE_PRIORITY=provider routes straight to AeroDataBox, the only
+    // source that returns the full forward board from Vercel. The Cloudflare-dead FR24 scrape and the
+    // (schedule-less) official API must NOT be touched when the provider returns a board.
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+
+    const ts = getStartOfDayForHub('DEN');
+    const iso = (h) => new Date((ts + h * 3600) * 1000).toISOString();
+    const adbDepartures = {
+      departures: [
+        {
+          number: 'UA 123', callSign: 'UAL123', status: 'Scheduled',
+          airline: { iata: 'UA', icao: 'UAL', name: 'United Airlines' },
+          departure: { scheduledTime: { utc: iso(20) }, revisedTime: { utc: iso(20) }, terminal: 'B', gate: 'B7', airport: { iata: 'DEN', name: 'Denver' } },
+          arrival: { scheduledTime: { utc: iso(23) }, airport: { iata: 'SFO', name: 'San Francisco' } },
+          aircraft: { model: 'Boeing 737', reg: 'N12345' },
+        },
+        {
+          number: 'UA 456', callSign: 'UAL456', status: 'Departed',
+          airline: { iata: 'UA', icao: 'UAL', name: 'United Airlines' },
+          departure: { scheduledTime: { utc: iso(8) }, runwayTime: { utc: iso(8) }, terminal: 'B', gate: 'C5', airport: { iata: 'DEN', name: 'Denver' } },
+          arrival: { scheduledTime: { utc: iso(11) }, airport: { iata: 'ORD', name: "Chicago O'Hare" } },
+          aircraft: { model: 'Airbus A320', reg: 'N67890' },
+        },
+      ],
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('aedbx/aerodatabox')) {
+        return { ok: true, status: 200, json: async () => adbDepartures };
+      }
+      if (urlStr.includes('api.flightradar24.com/common/v1/airport.json')) {
+        throw new Error('Dead FR24 scrape must not be called in provider mode');
+      }
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        throw new Error('Official API must not be called when the provider returns a full board');
+      }
+      return { ok: false, status: 403, text: async () => 'blocked', headers: { get: () => null } };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'DEN', dir: 'departures', timestamp: String(ts) },
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.meta.source).toBe('aerodatabox');
+    expect(res.body.total).toBe(2);
+    expect(res.body.partial).toBe(false);
+    const upcoming = res.body.flights.find((f) => f.identification.number.default === 'UA123');
+    expect(upcoming).toBeTruthy();
+    expect(upcoming.status.text).toBe('scheduled');
+    expect(upcoming.airport.destination.code.iata).toBe('SFO');
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes('common/v1/airport.json'))).toBe(false);
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes('fr24api.flightradar24.com'))).toBe(false);
+  });
+
+  it('provider mode without a key: falls through to FR24 official + live feed, never touching the dead scrape', async () => {
+    // Zero-key graceful degrade: with no AERODATABOX_API_KEY, provider mode skips the dead scrape and
+    // serves the official (active+completed) board merged with the free live feed.
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+
+    const ts = getStartOfDayForHub('IAH');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('api.flightradar24.com/common/v1/airport.json')) {
+        throw new Error('Dead FR24 scrape must not be called in provider mode');
+      }
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{
+              fr24_id: 'x1', flight: 'UA795', callsign: 'UAL795', operating_as: 'UAL', type: 'A21N', reg: 'N1',
+              orig_icao: 'KIAH', datetime_takeoff: new Date((ts + 9 * 3600) * 1000).toISOString().replace('.000Z', 'Z'),
+              dest_icao: 'KEWR', dest_icao_actual: 'KEWR', datetime_landed: new Date((ts + 12 * 3600) * 1000).toISOString().replace('.000Z', 'Z'),
+              flight_ended: true,
+            }],
+          }),
+        };
+      }
+      if (urlStr.includes('data-cloud.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            full_count: 1, version: 4,
+            'live-1': ['B1', 29.98, -95.34, 270, 35000, 430, '', '', 'B38M', 'N2', ts + 14 * 3600, 'IAH', 'SFO', 'UA999', 0, -500, 'UAL999', '', 'UAL'],
+          }),
+        };
+      }
+      return { ok: false, status: 403, text: async () => 'blocked', headers: { get: () => null } };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'IAH', dir: 'departures', timestamp: String(ts) },
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.meta.source).toBe('official-api');
+    expect(res.body.total).toBeGreaterThanOrEqual(2);
+    expect(res.body.meta.liveFeedFallbackAdded).toBeGreaterThanOrEqual(1);
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes('common/v1/airport.json'))).toBe(false);
   });
 
   it('uses same-day live FR24 feed as a degraded schedule fallback when scraping is blocked', async () => {
@@ -1001,6 +1122,67 @@ describe('schedule API', () => {
     expect(flight._source.liveFeedFallback).toBe(true);
     expect(flight.time.scheduled.arrival).toBeGreaterThan(ts);
     expect(flight.time.estimated.arrival).toBe(flight.time.scheduled.arrival);
+  });
+
+  it('scrape-first: merges official actual-only board with live-feed and ranks it above bare live-feed', async () => {
+    // Regression for the live degradation (boards stuck on stale live-feed despite the official API
+    // being called): when the scrape is blocked, the official actual-only board is merged with
+    // live-feed active flights into the richest board. mergeLiveFeedFallback must recompute
+    // completeness ABOVE the 0.35 live-feed baseline so the combined board wins and is served,
+    // instead of being discarded for a bare live-feed snapshot. (FR24-economy fix.)
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+    const ts = getStartOfDayForHub('ORD');
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      // Official API: one COMPLETED ORD departure (actual times only, no scheduled) -> actual-only board.
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{
+              fr24_id: 'aaa111', flight: 'UA795', callsign: 'UAL795', operating_as: 'UAL',
+              type: 'A21N', reg: 'N44550', orig_icao: 'KORD',
+              datetime_takeoff: new Date((ts + 10 * 3600) * 1000).toISOString().replace('.000Z', 'Z'),
+              dest_icao: 'KEWR', dest_icao_actual: 'KEWR',
+              datetime_landed: new Date((ts + 12 * 3600) * 1000).toISOString().replace('.000Z', 'Z'),
+              flight_ended: true,
+            }],
+          }),
+        };
+      }
+      // Live feed: a DIFFERENT active flight departing ORD -> added in the merge.
+      if (urlStr.includes('data-cloud.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            full_count: 1, version: 4,
+            'live-1': ['B1', 41.97, -87.9, 270, 35000, 430, '', '', 'B38M', 'N12345',
+              ts + 14 * 3600, 'ORD', 'SFO', 'UA999', 0, -500, 'UAL999', '', 'UAL'],
+          }),
+        };
+      }
+      // Direct scrape: Cloudflare-blocked.
+      return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    // Combined: official completed flight + live-feed active flight (deduped, both kept).
+    expect(res.body.total).toBeGreaterThanOrEqual(2);
+    expect(res.body.meta.liveFeedFallbackAdded).toBeGreaterThanOrEqual(1);
+    // Change 1: completeness recomputed above the 0.35 live-feed baseline so the merged board wins.
+    expect(res.body.meta.completeness).toBeGreaterThan(0.35);
+    // It's the official-base merged board, NOT bare live-feed.
+    expect(res.body.meta.source).toBe('official-api');
   });
 
   it('circuit breaker trips after repeated fallbacks', () => {
