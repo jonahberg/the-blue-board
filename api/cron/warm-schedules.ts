@@ -58,12 +58,16 @@ export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
 }
 
 export function buildScheduleWarmUrl(hub: string, dir: string, timestamp: number): string {
+  // Background warming uses the PROVIDER (AeroDataBox) — the only source that returns the full
+  // board from Vercel — and keeps officialFallback off so warming never burns FR24 credits, and
+  // scraperFallback off (the FR24 scrape is Cloudflare-dead). With SCHEDULE_SOURCE_PRIORITY=provider
+  // this populates the CDN + Supabase snapshots so live user traffic is served from cache.
   const params = new URLSearchParams({
     hub,
     dir,
     timestamp: String(timestamp),
     officialFallback: '0',
-    providerFallback: '0',
+    providerFallback: '1',
     scraperFallback: '0',
   });
   return `${BASE_URL}/api/schedule?${params}`;

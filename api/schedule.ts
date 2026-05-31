@@ -1248,12 +1248,43 @@ async function fetchAllPages(
   const allowScraperFallback = !options.disableScraperFallback;
 
   // ── Source routing decision tree ──
-  const srcPriority = options.disableOfficialSource
+  // 'provider' = AeroDataBox-first (the only source that still returns the FULL forward board —
+  // scheduled + active + completed incl. upcoming — from Vercel datacenter IPs, since FR24's web
+  // schedule is Cloudflare-challenge-dead and the FR24 official API has no schedule endpoint).
+  // Legacy 'scrape'/'official'/'scrape-only' are kept for the test suite and as a re-enable path
+  // if FR24 ever drops the challenge. NOTE: officialFallback=0 (cron / disableOfficialSource) used
+  // to force 'scrape-only'; we no longer let it override 'provider', so background warming can use
+  // the working provider without burning FR24 credits.
+  const envPriority = (process.env.SCHEDULE_SOURCE_PRIORITY || 'scrape').toLowerCase();
+  const srcPriority = (options.disableOfficialSource && envPriority !== 'provider')
     ? 'scrape-only'
-    : (process.env.SCHEDULE_SOURCE_PRIORITY || 'scrape').toLowerCase();
+    : envPriority;
 
-  if (!['scrape', 'official', 'scrape-only'].includes(srcPriority)) {
+  if (!['scrape', 'official', 'scrape-only', 'provider'].includes(srcPriority)) {
     console.warn(`Unrecognized SCHEDULE_SOURCE_PRIORITY: '${srcPriority}', using scrape-only`);
+  }
+
+  if (srcPriority === 'provider') {
+    // Primary: AeroDataBox returns the full forward schedule (incl. not-yet-departed flights).
+    if (allowProviderFallback && process.env.AERODATABOX_API_KEY) {
+      try {
+        const providerTimeout = Math.min(Math.floor((effectiveDeadline - Date.now()) * 0.7), 30000);
+        const providerResult = await fetchViaAeroDataBox(logHub, dir, ts, providerTimeout);
+        if (providerResult && providerResult.total > 0) {
+          // Overlay the free live feed for active flights only when the provider board is partial.
+          return await maybeAugmentWithLiveFeedFallback(providerResult, logHub, dir, ts, effectiveDeadline);
+        }
+      } catch (e: any) {
+        console.error(`Provider (AeroDataBox) primary failed for ${logHub}:`, e.message);
+      }
+    }
+    // Provider unavailable/empty -> FR24 official (active+completed, breaker-gated) + free live feed.
+    // disableOfficialSource (officialFallback=0, e.g. cron) keeps official off so background warming
+    // never burns FR24 credits; it then degrades to the free live feed.
+    const fallback = await tryScheduleRescue(
+      logHub, dir, ts, effectiveDeadline, false, !options.disableOfficialSource
+    );
+    if (fallback) return fallback;
   }
 
   if (srcPriority === 'official' && process.env.FR24_API_TOKEN) {
