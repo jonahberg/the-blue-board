@@ -187,6 +187,15 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   </nav>
 </div>
 
+<!-- DATA RESTORED BANNER (amber callout; shown once, dismissable via /js/restored-banner.js) -->
+<div id="data-restored-banner" role="status" aria-label="Data restored notice" style="display:none;background:var(--ua-amber-soft);border-bottom:1px solid var(--ua-border);border-left:3px solid var(--ua-amber);padding:6px 16px;font-size:11px;font-weight:500;letter-spacing:.3px;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px">
+  <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+    <span style="flex-shrink:0" aria-hidden="true">📡</span>
+    <span style="color:var(--ua-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong style="color:var(--ua-amber);font-weight:600">Data feeds restored.</strong> Full departure &amp; arrival schedules are back across all 9 hubs — thanks for your patience.</span>
+  </div>
+  <button id="data-restored-dismiss" aria-label="Dismiss data restored notice" style="background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;font-family:var(--font-ui)">✕</button>
+</div>
+
 <!-- NEWS BANNER (fetched from /data/news-latest.json at load time) -->
 <div id="news-banner" role="status" aria-label="Latest news" style="display:none;background:var(--ua-panel);border-bottom:1px solid var(--ua-border);padding:5px 16px;font-size:11px;font-weight:500;letter-spacing:.3px;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px">
   <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
@@ -998,5 +1007,6 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   }
 }
 </script>
+<script defer src="/js/restored-banner.js"></script>
 <script defer src="/js/news-banner.js"></script>
 </body></html>
