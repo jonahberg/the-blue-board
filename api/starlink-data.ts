@@ -8,11 +8,11 @@
 // On error, degrade rather than fail: stale in-memory -> stale Supabase snapshot -> committed
 // static file. The X-Starlink-Source header reports which path served the response.
 
+import { createRequire } from 'node:module';
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { normalizeStarlinkPayload, normalizeOperator, normalizeType, type StarlinkPayload } from './_starlink-normalize.js';
 import { loadStarlinkSnapshot, type PersistedStarlinkSnapshot } from './_starlink-snapshot.js';
-import STATIC_STARLINK from '../public/data/starlink.json';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/data';
 const CACHE_TTL = 4 * 60 * 60 * 1000;       // 4h in-memory freshness
@@ -23,10 +23,33 @@ const isRateLimited = createRateLimiter('starlink-data', 30);
 let inMemoryCache: StarlinkPayload | null = null;
 let lastFetch = 0;
 
-// Committed snapshot bundled at build time — the last-resort fallback when upstream is down and no
-// other cache exists. Shape on disk is just the aircraft array; wrap it into the full payload.
-function staticPayload(): StarlinkPayload {
-  const aircraft = (STATIC_STARLINK as Array<{ tail: string; fleet: string; type: string; operator: string }>).map((a) => ({
+// Committed snapshot — the last-resort fallback when upstream is down and no other cache exists.
+// Loaded lazily via createRequire, NOT a top-level `import ... from '*.json'`: this package is
+// "type":"module", so Vercel runs these functions as native Node ESM, where a bare JSON import
+// throws ERR_IMPORT_ATTRIBUTE_MISSING at module load — crashing the function before any request
+// handling (prod incident 2026-06-01). require() of JSON needs no import attributes, @vercel/nft
+// traces the literal path into the bundle, and any failure here degrades to "no static fallback"
+// instead of a cold-start crash.
+let staticAircraftCache: Array<{ tail: string; fleet: string; type: string; operator: string }> | null = null;
+function loadStaticAircraft(): Array<{ tail: string; fleet: string; type: string; operator: string }> {
+  if (staticAircraftCache) return staticAircraftCache;
+  try {
+    const requireJson = createRequire(import.meta.url);
+    const data = requireJson('../public/data/starlink.json');
+    staticAircraftCache = Array.isArray(data) ? data : [];
+  } catch (err: any) {
+    console.error('Static starlink fallback unavailable:', err?.message || err);
+    staticAircraftCache = [];
+  }
+  return staticAircraftCache;
+}
+
+// Wrap the on-disk aircraft array (no flights/fleet stats) into the full payload shape.
+// Returns null when the static file is unavailable so callers fall through to an error response.
+function staticPayload(): StarlinkPayload | null {
+  const raw = loadStaticAircraft();
+  if (raw.length === 0) return null;
+  const aircraft = raw.map((a) => ({
     tail: a.tail,
     fleet: a.fleet,
     type: normalizeType(a.type),
@@ -99,7 +122,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 4. Fetch fresh from upstream. If rate-limited, degrade instead of erroring.
     if (isRateLimited(req)) {
-      return serveDegraded(res, snapshot?.data ?? staticPayload(), snapshot ? 'supabase-stale' : 'static');
+      if (snapshot?.data) return serveDegraded(res, snapshot.data, 'supabase-stale');
+      const limited = staticPayload();
+      if (limited) return serveDegraded(res, limited, 'static');
+      return res.status(429).json({ error: 'Too many requests' });
     }
 
     inMemoryCache = await fetchUpstream();
@@ -109,7 +135,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Degrade rather than 502: stale in-memory -> stale snapshot -> committed static file.
     if (inMemoryCache) return serveDegraded(res, inMemoryCache, 'memory-stale');
     if (snapshot?.data) return serveDegraded(res, snapshot.data, 'supabase-stale');
-    console.error('Starlink data error (serving static fallback):', err?.message || err);
-    return serveDegraded(res, staticPayload(), 'static');
+    console.error('Starlink data error:', err?.message || err);
+    const fallback = staticPayload();
+    if (fallback) return serveDegraded(res, fallback, 'static');
+    return res.status(502).json({ error: 'Failed to fetch Starlink data' });
   }
 }
