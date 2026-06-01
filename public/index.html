@@ -555,6 +555,17 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       </div>
       <div class="sl-hero-chips" id="sl-hero-chips"></div>
     </div>
+    <div class="sl-chart-card" id="sl-chart-card" style="display:none">
+      <div class="sl-chart-label">Installation Velocity</div>
+      <div class="sl-chart-sub" id="sl-chart-sub">Aircraft equipped per month</div>
+      <div class="sl-chart-scroll"><svg id="sl-chart" viewBox="0 0 940 280" role="img" aria-label="Starlink installations per month"></svg></div>
+      <div class="sl-chart-legend">
+        <span><span class="sl-swatch" style="background:var(--ua-green)"></span>Express</span>
+        <span><span class="sl-swatch" style="background:var(--ua-accent)"></span>Mainline</span>
+        <span><span class="sl-swatch sl-swatch-line"></span>Cumulative</span>
+      </div>
+      <div class="sl-chart-footnote" id="sl-chart-footnote"></div>
+    </div>
     <div class="sl-filters" id="sl-filters">
       <input type="text" id="sl-search" aria-label="Search Starlink aircraft" placeholder="Search tail...">
       <select id="sl-filter-fleet" aria-label="Starlink fleet filter"><option value="">All Fleets</option><option value="Mainline">Mainline</option><option value="Express">Express</option></select>

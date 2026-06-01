@@ -4,6 +4,7 @@ import { formatDelayExplainFAAStatus, getScheduleRiskContext } from '../lib/dela
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, WIFI_DISPLAY, sortFleetData, filterFleetData, parseFleetDeepLink, TAB_MAP, VALID_FLEET_VIEWS } from '../lib/fleet-utils.js';
+import { bucketInstallsByMonth } from '../lib/starlink-utils.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
 import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
@@ -2490,7 +2491,125 @@ function initStarlinkTab() {
     });
   }
   renderSlHero();
+  renderSlChart();
   renderSlTable();
+}
+
+// ═══ INSTALLATION VELOCITY CHART ═══
+// Stacked monthly bars (Express green / Mainline blue) + amber cumulative line, built as pure SVG
+// from STARLINK_DB dateFound. No chart library. Spec: 2026-06-01-starlink-velocity-chart-design.md
+function renderSlChart() {
+  const card = document.getElementById('sl-chart-card');
+  const svg = document.getElementById('sl-chart');
+  if (!card || !svg) return;
+
+  const { months, undated } = bucketInstallsByMonth(STARLINK_DB);
+  // Degraded mode (static fallback has no dateFound): keep the card hidden entirely
+  if (months.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  // Date-range subtitle — full month + year on both ends for clarity
+  const subEl = document.getElementById('sl-chart-sub');
+  if (subEl) {
+    const fmtYm = (ym) => {
+      const [y, mo] = ym.split('-');
+      return ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][Number(mo) - 1] + ' ' + y;
+    };
+    subEl.textContent = 'Aircraft equipped per month · ' + fmtYm(months[0].ym) + ' – ' + fmtYm(months[months.length - 1].ym);
+  }
+
+  // ── Scales ──
+  // Outlier-aware bar cap: if the biggest month dwarfs the second biggest (the Dec '25 tracker
+  // catch-up batch), cap the bar axis at the second biggest + headroom and mark capped bars.
+  const sorted = months.map(m => m.total).sort((a, b) => b - a);
+  const maxT = sorted[0] || 0, secondT = sorted[1] || 0;
+  const hasOutlier = months.length > 2 && maxT > 2 * secondT;
+  const cap = Math.max(5, Math.ceil((hasOutlier ? secondT * 1.2 : maxT) / 5) * 5);
+  const maxCum = months[months.length - 1].cumulative || 1;
+
+  // ── Geometry ──
+  const W = 940, H = 280, padL = 40, padR = 46, padT = 18, padB = 34;
+  const cw = W - padL - padR, ch = H - padT - padB;
+  const n = months.length, step = cw / n, bw = Math.max(8, Math.floor(step * 0.56));
+
+  let s = '';
+
+  // Left-axis gridlines (monthly installs)
+  [0, Math.round(cap / 3), Math.round(cap * 2 / 3), cap].forEach(v => {
+    const y = padT + ch - (v / cap) * ch;
+    s += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="var(--ua-border-subtle)" stroke-width="1"/>';
+    s += '<text x="' + (padL - 6) + '" y="' + (y + 3) + '" fill="var(--ua-dim)" font-size="9" text-anchor="end">' + v + '</text>';
+  });
+
+  // Bars
+  const cappedMonths = [];
+  months.forEach((d, i) => {
+    const x = padL + i * step + (step - bw) / 2;
+    const isCapped = d.total > cap;
+    const visTotal = Math.min(d.total, cap);
+    // Express portion fills from the bottom; Mainline stacks on top (proportional within the cap)
+    const eVis = isCapped ? visTotal * (d.express / d.total) : d.express;
+    const mVis = visTotal - eVis;
+    const eh = (eVis / cap) * ch;
+    const mh = (mVis / cap) * ch;
+    const yE = padT + ch - eh;
+    const yM = yE - mh;
+    if (eVis > 0) s += '<rect x="' + x + '" y="' + yE + '" width="' + bw + '" height="' + eh + '" fill="var(--ua-green)" opacity="0.85" rx="1"/>';
+    if (mVis > 0) s += '<rect x="' + x + '" y="' + yM + '" width="' + bw + '" height="' + mh + '" fill="var(--ua-accent)" opacity="0.9" rx="1"/>';
+
+    if (isCapped) {
+      cappedMonths.push(d);
+      // Jagged break marker across the bar top + count label
+      const yTop = padT;
+      let zig = 'M ' + (x - 2) + ' ' + (yTop + 8);
+      for (let z = 0; z < Math.ceil((bw + 4) / 8); z++) zig += ' l 4 -5 l 4 5';
+      s += '<path d="' + zig + '" stroke="var(--ua-dim)" fill="none" stroke-width="1.5"/>';
+      s += '<text x="' + (x + bw / 2) + '" y="' + (yTop - 6) + '" fill="var(--ua-green)" font-size="10" font-weight="700" text-anchor="middle">' + d.total + '*</text>';
+    } else if (d.total > 0) {
+      s += '<text x="' + (x + bw / 2) + '" y="' + (padT + ch - (visTotal / cap) * ch - 5) + '" fill="var(--ua-muted)" font-size="9" text-anchor="middle">' + d.total + '</text>';
+    }
+
+    // Month label (thin out on dense charts: always label months that carry a year, else every other)
+    const showLabel = n <= 18 || d.label.indexOf(' ') !== -1 || i % 2 === 0;
+    if (showLabel) s += '<text x="' + (x + bw / 2) + '" y="' + (H - padB + 16) + '" fill="var(--ua-dim)" font-size="8.5" text-anchor="middle">' + d.label + '</text>';
+  });
+
+  // Cumulative line + dots (right axis scale)
+  let path = '';
+  months.forEach((d, i) => {
+    const x = padL + i * step + step / 2;
+    const y = padT + ch - (d.cumulative / maxCum) * ch;
+    path += (i === 0 ? 'M' : 'L') + x + ' ' + y + ' ';
+  });
+  s += '<path d="' + path + '" stroke="var(--ua-amber)" stroke-width="2" fill="none"/>';
+  months.forEach((d, i) => {
+    const x = padL + i * step + step / 2;
+    const y = padT + ch - (d.cumulative / maxCum) * ch;
+    s += '<circle cx="' + x + '" cy="' + y + '" r="2.5" fill="var(--ua-amber)"/>';
+  });
+
+  // Right-axis labels (cumulative) + end value
+  [0, Math.round(maxCum / 4), Math.round(maxCum / 2), Math.round(maxCum * 3 / 4), maxCum].forEach(v => {
+    const y = padT + ch - (v / maxCum) * ch;
+    s += '<text x="' + (W - padR + 8) + '" y="' + (y + 3) + '" fill="var(--ua-amber)" opacity="0.7" font-size="9">' + v + '</text>';
+  });
+  const lastY = padT + ch - ch;
+  s += '<text x="' + (W - padR - 4) + '" y="' + (lastY - 4) + '" fill="var(--ua-amber)" font-size="11" font-weight="700" text-anchor="end">' + maxCum + '</text>';
+
+  svg.innerHTML = s;
+
+  // Footnote: capped months (with the known Dec '25 batch context) + undated count
+  const fnEl = document.getElementById('sl-chart-footnote');
+  if (fnEl) {
+    const notes = [];
+    cappedMonths.forEach(d => {
+      let note = '* ' + d.label + ': ' + d.total + ' (exceeds chart scale)';
+      if (d.ym === '2025-12') note += ' — includes a 117-aircraft tracker catch-up batch on Dec 3';
+      notes.push(note);
+    });
+    if (undated > 0) notes.push(undated + ' aircraft have no recorded install date');
+    fnEl.textContent = notes.join(' · ');
+  }
 }
 
 // Hero band: equipped count, Express/Mainline rollout bars, new-this-week + airborne-now chips.
