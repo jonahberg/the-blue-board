@@ -29,12 +29,15 @@
         "api/check-flight.ts": { "maxDuration": 15 },
         "api/news-notify.ts": { "maxDuration": 15 },
         "api/tsa.ts": { "maxDuration": 30 },
-        "api/cron/refresh-tsa.ts": { "maxDuration": 30 }
+        "api/cron/refresh-tsa.ts": { "maxDuration": 30 },
+        "api/metar.ts": { "maxDuration": 15 },
+        "api/cron/refresh-metar.ts": { "maxDuration": 30 }
     },
     "crons": [
         { "path": "/api/cron/warm-schedules", "schedule": "0 */2 * * *" },
         { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" },
-        { "path": "/api/cron/refresh-tsa", "schedule": "*/5 * * * *" }
+        { "path": "/api/cron/refresh-tsa", "schedule": "*/5 * * * *" },
+        { "path": "/api/cron/refresh-metar", "schedule": "*/5 * * * *" }
     ],
   "buildCommand": "bun run build",
   "outputDirectory": "dist",
