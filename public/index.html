@@ -212,6 +212,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button class="tab-btn active" data-tab="tab-live" role="tab" tabindex="0" aria-selected="true" aria-controls="tab-live"><span aria-hidden="true">📡</span> LIVE OPS</button>
   <button class="tab-btn" data-tab="tab-schedule" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-schedule"><span aria-hidden="true">📅</span> SCHEDULE</button>
   <button class="tab-btn" data-tab="tab-fleet" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-fleet"><span aria-hidden="true">✈️</span> FLEET</button>
+  <button class="tab-btn" data-tab="tab-starlink" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-starlink"><span aria-hidden="true">🛰️</span> STARLINK</button>
   <button class="tab-btn" data-tab="tab-weather" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-weather"><span aria-hidden="true">🌦</span> DELAYS · WEATHER · HUBS</button>
   <button class="tab-btn" data-tab="tab-analytics" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-analytics" aria-label="Stats"><span aria-hidden="true">📊</span> STATS</button>
   <button class="tab-btn" data-tab="tab-sources" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-sources"><span aria-hidden="true">ℹ️</span> SOURCES</button>
@@ -223,12 +224,14 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button data-tab="tab-weather" role="tab" aria-selected="false" aria-controls="tab-weather"><span class="bnav-icon" aria-hidden="true">🌦</span><span class="bnav-label">Weather</span></button>
   <button data-tab="tab-schedule" role="tab" aria-selected="false" aria-controls="tab-schedule"><span class="bnav-icon" aria-hidden="true">📅</span><span class="bnav-label">Schedule</span></button>
   <button data-tab="tab-fleet" role="tab" aria-selected="false" aria-controls="tab-fleet"><span class="bnav-icon" aria-hidden="true">✈️</span><span class="bnav-label">Fleet</span></button>
+  <button data-tab="tab-starlink" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-starlink"><span class="bnav-icon" aria-hidden="true">🛰️</span><span class="bnav-label">Starlink</span></button>
   <button data-tab="tab-myflight" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-myflight"><span class="bnav-icon" aria-hidden="true">🎫</span><span class="bnav-label">My Flights</span></button>
   <button data-tab="tab-analytics" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-analytics"><span class="bnav-icon" aria-hidden="true">📊</span><span class="bnav-label">Stats</span></button>
   <button data-tab="tab-sources" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-sources"><span class="bnav-icon" aria-hidden="true">ℹ️</span><span class="bnav-label">Sources</span></button>
   <button id="mobile-more-btn" aria-label="More tabs" aria-expanded="false" aria-controls="mobile-more-menu"><span class="bnav-icon" aria-hidden="true">▾</span><span class="bnav-label">More</span></button>
 </nav>
 <div id="mobile-more-menu" aria-label="Additional navigation tabs">
+  <button data-tab="tab-starlink"><span class="bnav-icon" aria-hidden="true">🛰️</span> Starlink</button>
   <button data-tab="tab-myflight"><span class="bnav-icon" aria-hidden="true">🎫</span> My Flights</button>
   <button data-tab="tab-analytics"><span class="bnav-icon" aria-hidden="true">📊</span> Stats</button>
   <button data-tab="tab-sources"><span class="bnav-icon" aria-hidden="true">ℹ️</span> Sources</button>
@@ -504,7 +507,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <div class="fleet-subtab-bar" id="fleet-subtab-bar" role="tablist" aria-label="Aircraft lookup views">
       <button class="fleet-subtab active" role="tab" aria-selected="true" data-action="fleet-subtab" data-view="all" id="fleet-subtab-all">All Aircraft <span class="fleet-subtab-count" id="fleet-subtab-count-all"></span></button>
       <button class="fleet-subtab" role="tab" aria-selected="false" data-action="fleet-subtab" data-view="airborne" id="fleet-subtab-airborne">Airborne Now <span class="fleet-subtab-count" id="fleet-subtab-count-airborne"></span></button>
-      <button class="fleet-subtab" role="tab" aria-selected="false" data-action="fleet-subtab" data-view="starlink" id="fleet-subtab-starlink">Starlink <span class="fleet-subtab-count" id="fleet-subtab-count-starlink"></span></button>
+      <button class="fleet-subtab" role="tab" aria-selected="false" data-action="switch-tab" data-tab="tab-starlink" id="fleet-subtab-starlink">🛰️ Starlink <span class="fleet-subtab-count" id="fleet-subtab-count-starlink"></span></button>
       <button class="fleet-subtab" role="tab" aria-selected="false" data-action="fleet-subtab" data-view="special" id="fleet-subtab-special">Special <span class="fleet-subtab-count" id="fleet-subtab-count-special"></span></button>
     </div>
     <div class="fleet-lookup-seat-config" id="fleet-lookup-seat-config"></div>
@@ -514,13 +517,6 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <select id="fleet-filter-wifi" aria-label="Fleet WiFi filter"><option value="">All WiFi</option></select>
       <select id="fleet-filter-status" aria-label="Fleet status filter"><option value="">All Status</option><option value="active">Active</option><option value="stored">Stored/Maint</option><option value="starlink">Starlink</option><option value="special">Special/Named</option></select>
       <button class="refresh-btn" data-action="refresh-fleet-data">Refresh</button>
-    </div>
-    <div class="fleet-controls fleet-controls-starlink" id="fleet-controls-starlink" style="display:none">
-      <input type="text" id="starlink-search" aria-label="Search Starlink aircraft" placeholder="Search tail...">
-      <select id="starlink-filter-fleet" aria-label="Starlink fleet filter"><option value="">All Fleets</option><option value="Mainline">Mainline</option><option value="Express">Express</option></select>
-      <select id="starlink-filter-type" aria-label="Starlink type filter"><option value="">All Types</option></select>
-      <select id="starlink-filter-operator" aria-label="Starlink operator filter"><option value="">All Operators</option></select>
-      <span id="starlink-filtered-count" class="fleet-filtered-count"></span>
     </div>
     <!-- All Aircraft table -->
     <div class="fleet-table-wrap fleet-view-panel active" id="fleet-view-all">
@@ -537,18 +533,50 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
         <tbody id="airborne-tbody"></tbody>
       </table>
     </div>
-    <!-- Starlink table -->
-    <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-starlink" style="display:none">
-      <table id="starlink-table" aria-label="Starlink-equipped aircraft">
-        <thead><tr><th scope="col" data-starlink-sort="tail">Tail</th><th scope="col" data-starlink-sort="fleet">Fleet</th><th scope="col" data-starlink-sort="type">Type</th><th scope="col" data-starlink-sort="operator">Operator</th><th scope="col" id="starlink-next-flight-th" style="display:none">Next Flight</th></tr></thead>
-        <tbody id="starlink-tbody"></tbody>
-      </table>
-    </div>
     <!-- Special Aircraft table -->
     <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-special" style="display:none">
       <div id="special-aircraft-content"><div class="fleet-loading-text">Loading special aircraft...</div></div>
     </div>
-    <div class="fleet-starlink-source" id="fleet-starlink-source" style="display:none">Starlink data via <a href="https://unitedstarlinktracker.com" target="_blank" rel="noopener noreferrer" class="fleet-source-link">unitedstarlinktracker.com</a> · <span id="starlink-updated" class="fleet-starlink-updated">live</span> · <span id="starlink-count">258</span> aircraft</div>
+  </div>
+</div>
+
+<!-- TAB: STARLINK -->
+<div class="tab-content" id="tab-starlink" role="tabpanel" aria-label="Starlink-equipped fleet">
+  <div class="sl-zone">
+    <div class="sl-hero-label">Starlink Rollout</div>
+    <div class="sl-hero">
+      <div class="sl-hero-left">
+        <div class="sl-hero-num" id="sl-hero-count">—</div>
+        <div class="sl-hero-sub">Aircraft Equipped</div>
+      </div>
+      <div class="sl-bars" id="sl-bars">
+        <div class="sl-bar-row"><span class="sl-bar-label">Express</span><div class="sl-bar-track"><div class="sl-bar-fill sl-bar-fill-express" id="sl-bar-express"></div></div><span class="sl-bar-val" id="sl-bar-express-val"></span></div>
+        <div class="sl-bar-row"><span class="sl-bar-label">Mainline</span><div class="sl-bar-track"><div class="sl-bar-fill sl-bar-fill-mainline" id="sl-bar-mainline"></div></div><span class="sl-bar-val" id="sl-bar-mainline-val"></span></div>
+      </div>
+      <div class="sl-hero-chips" id="sl-hero-chips"></div>
+    </div>
+    <div class="sl-filters" id="sl-filters">
+      <input type="text" id="sl-search" aria-label="Search Starlink aircraft" placeholder="Search tail...">
+      <select id="sl-filter-fleet" aria-label="Starlink fleet filter"><option value="">All Fleets</option><option value="Mainline">Mainline</option><option value="Express">Express</option></select>
+      <select id="sl-filter-type" aria-label="Starlink type filter"><option value="">All Types</option></select>
+      <select id="sl-filter-operator" aria-label="Starlink operator filter"><option value="">All Operators</option></select>
+      <button id="sl-filter-new" class="sl-new-toggle" aria-pressed="false" type="button">★ New this week</button>
+      <span id="sl-filtered-count" class="fleet-filtered-count"></span>
+    </div>
+    <div class="fleet-table-wrap sl-table-wrap">
+      <table id="sl-table" aria-label="Starlink-equipped aircraft">
+        <thead><tr>
+          <th scope="col" data-sl-sort="tail">Tail</th>
+          <th scope="col" data-sl-sort="fleet">Fleet</th>
+          <th scope="col" data-sl-sort="type">Type</th>
+          <th scope="col" data-sl-sort="operator">Operator</th>
+          <th scope="col" id="sl-status-th">Status</th>
+          <th scope="col" id="sl-next-th">Next Flight</th>
+        </tr></thead>
+        <tbody id="sl-tbody"><tr><td colspan="6" class="fleet-loading-text">Loading Starlink fleet…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="fleet-starlink-source" id="sl-source">Starlink data via <a href="https://unitedstarlinktracker.com" target="_blank" rel="noopener noreferrer" class="fleet-source-link">unitedstarlinktracker.com</a> · <span id="sl-updated" class="fleet-starlink-updated">live</span> · <span id="sl-count">—</span> aircraft</div>
   </div>
 </div>
 

@@ -375,7 +375,7 @@ function getBasemapTileOptions() {
 }
 
 // ═══ TAB SWITCHING ═══
-const TAB_HASHES = {'tab-myflight':'#myflight','tab-live':'#live','tab-schedule':'#schedule','tab-fleet':'#fleet','tab-weather':'#weather','tab-analytics':'#stats','tab-sources':'#sources'};
+const TAB_HASHES = {'tab-myflight':'#myflight','tab-live':'#live','tab-schedule':'#schedule','tab-fleet':'#fleet','tab-starlink':'#starlink','tab-weather':'#weather','tab-analytics':'#stats','tab-sources':'#sources'};
 const HASH_TABS = Object.fromEntries(Object.entries(TAB_HASHES).map(([k,v])=>[v,k]));
 
 function switchToTab(tabId, updateHash) {
@@ -394,6 +394,7 @@ function switchToTab(tabId, updateHash) {
     if (tabId === 'tab-live' && map) map.invalidateSize();
     if (tabId === 'tab-schedule') { initScheduleTab(); if (schedInitialized && !schedAllFlights.length && !schedLoading) loadScheduleData(); }
     if (tabId === 'tab-fleet') { if (!allFlights.length && !flightsLoading) refreshFlights(); updateLiveFleetPanel(); }
+    if (tabId === 'tab-starlink') { if (!allFlights.length && !flightsLoading) refreshFlights(); initStarlinkTab(); }
     if (tabId === 'tab-weather') initWeatherTab();
     if (tabId === 'tab-analytics') updateAnalytics();
   });
@@ -439,6 +440,7 @@ document.getElementById('tab-bar')?.addEventListener('keydown', function(e) {
     'live': 'tab-live',
     'schedule': 'tab-schedule',
     'fleet': 'tab-fleet',
+    'starlink': 'tab-starlink',
     'weather': 'tab-weather',
     'irops': 'tab-weather',
     'stats': 'tab-analytics',
@@ -469,7 +471,10 @@ document.getElementById('tab-bar')?.addEventListener('keydown', function(e) {
       // Fleet tab: support sub-tab deep links via ?view=starlink|airborne|special
       if (tab === 'fleet') {
         const viewParam = params.get('view');
-        if (viewParam && ['starlink','airborne','special'].includes(viewParam)) {
+        if (viewParam === 'starlink') {
+          // Starlink is now its own top-level tab — redirect the legacy fleet sub-view deep link.
+          switchToTab('tab-starlink');
+        } else if (viewParam && ['airborne','special'].includes(viewParam)) {
           // Defer to after fleet data loads
           const waitForFleet = setInterval(() => {
             if (typeof switchFleetView === 'function' && FLEET_DB.length > 0) {
@@ -1053,6 +1058,7 @@ async function refreshFlights() {
     [updateMarkers, updateStats, updateHubStats, updateTicker].forEach(fn => { try { fn(); } catch(e) { console.error(fn.name + ':', e); } });
     try { if (document.getElementById('tab-myflight')?.classList.contains('active')) renderMyFlights(); } catch(e) { console.error('renderMyFlights:', e); }
     try { if (document.getElementById('tab-fleet')?.classList.contains('active')) updateLiveFleetPanel(); } catch(e) { console.error('updateLiveFleetPanel:', e); }
+    try { if (document.getElementById('tab-starlink')?.classList.contains('active') && slInitialized) { renderSlHero(); renderSlTable(); } } catch(e) { console.error('renderStarlinkTab:', e); }
     try { if (document.getElementById('tab-analytics')?.classList.contains('active')) updateAnalytics(); } catch(e) { console.error('updateAnalytics:', e); }
     // Handle deep link: ?flight=UA1234 on first load (also supports ?q= for SearchAction compatibility)
     if (!deepLinkHandled) {
@@ -1846,14 +1852,7 @@ function initFleetTab() {
     }
   }
 
-  // Update Starlink tracker freshness indicator
-  if (STARLINK_LAST_UPDATED) {
-    const updatedEl = document.getElementById('starlink-updated');
-    if (updatedEl) {
-      const ago = Math.round((Date.now() - new Date(STARLINK_LAST_UPDATED).getTime()) / 60000);
-      updatedEl.textContent = ago < 60 ? ('Updated ' + ago + 'm ago') : ago < 1440 ? ('Updated ' + Math.round(ago/60) + 'h ago') : ('Updated ' + Math.round(ago/1440) + 'd ago');
-    }
-  }
+  // (Starlink freshness indicator moved to the dedicated STARLINK tab — see renderSlHero)
 
   // Populate filters
   const wifiTypes = [...new Set(FLEET_DB.map(a => normalizeWifi(a.w)).filter(Boolean))].sort();
@@ -1872,8 +1871,6 @@ function initFleetTab() {
   renderFleetComposition();
   renderFleetTable();
   renderAgeChart();
-  renderStarlinkTable();
-  initStarlinkFilters();
   renderFleetHealth();
   renderSpecialAircraftPanel();
   updateFleetSubtabCounts();
@@ -2190,22 +2187,12 @@ function switchFleetView(view) {
     activePanel.classList.add('active');
     activePanel.style.display = '';
   }
-  // Show/hide appropriate controls
+  // Show controls (the Starlink sub-view moved to its own top-level tab — its sub-tab button is now
+  // a switch-tab redirect, so this function never receives view === 'starlink')
   const mainControls = document.getElementById('fleet-controls');
-  const starlinkControls = document.getElementById('fleet-controls-starlink');
-  const starlinkSource = document.getElementById('fleet-starlink-source');
-  if (view === 'starlink') {
-    mainControls.style.display = 'none';
-    starlinkControls.style.display = '';
-    if (starlinkSource) starlinkSource.style.display = '';
-  } else {
-    mainControls.style.display = '';
-    starlinkControls.style.display = 'none';
-    if (starlinkSource) starlinkSource.style.display = 'none';
-  }
+  if (mainControls) mainControls.style.display = '';
   // Render the active view
   if (view === 'airborne') renderAirborneTable();
-  else if (view === 'starlink') renderStarlinkTable();
   else if (view === 'special') renderSpecialAircraftPanel();
   else renderFleetTable();
 }
@@ -2423,7 +2410,14 @@ function renderAgeChart() {
     Object.entries(decades).map(([k, v]) => `<span style="margin-right:8px">${k}: <strong>${v}</strong></span>`).join('');
 }
 
-let starlinkSortKey = 'tail', starlinkSortAsc = true;
+// ═══ STARLINK TAB ═══
+// Dedicated top-level tab (#tab-starlink): rollout hero + filterable table where every row expands
+// inline into that aircraft's flight timeline and actions. Spec:
+// docs/superpowers/specs/2026-06-01-starlink-tab-design.md
+let slSortKey = 'tail', slSortAsc = true;
+let slInitialized = false;
+let slExpandedTail = null;   // tail of the one currently-expanded row (null = none)
+let slShowNewOnly = false;   // "★ New this week" quick filter
 
 // A plane counts as "newly equipped" if upstream first recorded its Starlink (DateFound) within the
 // last 7 days. Computed against the live clock so the badge ages out on its own.
@@ -2443,78 +2437,233 @@ function formatFlightTime(ts) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function initStarlinkFilters() {
-  // Populate type and operator dropdowns from actual data
-  const types = [...new Set(STARLINK_DB.map(s => s.type))].sort();
-  const operators = [...new Set(STARLINK_DB.map(s => s.operator))].sort();
-  const typeSelect = document.getElementById('starlink-filter-type');
-  const opSelect = document.getElementById('starlink-filter-operator');
-  types.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; typeSelect.appendChild(o); });
-  operators.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; opSelect.appendChild(o); });
-
-  // Event listeners for filters
-  ['starlink-search', 'starlink-filter-fleet', 'starlink-filter-type', 'starlink-filter-operator'].forEach(id => {
-    document.getElementById(id).addEventListener(id === 'starlink-search' ? 'input' : 'change', renderStarlinkTable);
-  });
-
-  // Sort headers
-  document.querySelectorAll('[data-starlink-sort]').forEach(th => {
-    th.addEventListener('click', () => {
-      const key = th.getAttribute('data-starlink-sort');
-      if (starlinkSortKey === key) starlinkSortAsc = !starlinkSortAsc;
-      else { starlinkSortKey = key; starlinkSortAsc = true; }
-      renderStarlinkTable();
-    });
-  });
+// Map of tail → live airborne flight from the LIVE OPS feed. One pass over allFlights; cheap enough
+// to rebuild per render.
+function getStarlinkAirborneMap() {
+  const live = {};
+  for (const f of allFlights) {
+    if (f.onGround) continue;
+    const reg = (f.reg || '').replace(/-/g, '').toUpperCase();
+    if (reg && STARLINK_TAILS.has(reg)) live[reg] = f;
+  }
+  return live;
 }
 
-function renderStarlinkTable() {
-  const search = (document.getElementById('starlink-search').value || '').trim().toUpperCase();
-  const fleetFilter = document.getElementById('starlink-filter-fleet').value;
-  const typeFilter = document.getElementById('starlink-filter-type').value;
-  const opFilter = document.getElementById('starlink-filter-operator').value;
+// Idempotent init for the STARLINK tab — wires filters/sort once, then (re)renders hero + table.
+function initStarlinkTab() {
+  if (!slInitialized && STARLINK_DB.length > 0) {
+    slInitialized = true;
+
+    // Populate type and operator dropdowns from actual data (already normalized server-side)
+    const types = [...new Set(STARLINK_DB.map(s => s.type))].sort();
+    const operators = [...new Set(STARLINK_DB.map(s => s.operator))].sort();
+    const typeSelect = document.getElementById('sl-filter-type');
+    const opSelect = document.getElementById('sl-filter-operator');
+    types.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; typeSelect.appendChild(o); });
+    operators.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; opSelect.appendChild(o); });
+
+    // Filter listeners — any change collapses the expanded row and re-renders
+    ['sl-search', 'sl-filter-fleet', 'sl-filter-type', 'sl-filter-operator'].forEach(id => {
+      document.getElementById(id).addEventListener(id === 'sl-search' ? 'input' : 'change', () => {
+        slExpandedTail = null;
+        renderSlTable();
+      });
+    });
+
+    // "★ New this week" quick filter toggle
+    document.getElementById('sl-filter-new').addEventListener('click', function() {
+      slShowNewOnly = !slShowNewOnly;
+      this.setAttribute('aria-pressed', slShowNewOnly ? 'true' : 'false');
+      slExpandedTail = null;
+      renderSlTable();
+    });
+
+    // Sort headers
+    document.querySelectorAll('[data-sl-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.getAttribute('data-sl-sort');
+        if (slSortKey === key) slSortAsc = !slSortAsc;
+        else { slSortKey = key; slSortAsc = true; }
+        slExpandedTail = null;
+        renderSlTable();
+      });
+    });
+  }
+  renderSlHero();
+  renderSlTable();
+}
+
+// Hero band: equipped count, Express/Mainline rollout bars, new-this-week + airborne-now chips.
+function renderSlHero() {
+  const countEl = document.getElementById('sl-hero-count');
+  if (!countEl) return;
+  const fs = STARLINK_FLEET_STATS;
+  const total = fs ? fs.total : STARLINK_DB.length;
+  countEl.textContent = total || '—';
+
+  // Rollout bars need fleet denominators — hide them in degraded (static-fallback) mode
+  const barsEl = document.getElementById('sl-bars');
+  if (fs && fs.expressTotal && fs.mainlineTotal) {
+    barsEl.style.display = '';
+    const expressPct = (fs.expressPct != null) ? fs.expressPct : Math.round(fs.express / fs.expressTotal * 100);
+    const mainlinePct = (fs.mainlinePct != null) ? fs.mainlinePct : Math.round(fs.mainline / fs.mainlineTotal * 100);
+    document.getElementById('sl-bar-express').style.width = expressPct + '%';
+    document.getElementById('sl-bar-mainline').style.width = mainlinePct + '%';
+    document.getElementById('sl-bar-express-val').textContent = fs.express + ' / ' + fs.expressTotal + ' · ' + expressPct + '%';
+    document.getElementById('sl-bar-mainline-val').textContent = fs.mainline + ' / ' + fs.mainlineTotal + ' · ' + mainlinePct + '%';
+  } else {
+    barsEl.style.display = 'none';
+  }
+
+  // Chips: new this week (amber) + airborne now (green; only when the live feed has data).
+  // Note: counts are integers derived from our own data — safe for innerHTML.
+  const newThisWeek = STARLINK_DB.filter(s => isRecentlyFound(s.dateFound)).length;
+  const airborneCount = Object.keys(getStarlinkAirborneMap()).length;
+  let chips = '';
+  if (newThisWeek > 0) chips += '<span class="sl-chip sl-chip-new">+' + newThisWeek + ' NEW THIS WEEK</span>';
+  if (airborneCount > 0) chips += '<span class="sl-chip sl-chip-live">● ' + airborneCount + ' AIRBORNE NOW</span>';
+  document.getElementById('sl-hero-chips').innerHTML = chips;
+
+  // Source line: count + freshness
+  document.getElementById('sl-count').textContent = STARLINK_DB.length;
+  if (STARLINK_LAST_UPDATED) {
+    const ago = Math.round((Date.now() - new Date(STARLINK_LAST_UPDATED).getTime()) / 60000);
+    document.getElementById('sl-updated').textContent = ago < 60 ? ('Updated ' + ago + 'm ago') : ago < 1440 ? ('Updated ' + Math.round(ago/60) + 'h ago') : ('Updated ' + Math.round(ago/1440) + 'd ago');
+  }
+}
+
+// The aircraft table. Every row toggles an inline expansion (one at a time).
+function renderSlTable() {
+  const tbody = document.getElementById('sl-tbody');
+  if (!tbody) return;
+
+  if (STARLINK_DB.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="sl-empty">Starlink fleet data unavailable — try refreshing the page.</td></tr>';
+    return;
+  }
+
+  const search = (document.getElementById('sl-search').value || '').trim().toUpperCase();
+  const fleetFilter = document.getElementById('sl-filter-fleet').value;
+  const typeFilter = document.getElementById('sl-filter-type').value;
+  const opFilter = document.getElementById('sl-filter-operator').value;
 
   let filtered = STARLINK_DB.filter(s => {
     if (search && !s.tail.toUpperCase().includes(search)) return false;
     if (fleetFilter && s.fleet !== fleetFilter) return false;
     if (typeFilter && s.type !== typeFilter) return false;
     if (opFilter && s.operator !== opFilter) return false;
+    if (slShowNewOnly && !isRecentlyFound(s.dateFound)) return false;
     return true;
   });
 
   filtered.sort((a, b) => {
-    const va = (a[starlinkSortKey] || '').toLowerCase();
-    const vb = (b[starlinkSortKey] || '').toLowerCase();
-    return starlinkSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    const va = (a[slSortKey] || '').toLowerCase();
+    const vb = (b[slSortKey] || '').toLowerCase();
+    return slSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
   });
 
-  document.getElementById('starlink-filtered-count').textContent = filtered.length < STARLINK_DB.length ? `${filtered.length} of ${STARLINK_DB.length}` : '';
-  document.getElementById('starlink-count').textContent = STARLINK_DB.length;
+  document.getElementById('sl-filtered-count').textContent = filtered.length < STARLINK_DB.length ? `${filtered.length} of ${STARLINK_DB.length}` : '';
 
   const hasFlights = Object.keys(STARLINK_FLIGHTS_BY_TAIL).length > 0;
+  const liveMap = getStarlinkAirborneMap();
+  const hasLive = allFlights.length > 0;
   const nowSec = Date.now() / 1000;
-  document.getElementById('starlink-tbody').innerHTML = filtered.map(s => {
-    let nextFlightHtml = '';
+
+  // Hide the Status / Next Flight columns when the data behind them is unavailable (degraded modes)
+  document.getElementById('sl-status-th').style.display = hasLive ? '' : 'none';
+  document.getElementById('sl-next-th').style.display = hasFlights ? '' : 'none';
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="sl-empty">No aircraft match your filters.</td></tr>';
+    return;
+  }
+
+  const rows = [];
+  for (const s of filtered) {
+    const live = liveMap[s.tail];
+    const expanded = slExpandedTail === s.tail;
+
+    let statusHtml = '';
+    if (hasLive) {
+      statusHtml = live
+        ? '<td><span class="sl-live-badge">● Airborne</span></td>'
+        : '<td><span class="sl-status-sched">Scheduled</span></td>';
+    }
+
+    let nextHtml = '';
     if (hasFlights) {
       const flights = STARLINK_FLIGHTS_BY_TAIL[s.tail];
       if (flights && flights.length > 0) {
-        // Next UPCOMING departure (flights are chronological; allow a 30-min grace for one that
-        // just left), falling back to the latest known flight if all are in the past.
+        // Next UPCOMING departure (flights are chronological; 30-min grace for one that just left),
+        // falling back to the latest known flight if all are in the past.
         const next = flights.find(f => (f.departure_ts || 0) >= nowSec - 1800) || flights[flights.length - 1];
         const t = formatFlightTime(next.departure_ts);
-        const timeHtml = t ? ` <span class="starlink-next-time">${escapeHtml(t)}</span>` : '';
-        nextFlightHtml = `<td style="font-size:9px">${escapeHtml(next.flight_number || '')} ${escapeHtml((next.origin || '') + '→' + (next.destination || ''))}${timeHtml}</td>`;
+        nextHtml = `<td style="font-size:9px">${escapeHtml(next.flight_number || '')} ${escapeHtml((next.origin || '') + '→' + (next.destination || ''))}${t ? ` <span class="starlink-next-time">${escapeHtml(t)}</span>` : ''}</td>`;
       } else {
-        nextFlightHtml = '<td style="font-size:9px;color:var(--ua-muted)">—</td>';
+        nextHtml = '<td style="font-size:9px;color:var(--ua-muted)">—</td>';
       }
     }
-    const newBadge = isRecentlyFound(s.dateFound) ? ` <span class="starlink-new-badge" title="Starlink equipment first seen ${escapeHtml(s.dateFound)}">NEW</span>` : '';
-    return `<tr><td style="font-weight:700;color:var(--ua-green)">${escapeHtml(s.tail)}${newBadge}</td><td>${escapeHtml(s.fleet)}</td><td>${escapeHtml(s.type)}</td><td style="font-size:10px">${escapeHtml(s.operator)}</td>${nextFlightHtml}</tr>`;
-  }).join('');
 
-  // Toggle next-flight column header visibility
-  const nextFlightHeader = document.getElementById('starlink-next-flight-th');
-  if (nextFlightHeader) nextFlightHeader.style.display = hasFlights ? '' : 'none';
+    const newBadge = isRecentlyFound(s.dateFound) ? ` <span class="starlink-new-badge" title="Starlink equipment first seen ${escapeHtml(s.dateFound)}">NEW</span>` : '';
+    rows.push(`<tr class="sl-row${expanded ? ' expanded' : ''}" data-action="sl-row-toggle" data-tail="${escapeHtml(s.tail)}" tabindex="0" role="button" aria-expanded="${expanded}">` +
+      `<td><span class="sl-tail">${escapeHtml(s.tail)}</span>${newBadge}</td>` +
+      `<td>${escapeHtml(s.fleet)}</td><td>${escapeHtml(s.type)}</td><td style="font-size:10px">${escapeHtml(s.operator)}</td>` +
+      statusHtml + nextHtml + '</tr>');
+
+    if (expanded) rows.push(renderSlExpand(s, live, hasFlights, hasLive, nowSec));
+  }
+  tbody.innerHTML = rows.join('');
+}
+
+// The inline expansion row: meta cards + flight timeline + actions.
+function renderSlExpand(s, live, hasFlights, hasLive, nowSec) {
+  const colspan = 4 + (hasLive ? 1 : 0) + (hasFlights ? 1 : 0);
+
+  let sinceHtml = 'Unknown';
+  if (s.dateFound) {
+    const days = Math.max(0, Math.round((Date.now() - Date.parse(s.dateFound)) / 86400000));
+    sinceHtml = escapeHtml(s.dateFound) + ' · ' + (days === 0 ? 'today' : days + 'd ago');
+  }
+
+  // Flight timeline: up to 5 upcoming flights
+  const flights = STARLINK_FLIGHTS_BY_TAIL[s.tail] || [];
+  const upcoming = flights.filter(f => (f.departure_ts || 0) >= nowSec - 1800).slice(0, 5);
+  let timelineHtml = '<div class="sl-timeline-label">Upcoming Flights</div>';
+  if (upcoming.length > 0) {
+    timelineHtml += upcoming.map(f => {
+      const dep = formatFlightTime(f.departure_ts);
+      const arrMs = f.arrival_time ? Date.parse(f.arrival_time) : NaN;
+      const arr = isNaN(arrMs) ? '' : formatFlightTime(arrMs / 1000);
+      return `<div class="sl-fl-row"><span class="sl-fl-num">${escapeHtml(f.flight_number || '')}</span>` +
+        `<span class="sl-fl-route">${escapeHtml(f.origin || '')} <span class="sl-arrow">→</span> ${escapeHtml(f.destination || '')}</span>` +
+        `<span class="sl-fl-time">${escapeHtml(dep)}${arr ? ' – ' + escapeHtml(arr) : ''}</span></div>`;
+    }).join('');
+  } else {
+    timelineHtml += '<div class="sl-fl-empty">No upcoming flights in the feed</div>';
+  }
+
+  // Actions: track on map (airborne only) + aircraft details + planespotters
+  let actions = '';
+  if (live && live.icao24) {
+    actions += `<button class="sl-btn sl-btn-primary" data-action="sl-track" data-icao24="${escapeHtml(live.icao24)}">📡 Track on Live Map</button>`;
+  }
+  actions += `<button class="sl-btn" data-action="aircraft-detail" data-reg="${escapeHtml(s.tail)}">Aircraft Details</button>`;
+  actions += `<a class="sl-btn" href="https://www.planespotters.net/search?q=${encodeURIComponent(s.tail)}" target="_blank" rel="noopener noreferrer">Planespotters ↗</a>`;
+
+  return `<tr class="sl-expand"><td colspan="${colspan}"><div class="sl-expand-inner">` +
+    `<div class="sl-meta-grid">` +
+      `<div class="sl-meta"><div class="sl-meta-k">Starlink Since</div><div class="sl-meta-v sl-meta-amber">${sinceHtml}</div></div>` +
+      `<div class="sl-meta"><div class="sl-meta-k">Operator</div><div class="sl-meta-v">${escapeHtml(s.operator)}</div></div>` +
+      `<div class="sl-meta"><div class="sl-meta-k">Airframe</div><div class="sl-meta-v">${escapeHtml(s.type)}</div></div>` +
+      `<div class="sl-meta"><div class="sl-meta-k">Fleet</div><div class="sl-meta-v">${escapeHtml(s.fleet)}</div></div>` +
+    `</div>` + timelineHtml + `<div class="sl-actions">${actions}</div>` +
+  `</div></td></tr>`;
+}
+
+// Toggle a row's inline expansion (only one open at a time).
+function toggleStarlinkExpand(tail) {
+  slExpandedTail = (slExpandedTail === tail) ? null : tail;
+  renderSlTable();
 }
 
 // ═══ FLEET DATA REFRESH ═══
@@ -5997,6 +6146,16 @@ document.addEventListener('click', function(e) {
     case 'close-delay-explain': {
       const dem = document.getElementById('delay-explain-modal');
       if (dem) dem.style.display = 'none';
+      break;
+    }
+    case 'sl-row-toggle': {
+      const slTail = actionEl.dataset.tail;
+      if (slTail) toggleStarlinkExpand(slTail);
+      break;
+    }
+    case 'sl-track': {
+      const slIcao = actionEl.dataset.icao24;
+      if (slIcao) focusFlight(slIcao); // focusFlight switches to LIVE OPS and centers the map
       break;
     }
     case 'aircraft-detail': {
