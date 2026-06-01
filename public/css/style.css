@@ -355,6 +355,8 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sa-flight-info{font-size:9px;color:var(--ua-green);margin-top:2px}
 .fleet-starlink-chip-val{font-size:16px;font-weight:700}
 .fleet-starlink-chip-label{color:var(--ua-muted);font-size:10px}
+.starlink-new-badge{display:inline-block;vertical-align:middle;font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:1px 5px;border-radius:3px;background:var(--ua-amber-soft);color:var(--ua-amber)}
+.starlink-next-time{color:var(--ua-muted);font-family:var(--font-mono)}
 
 /* Special Aircraft Badge & Tracker */
 .special-badge{background:rgba(139,92,246,.2);color:#a78bfa;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;font-family:var(--font-mono)}
