@@ -20,24 +20,26 @@ function makeReq(overrides = {}) {
   };
 }
 
+// Mirrors the live upstream: totalCount is the WHOLE tracked fleet (not the Starlink count),
+// fleetStats has no `combined`, departure_time is a UNIX-seconds integer, operator/type casing
+// is inconsistent.
 function mockUpstreamResponse() {
   return {
     starlinkPlanes: [
-      { TailNumber: 'N37559', fleet: 'mainline', Aircraft: 'B738', OperatedBy: 'United Airlines' },
-      { TailNumber: 'N77296', fleet: 'express', Aircraft: 'E175', OperatedBy: 'SkyWest Airlines' },
+      { TailNumber: 'N37559', fleet: 'mainline', Aircraft: 'Boeing 737-824', OperatedBy: 'United Airlines', DateFound: '2020-01-01', WiFi: 'Starlink' },
+      { TailNumber: 'N77296', fleet: 'express', Aircraft: 'Bombardier CRJ-550', OperatedBy: 'Skywest dba UAX', DateFound: '2020-01-01', WiFi: 'StrLnk' },
     ],
-    totalCount: 2,
+    totalCount: 1781,
     fleetStats: {
-      mainline: { starlink: 100, total: 800 },
-      express: { starlink: 50, total: 500 },
-      combined: { starlink: 150, total: 1300 },
+      mainline: { starlink: 51, total: 1122 },
+      express: { starlink: 320, total: 659 },
     },
     flightsByTail: {
       N37559: [
-        { flight_number: 'UA1234', departure_airport: 'ORD', arrival_airport: 'LAX', departure_time: '2026-04-04T10:00:00Z' },
+        { flight_number: 'UA1234', departure_airport: 'ORD', arrival_airport: 'LAX', departure_time: 1780270800, arrival_time: 1780280100, airline: 'UA' },
       ],
     },
-    lastUpdated: '2026-04-04T12:00:00Z',
+    lastUpdated: '2026-05-31T23:02:04.479Z',
   };
 }
 
@@ -58,28 +60,34 @@ describe('starlink-data API', () => {
     expect(res.statusCode).toBe(405);
   });
 
-  // --- Error paths (must run before any successful fetch populates inMemoryCache) ---
+  // --- Degraded paths (must run before any successful fetch populates inMemoryCache) ---
+  // With no in-memory or Supabase cache, the endpoint serves the committed static file rather
+  // than erroring, so the board never goes blank when upstream is down.
 
-  it('returns 502 when upstream fails and no cache exists', async () => {
+  it('serves the static fallback when upstream fails and no cache exists', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('upstream down'));
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = createRes();
     await handler(makeReq(), res);
 
-    expect(res.statusCode).toBe(502);
-    expect(res.body.error).toMatch(/Failed to fetch/);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['X-Starlink-Source']).toBe('static');
+    expect(Array.isArray(res.body.aircraft)).toBe(true);
+    expect(res.body.aircraft.length).toBeGreaterThan(0);
+    expect(res.body.totalCount).toBe(res.body.aircraft.length);
     spy.mockRestore();
   });
 
-  it('returns 502 when upstream returns non-ok status and no cache', async () => {
+  it('serves the static fallback when upstream returns a non-ok status and no cache', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 503 });
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = createRes();
     await handler(makeReq(), res);
 
-    expect(res.statusCode).toBe(502);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['X-Starlink-Source']).toBe('static');
     spy.mockRestore();
   });
 
@@ -109,19 +117,28 @@ describe('starlink-data API', () => {
     await handler(makeReq(), res);
 
     expect(res.statusCode).toBe(200);
+    expect(res.headers['X-Starlink-Source']).toBe('upstream');
     expect(res.body.aircraft).toHaveLength(2);
     expect(res.body.aircraft[0].tail).toBe('N37559');
     expect(res.body.aircraft[0].fleet).toBe('Mainline');
     expect(res.body.aircraft[1].fleet).toBe('Express');
-    expect(res.body.fleetStats.mainline).toBe(100);
-    expect(res.body.fleetStats.express).toBe(50);
+    // Type + operator normalisation
+    expect(res.body.aircraft[0].type).toBe('737-800');   // from "Boeing 737-824"
+    expect(res.body.aircraft[1].type).toBe('CRJ-550');   // from "Bombardier CRJ-550"
+    expect(res.body.aircraft[1].operator).toBe('SkyWest dba UAX'); // from "Skywest dba UAX"
+    expect(res.body.fleetStats.mainline).toBe(51);
+    expect(res.body.fleetStats.express).toBe(320);
+    // The headline fix: serve the real Starlink count, NOT upstream.totalCount (1781 = whole fleet)
     expect(res.body.totalCount).toBe(2);
+    expect(res.body.totalCount).not.toBe(1781);
 
-    // Verify flight normalization
+    // Verify flight normalization: epoch → ISO string + numeric ts
     const flights = res.body.flightsByTail.N37559;
     expect(flights).toHaveLength(1);
     expect(flights[0].origin).toBe('ORD');
     expect(flights[0].destination).toBe('LAX');
+    expect(flights[0].departure_ts).toBe(1780270800);
+    expect(flights[0].departure_time).toBe(new Date(1780270800 * 1000).toISOString());
   });
 
   // --- After inMemoryCache is populated, error falls back to stale cache ---

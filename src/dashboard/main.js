@@ -1826,12 +1826,21 @@ function initFleetTab() {
     if (statsEl) {
       const fs = STARLINK_FLEET_STATS;
       // Note: all values are pre-sanitized integers from our own API
+      const mainlinePct = (fs.mainlinePct != null) ? fs.mainlinePct : (fs.mainlineTotal ? Math.round(fs.mainline / fs.mainlineTotal * 100) : null);
+      const expressPct = (fs.expressPct != null) ? fs.expressPct : (fs.expressTotal ? Math.round(fs.express / fs.expressTotal * 100) : null);
+      const newThisWeek = STARLINK_DB.filter(s => isRecentlyFound(s.dateFound)).length;
       let chipsHtml = '';
       chipsHtml += '<div class="fleet-starlink-chip" style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2)"><span class="fleet-starlink-chip-val" style="color:var(--ua-green)">' + fs.total + '</span><span class="fleet-starlink-chip-label">Total</span></div>';
       chipsHtml += '<div class="fleet-starlink-chip" style="background:rgba(0,93,170,.1);border:1px solid rgba(0,93,170,.2)"><span class="fleet-starlink-chip-val" style="color:var(--ua-accent)">' + fs.mainline + '</span><span class="fleet-starlink-chip-label">Mainline</span></div>';
       chipsHtml += '<div class="fleet-starlink-chip" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2)"><span class="fleet-starlink-chip-val" style="color:#a855f7">' + fs.express + '</span><span class="fleet-starlink-chip-label">Express</span></div>';
-      if (fs.mainlineTotal) {
-        chipsHtml += '<div class="fleet-starlink-chip" style="background:rgba(100,116,139,.08);border:1px solid rgba(100,116,139,.15)"><span class="fleet-starlink-chip-val" style="color:var(--ua-text)">' + Math.round(fs.mainline / fs.mainlineTotal * 100) + '%</span><span class="fleet-starlink-chip-label">Mainline Fleet</span></div>';
+      if (mainlinePct != null) {
+        chipsHtml += '<div class="fleet-starlink-chip" style="background:rgba(100,116,139,.08);border:1px solid rgba(100,116,139,.15)"><span class="fleet-starlink-chip-val" style="color:var(--ua-text)">' + mainlinePct + '%</span><span class="fleet-starlink-chip-label">Mainline Fleet</span></div>';
+      }
+      if (expressPct != null) {
+        chipsHtml += '<div class="fleet-starlink-chip" style="background:rgba(100,116,139,.08);border:1px solid rgba(100,116,139,.15)"><span class="fleet-starlink-chip-val" style="color:var(--ua-text)">' + expressPct + '%</span><span class="fleet-starlink-chip-label">Express Fleet</span></div>';
+      }
+      if (newThisWeek > 0) {
+        chipsHtml += '<div class="fleet-starlink-chip" style="background:var(--ua-amber-soft);border:1px solid rgba(196,163,90,.25)"><span class="fleet-starlink-chip-val" style="color:var(--ua-amber)">+' + newThisWeek + '</span><span class="fleet-starlink-chip-label">New (7d)</span></div>';
       }
       statsEl.innerHTML = chipsHtml;
     }
@@ -2416,6 +2425,24 @@ function renderAgeChart() {
 
 let starlinkSortKey = 'tail', starlinkSortAsc = true;
 
+// A plane counts as "newly equipped" if upstream first recorded its Starlink (DateFound) within the
+// last 7 days. Computed against the live clock so the badge ages out on its own.
+function isRecentlyFound(dateFound) {
+  if (!dateFound) return false;
+  const t = Date.parse(dateFound);
+  if (isNaN(t)) return false;
+  const now = Date.now();
+  return t <= now + 86400000 && (now - t) <= 7 * 86400000;
+}
+
+// Format an upstream departure timestamp (UNIX seconds) as a short local HH:MM hint.
+function formatFlightTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 function initStarlinkFilters() {
   // Populate type and operator dropdowns from actual data
   const types = [...new Set(STARLINK_DB.map(s => s.type))].sort();
@@ -2465,18 +2492,24 @@ function renderStarlinkTable() {
   document.getElementById('starlink-count').textContent = STARLINK_DB.length;
 
   const hasFlights = Object.keys(STARLINK_FLIGHTS_BY_TAIL).length > 0;
+  const nowSec = Date.now() / 1000;
   document.getElementById('starlink-tbody').innerHTML = filtered.map(s => {
     let nextFlightHtml = '';
     if (hasFlights) {
       const flights = STARLINK_FLIGHTS_BY_TAIL[s.tail];
       if (flights && flights.length > 0) {
-        const next = flights[0];
-        nextFlightHtml = `<td style="font-size:9px">${escapeHtml(next.flight_number || '')} ${escapeHtml((next.origin || '') + '→' + (next.destination || ''))}</td>`;
+        // Next UPCOMING departure (flights are chronological; allow a 30-min grace for one that
+        // just left), falling back to the latest known flight if all are in the past.
+        const next = flights.find(f => (f.departure_ts || 0) >= nowSec - 1800) || flights[flights.length - 1];
+        const t = formatFlightTime(next.departure_ts);
+        const timeHtml = t ? ` <span class="starlink-next-time">${escapeHtml(t)}</span>` : '';
+        nextFlightHtml = `<td style="font-size:9px">${escapeHtml(next.flight_number || '')} ${escapeHtml((next.origin || '') + '→' + (next.destination || ''))}${timeHtml}</td>`;
       } else {
         nextFlightHtml = '<td style="font-size:9px;color:var(--ua-muted)">—</td>';
       }
     }
-    return `<tr><td style="font-weight:700;color:var(--ua-green)">${escapeHtml(s.tail)}</td><td>${escapeHtml(s.fleet)}</td><td>${escapeHtml(s.type)}</td><td style="font-size:10px">${escapeHtml(s.operator)}</td>${nextFlightHtml}</tr>`;
+    const newBadge = isRecentlyFound(s.dateFound) ? ` <span class="starlink-new-badge" title="Starlink equipment first seen ${escapeHtml(s.dateFound)}">NEW</span>` : '';
+    return `<tr><td style="font-weight:700;color:var(--ua-green)">${escapeHtml(s.tail)}${newBadge}</td><td>${escapeHtml(s.fleet)}</td><td>${escapeHtml(s.type)}</td><td style="font-size:10px">${escapeHtml(s.operator)}</td>${nextFlightHtml}</tr>`;
   }).join('');
 
   // Toggle next-flight column header visibility

@@ -1,28 +1,50 @@
-// Serves enriched Starlink aircraft data
-// Primary: serves cached data from cron sync
-// Fallback: fetches directly from upstream if cache is empty
+// Serves enriched Starlink aircraft data.
+//
+// Serve order (each falls through to the next on miss/failure):
+//   1. globalThis.__starlinkCache  — same-instance cron result (fast path, rare)
+//   2. in-memory cache             — this lambda's last fetch, if still fresh
+//   3. Supabase snapshot           — durable, cross-instance, written by the cron every 4h
+//   4. direct upstream fetch       — rate-limited; refreshes the in-memory cache
+// On error, degrade rather than fail: stale in-memory -> stale Supabase snapshot -> committed
+// static file. The X-Starlink-Source header reports which path served the response.
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
+import { normalizeStarlinkPayload, normalizeOperator, normalizeType, type StarlinkPayload } from './_starlink-normalize.js';
+import { loadStarlinkSnapshot, type PersistedStarlinkSnapshot } from './_starlink-snapshot.js';
+import STATIC_STARLINK from '../public/data/starlink.json';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/data';
-const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
-
-interface StarlinkCache {
-  aircraft: Array<{ tail: string; fleet: string; type: string; operator: string }>;
-  totalCount: number;
-  fleetStats: { mainline: number; express: number; total: number; mainlineTotal: number; expressTotal: number } | null;
-  flightsByTail: Record<string, Array<{ flight_number: string; origin: string; destination: string; departure_time: string }>>;
-  lastUpdated: string;
-  syncedAt: string;
-}
+const CACHE_TTL = 4 * 60 * 60 * 1000;       // 4h in-memory freshness
+const SNAPSHOT_FRESH_MS = 6 * 60 * 60 * 1000; // serve the durable snapshot directly if <6h old
 
 const isRateLimited = createRateLimiter('starlink-data', 30);
 
-let inMemoryCache: StarlinkCache | null = null;
+let inMemoryCache: StarlinkPayload | null = null;
 let lastFetch = 0;
 
-async function fetchUpstream(): Promise<StarlinkCache> {
+// Committed snapshot bundled at build time — the last-resort fallback when upstream is down and no
+// other cache exists. Shape on disk is just the aircraft array; wrap it into the full payload.
+function staticPayload(): StarlinkPayload {
+  const aircraft = (STATIC_STARLINK as Array<{ tail: string; fleet: string; type: string; operator: string }>).map((a) => ({
+    tail: a.tail,
+    fleet: a.fleet,
+    type: normalizeType(a.type),
+    operator: normalizeOperator(a.operator),
+    dateFound: '',
+    wifi: 'Starlink',
+  }));
+  return {
+    aircraft,
+    totalCount: aircraft.length,
+    fleetStats: null,
+    flightsByTail: {},
+    lastUpdated: '',
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+async function fetchUpstream(): Promise<StarlinkPayload> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -33,45 +55,19 @@ async function fetchUpstream(): Promise<StarlinkCache> {
   clearTimeout(timeout);
 
   if (!resp.ok) throw new Error(`Upstream ${resp.status}`);
+  return normalizeStarlinkPayload(await resp.json());
+}
 
-  const upstream = await resp.json() as any;
-  // Upstream uses: TailNumber, Aircraft (=type), fleet ("express"/"mainline"), OperatedBy
-  const aircraft = (upstream.starlinkPlanes || []).map((p: any) => ({
-    tail: p.TailNumber,
-    fleet: (p.fleet || 'express').charAt(0).toUpperCase() + (p.fleet || 'express').slice(1),
-    type: p.Aircraft || 'Unknown',
-    operator: p.OperatedBy || 'United Airlines',
-  }));
+function serveFresh(res: VercelResponse, payload: StarlinkPayload, source: string) {
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
+  res.setHeader('X-Starlink-Source', source);
+  return res.status(200).json(payload);
+}
 
-  // Normalize fleet stats to simple counts
-  const fs = upstream.fleetStats;
-  const fleetStats = fs ? {
-    mainline: fs.mainline?.starlink ?? 0,
-    express: fs.express?.starlink ?? 0,
-    total: fs.combined?.starlink ?? aircraft.length,
-    mainlineTotal: fs.mainline?.total ?? 0,
-    expressTotal: fs.express?.total ?? 0,
-  } : null;
-
-  // Normalize flight fields (upstream uses departure_airport/arrival_airport)
-  const flightsByTail: Record<string, any[]> = {};
-  for (const [tail, flights] of Object.entries(upstream.flightsByTail || {} as Record<string, any[]>)) {
-    flightsByTail[tail] = (flights as any[]).map((f: any) => ({
-      flight_number: f.flight_number,
-      origin: f.departure_airport || f.origin || '',
-      destination: f.arrival_airport || f.destination || '',
-      departure_time: f.departure_time || '',
-    }));
-  }
-
-  return {
-    aircraft,
-    totalCount: upstream.totalCount || aircraft.length,
-    fleetStats,
-    flightsByTail,
-    lastUpdated: upstream.lastUpdated || new Date().toISOString(),
-    syncedAt: new Date().toISOString(),
-  };
+function serveDegraded(res: VercelResponse, payload: StarlinkPayload, source: string) {
+  res.setHeader('Cache-Control', 'public, s-maxage=300');
+  res.setHeader('X-Starlink-Source', source);
+  return res.status(200).json(payload);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -79,37 +75,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Cached from earlier in the request lifecycle so the catch block can reuse it without a second read.
+  let snapshot: PersistedStarlinkSnapshot | null = null;
+
   try {
-    // Serve cached responses without rate limiting
-    const cronCache = (globalThis as any).__starlinkCache as StarlinkCache | undefined;
-    if (cronCache) {
-      res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
-      return res.status(200).json(cronCache);
-    }
+    // 1. Same-instance cron result.
+    const cronCache = (globalThis as any).__starlinkCache as StarlinkPayload | undefined;
+    if (cronCache) return serveFresh(res, cronCache, 'cron');
 
+    // 2. Fresh in-memory cache.
     if (inMemoryCache && Date.now() - lastFetch < CACHE_TTL) {
-      res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
-      return res.status(200).json(inMemoryCache);
+      return serveFresh(res, inMemoryCache, 'memory');
     }
 
-    // Rate limit only upstream fetches, not cache hits
+    // 3. Durable Supabase snapshot (written by the cron). Serve directly if fresh; this lets a cold
+    //    instance skip the 727KB upstream fetch entirely and keeps every instance consistent.
+    snapshot = await loadStarlinkSnapshot();
+    if (snapshot && Date.now() - snapshot.refreshedAt < SNAPSHOT_FRESH_MS) {
+      inMemoryCache = snapshot.data;
+      lastFetch = snapshot.refreshedAt;
+      return serveFresh(res, snapshot.data, 'supabase');
+    }
+
+    // 4. Fetch fresh from upstream. If rate-limited, degrade instead of erroring.
     if (isRateLimited(req)) {
-      return res.status(429).json({ error: 'Too many requests' });
+      return serveDegraded(res, snapshot?.data ?? staticPayload(), snapshot ? 'supabase-stale' : 'static');
     }
 
-    // Fetch fresh
     inMemoryCache = await fetchUpstream();
     lastFetch = Date.now();
-
-    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
-    return res.status(200).json(inMemoryCache);
+    return serveFresh(res, inMemoryCache, 'upstream');
   } catch (err: any) {
-    // If we have stale cache, serve it rather than failing
-    if (inMemoryCache) {
-      res.setHeader('Cache-Control', 'public, s-maxage=300');
-      return res.status(200).json(inMemoryCache);
-    }
-    console.error('Starlink data error:', err);
-    return res.status(502).json({ error: 'Failed to fetch Starlink data' });
+    // Degrade rather than 502: stale in-memory -> stale snapshot -> committed static file.
+    if (inMemoryCache) return serveDegraded(res, inMemoryCache, 'memory-stale');
+    if (snapshot?.data) return serveDegraded(res, snapshot.data, 'supabase-stale');
+    console.error('Starlink data error (serving static fallback):', err?.message || err);
+    return serveDegraded(res, staticPayload(), 'static');
   }
 }

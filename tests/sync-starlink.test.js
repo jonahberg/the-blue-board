@@ -25,17 +25,18 @@ function mockUpstream(planes = 2) {
     starlinkPlanes: Array.from({ length: planes }, (_, i) => ({
       TailNumber: `N${10000 + i}`,
       fleet: i % 2 === 0 ? 'mainline' : 'express',
-      Aircraft: 'B738',
-      OperatedBy: 'United Airlines',
+      Aircraft: 'Boeing 737-824',
+      OperatedBy: 'Skywest dba UAX',
+      DateFound: '2020-01-01',
+      WiFi: 'Starlink',
     })),
-    totalCount: planes,
+    totalCount: 1781, // upstream's whole-fleet number; must not become the Starlink count
     fleetStats: {
       mainline: { starlink: 1, total: 800 },
       express: { starlink: 1, total: 500 },
-      combined: { starlink: planes, total: 1300 },
     },
     flightsByTail: {},
-    lastUpdated: '2026-04-04T12:00:00Z',
+    lastUpdated: '2026-05-31T23:02:04.479Z',
   };
 }
 
@@ -94,8 +95,24 @@ describe('sync-starlink cron', () => {
 
     const cache = (globalThis).__starlinkCache;
     expect(cache.aircraft[0].tail).toBe('N10000');
-    expect(cache.aircraft[0].fleet).toBe('Mainline'); // capitalized
-    expect(cache.aircraft[0].type).toBe('B738');
+    expect(cache.aircraft[0].fleet).toBe('Mainline');        // capitalized
+    expect(cache.aircraft[0].type).toBe('737-800');          // normalized from "Boeing 737-824"
+    expect(cache.aircraft[0].operator).toBe('SkyWest dba UAX'); // normalized casing
+    expect(cache.totalCount).toBe(1);                        // real Starlink count, not upstream 1781
+  });
+
+  it('refuses to persist an empty board (does not poison the snapshot/cache)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => mockUpstream(0),
+    });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error).toMatch(/0 Starlink/);
+    expect((globalThis).__starlinkCache).toBeUndefined();
   });
 
   it('returns 502 when upstream returns error status', async () => {
