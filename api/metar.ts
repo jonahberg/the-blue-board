@@ -4,6 +4,45 @@ import { normalizeMetarPayload } from '../src/lib/metar.js';
 
 const isRateLimited = createRateLimiter('metar', 60);
 
+const AWC_BASE = 'https://aviationweather.gov/api/data/metar';
+// Per-station timeout. AWC's batch endpoint is gated by its slowest station on a cache miss
+// (one cold station can stall the whole response 12-20s), so we fetch each station on its own
+// clock instead. Concurrent fan-out means wall-clock is ~max(station), not the sum.
+const STATION_TIMEOUT_MS = Math.max(2000, Number(process.env.METAR_STATION_TIMEOUT_MS) || 6500);
+
+// Last-known-good observation per ICAO id, ephemeral per warm instance (same pattern as
+// _rate-limit.ts). This is the store the `stale-while-revalidate` header always implied but never
+// had: a momentarily-slow station serves its previous observation instead of blanking its hub card.
+const lastKnownGood = new Map<string, any>();
+
+/** Test helper: clear the last-known-good cache so module state doesn't leak across tests. */
+export function __resetMetarCacheForTests(): void {
+  lastKnownGood.clear();
+}
+
+function stationKey(rec: any): string {
+  return String(rec?.icaoId || rec?.stationId || rec?.id || '').toUpperCase();
+}
+
+// Fetch a single station with its own abort timer. Returns the normalized records (usually one),
+// or null on any failure/timeout — never throws, so Promise.allSettled stays clean.
+async function fetchOneStation(id: string): Promise<any[] | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STATION_TIMEOUT_MS);
+  try {
+    const resp = await fetch(`${AWC_BASE}?ids=${encodeURIComponent(id)}&format=json`, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'theblueboard.co weather (jonah.berg.g@gmail.com)' },
+    });
+    if (!resp.ok) return null;
+    return normalizeMetarPayload(await resp.json());
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -18,24 +57,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: 'Rate limited — try again shortly' });
   }
 
-  try {
-    const ids = (req.query.ids as string) || 'KORD';
-    // Validate: comma-separated ICAO codes, max 200 chars
-    if (!/^[A-Z0-9,]{1,200}$/i.test(ids)) {
-      return res.status(400).json({ error: 'Invalid airport IDs' });
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const upstream = await fetch(`https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(ids)}&format=json`, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (!upstream.ok) return res.status(502).json({ error: 'Upstream service unavailable' });
-    const data = normalizeMetarPayload(await upstream.json());
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(200).json(data);
-  } catch (e: any) {
-    console.error('METAR API error:', e);
-    if (e.name === 'AbortError') return res.status(504).json({ error: 'Upstream timeout' });
-    return res.status(502).json({ error: 'Upstream service unavailable' });
+  const ids = (req.query.ids as string) || 'KORD';
+  // Validate: comma-separated ICAO codes, max 200 chars
+  if (!/^[A-Z0-9,]{1,200}$/i.test(ids)) {
+    return res.status(400).json({ error: 'Invalid airport IDs' });
   }
+
+  const stations = ids.toUpperCase().split(',').map((s) => s.trim()).filter(Boolean);
+
+  // Fan out: one independent, concurrently-timed fetch per station. A single slow/failed station
+  // can no longer stall or 504 the whole batch — the rest still return, and the laggard falls back
+  // to its last-known observation (or is omitted) rather than blanking every hub.
+  const settled = await Promise.allSettled(stations.map(fetchOneStation));
+
+  const byStation = new Map<string, any>();
+  for (const result of settled) {
+    if (result.status !== 'fulfilled' || !Array.isArray(result.value)) continue;
+    for (const rec of result.value) {
+      const key = stationKey(rec);
+      if (!key) continue;
+      byStation.set(key, rec);
+      lastKnownGood.set(key, rec); // refresh last-known-good with every fresh observation
+    }
+  }
+
+  // Backfill any requested station that didn't answer this round from last-known-good.
+  for (const id of stations) {
+    if (!byStation.has(id) && lastKnownGood.has(id)) {
+      byStation.set(id, lastKnownGood.get(id));
+    }
+  }
+
+  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+  res.setHeader('Content-Type', 'application/json');
+  // Always 200 with whatever resolved (fresh + stale-backfilled). Worst case — a cold instance
+  // where every station is slow — returns [], which the dashboard already degrades to its
+  // existing "weather unavailable / retry" state rather than a hard error.
+  return res.status(200).json(Array.from(byStation.values()));
 }
