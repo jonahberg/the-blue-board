@@ -143,48 +143,66 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 <p style="font-size:11px;color:#64748b">Built for the United community by <a href="https://github.com/notjbg" style="color:#6BAAED">Jonah Berg</a>. Not affiliated with United Airlines, Inc. JavaScript is required for the live dashboard.</p>
 </div>
 </noscript>
-<div class="sr-only">The Blue Board is an independent United Airlines flight tracker and operations dashboard for United flyers. Use the live dashboard to check flight status, hub delays, fleet data, and Starlink availability.</div>
-<!-- TICKER -->
-<div class="ticker-wrap" role="marquee" aria-label="Flight alerts ticker">
-  <span class="ticker-label">▌ALERTS</span>
-  <div class="ticker" id="ticker" aria-live="off"></div>
-</div>
-
-<!-- HUB HEALTH BAR -->
-<div id="hub-health-bar" aria-live="polite" title="On-Time Performance: % of operated flights within 30 min of schedule (departures + arrivals). 🟢 >70% · 🟡 50-70% · 🔴 <50%"><span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info" tabindex="0" role="button" aria-label="Hub health explanation">?<span class="hh-tooltip" role="tooltip">% of operated flights within 30 min of schedule (departures &amp; arrivals). 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span><span style="color:var(--ua-muted)">Loading…</span></div>
-
-<!-- TIP STRIP -->
-<div id="tip-strip" style="display:none"><span class="tip-badge">Tip</span><span class="tip-text" id="tip-text"></span><button class="tip-dismiss" data-action="dismiss-tips" aria-label="Dismiss tips">&times;</button></div>
+<!-- SEO keyword sentence (was the brand strip; now crawlable sr-only text) -->
+<div class="sr-only">The Blue Board is an independent United Airlines flight tracker and operations dashboard with live status, hub delays, fleet data, and Starlink coverage. Use the live dashboard to check flight status, hub delays, fleet data, and Starlink availability.</div>
+<!-- Crawlable site navigation (always in DOM regardless of popover state) -->
+<nav class="sr-only" aria-label="United Airlines hub and site navigation">
+  <a href="/hubs/ord">United at Chicago O'Hare (ORD)</a>
+  <a href="/hubs/den">United at Denver (DEN)</a>
+  <a href="/hubs/iah">United at Houston (IAH)</a>
+  <a href="/hubs/ewr">United at Newark (EWR)</a>
+  <a href="/hubs/sfo">United at San Francisco (SFO)</a>
+  <a href="/hubs/iad">United at Washington Dulles (IAD)</a>
+  <a href="/hubs/lax">United at Los Angeles (LAX)</a>
+  <a href="/hubs/nrt">United at Tokyo Narita (NRT)</a>
+  <a href="/hubs/gum">United at Guam (GUM)</a>
+  <a href="/hubs">All United Airlines Hubs</a>
+  <a href="/fleet">United Airlines Fleet Database</a>
+  <a href="/news">The Blue Board News</a>
+</nav>
 
 <!-- WATCH NOTIFICATION BANNER -->
 <div id="watch-notification" aria-live="polite" role="status"><span id="wn-text"></span><button class="wn-dismiss" data-action="dismiss-watch-notification">Dismiss</button></div>
 <div id="push-prompt">🔔 Get desktop notifications for watched flights?<div style="display:flex;gap:6px"><button class="pp-enable" data-action="enable-push">Enable</button><button class="pp-dismiss" data-action="dismiss-push">No thanks</button></div></div>
 
-<!-- HEADER -->
+<!-- TIP STRIP (floating capsule below canopy; JS toggles inline display) -->
+<div id="tip-strip" style="display:none"><span class="tip-badge">Tip</span><span class="tip-text" id="tip-text"></span><button class="tip-dismiss" data-action="dismiss-tips" aria-label="Dismiss tips">&times;</button></div>
+
+<!-- ════════ THE CANOPY (floating top bar = #header restyled) ════════ -->
 <div id="header">
   <h1><a href="#" data-action="go-home" style="text-decoration:none;color:inherit;cursor:pointer"><span class="ua">THE BLUE BOARD</span></a> <span style="font-size:9px;color:var(--ua-muted);font-weight:400;letter-spacing:0.5px">FOR UNITED FLYERS, BY UNITED FLYERS</span></h1>
-  <div id="global-search-wrap" style="position:relative;flex:0 1 300px">
-    <input type="text" id="global-search-input" aria-label="Global flight search" placeholder="Track a flight (UA 1234, N12345, ORD...)" style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:4px;font-family:var(--font-mono);font-size:11px">
-    <div id="global-search-results" aria-label="Search results" style="position:absolute;top:34px;left:0;right:0;background:rgba(17,24,39,.95);border:1px solid var(--ua-border);border-radius:4px;max-height:300px;overflow-y:auto;display:none;z-index:9999;backdrop-filter:blur(8px)"></div>
+  <span class="cdiv"></span>
+
+  <!-- live status cluster -->
+  <span style="display:flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0"><span class="status-dot live" id="status-dot"></span><span id="status-text">LIVE</span> <span id="header-flight-count" style="color:var(--ua-muted);font-size:10px"></span></span>
+  <span class="cdiv"></span>
+
+  <!-- HUB HEALTH BAR (inline hub cluster inside the canopy) -->
+  <div id="hub-health-bar" aria-live="polite" title="On-Time Performance: % of operated flights within 30 min of schedule (departures + arrivals). 🟢 >70% · 🟡 50-70% · 🔴 <50%"><span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info" tabindex="0" role="button" aria-label="Hub health explanation">?<span class="hh-tooltip" role="tooltip">% of operated flights within 30 min of schedule (departures &amp; arrivals). 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span><span style="color:var(--ua-muted)">Loading…</span></div>
+  <span class="cdiv"></span>
+
+  <!-- TICKER (alert zone, flex-grows to fill the middle) -->
+  <div class="ticker-wrap" role="marquee" aria-label="Flight alerts ticker">
+    <div class="ticker" id="ticker" aria-live="off"></div>
   </div>
+  <span class="cdiv"></span>
+
+  <!-- global search in the canopy -->
+  <div id="global-search-wrap">
+    <input type="text" id="global-search-input" aria-label="Global flight search" placeholder="Track a flight (UA 1234, N12345, ORD...)">
+    <div id="global-search-results" aria-label="Search results" style="position:absolute;top:34px;left:0;right:0;background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:4px;max-height:300px;overflow-y:auto;display:none;z-index:775"></div>
+  </div>
+  <span class="cdiv"></span>
+
+  <!-- right utility cluster -->
   <div id="header-right">
-    <span><span class="status-dot live" id="status-dot"></span><span id="status-text">LIVE</span> <span id="header-flight-count" style="color:var(--ua-muted);font-size:10px"></span></span>
     <span id="countdown">Next refresh: --:--</span>
-    <span id="clock" style="color:var(--ua-muted)"></span>
+    <span id="clock"></span>
     <div style="position:relative"><button id="watch-header-btn" data-action="toggle-watch-panel" title="Watched flights" aria-label="Toggle watched flights panel" aria-expanded="false" aria-controls="watch-panel">👁️<span class="watch-badge" id="watch-badge" style="display:none">0</span></button><div id="watch-panel" role="region" aria-label="Watched flights"><div class="watch-panel-header"><span>👁️ Watched Flights</span><button data-action="clear-all-watched" style="background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:9px;font-family:var(--font-mono)">Clear All</button></div><div id="watch-panel-list"></div></div></div>
     <button id="mobile-search-toggle" aria-label="Toggle search" title="Search">🔍</button>
     <button id="home-hub-btn" data-action="cycle-home-hub" title="Home hub (click to change)" aria-label="Change home hub" style="font-size:10px;font-family:var(--font-ui);cursor:pointer;background:none;border:1px solid var(--ua-border);color:var(--ua-accent);padding:2px 6px;border-radius:3px">🏠 <span id="home-hub-display">—</span></button>
     <button id="onboarding-help" title="About this dashboard" aria-label="About this dashboard">?</button>
   </div>
-</div>
-<div id="brand-strip" aria-label="About The Blue Board">
-  <p><strong>The Blue Board</strong> is an independent United Airlines flight tracker and operations dashboard with live status, hub delays, fleet data, and Starlink coverage.</p>
-  <nav class="brand-links" aria-label="Primary site links">
-    <a href="/news">News</a>
-    <a href="/hubs">United Hub Pages</a>
-    <a href="/fleet">Fleet Database</a>
-    <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer">Follow @theblueboard</a>
-  </nav>
 </div>
 
 <!-- DATA RESTORED BANNER (amber callout; shown once, dismissable via /js/restored-banner.js) -->
@@ -206,7 +224,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button id="news-banner-dismiss" aria-label="Dismiss news banner" style="background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;font-family:var(--font-ui)">✕</button>
 </div>
 
-<!-- TAB BAR -->
+<!-- ════════ TAB DOCK (floating bottom = #tab-bar restyled) ════════ -->
 <nav id="tab-bar" aria-label="Dashboard navigation" role="tablist">
   <button class="tab-btn" data-tab="tab-myflight" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-myflight"><span aria-hidden="true">🎫</span> MY FLIGHTS</button>
   <button class="tab-btn active" data-tab="tab-live" role="tab" tabindex="0" aria-selected="true" aria-controls="tab-live"><span aria-hidden="true">📡</span> LIVE OPS</button>
@@ -216,9 +234,47 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button class="tab-btn" data-tab="tab-weather" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-weather"><span aria-hidden="true">🌦</span> DELAYS · WEATHER · HUBS</button>
   <button class="tab-btn" data-tab="tab-analytics" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-analytics" aria-label="Stats"><span aria-hidden="true">📊</span> STATS</button>
   <button class="tab-btn" data-tab="tab-sources" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-sources"><span aria-hidden="true">ℹ️</span> SOURCES</button>
+  <span class="dockdiv"></span>
+  <!-- Legal / about / donate popover — native details element, CSP-safe (no inline JS) -->
+  <details id="legal-details">
+    <summary id="legal-btn" title="About · Legal · Donate" aria-label="About, legal and donate links">ⓘ</summary>
+    <div id="legalpop" role="menu" aria-label="About and legal">
+      <div class="ltitle">About · Legal · Support</div>
+      <div class="lgrid">
+        <a href="#" data-action="show-disclaimer" data-prevent-default="1">About</a>
+        <a href="#" data-action="show-disclaimer" data-prevent-default="1">Disclaimer</a>
+        <a href="/fleet">Fleet Database</a>
+        <a href="https://github.com/notjbg/the-blue-board/issues" target="_blank" rel="noopener noreferrer">Support / Feedback</a>
+        <a class="donate" href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer">☕ Donate</a>
+        <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer">@theblueboard</a>
+      </div>
+      <nav class="lhubs" aria-label="United Airlines Hub Pages">
+        <a href="/hubs/ord">ORD</a>
+        <a href="/hubs/den">DEN</a>
+        <a href="/hubs/iah">IAH</a>
+        <a href="/hubs/ewr">EWR</a>
+        <a href="/hubs/sfo">SFO</a>
+        <a href="/hubs/iad">IAD</a>
+        <a href="/hubs/lax">LAX</a>
+        <a href="/hubs/nrt">NRT</a>
+        <a href="/hubs/gum">GUM</a>
+        <a href="/hubs">All Hubs</a>
+        <a href="/news">News</a>
+      </nav>
+      <div class="lnote">
+        Data: <a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><br>
+        Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer">Jonah Berg</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
+      </div>
+    </div>
+  </details>
 </nav>
 
-<!-- MOBILE BOTTOM NAV -->
+<!-- ════════ ATTRIBUTION (fixed micro-text, bottom-left over the map) ════════ -->
+<div id="attribution">
+  Data: <a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
+</div>
+
+<!-- MOBILE BOTTOM NAV (floating dock on mobile) -->
 <nav id="mobile-bottom-nav" aria-label="Mobile navigation" role="tablist">
   <button data-tab="tab-live" class="active" role="tab" aria-selected="true" aria-controls="tab-live"><span class="bnav-icon" aria-hidden="true">📡</span><span class="bnav-label">Live</span></button>
   <button data-tab="tab-weather" role="tab" aria-selected="false" aria-controls="tab-weather"><span class="bnav-icon" aria-hidden="true">🌦</span><span class="bnav-label">Weather</span></button>
@@ -806,40 +862,6 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <button data-action="hide-disclaimer" style="margin-top:16px;background:var(--ua-blue);color:white;border:none;padding:8px 24px;font-family:var(--font-ui);font-size:11px;cursor:pointer;border-radius:4px;width:100%">Got it</button>
   </div>
 </div>
-
-<!-- SITE FOOTER -->
-<footer style="background:var(--ua-panel);border-top:1px solid var(--ua-border);padding:10px 16px;font-size:9px;color:var(--ua-muted);text-align:center;line-height:1.8">
-  <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 10px">
-    <a href="#" data-action="show-disclaimer" data-prevent-default="1" style="color:var(--ua-accent);text-decoration:none">About</a>
-    <span>·</span>
-    <a href="#" data-action="show-disclaimer" data-prevent-default="1" style="color:var(--ua-accent);text-decoration:none">Disclaimer</a>
-    <span>·</span>
-    <a href="/fleet" style="color:var(--ua-accent);text-decoration:none">Fleet Database</a>
-    <span>·</span>
-    <a href="https://github.com/notjbg/the-blue-board/issues" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Support / Feedback</a>
-    <span>·</span>
-    <a href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Donate</a>
-  </div>
-  <div style="margin-top:4px">The Blue Board · Independent · Not affiliated with United Airlines, Inc. · Data may be delayed</div>
-  <nav class="footer-hub-links" aria-label="United Airlines Hub Pages" style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 8px;margin-top:4px">
-    <span>United Hubs:</span>
-    <a href="/hubs/ord" style="color:var(--ua-accent);text-decoration:none">Chicago O'Hare (ORD)</a> ·
-    <a href="/hubs/den" style="color:var(--ua-accent);text-decoration:none">Denver (DEN)</a> ·
-    <a href="/hubs/iah" style="color:var(--ua-accent);text-decoration:none">Houston (IAH)</a> ·
-    <a href="/hubs/ewr" style="color:var(--ua-accent);text-decoration:none">Newark (EWR)</a> ·
-    <a href="/hubs/sfo" style="color:var(--ua-accent);text-decoration:none">San Francisco (SFO)</a> ·
-    <a href="/hubs/iad" style="color:var(--ua-accent);text-decoration:none">Washington Dulles (IAD)</a> ·
-    <a href="/hubs/lax" style="color:var(--ua-accent);text-decoration:none">Los Angeles (LAX)</a> ·
-    <a href="/hubs/nrt" style="color:var(--ua-accent);text-decoration:none">Tokyo Narita (NRT)</a> ·
-    <a href="/hubs/gum" style="color:var(--ua-accent);text-decoration:none">Guam (GUM)</a> ·
-    <a href="/hubs" style="color:var(--ua-accent);text-decoration:none">All Hubs</a>
-  </nav>
-  <div class="footer-data-sources" style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 12px;margin-top:4px">
-    <span>Data: <a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-muted);text-decoration:none">FR24</a> · <a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer" style="color:var(--ua-muted);text-decoration:none">AWC</a> · <a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer" style="color:var(--ua-muted);text-decoration:none">FAA</a></span>
-    <a href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer" style="background:var(--ua-blue);color:white;padding:3px 10px;border-radius:3px;text-decoration:none;font-size:9px;font-family:var(--font-mono);white-space:nowrap">☕ Support Server Costs</a>
-    <span style="white-space:nowrap">Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Jonah Berg</a> · <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Follow @theblueboard</a></span>
-  </div>
-</footer>
 
 <script defer src="/_vercel/insights/script.js"></script>
 <script defer src="/js/sw-register.js"></script>
