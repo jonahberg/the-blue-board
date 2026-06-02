@@ -1,8 +1,9 @@
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#64748B;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
-body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);overflow:hidden;font-size:12px;line-height:1.4;height:100vh;height:100dvh;display:flex;flex-direction:column}
+/* Variant J — Canopy: body is a positioning context, not a flex column. Map is the page. */
+html,body{height:100%}
+body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);overflow:hidden;font-size:12px;line-height:1.4;height:100vh;height:100dvh}
 h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
-body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 49px,rgba(30,41,59,.15) 50px),repeating-linear-gradient(90deg,transparent,transparent 49px,rgba(30,41,59,.15) 50px);pointer-events:none;z-index:0}
 
 /* Skip link (a11y) */
 .skip-link{position:absolute;top:-100%;left:16px;background:var(--ua-blue);color:#fff;padding:8px 16px;border-radius:0 0 4px 4px;font-size:12px;font-weight:600;font-family:var(--font-ui);z-index:100000;text-decoration:none;transition:top .15s}
@@ -18,43 +19,72 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 ::-webkit-scrollbar-thumb{background:var(--ua-border);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:#2d3a4f}
 
-/* Ticker */
-.ticker-wrap{background:var(--ua-panel);border-bottom:1px solid var(--ua-border);overflow:hidden;height:28px;position:relative;z-index:100;flex-shrink:0}
-.ticker{display:flex;align-items:center;height:100%;white-space:nowrap;will-change:transform}
+/* ═══════════════════════════════════════════════════════════
+   VARIANT J — FLOATING CHROME (replaces the stacked bars)
+   Panel recipe: solid linear-gradient fill, 1px border, 6px radius.
+   NO backdrop-filter, NO blur, NO box-shadow.
+   Z-index ladder (Leaflet panes occupy 200-700; all chrome > 700):
+     #map 0 · .tab-content non-map 750 · #attribution 710 · #controls 712
+     · #stats-bar 715 · #fr24-credit-widget 718 · #tab-bar 760
+     · banners 765 · #header 770 · #global-search-results 775
+     · #legalpop 780 · #watch-panel 9999 · modals 10000+ · skip-link 100000
+   ═══════════════════════════════════════════════════════════ */
+
+/* MAP becomes the page background layer */
+#map{position:fixed;inset:0;z-index:0}
+#map::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 50% 38%,transparent 42%,rgba(7,11,18,.5) 100%)}
+
+/* Ticker — alert zone inline inside the canopy, flex-grows to fill the middle */
+.ticker-wrap{flex:1 1 auto;min-width:40px;display:flex;align-items:center;gap:7px;padding:0 4px;overflow:hidden;background:none;border:none;height:auto;position:static;z-index:auto}
+.ticker-label{display:none}
+.ticker{display:flex;align-items:center;flex:1 1 auto;min-width:0;white-space:nowrap;will-change:transform;overflow:hidden}
 .ticker-cycle{display:flex;align-items:center;flex:none}
 @keyframes tickerScroll{0%{transform:translate3d(0,0,0)}100%{transform:translate3d(var(--ticker-offset,-50%),0,0)}}
-.ticker-item{padding:0 40px;font-size:11px;font-weight:500;letter-spacing:.3px}
+.ticker-item{padding:0 40px;font-family:var(--font-ui);font-size:11px;font-weight:500;letter-spacing:.3px;color:var(--ua-text)}
 .ticker-item.info{color:var(--ua-green)}.ticker-item.advisory{color:var(--ua-yellow)}.ticker-item.critical{color:var(--ua-red)}
-.ticker-label{background:var(--ua-blue);color:#fff;font-size:10px;font-weight:700;padding:2px 10px;position:absolute;left:0;top:0;height:100%;display:flex;align-items:center;z-index:2;letter-spacing:1px}
 
-/* Header */
-#header{display:flex;align-items:center;justify-content:space-between;padding:6px 16px;background:linear-gradient(90deg,var(--ua-dark),#0d1520);border-bottom:1px solid rgba(0,93,170,.3);flex-shrink:0}
-#header h1{font-size:16px;font-weight:700;color:#fff;letter-spacing:1px}
+/* CANOPY (= #header restyled as the floating top bar) */
+#header{position:fixed;top:16px;left:16px;right:16px;z-index:770;height:52px;border-radius:6px;display:flex;align-items:center;justify-content:flex-start;padding:0 12px;gap:0;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border)}
+#header h1{font-family:var(--font-display);font-weight:700;font-size:14px;letter-spacing:.5px;color:#fff;white-space:nowrap;flex-shrink:0}
 #header h1 .ua{color:var(--ua-accent)}
-#header-right{display:flex;align-items:center;gap:16px;font-size:11px}
-#brand-strip{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 16px;background:rgba(17,24,39,.9);border-bottom:1px solid rgba(0,93,170,.25);font-size:10px;color:var(--ua-muted);flex-shrink:0}
-#brand-strip p{margin:0;line-height:1.5;max-width:760px}
-#brand-strip strong{color:var(--ua-text)}
-.brand-links{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.brand-links a{color:var(--ua-accent);font-weight:600;text-decoration:none;white-space:nowrap}
-.brand-links a:hover{text-decoration:underline}
-.status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
-.status-dot.live{background:var(--ua-green);box-shadow:0 0 8px var(--ua-green)}
-#countdown{font-variant-numeric:tabular-nums;color:var(--ua-accent)}
+#header h1 span[style]{font-size:9px;color:var(--ua-muted);font-weight:400;letter-spacing:.5px}
+#header-right{display:flex;align-items:center;gap:10px;font-size:11px;flex-shrink:0;margin-left:auto}
+#header-right > span:first-child{display:flex;align-items:center;gap:6px;white-space:nowrap}
+#header-flight-count{color:var(--ua-text);font-weight:700}
+.cdiv{width:1px;align-self:stretch;background:var(--ua-border);margin:0 6px;flex-shrink:0}
+/* canopy global search wrap */
+#global-search-wrap{position:relative;flex:0 1 240px;transition:flex-basis .2s ease}
+#global-search-input{width:100%;background:rgba(8,12,20,.7);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:6px;font-family:var(--font-mono);font-size:10px}
+#global-search-input:focus{outline:none;border-color:var(--ua-accent);background:rgba(8,12,20,.92)}
+.status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;flex-shrink:0}
+.status-dot.live{background:var(--ua-green);box-shadow:0 0 6px rgba(34,197,94,.6);animation:pulse 2s ease-in-out infinite}
+#countdown{font-variant-numeric:tabular-nums;color:var(--ua-muted);font-family:var(--font-mono);font-size:10px;white-space:nowrap}
+#clock{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--ua-text);flex-shrink:0;font-variant-numeric:tabular-nums}
 
-/* Tabs */
-#tab-bar{display:flex;background:var(--ua-panel);border-bottom:2px solid var(--ua-border);flex-shrink:0}
-.tab-btn{flex:1;padding:10px 8px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--ua-muted);cursor:pointer;border:none;background:none;transition:color .25s cubic-bezier(.4,0,.2,1),border-color .25s cubic-bezier(.4,0,.2,1),background-color .25s cubic-bezier(.4,0,.2,1);border-bottom:2px solid transparent}
-.tab-btn:hover{color:var(--ua-muted);background:rgba(30,41,59,.5)}
-.tab-btn.active{color:var(--ua-text);border-bottom-color:var(--ua-blue);background:rgba(0,93,170,.08)}
-main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.tab-content{display:none;position:relative;z-index:1;flex:1;min-height:0;overflow-y:auto;contain:layout style paint}
-.tab-content.active{display:flex;flex-direction:column}
+/* HUB CLUSTER (= #hub-health-bar inline in the canopy) */
+/* main rule restyled in the "Hub Health Bar" section further down */
+
+/* TAB DOCK (= #tab-bar restyled as the floating bottom dock, .tab-btn kept) */
+#tab-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:760;display:flex;align-items:stretch;padding:10px 12px;gap:4px;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);max-width:calc(100vw - 32px);overflow-x:auto;scrollbar-width:none}
+#tab-bar::-webkit-scrollbar{display:none}
+.tab-btn{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 12px 7px;border-radius:6px;color:var(--ua-muted);min-width:64px;border:none;border-top:2px solid transparent;background:none;font-size:9px;font-weight:600;letter-spacing:.5px;cursor:pointer;white-space:nowrap;transition:background-color .15s,color .15s}
+.tab-btn span[aria-hidden]{font-size:16px;line-height:1}
+.tab-btn:hover{background:rgba(148,163,184,.07);color:var(--ua-text)}
+.tab-btn.active{background:var(--ua-blue-soft);color:var(--ua-accent);border-top:2px solid var(--ua-blue)}
+
+main{display:contents}
+.tab-content{display:none}
+/* Non-map tab panels: fixed full-bleed scroll panels over the map, opaque background.
+   The box is inset below the canopy (top:84px) and above the dock (bottom:104px); each
+   tab keeps its own inner padding (set by its #tab-* rule). */
+.tab-content.active{display:block;position:fixed;top:84px;left:0;right:0;bottom:104px;z-index:750;overflow-y:auto;background:var(--ua-dark);border-top:1px solid var(--ua-border);contain:layout style paint;animation:fadeIn .2s ease}
+/* The LIVE OPS map tab is transparent — the fixed map shows through, chrome floats over it. */
+#tab-live.active{position:fixed;inset:0;top:0;bottom:0;z-index:1;overflow:visible;background:none;border-top:none}
 
 /* ═══ TAB 1: LIVE OPS ═══ */
-#tab-live{flex:1;min-height:0}
-#tab-live .ops-layout{display:flex;height:100%;overflow:hidden}
-#tab-live .sidebar{width:260px;background:var(--ua-panel);border-right:1px solid var(--ua-border);overflow-y:auto;flex-shrink:0;contain:layout style paint}
+#tab-live .ops-layout{display:block;height:100%;overflow:visible}
+/* Sidebar becomes a floating left panel over the map */
+#tab-live .sidebar{position:fixed;left:16px;top:84px;bottom:96px;width:260px;z-index:705;overflow-y:auto;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);contain:layout style paint}
 #sidebar-filters-toggle{display:none}
 #tab-live .sidebar h3{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;padding:12px 12px 6px;border-bottom:1px solid var(--ua-border)}
 .hub-row{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-bottom:1px solid rgba(30,41,59,.4);transition:background .15s;cursor:default}
@@ -64,28 +94,56 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .hub-bar{height:3px;background:var(--ua-border);border-radius:2px;margin-top:3px}
 .hub-bar-fill{height:100%;background:var(--ua-blue);border-radius:2px;transition:width .5s}
 .busiest-badge{background:var(--ua-blue);color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700}
-#tab-live .map-area{flex:1;position:relative}
-#tab-live #map{width:100%;height:100%}
-#tab-live #controls{position:absolute;top:10px;right:10px;z-index:1000}
+#tab-live .map-area{position:static}
+/* #map is fixed inset:0 z:0 (declared above) — these no-ops keep specificity harmless */
+#tab-live #map{position:fixed;inset:0;z-index:0}
+/* Map controls re-anchored mid-right, lowered into the floating ladder */
+#tab-live #controls{position:fixed;top:50%;right:16px;transform:translateY(-50%);left:auto;z-index:712}
 #ctrl-panel{display:flex;flex-direction:column;gap:5px}
 #mobile-ctrl-toggle{display:none}
-.ctrl-btn{background:rgba(10,14,20,.9);border:1px solid var(--ua-border);color:var(--ua-muted);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-family:var(--font-mono);backdrop-filter:blur(8px);transition:background-color .2s cubic-bezier(.4,0,.2,1),border-color .2s cubic-bezier(.4,0,.2,1),color .2s cubic-bezier(.4,0,.2,1),transform .15s cubic-bezier(.4,0,.2,1)}
+.ctrl-btn{background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);color:var(--ua-muted);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:background-color .2s cubic-bezier(.4,0,.2,1),border-color .2s cubic-bezier(.4,0,.2,1),color .2s cubic-bezier(.4,0,.2,1),transform .15s cubic-bezier(.4,0,.2,1)}
 .ctrl-btn:hover{background:rgba(0,93,170,.3);border-color:var(--ua-blue)}
 .ctrl-btn.active{border-color:var(--ua-accent);color:var(--ua-accent)}
-#search-box{position:absolute;top:10px;left:10px;z-index:1000}
-#search-input{background:rgba(10,14,20,.9);border:1px solid var(--ua-border);color:var(--ua-text);padding:7px 12px;border-radius:4px;font-family:var(--font-mono);font-size:11px;width:220px;backdrop-filter:blur(8px)}
+#search-box{position:absolute;top:10px;left:10px;z-index:712}
+#search-input{background:rgba(10,14,20,.9);border:1px solid var(--ua-border);color:var(--ua-text);padding:7px 12px;border-radius:4px;font-family:var(--font-mono);font-size:11px;width:220px}
 #search-input:focus{border-color:var(--ua-accent)}
 #search-input:focus-visible{outline:2px solid var(--ua-accent);outline-offset:1px}
-#search-results{position:absolute;top:34px;left:0;background:rgba(17,24,39,.95);border:1px solid var(--ua-border);border-radius:4px;max-height:300px;overflow-y:auto;width:280px;display:none;backdrop-filter:blur(8px)}
+#search-results{position:absolute;top:34px;left:0;background:rgba(17,24,39,.95);border:1px solid var(--ua-border);border-radius:4px;max-height:300px;overflow-y:auto;width:280px;display:none;z-index:775}
 .search-result{padding:6px 12px;cursor:pointer;border-bottom:1px solid rgba(30,41,59,.3);font-size:11px}
 .search-result:hover{background:rgba(0,93,170,.15)}
 
-/* Stats bar */
-#stats-bar{background:var(--ua-panel);border-top:1px solid var(--ua-border);padding:6px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:10px;flex-shrink:0}
-.stat-item{display:flex;align-items:center;gap:4px}
-.stat-val{color:var(--ua-accent);font-weight:700;font-size:12px;font-family:var(--font-mono)}
-.stat-label{color:var(--ua-muted)}
+/* STATS CAPSULE (= #stats-bar restyled, floating bottom-left) */
+#stats-bar{position:fixed;left:16px;bottom:24px;z-index:715;display:flex;align-items:center;padding:8px 12px;gap:0;flex-wrap:nowrap;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;font-size:10px;max-width:calc(100vw - 32px);overflow-x:auto;scrollbar-width:none}
+#stats-bar::-webkit-scrollbar{display:none}
+.stat-item{display:flex;align-items:baseline;gap:4px;padding:0 9px;white-space:nowrap}
+.stat-val{color:var(--ua-text);font-weight:700;font-size:10px;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.stat-label{color:var(--ua-dim);font-size:9px;letter-spacing:.6px;text-transform:uppercase}
 .stat-sep{color:var(--ua-border);margin:0 4px}
+
+/* ATTRIBUTION (new — fixed micro-text bottom-left, below the stats capsule) */
+#attribution{position:fixed;left:18px;bottom:8px;z-index:710;max-width:520px;font-size:8px;line-height:1.5;color:rgba(226,232,240,.55);text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.7)}
+#attribution a{color:rgba(226,232,240,.62)}
+#attribution a:hover{color:var(--ua-accent)}
+#attribution .sep{color:rgba(148,163,184,.3);margin:0 3px}
+
+/* LEGAL POPOVER (new — native <details>, replaces footer links + disclaimer trigger) */
+#legal-details{position:relative;display:flex;align-items:stretch;flex:0 0 auto}
+#legal-details>summary{list-style:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 12px 7px;border-radius:6px;color:var(--ua-muted);min-width:0;background:none;font-size:15px;font-weight:700;font-family:var(--font-display);cursor:pointer;transition:background-color .15s,color .15s}
+#legal-details>summary::-webkit-details-marker{display:none}
+#legal-details>summary:hover{background:rgba(148,163,184,.07);color:var(--ua-text)}
+#legal-details[open]>summary{background:var(--ua-blue-soft);color:var(--ua-accent)}
+#legalpop{position:fixed;bottom:96px;right:16px;z-index:780;width:300px;max-width:calc(100vw - 32px);padding:13px 14px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px}
+#legalpop .ltitle{font-family:var(--font-display);font-weight:700;font-size:11px;letter-spacing:.5px;color:var(--ua-text);margin-bottom:8px;text-transform:uppercase}
+#legalpop .lgrid{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11px;line-height:1.5}
+#legalpop a{color:var(--ua-muted);text-decoration:none}
+#legalpop a:hover{color:var(--ua-accent)}
+#legalpop .donate{color:var(--ua-amber)}
+#legalpop .lhubs{margin-top:9px;padding-top:9px;border-top:1px solid var(--ua-border);display:flex;flex-wrap:wrap;gap:5px 10px;font-size:10px}
+#legalpop .lhubs a{font-family:var(--font-mono);letter-spacing:.5px}
+#legalpop .lnote{margin-top:9px;padding-top:9px;border-top:1px solid var(--ua-border);font-size:9px;color:var(--ua-dim);line-height:1.6}
+#legalpop .lnote a{color:var(--ua-muted)}
+#legalpop .lnote .sep{color:var(--ua-border);margin:0 3px}
+.dockdiv{width:1px;align-self:stretch;background:var(--ua-border);margin:4px 4px;flex-shrink:0}
 
 /* Popups */
 .leaflet-popup-content-wrapper{background:rgba(17,24,39,.96)!important;color:var(--ua-text)!important;border:1px solid var(--ua-border)!important;border-radius:8px!important;box-shadow:0 8px 32px rgba(0,0,0,.6)!important;backdrop-filter:blur(12px)!important;font-family:var(--font-mono)!important}
@@ -553,8 +611,8 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .wx-explainer{background:rgba(0,93,170,.06);border:1px solid rgba(0,93,170,.15);border-radius:4px;padding:8px 10px;margin:4px 0 8px;font-size:10px;line-height:1.5;color:var(--ua-text)}
 .wx-explainer .icon{font-size:12px;margin-right:4px}
 
-/* Offline Banner */
-#offline-banner{display:none;background:var(--ua-red);color:#fff;text-align:center;padding:8px 16px;font-size:11px;font-weight:600;letter-spacing:.5px;z-index:9999}
+/* Offline Banner (re-anchored as a fixed top overlay above the canopy) */
+#offline-banner{display:none;position:fixed;top:0;left:0;right:0;background:var(--ua-red);color:#fff;text-align:center;padding:8px 16px;font-size:11px;font-weight:600;letter-spacing:.5px;z-index:9999}
 #offline-banner.show{display:block}
 
 /* Error/Empty States */
@@ -571,7 +629,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 @keyframes ctrlPanelIn{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 .tab-content.active{animation:fadeIn .2s ease}
 
-#sched-table-wrap{max-height:calc(100vh - 260px)}
+#sched-table-wrap{max-height:calc(100dvh - 320px)}
 /* Prevent overflow:hidden on card from trapping scroll events when table is short */
 #tab-schedule .card[style*="overflow:hidden"]{overflow:visible!important}
 /* ═══ REDUCED MOTION (a11y) ═══ */
@@ -585,49 +643,52 @@ tbody td{padding:5px 8px;white-space:nowrap}
 
 /* ═══ MOBILE RESPONSIVE ═══ */
 @media(max-width:768px){
-  body{font-size:14px;height:calc(100vh - 56px);height:calc(100dvh - 56px)}
-  /* ── Compact Header ── */
-  #header{flex-direction:row;gap:0;padding:0 12px;height:44px;text-align:left;align-items:center}
-  #header h1{font-size:14px;letter-spacing:1px;white-space:nowrap}
+  body{font-size:14px}
+  /* ── MOBILE CANOPY — two stacked floating rows (restyled #header + #hub-health-bar) ── */
+  /* Row 1: wordmark + live + search toggle */
+  #header{position:fixed;top:12px;left:12px;right:12px;z-index:770;flex-direction:row;gap:8px;padding:9px 11px;height:auto;border-radius:6px;text-align:left;align-items:center}
+  #header h1{font-size:13px;letter-spacing:.4px;white-space:nowrap}
   #header h1 span[style]{display:none}
-  #brand-strip{flex-direction:column;align-items:flex-start;padding:4px 12px;font-size:9px}
-  #brand-strip p{display:none}
-  #global-search-wrap{position:absolute!important;top:44px;left:0;right:0;flex:none!important;order:0;display:none;padding:8px 12px;background:var(--ua-dark);border-bottom:1px solid var(--ua-border);z-index:999}
+  #global-search-wrap{position:fixed!important;top:108px;left:12px;right:12px;flex:none!important;order:0;display:none;z-index:775}
   #global-search-wrap.mobile-search-open{display:block!important}
-  #header-right{font-size:14px;gap:8px;margin-left:auto}
+  #global-search-input{padding:8px 10px;font-size:12px}
+  #header-right{font-size:12px;gap:8px;margin-left:auto}
   #header-right #countdown,#header-right #clock{display:none}
   #mobile-search-toggle{display:flex!important}
-  /* ── Hide top tab bar, show bottom nav ── */
+  /* Row 2: scrolling hub values (floating row directly below row 1) */
+  #hub-health-bar{position:fixed;top:62px;left:12px;right:12px;z-index:770;display:flex!important;flex-wrap:nowrap;justify-content:flex-start;align-items:center;height:28px;padding:0 9px;gap:0;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 90%,transparent 100%);mask-image:linear-gradient(90deg,#000 90%,transparent 100%)}
+  #hub-health-bar::-webkit-scrollbar{display:none}
+  #hub-health-bar .hh-label,#hub-health-bar .hh-explainer,#hub-health-bar .hh-info,#hub-health-bar .hh-sep,#hub-health-bar .hh-avg{display:none!important}
+  #hub-health-bar .hh-hub{padding:2px 6px;flex-shrink:0;border-radius:4px;margin:0;min-height:auto;display:inline-flex;align-items:baseline}
+  #hub-health-bar .hh-hub a{display:inline-flex;align-items:baseline}
+  /* ── Tab dock on mobile: desktop #tab-bar hidden, mobile bottom-nav is the floating dock ── */
   #tab-bar{display:none!important}
+  /* Desktop dock + its legal popover are hidden on mobile; legal/about/donate remain reachable
+     via the Sources tab and the sr-only site nav (crawlable). */
+  #legal-details{display:none}
+  /* Mobile bottom nav = the floating dock (restyled below as a floating rounded bar) */
   #mobile-bottom-nav{display:flex!important}
-  .tab-content{padding-bottom:60px}
   /* ── Live Ops ── */
-  #tab-live{flex:1;min-height:0}
-  #tab-live .ops-layout{flex-direction:column}
-  /* Sidebar collapsed by default on mobile */
-  #tab-live .sidebar{width:100%;max-height:none;border-right:none;border-bottom:1px solid var(--ua-border);display:none;position:relative;z-index:10}
+  #tab-live .ops-layout{display:block}
+  /* Sidebar: floating panel, collapsed by default on mobile via toggle */
+  #tab-live .sidebar{left:12px;right:12px;width:auto;top:96px;bottom:auto;max-height:none;display:none;z-index:706}
   #tab-live .sidebar.mobile-sidebar-open{display:block;max-height:60vh;overflow-y:auto}
   #tab-live .sidebar #sidebar-extra-filters{display:none}
   #tab-live .sidebar #sidebar-filters-toggle{display:block}
   #tab-live .sidebar #sidebar-extra-filters.show{display:block}
-  #mobile-sidebar-toggle{display:flex!important}
-  #tab-live .map-area{height:calc(100vh - 100px);min-height:300px}
-  #tab-live #map{height:100%}
+  #mobile-sidebar-toggle{display:flex!important;position:fixed;top:96px;left:12px;z-index:707;width:auto;margin:0}
   /* ── Map controls: expandable FAB + floating panel ── */
-  #tab-live #controls{top:auto;bottom:8px;right:auto;left:8px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
-  #ctrl-panel{display:none;flex-direction:column;background:rgba(10,14,20,.95);border:1px solid var(--ua-border);border-radius:12px;padding:6px;gap:4px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 4px 20px rgba(0,0,0,.5)}
+  #tab-live #controls{top:auto;bottom:70px;right:auto;left:12px;transform:none;display:flex;flex-direction:column;align-items:flex-start;gap:8px;z-index:712}
+  #ctrl-panel{display:none;flex-direction:column;background:rgba(10,14,20,.95);border:1px solid var(--ua-border);border-radius:12px;padding:6px;gap:4px;box-shadow:0 4px 20px rgba(0,0,0,.5)}
   #controls.ctrl-menu-open #ctrl-panel{display:flex;animation:ctrlPanelIn .2s ease-out}
   #ctrl-panel .ctrl-btn{display:flex;padding:10px 14px;font-size:12px;min-height:40px;border-radius:8px;white-space:nowrap;background:rgba(30,41,59,.4);border-color:transparent}
   #ctrl-panel .ctrl-btn.active{background:rgba(0,93,170,.2);border-color:var(--ua-accent);color:var(--ua-accent)}
-  #mobile-ctrl-toggle{display:flex!important;width:44px;height:44px;border-radius:50%;align-items:center;justify-content:center;padding:0;background:rgba(10,14,20,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 2px 12px rgba(0,0,0,.4);min-height:44px;color:var(--ua-accent);border:1px solid var(--ua-border)}
+  #mobile-ctrl-toggle{display:flex!important;width:44px;height:44px;border-radius:50%;align-items:center;justify-content:center;padding:0;background:rgba(10,14,20,.92);box-shadow:0 2px 12px rgba(0,0,0,.4);min-height:44px;color:var(--ua-accent);border:1px solid var(--ua-border)}
   .ctrl-btn{min-height:32px}
-  /* ── Stats bar: horizontal scrollable strip (Changes 2, 7) ── */
-  #stats-bar{padding:4px 10px;gap:0;display:flex!important;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-height:40px}
-  #stats-bar::-webkit-scrollbar{display:none}
-  .stat-sep{display:none}
-  .stat-item{min-width:auto;text-align:center;flex-direction:row;gap:4px;padding:4px 10px;white-space:nowrap;flex-shrink:0;background:rgba(30,41,59,.4);border-radius:12px;margin:2px 3px}
-  .stat-val{font-size:13px;font-weight:700}
-  .stat-label{font-size:10px;color:var(--ua-muted)}
+  /* ── Stats capsule: hidden on mobile per plan D5 ── */
+  #stats-bar{display:none!important}
+  /* ── Attribution hidden on mobile (lives in legal popover) ── */
+  #attribution{display:none}
   /* Schedule tab mobile */
   #tab-schedule .card:first-child > div{flex-direction:column;gap:8px}
   #tab-schedule .card:first-child > div > div{flex-direction:column;gap:6px;width:100%}
@@ -678,40 +739,37 @@ tbody td{padding:5px 8px;white-space:nowrap}
   .watch-remove{min-width:40px;display:inline-flex;align-items:center;justify-content:center}
   .popup-links .watch-btn,.popup-links .share-btn,.popup-links a{flex:1 1 calc(50% - 6px);justify-content:center}
   .mf-actions{flex-wrap:wrap}
-  /* Footer mobile */
+  /* Modal mobile */
   #disclaimer-modal > div{margin:10px;padding:16px}
-  /* ── Ticker: static single-line with fade rotation (Change 3) ── */
-  .ticker-wrap{overflow:hidden}
+  /* ── Non-map tab panels clear the two-row canopy (top) and floating dock (bottom) ── */
+  .tab-content.active{top:98px;bottom:74px}
+  #tab-live.active{top:0;bottom:0}
+  /* ── Ticker: hidden on mobile (the two-row canopy prioritizes hub values; ticker folds) ── */
+  .ticker-wrap{display:none}
   .ticker{animation:none!important;transform:none!important;overflow:hidden;position:relative}
-  .ticker .ticker-item{display:none;position:absolute;left:60px;right:0;top:0;height:100%;align-items:center;overflow:hidden;text-overflow:ellipsis;padding:0 10px;transition:opacity .4s ease}
+  .ticker .ticker-item{display:none;position:absolute;left:0;right:0;top:0;height:100%;align-items:center;overflow:hidden;text-overflow:ellipsis;padding:0 10px;transition:opacity .4s ease}
   .ticker .ticker-item.mobile-active{display:flex;opacity:1}
   .ticker .ticker-item.mobile-fade-out{opacity:0}
-  /* ── Bottom nav: 4 tabs max, larger icons (Change 4) ── */
-  #mobile-bottom-nav button .bnav-icon{font-size:22px}
-  #mobile-bottom-nav button .bnav-label{font-size:12px}
+  /* ── Mobile dock = #mobile-bottom-nav restyled as a floating rounded bar 12px above bottom ── */
+  #mobile-bottom-nav button .bnav-icon{font-size:20px}
+  #mobile-bottom-nav button .bnav-label{font-size:11px}
   #mobile-bottom-nav .bnav-overflow-item{display:none}
   #mobile-more-btn{display:flex!important}
-  #mobile-more-menu{display:none;position:fixed;bottom:58px;right:8px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:8px;padding:6px 0;z-index:9999;box-shadow:0 -4px 20px rgba(0,0,0,.5);min-width:160px}
+  #mobile-more-menu{display:none;position:fixed;bottom:74px;right:12px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:6px 0;z-index:781;box-shadow:0 -4px 20px rgba(0,0,0,.5);min-width:160px}
   #mobile-more-menu.open{display:block}
   #mobile-more-menu button{display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;color:var(--ua-text);font-family:var(--font-ui);font-size:13px;padding:10px 16px;cursor:pointer;transition:background-color .15s cubic-bezier(.4,0,.2,1)}
   #mobile-more-menu button:hover{background:rgba(30,41,59,.5)}
   #mobile-more-menu button .bnav-icon{font-size:18px}
-  /* ── Hub health bar: compact pill grid on mobile (Change 5) ── */
-  #hub-health-bar{display:flex!important;flex-wrap:wrap;justify-content:center;padding:3px 6px;gap:0}
-  #hub-health-bar .hh-label,#hub-health-bar .hh-explainer,#hub-health-bar .hh-info,#hub-health-bar .hh-sep,#hub-health-bar .hh-avg{display:none!important}
-  #hub-health-bar .hh-hub{padding:2px 6px;font-size:10px;flex-shrink:0;background:rgba(30,41,59,.4);border-radius:8px;margin:1px 2px;min-height:22px;display:inline-flex;align-items:center}
-  #hub-health-bar .hh-hub a{min-height:22px;display:inline-flex;align-items:center}
-  #tip-strip{display:none!important}
-  /* ── Footer: condensed single line (Change 6) ── */
-  .footer-hub-links,.footer-data-sources{display:none!important}
-  /* ── Header live count emphasis (Change 7) ── */
+  /* ── Tip strip floating capsule re-anchored below the two-row canopy ── */
+  #tip-strip{top:96px;left:12px;right:12px;transform:none;max-width:none}
+  /* ── Header live count emphasis ── */
   #header-flight-count{font-size:11px!important;color:var(--ua-accent)!important;font-weight:600}
 }
-/* ── Bottom Nav (hidden on desktop) ── */
-#mobile-bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--ua-panel);border-top:1px solid var(--ua-border);z-index:9998;align-items:stretch;justify-content:space-around}
-#mobile-bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--ua-muted);font-family:var(--font-ui);font-size:11px;cursor:pointer;padding:4px 0;transition:color .2s cubic-bezier(.4,0,.2,1);min-height:44px}
-#mobile-bottom-nav button .bnav-icon{font-size:18px;line-height:1}
-#mobile-bottom-nav button.active{color:var(--ua-accent)}
+/* ── Mobile Bottom Nav / floating dock (hidden on desktop) ── */
+#mobile-bottom-nav{display:none;position:fixed;bottom:12px;left:12px;right:12px;height:auto;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;z-index:760;align-items:stretch;justify-content:space-around;padding:6px 6px}
+#mobile-bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;border-radius:6px;color:var(--ua-muted);font-family:var(--font-ui);font-size:11px;cursor:pointer;padding:6px 2px 5px;transition:color .2s cubic-bezier(.4,0,.2,1),background-color .15s;min-height:44px}
+#mobile-bottom-nav button .bnav-icon{font-size:20px;line-height:1}
+#mobile-bottom-nav button.active{color:var(--ua-accent);background:var(--ua-blue-soft)}
 #mobile-bottom-nav button.active .bnav-label{color:var(--ua-accent)}
 #mobile-more-btn{display:none}
 #mobile-more-menu{display:none}
@@ -759,21 +817,21 @@ tbody td{padding:5px 8px;white-space:nowrap}
 @keyframes obFadeIn{from{opacity:0}to{opacity:1}}
 @media(max-width:500px){#onboarding-card{padding:24px 18px}#onboarding-card h2{font-size:17px}}
 
-/* Hub Health Bar */
-#hub-health-bar{background:var(--ua-panel);border-bottom:1px solid var(--ua-border);padding:6px 16px;font-size:10px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;overflow:hidden;flex-shrink:0}
-#hub-health-bar .hh-label{color:var(--ua-accent);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:4px;font-size:9px;white-space:nowrap}
-#hub-health-bar .hh-explainer{color:var(--ua-muted);font-size:8px;margin-right:4px;white-space:nowrap}
-#hub-health-bar .hh-info{color:var(--ua-muted);font-size:9px;cursor:pointer;margin-right:8px;opacity:.6;position:relative;border:1px solid var(--ua-border);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+/* Hub Health Bar — inline hub cluster inside the canopy (band styling unset) */
+#hub-health-bar{display:flex;align-items:center;gap:0;flex-shrink:1;min-width:0;background:none;border:none;padding:0;overflow:hidden;font-size:9px}
+#hub-health-bar .hh-label,#hub-health-bar .hh-explainer{display:none}
+#hub-health-bar .hh-info{color:var(--ua-dim);font-size:9px;cursor:pointer;margin-right:6px;opacity:.6;position:relative;border:1px solid var(--ua-border);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
 #hub-health-bar .hh-info:hover{opacity:1;color:var(--ua-accent)}
-#hub-health-bar .hh-tooltip{display:none;position:absolute;top:20px;left:0;background:rgba(17,24,39,.95);border:1px solid var(--ua-border);border-radius:4px;padding:8px 10px;font-size:9px;color:var(--ua-text);white-space:normal;width:260px;z-index:9999;line-height:1.4;backdrop-filter:blur(8px)}
+#hub-health-bar .hh-tooltip{display:none;position:absolute;top:20px;left:0;background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:4px;padding:8px 10px;font-size:9px;color:var(--ua-text);white-space:normal;width:260px;z-index:9999;line-height:1.4}
 #hub-health-bar .hh-info:hover .hh-tooltip,#hub-health-bar .hh-info:focus .hh-tooltip,#hub-health-bar .hh-info:focus-within .hh-tooltip{display:block}
-.hh-hub{display:inline-flex;align-items:center;gap:3px;padding:4px 8px;border-radius:3px;white-space:nowrap;min-height:28px}
-.hh-hub .hh-code{font-weight:700;color:var(--ua-text)}
-.hh-hub .hh-pct{font-weight:600}
-.hh-sep{color:var(--ua-border);margin:0 2px}
+.hh-hub{display:inline-flex;align-items:baseline;gap:4px;padding:3px 7px;border-radius:4px;white-space:nowrap;transition:background .15s;min-height:auto}
+.hh-hub:hover{background:rgba(148,163,184,.08)}
+.hh-hub .hh-code{font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.6px;color:var(--ua-dim)}
+.hh-hub .hh-pct{font-family:var(--font-mono);font-size:9px;font-weight:700;font-variant-numeric:tabular-nums}
+.hh-sep{display:none}
 
-/* Tip Strip */
-#tip-strip{background:var(--ua-panel);border-bottom:1px solid var(--ua-border);padding:4px 16px;font-size:10px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+/* Tip Strip — floating capsule below the canopy (JS toggles inline display) */
+#tip-strip{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:765;max-width:calc(100vw - 32px);background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:6px 14px;font-size:10px;align-items:center;gap:8px}
 #tip-strip .tip-badge{background:var(--ua-blue);color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0}
 #tip-strip .tip-text{color:var(--ua-muted);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .3s ease}
 #tip-strip .tip-text.tip-fade{opacity:0}
@@ -832,7 +890,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 #watch-header-btn{position:relative;background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 8px;border-radius:4px;cursor:pointer;font-family:var(--font-ui);font-size:11px;transition:border-color .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1)}
 #watch-header-btn:hover{border-color:var(--ua-accent);color:var(--ua-accent)}
 .watch-badge{position:absolute;top:-4px;right:-4px;background:var(--ua-red);color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:6px;min-width:14px;text-align:center}
-#watch-panel{display:none;position:absolute;top:36px;right:0;background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:6px;width:340px;max-height:400px;overflow-y:auto;z-index:9999;backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.5)}
+#watch-panel{display:none;position:fixed;top:76px;right:16px;background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:6px;width:340px;max-width:calc(100vw - 32px);max-height:400px;overflow-y:auto;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.5)}
 #watch-panel.show{display:block}
 .watch-panel-header{padding:10px 12px;border-bottom:1px solid var(--ua-border);font-size:10px;color:var(--ua-accent);font-weight:700;text-transform:uppercase;letter-spacing:1px;display:flex;justify-content:space-between;align-items:center}
 .watch-flight-item{padding:8px 12px;border-bottom:1px solid rgba(30,41,59,.3);font-size:10px;display:flex;justify-content:space-between;align-items:center}
@@ -859,8 +917,8 @@ table,thead th,tbody td,.stat-val,.metric-val,.big-number,.ticker,.ticker-item,.
 .shimmer-loader *{visibility:hidden}
 .irops-empty,.popup-times-loading{background:linear-gradient(90deg,var(--ua-panel) 25%,rgba(30,41,59,.6) 50%,var(--ua-panel) 75%);background-size:200% 100%;animation:shimmerSlide 1.5s ease-in-out infinite;border-radius:4px}
 
-/* ═══ FR24 CREDIT USAGE WIDGET ═══ */
-#fr24-credit-widget{position:fixed;bottom:8px;right:8px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:8px 12px;font-family:var(--font-mono);font-size:11px;color:var(--ua-muted);z-index:900;min-width:200px;opacity:.85;transition:opacity .2s}
+/* ═══ FR24 CREDIT USAGE WIDGET (above the dock, bottom-right) ═══ */
+#fr24-credit-widget{position:fixed;bottom:24px;right:16px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:8px 12px;font-family:var(--font-mono);font-size:11px;color:var(--ua-muted);z-index:718;min-width:200px;opacity:.85;transition:opacity .2s}
 #fr24-credit-widget:hover{opacity:1}
 .credit-widget-label{margin-bottom:4px}
 .credit-widget-bar-bg{height:6px;background:var(--ua-border);border-radius:3px;overflow:hidden}

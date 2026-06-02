@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v9'; // bumped to purge the v8 precache that pinned the old dashboard.js / style.css
+const CACHE_VERSION = 'v10'; // bumped for Variant J canopy chrome redesign (floating header/footer)
 const PAGE_CACHE = `blueboard-pages-${CACHE_VERSION}`;
 const DATA_CACHE = `blueboard-data-${CACHE_VERSION}`;
 const STATIC_CACHE = `blueboard-static-${CACHE_VERSION}`;
