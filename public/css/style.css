@@ -35,15 +35,20 @@ h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
 #map::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 50% 38%,transparent 42%,rgba(7,11,18,.5) 100%)}
 
 /* Ticker — alert zone inline inside the canopy, flex-grows to fill the middle */
-/* Ticker fix: full canopy height + vertical centering so items sit mid-bar, not at the top.
-   Marquee animates .ticker (transform) and measures .ticker-cycle width — height-only
-   changes here do not affect the horizontal width measurement, so the scroll is preserved. */
-.ticker-wrap{flex:1 1 120px;min-width:0;display:flex;align-items:center;gap:7px;padding:0 4px;overflow:hidden;background:none;border:none;height:100%;position:static;z-index:auto}
+/* Ticker: fade-rotation mode — one item at a time, fully readable, crossfading every 5s.
+   The marquee scroll only runs in containers ≥700px wide (initTickerAnimation checks), which
+   never happens in the canopy. Items are absolutely positioned against .ticker and toggled by
+   the rotation JS via .mobile-active / .mobile-fade-out. */
+.ticker-wrap{flex:1 1 160px;min-width:0;display:flex;align-items:center;gap:7px;padding:0 4px;overflow:hidden;background:none;border:none;height:100%;position:static;z-index:auto}
 .ticker-label{display:none}
-.ticker{display:flex;align-items:center;flex:1 1 auto;min-width:0;height:100%;white-space:nowrap;will-change:transform;overflow:hidden}
+.ticker{display:block;position:relative;flex:1 1 auto;min-width:0;height:100%;white-space:nowrap}
+/* Belt-and-suspenders: the canopy ticker never scrolls, even if stale JS sets an inline animation */
+#header .ticker{animation:none!important;transform:none!important}
 .ticker-cycle{display:flex;align-items:center;height:100%;flex:none}
 @keyframes tickerScroll{0%{transform:translate3d(0,0,0)}100%{transform:translate3d(var(--ticker-offset,-50%),0,0)}}
-.ticker-item{display:inline-flex;align-items:center;padding:0 40px;font-family:var(--font-ui);font-size:11px;font-weight:500;letter-spacing:.3px;color:var(--ua-text)}
+.ticker .ticker-item{display:none;position:absolute;inset:0;align-items:center;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-ui);font-size:11px;font-weight:500;letter-spacing:.3px;color:var(--ua-text);transition:opacity .4s ease}
+.ticker .ticker-item.mobile-active{display:flex;opacity:1}
+.ticker .ticker-item.mobile-fade-out{opacity:0}
 .ticker-item.info{color:var(--ua-green)}.ticker-item.advisory{color:var(--ua-yellow)}.ticker-item.critical{color:var(--ua-red)}
 
 /* CANOPY (= #header restyled as the floating top bar) */
@@ -66,10 +71,9 @@ h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
 .status-dot.live{background:var(--ua-green);box-shadow:0 0 6px rgba(34,197,94,.6);animation:pulse 2s ease-in-out infinite}
 #countdown{font-variant-numeric:tabular-nums;color:var(--ua-muted);font-family:var(--font-mono);font-size:10px;white-space:nowrap}
 #clock{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--ua-text);flex-shrink:0;font-variant-numeric:tabular-nums}
-/* BUG 1 fix: below ~1500px the canopy is tight — drop the ~95px "Next refresh" countdown text
-   to free space for the search + hub bar. Scoped above the mobile breakpoint so it never
-   collides with the mobile rule (which already hides #countdown at ≤768px). */
-@media(max-width:1500px){#header-right #countdown{display:none}}
+/* "Next refresh" countdown removed from the canopy at all widths (it ate ~95px and the clock
+   already communicates recency). The element stays in the DOM — JS keeps writing to it. */
+#header-right #countdown{display:none}
 
 /* HUB CLUSTER (= #hub-health-bar inline in the canopy) */
 /* main rule restyled in the "Hub Health Bar" section further down */
@@ -133,7 +137,7 @@ main{display:contents}
    min-width:0 lets it shrink; the media query below hides it entirely once the cap squeezes it
    below ~3 stats (≤1080px), since a 30–110px corner sliver reads as broken. Mobile (≤768px) hides
    it via the existing rule. */
-#stats-bar{position:fixed;left:16px;bottom:24px;z-index:715;display:flex;align-items:center;padding:8px 12px;gap:0;flex-wrap:nowrap;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;font-size:10px;min-width:0;max-width:calc(50vw - 416px);overflow:hidden;scrollbar-width:none}
+#stats-bar{position:fixed;left:16px;bottom:24px;z-index:715;display:flex;align-items:center;padding:7px 8px;gap:0;flex-wrap:wrap;row-gap:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;font-size:10px;min-width:0;max-width:calc(50vw - 416px);overflow:hidden;scrollbar-width:none}
 /* Hide the capsule in the dead zone (769–1080px) where the dock-clearance cap collapses it to an
    unreadable corner sliver. Scoped above the 768px mobile breakpoint so it never double-fires. */
 @media(min-width:769px) and (max-width:1080px){#stats-bar{display:none}}
@@ -141,9 +145,11 @@ main{display:contents}
    broken; .stat-item padding spaces them. */
 #stats-bar .stat-sep{display:none}
 #stats-bar::-webkit-scrollbar{display:none}
-.stat-item{display:flex;align-items:baseline;gap:4px;padding:0 9px;white-space:nowrap}
-.stat-val{color:var(--ua-text);font-weight:700;font-size:10px;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
-.stat-label{color:var(--ua-dim);font-size:9px;letter-spacing:.6px;text-transform:uppercase}
+/* Stacked value-over-label (approved variant-j format): half the width of the old inline
+   layout, so all 5 stats fit in one row at ≥1440px and wrap cleanly below that. */
+.stat-item{display:flex;flex-direction:column;align-items:center;gap:1px;padding:0 7px;white-space:nowrap}
+.stat-val{color:var(--ua-text);font-weight:700;font-size:13px;line-height:1.1;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.stat-label{color:var(--ua-dim);font-size:7px;letter-spacing:.5px;text-transform:uppercase}
 .stat-sep{color:var(--ua-border);margin:0 4px}
 
 /* ATTRIBUTION (new — fixed micro-text bottom-left, below the stats capsule) */
@@ -778,12 +784,10 @@ tbody td{padding:5px 8px;white-space:nowrap}
   /* ── Non-map tab panels clear the two-row canopy (top) and floating dock (bottom) ── */
   .tab-content.active{top:98px;bottom:74px}
   #tab-live.active{top:0;bottom:0}
-  /* ── Ticker: hidden on mobile (the two-row canopy prioritizes hub values; ticker folds) ── */
+  /* ── Ticker: hidden on mobile (the two-row canopy prioritizes hub values; ticker folds).
+     Fade-rotation item styles live in the base rules now (they apply at all widths). ── */
   .ticker-wrap{display:none}
-  .ticker{animation:none!important;transform:none!important;overflow:hidden;position:relative}
-  .ticker .ticker-item{display:none;position:absolute;left:0;right:0;top:0;height:100%;align-items:center;overflow:hidden;text-overflow:ellipsis;padding:0 10px;transition:opacity .4s ease}
-  .ticker .ticker-item.mobile-active{display:flex;opacity:1}
-  .ticker .ticker-item.mobile-fade-out{opacity:0}
+  .ticker{animation:none!important;transform:none!important}
   /* ── Mobile dock = #mobile-bottom-nav restyled as a floating rounded bar 12px above bottom ── */
   #mobile-bottom-nav button .bnav-icon{font-size:20px}
   #mobile-bottom-nav button .bnav-label{font-size:11px}
