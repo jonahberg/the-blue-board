@@ -35,12 +35,15 @@ h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
 #map::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 50% 38%,transparent 42%,rgba(7,11,18,.5) 100%)}
 
 /* Ticker — alert zone inline inside the canopy, flex-grows to fill the middle */
-.ticker-wrap{flex:1 1 auto;min-width:40px;display:flex;align-items:center;gap:7px;padding:0 4px;overflow:hidden;background:none;border:none;height:auto;position:static;z-index:auto}
+/* Ticker fix: full canopy height + vertical centering so items sit mid-bar, not at the top.
+   Marquee animates .ticker (transform) and measures .ticker-cycle width — height-only
+   changes here do not affect the horizontal width measurement, so the scroll is preserved. */
+.ticker-wrap{flex:1 1 120px;min-width:0;display:flex;align-items:center;gap:7px;padding:0 4px;overflow:hidden;background:none;border:none;height:100%;position:static;z-index:auto}
 .ticker-label{display:none}
-.ticker{display:flex;align-items:center;flex:1 1 auto;min-width:0;white-space:nowrap;will-change:transform;overflow:hidden}
-.ticker-cycle{display:flex;align-items:center;flex:none}
+.ticker{display:flex;align-items:center;flex:1 1 auto;min-width:0;height:100%;white-space:nowrap;will-change:transform;overflow:hidden}
+.ticker-cycle{display:flex;align-items:center;height:100%;flex:none}
 @keyframes tickerScroll{0%{transform:translate3d(0,0,0)}100%{transform:translate3d(var(--ticker-offset,-50%),0,0)}}
-.ticker-item{padding:0 40px;font-family:var(--font-ui);font-size:11px;font-weight:500;letter-spacing:.3px;color:var(--ua-text)}
+.ticker-item{display:inline-flex;align-items:center;padding:0 40px;font-family:var(--font-ui);font-size:11px;font-weight:500;letter-spacing:.3px;color:var(--ua-text)}
 .ticker-item.info{color:var(--ua-green)}.ticker-item.advisory{color:var(--ua-yellow)}.ticker-item.critical{color:var(--ua-red)}
 
 /* CANOPY (= #header restyled as the floating top bar) */
@@ -48,18 +51,25 @@ h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
 #header h1{font-family:var(--font-display);font-weight:700;font-size:14px;letter-spacing:.5px;color:#fff;white-space:nowrap;flex-shrink:0}
 #header h1 .ua{color:var(--ua-accent)}
 #header h1 span[style]{font-size:9px;color:var(--ua-muted);font-weight:400;letter-spacing:.5px}
+/* BUG: canopy overcrowded — hide the wordmark tagline on desktop (mobile already hides it).
+   h1 312px → ~150px, freeing ~160px for the hub bar + search. */
+#header h1 span[style]{display:none}
 #header-right{display:flex;align-items:center;gap:10px;font-size:11px;flex-shrink:0;margin-left:auto}
 #header-right > span:first-child{display:flex;align-items:center;gap:6px;white-space:nowrap}
 #header-flight-count{color:var(--ua-text);font-weight:700}
 .cdiv{width:1px;align-self:stretch;background:var(--ua-border);margin:0 6px;flex-shrink:0}
-/* canopy global search wrap */
-#global-search-wrap{position:relative;flex:0 1 240px;transition:flex-basis .2s ease}
+/* canopy global search wrap — BUG 1 fix: protected fixed width, never crushed */
+#global-search-wrap{position:relative;flex:0 0 200px;min-width:200px;transition:flex-basis .2s ease}
 #global-search-input{width:100%;background:rgba(8,12,20,.7);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:6px;font-family:var(--font-mono);font-size:10px}
 #global-search-input:focus{outline:none;border-color:var(--ua-accent);background:rgba(8,12,20,.92)}
 .status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;flex-shrink:0}
 .status-dot.live{background:var(--ua-green);box-shadow:0 0 6px rgba(34,197,94,.6);animation:pulse 2s ease-in-out infinite}
 #countdown{font-variant-numeric:tabular-nums;color:var(--ua-muted);font-family:var(--font-mono);font-size:10px;white-space:nowrap}
 #clock{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--ua-text);flex-shrink:0;font-variant-numeric:tabular-nums}
+/* BUG 1 fix: below ~1500px the canopy is tight — drop the ~95px "Next refresh" countdown text
+   to free space for the search + hub bar. Scoped above the mobile breakpoint so it never
+   collides with the mobile rule (which already hides #countdown at ≤768px). */
+@media(max-width:1500px){#header-right #countdown{display:none}}
 
 /* HUB CLUSTER (= #hub-health-bar inline in the canopy) */
 /* main rule restyled in the "Hub Health Bar" section further down */
@@ -113,7 +123,23 @@ main{display:contents}
 .search-result:hover{background:rgba(0,93,170,.15)}
 
 /* STATS CAPSULE (= #stats-bar restyled, floating bottom-left) */
-#stats-bar{position:fixed;left:16px;bottom:24px;z-index:715;display:flex;align-items:center;padding:8px 12px;gap:0;flex-wrap:nowrap;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;font-size:10px;max-width:calc(100vw - 32px);overflow-x:auto;scrollbar-width:none}
+/* BUG 3 fix: keep the stats capsule a single-row pill whose right edge always stops left of the
+   centered dock. Dock is 752px wide, centered → its left edge sits at calc(50vw - 376px). Stats
+   left edge is fixed at 16px. Setting max-width to calc(50vw - 416px) makes the right edge land at
+   16 + (50vw - 416) = 50vw - 400, a constant 24px left of the dock's 50vw - 376 left edge at EVERY
+   viewport width (both terms scale with 50vw, so the gap is width-independent). Stays nowrap (a
+   wrapped capsule builds a tall 9-row tower that re-collides with the dock vertically);
+   overflow:hidden clips any stats that don't fit cleanly instead of scrolling them under the dock.
+   min-width:0 lets it shrink; the media query below hides it entirely once the cap squeezes it
+   below ~3 stats (≤1080px), since a 30–110px corner sliver reads as broken. Mobile (≤768px) hides
+   it via the existing rule. */
+#stats-bar{position:fixed;left:16px;bottom:24px;z-index:715;display:flex;align-items:center;padding:8px 12px;gap:0;flex-wrap:nowrap;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;font-size:10px;min-width:0;max-width:calc(50vw - 416px);overflow:hidden;scrollbar-width:none}
+/* Hide the capsule in the dead zone (769–1080px) where the dock-clearance cap collapses it to an
+   unreadable corner sliver. Scoped above the 768px mobile breakpoint so it never double-fires. */
+@media(min-width:769px) and (max-width:1080px){#stats-bar{display:none}}
+/* No separators in the capsule — the cap clips to N items and bare │ at the clip edge looks
+   broken; .stat-item padding spaces them. */
+#stats-bar .stat-sep{display:none}
 #stats-bar::-webkit-scrollbar{display:none}
 .stat-item{display:flex;align-items:baseline;gap:4px;padding:0 9px;white-space:nowrap}
 .stat-val{color:var(--ua-text);font-weight:700;font-size:10px;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
@@ -646,17 +672,25 @@ tbody td{padding:5px 8px;white-space:nowrap}
   body{font-size:14px}
   /* ── MOBILE CANOPY — two stacked floating rows (restyled #header + #hub-health-bar) ── */
   /* Row 1: wordmark + live + search toggle */
-  #header{position:fixed;top:12px;left:12px;right:12px;z-index:770;flex-direction:row;gap:8px;padding:9px 11px;height:auto;border-radius:6px;text-align:left;align-items:center}
-  #header h1{font-size:13px;letter-spacing:.4px;white-space:nowrap}
+  /* Explicit 48px height (was height:auto → grew to 60px with real content and overlapped row 2).
+     Dividers hidden + tighter gaps + shrinkable h1 prevent right-edge clipping of utility icons. */
+  #header{position:fixed;top:12px;left:12px;right:12px;z-index:770;flex-direction:row;gap:6px;padding:0 11px;height:48px;overflow:hidden;border-radius:6px;text-align:left;align-items:center}
+  #header .cdiv{display:none}
+  /* Brand never truncates; the flight-count text gives way instead (its number is what matters) */
+  #header h1{font-size:13px;letter-spacing:.4px;white-space:nowrap;flex-shrink:0}
+  #header-flight-count{max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
   #header h1 span[style]{display:none}
   #global-search-wrap{position:fixed!important;top:108px;left:12px;right:12px;flex:none!important;order:0;display:none;z-index:775}
   #global-search-wrap.mobile-search-open{display:block!important}
   #global-search-input{padding:8px 10px;font-size:12px}
-  #header-right{font-size:12px;gap:8px;margin-left:auto}
-  #header-right #countdown,#header-right #clock{display:none}
+  #header-right{font-size:12px;gap:6px;margin-left:auto;flex-shrink:0}
+  /* Home-hub chip also hidden on mobile: the brand row is ~16px over budget at 390px and this is
+     the least essential icon (hub is still settable via onboarding). Keeps the wordmark untruncated. */
+  #header-right #countdown,#header-right #clock,#header-right #home-hub-btn{display:none}
   #mobile-search-toggle{display:flex!important}
   /* Row 2: scrolling hub values (floating row directly below row 1) */
-  #hub-health-bar{position:fixed;top:62px;left:12px;right:12px;z-index:770;display:flex!important;flex-wrap:nowrap;justify-content:flex-start;align-items:center;height:28px;padding:0 9px;gap:0;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 90%,transparent 100%);mask-image:linear-gradient(90deg,#000 90%,transparent 100%)}
+  /* Row 2 sits at 66px: row 1 is 12px top + 48px tall = 60px bottom, leaving a 6px gap */
+  #hub-health-bar{position:fixed;top:66px;left:12px;right:12px;z-index:770;display:flex!important;flex-wrap:nowrap;justify-content:flex-start;align-items:center;height:28px;padding:0 9px;gap:0;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 90%,transparent 100%);mask-image:linear-gradient(90deg,#000 90%,transparent 100%)}
   #hub-health-bar::-webkit-scrollbar{display:none}
   #hub-health-bar .hh-label,#hub-health-bar .hh-explainer,#hub-health-bar .hh-info,#hub-health-bar .hh-sep,#hub-health-bar .hh-avg{display:none!important}
   #hub-health-bar .hh-hub{padding:2px 6px;flex-shrink:0;border-radius:4px;margin:0;min-height:auto;display:inline-flex;align-items:baseline}
@@ -671,7 +705,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
   /* ── Live Ops ── */
   #tab-live .ops-layout{display:block}
   /* Sidebar: floating panel, collapsed by default on mobile via toggle */
-  #tab-live .sidebar{left:12px;right:12px;width:auto;top:96px;bottom:auto;max-height:none;display:none;z-index:706}
+  #tab-live .sidebar{left:12px;right:12px;width:auto;top:102px;bottom:auto;max-height:none;display:none;z-index:706}
   #tab-live .sidebar.mobile-sidebar-open{display:block;max-height:60vh;overflow-y:auto}
   #tab-live .sidebar #sidebar-extra-filters{display:none}
   #tab-live .sidebar #sidebar-filters-toggle{display:block}
@@ -761,7 +795,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #mobile-more-menu button:hover{background:rgba(30,41,59,.5)}
   #mobile-more-menu button .bnav-icon{font-size:18px}
   /* ── Tip strip floating capsule re-anchored below the two-row canopy ── */
-  #tip-strip{top:96px;left:12px;right:12px;transform:none;max-width:none}
+  /* tip-strip mobile override lives at end of file (must follow base rule for source-order) */
   /* ── Header live count emphasis ── */
   #header-flight-count{font-size:11px!important;color:var(--ua-accent)!important;font-weight:600}
 }
@@ -818,25 +852,48 @@ tbody td{padding:5px 8px;white-space:nowrap}
 @media(max-width:500px){#onboarding-card{padding:24px 18px}#onboarding-card h2{font-size:17px}}
 
 /* Hub Health Bar — inline hub cluster inside the canopy (band styling unset) */
-#hub-health-bar{display:flex;align-items:center;gap:0;flex-shrink:1;min-width:0;background:none;border:none;padding:0;overflow:hidden;font-size:9px}
+#hub-health-bar{display:flex;align-items:center;gap:0;flex:0 1 auto;flex-shrink:1;min-width:0;background:none;border:none;padding:0;overflow:hidden;font-size:9px}
 #hub-health-bar .hh-label,#hub-health-bar .hh-explainer{display:none}
-#hub-health-bar .hh-info{color:var(--ua-dim);font-size:9px;cursor:pointer;margin-right:6px;opacity:.6;position:relative;border:1px solid var(--ua-border);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+/* BUG 2 fix (a): hide the info "?" badge, the │ separators, and the trailing avg label on
+   desktop too (mobile already hides all of these). These ate width and clipped the bar to
+   ~102px so only 1.5 of 9 hubs showed. Placed OUTSIDE any media query so they apply in both
+   the desktop canopy and the mobile row-2 contexts. */
+#hub-health-bar .hh-info,#hub-health-bar .hh-sep,#hub-health-bar .hh-avg{display:none}
+/* BUG 2 fix (b): the status emoji (🟢🟡🔴⚪) is a bare text node inside .hh-hub — kill it with
+   font-size:0, then restore the real children. .hh-pct keeps the colored % (status signal);
+   the unclassed inline <span style="color:…">⚪ —</span> (no-data hubs, undefined pct) is also
+   restored so those hubs still render their dash instead of vanishing. */
+#hub-health-bar .hh-hub{font-size:0;gap:0}
+#hub-health-bar .hh-hub .hh-code{font-size:10px}
+#hub-health-bar .hh-hub .hh-pct{font-size:10px;margin-left:4px}
+#hub-health-bar .hh-hub > span[style]{font-size:10px;margin-left:4px}
+/* BUG 2 fix (a): info "?" badge hidden in the canopy (was display:inline-flex here, which —
+   being a later same-specificity rule — re-showed it and defeated the hide above). The hover
+   tooltip styling below is now dead but harmless. */
+#hub-health-bar .hh-info{display:none;color:var(--ua-dim);font-size:9px;cursor:pointer;margin-right:6px;opacity:.6;position:relative;border:1px solid var(--ua-border);border-radius:50%;width:14px;height:14px;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
 #hub-health-bar .hh-info:hover{opacity:1;color:var(--ua-accent)}
 #hub-health-bar .hh-tooltip{display:none;position:absolute;top:20px;left:0;background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:4px;padding:8px 10px;font-size:9px;color:var(--ua-text);white-space:normal;width:260px;z-index:9999;line-height:1.4}
 #hub-health-bar .hh-info:hover .hh-tooltip,#hub-health-bar .hh-info:focus .hh-tooltip,#hub-health-bar .hh-info:focus-within .hh-tooltip{display:block}
-.hh-hub{display:inline-flex;align-items:baseline;gap:4px;padding:3px 7px;border-radius:4px;white-space:nowrap;transition:background .15s;min-height:auto}
+/* BUG 2 fix (d): tighter padding so 9 compact hubs fit (~9×44px ≈ 400px budget). */
+.hh-hub{display:inline-flex;align-items:baseline;gap:4px;padding:2px 5px;border-radius:4px;white-space:nowrap;transition:background .15s;min-height:auto}
 .hh-hub:hover{background:rgba(148,163,184,.08)}
 .hh-hub .hh-code{font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.6px;color:var(--ua-dim)}
 .hh-hub .hh-pct{font-family:var(--font-mono);font-size:9px;font-weight:700;font-variant-numeric:tabular-nums}
 .hh-sep{display:none}
 
-/* Tip Strip — floating capsule below the canopy (JS toggles inline display) */
-#tip-strip{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:765;max-width:calc(100vw - 32px);background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:6px 14px;font-size:10px;align-items:center;gap:8px}
+/* Tip Strip — floating capsule centered just below the canopy (JS toggles inline display).
+   Capped at 600px so it reads as a compact pill rather than a full-width orphaned band. */
+#tip-strip{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:765;max-width:600px;width:max-content;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:6px 14px;font-size:10px;align-items:center;gap:8px}
 #tip-strip .tip-badge{background:var(--ua-blue);color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0}
 #tip-strip .tip-text{color:var(--ua-muted);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .3s ease}
 #tip-strip .tip-text.tip-fade{opacity:0}
 #tip-strip .tip-dismiss{background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:12px;padding:0 2px;opacity:.5;flex-shrink:0}
 #tip-strip .tip-dismiss:hover{opacity:1;color:var(--ua-text)}
+/* Mobile override must live AFTER the base rule above (same specificity → source order wins).
+   The earlier @media block's #tip-strip rule loses to the base rule; this one doesn't. */
+@media(max-width:768px){
+  #tip-strip{top:102px;left:12px;right:12px;transform:none;max-width:none;width:auto}
+}
 
 /* Equipment Change Badge */
 .equip-change-badge{display:inline-block;background:rgba(245,158,11,.15);color:var(--ua-yellow);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;margin-top:2px}
