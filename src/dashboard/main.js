@@ -591,10 +591,17 @@ switchToTab = function(tabId, updateHash) {
   }
 })();
 
-// ═══ MOBILE TICKER ROTATION (Change 3) ═══
+// ═══ TICKER FADE ROTATION (mobile + canopy) ═══
 (function(){
   var mobileTickerQuery = window.matchMedia('(max-width: 768px)');
-  var isMobile = function() { return mobileTickerQuery.matches; };
+  // Fade-rotation applies on mobile AND whenever the ticker lives inside the canopy
+  // (#header). A marquee scroll is unreadable in the canopy's narrow flex zone: content
+  // clips and there are long blank gaps between cycles. Structural check (not a width
+  // measurement) so it can't race against data population changing the zone's size.
+  var useFadeRotation = function() {
+    if (mobileTickerQuery.matches) return true;
+    return !!document.querySelector('#header .ticker-wrap');
+  };
   var rotateInterval = null;
   var fadeTimeout = null;
   var currentIndex = 0;
@@ -618,7 +625,7 @@ switchToTab = function(tabId, updateHash) {
     var items = ticker.querySelectorAll('.ticker-item');
     var uniqueCount = Math.ceil(items.length / 2);
 
-    if (!isMobile() || uniqueCount === 0) {
+    if (!useFadeRotation() || uniqueCount === 0) {
       clearMobileTickerState();
       return;
     }
@@ -641,7 +648,7 @@ switchToTab = function(tabId, updateHash) {
     if (uniqueCount <= 1) return;
 
     rotateInterval = setInterval(function() {
-      if (!isMobile()) { clearInterval(rotateInterval); rotateInterval = null; return; }
+      if (!useFadeRotation()) { clearInterval(rotateInterval); rotateInterval = null; return; }
       var items = ticker.querySelectorAll('.ticker-item');
       var uniqueCount = Math.ceil(items.length / 2);
       if (uniqueCount <= 1) return;
@@ -668,8 +675,9 @@ switchToTab = function(tabId, updateHash) {
   }
 
   function handleTickerViewportChange() {
-    if (isMobile()) setupMobileTicker();
-    else clearMobileTickerState();
+    // setupMobileTicker self-gates on useFadeRotation(), which covers both
+    // mobile and the narrow canopy zone — just re-run it on breakpoint changes.
+    setupMobileTicker();
   }
 
   // Mobile browsers emit resize events while their toolbar expands/collapses.
@@ -1753,8 +1761,11 @@ function initTickerAnimation(tickerEl) {
   // Cancel any previous animation
   if (_tickerRafId) { cancelAnimationFrame(_tickerRafId); _tickerRafId = null; }
 
-  // Mobile uses fade-rotation via setupMobileTicker — skip desktop scroll animation
-  if (window.innerWidth <= 768) {
+  // Fade-rotation (via the ticker rotation IIFE) handles mobile AND the canopy ticker —
+  // the marquee scroll only makes sense in a wide standalone bar. Structural check: if the
+  // ticker lives inside #header (the canopy), never run the scroll animation. This cannot
+  // race against data population the way a width measurement could.
+  if (window.innerWidth <= 768 || tickerEl.closest('#header')) {
     tickerEl.style.animation = '';
     tickerEl.style.transform = '';
     return;
