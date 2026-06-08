@@ -1585,11 +1585,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const isOld = (now - ts) > 86400;
     // A given day's schedule is stable, so a clean (non-partial) today board can be reused for hours.
-    // Reuse it for 3h in-memory + at the edge so one ~29-credit official refresh is amortized across
-    // the whole warm window instead of re-fetched every 15 min. Partial boards are unaffected:
-    // setAggregateCacheHeader overrides cdnMaxAge to 120s/30s for partial responses. (FR24-economy.)
-    const ttl = isOld ? 600000 : 10800000;     // 3h for today's clean board (was 15m)
-    const cdnMaxAge = isOld ? 3600 : 10800;    // 3h per-edge for today's clean board (was 15m)
+    // Reuse it for 6h in-memory + at the edge so each metered AeroDataBox refresh (2 FIDS calls =
+    // 4 units) is amortized across the whole warm window instead of re-fetched every few minutes.
+    // This roughly halves the worst-case monthly provider spend vs the old 3h TTL. Partial boards
+    // are unaffected: setAggregateCacheHeader overrides cdnMaxAge to 120s/30s for partial responses.
+    // (Tradeoff: a clean board's per-flight status can lag up to 6h; lower to 10800 for fresher status.)
+    const ttl = isOld ? 600000 : 21600000;     // 6h for today's clean board (was 3h) — quota economy
+    const cdnMaxAge = isOld ? 3600 : 21600;    // 6h per-edge for today's clean board (was 3h)
     swr = 600;
     const allowOfficialFallback = !shouldDisableOfficialFallback(req);
     const allowProviderFallback = !shouldDisableProviderFallback(req);

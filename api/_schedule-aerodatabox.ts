@@ -283,7 +283,7 @@ async function fetchWindow(
 
       if (resp.status === 204) return { ok: true, flights: [] };
       if (resp.status === 429 || resp.status === 503) {
-        await resp.text().catch(() => '');
+        const body = await resp.text().catch(() => '');
         const retryAfter = Number(resp.headers.get('retry-after'));
         const backoff = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1500 * attempt;
         if (attempt < maxAttempts && deadline - Date.now() > backoff + 800) {
@@ -291,7 +291,16 @@ async function fetchWindow(
           await new Promise((r) => setTimeout(r, backoff));
           continue;
         }
-        console.error(`AeroDataBox schedule returned ${resp.status} for ${hub} ${dir} after ${attempt} attempt(s)`);
+        // Surface WHY we gave up so a monthly-quota wall is distinguishable from a per-second
+        // throttle (the body/headers were previously discarded, hiding quota exhaustion in the logs).
+        const quotaRemaining =
+          resp.headers.get('x-ratelimit-requests-remaining') ??
+          resp.headers.get('x-ratelimit-rapid-free-plans-hard-limit-remaining') ??
+          resp.headers.get('x-ratelimit-remaining') ??
+          '?';
+        console.error(
+          `AeroDataBox schedule gave up: ${resp.status} for ${hub} ${dir} after ${attempt} attempt(s) — quota-remaining=${quotaRemaining} body=${body.slice(0, 200)}`
+        );
         return { ok: false };
       }
       if (!resp.ok) {
