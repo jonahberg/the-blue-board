@@ -4,6 +4,15 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.15] - 2026-06-07
+
+### Changed
+- Schedule warming is now today/tomorrow-focused and conservative by default so it fits a metered AeroDataBox plan: `SCHEDULE_WARM_TASKS_PER_RUN` defaults to 2 (was 4), yesterday's historical board is served on-demand instead of warmed every cycle, and a clean today board is cached for 6h at the edge (was 3h). Together these roughly halve the worst-case monthly provider spend.
+
+### Fixed
+- Warm-schedule rotation now advances one stride per cron fire (slot aligned to the 2h cron interval), so consecutive runs cover every today/tomorrow window with no gaps. The previous 15-minute slot striding against a 2h cron skipped most windows.
+- AeroDataBox 429/503 give-up now logs the response body and remaining-quota header, so monthly-quota exhaustion is visible in the logs instead of silently degrading to empty boards. The warm cron also logs an estimated AeroDataBox unit spend per run.
+
 ## [1.5.14] - 2026-05-16
 
 ### Fixed

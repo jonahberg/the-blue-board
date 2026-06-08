@@ -3,7 +3,8 @@ import { buildScheduleWarmUrl, buildWarmPlan } from '../api/cron/warm-schedules.
 
 describe('warm-schedules buildWarmPlan', () => {
   const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
-  const TOTAL_TASKS = 9 * 6; // 9 hubs × 6 window tasks (3 days × 2 dirs)
+  const TOTAL_TASKS = 9 * 4; // 9 hubs × 4 window tasks (today+tomorrow × 2 dirs); yesterday is on-demand
+  const SLOT_MS = 2 * 60 * 60 * 1000; // must match the cron interval / SLOT_MS in warm-schedules.ts
 
   it('returns an array of warm tasks', () => {
     const plan = buildWarmPlan();
@@ -11,24 +12,28 @@ describe('warm-schedules buildWarmPlan', () => {
     expect(plan.length).toBeGreaterThan(0);
   });
 
-  it('each task has required fields', () => {
-    const plan = buildWarmPlan();
-    for (const task of plan) {
-      expect(HUBS).toContain(task.hub);
-      expect(['departures', 'arrivals']).toContain(task.dir);
-      expect([-1, 0, 1]).toContain(task.dayOffset);
-      expect(['yesterday', 'today', 'tomorrow']).toContain(task.label);
+  it('each task has required fields and never warms yesterday', () => {
+    // Sweep a full rotation so we assert across every window the plan can emit, not just one slot.
+    const start = new Date('2026-04-03T00:00:00Z').getTime();
+    for (let i = 0; i < TOTAL_TASKS + 4; i++) {
+      const plan = buildWarmPlan(start + i * SLOT_MS);
+      for (const task of plan) {
+        expect(HUBS).toContain(task.hub);
+        expect(['departures', 'arrivals']).toContain(task.dir);
+        expect([0, 1]).toContain(task.dayOffset);          // today / tomorrow only
+        expect(['today', 'tomorrow']).toContain(task.label); // yesterday is on-demand, never warmed
+      }
     }
   });
 
-  it('returns different tasks for different 15-minute slots', () => {
+  it('returns different tasks for different 2-hour slots', () => {
     const t1 = new Date('2026-04-03T00:00:00Z').getTime();
-    const t2 = new Date('2026-04-03T00:15:00Z').getTime();
+    const t2 = new Date('2026-04-03T02:00:00Z').getTime();
 
     const plan1 = buildWarmPlan(t1);
     const plan2 = buildWarmPlan(t2);
 
-    // Different time slots should produce different starting positions
+    // Adjacent cron fires (2h apart) should advance to a different starting position
     const keys1 = plan1.map(t => `${t.hub}-${t.dir}-${t.label}`);
     const keys2 = plan2.map(t => `${t.hub}-${t.dir}-${t.label}`);
     expect(keys1).not.toEqual(keys2);
@@ -41,27 +46,26 @@ describe('warm-schedules buildWarmPlan', () => {
     expect(plan1).toEqual(plan2);
   });
 
-  it('cycles through all tasks over enough 15-minute intervals', () => {
+  it('cycles through all tasks over enough cron intervals with no gaps', () => {
     const allKeys = new Set();
     const start = new Date('2026-04-03T00:00:00Z').getTime();
 
-    // Run enough intervals to cover all tasks
-    for (let i = 0; i < Math.ceil(TOTAL_TASKS / 4) + 2; i++) {
-      const plan = buildWarmPlan(start + i * 15 * 60 * 1000);
+    // Run enough 2h cron fires to cover all windows (sequential stride => full coverage)
+    for (let i = 0; i < TOTAL_TASKS + 4; i++) {
+      const plan = buildWarmPlan(start + i * SLOT_MS);
       for (const task of plan) {
         allKeys.add(`${task.hub}-${task.dir}-${task.label}`);
       }
     }
 
-    // Should eventually cover all hub/dir/day combinations
+    // Should eventually cover every today/tomorrow hub/dir combination
     expect(allKeys.size).toBe(TOTAL_TASKS);
   });
 
-  it('limits plan size to WARM_TASKS_PER_RUN (default 4)', () => {
+  it('limits plan size to WARM_TASKS_PER_RUN (default 2)', () => {
     const plan = buildWarmPlan();
-    // Default is 4 tasks per run
-    expect(plan.length).toBeLessThanOrEqual(8);
-    expect(plan.length).toBeGreaterThanOrEqual(1);
+    // Default is 2 tasks per run to bound metered AeroDataBox spend
+    expect(plan.length).toBe(2);
   });
 
   it('warms via the provider (AeroDataBox) while keeping paid FR24 + dead scrape off', () => {
