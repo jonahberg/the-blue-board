@@ -1,24 +1,27 @@
+import { waitUntil } from '@vercel/functions';
 import { HUB_TZ } from './irops.js';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
+import { getHubTerminal } from './_hubs.js';
+import { hydrateAdbSpend, isAdbBudgetExhausted, recordAdbUnits, getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
 
 const AERODATABOX_BASE_URL = 'https://prod.api.market/api/v1/aedbx/aerodatabox';
+// Each FIDS window request is billed at 2 units by the provider (1 board = 2 windows = 4 units).
+const ADB_UNITS_PER_REQUEST = 2;
+// Budget-exempt (cron-forced) calls still hit an absolute ceiling at 3x the organic budget so a
+// leaked cron secret cannot spend unboundedly; the warm ring's own cadence keeps normal forced
+// spend far below this.
+const ADB_BYPASS_CEILING_MULTIPLIER = 3;
 
-const UNITED_HUB_TERMINALS: Record<string, { domestic: string; international: string }> = {
-  ORD: { domestic: '1', international: '1' },
-  DEN: { domestic: 'B', international: 'B' },
-  EWR: { domestic: 'C', international: 'C' },
-  IAH: { domestic: 'C', international: 'E' },
-  SFO: { domestic: '3', international: 'G' },
-  LAX: { domestic: '7', international: '7' },
-  IAD: { domestic: 'C', international: 'D' },
-  NRT: { domestic: '1', international: '1' },
-  GUM: { domestic: '1', international: '1' },
-};
-
-function getHubTerminal(iata: string, isIntl: boolean): string {
-  const hub = UNITED_HUB_TERMINALS[iata.toUpperCase()];
-  if (!hub) return '';
-  return isIntl ? hub.international : hub.domestic;
+// Persist the spend write even if Vercel freezes the lambda right after the response is sent —
+// a dropped RPC undercounts the cross-instance counter that IS the global spend ceiling.
+function recordAdbUnitsDurable(units: number): void {
+  const promise = recordAdbUnits(units);
+  try {
+    waitUntil(promise);
+  } catch {
+    // Outside a Vercel request context (tests, local scripts) waitUntil may throw; the promise
+    // still runs to completion in-process.
+  }
 }
 
 function partsToObj(parts: Intl.DateTimeFormatPart[]): Record<string, string> {
@@ -278,6 +281,9 @@ async function fetchWindow(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Math.min(remaining, 15000));
     try {
+      // Count spend per request actually fired (retries bill too), before reading the outcome —
+      // a 429 storm then exhausts the budget quickly, which is exactly the circuit we want.
+      recordAdbUnitsDurable(ADB_UNITS_PER_REQUEST);
       const resp = await fetch(url, { signal: controller.signal, headers });
       clearTimeout(timer);
 
@@ -325,8 +331,37 @@ async function fetchWindow(
   return { ok: false };
 }
 
-export async function fetchViaAeroDataBox(hub: string, dir: string, ts: number, timeoutMs = 12000) {
+export async function fetchViaAeroDataBox(
+  hub: string,
+  dir: string,
+  ts: number,
+  timeoutMs = 12000,
+  opts: { bypassDailyBudget?: boolean } = {}
+) {
   if (!process.env.AERODATABOX_API_KEY) return null;
+
+  // Cross-instance daily spend stop: behave exactly as if the provider were unconfigured so
+  // callers fall through to their existing degraded paths instead of burning more quota.
+  // Authorized cron warms bypass the organic gate — their spend is hard-bounded by the warm ring
+  // itself (~288 units/day) and they are the one path that keeps boards from freezing, so organic
+  // traffic must never starve them. Their units are still recorded against the organic budget,
+  // and they keep a 3x absolute ceiling so a leaked cron secret cannot spend unboundedly. Both
+  // gates hydrate first: an unhydrated ceiling reads a cold instance's 0 and is per-instance
+  // theater under fan-out (the hydrate is rate-limited to one Supabase read per 10s).
+  await hydrateAdbSpend();
+  if (opts.bypassDailyBudget) {
+    if (getAdbUnitsToday() >= getAdbDailyUnitBudget() * ADB_BYPASS_CEILING_MULTIPLIER) {
+      console.error(
+        `AeroDataBox bypass ceiling hit (${getAdbUnitsToday()}/${getAdbDailyUnitBudget() * ADB_BYPASS_CEILING_MULTIPLIER}); refusing forced fetch for ${hub} ${dir}`
+      );
+      return null;
+    }
+  } else if (isAdbBudgetExhausted()) {
+    console.warn(
+      `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping ${hub} ${dir} until next UTC day`
+    );
+    return null;
+  }
 
   const startTime = Date.now();
   const date = hubLocalDate(hub, ts);

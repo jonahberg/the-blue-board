@@ -4,6 +4,20 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.16] - 2026-06-10
+
+### Fixed
+- Schedule boards no longer freeze after their first fetch of the day. Every cache-fallback serve path hardcoded `disableProviderFallback`, so a board fetched once (usually the evening before, as "tomorrow") was served stale all day while self-reporting completeness 1.0 — live delays, cancellations, and gate changes never appeared. The warm cron now sends an authenticated `forceRefresh` that actually refetches the board, background refreshes may use the provider once data is older than 3h (one provider refresh per board per hour), and a warm that comes back stale, degraded, CDN-cached, or otherwise un-refetched counts as a FAILED warm instead of a green "ok".
+- The warm rotation now refreshes every today board 3×/day (~every 8h) and each tomorrow board once, on an hourly cron — ~288 AeroDataBox units/day, exactly the metered-plan budget that previously went unspent. Warm day-keys are computed with the DST-safe hub-local helper, so pre-6AM slots no longer spend quota on mislabeled yesterday boards.
+- The degraded-board banner now shows a humanized data age ("30h ago", not "1775m ago"), escalates teal → amber → red as the board ages past 1h/6h, and no longer promises a refresh that wasn't happening.
+- A run of the warm cron that warmed no schedule board returns 503 so Vercel cron monitoring goes red during exactly the frozen-board incident class (the always-green Starlink ping no longer masks it).
+
+### Security
+- `/api/schedule` now rejects non-United-hub airport codes and snaps timestamps to the hub-local day start. Previously any 3-4 letter code at 1-second timestamp granularity busted all four cache tiers and fired two metered AeroDataBox calls per unique combination — one IP at the allowed rate could drain the monthly quota in under two hours, recreating the June outage on demand.
+- Provider spend now has a cross-instance daily unit budget (default 400, `AERODATABOX_DAILY_UNIT_BUDGET`; `0` is honored as a kill switch) persisted via an atomic Supabase counter (`sql/009_provider_spend.sql` — apply manually in the SQL editor). Authorized cron warms bypass the organic budget (they are ring-bounded) but keep a hydrated 3× absolute ceiling so even a leaked cron secret cannot spend unboundedly.
+- Cron authorization is now timing-safe and fails closed when `CRON_SECRET` is unset (the literal string "Bearer undefined" previously authenticated), shared via `api/_cron-auth.ts`.
+- Any `forceRefresh`-flavored request responds `Cache-Control: no-store` regardless of authorization, so an unauthenticated probe of the predictable warm URL can no longer pin a 6h CDN object on the cron's own URL key and re-freeze boards behind a green cron.
+
 ## [1.5.15] - 2026-06-07
 
 ### Changed

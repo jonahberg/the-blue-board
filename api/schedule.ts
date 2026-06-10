@@ -1,7 +1,9 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadScheduleSnapshot, saveScheduleSnapshot, isSnapshotCandidateBetter } from './_schedule-snapshots.js';
-import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock } from './_cost-state.js';
+import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock, __resetAdbSpendForTests } from './_cost-state.js';
+import { UNITED_HUB_SET, getHubTerminal } from './_hubs.js';
+import { isAuthorizedCronRequest } from './_cron-auth.js';
 import { fetchViaAeroDataBox } from './_schedule-aerodatabox.js';
 import {
   FR24_SCHEDULE_HEADERS,
@@ -20,6 +22,10 @@ type ScheduleFetchOptions = {
   disableOfficialSource?: boolean;
   disableProviderFallback?: boolean;
   disableScraperFallback?: boolean;
+  // Authorized cron warms only: their provider spend is already hard-bounded by the warm ring
+  // (~288 units/day), so the organic daily budget must not starve the one path that keeps boards
+  // from freezing. Never set from user input.
+  providerBudgetExempt?: boolean;
 };
 
 // In-memory LRU cache for FR24 schedule data
@@ -34,7 +40,7 @@ const MAX_COMPLETE_CACHE_SIZE = 128;
 const COMPLETE_CACHE_MAX_AGE = 21600000; // 6 hours
 const BATCH_DELAY = 500; // 500ms pause between parallel batches
 const STALE_GRACE = 120000; // serve stale data for up to 2min past expiry
-const TARGETED_OFFICIAL_RESCUE_HUBS = new Set(['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM']);
+const TARGETED_OFFICIAL_RESCUE_HUBS: ReadonlySet<string> = UNITED_HUB_SET; // same 9 hubs; alias keeps the call site self-describing
 
 // Busy hubs get more time to fetch all pages (capped at 55s for Vercel's 60s maxDuration)
 const HUB_TIMEOUT_MS: Record<string, number> = { ORD: 55000, EWR: 55000, IAH: 55000, SFO: 55000, LAX: 55000, DEN: 55000, IAD: 55000, NRT: 55000, GUM: 55000 };
@@ -44,24 +50,7 @@ const MAX_CONSECUTIVE_RATE_LIMIT_BATCHES = 2;
 const MIN_REMAINING_MS_TO_KEEP_PAGING = 8000;
 const MIN_REMAINING_MS_FOR_OFFICIAL_RESCUE = 6000;
 
-// Known United Airlines terminal assignments at each hub (used when API doesn't provide terminal data)
-const UNITED_HUB_TERMINALS: Record<string, { domestic: string; international: string }> = {
-  ORD: { domestic: '1', international: '1' },       // Terminal 1 (Concourses B & C); Express uses T2
-  DEN: { domestic: 'B', international: 'B' },       // Concourse B
-  EWR: { domestic: 'C', international: 'C' },       // Terminal C (primary); some flights use Terminal A
-  IAH: { domestic: 'C', international: 'E' },       // Terminal C (domestic), Terminal E (international)
-  SFO: { domestic: '3', international: 'G' },       // Terminal 3 (domestic), International Terminal G
-  LAX: { domestic: '7', international: '7' },       // Terminals 7 & 8
-  IAD: { domestic: 'C', international: 'D' },       // Concourse C (domestic), Concourse D (international)
-  NRT: { domestic: '1', international: '1' },       // Terminal 1
-  GUM: { domestic: '1', international: '1' },       // Single terminal
-};
-
-function getHubTerminal(iata: string, isIntl: boolean): string {
-  const hub = UNITED_HUB_TERMINALS[iata.toUpperCase()];
-  if (!hub) return '';
-  return isIntl ? hub.international : hub.domestic;
-}
+// Terminal assignments live in api/_hubs.ts (shared with _schedule-aerodatabox.ts).
 
 // Global concurrency limiter for FR24 outbound requests
 const MAX_CONCURRENT_FR24 = 6;
@@ -208,7 +197,14 @@ function cacheSet(key: string, data: any, ttlMs: number): void {
   cache.set(key, { data, expires: Date.now() + ttlMs, time: Date.now() });
 }
 
-function setAggregateCacheHeader(res: VercelResponse, data: any, cdnMaxAge: number, swr: number): void {
+function setAggregateCacheHeader(res: VercelResponse, data: any, cdnMaxAge: number, swr: number, noStore = false): void {
+  // Any forceRefresh-flavored URL must never pin a CDN object — the warm URL is predictable
+  // from the public repo, and a 6h object stored on it by an UNAUTHENTICATED probe would be
+  // served back to the next hourly cron warm as a frozen-but-green board.
+  if (noStore) {
+    res.setHeader('Cache-Control', 'no-store');
+    return;
+  }
   const isPartial = data?.partial === true;
   const total = Number(data?.total || 0);
   // A degraded-but-NON-EMPTY board is still useful to show; re-validating it every 30s at the CDN
@@ -240,6 +236,55 @@ function shouldDisableScraperFallback(req: VercelRequest): boolean {
   const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.scraperFallback).toLowerCase();
   const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-scraper-fallback'] as string | string[] | undefined).toLowerCase();
   return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
+}
+
+/**
+ * forceRefresh=1 + the cron secret skips every cached/stale/persistent serve path and runs a full
+ * fetch. This is how the warm cron actually REFRESHES a board: without it, the handler serves the
+ * frozen snapshot back to the cron, reports "ok", and a complete board is never refetched all day
+ * (the frozen-board failure mode). Unauthorized force params are silently ignored — the request is
+ * served like any other, so probing this surface costs an attacker nothing and gains them nothing.
+ */
+function hasForceRefreshParam(req: VercelRequest): boolean {
+  return ['1', 'true', 'yes', 'on'].includes(
+    getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.forceRefresh).toLowerCase()
+  );
+}
+
+function isAuthorizedForceRefresh(req: VercelRequest): boolean {
+  return hasForceRefreshParam(req) && isAuthorizedCronRequest(req);
+}
+
+// ── Background provider refresh gate ──
+// The degraded serve paths trigger a background refresh, but letting every user request fan that
+// refresh out to the metered provider would let traffic stampede the quota. Gate it: the provider
+// joins a background refresh only when the data being served is genuinely old (> 3h), and at most
+// once per board per hour per instance. The cross-instance ceiling is the daily unit budget in
+// _cost-state.ts. 3h keeps a today board no staler than ~3h under user traffic alone, and the
+// hourly per-key cooldown bounds worst case to 24 provider refreshes per board per day.
+const PROVIDER_REFRESH_STALE_MS = 3 * 60 * 60 * 1000;
+const PROVIDER_REFRESH_KEY_COOLDOWN_MS = 60 * 60 * 1000;
+const MAX_PROVIDER_REFRESH_KEYS = 512; // keyspace is ~270 (9 hubs x 2 dirs x ~15 days): eviction is a guard rail, currently unreachable
+const lastProviderRefreshAt = new Map<string, number>();
+
+export function shouldEnableProviderForBackgroundRefresh(
+  aggKey: string,
+  dataAgeMs: number,
+  allowProviderFallback: boolean,
+  nowMs = Date.now()
+): boolean {
+  // NOTE: this is an ACQUIRE, not a pure check — a true return consumes the key's hourly
+  // cooldown slot. Callers must only invoke it when the refresh will actually be dispatched
+  // (i.e. no in-flight refresh for the key), or the slot is burned for nothing.
+  if (!allowProviderFallback || !process.env.AERODATABOX_API_KEY) return false;
+  if (dataAgeMs <= PROVIDER_REFRESH_STALE_MS) return false;
+  const last = lastProviderRefreshAt.get(aggKey) || 0;
+  if (nowMs - last < PROVIDER_REFRESH_KEY_COOLDOWN_MS) return false;
+  if (lastProviderRefreshAt.size >= MAX_PROVIDER_REFRESH_KEYS) {
+    lastProviderRefreshAt.delete(lastProviderRefreshAt.keys().next().value!);
+  }
+  lastProviderRefreshAt.set(aggKey, nowMs);
+  return true;
 }
 
 async function fetchWithTimeout(url: string, deadlineMs?: number): Promise<Response> {
@@ -1119,7 +1164,9 @@ function triggerBackgroundRefresh(
   }).catch(e => {
     console.error(`Background refresh failed for ${refreshHub} [${aggKey}]:`, e.message);
   }).finally(() => {
-    pendingAggs.delete(aggKey);
+    // Compare-and-delete: a forced warm may have overwritten this entry with its own fetch —
+    // an unconditional delete would evict that still-in-flight fetch and break dedupe for it.
+    if (pendingAggs.get(aggKey) === promise) pendingAggs.delete(aggKey);
   });
   pendingAggs.set(aggKey, promise);
   enqueueBackgroundTask(promise);
@@ -1155,6 +1202,7 @@ export function resetFallbackBreaker(): void {
   liveFeedCache = null;
   liveFeedInFlight = null;
   resetMirroredQuotaBlock();
+  __resetAdbSpendForTests();
 }
 
 /**
@@ -1166,6 +1214,7 @@ export function __resetScheduleCachesForTests(): void {
   lastCompleteCache.clear();
   lastCompleteByHubDir.clear();
   pendingAggs.clear();
+  lastProviderRefreshAt.clear();
 }
 
 async function tryOfficialFallback(
@@ -1187,13 +1236,13 @@ async function tryOfficialFallback(
 }
 
 async function tryScheduleProviderFallback(
-  logHub: string, dir: string, ts: number, effectiveDeadline: number
+  logHub: string, dir: string, ts: number, effectiveDeadline: number, budgetExempt = false
 ): Promise<any | null> {
   if (!process.env.AERODATABOX_API_KEY) return null;
   try {
     const remaining = Math.max(0, effectiveDeadline - Date.now() - 1000);
     if (remaining < 2000) return null;
-    const result = await fetchViaAeroDataBox(logHub, dir, ts, Math.min(remaining, 12000));
+    const result = await fetchViaAeroDataBox(logHub, dir, ts, Math.min(remaining, 12000), { bypassDailyBudget: budgetExempt });
     if (result && result.total > 0) {
       result.meta = { ...(result.meta as any), fallbackFrom: 'scraping' };
       return result;
@@ -1210,10 +1259,11 @@ async function tryScheduleRescue(
   ts: number,
   effectiveDeadline: number,
   allowProviderFallback: boolean,
-  allowOfficialFallback: boolean
+  allowOfficialFallback: boolean,
+  budgetExempt = false
 ): Promise<any | null> {
   if (allowProviderFallback) {
-    const providerFallback = await tryScheduleProviderFallback(logHub, dir, ts, effectiveDeadline);
+    const providerFallback = await tryScheduleProviderFallback(logHub, dir, ts, effectiveDeadline, budgetExempt);
     if (providerFallback) return providerFallback;
   }
   if (allowOfficialFallback) {
@@ -1269,7 +1319,9 @@ async function fetchAllPages(
     if (allowProviderFallback && process.env.AERODATABOX_API_KEY) {
       try {
         const providerTimeout = Math.min(Math.floor((effectiveDeadline - Date.now()) * 0.7), 30000);
-        const providerResult = await fetchViaAeroDataBox(logHub, dir, ts, providerTimeout);
+        const providerResult = await fetchViaAeroDataBox(logHub, dir, ts, providerTimeout, {
+          bypassDailyBudget: !!options.providerBudgetExempt,
+        });
         if (providerResult && providerResult.total > 0) {
           // Overlay the free live feed for active flights only when the provider board is partial.
           return await maybeAugmentWithLiveFeedFallback(providerResult, logHub, dir, ts, effectiveDeadline);
@@ -1282,7 +1334,7 @@ async function fetchAllPages(
     // disableOfficialSource (officialFallback=0, e.g. cron) keeps official off so background warming
     // never burns FR24 credits; it then degrades to the free live feed.
     const fallback = await tryScheduleRescue(
-      logHub, dir, ts, effectiveDeadline, false, !options.disableOfficialSource
+      logHub, dir, ts, effectiveDeadline, false, !options.disableOfficialSource, !!options.providerBudgetExempt
     );
     if (fallback) return fallback;
   }
@@ -1343,7 +1395,7 @@ async function fetchAllPages(
   if (!firstPage || firstPage._rateLimited) {
     if (srcPriority === 'scrape' && (allowProviderFallback || allowTargetedOfficialRescue)) {
       console.log(`Scraping failed on first page for ${logHub} ${dir}, trying schedule fallback`);
-      const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
+      const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue, !!options.providerBudgetExempt);
       if (fallback) return fallback;
     }
     const failedResult = { flights: [], total: 0, totalFetched: 0, pagesScanned: 0, totalPages: 1, cached: false, partial: true, hub: logHub, dir,
@@ -1529,14 +1581,14 @@ async function fetchAllPages(
   ) {
     attemptedOfficialRescue = true;
     console.log(`Scraping hit repeated FR24 rate limits for ${logHub} ${dir}, trying schedule fallback`);
-    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
+    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue, !!options.providerBudgetExempt);
     if (fallback) return fallback;
   }
 
   // Scrape-first fallback: if scraping failed completely, try official API (with circuit breaker)
   if (!attemptedOfficialRescue && srcPriority === 'scrape' && (allowProviderFallback || allowTargetedOfficialRescue) && scrapeResult.total === 0 && scrapeResult.partial) {
     console.log(`Scraping returned 0 flights for ${logHub} ${dir}, trying schedule fallback`);
-    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
+    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue, !!options.providerBudgetExempt);
     if (fallback) return fallback;
   }
 
@@ -1567,22 +1619,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // paid official API. (Audit P1: per-lambda cost guards do not bound global spend.)
     await hydrateQuotaBlock();
 
-    const { hub, dir = 'departures', timestamp, page } = req.query as Record<string, string>;
-    if (!hub || !timestamp) {
+    const { hub: hubParam, dir = 'departures', timestamp, page } = req.query as Record<string, string>;
+    if (!hubParam || !timestamp) {
       return res.status(400).json({ error: 'Missing required params: hub, timestamp' });
     }
     if (!['departures', 'arrivals'].includes(dir)) {
       return res.status(400).json({ error: 'dir must be departures or arrivals' });
     }
-    if (!/^[A-Z]{3,4}$/i.test(hub)) {
+    // Allowlist, not just a shape check: every distinct hub value mints its own cache keys across
+    // all four tiers and fires 2 metered provider calls on a miss, so an open airport parameter is
+    // an unmetered spend surface (a crawler iterating IATA codes recreates the quota outage).
+    const hub = hubParam.toUpperCase();
+    if (!UNITED_HUB_SET.has(hub)) {
       return res.status(400).json({ error: 'Invalid hub code' });
     }
 
-    const ts = parseInt(timestamp, 10);
+    const tsParam = parseInt(timestamp, 10);
     const now = Math.floor(Date.now() / 1000);
-    if (isNaN(ts) || ts < now - 86400 * 7 || ts > now + 86400 * 7) {
+    if (isNaN(tsParam) || tsParam < now - 86400 * 7 || tsParam > now + 86400 * 7) {
       return res.status(400).json({ error: 'Invalid timestamp' });
     }
+    // Snap to the start of the hub-local day containing the timestamp. Board content only depends
+    // on the hub-local DAY (the provider fetch is windowed by hubLocalDate), so this is lossless —
+    // and it collapses cache-key cardinality from ~1.2M second-granularity values per hub/dir to
+    // ≤15 day keys, closing the second cache-busting spend surface.
+    const ts = getStartOfHubDay(hub, 0, new Date(tsParam * 1000));
     const isOld = (now - ts) > 86400;
     // A given day's schedule is stable, so a clean (non-partial) today board can be reused for hours.
     // Reuse it for 6h in-memory + at the edge so each metered AeroDataBox refresh (2 FIDS calls =
@@ -1626,36 +1687,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const currentAggKey = `agg:${hub}:${dir}:${ts}`;
     aggKey = currentAggKey;
 
-    const cached = cacheGet(currentAggKey);
+    // Authorized cron warms bypass every serve-from-cache path below: a complete snapshot would
+    // otherwise satisfy the warm request, report "ok", and never be refetched — freezing the board
+    // for the rest of the day while it self-reports completeness 1.0.
+    const wantsForce = hasForceRefreshParam(req);
+    const forceRefresh = wantsForce && isAuthorizedCronRequest(req);
+
+    const cached = forceRefresh ? null : cacheGet(currentAggKey);
     const hasImmediateScheduleRecovery =
       (allowScraperFallback && hasConfiguredFr24ScraperTransport()) ||
       (allowProviderFallback && !!process.env.AERODATABOX_API_KEY) ||
       shouldAttemptLiveFeedFallback(hub, ts);
     const shouldBypassEmptyPartialCache = cached?.data?.partial === true && Number(cached?.data?.total || 0) === 0 && hasImmediateScheduleRecovery;
     if (cached && !shouldBypassEmptyPartialCache) {
-      setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr);
+      setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr, wantsForce);
       return res.status(200).json({ ...cached.data, cached: true });
     }
 
-    const stale = cacheGetStale(currentAggKey);
+    const stale = forceRefresh ? null : cacheGetStale(currentAggKey);
     if (stale && !stale.data.partial) {
       triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
         allowTargetedOfficialRescue: false,
         disableOfficialSource: !allowOfficialFallback,
-        disableProviderFallback: true,
+        disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
+          currentAggKey, Date.now() - stale.time, allowProviderFallback
+        ),
         disableScraperFallback: true,
       });
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
       return res.status(200).json({ ...stale.data, cached: true, stale: true });
     }
 
-    const exactLastComplete = getLastComplete(currentAggKey);
-    const fallbackComplete = exactLastComplete || getLastCompleteByHubDir(hub, dir, ts);
+    const exactLastComplete = forceRefresh ? null : getLastComplete(currentAggKey);
+    const fallbackComplete = forceRefresh ? null : (exactLastComplete || getLastCompleteByHubDir(hub, dir, ts));
     if (fallbackComplete) {
       triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
         allowTargetedOfficialRescue: false,
         disableOfficialSource: !allowOfficialFallback,
-        disableProviderFallback: true,
+        disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
+          currentAggKey, Date.now() - fallbackComplete.time, allowProviderFallback
+        ),
         disableScraperFallback: true,
       });
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
@@ -1663,7 +1734,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let partialPersistentFallback: Awaited<ReturnType<typeof getPersistentFallback>> | null = null;
-    const persistentFallback = await getPersistentFallback(currentAggKey);
+    const persistentFallback = forceRefresh ? null : await getPersistentFallback(currentAggKey);
     if (persistentFallback) {
       const canAttemptRecoveryNow = persistentFallback.fallbackScope === 'persistent_partial' && hasImmediateScheduleRecovery;
       if (canAttemptRecoveryNow) {
@@ -1672,7 +1743,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
           allowTargetedOfficialRescue: allowOfficialFallback && persistentFallback.fallbackScope === 'persistent_partial',
           disableOfficialSource: !allowOfficialFallback,
-          disableProviderFallback: true,
+          disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
+            currentAggKey, Date.now() - persistentFallback.time, allowProviderFallback
+          ),
           disableScraperFallback: true,
         });
         res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
@@ -1680,10 +1753,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    if (pendingAggs.has(currentAggKey)) {
+    // A force warm must run its own fetch: the in-flight refresh it would join is often
+    // provider-disabled (a user-triggered background refresh below the age gate), which would
+    // silently swallow the cron's refetch for this hour. Concurrent user requests still
+    // piggyback on the forced fetch via the pendingAggs entry it registers below.
+    if (!forceRefresh && pendingAggs.has(currentAggKey)) {
       const result = await pendingAggs.get(currentAggKey);
       if (result) {
-        setAggregateCacheHeader(res, result, cdnMaxAge, swr);
+        setAggregateCacheHeader(res, result, cdnMaxAge, swr, wantsForce);
         return res.status(200).json({ ...result, cached: true });
       }
     }
@@ -1693,6 +1770,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       disableOfficialSource: !allowOfficialFallback,
       disableProviderFallback: !allowProviderFallback,
       disableScraperFallback: !allowScraperFallback,
+      providerBudgetExempt: forceRefresh,
     }).then(async result => {
       cacheSet(currentAggKey, result, result.partial ? 60000 : ttl);
       saveComplete(currentAggKey, result);
@@ -1725,10 +1803,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(200).json(buildDegradedResponse(partialPersistentFallback, 'persistent_partial'));
         }
       }
-      setAggregateCacheHeader(res, result, cdnMaxAge, swr);
+      // The cron's force URL is its own CDN object (forceRefresh=1 is part of the query string).
+      // Never let it pin: a CDN HIT on the warm URL would silently skip the refresh next cycle.
+      // (The partial branches above set s-maxage=60, which expires long before the next warm.)
+      setAggregateCacheHeader(res, result, cdnMaxAge, swr, wantsForce);
       return res.status(200).json(result);
     } finally {
-      pendingAggs.delete(currentAggKey);
+      // Compare-and-delete (see triggerBackgroundRefresh): never evict an entry that a
+      // concurrent forced warm registered over this one.
+      if (pendingAggs.get(currentAggKey) === aggPromise) pendingAggs.delete(currentAggKey);
     }
   } catch (e) {
     console.error('Schedule API error:', e);
