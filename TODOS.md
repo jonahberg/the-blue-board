@@ -16,7 +16,7 @@
 
 ### Security hygiene (backlog)
 
-- [ ] [#6] CRON_SECRET timing-safe compare across `api/cron/refresh-tsa.ts:10`, `api/cron/sync-starlink.ts:11`, `api/cron/warm-schedules.ts:79`, `api/news-notify.ts:50-51`. Bundle with auth hardening pass.
+- [ ] [#6] CRON_SECRET timing-safe compare across `api/cron/refresh-tsa.ts:10`, `api/cron/sync-starlink.ts:11`, `api/news-notify.ts:50-51`. Bundle with auth hardening pass. (partial: warm-schedules + the /api/schedule forceRefresh gate shipped timing-safe fail-closed auth in v1.5.16 via `api/_cron-auth.ts` — reuse it for the remaining three)
 - [ ] [#26 extension] Evaluate moving waitlist off hand-rolled Supabase+Resend → Loops/Resend Audiences/ConvertKit.
 - [ ] [README drift] Audit README claims vs actual codebase ("strict CSP", "zero inline handlers", "fully escaped") and either fix the code or fix the docs.
 
