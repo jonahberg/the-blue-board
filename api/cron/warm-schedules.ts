@@ -11,6 +11,8 @@
 import type { VercelRequest, VercelResponse } from '../types.js';
 import { UNITED_HUBS } from '../_hubs.js';
 import { isAuthorizedCronRequest } from '../_cron-auth.js';
+import { sendAlert } from '../_alert.js';
+import { hydrateAdbSpend, getAdbUnitsToday, getAdbDailyUnitBudget } from '../_cost-state.js';
 import { getStartOfHubDay } from '../../src/lib/hubTz.js';
 
 const HUBS = UNITED_HUBS;
@@ -221,6 +223,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `Cron warm-schedules: ${warmed} warmed, ${failed} failed, ~${estUnits} AeroDataBox units (${freshBoards} fresh boards)`,
     { warmPlan, results }
   );
+
+  // Operational alerting (env-gated; no-op without ALERT_WEBHOOK_URL). The hourly warm cron is
+  // the natural heartbeat for the schedule pipeline: alert on the signatures that mean the live
+  // site is degraded RIGHT NOW or money is about to run out, not on every transient blip.
+  // (Audit P1: no-alerting-blind-pipeline; supersedes PR #168, whose `failed > warmed` condition
+  // predates the schedule/starlink counter split and the stale_served/not_refreshed statuses.)
+  try {
+    const scheduleEntries = Object.entries(results).filter(([k]) => k !== 'starlink-data');
+    const byStatus = (...statuses: string[]) =>
+      scheduleEntries.filter(([, r]) => statuses.includes(r?.status)).map(([k]) => k);
+    const frozen = byStatus('stale_served', 'not_refreshed'); // the frozen-board signature
+    const emptyBoards = byStatus('degraded_empty');
+    const erroredKeys = scheduleEntries
+      .filter(([, r]) => r?.status === 'error' || String(r?.status || '').startsWith('http_'))
+      .map(([k]) => k);
+    const starlinkStatus = results['starlink-data']?.status;
+
+    await hydrateAdbSpend();
+    const unitsToday = getAdbUnitsToday();
+    const budget = getAdbDailyUnitBudget();
+    const budgetHot = budget > 0 && unitsToday >= budget * 0.8;
+
+    const totalFailure = scheduleWarmed === 0 && scheduleFailed > 0;
+    if (totalFailure || frozen.length > 0 || emptyBoards.length > 0 || budgetHot || (starlinkStatus && starlinkStatus !== 'ok')) {
+      await sendAlert('⚠️ Blue Board schedule pipeline degraded', [
+        `warmed=${scheduleWarmed} failed=${scheduleFailed} (plan size ${warmPlan.length}, ~${estUnits} units this run)`,
+        frozen.length ? `frozen/stale-served boards (warm did NOT refetch): ${frozen.join(', ')}` : '',
+        emptyBoards.length ? `0-flight boards: ${emptyBoards.join(', ')}` : '',
+        erroredKeys.length ? `errors/http: ${erroredKeys.join(', ')}` : '',
+        budgetHot ? `AeroDataBox budget: ${unitsToday}/${budget} units today (≥80%)` : '',
+        starlinkStatus && starlinkStatus !== 'ok' ? `starlink: ${starlinkStatus}` : '',
+      ].filter(Boolean));
+    }
+  } catch (e: any) {
+    // Alerting must never break the cron itself.
+    console.error('warm-schedules alerting block failed:', e?.message || e);
+  }
+
   // A run that warmed NO schedule board is an incident, not a success — return 5xx so Vercel's
   // built-in cron monitoring (and any uptime check on this path) goes red instead of logging a
   // quiet 200. Gated on the schedule counters only; see the counter comment above.

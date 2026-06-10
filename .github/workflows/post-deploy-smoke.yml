@@ -1,0 +1,34 @@
+# Post-deploy smoke check: merge to main = instant Vercel production deploy (no preview deploys),
+# so this is the only automated signal that a deploy broke the site (the b280fd7 ESM-crash class).
+# Waits for Vercel to build, then curls the three load-bearing URLs with retries.
+name: Post-deploy smoke
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Vercel production deploy
+        run: sleep 150
+      - name: Smoke-check production
+        run: |
+          check () {
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$1")
+            echo "$1 -> $code"
+            [ "$code" = "200" ]
+          }
+          for attempt in 1 2 3; do
+            ok=true
+            check "https://theblueboard.co/" || ok=false
+            check "https://theblueboard.co/api/starlink-data" || ok=false
+            # Any intra-day timestamp snaps server-side to the hub-local day start (v1.5.16+).
+            check "https://theblueboard.co/api/schedule?hub=ORD&dir=departures&timestamp=$(date +%s)" || ok=false
+            if $ok; then echo "smoke OK"; exit 0; fi
+            echo "attempt $attempt failed; retrying in 60s"
+            sleep 60
+          done
+          echo "PRODUCTION SMOKE FAILED after 3 attempts — consider 'vercel rollback'"
+          exit 1

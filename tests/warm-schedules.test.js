@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler, { buildScheduleWarmUrl, buildWarmPlan } from '../api/cron/warm-schedules.js';
+import { __resetAlertThrottleForTests } from '../api/_alert.js';
+import { recordAdbUnits, __resetAdbSpendForTests } from '../api/_cost-state.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
 describe('warm-schedules buildWarmPlan', () => {
@@ -121,6 +123,8 @@ describe('warm-schedules handler', () => {
     process.env.CRON_SECRET = SECRET;
     process.env.SCHEDULE_WARM_DELAY_MS = '0';
     process.env.SCHEDULE_WARM_TASKS_PER_RUN = '3'; // pin the per-call env read (see plan describe)
+    __resetAlertThrottleForTests();
+    __resetAdbSpendForTests();
   });
 
   afterEach(() => {
@@ -128,6 +132,9 @@ describe('warm-schedules handler', () => {
     delete process.env.CRON_SECRET;
     delete process.env.SCHEDULE_WARM_DELAY_MS;
     delete process.env.SCHEDULE_WARM_TASKS_PER_RUN;
+    delete process.env.ALERT_WEBHOOK_URL;
+    __resetAlertThrottleForTests();
+    __resetAdbSpendForTests();
   });
 
   function mockFetchOk(schedulePayload) {
@@ -248,6 +255,34 @@ describe('warm-schedules handler', () => {
     const res = createRes();
     await handler({ method: 'GET', headers: {} }, res);
     expect(res.statusCode).toBe(401);
+  });
+
+  it('alerts the webhook when every schedule warm is frozen (stale_served)', async () => {
+    process.env.ALERT_WEBHOOK_URL = 'https://discord.test/webhook';
+    const fetchSpy = mockFetchOk({ cached: true, stale: true, degraded: true, partial: false, total: 628, meta: { dataAge: 106495 } });
+    await handler(createReq(), createRes());
+    const alertCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('discord.test'));
+    expect(alertCalls.length).toBe(1);
+    const body = JSON.parse(alertCalls[0][1].body);
+    expect(body.content).toMatch(/stale|frozen/i);
+  });
+
+  it('does not alert on a fully healthy run', async () => {
+    process.env.ALERT_WEBHOOK_URL = 'https://discord.test/webhook';
+    const fetchSpy = mockFetchOk({ cached: false, stale: false, partial: false, total: 312, meta: { completeness: 1 } });
+    await handler(createReq(), createRes());
+    const alertCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('discord.test'));
+    expect(alertCalls.length).toBe(0);
+  });
+
+  it('alerts when daily AeroDataBox spend crosses 80% of the budget, even on a healthy run', async () => {
+    process.env.ALERT_WEBHOOK_URL = 'https://discord.test/webhook';
+    await recordAdbUnits(340); // 85% of the 400 default
+    const fetchSpy = mockFetchOk({ cached: false, stale: false, partial: false, total: 312, meta: { completeness: 1 } });
+    await handler(createReq(), createRes());
+    const alertCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('discord.test'));
+    expect(alertCalls.length).toBe(1);
+    expect(JSON.parse(alertCalls[0][1].body).content).toMatch(/budget|units/i);
   });
 
   it('fails CLOSED when CRON_SECRET is unset — "Bearer undefined" must not authenticate', async () => {
