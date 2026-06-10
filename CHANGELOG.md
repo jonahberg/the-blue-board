@@ -4,6 +4,19 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.20] - 2026-06-10
+
+### Changed
+- Static JS/CSS now caches for an hour (with a day of stale-while-revalidate) instead of being re-downloaded on every page load — repeat visits and reloads are noticeably lighter. The HTML entrypoint stays uncached, so a new deploy is still picked up promptly.
+- Hub pages stop polling live flight data when their tab is in the background, and refresh once when you switch back. A backgrounded hub tab was previously making ~2,880 requests a day for data nobody was looking at.
+- The TSA wait-times refresh job now runs hourly instead of every 5 minutes. The underlying government feed (MyTSA) has been decommissioned, so the API now reports an honest `feedDown` state instead of stamping an empty response as fresh data, and the page no longer burns ~576 refreshes a day against a dead source.
+
+### Fixed
+- The social share image is now exported at its declared 1200×630 size (was a 1.3MB 2588×1540 file), and `/favicon.ico` no longer 404s.
+
+### Removed
+- Deleted ~1,900 lines of dead code and ~760KB of stray build artifacts (an orphaned hub-data file, two broken one-off scripts, debug screenshots, an unused web font) that shipped in every deploy.
+
 ## [1.5.19] - 2026-06-10
 
 ### Fixed
