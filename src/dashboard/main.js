@@ -8,6 +8,7 @@ import { bucketInstallsByMonth } from '../lib/starlink-utils.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
 import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
+import { formatDataAge, dataAgeSeverity } from '../lib/data-age.js';
 
 injectSpeedInsights();
 
@@ -4035,10 +4036,12 @@ async function loadScheduleData() {
       const meta = result.meta || {};
       let msg = '';
       if (result.degraded && meta.dataAge) {
-        const ageMin = Math.round(meta.dataAge / 60);
+        // Humanized + honest: "1775m ago while refreshing" hid a 30h-frozen board behind a
+        // reassuring teal banner promising a refresh that never came.
+        const age = formatDataAge(meta.dataAge);
         msg = result.partial
-          ? `Showing cached partial data from ${ageMin}m ago while refreshing.`
-          : `Showing cached complete data from ${ageMin}m ago while refreshing.`;
+          ? `Showing cached partial data from ${age} ago.`
+          : `Showing cached complete data from ${age} ago.`;
       } else if (meta.liveFeedFallbackAdded) {
         msg = `Added ${meta.liveFeedFallbackAdded} live active flight(s) while the full schedule feed recovers.`;
       } else if (meta.partialReason === 'live_feed_fallback') {
@@ -4061,10 +4064,20 @@ async function loadScheduleData() {
             ? ` ${Math.round(meta.completeness * 100)}% loaded.`
             : ''
         : '';
-      const bgColor = result.degraded ? 'rgba(78,205,196,.12)' : 'rgba(234,179,8,.12)';
-      const borderColor = result.degraded ? 'rgba(78,205,196,.3)' : 'rgba(234,179,8,.3)';
-      const textColor = result.degraded ? '#4ecdc4' : '#eab308';
-      const icon = result.degraded ? '⏳' : '⚠️';
+      // Escalate the banner with data age: teal reads as "all good", which is a lie for a board
+      // that is hours old. 1-6h → amber caution; 6h+ (past a full cache lifetime) → red (--ua-red).
+      const ageSeverity = result.degraded && meta.dataAge ? dataAgeSeverity(meta.dataAge) : null;
+      const palette = ageSeverity === 'stale'
+        ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.3)', text: '#ef4444', icon: '⚠️' }
+        : ageSeverity === 'aging'
+          ? { bg: 'rgba(234,179,8,.12)', border: 'rgba(234,179,8,.3)', text: '#eab308', icon: '⏳' }
+          : result.degraded
+            ? { bg: 'rgba(78,205,196,.12)', border: 'rgba(78,205,196,.3)', text: '#4ecdc4', icon: '⏳' }
+            : { bg: 'rgba(234,179,8,.12)', border: 'rgba(234,179,8,.3)', text: '#eab308', icon: '⚠️' };
+      const bgColor = palette.bg;
+      const borderColor = palette.border;
+      const textColor = palette.text;
+      const icon = palette.icon;
       loadEl.innerHTML = `<div style="padding:4px 12px;background:${bgColor};border:1px solid ${borderColor};border-radius:4px;font-size:11px;color:${textColor};margin:0">${icon} ${msg}${pct} <button data-action="schedule-retry-cached" style="background:none;border:none;color:var(--ua-accent);cursor:pointer;font-family:var(--font-ui);font-size:11px;text-decoration:underline">↻ Retry</button></div>`;
       loadEl.style.display = 'block';
     } else {

@@ -67,6 +67,117 @@ export async function hydrateQuotaBlock(): Promise<number> {
   }
 }
 
+// ── AeroDataBox daily unit budget ──
+//
+// The schedule provider is METERED (RapidAPI bills per call: 1 board = 2 FIDS calls = 4 units).
+// The per-IP rate limiter is in-memory per lambda instance, so it cannot bound global spend under
+// fan-out — one IP at the allowed rate can drain a monthly tier in hours. This counter is the
+// cross-instance hard stop: once the day's units cross the budget, fetchViaAeroDataBox refuses to
+// call upstream until the next UTC day. Persistence uses the increment_adb_units RPC
+// (sql/009_provider_spend.sql); like the quota block above, every Supabase failure degrades to
+// in-memory per-instance accounting — never worse than no guard at all.
+
+const ADB_HYDRATE_TTL_MS = 10_000;
+
+let adbDay = '';            // UTC day (YYYY-MM-DD) the counter applies to
+let adbUnits = 0;           // units spent today, as best known by this instance
+let lastAdbHydratedAt = 0;
+
+function utcToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function rollAdbDay(): void {
+  const today = utcToday();
+  if (adbDay !== today) {
+    adbDay = today;
+    adbUnits = 0;
+  }
+}
+
+export function getAdbUnitsToday(): number {
+  rollAdbDay();
+  return adbUnits;
+}
+
+export function getAdbDailyUnitBudget(): number {
+  const configured = Number(process.env.AERODATABOX_DAILY_UNIT_BUDGET);
+  return Number.isFinite(configured) && configured > 0 ? configured : 400;
+}
+
+/** True once today's known spend has reached the daily budget. Sync; safe in the hot path. */
+export function isAdbBudgetExhausted(): boolean {
+  return getAdbUnitsToday() >= getAdbDailyUnitBudget();
+}
+
+/**
+ * Record provider spend: bump the in-memory counter immediately, then write-through via the
+ * atomic increment RPC and adopt the returned cross-instance total. Callers may ignore the
+ * promise (fire-and-forget); never throws.
+ */
+export async function recordAdbUnits(units: number): Promise<void> {
+  const n = Number(units);
+  if (!Number.isFinite(n) || n <= 0) return;
+  rollAdbDay();
+  adbUnits += n;
+
+  try {
+    const supabase = typeof getSupabaseAdmin === 'function' ? await getSupabaseAdmin() : null;
+    if (!supabase || typeof supabase.rpc !== 'function') return;
+
+    const { data, error } = await supabase.rpc('increment_adb_units', { p_day: adbDay, p_units: n });
+    if (error) {
+      console.error('adb-spend increment failed:', error.message);
+      return;
+    }
+    const total = Number(data);
+    rollAdbDay();
+    if (Number.isFinite(total)) adbUnits = Math.max(adbUnits, total);
+  } catch (error: any) {
+    console.error('adb-spend increment threw:', error?.message || error);
+  }
+}
+
+/**
+ * Pull today's cross-instance spend into the in-memory counter, at most once per
+ * ADB_HYDRATE_TTL_MS. Never throws; on any failure the in-memory value stands.
+ */
+export async function hydrateAdbSpend(): Promise<number> {
+  rollAdbDay();
+  const now = Date.now();
+  if (now - lastAdbHydratedAt < ADB_HYDRATE_TTL_MS) return adbUnits;
+  lastAdbHydratedAt = now;
+
+  try {
+    const supabase = typeof getSupabaseAdmin === 'function' ? await getSupabaseAdmin() : null;
+    if (!supabase || typeof supabase.from !== 'function') return adbUnits;
+
+    const { data, error } = await supabase
+      .from('schedule_provider_spend')
+      .select('units')
+      .eq('day', adbDay)
+      .limit(1);
+    if (error) {
+      console.error('adb-spend read failed:', error.message);
+      return adbUnits;
+    }
+    const units = Number((data as Array<{ units: number }> | null)?.[0]?.units);
+    rollAdbDay();
+    if (Number.isFinite(units)) adbUnits = Math.max(adbUnits, units);
+    return adbUnits;
+  } catch (error: any) {
+    console.error('adb-spend read threw:', error?.message || error);
+    return adbUnits;
+  }
+}
+
+/** Test helper: clear ADB spend state so it does not leak across tests. Production never calls it. */
+export function __resetAdbSpendForTests(): void {
+  adbDay = '';
+  adbUnits = 0;
+  lastAdbHydratedAt = 0;
+}
+
 /**
  * Write-through a new quota block so other instances honour it on their next hydrate. Fire-and-
  * forget from the caller's perspective; never throws.

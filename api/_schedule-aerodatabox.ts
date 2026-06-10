@@ -1,25 +1,11 @@
 import { HUB_TZ } from './irops.js';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
+import { getHubTerminal } from './_hubs.js';
+import { hydrateAdbSpend, isAdbBudgetExhausted, recordAdbUnits, getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
 
 const AERODATABOX_BASE_URL = 'https://prod.api.market/api/v1/aedbx/aerodatabox';
-
-const UNITED_HUB_TERMINALS: Record<string, { domestic: string; international: string }> = {
-  ORD: { domestic: '1', international: '1' },
-  DEN: { domestic: 'B', international: 'B' },
-  EWR: { domestic: 'C', international: 'C' },
-  IAH: { domestic: 'C', international: 'E' },
-  SFO: { domestic: '3', international: 'G' },
-  LAX: { domestic: '7', international: '7' },
-  IAD: { domestic: 'C', international: 'D' },
-  NRT: { domestic: '1', international: '1' },
-  GUM: { domestic: '1', international: '1' },
-};
-
-function getHubTerminal(iata: string, isIntl: boolean): string {
-  const hub = UNITED_HUB_TERMINALS[iata.toUpperCase()];
-  if (!hub) return '';
-  return isIntl ? hub.international : hub.domestic;
-}
+// Each FIDS window request is billed at 2 units by the provider (1 board = 2 windows = 4 units).
+const ADB_UNITS_PER_REQUEST = 2;
 
 function partsToObj(parts: Intl.DateTimeFormatPart[]): Record<string, string> {
   const o: Record<string, string> = {};
@@ -278,6 +264,9 @@ async function fetchWindow(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Math.min(remaining, 15000));
     try {
+      // Count spend per request actually fired (retries bill too), before reading the outcome —
+      // a 429 storm then exhausts the budget quickly, which is exactly the circuit we want.
+      void recordAdbUnits(ADB_UNITS_PER_REQUEST);
       const resp = await fetch(url, { signal: controller.signal, headers });
       clearTimeout(timer);
 
@@ -327,6 +316,16 @@ async function fetchWindow(
 
 export async function fetchViaAeroDataBox(hub: string, dir: string, ts: number, timeoutMs = 12000) {
   if (!process.env.AERODATABOX_API_KEY) return null;
+
+  // Cross-instance daily spend stop: behave exactly as if the provider were unconfigured so
+  // callers fall through to their existing degraded paths instead of burning more quota.
+  await hydrateAdbSpend();
+  if (isAdbBudgetExhausted()) {
+    console.warn(
+      `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping ${hub} ${dir} until next UTC day`
+    );
+    return null;
+  }
 
   const startTime = Date.now();
   const date = hubLocalDate(hub, ts);

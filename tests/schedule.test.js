@@ -12,9 +12,10 @@ const vercelFunctionMocks = vi.hoisted(() => ({
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => scheduleSnapshotMocks);
 vi.mock('@vercel/functions', () => vercelFunctionMocks);
 
-import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker, __resetScheduleCachesForTests } from '../api/schedule.js';
+import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker, __resetScheduleCachesForTests, shouldEnableProviderForBackgroundRefresh } from '../api/schedule.js';
 import { getStartOfDayForHub } from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
+import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
 function formatForFR24Test(date) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -651,7 +652,9 @@ describe('schedule API', () => {
       };
     });
 
-    const ts1 = Math.floor(Date.now() / 1000) - 42000;
+    // Two days back: snapped day is never "today", keeping the today-only live-feed rescue out of
+    // this test's fetch counts regardless of wall-clock time.
+    const ts1 = Math.floor(Date.now() / 1000) - 172800;
     const req1 = {
       method: 'GET',
       headers: { origin: 'http://localhost:3000' },
@@ -1225,7 +1228,9 @@ describe('schedule API', () => {
       };
     });
 
-    const ts = Math.floor(Date.now() / 1000) - 28800;
+    // Two days back: a snapped "today" board would legitimately attempt the live-feed rescue for
+    // an empty result, which is out of scope for this test.
+    const ts = Math.floor(Date.now() / 1000) - 172800;
     const req = {
       method: 'GET',
       headers: { origin: 'http://localhost:3000' },
@@ -1323,7 +1328,10 @@ describe('schedule API', () => {
   });
 
   it('returns persisted exact snapshot on cold start while refreshing in the background', async () => {
-    const ts = Math.floor(Date.now() / 1000) - 46800;
+    // Two days back: the snapped day is never "today", so the empty-board live-feed rescue
+    // (a today-only path) cannot add clock-dependent fetches to this test.
+    const ts = Math.floor(Date.now() / 1000) - 172800;
+    const tsSnapped = getStartOfHubDay('ORD', 0, new Date(ts * 1000));
     scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue({
       data: {
         flights: [{
@@ -1374,7 +1382,7 @@ describe('schedule API', () => {
     expect(res.body.total).toBe(1);
     expect(res.body.degraded).toBe(true);
     expect(res.body.meta.fallbackScope).toBe('persistent');
-    expect(scheduleSnapshotMocks.loadScheduleSnapshot).toHaveBeenCalledWith(`agg:ORD:departures:${ts}`);
+    expect(scheduleSnapshotMocks.loadScheduleSnapshot).toHaveBeenCalledWith(`agg:ORD:departures:${tsSnapped}`);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(vercelFunctionMocks.waitUntil).toHaveBeenCalledTimes(1);
   });
@@ -1469,6 +1477,8 @@ describe('schedule API', () => {
     });
 
     const ts = Math.floor(Date.now() / 1000) - 50400;
+    // The handler snaps any intra-day timestamp to the hub-local day start before keying.
+    const tsSnapped = getStartOfHubDay('EWR', 0, new Date(ts * 1000));
     const req = {
       method: 'GET',
       headers: { origin: 'http://localhost:3000' },
@@ -1481,10 +1491,10 @@ describe('schedule API', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.partial).toBe(false);
     expect(scheduleSnapshotMocks.saveScheduleSnapshot).toHaveBeenCalledWith(expect.objectContaining({
-      cacheKey: `agg:EWR:departures:${ts}`,
+      cacheKey: `agg:EWR:departures:${tsSnapped}`,
       hub: 'EWR',
       dir: 'departures',
-      ts,
+      ts: tsSnapped,
       data: expect.objectContaining({
         partial: false,
         total: 1
@@ -1832,5 +1842,219 @@ describe('schedule API', () => {
     for (const call of fetchSpy.mock.calls) {
       expect(String(call[0])).not.toContain('fr24api.flightradar24.com');
     }
+  });
+});
+
+// Empty-but-valid FR24 scrape payload: the no-env default path completes with a total-0 complete
+// board, which is enough to populate the in-memory agg cache for cache-key assertions.
+function mockEmptyScrape() {
+  return vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    json: async () => ({ result: { response: { airport: { pluginData: {} } } } }),
+  });
+}
+
+function resetScheduleTestState() {
+  vi.restoreAllMocks();
+  __resetRateLimitersForTests();
+  __resetScheduleCachesForTests();
+  process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
+  scheduleSnapshotMocks.loadScheduleSnapshot.mockReset();
+  scheduleSnapshotMocks.saveScheduleSnapshot.mockReset();
+  scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
+  scheduleSnapshotMocks.saveScheduleSnapshot.mockResolvedValue(undefined);
+  vercelFunctionMocks.waitUntil.mockReset();
+}
+
+function cleanupScheduleTestEnv() {
+  delete process.env.FR24_API_TOKEN;
+  delete process.env.AERODATABOX_API_KEY;
+  delete process.env.AERODATABOX_BASE_URL;
+  delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
+  delete process.env.SCHEDULE_SOURCE_PRIORITY;
+  delete process.env.CRON_SECRET;
+  resetFallbackBreaker();
+}
+
+describe('hub allowlist + timestamp snapping (quota-burn surface)', () => {
+  beforeEach(resetScheduleTestState);
+  afterEach(cleanupScheduleTestEnv);
+
+  it('rejects non-United-hub codes with 400 before any upstream call', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    for (const hub of ['JFK', 'ATL', 'LHR', 'ZZZ']) {
+      const res = createRes();
+      await handler({
+        method: 'GET',
+        headers: { origin: 'http://localhost:3000' },
+        query: { hub, dir: 'departures', timestamp: String(Math.floor(Date.now() / 1000)) },
+      }, res);
+      expect(res.statusCode, hub).toBe(400);
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('serves lowercase hub + intra-day timestamp from the same cache entry as the canonical request', async () => {
+    mockEmptyScrape();
+    const dayStart = getStartOfHubDay('ORD', 0);
+
+    const res1 = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(dayStart) },
+    }, res1);
+    expect(res1.statusCode).toBe(200);
+    expect(res1.body.cached).toBe(false);
+
+    // 'ord' two hours into the same hub-local day must hit the SAME board, not mint a new
+    // cache key (every distinct key = 2 paid provider calls once the provider path is on).
+    const res2 = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ord', dir: 'departures', timestamp: String(dayStart + 7200) },
+    }, res2);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.cached).toBe(true);
+  });
+});
+
+describe('forceRefresh (cron-authorized cache bypass)', () => {
+  const SECRET = 'test-cron-secret-1234';
+
+  beforeEach(() => {
+    resetScheduleTestState();
+    process.env.CRON_SECRET = SECRET;
+  });
+  afterEach(cleanupScheduleTestEnv);
+
+  function baseQuery() {
+    return { hub: 'ORD', dir: 'departures', timestamp: String(getStartOfHubDay('ORD', 0)) };
+  }
+
+  async function prime() {
+    mockEmptyScrape();
+    const res = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: baseQuery() }, res);
+    expect(res.body.cached).toBe(false);
+  }
+
+  it('bypasses the fresh cache and responds no-store when authorized with CRON_SECRET', async () => {
+    await prime();
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { authorization: `Bearer ${SECRET}` },
+      query: { ...baseQuery(), forceRefresh: '1' },
+    }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.cached).toBe(false);                  // refetched, not served frozen
+    expect(res.headers['Cache-Control']).toBe('no-store'); // cron URL must never pin a CDN object
+  });
+
+  it('ignores forceRefresh with a wrong secret', async () => {
+    await prime();
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { authorization: 'Bearer wrong-secret' },
+      query: { ...baseQuery(), forceRefresh: '1' },
+    }, res);
+    expect(res.body.cached).toBe(true);
+  });
+
+  it('ignores forceRefresh when CRON_SECRET is not configured', async () => {
+    await prime();
+    delete process.env.CRON_SECRET;
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { authorization: 'Bearer anything' },
+      query: { ...baseQuery(), forceRefresh: '1' },
+    }, res);
+    expect(res.body.cached).toBe(true);
+  });
+});
+
+describe('background provider refresh age gate', () => {
+  beforeEach(resetScheduleTestState);
+  afterEach(cleanupScheduleTestEnv);
+
+  it('stays off without a provider key, fresh data, or provider fallback disabled', () => {
+    delete process.env.AERODATABOX_API_KEY;
+    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:1', 30 * 3600 * 1000, true)).toBe(false);
+    process.env.AERODATABOX_API_KEY = 'test-key';
+    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:1', 1 * 3600 * 1000, true)).toBe(false);
+    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:1', 30 * 3600 * 1000, false)).toBe(false);
+  });
+
+  it('allows one provider refresh per agg key per hour once data is older than 3h', () => {
+    process.env.AERODATABOX_API_KEY = 'test-key';
+    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:2', 4 * 3600 * 1000, true)).toBe(true);
+    // Same key again immediately: cooldown holds (user traffic must not stampede the quota).
+    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:2', 4 * 3600 * 1000, true)).toBe(false);
+    // A different board is independent.
+    expect(shouldEnableProviderForBackgroundRefresh('agg:DEN:departures:2', 4 * 3600 * 1000, true)).toBe(true);
+  });
+
+  it('enables the provider on background refresh of a 30h-old persistent snapshot', async () => {
+    process.env.AERODATABOX_API_KEY = 'test-key';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({ departures: [], result: { response: { airport: { pluginData: {} } } } }),
+    });
+    scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue({
+      data: { flights: [], total: 412, partial: false, meta: { completeness: 1 } },
+      refreshedAt: Date.now() - 30 * 3600 * 1000,
+    });
+
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(getStartOfHubDay('ORD', 0)) },
+    }, res);
+    expect(res.body.stale).toBe(true);
+    expect(res.body.meta.fallbackScope).toBe('persistent');
+
+    // The background refresh (captured by waitUntil) must hit the paid provider: a 30h-old board
+    // is exactly the frozen state the refresh exists to fix.
+    expect(vercelFunctionMocks.waitUntil).toHaveBeenCalled();
+    await Promise.all(vercelFunctionMocks.waitUntil.mock.calls.map(c => c[0]));
+    const aeroCalls = fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url)));
+    expect(aeroCalls.length).toBeGreaterThan(0);
+  });
+
+  it('keeps the provider off on background refresh of a young snapshot', async () => {
+    process.env.AERODATABOX_API_KEY = 'test-key';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({ departures: [], result: { response: { airport: { pluginData: {} } } } }),
+    });
+    scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue({
+      data: { flights: [], total: 412, partial: false, meta: { completeness: 1 } },
+      refreshedAt: Date.now() - 10 * 60 * 1000,
+    });
+
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(getStartOfHubDay('ORD', 0)) },
+    }, res);
+    expect(res.body.stale).toBe(true);
+
+    await Promise.all(vercelFunctionMocks.waitUntil.mock.calls.map(c => c[0]));
+    const aeroCalls = fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url)));
+    expect(aeroCalls.length).toBe(0);
   });
 });

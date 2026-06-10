@@ -1,63 +1,88 @@
 // Vercel Cron Job: rotates through the 2-day schedule window (today/tomorrow) so exact
 // hub/day/direction snapshots stay warm at the CDN + Supabase snapshot. Yesterday is served
 // on-demand (historical board, rarely viewed) to conserve the metered AeroDataBox quota.
-// Config in vercel.json: { "path": "/api/cron/warm-schedules", "schedule": "0 */2 * * *" }
+// Config in vercel.json: { "path": "/api/cron/warm-schedules", "schedule": "0 * * * *" }
+//
+// Warm requests send forceRefresh=1 + the cron secret so /api/schedule actually REFETCHES the
+// board. Without it the handler serves the existing complete snapshot back to the cron, reports
+// "ok", and a board fetched once (usually the evening before, as "tomorrow") is never refreshed
+// again all day — the frozen-board failure mode this cron exists to prevent.
 
 import type { VercelRequest, VercelResponse } from '../types.js';
-import { getStartOfDayForHub } from '../irops.js';
+import { UNITED_HUBS } from '../_hubs.js';
+import { getStartOfHubDay } from '../../src/lib/hubTz.js';
 
-const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
+const HUBS = UNITED_HUBS;
 // Serialized with INTER_TASK_DELAY_MS between tasks. Budget math: each task worst-case is ~58s
 // (55s schedule fetch + 3s gap). maxDuration for this cron is 300s in vercel.json, so the clamp
-// ceiling of 4 tasks → 4 × 58s = 232s stays under the Lambda limit. Default is 2 to bound the
-// metered AeroDataBox spend: 2 boards/run × 12 runs/day × 4 units/board ≈ 96 units/day worst case
-// (~2,880/mo), well inside a paid tier. Serial (not Promise.allSettled) respects the 1 req/s limit.
-const WARM_TASKS_PER_RUN = Math.max(1, Math.min(4, Number(process.env.SCHEDULE_WARM_TASKS_PER_RUN || 2) || 2));
-const INTER_TASK_DELAY_MS = Math.max(0, Number(process.env.SCHEDULE_WARM_DELAY_MS || 3000) || 3000);
+// ceiling of 4 tasks → 4 × 58s = 232s stays under the Lambda limit. Default is 3 on an HOURLY
+// cron: 3 tasks × 24 fires = 72 warm slots/day = exactly one full ring (today boards 3×/day,
+// tomorrow boards 1×/day) ≈ 72 fresh boards × 4 units = 288 AeroDataBox units/day, the metered
+// plan's budget. Serial (not Promise.allSettled) respects the provider's 1 req/s limit.
+function envNumber(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) ? value : fallback;
+}
+// Read per call (not at module load) so a runtime env change — or a test — actually takes effect,
+// and so an explicit '0' delay is honoured instead of being swallowed by `|| fallback`.
+const getWarmTasksPerRun = () => Math.max(1, Math.min(4, Math.floor(envNumber('SCHEDULE_WARM_TASKS_PER_RUN', 3))));
+const getInterTaskDelayMs = () => Math.max(0, envNumber('SCHEDULE_WARM_DELAY_MS', 3000));
+// A warm that came back stale/degraded did not warm anything — the handler served a frozen
+// fallback instead of refetching. Anything older than the clean-board TTL (6h) counts as failed.
+const STALE_WARM_MAX_AGE_S = 21600;
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'https://theblueboard.co';
 
-// Yesterday (dayOffset -1) is intentionally NOT warmed — its board is historical/stable and
-// rarely viewed, so it loads on-demand (and caches) instead of burning quota every cycle.
-const WINDOW_TASKS = [
-  { dayOffset: 0, label: 'today', dir: 'departures' },
-  { dayOffset: 0, label: 'today', dir: 'arrivals' },
-  { dayOffset: 1, label: 'tomorrow', dir: 'departures' },
-  { dayOffset: 1, label: 'tomorrow', dir: 'arrivals' },
-] as const;
-
 type WarmTask = {
   hub: string;
   dir: 'departures' | 'arrivals';
-  dayOffset: -1 | 0 | 1;
-  label: 'yesterday' | 'today' | 'tomorrow';
+  dayOffset: 0 | 1;
+  label: 'today' | 'tomorrow';
 };
 
-export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
+// Yesterday (dayOffset -1) is intentionally NOT warmed — its board is historical/stable and
+// rarely viewed, so it loads on-demand (and caches) instead of burning quota every cycle.
+function windowTasks(dayOffset: 0 | 1, label: 'today' | 'tomorrow'): WarmTask[] {
   const tasks: WarmTask[] = [];
-  for (const task of WINDOW_TASKS) {
-    for (const hub of HUBS) {
-      tasks.push({
-        hub,
-        dir: task.dir,
-        dayOffset: task.dayOffset,
-        label: task.label,
-      });
-    }
+  for (const dir of ['departures', 'arrivals'] as const) {
+    for (const hub of HUBS) tasks.push({ hub, dir, dayOffset, label });
   }
+  return tasks;
+}
+
+// The warm ring: TODAY_ROUNDS rounds of all 18 today windows, with the 18 tomorrow windows split
+// evenly across the rounds. Striding through it sequentially warms each today board TODAY_ROUNDS
+// times per ring (~every 8h — delays/cancellations stay current) and each tomorrow board once
+// (schedule data is stable; it just needs to exist before midnight).
+const TODAY_ROUNDS = 3;
+function buildWarmRing(): WarmTask[] {
+  const today = windowTasks(0, 'today');
+  const tomorrow = windowTasks(1, 'tomorrow');
+  const perRound = Math.ceil(tomorrow.length / TODAY_ROUNDS);
+  const ring: WarmTask[] = [];
+  for (let round = 0; round < TODAY_ROUNDS; round++) {
+    ring.push(...today);
+    ring.push(...tomorrow.slice(round * perRound, (round + 1) * perRound));
+  }
+  return ring;
+}
+
+export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
+  const tasks = buildWarmRing();
 
   // Advance exactly one WARM_TASKS_PER_RUN stride per cron fire so consecutive fires cover the
-  // window list sequentially with no gaps. SLOT_MS MUST match the cron interval in vercel.json
-  // (currently every 2h): a 15-min slot here while the cron fires every 2h would stride 8× per
-  // fire and skip most windows (only every Nth pair would ever warm). Update both together.
-  const SLOT_MS = 2 * 60 * 60 * 1000; // = vercel.json cron interval (0 */2 * * *)
+  // ring sequentially with no gaps. SLOT_MS MUST match the cron interval in vercel.json
+  // (currently hourly): a 15-min slot here while the cron fires hourly would stride 4× per fire
+  // and skip most windows. Update both together.
+  const SLOT_MS = 60 * 60 * 1000; // = vercel.json cron interval (0 * * * *)
+  const tasksPerRun = getWarmTasksPerRun();
   const slot = Math.floor(nowMs / SLOT_MS);
-  const start = (slot * WARM_TASKS_PER_RUN) % tasks.length;
+  const start = (slot * tasksPerRun) % tasks.length;
   const plan: WarmTask[] = [];
-  for (let i = 0; i < Math.min(WARM_TASKS_PER_RUN, tasks.length); i++) {
+  for (let i = 0; i < Math.min(tasksPerRun, tasks.length); i++) {
     plan.push(tasks[(start + i) % tasks.length]);
   }
   return plan;
@@ -66,8 +91,9 @@ export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
 export function buildScheduleWarmUrl(hub: string, dir: string, timestamp: number): string {
   // Background warming uses the PROVIDER (AeroDataBox) — the only source that returns the full
   // board from Vercel — and keeps officialFallback off so warming never burns FR24 credits, and
-  // scraperFallback off (the FR24 scrape is Cloudflare-dead). With SCHEDULE_SOURCE_PRIORITY=provider
-  // this populates the CDN + Supabase snapshots so live user traffic is served from cache.
+  // scraperFallback off (the FR24 scrape is Cloudflare-dead). forceRefresh=1 (honoured only with
+  // the cron secret, sent by warmOne) bypasses the snapshot serve paths so the board is actually
+  // refetched instead of echoed back from the frozen cache.
   const params = new URLSearchParams({
     hub,
     dir,
@@ -75,6 +101,7 @@ export function buildScheduleWarmUrl(hub: string, dir: string, timestamp: number
     officialFallback: '0',
     providerFallback: '1',
     scraperFallback: '0',
+    forceRefresh: '1',
   });
   return `${BASE_URL}/api/schedule?${params}`;
 }
@@ -87,7 +114,11 @@ async function warmOne(hub: string, dir: string, timestamp: number, label: strin
     const timeout = setTimeout(() => controller.abort(), 55000);
     const resp = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'BlueBoard-CronWarmer/1.0' }
+      headers: {
+        'User-Agent': 'BlueBoard-CronWarmer/1.0',
+        // Authorizes forceRefresh on /api/schedule (same secret Vercel cron sends to this handler).
+        'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+      }
     });
     clearTimeout(timeout);
     const cdnStatus = resp.headers.get('x-vercel-cache') || 'unknown';
@@ -95,9 +126,15 @@ async function warmOne(hub: string, dir: string, timestamp: number, label: strin
       const data = await resp.json() as any;
       const flights = Number(data.total || 0);
       const partial = data.partial === true;
-      const status = partial
-        ? flights > 0 ? 'degraded_partial' : 'degraded_empty'
-        : 'ok';
+      const servedStale =
+        data.stale === true ||
+        data.degraded === true ||
+        Number(data?.meta?.dataAge || 0) > STALE_WARM_MAX_AGE_S;
+      const status = servedStale
+        ? 'stale_served'
+        : partial
+          ? flights > 0 ? 'degraded_partial' : 'degraded_empty'
+          : 'ok';
       return {
         key,
         result: {
@@ -106,6 +143,7 @@ async function warmOne(hub: string, dir: string, timestamp: number, label: strin
           partial,
           cached: data.cached || false,
           cdn: cdnStatus,
+          dataAge: data?.meta?.dataAge,
           partialReason: data.meta?.partialReason,
           completeness: data.meta?.completeness,
         }
@@ -127,17 +165,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let warmed = 0;
   let failed = 0;
 
-  // There are 36 total windows (9 hubs × 2 days × 2 directions); yesterday is on-demand.
-  // Keep the default conservative for the metered provider, and use the seed script for first-fill.
   const warmPlan = buildWarmPlan();
   for (let i = 0; i < warmPlan.length; i++) {
     const task = warmPlan[i];
-    const ts = getStartOfDayForHub(task.hub) + (task.dayOffset * 86400);
+    // getStartOfHubDay (NOT irops' getStartOfDayForHub): the IROPS helper rolls back to YESTERDAY
+    // before 6 AM hub-local and adds DST-naive +86400 for tomorrow, so ~25% of warm slots used to
+    // spend their quota on mislabeled day keys no user-facing view ever reads.
+    const ts = getStartOfHubDay(task.hub, task.dayOffset);
     const { key, result } = await warmOne(task.hub, task.dir, ts, task.label);
     results[key] = result;
     if (result.status === 'ok') warmed++; else failed++;
     if (i < warmPlan.length - 1) {
-      await new Promise(r => setTimeout(r, INTER_TASK_DELAY_MS));
+      await new Promise(r => setTimeout(r, getInterTaskDelayMs()));
     }
   }
 
@@ -167,7 +206,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `Cron warm-schedules: ${warmed} warmed, ${failed} failed, ~${estUnits} AeroDataBox units (${freshBoards} fresh boards)`,
     { warmPlan, results }
   );
-  return res.status(200).json({
+  // A run that warmed NOTHING is an incident, not a success — return 5xx so Vercel's built-in
+  // cron monitoring (and any uptime check on this path) goes red instead of logging a quiet 200.
+  const statusCode = warmed === 0 && failed > 0 ? 503 : 200;
+  return res.status(statusCode).json({
     warmed,
     failed,
     warmPlan,
