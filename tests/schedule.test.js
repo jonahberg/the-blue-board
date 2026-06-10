@@ -1956,6 +1956,51 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
     expect(res.headers['Cache-Control']).toBe('no-store'); // cron URL must never pin a CDN object
   });
 
+  it('bypasses the persistent-snapshot serve tier (the live 30h-frozen incident path)', async () => {
+    // The frozen-board incident: with cold in-memory caches, a 30h-old COMPLETE persisted snapshot
+    // satisfies every organic request via the persistent serve tier. If the cron's authorized force
+    // request also got that snapshot back, the board would never be refetched — the exact freeze
+    // the warm cron exists to break. The force must skip the snapshot and run a real fetch.
+    scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue({
+      data: { flights: [], total: 412, partial: false, meta: { completeness: 1 } },
+      refreshedAt: Date.now() - 30 * 3600 * 1000,
+    });
+    mockEmptyScrape();
+
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { authorization: `Bearer ${SECRET}` },
+      query: { ...baseQuery(), forceRefresh: '1' },
+    }, res);
+
+    expect(res.statusCode).toBe(200);
+    // NOT the degraded snapshot: a snapshot serve is stale+degraded with meta.fallbackScope set
+    // and total 412; the forced refetch is a fresh (empty-scrape) board.
+    expect(res.body.cached).toBe(false);
+    expect(res.body.stale).toBeFalsy();
+    expect(res.body.degraded).toBeFalsy();
+    expect(res.body.meta.fallbackScope).toBeUndefined();
+    expect(res.body.total).toBe(0);
+  });
+
+  it("accepts the documented force value variants ('true', 'yes') like '1'", async () => {
+    await prime();
+    for (const value of ['true', 'yes']) {
+      mockEmptyScrape();
+      const res = createRes();
+      await handler({
+        method: 'GET',
+        headers: { authorization: `Bearer ${SECRET}` },
+        query: { ...baseQuery(), forceRefresh: value },
+      }, res);
+      expect(res.statusCode, `forceRefresh=${value}`).toBe(200);
+      // Each variant must trigger a refetch (cached:false), not serve the fresh cache entry the
+      // previous request just repopulated.
+      expect(res.body.cached, `forceRefresh=${value}`).toBe(false);
+    }
+  });
+
   it('ignores forceRefresh with a wrong secret', async () => {
     await prime();
     const res = createRes();

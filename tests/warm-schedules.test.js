@@ -207,4 +207,77 @@ describe('warm-schedules handler', () => {
     await handler({ method: 'GET', headers: {} }, res);
     expect(res.statusCode).toBe(401);
   });
+
+  it('counts a partial non-empty board as degraded_partial — a FAILED warm', async () => {
+    mockFetchOk({ cached: false, stale: false, partial: true, total: 50, meta: { completeness: 0.5 } });
+    const res = createRes();
+    await handler(createReq(), res);
+    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
+    expect(scheduleResults.length).toBe(3);
+    for (const [key, r] of scheduleResults) expect(r.status, key).toBe('degraded_partial');
+    // A half-board did not warm anything: the schedule counters must reflect total failure even
+    // though the starlink ping succeeded, and the run must go red for cron monitoring.
+    expect(res.body.scheduleWarmed).toBe(0);
+    expect(res.body.scheduleFailed).toBe(3);
+    expect(res.body.failed).toBe(3);
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('counts a partial EMPTY board as degraded_empty — a FAILED warm', async () => {
+    mockFetchOk({ cached: false, stale: false, partial: true, total: 0, meta: { completeness: 0 } });
+    const res = createRes();
+    await handler(createReq(), res);
+    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
+    expect(scheduleResults.length).toBe(3);
+    for (const [key, r] of scheduleResults) expect(r.status, key).toBe('degraded_empty');
+    expect(res.body.scheduleWarmed).toBe(0);
+    expect(res.body.scheduleFailed).toBe(3);
+    expect(res.statusCode).toBe(503);
+  });
+
+  it("marks a schedule warm whose fetch throws as status 'error' (a FAILED warm)", async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/api/schedule')) throw new Error('socket hang up');
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ ok: true }) };
+    });
+    const res = createRes();
+    await handler(createReq(), res);
+    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
+    expect(scheduleResults.length).toBe(3);
+    for (const [key, r] of scheduleResults) {
+      expect(r.status, key).toBe('error');
+      expect(r.message, key).toBe('socket hang up');
+    }
+    expect(res.body.scheduleWarmed).toBe(0);
+    expect(res.body.scheduleFailed).toBe(3);
+    // Starlink still warmed (its fetch resolves), but that must not mask the schedule incident.
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('returns 200 on a MIXED run where at least one board actually warmed', async () => {
+    // 503 is reserved for "warmed NOTHING": one genuinely fresh board out of three is a partial
+    // success, and flapping the cron red on every transient stale-serve would bury real incidents.
+    let scheduleCalls = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const isSchedule = String(url).includes('/api/schedule');
+      if (!isSchedule) {
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ ok: true }) };
+      }
+      scheduleCalls++;
+      const fresh = scheduleCalls === 1;
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => fresh
+          ? { cached: false, stale: false, partial: false, total: 280, meta: { completeness: 1 } }
+          : { cached: true, stale: true, degraded: true, partial: false, total: 600, meta: { dataAge: 106495 } },
+      };
+    });
+    const res = createRes();
+    await handler(createReq(), res);
+    expect(res.body.scheduleWarmed).toBe(1);
+    expect(res.body.scheduleFailed).toBe(2);
+    expect(res.statusCode).toBe(200);
+  });
 });

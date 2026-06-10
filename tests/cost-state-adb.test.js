@@ -88,6 +88,59 @@ describe('AeroDataBox daily unit budget (cost-state)', () => {
     await hydrateAdbSpend();
     expect(getAdbUnitsToday()).toBe(6);
   });
+
+  it('ignores zero, negative, and NaN unit amounts', async () => {
+    await recordAdbUnits(0);
+    await recordAdbUnits(-5);
+    await recordAdbUnits(NaN);
+    await recordAdbUnits('abc');
+    expect(getAdbUnitsToday()).toBe(0);
+    // Garbage input must not poison the counter for subsequent valid spend either.
+    await recordAdbUnits(2);
+    await recordAdbUnits(-1);
+    expect(getAdbUnitsToday()).toBe(2);
+  });
+
+  it('keeps the locally recorded count when the increment RPC returns an error object', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: { message: 'x' } }));
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue({ rpc });
+    await recordAdbUnits(4);
+    expect(rpc).toHaveBeenCalled();
+    // The errored RPC's data (null → Number(null) = 0) must never replace local spend.
+    expect(getAdbUnitsToday()).toBe(4);
+  });
+
+  it('falls back to the 400-unit default when AERODATABOX_DAILY_UNIT_BUDGET is invalid', async () => {
+    // '0' or '-5' honoured literally would brick the provider (always exhausted); 'abc' honoured
+    // as NaN would disable the budget entirely. All three must fall back to the 400 default.
+    for (const bad of ['0', '-5', 'abc']) {
+      __resetAdbSpendForTests();
+      process.env.AERODATABOX_DAILY_UNIT_BUDGET = bad;
+      await recordAdbUnits(399);
+      expect(isAdbBudgetExhausted(), `budget=${bad} at 399 units`).toBe(false);
+      await recordAdbUnits(1);
+      expect(isAdbBudgetExhausted(), `budget=${bad} at 400 units`).toBe(true);
+    }
+  });
+
+  it('rate-limits hydrate reads to one per 10s: a second hydrate inside the TTL is a no-op', async () => {
+    let storedUnits = 120;
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue({
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            limit: async () => ({ data: [{ units: storedUnits }], error: null }),
+          }),
+        }),
+      }),
+    });
+    await hydrateAdbSpend();
+    expect(getAdbUnitsToday()).toBe(120);
+    // The store moves, but a hydrate within the 10s TTL must NOT re-read it (hot-path read guard).
+    storedUnits = 500;
+    await hydrateAdbSpend();
+    expect(getAdbUnitsToday()).toBe(120);
+  });
 });
 
 describe('fetchViaAeroDataBox budget enforcement', () => {
@@ -141,6 +194,37 @@ describe('fetchViaAeroDataBox budget enforcement', () => {
     // Spend is still accounted (2 windows × 2 units) so the organic budget sees the true total.
     expect(getAdbUnitsToday()).toBe(404);
   });
+
+  it('bills 2 units per ATTEMPT: 429 retries are metered too (2×429 then 200 per window = 12 units)', { timeout: 20000 }, async () => {
+    // The provider bills every request FIRED, not every success — fetchWindow records spend before
+    // reading the outcome, so a 429 storm drains the budget fast (the intended circuit). Two 429s
+    // then a 200 per window = 3 attempts × 2 units × 2 windows = 12 units for the board, not 4.
+    const attemptsByWindow = new Map();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const key = String(url);
+      const attempt = (attemptsByWindow.get(key) || 0) + 1;
+      attemptsByWindow.set(key, attempt);
+      if (attempt <= 2) {
+        return {
+          ok: false,
+          status: 429,
+          // fetchWindow honours a positive retry-after (seconds) as the backoff; a tiny fractional
+          // value (10ms) keeps the retries fast. ('0' would NOT be honoured and would fall back to
+          // the slow 1500ms×attempt default.)
+          headers: { get: (name) => (String(name).toLowerCase() === 'retry-after' ? '0.01' : null) },
+          text: async () => '',
+        };
+      }
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ departures: [] }) };
+    });
+
+    const result = await fetchViaAeroDataBox('ORD', 'departures', Math.floor(Date.now() / 1000), 60000);
+    expect(result).not.toBeNull();
+    // Both windows recovered on attempt 3, so the board itself is complete...
+    expect(result.partial).toBe(false);
+    // ...but every attempt was billed.
+    expect(getAdbUnitsToday()).toBe(12);
+  });
 });
 
 describe('ADB spend day-rollover races', () => {
@@ -165,6 +249,25 @@ describe('ADB spend day-rollover races', () => {
     supabaseMocks.getSupabaseAdmin.mockResolvedValue({ rpc });
     await recordAdbUnits(4);
     // New day starts clean — adopting 350 would block the provider for the whole new day.
+    expect(getAdbUnitsToday()).toBe(0);
+  });
+
+  it('discards a hydrate read that lands after UTC midnight instead of adopting yesterday into the new day', async () => {
+    vi.useFakeTimers({ now: new Date('2026-06-10T23:59:50Z'), toFake: ['Date'] });
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue({
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            limit: async () => {
+              // The read round-trip crosses UTC midnight: 350 is YESTERDAY's running total.
+              vi.setSystemTime(new Date('2026-06-11T00:00:10Z'));
+              return { data: [{ units: 350 }], error: null };
+            },
+          }),
+        }),
+      }),
+    });
+    await hydrateAdbSpend();
     expect(getAdbUnitsToday()).toBe(0);
   });
 });

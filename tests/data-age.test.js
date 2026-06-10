@@ -21,6 +21,14 @@ describe('formatDataAge', () => {
   it('reports multi-day ages in days', () => {
     expect(formatDataAge(86400 * 3)).toBe('3d');
   });
+
+  it('clamps negative, NaN, and missing ages to "just now"', () => {
+    // meta.dataAge can be garbage (clock skew → negative, absent field → undefined/NaN);
+    // the banner must never render "-5m" or "NaNh".
+    expect(formatDataAge(-5)).toBe('just now');
+    expect(formatDataAge(NaN)).toBe('just now');
+    expect(formatDataAge(undefined)).toBe('just now');
+  });
 });
 
 describe('dataAgeSeverity', () => {
@@ -37,5 +45,12 @@ describe('dataAgeSeverity', () => {
   it('treats 6h+ data as stale', () => {
     expect(dataAgeSeverity(21600)).toBe('stale');
     expect(dataAgeSeverity(106495)).toBe('stale');
+  });
+
+  it('clamps negative, NaN, and missing ages to "recent"', () => {
+    // Same clamping as formatDataAge: garbage age must not style the board as a stale incident.
+    expect(dataAgeSeverity(-5)).toBe('recent');
+    expect(dataAgeSeverity(NaN)).toBe('recent');
+    expect(dataAgeSeverity(undefined)).toBe('recent');
   });
 });
