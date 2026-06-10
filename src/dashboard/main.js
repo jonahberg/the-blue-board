@@ -4068,7 +4068,7 @@ async function loadScheduleData() {
       // that is hours old. 1-6h → amber caution; 6h+ (past a full cache lifetime) → red (--ua-red).
       const ageSeverity = result.degraded && meta.dataAge ? dataAgeSeverity(meta.dataAge) : null;
       const palette = ageSeverity === 'stale'
-        ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.3)', text: '#ef4444', icon: '⚠️' }
+        ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.3)', text: 'var(--ua-red)', icon: '⚠️' }
         : ageSeverity === 'aging'
           ? { bg: 'rgba(234,179,8,.12)', border: 'rgba(234,179,8,.3)', text: '#eab308', icon: '⏳' }
           : result.degraded

@@ -10,6 +10,7 @@
 
 import type { VercelRequest, VercelResponse } from '../types.js';
 import { UNITED_HUBS } from '../_hubs.js';
+import { isAuthorizedCronRequest } from '../_cron-auth.js';
 import { getStartOfHubDay } from '../../src/lib/hubTz.js';
 
 const HUBS = UNITED_HUBS;
@@ -156,8 +157,9 @@ async function warmOne(hub: string, dir: string, timestamp: number, label: strin
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Vercel cron sends authorization header with CRON_SECRET
-  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Vercel cron sends authorization header with CRON_SECRET (timing-safe, fails closed on
+  // missing secret — see api/_cron-auth.ts).
+  if (!isAuthorizedCronRequest(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

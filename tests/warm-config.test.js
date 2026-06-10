@@ -13,4 +13,11 @@ describe('vercel.json warm-schedules cron config', () => {
     expect(cron, 'warm-schedules cron entry missing from vercel.json').toBeTruthy();
     expect(cron.schedule).toBe('0 * * * *');
   });
+
+  it('SLOT_MS in warm-schedules.ts matches the hourly cron (the other side of the lockstep)', () => {
+    // Without this, changing SLOT_MS back to 2h while vercel.json stays hourly would pass the
+    // test above and silently double-stride the warm ring in production.
+    const src = readFileSync(new URL('../api/cron/warm-schedules.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/const SLOT_MS = 60 \* 60 \* 1000/);
+  });
 });

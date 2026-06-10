@@ -173,7 +173,10 @@ describe('fetchViaAeroDataBox budget enforcement', () => {
 
   it('returns null without calling upstream once the daily budget is exhausted', async () => {
     await recordAdbUnits(400);
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    // Stubbed (not call-through): a gate regression must fail fast, not via live provider calls.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 500, headers: { get: () => null }, json: async () => ({}), text: async () => '',
+    });
     const result = await fetchViaAeroDataBox('ORD', 'departures', Math.floor(Date.now() / 1000), 5000);
     expect(result).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -193,6 +196,18 @@ describe('fetchViaAeroDataBox budget enforcement', () => {
     expect(result).not.toBeNull();
     // Spend is still accounted (2 windows × 2 units) so the organic budget sees the true total.
     expect(getAdbUnitsToday()).toBe(404);
+  });
+
+  it('bypassDailyBudget still respects the 3x disaster ceiling — a leaked cron secret cannot spend unboundedly', async () => {
+    await recordAdbUnits(1200); // 3 × the 400 default
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 500, headers: { get: () => null }, json: async () => ({}), text: async () => '',
+    });
+    const result = await fetchViaAeroDataBox('ORD', 'departures', Math.floor(Date.now() / 1000), 5000, {
+      bypassDailyBudget: true,
+    });
+    expect(result).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('bills 2 units per ATTEMPT: 429 retries are metered too (2×429 then 200 per window = 12 units)', { timeout: 20000 }, async () => {

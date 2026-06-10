@@ -1884,7 +1884,11 @@ describe('hub allowlist + timestamp snapping (quota-burn surface)', () => {
   afterEach(cleanupScheduleTestEnv);
 
   it('rejects non-United-hub codes with 400 before any upstream call', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    // Stubbed (not call-through): on regression the handler would otherwise fire real FR24
+    // requests with 45s+ timeouts before the not-called assertion fails.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 500, headers: { get: () => null }, json: async () => ({}), text: async () => '',
+    });
     for (const hub of ['JFK', 'ATL', 'LHR', 'ZZZ']) {
       const res = createRes();
       await handler({

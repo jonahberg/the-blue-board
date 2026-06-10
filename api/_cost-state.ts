@@ -87,6 +87,26 @@ function utcToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Schema-missing must be loudly distinguishable from a transient Supabase blip: with sql/009
+// unapplied, the cross-instance ceiling silently doesn't exist (per-instance only) while
+// everything else looks healthy — the same invisible-drift failure mode as the migration-006
+// incident. PGRST202 = missing RPC; 42P01 = missing table.
+let warnedAdbSchemaMissing = false;
+function logAdbPersistError(op: string, error: { code?: string; message?: string }): void {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '');
+  if (code === 'PGRST202' || code === '42P01' || /increment_adb_units.*not.*found|schedule_provider_spend.*does not exist/i.test(message)) {
+    if (!warnedAdbSchemaMissing) {
+      warnedAdbSchemaMissing = true;
+      console.error(
+        'sql/009_provider_spend.sql is NOT applied — the AeroDataBox budget is per-instance only (no cross-instance ceiling). Apply it via the Supabase SQL editor.'
+      );
+    }
+    return;
+  }
+  console.error(`adb-spend ${op} failed:`, message);
+}
+
 function rollAdbDay(): void {
   const today = utcToday();
   if (adbDay !== today) {
@@ -128,7 +148,7 @@ export async function recordAdbUnits(units: number): Promise<void> {
 
     const { data, error } = await supabase.rpc('increment_adb_units', { p_day: issuedForDay, p_units: n });
     if (error) {
-      console.error('adb-spend increment failed:', error.message);
+      logAdbPersistError('increment', error);
       return;
     }
     const total = Number(data);
@@ -163,7 +183,7 @@ export async function hydrateAdbSpend(): Promise<number> {
       .eq('day', issuedForDay)
       .limit(1);
     if (error) {
-      console.error('adb-spend read failed:', error.message);
+      logAdbPersistError('read', error);
       return adbUnits;
     }
     const units = Number((data as Array<{ units: number }> | null)?.[0]?.units);
@@ -183,6 +203,7 @@ export function __resetAdbSpendForTests(): void {
   adbDay = '';
   adbUnits = 0;
   lastAdbHydratedAt = 0;
+  warnedAdbSchemaMissing = false;
 }
 
 /**

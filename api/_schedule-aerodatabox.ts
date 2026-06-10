@@ -1,3 +1,4 @@
+import { waitUntil } from '@vercel/functions';
 import { HUB_TZ } from './irops.js';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
 import { getHubTerminal } from './_hubs.js';
@@ -6,6 +7,22 @@ import { hydrateAdbSpend, isAdbBudgetExhausted, recordAdbUnits, getAdbUnitsToday
 const AERODATABOX_BASE_URL = 'https://prod.api.market/api/v1/aedbx/aerodatabox';
 // Each FIDS window request is billed at 2 units by the provider (1 board = 2 windows = 4 units).
 const ADB_UNITS_PER_REQUEST = 2;
+// Budget-exempt (cron-forced) calls still hit an absolute ceiling at 3x the organic budget so a
+// leaked cron secret cannot spend unboundedly; the warm ring's own cadence keeps normal forced
+// spend far below this.
+const ADB_BYPASS_CEILING_MULTIPLIER = 3;
+
+// Persist the spend write even if Vercel freezes the lambda right after the response is sent —
+// a dropped RPC undercounts the cross-instance counter that IS the global spend ceiling.
+function recordAdbUnitsDurable(units: number): void {
+  const promise = recordAdbUnits(units);
+  try {
+    waitUntil(promise);
+  } catch {
+    // Outside a Vercel request context (tests, local scripts) waitUntil may throw; the promise
+    // still runs to completion in-process.
+  }
+}
 
 function partsToObj(parts: Intl.DateTimeFormatPart[]): Record<string, string> {
   const o: Record<string, string> = {};
@@ -266,7 +283,7 @@ async function fetchWindow(
     try {
       // Count spend per request actually fired (retries bill too), before reading the outcome —
       // a 429 storm then exhausts the budget quickly, which is exactly the circuit we want.
-      void recordAdbUnits(ADB_UNITS_PER_REQUEST);
+      recordAdbUnitsDurable(ADB_UNITS_PER_REQUEST);
       const resp = await fetch(url, { signal: controller.signal, headers });
       clearTimeout(timer);
 
@@ -325,15 +342,25 @@ export async function fetchViaAeroDataBox(
 
   // Cross-instance daily spend stop: behave exactly as if the provider were unconfigured so
   // callers fall through to their existing degraded paths instead of burning more quota.
-  // Authorized cron warms bypass the gate — their spend is hard-bounded by the warm ring itself
-  // (~288 units/day) and they are the one path that keeps boards from freezing, so organic
-  // traffic must never starve them. Their units are still recorded against the organic budget.
-  await hydrateAdbSpend();
-  if (!opts.bypassDailyBudget && isAdbBudgetExhausted()) {
-    console.warn(
-      `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping ${hub} ${dir} until next UTC day`
-    );
-    return null;
+  // Authorized cron warms bypass the organic gate — their spend is hard-bounded by the warm ring
+  // itself (~288 units/day) and they are the one path that keeps boards from freezing, so organic
+  // traffic must never starve them. Their units are still recorded against the organic budget,
+  // and they keep a 3x absolute ceiling so a leaked cron secret cannot spend unboundedly.
+  if (opts.bypassDailyBudget) {
+    if (getAdbUnitsToday() >= getAdbDailyUnitBudget() * ADB_BYPASS_CEILING_MULTIPLIER) {
+      console.error(
+        `AeroDataBox bypass ceiling hit (${getAdbUnitsToday()}/${getAdbDailyUnitBudget() * ADB_BYPASS_CEILING_MULTIPLIER}); refusing forced fetch for ${hub} ${dir}`
+      );
+      return null;
+    }
+  } else {
+    await hydrateAdbSpend();
+    if (isAdbBudgetExhausted()) {
+      console.warn(
+        `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping ${hub} ${dir} until next UTC day`
+      );
+      return null;
+    }
   }
 
   const startTime = Date.now();

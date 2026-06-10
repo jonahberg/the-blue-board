@@ -3,6 +3,11 @@ import handler, { buildScheduleWarmUrl, buildWarmPlan } from '../api/cron/warm-s
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
 describe('warm-schedules buildWarmPlan', () => {
+  // The production code reads this env per call; pin it so an ambient export in a dev/CI shell
+  // can't skew every count-based assertion in this file.
+  beforeEach(() => { process.env.SCHEDULE_WARM_TASKS_PER_RUN = '3'; });
+  afterEach(() => { delete process.env.SCHEDULE_WARM_TASKS_PER_RUN; });
+
   const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
   const UNIQUE_WINDOWS = 9 * 4;       // 9 hubs × (today+tomorrow) × 2 dirs; yesterday is on-demand
   const TODAY_ROUNDS = 3;             // each today window is warmed 3×/day (~every 8h)
@@ -115,12 +120,14 @@ describe('warm-schedules handler', () => {
     vi.restoreAllMocks();
     process.env.CRON_SECRET = SECRET;
     process.env.SCHEDULE_WARM_DELAY_MS = '0';
+    process.env.SCHEDULE_WARM_TASKS_PER_RUN = '3'; // pin the per-call env read (see plan describe)
   });
 
   afterEach(() => {
     vi.useRealTimers();
     delete process.env.CRON_SECRET;
     delete process.env.SCHEDULE_WARM_DELAY_MS;
+    delete process.env.SCHEDULE_WARM_TASKS_PER_RUN;
   });
 
   function mockFetchOk(schedulePayload) {
@@ -153,11 +160,17 @@ describe('warm-schedules handler', () => {
       await handler(createReq(), createRes());
       const scheduleCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('/api/schedule'));
       expect(scheduleCalls.length).toBeGreaterThan(0);
+      // Exact per-task assertion (not "either day"): a bug that swaps the today/tomorrow
+      // dayOffset mapping must fail here, not just the yesterday-rollback regression.
+      const plan = buildWarmPlan(Date.now());
       for (const [url] of scheduleCalls) {
         const u = new URL(String(url));
         const hub = u.searchParams.get('hub');
+        const dir = u.searchParams.get('dir');
         const ts = Number(u.searchParams.get('timestamp'));
-        expect([getStartOfHubDay(hub, 0), getStartOfHubDay(hub, 1)], `${h}:30Z ${hub} ts ${ts}`).toContain(ts);
+        const task = plan.find(t => t.hub === hub && t.dir === dir);
+        expect(task, `${h}:30Z no plan task for ${hub} ${dir}`).toBeTruthy();
+        expect(ts, `${h}:30Z ${hub} ${dir} (${task.label})`).toBe(getStartOfHubDay(task.hub, task.dayOffset));
       }
       vi.restoreAllMocks();
       vi.useRealTimers();
@@ -205,6 +218,15 @@ describe('warm-schedules handler', () => {
   it('rejects requests without the cron secret', async () => {
     const res = createRes();
     await handler({ method: 'GET', headers: {} }, res);
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('fails CLOSED when CRON_SECRET is unset — "Bearer undefined" must not authenticate', async () => {
+    // A plain `auth !== `Bearer ${process.env.CRON_SECRET}`` check with the env var missing
+    // compares against the literal string "Bearer undefined" — a guessable constant.
+    delete process.env.CRON_SECRET;
+    const res = createRes();
+    await handler({ method: 'GET', headers: { authorization: 'Bearer undefined' } }, res);
     expect(res.statusCode).toBe(401);
   });
 
