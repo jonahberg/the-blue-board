@@ -2016,6 +2016,22 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
     expect(res.body.cached).toBe(true);
   });
 
+  it('responds no-store to ANY forceRefresh request, even unauthorized', async () => {
+    // The warm URL is fully predictable from the public repo. If an unauthenticated GET of it
+    // produced a normal cacheable response, the CDN would pin a 6h object on the cron's own URL
+    // key and the next hourly warm could be served that frozen object as a green "ok" —
+    // unauthenticated re-freezing of the exact boards the force path exists to refresh.
+    await prime();
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { authorization: 'Bearer wrong-secret' },
+      query: { ...baseQuery(), forceRefresh: '1' },
+    }, res);
+    expect(res.body.cached).toBe(true); // still served normally (no oracle)...
+    expect(res.headers['Cache-Control']).toBe('no-store'); // ...but never CDN-pinned
+  });
+
   it('ignores forceRefresh when CRON_SECRET is not configured', async () => {
     await prime();
     delete process.env.CRON_SECRET;

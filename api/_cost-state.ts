@@ -121,8 +121,11 @@ export function getAdbUnitsToday(): number {
 }
 
 export function getAdbDailyUnitBudget(): number {
+  // An explicit 0 is a kill switch (operator says: stop all metered spend NOW) and must be
+  // honoured — substituting the default would fail open with real money. Garbage (negative,
+  // NaN) falls back to the default.
   const configured = Number(process.env.AERODATABOX_DAILY_UNIT_BUDGET);
-  return Number.isFinite(configured) && configured > 0 ? configured : 400;
+  return Number.isFinite(configured) && configured >= 0 ? configured : 400;
 }
 
 /** True once today's known spend has reached the daily budget. Sync; safe in the hot path. */

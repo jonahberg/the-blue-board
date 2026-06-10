@@ -202,6 +202,35 @@ describe('warm-schedules handler', () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it('counts a CDN HIT or cache-served warm as NOT refreshed — a warm that did not refetch warmed nothing', async () => {
+    // Tripwire for CDN pinning of the warm URL: a HIT means the stored body (possibly a frozen
+    // board recorded as cached:false hours ago) came back without the lambda running at all.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => ({
+      ok: true,
+      status: 200,
+      headers: { get: (h) => (h === 'x-vercel-cache' && String(url).includes('/api/schedule') ? 'HIT' : null) },
+      json: async () => (String(url).includes('/api/schedule')
+        ? { cached: false, stale: false, partial: false, total: 300, meta: { completeness: 1 } }
+        : { ok: true }),
+    }));
+    const res = createRes();
+    await handler(createReq(), res);
+    expect(res.body.scheduleWarmed).toBe(0);
+    expect(res.statusCode).toBe(503);
+    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
+    for (const [, r] of scheduleResults) expect(r.status).toBe('not_refreshed');
+  });
+
+  it('counts a cache-served body (cached:true, e.g. force silently ignored) as NOT refreshed', async () => {
+    // If CRON_SECRET is missing from the schedule lambda's env, forceRefresh is silently ignored
+    // and the warm gets the cached board back — that must not report a green ok.
+    mockFetchOk({ cached: true, stale: false, partial: false, total: 300, meta: { completeness: 1 } });
+    const res = createRes();
+    await handler(createReq(), res);
+    expect(res.body.scheduleWarmed).toBe(0);
+    expect(res.statusCode).toBe(503);
+  });
+
   it('returns 503 when every warm task fails so cron monitoring turns red', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false,

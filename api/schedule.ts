@@ -197,7 +197,14 @@ function cacheSet(key: string, data: any, ttlMs: number): void {
   cache.set(key, { data, expires: Date.now() + ttlMs, time: Date.now() });
 }
 
-function setAggregateCacheHeader(res: VercelResponse, data: any, cdnMaxAge: number, swr: number): void {
+function setAggregateCacheHeader(res: VercelResponse, data: any, cdnMaxAge: number, swr: number, noStore = false): void {
+  // Any forceRefresh-flavored URL must never pin a CDN object — the warm URL is predictable
+  // from the public repo, and a 6h object stored on it by an UNAUTHENTICATED probe would be
+  // served back to the next hourly cron warm as a frozen-but-green board.
+  if (noStore) {
+    res.setHeader('Cache-Control', 'no-store');
+    return;
+  }
   const isPartial = data?.partial === true;
   const total = Number(data?.total || 0);
   // A degraded-but-NON-EMPTY board is still useful to show; re-validating it every 30s at the CDN
@@ -238,11 +245,14 @@ function shouldDisableScraperFallback(req: VercelRequest): boolean {
  * (the frozen-board failure mode). Unauthorized force params are silently ignored — the request is
  * served like any other, so probing this surface costs an attacker nothing and gains them nothing.
  */
-function isAuthorizedForceRefresh(req: VercelRequest): boolean {
-  const wantsForce = ['1', 'true', 'yes', 'on'].includes(
+function hasForceRefreshParam(req: VercelRequest): boolean {
+  return ['1', 'true', 'yes', 'on'].includes(
     getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.forceRefresh).toLowerCase()
   );
-  return wantsForce && isAuthorizedCronRequest(req);
+}
+
+function isAuthorizedForceRefresh(req: VercelRequest): boolean {
+  return hasForceRefreshParam(req) && isAuthorizedCronRequest(req);
 }
 
 // ── Background provider refresh gate ──
@@ -254,7 +264,7 @@ function isAuthorizedForceRefresh(req: VercelRequest): boolean {
 // hourly per-key cooldown bounds worst case to 24 provider refreshes per board per day.
 const PROVIDER_REFRESH_STALE_MS = 3 * 60 * 60 * 1000;
 const PROVIDER_REFRESH_KEY_COOLDOWN_MS = 60 * 60 * 1000;
-const MAX_PROVIDER_REFRESH_KEYS = 512;
+const MAX_PROVIDER_REFRESH_KEYS = 512; // keyspace is ~270 (9 hubs x 2 dirs x ~15 days): eviction is a guard rail, currently unreachable
 const lastProviderRefreshAt = new Map<string, number>();
 
 export function shouldEnableProviderForBackgroundRefresh(
@@ -1680,7 +1690,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Authorized cron warms bypass every serve-from-cache path below: a complete snapshot would
     // otherwise satisfy the warm request, report "ok", and never be refetched — freezing the board
     // for the rest of the day while it self-reports completeness 1.0.
-    const forceRefresh = isAuthorizedForceRefresh(req);
+    const wantsForce = hasForceRefreshParam(req);
+    const forceRefresh = wantsForce && isAuthorizedCronRequest(req);
 
     const cached = forceRefresh ? null : cacheGet(currentAggKey);
     const hasImmediateScheduleRecovery =
@@ -1689,7 +1700,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       shouldAttemptLiveFeedFallback(hub, ts);
     const shouldBypassEmptyPartialCache = cached?.data?.partial === true && Number(cached?.data?.total || 0) === 0 && hasImmediateScheduleRecovery;
     if (cached && !shouldBypassEmptyPartialCache) {
-      setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr);
+      setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr, wantsForce);
       return res.status(200).json({ ...cached.data, cached: true });
     }
 
@@ -1749,7 +1760,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!forceRefresh && pendingAggs.has(currentAggKey)) {
       const result = await pendingAggs.get(currentAggKey);
       if (result) {
-        setAggregateCacheHeader(res, result, cdnMaxAge, swr);
+        setAggregateCacheHeader(res, result, cdnMaxAge, swr, wantsForce);
         return res.status(200).json({ ...result, cached: true });
       }
     }
@@ -1795,11 +1806,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // The cron's force URL is its own CDN object (forceRefresh=1 is part of the query string).
       // Never let it pin: a CDN HIT on the warm URL would silently skip the refresh next cycle.
       // (The partial branches above set s-maxage=60, which expires long before the next warm.)
-      if (forceRefresh) {
-        res.setHeader('Cache-Control', 'no-store');
-      } else {
-        setAggregateCacheHeader(res, result, cdnMaxAge, swr);
-      }
+      setAggregateCacheHeader(res, result, cdnMaxAge, swr, wantsForce);
       return res.status(200).json(result);
     } finally {
       // Compare-and-delete (see triggerBackgroundRefresh): never evict an entry that a

@@ -131,11 +131,18 @@ async function warmOne(hub: string, dir: string, timestamp: number, label: strin
         data.stale === true ||
         data.degraded === true ||
         Number(data?.meta?.dataAge || 0) > STALE_WARM_MAX_AGE_S;
+      // A warm that did not actually refetch warmed nothing: a CDN HIT means the lambda never
+      // ran (the stored body may be a frozen board recorded as cached:false hours ago), and
+      // cached:true means forceRefresh was silently ignored (e.g. CRON_SECRET missing from the
+      // schedule lambda's env). Both must read as failures, not green oks.
+      const notRefreshed = !servedStale && (/HIT/i.test(cdnStatus) || data.cached === true);
       const status = servedStale
         ? 'stale_served'
-        : partial
-          ? flights > 0 ? 'degraded_partial' : 'degraded_empty'
-          : 'ok';
+        : notRefreshed
+          ? 'not_refreshed'
+          : partial
+            ? flights > 0 ? 'degraded_partial' : 'degraded_empty'
+            : 'ok';
       return {
         key,
         result: {

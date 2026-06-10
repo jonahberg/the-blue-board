@@ -110,10 +110,9 @@ describe('AeroDataBox daily unit budget (cost-state)', () => {
     expect(getAdbUnitsToday()).toBe(4);
   });
 
-  it('falls back to the 400-unit default when AERODATABOX_DAILY_UNIT_BUDGET is invalid', async () => {
-    // '0' or '-5' honoured literally would brick the provider (always exhausted); 'abc' honoured
-    // as NaN would disable the budget entirely. All three must fall back to the 400 default.
-    for (const bad of ['0', '-5', 'abc']) {
+  it('falls back to the 400-unit default when AERODATABOX_DAILY_UNIT_BUDGET is garbage', async () => {
+    // '-5' honoured literally or 'abc' honoured as NaN would disable the budget entirely.
+    for (const bad of ['-5', 'abc']) {
       __resetAdbSpendForTests();
       process.env.AERODATABOX_DAILY_UNIT_BUDGET = bad;
       await recordAdbUnits(399);
@@ -121,6 +120,13 @@ describe('AeroDataBox daily unit budget (cost-state)', () => {
       await recordAdbUnits(1);
       expect(isAdbBudgetExhausted(), `budget=${bad} at 400 units`).toBe(true);
     }
+  });
+
+  it('honours an explicit budget of 0 as a kill switch — this is metered money', async () => {
+    // An operator setting 0 during a billing incident means STOP ALL SPEND; silently substituting
+    // the 400 default would be fail-open with the owner's wallet.
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '0';
+    expect(isAdbBudgetExhausted()).toBe(true);
   });
 
   it('rate-limits hydrate reads to one per 10s: a second hydrate inside the TTL is a no-op', async () => {
