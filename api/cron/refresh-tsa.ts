@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '../types.js';
 
 /**
- * Cron job to warm the TSA wait times cache every 5 minutes.
+ * Cron job to warm the TSA wait times cache hourly (was every 5 minutes — dropped because the
+ * MyTSA upstream is decommissioned and returns all-null, so /api/tsa now reports feedDown).
  * Calls the /api/tsa endpoint internally to trigger a fresh fetch.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -26,9 +26,45 @@ function mockTsaApiResponse(waitTime, createdDatetime = '2026-04-03T12:00:00') {
   return [{ Wait_Time: waitTime, Created_Datetime: createdDatetime, Airport_Code: 'ORD' }];
 }
 
+import { computeTsaFeedDown } from '../api/tsa.js';
+
+describe('computeTsaFeedDown', () => {
+  const liveHub = { standardWait: 15, precheckWait: 5, lastUpdated: '2026-06-10T12:00:00Z', reports: [{ wait: 15, precheck: false, created: '2026-06-10T12:00:00Z' }] };
+  const deadHub = { standardWait: null, precheckWait: null, lastUpdated: null, reports: [] };
+
+  it('is true when every hub is empty (the decommissioned-upstream signature)', () => {
+    expect(computeTsaFeedDown({ ORD: deadHub, DEN: deadHub, IAH: deadHub })).toBe(true);
+  });
+
+  it('is true for an empty hub set', () => {
+    expect(computeTsaFeedDown({})).toBe(true);
+  });
+
+  it('is false when at least one hub has real wait data', () => {
+    expect(computeTsaFeedDown({ ORD: deadHub, DEN: liveHub })).toBe(false);
+  });
+
+  it('is false when a hub has reports even if the latest wait is null', () => {
+    const reportedHub = { standardWait: null, precheckWait: null, lastUpdated: '2026-06-10T12:00:00Z', reports: [{ wait: 0, precheck: false, created: '2026-06-10T12:00:00Z' }] };
+    expect(computeTsaFeedDown({ ORD: reportedHub })).toBe(false);
+  });
+});
+
 describe('TSA API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('flags feedDown when the live response has wait data for at least one hub (regression: was always absent)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => mockTsaApiResponse(2),
+    });
+    const res = createRes();
+    await handler(makeReq({ headers: { origin: 'https://theblueboard.co' } }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toHaveProperty('feedDown');
+    expect(typeof res.body.feedDown).toBe('boolean');
   });
 
   // --- Validation tests (no fetch needed) ---
