@@ -16,7 +16,8 @@
             ],
             "destination": "https://theblueboard.co/:path*",
             "permanent": true
-        }
+        },
+        { "source": "/favicon.ico", "destination": "/favicon.svg", "permanent": true }
     ],
     "functions": {
         "api/irops.ts": { "maxDuration": 90 },
@@ -36,7 +37,7 @@
     "crons": [
         { "path": "/api/cron/warm-schedules", "schedule": "0 * * * *" },
         { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" },
-        { "path": "/api/cron/refresh-tsa", "schedule": "*/5 * * * *" },
+        { "path": "/api/cron/refresh-tsa", "schedule": "0 * * * *" },
         { "path": "/api/cron/refresh-metar", "schedule": "*/5 * * * *" }
     ],
   "buildCommand": "bun run build",
@@ -105,13 +106,13 @@
     {
       "source": "/css/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }
       ]
     },
     {
       "source": "/js/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }
       ]
     }
   ]

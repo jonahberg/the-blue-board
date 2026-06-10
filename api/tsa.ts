@@ -20,6 +20,21 @@ interface TsaResponse {
     reports: Array<{ wait: number; precheck: boolean; created: string }>;
   }>;
   lastRefreshed: string;
+  // True when the MyTSA upstream returned nothing usable for any hub. MyTSA was decommissioned
+  // (the endpoint 302s to the TSA homepage), so this is currently always true in production —
+  // the flag lets consumers say "wait times unavailable" instead of rendering all-null as fresh
+  // data stamped `lastRefreshed: now`. (Audit: tsa-serves-dead-upstream-as-fresh.)
+  feedDown: boolean;
+}
+
+/** True when no hub has any wait data or reports — the dead-upstream signature. */
+export function computeTsaFeedDown(hubs: TsaResponse['hubs']): boolean {
+  const codes = Object.keys(hubs);
+  if (codes.length === 0) return true;
+  return codes.every((c) => {
+    const h = hubs[c];
+    return h.standardWait === null && h.precheckWait === null && (h.reports?.length ?? 0) === 0;
+  });
 }
 
 /**
@@ -64,7 +79,7 @@ async function fetchMyTsaData(): Promise<TsaResponse> {
     };
   }
 
-  return { hubs, lastRefreshed: now };
+  return { hubs, lastRefreshed: now, feedDown: computeTsaFeedDown(hubs) };
 }
 
 /**
