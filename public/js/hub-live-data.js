@@ -40,6 +40,25 @@
     }
   }
 
+  // Poll every 30s, but only while the tab is visible. A backgrounded hub tab previously kept
+  // hitting /api/fr24-feed forever (2,880 invocations/day per tab); now it pauses when hidden and
+  // refreshes once on return so the count is current without the wasted lambda invocations.
+  var timer = null;
+  function startPolling() {
+    if (timer === null) timer = setInterval(loadLiveData, 30000);
+  }
+  function stopPolling() {
+    if (timer !== null) { clearInterval(timer); timer = null; }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      stopPolling();
+    } else {
+      loadLiveData();
+      startPolling();
+    }
+  });
+
   loadLiveData();
-  setInterval(loadLiveData, 30000);
+  if (!document.hidden) startPolling();
 })();
