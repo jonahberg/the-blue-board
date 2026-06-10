@@ -4035,9 +4035,10 @@ async function loadScheduleData() {
     if (result.partial || result.degraded) {
       const meta = result.meta || {};
       let msg = '';
-      if (result.degraded && meta.dataAge) {
+      if (result.degraded && meta.dataAge != null) {
         // Humanized + honest: "1775m ago while refreshing" hid a 30h-frozen board behind a
-        // reassuring teal banner promising a refresh that never came.
+        // reassuring teal banner promising a refresh that never came. != null (not truthiness):
+        // a just-written snapshot has dataAge 0, which must still render with age context.
         const age = formatDataAge(meta.dataAge);
         msg = result.partial
           ? `Showing cached partial data from ${age} ago.`
@@ -4066,7 +4067,7 @@ async function loadScheduleData() {
         : '';
       // Escalate the banner with data age: teal reads as "all good", which is a lie for a board
       // that is hours old. 1-6h → amber caution; 6h+ (past a full cache lifetime) → red (--ua-red).
-      const ageSeverity = result.degraded && meta.dataAge ? dataAgeSeverity(meta.dataAge) : null;
+      const ageSeverity = result.degraded && meta.dataAge != null ? dataAgeSeverity(meta.dataAge) : null;
       const palette = ageSeverity === 'stale'
         ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.3)', text: 'var(--ua-red)', icon: '⚠️' }
         : ageSeverity === 'aging'

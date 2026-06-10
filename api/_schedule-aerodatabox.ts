@@ -345,7 +345,10 @@ export async function fetchViaAeroDataBox(
   // Authorized cron warms bypass the organic gate — their spend is hard-bounded by the warm ring
   // itself (~288 units/day) and they are the one path that keeps boards from freezing, so organic
   // traffic must never starve them. Their units are still recorded against the organic budget,
-  // and they keep a 3x absolute ceiling so a leaked cron secret cannot spend unboundedly.
+  // and they keep a 3x absolute ceiling so a leaked cron secret cannot spend unboundedly. Both
+  // gates hydrate first: an unhydrated ceiling reads a cold instance's 0 and is per-instance
+  // theater under fan-out (the hydrate is rate-limited to one Supabase read per 10s).
+  await hydrateAdbSpend();
   if (opts.bypassDailyBudget) {
     if (getAdbUnitsToday() >= getAdbDailyUnitBudget() * ADB_BYPASS_CEILING_MULTIPLIER) {
       console.error(
@@ -353,14 +356,11 @@ export async function fetchViaAeroDataBox(
       );
       return null;
     }
-  } else {
-    await hydrateAdbSpend();
-    if (isAdbBudgetExhausted()) {
-      console.warn(
-        `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping ${hub} ${dir} until next UTC day`
-      );
-      return null;
-    }
+  } else if (isAdbBudgetExhausted()) {
+    console.warn(
+      `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping ${hub} ${dir} until next UTC day`
+    );
+    return null;
   }
 
   const startTime = Date.now();

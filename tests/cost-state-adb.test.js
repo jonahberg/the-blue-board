@@ -210,6 +210,28 @@ describe('fetchViaAeroDataBox budget enforcement', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('the 3x ceiling sees CROSS-INSTANCE spend — a cold lambda (in-memory 0) must still refuse', async () => {
+    // Without hydrating, every freshly-spawned instance reads 0 and the "absolute ceiling"
+    // protecting the privileged force path is per-instance theater.
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue({
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            limit: async () => ({ data: [{ units: 1200 }], error: null }),
+          }),
+        }),
+      }),
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 500, headers: { get: () => null }, json: async () => ({}), text: async () => '',
+    });
+    const result = await fetchViaAeroDataBox('ORD', 'departures', Math.floor(Date.now() / 1000), 5000, {
+      bypassDailyBudget: true,
+    });
+    expect(result).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('bills 2 units per ATTEMPT: 429 retries are metered too (2×429 then 200 per window = 12 units)', { timeout: 20000 }, async () => {
     // The provider bills every request FIRED, not every success — fetchWindow records spend before
     // reading the outcome, so a 429 storm drains the budget fast (the intended circuit). Two 429s
