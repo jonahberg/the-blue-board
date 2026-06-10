@@ -93,7 +93,7 @@ Curated United Airlines news hub with individual article pages, source links, an
     │  /api/fr24-usage    — FR24 credit monitor│
     │                                          │
     │  Cron jobs (vercel.json):                │
-    │  /api/cron/warm-schedules  — every 15min │
+    │  /api/cron/warm-schedules  — hourly      │
     │  /api/cron/sync-starlink   — every 4hrs  │
     └──────────┬──────────────────────────────┘
                │
@@ -107,7 +107,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 ### Why Server-Side Proxies?
 
 - **Rate limiting** — One server fetches data for all users, not 500 browsers hammering APIs independently
-- **Caching** — Schedule data cached 60s (live) / 5min (historical), IROPS cached 5min, reducing upstream load by 90%+
+- **Caching** — Complete schedule boards cached up to 6h at the edge (60s when partial), IROPS cached 5min, reducing upstream load by 90%+
 - **UA filtering** — Server filters to United flights only, shrinking payloads dramatically
 - **CORS** — Some sources (AWC, FAA) don't allow direct browser requests
 - **Batching** — METAR data for all 9 hubs fetched in a single request
@@ -119,6 +119,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 | Source | Data | Freshness | Notes |
 |--------|------|-----------|-------|
 | [Flightradar24](https://flightradar24.com) | Live positions, schedules, flight lookup | ~15s–60s | Server-side proxy with caching; schedules can recover through a configured FR24 scraper transport when direct fetches are blocked |
+| [AeroDataBox](https://aerodatabox.com) | Hub schedule boards (refresh + fallback) | Hourly warm + on-demand | Metered RapidAPI provider; spend capped by a cross-instance daily unit budget |
 | [Aviation Weather Center](https://aviationweather.gov) | METAR observations | ~5min | NOAA/CORS proxy, batched |
 | [FAA NAS Status](https://nasstatus.faa.gov) | Delays & ground stops | ~5min | XML→JSON proxy |
 | [United Fleet Site](https://unitedfleetsite.com/) | Fleet database | Daily | Community-maintained |
@@ -205,7 +206,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 │   ├── icons/                    # PWA app icons (192px, 512px)
 │   └── robots.txt                # Search engine directives
 ├── api/
-│   ├── schedule.ts               # FR24 schedule proxy (cached, rate-limited)
+│   ├── schedule.ts               # Hub schedule boards (FR24 + AeroDataBox, cached, rate-limited, quota-guarded)
 │   ├── irops.ts                  # Server-side IROPS aggregation (5min cache)
 │   ├── fr24-feed.ts              # Live flight feed proxy
 │   ├── fr24-flight.ts            # FR24 official API flight lookup
@@ -216,7 +217,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 │   ├── waitlist.ts               # Waitlist signup + welcome email
 │   ├── news-notify.ts            # News digest email broadcasts
 │   ├── fr24-usage.ts             # FR24 credit usage monitor
-│   ├── cron/warm-schedules.ts    # Schedule cache warming (every 15min)
+│   ├── cron/warm-schedules.ts    # Schedule cache warming (hourly, quota-budgeted)
 │   └── cron/sync-starlink.ts     # Starlink data sync (every 4hrs)
 ├── sql/                          # Supabase migration files
 ├── scripts/                      # Build + seed scripts
