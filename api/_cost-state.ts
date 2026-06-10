@@ -120,19 +120,23 @@ export async function recordAdbUnits(units: number): Promise<void> {
   if (!Number.isFinite(n) || n <= 0) return;
   rollAdbDay();
   adbUnits += n;
+  const issuedForDay = adbDay;
 
   try {
     const supabase = typeof getSupabaseAdmin === 'function' ? await getSupabaseAdmin() : null;
     if (!supabase || typeof supabase.rpc !== 'function') return;
 
-    const { data, error } = await supabase.rpc('increment_adb_units', { p_day: adbDay, p_units: n });
+    const { data, error } = await supabase.rpc('increment_adb_units', { p_day: issuedForDay, p_units: n });
     if (error) {
       console.error('adb-spend increment failed:', error.message);
       return;
     }
     const total = Number(data);
     rollAdbDay();
-    if (Number.isFinite(total)) adbUnits = Math.max(adbUnits, total);
+    // Only adopt the returned total if UTC midnight did not pass mid-flight — it is the running
+    // total for the day the RPC was issued for, and adopting yesterday's total into a fresh day
+    // would falsely block the provider until the next reset.
+    if (Number.isFinite(total) && adbDay === issuedForDay) adbUnits = Math.max(adbUnits, total);
   } catch (error: any) {
     console.error('adb-spend increment threw:', error?.message || error);
   }
@@ -147,6 +151,7 @@ export async function hydrateAdbSpend(): Promise<number> {
   const now = Date.now();
   if (now - lastAdbHydratedAt < ADB_HYDRATE_TTL_MS) return adbUnits;
   lastAdbHydratedAt = now;
+  const issuedForDay = adbDay;
 
   try {
     const supabase = typeof getSupabaseAdmin === 'function' ? await getSupabaseAdmin() : null;
@@ -155,7 +160,7 @@ export async function hydrateAdbSpend(): Promise<number> {
     const { data, error } = await supabase
       .from('schedule_provider_spend')
       .select('units')
-      .eq('day', adbDay)
+      .eq('day', issuedForDay)
       .limit(1);
     if (error) {
       console.error('adb-spend read failed:', error.message);
@@ -163,7 +168,9 @@ export async function hydrateAdbSpend(): Promise<number> {
     }
     const units = Number((data as Array<{ units: number }> | null)?.[0]?.units);
     rollAdbDay();
-    if (Number.isFinite(units)) adbUnits = Math.max(adbUnits, units);
+    // Same mid-flight day-rollover guard as recordAdbUnits: never adopt yesterday's total into a
+    // fresh day.
+    if (Number.isFinite(units) && adbDay === issuedForDay) adbUnits = Math.max(adbUnits, units);
     return adbUnits;
   } catch (error: any) {
     console.error('adb-spend read threw:', error?.message || error);

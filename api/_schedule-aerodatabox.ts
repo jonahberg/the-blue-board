@@ -314,13 +314,22 @@ async function fetchWindow(
   return { ok: false };
 }
 
-export async function fetchViaAeroDataBox(hub: string, dir: string, ts: number, timeoutMs = 12000) {
+export async function fetchViaAeroDataBox(
+  hub: string,
+  dir: string,
+  ts: number,
+  timeoutMs = 12000,
+  opts: { bypassDailyBudget?: boolean } = {}
+) {
   if (!process.env.AERODATABOX_API_KEY) return null;
 
   // Cross-instance daily spend stop: behave exactly as if the provider were unconfigured so
   // callers fall through to their existing degraded paths instead of burning more quota.
+  // Authorized cron warms bypass the gate — their spend is hard-bounded by the warm ring itself
+  // (~288 units/day) and they are the one path that keeps boards from freezing, so organic
+  // traffic must never starve them. Their units are still recorded against the organic budget.
   await hydrateAdbSpend();
-  if (isAdbBudgetExhausted()) {
+  if (!opts.bypassDailyBudget && isAdbBudgetExhausted()) {
     console.warn(
       `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping ${hub} ${dir} until next UTC day`
     );

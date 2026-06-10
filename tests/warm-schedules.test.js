@@ -173,6 +173,11 @@ describe('warm-schedules handler', () => {
     expect(res.body.warmed).toBe(1);
     const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
     for (const [, r] of scheduleResults) expect(r.status).toBe('stale_served');
+    // The Starlink ping has nothing to do with AeroDataBox and is built to never fail — its
+    // success must not turn an every-board-frozen run into a green 200 (that 200-while-frozen
+    // masking is the exact incident this commit exists to surface).
+    expect(res.body.scheduleWarmed).toBe(0);
+    expect(res.statusCode).toBe(503);
   });
 
   it('counts a fresh complete board as warmed', async () => {

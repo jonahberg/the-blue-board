@@ -15,6 +15,7 @@ vi.mock('@vercel/functions', () => vercelFunctionMocks);
 import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker, __resetScheduleCachesForTests, shouldEnableProviderForBackgroundRefresh } from '../api/schedule.js';
 import { getStartOfDayForHub } from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
+import { recordAdbUnits } from '../api/_cost-state.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
 function formatForFR24Test(date) {
@@ -1976,6 +1977,32 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
       query: { ...baseQuery(), forceRefresh: '1' },
     }, res);
     expect(res.body.cached).toBe(true);
+  });
+
+  it('keeps the provider available to authorized force warms after the organic budget is exhausted', async () => {
+    process.env.AERODATABOX_API_KEY = 'test-key';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
+    await recordAdbUnits(400);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({ departures: [], result: { response: { airport: { pluginData: {} } } } }),
+    });
+
+    // Organic cache-miss traffic: the budget gate blocks the provider (spend cap working).
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: baseQuery() }, createRes());
+    expect(fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url))).length).toBe(0);
+
+    // The cron's authorized force warm is ring-bounded (~288 units/day) upstream — the organic
+    // cap must not starve the very refresh path that keeps boards from freezing.
+    fetchSpy.mockClear();
+    await handler({
+      method: 'GET',
+      headers: { authorization: `Bearer ${SECRET}` },
+      query: { ...baseQuery(), forceRefresh: '1' },
+    }, createRes());
+    expect(fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url))).length).toBeGreaterThan(0);
   });
 });
 

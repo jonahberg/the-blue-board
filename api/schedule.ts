@@ -22,6 +22,10 @@ type ScheduleFetchOptions = {
   disableOfficialSource?: boolean;
   disableProviderFallback?: boolean;
   disableScraperFallback?: boolean;
+  // Authorized cron warms only: their provider spend is already hard-bounded by the warm ring
+  // (~288 units/day), so the organic daily budget must not starve the one path that keeps boards
+  // from freezing. Never set from user input.
+  providerBudgetExempt?: boolean;
 };
 
 // In-memory LRU cache for FR24 schedule data
@@ -1228,13 +1232,13 @@ async function tryOfficialFallback(
 }
 
 async function tryScheduleProviderFallback(
-  logHub: string, dir: string, ts: number, effectiveDeadline: number
+  logHub: string, dir: string, ts: number, effectiveDeadline: number, budgetExempt = false
 ): Promise<any | null> {
   if (!process.env.AERODATABOX_API_KEY) return null;
   try {
     const remaining = Math.max(0, effectiveDeadline - Date.now() - 1000);
     if (remaining < 2000) return null;
-    const result = await fetchViaAeroDataBox(logHub, dir, ts, Math.min(remaining, 12000));
+    const result = await fetchViaAeroDataBox(logHub, dir, ts, Math.min(remaining, 12000), { bypassDailyBudget: budgetExempt });
     if (result && result.total > 0) {
       result.meta = { ...(result.meta as any), fallbackFrom: 'scraping' };
       return result;
@@ -1251,10 +1255,11 @@ async function tryScheduleRescue(
   ts: number,
   effectiveDeadline: number,
   allowProviderFallback: boolean,
-  allowOfficialFallback: boolean
+  allowOfficialFallback: boolean,
+  budgetExempt = false
 ): Promise<any | null> {
   if (allowProviderFallback) {
-    const providerFallback = await tryScheduleProviderFallback(logHub, dir, ts, effectiveDeadline);
+    const providerFallback = await tryScheduleProviderFallback(logHub, dir, ts, effectiveDeadline, budgetExempt);
     if (providerFallback) return providerFallback;
   }
   if (allowOfficialFallback) {
@@ -1310,7 +1315,9 @@ async function fetchAllPages(
     if (allowProviderFallback && process.env.AERODATABOX_API_KEY) {
       try {
         const providerTimeout = Math.min(Math.floor((effectiveDeadline - Date.now()) * 0.7), 30000);
-        const providerResult = await fetchViaAeroDataBox(logHub, dir, ts, providerTimeout);
+        const providerResult = await fetchViaAeroDataBox(logHub, dir, ts, providerTimeout, {
+          bypassDailyBudget: !!options.providerBudgetExempt,
+        });
         if (providerResult && providerResult.total > 0) {
           // Overlay the free live feed for active flights only when the provider board is partial.
           return await maybeAugmentWithLiveFeedFallback(providerResult, logHub, dir, ts, effectiveDeadline);
@@ -1323,7 +1330,7 @@ async function fetchAllPages(
     // disableOfficialSource (officialFallback=0, e.g. cron) keeps official off so background warming
     // never burns FR24 credits; it then degrades to the free live feed.
     const fallback = await tryScheduleRescue(
-      logHub, dir, ts, effectiveDeadline, false, !options.disableOfficialSource
+      logHub, dir, ts, effectiveDeadline, false, !options.disableOfficialSource, !!options.providerBudgetExempt
     );
     if (fallback) return fallback;
   }
@@ -1384,7 +1391,7 @@ async function fetchAllPages(
   if (!firstPage || firstPage._rateLimited) {
     if (srcPriority === 'scrape' && (allowProviderFallback || allowTargetedOfficialRescue)) {
       console.log(`Scraping failed on first page for ${logHub} ${dir}, trying schedule fallback`);
-      const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
+      const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue, !!options.providerBudgetExempt);
       if (fallback) return fallback;
     }
     const failedResult = { flights: [], total: 0, totalFetched: 0, pagesScanned: 0, totalPages: 1, cached: false, partial: true, hub: logHub, dir,
@@ -1570,14 +1577,14 @@ async function fetchAllPages(
   ) {
     attemptedOfficialRescue = true;
     console.log(`Scraping hit repeated FR24 rate limits for ${logHub} ${dir}, trying schedule fallback`);
-    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
+    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue, !!options.providerBudgetExempt);
     if (fallback) return fallback;
   }
 
   // Scrape-first fallback: if scraping failed completely, try official API (with circuit breaker)
   if (!attemptedOfficialRescue && srcPriority === 'scrape' && (allowProviderFallback || allowTargetedOfficialRescue) && scrapeResult.total === 0 && scrapeResult.partial) {
     console.log(`Scraping returned 0 flights for ${logHub} ${dir}, trying schedule fallback`);
-    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue);
+    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue, !!options.providerBudgetExempt);
     if (fallback) return fallback;
   }
 
@@ -1741,7 +1748,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    if (pendingAggs.has(currentAggKey)) {
+    // A force warm must run its own fetch: the in-flight refresh it would join is often
+    // provider-disabled (a user-triggered background refresh below the age gate), which would
+    // silently swallow the cron's refetch for this hour. Concurrent user requests still
+    // piggyback on the forced fetch via the pendingAggs entry it registers below.
+    if (!forceRefresh && pendingAggs.has(currentAggKey)) {
       const result = await pendingAggs.get(currentAggKey);
       if (result) {
         setAggregateCacheHeader(res, result, cdnMaxAge, swr);
@@ -1754,6 +1765,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       disableOfficialSource: !allowOfficialFallback,
       disableProviderFallback: !allowProviderFallback,
       disableScraperFallback: !allowScraperFallback,
+      providerBudgetExempt: forceRefresh,
     }).then(async result => {
       cacheSet(currentAggKey, result, result.partial ? 60000 : ttl);
       saveComplete(currentAggKey, result);

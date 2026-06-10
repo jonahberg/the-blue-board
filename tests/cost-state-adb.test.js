@@ -125,4 +125,46 @@ describe('fetchViaAeroDataBox budget enforcement', () => {
     expect(result).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('bypassDailyBudget (authorized cron warms, ring-bounded at ~288/day) skips the gate but still records spend', async () => {
+    await recordAdbUnits(400);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({ departures: [] }),
+    });
+    const result = await fetchViaAeroDataBox('ORD', 'departures', Math.floor(Date.now() / 1000), 5000, {
+      bypassDailyBudget: true,
+    });
+    expect(result).not.toBeNull();
+    // Spend is still accounted (2 windows × 2 units) so the organic budget sees the true total.
+    expect(getAdbUnitsToday()).toBe(404);
+  });
+});
+
+describe('ADB spend day-rollover races', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetAdbSpendForTests();
+    supabaseMocks.getSupabaseAdmin.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    __resetAdbSpendForTests();
+  });
+
+  it('discards an RPC total that lands after UTC midnight instead of adopting yesterday into the new day', async () => {
+    vi.useFakeTimers({ now: new Date('2026-06-10T23:59:50Z'), toFake: ['Date'] });
+    const rpc = vi.fn(async () => {
+      // The RPC round-trip crosses UTC midnight: its return is YESTERDAY's running total.
+      vi.setSystemTime(new Date('2026-06-11T00:00:10Z'));
+      return { data: 350, error: null };
+    });
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue({ rpc });
+    await recordAdbUnits(4);
+    // New day starts clean — adopting 350 would block the provider for the whole new day.
+    expect(getAdbUnitsToday()).toBe(0);
+  });
 });

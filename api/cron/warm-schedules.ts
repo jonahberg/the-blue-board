@@ -162,6 +162,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const results: Record<string, any> = {};
+  // Schedule warms are tracked separately from the Starlink ping: starlink-data has a 5-tier
+  // fallback chain and no AeroDataBox dependency, so it succeeds even mid-incident — counting it
+  // into one shared bucket would turn an every-board-frozen run into a green 200 (the exact
+  // masking this cron's 503 exists to kill).
+  let scheduleWarmed = 0;
+  let scheduleFailed = 0;
   let warmed = 0;
   let failed = 0;
 
@@ -174,7 +180,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ts = getStartOfHubDay(task.hub, task.dayOffset);
     const { key, result } = await warmOne(task.hub, task.dir, ts, task.label);
     results[key] = result;
-    if (result.status === 'ok') warmed++; else failed++;
+    if (result.status === 'ok') { scheduleWarmed++; warmed++; } else { scheduleFailed++; failed++; }
     if (i < warmPlan.length - 1) {
       await new Promise(r => setTimeout(r, getInterTaskDelayMs()));
     }
@@ -206,12 +212,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `Cron warm-schedules: ${warmed} warmed, ${failed} failed, ~${estUnits} AeroDataBox units (${freshBoards} fresh boards)`,
     { warmPlan, results }
   );
-  // A run that warmed NOTHING is an incident, not a success — return 5xx so Vercel's built-in
-  // cron monitoring (and any uptime check on this path) goes red instead of logging a quiet 200.
-  const statusCode = warmed === 0 && failed > 0 ? 503 : 200;
+  // A run that warmed NO schedule board is an incident, not a success — return 5xx so Vercel's
+  // built-in cron monitoring (and any uptime check on this path) goes red instead of logging a
+  // quiet 200. Gated on the schedule counters only; see the counter comment above.
+  const statusCode = scheduleWarmed === 0 && scheduleFailed > 0 ? 503 : 200;
   return res.status(statusCode).json({
     warmed,
     failed,
+    scheduleWarmed,
+    scheduleFailed,
     warmPlan,
     results,
     timestamp: new Date().toISOString()
