@@ -16,6 +16,10 @@
 
 ### Security hygiene (backlog)
 
+- [ ] [compliance] FlightAware HTML scraping (`api/flight-times.ts`) uses a spoofed Chrome UA against FlightAware's Terms of Use — migrate to AeroAPI's free tier or rely on the tryFR24Summary fallback, and credit any FlightAware data shown. (Deferred from v1.5.17 compliance sweep.)
+- [ ] [compliance] Starlink upstream (unitedstarlinktracker.com) is consumed against its robots.txt with no documented permission — ask @martinamps for written permission and record it in docs. (Deferred from v1.5.17.)
+- [ ] [compliance] Set `EMAIL_POSTAL_ADDRESS` in Vercel env (real postal address / PO Box — CAN-SPAM requires it; the email footer renders it once set). Optional follow-up: an HTTPS one-click unsubscribe endpoint enables the RFC 8058 List-Unsubscribe-Post header.
+
 - [ ] [#6] CRON_SECRET timing-safe compare across `api/cron/refresh-tsa.ts:10`, `api/cron/sync-starlink.ts:11`, `api/news-notify.ts:50-51`. Bundle with auth hardening pass. (partial: warm-schedules + the /api/schedule forceRefresh gate shipped timing-safe fail-closed auth in v1.5.16 via `api/_cron-auth.ts` — reuse it for the remaining three)
 - [ ] [#26 extension] Evaluate moving waitlist off hand-rolled Supabase+Resend → Loops/Resend Audiences/ConvertKit.
 - [ ] [README drift] Audit README claims vs actual codebase ("strict CSP", "zero inline handlers", "fully escaped") and either fix the code or fix the docs.
