@@ -203,6 +203,42 @@ describe('news-notify API', () => {
     expect(res.body.error).toMatch(/Failed to send/);
   });
 
+  // ── CAN-SPAM compliance footer ──────────────────────────────────────────
+  // The digest is an Audience BROADCAST (resend.broadcasts.create), so the
+  // {{{RESEND_UNSUBSCRIBE_URL}}} placeholder DOES substitute per-recipient —
+  // it is the correct unsubscribe mechanism for this path. (broadcasts.create
+  // accepts no custom headers; Resend manages broadcast List-Unsubscribe.)
+
+  it('digest html contains the broadcast unsubscribe link and privacy policy link', async () => {
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    expect(res.body.status).toBe('sent');
+    const created = mockBroadcastCreate.mock.calls[0][0];
+    expect(created.html).toContain('Unsubscribe');
+    expect(created.html).toContain('{{{RESEND_UNSUBSCRIBE_URL}}}');
+    expect(created.html).toContain('https://theblueboard.co/privacy');
+  });
+
+  it('digest html includes the postal address when EMAIL_POSTAL_ADDRESS is set', async () => {
+    vi.stubEnv('EMAIL_POSTAL_ADDRESS', 'The Blue Board, PO Box 12345, Chicago, IL 60601');
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    const created = mockBroadcastCreate.mock.calls[0][0];
+    expect(created.html).toContain('The Blue Board, PO Box 12345, Chicago, IL 60601');
+  });
+
+  it('digest html omits the postal address line when EMAIL_POSTAL_ADDRESS is unset', async () => {
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    const created = mockBroadcastCreate.mock.calls[0][0];
+    expect(created.html).not.toContain('PO Box 12345');
+    expect(created.html).toContain('Unsubscribe');
+  });
+
   it('does not leak err.message in the JSON response', async () => {
     // Upstream throws with a schema-revealing message — the handler must
     // log internally but respond with a generic error.

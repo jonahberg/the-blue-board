@@ -1,0 +1,81 @@
+---
+import Footer from '../components/Footer.astro';
+import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
+---
+<!DOCTYPE html>
+<html lang="en" style="color-scheme:dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0B1018">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E">
+<title>Privacy Policy | The Blue Board</title>
+<meta name="description" content="What The Blue Board collects (your email, if you sign up), where it lives, what it's used for, and how to unsubscribe or delete it.">
+<meta name="author" content="The Blue Board">
+<link rel="canonical" href="https://theblueboard.co/privacy">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Privacy Policy | The Blue Board">
+<meta property="og:description" content="What The Blue Board collects, where it lives, and how to unsubscribe or delete your data.">
+<meta property="og:url" content="https://theblueboard.co/privacy">
+<meta property="og:site_name" content="The Blue Board">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .privacy-page { max-width: 720px; margin: 0 auto; padding: 20px 16px 0; }
+  .privacy-breadcrumb { font-family: var(--font-ui); font-size: 11px; font-weight: 500; color: var(--ua-muted); margin-bottom: 20px; }
+  .privacy-breadcrumb a { color: var(--ua-accent); text-decoration: none; }
+  .privacy-breadcrumb a:hover { text-decoration: underline; }
+
+  .privacy-page h1 { font-family: var(--font-ui); font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: var(--ua-text); margin: 0 0 4px; }
+  .privacy-effective { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--ua-amber); margin: 0 0 28px; }
+
+  .privacy-page h2 { font-family: var(--font-ui); font-size: 14px; font-weight: 700; color: var(--ua-text); margin: 28px 0 8px; }
+  .privacy-page p, .privacy-page li { font-family: var(--font-ui); font-size: 13px; color: var(--ua-muted); line-height: 1.7; margin: 0 0 10px; }
+  .privacy-page ul { margin: 0 0 10px; padding-left: 20px; }
+  .privacy-page li { margin-bottom: 4px; }
+  .privacy-page a { color: var(--ua-accent); text-decoration: none; }
+  .privacy-page a:hover { text-decoration: underline; }
+  .privacy-page strong { color: var(--ua-text); }
+</style>
+</head>
+<body>
+<main class="privacy-page">
+
+  <nav class="privacy-breadcrumb" aria-label="Breadcrumb">
+    <a href="/">&larr; The Blue Board</a> / Privacy
+  </nav>
+
+  <h1>Privacy Policy</h1>
+  <p class="privacy-effective">Effective June 10, 2026</p>
+
+  <p>The Blue Board is a free, ad-free United Airlines ops dashboard built by one person. The short version: the only personal data we collect is what you give us when you sign up for email updates, we use it only to send you those updates, and we never sell it.</p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li><strong>Email address</strong> — only if you join the waitlist or email list.</li>
+    <li><strong>Feature request</strong> — optional free-text you can include when signing up.</li>
+    <li><strong>Source tag</strong> — which page or form you signed up from (e.g. the TSA page or the dashboard popup).</li>
+  </ul>
+  <p>Your IP address is used transiently in server memory to rate-limit signups; it is not stored with your email. We don't run ads or ad trackers.</p>
+
+  <h2>Where it lives and who processes it</h2>
+  <ul>
+    <li><strong>Supabase</strong> — stores the signup list (email, feature request, source).</li>
+    <li><strong>Resend</strong> — delivers our emails and holds the news-digest subscriber list.</li>
+    <li><strong>Vercel</strong> — hosts the site and collects cookieless, anonymized usage data: page views and interaction events via Vercel Web Analytics, and performance metrics via Vercel Speed Insights.</li>
+  </ul>
+
+  <h2>What it's used for</h2>
+  <p>A welcome email when you sign up, plus the launch updates and news digests you asked for. Nothing else.</p>
+
+  <h2>No selling</h2>
+  <p>We never sell, rent, or share your data with anyone for marketing.</p>
+
+  <h2>Unsubscribe &amp; deletion</h2>
+  <p>Every email we send includes an unsubscribe option. You can also reply &ldquo;unsubscribe&rdquo; to any email, or write to <a href="mailto:hello@theblueboard.co">hello@theblueboard.co</a> to unsubscribe or have your data deleted entirely — same address for any privacy question.</p>
+
+</main>
+
+<Footer />
+<VercelSpeedInsights />
+</body>
+</html>

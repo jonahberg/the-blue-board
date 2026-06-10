@@ -84,6 +84,7 @@ describe('waitlist API', () => {
 
   afterEach(() => {
     delete process.env.RESEND_API_KEY;
+    delete process.env.EMAIL_POSTAL_ADDRESS;
   });
 
   it('rejects non-POST methods', async () => {
@@ -237,6 +238,65 @@ describe('waitlist API', () => {
     expect(errorSpy).toHaveBeenCalled();
 
     errorSpy.mockRestore();
+  });
+
+  // ── CAN-SPAM compliance footer ──────────────────────────────────────────
+  // The welcome email is a TRANSACTIONAL Resend send (resend.emails.send), so
+  // the {{{RESEND_UNSUBSCRIBE_URL}}} broadcast placeholder would NOT substitute.
+  // It must use the honest mailto unsubscribe line + List-Unsubscribe headers.
+
+  it('welcome email html contains the unsubscribe line and privacy policy link', async () => {
+    process.env.RESEND_API_KEY = 're_test_key';
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    expect(mockEmailSend).toHaveBeenCalledTimes(1);
+    const sent = mockEmailSend.mock.calls[0][0];
+    expect(sent.html).toContain('Unsubscribe anytime');
+    expect(sent.html).toContain('hello@theblueboard.co');
+    expect(sent.html).toContain('https://theblueboard.co/privacy');
+    // Broadcast-only placeholder must never appear in a transactional send —
+    // Resend would deliver it as literal text.
+    expect(sent.html).not.toContain('RESEND_UNSUBSCRIBE_URL');
+  });
+
+  it('welcome email send carries List-Unsubscribe headers (Gmail/Yahoo bulk-sender rules)', async () => {
+    process.env.RESEND_API_KEY = 're_test_key';
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    const sent = mockEmailSend.mock.calls[0][0];
+    expect(sent.headers).toBeDefined();
+    expect(sent.headers['List-Unsubscribe']).toContain('mailto:hello@theblueboard.co');
+    // No List-Unsubscribe-Post: RFC 8058 requires an HTTPS URI for one-click; mailto-only
+    // with a stray -Post header is malformed and some filters flag it.
+    expect(sent.headers['List-Unsubscribe-Post']).toBeUndefined();
+  });
+
+  it('welcome email includes the postal address when EMAIL_POSTAL_ADDRESS is set', async () => {
+    process.env.RESEND_API_KEY = 're_test_key';
+    process.env.EMAIL_POSTAL_ADDRESS = 'The Blue Board, PO Box 12345, Chicago, IL 60601';
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    const sent = mockEmailSend.mock.calls[0][0];
+    expect(sent.html).toContain('The Blue Board, PO Box 12345, Chicago, IL 60601');
+  });
+
+  it('welcome email omits the postal address line when EMAIL_POSTAL_ADDRESS is unset', async () => {
+    process.env.RESEND_API_KEY = 're_test_key';
+    delete process.env.EMAIL_POSTAL_ADDRESS;
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    const sent = mockEmailSend.mock.calls[0][0];
+    expect(sent.html).not.toContain('PO Box 12345');
+    // Still has the rest of the compliance footer.
+    expect(sent.html).toContain('Unsubscribe anytime');
   });
 
   it('returns 429 when rate limited (6th request from same IP)', async () => {

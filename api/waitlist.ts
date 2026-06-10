@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { getSupabase } from './_supabase.js';
+import { buildEmailFooterHtml, listUnsubscribeHeaders } from './_email-footer.js';
 
 // 5 submissions per IP per hour → ~5 per 60 minutes
 // Rate limiter works in 60s windows, so allow 5 per 60s window
@@ -177,6 +178,9 @@ function buildWelcomeEmail(): string {
     <p style="font-size:11px;color:#444;margin:40px 0 0;">
       Not affiliated with United Airlines, Inc. You're receiving this because you signed up at theblueboard.co.
     </p>
+    <!-- CAN-SPAM compliance footer: transactional send, so mailto unsubscribe
+         (Resend's broadcast unsubscribe placeholder does not substitute here). -->
+    ${buildEmailFooterHtml('transactional')}
   </div>
 </body>
 </html>`;
@@ -195,6 +199,8 @@ async function sendWelcomeEmail(email: string): Promise<void> {
       to: email,
       subject: 'Welcome aboard ✈️',
       html: buildWelcomeEmail(),
+      // Gmail/Yahoo bulk-sender rules look for List-Unsubscribe headers.
+      headers: listUnsubscribeHeaders(),
     });
 
     if (error) {
