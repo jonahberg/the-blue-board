@@ -1,9 +1,14 @@
 // FR24 Official API — Credit Usage Monitoring Endpoint
-// Usage: GET /api/fr24-usage
+// Usage: GET /api/fr24-usage  (Authorization: Bearer $CRON_SECRET)
 // Returns current billing period credit consumption from FR24's usage API.
+//
+// Owner/ops debug endpoint: the response exposes paid FR24 plan billing/credit
+// telemetry, so it is gated behind CRON_SECRET (timing-safe, fails closed when
+// the secret is unset) — same credential the cron handlers use.
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
+import { isAuthorizedCronRequest } from './_cron-auth.js';
 
 const FR24_BASE = 'https://fr24api.flightradar24.com';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -28,8 +33,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
+  // Authenticated responses must NEVER hit the shared CDN cache: an s-maxage'd 200 would be
+  // served to unauthenticated requests for its TTL, silently bypassing the auth gate below.
+  res.setHeader('Cache-Control', 'private, no-store');
+
   if (isRateLimited(req)) {
     return res.status(429).json({ error: 'Too many requests — try again later' });
+  }
+
+  if (!isAuthorizedCronRequest(req)) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   if (!process.env.FR24_API_TOKEN) {
@@ -64,7 +77,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = await resp.json();
     usageCache = { data, ts: Date.now() };
 
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
     return res.status(200).json({ ...data, cached: false });
   } catch (e: any) {
     console.error('FR24 usage fetch error:', e.message);

@@ -25,7 +25,7 @@ h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
    NO backdrop-filter, NO blur, NO box-shadow.
    Z-index ladder (Leaflet panes occupy 200-700; all chrome > 700):
      #map 0 · .tab-content non-map 750 · #attribution 710 · #controls 712
-     · #stats-bar 715 · #fr24-credit-widget 718 · #tab-bar 760
+     · #stats-bar 715 · #tab-bar 760
      · banners 765 · #header 770 · #global-search-results 775
      · #legalpop 780 · #watch-panel 9999 · modals 10000+ · skip-link 100000
    ═══════════════════════════════════════════════════════════ */
@@ -176,6 +176,14 @@ main{display:contents}
 #legalpop .lnote a{color:var(--ua-muted)}
 #legalpop .lnote .sep{color:var(--ua-border);margin:0 3px}
 .dockdiv{width:1px;align-self:stretch;background:var(--ua-border);margin:4px 4px;flex-shrink:0}
+
+/* Map attribution (ODbL: OpenStreetMap/CARTO credit, both Leaflet maps) — restyle the default
+   white pill for the dark NOC theme: micro-text, low-contrast but legible (--ua-dim is the
+   tertiary token; links one step up at --ua-muted). Never display:none this — license requires
+   the credit to stay visible wherever the tiles render. */
+.leaflet-control-attribution{background:rgba(11,16,24,.65)!important;color:var(--ua-dim)!important;font-family:var(--font-ui)!important;font-size:9px!important;line-height:1.5;padding:2px 6px;border-radius:3px 0 0 0}
+.leaflet-control-attribution a{color:var(--ua-muted)!important;text-decoration:none}
+.leaflet-control-attribution a:hover{color:var(--ua-accent)!important;text-decoration:underline}
 
 /* Popups */
 .leaflet-popup-content-wrapper{background:rgba(17,24,39,.96)!important;color:var(--ua-text)!important;border:1px solid var(--ua-border)!important;border-radius:8px!important;box-shadow:0 8px 32px rgba(0,0,0,.6)!important;backdrop-filter:blur(12px)!important;font-family:var(--font-mono)!important}
@@ -979,16 +987,27 @@ table,thead th,tbody td,.stat-val,.metric-val,.big-number,.ticker,.ticker-item,.
 .irops-empty,.popup-times-loading{background:linear-gradient(90deg,var(--ua-panel) 25%,rgba(30,41,59,.6) 50%,var(--ua-panel) 75%);background-size:200% 100%;animation:shimmerSlide 1.5s ease-in-out infinite;border-radius:4px}
 
 /* ═══ FR24 CREDIT USAGE WIDGET (above the dock, bottom-right) ═══ */
-#fr24-credit-widget{position:fixed;bottom:24px;right:16px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:8px 12px;font-family:var(--font-mono);font-size:11px;color:var(--ua-muted);z-index:718;min-width:200px;opacity:.85;transition:opacity .2s}
-#fr24-credit-widget:hover{opacity:1}
-.credit-widget-label{margin-bottom:4px}
-.credit-widget-bar-bg{height:6px;background:var(--ua-border);border-radius:3px;overflow:hidden}
-.credit-widget-bar{height:100%;border-radius:3px;transition:width .5s ease}
-@media(max-width:768px){#fr24-credit-widget{display:none}}
 
 /* ═══ MOBILE SCROLL FADE MASKS ═══ */
 @media(max-width:768px){
   #stats-bar{-webkit-mask-image:linear-gradient(to right,transparent,#000 16px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(to right,transparent,#000 16px,#000 calc(100% - 24px),transparent)}
   .fleet-table-wrap{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent)}
   #hub-matrix{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent)}
+}
+
+/* ═══ NEWS BANNER — floating capsule in the documented "banners 765" z-slot ═══
+   Same panel recipe + geometry as #tip-strip (solid gradient fill, 1px border, 6px radius,
+   centered just below the canopy). JS (/js/news-banner.js) toggles inline display:flex and
+   persists dismissal in localStorage ('news_dismissed_slug'). While visible, the sibling rule
+   pushes #tip-strip down one row so the two capsules stack instead of overlapping (the banner
+   markup precedes #tip-strip in index.html — keep it that way or the ~ selector breaks).
+   [style*="flex"] only matches the CSSOM-serialized "display: flex;" the JS writes — the
+   banner's static inline style must stay exactly display:none for this to hold. */
+#news-banner{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:765;max-width:680px;width:max-content;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:500;letter-spacing:.3px;align-items:center;justify-content:space-between;gap:8px}
+#news-banner[style*="flex"]~#tip-strip{top:118px}
+/* Mobile: full-width below the two-row canopy, mirroring the #tip-strip mobile anchor.
+   Must follow the desktop sibling rule above (same specificity → source order wins). */
+@media(max-width:768px){
+  #news-banner{top:102px;left:12px;right:12px;transform:none;max-width:none;width:auto}
+  #news-banner[style*="flex"]~#tip-strip{top:140px}
 }

@@ -24,6 +24,7 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { getSupabase } from './_supabase.js';
 import { escapeHtml, sanitizeHeaderValue } from '../src/lib/escape.js';
+import { buildEmailFooterHtml } from './_email-footer.js';
 
 const FROM_ADDRESS = 'Jonah @ The Blue Board <hello@theblueboard.co>';
 const BASE_URL = 'https://theblueboard.co';
@@ -208,6 +209,9 @@ function buildDigestEmail(title: string, category: string, articleUrl: string): 
     <p style="font-size:13px;color:#6b7280;margin:0;text-align:center;">
       <a href="https://theblueboard.co" style="color:#4a90d9;text-decoration:none;">The Blue Board</a> — Free, ad-free United Airlines ops dashboard
     </p>
+    <!-- CAN-SPAM compliance footer: this is an Audience broadcast, so Resend
+         substitutes the one-click unsubscribe placeholder per-recipient. -->
+    ${buildEmailFooterHtml('broadcast')}
   </div>
 </body>
 </html>`;

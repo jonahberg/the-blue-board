@@ -165,6 +165,19 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 <div id="watch-notification" aria-live="polite" role="status"><span id="wn-text"></span><button class="wn-dismiss" data-action="dismiss-watch-notification">Dismiss</button></div>
 <div id="push-prompt">🔔 Get desktop notifications for watched flights?<div style="display:flex;gap:6px"><button class="pp-enable" data-action="enable-push">Enable</button><button class="pp-dismiss" data-action="dismiss-push">No thanks</button></div></div>
 
+<!-- NEWS BANNER (floating capsule below canopy in the z-765 banner slot; populated from
+     /data/news-latest.json by /js/news-banner.js, which also wires the dismiss button and
+     persists dismissal in localStorage. Must precede #tip-strip: style.css uses a sibling
+     selector to push the tip strip down while the banner is visible. -->
+<div id="news-banner" role="status" aria-label="Latest news" style="display:none">
+  <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+    <span style="flex-shrink:0">📰</span>
+    <a id="news-banner-link" href="/news" style="color:var(--ua-text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:opacity .4s"></a>
+    <a id="news-banner-read" href="/news" style="color:var(--ua-accent);font-weight:600;flex-shrink:0;font-size:11px">Read →</a>
+  </div>
+  <button id="news-banner-dismiss" aria-label="Dismiss news banner" style="background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;font-family:var(--font-ui)">✕</button>
+</div>
+
 <!-- TIP STRIP (floating capsule below canopy; JS toggles inline display) -->
 <div id="tip-strip" style="display:none"><span class="tip-badge">Tip</span><span class="tip-text" id="tip-text"></span><button class="tip-dismiss" data-action="dismiss-tips" aria-label="Dismiss tips">&times;</button></div>
 
@@ -205,25 +218,6 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   </div>
 </div>
 
-<!-- DATA RESTORED BANNER (amber callout; shown once, dismissable via /js/restored-banner.js) -->
-<div id="data-restored-banner" role="status" aria-label="Data restored notice" style="display:none;background:var(--ua-amber-soft);border-bottom:1px solid var(--ua-border);border-left:3px solid var(--ua-amber);padding:6px 16px;font-size:11px;font-weight:500;letter-spacing:.3px;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px">
-  <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
-    <span style="flex-shrink:0" aria-hidden="true">📡</span>
-    <span style="color:var(--ua-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong style="color:var(--ua-amber);font-weight:600">Data feeds restored.</strong> Full departure &amp; arrival schedules are back across all 9 hubs — thanks for your patience.</span>
-  </div>
-  <button id="data-restored-dismiss" aria-label="Dismiss data restored notice" style="background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;font-family:var(--font-ui)">✕</button>
-</div>
-
-<!-- NEWS BANNER (fetched from /data/news-latest.json at load time) -->
-<div id="news-banner" role="status" aria-label="Latest news" style="display:none;background:var(--ua-panel);border-bottom:1px solid var(--ua-border);padding:5px 16px;font-size:11px;font-weight:500;letter-spacing:.3px;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px">
-  <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
-    <span style="flex-shrink:0">📰</span>
-    <a id="news-banner-link" href="/news" style="color:var(--ua-text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:opacity .4s"></a>
-    <a id="news-banner-read" href="/news" style="color:var(--ua-accent);font-weight:600;flex-shrink:0;font-size:11px">Read →</a>
-  </div>
-  <button id="news-banner-dismiss" aria-label="Dismiss news banner" style="background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;font-family:var(--font-ui)">✕</button>
-</div>
-
 <!-- ════════ TAB DOCK (floating bottom = #tab-bar restyled) ════════ -->
 <nav id="tab-bar" aria-label="Dashboard navigation" role="tablist">
   <button class="tab-btn" data-tab="tab-myflight" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-myflight"><span aria-hidden="true">🎫</span> MY FLIGHTS</button>
@@ -243,6 +237,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <div class="lgrid">
         <a href="#" data-action="show-disclaimer" data-prevent-default="1">About</a>
         <a href="#" data-action="show-disclaimer" data-prevent-default="1">Disclaimer</a>
+        <a href="/privacy">Privacy</a>
         <a href="/fleet">Fleet Database</a>
         <a href="https://github.com/notjbg/the-blue-board/issues" target="_blank" rel="noopener noreferrer">Support / Feedback</a>
         <a class="donate" href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer">☕ Donate</a>
@@ -262,7 +257,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
         <a href="/news">News</a>
       </nav>
       <div class="lnote">
-        Data: <a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><br>
+        Data: <a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer">AeroDataBox</a><span class="sep">·</span><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><br>
         Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer">Jonah Berg</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
       </div>
     </div>
@@ -271,7 +266,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 
 <!-- ════════ ATTRIBUTION (fixed micro-text, bottom-left over the map) ════════ -->
 <div id="attribution">
-  Data: <a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
+  Data: <a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer">AeroDataBox</a><span class="sep">·</span><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
 </div>
 
 <!-- MOBILE BOTTOM NAV (floating dock on mobile) -->
@@ -481,7 +476,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     </div>
   </div>
   <div id="sched-pagination" style="display:none;text-align:center;padding:8px;font-size:10px;color:var(--ua-muted)"></div>
-  <div id="sched-tz-footer" style="font-size:9px;color:var(--ua-muted);text-align:center;padding:6px 0">Schedule data via <a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-green)">Flightradar24</a> · United flights only · Times in local airport timezone</div>
+  <div id="sched-tz-footer" style="font-size:9px;color:var(--ua-muted);text-align:center;padding:6px 0">Schedule data via <a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-green)">AeroDataBox</a> · United flights only · Times in local airport timezone</div>
 </div>
 
 <!-- TAB 3: FLEET -->
@@ -728,8 +723,8 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="source-item">
     <div class="source-icon">📡</div>
     <div>
-      <div class="source-name">Flight Data — Flightradar24 <span class="freshness fresh-live">LIVE</span></div>
-      <div class="source-desc">Real-time flight tracking with registration, origin, destination, aircraft type, and flight number. Updates every 30 seconds.</div>
+      <div class="source-name">Live Flight Positions — Flightradar24 <span class="freshness fresh-live">LIVE</span></div>
+      <div class="source-desc">Real-time aircraft positions with registration, origin, destination, aircraft type, and flight number. Updates every 30 seconds.</div>
       <a class="source-link" href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">flightradar24.com →</a>
     </div>
   </div>
@@ -737,9 +732,9 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="source-item">
     <div class="source-icon">📅</div>
     <div>
-      <div class="source-name">Flight Schedule — Flightradar24 <span class="freshness fresh-live">LIVE</span></div>
+      <div class="source-name">Flight Schedule — AeroDataBox <span class="freshness fresh-live">LIVE</span></div>
       <div class="source-desc">Airport departure/arrival schedules with status, gate, terminal, and aircraft info.</div>
-      <a class="source-link" href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">flightradar24.com →</a>
+      <a class="source-link" href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer">aerodatabox.com →</a>
     </div>
   </div>
 
@@ -778,6 +773,16 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <div class="source-name">NEXRAD Radar — Iowa State / NWS <span class="freshness fresh-live">LIVE</span></div>
       <div class="source-desc">Composite NEXRAD radar imagery overlaid on maps.</div>
       <a class="source-link" href="https://mesonet.agron.iastate.edu" target="_blank" rel="noopener noreferrer">Iowa State Mesonet →</a>
+    </div>
+  </div>
+
+  <div class="source-item">
+    <div class="source-icon">🗺</div>
+    <div>
+      <div class="source-name">Basemap — CARTO / OpenStreetMap <span class="freshness fresh-static">TILES</span></div>
+      <div class="source-desc">Dark basemap tiles by CARTO. Map data © OpenStreetMap contributors, licensed under ODbL.</div>
+      <a class="source-link" href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">carto.com →</a>
+      <a class="source-link" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" style="margin-left:12px">openstreetmap.org/copyright →</a>
     </div>
   </div>
 
@@ -826,7 +831,9 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <p style="margin-bottom:12px"><strong style="color:var(--ua-yellow)">The Blue Board is an independent, fan-built project and is not affiliated with, endorsed by, or connected to United Airlines, Inc.</strong> "United Airlines" and the United logo are trademarks of United Airlines, Inc. An independent tool built for the United community.</p>
       <p style="margin-bottom:12px"><strong>Data Sources & Attribution:</strong></p>
       <ul style="margin:0 0 12px 20px;color:var(--ua-muted)">
-        <li><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent)">Flightradar24</a> — Live flight positions and schedule data</li>
+        <li><a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent)">AeroDataBox</a> — Airport departure &amp; arrival schedule data</li>
+        <li><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent)">Flightradar24</a> — Live flight positions</li>
+        <li><a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent)">CARTO</a> / <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent)">OpenStreetMap</a> contributors — Basemap tiles and map data (ODbL)</li>
         <li><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent)">Aviation Weather Center (NOAA)</a> — METAR weather observations</li>
         <li><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent)">FAA NAS Status</a> — Airport delay and closure information</li>
         <li>Fleet configuration data sourced from publicly available records</li>
@@ -1068,6 +1075,5 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   }
 }
 </script>
-<script defer src="/js/restored-banner.js"></script>
 <script defer src="/js/news-banner.js"></script>
 </body></html>

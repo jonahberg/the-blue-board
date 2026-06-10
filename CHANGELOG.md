@@ -4,11 +4,28 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.19] - 2026-06-10
+
+### Fixed
+- The site's announcement channel works again: the stale "Data feeds restored" banner (which rendered invisibly behind the fixed header and could never be dismissed) is deleted, and the news banner now renders in the canopy z-765 slot below the header with a reachable, persistent dismiss.
+- The schedule footer no longer re-credits Flightradar24 on every render (`updateSchedTzFooter` rewrote the static attribution fix at runtime).
+
+### Security
+- `/api/fr24-usage` (paid FR24 billing/credit telemetry) now requires the cron Bearer secret, responds `Cache-Control: private, no-store` so the shared CDN can never serve an authorized response to unauthenticated requests, and the admin dashboard widget that called it was removed (a browser must never hold the spend-capable cron secret). Owner access: `curl -H "Authorization: Bearer $CRON_SECRET" https://theblueboard.co/api/fr24-usage`.
+- `sql/010_waitlist_drop_open_policy.sql` drops the original `WITH CHECK (true)` anonymous-INSERT policy on the waitlist (verified still active in prod alongside 006's validated policy — permissive-OR meant the open one won). Apply manually via the Supabase SQL editor.
+
+### Compliance
+- Schedule data is now correctly attributed to AeroDataBox everywhere (header micro-attribution, schedule footer, Sources panel, disclaimer modal); Flightradar24 remains credited where it is genuinely the source (live aircraft positions). Misattribution violated AeroDataBox's terms on the exact plan the product pays for.
+- Both maps now display OpenStreetMap/CARTO attribution (dark-theme styled control) and the Sources panel lists the basemap — resolving an ODbL license violation that risked basemap revocation.
+- Outbound email is CAN-SPAM-aligned: the news digest (Resend broadcast) carries a one-click unsubscribe link, the waitlist welcome (transactional) carries an honest mailto unsubscribe plus a `List-Unsubscribe` header, and both link the new privacy policy and render a postal address once `EMAIL_POSTAL_ADDRESS` is set.
+- New `/privacy` page (plain-English, code-verified claims: what's collected, where it lives, how to unsubscribe/delete), linked from the dashboard legal menu, the shared site footer, and every email.
+
 ## [1.5.18] - 2026-06-10
 
 ### Added
 - Operational alerting (supersedes PR #168): when `ALERT_WEBHOOK_URL` is set, the hourly warm cron posts a Discord alert on the signatures that mean the live site is degraded right now — total warm failure, frozen/stale-served boards (the warm didn't actually refetch), 0-flight boards, AeroDataBox spend ≥80% of the daily budget, or the Starlink feed down. Throttled to one alert per 5 minutes; alerting failures never affect the cron itself.
 - Post-deploy smoke check (`.github/workflows/post-deploy-smoke.yml`): every push to main waits for the Vercel deploy and curls the homepage, the Starlink API, and a live schedule board with retries — the first automated signal for the merge-equals-deploy pipeline (previously a broken deploy was only discovered by visiting the site).
+
 
 ## [1.5.16] - 2026-06-10
 

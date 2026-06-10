@@ -372,7 +372,11 @@ function getBasemapTileOptions() {
     maxZoom: 18,
     subdomains: smallScreen ? 'ab' : 'abcd',
     tileSize: 256,
-    detectRetina: !smallScreen && window.devicePixelRatio > 1
+    detectRetina: !smallScreen && window.devicePixelRatio > 1,
+    // ODbL requires visible credit wherever CARTO/OSM tiles are drawn. Both maps share these
+    // options, so the attribution control picks this up automatically — never re-suppress the
+    // control in the L.map() options (audit: ODbL violation; pinned by tests/compliance.test.js).
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>'
   };
 }
 
@@ -887,8 +891,11 @@ function initMap() {
   var basemapTileOptions = getBasemapTileOptions();
   map = L.map('map', {
     center: mapCenter, zoom: mapZoom, zoomControl: false,
-    attributionControl: false, worldCopyJump: true
+    worldCopyJump: true
   });
+  // Default attribution control stays on (ODbL — credit string comes from the tile layer via
+  // getBasemapTileOptions). Drop the "Leaflet" prefix: micro-text, dark-theme styled in style.css.
+  map.attributionControl.setPrefix('');
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', basemapTileOptions).addTo(map);
 
@@ -3162,7 +3169,8 @@ async function initWeatherTab() {
   // weather-retry action (which resets weatherInitialized), and L.map() on an already-initialized
   // container throws "Map container is already initialized." (Audit P1: weather-retry-double-map-init.)
   if (radarMap) { try { radarMap.remove(); } catch (e) { /* already removed */ } radarMap = null; }
-  radarMap = L.map('radar-map', {center:[39,-97],zoom:3,zoomControl:false,attributionControl:false});
+  radarMap = L.map('radar-map', {center:[39,-97],zoom:3,zoomControl:false});
+  radarMap.attributionControl.setPrefix(''); // OSM/CARTO credit from tile options (ODbL)
   L.control.zoom({ position: 'bottomleft' }).addTo(radarMap);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', basemapTileOptions).addTo(radarMap);
   L.tileLayer('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png',{opacity:0.6}).addTo(radarMap);
@@ -4239,13 +4247,15 @@ function updateSchedTzFooter() {
   if (!footer) return;
   footer.textContent = '';
   footer.appendChild(document.createTextNode('Schedule data via '));
-  const fr24Link = document.createElement('a');
-  fr24Link.href = 'https://www.flightradar24.com';
-  fr24Link.target = '_blank';
-  fr24Link.rel = 'noopener noreferrer';
-  fr24Link.style.color = 'var(--ua-green)';
-  fr24Link.textContent = 'Flightradar24';
-  footer.appendChild(fr24Link);
+  // Schedules come from AeroDataBox, NOT Flightradar24 — crediting FR24 here was an FR24 ToS
+  // violation (audit). FR24 credit belongs only on live aircraft positions.
+  const schedSourceLink = document.createElement('a');
+  schedSourceLink.href = 'https://aerodatabox.com';
+  schedSourceLink.target = '_blank';
+  schedSourceLink.rel = 'noopener noreferrer';
+  schedSourceLink.style.color = 'var(--ua-green)';
+  schedSourceLink.textContent = 'AeroDataBox';
+  footer.appendChild(schedSourceLink);
   footer.appendChild(document.createTextNode(' · United flights only · All times ' + hubLabel + ' local ('));
   const bold = document.createElement('b');
   bold.textContent = abbr;
@@ -6512,54 +6522,6 @@ async function initApp() {
   // Background preload: fetch top 3 hubs on idle so Schedule tab is fast without hammering mobile
   const idlePreload = () => { preloadScheduleData(); fetchIropsFromAPI(); preloadWeatherAndFAA(); };
   if ('requestIdleCallback' in window) requestIdleCallback(idlePreload); else setTimeout(idlePreload, 5000);
-  initCreditWidget();
-}
-
-// ═══ FR24 CREDIT USAGE WIDGET ═══
-// Admin-only: visit theblueboard.co?admin to enable, ?admin=off to disable
-function initCreditWidget() {
-  var params = new URLSearchParams(location.search);
-  if (params.has('admin')) {
-    if (params.get('admin') === 'off') { localStorage.removeItem('bb_admin'); return; }
-    localStorage.setItem('bb_admin', '1');
-  }
-  if (!localStorage.getItem('bb_admin')) return;
-  function render(data) {
-    var existing = document.getElementById('fr24-credit-widget');
-    if (existing) existing.remove();
-    if (!data || !data.data) return;
-    var rows = data.data;
-    var totalCredits = 0;
-    for (var i = 0; i < rows.length; i++) totalCredits += (rows[i].credits || 0);
-    var limit = 60000; // Explorer tier
-    var remaining = Math.max(0, limit - totalCredits);
-    var pct = Math.round((remaining / limit) * 100);
-    var color = pct > 50 ? 'var(--ua-green)' : pct > 20 ? 'var(--ua-yellow)' : 'var(--ua-red)';
-
-    var w = document.createElement('div');
-    w.id = 'fr24-credit-widget';
-
-    var label = document.createElement('div');
-    label.className = 'credit-widget-label';
-    label.textContent = 'FR24 API: ' + remaining.toLocaleString() + ' / ' + limit.toLocaleString() + ' credits remaining';
-    w.appendChild(label);
-
-    var barBg = document.createElement('div');
-    barBg.className = 'credit-widget-bar-bg';
-    var bar = document.createElement('div');
-    bar.className = 'credit-widget-bar';
-    bar.style.width = pct + '%';
-    bar.style.background = color;
-    barBg.appendChild(bar);
-    w.appendChild(barBg);
-
-    document.body.appendChild(w);
-  }
-  function load() {
-    fetch('/api/fr24-usage').then(function(r) { return r.json(); }).then(render).catch(function() {});
-  }
-  load();
-  setInterval(load, 5 * 60 * 1000);
 }
 
 // Both Leaflet and dashboard are deferred — Leaflet loads first (script order preserved).
