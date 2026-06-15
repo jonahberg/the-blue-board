@@ -1565,6 +1565,28 @@ function fetchStarlinkPredictions() {
 }
 
 function applyStarlinkPrediction(el, data) {
+  // Two distinct badge surfaces share this renderer. Only the NEW forecast badge
+  // (data-mode="forecast", driven by predict-flight's statistical base-rate) gets
+  // the "likely ~N%" label + low-data gating. The pre-existing deterministic
+  // check-flight badge (tail already resolved) must render exactly as it did on
+  // main — otherwise a verified-95% confirmation (n_observations≈1) would be
+  // demoted to a muted "· low data" with a self-contradictory tooltip.
+  const forecast = el.getAttribute('data-mode') === 'forecast';
+
+  if (!forecast) {
+    // ---- Legacy check-flight badge — byte-identical to main ----
+    const lpct = Math.round(data.probability * 100);
+    if (lpct < 5) { el.style.display = 'none'; return; }
+    const lcolor = lpct >= 75 ? 'var(--ua-green)' : lpct >= 40 ? 'var(--ua-yellow)' : 'var(--ua-muted)';
+    const lbg = lpct >= 75 ? 'rgba(34,197,94,.2)' : lpct >= 40 ? 'rgba(234,179,8,.15)' : 'rgba(100,116,139,.15)';
+    el.style.background = lbg;
+    el.style.color = lcolor;
+    el.textContent = '⚡ Starlink ~' + lpct + '%';
+    el.title = 'Confidence: ' + (data.confidence || 'unknown') + ' (' + (data.n_observations || 0) + ' observations)';
+    return;
+  }
+
+  // ---- Forecast badge — statistical route base-rate from predict-flight ----
   const pct = Math.round((data.probability || 0) * 100);
   // A near-zero base rate is noise, not a signal — hide rather than show "~2%".
   if (pct < 5) { el.style.display = 'none'; return; }
