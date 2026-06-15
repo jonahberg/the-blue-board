@@ -1587,19 +1587,29 @@ function fetchStarlinkPredictions() {
   // en-CA emits YYYY-MM-DD in the user's local timezone, which matches the
   // operational date of the displayed flights. Plain toISOString() is UTC and
   // would query tomorrow's date for west-of-UTC users after local afternoon.
+  // (Only the legacy tail-known check-flight path is date-scoped.)
   const today = new Date().toLocaleDateString('en-CA');
   document.querySelectorAll('.starlink-predict').forEach(el => {
     const flight = el.getAttribute('data-flight');
     if (!flight || flight === 'N/A') { el.style.display = 'none'; return; }
 
-    const cacheKey = flight + '|' + today;
+    // Forecast badges fire where no tail is resolvable, so the right signal is the
+    // statistical route base-rate from predict-flight's flight_history model. That
+    // model is date-agnostic → drop the date param and cache by flight-number only.
+    // Tail-known badges keep their existing date-scoped check-flight path.
+    const forecast = el.getAttribute('data-mode') === 'forecast';
+    const cacheKey = forecast ? 'forecast|' + flight : flight + '|' + today;
     const cached = starlinkPredictionCache.get(cacheKey);
     if (cached) {
       applyStarlinkPrediction(el, cached);
       return;
     }
 
-    fetch('/api/check-flight?flight_number=' + encodeURIComponent(flight) + '&date=' + today)
+    const url = forecast
+      ? '/api/predict-flight?flight_number=' + encodeURIComponent(flight)
+      : '/api/check-flight?flight_number=' + encodeURIComponent(flight) + '&date=' + today;
+
+    fetch(url)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data || data.probability === undefined) {
@@ -1614,15 +1624,55 @@ function fetchStarlinkPredictions() {
 }
 
 function applyStarlinkPrediction(el, data) {
-  const pct = Math.round(data.probability * 100);
+  // Two distinct badge surfaces share this renderer. Only the NEW forecast badge
+  // (data-mode="forecast", driven by predict-flight's statistical base-rate) gets
+  // the "likely ~N%" label + low-data gating. The pre-existing deterministic
+  // check-flight badge (tail already resolved) must render exactly as it did on
+  // main — otherwise a verified-95% confirmation (n_observations≈1) would be
+  // demoted to a muted "· low data" with a self-contradictory tooltip.
+  const forecast = el.getAttribute('data-mode') === 'forecast';
+
+  if (!forecast) {
+    // ---- Legacy check-flight badge — byte-identical to main ----
+    const lpct = Math.round(data.probability * 100);
+    if (lpct < 5) { el.style.display = 'none'; return; }
+    const lcolor = lpct >= 75 ? 'var(--ua-green)' : lpct >= 40 ? 'var(--ua-yellow)' : 'var(--ua-muted)';
+    const lbg = lpct >= 75 ? 'rgba(34,197,94,.2)' : lpct >= 40 ? 'rgba(234,179,8,.15)' : 'rgba(100,116,139,.15)';
+    el.style.background = lbg;
+    el.style.color = lcolor;
+    el.textContent = '⚡ Starlink ~' + lpct + '%';
+    el.title = 'Confidence: ' + (data.confidence || 'unknown') + ' (' + (data.n_observations || 0) + ' observations)';
+    return;
+  }
+
+  // ---- Forecast badge — statistical route base-rate from predict-flight ----
+  const pct = Math.round((data.probability || 0) * 100);
+  // A near-zero base rate is noise, not a signal — hide rather than show "~2%".
   if (pct < 5) { el.style.display = 'none'; return; }
 
-  const color = pct >= 75 ? 'var(--ua-green)' : pct >= 40 ? 'var(--ua-yellow)' : 'var(--ua-muted)';
-  const bgColor = pct >= 75 ? 'rgba(34,197,94,.2)' : pct >= 40 ? 'rgba(234,179,8,.15)' : 'rgba(100,116,139,.15)';
+  const n = data.n_observations || 0;
+  const confidence = data.confidence || 'unknown';
+  // Sample-size gating: a high % off <3 flights (or an explicitly low-confidence
+  // model) shouldn't masquerade as a confident green badge. Demote to the muted
+  // treatment and carry the caveat in TEXT + SHAPE (dashed underline), never colour
+  // alone — per DESIGN.md "status never conveyed by color alone".
+  const lowData = n < 3 || confidence === 'low';
+
+  let color, bgColor;
+  if (lowData) {
+    color = 'var(--ua-muted)';
+    bgColor = 'rgba(100,116,139,.15)';
+  } else {
+    color = pct >= 75 ? 'var(--ua-green)' : pct >= 40 ? 'var(--ua-yellow)' : 'var(--ua-muted)';
+    bgColor = pct >= 75 ? 'rgba(34,197,94,.2)' : pct >= 40 ? 'rgba(234,179,8,.15)' : 'rgba(100,116,139,.15)';
+  }
   el.style.background = bgColor;
   el.style.color = color;
-  el.textContent = '⚡ Starlink ~' + pct + '%';
-  el.title = 'Confidence: ' + (data.confidence || 'unknown') + ' (' + (data.n_observations || 0) + ' observations)';
+  el.style.borderBottom = lowData ? '1px dashed currentColor' : '';
+  el.textContent = '⚡ Starlink likely ~' + pct + '%' + (lowData ? ' · low data' : '');
+  // Read as a statistical estimate, NOT a united.com verification for this date.
+  el.title = 'Statistical estimate from ' + n + ' past flights · ' + confidence
+    + ' confidence · not a guarantee for this date’s aircraft.';
 }
 
 // ═══ STATS ═══
@@ -5757,7 +5807,15 @@ function buildMyFlightCard(watched, td) {
       <div><span class="mf-label">Config</span><div class="mf-value">${escapeHtml(seatStr)}${isStar ? ' <span class="starlink-badge">⚡ Starlink Confirmed</span>' : ` <span class="starlink-badge starlink-predict" data-flight="${escapeHtml(flightNum)}" style="background:rgba(100,116,139,.15);color:var(--ua-muted)">⚡ Checking…</span>`}</div></div>
     </div>`;
   } else if (td && td.aircraft) {
-    equipHtml = `<div><span class="mf-label">Aircraft</span><div class="mf-value">${escapeHtml(td.aircraft)}</div></div>`;
+    // No resolvable tail here (e.g. future-dated lookups): we know the route but not
+    // the metal, so STARLINK_TAILS can't confirm and a route base-rate is the right
+    // signal. Surface a statistical forecast badge instead of leaving Starlink blank.
+    // data-mode="forecast" routes it to the date-agnostic predict-flight model in
+    // fetchStarlinkPredictions(); it hides itself if the model has no useful estimate.
+    const forecastBadge = (flightNum && flightNum !== 'N/A')
+      ? ` <span class="starlink-badge starlink-predict" data-flight="${escapeHtml(flightNum)}" data-mode="forecast" style="background:rgba(100,116,139,.15);color:var(--ua-muted)">⚡ Checking…</span>`
+      : '';
+    equipHtml = `<div><span class="mf-label">Aircraft</span><div class="mf-value">${escapeHtml(td.aircraft)}${forecastBadge}</div></div>`;
   }
 
   // Inbound aircraft tracking + journey chain
