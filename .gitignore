@@ -12,4 +12,5 @@ public/js/dashboard.js
 
 audit-output
 .gstack/
+.playwright-mcp/
 package-lock.json

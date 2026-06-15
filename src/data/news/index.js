@@ -270,6 +270,3 @@ export const newsOrder = articles.map((a) => a.slug);
 
 /** Map of slug → article for quick lookup */
 export const newsMap = Object.fromEntries(articles.map((a) => [a.slug, a]));
-
-/** Categories used across all articles */
-export const newsCategories = CATEGORIES;
