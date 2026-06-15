@@ -553,12 +553,46 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sl-trend-stat-note{font-family:var(--font-mono);font-size:8px;color:var(--ua-dim);margin-top:2px}
 .sl-trend-foot{font-family:var(--font-mono);font-size:8px;color:var(--ua-dim);margin-top:8px}
 .sl-trend-foot:empty{display:none}
+/* ═══ VERIFICATION LEDGER ═══ */
+.sl-hero-verify-sub{font-family:var(--font-mono);font-size:9px;color:var(--ua-dim);letter-spacing:.3px;margin-top:5px}
+.sl-verify{margin-top:14px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.6) 100%);border:1px solid var(--ua-border);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:16px 20px}
+.sl-verify-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.sl-verify-label{margin-bottom:0}
+.sl-verify-strip{display:flex;gap:10px;flex-wrap:wrap}
+.sl-verify-stat{background:var(--ua-panel-elevated);border:1px solid var(--ua-border);border-radius:4px;padding:6px 12px;text-align:center;min-width:74px}
+.sl-verify-stat-v{font-family:var(--font-mono);font-size:18px;font-weight:700;line-height:1;color:var(--ua-text)}
+.sl-verify-stat-ok{color:var(--ua-green)}
+.sl-verify-stat-bad{color:var(--ua-amber)}
+.sl-verify-stat-k{font-family:var(--font-mono);font-size:8px;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-dim);margin-top:3px}
+.sl-verify-alert{display:flex;flex-direction:column;gap:4px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-left:3px solid var(--ua-red);border-radius:0 4px 4px 0;padding:10px 12px;margin-bottom:12px}
+.sl-verify-alert-badge{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ua-red)}
+.sl-verify-alert-text{font-family:var(--font-mono);font-size:11px;color:var(--ua-text);line-height:1.5}
+.sl-verify-details{border-top:1px solid var(--ua-border-subtle);padding-top:8px}
+.sl-verify-summary{font-family:var(--font-mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-text);cursor:pointer;padding:4px 0;list-style:none}
+.sl-verify-summary::-webkit-details-marker{display:none}
+.sl-verify-summary::before{content:'\25B8 ';color:var(--ua-amber)}
+.sl-verify-details[open] .sl-verify-summary::before{content:'\25BE '}
+.sl-verify-summary-hint{color:var(--ua-dim);font-weight:400;text-transform:none;letter-spacing:0}
+.sl-verify-note{font-family:var(--font-ui);font-size:11px;line-height:1.6;color:var(--ua-muted);margin:8px 0 12px;max-width:680px}
+.sl-verify-note strong{color:var(--ua-text)}
+.sl-verify-table{width:100%;border-collapse:collapse}
+.sl-verify-table th{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-dim);text-align:left;padding:6px 10px;border-bottom:1px solid var(--ua-border)}
+.sl-verify-table td{font-family:var(--font-mono);font-size:11px;color:var(--ua-text);padding:7px 10px;border-bottom:1px solid var(--ua-border-subtle);vertical-align:middle}
+.sl-verify-badge{display:inline-block;font-family:var(--font-mono);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:1px 5px;border-radius:3px;background:rgba(239,68,68,.12);color:var(--ua-red);border:1px solid rgba(239,68,68,.3);margin-right:6px;vertical-align:middle}
+.sl-verify-transition{color:var(--ua-muted)}
+.sl-verify-arrow{color:var(--ua-dim)}
+.sl-verify-when{color:var(--ua-muted);font-size:10px}
+.sl-verify-empty{text-align:center;color:var(--ua-muted);padding:18px;font-size:11px}
+.sl-verify-dot{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:var(--ua-red);color:#fff;font-family:var(--font-mono);font-size:9px;font-weight:700;line-height:1;vertical-align:middle;margin-left:6px}
 @media (max-width:600px){
   .sl-hero{grid-template-columns:1fr;gap:14px}
   .sl-hero-chips{flex-direction:row;align-items:flex-start;flex-wrap:wrap}
   .sl-meta-grid{grid-template-columns:repeat(2,1fr)}
   .sl-bar-row{grid-template-columns:56px 1fr 90px}
   .sl-trend-stats{grid-template-columns:1fr}
+  .sl-verify-head{flex-direction:column;align-items:flex-start;gap:10px}
+  .sl-verify-strip{width:100%}
+  .sl-verify-stat{flex:1}
 }
 
 /* Special Aircraft Badge & Tracker */

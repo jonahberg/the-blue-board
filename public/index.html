@@ -601,6 +601,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <div class="sl-hero-left">
         <div class="sl-hero-num" id="sl-hero-count">—</div>
         <div class="sl-hero-sub">Aircraft Equipped</div>
+        <div class="sl-hero-verify-sub" id="sl-hero-verify-sub" style="display:none"></div>
       </div>
       <div class="sl-bars" id="sl-bars">
         <div class="sl-bar-row"><span class="sl-bar-label">Express</span><div class="sl-bar-track"><div class="sl-bar-fill sl-bar-fill-express" id="sl-bar-express"></div></div><span class="sl-bar-val" id="sl-bar-express-val"></span></div>
@@ -667,6 +668,32 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
         <tbody id="sl-tbody"><tr><td colspan="6" class="fleet-loading-text">Loading Starlink fleet…</td></tr></tbody>
       </table>
     </div>
+    <section id="sl-verification" class="sl-verify" aria-label="Starlink verification ledger" style="display:none">
+      <div class="sl-verify-head">
+        <div class="sl-hero-label sl-verify-label">Verification Ledger</div>
+        <div class="sl-verify-strip">
+          <div class="sl-verify-stat"><div class="sl-verify-stat-v sl-verify-stat-ok" id="sl-verify-verified">—</div><div class="sl-verify-stat-k">Verified Starlink</div></div>
+          <div class="sl-verify-stat"><div class="sl-verify-stat-v sl-verify-stat-bad" id="sl-verify-disputed">—</div><div class="sl-verify-stat-k">Disputed</div></div>
+          <div class="sl-verify-stat"><div class="sl-verify-stat-v" id="sl-verify-unverified">—</div><div class="sl-verify-stat-k">Unverified</div></div>
+        </div>
+      </div>
+      <div class="sl-verify-alert" id="sl-verify-alert" role="alert" style="display:none"></div>
+      <details class="sl-verify-details" open>
+        <summary class="sl-verify-summary">Disputed claims <span class="sl-verify-summary-hint">— overruled by official verification</span></summary>
+        <p class="sl-verify-note">These tails were claimed as Starlink in the community spreadsheet, but official united.com verification overruled the claim. Upstream <strong>already excludes</strong> them from the served fleet, so The Blue Board's equipped count is not affected. Verified equipment may be Viasat or Thales.</p>
+        <div class="fleet-table-wrap sl-verify-table-wrap">
+          <table class="sl-verify-table" aria-label="Disputed Starlink claims">
+            <thead><tr>
+              <th scope="col">Tail</th>
+              <th scope="col">Airframe</th>
+              <th scope="col">Verification</th>
+              <th scope="col">Verified</th>
+            </tr></thead>
+            <tbody id="sl-verify-tbody"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
     <div class="fleet-starlink-source" id="sl-source">Starlink data via <a href="https://unitedstarlinktracker.com" target="_blank" rel="noopener noreferrer" class="fleet-source-link">unitedstarlinktracker.com</a> · <span id="sl-updated" class="fleet-starlink-updated">live</span> · <span id="sl-count">—</span> aircraft</div>
   </div>
 </div>
