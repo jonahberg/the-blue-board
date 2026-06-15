@@ -609,34 +609,39 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       </div>
       <div class="sl-hero-chips" id="sl-hero-chips"></div>
     </div>
-    <div class="sl-industry" id="sl-industry" style="display:none">
-      <div class="sl-hero-label">Industry · Starlink Coverage</div>
-      <div class="sl-bars" id="sl-industry-bars"></div>
-    </div>
-    <div class="sl-trend" id="sl-trend" style="display:none">
-      <div class="sl-trend-label">Install Pace</div>
-      <div class="sl-trend-sub" id="sl-trend-sub">Weekly equipped · trailing 12 weeks</div>
-      <div class="sl-trend-bars" id="sl-trend-bars" role="img" aria-label="Weekly Starlink installs, trailing 12 weeks"></div>
-      <div class="sl-trend-stats">
-        <div class="sl-trend-stat">
-          <div class="sl-trend-stat-k">This Week</div>
-          <div class="sl-trend-stat-v" id="sl-trend-thisweek">—</div>
-          <div class="sl-trend-stat-note">in progress</div>
-        </div>
+    <!-- THE ARC — rollout history with pace + ETA folded in as its caption. This velocity chart is the
+         rollout story; it replaces the standalone "Install Pace" sparkline panel (which retold the same
+         story, worse, and led with a partial-week "0"). Promoted directly under the hero count. -->
+    <div class="sl-chart-card" id="sl-chart-card" style="display:none">
+      <div class="sl-chart-label">Installation Velocity</div>
+      <div class="sl-chart-sub" id="sl-chart-sub">Aircraft equipped per month</div>
+      <div class="sl-chart-scroll"><svg id="sl-chart" viewBox="0 0 940 280" role="img" aria-label="Starlink installations per month"></svg></div>
+      <div class="sl-chart-legend">
+        <span><span class="sl-swatch" style="background:var(--ua-green)"></span>Express</span>
+        <span><span class="sl-swatch" style="background:var(--ua-accent)"></span>Mainline</span>
+        <span><span class="sl-swatch sl-swatch-line"></span>Cumulative</span>
+      </div>
+      <div class="sl-chart-footnote" id="sl-chart-footnote"></div>
+      <div class="sl-trend-stats sl-velo-stats" id="sl-velo-stats" style="display:none">
         <div class="sl-trend-stat">
           <div class="sl-trend-stat-k">Avg / Wk</div>
           <div class="sl-trend-stat-v" id="sl-trend-pace">—</div>
-          <div class="sl-trend-stat-note" id="sl-trend-pace-note">8-wk trailing</div>
+          <div class="sl-trend-stat-note" id="sl-trend-pace-note">8-wk trailing pace</div>
         </div>
         <div class="sl-trend-stat sl-trend-stat-featured">
-          <div class="sl-trend-stat-k">Express ETA</div>
+          <div class="sl-trend-stat-k">Express · 100% ETA</div>
           <div class="sl-trend-stat-v" id="sl-trend-eta">—</div>
           <div class="sl-trend-stat-note" id="sl-trend-eta-note">at current pace</div>
         </div>
       </div>
-      <div class="sl-trend-foot" id="sl-trend-foot"></div>
     </div>
-    <!-- HUB DEPARTURES BOARD — live NOC FIDS built client-side from STARLINK_FLIGHTS_BY_TAIL (renderSlRoutesBoard). Hidden in degraded tier. -->
+    <!-- Industry context — demoted: quiet context, not the second headline. -->
+    <div class="sl-industry sl-industry-demoted" id="sl-industry" style="display:none">
+      <div class="sl-hero-label">Industry · Starlink Coverage</div>
+      <div class="sl-bars" id="sl-industry-bars"></div>
+    </div>
+    <!-- LIVE — Hub Departures Board (the all-hubs view collapses to a tight per-hub slice; "Show all"
+         expands). Built client-side from STARLINK_FLIGHTS_BY_TAIL (renderSlRoutesBoard). Hidden in degraded tier. -->
     <div class="sl-board-note" id="sl-board-note" style="display:none">Live departures board unavailable — Starlink schedule feed is offline (showing the fleet roster only).</div>
     <div class="sl-board" id="sl-board" style="display:none">
       <div class="sl-board-head">
@@ -652,16 +657,6 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <div class="sl-board-pills" id="sl-board-pills" role="group" aria-label="Filter departures by hub"></div>
       <div class="sl-board-body" id="sl-board-body"></div>
       <div class="sl-board-foot">A NOC departures board, not a passenger FIDS. Callsigns are the operating carrier (SkyWest, Republic, Mesa…), not United marketing flight numbers. Times are scheduled / last-seen, served through The Blue Board's cache (up to 6h) — not live ATC.</div>
-    <div class="sl-chart-card" id="sl-chart-card" style="display:none">
-      <div class="sl-chart-label">Installation Velocity</div>
-      <div class="sl-chart-sub" id="sl-chart-sub">Aircraft equipped per month</div>
-      <div class="sl-chart-scroll"><svg id="sl-chart" viewBox="0 0 940 280" role="img" aria-label="Starlink installations per month"></svg></div>
-      <div class="sl-chart-legend">
-        <span><span class="sl-swatch" style="background:var(--ua-green)"></span>Express</span>
-        <span><span class="sl-swatch" style="background:var(--ua-accent)"></span>Mainline</span>
-        <span><span class="sl-swatch sl-swatch-line"></span>Cumulative</span>
-      </div>
-      <div class="sl-chart-footnote" id="sl-chart-footnote"></div>
     </div>
     <div class="sl-filters" id="sl-filters">
       <input type="text" id="sl-search" aria-label="Search Starlink aircraft" placeholder="Search tail...">

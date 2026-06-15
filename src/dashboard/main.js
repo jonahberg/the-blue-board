@@ -2757,7 +2757,12 @@ function renderSlVerification() {
   // context so they never overwrite the served count in the big hero number.
   if (subEl) {
     if (summary && summary.verifiedStarlink != null) {
-      subEl.textContent = summary.verifiedStarlink + ' verified · ' + disputedCount + ' disputed';
+      // "N disputed" jumps to the verification ledger (a plain hash link can't reach it — the ledger
+      // lives inside the #tab-starlink scroll container, so the dispatch handler uses scrollIntoView).
+      // Both values are our own integer counts (coerced to Number so the innerHTML can carry no markup).
+      subEl.innerHTML = Number(summary.verifiedStarlink) + ' verified · ' +
+        '<span class="sl-verify-jump" data-action="sl-jump-verify" role="button" tabindex="0" ' +
+        'title="Jump to the verification ledger">' + Number(disputedCount) + ' disputed</span>';
       subEl.style.display = '';
     } else {
       subEl.style.display = 'none';
@@ -2772,8 +2777,14 @@ function renderSlVerification() {
 // WEEKLY ADDS over a 12-week window (never an all-time cumulative cliff), clamps backfill spikes, and
 // frames the ETA as Express-fleet "at current pace …", never a commitment.
 function renderSlTrend() {
-  const card = document.getElementById('sl-trend');
-  if (!card) return;
+  // Pace + ETA, rendered as the caption stat-row inside the Installation Velocity card
+  // (#sl-velo-stats). This was a standalone "Install Pace" panel with a 12-week sparkline, but that
+  // retold the velocity chart's story at a coarser zoom and led with a partial-week "0" that read as
+  // a stalled feed. We keep only the two things the monthly chart can't show: the trailing weekly
+  // pace and the Express-fleet "at current pace" ETA. Pace math + backfill clamp live in
+  // computeInstallPace (starlink-utils).
+  const row = document.getElementById('sl-velo-stats');
+  if (!row) return;
 
   const fs = STARLINK_FLEET_STATS;
   // Express remaining drives the ETA. Mainline (much of which is widebody/retiring that may never get
@@ -2783,34 +2794,15 @@ function renderSlTrend() {
   const pace = computeInstallPace(STARLINK_DB, new Date(),
     expressRemaining != null ? { remaining: expressRemaining } : {});
 
-  // Degraded mode (static fallback carries no dateFound): hide the whole panel, same guard the
-  // rollout bars use — never render an empty/garbage panel.
-  if (pace.dated === 0) { card.style.display = 'none'; return; }
-  card.style.display = '';
+  // Degraded mode (static fallback carries no dateFound): hide the stats, same guard the chart uses.
+  if (pace.dated === 0) { row.style.display = 'none'; return; }
+  row.style.display = '';
 
-  // Sparkline: one vertical bar per ISO week (amber fill on a --ua-border-subtle track). Backfill
-  // weeks get a striped fill (texture, not color alone) + a tooltip note.
-  const barsEl = document.getElementById('sl-trend-bars');
-  barsEl.innerHTML = pace.weeks.map(w => {
-    const pct = w.barValue > 0 ? Math.max(3, Math.round((w.barValue / pace.peak) * 100)) : 0;
-    const tip = 'Week of ' + w.label + ' · ' + w.count + ' equipped' + (w.capped ? ' (backfill batch)' : '');
-    return '<div class="sl-trend-bar" title="' + escapeHtml(tip) + '">' +
-      '<div class="sl-trend-bar-fill' + (w.capped ? ' sl-trend-bar-capped' : '') + '" style="height:' + pct + '%"></div>' +
-      '</div>';
-  }).join('');
-
-  // Window subtitle: first → last week of the displayed range.
-  const subEl = document.getElementById('sl-trend-sub');
-  if (subEl && pace.weeks.length) {
-    subEl.textContent = 'Weekly equipped · ' + pace.weeks[0].label + ' – ' + pace.weeks[pace.weeks.length - 1].label;
-  }
-
-  // 3-up readout — counts/derived numbers are our own data, safe as textContent.
-  document.getElementById('sl-trend-thisweek').textContent = pace.thisWeek;
+  // Trailing weekly pace — derived from our own data, safe as textContent.
   const paceStr = pace.pace >= 10 ? String(Math.round(pace.pace)) : String(Math.round(pace.pace * 10) / 10);
   document.getElementById('sl-trend-pace').textContent = pace.pace > 0 ? '~' + paceStr : '—';
   const paceNote = document.getElementById('sl-trend-pace-note');
-  if (paceNote) paceNote.textContent = pace.paceWeeks > 0 ? pace.paceWeeks + '-wk trailing' : 'no complete weeks';
+  if (paceNote) paceNote.textContent = pace.paceWeeks > 0 ? pace.paceWeeks + '-wk trailing pace' : 'no complete weeks';
 
   // Featured amber ETA — Express-fleet, "at current pace", never a commitment. Drops to em-dash when
   // pace or the Express denominator is unavailable.
@@ -2823,15 +2815,6 @@ function renderSlTrend() {
   } else {
     etaEl.textContent = '—';
     if (etaNote) etaNote.textContent = expressRemaining == null ? 'Express fleet n/a' : 'pace too low';
-  }
-
-  // Footnote: surface any backfill-clamped weeks so the spike never reads as a real surge.
-  const footEl = document.getElementById('sl-trend-foot');
-  if (footEl) {
-    const capped = pace.weeks.filter(w => w.capped);
-    footEl.textContent = capped.length
-      ? '* ' + capped.map(w => 'Week of ' + w.label + ' (' + w.count + ') is a backfill detection batch — bar clamped').join(' · ')
-      : '';
   }
 }
 
@@ -2980,8 +2963,13 @@ function renderSlRoutesBoard() {
 
   const now = Date.now() / 1000;
   const windowSec = slBoardWindow * 3600;
-  // Cap the DOM only in the wide 48h view (~1492 rows) unless the user asked for all.
-  const capPerHub = (slBoardWindow >= 48 && !slBoardShowAll) ? 40 : Infinity;
+  // Tame the default. The all-hubs 12h list is ~180 rows — a wall that buries the roster and the
+  // ledger below it. Cap to a tight per-hub slice in the all-hubs view (the "Show all" button
+  // expands it); a single-hub 12h view shows everything; the wide 48h view stays capped at 40/hub.
+  const capPerHub = slBoardShowAll ? Infinity
+    : !slBoardHub ? 6
+    : slBoardWindow >= 48 ? 40
+    : Infinity;
 
   const data = buildDeparturesBoard(STARLINK_FLIGHTS_BY_TAIL, aircraftByTail, airborneByTail, HUB_CODES, {
     now, windowSec, graceSec: 1800, hub: slBoardHub, capPerHub,
@@ -3039,7 +3027,7 @@ function renderSlRoutesBoard() {
     for (const r of bucket.rows) html += renderSlBoardRow(r, now);
   }
   if (data.hiddenCount > 0) {
-    html += `<button class="sl-board-showall" data-action="sl-board-show-all">Show all · ${data.hiddenCount} more capped at 40/hub ▾</button>`;
+    html += `<button class="sl-board-showall" data-action="sl-board-show-all">Show all · ${data.hiddenCount} more departures ▾</button>`;
   }
   body.innerHTML = html;
 }
@@ -6838,6 +6826,12 @@ document.addEventListener('click', function(e) {
     case 'sl-board-show-all': {
       slBoardShowAll = true;
       renderSlRoutesBoard();
+      break;
+    }
+    case 'sl-jump-verify': {
+      // Hero "N disputed" → verification ledger. scrollIntoView (not a hash link) because the ledger
+      // lives inside the #tab-starlink scroll container, which a fragment URL can't reach.
+      document.getElementById('sl-verification')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       break;
     }
     case 'aircraft-detail': {
