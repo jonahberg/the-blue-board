@@ -86,6 +86,74 @@ export function resolveTag(tag) {
 
 export const articles = [
   {
+    slug: 'united-a321xlr-blocked-middle-seat',
+    title: 'The Blocked Middle Seat: Inside United\'s Plan to Fly the A321XLR With a Leaner Crew',
+    date: '2026-06-12',
+    category: 'Operations',
+    sources: [
+      { name: 'View from the Wing', url: 'https://viewfromthewing.com/united-airlines-confirms-it-will-block-middle-seats-on-new-a321xlrs-to-fly-with-fewer-flight-attendants/' },
+      { name: 'Paddle Your Own Kanoo', url: 'https://www.paddleyourownkanoo.com/2026/06/10/united-airlines-is-reportedly-working-on-a-new-economy-product-with-a-blocked-middle-seat-to-reduce-flight-attendant-requirements/' },
+      { name: 'Simple Flying', url: 'https://simpleflying.com/united-a321xlr-blocked-middle-seats-flight-attendants/' },
+    ],
+    summary: 'United is blocking two middle seats on its new A321XLR to hold the cabin at 150 seats — a quiet move that keeps the jet under an FAA flight-attendant threshold. The airline calls it customer investment; the labor math tells a more interesting story.',
+    body: `<p>Amid all the excitement over United's first A321XLR, eagle-eyed observers caught a strange detail in the cabin: two seats — 32B and 32E — blocked off by a fixed tray table, unusable. Why would an airline deliberately disable seats on a brand-new airplane it just spent a fortune to buy? The answer, reported in mid-June, is one of the more quietly clever pieces of airline math you'll see this year.</p>
+
+<p>It comes down to flight attendants. Under FAA rules (14 CFR §121.391), an airline needs one flight attendant for every 50 seats onboard — and those thresholds turn into real money over the life of a fleet. The wrinkle on the XLR is that its premium cabin, with enclosed Polaris suites, already pushes the staffing requirement up a notch. By blocking two seats and holding the cabin at exactly 150, United keeps the jet from crossing into the next bracket — which, as View from the Wing lays out, is the difference between four flight attendants and five on every single flight. One fewer crew position, across 50 airplanes, for decades.</p>
+
+<p>United, for its part, isn't hiding it — though it's selling the comfort, not the spreadsheet. Asked about the blocked seats, the airline framed the move as "part of our winning strategy to continually invest in the customer, nose-to-tail." And to be fair, there's a real passenger benefit: a blocked middle gives those rows a 2-2 feel, the same trick European carriers use for their short-haul business class. But the staffing math is the part that made aviation watchers sit up.</p>
+
+<p>Here's where it gets murkier — and where we'd urge caution. A separate, widely-shared report claims United is working on a much broader version of this idea: a permanently blocked middle seat in regular Economy, on a tray that unlocks and stows when the seat is actually needed, that could let a denser jet like the 161-seat Coastliner fly with three flight attendants instead of four. That one traces back to a single Reddit post from someone claiming a contact at United's headquarters, and United declined to comment. So to be precise: the blocked middles on the XLR are real and confirmed; a fleet-wide "block the middle to cut a crew member" program is, for now, speculation.</p>
+
+<p>It's worth watching anyway. If it works, it quietly tilts the economics of narrowbody long-haul in United's favor — and the flight attendants' union will almost certainly have something to say about a strategy whose explicit goal is to staff cabins more thinly. For now, file it under: confirmed on the XLR, fascinating everywhere else.</p>`,
+    tags: ['ewr', 'a321neo'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-first-a321xlr-757-replacement',
+    title: 'The 757 Replacement Arrives: United Takes Delivery of Its First A321XLR',
+    date: '2026-06-03',
+    category: 'Fleet',
+    sources: [
+      { name: 'AeroTime', url: 'https://www.aerotime.aero/articles/united-first-airbus-a321xlr-arrives-us' },
+      { name: 'One Mile at a Time', url: 'https://onemileatatime.com/news/united-airbus-a321xlr/' },
+      { name: 'Aerospace Global News', url: 'https://aerospaceglobalnews.com/news/united-airlines-first-airbus-a321xlr-delivered/' },
+    ],
+    summary: 'United took delivery of its first Airbus A321XLR on June 3 — the long-range narrowbody that finally retires the 757 on transatlantic flying, with 20 lie-flat Polaris suites, free Starlink Wi-Fi, and a 4,700-nautical-mile reach that opens "long and thin" city pairs no widebody could justify.',
+    body: `<p>The airplane United spent all spring teasing is now sitting on the ground in Florida. On June 3, the airline took delivery of its first Airbus A321XLR — registration N64321 — ferried straight from the Airbus line in Hamburg to Tampa, where it goes in for Starlink installation before it ever carries a paying passenger. It's the first of 50 on order, and it enters revenue service this summer. After years of "what finally replaces the 757," United has its answer, and it has a tail number.</p>
+
+<p>Here's why this particular airplane matters more than the average fleet addition. The Boeing 757 was the industry's great irreplaceable workhorse: a narrowbody with the legs to cross the Atlantic, perfect for routes too thin to fill a widebody but too long for an ordinary single-aisle. Nothing built since could quite do the job — until the XLR. With roughly 4,700 nautical miles of range (about 8,700 km), it opens exactly the "long and thin" city pairs United has been circling for years: think Newark to Bogotá, Newark to Edinburgh, and a long list of secondary European and South American cities that could never justify a 767.</p>
+
+<p>The cabin is where United made its statement. The XLR carries 150 seats: 20 Polaris business-class suites in a 1-1, all-aisle-access herringbone layout — the same lie-flat suite with privacy doors rolling out on the new 787-9 and the Coastliner — plus 12 Premium Plus seats, 118 economy seats (36 of them Economy Plus), and a snack bar in the back. That's a strikingly premium-heavy load for a single-aisle jet; United is putting 32 premium seats up front where the old 757 had 16 angled-flat ones. Starlink Wi-Fi, free for MileagePlus members, is standard — which is the whole reason the jet detoured to Tampa before flying a single route.</p>
+
+<p>The honest caveat: it's still a narrowbody. Eight-plus hours in a single-aisle tube will never feel like a widebody, no matter how good the seat, and the XLR makes do with a single forward lavatory shared with the flight deck. But measured against the aging 757s it replaces, it isn't close. Passengers get a real lie-flat suite with a door, 4K screens, fast free internet, and a quieter, more efficient airplane.</p>
+
+<p>Step back and the fleet math is the story United wants you to see. Fifty XLRs on order since December 2019, more than half due to be flying by 2028, paired with the 40 Coastliner A321neos — together, 100 new narrowbodies pushing out 40 tired 757s. The first one flies this summer on routes the 757 works today; the new markets come after. The replacement question that hung over United's transatlantic network for a decade just got its first real answer.</p>`,
+    tags: ['ewr', 'a321neo', '757-200'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-summer-2026-transatlantic-routes',
+    title: 'Split, Bari, Glasgow, Santiago — and Reykjavik: United\'s New European Map Goes Live',
+    date: '2026-05-27',
+    category: 'Routes',
+    sources: [
+      { name: 'The Points Guy', url: 'https://thepointsguy.com/news/united-airlines-summer-2026-seasonal-routes/' },
+      { name: 'Live and Let\'s Fly', url: 'https://liveandletsfly.com/united-airlines-2026-new-routes/' },
+    ],
+    summary: 'United\'s summer 2026 transatlantic push is now in the air: four new or returning Newark nonstops to secondary European cities, the airline\'s first-ever Washington-Dulles–Reykjavik route, and a year-round Newark–Seoul launch this fall — part of a network no other U.S. carrier comes close to matching.',
+    body: `<p>The summer map United sketched out over the winter is now, finally, in the air. Over five weeks this spring the airline lit up a run of new and returning transatlantic routes out of its East Coast hubs — and the through-line is unmistakable: United is going after the secondary cities nobody else flies nonstop.</p>
+
+<p>Start with Newark. Split, Croatia kicked things off on April 30 (three times a week), followed by Bari, Italy on May 1 (four times a week) — both on a "high-J" Boeing 767-300 stuffed with premium seats: 46 Polaris business-class seats and 22 Premium Plus on the Split configuration alone. Then the narrowbodies took over: daily Newark–Glasgow returned on May 8, and Newark–Santiago de Compostela, the end of the Camino in northwest Spain, launched May 22 — both flown by the Boeing 737 MAX 8. A single-aisle MAX crossing the Atlantic to a Spanish pilgrimage town is its own quiet milestone, and a preview of exactly the thin-route economics the incoming A321XLR is built to exploit.</p>
+
+<p>The most interesting new line on the map isn't out of Newark at all. On May 21, United launched daily Washington-Dulles to Reykjavik on a Boeing 757-200 — its first-ever nonstop between the two cities, and a direct shot at Icelandair on its home turf from United's capital hub. Reykjavik is both a destination in its own right and a connecting funnel into the rest of Europe, and United clearly wants a piece of it.</p>
+
+<p>It isn't only Europe. This fall, on September 1, United turns Newark–Seoul into a year-round daily on the Boeing 787-9 Dreamliner — converting one of the more strategically valuable transpacific links from a seasonal play into a permanent fixture of the Newark long-haul bank. And closer to home, United layered in nine Saturday-only summer leisure routes to markets the big carriers usually ignore: Bangor and Portland in Maine, Halifax and Québec City, Burlington, Spokane, Chattanooga, and Cody, Wyoming — the gateway to Yellowstone.</p>
+
+<p>The strategy underneath all of it is the one United keeps coming back to: own the routes the competition can't or won't fly. The airline says it will serve more than 40 overseas cities no other U.S. carrier touches, building toward nearly 3,000 weekly international roundtrips. Split and Santiago and Reykjavik won't move the revenue needle on their own — but as a set, they're a moat. And every one of them feeds the hubs.</p>`,
+    tags: ['ewr', 'iad', '767-300er', '737-max-8', '757-200', '787-9-dreamliner'],
+    ogImage: null,
+  },
+  {
     slug: 'united-250-planes-coastliner-a321xlr-crj450',
     title: 'United Unveils Coastliner, A321XLR, and CRJ450 — 250+ Aircraft in Two Years',
     date: '2026-03-24',
