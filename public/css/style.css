@@ -470,6 +470,11 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sl-bar-fill{height:100%;border-radius:3px;width:0;transition:width .5s ease}
 .sl-bar-fill-express{background:var(--ua-green)}
 .sl-bar-fill-mainline{background:var(--ua-accent)}
+/* Industry coverage strip: United is the amber home team, competitors muted. */
+.sl-bar-fill-ua{background:var(--ua-amber)}
+.sl-bar-fill-muted{background:var(--ua-dim)}
+.sl-bar-label-ua{color:var(--ua-amber);font-weight:600}
+.sl-industry{margin-bottom:14px}
 .sl-bar-val{color:var(--ua-text);text-align:right;white-space:nowrap}
 .sl-hero-chips{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
 .sl-chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:3px;white-space:nowrap}
