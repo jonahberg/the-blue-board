@@ -1125,7 +1125,7 @@ async function refreshFlights() {
     [updateMarkers, updateStats, updateHubStats, updateTicker].forEach(fn => { try { fn(); } catch(e) { console.error(fn.name + ':', e); } });
     try { if (document.getElementById('tab-myflight')?.classList.contains('active')) renderMyFlights(); } catch(e) { console.error('renderMyFlights:', e); }
     try { if (document.getElementById('tab-fleet')?.classList.contains('active')) updateLiveFleetPanel(); } catch(e) { console.error('updateLiveFleetPanel:', e); }
-    try { if (document.getElementById('tab-starlink')?.classList.contains('active') && slInitialized) { renderSlHero(); renderSlTrend(); renderSlTable(); } } catch(e) { console.error('renderStarlinkTab:', e); }
+    try { if (document.getElementById('tab-starlink')?.classList.contains('active') && slInitialized) { renderSlHero(); renderSlTrend(); renderSlTable(); renderSlVerification(); } } catch(e) { console.error('renderStarlinkTab:', e); }
     try { if (document.getElementById('tab-analytics')?.classList.contains('active')) updateAnalytics(); } catch(e) { console.error('updateAnalytics:', e); }
     // Handle deep link: ?flight=UA1234 on first load (also supports ?q= for SearchAction compatibility)
     if (!deepLinkHandled) {
@@ -2547,6 +2547,12 @@ let slSortKey = 'tail', slSortAsc = true;
 let slInitialized = false;
 let slExpandedTail = null;   // tail of the one currently-expanded row (null = none)
 let slShowNewOnly = false;   // "★ New this week" quick filter
+// Verification Ledger: community-spreadsheet Starlink claims that official united.com verification
+// OVERRULED. Upstream already excludes these from the served fleet, so a disputed tail should never
+// appear in STARLINK_TAILS — see getServedConflictTails() for the render-time integrity tripwire.
+let STARLINK_DISPUTED = [];         // [{ tail, aircraft, operator, verifiedAs, verifiedAt, dateFound }]
+let STARLINK_VERIFY_SUMMARY = null; // { verifiedStarlink, disputed, unverified, totalPlanes, generatedAt }
+let slMismatchesFetched = false;    // one-shot fetch guard (the ledger changes slowly)
 
 // A plane counts as "newly equipped" if upstream first recorded its Starlink (DateFound) within the
 // last 7 days. Computed against the live clock so the badge ages out on its own.
@@ -2622,6 +2628,135 @@ function initStarlinkTab() {
   renderSlTrend();
   renderSlChart();
   renderSlTable();
+  fetchStarlinkMismatches(); // lazy/non-blocking; resolves into renderSlVerification()
+  renderSlVerification();    // reflect any already-loaded ledger on an idempotent re-open
+}
+
+// ═══ VERIFICATION LEDGER ═══
+// Fetches the disputed-claims ledger from /api/starlink-mismatches. Mirrors fetchStarlinkPredictions:
+// lazy, non-blocking, and a failure or empty list simply hides the panel — it never blocks the tab.
+function fetchStarlinkMismatches() {
+  if (slMismatchesFetched) return;
+  slMismatchesFetched = true;
+  fetch('/api/starlink-mismatches')
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (data && Array.isArray(data.disputed)) {
+        STARLINK_DISPUTED = data.disputed;
+        STARLINK_VERIFY_SUMMARY = data.summary || null;
+      } else {
+        STARLINK_DISPUTED = [];
+        STARLINK_VERIFY_SUMMARY = null;
+        slMismatchesFetched = false; // allow a retry on the next tab open
+      }
+      renderSlVerification();
+      renderSlTable(); // re-render rows so an integrity conflict can flag the offending tail
+    })
+    .catch(() => {
+      STARLINK_DISPUTED = [];
+      STARLINK_VERIFY_SUMMARY = null;
+      slMismatchesFetched = false;
+      renderSlVerification();
+    });
+}
+
+// Render-time integrity tripwire: disputed tails that upstream STILL serves in the equipped fleet.
+// Today this is empty (0 of the disputed set appear in STARLINK_TAILS), so the panel stays quiet.
+// If it ever becomes non-empty, renderSlVerification() raises an INTEGRITY ALERT and renderSlTable()
+// flags the offending rows.
+function getServedConflictTails() {
+  const set = new Set();
+  for (const d of STARLINK_DISPUTED) {
+    if (d && d.tail && STARLINK_TAILS.has(d.tail)) set.add(d.tail);
+  }
+  return set;
+}
+
+function formatVerifyDate(iso) {
+  const ms = Date.parse(iso);
+  if (isNaN(ms)) return '';
+  return new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Stat strip + disputed table + the load-bearing integrity guard. Empty/failed ledger → hidden.
+function renderSlVerification() {
+  const section = document.getElementById('sl-verification');
+  if (!section) return;
+
+  const summary = STARLINK_VERIFY_SUMMARY;
+  const disputed = Array.isArray(STARLINK_DISPUTED) ? STARLINK_DISPUTED : [];
+  const subEl = document.getElementById('sl-hero-verify-sub');
+
+  // Degraded tier / fetch miss / empty ledger → hide the whole panel (mirrors other tab guards).
+  // adapt() returns a truthy zero-filled summary on any HTTP 200, so a shape drift (upstream
+  // renames a field we don't recognise) would otherwise render a contradictory "0 / 0 / 0" panel
+  // and a "0 verified · 0 disputed" hero sub-line under the big 400. Treat "no meaningful data"
+  // (no disputed rows AND every summary counter zero/absent) as empty and hide.
+  const hasData = disputed.length > 0 || !!(summary && (
+    summary.verifiedStarlink || summary.disputed || summary.unverified || summary.totalPlanes
+  ));
+  if (!hasData) {
+    section.style.display = 'none';
+    if (subEl) subEl.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+
+  // (1) Stat strip — verified / disputed / unverified from the summary.
+  const v = summary || {};
+  const disputedCount = (v.disputed != null) ? v.disputed : disputed.length;
+  document.getElementById('sl-verify-verified').textContent = (v.verifiedStarlink != null) ? v.verifiedStarlink : '—';
+  document.getElementById('sl-verify-disputed').textContent = disputedCount;
+  document.getElementById('sl-verify-unverified').textContent = (v.unverified != null) ? v.unverified : '—';
+
+  // Load-bearing guard.
+  const conflicts = getServedConflictTails();
+  const alertEl = document.getElementById('sl-verify-alert');
+  if (conflicts.size > 0) {
+    const tails = [...conflicts].map(escapeHtml).join(', ');
+    alertEl.innerHTML = '<span class="sl-verify-alert-badge">⚠ INTEGRITY ALERT</span>' +
+      '<span class="sl-verify-alert-text">' + conflicts.size + ' disputed ' +
+      (conflicts.size === 1 ? 'tail is' : 'tails are') +
+      ' still present in the served Starlink fleet: <strong>' + tails + '</strong>. ' +
+      'These were overruled by official verification and should be excluded — check the data pipeline.</span>';
+    alertEl.style.display = '';
+  } else {
+    alertEl.style.display = 'none';
+    alertEl.innerHTML = '';
+  }
+
+  // (2) Disputed table — Tail · Airframe · "DISPUTED Starlink → Viasat/Thales" · verified-when.
+  const tbody = document.getElementById('sl-verify-tbody');
+  if (disputed.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="sl-verify-empty">No disputed claims on record.</td></tr>';
+  } else {
+    tbody.innerHTML = disputed.map(d => {
+      const tail = escapeHtml(d.tail || '');
+      const air = escapeHtml(d.aircraft || '—');
+      const verifiedAs = escapeHtml(d.verifiedAs || 'Not Starlink');
+      const when = d.verifiedAt ? escapeHtml(formatVerifyDate(d.verifiedAt)) : '—';
+      const conflictDot = conflicts.has(d.tail)
+        ? ' <span class="sl-verify-dot" title="Still served in the equipped fleet — integrity conflict">!</span>'
+        : '';
+      return '<tr>' +
+        '<td><span class="sl-tail">' + tail + '</span>' + conflictDot + '</td>' +
+        '<td>' + air + '</td>' +
+        '<td class="sl-verify-transition"><span class="sl-verify-badge">Disputed</span> Starlink <span class="sl-verify-arrow">→</span> ' + verifiedAs + '</td>' +
+        '<td class="sl-verify-when">' + when + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  // Optional muted hero sub-line — keeps the 397/disputed figures strictly inside this panel's
+  // context so they never overwrite the served count in the big hero number.
+  if (subEl) {
+    if (summary && summary.verifiedStarlink != null) {
+      subEl.textContent = summary.verifiedStarlink + ' verified · ' + disputedCount + ' disputed';
+      subEl.style.display = '';
+    } else {
+      subEl.style.display = 'none';
+    }
+  }
 }
 
 // ═══ INSTALL PACE ═══
@@ -2931,6 +3066,8 @@ function renderSlTable() {
   const liveMap = getStarlinkAirborneMap();
   const hasLive = allFlights.length > 0;
   const nowSec = Date.now() / 1000;
+  // Disputed-but-still-served tails (normally empty). Marked with a red integrity dot below.
+  const conflictTails = getServedConflictTails();
 
   // Hide the Status / Next Flight columns when the data behind them is unavailable (degraded modes)
   document.getElementById('sl-status-th').style.display = hasLive ? '' : 'none';
@@ -2968,8 +3105,9 @@ function renderSlTable() {
     }
 
     const newBadge = isRecentlyFound(s.dateFound) ? ` <span class="starlink-new-badge" title="Starlink equipment first seen ${escapeHtml(s.dateFound)}">NEW</span>` : '';
+    const conflictDot = conflictTails.has(s.tail) ? ` <span class="sl-verify-dot" title="Disputed by official verification — should not be served. See the Verification Ledger below.">!</span>` : '';
     rows.push(`<tr class="sl-row${expanded ? ' expanded' : ''}" data-action="sl-row-toggle" data-tail="${escapeHtml(s.tail)}" tabindex="0" role="button" aria-expanded="${expanded}">` +
-      `<td><span class="sl-tail">${escapeHtml(s.tail)}</span>${newBadge}</td>` +
+      `<td><span class="sl-tail">${escapeHtml(s.tail)}</span>${newBadge}${conflictDot}</td>` +
       `<td>${escapeHtml(s.fleet)}</td><td>${escapeHtml(s.type)}</td><td style="font-size:10px">${escapeHtml(s.operator)}</td>` +
       statusHtml + nextHtml + '</tr>');
 
