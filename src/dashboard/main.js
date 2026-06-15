@@ -55,6 +55,7 @@ let STARLINK_TAILS = new Set();
 let STARLINK_FLIGHTS_BY_TAIL = {};  // upcoming flights keyed by tail number
 let STARLINK_FLEET_STATS = null;    // { mainline, express, total }
 let STARLINK_LAST_UPDATED = null;   // ISO timestamp from upstream
+let STARLINK_INDUSTRY = null;       // [{ code, name, installed, total, percentage }] from /api/fleet-summary
 let pendingFleetDeepLinkFilter = null;
 
 // Build registration lookup
@@ -62,10 +63,13 @@ const FLEET_BY_REG = {};
 
 async function loadFleetData() {
   try {
-    // Fetch fleet + Starlink data in parallel (saves one network round trip)
-    const [fleetRes, starlinkResult] = await Promise.all([
+    // Fetch fleet + Starlink data + industry coverage in parallel (saves round trips).
+    // The industry fetch is non-blocking: any failure resolves to null and the
+    // "Starlink coverage by airline" strip simply doesn't render.
+    const [fleetRes, starlinkResult, industryResult] = await Promise.all([
       fetch('/data/fleet.json'),
-      fetch('/api/starlink-data').then(r => r.ok ? r.json() : null).catch(() => null)
+      fetch('/api/starlink-data').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/fleet-summary').then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
     if (!fleetRes.ok) throw new Error('Fleet data load failed');
     FLEET_DB = await fleetRes.json();
@@ -87,6 +91,11 @@ async function loadFleetData() {
         STARLINK_DB = await starlinkRes.json();
       }
     }
+
+    // Industry coverage strip data (optional). renderSlIndustry() re-validates
+    // each row before painting, so we only need the array-or-null here.
+    STARLINK_INDUSTRY = (industryResult && Array.isArray(industryResult.airlines) && industryResult.airlines.length > 0)
+      ? industryResult.airlines : null;
   } catch (err) {
     console.error('Fleet data load error:', err);
     FLEET_DB = [];
@@ -2719,6 +2728,50 @@ function renderSlHero() {
     const ago = Math.round((Date.now() - new Date(STARLINK_LAST_UPDATED).getTime()) / 60000);
     document.getElementById('sl-updated').textContent = ago < 60 ? ('Updated ' + ago + 'm ago') : ago < 1440 ? ('Updated ' + Math.round(ago/60) + 'h ago') : ('Updated ' + Math.round(ago/1440) + 'd ago');
   }
+
+  renderSlIndustry();
+}
+
+// Industry strip: one thin coverage bar per carrier (UA vs competitors), sorted
+// descending. Reuses the hero's .sl-bar-* classes. United is the amber "home
+// team"; competitors are muted. Coverage = installed / tracked-fleet from upstream
+// (NOT full mainline). Hidden entirely unless every row has a finite percentage,
+// mirroring the degraded-tier guards elsewhere on this tab.
+function renderSlIndustry() {
+  const wrap = document.getElementById('sl-industry');
+  if (!wrap) return;
+  const barsEl = document.getElementById('sl-industry-bars');
+
+  const rows = STARLINK_INDUSTRY;
+  const finitePct = (r) => {
+    if (!r || r.percentage == null || r.percentage === '') return false;
+    const p = typeof r.percentage === 'string' ? parseFloat(r.percentage) : r.percentage;
+    return typeof p === 'number' && Number.isFinite(p);
+  };
+  if (!Array.isArray(rows) || rows.length === 0 || !rows.every(finitePct)) {
+    wrap.style.display = 'none';
+    if (barsEl) barsEl.innerHTML = '';
+    return;
+  }
+
+  const sorted = rows.slice().sort((a, b) => Number(b.percentage) - Number(a.percentage));
+  barsEl.innerHTML = sorted.map((r) => {
+    const code = escapeHtml(String(r.code || '').toUpperCase());
+    const isUA = String(r.code || '').toUpperCase() === 'UA';
+    const pctNum = Number(r.percentage);
+    const pct = Math.round(pctNum);
+    const width = Math.max(0, Math.min(100, pctNum));
+    const installed = Number.isFinite(Number(r.installed)) ? Number(r.installed) : '—';
+    const total = Number.isFinite(Number(r.total)) ? Number(r.total) : '—';
+    const fillCls = isUA ? 'sl-bar-fill-ua' : 'sl-bar-fill-muted';
+    const labelCls = isUA ? 'sl-bar-label sl-bar-label-ua' : 'sl-bar-label';
+    return '<div class="sl-bar-row">' +
+      '<span class="' + labelCls + '">' + code + '</span>' +
+      '<div class="sl-bar-track"><div class="sl-bar-fill ' + fillCls + '" style="width:' + width + '%"></div></div>' +
+      '<span class="sl-bar-val">' + installed + ' / ' + total + ' · ' + pct + '%</span>' +
+      '</div>';
+  }).join('');
+  wrap.style.display = '';
 }
 
 // The aircraft table. Every row toggles an inline expansion (one at a time).
