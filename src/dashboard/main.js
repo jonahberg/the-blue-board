@@ -4,7 +4,7 @@ import { formatDelayExplainFAAStatus, getScheduleRiskContext } from '../lib/dela
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, WIFI_DISPLAY, sortFleetData, filterFleetData, parseFleetDeepLink, TAB_MAP, VALID_FLEET_VIEWS } from '../lib/fleet-utils.js';
-import { bucketInstallsByMonth, computeInstallPace } from '../lib/starlink-utils.js';
+import { bucketInstallsByMonth, computeInstallPace, buildDeparturesBoard } from '../lib/starlink-utils.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
 import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
@@ -1125,7 +1125,7 @@ async function refreshFlights() {
     [updateMarkers, updateStats, updateHubStats, updateTicker].forEach(fn => { try { fn(); } catch(e) { console.error(fn.name + ':', e); } });
     try { if (document.getElementById('tab-myflight')?.classList.contains('active')) renderMyFlights(); } catch(e) { console.error('renderMyFlights:', e); }
     try { if (document.getElementById('tab-fleet')?.classList.contains('active')) updateLiveFleetPanel(); } catch(e) { console.error('updateLiveFleetPanel:', e); }
-    try { if (document.getElementById('tab-starlink')?.classList.contains('active') && slInitialized) { renderSlHero(); renderSlTrend(); renderSlTable(); renderSlVerification(); } } catch(e) { console.error('renderStarlinkTab:', e); }
+    try { if (document.getElementById('tab-starlink')?.classList.contains('active') && slInitialized) { renderSlHero(); renderSlTrend(); renderSlRoutesBoard(); renderSlTable(); renderSlVerification(); } } catch(e) { console.error('renderStarlinkTab:', e); }
     try { if (document.getElementById('tab-analytics')?.classList.contains('active')) updateAnalytics(); } catch(e) { console.error('updateAnalytics:', e); }
     // Handle deep link: ?flight=UA1234 on first load (also supports ?q= for SearchAction compatibility)
     if (!deepLinkHandled) {
@@ -2554,6 +2554,11 @@ let STARLINK_DISPUTED = [];         // [{ tail, aircraft, operator, verifiedAs, 
 let STARLINK_VERIFY_SUMMARY = null; // { verifiedStarlink, disputed, unverified, totalPlanes, generatedAt }
 let slMismatchesFetched = false;    // one-shot fetch guard (the ledger changes slowly)
 
+// Departures-board state (the hub FIDS panel above the roster table)
+let slBoardHub = null;       // active hub filter; null = all hubs
+let slBoardWindow = 12;      // departure window in hours: 12 (default) | 48
+let slBoardShowAll = false;  // bypass the per-hub render cap (48h view)
+
 // A plane counts as "newly equipped" if upstream first recorded its Starlink (DateFound) within the
 // last 7 days. Computed against the live clock so the badge ages out on its own.
 function isRecentlyFound(dateFound) {
@@ -2627,6 +2632,7 @@ function initStarlinkTab() {
   renderSlHero();
   renderSlTrend();
   renderSlChart();
+  renderSlRoutesBoard();
   renderSlTable();
   fetchStarlinkMismatches(); // lazy/non-blocking; resolves into renderSlVerification()
   renderSlVerification();    // reflect any already-loaded ledger on an idempotent re-open
@@ -2944,6 +2950,131 @@ function renderSlChart() {
     if (undated > 0) notes.push(undated + ' aircraft have no recorded install date');
     fnEl.textContent = notes.join(' · ');
   }
+}
+
+// ═══ HUB DEPARTURES BOARD ═══
+// A NOC-style FIDS built 100% client-side from STARLINK_FLIGHTS_BY_TAIL (no endpoint, no server
+// change). Flattens the per-tail flights, joins fleet + live-airborne data, keeps hub departures in
+// the active window, and groups them under time-bucket section labels. Honesty: callsigns are the
+// OPERATING carrier (SKW####/RPA####/…), not UA marketing numbers, and times are scheduled/last-seen
+// (served through BB's up-to-6h cache), not live ATC — both are labelled as such on the panel.
+function renderSlRoutesBoard() {
+  const board = document.getElementById('sl-board');
+  if (!board) return;
+  const note = document.getElementById('sl-board-note');
+
+  // Degraded tier (static fallback has empty flightsByTail / no fleet): hide the whole panel and
+  // surface a one-line note instead — mirrors the sl-next-th column toggle.
+  const hasFlights = Object.keys(STARLINK_FLIGHTS_BY_TAIL).length > 0;
+  if (!hasFlights || STARLINK_DB.length === 0) {
+    board.style.display = 'none';
+    if (note) note.style.display = '';
+    return;
+  }
+  board.style.display = '';
+  if (note) note.style.display = 'none';
+
+  const aircraftByTail = {};
+  for (const s of STARLINK_DB) aircraftByTail[s.tail] = s;
+  const airborneByTail = getStarlinkAirborneMap(); // tail → live flight (has icao24)
+
+  const now = Date.now() / 1000;
+  const windowSec = slBoardWindow * 3600;
+  // Cap the DOM only in the wide 48h view (~1492 rows) unless the user asked for all.
+  const capPerHub = (slBoardWindow >= 48 && !slBoardShowAll) ? 40 : Infinity;
+
+  const data = buildDeparturesBoard(STARLINK_FLIGHTS_BY_TAIL, aircraftByTail, airborneByTail, HUB_CODES, {
+    now, windowSec, graceSec: 1800, hub: slBoardHub, capPerHub,
+  });
+
+  // Freshness — surface STARLINK_LAST_UPDATED so the panel never reads as live ATC.
+  const freshEl = document.getElementById('sl-board-updated');
+  if (freshEl) {
+    if (STARLINK_LAST_UPDATED) {
+      const ago = Math.round((Date.now() - new Date(STARLINK_LAST_UPDATED).getTime()) / 60000);
+      freshEl.textContent = ago < 60 ? ('updated ' + ago + 'm ago')
+        : ago < 1440 ? ('updated ' + Math.round(ago / 60) + 'h ago')
+        : ('updated ' + Math.round(ago / 1440) + 'd ago');
+    } else {
+      freshEl.textContent = 'scheduled times';
+    }
+  }
+
+  // Window toggle active state
+  document.querySelectorAll('#sl-board-windows [data-window]').forEach(btn => {
+    const on = Number(btn.dataset.window) === slBoardWindow;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+
+  // Hub-filter pills (Cross-Nav rectangular pill component). Counts are integers from our own data.
+  const pillsEl = document.getElementById('sl-board-pills');
+  if (pillsEl) {
+    const allActive = !slBoardHub;
+    const pills = [
+      `<button class="sl-board-pill${allActive ? ' active' : ''}" data-action="sl-board-hub" data-hub="" aria-pressed="${allActive}">ALL <span class="sl-board-pill-n">${data.allCount}</span></button>`,
+    ];
+    for (const h of HUB_CODES) {
+      const n = data.hubCounts[h] || 0;
+      const active = slBoardHub === h;
+      pills.push(
+        `<button class="sl-board-pill${active ? ' active' : ''}${n === 0 ? ' sl-board-pill-empty' : ''}" data-action="sl-board-hub" data-hub="${escapeHtml(h)}" aria-pressed="${active}">${escapeHtml(h)} <span class="sl-board-pill-n">${n}</span></button>`
+      );
+    }
+    pillsEl.innerHTML = pills.join('');
+  }
+
+  // Body — time-bucket sections
+  const body = document.getElementById('sl-board-body');
+  if (!body) return;
+  if (data.buckets.length === 0) {
+    const scope = slBoardHub ? escapeHtml(slBoardHub) : 'the hubs';
+    body.innerHTML = `<div class="sl-board-empty">No United Starlink departures from ${scope} in the next ${slBoardWindow}h.</div>`;
+    return;
+  }
+
+  let html = '';
+  for (const bucket of data.buckets) {
+    html += `<div class="sl-board-bucket-label">${escapeHtml(bucket.label)} <span class="sl-board-bucket-n">${bucket.rows.length}</span></div>`;
+    for (const r of bucket.rows) html += renderSlBoardRow(r, now);
+  }
+  if (data.hiddenCount > 0) {
+    html += `<button class="sl-board-showall" data-action="sl-board-show-all">Show all · ${data.hiddenCount} more capped at 40/hub ▾</button>`;
+  }
+  body.innerHTML = html;
+}
+
+// One departures-board row: scheduled time + relative hint, operating callsign + carrier, route,
+// airframe, and live status (📡 Track reuses the existing delegated sl-track → focusFlight action;
+// the callsign opens the existing aircraft-detail modal). All fields are escaped.
+function renderSlBoardRow(r, now) {
+  const t = formatFlightTime(r.departure_ts);
+  const mins = Math.round((r.departure_ts - now) / 60);
+  let rel;
+  if (mins < 0) rel = Math.abs(mins) + 'm ago';
+  else if (mins < 60) rel = '+' + mins + 'm';
+  else { const h = Math.floor(mins / 60), mm = mins % 60; rel = '+' + h + 'h' + (mm ? ' ' + mm + 'm' : ''); }
+
+  // Operator label: drop the " dba UAX"/"dba United Express" tail so the carrier reads cleanly.
+  const operator = (r.operator || '').replace(/\s*dba\b.*$/i, '').trim() || 'United';
+
+  const status = r.airborne
+    ? '<span class="sl-board-live">● Airborne</span>'
+    : '<span class="sl-board-sched">SCHED</span>';
+  const track = (r.airborne && r.icao24)
+    ? `<button class="sl-board-track" data-action="sl-track" data-icao24="${escapeHtml(r.icao24)}" title="Track ${escapeHtml(r.tail)} on the live map">📡 Track</button>`
+    : '';
+
+  return `<div class="sl-board-row${r.airborne ? ' airborne' : ''}">` +
+    `<span class="sl-board-time">${escapeHtml(t)}<span class="sl-board-rel">${escapeHtml(rel)}</span></span>` +
+    `<button class="sl-board-flt" data-action="aircraft-detail" data-reg="${escapeHtml(r.tail)}" title="Aircraft details · ${escapeHtml(r.tail)}">` +
+      `<span class="sl-board-cs">${escapeHtml(r.flight_number || '—')}</span>` +
+      `<span class="sl-board-op">${escapeHtml(operator)} · ${escapeHtml(r.tail)}</span>` +
+    `</button>` +
+    `<span class="sl-board-route"><span class="sl-board-orig">${escapeHtml(r.origin)}</span><span class="sl-board-arrow">→</span><span class="sl-board-dest">${escapeHtml(r.destination || '???')}</span></span>` +
+    `<span class="sl-board-type">${escapeHtml(r.type || '')}</span>` +
+    `<span class="sl-board-status">${status}${track}</span>` +
+  `</div>`;
 }
 
 // Hero band: equipped count, Express/Mainline rollout bars, new-this-week + airborne-now chips.
@@ -6690,6 +6821,23 @@ document.addEventListener('click', function(e) {
     case 'sl-track': {
       const slIcao = actionEl.dataset.icao24;
       if (slIcao) focusFlight(slIcao); // focusFlight switches to LIVE OPS and centers the map
+      break;
+    }
+    case 'sl-board-hub': {
+      const h = actionEl.dataset.hub || '';
+      slBoardHub = h || null;
+      slBoardShowAll = false; // a new hub selection resets the per-hub cap
+      renderSlRoutesBoard();
+      break;
+    }
+    case 'sl-board-window': {
+      const w = Number(actionEl.dataset.window);
+      if (w === 12 || w === 48) { slBoardWindow = w; slBoardShowAll = false; renderSlRoutesBoard(); }
+      break;
+    }
+    case 'sl-board-show-all': {
+      slBoardShowAll = true;
+      renderSlRoutesBoard();
       break;
     }
     case 'aircraft-detail': {

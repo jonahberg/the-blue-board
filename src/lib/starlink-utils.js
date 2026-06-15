@@ -171,3 +171,123 @@ export function computeInstallPace(aircraft, nowDate = new Date(), opts = {}) {
 
   return { weeks, peak, thisWeek: rawCounts[weeksWindow - 1], pace, paceWeeks, dated, remaining, etaWeeks, etaDate };
 }
+
+// ═══ HUB DEPARTURES BOARD ═══
+// Time-bucket section labels, in render order. A departure's bucket is chosen by how far in the
+// future it departs (negative deltas — the now-1800 grace window — fall into "WITHIN 1 HOUR").
+export const DEPARTURE_BUCKETS = [
+  { label: 'WITHIN 1 HOUR', maxSec: 3600 },
+  { label: '1–3 HRS', maxSec: 3 * 3600 },
+  { label: '3–12 HRS', maxSec: 12 * 3600 },
+  { label: '12–48 HRS', maxSec: 48 * 3600 },
+];
+
+/** Pick the time-bucket label for a departure `deltaSec` seconds from now. */
+export function departureBucketLabel(deltaSec) {
+  for (const b of DEPARTURE_BUCKETS) if (deltaSec < b.maxSec) return b.label;
+  return DEPARTURE_BUCKETS[DEPARTURE_BUCKETS.length - 1].label;
+}
+
+/**
+ * Build a NOC hub departures board, 100% client-side, from the data already in memory.
+ *
+ * Flattens STARLINK_FLIGHTS_BY_TAIL into rows, joins each tail to its fleet entry (type/fleet/
+ * operator) and to the live airborne map (status/icao24), then keeps only departures FROM a hub
+ * within the [now - graceSec, now + windowSec] window, sorted ascending and grouped into time
+ * buckets for rendering.
+ *
+ * @param {Record<string, Array<{flight_number?:string, origin?:string, destination?:string, departure_ts?:number, departure_time?:string, arrival_time?:string}>>} flightsByTail
+ * @param {Record<string, {type?:string, fleet?:string, operator?:string}>} aircraftByTail - tail → fleet DB entry
+ * @param {Record<string, {icao24?:string}>|Map<string,{icao24?:string}>} airborneByTail - tail → live flight (has icao24)
+ * @param {string[]} hubCodes - hub IATA codes to include as origins
+ * @param {{now?:number, windowSec?:number, graceSec?:number, hub?:(string|null), capPerHub?:number}} [opts]
+ * @returns {{ hubCounts: Record<string,number>, allCount: number, totalInWindow: number, buckets: Array<{label:string, rows:object[]}>, shownCount: number, hiddenCount: number }}
+ *   - hubCounts/allCount are computed over the window BEFORE the hub filter (so per-hub pills, incl.
+ *     empty Pacific hubs at 0, render their true counts regardless of the active selection).
+ *   - buckets/shownCount/hiddenCount reflect the active hub filter and the per-hub render cap.
+ */
+export function buildDeparturesBoard(flightsByTail, aircraftByTail, airborneByTail, hubCodes, opts = {}) {
+  const now = typeof opts.now === 'number' ? opts.now : Date.now() / 1000;
+  const windowSec = typeof opts.windowSec === 'number' ? opts.windowSec : 12 * 3600;
+  const graceSec = typeof opts.graceSec === 'number' ? opts.graceSec : 1800;
+  const hub = opts.hub || null;
+  const capPerHub = typeof opts.capPerHub === 'number' ? opts.capPerHub : Infinity;
+
+  const hubList = Array.isArray(hubCodes) ? hubCodes : [];
+  const hubSet = new Set(hubList);
+  const hubCounts = {};
+  for (const h of hubList) hubCounts[h] = 0;
+
+  const lo = now - graceSec;
+  const hi = now + windowSec;
+  const lookupAir = (tail) =>
+    airborneByTail && (typeof airborneByTail.get === 'function' ? airborneByTail.get(tail) : airborneByTail[tail]);
+
+  // 1. flatten + 2. window/hub filter, joining each tail to its fleet entry + live status
+  const rows = [];
+  for (const tail of Object.keys(flightsByTail || {})) {
+    const ac = (aircraftByTail && aircraftByTail[tail]) || null;
+    const air = lookupAir(tail) || null;
+    const flights = flightsByTail[tail] || [];
+    for (const f of flights) {
+      const ts = Number(f && f.departure_ts) || 0;
+      if (!ts || ts < lo || ts > hi) continue;
+      const origin = String((f && f.origin) || '').toUpperCase();
+      if (!hubSet.has(origin)) continue;
+      hubCounts[origin] = (hubCounts[origin] || 0) + 1; // count over window, pre-hub-filter
+      if (hub && origin !== hub) continue;
+      rows.push({
+        tail,
+        flight_number: String((f && f.flight_number) || ''),
+        origin,
+        destination: String((f && f.destination) || '').toUpperCase(),
+        departure_ts: ts,
+        departure_time: String((f && f.departure_time) || ''),
+        arrival_time: String((f && f.arrival_time) || ''),
+        type: ac ? String(ac.type || '') : '',
+        fleet: ac ? String(ac.fleet || '') : '',
+        operator: ac ? String(ac.operator || '') : '',
+        airborne: !!air,
+        icao24: air ? String(air.icao24 || '') : '',
+        deltaSec: ts - now,
+      });
+    }
+  }
+
+  const allCount = hubList.reduce((s, h) => s + (hubCounts[h] || 0), 0);
+
+  // 3. sort ascending by departure_ts
+  rows.sort((a, b) => a.departure_ts - b.departure_ts);
+
+  // 4. per-hub render cap (bounds the DOM in the 48h window); keep the earliest N per origin
+  const perHubSeen = {};
+  let hiddenCount = 0;
+  const kept = [];
+  for (const r of rows) {
+    const c = (perHubSeen[r.origin] = (perHubSeen[r.origin] || 0) + 1);
+    if (c > capPerHub) { hiddenCount++; continue; }
+    kept.push(r);
+  }
+
+  // 5. group into time buckets (fixed order; only non-empty buckets are returned)
+  const byLabel = new Map();
+  for (const r of kept) {
+    const label = departureBucketLabel(r.deltaSec);
+    if (!byLabel.has(label)) byLabel.set(label, []);
+    byLabel.get(label).push(r);
+  }
+  const buckets = [];
+  for (const b of DEPARTURE_BUCKETS) {
+    const list = byLabel.get(b.label);
+    if (list && list.length) buckets.push({ label: b.label, rows: list });
+  }
+
+  return {
+    hubCounts,
+    allCount,
+    totalInWindow: hub ? rows.length : allCount,
+    buckets,
+    shownCount: kept.length,
+    hiddenCount,
+  };
+}

@@ -636,6 +636,22 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       </div>
       <div class="sl-trend-foot" id="sl-trend-foot"></div>
     </div>
+    <!-- HUB DEPARTURES BOARD — live NOC FIDS built client-side from STARLINK_FLIGHTS_BY_TAIL (renderSlRoutesBoard). Hidden in degraded tier. -->
+    <div class="sl-board-note" id="sl-board-note" style="display:none">Live departures board unavailable — Starlink schedule feed is offline (showing the fleet roster only).</div>
+    <div class="sl-board" id="sl-board" style="display:none">
+      <div class="sl-board-head">
+        <div class="sl-board-titles">
+          <div class="sl-board-label">Hub Departures Board</div>
+          <div class="sl-board-sub">United Starlink aircraft departing the hubs · operating callsigns · <span id="sl-board-updated" class="sl-board-fresh">scheduled times</span></div>
+        </div>
+        <div class="sl-board-windows" id="sl-board-windows" role="group" aria-label="Departure window">
+          <button class="sl-board-pill active" data-action="sl-board-window" data-window="12" aria-pressed="true">12H</button>
+          <button class="sl-board-pill" data-action="sl-board-window" data-window="48" aria-pressed="false">48H</button>
+        </div>
+      </div>
+      <div class="sl-board-pills" id="sl-board-pills" role="group" aria-label="Filter departures by hub"></div>
+      <div class="sl-board-body" id="sl-board-body"></div>
+      <div class="sl-board-foot">A NOC departures board, not a passenger FIDS. Callsigns are the operating carrier (SkyWest, Republic, Mesa…), not United marketing flight numbers. Times are scheduled / last-seen, served through The Blue Board's cache (up to 6h) — not live ATC.</div>
     <div class="sl-chart-card" id="sl-chart-card" style="display:none">
       <div class="sl-chart-label">Installation Velocity</div>
       <div class="sl-chart-sub" id="sl-chart-sub">Aircraft equipped per month</div>
