@@ -71,3 +71,103 @@ export function bucketInstallsByMonth(aircraft, nowDate = new Date()) {
 
   return { months, undated, total: aircraft.length };
 }
+
+const WEEK_MS = 7 * 86400000;
+const WEEK_LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Monday-anchored ISO-week start (UTC midnight) for a millisecond timestamp.
+function isoWeekStartUTC(ms) {
+  const d = new Date(ms);
+  const dayOfWeek = (d.getUTCDay() + 6) % 7; // 0 = Mon … 6 = Sun
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - dayOfWeek * 86400000;
+}
+
+// 'MMM D' label for a week-start timestamp (UTC), e.g. 'Jun 9'.
+function weekStartLabel(ms) {
+  const d = new Date(ms);
+  return WEEK_LABEL_MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate();
+}
+
+/**
+ * Compute the rolling 12-week install-pace series for the STARLINK tab.
+ *
+ * IMPORTANT — data caveat baked into this function: `dateFound` is a *detection* date, not an
+ * install date. A large share of the fleet shares one upstream backfill date (e.g. ~121 tails on
+ * 2025-12-03), so any week can be a detection spike rather than a real install surge. We therefore:
+ *   - only ever look at the trailing 12-week window (never an all-time cumulative line);
+ *   - clamp the *bar height* of any week exceeding ~3× the trailing median to a ceiling and flag it
+ *     `capped` (a backfill batch), while preserving the true `count` for the tooltip;
+ *   - compute pace from the trailing COMPLETE weeks only (the current week is partial — detection
+ *     systematically under-reads it — so it is excluded from both pace and the average framing), and
+ *     clamp backfill weeks before averaging so one batch can't inflate the pace.
+ *
+ * @param {Array<{dateFound?: string}>} aircraft - entries from /api/starlink-data (STARLINK_DB)
+ * @param {Date} [nowDate] - "today"; the window ends at this (partial) ISO week
+ * @param {{remaining?: number, weeksWindow?: number, paceWindow?: number}} [opts]
+ *        remaining: aircraft still to equip (e.g. Express remaining) → drives etaWeeks/etaDate
+ * @returns {{
+ *   weeks: Array<{start: number, label: string, count: number, barValue: number, capped: boolean}>,
+ *   peak: number, thisWeek: number, pace: number, paceWeeks: number, dated: number,
+ *   remaining: (number|null), etaWeeks: (number|null), etaDate: (Date|null)
+ * }}
+ */
+export function computeInstallPace(aircraft, nowDate = new Date(), opts = {}) {
+  const weeksWindow = opts.weeksWindow || 12;
+  const paceWindow = opts.paceWindow || 8;
+  const empty = {
+    weeks: [], peak: 1, thisWeek: 0, pace: 0, paceWeeks: 0, dated: 0,
+    remaining: null, etaWeeks: null, etaDate: null,
+  };
+  if (!Array.isArray(aircraft) || aircraft.length === 0) return empty;
+
+  const currentWeekStart = isoWeekStartUTC(nowDate.getTime());
+
+  // Tally every dated aircraft into its ISO week (whole fleet — `dated` drives the degraded guard).
+  const counts = new Map(); // weekStart(ms) -> count
+  let dated = 0;
+  for (const a of aircraft) {
+    const raw = typeof a?.dateFound === 'string' ? a.dateFound.slice(0, 10) : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) continue;
+    const t = Date.parse(raw);
+    if (isNaN(t)) continue;
+    dated++;
+    const ws = isoWeekStartUTC(t);
+    counts.set(ws, (counts.get(ws) || 0) + 1);
+  }
+  if (dated === 0) return empty;
+
+  // Window anchors: oldest → current (partial) week.
+  const starts = [];
+  for (let i = weeksWindow - 1; i >= 0; i--) starts.push(currentWeekStart - i * WEEK_MS);
+  const rawCounts = starts.map(s => counts.get(s) || 0);
+
+  // Backfill clamp ceiling = 3× the median of the non-zero COMPLETE weeks (exclude current partial).
+  const completeNonZero = rawCounts.slice(0, weeksWindow - 1).filter(c => c > 0).sort((a, b) => a - b);
+  const median = completeNonZero.length
+    ? completeNonZero[Math.floor((completeNonZero.length - 1) / 2)]
+    : 0;
+  const clampCeil = median > 0 ? median * 3 : Infinity;
+
+  const weeks = starts.map((s, i) => {
+    const count = rawCounts[i];
+    const capped = count > clampCeil;
+    return { start: s, label: weekStartLabel(s), count, barValue: capped ? clampCeil : count, capped };
+  });
+  const peak = Math.max(1, ...weeks.map(w => w.barValue));
+
+  // Pace: mean of the trailing `paceWindow` COMPLETE weeks, backfill-clamped.
+  const completeCounts = rawCounts.slice(0, weeksWindow - 1);
+  const trailing = completeCounts.slice(-paceWindow);
+  const trailingClamped = trailing.map(c => (clampCeil !== Infinity && c > clampCeil) ? clampCeil : c);
+  const paceWeeks = trailing.length;
+  const pace = paceWeeks ? trailingClamped.reduce((a, b) => a + b, 0) / paceWeeks : 0;
+
+  let remaining = null, etaWeeks = null, etaDate = null;
+  if (typeof opts.remaining === 'number' && opts.remaining > 0 && pace > 0) {
+    remaining = opts.remaining;
+    etaWeeks = Math.ceil(opts.remaining / pace);
+    etaDate = new Date(currentWeekStart + etaWeeks * WEEK_MS);
+  }
+
+  return { weeks, peak, thisWeek: rawCounts[weeksWindow - 1], pace, paceWeeks, dated, remaining, etaWeeks, etaDate };
+}
