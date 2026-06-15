@@ -3,7 +3,7 @@ import { computeDelayRiskModel, HUB_COORDINATES, HUB_RISK_PROFILES } from '../li
 import { formatDelayExplainFAAStatus, getScheduleRiskContext } from '../lib/delay-explain-context.js';
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
-import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, WIFI_DISPLAY, sortFleetData, filterFleetData, parseFleetDeepLink, TAB_MAP, VALID_FLEET_VIEWS } from '../lib/fleet-utils.js';
+import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi } from '../lib/fleet-utils.js';
 import { bucketInstallsByMonth, computeInstallPace, buildDeparturesBoard } from '../lib/starlink-utils.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
@@ -5055,7 +5055,7 @@ const ICAO_TO_FLEET_TYPE = {
 const CABIN_RANK = { 'J': 4, 'F': 3, 'PP': 2, 'PE': 2, 'E+': 1, 'Y': 0 };
 
 // WiFi display name normalization (raw data → clean labels)
-// WIFI_DISPLAY and normalizeWifi imported from ../lib/fleet-utils.js
+// normalizeWifi imported from ../lib/fleet-utils.js
 
 // WiFi quality ranking: higher = better (uses normalized names)
 const WIFI_RANK = { 'Starlink': 3, 'ViaSat Ka': 2, 'Satellite Ka': 1, 'Satellite Ka (US)': 1, 'Satellite Ku': 1, 'NO': 0 };

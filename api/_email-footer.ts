@@ -20,9 +20,9 @@
 import { escapeHtml } from '../src/lib/escape.js';
 
 /** Sender / reply-to / unsubscribe contact for all outbound email. */
-export const EMAIL_CONTACT = 'hello@theblueboard.co';
+const EMAIL_CONTACT = 'hello@theblueboard.co';
 
-export const PRIVACY_URL = 'https://theblueboard.co/privacy';
+const PRIVACY_URL = 'https://theblueboard.co/privacy';
 
 export type EmailFooterMode = 'broadcast' | 'transactional';
 

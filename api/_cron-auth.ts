@@ -6,7 +6,7 @@
 
 import { timingSafeEqual } from 'node:crypto';
 
-export function timingSafeEqualStr(a: string, b: string): boolean {
+function timingSafeEqualStr(a: string, b: string): boolean {
   const ab = new TextEncoder().encode(a);
   const bb = new TextEncoder().encode(b);
   if (ab.length !== bb.length) return false;

@@ -537,13 +537,8 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sl-swatch-line{background:var(--ua-amber);height:2px;width:14px}
 .sl-chart-footnote{font-family:var(--font-mono);font-size:8px;color:var(--ua-dim);margin-top:8px}
 .sl-chart-footnote:empty{display:none}
-.sl-trend{background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.6) 100%);border:1px solid var(--ua-border);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:16px 20px;margin-bottom:14px}
-.sl-trend-label{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber);margin-bottom:2px}
-.sl-trend-sub{font-family:var(--font-mono);font-size:9px;color:var(--ua-dim);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
-.sl-trend-bars{display:flex;align-items:flex-end;gap:4px;height:52px;margin-bottom:12px}
-.sl-trend-bar{flex:1;height:100%;display:flex;align-items:flex-end;background:var(--ua-border-subtle);border-radius:2px;overflow:hidden}
-.sl-trend-bar-fill{width:100%;background:var(--ua-amber);border-radius:2px 2px 0 0;transition:height .5s ease}
-.sl-trend-bar-capped{background:repeating-linear-gradient(45deg,var(--ua-amber),var(--ua-amber) 3px,rgba(196,163,90,.4) 3px,rgba(196,163,90,.4) 6px)}
+/* .sl-trend-stats / -stat* are reused by the Installation Velocity caption row (.sl-velo-stats).
+   The old standalone Install Pace panel + sparkline (.sl-trend, .sl-trend-bars/-bar*) are gone (PR #205). */
 .sl-trend-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .sl-trend-stat{background:var(--ua-panel-elevated);border:1px solid var(--ua-border);border-radius:4px;padding:8px 10px}
 .sl-trend-stat-featured{border-left:3px solid var(--ua-amber)}
@@ -551,8 +546,6 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sl-trend-stat-v{font-family:var(--font-mono);font-size:18px;font-weight:700;line-height:1.1;margin-top:2px;color:var(--ua-text)}
 .sl-trend-stat-featured .sl-trend-stat-v{color:var(--ua-amber)}
 .sl-trend-stat-note{font-family:var(--font-mono);font-size:8px;color:var(--ua-dim);margin-top:2px}
-.sl-trend-foot{font-family:var(--font-mono);font-size:8px;color:var(--ua-dim);margin-top:8px}
-.sl-trend-foot:empty{display:none}
 /* Pace + ETA caption, folded into the Installation Velocity card — two stats, not three. */
 .sl-velo-stats{grid-template-columns:repeat(2,1fr);margin-top:16px}
 .sl-velo-stats .sl-trend-stat-v{font-size:20px}
