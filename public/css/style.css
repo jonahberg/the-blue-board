@@ -118,6 +118,14 @@ main{display:contents}
 .ctrl-btn{background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);color:var(--ua-muted);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:background-color .2s cubic-bezier(.4,0,.2,1),border-color .2s cubic-bezier(.4,0,.2,1),color .2s cubic-bezier(.4,0,.2,1),transform .15s cubic-bezier(.4,0,.2,1)}
 .ctrl-btn:hover{background:rgba(0,93,170,.3);border-color:var(--ua-blue)}
 .ctrl-btn.active{border-color:var(--ua-accent);color:var(--ua-accent)}
+/* Degraded tier: Starlink toggle disabled (no tails loaded) — greyed, no hover affordance */
+.ctrl-btn:disabled,.ctrl-btn.ctrl-btn-disabled{opacity:.4;cursor:not-allowed}
+.ctrl-btn:disabled:hover,.ctrl-btn.ctrl-btn-disabled:hover{background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border-color:var(--ua-border);color:var(--ua-muted)}
+/* Map marker legend — one amber Starlink key, grouped under the control ladder. The dot
+   mirrors the marker's amber glow halo; the "Starlink" text means color is not the sole signal. */
+#map-legend{display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 10px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;font-size:10px;font-family:var(--font-mono);color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;pointer-events:none}
+.map-legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
+.map-legend-dot-starlink{background:#fbbf24;box-shadow:0 0 4px #fbbf24,0 0 7px rgba(251,191,36,.7)}
 #search-box{position:absolute;top:10px;left:10px;z-index:712}
 #search-input{background:rgba(10,14,20,.9);border:1px solid var(--ua-border);color:var(--ua-text);padding:7px 12px;border-radius:4px;font-family:var(--font-mono);font-size:11px;width:220px}
 #search-input:focus{border-color:var(--ua-accent)}
@@ -475,6 +483,10 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sl-chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:3px;white-space:nowrap}
 .sl-chip-new{background:var(--ua-amber-soft);border:1px solid rgba(196,163,90,.25);color:var(--ua-amber)}
 .sl-chip-live{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:var(--ua-green)}
+/* Click-through chip → LIVE OPS map with the Starlink filter pre-enabled */
+.sl-chip-clickable{cursor:pointer;transition:background .15s ease,border-color .15s ease,transform .15s ease}
+.sl-chip-clickable:hover{background:rgba(34,197,94,.18);border-color:rgba(34,197,94,.45)}
+.sl-chip-clickable:active{transform:scale(.97)}
 .sl-filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
 .sl-filters input,.sl-filters select{background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:5px 10px;font-family:var(--font-mono);font-size:10px;border-radius:3px}
 .sl-new-toggle{background:var(--ua-panel);color:var(--ua-amber);border:1px solid rgba(196,163,90,.4);padding:5px 10px;font-family:var(--font-mono);font-size:10px;border-radius:3px;cursor:pointer;transition:background .15s ease,border-color .15s ease}
@@ -727,6 +739,8 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #mobile-sidebar-toggle{display:flex!important;position:fixed;top:96px;left:12px;z-index:707;width:auto;margin:0}
   /* ── Map controls: expandable FAB + floating panel ── */
   #tab-live #controls{top:auto;bottom:70px;right:auto;left:12px;transform:none;display:flex;flex-direction:column;align-items:flex-start;gap:8px;z-index:712}
+  /* Legend lives in the desktop control ladder; the mobile controls collapse to a FAB, so hide it there (amber glow markers still convey the signal). */
+  #map-legend{display:none!important}
   #ctrl-panel{display:none;flex-direction:column;background:rgba(10,14,20,.95);border:1px solid var(--ua-border);border-radius:12px;padding:6px;gap:4px;box-shadow:0 4px 20px rgba(0,0,0,.5)}
   #controls.ctrl-menu-open #ctrl-panel{display:flex;animation:ctrlPanelIn .2s ease-out}
   #ctrl-panel .ctrl-btn{display:flex;padding:10px 14px;font-size:12px;min-height:40px;border-radius:8px;white-space:nowrap;background:rgba(30,41,59,.4);border-color:transparent}

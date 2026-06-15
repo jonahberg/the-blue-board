@@ -357,7 +357,7 @@ const IATA_CITIES = {
 
 // ═══ GLOBALS ═══
 let map, flightMarkers = {}, routeLine = null, routeGroup = null, hubMarkers = [], wxLayer = null;
-let allFlights = [], showHubs = true, showLonghaul = false, showWeather = false;
+let allFlights = [], showHubs = true, showLonghaul = false, showWeather = false, showStarlinkOnly = false;
 let activeHubFilter = null, activePhaseFilter = null;
 let refreshTimer = null, countdown = 30;
 let deepLinkHandled = false;
@@ -882,6 +882,18 @@ function matchAircraft(f) {
   return null;
 }
 
+// Single source of truth for "is this live flight a Starlink-equipped tail?".
+// Mirrors the popup badge: prefer matchAircraft(f) for membership recovery (handles
+// blank-reg via icao24→N-number), then fall back to the raw reg dash-stripped + uppercased
+// — the SAME normalization getStarlinkAirborneMap/the popup use — so map markers and the
+// popup CONFIRMED badge stay consistent. Returns false in degraded tier (empty STARLINK_TAILS).
+function isStarlinkFlight(f) {
+  if (!STARLINK_TAILS.size || !f) return false;
+  const ac = matchAircraft(f);
+  if (ac) return STARLINK_TAILS.has(ac.r);
+  return !!(f.reg && STARLINK_TAILS.has(f.reg.replace(/-/g, '').toUpperCase()));
+}
+
 // ═══ MAP INIT ═══
 function initMap() {
   var homeCode = getHomeAirport();
@@ -960,6 +972,35 @@ function drawHubs() {
 
 function toggleHubs() { showHubs = !showHubs; drawHubs(); const el = document.getElementById('btn-hubs'); el.classList.toggle('active'); el.setAttribute('aria-pressed', String(showHubs)); }
 function toggleLonghaul() { showLonghaul = !showLonghaul; const el = document.getElementById('btn-longhaul'); el.classList.toggle('active'); el.setAttribute('aria-pressed', String(showLonghaul)); updateMarkers(); }
+function toggleStarlinkLayer() {
+  // Degraded tier (no Starlink tails loaded) → no-op; the button is also disabled/greyed.
+  if (!STARLINK_TAILS.size) return;
+  showStarlinkOnly = !showStarlinkOnly;
+  const el = document.getElementById('btn-starlink');
+  if (el) { el.classList.toggle('active', showStarlinkOnly); el.setAttribute('aria-pressed', String(showStarlinkOnly)); }
+  updateMarkers();
+}
+// Reflect data availability onto the Starlink toggle + legend. Degraded tier
+// (static fallback, empty STARLINK_TAILS) disables/greys the control and hides the
+// legend rather than offering a filter that would empty the map.
+function updateStarlinkControlState() {
+  const has = STARLINK_TAILS.size > 0;
+  const btn = document.getElementById('btn-starlink');
+  if (btn) {
+    btn.disabled = !has;
+    btn.setAttribute('aria-disabled', String(!has));
+    btn.classList.toggle('ctrl-btn-disabled', !has);
+    if (!has) {
+      // Force the filter off if data disappeared while it was active.
+      if (showStarlinkOnly) { showStarlinkOnly = false; btn.classList.remove('active'); btn.setAttribute('aria-pressed', 'false'); if (map) updateMarkers(); }
+      btn.title = 'Starlink data unavailable';
+    } else {
+      btn.removeAttribute('title');
+    }
+  }
+  const legend = document.getElementById('map-legend');
+  if (legend) legend.style.display = has ? '' : 'none';
+}
 function toggleWeather() {
   showWeather = !showWeather;
   const wxBtn = document.getElementById('btn-wx'); wxBtn.classList.toggle('active'); wxBtn.setAttribute('aria-pressed', String(showWeather));
@@ -1120,17 +1161,24 @@ function isLonghaulFlight(f) {
   return num > 0 && num < 100;
 }
 
-// Icon cache: key = "hdg_rounded|isLonghaul|phase|isWatched" → L.divIcon
+// Icon cache: key = "hdg_rounded|isLonghaul|phase|isWatched|isStarlink" → L.divIcon
 const _iconCache = {};
-function createPlaneIcon(hdg, isLonghaul, phase, isWatched) {
+function createPlaneIcon(hdg, isLonghaul, phase, isWatched, isStarlink) {
   // Round heading to nearest 5° to maximize cache hits
   const hdgRounded = Math.round((hdg || 0) / 5) * 5;
-  const cacheKey = `${hdgRounded}|${isLonghaul?1:0}|${phase}|${isWatched?1:0}`;
+  const cacheKey = `${hdgRounded}|${isLonghaul?1:0}|${phase}|${isWatched?1:0}|${isStarlink?1:0}`;
   if (_iconCache[cacheKey]) return _iconCache[cacheKey];
   const color = isWatched ? '#22c55e' : (isLonghaul ? '#fbbf24' : (phase === 'Ground' ? '#64748B' : '#6BAAED'));
   const size = isWatched ? 16 : (isLonghaul ? 14 : 10);
+  // Starlink marker treatment: an amber glow HALO that STACKS on top of the existing
+  // phase/long-haul/watched fill (we keep the fill so phase info is never lost — a recolor
+  // would collide with long-haul's amber). Pairs the amber color with an enlarged glow shape
+  // so color is not the sole signal (DESIGN.md). #fbbf24 is the map's existing amber.
+  const filter = isStarlink
+    ? `drop-shadow(0 0 2px ${color}) drop-shadow(0 0 4px #fbbf24) drop-shadow(0 0 7px #fbbf24)`
+    : `drop-shadow(0 0 2px ${color})`;
   // SVG plane pointing north (0°) — classic top-down aircraft silhouette, cross-platform consistent
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="filter:drop-shadow(0 0 2px ${color})"><path d="M128 16c-4 0-8 3-9 7l-15 72-88 34c-3 1-4 4-4 7s2 5 5 6l87 20 4 52-28 18c-2 1-3 3-3 5v8c0 2 1 4 3 4l20-6h28l20 6c2 0 3-2 3-4v-8c0-2-1-4-3-5l-28-18 4-52 87-20c3-1 5-3 5-6s-1-6-4-7l-88-34-15-72c-1-4-5-7-9-7z"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="filter:${filter}"><path d="M128 16c-4 0-8 3-9 7l-15 72-88 34c-3 1-4 4-4 7s2 5 5 6l87 20 4 52-28 18c-2 1-3 3-3 5v8c0 2 1 4 3 4l20-6h28l20 6c2 0 3-2 3-4v-8c0-2-1-4-3-5l-28-18 4-52 87-20c3-1 5-3 5-6s-1-6-4-7l-88-34-15-72c-1-4-5-7-9-7z"/></svg>`;
   const icon = L.divIcon({
     html: `<div style="transform:rotate(${hdgRounded}deg);line-height:0">${svg}</div>`,
     iconSize: [size, size], iconAnchor: [size/2, size/2], className: ''
@@ -1153,6 +1201,7 @@ function getFilteredFlights() {
       const phaseGroup = getPhaseGroup(p.phase);
       if (phaseGroup !== activePhaseFilter) return false;
     }
+    if (showStarlinkOnly && !isStarlinkFlight(f)) return false;
     return true;
   });
 }
@@ -1188,7 +1237,8 @@ function updateMarkers() {
     const phaseInfo = getPhase(f.alt, f.vr, f.spd);
     const flightId = f.flightIATA || '';
     const isWatched = flightId && watchedSet.has(flightId);
-    const icon = createPlaneIcon(f.hdg, isLonghaul, phaseInfo.phase, isWatched);
+    const isStarlink = isStarlinkFlight(f);
+    const icon = createPlaneIcon(f.hdg, isLonghaul, phaseInfo.phase, isWatched, isStarlink);
 
     // Normalize longitude to nearest world copy relative to map center
     // so IDL-crossing flights (e.g. SFO→BNE) are always visible
@@ -1240,7 +1290,7 @@ function showFlightPopup(f, marker) {
   const phaseInfo = getPhase(f.alt, f.vr, f.spd);
   const squawk = decodeSquawk(f.squawk);
   const aircraft = matchAircraft(f);
-  const isStarlink = aircraft ? STARLINK_TAILS.has(aircraft.r) : (f.reg && STARLINK_TAILS.has(f.reg));
+  const isStarlink = isStarlinkFlight(f);
   const flightNum = f.flightIATA || f.callsign.replace(/^UAL/, '');
   const displayFlight = f.flightIATA || f.callsign || 'N/A';
 
@@ -2659,7 +2709,8 @@ function renderSlHero() {
   const airborneCount = Object.keys(getStarlinkAirborneMap()).length;
   let chips = '';
   if (newThisWeek > 0) chips += '<span class="sl-chip sl-chip-new">+' + newThisWeek + ' NEW THIS WEEK</span>';
-  if (airborneCount > 0) chips += '<span class="sl-chip sl-chip-live">● ' + airborneCount + ' AIRBORNE NOW</span>';
+  // The live chip is a click-through to the LIVE OPS map with the Starlink filter pre-enabled.
+  if (airborneCount > 0) chips += '<span class="sl-chip sl-chip-live sl-chip-clickable" data-action="view-starlink-on-map" role="button" tabindex="0" title="Show these on the live map" aria-label="Show ' + airborneCount + ' airborne Starlink aircraft on the live map">● ' + airborneCount + ' AIRBORNE NOW</span>';
   document.getElementById('sl-hero-chips').innerHTML = chips;
 
   // Source line: count + freshness
@@ -6102,6 +6153,15 @@ document.addEventListener('click', function(e) {
     case 'toggle-longhaul':
       toggleLonghaul();
       break;
+    case 'toggle-starlink-layer':
+      toggleStarlinkLayer();
+      break;
+    case 'view-starlink-on-map':
+      // Click-through from the STARLINK tab's "● N AIRBORNE NOW" chip: jump to the
+      // LIVE OPS map with the Starlink-only filter pre-enabled.
+      switchToTab('tab-live');
+      if (STARLINK_TAILS.size && !showStarlinkOnly) toggleStarlinkLayer();
+      break;
     case 'toggle-weather':
       toggleWeather();
       break;
@@ -6493,6 +6553,8 @@ async function initApp() {
   var acDeepLink = new URLSearchParams(location.search).get('aircraft');
   const loadFleetAndInit = async () => {
     await loadFleetData();
+    // STARLINK_TAILS is now populated (or empty in degraded tier) — sync the map toggle + legend.
+    updateStarlinkControlState();
     if (allFlights.length > 0) {
       updateStats();
       updateAnalytics();
