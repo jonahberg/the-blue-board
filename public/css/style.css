@@ -553,8 +553,18 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sl-trend-stat-note{font-family:var(--font-mono);font-size:8px;color:var(--ua-dim);margin-top:2px}
 .sl-trend-foot{font-family:var(--font-mono);font-size:8px;color:var(--ua-dim);margin-top:8px}
 .sl-trend-foot:empty{display:none}
+/* Pace + ETA caption, folded into the Installation Velocity card — two stats, not three. */
+.sl-velo-stats{grid-template-columns:repeat(2,1fr);margin-top:16px}
+.sl-velo-stats .sl-trend-stat-v{font-size:20px}
+/* Industry-coverage strip, demoted to quiet context below the rollout chart. */
+.sl-industry-demoted{max-width:760px;opacity:.9}
+.sl-industry-demoted .sl-hero-label{color:var(--ua-dim)}
 /* ═══ VERIFICATION LEDGER ═══ */
 .sl-hero-verify-sub{font-family:var(--font-mono);font-size:9px;color:var(--ua-dim);letter-spacing:.3px;margin-top:5px}
+/* "N disputed" in the hero sub-line jumps to the ledger — underline-dotted affordance. */
+.sl-verify-jump{color:var(--ua-accent);text-decoration:underline dotted;text-underline-offset:2px;cursor:pointer}
+.sl-verify-jump:hover{color:var(--ua-amber)}
+.sl-verify-jump:focus-visible{outline:2px solid var(--ua-accent);outline-offset:2px;border-radius:2px}
 .sl-verify{margin-top:14px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.6) 100%);border:1px solid var(--ua-border);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:16px 20px}
 .sl-verify-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px}
 .sl-verify-label{margin-bottom:0}
