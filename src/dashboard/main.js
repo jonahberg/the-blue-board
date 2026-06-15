@@ -4,7 +4,7 @@ import { formatDelayExplainFAAStatus, getScheduleRiskContext } from '../lib/dela
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, WIFI_DISPLAY, sortFleetData, filterFleetData, parseFleetDeepLink, TAB_MAP, VALID_FLEET_VIEWS } from '../lib/fleet-utils.js';
-import { bucketInstallsByMonth } from '../lib/starlink-utils.js';
+import { bucketInstallsByMonth, computeInstallPace } from '../lib/starlink-utils.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
 import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
@@ -1125,7 +1125,7 @@ async function refreshFlights() {
     [updateMarkers, updateStats, updateHubStats, updateTicker].forEach(fn => { try { fn(); } catch(e) { console.error(fn.name + ':', e); } });
     try { if (document.getElementById('tab-myflight')?.classList.contains('active')) renderMyFlights(); } catch(e) { console.error('renderMyFlights:', e); }
     try { if (document.getElementById('tab-fleet')?.classList.contains('active')) updateLiveFleetPanel(); } catch(e) { console.error('updateLiveFleetPanel:', e); }
-    try { if (document.getElementById('tab-starlink')?.classList.contains('active') && slInitialized) { renderSlHero(); renderSlTable(); } } catch(e) { console.error('renderStarlinkTab:', e); }
+    try { if (document.getElementById('tab-starlink')?.classList.contains('active') && slInitialized) { renderSlHero(); renderSlTrend(); renderSlTable(); } } catch(e) { console.error('renderStarlinkTab:', e); }
     try { if (document.getElementById('tab-analytics')?.classList.contains('active')) updateAnalytics(); } catch(e) { console.error('updateAnalytics:', e); }
     // Handle deep link: ?flight=UA1234 on first load (also supports ?q= for SearchAction compatibility)
     if (!deepLinkHandled) {
@@ -2569,8 +2569,79 @@ function initStarlinkTab() {
     });
   }
   renderSlHero();
+  renderSlTrend();
   renderSlChart();
   renderSlTable();
+}
+
+// ═══ INSTALL PACE ═══
+// Compact rolling 12-week sparkline + 3-up readout (this week / 8-wk avg / Express ETA), built from
+// CSS divs (no chart library). Pace math + backfill clamp live in computeInstallPace (starlink-utils).
+// HONESTY: dateFound is a DETECTION date — ~121 tails share one backfill date — so this shows ROLLING
+// WEEKLY ADDS over a 12-week window (never an all-time cumulative cliff), clamps backfill spikes, and
+// frames the ETA as Express-fleet "at current pace …", never a commitment.
+function renderSlTrend() {
+  const card = document.getElementById('sl-trend');
+  if (!card) return;
+
+  const fs = STARLINK_FLEET_STATS;
+  // Express remaining drives the ETA. Mainline (much of which is widebody/retiring that may never get
+  // Starlink) is deliberately NOT used as the ETA denominator — see spec.
+  const expressRemaining = (fs && fs.expressTotal && fs.express != null)
+    ? Math.max(0, fs.expressTotal - fs.express) : null;
+  const pace = computeInstallPace(STARLINK_DB, new Date(),
+    expressRemaining != null ? { remaining: expressRemaining } : {});
+
+  // Degraded mode (static fallback carries no dateFound): hide the whole panel, same guard the
+  // rollout bars use — never render an empty/garbage panel.
+  if (pace.dated === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  // Sparkline: one vertical bar per ISO week (amber fill on a --ua-border-subtle track). Backfill
+  // weeks get a striped fill (texture, not color alone) + a tooltip note.
+  const barsEl = document.getElementById('sl-trend-bars');
+  barsEl.innerHTML = pace.weeks.map(w => {
+    const pct = w.barValue > 0 ? Math.max(3, Math.round((w.barValue / pace.peak) * 100)) : 0;
+    const tip = 'Week of ' + w.label + ' · ' + w.count + ' equipped' + (w.capped ? ' (backfill batch)' : '');
+    return '<div class="sl-trend-bar" title="' + escapeHtml(tip) + '">' +
+      '<div class="sl-trend-bar-fill' + (w.capped ? ' sl-trend-bar-capped' : '') + '" style="height:' + pct + '%"></div>' +
+      '</div>';
+  }).join('');
+
+  // Window subtitle: first → last week of the displayed range.
+  const subEl = document.getElementById('sl-trend-sub');
+  if (subEl && pace.weeks.length) {
+    subEl.textContent = 'Weekly equipped · ' + pace.weeks[0].label + ' – ' + pace.weeks[pace.weeks.length - 1].label;
+  }
+
+  // 3-up readout — counts/derived numbers are our own data, safe as textContent.
+  document.getElementById('sl-trend-thisweek').textContent = pace.thisWeek;
+  const paceStr = pace.pace >= 10 ? String(Math.round(pace.pace)) : String(Math.round(pace.pace * 10) / 10);
+  document.getElementById('sl-trend-pace').textContent = pace.pace > 0 ? '~' + paceStr : '—';
+  const paceNote = document.getElementById('sl-trend-pace-note');
+  if (paceNote) paceNote.textContent = pace.paceWeeks > 0 ? pace.paceWeeks + '-wk trailing' : 'no complete weeks';
+
+  // Featured amber ETA — Express-fleet, "at current pace", never a commitment. Drops to em-dash when
+  // pace or the Express denominator is unavailable.
+  const etaEl = document.getElementById('sl-trend-eta');
+  const etaNote = document.getElementById('sl-trend-eta-note');
+  if (pace.etaDate) {
+    const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    etaEl.textContent = '~' + MON[pace.etaDate.getUTCMonth()] + " '" + String(pace.etaDate.getUTCFullYear()).slice(2);
+    if (etaNote) etaNote.textContent = 'Express · at current pace';
+  } else {
+    etaEl.textContent = '—';
+    if (etaNote) etaNote.textContent = expressRemaining == null ? 'Express fleet n/a' : 'pace too low';
+  }
+
+  // Footnote: surface any backfill-clamped weeks so the spike never reads as a real surge.
+  const footEl = document.getElementById('sl-trend-foot');
+  if (footEl) {
+    const capped = pace.weeks.filter(w => w.capped);
+    footEl.textContent = capped.length
+      ? '* ' + capped.map(w => 'Week of ' + w.label + ' (' + w.count + ') is a backfill detection batch — bar clamped').join(' · ')
+      : '';
+  }
 }
 
 // ═══ INSTALLATION VELOCITY CHART ═══
