@@ -97,7 +97,7 @@ function adapt(u: any): AdaptedResponse {
   const s = u?.summary ?? u?.stats ?? {};
   const summary: VerifySummary = {
     verifiedStarlink: num(s?.verifiedStarlink ?? s?.verified_starlink ?? s?.verified),
-    disputed: num(s?.disputed ?? s?.disputed_count) || disputed.length,
+    disputed: num(s?.disputed ?? s?.disputed_count ?? s?.mismatches_count) || disputed.length,
     unverified: num(s?.unverified ?? s?.unverified_count),
     totalPlanes: num(s?.totalPlanes ?? s?.total_planes ?? s?.total),
     generatedAt: toIso(s?.generatedAt ?? s?.generated_at ?? u?.generatedAt) || new Date().toISOString(),

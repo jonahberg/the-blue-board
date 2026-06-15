@@ -2688,7 +2688,14 @@ function renderSlVerification() {
   const subEl = document.getElementById('sl-hero-verify-sub');
 
   // Degraded tier / fetch miss / empty ledger → hide the whole panel (mirrors other tab guards).
-  if (!summary && disputed.length === 0) {
+  // adapt() returns a truthy zero-filled summary on any HTTP 200, so a shape drift (upstream
+  // renames a field we don't recognise) would otherwise render a contradictory "0 / 0 / 0" panel
+  // and a "0 verified · 0 disputed" hero sub-line under the big 400. Treat "no meaningful data"
+  // (no disputed rows AND every summary counter zero/absent) as empty and hide.
+  const hasData = disputed.length > 0 || !!(summary && (
+    summary.verifiedStarlink || summary.disputed || summary.unverified || summary.totalPlanes
+  ));
+  if (!hasData) {
     section.style.display = 'none';
     if (subEl) subEl.style.display = 'none';
     return;
