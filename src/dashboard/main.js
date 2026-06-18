@@ -5918,15 +5918,36 @@ function buildJourneyContextStr(reg, segments, myFlight, origCode, destCode) {
 async function fetchAircraftJourney(reg, myFlight, origCode, destCode) {
   if (!reg) return;
 
+  // Replace a stuck "Loading aircraft journey…" placeholder with a graceful
+  // unavailable state. Guarded on .mf-journey-loading so it never clobbers a
+  // live "Where's My Plane?" inbound card already rendered for this tail.
+  function showJourneyUnavailable() {
+    var el = document.getElementById('journey-' + reg);
+    if (el && el.querySelector('.mf-journey-loading')) {
+      el.innerHTML = '<div class="mf-journey-loading">Flight history unavailable</div>';
+    }
+  }
+
   // Check cache
   var cached = aircraftJourneyCache[reg];
   if (cached && Date.now() - cached.ts < 300000) return; // 5min TTL
 
   try {
     var resp = await fetch('/api/aircraft-history?reg=' + encodeURIComponent(reg));
-    if (!resp.ok) return;
+    if (!resp.ok) {
+      // Upstream error (e.g. FR24 502 / credit-blocked): cache an empty marker so
+      // the post-fetch re-render renders the graceful state instead of rebuilding
+      // a perpetual loading line, and update the live placeholder now.
+      aircraftJourneyCache[reg] = { segments: [], ts: Date.now() };
+      showJourneyUnavailable();
+      return;
+    }
     var data = await resp.json();
-    if (!data.success || !data.segments) return;
+    if (!data.success || !data.segments) {
+      aircraftJourneyCache[reg] = { segments: [], ts: Date.now() };
+      showJourneyUnavailable();
+      return;
+    }
 
     aircraftJourneyCache[reg] = { segments: data.segments, ts: Date.now() };
 
@@ -5943,12 +5964,15 @@ async function fetchAircraftJourney(reg, myFlight, origCode, destCode) {
         });
       }
     } else if (container) {
-      container.innerHTML = ''; // No history available — remove loading placeholder
+      // Lookup succeeded but no recent segments — surface the graceful state
+      // (matches the failed-fetch path) instead of leaving an empty section.
+      showJourneyUnavailable();
     }
   } catch (e) {
-    // Silently fail — journey chain is supplementary
-    var c = document.getElementById('journey-' + reg);
-    if (c) c.innerHTML = '';
+    // Network/parse failure — cache an empty marker and replace the loading
+    // placeholder with the graceful state (journey chain is supplementary).
+    aircraftJourneyCache[reg] = { segments: [], ts: Date.now() };
+    showJourneyUnavailable();
   }
 }
 
@@ -6090,7 +6114,8 @@ function buildMyFlightCard(watched, td) {
     }
     // Check if we already have cached journey data for richer inbound context
     const cached = aircraftJourneyCache[reg];
-    if (cached && cached.segments && cached.segments.length > 0 && Date.now() - cached.ts < 300000) {
+    const cacheFresh = cached && Date.now() - cached.ts < 300000;
+    if (cacheFresh && cached.segments && cached.segments.length > 0) {
       inboundHtml = buildJourneyChainHtml(reg, cached.segments, watched.flight, origCode, destCode);
       inboundStr = buildJourneyContextStr(reg, cached.segments, watched.flight, origCode, destCode);
     } else if (inbound) {
@@ -6100,9 +6125,16 @@ function buildMyFlightCard(watched, td) {
         Your aircraft is currently operating <strong>${escapeHtml(inbound.flightIATA)}</strong> from ${escapeHtml(inbCity)} (${escapeHtml(inbound.origin)}) \u2192 ${escapeHtml(origCity)} (${escapeHtml(origCode)}) at ${Math.round(inbound.alt * 3.28084).toLocaleString()}ft
       </div>`;
     }
-    // Placeholder for async journey chain load
+    // Async journey chain slot. While the history fetch is still pending (no fresh
+    // cache yet) show a loading line; once it has completed but produced nothing
+    // usable \u2014 upstream error or no recent segments \u2014 show a graceful unavailable
+    // state instead of a perpetual "Loading\u2026" line. (The fetch won't re-run until
+    // the 5-min TTL, and the post-fetch re-render rebuilds this card from cache.)
     if (!inboundHtml && reg) {
-      inboundHtml = `<div class="mf-journey" id="journey-${escapeHtml(reg)}"><div class="mf-journey-loading">Loading aircraft journey\u2026</div></div>`;
+      const journeyBody = cacheFresh
+        ? '<div class="mf-journey-loading">Flight history unavailable</div>'
+        : '<div class="mf-journey-loading">Loading aircraft journey\u2026</div>';
+      inboundHtml = `<div class="mf-journey" id="journey-${escapeHtml(reg)}">${journeyBody}</div>`;
     } else if (inboundHtml && reg) {
       // Wrap existing html with an ID for async update
       inboundHtml = `<div id="journey-${escapeHtml(reg)}">${inboundHtml}</div>`;

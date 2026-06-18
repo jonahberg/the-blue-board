@@ -23,7 +23,7 @@ type ScheduleFetchOptions = {
   disableProviderFallback?: boolean;
   disableScraperFallback?: boolean;
   // Authorized cron warms only: their provider spend is already hard-bounded by the warm ring
-  // (~288 units/day), so the organic daily budget must not starve the one path that keeps boards
+  // (~384 units/day), so the organic daily budget must not starve the one path that keeps boards
   // from freezing. Never set from user input.
   providerBudgetExempt?: boolean;
 };
@@ -150,6 +150,14 @@ async function getPersistentFallback(key: string) {
   };
 }
 
+// A board served from the fallback tier is not automatically "degraded". 'degraded' must mean the
+// board is INCOMPLETE (partial), and 'stale' must mean it is old (>=1h) OR incomplete — not merely
+// "served from cache". The old blanket stale:true + degraded:true mislabeled a complete board that
+// the cron warmed minutes ago as a degraded/stale snapshot. 1h mirrors the frontend recent<1h
+// bucket in src/lib/data-age.js (dataAgeSeverity). cached:true is always set so the client still
+// knows the board came from a cache/snapshot tier; meta.dataAge stays informational.
+const STALE_AGE_SECONDS = 3600;
+
 function buildDegradedResponse(
   entry: { data: any; time: number },
   fallbackScope: 'exact' | 'hub_dir' | 'persistent' | 'persistent_partial'
@@ -159,8 +167,8 @@ function buildDegradedResponse(
   return {
     ...entry.data,
     cached: true,
-    stale: true,
-    degraded: true,
+    stale: isBestKnownPartial || dataAge >= STALE_AGE_SECONDS,
+    degraded: isBestKnownPartial,
     meta: {
       ...(entry.data?.meta || {}),
       dataAge,
@@ -168,6 +176,14 @@ function buildDegradedResponse(
       bestKnownPartial: isBestKnownPartial,
     }
   };
+}
+
+// A board is "fresh + complete" when it is non-partial AND younger than the staleness threshold.
+// Such a board has nothing to refresh — a background refresh can only DEGRADE it (the live-feed
+// fallback returns a ~35% partial that would then poison the hot cache and flap the board). The
+// fallback serve tiers use this to skip the pointless refresh. (Audit: busy-hub board flapping.)
+function isFreshComplete(entry: { data: any; time: number }): boolean {
+  return entry.data?.partial !== true && (Date.now() - entry.time) < STALE_AGE_SECONDS * 1000;
 }
 
 function shouldAttemptTargetedOfficialRescue(hub: string, ts: number, options?: ScheduleFetchOptions): boolean {
@@ -195,6 +211,22 @@ function cacheSet(key: string, data: any, ttlMs: number): void {
     if (firstKey !== undefined) cache.delete(firstKey);
   }
   cache.set(key, { data, expires: Date.now() + ttlMs, time: Date.now() });
+}
+
+// Mirror saveComplete's empty/partial protection on the HOT cache: never let a partial (or empty)
+// result overwrite an existing complete, non-empty board for the same key. A background refresh
+// that returns the ~35%-complete live-feed partial would otherwise replace the full ~650-flight
+// board in memory and make the very next request serve the 74-flight partial — the busy-hub flap.
+// A complete (or higher-value) result always writes through. (Audit: partial-overwrites-complete.)
+function cacheSetGuarded(key: string, data: any, ttlMs: number): void {
+  const incomingIsWorse = data?.partial === true || Number(data?.total || 0) === 0;
+  if (incomingIsWorse) {
+    const existing = cache.get(key);
+    if (existing && existing.data?.partial !== true && Number(existing.data?.total || 0) > 0) {
+      return; // keep the better complete entry
+    }
+  }
+  cacheSet(key, data, ttlMs);
 }
 
 function setAggregateCacheHeader(res: VercelResponse, data: any, cdnMaxAge: number, swr: number, noStore = false): void {
@@ -1157,7 +1189,7 @@ function triggerBackgroundRefresh(
   if (pendingAggs.has(aggKey)) return;
   const refreshHub = String(hub);
   const promise = fetchAllPages(refreshHub, dir, ts, undefined, Date.now() + 55000, options).then(async result => {
-    cacheSet(aggKey, result, result.partial ? 60000 : ttl);
+    cacheSetGuarded(aggKey, result, result.partial ? 60000 : ttl);
     saveComplete(aggKey, result);
     await saveScheduleSnapshot({ cacheKey: aggKey, hub: refreshHub, dir, ts, data: result });
     return result;
@@ -1305,7 +1337,10 @@ async function fetchAllPages(
   // if FR24 ever drops the challenge. NOTE: officialFallback=0 (cron / disableOfficialSource) used
   // to force 'scrape-only'; we no longer let it override 'provider', so background warming can use
   // the working provider without burning FR24 credits.
-  const envPriority = (process.env.SCHEDULE_SOURCE_PRIORITY || 'scrape').toLowerCase();
+  // FAIL-CLOSED DEFAULT: when SCHEDULE_SOURCE_PRIORITY is unset (e.g. an env wipe), default to
+  // 'provider' — the working paid AeroDataBox feed — not the Cloudflare-dead 'scrape', so a missing
+  // env degrades to a source that returns a real board instead of an empty/blocked one.
+  const envPriority = (process.env.SCHEDULE_SOURCE_PRIORITY || 'provider').toLowerCase();
   const srcPriority = (options.disableOfficialSource && envPriority !== 'provider')
     ? 'scrape-only'
     : envPriority;
@@ -1698,37 +1733,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (allowScraperFallback && hasConfiguredFr24ScraperTransport()) ||
       (allowProviderFallback && !!process.env.AERODATABOX_API_KEY) ||
       shouldAttemptLiveFeedFallback(hub, ts);
-    const shouldBypassEmptyPartialCache = cached?.data?.partial === true && Number(cached?.data?.total || 0) === 0 && hasImmediateScheduleRecovery;
-    if (cached && !shouldBypassEmptyPartialCache) {
+    const cachedIsPartial = cached?.data?.partial === true;
+    const shouldBypassEmptyPartialCache = cachedIsPartial && Number(cached?.data?.total || 0) === 0 && hasImmediateScheduleRecovery;
+    // A NONEMPTY cached partial (e.g. the ~35% live-feed fallback) must not outrank a complete board.
+    // When the hot cache holds a partial but a complete last-known board is available in memory, fall
+    // through so the cascade below serves that complete board (honestly flagged via
+    // buildDegradedResponse) instead of the partial. This stops the busy-hub flap between the full
+    // board and a 74-flight partial, and prefers the complete AeroDataBox snapshot over the live-feed
+    // fallback while the FR24 official rescue is credit-dead. We only bypass when a complete board
+    // actually exists, so a usable partial is never discarded for a fresh (metered) fetch with
+    // nothing better to serve. (Audit: partial-outranks-complete flap; fix #5.)
+    const shouldBypassPartialForComplete = !!cached && cachedIsPartial && Number(cached?.data?.total || 0) > 0 &&
+      !!(getLastComplete(currentAggKey) || getLastCompleteByHubDir(hub, dir, ts));
+    if (cached && !shouldBypassEmptyPartialCache && !shouldBypassPartialForComplete) {
       setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr, wantsForce);
       return res.status(200).json({ ...cached.data, cached: true });
     }
 
     const stale = forceRefresh ? null : cacheGetStale(currentAggKey);
     if (stale && !stale.data.partial) {
-      triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
-        allowTargetedOfficialRescue: false,
-        disableOfficialSource: !allowOfficialFallback,
-        disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
-          currentAggKey, Date.now() - stale.time, allowProviderFallback
-        ),
-        disableScraperFallback: true,
-      });
+      // Skip the refresh for a fresh + complete board: there is nothing to refresh and the refresh
+      // can only degrade it to a partial. (Audit: busy-hub board flapping.)
+      if (!isFreshComplete(stale)) {
+        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
+          allowTargetedOfficialRescue: false,
+          disableOfficialSource: !allowOfficialFallback,
+          disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
+            currentAggKey, Date.now() - stale.time, allowProviderFallback
+          ),
+          disableScraperFallback: true,
+        });
+      }
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-      return res.status(200).json({ ...stale.data, cached: true, stale: true });
+      return res.status(200).json({ ...stale.data, cached: true, stale: !isFreshComplete(stale) });
     }
 
     const exactLastComplete = forceRefresh ? null : getLastComplete(currentAggKey);
     const fallbackComplete = forceRefresh ? null : (exactLastComplete || getLastCompleteByHubDir(hub, dir, ts));
     if (fallbackComplete) {
-      triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
-        allowTargetedOfficialRescue: false,
-        disableOfficialSource: !allowOfficialFallback,
-        disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
-          currentAggKey, Date.now() - fallbackComplete.time, allowProviderFallback
-        ),
-        disableScraperFallback: true,
-      });
+      // Skip the refresh for a fresh + complete last-known board: refreshing it can only replace the
+      // full board with a partial. Only refresh once it is genuinely old. (Audit: board flapping.)
+      if (!isFreshComplete(fallbackComplete)) {
+        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
+          allowTargetedOfficialRescue: false,
+          disableOfficialSource: !allowOfficialFallback,
+          disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
+            currentAggKey, Date.now() - fallbackComplete.time, allowProviderFallback
+          ),
+          disableScraperFallback: true,
+        });
+      }
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
       return res.status(200).json(buildDegradedResponse(fallbackComplete, exactLastComplete ? 'exact' : 'hub_dir'));
     }
@@ -1740,14 +1794,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (canAttemptRecoveryNow) {
         partialPersistentFallback = persistentFallback;
       } else {
-        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
-          allowTargetedOfficialRescue: allowOfficialFallback && persistentFallback.fallbackScope === 'persistent_partial',
-          disableOfficialSource: !allowOfficialFallback,
-          disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
-            currentAggKey, Date.now() - persistentFallback.time, allowProviderFallback
-          ),
-          disableScraperFallback: true,
-        });
+        // Skip the refresh for a fresh + complete persisted snapshot: it is already the best board and
+        // a refresh can only degrade it. A partial snapshot (or an old one) still refreshes so the
+        // frozen-board recovery path is preserved. (Audit: board flapping.)
+        if (!isFreshComplete(persistentFallback)) {
+          triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
+            allowTargetedOfficialRescue: allowOfficialFallback && persistentFallback.fallbackScope === 'persistent_partial',
+            disableOfficialSource: !allowOfficialFallback,
+            disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
+              currentAggKey, Date.now() - persistentFallback.time, allowProviderFallback
+            ),
+            disableScraperFallback: true,
+          });
+        }
         res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
         return res.status(200).json(buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope));
       }
@@ -1772,7 +1831,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       disableScraperFallback: !allowScraperFallback,
       providerBudgetExempt: forceRefresh,
     }).then(async result => {
-      cacheSet(currentAggKey, result, result.partial ? 60000 : ttl);
+      cacheSetGuarded(currentAggKey, result, result.partial ? 60000 : ttl);
       saveComplete(currentAggKey, result);
       await saveScheduleSnapshot({ cacheKey: currentAggKey, hub, dir, ts, data: result });
       return result;

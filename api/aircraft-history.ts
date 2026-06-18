@@ -145,7 +145,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
       console.error(`FR24 aircraft history error for ${reg}: status=${resp.status} ${text.slice(0, 200)}`);
-      return res.status(502).json({ success: false, error: 'FR24 API error' });
+      // Echo the upstream status so the failure is diagnosable from the response
+      // alone (e.g. 402/403 = credit-blocked vs 5xx = outage). The frontend only
+      // reads `success`, so this extra field is inert for consumers.
+      return res.status(502).json({ success: false, error: 'FR24 API error', upstreamStatus: resp.status });
     }
 
     const data = await resp.json();

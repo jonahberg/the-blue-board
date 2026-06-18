@@ -166,6 +166,14 @@ const faqEntries = getAllFaqEntries();
     <p>Complete checkpoint guide for United Airlines terminals at all 7 domestic hubs. Standard, Pre✓, CLEAR, and Priority lane availability — hours, tips, and which checkpoint to use.</p>
   </div>
 
+  <!-- Live wait-time feed status. The MyTSA public feed is decommissioned (api/tsa.ts
+       reports feedDown with all-null waits), so live minute-by-minute numbers are
+       unavailable. Surface that explicitly rather than leaving the "TSA Wait Times"
+       hub cards looking broken / empty. Static checkpoint guide below stays accurate. -->
+  <div class="tsa-tip" role="status" style="margin-bottom:32px">
+    <span class="tsa-tip-icon">⏳</span>Live checkpoint wait times are temporarily unavailable — the TSA's public wait-time feed is offline. The checkpoint guide below (lanes, hours, and tips) is current.
+  </div>
+
   <!-- Jump nav -->
   <nav class="tsa-jump-nav" aria-label="Hub navigation">
     {tsaHubOrder.map((code) => (
@@ -260,8 +268,8 @@ const faqEntries = getAllFaqEntries();
 <div class="tsa-gate-overlay tsa-hidden" id="tsa-gate">
   <div class="tsa-gate-modal">
     <div class="tsa-gate-logo">The Blue Board</div>
-    <h2 class="tsa-gate-title">Unlock Live TSA Wait Times</h2>
-    <p class="tsa-gate-text">Enter your email for live checkpoint wait times at United terminals — plus delay alerts, fleet updates, and hub intel.</p>
+    <h2 class="tsa-gate-title">United Hub Intel &amp; Delay Alerts</h2>
+    <p class="tsa-gate-text">Live TSA wait times are temporarily offline. Enter your email for delay alerts, fleet updates, and hub intel — and we'll let you know the moment checkpoint wait times return.</p>
     <input class="tsa-gate-input" type="email" id="tsa-gate-email" placeholder="you@airline.com" autocomplete="email">
     <button class="tsa-gate-btn" id="tsa-gate-submit">Get Free Access &rarr;</button>
     <div class="tsa-gate-error" id="tsa-gate-error"></div>
