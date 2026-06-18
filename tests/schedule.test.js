@@ -338,7 +338,8 @@ describe('schedule API', () => {
 
   it('scrape-first: scraping succeeds, official API never called', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    // Default SCHEDULE_SOURCE_PRIORITY is 'scrape'
+    // The fail-closed default is now 'provider'; pin 'scrape' to exercise the legacy scrape path.
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape';
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
@@ -396,6 +397,7 @@ describe('schedule API', () => {
 
   it('scrape-first: historical failures do not trigger official API rescue', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape'; // pin legacy scrape path (default is now 'provider')
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
@@ -522,6 +524,7 @@ describe('schedule API', () => {
 
   it('scrape-first: official fallback can still be disabled by env', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape'; // pin legacy scrape path (default is now 'provider')
     process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '0';
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -717,6 +720,9 @@ describe('schedule API', () => {
   it('uses AeroDataBox schedule fallback before FR24 official fallback when scraping fails', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
     process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    // Pin the legacy scrape path (default is now 'provider'): this test asserts the scrape→provider
+    // rescue ordering (meta.fallbackFrom='scraping'), which only happens in scrape mode.
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape';
 
     const ts = getStartOfDayForHub('GUM') + 86400;
     const depTime = ts + 9 * 3600;
@@ -796,6 +802,9 @@ describe('schedule API', () => {
     process.env.SCHEDULE_SCRAPER_TOKEN = 'proxy-secret';
     process.env.AERODATABOX_API_KEY = 'adb-test-key';
     process.env.FR24_API_TOKEN = 'test-token-12345678';
+    // Pin the legacy scrape path (default is now 'provider'): this asserts the scraper transport is
+    // tried before provider fallbacks when the DIRECT scrape is blocked — a scrape-mode ordering.
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape';
 
     const ts = getStartOfDayForHub('SFO') + 86400;
     const depTime = ts + 7 * 3600;
@@ -1201,6 +1210,7 @@ describe('schedule API', () => {
 
   it('scrape-first: empty schedule (not partial) does not trigger fallback', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape'; // pin legacy scrape path (default is now 'provider')
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
@@ -1328,9 +1338,13 @@ describe('schedule API', () => {
     expect(res.body.meta.source).toBe('scraping');
   });
 
-  it('returns persisted exact snapshot on cold start while refreshing in the background', async () => {
+  it('returns a fresh+complete persisted snapshot honestly flagged, without a pointless refresh', async () => {
     // Two days back: the snapped day is never "today", so the empty-board live-feed rescue
     // (a today-only path) cannot add clock-dependent fetches to this test.
+    // The snapshot is COMPLETE and only 5 min old, so it is genuinely fresh: the handler must serve
+    // it as cached:true but stale:false, degraded:false (honest labeling) and must NOT trigger a
+    // background refresh — a refresh of a fresh+complete board can only degrade it to a partial.
+    // (Audit: stale/degraded mislabeling + busy-hub flapping.)
     const ts = Math.floor(Date.now() / 1000) - 172800;
     const tsSnapped = getStartOfHubDay('ORD', 0, new Date(ts * 1000));
     scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue({
@@ -1367,7 +1381,7 @@ describe('schedule API', () => {
     });
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      throw new Error('fetch should not run when an exact persisted snapshot is available');
+      throw new Error('fetch should not run when a fresh+complete persisted snapshot is available');
     });
 
     const req = {
@@ -1381,14 +1395,22 @@ describe('schedule API', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.total).toBe(1);
-    expect(res.body.degraded).toBe(true);
+    expect(res.body.cached).toBe(true);
+    // Fresh (5 min) + complete → honestly flagged, NOT stale/degraded.
+    expect(res.body.stale).toBe(false);
+    expect(res.body.degraded).toBe(false);
     expect(res.body.meta.fallbackScope).toBe('persistent');
     expect(scheduleSnapshotMocks.loadScheduleSnapshot).toHaveBeenCalledWith(`agg:ORD:departures:${tsSnapped}`);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(vercelFunctionMocks.waitUntil).toHaveBeenCalledTimes(1);
+    // No background refresh: a fresh+complete board has nothing to refresh.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(vercelFunctionMocks.waitUntil).not.toHaveBeenCalled();
   });
 
   it('returns persisted partial snapshot on cold start while refreshing in the background', async () => {
+    // A partial snapshot is NOT fresh+complete, so the background refresh still fires. Pin the legacy
+    // scrape path (default is now 'provider') so the refresh deterministically hits the scrape
+    // first-page (one fetch) rather than adding async provider/official hops before that fetch.
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape';
     const ts = getStartOfDayForHub('ORD') + 86400;
     scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue({
       data: {
@@ -1703,6 +1725,7 @@ describe('schedule API', () => {
 
   it('scrape-first: heavy rate limiting uses official rescue on targeted windows when explicitly enabled', { timeout: 15000 }, async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape'; // pin legacy scrape path (default is now 'provider')
     process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '1';
 
     let pagesFetched = [];
@@ -2123,7 +2146,7 @@ describe('background provider refresh age gate', () => {
     expect(aeroCalls.length).toBeGreaterThan(0);
   });
 
-  it('keeps the provider off on background refresh of a young snapshot', async () => {
+  it('keeps the provider off for a young+complete snapshot (no pointless refresh)', async () => {
     process.env.AERODATABOX_API_KEY = 'test-key';
     process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
@@ -2143,7 +2166,9 @@ describe('background provider refresh age gate', () => {
       headers: { origin: 'http://localhost:3000' },
       query: { hub: 'ORD', dir: 'departures', timestamp: String(getStartOfHubDay('ORD', 0)) },
     }, res);
-    expect(res.body.stale).toBe(true);
+    // A 10-min-old COMPLETE board is fresh: honestly flagged stale:false, and no background refresh
+    // fires at all (the refresh could only degrade it), so the paid provider is never touched.
+    expect(res.body.stale).toBe(false);
 
     await Promise.all(vercelFunctionMocks.waitUntil.mock.calls.map(c => c[0]));
     const aeroCalls = fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url)));

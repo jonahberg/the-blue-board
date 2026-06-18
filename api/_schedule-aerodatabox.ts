@@ -343,7 +343,7 @@ export async function fetchViaAeroDataBox(
   // Cross-instance daily spend stop: behave exactly as if the provider were unconfigured so
   // callers fall through to their existing degraded paths instead of burning more quota.
   // Authorized cron warms bypass the organic gate — their spend is hard-bounded by the warm ring
-  // itself (~288 units/day) and they are the one path that keeps boards from freezing, so organic
+  // itself (~384 units/day) and they are the one path that keeps boards from freezing, so organic
   // traffic must never starve them. Their units are still recorded against the organic budget,
   // and they keep a 3x absolute ceiling so a leaked cron secret cannot spend unboundedly. Both
   // gates hydrate first: an unhydrated ceiling reads a cold instance's 0 and is per-instance
@@ -373,8 +373,12 @@ export async function fetchViaAeroDataBox(
   const rawFlights: any[] = [];
   const failedWindows: number[] = [];
   // Free RapidAPI plans throttle by requests-per-second, so pause between the sequential window
-  // calls. Reserve that pause out of the budget when sizing each window's timeout.
-  const interWindowDelayMs = Math.max(0, Number(process.env.AERODATABOX_INTER_WINDOW_DELAY_MS ?? 1100) || 0);
+  // calls. 1500ms (was 1100) keeps the two FIDS calls comfortably under the 1 req/s ceiling even
+  // when an organic request is competing for the same per-second budget, cutting 429s; on the warm
+  // path (~30s provider budget) it only trims each window's timeout by ~100ms, and on the organic
+  // path (~12s budget) by ~200ms — both stay well above the 2000ms floor below. Reserve that pause
+  // out of the budget when sizing each window's timeout.
+  const interWindowDelayMs = Math.max(0, Number(process.env.AERODATABOX_INTER_WINDOW_DELAY_MS ?? 1500) || 0);
   const reserved = interWindowDelayMs * (windows.length - 1);
   const perWindowTimeout = Math.max(2000, Math.floor((timeoutMs - reserved) / windows.length));
 

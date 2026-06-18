@@ -18,17 +18,20 @@ import { getStartOfHubDay } from '../../src/lib/hubTz.js';
 const HUBS = UNITED_HUBS;
 // Serialized with INTER_TASK_DELAY_MS between tasks. Budget math: each task worst-case is ~58s
 // (55s schedule fetch + 3s gap). maxDuration for this cron is 300s in vercel.json, so the clamp
-// ceiling of 4 tasks → 4 × 58s = 232s stays under the Lambda limit. Default is 3 on an HOURLY
-// cron: 3 tasks × 24 fires = 72 warm slots/day = exactly one full ring (today boards 3×/day,
-// tomorrow boards 1×/day) ≈ 72 fresh boards × 4 units = 288 AeroDataBox units/day, the metered
-// plan's budget. Serial (not Promise.allSettled) respects the provider's 1 req/s limit.
+// ceiling of 4 tasks → 4 × 55s + 3 × 3s = 229s, plus the ~20s starlink ping and ~5s alerting
+// (≈254s), stays under the Lambda limit. Default is 4 on an HOURLY cron: 4 tasks × 24 fires = 96
+// warm slots/day = 1.33 passes over the 72-task ring, so each today board warms 4×/day (~every 6h
+// — the low-traffic intl hubs NRT/LAX/IAD no longer drift 8–10h stale) and each tomorrow board
+// ~1.33×/day. That is ≈ 96 fresh boards × 4 units = 384 AeroDataBox units/day. (Default was 3 →
+// 8h cadence / 288 units/day; the +96 units/day buys the fresher cadence and stays far under the
+// 3× organic-budget bypass ceiling.) Serial (not Promise.allSettled) respects the 1 req/s limit.
 function envNumber(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) ? value : fallback;
 }
 // Read per call (not at module load) so a runtime env change — or a test — actually takes effect,
 // and so an explicit '0' delay is honoured instead of being swallowed by `|| fallback`.
-const getWarmTasksPerRun = () => Math.max(1, Math.min(4, Math.floor(envNumber('SCHEDULE_WARM_TASKS_PER_RUN', 3))));
+const getWarmTasksPerRun = () => Math.max(1, Math.min(4, Math.floor(envNumber('SCHEDULE_WARM_TASKS_PER_RUN', 4))));
 const getInterTaskDelayMs = () => Math.max(0, envNumber('SCHEDULE_WARM_DELAY_MS', 3000));
 // A warm that came back stale/degraded did not warm anything — the handler served a frozen
 // fallback instead of refetching. Anything older than the clean-board TTL (6h) counts as failed.
@@ -57,9 +60,14 @@ function windowTasks(dayOffset: 0 | 1, label: 'today' | 'tomorrow'): WarmTask[] 
 }
 
 // The warm ring: TODAY_ROUNDS rounds of all 18 today windows, with the 18 tomorrow windows split
-// evenly across the rounds. Striding through it sequentially warms each today board TODAY_ROUNDS
-// times per ring (~every 8h — delays/cancellations stay current) and each tomorrow board once
-// (schedule data is stable; it just needs to exist before midnight).
+// evenly across the rounds. Striding through it sequentially (SCHEDULE_WARM_TASKS_PER_RUN windows
+// per fire) warms each today board TODAY_ROUNDS times per ring and each tomorrow board once. At
+// the default stride of 4/fire the 72-slot ring completes ~1.33×/day, so each today board
+// refreshes ~every 6h (delays/cancellations stay current) and each tomorrow board ~1.33×/day
+// (schedule data is stable; it just needs to exist before midnight). TODAY_ROUNDS stays 3 so the
+// ring length (72) divides evenly by the stride (4) — that clean tiling is what gives an even 6h
+// spacing with no skipped windows; bumping TODAY_ROUNDS to 4+ would make the ring (90+) outrun a
+// single day's 96 slots and leave some tomorrow boards unwarmed.
 const TODAY_ROUNDS = 3;
 function buildWarmRing(): WarmTask[] {
   const today = windowTasks(0, 'today');
@@ -235,6 +243,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       scheduleEntries.filter(([, r]) => statuses.includes(r?.status)).map(([k]) => k);
     const frozen = byStatus('stale_served', 'not_refreshed'); // the frozen-board signature
     const emptyBoards = byStatus('degraded_empty');
+    // Nonempty-but-incomplete boards: a window 429'd/timed out so the board fetched fewer flights
+    // than it should. The schedule run still returns a NONEMPTY board (no 503, no frozen/empty
+    // signature), so without this a busy hub flapping to a partial board never pages.
+    const degradedPartial = byStatus('degraded_partial');
     const erroredKeys = scheduleEntries
       .filter(([, r]) => r?.status === 'error' || String(r?.status || '').startsWith('http_'))
       .map(([k]) => k);
@@ -246,11 +258,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const budgetHot = budget > 0 && unitsToday >= budget * 0.8;
 
     const totalFailure = scheduleWarmed === 0 && scheduleFailed > 0;
-    if (totalFailure || frozen.length > 0 || emptyBoards.length > 0 || budgetHot || (starlinkStatus && starlinkStatus !== 'ok')) {
+    if (totalFailure || frozen.length > 0 || emptyBoards.length > 0 || degradedPartial.length > 0 || budgetHot || (starlinkStatus && starlinkStatus !== 'ok')) {
       await sendAlert('⚠️ Blue Board schedule pipeline degraded', [
         `warmed=${scheduleWarmed} failed=${scheduleFailed} (plan size ${warmPlan.length}, ~${estUnits} units this run)`,
         frozen.length ? `frozen/stale-served boards (warm did NOT refetch): ${frozen.join(', ')}` : '',
         emptyBoards.length ? `0-flight boards: ${emptyBoards.join(', ')}` : '',
+        degradedPartial.length ? `partial boards (nonempty but a window failed — incomplete): ${degradedPartial.join(', ')}` : '',
         erroredKeys.length ? `errors/http: ${erroredKeys.join(', ')}` : '',
         budgetHot ? `AeroDataBox budget: ${unitsToday}/${budget} units today (≥80%)` : '',
         starlinkStatus && starlinkStatus !== 'ok' ? `starlink: ${starlinkStatus}` : '',
