@@ -12,6 +12,16 @@ const ADB_UNITS_PER_REQUEST = 2;
 // spend far below this.
 const ADB_BYPASS_CEILING_MULTIPLIER = 3;
 
+// The "budget exhausted" warning previously fired on every gated organic request — dozens/hour for
+// ~11h/day once the budget trips, burying genuine warnings and inflating log-query latency. Throttle
+// it to once per instance per UTC day (mirrors warnedAdbSchemaMissing in _cost-state.ts).
+let lastBudgetWarnDay = '';
+
+/** Test-only: clear the once-per-day warn throttle so per-test assertions start from a clean slate. */
+export function __resetScheduleWarnsForTests(): void {
+  lastBudgetWarnDay = '';
+}
+
 // Persist the spend write even if Vercel freezes the lambda right after the response is sent —
 // a dropped RPC undercounts the cross-instance counter that IS the global spend ceiling.
 function recordAdbUnitsDurable(units: number): void {
@@ -357,9 +367,15 @@ export async function fetchViaAeroDataBox(
       return null;
     }
   } else if (isAdbBudgetExhausted()) {
-    console.warn(
-      `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping ${hub} ${dir} until next UTC day`
-    );
+    // Throttle: once the day's budget trips, every organic board load would otherwise log this —
+    // emit it once per instance per UTC day so the signal isn't drowned in its own repetition.
+    const today = new Date().toISOString().slice(0, 10);
+    if (lastBudgetWarnDay !== today) {
+      lastBudgetWarnDay = today;
+      console.warn(
+        `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping further organic schedule fetches until next UTC day`
+      );
+    }
     return null;
   }
 

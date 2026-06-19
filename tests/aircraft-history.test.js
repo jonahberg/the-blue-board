@@ -131,6 +131,29 @@ describe('aircraft-history API', () => {
     expect(res.body.error).toMatch(/FR24 API error/);
   });
 
+  it('returns HTTP 200 (not 5xx) when FR24 declines on billing/auth (402/403/429)', async () => {
+    // An upstream BILLING/auth decline is not a gateway fault: returning 5xx for a credit-blocked
+    // (402) feed violates HTTP semantics, is the only 5xx class in prod, and would trip any
+    // 5xx-based uptime canary. The frontend reads only `success`, so a 200 + success:false degrades
+    // identically. Genuine upstream 5xx / network faults still return 502 (see tests above/below).
+    for (const status of [402, 403, 429]) {
+      vi.restoreAllMocks();
+      process.env.FR24_API_TOKEN = 'test-token';
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: false,
+        status,
+        text: async () => 'declined',
+      });
+
+      const res = createRes();
+      await handler(makeReq(), res);
+
+      expect(res.statusCode, `upstream ${status} should map to HTTP 200`).toBe(200);
+      expect(res.body.success).toBe(false);
+      expect(res.body.upstreamStatus).toBe(status);
+    }
+  });
+
   it('returns 504 on fetch timeout (AbortError)', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(
       Object.assign(new Error('aborted'), { name: 'AbortError' })

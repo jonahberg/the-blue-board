@@ -148,7 +148,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Echo the upstream status so the failure is diagnosable from the response
       // alone (e.g. 402/403 = credit-blocked vs 5xx = outage). The frontend only
       // reads `success`, so this extra field is inert for consumers.
-      return res.status(502).json({ success: false, error: 'FR24 API error', upstreamStatus: resp.status });
+      //
+      // A BILLING/auth/rate decline (402 credit-blocked, 403 forbidden, 429 throttled) is not a
+      // gateway fault — answering 5xx for it violates HTTP semantics, is the only 5xx class this
+      // service emits in prod, and would trip any 5xx uptime canary. Map those to 200 + success:false
+      // (the frontend degrades identically); reserve 502 for a genuine upstream 5xx / outage.
+      const billingDeclined = resp.status === 402 || resp.status === 403 || resp.status === 429;
+      return res
+        .status(billingDeclined ? 200 : 502)
+        .json({ success: false, error: 'FR24 API error', upstreamStatus: resp.status });
     }
 
     const data = await resp.json();

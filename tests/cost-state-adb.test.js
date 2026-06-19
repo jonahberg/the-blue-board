@@ -15,7 +15,7 @@ import {
   hydrateAdbSpend,
   __resetAdbSpendForTests,
 } from '../api/_cost-state.js';
-import { fetchViaAeroDataBox } from '../api/_schedule-aerodatabox.js';
+import { fetchViaAeroDataBox, __resetScheduleWarnsForTests } from '../api/_schedule-aerodatabox.js';
 
 describe('AeroDataBox daily unit budget (cost-state)', () => {
   beforeEach(() => {
@@ -186,6 +186,26 @@ describe('fetchViaAeroDataBox budget enforcement', () => {
     const result = await fetchViaAeroDataBox('ORD', 'departures', Math.floor(Date.now() / 1000), 5000);
     expect(result).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('logs the budget-exhausted warning at most ONCE per UTC day (no per-request log spam)', async () => {
+    // The warning previously fired on EVERY gated organic request — dozens/hour for ~11h/day,
+    // burying genuine warnings and inflating log-query latency. It must throttle to once per
+    // instance per UTC day (reset here so prior exhausted-path tests don't consume the one allowance).
+    __resetScheduleWarnsForTests();
+    await recordAdbUnits(400);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 500, headers: { get: () => null }, json: async () => ({}), text: async () => '',
+    });
+
+    const ts = Math.floor(Date.now() / 1000);
+    await fetchViaAeroDataBox('ORD', 'departures', ts, 5000);
+    await fetchViaAeroDataBox('SFO', 'arrivals', ts, 5000);
+    await fetchViaAeroDataBox('DEN', 'departures', ts, 5000);
+
+    const budgetWarns = warnSpy.mock.calls.filter((c) => /daily unit budget exhausted/.test(String(c[0])));
+    expect(budgetWarns).toHaveLength(1);
   });
 
   it('bypassDailyBudget (authorized cron warms, ring-bounded at ~288/day) skips the gate but still records spend', async () => {
