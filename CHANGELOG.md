@@ -4,6 +4,16 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.21] - 2026-06-19
+
+### Fixed
+- Stale schedule boards show a staleness banner again. A complete board served from cache past its fresh window is correctly flagged `stale` but `degraded:false`, and the dashboard banner only checked `partial`/`degraded` — so an hours-old complete board (e.g. an 18h-old arrivals board) rendered with no warning at all. The banner now also fires on `stale`, with amber (1–6h) → red (6h+) age escalation and an honest "Showing complete data from Xh ago" message instead of the misleading "Some flights may be missing."
+- The manual connection checker no longer blames the user for a backend outage. While the flight-times feed is unavailable (an HTTP error) it now shows "Flight times are temporarily unavailable" rather than "Could not find one or both flights. Check the flight numbers." — which it displayed for every valid input while the feed was down. A genuine 200-but-not-found still shows the check-the-numbers message.
+
+### Changed
+- `/api/aircraft-history` returns HTTP 200 with `success:false` (instead of 502) when the upstream FR24 API declines on billing/auth/rate limits (402/403/429). The frontend degrades identically, but this stops a known-dead upstream from being the site's only 5xx — which polluted the error dashboard and would trip any uptime canary. Genuine upstream 5xx and network faults still return 502.
+- The "AeroDataBox daily unit budget exhausted" log warning is throttled to once per instance per UTC day instead of firing on every gated request (previously dozens per hour for ~11h a day), so it no longer buries genuine warnings.
+
 ## [1.5.20] - 2026-06-10
 
 ### Changed

@@ -4522,7 +4522,7 @@ async function loadScheduleData() {
     document.getElementById('sched-timerange').value = '';
     document.getElementById('sched-risk').value = '';
     loadEl.style.display = 'none';
-    if (result.partial || result.degraded) {
+    if (result.partial || result.degraded || result.stale) {
       const meta = result.meta || {};
       let msg = '';
       if (result.degraded && meta.dataAge != null) {
@@ -4533,6 +4533,13 @@ async function loadScheduleData() {
         msg = result.partial
           ? `Showing cached partial data from ${age} ago.`
           : `Showing cached complete data from ${age} ago.`;
+      } else if (result.stale && !result.partial && meta.dataAge != null) {
+        // Complete but aged out of the fresh window (degraded=false: nothing is missing). PR #207
+        // made these boards degraded=false for honesty, but the banner gate never checked
+        // result.stale — so hours-old complete boards rendered with NO warning. This branch (and
+        // the gate above) restores the warning; without it the chain falls to the misleading
+        // "Some flights may be missing." default, a lie for a complete board.
+        msg = `Showing complete data from ${formatDataAge(meta.dataAge)} ago.`;
       } else if (meta.liveFeedFallbackAdded) {
         msg = `Added ${meta.liveFeedFallbackAdded} live active flight(s) while the full schedule feed recovers.`;
       } else if (meta.partialReason === 'live_feed_fallback') {
@@ -4548,7 +4555,7 @@ async function loadScheduleData() {
       } else {
         msg = 'Some flights may be missing.';
       }
-      const pct = meta.completeness != null && meta.partialReason !== 'actual_only_official'
+      const pct = meta.completeness != null && meta.partialReason !== 'actual_only_official' && (result.partial || result.degraded)
         ? result.degraded && result.partial
           ? ` ${Math.round(meta.completeness * 100)}% previously loaded.`
           : !result.degraded
@@ -4557,7 +4564,7 @@ async function loadScheduleData() {
         : '';
       // Escalate the banner with data age: teal reads as "all good", which is a lie for a board
       // that is hours old. 1-6h → amber caution; 6h+ (past a full cache lifetime) → red (--ua-red).
-      const ageSeverity = result.degraded && meta.dataAge != null ? dataAgeSeverity(meta.dataAge) : null;
+      const ageSeverity = (result.degraded || result.stale) && meta.dataAge != null ? dataAgeSeverity(meta.dataAge) : null;
       const palette = ageSeverity === 'stale'
         ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.3)', text: 'var(--ua-red)', icon: '⚠️' }
         : ageSeverity === 'aging'
@@ -6445,7 +6452,15 @@ async function checkManualConnection() {
       fetch('/api/flight-times?flight=' + encodeURIComponent(normalize(inFlt))).then(r => r.ok ? r.json() : null),
       fetch('/api/flight-times?flight=' + encodeURIComponent(normalize(outFlt))).then(r => r.ok ? r.json() : null)
     ]);
-    if (!r1 || !r2 || r1.success === false || r2.success === false) {
+    // r===null means the HTTP request itself failed (404/5xx). Right now the flight-times feed is
+    // dark for every flight (FlightAware soft-blocks server-side scrapes; the FR24 summary fallback
+    // is credit-dead), so the old blanket "check the flight numbers" blamed the user for a backend
+    // outage on every valid input. Distinguish a feed outage (neutral) from a genuine 200+not-found.
+    if (r1 === null || r2 === null) {
+      resultEl.innerHTML = '<div style="color:var(--ua-muted);font-size:11px">Flight times are temporarily unavailable. Please try again later.</div>';
+      return;
+    }
+    if (r1.success === false || r2.success === false) {
       resultEl.innerHTML = '<div style="color:var(--ua-red);font-size:11px">Could not find one or both flights. Check the flight numbers.</div>';
       return;
     }
