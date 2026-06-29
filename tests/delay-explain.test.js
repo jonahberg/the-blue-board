@@ -39,7 +39,7 @@ describe('delay-explain API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     mockCreate.mockReset();
-    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.AI_GATEWAY_API_KEY = 'test-key';
     mockCreate.mockResolvedValue({
       content: [{ type: 'text', text: 'This flight is delayed due to weather.' }],
     });
@@ -67,8 +67,8 @@ describe('delay-explain API', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('returns 503 when ANTHROPIC_API_KEY is missing', async () => {
-    delete process.env.ANTHROPIC_API_KEY;
+  it('returns 503 when AI_GATEWAY_API_KEY is missing', async () => {
+    delete process.env.AI_GATEWAY_API_KEY;
     const res = createRes();
     await handler(makeReq(), res);
     expect(res.statusCode).toBe(503);
@@ -237,6 +237,33 @@ describe('delay-explain API', () => {
     mockCreate.mockClear();
     const res2 = createRes();
     await handler(makeReq(), res2);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.unavailable).toBe(true);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  // Gateway budget/credit failure (402) trips the same circuit breaker as the
+  // billing-400 case above. Isolated via resetModules + dynamic re-import so it
+  // runs against a CLOSED circuit — the billing-400 test above leaves the shared
+  // module's circuit open, and without a fresh module the early circuit-open
+  // return would make this pass vacuously without ever exercising the 402 branch.
+  it('returns a graceful 200 for a gateway 402 and opens the circuit', async () => {
+    vi.resetModules();
+    const { default: freshHandler } = await import('../api/delay-explain.js');
+    mockCreate.mockReset();
+    process.env.AI_GATEWAY_API_KEY = 'test-key';
+
+    mockCreate.mockRejectedValueOnce(Object.assign(new Error('Payment Required'), { status: 402 }));
+    const res = createRes();
+    await freshHandler(makeReq({ body: { flight: 'UAGW402' } }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.unavailable).toBe(true);
+    expect(res.body.explanation).toMatch(/temporarily unavailable/i);
+
+    // Circuit now open: a subsequent click serves the graceful message WITHOUT calling the gateway.
+    mockCreate.mockClear();
+    const res2 = createRes();
+    await freshHandler(makeReq({ body: { flight: 'UAGW402B' } }), res2);
     expect(res2.statusCode).toBe(200);
     expect(res2.body.unavailable).toBe(true);
     expect(mockCreate).not.toHaveBeenCalled();

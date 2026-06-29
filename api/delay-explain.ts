@@ -8,7 +8,21 @@ const isRateLimited = createRateLimiter('delay-explain', 20);
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
   if (!client) {
-    client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    // Route through Vercel AI Gateway's Anthropic-compatible endpoint so spend
+    // lands in the shared AI Gateway dashboard (unified with Plaincast) at zero
+    // markup. The @anthropic-ai/sdk speaks the gateway's /v1/messages contract
+    // 1:1, so the call below is unchanged; auth is the gateway key sent as a
+    // Bearer token (authToken), not Anthropic's x-api-key. Override the host
+    // with AI_GATEWAY_BASE_URL if needed (e.g. to fall back to Anthropic-direct).
+    client = new Anthropic({
+      baseURL: process.env.AI_GATEWAY_BASE_URL || 'https://ai-gateway.vercel.sh',
+      // apiKey: null suppresses @anthropic-ai/sdk's default ANTHROPIC_API_KEY env
+      // read. Without it the SDK sends BOTH x-api-key (the old, now-unused
+      // Anthropic key still in Vercel env for rollback) AND Authorization: Bearer
+      // (the gateway key) on every request. Bearer-only is what the gateway wants.
+      apiKey: null,
+      authToken: process.env.AI_GATEWAY_API_KEY,
+    });
   }
   return client;
 }
@@ -83,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: 'Rate limited — try again shortly' });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.AI_GATEWAY_API_KEY) {
     return res.status(503).json({ error: 'AI analysis unavailable — no API key configured' });
   }
 
@@ -191,6 +205,14 @@ Deliver 2-4 sentences of direct, specific analysis grounded in the provided data
     }
     if (e.status === 401) return res.status(503).json({ error: 'Invalid API key' });
     if (e.status === 429) return res.status(429).json({ error: 'AI rate limited — try again shortly' });
+    // Vercel AI Gateway returns 402 (Payment Required) when its budget/credit ceiling is hit — the
+    // gateway analog of Anthropic's billing-400 below. Trip the same circuit so we stop hammering it
+    // and serve the calm 200 the modal renders as plain text.
+    if (e.status === 402) {
+      aiUnavailableUntil = Date.now() + AI_UNAVAILABLE_COOLDOWN_MS;
+      console.warn(`Delay explain: AI Gateway budget/credit error (402) — AI-unavailable circuit open ${AI_UNAVAILABLE_COOLDOWN_MS / 1000}s`);
+      return res.status(200).json({ explanation: AI_UNAVAILABLE_MSG, unavailable: true });
+    }
     // Anthropic rejects a credit/billing problem as a 400 (no tokens billed). Don't surface it as a
     // 5xx on every click: trip the circuit so we stop calling the API, and return a calm 200 the
     // modal renders as plain text. Other client 400s (malformed request) are also non-retryable, so
