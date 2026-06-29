@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.22] - 2026-06-29
+
+### Changed
+- The "Explain Delay Risk" AI analysis now runs through Vercel AI Gateway instead of calling Anthropic directly, so its spend is tracked in one shared dashboard alongside the project's other AI features — at zero markup, with the same Claude Haiku model and prompt caching preserved. Graceful degradation is unchanged: a budget or credit outage (the gateway's `402`, the analog of Anthropic's billing `400`) trips the same circuit breaker and shows the calm "AI delay analysis is temporarily unavailable" message, with the risk score and contributing factors still visible.
+
 ## [1.5.21] - 2026-06-19
 
 ### Fixed
