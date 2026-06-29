@@ -203,4 +203,42 @@ describe('delay-explain API', () => {
     expect(prompt).toContain('100/100');
     expect(prompt).not.toContain('999');
   });
+
+  // --- Graceful AI-unavailable handling (must stay LAST: the billing case opens a module-level
+  // circuit breaker for 5 min, which would short-circuit any normal test that ran after it) ---
+
+  it('returns a graceful 200 (not 502) for a non-billing Anthropic 400, leaving the circuit closed', async () => {
+    mockCreate.mockRejectedValueOnce(Object.assign(new Error('invalid request: bad field'), { status: 400 }));
+    const res1 = createRes();
+    await handler(makeReq(), res1);
+    expect(res1.statusCode).toBe(200);
+    expect(res1.body.unavailable).toBe(true);
+    expect(res1.body.explanation).toMatch(/temporarily unavailable/i);
+
+    // Circuit must NOT be open for a generic 400 — the next call still reaches Anthropic.
+    mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'fresh analysis' }] });
+    const res2 = createRes();
+    await handler(makeReq(), res2);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.explanation).toBe('fresh analysis');
+  });
+
+  it('returns a graceful 200 for an Anthropic credit/billing 400 and opens the circuit', async () => {
+    mockCreate.mockRejectedValueOnce(
+      Object.assign(new Error('Your credit balance is too low to access the Anthropic API'), { status: 400 }),
+    );
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.unavailable).toBe(true);
+    expect(res.body.explanation).toMatch(/temporarily unavailable/i);
+
+    // Circuit now open: a subsequent click serves the graceful message WITHOUT calling Anthropic.
+    mockCreate.mockClear();
+    const res2 = createRes();
+    await handler(makeReq(), res2);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.unavailable).toBe(true);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
 });
