@@ -15,6 +15,25 @@ function getClient(): Anthropic {
 
 const cache = new CacheStore<string>('delay-explain', { maxSize: 200, defaultTTL: 5 * 60 * 1000 });
 
+// Calm, non-alarming copy the modal renders as plain text (frontend shows `explanation` verbatim
+// in the normal `.delay-explain-text` style on a 200; only non-2xx shows the ⚠️ error styling).
+// The risk score + contributing factors stay visible regardless, so this degrades gracefully.
+const AI_UNAVAILABLE_MSG =
+  'AI delay analysis is temporarily unavailable. The risk score and contributing factors shown above still reflect current conditions.';
+
+// Circuit breaker for billing/credit outages. When Anthropic rejects with a credit/billing 400 it
+// bills no tokens, but without this every "Explain Delay Risk" click would re-hit the API and log a
+// fresh 5xx — a daily error-feed flood for zero benefit. One billing error opens the circuit for a
+// cooldown; while open we short-circuit to the graceful 200 without calling Anthropic. Per-instance
+// (matches the rest of this codebase's serverless state model); a cold instance simply tries once.
+const AI_UNAVAILABLE_COOLDOWN_MS = 5 * 60 * 1000;
+let aiUnavailableUntil = 0;
+
+// Per-request input spend cap. Output is already bounded by max_tokens: 400; this bounds input so a
+// crafted-but-origin-valid POST can't inflate prompt tokens. Each field is already truncated by
+// sanitize(); this is a belt-and-suspenders ceiling on the assembled prompt.
+const MAX_PROMPT_CHARS = 2400;
+
 interface DelayContext {
   flight: string;
   route?: string;
@@ -81,6 +100,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ explanation: cached, cached: true });
     }
 
+    // Billing circuit open: serve the graceful message without calling Anthropic.
+    if (Date.now() < aiUnavailableUntil) {
+      return res.status(200).json({ explanation: AI_UNAVAILABLE_MSG, unavailable: true });
+    }
+
     // Build context prompt with aircraft journey chain
     // All fields sanitized to mitigate prompt injection via crafted POST bodies
     const flight = sanitize(ctx.flight, 20);
@@ -110,6 +134,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // SDK call would keep running past the Lambda kill, Anthropic keeps
     // billing tokens, and the user sees a generic 5xx. 12s leaves a 3s
     // budget for handler teardown and response formatting.
+    // Per-request input ceiling (see MAX_PROMPT_CHARS): sanitize() already truncates each field;
+    // this bounds the assembled total so prompt-token spend per call can't be inflated.
+    const userPrompt = lines.join('\n').slice(0, MAX_PROMPT_CHARS);
+
     const anthropicAbort = new AbortController();
     const anthropicTimer = setTimeout(() => anthropicAbort.abort(), 12_000);
 
@@ -141,7 +169,7 @@ Analysis framework — discuss ONLY topics where data is provided:
 For LOW-risk flights with clean conditions, say so positively and briefly.
 
 Deliver 2-4 sentences of direct, specific analysis grounded in the provided data. Write in plain text only — no markdown, no headers, no bold, no bullet points.`,
-          messages: [{ role: 'user', content: lines.join('\n') }],
+          messages: [{ role: 'user', content: userPrompt }],
         },
         { signal: anthropicAbort.signal }
       );
@@ -163,6 +191,20 @@ Deliver 2-4 sentences of direct, specific analysis grounded in the provided data
     }
     if (e.status === 401) return res.status(503).json({ error: 'Invalid API key' });
     if (e.status === 429) return res.status(429).json({ error: 'AI rate limited — try again shortly' });
+    // Anthropic rejects a credit/billing problem as a 400 (no tokens billed). Don't surface it as a
+    // 5xx on every click: trip the circuit so we stop calling the API, and return a calm 200 the
+    // modal renders as plain text. Other client 400s (malformed request) are also non-retryable, so
+    // serve the same graceful message rather than a 502 error-feed entry — but don't open the
+    // circuit for those, since they're request-specific, not an account-wide outage.
+    if (e.status === 400) {
+      const msg = String(e?.error?.error?.message || e?.message || '').toLowerCase();
+      const isBilling = /credit balance|too low|billing|payment|insufficient|quota|upgrade|plan/.test(msg);
+      if (isBilling) {
+        aiUnavailableUntil = Date.now() + AI_UNAVAILABLE_COOLDOWN_MS;
+        console.warn(`Delay explain: Anthropic billing/credit error — AI-unavailable circuit open ${AI_UNAVAILABLE_COOLDOWN_MS / 1000}s`);
+      }
+      return res.status(200).json({ explanation: AI_UNAVAILABLE_MSG, unavailable: true });
+    }
     return res.status(502).json({ error: 'AI analysis temporarily unavailable' });
   }
 }
