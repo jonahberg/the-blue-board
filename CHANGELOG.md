@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.23] - 2026-06-29
+
+### Fixed
+- The Schedule tab no longer shows flights that have already departed as "Scheduled." The data provider marks many flights "Expected" and never sends an actual-departure time, so a flight that left hours ago kept its "Scheduled" badge indefinitely — and the "Upcoming" count and the Scheduled status filter counted it as still to come. A pilot sorting EWR departures at night saw ~29 "scheduled" flights when over half were already airborne. Now a flight whose departure (or arrival) time is more than an hour past, with no actual time reported, is shown as Departed/Landed, so the Scheduled filter and the Upcoming count reflect what is genuinely still to go. The reclassification is anchored to the schedule server's clock, so a device with a wrong local time can't hide upcoming flights, and a watched flight only fires a "departed/landed" alert on a real provider update, never on this time-based inference.
+
 ## [1.5.22] - 2026-06-29
 
 ### Changed
