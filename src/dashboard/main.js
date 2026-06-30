@@ -7,6 +7,7 @@ import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normali
 import { bucketInstallsByMonth, computeInstallPace, buildDeparturesBoard } from '../lib/starlink-utils.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
+import { classifySchedStatus } from '../lib/schedule-status.js';
 import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
 import { formatDataAge, dataAgeSeverity } from '../lib/data-age.js';
 
@@ -4307,6 +4308,15 @@ let schedSortCol = 'time';
 let schedSortAsc = true;
 let schedLoading = false;
 
+// Client→server clock offset (seconds), learned from the schedule API's Date/Age headers on each
+// fetch. classifySchedStatus reclassifies a long-past "scheduled" flight as departed based on
+// elapsed time, so a device whose clock is skewed (a kiosk/EFB/tablet with bad NTP) would otherwise
+// hide genuinely-upcoming flights or fabricate departures. schedNow() returns a server-anchored
+// "now" so the reclassification tracks the schedule server's clock, not the device's. Offset 0
+// (no header / first call) falls back to the raw device clock — same as before this anchor existed.
+let schedClockOffsetSec = 0;
+function schedNow() { return Math.floor(Date.now() / 1000) - schedClockOffsetSec; }
+
 function initScheduleTab() {
   if (!schedInitialized) {
     schedInitialized = true;
@@ -4415,6 +4425,14 @@ async function fetchScheduleAggregated(hub, dir, timestamp) {
   try {
     const resp = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
+    // Learn the server clock from this response so time-based status reclassification is immune to
+    // device clock skew. Date = serve time; Age = seconds the response sat in a CDN cache, so the
+    // edge's "now" is Date + Age. Best-effort: a missing/unparseable header leaves the offset as-is.
+    const serverDateMs = Date.parse(resp.headers.get('date') || '');
+    if (!Number.isNaN(serverDateMs)) {
+      const ageSec = parseInt(resp.headers.get('age') || '0', 10) || 0;
+      schedClockOffsetSec = Math.floor(Date.now() / 1000) - (Math.floor(serverDateMs / 1000) + ageSec);
+    }
     if (!resp.ok) throw new Error(`Schedule API ${resp.status}`);
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
@@ -4427,33 +4445,11 @@ async function fetchScheduleAggregated(hub, dir, timestamp) {
   }
 }
 
-function classifySchedStatus(flight) {
-  const s = flight.status;
-  if (!s) return { text: 'Unknown', cls: 'unknown', key: 'unknown' };
-  const generic = s.generic?.status;
-  const txt = s.text || '';
-  const statusText = generic?.text || '';
-  const diverted = generic?.diverted;
-  const txtLower = txt.toLowerCase();
-  if (diverted) return { text: 'Diverted', cls: 'diverted', key: 'diverted' };
-  // FR24 uses various cancellation indicators: generic.status.text, status.text, status.icon
-  const iconColor = s.icon || '';
-  if (statusText === 'canceled' || statusText === 'cancelled' || txtLower.includes('cancel') || (iconColor === 'red' && generic?.type === 'canceled')) return { text: txt || 'Canceled', cls: 'canceled', key: 'canceled' };
-  if (statusText === 'landed' || txtLower.includes('landed')) return { text: txt || 'Landed', cls: 'landed', key: 'landed' };
-  if (statusText === 'departed' || txtLower.startsWith('departed')) return { text: txt || 'Departed', cls: 'departed', key: 'departed' };
-  // A flight is en-route if: FR24 says so, OR it's live with a real departure (actually airborne)
-  const isAirborne = s.live === true && (flight.time?.real?.departure != null);
-  if (statusText === 'en-route' || txtLower.includes('en route') || isAirborne) return { text: txt || 'En Route', cls: 'enroute', key: 'enroute' };
-  if (statusText === 'scheduled') return { text: txt || 'Scheduled', cls: 'scheduled', key: 'scheduled' };
-  if (statusText === 'estimated') {
-    const schedTime = flight.time?.scheduled?.departure || flight.time?.scheduled?.arrival;
-    const estTime = flight.time?.estimated?.departure || flight.time?.estimated?.arrival;
-    if (schedTime && estTime && estTime > schedTime + 900) return { text: txt, cls: 'delayed', key: 'estimated' };
-    return { text: txt, cls: 'estimated', key: 'estimated' };
-  }
-  if (txtLower.includes('delay')) return { text: txt, cls: 'delayed', key: 'delayed' };
-  return { text: txt || 'Unknown', cls: 'unknown', key: 'unknown' };
-}
+// classifySchedStatus now lives in ../lib/schedule-status.js (extracted + made time-aware so
+// flights that already departed stop showing as "Scheduled"). Schedule-tab call sites pass
+// schedCurrentDir so the departures/arrivals leg drives the elapsed-time check. updateHubHealth
+// and updateIrops intentionally use the default 'departures' — they aggregate both directions /
+// only read canceled+diverted — and must NOT be changed to pass schedCurrentDir.
 
 let _schedPendingReload = false;
 async function loadScheduleData() {
@@ -4619,7 +4615,7 @@ function formatSchedTime(utcTimestamp, hub) {
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
 }
 
-function getFilteredScheduleFlights() {
+function getFilteredScheduleFlights(nowSec = schedNow()) {
   const statusFilter = document.getElementById('sched-status').value;
   const aircraftFilter = document.getElementById('sched-aircraft').value;
   const fleetFamilyFilter = document.getElementById('sched-fleet-family').value;
@@ -4632,7 +4628,7 @@ function getFilteredScheduleFlights() {
   return schedAllFlights.filter(fl => {
     // Status filter
     if (statusFilter) {
-      const s = classifySchedStatus(fl);
+      const s = classifySchedStatus(fl, schedCurrentDir, nowSec);
       if (s.key !== statusFilter) return false;
     }
     // Aircraft filter
@@ -4673,9 +4669,9 @@ function getFilteredScheduleFlights() {
     }
     // Delay risk filter
     if (riskFilter) {
-      const status = classifySchedStatus(fl);
+      const status = classifySchedStatus(fl, schedCurrentDir, nowSec);
       if (['scheduled', 'estimated', 'delayed'].includes(status.key)) {
-        const risk = computeDelayRiskForScheduleFlight(fl, schedCurrentHub);
+        const risk = computeDelayRiskForScheduleFlight(fl, schedCurrentHub, nowSec);
         const riskLabel = risk ? risk.label : 'LOW';
         if (riskFilter === 'high' && riskLabel !== 'HIGH') return false;
         if (riskFilter === 'moderate' && riskLabel === 'LOW') return false;
@@ -4701,7 +4697,7 @@ function getFilteredScheduleFlights() {
   });
 }
 
-function sortScheduleFlights(flights) {
+function sortScheduleFlights(flights, nowSec = schedNow()) {
   const dir = schedSortAsc ? 1 : -1;
   return [...flights].sort((a, b) => {
     switch (schedSortCol) {
@@ -4719,8 +4715,8 @@ function sortScheduleFlights(flights) {
       case 'aircraft': return ((a.aircraft?.model?.code || '').localeCompare(b.aircraft?.model?.code || '')) * dir;
       case 'reg': return ((a.aircraft?.registration || '').localeCompare(b.aircraft?.registration || '')) * dir;
       case 'status': {
-        const sA = classifySchedStatus(a).key;
-        const sB = classifySchedStatus(b).key;
+        const sA = classifySchedStatus(a, schedCurrentDir, nowSec).key;
+        const sB = classifySchedStatus(b, schedCurrentDir, nowSec).key;
         return sA.localeCompare(sB) * dir;
       }
       default: return 0;
@@ -4753,8 +4749,13 @@ function updateSchedTzFooter() {
 }
 
 function renderScheduleTable() {
-  const filtered = getFilteredScheduleFlights();
-  const sorted = sortScheduleFlights(filtered);
+  // Snapshot one server-anchored "now" for the whole render so the filter, sort, row badges, and
+  // stat counts all agree on which flights have crossed the departed/landed grace window. Calling
+  // schedNow() per classify (per row, per sort comparison) could straddle a 1s tick and disagree
+  // within a single frame.
+  const now = schedNow();
+  const filtered = getFilteredScheduleFlights(now);
+  const sorted = sortScheduleFlights(filtered, now);
   const tbody = document.getElementById('sched-tbody');
   const hub = schedCurrentHub;
   updateSchedTzFooter();
@@ -4769,7 +4770,7 @@ function renderScheduleTable() {
 
   if (sorted.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>No flights match your filters<br><span style="font-size:10px">Try adjusting hub, status, or search criteria</span></td></tr>`;
-    renderScheduleStats(filtered);
+    renderScheduleStats(filtered, now);
     return;
   }
 
@@ -4816,7 +4817,7 @@ function renderScheduleTable() {
       gate = dest?.info?.gate ? dest.info.gate : (t ? `T${t}` : '—');
     }
 
-    const status = classifySchedStatus(fl);
+    const status = classifySchedStatus(fl, schedCurrentDir, now);
 
     // Fleet match + enrichment
     let fleetMatch = '';
@@ -4883,7 +4884,7 @@ function renderScheduleTable() {
     const watchBtn = ident !== '—' ? `<button class="watch-btn${isWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(watchRoute)}" data-status="${escapeHtml(status.text)}" data-stop-prop="1" aria-label="${isWatched ? 'Unwatch flight' : 'Watch flight'}" title="${isWatched ? 'Unwatch' : 'Watch'} this flight">${isWatched ? ICO_WATCHING : ICO_WATCH}</button>` : '';
 
     // Delay risk scoring
-    const dRisk = computeDelayRiskForScheduleFlight(fl, hub);
+    const dRisk = computeDelayRiskForScheduleFlight(fl, hub, now);
     const schedRiskOtp = hubHealthData[depHub];
     const schedRiskWxOrig = weatherOpsByHub[depHub];
     const schedRiskWxDest = weatherOpsByHub[arrHub];
@@ -4909,12 +4910,12 @@ function renderScheduleTable() {
   renderScheduleStats(filtered);
 }
 
-function renderScheduleStats(filtered) {
-  if (!filtered) filtered = getFilteredScheduleFlights();
+function renderScheduleStats(filtered, nowSec = schedNow()) {
+  if (!filtered) filtered = getFilteredScheduleFlights(nowSec);
   const showing = filtered.length;
   const statuses = {};
   filtered.forEach(fl => {
-    const s = classifySchedStatus(fl);
+    const s = classifySchedStatus(fl, schedCurrentDir, nowSec);
     statuses[s.key] = (statuses[s.key] || 0) + 1;
   });
 
@@ -4924,12 +4925,15 @@ function renderScheduleStats(filtered) {
   let scheduled = 0;
   let canceled = statuses.canceled || 0;
   filtered.forEach(fl => {
-    const status = classifySchedStatus(fl);
+    const status = classifySchedStatus(fl, schedCurrentDir, nowSec);
     const hasOperated = status.key === 'departed' || status.key === 'enroute' || status.key === 'landed';
     if (!hasOperated) {
       if (status.key === 'scheduled' || status.key === 'estimated') scheduled++;
       return;
     }
+    // Time-inferred departures have no trustworthy actual-out time — exclude from OTP so a
+    // stale "expected" row that we reclassified can't be scored as on-time/late.
+    if (status.inferred) return;
     const schedT = schedCurrentDir === 'departures' ? fl.time?.scheduled?.departure : fl.time?.scheduled?.arrival;
     const derivedScheduleTime = schedCurrentDir === 'departures' ? fl._source?.scheduleTimeDerivedFromActual?.departure : fl._source?.scheduleTimeDerivedFromActual?.arrival;
     if (fl._source?.liveFeedFallback) return; // live rescue rows have last-seen/ETA times, not true schedule baselines
@@ -5295,9 +5299,16 @@ function updateHubHealth() {
     const hub = key.split('-')[0];
     if (!totalsByHub[hub]) continue;
     flights.forEach(fl => {
-      const status = classifySchedStatus(fl);
+      // Default dir 'departures' is intentional: this loop aggregates BOTH arrivals and departures
+      // boards, so there is no single correct direction. Don't pass schedCurrentDir here.
+      const status = classifySchedStatus(fl, 'departures', schedNow());
       const hasOp = status.key === 'departed' || status.key === 'enroute' || status.key === 'landed';
       if (!hasOp) return;
+      // Time-inferred operated rows (a long-past "scheduled" the classifier reclassified, with no
+      // real out-time) have no trustworthy baseline — exclude them, exactly as renderScheduleStats
+      // does. Without this, a stale arrival carrying real.arrival but no real.departure would slip
+      // past the realT check below and score a bogus cross-leg delay. (maintainability review)
+      if (status.inferred) return;
       // Exclude degraded synthetic rows, exactly as the per-board OTP card does (updateSchedStats):
       // live-feed rescue rows carry last-seen/ETA times (not a true schedule baseline), and rows
       // whose schedule time was derived from the actual time always score on-time (delay 0) —
@@ -5462,7 +5473,9 @@ function updateIrops() {
   const worstDelays = [];
 
   allSchedFlts.forEach(fl => {
-    const s = classifySchedStatus(fl);
+    // Default dir 'departures' is intentional: this only reads 'canceled'/'diverted', which the
+    // time-aware reclassification never produces, so direction (and now) can't change the result.
+    const s = classifySchedStatus(fl, 'departures', schedNow());
     if (s.key === 'canceled') cancellations++;
     if (s.key === 'diverted') diversions++;
     const schedT = fl.time?.scheduled?.departure || fl.time?.scheduled?.arrival || 0;
@@ -6309,9 +6322,9 @@ function computeDelayRisk(watched, origHub, destHub, timeData, liveFlight) {
   });
 }
 
-function computeDelayRiskForScheduleFlight(fl, hub) {
+function computeDelayRiskForScheduleFlight(fl, hub, nowSec = schedNow()) {
   const { depHub, arrHub } = getScheduleRiskContext(fl, hub, schedCurrentDir);
-  const status = classifySchedStatus(fl);
+  const status = classifySchedStatus(fl, schedCurrentDir, nowSec);
   // Only score not-yet-departed flights
   if (status.key !== 'scheduled' && status.key !== 'estimated' && status.key !== 'delayed') return null;
 
@@ -6506,7 +6519,13 @@ function checkWatchedFlightChanges(flights) {
     if (!ident) return;
     const wIdx = watched.findIndex(w => w.flight === ident);
     if (wIdx < 0) return;
-    const s = classifySchedStatus(fl);
+    const s = classifySchedStatus(fl, schedCurrentDir, schedNow());
+    // A time-inferred status (we guessed "Departed"/"Landed" because the clock crossed the grace
+    // window, not because the provider confirmed it) must NOT fire a watch notification, a BMAC
+    // landing toast, or overwrite the stored status. Skip until a real provider transition
+    // arrives — otherwise watchers get speculative "your flight departed/landed" alerts and the
+    // fabricated status masks the genuine change later. (adversarial review)
+    if (s.inferred) return;
     const newStatus = s.text;
     const oldStatus = watched[wIdx].status;
     if (oldStatus && newStatus !== oldStatus && isSignificantStatusChange(oldStatus, newStatus)) {
