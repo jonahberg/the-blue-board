@@ -16,7 +16,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ### Security
 - All cron/webhook endpoints (`sync-starlink`, `refresh-metar`, `refresh-tsa`, `news-notify`) now authenticate through the shared timing-safe, fail-closed helper. Three of them compared the raw header against `Bearer ${CRON_SECRET}` directly — a pattern that authenticates anyone sending `Bearer undefined` if the secret were ever unset (latent only; the secret is set in prod).
-- `sql/012` closes the open anonymous INSERT path on `cep_review_comments` (applied to prod 2026-07-03): writes went straight to PostgREST with the public anon key, bypassing every API rate limiter, so any stranger could inject unlimited persistent rows. The world-readable SELECT policy documented as intentional in `sql/011` is kept.
+- `sql/012` documents the true access contract on `cep_review_comments`: the anon INSERT path is INTENTIONAL and load-bearing — it serves the external krpd design-review site (krpd-cep-site.vercel.app), which submits comments via this database's public anon key. The audit briefly revoked it as a spam vector (finding zero consumers in this repo), which broke krpd comment submission; it was restored the same hour, owner-approved, and the accepted risk plus the check-external-consumers-first lesson are now recorded in the migration itself. Anon UPDATE stays revoked (sql/011); public SELECT stays intentional.
 - Upgraded `astro` 6.4.2 → 6.4.8, clearing a high-severity SSRF advisory (GHSA-2pvr-wf23-7pc7) and a moderate XSS advisory (GHSA-jrpj-wcv7-9fh9) — the only vulnerabilities in the dependency tree reachable from production surface.
 
 ### Changed
