@@ -917,7 +917,10 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
     return null;
   }
   if (isOfficialQuotaBlocked()) {
-    const secondsRemaining = Math.ceil((officialQuotaBlockedUntil - Date.now()) / 1000);
+    // Include the Supabase-mirrored block: on an instance that never saw the 402 itself the
+    // local blockedUntil is 0 and this log printed a nonsense negative epoch.
+    const blockedUntil = Math.max(officialQuotaBlockedUntil, getMirroredQuotaBlockedUntil());
+    const secondsRemaining = Math.ceil((blockedUntil - Date.now()) / 1000);
     console.warn(`Official FR24 API: quota block active for ${logHub}, skipping for ${secondsRemaining}s`);
     return null;
   }
@@ -928,6 +931,15 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
 
   const dayStart = new Date(ts * 1000);
   const dayEnd = new Date((ts + 86400 - 1) * 1000);
+
+  // FR24 rejects any window whose "from" falls on tomorrow's UTC date or later ("The flight
+  // datetime from field must be a date before tomorrow"), so a tomorrow-day board can never be
+  // served here — skip instead of burning an upstream call, a circuit-breaker slot, and log noise.
+  const tomorrowUtcMidnightMs = new Date().setUTCHours(0, 0, 0, 0) + 86400_000;
+  if (dayStart.getTime() >= tomorrowUtcMidnightMs) {
+    console.log(`Official FR24 API: window for ${logHub} ${dir} starts ${formatForFR24(dayStart)} (tomorrow UTC or later) — FR24 cannot serve it, skipping`);
+    return null;
+  }
 
   console.log(`Official FR24 API: fetching ${logHub} ${dir} (filter=${dir === 'departures' ? 'outbound' : 'inbound'}:${logHub}) from=${formatForFR24(dayStart)} to=${formatForFR24(dayEnd)} limit=${OFFICIAL_API_PAGE_SIZE}`);
 
@@ -1211,7 +1223,10 @@ const MAX_FALLBACKS_PER_WINDOW = 5;
 
 export function shouldAttemptOfficialFallback(): boolean {
   if (isOfficialQuotaBlocked()) {
-    const secondsRemaining = Math.ceil((officialQuotaBlockedUntil - Date.now()) / 1000);
+    // Mirror-aware, same as isOfficialQuotaBlocked(): local-only blockedUntil is 0 on instances
+    // that never saw the 402 themselves, which printed "-<epoch>s" here.
+    const blockedUntil = Math.max(officialQuotaBlockedUntil, getMirroredQuotaBlockedUntil());
+    const secondsRemaining = Math.ceil((blockedUntil - Date.now()) / 1000);
     console.warn(`Circuit breaker tripped: official API quota block active for ${secondsRemaining}s, skipping`);
     return false;
   }

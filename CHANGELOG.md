@@ -4,6 +4,17 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.24] - 2026-07-02
+
+### Fixed
+- The STARLINK tab no longer raises a false "INTEGRITY ALERT" during the normal sync window. The served fleet comes from a 4-hourly snapshot while the disputed-tails ledger is near-live, so a tail verified minutes ago could look like a pipeline fault for up to 4 hours (observed live for N34131). The alert now fires only when the served snapshot post-dates the verification and still contains the tail — a genuine pipeline problem.
+- Schedule status text no longer mixes casings: provider-confirmed rows ("departed", "expected") are capitalized to match the inferred statuses ("Departed", "Landed") in the same column.
+- The FR24 official fallback no longer attempts tomorrow-window boards it can never serve — FR24 rejects any window starting tomorrow (UTC) with a validation 400, so each attempt only wasted an upstream call, a circuit-breaker slot, and produced recurring error-log noise (222 occurrences for EWR alone since April).
+- Quota-block log lines no longer print nonsense negative durations ("active for -1783016316s") on serverless instances that learned of the block from the Supabase mirror rather than seeing the 402 themselves.
+
+### Changed
+- The sync-starlink cron now logs a one-line success summary (aircraft count + sync time), so a silently shrinking fleet or a snapshot write degrading to a no-op is visible in runtime logs instead of hiding behind a bare 200.
+
 ## [1.5.23] - 2026-06-29
 
 ### Fixed
