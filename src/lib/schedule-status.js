@@ -45,13 +45,19 @@ function effectiveTime(scheduled, estimated) {
   return e || s || 0;
 }
 
+// Provider status text arrives lowercase ('departed', 'expected') while inferred statuses are
+// title-case ('Departed'), so the same status column mixed casings. Capitalize at the source.
+function cap(text) {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
 // Base classification from provider status text. Mirrors the original inline
 // classifySchedStatus logic exactly; the time-aware override is layered on top below.
 function classifyBase(flight) {
   const s = flight.status;
   if (!s) return { text: 'Unknown', cls: 'unknown', key: 'unknown' };
   const generic = s.generic?.status;
-  const txt = s.text || '';
+  const txt = cap(s.text || '');
   const statusText = generic?.text || '';
   const diverted = generic?.diverted;
   const txtLower = txt.toLowerCase();

@@ -56,6 +56,7 @@ let STARLINK_TAILS = new Set();
 let STARLINK_FLIGHTS_BY_TAIL = {};  // upcoming flights keyed by tail number
 let STARLINK_FLEET_STATS = null;    // { mainline, express, total }
 let STARLINK_LAST_UPDATED = null;   // ISO timestamp from upstream
+let STARLINK_SYNCED_AT = null;      // ISO timestamp of the served snapshot (BB sync-starlink cron)
 let STARLINK_INDUSTRY = null;       // [{ code, name, installed, total, percentage }] from /api/fleet-summary
 let pendingFleetDeepLinkFilter = null;
 
@@ -82,6 +83,7 @@ async function loadFleetData() {
       STARLINK_FLIGHTS_BY_TAIL = starlinkResult.flightsByTail || {};
       STARLINK_FLEET_STATS = starlinkResult.fleetStats || null;
       STARLINK_LAST_UPDATED = starlinkResult.lastUpdated || null;
+      STARLINK_SYNCED_AT = starlinkResult.syncedAt || null;
       starlinkLoaded = true;
     }
 
@@ -2668,13 +2670,23 @@ function fetchStarlinkMismatches() {
 }
 
 // Render-time integrity tripwire: disputed tails that upstream STILL serves in the equipped fleet.
-// Today this is empty (0 of the disputed set appear in STARLINK_TAILS), so the panel stays quiet.
 // If it ever becomes non-empty, renderSlVerification() raises an INTEGRITY ALERT and renderSlTable()
 // flags the offending rows.
+//
+// Propagation guard: the fleet comes from the 4-hourly sync-starlink snapshot while the disputed
+// ledger is near-live (45-min cache), so a tail verified AFTER the served snapshot was taken is a
+// normal, self-healing race (next cron prunes it) — not a pipeline fault. Alert only when the
+// snapshot POST-dates the verification and still contains the tail. Observed live Jul 2 2026:
+// N34131 verified 18:17Z against a 16:00Z snapshot rendered a false "check the data pipeline".
 function getServedConflictTails() {
   const set = new Set();
+  const syncedMs = STARLINK_SYNCED_AT ? Date.parse(STARLINK_SYNCED_AT) : NaN;
   for (const d of STARLINK_DISPUTED) {
-    if (d && d.tail && STARLINK_TAILS.has(d.tail)) set.add(d.tail);
+    if (!d || !d.tail || !STARLINK_TAILS.has(d.tail)) continue;
+    const verifiedMs = d.verifiedAt ? Date.parse(d.verifiedAt) : NaN;
+    // Both timestamps known and the dispute is newer than the served snapshot → propagation lag.
+    if (!isNaN(syncedMs) && !isNaN(verifiedMs) && verifiedMs > syncedMs) continue;
+    set.add(d.tail);
   }
   return set;
 }

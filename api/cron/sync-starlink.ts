@@ -47,6 +47,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // unconfigured, so the cron still reports success and the endpoint falls back to direct fetch.
     await saveStarlinkSnapshot(enriched);
 
+    // The 200 body is not captured in runtime logs, so without this line a healthy run is
+    // indistinguishable from a silently-degrading one (shrinking fleet, snapshot no-op).
+    console.log(`Cron sync-starlink: ${enriched.aircraft.length} aircraft synced at ${enriched.syncedAt}`);
+
     return res.status(200).json({
       status: 'ok',
       aircraft_count: enriched.aircraft.length,
