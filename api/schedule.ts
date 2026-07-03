@@ -4,6 +4,7 @@ import { loadScheduleSnapshot, saveScheduleSnapshot, isSnapshotCandidateBetter }
 import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock, __resetAdbSpendForTests } from './_cost-state.js';
 import { UNITED_HUB_SET, getHubTerminal } from './_hubs.js';
 import { isAuthorizedCronRequest } from './_cron-auth.js';
+import { isOfficialFr24Enabled } from './_official-fr24.js';
 import { fetchViaAeroDataBox } from './_schedule-aerodatabox.js';
 import {
   FR24_SCHEDULE_HEADERS,
@@ -188,10 +189,7 @@ function isFreshComplete(entry: { data: any; time: number }): boolean {
 
 function shouldAttemptTargetedOfficialRescue(hub: string, ts: number, options?: ScheduleFetchOptions): boolean {
   if (!options?.allowTargetedOfficialRescue || !process.env.FR24_API_TOKEN) return false;
-  const fallbackSetting = String(process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED || 'true').toLowerCase();
-  if (['0', 'false', 'off', 'no'].includes(fallbackSetting)) {
-    return false;
-  }
+  if (!isOfficialFr24Enabled()) return false;
   const hubUpper = hub.toUpperCase();
   if (!TARGETED_OFFICIAL_RESCUE_HUBS.has(hubUpper)) return false;
 
@@ -1267,7 +1265,7 @@ export function __resetScheduleCachesForTests(): void {
 async function tryOfficialFallback(
   logHub: string, dir: string, ts: number, effectiveDeadline: number
 ): Promise<any | null> {
-  if (!process.env.FR24_API_TOKEN || !shouldAttemptOfficialFallback()) return null;
+  if (!process.env.FR24_API_TOKEN || !isOfficialFr24Enabled() || !shouldAttemptOfficialFallback()) return null;
   recordFallback();
   try {
     const remaining = Math.max(2000, effectiveDeadline - Date.now() - 1000);

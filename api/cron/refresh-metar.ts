@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '../types.js';
+import { isAuthorizedCronRequest } from '../_cron-auth.js';
 
 const HUB_ICAOS = 'KEWR,KIAH,KORD,KDEN,KSFO,KLAX,KIAD,RJAA,PGUM';
 
@@ -8,8 +9,8 @@ const HUB_ICAOS = 'KEWR,KIAH,KORD,KDEN,KSFO,KLAX,KIAD,RJAA,PGUM';
  * last-known-good store gets populated — making user-facing cache-misses (and slow-AWC blackouts) rare.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const authHeader = req.headers['authorization'];
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Timing-safe, fails closed when CRON_SECRET is unset
+  if (!isAuthorizedCronRequest(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

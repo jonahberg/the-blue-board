@@ -1134,3 +1134,22 @@ table,thead th,tbody td,.stat-val,.metric-val,.big-number,.ticker,.ticker-item,.
   #news-banner{top:102px;left:12px;right:12px;transform:none;max-width:none;width:auto}
   #news-banner[style*="flex"]~#tip-strip{top:140px}
 }
+
+/* ═══ CAPSULE LAYOUT RESERVATION (audit Jul 3: floating capsules blocked content) ═══
+   The news banner + tip strip are fixed capsules in the z-765 slot. On non-map tabs they
+   floated OVER the scroll panel — covering the Schedule day pills ("Tomorrow" clicks hit the
+   banner div) and permanently obscuring Starlink table rows while scrolling. While either
+   capsule is visible, push the active tab panel down one 38px capsule row (two rows when both
+   stack) so the capsules own their own band and never overlap interactive controls.
+   #tab-live is exempt: there the map is the background layer and reserves no space.
+   Visibility detection mirrors the documented [style*="flex"] contract above; the tip strip
+   shows via inline display:'' (its style attribute then no longer contains "none"). */
+#news-banner[style*="flex"]~main .tab-content.active:not(#tab-live),
+#tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:122px}
+#news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:160px}
+/* Mobile anchors: capsules sit at 102px (one row) / 140px (stacked) below the two-row canopy. */
+@media(max-width:768px){
+  #news-banner[style*="flex"]~main .tab-content.active:not(#tab-live),
+  #tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:140px}
+  #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:178px}
+}

@@ -7,6 +7,21 @@ const isRateLimited = createRateLimiter('fr24-feed', 30);
 const feedCache = new CacheStore('fr24-feed', { maxSize: 1, defaultTTL: 15_000 });
 const feedFetching = new Map<string, Promise<any>>();
 
+class EmptyFeedError extends Error {
+  constructor() { super('Upstream returned empty feed'); this.name = 'EmptyFeedError'; }
+}
+
+// Aircraft entries are every key in the feed body that maps to a position array; the only
+// non-aircraft keys FR24 sends are scalar metadata like full_count/version/stats.
+export function countFeedAircraft(payload: any): number {
+  if (!payload || typeof payload !== 'object') return 0;
+  let count = 0;
+  for (const value of Object.values(payload)) {
+    if (Array.isArray(value)) count++;
+  }
+  return count;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -58,7 +73,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       clearTimeout(timeout);
       if (!upstream.ok) throw new Error('Upstream service unavailable');
-      return upstream.json();
+      const payload = await upstream.json();
+      // The feed occasionally 200s with a meta-only body ({full_count, version} and zero
+      // aircraft entries). Caching/serving that as success wipes the client's map and boards
+      // ("NO DATA" cold-load bug, Jul 3 2026 audit). United always has aircraft airborne, so an
+      // empty feed is an upstream glitch, never truth — surface it as an error so the client's
+      // failure/retry path handles it and CDN/browser caches never store the empty body.
+      if (countFeedAircraft(payload) === 0) throw new EmptyFeedError();
+      return payload;
     };
 
     try {
@@ -74,6 +96,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (e: any) {
     console.error('FR24 feed error:', e);
     if (e.name === 'AbortError') return res.status(504).json({ error: 'Upstream timeout' });
+    if (e.name === 'EmptyFeedError') {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(503).json({ error: 'Upstream returned empty feed' });
+    }
     return res.status(502).json({ error: 'Upstream service unavailable' });
   }
 }

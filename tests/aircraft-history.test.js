@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler, { normalizeSegments } from '../api/aircraft-history.js';
 
 function createRes() {
@@ -277,5 +277,32 @@ describe('normalizeSegments', () => {
     expect(result).toHaveLength(5);
     // Most recent first
     expect(result[0].flightNumber).toBe('UA7');
+  });
+});
+
+// Jul 3 2026 audit: the official-FR24 kill switch (SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false)
+// only gated /api/schedule's targeted rescue — this endpoint kept burning official-API calls
+// (402s while credits were exhausted). It must now refuse cleanly without touching upstream.
+describe('aircraft-history official-FR24 kill switch', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    process.env.FR24_API_TOKEN = 'test-token';
+  });
+
+  afterEach(() => {
+    delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
+  });
+
+  it('returns 503 without calling FR24 when the kill switch is off', async () => {
+    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = 'false';
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error).toMatch(/temporarily unavailable/i);
+    expect(res.headers['Cache-Control']).toBe('no-store');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

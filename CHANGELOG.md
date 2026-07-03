@@ -4,6 +4,24 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.25] - 2026-07-03
+
+### Fixed
+- Cold-loading the dashboard can no longer strand it on "NO DATA": the FR24 live feed occasionally 200s with a meta-only body (zero aircraft), which the API cached and the client treated as a valid empty feed — wiping the map and hub boards for over a minute with a "Retrying automatically" banner that never retried. The API now rejects empty feed bodies as a 503 (`no-store`, never cached), and the client treats a zero-flight payload exactly like a failed fetch: it keeps the previously rendered data and retries fast (5s → 10s → 20s → 30s cap), so "Retrying automatically" is now true.
+- The NO-DATA message no longer renders clipped behind the fixed header. It was absolutely positioned inside a zero-height container, pinning the one message that explains an empty dashboard to the top edge where the header covered it; it now centers in the viewport below the header at all widths.
+- The floating news banner and tip strip no longer cover or intercept board controls (the Schedule "Tomorrow" date pill was unclickable until the banner was dismissed, and Starlink table rows scrolled underneath them). Non-map tabs now reserve a layout band for visible capsules instead of letting them overlap content.
+- The header LIVE/STALE freshness chip no longer flaps on every poll. It mirrored the CDN's stale-while-revalidate cache header, flagging 12-second-old data as STALE; it is now keyed to actual payload age (LIVE under 3 minutes since the last good feed). The mobile mixed-signal bug (yellow dot next to "LIVE") is fixed the same way — the failure tint is reset on recovery so dot and label always agree.
+- `SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false` now actually disables every FR24 Official API caller. The flag was read only by the targeted same-day rescue, so the general scraping-outage fallback — plus `/api/fr24-flight` and `/api/aircraft-history` — kept calling the paid API (and logging 402s roughly every half hour while credits were exhausted). All official-API paths now gate on one shared helper (`api/_official-fr24.ts`); the two user-facing endpoints return an honest 503 instead of silently failing upstream.
+- Restored the `[1.5.17]` changelog entry (including its Security section), which was silently dropped by a June merge-conflict resolution.
+
+### Security
+- All cron/webhook endpoints (`sync-starlink`, `refresh-metar`, `refresh-tsa`, `news-notify`) now authenticate through the shared timing-safe, fail-closed helper. Three of them compared the raw header against `Bearer ${CRON_SECRET}` directly — a pattern that authenticates anyone sending `Bearer undefined` if the secret were ever unset (latent only; the secret is set in prod).
+- `sql/012` closes the open anonymous INSERT path on `cep_review_comments` (applied to prod 2026-07-03): writes went straight to PostgREST with the public anon key, bypassing every API rate limiter, so any stranger could inject unlimited persistent rows. The world-readable SELECT policy documented as intentional in `sql/011` is kept.
+- Upgraded `astro` 6.4.2 → 6.4.8, clearing a high-severity SSRF advisory (GHSA-2pvr-wf23-7pc7) and a moderate XSS advisory (GHSA-jrpj-wcv7-9fh9) — the only vulnerabilities in the dependency tree reachable from production surface.
+
+### Changed
+- Added the standard `mobile-web-app-capable` meta tag alongside the deprecated `apple-` variant, silencing the Chrome deprecation warning.
+
 ## [1.5.24] - 2026-07-02
 
 ### Fixed
@@ -70,6 +88,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 - Operational alerting (supersedes PR #168): when `ALERT_WEBHOOK_URL` is set, the hourly warm cron posts a Discord alert on the signatures that mean the live site is degraded right now — total warm failure, frozen/stale-served boards (the warm didn't actually refetch), 0-flight boards, AeroDataBox spend ≥80% of the daily budget, or the Starlink feed down. Throttled to one alert per 5 minutes; alerting failures never affect the cron itself.
 - Post-deploy smoke check (`.github/workflows/post-deploy-smoke.yml`): every push to main waits for the Vercel deploy and curls the homepage, the Starlink API, and a live schedule board with retries — the first automated signal for the merge-equals-deploy pipeline (previously a broken deploy was only discovered by visiting the site).
 
+
+## [1.5.17] - 2026-06-10
+
+### Fixed
+- The site's announcement channel works again: the stale "Data feeds restored" banner (which rendered invisibly behind the fixed header and could never be dismissed) is deleted, and the news banner now renders in the canopy z-765 slot below the header with a reachable, persistent dismiss.
+- The schedule footer no longer re-credits Flightradar24 on every render (`updateSchedTzFooter` rewrote the static attribution fix at runtime).
+
+### Security
+- `/api/fr24-usage` (paid FR24 billing/credit telemetry) now requires the cron Bearer secret, responds `Cache-Control: private, no-store` so the shared CDN can never serve an authorized response to unauthenticated requests, and the admin dashboard widget that called it was removed (a browser must never hold the spend-capable cron secret). Owner access: `curl -H "Authorization: Bearer $CRON_SECRET" https://theblueboard.co/api/fr24-usage`.
+- `sql/010_waitlist_drop_open_policy.sql` drops the original `WITH CHECK (true)` anonymous-INSERT policy on the waitlist (verified still active in prod alongside 006's validated policy — permissive-OR meant the open one won). Apply manually via the Supabase SQL editor.
+
+### Compliance
+- Schedule data is now correctly attributed to AeroDataBox everywhere (header micro-attribution, schedule footer, Sources panel, disclaimer modal); Flightradar24 remains credited where it is genuinely the source (live aircraft positions). Misattribution violated AeroDataBox's terms on the exact plan the product pays for.
+- Both maps now display OpenStreetMap/CARTO attribution (dark-theme styled control) and the Sources panel lists the basemap — resolving an ODbL license violation that risked basemap revocation.
+- Outbound email is CAN-SPAM-aligned: the news digest (Resend broadcast) carries a one-click unsubscribe link, the waitlist welcome (transactional) carries an honest mailto unsubscribe plus a `List-Unsubscribe` header, and both link the new privacy policy and render a postal address once `EMAIL_POSTAL_ADDRESS` is set.
+- New `/privacy` page (plain-English, code-verified claims: what's collected, where it lives, how to unsubscribe/delete), linked from the dashboard legal menu, the shared site footer, and every email.
 
 ## [1.5.16] - 2026-06-10
 
