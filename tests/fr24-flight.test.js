@@ -205,3 +205,49 @@ describe('getClientIp (FR24)', () => {
     expect(getClientIp({ headers: {} })).toBe('unknown');
   });
 });
+
+// Jul 3 2026 audit: same kill-switch coverage as aircraft-history — this endpoint calls the
+// paid FR24 Official API and must refuse cleanly when SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false.
+import { vi, beforeEach, afterEach } from 'vitest';
+import handler from '../api/fr24-flight.js';
+
+function createRes() {
+  return {
+    statusCode: 200,
+    headers: {},
+    body: null,
+    setHeader(name, value) { this.headers[name] = value; },
+    status(code) { this.statusCode = code; return this; },
+    json(payload) { this.body = payload; return this; },
+    end() { return this; },
+  };
+}
+
+describe('fr24-flight official-FR24 kill switch', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    process.env.FR24_API_TOKEN = 'test-token';
+  });
+
+  afterEach(() => {
+    delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
+    delete process.env.FR24_API_TOKEN;
+  });
+
+  it('returns 503 without calling FR24 when the kill switch is off', async () => {
+    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '0';
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { flight: 'UA9981' }, // unique flight → cold module cache
+    }, res);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error).toMatch(/temporarily unavailable/i);
+    expect(res.headers['Cache-Control']).toBe('no-store');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

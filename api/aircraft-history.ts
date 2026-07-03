@@ -6,6 +6,7 @@
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
+import { isOfficialFr24Enabled } from './_official-fr24.js';
 
 const isRateLimited = createRateLimiter('aircraft-history', 15);
 
@@ -99,6 +100,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!process.env.FR24_API_TOKEN) {
     return res.status(500).json({ success: false, error: 'FR24 API not configured' });
+  }
+
+  if (!isOfficialFr24Enabled()) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(503).json({ success: false, error: 'Aircraft history temporarily unavailable' });
   }
 
   const reg = ((req.query.reg as string) || '').trim().toUpperCase().replace('-', '');

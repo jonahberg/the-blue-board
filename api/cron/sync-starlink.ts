@@ -8,12 +8,13 @@
 import type { VercelRequest, VercelResponse } from '../types.js';
 import { normalizeStarlinkPayload } from '../_starlink-normalize.js';
 import { saveStarlinkSnapshot } from '../_starlink-snapshot.js';
+import { isAuthorizedCronRequest } from '../_cron-auth.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/data';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Verify cron secret — reject if missing or mismatched
-  if (req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Verify cron secret — timing-safe, fails closed when CRON_SECRET is unset
+  if (!isAuthorizedCronRequest(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

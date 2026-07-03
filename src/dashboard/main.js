@@ -10,6 +10,7 @@ import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
 import { classifySchedStatus } from '../lib/schedule-status.js';
 import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
 import { formatDataAge, dataAgeSeverity } from '../lib/data-age.js';
+import { parseFr24Feed, applyFeedResult, feedFreshness, nextFeedRetryDelay } from '../lib/feed-health.js';
 
 injectSpeedInsights();
 
@@ -1038,89 +1039,105 @@ function togglePacific() {
 // ═══ FLIGHT DATA (FlightRadar24) ═══
 let flightsLoading = false;
 let isRefreshing = false;
+// Freshness + fast-retry state (audit Jul 3: cold-load empty feed left the page in NO DATA
+// with no self-recovery, and the LIVE/STALE chip flapped on transport-level cache signals).
+let lastGoodFeedTs = 0;   // when a non-empty feed was last committed — the chip keys to THIS
+let feedRetryAttempt = 0; // consecutive failed polls (zero-flight 200, 5xx, network error)
+let feedRetryTimer = null;
+
+// Full-viewport NO-DATA overlay. Was position:absolute inside .map-area, which collapses to a
+// zero-height box (the map itself is position:fixed) — so the one message explaining the empty
+// dashboard rendered at the very top edge, clipped behind the canopy header (header z 770 beats
+// #tab-live's z-index:1 stacking context; the overlay's z 999 is trapped inside it). Fixed +
+// viewport-centered renders fully below the header at any width; z 999 still covers the sidebar/
+// controls within #tab-live, and the header/tab dock stay on top and clickable.
+function showMapErrorOverlay() {
+  if (document.getElementById('map-error-overlay')) return;
+  const mapEl = document.getElementById('map');
+  if (!mapEl) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'map-error-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(10,14,20,.85);pointer-events:auto';
+  overlay.innerHTML = '<div class="error-state"><div class="error-icon">📡</div><div style="color:var(--ua-text);font-size:13px;margin-bottom:4px">Live flight feed unavailable</div><div style="color:var(--ua-muted);font-size:11px">Retrying automatically in a few seconds…</div><button class="retry-btn" data-action="map-error-retry">↻ Retry now</button></div>';
+  // Appended inside #tab-live so the overlay hides with the tab; kept out of .map-area's
+  // (collapsed) coordinate space by position:fixed above.
+  mapEl.parentElement.appendChild(overlay);
+}
+
 async function refreshFlights() {
   if (isRefreshing) return;
   isRefreshing = true;
   flightsLoading = true;
+  // This refresh (manual, scheduled, or retry-fired) supersedes any pending fast retry.
+  if (feedRetryTimer) { clearTimeout(feedRetryTimer); feedRetryTimer = null; }
   document.getElementById('btn-refresh').textContent = '⏳ Loading...';
+  let feedFailed = false;
   try {
     const res = await fetch('/api/fr24-feed?airline=UAL');
-    if (!res.ok) throw new Error(res.status);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const parsed = [];
-    for (const [id, arr] of Object.entries(data)) {
-      if (id === 'full_count' || id === 'version' || id === 'stats' || !Array.isArray(arr)) continue;
-      const f = {
-        fr24id: id,
-        icao24: arr[0],
-        lat: arr[1], lon: arr[2], hdg: arr[3],
-        alt: arr[4] ? arr[4] / 3.28084 : 0, // FR24 gives feet, convert to meters for compatibility
-        spd: arr[5] ? arr[5] / 1.944 : 0,   // FR24 gives knots, convert to m/s for compatibility
-        vr: arr[15] ? arr[15] / 196.85 : 0,  // FR24 gives fpm, convert to m/s for compatibility
-        squawk: null,
-        acType: arr[8] || '',
-        reg: arr[9] || '',
-        origin: arr[11] || '',
-        dest: arr[12] || '',
-        flightIATA: arr[13] || '',
-        onGround: arr[14] === 1,
-        callsign: arr[16] || '',
-        airline: arr[18] || ''
-      };
-      if (f.lat && f.lon) parsed.push(f);
-    }
+    // A 200 with ZERO UA flights is never legitimate — United always has hundreds airborne, so a
+    // meta-only body ({"full_count":…,"version":…}) is a degraded feed (FR24 rate-limit
+    // interstitial / empty upstream). Treat it EXACTLY like the 503 the server now returns for
+    // empty upstream bodies: keep last-good flights, fall through to the shared failure path.
+    const result = applyFeedResult(allFlights, parseFr24Feed(data));
+    if (!result.ok) throw new Error('empty feed (zero aircraft in payload)');
 
-    if (parsed.length > 0) {
-      // Healthy live feed: commit the new flights and show LIVE.
-      allFlights = parsed;
-      document.getElementById('status-dot').className = 'status-dot live';
+    // Healthy live feed: commit the new flights and show LIVE.
+    allFlights = result.flights;
+    lastGoodFeedTs = Date.now();
+    feedRetryAttempt = 0;
+    const dot = document.getElementById('status-dot');
+    dot.className = 'status-dot live';
+    dot.style.background = ''; // clear the yellow inline override a prior failure set — dot and label must agree
+    document.getElementById('status-text').textContent = 'LIVE';
+    document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights';
+    const errOverlay = document.getElementById('map-error-overlay');
+    if (errOverlay) errOverlay.remove();
+  } catch (e) {
+    // Shared failure path for zero-flight 200s, 5xx (incl. the server's new empty-upstream 503),
+    // and network errors. Never wipes allFlights; a fast retry is scheduled in finally.
+    feedFailed = true;
+    console.error('FR24 error:', e);
+    const dot = document.getElementById('status-dot');
+    // Chip keyed to actual payload age (time since last committed feed), NOT to this response's
+    // transport state — one failed poll against fresh data stays LIVE instead of flapping.
+    const age = lastGoodFeedTs ? Date.now() - lastGoodFeedTs : Infinity;
+    if (allFlights.length > 0 && feedFreshness(age) === 'live') {
+      dot.className = 'status-dot live';
+      dot.style.background = '';
       document.getElementById('status-text').textContent = 'LIVE';
       document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights';
-      const errOverlay = document.getElementById('map-error-overlay');
-      if (errOverlay) errOverlay.remove();
+    } else if (allFlights.length > 0) {
+      dot.className = 'status-dot';
+      dot.style.background = '#EAB308';
+      document.getElementById('status-text').textContent = 'STALE';
+      document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights (stale)';
     } else {
-      // A 200 with ZERO UA flights is never legitimate — United always has hundreds airborne, so
-      // this is a degraded feed (FR24 rate-limit interstitial / empty body). Do NOT blank the map
-      // by overwriting allFlights, and do NOT show a healthy green LIVE. Keep the last-good markers
-      // and tell the truth with a STALE/NO-DATA label. (Audit P1: empty-feed-blank-map-no-degraded-state.)
-      document.getElementById('status-dot').className = 'status-dot';
-      document.getElementById('status-dot').style.background = '#EAB308';
-      if (allFlights.length > 0) {
-        document.getElementById('status-text').textContent = 'STALE';
-        document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights (stale)';
-      } else {
-        // No prior data to keep showing — surface the unavailable overlay (same affordance as the
-        // network-error path) so the user isn't left staring at an empty "LIVE" map.
-        document.getElementById('status-text').textContent = 'NO DATA';
-        const mapEl = document.getElementById('map');
-        if (mapEl && !document.getElementById('map-error-overlay')) {
-          const overlay = document.createElement('div');
-          overlay.id = 'map-error-overlay';
-          overlay.style.cssText = 'position:absolute;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(10,14,20,.85);pointer-events:auto';
-          overlay.innerHTML = '<div class="error-state"><div class="error-icon">📡</div><div style="color:var(--ua-text);font-size:13px;margin-bottom:4px">Live feed returned no flights</div><div style="color:var(--ua-muted);font-size:11px">Retrying automatically…</div><button class="retry-btn" data-action="map-error-retry">↻ Retry</button></div>';
-          mapEl.parentElement.style.position = 'relative';
-          mapEl.parentElement.appendChild(overlay);
-        }
-      }
-    }
-  } catch (e) {
-    console.error('FR24 error:', e);
-    document.getElementById('status-dot').className = 'status-dot';
-    document.getElementById('status-dot').style.background = '#EAB308';
-    document.getElementById('status-text').textContent = 'ERROR';
-    if (allFlights.length === 0) {
-      const mapEl = document.getElementById('map');
-      if (!document.getElementById('map-error-overlay')) {
-        const overlay = document.createElement('div');
-        overlay.id = 'map-error-overlay';
-        overlay.style.cssText = 'position:absolute;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(10,14,20,.85);pointer-events:auto';
-        overlay.innerHTML = '<div class="error-state"><div class="error-icon">📡</div><div style="color:var(--ua-text);font-size:13px;margin-bottom:4px">Live data temporarily unavailable</div><div style="color:var(--ua-muted);font-size:11px">Could not reach flight data server</div><button class="retry-btn" data-action="map-error-retry">↻ Retry</button></div>';
-        mapEl.parentElement.style.position = 'relative';
-        mapEl.parentElement.appendChild(overlay);
-      }
+      // No prior data to keep showing — surface the unavailable overlay so the user isn't left
+      // staring at an empty "LIVE" map.
+      dot.className = 'status-dot';
+      dot.style.background = '#EAB308';
+      document.getElementById('status-text').textContent = 'NO DATA';
+      showMapErrorOverlay();
     }
   } finally {
-    countdown = 30;
+    // Failed poll → fast retry (5s → 10s → 20s → 30s cap), separate from the normal 30s cadence.
+    // This makes the overlay's "Retrying automatically" claim true. The countdown display is set
+    // to match so the header never promises a slower refresh than the retry will deliver.
+    let nextSecs = 30;
+    if (feedFailed) {
+      const delay = nextFeedRetryDelay(feedRetryAttempt);
+      feedRetryAttempt++;
+      nextSecs = Math.round(delay / 1000);
+      feedRetryTimer = setTimeout(() => {
+        feedRetryTimer = null;
+        // Hidden tab: skip (polling is paused to save API credits); the visibilitychange
+        // handler refreshes immediately when the tab returns.
+        if (!document.hidden) refreshFlights();
+      }, delay);
+    }
+    countdown = nextSecs;
     document.getElementById('btn-refresh').textContent = '🔄 Refresh';
     flightsLoading = false;
     isRefreshing = false;
