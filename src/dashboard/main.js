@@ -3715,7 +3715,7 @@ async function initWeatherTab() {
   // weather-retry action (which resets weatherInitialized), and L.map() on an already-initialized
   // container throws "Map container is already initialized." (Audit P1: weather-retry-double-map-init.)
   if (radarMap) { try { radarMap.remove(); } catch (e) { /* already removed */ } radarMap = null; }
-  radarMap = L.map('radar-map', {center:[39,-97],zoom:3,zoomControl:false});
+  radarMap = L.map('radar-map', {center:[39,-97],zoom:4,zoomControl:false});
   radarMap.attributionControl.setPrefix(''); // OSM/CARTO credit from tile options (ODbL)
   L.control.zoom({ position: 'bottomleft' }).addTo(radarMap);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', basemapTileOptions).addTo(radarMap);
