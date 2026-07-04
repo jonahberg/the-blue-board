@@ -4,7 +4,7 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-07-04
+## [1.5.27] - 2026-07-04
 
 ### Added
 - Schedule: blank registrations backfill from live flight tracking (seen-today ledger; provider values never overwritten)
