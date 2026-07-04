@@ -16,6 +16,7 @@ import { firstFutureIndex, nowDividerIndex } from '../lib/board-now.js';
 import { deriveOpsHealth } from '../lib/ops-health.js';
 import { displayScheduleStatus } from '../lib/status-display.js';
 import { computeScheduleStatCounts } from '../lib/board-stats.js';
+import { recordSightings, lookupReg, pruneLedger, deserializeLedger } from '../lib/reg-ledger.js';
 
 injectSpeedInsights();
 
@@ -376,6 +377,16 @@ const IATA_CITIES = {
 // ═══ GLOBALS ═══
 let map, flightMarkers = {}, routeLine = null, routeGroup = null, hubMarkers = [], wxLayer = null;
 let allFlights = [], showHubs = true, showLonghaul = false, showWeather = false, showStarlinkOnly = false;
+// Seen-today reg ledger: flightNumber → {reg, seenAt} harvested from every live-feed poll,
+// used to backfill blank schedule-board registrations (see src/lib/reg-ledger.js).
+const REG_LEDGER_KEY = 'bb_reg_ledger_v1';
+let regLedger = {};
+try { regLedger = deserializeLedger(localStorage.getItem(REG_LEDGER_KEY)); } catch (e) { regLedger = {}; }
+function recordRegSightings(flights) {
+  recordSightings(regLedger, flights, Date.now());
+  pruneLedger(regLedger, Date.now());
+  try { localStorage.setItem(REG_LEDGER_KEY, JSON.stringify(regLedger)); } catch (e) { /* private mode / quota */ }
+}
 let activeHubFilter = null, activePhaseFilter = null;
 let refreshTimer = null, countdown = 30;
 let deepLinkHandled = false;
@@ -1090,6 +1101,7 @@ async function refreshFlights() {
 
     // Healthy live feed: commit the new flights and show LIVE.
     allFlights = result.flights;
+    recordRegSightings(allFlights);
     lastGoodFeedTs = Date.now();
     feedRetryAttempt = 0;
     const dot = document.getElementById('status-dot');
@@ -4962,7 +4974,18 @@ function renderScheduleTable() {
     const acCode = fl.aircraft?.model?.code || '—';
     const acText = fl.aircraft?.model?.text || '';
     const acShort = acText ? acText.replace(/Boeing |Airbus |Embraer /g, '').substring(0, 20) : '';
-    const reg = fl.aircraft?.registration || '—';
+    // Provider reg first, ALWAYS. When the schedule feed omitted the tail, fall back to the
+    // live-feed ledger — a currently-airborne flight fills from this poll's sighting, a
+    // departed one from whenever a session saw it airborne. A filled reg also unlocks the
+    // FLEET_BY_REG enrichment below (type, Starlink ⚡, special livery) for free.
+    let reg = fl.aircraft?.registration || '';
+    let regFromLive = false;
+    if (!reg) {
+      const filled = lookupReg(regLedger, fl.identification?.number?.default,
+        fl.time?.scheduled?.departure, fl.time?.scheduled?.arrival, Date.now());
+      if (filled) { reg = filled; regFromLive = true; }
+    }
+    if (!reg) reg = '—';
 
     const oIata = orig?.code?.iata || '';
     const dIata = dest?.code?.iata || '';
@@ -5090,7 +5113,7 @@ function renderScheduleTable() {
       <td style="font-weight:600;color:var(--ua-accent)">${escapeHtml(ident)}</td>
       <td>${routeStr}</td>
       <td title="${escapeHtml(acText)}">${escapeHtml(acCode)}${acShort ? `<div style="font-size:9px;color:var(--ua-muted)">${escapeHtml(acShort)}</div>` : ''}${equipBadge}</td>
-      <td style="font-family:var(--font-mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}">${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
+      <td style="font-family:var(--font-mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}"${regFromLive ? ' title="Tail from live flight tracking (not in the schedule feed)"' : ''}>${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
       <td>${escapeHtml(gate)}</td>
       <td>${statusCell}${faaContext}</td>
       <td class="sched-delay-cell">${delayCell}</td>
