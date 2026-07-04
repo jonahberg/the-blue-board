@@ -121,8 +121,8 @@ main{display:contents}
 /* Degraded tier: Starlink toggle disabled (no tails loaded) — greyed, no hover affordance */
 .ctrl-btn:disabled,.ctrl-btn.ctrl-btn-disabled{opacity:.4;cursor:not-allowed}
 .ctrl-btn:disabled:hover,.ctrl-btn.ctrl-btn-disabled:hover{background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border-color:var(--ua-border);color:var(--ua-muted)}
-/* Map marker legend — one amber Starlink key, grouped under the control ladder. The dot
-   mirrors the marker's amber glow halo; the "Starlink" text means color is not the sole signal. */
+/* Map marker legend — one violet Starlink key, grouped under the control ladder. The dot
+   mirrors the marker's violet fill; the "Starlink" text means color is not the sole signal. */
 #map-legend{display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 10px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;font-size:10px;font-family:var(--font-mono);color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;pointer-events:none}
 .map-legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
 .map-legend-dot-starlink{background:#A78BFA}

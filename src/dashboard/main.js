@@ -387,6 +387,16 @@ function recordRegSightings(flights) {
   pruneLedger(regLedger, Date.now());
   try { localStorage.setItem(REG_LEDGER_KEY, JSON.stringify(regLedger)); } catch (e) { /* private mode / quota */ }
 }
+// Single source of truth for a schedule row's registration: provider value first, ledger
+// backfill second. EVERY schedule consumer (row render, Starlink filter, tail search, reg
+// sort) must go through this — a row that shows a backfilled ⚡ tail but doesn't match the
+// Starlink filter or a search for that tail is a lie of inconsistency.
+function schedRegFor(fl) {
+  return fl.aircraft?.registration
+    || lookupReg(regLedger, fl.identification?.number?.default,
+         fl.time?.scheduled?.departure, fl.time?.scheduled?.arrival, Date.now())
+    || '';
+}
 let activeHubFilter = null, activePhaseFilter = null;
 let refreshTimer = null, countdown = 30;
 let deepLinkHandled = false;
@@ -4800,9 +4810,9 @@ function getFilteredScheduleFlights(nowSec = schedNow()) {
       if (routeTypeFilter === 'domestic' && isIntl) return false;
       if (routeTypeFilter === 'international' && !isIntl) return false;
     }
-    // Starlink filter
+    // Starlink filter (schedRegFor: backfilled tails must match the filter their ⚡ badge implies)
     if (starlinkFilter) {
-      const reg = fl.aircraft?.registration;
+      const reg = schedRegFor(fl);
       const hasSL = reg && STARLINK_TAILS.has(reg);
       if (starlinkFilter === 'starlink' && !hasSL) return false;
       if (starlinkFilter === 'no-starlink' && hasSL) return false;
@@ -4837,7 +4847,7 @@ function getFilteredScheduleFlights(nowSec = schedNow()) {
     if (searchFilter) {
       const flNum = fl.identification?.number?.default?.toLowerCase() || '';
       const callsign = fl.identification?.callsign?.toLowerCase() || '';
-      const reg = fl.aircraft?.registration?.toLowerCase() || '';
+      const reg = schedRegFor(fl).toLowerCase(); // incl. backfilled tails — searching a visible reg must hit
       const destName = (fl.airport?.destination?.name || '').toLowerCase();
       const destCode = (fl.airport?.destination?.code?.iata || '').toLowerCase();
       const origName = (fl.airport?.origin?.name || '').toLowerCase();
@@ -4866,7 +4876,7 @@ function sortScheduleFlights(flights, nowSec = schedNow()) {
         return rA.localeCompare(rB) * dir;
       }
       case 'aircraft': return ((a.aircraft?.model?.code || '').localeCompare(b.aircraft?.model?.code || '')) * dir;
-      case 'reg': return ((a.aircraft?.registration || '').localeCompare(b.aircraft?.registration || '')) * dir;
+      case 'reg': return (schedRegFor(a).localeCompare(schedRegFor(b))) * dir;
       case 'status': {
         const sA = classifySchedStatus(a, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta)).key;
         const sB = classifySchedStatus(b, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta)).key;
@@ -4978,14 +4988,8 @@ function renderScheduleTable() {
     // live-feed ledger — a currently-airborne flight fills from this poll's sighting, a
     // departed one from whenever a session saw it airborne. A filled reg also unlocks the
     // FLEET_BY_REG enrichment below (type, Starlink ⚡, special livery) for free.
-    let reg = fl.aircraft?.registration || '';
-    let regFromLive = false;
-    if (!reg) {
-      const filled = lookupReg(regLedger, fl.identification?.number?.default,
-        fl.time?.scheduled?.departure, fl.time?.scheduled?.arrival, Date.now());
-      if (filled) { reg = filled; regFromLive = true; }
-    }
-    if (!reg) reg = '—';
+    const reg = schedRegFor(fl) || '—';
+    const regFromLive = reg !== '—' && !fl.aircraft?.registration;
 
     const oIata = orig?.code?.iata || '';
     const dIata = dest?.code?.iata || '';
