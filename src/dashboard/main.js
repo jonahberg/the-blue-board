@@ -1202,15 +1202,16 @@ function createPlaneIcon(hdg, isLonghaul, phase, isWatched, isStarlink) {
   const hdgRounded = Math.round((hdg || 0) / 5) * 5;
   const cacheKey = `${hdgRounded}|${isLonghaul?1:0}|${phase}|${isWatched?1:0}|${isStarlink?1:0}`;
   if (_iconCache[cacheKey]) return _iconCache[cacheKey];
-  const color = isWatched ? '#22c55e' : (isLonghaul ? '#fbbf24' : (phase === 'Ground' ? '#64748B' : '#6BAAED'));
+  // Starlink marker treatment: distinct violet FILL, no glow halo (owner Jul 4 2026 — the
+  // stacked drop-shadow "orb" look is gone). Fill priority: watched green → Starlink violet
+  // → long-haul amber → phase color. Accepted trade-off: phase color is not visible on
+  // Starlink aircraft — the popup and the Starlink-only filter still carry it.
+  const color = isWatched ? '#22c55e'
+    : isStarlink ? '#A78BFA'
+    : isLonghaul ? '#fbbf24'
+    : (phase === 'Ground' ? '#64748B' : '#6BAAED');
   const size = isWatched ? 16 : (isLonghaul ? 14 : 10);
-  // Starlink marker treatment: an amber glow HALO that STACKS on top of the existing
-  // phase/long-haul/watched fill (we keep the fill so phase info is never lost — a recolor
-  // would collide with long-haul's amber). Pairs the amber color with an enlarged glow shape
-  // so color is not the sole signal (DESIGN.md). #fbbf24 is the map's existing amber.
-  const filter = isStarlink
-    ? `drop-shadow(0 0 2px ${color}) drop-shadow(0 0 4px #fbbf24) drop-shadow(0 0 7px #fbbf24)`
-    : `drop-shadow(0 0 2px ${color})`;
+  const filter = `drop-shadow(0 0 2px ${color})`;
   // SVG plane pointing north (0°) — classic top-down aircraft silhouette, cross-platform consistent
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="filter:${filter}"><path d="M128 16c-4 0-8 3-9 7l-15 72-88 34c-3 1-4 4-4 7s2 5 5 6l87 20 4 52-28 18c-2 1-3 3-3 5v8c0 2 1 4 3 4l20-6h28l20 6c2 0 3-2 3-4v-8c0-2-1-4-3-5l-28-18 4-52 87-20c3-1 5-3 5-6s-1-6-4-7l-88-34-15-72c-1-4-5-7-9-7z"/></svg>`;
   const icon = L.divIcon({

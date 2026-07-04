@@ -125,7 +125,7 @@ main{display:contents}
    mirrors the marker's amber glow halo; the "Starlink" text means color is not the sole signal. */
 #map-legend{display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 10px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;font-size:10px;font-family:var(--font-mono);color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;pointer-events:none}
 .map-legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
-.map-legend-dot-starlink{background:#fbbf24;box-shadow:0 0 4px #fbbf24,0 0 7px rgba(251,191,36,.7)}
+.map-legend-dot-starlink{background:#A78BFA}
 #search-box{position:absolute;top:10px;left:10px;z-index:712}
 #search-input{background:rgba(10,14,20,.9);border:1px solid var(--ua-border);color:var(--ua-text);padding:7px 12px;border-radius:4px;font-family:var(--font-mono);font-size:11px;width:220px}
 #search-input:focus{border-color:var(--ua-accent)}
