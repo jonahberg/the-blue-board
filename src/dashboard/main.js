@@ -16,6 +16,7 @@ import { firstFutureIndex, nowDividerIndex } from '../lib/board-now.js';
 import { deriveOpsHealth } from '../lib/ops-health.js';
 import { displayScheduleStatus } from '../lib/status-display.js';
 import { computeScheduleStatCounts } from '../lib/board-stats.js';
+import { recordSightings, lookupReg, pruneLedger, deserializeLedger } from '../lib/reg-ledger.js';
 
 injectSpeedInsights();
 
@@ -376,6 +377,26 @@ const IATA_CITIES = {
 // ═══ GLOBALS ═══
 let map, flightMarkers = {}, routeLine = null, routeGroup = null, hubMarkers = [], wxLayer = null;
 let allFlights = [], showHubs = true, showLonghaul = false, showWeather = false, showStarlinkOnly = false;
+// Seen-today reg ledger: flightNumber → {reg, seenAt} harvested from every live-feed poll,
+// used to backfill blank schedule-board registrations (see src/lib/reg-ledger.js).
+const REG_LEDGER_KEY = 'bb_reg_ledger_v1';
+let regLedger = {};
+try { regLedger = deserializeLedger(localStorage.getItem(REG_LEDGER_KEY)); } catch (e) { regLedger = {}; }
+function recordRegSightings(flights) {
+  recordSightings(regLedger, flights, Date.now());
+  pruneLedger(regLedger, Date.now());
+  try { localStorage.setItem(REG_LEDGER_KEY, JSON.stringify(regLedger)); } catch (e) { /* private mode / quota */ }
+}
+// Single source of truth for a schedule row's registration: provider value first, ledger
+// backfill second. EVERY schedule consumer (row render, Starlink filter, tail search, reg
+// sort) must go through this — a row that shows a backfilled ⚡ tail but doesn't match the
+// Starlink filter or a search for that tail is a lie of inconsistency.
+function schedRegFor(fl) {
+  return fl.aircraft?.registration
+    || lookupReg(regLedger, fl.identification?.number?.default,
+         fl.time?.scheduled?.departure, fl.time?.scheduled?.arrival, Date.now())
+    || '';
+}
 let activeHubFilter = null, activePhaseFilter = null;
 let refreshTimer = null, countdown = 30;
 let deepLinkHandled = false;
@@ -1090,6 +1111,7 @@ async function refreshFlights() {
 
     // Healthy live feed: commit the new flights and show LIVE.
     allFlights = result.flights;
+    recordRegSightings(allFlights);
     lastGoodFeedTs = Date.now();
     feedRetryAttempt = 0;
     const dot = document.getElementById('status-dot');
@@ -1202,15 +1224,16 @@ function createPlaneIcon(hdg, isLonghaul, phase, isWatched, isStarlink) {
   const hdgRounded = Math.round((hdg || 0) / 5) * 5;
   const cacheKey = `${hdgRounded}|${isLonghaul?1:0}|${phase}|${isWatched?1:0}|${isStarlink?1:0}`;
   if (_iconCache[cacheKey]) return _iconCache[cacheKey];
-  const color = isWatched ? '#22c55e' : (isLonghaul ? '#fbbf24' : (phase === 'Ground' ? '#64748B' : '#6BAAED'));
+  // Starlink marker treatment: distinct violet FILL, no glow halo (owner Jul 4 2026 — the
+  // stacked drop-shadow "orb" look is gone). Fill priority: watched green → Starlink violet
+  // → long-haul amber → phase color. Accepted trade-off: phase color is not visible on
+  // Starlink aircraft — the popup and the Starlink-only filter still carry it.
+  const color = isWatched ? '#22c55e'
+    : isStarlink ? '#A78BFA'
+    : isLonghaul ? '#fbbf24'
+    : (phase === 'Ground' ? '#64748B' : '#6BAAED');
   const size = isWatched ? 16 : (isLonghaul ? 14 : 10);
-  // Starlink marker treatment: an amber glow HALO that STACKS on top of the existing
-  // phase/long-haul/watched fill (we keep the fill so phase info is never lost — a recolor
-  // would collide with long-haul's amber). Pairs the amber color with an enlarged glow shape
-  // so color is not the sole signal (DESIGN.md). #fbbf24 is the map's existing amber.
-  const filter = isStarlink
-    ? `drop-shadow(0 0 2px ${color}) drop-shadow(0 0 4px #fbbf24) drop-shadow(0 0 7px #fbbf24)`
-    : `drop-shadow(0 0 2px ${color})`;
+  const filter = `drop-shadow(0 0 2px ${color})`;
   // SVG plane pointing north (0°) — classic top-down aircraft silhouette, cross-platform consistent
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="filter:${filter}"><path d="M128 16c-4 0-8 3-9 7l-15 72-88 34c-3 1-4 4-4 7s2 5 5 6l87 20 4 52-28 18c-2 1-3 3-3 5v8c0 2 1 4 3 4l20-6h28l20 6c2 0 3-2 3-4v-8c0-2-1-4-3-5l-28-18 4-52 87-20c3-1 5-3 5-6s-1-6-4-7l-88-34-15-72c-1-4-5-7-9-7z"/></svg>`;
   const icon = L.divIcon({
@@ -3714,7 +3737,7 @@ async function initWeatherTab() {
   // weather-retry action (which resets weatherInitialized), and L.map() on an already-initialized
   // container throws "Map container is already initialized." (Audit P1: weather-retry-double-map-init.)
   if (radarMap) { try { radarMap.remove(); } catch (e) { /* already removed */ } radarMap = null; }
-  radarMap = L.map('radar-map', {center:[39,-97],zoom:3,zoomControl:false});
+  radarMap = L.map('radar-map', {center:[39,-97],zoom:4,zoomControl:false});
   radarMap.attributionControl.setPrefix(''); // OSM/CARTO credit from tile options (ODbL)
   L.control.zoom({ position: 'bottomleft' }).addTo(radarMap);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', basemapTileOptions).addTo(radarMap);
@@ -4627,21 +4650,22 @@ async function loadScheduleData() {
       let msg = '';
       if (result.degraded && meta.dataAge != null) {
         // Absolute time + consequence, not just a relative age: "from 2h ago" made users do
-        // clock math and never said what it MEANS. "Statuses as of 7:12 PM CDT — live updates
-        // paused" states both. != null (not truthiness): a just-written snapshot has dataAge 0,
-        // which must still render with age context.
+        // clock math and never said what it MEANS. "Statuses as of 7:12 PM CDT — showing the
+        // latest data we have" states both without implying an intentional, resumable stop
+        // (owner Jul 4 2026: "paused" read as dishonest). != null (not truthiness): a
+        // just-written snapshot has dataAge 0, which must still render with age context.
         const age = formatDataAge(meta.dataAge);
         const asOf = formatBoardAsOf();
         msg = result.partial
-          ? `Statuses as of ${asOf} (partial board, ${age} old) — live updates paused.`
-          : `Statuses as of ${asOf} (${age} old) — live updates paused.`;
+          ? `Statuses as of ${asOf} (partial board, ${age} old) — showing the latest data we have.`
+          : `Statuses as of ${asOf} (${age} old) — showing the latest data we have.`;
       } else if (result.stale && !result.partial && meta.dataAge != null) {
         // Complete but aged out of the fresh window (degraded=false: nothing is missing). PR #207
         // made these boards degraded=false for honesty, but the banner gate never checked
         // result.stale — so hours-old complete boards rendered with NO warning. This branch (and
         // the gate above) restores the warning; without it the chain falls to the misleading
         // "Some flights may be missing." default, a lie for a complete board.
-        msg = `Statuses as of ${formatBoardAsOf()} (${formatDataAge(meta.dataAge)} old) — live updates paused.`;
+        msg = `Statuses as of ${formatBoardAsOf()} (${formatDataAge(meta.dataAge)} old) — showing the latest data we have.`;
       } else if (meta.liveFeedFallbackAdded) {
         msg = `Added ${meta.liveFeedFallbackAdded} live active flight(s) while the full schedule feed recovers.`;
       } else if (meta.partialReason === 'live_feed_fallback') {
@@ -4786,9 +4810,9 @@ function getFilteredScheduleFlights(nowSec = schedNow()) {
       if (routeTypeFilter === 'domestic' && isIntl) return false;
       if (routeTypeFilter === 'international' && !isIntl) return false;
     }
-    // Starlink filter
+    // Starlink filter (schedRegFor: backfilled tails must match the filter their ⚡ badge implies)
     if (starlinkFilter) {
-      const reg = fl.aircraft?.registration;
+      const reg = schedRegFor(fl);
       const hasSL = reg && STARLINK_TAILS.has(reg);
       if (starlinkFilter === 'starlink' && !hasSL) return false;
       if (starlinkFilter === 'no-starlink' && hasSL) return false;
@@ -4823,7 +4847,7 @@ function getFilteredScheduleFlights(nowSec = schedNow()) {
     if (searchFilter) {
       const flNum = fl.identification?.number?.default?.toLowerCase() || '';
       const callsign = fl.identification?.callsign?.toLowerCase() || '';
-      const reg = fl.aircraft?.registration?.toLowerCase() || '';
+      const reg = schedRegFor(fl).toLowerCase(); // incl. backfilled tails — searching a visible reg must hit
       const destName = (fl.airport?.destination?.name || '').toLowerCase();
       const destCode = (fl.airport?.destination?.code?.iata || '').toLowerCase();
       const origName = (fl.airport?.origin?.name || '').toLowerCase();
@@ -4852,7 +4876,7 @@ function sortScheduleFlights(flights, nowSec = schedNow()) {
         return rA.localeCompare(rB) * dir;
       }
       case 'aircraft': return ((a.aircraft?.model?.code || '').localeCompare(b.aircraft?.model?.code || '')) * dir;
-      case 'reg': return ((a.aircraft?.registration || '').localeCompare(b.aircraft?.registration || '')) * dir;
+      case 'reg': return (schedRegFor(a).localeCompare(schedRegFor(b))) * dir;
       case 'status': {
         const sA = classifySchedStatus(a, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta)).key;
         const sB = classifySchedStatus(b, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta)).key;
@@ -4960,7 +4984,12 @@ function renderScheduleTable() {
     const acCode = fl.aircraft?.model?.code || '—';
     const acText = fl.aircraft?.model?.text || '';
     const acShort = acText ? acText.replace(/Boeing |Airbus |Embraer /g, '').substring(0, 20) : '';
-    const reg = fl.aircraft?.registration || '—';
+    // Provider reg first, ALWAYS. When the schedule feed omitted the tail, fall back to the
+    // live-feed ledger — a currently-airborne flight fills from this poll's sighting, a
+    // departed one from whenever a session saw it airborne. A filled reg also unlocks the
+    // FLEET_BY_REG enrichment below (type, Starlink ⚡, special livery) for free.
+    const reg = schedRegFor(fl) || '—';
+    const regFromLive = reg !== '—' && !fl.aircraft?.registration;
 
     const oIata = orig?.code?.iata || '';
     const dIata = dest?.code?.iata || '';
@@ -5088,7 +5117,7 @@ function renderScheduleTable() {
       <td style="font-weight:600;color:var(--ua-accent)">${escapeHtml(ident)}</td>
       <td>${routeStr}</td>
       <td title="${escapeHtml(acText)}">${escapeHtml(acCode)}${acShort ? `<div style="font-size:9px;color:var(--ua-muted)">${escapeHtml(acShort)}</div>` : ''}${equipBadge}</td>
-      <td style="font-family:var(--font-mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}">${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
+      <td style="font-family:var(--font-mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}"${regFromLive ? ' title="Tail from live flight tracking (not in the schedule feed)"' : ''}>${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
       <td>${escapeHtml(gate)}</td>
       <td>${statusCell}${faaContext}</td>
       <td class="sched-delay-cell">${delayCell}</td>
@@ -5773,7 +5802,7 @@ function updateIrops() {
 
   const score = totalFlights > 0 ? ((cancellations * 3 + delayed60 * 2 + delayed30 + diversions * 2) / totalFlights * 100).toFixed(1) : 0;
   const scoreCls = score < 5 ? 'low' : score < 15 ? 'med' : 'high';
-  const scoreLabel = score < 5 ? 'Normal Ops' : score < 15 ? 'Minor Disruptions' : 'Significant IROPS';
+  const scoreLabel = score < 5 ? 'NORMAL OPERATIONS' : score < 15 ? 'MINOR DISRUPTION' : 'SIGNIFICANT DISRUPTION';
 
   worstDelays.sort((a, b) => b.delay - a.delay);
   const top5 = worstDelays.slice(0, 5);
@@ -5781,9 +5810,9 @@ function updateIrops() {
   // NOTE: All values here are computed numbers/strings from internal schedule data,
   // not user input. FAA alerts use escapeHtml() below.
   let html = '<div class="irops-bar">';
-  // Bare "56.7" read as a mystery number — attach the scale/label and the same
-  // "?" tooltip pattern the OTP strip uses. (Audit Jul 3 2026, ticker coherence.)
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">IROPS ${score}/100</span><span class="irops-bar-label">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">IROPS severity index (0\u2013100): weighted cancellations, 60min+ delays and diversions per 100 flights. &lt;5 normal \u00b7 5\u201315 minor \u00b7 \u226515 significant</span></span></span>`;
+  // Plain-language severity instead of a bare 0-100 index (owner Jul 4 2026: the number
+  // wasn't helpful). The numeric score is still computed below for the ticker's gating.
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">Severity from weighted cancellations, 60min+ delays and diversions per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -5875,12 +5904,12 @@ function renderIropsFromAPI(data) {
   const content = document.getElementById('irops-content');
   const score = data.score;
   const scoreCls = score < 5 ? 'low' : score < 15 ? 'med' : 'high';
-  const scoreLabel = score < 5 ? 'Normal Ops' : score < 15 ? 'Minor Disruptions' : 'Significant IROPS';
+  const scoreLabel = score < 5 ? 'NORMAL OPERATIONS' : score < 15 ? 'MINOR DISRUPTION' : 'SIGNIFICANT DISRUPTION';
 
   // NOTE: All values here are from the IROPS API (internal, not user input).
   let html = '<div class="irops-bar">';
   // Same scale/label + tooltip treatment as the client-computed IROPS bar above.
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">IROPS ${score}/100</span><span class="irops-bar-label">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">IROPS severity index (0\u2013100): weighted cancellations, 60min+ delays and diversions per 100 flights. &lt;5 normal \u00b7 5\u201315 minor \u00b7 \u226515 significant</span></span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">Severity from weighted cancellations, 60min+ delays and diversions per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';

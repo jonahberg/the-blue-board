@@ -52,6 +52,7 @@ The Blue Board uses a dark NOC (Network Operations Center) aesthetic with cockpi
 | `--ua-accent` | `#6BAAED` | Links, interactive text, hover states. Slightly deeper than the old `#8ab4f8` — more intentional, less washed out. |
 | `--ua-amber` | `#C4A35A` | **NEW.** Cockpit instrument amber. Featured stat values, highlight borders, hover warmth, premium callouts. Use sparingly — this is the personality color. |
 | `--ua-amber-soft` | `rgba(196, 163, 90, 0.12)` | Amber background tint for badges and hover states. |
+| `--ua-violet` | `#A78BFA` | Starlink-equipped aircraft markers on maps. Owner-approved Jul 4 2026. Not for text or buttons. |
 | `--ua-blue-soft` | `rgba(0, 93, 170, 0.12)` | Blue background tint for active states. |
 | `--ua-green` | `#22C55E` | Live indicators, positive status, on-time. |
 | `--ua-yellow` | `#EAB308` | Warnings, moderate delays. |
