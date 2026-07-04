@@ -5775,7 +5775,7 @@ function updateIrops() {
 
   const score = totalFlights > 0 ? ((cancellations * 3 + delayed60 * 2 + delayed30 + diversions * 2) / totalFlights * 100).toFixed(1) : 0;
   const scoreCls = score < 5 ? 'low' : score < 15 ? 'med' : 'high';
-  const scoreLabel = score < 5 ? 'Normal Ops' : score < 15 ? 'Minor Disruptions' : 'Significant IROPS';
+  const scoreLabel = score < 5 ? 'NORMAL OPERATIONS' : score < 15 ? 'MINOR DISRUPTION' : 'SIGNIFICANT DISRUPTION';
 
   worstDelays.sort((a, b) => b.delay - a.delay);
   const top5 = worstDelays.slice(0, 5);
@@ -5783,9 +5783,9 @@ function updateIrops() {
   // NOTE: All values here are computed numbers/strings from internal schedule data,
   // not user input. FAA alerts use escapeHtml() below.
   let html = '<div class="irops-bar">';
-  // Bare "56.7" read as a mystery number — attach the scale/label and the same
-  // "?" tooltip pattern the OTP strip uses. (Audit Jul 3 2026, ticker coherence.)
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">IROPS ${score}/100</span><span class="irops-bar-label">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">IROPS severity index (0\u2013100): weighted cancellations, 60min+ delays and diversions per 100 flights. &lt;5 normal \u00b7 5\u201315 minor \u00b7 \u226515 significant</span></span></span>`;
+  // Plain-language severity instead of a bare 0-100 index (owner Jul 4 2026: the number
+  // wasn't helpful). The numeric score is still computed below for the ticker's gating.
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">Severity from weighted cancellations, 60min+ delays and diversions per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -5877,12 +5877,12 @@ function renderIropsFromAPI(data) {
   const content = document.getElementById('irops-content');
   const score = data.score;
   const scoreCls = score < 5 ? 'low' : score < 15 ? 'med' : 'high';
-  const scoreLabel = score < 5 ? 'Normal Ops' : score < 15 ? 'Minor Disruptions' : 'Significant IROPS';
+  const scoreLabel = score < 5 ? 'NORMAL OPERATIONS' : score < 15 ? 'MINOR DISRUPTION' : 'SIGNIFICANT DISRUPTION';
 
   // NOTE: All values here are from the IROPS API (internal, not user input).
   let html = '<div class="irops-bar">';
   // Same scale/label + tooltip treatment as the client-computed IROPS bar above.
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">IROPS ${score}/100</span><span class="irops-bar-label">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">IROPS severity index (0\u2013100): weighted cancellations, 60min+ delays and diversions per 100 flights. &lt;5 normal \u00b7 5\u201315 minor \u00b7 \u226515 significant</span></span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">Severity from weighted cancellations, 60min+ delays and diversions per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
