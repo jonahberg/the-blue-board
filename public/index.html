@@ -192,7 +192,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <span class="cdiv"></span>
 
   <!-- HUB HEALTH BAR (inline hub cluster inside the canopy) -->
-  <div id="hub-health-bar" aria-live="polite" title="On-Time Performance: % of operated flights within 30 min of schedule (departures + arrivals). 🟢 >70% · 🟡 50-70% · 🔴 <50%"><span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info" tabindex="0" role="button" aria-label="Hub health explanation">?<span class="hh-tooltip" role="tooltip">% of operated flights within 30 min of schedule (departures &amp; arrivals). 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span><span style="color:var(--ua-muted)">Loading…</span></div>
+  <div id="hub-health-bar" aria-live="polite" title="On-Time Performance: % of operated departures within 30 min of schedule. 🟢 >70% · 🟡 50-70% · 🔴 <50%"><span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info" tabindex="0" role="button" aria-label="Hub health explanation">?<span class="hh-tooltip" role="tooltip">% of operated departures within 30 min of schedule. 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span><span style="color:var(--ua-muted)">Loading…</span></div>
   <span class="cdiv"></span>
 
   <!-- TICKER (alert zone, flex-grows to fill the middle) -->
@@ -205,6 +205,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div id="global-search-wrap">
     <input type="text" id="global-search-input" aria-label="Global flight search" placeholder="Track a flight (UA 1234, N12345, ORD...)">
     <div id="global-search-results" aria-label="Search results" style="position:absolute;top:34px;left:0;right:0;background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:4px;max-height:300px;overflow-y:auto;display:none;z-index:775"></div>
+    <div id="global-search-error" role="alert" style="display:none;position:absolute;top:34px;left:0;right:0;background:rgba(17,24,39,.97);border:1px solid rgba(239,68,68,.4);border-radius:4px;padding:6px 10px;font-size:10px;color:var(--ua-red);z-index:775"></div>
   </div>
   <span class="cdiv"></span>
 
@@ -397,6 +398,8 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
           <option value="departures">Departures</option>
           <option value="arrivals">Arrivals</option>
         </select>
+        <input type="text" id="sched-find" aria-label="Find in board" placeholder="Find in board…" style="background:var(--ua-panel);color:var(--ua-text);border:1px solid var(--ua-border);padding:4px 8px;font-family:var(--font-mono);font-size:10px;border-radius:3px;width:110px">
+        <button id="sched-jump-now" data-action="sched-jump-now" class="sched-jump-now" style="display:none" title="Scroll to the current time">⌖ Jump to now</button>
         <button id="sched-refresh-btn" data-action="schedule-refresh" style="background:var(--ua-blue);color:white;border:none;padding:4px 10px;font-family:var(--font-ui);font-size:10px;border-radius:3px;cursor:pointer">↻ Refresh</button>
         <button id="sched-more-filters-btn" data-action="schedule-more-filters" aria-expanded="false" aria-controls="sched-adv-filters" style="background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:4px 10px;font-family:var(--font-ui);font-size:10px;border-radius:3px;cursor:pointer">Filter: Aircraft, Starlink, Delay… ▾</button>
         <div id="sched-adv-filters" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
@@ -453,6 +456,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   </div>
   <div id="equip-change-summary"></div>
   <div id="sched-stats" class="metric-row" style="margin:4px 0"></div>
+  <div id="sched-stats-note" style="display:none"></div>
   <div class="card" style="padding:0;overflow:hidden">
     <div id="sched-loading" style="text-align:center;padding:10px;color:var(--ua-muted);font-size:11px">
       <div style="font-size:24px;margin-bottom:8px">📅</div>
@@ -467,9 +471,9 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
             <th scope="col" data-sort="route" style="cursor:pointer;min-width:140px">Route</th>
             <th scope="col" data-sort="aircraft" style="cursor:pointer">Aircraft</th>
             <th scope="col" data-sort="reg" style="cursor:pointer">Reg</th>
-            <th scope="col">Gate</th>
+            <th scope="col">Term / Gate</th>
             <th scope="col" data-sort="status" style="cursor:pointer;min-width:130px">Status ↕</th>
-            <th scope="col" style="width:45px">Delay</th>
+            <th scope="col" style="min-width:80px">Delay / Risk</th>
             <th scope="col">Fleet</th>
             <th scope="col"><span aria-hidden="true">👁️</span><span class="sr-only">Watch</span></th>
           </tr>

@@ -1,9 +1,23 @@
 // Flight Times API — scrapes FlightAware for departure/arrival times
 // Usage: /api/flight-times?flight=UA2221
 // Returns scheduled, estimated, and actual gate/takeoff/landing times
+//
+// Source chain (Jul 3 2026 audit: FlightAware's bot-wall serves a parseable trackpollBootstrap
+// with ZERO flights, which the old code treated as authoritative "No active flight found" —
+// killing the endpoint for every flight):
+//   1. FlightAware scrape (source: 'flightaware')
+//   2. FR24 Official API flight-summary (source: 'fr24') — HARD-GATED on isOfficialFr24Enabled():
+//      the kill switch is OFF in prod while credits are exhausted, so this tier must be skippable
+//   3. Schedule snapshot layer (source: 'schedule-cache') — the boards already hold sched/est/real
+//      times server-side; look the flight number up across the persisted hub board snapshots
+// Only when ALL tiers fail does the endpoint return success:false with a reason.
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
+import { isOfficialFr24Enabled } from './_official-fr24.js';
+import { loadScheduleSnapshot } from './_schedule-snapshots.js';
+import { UNITED_HUBS } from './_hubs.js';
+import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
 const CACHE_TTL_MS = 60_000; // 1 minute
 const cache = new Map<string, { data: any; ts: number }>();
@@ -71,10 +85,12 @@ export function epochToISO(epoch: number | undefined | null): string {
   return new Date(epoch * 1000).toISOString();
 }
 
-async function tryFR24Summary(req: VercelRequest, res: VercelResponse, flight: string, cacheKey: string) {
-  if (!process.env.FR24_API_TOKEN) {
-    return res.status(404).json({ success: false, error: 'No flight data available' });
-  }
+// FR24 Official API flight-summary tier. Returns a result payload or null — never writes the
+// response itself, so the caller can continue down the fallback chain.
+async function fetchFr24Summary(flight: string): Promise<any | null> {
+  if (!process.env.FR24_API_TOKEN) return null;
+  // Paid official API: honour the operator kill switch (credits exhausted → OFF in prod).
+  if (!isOfficialFr24Enabled()) return null;
   try {
     // Convert UAL2221 -> UA2221 for FR24
     const fr24Flight = flight.replace('UAL', 'UA');
@@ -96,7 +112,7 @@ async function tryFR24Summary(req: VercelRequest, res: VercelResponse, flight: s
     );
     clearTimeout(timeout);
     if (!resp.ok) {
-      return res.status(404).json({ success: false, error: 'No flight data available' });
+      return null;
     }
     const data = await resp.json();
     const flights = (data as any)?.data || [];
@@ -105,7 +121,7 @@ async function tryFR24Summary(req: VercelRequest, res: VercelResponse, flight: s
       || flights.find((fl: any) => !fl.flight_ended)
       || flights[0];
     if (!f) {
-      return res.status(404).json({ success: false, error: 'No flight data available' });
+      return null;
     }
     const result = {
       success: true,
@@ -132,17 +148,109 @@ async function tryFR24Summary(req: VercelRequest, res: VercelResponse, flight: s
       status: f.flight_ended ? 'landed' : 'en-route',
       cancelled: false,
       diverted: !!(f.dest_icao_actual && f.dest_icao && f.dest_icao !== f.dest_icao_actual),
-      source: 'fr24-summary',
+      source: 'fr24',
       cached: false,
     };
     if (f.orig_icao) result.origin.iata = icaoToIata(f.orig_icao);
     if (f.dest_icao_actual || f.dest_icao) result.destination.iata = icaoToIata(f.dest_icao_actual || f.dest_icao);
-    setCache(cacheKey, result);
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
-    return res.status(200).json(result);
+    return result;
   } catch (e) {
-    return res.status(404).json({ success: false, error: 'No flight data available' });
+    return null;
   }
+}
+
+// Schedule snapshot tier: the hub boards already carry scheduled/estimated/real times server-side
+// (api/schedule.ts caches + api/_schedule-snapshots.ts persistence). Look the flight number up
+// across today's persisted hub boards — departures first (richer origin-side data), then
+// arrivals. Reads only the durable snapshot layer (shared across lambdas); no upstream calls.
+async function fetchScheduleCacheTimes(flight: string): Promise<any | null> {
+  const flightNum = flight.replace('UAL', 'UA');
+  try {
+    for (const dir of ['departures', 'arrivals'] as const) {
+      const snapshots = await Promise.all(
+        UNITED_HUBS.map(async (hub) => {
+          const ts = getStartOfHubDay(hub, 0);
+          return loadScheduleSnapshot(`agg:${hub}:${dir}:${ts}`);
+        })
+      );
+      for (const snapshot of snapshots) {
+        const flights = snapshot?.data?.flights;
+        if (!Array.isArray(flights)) continue;
+        const match = flights.find(
+          (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
+        );
+        if (!match) continue;
+
+        const time = match.time || {};
+        const generic = match.status?.generic?.status || {};
+        return {
+          success: true,
+          flight: flightNum,
+          origin: {
+            iata: match.airport?.origin?.code?.iata || '',
+            name: match.airport?.origin?.name || '',
+            terminal: match.airport?.origin?.info?.terminal || '',
+            gate: match.airport?.origin?.info?.gate || '',
+            tz: '',
+          },
+          destination: {
+            iata: match.airport?.destination?.code?.iata || '',
+            name: match.airport?.destination?.name || '',
+            terminal: match.airport?.destination?.info?.terminal || '',
+            gate: match.airport?.destination?.info?.gate || '',
+            tz: '',
+          },
+          departure: {
+            gate: {
+              scheduled: epochToISO(time.scheduled?.departure),
+              estimated: epochToISO(time.estimated?.departure),
+              actual: epochToISO(time.real?.departure),
+            },
+            takeoff: { scheduled: '', estimated: '', actual: '' },
+          },
+          arrival: {
+            landing: { scheduled: '', estimated: '', actual: '' },
+            gate: {
+              scheduled: epochToISO(time.scheduled?.arrival),
+              estimated: epochToISO(time.estimated?.arrival),
+              actual: epochToISO(time.real?.arrival),
+            },
+          },
+          aircraft: match.aircraft?.model?.text || match.aircraft?.model?.code || '',
+          status: generic.text || '',
+          cancelled: match.status?.generic?.type === 'canceled' || generic.text === 'canceled',
+          diverted: !!generic.diverted,
+          source: 'schedule-cache',
+          cached: false,
+        };
+      }
+    }
+  } catch (e: any) {
+    console.warn('flight-times schedule-cache lookup failed:', e?.message || e);
+  }
+  return null;
+}
+
+// Run the FR24 → schedule-cache fallback chain and write the response. `reason` records WHY the
+// primary (FlightAware) tier failed, and is only surfaced when every tier fails.
+async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey: string, reason: string) {
+  const fr24 = await fetchFr24Summary(flight);
+  if (fr24) {
+    setCache(cacheKey, fr24);
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    return res.status(200).json(fr24);
+  }
+  const schedCache = await fetchScheduleCacheTimes(flight);
+  if (schedCache) {
+    setCache(cacheKey, schedCache);
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    return res.status(200).json(schedCache);
+  }
+  return res.status(404).json({
+    success: false,
+    error: 'No flight data available',
+    reason: `${reason}; fr24 and schedule-cache fallbacks unavailable`,
+  });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -185,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     clearTimeout(timeout);
 
     if (!resp.ok) {
-      return await tryFR24Summary(req, res, flight, cacheKey);
+      return await respondViaFallbacks(res, flight, cacheKey, `flightaware HTTP ${resp.status}`);
     }
 
     // Cap response body size to prevent a misbehaving or malicious FlightAware
@@ -199,15 +307,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // catastrophic regex backtracking on unexpected input shapes.
     const match = html.match(/trackpollBootstrap\s*=\s*(\{[\s\S]{1,200000}?\});\s*(?:var|<\/script)/);
     if (!match) {
-      // FlightAware blocked — try FR24 summary as fallback
-      return await tryFR24Summary(req, res, flight, cacheKey);
+      // FlightAware blocked — fall down the chain
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware blocked (no bootstrap)');
     }
 
     let bootstrap: any;
     try {
       bootstrap = JSON.parse(match[1]);
     } catch (e) {
-      return await tryFR24Summary(req, res, flight, cacheKey);
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap unparseable');
     }
 
     // Find the most relevant flight — scan ALL activity log entries, prefer in-air
@@ -230,7 +338,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const bestFlight = candidates[0]?.flight || null;
 
     if (!bestFlight) {
-      return res.status(404).json({ success: false, error: 'No active flight found' });
+      // A bootstrap that parses but contains ZERO flights is FlightAware's bot-wall, not a
+      // definitive "this flight does not exist" — treat it as a source failure and fall through
+      // to FR24 / the schedule snapshot layer instead of 404ing every flight. (Jul 3 2026 audit.)
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap empty (bot-wall)');
     }
 
     const f = bestFlight;
@@ -288,6 +399,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(result);
   } catch (e) {
     console.error('FlightAware scrape error:', e);
-    return await tryFR24Summary(req, res, flight, cacheKey);
+    return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error');
   }
 }

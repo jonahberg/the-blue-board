@@ -81,6 +81,22 @@ describe('computeMetrics', () => {
     expect(result.cancellations).toBe(1);
   });
 
+  it('counts canceled_uncertain (AeroDataBox soft-cancel) as a cancellation, globally and per hub', () => {
+    // Likely-canceled rows group under Canceled everywhere else in the UI; the server metrics
+    // must agree or they vanish from the IROPS index and Delays tab cancellation counts.
+    const t = 1700000000;
+    const flights = [
+      makeFlight('ORD', { schedDep: t, realDep: t, status: 'landed' }),
+      makeFlight('ORD', { schedDep: t, status: 'canceled' }),
+      makeFlight('ORD', { schedDep: t, status: 'canceled_uncertain' }),
+    ];
+    const result = computeMetrics({ ORD: flights });
+    expect(result.cancellations).toBe(2);
+    expect(result.hubMetrics.ORD.cancellations).toBe(2);
+    // score = (2 cancels * 3 / 3 flights) * 100 = 200 — soft cancels move the index too.
+    expect(result.score).toBe(200);
+  });
+
   it('weights 60-min delays at 2x', () => {
     const t = 1700000000;
     const flights = [

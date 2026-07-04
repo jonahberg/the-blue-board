@@ -13,6 +13,7 @@ import { UNITED_HUBS } from '../_hubs.js';
 import { isAuthorizedCronRequest } from '../_cron-auth.js';
 import { sendAlert } from '../_alert.js';
 import { hydrateAdbSpend, getAdbUnitsToday, getAdbDailyUnitBudget } from '../_cost-state.js';
+import { getDisruptedAirportsMap } from '../faa.js';
 import { getStartOfHubDay } from '../../src/lib/hubTz.js';
 
 const HUBS = UNITED_HUBS;
@@ -81,22 +82,105 @@ function buildWarmRing(): WarmTask[] {
   return ring;
 }
 
+// One slot per cron fire. SLOT_MS MUST match the cron interval in vercel.json (currently
+// hourly): a 15-min slot here while the cron fires hourly would stride 4× per fire and skip
+// most windows. Update both together. The same slot number seeds applyIropsPriority's
+// disrupted-hub rotation so priority fairness advances in lockstep with the ring.
+const SLOT_MS = 60 * 60 * 1000; // = vercel.json cron interval (0 * * * *)
+export function getWarmSlot(nowMs = Date.now()): number {
+  return Math.floor(nowMs / SLOT_MS);
+}
+
 export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
   const tasks = buildWarmRing();
 
   // Advance exactly one WARM_TASKS_PER_RUN stride per cron fire so consecutive fires cover the
-  // ring sequentially with no gaps. SLOT_MS MUST match the cron interval in vercel.json
-  // (currently hourly): a 15-min slot here while the cron fires hourly would stride 4× per fire
-  // and skip most windows. Update both together.
-  const SLOT_MS = 60 * 60 * 1000; // = vercel.json cron interval (0 * * * *)
+  // ring sequentially with no gaps.
   const tasksPerRun = getWarmTasksPerRun();
-  const slot = Math.floor(nowMs / SLOT_MS);
+  const slot = getWarmSlot(nowMs);
   const start = (slot * tasksPerRun) % tasks.length;
   const plan: WarmTask[] = [];
   for (let i = 0; i < Math.min(tasksPerRun, tasks.length); i++) {
     plan.push(tasks[(start + i) % tasks.length]);
   }
   return plan;
+}
+
+// ── IROPS-aware priority (pure) ──
+// During an active FAA program (GDP/ground stop/closure) a hub's TODAY board changes minute to
+// minute, but the stride-4 ring only revisits it ~every 6h. While hubs are disrupted, their
+// today windows ROTATE FAIRLY into the front of each run's stride: priority injections are
+// capped at stride-1 slots per run (at least one base ring slot always survives, so the ring
+// never fully stalls behind a long disruption), and the disrupted-hub order is rotated by the
+// same clock-derived slot pointer buildWarmPlan strides with — across consecutive runs every
+// disrupted hub's boards cycle through the capped priority slots instead of the first two hubs
+// in HUBS order winning every run and starving the rest. Injections replace the lowest-priority
+// slots of the stride (tomorrow slots first, then today slots of undisrupted hubs, from the
+// back), so the run's task count — and therefore the 300s budget and unit spend — is unchanged.
+// Priority tasks run first within the stride. Pure function; the handler feeds it the cached FAA
+// disruption map (api/faa.ts — one cached fetch per run, no per-task upstream call) plus the
+// current warm slot as the rotation seed.
+export function applyIropsPriority(
+  plan: WarmTask[],
+  disruptedHubs: Iterable<string>,
+  rotationSeed = 0
+): { plan: WarmTask[]; injected: string[]; displaced: string[] } {
+  const hubSet: ReadonlySet<string> = new Set(HUBS);
+  const disrupted: string[] = [];
+  for (const raw of Array.from(disruptedHubs)) {
+    const hub = String(raw || '').toUpperCase();
+    if (hubSet.has(hub) && !disrupted.includes(hub)) disrupted.push(hub);
+  }
+  if (disrupted.length === 0 || plan.length === 0) return { plan, injected: [], displaced: [] };
+
+  // Fair rotation: start the disrupted-hub order at the seed-derived offset so consecutive runs
+  // hand the capped priority slots to different hubs.
+  const offset = ((rotationSeed % disrupted.length) + disrupted.length) % disrupted.length;
+  const rotated = disrupted.map((_, i) => disrupted[(i + offset) % disrupted.length]);
+
+  const keyOf = (t: WarmTask) => `${t.hub}-${t.dir}-${t.dayOffset}`;
+  const isPriority = (t: WarmTask) => t.dayOffset === 0 && disrupted.includes(t.hub);
+
+  // Priority candidates in rotated hub order, departures before arrivals within a hub. The
+  // candidate rank also orders the priority tasks at the front of the returned plan.
+  const candidates: WarmTask[] = [];
+  for (const hub of rotated) {
+    for (const dir of ['departures', 'arrivals'] as const) {
+      candidates.push({ hub, dir, dayOffset: 0, label: 'today' });
+    }
+  }
+  const candidateRank = new Map(candidates.map((t, i) => [keyOf(t), i]));
+
+  const result = [...plan];
+  const injected: string[] = [];
+  const displaced: string[] = [];
+  // Cap injections at stride-1 so at least one base ring slot always survives (2 disrupted hubs
+  // used to consume the entire stride-4 run and starve the ring for the whole disruption).
+  const maxInjections = Math.max(0, plan.length - 1);
+
+  for (const task of candidates) {
+    if (injected.length >= maxInjections) break;
+    if (result.some((t) => keyOf(t) === keyOf(task))) continue; // stride already covers it
+    // Pick the lowest-priority victim: a tomorrow slot if any (scanning from the back), else
+    // the back-most today slot of an undisrupted hub. Never displace another priority task.
+    let victim = -1;
+    for (let i = result.length - 1; i >= 0; i--) {
+      if (isPriority(result[i])) continue;
+      if (result[i].dayOffset === 1) { victim = i; break; }
+      if (victim === -1) victim = i;
+    }
+    if (victim === -1) break; // every slot is already a disrupted-hub today task
+    displaced.push(`${result[victim].hub}-${result[victim].dir}-${result[victim].label}`);
+    result[victim] = task;
+    injected.push(`${task.hub}-${task.dir}-today`);
+  }
+
+  // Disrupted-hub today boards run first, in rotated candidate order; everything else keeps its
+  // ring order.
+  const rank = (t: WarmTask) => candidateRank.get(keyOf(t)) ?? Number.MAX_SAFE_INTEGER;
+  const priority = result.filter(isPriority).sort((a, b) => rank(a) - rank(b));
+  const rest = result.filter((t) => !isPriority(t));
+  return { plan: [...priority, ...rest], injected, displaced };
 }
 
 export function buildScheduleWarmUrl(hub: string, dir: string, timestamp: number): string {
@@ -190,7 +274,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let warmed = 0;
   let failed = 0;
 
-  const warmPlan = buildWarmPlan();
+  let warmPlan = buildWarmPlan();
+
+  // IROPS priority: while hubs have active FAA programs, their today boards rotate fairly into
+  // the front of each run's stride (capped at stride-1 injections; same task count — lowest-
+  // priority ring slots are displaced, so the 300s budget holds). The warm slot seeds the
+  // rotation so consecutive runs prioritize different disrupted hubs.
+  try {
+    const disruptions = await getDisruptedAirportsMap();
+    const disruptedHubs = HUBS.filter((h) => (disruptions.get(h) || 0) > 0);
+    if (disruptedHubs.length > 0) {
+      const adjusted = applyIropsPriority(warmPlan, disruptedHubs, getWarmSlot());
+      console.log(
+        `IROPS warm priority engaged for ${disruptedHubs.map((h) => `${h}(${disruptions.get(h)}m)`).join(', ')}: ` +
+        (adjusted.injected.length
+          ? `injected [${adjusted.injected.join(', ')}] displacing [${adjusted.displaced.join(', ')}]`
+          : 'disrupted-hub boards already in this stride; reordered to run first')
+      );
+      warmPlan = adjusted.plan;
+    }
+  } catch (e: any) {
+    console.warn('IROPS warm priority lookup failed; using base ring plan:', e?.message || e);
+  }
+
   for (let i = 0; i < warmPlan.length; i++) {
     const task = warmPlan[i];
     // getStartOfHubDay (NOT irops' getStartOfDayForHub): the IROPS helper rolls back to YESTERDAY

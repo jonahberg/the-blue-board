@@ -112,6 +112,32 @@ describe('isSnapshotCandidateBetter', () => {
     )).toBe(false);
   });
 
+  it('ranks on dedupe-adjusted totals: a fresh 700-flight deduped board replaces a stale 717-row dup-laden snapshot', () => {
+    // Pre-dedupe persisted snapshot: 717 rows, 17 of them revision dupes / operator clones /
+    // foreign leaks. Fresh deduped board: 700 real flights + meta.dedupe accounting for the 17.
+    // Raw-total ranking let the stale snapshot outrank every fresh deduped board and refuse
+    // overwrite for its whole 72h TTL.
+    const staleDupLaden = { partial: true, total: 717, meta: { completeness: 0.5, pagesSucceeded: 1 } };
+    const freshDeduped = {
+      partial: true, total: 700,
+      meta: { completeness: 0.5, pagesSucceeded: 1, dedupe: { revisions: 16, operatorClones: 1, foreign: 0 } },
+    };
+    expect(isSnapshotCandidateBetter(freshDeduped, staleDupLaden)).toBe(true);
+    // And the reverse: the un-deduped 717 board must NOT beat the persisted deduped 700 board.
+    expect(isSnapshotCandidateBetter(staleDupLaden, freshDeduped)).toBe(false);
+  });
+
+  it('dedupe adjustment cannot manufacture a win over genuinely better coverage', () => {
+    // 690 + 17 dropped = 707 effective < 717 raw: the dup-laden snapshot still carries more
+    // underlying flights, so it stays.
+    const staleDupLaden = { partial: true, total: 717, meta: { completeness: 0.5, pagesSucceeded: 1 } };
+    const smallerDeduped = {
+      partial: true, total: 690,
+      meta: { completeness: 0.5, pagesSucceeded: 1, dedupe: { revisions: 16, operatorClones: 1, foreign: 0 } },
+    };
+    expect(isSnapshotCandidateBetter(smallerDeduped, staleDupLaden)).toBe(false);
+  });
+
   it('uses pagesSucceeded as final tiebreaker', () => {
     expect(isSnapshotCandidateBetter(
       { partial: true, total: 50, meta: { completeness: 0.5, pagesSucceeded: 5 } },

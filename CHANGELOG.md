@@ -4,6 +4,31 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.26] - 2026-07-03
+
+### Fixed
+- **Flight time lookups work again** (`/api/flight-times`): FlightAware's bot-wall returns a parseable-but-empty response, which was treated as "no active flight" for every flight — silently breaking My Flights card statuses ("LOADING..." forever, "() → ()" routes) and the Check-a-Connection tool. An empty parse now falls back to the FR24 Official API (only when the official-API kill switch is on) and then to the schedule snapshot layer, so times survive even with FlightAware blocked and FR24 credits exhausted. Failures now say why.
+- **Parked aircraft are no longer shown as "Departed" during delay programs.** The one-hour time-inference grace was systematically wrong under a ground-delay program (162 false "Departed" rows at ORD during the Jul 3 GDP; spot-checked aircraft were physically parked 3-4 hours). Boards now carry the hub's live FAA disruption magnitude, the inference grace stretches with it, and every time-inferred row is labeled "Departed*" with an explanation instead of masquerading as confirmed.
+- **"CanceledUncertain" is no longer a hard cancellation** (UA4809 was shown Canceled and flew on time — and the status rendered as the literal string "Canceleduncertain"). It is now its own soft "Likely Canceled" state, amber not red, grouped under the Canceled filter, overridden the moment real times arrive.
+- **One takeoff, one row, one OTP entry.** Schedule revisions produced duplicate rows for the same physical departure (counted both On Time and 2h48m Late), operating-carrier clones duplicated United Express flights ("GoJet to London Heathrow"), and foreign airlines leaked onto United boards (a Spirit flight on EWR). Boards now collapse revision and operator-code duplicates and drop foreign rows, with the collapse counts exposed in `meta.dedupe`.
+- **The stat strip no longer hides a third of the board.** Canceled flights (70 at ORD on Jul 3) were computed and thrown away; the cards did not sum to the total. There is now a CANCELED card, a presumed-departed chip, and an explicit "uncategorized" remainder — the cards reconcile with the total by construction, with a unit-tested invariant.
+- **The header ticker can no longer say "All systems normal" beside a red IROPS wall.** Ticker state now derives from the same hub-health/FAA/IROPS inputs as the Delays tab (ground stop > low OTP > GDP precedence), and the bare IROPS number is labeled ("IROPS 56.7/100") with an explainer.
+- **The DELAY column now contains the delay.** Departed/landed rows show the real delta (tabular figures, `+2h20m` formatting) instead of hiding it as fine print in the TIME cell, and AI predictions are labeled as predictions ("RISK: HIGH") instead of reading as facts. Column renamed "Delay / Risk".
+- **Today boards anchor at NOW.** A sticky "── NOW · 9:12 PM CDT ──" divider separates flown from upcoming, the board auto-scrolls there on load, yesterday's delayed-overnight rows carry a date chip ("Jul 2") instead of being indistinguishable from tonight's same-numbered flights, and a "Jump to now" pill returns you there.
+- **"Unknown" is no longer a passenger-facing status.** Rows the stale pipeline could not refresh (168 in one evening) render as "Scheduled · as of 7:12 PM CDT" instead of "Unknown"; the stale banner states an absolute as-of time and consequence instead of a vague age.
+- **OTP has a single writer.** The header hub percentages flapped (DEN 68→100→68) because a client-side recomputation with a 5-flight floor overwrote the server value on every refresh; the server IROPS value is now authoritative, and the client only fills gaps with a 25-flight minimum.
+- **Risk badges agree with themselves.** The same flight showed V.HIGH on the Schedule board and LOW on its My Flights card (missing inputs defaulted to LOW); cards now reuse the board's computed score, or say "RISK N/A" — never a fabricated LOW.
+- The dead "Delayed" status filter works: the provider's Delayed status now maps to the delayed key instead of disappearing into "Estimated".
+- Aircraft registrations are validated (a model string like "B737M9" served in the registration field now renders as "—" instead of passing through).
+- Starlink departures board times are hub-local with a timezone label, matching the Schedule tab (they were unlabeled viewer-local — the same flight showed two different wall clocks on one page).
+- Schedule search is findable and consistent: a "Find in board" input on the toolbar filters rows live (the only board filter used to hide inside the collapsed Filter drawer), the header search placeholder no longer switches to aircraft-lookup wording on the Schedule tab, and a failed lookup shows inline feedback instead of a blocking modal.
+- Watch notifications no longer fire on transitions into "Unknown" ("UA675: Unknown (was: Departed)" was pure noise); only meaningful status changes notify.
+- The Check-a-Connection inputs submit on Enter.
+- The GATE column is honestly labeled TERMINAL, both OTP tooltips state the same definition ("% of operated departures within 30 min of schedule"), "(412 opr)" reads "(412 operated)", and the mobile first viewport now shows the data-attribution and not-affiliated disclaimer via the ticker rotation.
+
+### Added
+- **IROPS-aware cache warming**: when a hub has an active FAA program, its today board jumps the warm-cron queue every run (displacing lower-priority slots, never growing the cron's budget) — attacking the root cause of stale boards during disruptions.
+
 ## [1.5.25] - 2026-07-03
 
 ### Fixed

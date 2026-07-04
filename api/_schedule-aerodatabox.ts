@@ -91,7 +91,7 @@ function toUnixDateTime(value: any): number | null {
   return toUnixDateTime(value.utc || value.local);
 }
 
-function mapAeroStatus(status: any) {
+export function mapAeroStatus(status: any) {
   const s = String(status || '').trim();
   let text = 'scheduled';
   let type = '';
@@ -99,10 +99,17 @@ function mapAeroStatus(status: any) {
   let live = false;
   let icon = '';
 
-  if (s === 'Canceled' || s === 'CanceledUncertain') {
+  if (s === 'Canceled') {
     type = 'canceled';
     text = 'canceled';
     icon = 'red';
+  } else if (s === 'CanceledUncertain') {
+    // SOFT state: the provider suspects a cancellation but has not confirmed it. Keep it
+    // distinct from hard 'canceled' so classifySchedStatus can render "Likely Canceled" (warn)
+    // instead of red Canceled — the UI used to show the raw string "Canceleduncertain".
+    type = 'canceled_uncertain';
+    text = 'canceled_uncertain';
+    icon = 'yellow';
   } else if (s === 'Diverted') {
     diverted = true;
     text = 'landed';
@@ -119,7 +126,9 @@ function mapAeroStatus(status: any) {
     live = true;
     icon = 'green';
   } else if (s === 'Delayed') {
-    text = 'estimated';
+    // Map to the dedicated 'delayed' key (schedule-status.js already classifies it): the old
+    // generic 'estimated' mapping left the UI's "Delayed" filter permanently empty.
+    text = 'delayed';
     icon = 'yellow';
   }
 
@@ -129,6 +138,30 @@ function mapAeroStatus(status: any) {
     icon,
     live,
   };
+}
+
+// ── Registration validation ──
+// AeroDataBox occasionally puts an aircraft MODEL string in the reg field (observed live:
+// reg "B737M9" on ORD board rows). Validate the shape and drop anything that is not a
+// plausible tail number; the UI already renders a missing reg as "—".
+//   - US N-number fast path: N + 1-5 digits (no leading zero) + up to 2 trailing letters.
+//   - Hyphenated intl: 1-2 char country prefix, hyphen, 1-5 alphanumerics (C-FABC, B-1234, D-ABCD).
+//   - Common hyphenless intl forms the provider emits without the hyphen: JA#### (Japan),
+//     HL#### (Korea), B#### (exactly 4 digits, China/Taiwan — 3-digit/trailing-letter shapes
+//     like "B788"/"B38M"/"B77W" are aircraft MODEL codes, not tails).
+// A bare "letters+alnum" regex would pass "B737M9" (prefix B + 737M9), so hyphenless forms are
+// allowlisted narrowly instead.
+const REG_N_NUMBER = /^N[1-9]\d{0,4}[A-Z]{0,2}$/;
+const REG_HYPHENATED = /^[A-Z0-9]{1,2}-[A-Z0-9]{1,5}$/;
+const REG_HYPHENLESS_INTL = /^(JA\d{2,4}[A-Z]{0,2}|HL\d{4}|B\d{4})$/;
+
+export function validateRegistration(raw: any): string | null {
+  const reg = String(raw || '').trim().toUpperCase();
+  if (!reg || reg.length > 8) return null;
+  if (REG_N_NUMBER.test(reg) && reg.length <= 6) return reg;
+  if (REG_HYPHENATED.test(reg)) return reg;
+  if (REG_HYPHENLESS_INTL.test(reg)) return reg;
+  return null;
 }
 
 function isUnitedFlight(flight: any): boolean {
@@ -228,7 +261,7 @@ function normalizeFlight(flight: any, hub: string, dir: string) {
     },
     aircraft: {
       model: { code: '', text: flight?.aircraft?.model || '' },
-      registration: flight?.aircraft?.reg || '',
+      registration: validateRegistration(flight?.aircraft?.reg) || '',
     },
     _source: {
       provider: 'aerodatabox',
@@ -239,6 +272,114 @@ function normalizeFlight(flight: any, hub: string, dir: string) {
       ],
     },
   };
+}
+
+// ── Board-level dedupe + foreign-row filter ──
+// Observed live during the Jul 3 2026 ORD GDP:
+//   (a) schedule REVISIONS produce two rows for one physical departure (the legacy dedupe key
+//       includes the scheduled time, so a revised row survives it) — UA5982 counted both
+//       "On Time" and "+2h48 Late"; 16 dup groups at ORD.
+//   (b) operating-carrier CLONES: the same physical flight listed under both its UA marketing
+//       ident and the United Express operator ident ("G7929 to LHR").
+//   (c) clearly FOREIGN rows (NK/DL/AA idents) leaking through the codeshare filter (Spirit
+//       NK3005 on the EWR board).
+const UNITED_EXPRESS_CARRIERS = new Set(['OO', 'YV', 'YX', 'ZW', 'G7', 'C5', 'AX', 'EV']);
+const OPERATOR_CLONE_TOLERANCE_S = 300; // "same time" window for SCHEDULED clone matching (±5 min)
+// Real (runway/actual) timestamps are precise: two rows that both physically moved more than
+// 2 min apart are two aircraft, not one flight under two idents — never collapse them.
+const OPERATOR_CLONE_REAL_TOLERANCE_S = 120;
+
+function boardCarrierCode(flight: any): string {
+  const ident = String(flight?.identification?.number?.default || '').toUpperCase();
+  const m = /^([A-Z][A-Z0-9])\d/.exec(ident);
+  return m ? m[1] : '';
+}
+
+function boardRoute(flight: any): string {
+  return `${flight?.airport?.origin?.code?.iata || ''}>${flight?.airport?.destination?.code?.iata || ''}`;
+}
+
+function timesMatch(a: number | null | undefined, b: number | null | undefined, tolS: number): boolean {
+  return !!a && !!b && Math.abs(a - b) <= tolS;
+}
+
+export function dedupeBoardFlights(
+  flights: any[],
+  dir: string
+): { flights: any[]; dedupe: { revisions: number; operatorClones: number; foreign: number } } {
+  const isDep = dir === 'departures';
+  const dedupe = { revisions: 0, operatorClones: 0, foreign: 0 };
+
+  // (a) Collapse schedule-revision dupes: rows sharing flight number + the same REAL departure
+  // (or arrival) timestamp describe one physical movement; keep the row with the EARLIEST
+  // scheduled time (the ORIGINAL baseline). Both rows carry the same real timestamp, so keeping
+  // the original schedule preserves the true delay — keeping the latest revision (revised
+  // schedule ≈ real time) rendered UA5982's +2h48m GDP delay as "On Time". Rows without a real
+  // timestamp are never collapsed here — two same-numbered rows with different scheduled times
+  // and no actuals are legitimately two flights (morning + evening rotation of the same number).
+  const schedOf = (f: any) => (isDep ? f?.time?.scheduled?.departure : f?.time?.scheduled?.arrival) || 0;
+  const revisionKey = (f: any): string | null => {
+    const ident = String(f?.identification?.number?.default || '');
+    const real = isDep
+      ? (f?.time?.real?.departure || f?.time?.real?.arrival)
+      : (f?.time?.real?.arrival || f?.time?.real?.departure);
+    if (!ident || !real) return null;
+    return `${ident}:${real}`;
+  };
+  const revisionWinners = new Map<string, any>();
+  for (const f of flights) {
+    const key = revisionKey(f);
+    if (!key) continue;
+    const existing = revisionWinners.get(key);
+    // Earliest non-zero schedule wins; a row with no scheduled time at all never displaces one
+    // that carries the original baseline.
+    const candSched = schedOf(f);
+    const existingSched = existing ? schedOf(existing) : 0;
+    if (!existing || (candSched > 0 && (existingSched === 0 || candSched < existingSched))) {
+      revisionWinners.set(key, f);
+    }
+  }
+  const afterRevisions = flights.filter((f) => {
+    const key = revisionKey(f);
+    if (!key || revisionWinners.get(key) === f) return true;
+    dedupe.revisions++;
+    return false;
+  });
+
+  // (b)+(c) Non-UA idents: a row matching a UA row on route + time is the same physical flight
+  // listed under its operator/codeshare ident — keep the UA row. Real timestamps are the ground
+  // truth: when BOTH rows carry a real departure (arrival for arrivals boards), they are clones
+  // only if those real times match within ±120s — distinct real times are two physical aircraft
+  // even on the same route minutes apart (route + schedule ±5 min alone deleted legitimate
+  // United Express flights). A non-UA row that has a real time the UA row lacks is likewise a
+  // real flight; only a non-UA row with NO real times may match on schedule (±5 min). A
+  // non-matching row survives only if its carrier is a known United Express operator; anything
+  // else (NK/DL/AA/…) is a foreign leak and is dropped.
+  const uaRows = afterRevisions.filter((f) => boardCarrierCode(f) === 'UA');
+  const result = afterRevisions.filter((f) => {
+    const carrier = boardCarrierCode(f);
+    if (carrier === 'UA' || carrier === '') return true; // '' = unparseable ident, already UA-vetted upstream
+    const route = boardRoute(f);
+    const realT = isDep ? f?.time?.real?.departure : f?.time?.real?.arrival;
+    const schedT = isDep ? f?.time?.scheduled?.departure : f?.time?.scheduled?.arrival;
+    const clone = uaRows.some((u) => {
+      if (boardRoute(u) !== route) return false;
+      const uReal = isDep ? u?.time?.real?.departure : u?.time?.real?.arrival;
+      const uSched = isDep ? u?.time?.scheduled?.departure : u?.time?.scheduled?.arrival;
+      if (realT && uReal) return timesMatch(realT, uReal, OPERATOR_CLONE_REAL_TOLERANCE_S);
+      if (realT) return false; // this row physically moved at a time the UA row doesn't corroborate
+      return timesMatch(schedT, uSched, OPERATOR_CLONE_TOLERANCE_S);
+    });
+    if (clone) {
+      dedupe.operatorClones++;
+      return false;
+    }
+    if (UNITED_EXPRESS_CARRIERS.has(carrier)) return true;
+    dedupe.foreign++;
+    return false;
+  });
+
+  return { flights: result, dedupe };
 }
 
 async function fetchWindow(
@@ -412,7 +553,7 @@ export async function fetchViaAeroDataBox(
   }
 
   const seen = new Set<string>();
-  const flights: any[] = [];
+  const exactDeduped: any[] = [];
   for (const raw of rawFlights) {
     const normalized = normalizeFlight(raw, hub, dir);
     if (!normalized) continue;
@@ -422,7 +563,16 @@ export async function fetchViaAeroDataBox(
     const key = `${normalized.identification?.number?.default || ''}:${scheduleKey || ''}:${normalized.airport?.origin?.code?.iata || ''}:${normalized.airport?.destination?.code?.iata || ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    flights.push(normalized);
+    exactDeduped.push(normalized);
+  }
+
+  // The exact key above intentionally includes the scheduled time, so schedule revisions,
+  // operator-code clones and foreign codeshare leaks survive it — collapse those here.
+  const { flights, dedupe } = dedupeBoardFlights(exactDeduped, dir);
+  if (dedupe.revisions > 0 || dedupe.operatorClones > 0 || dedupe.foreign > 0) {
+    console.log(
+      `AeroDataBox dedupe for ${hub} ${dir}: collapsed ${dedupe.revisions} schedule-revision dupes, ${dedupe.operatorClones} operator-code clones; dropped ${dedupe.foreign} foreign rows`
+    );
   }
 
   const partial = failedWindows.length > 0;
@@ -449,6 +599,7 @@ export async function fetchViaAeroDataBox(
       completeness: pagesRequested > 0 ? Math.round((pagesSucceeded / pagesRequested) * 100) / 100 : 1,
       elapsedMs: Date.now() - startTime,
       source: 'aerodatabox',
+      dedupe,
     },
   };
 }

@@ -71,6 +71,11 @@ interface WorstDelay {
   delay: number;
 }
 
+// 'canceled_uncertain' is AeroDataBox's soft-cancel state ("Likely Canceled"); it groups under
+// Canceled everywhere else in the UI, so the server-side metrics must count it too — otherwise
+// likely-canceled rows vanish from the IROPS index and the Delays tab cancellation counts.
+const CANCELED_STATUSES = new Set(['canceled', 'cancelled', 'canceled_uncertain']);
+
 export function computeMetrics(flightsByHub: Record<string, any[]>) {
   let allFlights: any[] = [];
   const hubMetrics: Record<string, HubMetric> = {};
@@ -81,7 +86,7 @@ export function computeMetrics(flightsByHub: Record<string, any[]>) {
 
     for (const fl of flights) {
       const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
-      if (status === 'canceled' || status === 'cancelled') { hubMetrics[hub].cancellations++; continue; }
+      if (CANCELED_STATUSES.has(status)) { hubMetrics[hub].cancellations++; continue; }
       if (status === 'diverted') hubMetrics[hub].diversions++;
 
       const hasOperated = status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted';
@@ -114,7 +119,7 @@ export function computeMetrics(flightsByHub: Record<string, any[]>) {
 
   for (const fl of allFlights) {
     const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
-    if (status === 'canceled' || status === 'cancelled') cancellations++;
+    if (CANCELED_STATUSES.has(status)) cancellations++;
     if (status === 'diverted') diversions++;
 
     const schedT = fl.time?.scheduled?.departure || 0;

@@ -12,6 +12,7 @@ import {
   hasConfiguredFr24ScraperTransport,
 } from './_fr24-scraper-transport.js';
 import { getStartOfDayForHub } from './irops.js';
+import { peekHubDisruptionMinutes, kickDisruptionRefresh } from './faa.js';
 import { waitUntil } from '@vercel/functions';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
@@ -1735,6 +1736,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const currentAggKey = `agg:${hub}:${dir}:${ts}`;
     aggKey = currentAggKey;
 
+    // Live FAA disruption magnitude for this hub (meta.hubDisruptionMinutes). The frontend feeds
+    // it into classifySchedStatus so a GDP hub stops time-inferring false "Departed" rows.
+    // NON-BLOCKING: every serve path below — including sub-millisecond cache hits — attaches the
+    // synchronously PEEKED cached value; a cold/expired FAA cache kicks a background refresh via
+    // waitUntil instead of making the serve await the (up to 5s) FAA fetch. The first request
+    // after a cold start reads 0 and the refresh warms the value for subsequent serves.
+    const disruptionRefresh = kickDisruptionRefresh();
+    if (disruptionRefresh) enqueueBackgroundTask(disruptionRefresh);
+    const withDisruption = (payload: any) => ({
+      ...payload,
+      meta: { ...(payload?.meta || {}), hubDisruptionMinutes: peekHubDisruptionMinutes(hub) },
+    });
+
     // Authorized cron warms bypass every serve-from-cache path below: a complete snapshot would
     // otherwise satisfy the warm request, report "ok", and never be refetched — freezing the board
     // for the rest of the day while it self-reports completeness 1.0.
@@ -1760,7 +1774,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       !!(getLastComplete(currentAggKey) || getLastCompleteByHubDir(hub, dir, ts));
     if (cached && !shouldBypassEmptyPartialCache && !shouldBypassPartialForComplete) {
       setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr, wantsForce);
-      return res.status(200).json({ ...cached.data, cached: true });
+      return res.status(200).json(withDisruption({ ...cached.data, cached: true }));
     }
 
     const stale = forceRefresh ? null : cacheGetStale(currentAggKey);
@@ -1778,7 +1792,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-      return res.status(200).json({ ...stale.data, cached: true, stale: !isFreshComplete(stale) });
+      return res.status(200).json(withDisruption({ ...stale.data, cached: true, stale: !isFreshComplete(stale) }));
     }
 
     const exactLastComplete = forceRefresh ? null : getLastComplete(currentAggKey);
@@ -1797,7 +1811,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-      return res.status(200).json(buildDegradedResponse(fallbackComplete, exactLastComplete ? 'exact' : 'hub_dir'));
+      return res.status(200).json(withDisruption(buildDegradedResponse(fallbackComplete, exactLastComplete ? 'exact' : 'hub_dir')));
     }
 
     let partialPersistentFallback: Awaited<ReturnType<typeof getPersistentFallback>> | null = null;
@@ -1821,7 +1835,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
         res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-        return res.status(200).json(buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope));
+        return res.status(200).json(withDisruption(buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope)));
       }
     }
 
@@ -1833,7 +1847,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const result = await pendingAggs.get(currentAggKey);
       if (result) {
         setAggregateCacheHeader(res, result, cdnMaxAge, swr, wantsForce);
-        return res.status(200).json({ ...result, cached: true });
+        return res.status(200).json(withDisruption({ ...result, cached: true }));
       }
     }
 
@@ -1858,13 +1872,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const lc = exactLc || getLastCompleteByHubDir(hub, dir, ts);
         if (lc) {
           res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-          return res.status(200).json(buildDegradedResponse(lc, exactLc ? 'exact' : 'hub_dir'));
+          return res.status(200).json(withDisruption(buildDegradedResponse(lc, exactLc ? 'exact' : 'hub_dir')));
         }
 
         const persistentResult = await getPersistentFallback(currentAggKey);
         if (persistentResult && persistentResult.fallbackScope === 'persistent') {
           res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-          return res.status(200).json(buildDegradedResponse(persistentResult, 'persistent'));
+          return res.status(200).json(withDisruption(buildDegradedResponse(persistentResult, 'persistent')));
         }
         // Only prefer the stale persisted partial snapshot when it genuinely outranks the board we
         // just built. The fresh board may be an official+live-feed merge (richer, higher completeness
@@ -1872,14 +1886,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Reuses the exact ranking the snapshot writer uses, so serve-path and persist-path agree.
         if (partialPersistentFallback && !isSnapshotCandidateBetter(result, partialPersistentFallback.data)) {
           res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-          return res.status(200).json(buildDegradedResponse(partialPersistentFallback, 'persistent_partial'));
+          return res.status(200).json(withDisruption(buildDegradedResponse(partialPersistentFallback, 'persistent_partial')));
         }
       }
       // The cron's force URL is its own CDN object (forceRefresh=1 is part of the query string).
       // Never let it pin: a CDN HIT on the warm URL would silently skip the refresh next cycle.
       // (The partial branches above set s-maxage=60, which expires long before the next warm.)
       setAggregateCacheHeader(res, result, cdnMaxAge, swr, wantsForce);
-      return res.status(200).json(result);
+      return res.status(200).json(withDisruption(result));
     } finally {
       // Compare-and-delete (see triggerBackgroundRefresh): never evict an entry that a
       // concurrent forced warm registered over this one.
@@ -1890,8 +1904,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (aggKey) {
       const persistentFallback = await getPersistentFallback(aggKey);
       if (persistentFallback) {
+        // Error-path serve: still attach the disruption context — peeked synchronously (cached
+        // value or 0, never fetches, never throws), same non-blocking contract as the main path.
+        const hubFromKey = /^agg:([A-Z]{3,4}):/.exec(aggKey)?.[1] || '';
+        const hubDisruptionMinutes = hubFromKey ? peekHubDisruptionMinutes(hubFromKey) : 0;
+        const degraded = buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope);
         res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-        return res.status(200).json(buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope));
+        return res.status(200).json({ ...degraded, meta: { ...degraded.meta, hubDisruptionMinutes } });
       }
     }
     return res.status(502).json({ error: 'Upstream service unavailable' });
