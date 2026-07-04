@@ -38,6 +38,22 @@ export function shouldPersistPartialSnapshot(data: any): boolean {
   return total > 0 && getSnapshotCompleteness(data) >= MIN_PARTIAL_SNAPSHOT_COMPLETENESS;
 }
 
+// Dedupe-adjusted ranking total. dedupeBoardFlights lowers a board's `total` BECAUSE duplicate
+// revision rows, operator clones and foreign leaks were removed — not because coverage shrank.
+// Ranking on the raw total let a stale pre-dedupe snapshot (e.g. 717 rows, 17 of them dupes)
+// permanently outrank every fresh deduped board (700 rows) and refuse overwrite. A candidate
+// carrying meta.dedupe therefore ranks on total + rows it dropped; a snapshot without
+// meta.dedupe keeps its raw total, so equal underlying coverage ranks equal.
+function getRankingTotal(data: any): number {
+  const total = Number(data?.total || 0);
+  const dedupe = data?.meta?.dedupe;
+  if (!dedupe) return total;
+  return total
+    + (Number(dedupe.revisions) || 0)
+    + (Number(dedupe.operatorClones) || 0)
+    + (Number(dedupe.foreign) || 0);
+}
+
 export function isSnapshotCandidateBetter(candidate: any, existing: any): boolean {
   if (!existing) return true;
   if (!candidate?.partial) return true;
@@ -48,9 +64,14 @@ export function isSnapshotCandidateBetter(candidate: any, existing: any): boolea
   if (candidateCompleteness > existingCompleteness + 0.01) return true;
   if (candidateCompleteness + 0.01 < existingCompleteness) return false;
 
-  const candidateTotal = Number(candidate?.total || 0);
-  const existingTotal = Number(existing?.total || 0);
+  const candidateTotal = getRankingTotal(candidate);
+  const existingTotal = getRankingTotal(existing);
   if (candidateTotal !== existingTotal) return candidateTotal > existingTotal;
+
+  // Equal dedupe-adjusted totals: a deduped candidate REPLACES an un-deduped existing snapshot —
+  // same underlying coverage, but the fresh board is hygienic (and fresher) while the stale
+  // dup-laden one would otherwise pin until its 72h TTL.
+  if (candidate?.meta?.dedupe && !existing?.meta?.dedupe) return true;
 
   const candidatePages = Number(candidate?.meta?.pagesSucceeded || 0);
   const existingPages = Number(existing?.meta?.pagesSucceeded || 0);

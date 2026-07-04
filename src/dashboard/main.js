@@ -11,6 +11,11 @@ import { classifySchedStatus } from '../lib/schedule-status.js';
 import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
 import { formatDataAge, dataAgeSeverity } from '../lib/data-age.js';
 import { parseFr24Feed, applyFeedResult, feedFreshness, nextFeedRetryDelay } from '../lib/feed-health.js';
+import { formatDelayMinutes, delayColorVar } from '../lib/delay-format.js';
+import { firstFutureIndex, nowDividerIndex } from '../lib/board-now.js';
+import { deriveOpsHealth } from '../lib/ops-health.js';
+import { displayScheduleStatus } from '../lib/status-display.js';
+import { computeScheduleStatCounts } from '../lib/board-stats.js';
 
 injectSpeedInsights();
 
@@ -1863,6 +1868,19 @@ function updateTicker() {
   const airborne = allFlights.filter(f=>!f.onGround).length;
   const items = [];
 
+  // Ops health first: derived from the SAME inputs the IROPS panel uses (hub OTP,
+  // FAA programs at UA hubs, IROPS index) so the ticker can never say "all systems
+  // normal" while the Delays tab shows a red IROPS night. (Audit Jul 3 2026.)
+  const opsHealth = deriveOpsHealth({
+    hubOtps: hubHealthData,
+    faaIndex: faaDelayIndex,
+    hubCodes: ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'],
+    iropsScore: lastIropsScore,
+  });
+  if (opsHealth.level !== 'normal') {
+    items.push({ text: `⚠️ ${opsHealth.text}`, cls: 'advisory' });
+  }
+
   if (allFlights.length > 0) {
     items.push({ text: `${airborne} United flights airborne`, cls: 'info' });
     // Show fleet counts only after fleet data has loaded — avoids misleading "0 aircraft" on initial render
@@ -1880,11 +1898,16 @@ function updateTicker() {
     }
   });
 
-  // Default message when no alerts
+  // Default message only when nothing above is an advisory/critical item — an
+  // active disruption item suppresses the green "all systems normal" line.
   if (items.length === 0 || items.every(i => i.cls === 'info')) {
     const countStr = allFlights.length > 0 ? ` — tracking ${allFlights.length} United flights` : '';
     items.unshift({ text: `✅ All systems normal${countStr}`, cls: 'info' });
   }
+
+  // Compact disclaimer/attribution in the rotation so it is visible in the mobile
+  // first viewport (the footer is far below the fold on phones).
+  items.push({ text: 'Unofficial — not affiliated with United Airlines · Data: AeroDataBox · FR24 · AWC · FAA', cls: 'disclaimer' });
 
   const tickerHtml = items.map(i => `<span class="ticker-item ${escapeHtml(i.cls)}">${escapeHtml(i.text)}</span>`).join('');
   const tickerEl = document.getElementById('ticker');
@@ -2589,12 +2612,22 @@ function isRecentlyFound(dateFound) {
   return t <= now + 86400000 && (now - t) <= 7 * 86400000;
 }
 
-// Format an upstream departure timestamp (UNIX seconds) as a short local HH:MM hint.
-function formatFlightTime(ts) {
+// Format an upstream departure timestamp (UNIX seconds) as a short HH:MM hint.
+// Hub-local with the hub TZ abbreviation when the airport is a known hub — the
+// Schedule tab is hub-local, and the FIDS board showing unlabeled viewer-local
+// times next to it was silently inconsistent (audit Jul 3 2026). Non-hub airports
+// fall back to viewer-local but ALWAYS carry a TZ label so the time is never
+// ambiguous.
+function formatFlightTime(ts, airportIata) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
   if (isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const tz = SCHED_HUB_TZ[airportIata];
+  if (tz) {
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })
+      + ' ' + getHubTzAbbrev(airportIata);
+  }
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' });
 }
 
 // Map of tail → live airborne flight from the LIVE OPS feed. One pass over allFlights; cheap enough
@@ -3066,7 +3099,7 @@ function renderSlRoutesBoard() {
 // airframe, and live status (📡 Track reuses the existing delegated sl-track → focusFlight action;
 // the callsign opens the existing aircraft-detail modal). All fields are escaped.
 function renderSlBoardRow(r, now) {
-  const t = formatFlightTime(r.departure_ts);
+  const t = formatFlightTime(r.departure_ts, r.origin);
   const mins = Math.round((r.departure_ts - now) / 60);
   let rel;
   if (mins < 0) rel = Math.abs(mins) + 'm ago';
@@ -3246,7 +3279,7 @@ function renderSlTable() {
         // Next UPCOMING departure (flights are chronological; 30-min grace for one that just left),
         // falling back to the latest known flight if all are in the past.
         const next = flights.find(f => (f.departure_ts || 0) >= nowSec - 1800) || flights[flights.length - 1];
-        const t = formatFlightTime(next.departure_ts);
+        const t = formatFlightTime(next.departure_ts, next.origin);
         nextHtml = `<td style="font-size:9px">${escapeHtml(next.flight_number || '')} ${escapeHtml((next.origin || '') + '→' + (next.destination || ''))}${t ? ` <span class="starlink-next-time">${escapeHtml(t)}</span>` : ''}</td>`;
       } else {
         nextHtml = '<td style="font-size:9px;color:var(--ua-muted)">—</td>';
@@ -3281,9 +3314,9 @@ function renderSlExpand(s, live, hasFlights, hasLive, nowSec) {
   let timelineHtml = '<div class="sl-timeline-label">Upcoming Flights</div>';
   if (upcoming.length > 0) {
     timelineHtml += upcoming.map(f => {
-      const dep = formatFlightTime(f.departure_ts);
+      const dep = formatFlightTime(f.departure_ts, f.origin);
       const arrMs = f.arrival_time ? Date.parse(f.arrival_time) : NaN;
-      const arr = isNaN(arrMs) ? '' : formatFlightTime(arrMs / 1000);
+      const arr = isNaN(arrMs) ? '' : formatFlightTime(arrMs / 1000, f.destination);
       return `<div class="sl-fl-row"><span class="sl-fl-num">${escapeHtml(f.flight_number || '')}</span>` +
         `<span class="sl-fl-route">${escapeHtml(f.origin || '')} <span class="sl-arrow">→</span> ${escapeHtml(f.destination || '')}</span>` +
         `<span class="sl-fl-time">${escapeHtml(dep)}${arr ? ' – ' + escapeHtml(arr) : ''}</span></div>`;
@@ -4336,6 +4369,28 @@ let schedInitialized = false;
 let schedSortCol = 'time';
 let schedSortAsc = true;
 let schedLoading = false;
+let schedBoardMeta = null;        // meta object from the last loaded board (may be null/partial on old cached payloads)
+let schedMetaByHub = {};          // key: "hub-dir-day" → that board's meta (disruption minutes are PER HUB)
+let schedBoardFetchedAtMs = 0;    // when the current board arrived on this client
+
+// Threads the board's live FAA disruption magnitude into classification so the
+// disruption-extended operated-inference grace (schedule-status.js) actually engages.
+// Without this opts plumbing at every classify call site, the GDP guard is dead code
+// and stale boards mint false "Departed" rows again (review Jul 3 2026).
+function classifyOptsFor(meta) {
+  const v = Number(meta?.hubDisruptionMinutes);
+  return { hubDisruptionMinutes: Number.isFinite(v) && v > 0 ? v : 0 };
+}
+// Per-hub variant for loops over schedRawByHub keys ("hub-dir-day").
+function classifyOptsForKey(hubKey) {
+  return classifyOptsFor(schedMetaByHub[hubKey]);
+}
+// Prefix lookup when only hub+dir are known (day defaults to today's board first).
+function metaForHubDir(hub, dir) {
+  return schedMetaByHub[`${hub}-${dir}-0`] || schedMetaByHub[`${hub}-${dir}-1`] || null;
+}
+let schedAutoScrollPending = false; // one-shot: scroll a freshly loaded TODAY board to "now"
+let schedLastFutureIdx = -1;      // row index of the first future row in the last render (-1 = none)
 
 // Client→server clock offset (seconds), learned from the schedule API's Date/Age headers on each
 // fetch. classifySchedStatus reclassifies a long-past "scheduled" flight as departed based on
@@ -4372,6 +4427,21 @@ function initScheduleTab() {
     document.getElementById('sched-timerange').addEventListener('change', schedFilterChanged);
     document.getElementById('sched-risk').addEventListener('change', schedFilterChanged);
     document.getElementById('sched-search').addEventListener('input', schedFilterChanged);
+    // "Find in board" lives directly on the toolbar and drives the SAME text
+    // predicate as the drawer's search input (two-way mirror, one filter).
+    const schedFind = document.getElementById('sched-find');
+    const schedDrawerSearch = document.getElementById('sched-search');
+    if (schedFind && schedDrawerSearch) {
+      schedFind.addEventListener('input', () => {
+        if (schedDrawerSearch.value !== schedFind.value) {
+          schedDrawerSearch.value = schedFind.value;
+          schedFilterChanged();
+        }
+      });
+      schedDrawerSearch.addEventListener('input', () => {
+        if (schedFind.value !== schedDrawerSearch.value) schedFind.value = schedDrawerSearch.value;
+      });
+    }
     // Sort headers
     document.querySelectorAll('#sched-table th[data-sort]').forEach(th => {
       th.addEventListener('click', () => {
@@ -4434,6 +4504,7 @@ async function preloadScheduleData() {
       const hubKey = `${hub}-departures-0`;
       if (result.flights?.length && !schedRawByHub[hubKey]) {
         schedRawByHub[hubKey] = result.flights;
+        schedMetaByHub[hubKey] = result.meta || null;
         loaded++;
       }
     } catch (e) { /* preload is best-effort */ }
@@ -4538,6 +4609,10 @@ async function loadScheduleData() {
 
     schedAllFlights = allUAFlights;
     schedRawByHub[hubKey] = allUAFlights;
+    schedBoardMeta = result.meta || null;
+    schedMetaByHub[hubKey] = result.meta || null;
+    schedBoardFetchedAtMs = Date.now();
+    schedAutoScrollPending = schedCurrentDay === 0; // anchor Today at NOW on load (tomorrow/yesterday boards skip)
     preloadWeatherAndFAA();
     detectEquipmentSwaps(allUAFlights, schedCurrentHub, schedCurrentDir, schedCurrentDay);
     populateAircraftFilter();
@@ -4551,20 +4626,22 @@ async function loadScheduleData() {
       const meta = result.meta || {};
       let msg = '';
       if (result.degraded && meta.dataAge != null) {
-        // Humanized + honest: "1775m ago while refreshing" hid a 30h-frozen board behind a
-        // reassuring teal banner promising a refresh that never came. != null (not truthiness):
-        // a just-written snapshot has dataAge 0, which must still render with age context.
+        // Absolute time + consequence, not just a relative age: "from 2h ago" made users do
+        // clock math and never said what it MEANS. "Statuses as of 7:12 PM CDT — live updates
+        // paused" states both. != null (not truthiness): a just-written snapshot has dataAge 0,
+        // which must still render with age context.
         const age = formatDataAge(meta.dataAge);
+        const asOf = formatBoardAsOf();
         msg = result.partial
-          ? `Showing cached partial data from ${age} ago.`
-          : `Showing cached complete data from ${age} ago.`;
+          ? `Statuses as of ${asOf} (partial board, ${age} old) — live updates paused.`
+          : `Statuses as of ${asOf} (${age} old) — live updates paused.`;
       } else if (result.stale && !result.partial && meta.dataAge != null) {
         // Complete but aged out of the fresh window (degraded=false: nothing is missing). PR #207
         // made these boards degraded=false for honesty, but the banner gate never checked
         // result.stale — so hours-old complete boards rendered with NO warning. This branch (and
         // the gate above) restores the warning; without it the chain falls to the misleading
         // "Some flights may be missing." default, a lie for a complete board.
-        msg = `Showing complete data from ${formatDataAge(meta.dataAge)} ago.`;
+        msg = `Statuses as of ${formatBoardAsOf()} (${formatDataAge(meta.dataAge)} old) — live updates paused.`;
       } else if (meta.liveFeedFallbackAdded) {
         msg = `Added ${meta.liveFeedFallbackAdded} live active flight(s) while the full schedule feed recovers.`;
       } else if (meta.partialReason === 'live_feed_fallback') {
@@ -4644,6 +4721,36 @@ function formatSchedTime(utcTimestamp, hub) {
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
 }
 
+// Absolute timestamp (ms) the current board's statuses are valid "as of".
+// Prefers meta.generatedAt when the API provides it; falls back to fetch-time
+// minus meta.dataAge; finally the fetch time itself. All fields defensive —
+// old cached payloads may lack any of them.
+function schedBoardAsOfMs() {
+  const meta = schedBoardMeta;
+  if (meta && meta.generatedAt) {
+    const t = Date.parse(meta.generatedAt);
+    if (!isNaN(t)) return t;
+  }
+  const base = schedBoardFetchedAtMs || Date.now();
+  if (meta && meta.dataAge != null && Number.isFinite(Number(meta.dataAge))) {
+    return base - Number(meta.dataAge) * 1000;
+  }
+  return base;
+}
+
+// "7:12 PM CDT" in the current hub's timezone — the absolute stamp used by the
+// stale banner and by "Scheduled (as of …)" unknown-status rows.
+function formatBoardAsOf(hub = schedCurrentHub) {
+  const tz = SCHED_HUB_TZ[hub] || 'America/Chicago';
+  try {
+    return new Date(schedBoardAsOfMs()).toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', timeZone: tz, timeZoneName: 'short',
+    });
+  } catch (e) {
+    return new Date(schedBoardAsOfMs()).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+}
+
 function getFilteredScheduleFlights(nowSec = schedNow()) {
   const statusFilter = document.getElementById('sched-status').value;
   const aircraftFilter = document.getElementById('sched-aircraft').value;
@@ -4655,10 +4762,13 @@ function getFilteredScheduleFlights(nowSec = schedNow()) {
   const searchFilter = document.getElementById('sched-search').value.toLowerCase().trim();
 
   return schedAllFlights.filter(fl => {
-    // Status filter
+    // Status filter. canceled_uncertain ("Likely Canceled") groups under the
+    // Canceled filter per the dq-jul3 contract — it is a cancellation for
+    // filtering purposes, just an unconfirmed one.
     if (statusFilter) {
-      const s = classifySchedStatus(fl, schedCurrentDir, nowSec);
-      if (s.key !== statusFilter) return false;
+      const s = classifySchedStatus(fl, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta));
+      const filterKey = s.key === 'canceled_uncertain' ? 'canceled' : s.key;
+      if (filterKey !== statusFilter) return false;
     }
     // Aircraft filter
     if (aircraftFilter && fl.aircraft?.model?.code !== aircraftFilter) return false;
@@ -4698,7 +4808,7 @@ function getFilteredScheduleFlights(nowSec = schedNow()) {
     }
     // Delay risk filter
     if (riskFilter) {
-      const status = classifySchedStatus(fl, schedCurrentDir, nowSec);
+      const status = classifySchedStatus(fl, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta));
       if (['scheduled', 'estimated', 'delayed'].includes(status.key)) {
         const risk = computeDelayRiskForScheduleFlight(fl, schedCurrentHub, nowSec);
         const riskLabel = risk ? risk.label : 'LOW';
@@ -4744,8 +4854,8 @@ function sortScheduleFlights(flights, nowSec = schedNow()) {
       case 'aircraft': return ((a.aircraft?.model?.code || '').localeCompare(b.aircraft?.model?.code || '')) * dir;
       case 'reg': return ((a.aircraft?.registration || '').localeCompare(b.aircraft?.registration || '')) * dir;
       case 'status': {
-        const sA = classifySchedStatus(a, schedCurrentDir, nowSec).key;
-        const sB = classifySchedStatus(b, schedCurrentDir, nowSec).key;
+        const sA = classifySchedStatus(a, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta)).key;
+        const sB = classifySchedStatus(b, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta)).key;
         return sA.localeCompare(sB) * dir;
       }
       default: return 0;
@@ -4799,9 +4909,17 @@ function renderScheduleTable() {
 
   if (sorted.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">🔍</div>No flights match your filters<br><span style="font-size:10px">Try adjusting hub, status, or search criteria</span></td></tr>`;
+    schedLastFutureIdx = -1;
+    updateJumpNowPill(false);
     renderScheduleStats(filtered, now);
     return;
   }
+
+  // Shared per-render context for date chips and "as of" stamps.
+  const hubTzName = SCHED_HUB_TZ[hub] || 'America/Chicago';
+  let boardDayStartSec = 0;
+  try { boardDayStartSec = getStartOfHubDay(hub, schedCurrentDay); } catch (e) { boardDayStartSec = 0; }
+  const boardAsOfStr = formatBoardAsOf(hub);
 
   const rows = sorted.map(fl => {
     const ident = fl.identification?.number?.default || '—';
@@ -4809,6 +4927,15 @@ function renderScheduleTable() {
     const actualTime = schedCurrentDir === 'departures' ? (fl.time?.real?.departure || fl.time?.estimated?.departure) : (fl.time?.real?.arrival || fl.time?.estimated?.arrival);
     const derivedScheduleTime = schedCurrentDir === 'departures' ? fl._source?.scheduleTimeDerivedFromActual?.departure : fl._source?.scheduleTimeDerivedFromActual?.arrival;
     const timeStr = formatSchedTime(schedTime, hub);
+    // Rows from a previous hub-local date (yesterday's stragglers on a time-ascending
+    // board) get a small date chip so "06:52" is never mistaken for today's 06:52.
+    let dateChip = '';
+    if (schedTime && boardDayStartSec && schedTime < boardDayStartSec) {
+      try {
+        const chipLabel = new Date(schedTime * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: hubTzName });
+        dateChip = ` <span class="sched-date-chip">${escapeHtml(chipLabel)}</span>`;
+      } catch (e) { /* chip is decorative — never break the row */ }
+    }
     let timeExtra = '';
     if (derivedScheduleTime) {
       timeExtra = `<div class="sched-time-actual">actual</div>`;
@@ -4837,16 +4964,23 @@ function renderScheduleTable() {
 
     const oIata = orig?.code?.iata || '';
     const dIata = dest?.code?.iata || '';
+    // Terminal first, gate second ("T1 · C18") — the header says Term / Gate, so a bare
+    // gate value must never sit where a terminal is expected (review Jul 3 2026).
     let gate;
-    if (schedCurrentDir === 'departures') {
-      const t = orig?.info?.terminal || getUnitedTerminal(oIata, oIata, dIata);
-      gate = orig?.info?.gate ? orig.info.gate : (t ? `T${t}` : '—');
-    } else {
-      const t = dest?.info?.terminal || getUnitedTerminal(dIata, oIata, dIata);
-      gate = dest?.info?.gate ? dest.info.gate : (t ? `T${t}` : '—');
+    {
+      const ap = schedCurrentDir === 'departures' ? orig : dest;
+      const t = ap?.info?.terminal || (schedCurrentDir === 'departures'
+        ? getUnitedTerminal(oIata, oIata, dIata)
+        : getUnitedTerminal(dIata, oIata, dIata));
+      const g = ap?.info?.gate;
+      gate = t && g ? `T${t} · ${g}` : t ? `T${t}` : g ? `Gate ${g}` : '—';
     }
 
-    const status = classifySchedStatus(fl, schedCurrentDir, now);
+    const status = classifySchedStatus(fl, schedCurrentDir, now, classifyOptsFor(schedBoardMeta));
+    // Display layer: 'unknown' renders as "Scheduled (as of …)", canceled_uncertain
+    // gets its "Likely Canceled" label, raw provider strings get title-cased, and
+    // presumed (time-inferred) departures get the asterisk treatment.
+    const statusDisp = displayScheduleStatus(status);
 
     // Fleet match + enrichment
     let fleetMatch = '';
@@ -4910,7 +5044,7 @@ function renderScheduleTable() {
     const isWatched = isFlightWatched(ident);
     const { origCode, destCode, depHub, arrHub } = getScheduleRiskContext(fl, hub, schedCurrentDir);
     const watchRoute = `${origCode}→${destCode}`;
-    const watchBtn = ident !== '—' ? `<button class="watch-btn${isWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(watchRoute)}" data-status="${escapeHtml(status.text)}" data-stop-prop="1" aria-label="${isWatched ? 'Unwatch flight' : 'Watch flight'}" title="${isWatched ? 'Unwatch' : 'Watch'} this flight">${isWatched ? ICO_WATCHING : ICO_WATCH}</button>` : '';
+    const watchBtn = ident !== '—' ? `<button class="watch-btn${isWatched ? ' watching' : ''}" data-action="toggle-watch-flight" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(watchRoute)}" data-status="${escapeHtml(statusDisp.text)}" data-stop-prop="1" aria-label="${isWatched ? 'Unwatch flight' : 'Watch flight'}" title="${isWatched ? 'Unwatch' : 'Watch'} this flight">${isWatched ? ICO_WATCHING : ICO_WATCH}</button>` : '';
 
     // Delay risk scoring
     const dRisk = computeDelayRiskForScheduleFlight(fl, hub, now);
@@ -4919,90 +5053,178 @@ function renderScheduleTable() {
     const schedRiskWxDest = weatherOpsByHub[arrHub];
     const schedRiskIrops = iropsHubData[depHub];
     const schedRiskFaa = formatDelayExplainFAAStatus(depHub, arrHub, faaDelayIndex);
-    const riskCell = dRisk ? `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(status.text)}" data-risk-label="${dRisk.label}" data-risk-score="${dRisk.score}" data-risk-factors="${escapeHtml(dRisk.factors.join('|'))}" data-hub="${escapeHtml(depHub)}"${schedRiskOtp !== undefined ? ' data-otp="' + schedRiskOtp + '"' : ''}${schedRiskWxOrig ? ' data-weather="' + escapeHtml(schedRiskWxOrig.level + (schedRiskWxOrig.reasons.length ? ': ' + schedRiskWxOrig.reasons.join(', ') : '')) + '"' : ''}${schedRiskWxDest ? ' data-dest-weather="' + escapeHtml(schedRiskWxDest.level + (schedRiskWxDest.reasons.length ? ': ' + schedRiskWxDest.reasons.join(', ') : '')) + '"' : ''}${schedRiskIrops ? ' data-irops="' + escapeHtml(schedRiskIrops.cancellationRate + '% cancelled, ' + (schedRiskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${schedRiskFaa ? ' data-faa-status="' + escapeHtml(schedRiskFaa) + '"' : ''} style="background:${dRisk.color}20;color:${dRisk.color};cursor:pointer" title="Click for AI analysis">${dRisk.label}</span>` : '';
+    const riskCell = dRisk ? `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(statusDisp.text)}" data-risk-label="${dRisk.label}" data-risk-score="${dRisk.score}" data-risk-factors="${escapeHtml(dRisk.factors.join('|'))}" data-hub="${escapeHtml(depHub)}"${schedRiskOtp !== undefined ? ' data-otp="' + schedRiskOtp + '"' : ''}${schedRiskWxOrig ? ' data-weather="' + escapeHtml(schedRiskWxOrig.level + (schedRiskWxOrig.reasons.length ? ': ' + schedRiskWxOrig.reasons.join(', ') : '')) + '"' : ''}${schedRiskWxDest ? ' data-dest-weather="' + escapeHtml(schedRiskWxDest.level + (schedRiskWxDest.reasons.length ? ': ' + schedRiskWxDest.reasons.join(', ') : '')) + '"' : ''}${schedRiskIrops ? ' data-irops="' + escapeHtml(schedRiskIrops.cancellationRate + '% cancelled, ' + (schedRiskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${schedRiskFaa ? ' data-faa-status="' + escapeHtml(schedRiskFaa) + '"' : ''} style="background:${dRisk.color}20;color:${dRisk.color};cursor:pointer" title="Click for AI analysis">RISK: ${dRisk.label}</span>` : '';
+
+    // DELAY / RISK cell (#2): facts beat predictions. A row with a known
+    // actual/estimated delta shows the REAL delay (right-aligned tabular figures,
+    // +Nm under 90 min, +XhYYm above); only future rows without a meaningful delta
+    // show the AI risk badge — worded "RISK: …" so a prediction can never read as a
+    // fact. (Audit Jul 3 2026: a flight with a known +140m delay displayed "V.HIGH".)
+    const hasOperatedRow = status.key === 'departed' || status.key === 'enroute' || status.key === 'landed';
+    const isTerminalRow = status.key === 'canceled' || status.key === 'canceled_uncertain' || status.key === 'diverted';
+    const deltaMin = (actualTime && schedTime) ? Math.round((actualTime - schedTime) / 60) : null;
+    let delayCell;
+    if (isTerminalRow) {
+      delayCell = '<span class="sched-delay-none">\u2014</span>';
+    } else if (deltaMin !== null && ((hasOperatedRow && !statusDisp.presumed) || deltaMin > 5)) {
+      const deltaSrc = (fl.time?.real?.departure || fl.time?.real?.arrival) ? 'Actual' : 'Estimated';
+      delayCell = `<span class="sched-delay-actual" style="color:${delayColorVar(deltaMin)}" title="${deltaSrc} vs scheduled ${schedCurrentDir === 'departures' ? 'departure' : 'arrival'}">${escapeHtml(formatDelayMinutes(deltaMin))}</span>`;
+    } else if (riskCell) {
+      delayCell = riskCell;
+    } else {
+      delayCell = '<span class="sched-delay-none">\u2014</span>';
+    }
+
+    // Status cell: presumed rows render "Departed*" with an explanatory tooltip;
+    // unknown rows render "Scheduled" plus an absolute "as of" sub-stamp (#5/#6).
+    const presumedTip = statusDisp.presumed
+      ? ` title="Presumed ${status.key === 'landed' ? 'landed' : 'departed'} \u2014 scheduled time passed without a live update"`
+      : '';
+    let statusCell = `<span class="sched-status ${escapeHtml(statusDisp.cls)}"${presumedTip}>${escapeHtml(statusDisp.text)}${statusDisp.presumed ? '*' : ''}</span>`;
+    if (statusDisp.asOf) statusCell += `<div class="sched-asof">as of ${escapeHtml(boardAsOfStr)}</div>`;
 
     return `<tr>
-      <td>${escapeHtml(timeStr)}${timeExtra}</td>
+      <td>${escapeHtml(timeStr)}${dateChip}${timeExtra}</td>
       <td style="font-weight:600;color:var(--ua-accent)">${escapeHtml(ident)}</td>
       <td>${routeStr}</td>
       <td title="${escapeHtml(acText)}">${escapeHtml(acCode)}${acShort ? `<div style="font-size:9px;color:var(--ua-muted)">${escapeHtml(acShort)}</div>` : ''}${equipBadge}</td>
       <td style="font-family:var(--font-mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}">${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
       <td>${escapeHtml(gate)}</td>
-      <td><span class="sched-status ${escapeHtml(status.cls)}">${escapeHtml(status.text)}</span>${faaContext}</td>
-      <td>${riskCell}</td>
+      <td>${statusCell}${faaContext}</td>
+      <td class="sched-delay-cell">${delayCell}</td>
       <td>${fleetMatch}</td>
       <td>${watchBtn}</td>
     </tr>`;
   });
 
+  // ── NOW anchor (#3): today boards only, and only under the default time-ascending
+  // sort (a divider is meaningless mid-list when sorted by flight/route/status).
+  // Tomorrow boards and boards with no future rows skip all of this gracefully —
+  // firstFutureIndex returns -1 with no future rows, and nowDividerIndex additionally
+  // returns -1 when there are no past rows to divide from.
+  schedLastFutureIdx = -1;
+  if (schedCurrentDay === 0 && schedSortCol === 'time' && schedSortAsc) {
+    const rowTimes = sorted.map(f => (schedCurrentDir === 'departures' ? f.time?.scheduled?.departure : f.time?.scheduled?.arrival) || 0);
+    schedLastFutureIdx = firstFutureIndex(rowTimes, now);
+    const divIdx = nowDividerIndex(rowTimes, now);
+    if (divIdx >= 0) {
+      // Re-rendered with a fresh HH:MM on every refresh (renderScheduleTable is the
+      // single render path), so the stamp tracks the clock.
+      const nowLabel = `${formatSchedTime(now, hub)} ${getHubTzAbbrev(hub)}`;
+      rows.splice(divIdx, 0, `<tr class="sched-now-divider" id="sched-now-row" aria-label="Current time marker"><td colspan="10">── NOW · ${escapeHtml(nowLabel)} ──</td></tr>`);
+    }
+  }
+  updateJumpNowPill(schedCurrentDay === 0 && schedLastFutureIdx >= 0);
+
   tbody.innerHTML = rows.join('');
+
+  // One-shot auto-scroll to NOW after a fresh board load (never on filter re-renders,
+  // never when the user is on another tab).
+  if (schedAutoScrollPending) {
+    schedAutoScrollPending = false;
+    if (schedLastFutureIdx >= 0 && document.getElementById('tab-schedule')?.classList.contains('active')) {
+      scrollScheduleToNow(false);
+    }
+  }
   renderScheduleStats(filtered);
+}
+
+// Show/hide the "Jump to now" toolbar pill (today boards with at least one future row).
+function updateJumpNowPill(visible) {
+  const pill = document.getElementById('sched-jump-now');
+  if (pill) pill.style.display = visible ? '' : 'none';
+}
+
+// Scroll the schedule table's scroll container to the NOW divider (or the first
+// future row when the divider was skipped because there are no past rows).
+function scrollScheduleToNow(smooth = true) {
+  const wrap = document.getElementById('sched-table-wrap');
+  const tbody = document.getElementById('sched-tbody');
+  if (!wrap || !tbody) return;
+  const target = document.getElementById('sched-now-row')
+    || (schedLastFutureIdx >= 0 ? tbody.children[schedLastFutureIdx] : null);
+  if (!target) return;
+  const top = Math.max(0, target.offsetTop - 60);
+  requestAnimationFrame(() => {
+    if (typeof wrap.scrollTo === 'function') wrap.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' });
+    else wrap.scrollTop = top;
+  });
 }
 
 function renderScheduleStats(filtered, nowSec = schedNow()) {
   if (!filtered) filtered = getFilteredScheduleFlights(nowSec);
-  const showing = filtered.length;
-  const statuses = {};
-  filtered.forEach(fl => {
-    const s = classifySchedStatus(fl, schedCurrentDir, nowSec);
-    statuses[s.key] = (statuses[s.key] || 0) + 1;
-  });
 
-  // OTP: only count flights with real departure/arrival data (actually operated)
-  let depOnTime = 0;
-  let depDelayed = 0;
-  let scheduled = 0;
-  let canceled = statuses.canceled || 0;
-  filtered.forEach(fl => {
-    const status = classifySchedStatus(fl, schedCurrentDir, nowSec);
-    const hasOperated = status.key === 'departed' || status.key === 'enroute' || status.key === 'landed';
-    if (!hasOperated) {
-      if (status.key === 'scheduled' || status.key === 'estimated') scheduled++;
-      return;
-    }
-    // Time-inferred departures have no trustworthy actual-out time — exclude from OTP so a
-    // stale "expected" row that we reclassified can't be scored as on-time/late.
-    if (status.inferred) return;
-    const schedT = schedCurrentDir === 'departures' ? fl.time?.scheduled?.departure : fl.time?.scheduled?.arrival;
-    const derivedScheduleTime = schedCurrentDir === 'departures' ? fl._source?.scheduleTimeDerivedFromActual?.departure : fl._source?.scheduleTimeDerivedFromActual?.arrival;
-    if (fl._source?.liveFeedFallback) return; // live rescue rows have last-seen/ETA times, not true schedule baselines
-    const realT = fl.time?.real?.departure || fl.time?.real?.arrival;
-    const actT = realT || (schedCurrentDir === 'departures' ? fl.time?.estimated?.departure : fl.time?.estimated?.arrival);
-    if (!schedT || !actT || derivedScheduleTime) return; // skip flights without a real schedule baseline
-    if (actT > schedT + 1800) depDelayed++;
-    else depOnTime++;
+  // Bucketing lives in src/lib/board-stats.js so the reconciliation invariant
+  // (cards + catch-all === Total) is unit-tested. Audit Jul 3 2026: the strip
+  // computed `canceled` but never rendered it — ORD showed Total 717 while the
+  // visible cards summed 475, hiding 70 cancellations on an IROPS night.
+  const counts = computeScheduleStatCounts(filtered, {
+    dir: schedCurrentDir,
+    nowSec,
+    classify: (fl) => classifySchedStatus(fl, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta)),
   });
+  const showing = counts.total;
 
-  const totalOperated = depOnTime + depDelayed;
-  const otp = totalOperated > 0 ? Math.round((depOnTime / totalOperated) * 100) : (showing > 0 ? '—' : 0);
+  const otp = counts.otp != null ? counts.otp : (showing > 0 ? '\u2014' : 0);
   const otpColor = typeof otp === 'number' ? (otp >= 70 ? '#22c55e' : otp >= 50 ? '#f59e0b' : '#ef4444') : 'var(--ua-muted)';
   const otpStr = typeof otp === 'number' ? otp + '%' : otp;
 
   const dayLabel = getSchedDayLabel(schedCurrentDay);
   const dirLabel = schedCurrentDir === 'departures' ? 'DEP' : 'ARR';
 
+  const canceledTitle = counts.canceledUncertain > 0
+    ? ` title="Includes ${counts.canceledUncertain} likely canceled (unconfirmed by provider)"`
+    : '';
+  // Muted catch-all so the visible cards always reconcile with Total instead of
+  // lying by omission (diverted, operated rows without usable timestamps, etc.).
+  const uncatCard = counts.uncategorized > 0 ? `
+    <div class="metric-card" title="Rows that fit no card: diverted, or operated without usable timestamps">
+      <span class="metric-val" style="color:var(--ua-dim)">${counts.uncategorized}</span>
+      <span class="metric-label">Uncategorized</span>
+    </div>` : '';
+
   document.getElementById('sched-stats').innerHTML = `
     <div class="metric-card">
       <span class="metric-val">${showing}</span>
-      <span class="metric-label">UA ${dirLabel} · ${dayLabel}</span>
+      <span class="metric-label">UA ${dirLabel} \u00b7 ${dayLabel}</span>
     </div>
     <div class="metric-card">
       <span class="metric-val" style="color:${otpColor}">${otpStr}</span>
-      <span class="metric-label">On-Time (${totalOperated} opr)</span>
+      <span class="metric-label">On-Time (${counts.operated} operated)</span>
     </div>
     <div class="metric-card">
-      <span class="metric-val" style="color:var(--ua-green)">${depOnTime}</span>
+      <span class="metric-val" style="color:var(--ua-green)">${counts.onTime}</span>
       <span class="metric-label">On Time</span>
     </div>
     <div class="metric-card">
-      <span class="metric-val" style="color:var(--ua-yellow)">${depDelayed}</span>
+      <span class="metric-val" style="color:var(--ua-yellow)">${counts.late}</span>
       <span class="metric-label">Late</span>
     </div>
-    <div class="metric-card">
-      <span class="metric-val" style="color:var(--ua-muted)">${scheduled}</span>
-      <span class="metric-label">Upcoming</span>
+    <div class="metric-card"${canceledTitle}>
+      <span class="metric-val" style="color:var(--ua-red)">${counts.canceled}</span>
+      <span class="metric-label">Canceled</span>
     </div>
+    <div class="metric-card">
+      <span class="metric-val" style="color:var(--ua-muted)">${counts.upcoming}</span>
+      <span class="metric-label">Upcoming</span>
+    </div>${uncatCard}
   `;
+
+  // Sub-strip notes: presumed-departed count (#6) + FAA hub-disruption lag warning.
+  const noteEl = document.getElementById('sched-stats-note');
+  if (noteEl) {
+    let notes = '';
+    if (counts.presumed > 0) {
+      const verb = schedCurrentDir === 'arrivals' ? 'landed' : 'departed';
+      notes += `<span class="sched-note-chip" title="Presumed ${verb} \u2014 scheduled time passed without a live update">\u2708 ${counts.presumed} presumed ${verb}</span>`;
+    }
+    const hdm = Number(schedBoardMeta?.hubDisruptionMinutes);
+    if (Number.isFinite(hdm) && hdm > 60 && schedCurrentHub) {
+      notes += `<span class="sched-note-warn">\u26a0 ${escapeHtml(schedCurrentHub)} under FAA delay program (avg ${Math.round(hdm)}min) \u2014 statuses may lag.</span>`;
+    }
+    noteEl.innerHTML = notes;
+    noteEl.style.display = notes ? '' : 'none';
+  }
 }
 
 // ═══ OFFLINE DETECTION ═══
@@ -5021,6 +5243,7 @@ window.addEventListener('offline', updateOnlineStatus);
 
 // ═══ GLOBAL SEARCH ═══
 document.getElementById('global-search-input').addEventListener('input', debounce(function() {
+  hideGlobalSearchError();
   const q = this.value.trim().toUpperCase();
   const results = document.getElementById('global-search-results');
   if (q.length < 2) { results.style.display = 'none'; return; }
@@ -5276,6 +5499,15 @@ function getEquipChangeForFlight(flightNum) {
 
 // ═══ HUB HEALTH ═══
 let hubHealthData = {};
+// Hubs whose OTP came from the server /api/irops response. Server values are
+// authoritative: the client-side computation may only FILL hubs the server
+// response lacks, never overwrite them (audit Jul 3 2026: the DEN 68→100 flap —
+// a thin client sample gated only by a ≥5-flight floor clobbered the server's
+// much larger sample).
+let hubHealthServerHubs = new Set();
+// Latest IROPS severity index (0-100) from either computation path — feeds the
+// header ticker so it can never say "normal" during a red IROPS night.
+let lastIropsScore = null;
 
 // Single renderer for the hub health bar — reads from hubHealthData (shared state).
 // Both IROPS and schedule paths write to hubHealthData, then call this.
@@ -5283,11 +5515,11 @@ function renderHubHealthBar() {
   const bar = document.getElementById('hub-health-bar');
   const hubs = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
   if (!Object.keys(hubHealthData).length) {
-    bar.innerHTML = '<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">% of operated flights departing within 30 min of schedule. 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span><span style="color:var(--ua-muted)">Load schedule data for hub health</span>';
+    bar.innerHTML = '<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">% of operated departures within 30 min of schedule. 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span><span style="color:var(--ua-muted)">Load schedule data for hub health</span>';
     return;
   }
   const homeHub = getHomeAirport();
-  let html = '<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">% of operated flights departing within 30 min of schedule. 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span>';
+  let html = '<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">% of operated departures within 30 min of schedule. 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span>';
   hubs.forEach((hub, i) => {
     const isHome = hub === homeHub;
     const homeStyle = isHome ? ';border:1px solid var(--ua-accent);border-radius:3px;padding:2px 6px' : '';
@@ -5325,12 +5557,15 @@ function updateHubHealth() {
   for (const key of Object.keys(schedRawByHub)) {
     const flights = schedRawByHub[key];
     if (!flights || !flights.length) continue;
-    const hub = key.split('-')[0];
+    const keyParts = key.split('-');
+    const hub = keyParts[0];
+    const boardDir = keyParts[1] === 'arrivals' ? 'arrivals' : 'departures';
     if (!totalsByHub[hub]) continue;
     flights.forEach(fl => {
-      // Default dir 'departures' is intentional: this loop aggregates BOTH arrivals and departures
-      // boards, so there is no single correct direction. Don't pass schedCurrentDir here.
-      const status = classifySchedStatus(fl, 'departures', schedNow());
+      // The key carries each board's true direction — use it (a hardcoded 'departures' misreads
+      // arrivals rows: direction picks which real timestamp resolves inference and
+      // canceled_uncertain). Disruption opts are per-hub too. (review Jul 3 2026)
+      const status = classifySchedStatus(fl, boardDir, schedNow(), classifyOptsForKey(key));
       const hasOp = status.key === 'departed' || status.key === 'enroute' || status.key === 'landed';
       if (!hasOp) return;
       // Time-inferred operated rows (a long-past "scheduled" the classifier reclassified, with no
@@ -5354,14 +5589,20 @@ function updateHubHealth() {
   }
 
   hubs.forEach(hub => {
+    // Server /api/irops OTP is authoritative when present — the client-side
+    // computation only fills hubs the server response lacks, and never writes
+    // from a thin sample (n < 25). Audit Jul 3 2026: DEN flapped 68→100 because
+    // a 5-flight client sample overwrote the server's reading.
+    if (hubHealthServerHubs.has(hub)) return;
     const { onTime, operated } = totalsByHub[hub];
-    if (operated >= 5) {
+    if (operated >= 25) {
       hubHealthData[hub] = Math.round((onTime / operated) * 100);
     }
     // Don't delete hubHealthData[hub] — IROPS may have set it
   });
 
   renderHubHealthBar();
+  updateTicker(); // ticker health derives from hub OTP — keep it in lockstep
 }
 
 // ═══ IROPS DASHBOARD ═══
@@ -5488,8 +5729,10 @@ function updateIrops() {
   const content = document.getElementById('irops-content');
   // Gather all schedule data
   let allSchedFlts = [];
-  for (const flights of Object.values(schedRawByHub)) {
-    if (Array.isArray(flights)) allSchedFlts = allSchedFlts.concat(flights);
+  for (const [key, flights] of Object.entries(schedRawByHub)) {
+    if (!Array.isArray(flights)) continue;
+    const dir = key.split('-')[1] === 'arrivals' ? 'arrivals' : 'departures';
+    for (const fl of flights) allSchedFlts.push({ fl, dir, key });
   }
 
   if (allSchedFlts.length === 0) {
@@ -5501,11 +5744,12 @@ function updateIrops() {
 
   const worstDelays = [];
 
-  allSchedFlts.forEach(fl => {
-    // Default dir 'departures' is intentional: this only reads 'canceled'/'diverted', which the
-    // time-aware reclassification never produces, so direction (and now) can't change the result.
-    const s = classifySchedStatus(fl, 'departures', schedNow());
-    if (s.key === 'canceled') cancellations++;
+  allSchedFlts.forEach(({ fl, dir, key }) => {
+    // Direction matters here: canceled_uncertain resolves via the direction-appropriate real
+    // timestamp (an arrivals row with real.arrival must clear the suspicion) — a hardcoded
+    // 'departures' miscounts arrivals boards' likely-canceled rows. (review Jul 3 2026)
+    const s = classifySchedStatus(fl, dir, schedNow(), classifyOptsForKey(key));
+    if (s.key === 'canceled' || s.key === 'canceled_uncertain') cancellations++; // Likely Canceled groups with cancellations
     if (s.key === 'diverted') diversions++;
     const schedT = fl.time?.scheduled?.departure || fl.time?.scheduled?.arrival || 0;
     const actT = fl.time?.real?.departure || fl.time?.real?.arrival || fl.time?.estimated?.departure || fl.time?.estimated?.arrival || 0;
@@ -5537,7 +5781,9 @@ function updateIrops() {
   // NOTE: All values here are computed numbers/strings from internal schedule data,
   // not user input. FAA alerts use escapeHtml() below.
   let html = '<div class="irops-bar">';
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${score}</span><span class="irops-bar-label">${scoreLabel}</span></span>`;
+  // Bare "56.7" read as a mystery number — attach the scale/label and the same
+  // "?" tooltip pattern the OTP strip uses. (Audit Jul 3 2026, ticker coherence.)
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">IROPS ${score}/100</span><span class="irops-bar-label">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">IROPS severity index (0\u2013100): weighted cancellations, 60min+ delays and diversions per 100 flights. &lt;5 normal \u00b7 5\u201315 minor \u00b7 \u226515 significant</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -5561,6 +5807,9 @@ function updateIrops() {
     html += `<div class="irops-bar-faa">${faaAlerts.map(a => escapeHtml(a)).join(' · ')}</div>`;
   }
   content.innerHTML = html;
+
+  lastIropsScore = Number(score);
+  updateTicker(); // ticker health derives from the IROPS index — keep it in lockstep
 }
 
 function autoLoadIrops() {
@@ -5613,8 +5862,10 @@ function renderIropsFromAPI(data) {
       const cancelRate = m.total > 10 ? Number(m.cancellations || 0) / m.total : 0;
       if (operated < 5 && cancelRate >= 0.5) {
         hubHealthData[hub] = 0; // mostly cancelled — show as critical
+        hubHealthServerHubs.add(hub); // server value is authoritative from here on
       } else if (operated >= 5) {
         hubHealthData[hub] = Math.round((onTime / operated) * 100);
+        hubHealthServerHubs.add(hub); // server value is authoritative from here on
       }
       // operated < 5 and low cancel rate: leave hub alone (no data yet)
     }
@@ -5628,7 +5879,8 @@ function renderIropsFromAPI(data) {
 
   // NOTE: All values here are from the IROPS API (internal, not user input).
   let html = '<div class="irops-bar">';
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${score}</span><span class="irops-bar-label">${scoreLabel}</span></span>`;
+  // Same scale/label + tooltip treatment as the client-computed IROPS bar above.
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">IROPS ${score}/100</span><span class="irops-bar-label">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">IROPS severity index (0\u2013100): weighted cancellations, 60min+ delays and diversions per 100 flights. &lt;5 normal \u00b7 5\u201315 minor \u00b7 \u226515 significant</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -5642,6 +5894,9 @@ function renderIropsFromAPI(data) {
   html += '</div>';
 
   content.innerHTML = html;
+
+  lastIropsScore = Number(score);
+  updateTicker(); // ticker health derives from the IROPS index — keep it in lockstep
 
   if (document.getElementById('tab-schedule')?.classList.contains('active') && schedAllFlights.length) {
     renderScheduleTable();
@@ -6190,9 +6445,22 @@ function buildMyFlightCard(watched, td) {
     }
   }
 
-  // Delay risk — pass timeData and liveFlight for multi-signal scoring
+  // Delay risk — pass timeData and liveFlight for multi-signal scoring.
+  // Never default to LOW on missing inputs (audit Jul 3 2026: card said LOW while
+  // the board said V.HIGH for the same flight, purely because the flight-times
+  // feed was dark). When the card lacks the inputs the board's risk had, reuse
+  // the board's computed score if the flight is on a loaded board; otherwise
+  // show an explicit "RISK N/A".
   let riskHtml = '';
-  const risk = computeDelayRisk(watched, origCode, destCode, td, liveFlight);
+  const hasRiskInputs = !!(td && td.success !== false && (td.departure?.gate?.scheduled || td.departure?.gate?.estimated));
+  let risk = null;
+  let riskNA = false;
+  if (hasRiskInputs) {
+    risk = computeDelayRisk(watched, origCode, destCode, td, liveFlight);
+  } else {
+    risk = findBoardRiskForFlight(watched.flight);
+    if (!risk) riskNA = true;
+  }
   const riskOtp = hubHealthData[origCode];
   const riskWx = weatherOpsByHub[origCode];
   const riskWxDest = weatherOpsByHub[destCode];
@@ -6204,6 +6472,8 @@ function buildMyFlightCard(watched, td) {
     : 'Connects to ' + riskConn.connFlight + ' ' + riskConn.hub + '\u2192' + (riskConn.dest || '?') + ', ' + riskConn.minutes + 'min layover (' + riskConn.risk + ')') : '';
   if (risk && (resolvedStatus === 'scheduled' || resolvedStatus === 'delayed' || resolvedStatus === '' || !resolvedStatus)) {
     riskHtml = `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIrops ? ' data-irops="' + escapeHtml(riskIrops.cancellationRate + '% cancelled, ' + (riskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${riskFaaStatus ? ' data-faa-status="' + escapeHtml(riskFaaStatus) + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''} style="background:${risk.color}20;color:${risk.color};cursor:pointer" title="Click for AI analysis">${risk.label} RISK</span>`;
+  } else if (riskNA && (resolvedStatus === 'scheduled' || resolvedStatus === 'delayed' || resolvedStatus === '' || !resolvedStatus)) {
+    riskHtml = `<span class="delay-risk-badge" style="background:rgba(100,116,139,.15);color:var(--ua-muted);cursor:default" title="Not enough live data to score this flight">RISK N/A</span>`;
   }
 
   // Departure/arrival time data attributes for countdown timer
@@ -6351,9 +6621,9 @@ function computeDelayRisk(watched, origHub, destHub, timeData, liveFlight) {
   });
 }
 
-function computeDelayRiskForScheduleFlight(fl, hub, nowSec = schedNow()) {
-  const { depHub, arrHub } = getScheduleRiskContext(fl, hub, schedCurrentDir);
-  const status = classifySchedStatus(fl, schedCurrentDir, nowSec);
+function computeDelayRiskForScheduleFlight(fl, hub, nowSec = schedNow(), dir = schedCurrentDir) {
+  const { depHub, arrHub } = getScheduleRiskContext(fl, hub, dir);
+  const status = classifySchedStatus(fl, dir, nowSec, classifyOptsFor(metaForHubDir(hub, dir)));
   // Only score not-yet-departed flights
   if (status.key !== 'scheduled' && status.key !== 'estimated' && status.key !== 'delayed') return null;
 
@@ -6382,6 +6652,26 @@ function computeDelayRiskForScheduleFlight(fl, hub, nowSec = schedNow()) {
   });
 
   return result.score === 0 ? null : result;
+}
+
+// Reuse the schedule board's computed risk for a flight when the My Flights card
+// lacks the inputs the board had (flight-times feed dark → no scheduledTime →
+// the model degenerates to a default LOW that contradicts the board's V.HIGH,
+// same flight — audit Jul 3 2026). Scans every loaded board; returns null when
+// the flight is on no loaded board.
+function findBoardRiskForFlight(flightNum) {
+  if (!flightNum) return null;
+  for (const [key, flights] of Object.entries(schedRawByHub)) {
+    if (!Array.isArray(flights) || !flights.length) continue;
+    const parts = key.split('-');
+    const boardHub = parts[0];
+    const boardDir = parts[1] === 'arrivals' ? 'arrivals' : 'departures';
+    const fl = flights.find(f => f.identification?.number?.default === flightNum);
+    if (!fl) continue;
+    const risk = computeDelayRiskForScheduleFlight(fl, boardHub, schedNow(), boardDir);
+    if (risk) return risk;
+  }
+  return null;
 }
 
 // ═══ CONNECTION RISK CALCULATOR ═══
@@ -6548,13 +6838,18 @@ function checkWatchedFlightChanges(flights) {
     if (!ident) return;
     const wIdx = watched.findIndex(w => w.flight === ident);
     if (wIdx < 0) return;
-    const s = classifySchedStatus(fl, schedCurrentDir, schedNow());
+    const s = classifySchedStatus(fl, schedCurrentDir, schedNow(), classifyOptsFor(schedBoardMeta));
     // A time-inferred status (we guessed "Departed"/"Landed" because the clock crossed the grace
     // window, not because the provider confirmed it) must NOT fire a watch notification, a BMAC
     // landing toast, or overwrite the stored status. Skip until a real provider transition
     // arrives — otherwise watchers get speculative "your flight departed/landed" alerts and the
     // fabricated status masks the genuine change later. (adversarial review)
     if (s.inferred) return;
+    // Transitions INTO 'unknown' are pipeline noise, not flight events — tonight
+    // this fired "Unknown (was: Departed)" toasts. Skip entirely: don't notify and
+    // don't overwrite the stored status, so the next REAL transition still compares
+    // against the last meaningful state. (Audit Jul 3 2026.)
+    if (s.key === 'unknown') return;
     const newStatus = s.text;
     const oldStatus = watched[wIdx].status;
     if (oldStatus && newStatus !== oldStatus && isSignificantStatusChange(oldStatus, newStatus)) {
@@ -6605,6 +6900,20 @@ function showWatchNotification(msg) {
 function hideGlobalSearchResults() {
   const results = document.getElementById('global-search-results');
   if (results) results.style.display = 'none';
+}
+
+// Inline (non-blocking) error line under the header search field. A failed
+// lookup used to open a full-screen modal — a dead end for a quick search.
+function showGlobalSearchError(msg) {
+  const el = document.getElementById('global-search-error');
+  if (!el) return false;
+  el.textContent = msg;
+  el.style.display = 'block';
+  return true;
+}
+function hideGlobalSearchError() {
+  const el = document.getElementById('global-search-error');
+  if (el) el.style.display = 'none';
 }
 
 function toggleSidebarFilters() {
@@ -6704,6 +7013,9 @@ document.addEventListener('click', function(e) {
       break;
     case 'refresh-flights':
       refreshFlights();
+      break;
+    case 'sched-jump-now':
+      scrollScheduleToNow(true);
       break;
     case 'schedule-refresh':
       { const ts = getSchedDayTimestamp(schedCurrentDay);
@@ -7075,13 +7387,16 @@ async function initApp() {
       mfSearch.value = '';
     }
   });
+  // Connection-checker inputs submit on Enter (parity with the button)
+  ['conn-inbound', 'conn-outbound'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', function(e) { if (e.key === 'Enter') checkManualConnection(); });
+  });
   // Rotating search placeholders
   (function() {
-    const hints = [
-      'Track a flight — try "UA 1234"',
-      'Look up an aircraft — try "N37502"',
-      'Search by airport — try "ORD"'
-    ];
+    // Header search keeps ONE flight-first placeholder everywhere (its static
+    // HTML placeholder) — the old rotation mutated it to "Look up an aircraft…"
+    // on whatever tab you were on, teaching users the wrong primary use.
     const mfHints = [
       'Add a flight (e.g. UA 1234)',
       'Try a tail number (N37502)'
@@ -7097,7 +7412,6 @@ async function initApp() {
       el.addEventListener('focus', () => { clearInterval(timer); timer = null; });
       el.addEventListener('blur', () => { if (!el.value && !timer) timer = setInterval(cycle, 4000); });
     }
-    rotator(document.getElementById('global-search-input'), hints);
     rotator(document.getElementById('myflight-search'), mfHints);
   })();
   // Init map immediately so the user sees something
@@ -7732,14 +8046,26 @@ function lookupFR24Flight(query) {
     .then(r => r.ok ? r.json() : r.json().catch(() => ({})).then(b => Promise.reject(new Error(b.error || 'HTTP ' + r.status))))
     .then(data => {
       if (!data.success || !data.flight) {
-        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
+        // Failure is never a blocking modal (audit Jul 3 2026): close the loading
+        // modal and render inline error text under the header search field. Modal
+        // fallback only if the inline slot is missing from the DOM.
+        const msg = (data.error || 'No data found for ' + q) + ' — the flight may not be active right now. Check the Schedule tab for gate status.';
+        if (showGlobalSearchError(msg)) {
+          modal.style.display = 'none';
+        } else {
+          modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px"><div style="font-size:24px;margin-bottom:8px">✈️</div><div style="color:var(--ua-muted);font-size:11px">' + escapeHtml(data.error || 'No data found for ' + q) + '</div><div style="margin-top:12px;font-size:9px;color:var(--ua-muted)">The flight may not be active right now.<br>Check the Schedule tab for gate status.</div></div></div>';
+        }
         return;
       }
       renderFR24Modal(data.flight, data.source, data.cached);
     })
     .catch(err => {
       console.error('FR24 lookup error:', err);
-      modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
+      if (showGlobalSearchError('Lookup failed for ' + q + ' — try again in a moment.')) {
+        modal.style.display = 'none';
+      } else {
+        modal.innerHTML = '<div style="background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;padding:24px;max-width:420px;width:90%;color:var(--ua-text);font-family:var(--font-mono);position:relative"><button data-action="close-fr24-modal" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--ua-muted);cursor:pointer;font-size:16px">✕</button><div style="text-align:center;padding:20px;color:var(--ua-muted)"><div style="font-size:24px;margin-bottom:8px">⚠️</div>Failed to look up flight. Try again later.</div></div>';
+      }
     });
 }
 

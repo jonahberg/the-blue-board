@@ -1153,3 +1153,26 @@ table,thead th,tbody td,.stat-val,.metric-val,.big-number,.ticker,.ticker-item,.
   #tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:140px}
   #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:178px}
 }
+
+/* ═══ DQ-JUL3: data-quality release (frontend) ═══ */
+/* Likely Canceled (canceled_uncertain) — warning yellow, distinct from confirmed-red */
+.sched-status.warn{background:rgba(234,179,8,.15);color:var(--ua-yellow)}
+/* "as of <board time>" sub-stamp under statuses rendered from stale/unknown provider data */
+.sched-asof{font-size:8px;color:var(--ua-dim);margin-top:2px;font-family:var(--font-ui)}
+/* Date chip on rows from a previous hub-local date (yesterday's stragglers) */
+.sched-date-chip{display:inline-block;margin-left:4px;padding:0 4px;border:1px solid var(--ua-border);border-radius:3px;font-size:8px;color:var(--ua-muted);font-family:var(--font-mono);letter-spacing:.3px;vertical-align:1px}
+/* DELAY / RISK column: real deltas right-aligned in tabular figures */
+.sched-delay-cell{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sched-delay-actual{font-family:var(--font-mono);font-size:10px;font-weight:600}
+.sched-delay-none{color:var(--ua-dim)}
+/* Sticky "── NOW ──" divider row inside the schedule scroll container */
+.sched-now-divider td{position:sticky;top:0;z-index:3;background:var(--ua-panel-elevated);color:var(--ua-amber);font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:1px;text-align:center;padding:4px 8px;border-top:1px solid var(--ua-amber);border-bottom:1px solid var(--ua-border)}
+/* "Jump to now" toolbar pill */
+.sched-jump-now{background:none;border:1px solid var(--ua-border);color:var(--ua-accent);padding:4px 10px;font-family:var(--font-mono);font-size:10px;border-radius:20px;cursor:pointer;transition:border-color .15s ease,color .15s ease}
+.sched-jump-now:hover{border-color:var(--ua-accent)}
+/* Sub-strip notes under the schedule stat cards (presumed count, FAA lag warning) */
+#sched-stats-note{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:2px 0 6px}
+.sched-note-chip{color:var(--ua-muted);font-family:var(--font-mono);font-size:9px;letter-spacing:.3px}
+.sched-note-warn{color:var(--ua-yellow);font-family:var(--font-ui);font-size:10px}
+/* Compact disclaimer/attribution item in the ticker rotation */
+.ticker-item.disclaimer{color:var(--ua-dim)}

@@ -24,6 +24,17 @@
 // best-known time is already well behind us.
 export const OPERATED_GRACE_SECONDS = 3600; // 60 minutes
 
+// During a hub-wide FAA program (GDP/ground stop), flights routinely sit hours past their
+// best-known time WITHOUT the provider ever publishing a revised estimate — the Jul 3 2026 ORD
+// GDP (293-min average delay) minted 162 false time-inferred "Departed" rows (UA2610/UA1967 were
+// physically parked). When the caller passes the hub's current disruption magnitude, extend the
+// inference grace to cover the program's average delay plus the normal 60-minute grace.
+export function operatedGraceSeconds(hubDisruptionMinutes) {
+  const mins = Number(hubDisruptionMinutes);
+  if (!Number.isFinite(mins) || mins <= 0) return OPERATED_GRACE_SECONDS;
+  return Math.max(OPERATED_GRACE_SECONDS, (mins + 60) * 60);
+}
+
 // How far past scheduled an estimated time must be before classifyBase labels it "delayed"
 // rather than "estimated". Faithfully carried over from the original inline classifier.
 const ESTIMATED_DELAY_SECONDS = 900; // 15 minutes
@@ -64,6 +75,14 @@ function classifyBase(flight) {
   if (diverted) return { text: 'Diverted', cls: 'diverted', key: 'diverted' };
   // FR24 uses various cancellation indicators: generic.status.text, status.text, status.icon
   const iconColor = s.icon || '';
+  // AeroDataBox "CanceledUncertain" is a SOFT signal — the provider suspects a cancellation but
+  // has not confirmed it. Surface it as its own warn-level state instead of hard red Canceled
+  // (the UI used to render the raw string "Canceleduncertain"). MUST be checked before the
+  // generic cancel branch below, whose includes('cancel') would swallow it. `label` mirrors
+  // `text` — it is the field name in the agreed frontend contract for this status.
+  if (statusText === 'canceled_uncertain' || generic?.type === 'canceled_uncertain' || txtLower.includes('canceleduncertain') || txtLower.includes('canceled uncertain')) {
+    return { text: 'Likely Canceled', label: 'Likely Canceled', cls: 'warn', key: 'canceled_uncertain' };
+  }
   if (statusText === 'canceled' || statusText === 'cancelled' || txtLower.includes('cancel') || (iconColor === 'red' && generic?.type === 'canceled')) return { text: txt || 'Canceled', cls: 'canceled', key: 'canceled' };
   if (statusText === 'landed' || txtLower.includes('landed')) return { text: txt || 'Landed', cls: 'landed', key: 'landed' };
   if (statusText === 'departed' || txtLower.startsWith('departed')) return { text: txt || 'Departed', cls: 'departed', key: 'departed' };
@@ -88,29 +107,48 @@ function classifyBase(flight) {
  * @param {('departures'|'arrivals')} [dir='departures']  board direction; decides which
  *        leg (departure vs arrival) drives the time-based "has it operated yet?" check.
  * @param {number} [nowSec]  current unix time in SECONDS (injectable for tests).
- * @returns {{text:string, cls:string, key:string, inferred?:boolean}}
- *        inferred:true marks a status derived from elapsed time rather than confirmed by
- *        the provider — callers exclude these from on-time stats (no trustworthy actual time).
+ * @param {{hubDisruptionMinutes?: number}} [opts]  hubDisruptionMinutes > 0 (from board
+ *        meta.hubDisruptionMinutes, derived from live FAA programs) extends the operated-
+ *        inference grace to max(3600, (hubDisruptionMinutes + 60) * 60) seconds so a GDP hub
+ *        stops minting false time-inferred Departed rows. 0/undefined = legacy behavior.
+ * @returns {{text:string, cls:string, key:string, inferred?:boolean, presumed?:boolean, label?:string}}
+ *        inferred:true / presumed:true both mark a status derived from elapsed time rather than
+ *        confirmed by the provider — callers exclude these from on-time stats (no trustworthy
+ *        actual time) and badge them as presumed in the UI.
  */
-export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.floor(Date.now() / 1000)) {
+export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.floor(Date.now() / 1000), opts = {}) {
   const base = classifyBase(flight);
+  const time = flight.time || {};
+  const isArr = dir === 'arrivals';
+
+  // A provider row can carry the soft CanceledUncertain status AND a real departure/arrival
+  // time (the suspicion was wrong — the flight operated). Confirmed real times win.
+  if (base.key === 'canceled_uncertain') {
+    const real = isArr ? time.real?.arrival : time.real?.departure;
+    if (real && real > 0) {
+      return isArr
+        ? { text: 'Landed', cls: 'landed', key: 'landed' }
+        : { text: 'Departed', cls: 'departed', key: 'departed' };
+    }
+    return base;
+  }
+
   if (!RECLASSIFIABLE_KEYS.has(base.key)) return base;
 
   // Reclassify purely on elapsed time. This path is only reached for not-yet-operated provider
   // statuses (scheduled / estimated / delayed); a confirmed real departure/arrival is already
   // handled by classifyBase (the departed / en-route / landed branches), so we do not re-read
   // time.real here.
-  const time = flight.time || {};
-  const isArr = dir === 'arrivals';
   const scheduled = isArr ? time.scheduled?.arrival : time.scheduled?.departure;
   const estimated = isArr ? time.estimated?.arrival : time.estimated?.departure;
   const eff = effectiveTime(scheduled, estimated);
   if (!eff) return base; // no time to reason about — leave provider status untouched
 
-  if (eff < nowSec - OPERATED_GRACE_SECONDS) {
+  const grace = operatedGraceSeconds(opts?.hubDisruptionMinutes);
+  if (eff < nowSec - grace) {
     return isArr
-      ? { text: 'Landed', cls: 'landed', key: 'landed', inferred: true }
-      : { text: 'Departed', cls: 'departed', key: 'departed', inferred: true };
+      ? { text: 'Landed', cls: 'landed', key: 'landed', inferred: true, presumed: true }
+      : { text: 'Departed', cls: 'departed', key: 'departed', inferred: true, presumed: true };
   }
   return base;
 }

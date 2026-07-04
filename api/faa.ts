@@ -341,6 +341,123 @@ function parseXmlFallback(xml: string): FAAAirport[] {
   return results;
 }
 
+// --- Cached hub-disruption lookup (internal server consumers) ---
+// api/schedule.ts (board meta.hubDisruptionMinutes) and api/cron/warm-schedules.ts (IROPS-aware
+// warm priority) need "does hub X currently have an active FAA program, and how bad is it?"
+// WITHOUT adding an upstream FAA call per board request. This reuses the same nasstatus JSON
+// endpoint the handler above fetches, behind a small in-memory TTL cache with in-flight dedupe.
+
+// 10-minute TTL (positive AND negative): fresh enough for grace/warm decisions (FAA programs run
+// for hours), cheap enough that a board-serving lambda fetches FAA at most once per 10 minutes.
+// Deliberately generous so serve paths are effectively fetch-free after the first lookup.
+const FAA_DISRUPTION_CACHE_TTL_MS = 10 * 60 * 1000;
+const FAA_DISRUPTION_NEGATIVE_TTL_MS = 10 * 60 * 1000;
+const FAA_DISRUPTION_FETCH_TIMEOUT_MS = 5000;
+
+let disruptionCache: { byAirport: Map<string, number>; expires: number } | null = null;
+let disruptionInFlight: Promise<Map<string, number>> | null = null;
+
+/** Test-only: clear the disruption cache so tests control the fetch outcome. */
+export function __resetFaaDisruptionCacheForTests(): void {
+  disruptionCache = null;
+  disruptionInFlight = null;
+}
+
+/**
+ * Disruption magnitude for one FAA airport record, in minutes. 0 = no active program.
+ * Pure — exported for tests.
+ * - "Active" means a real traffic-management PROGRAM: ground stop, ground delay (GDP) or
+ *   closure. Routine departure/arrival delay advisories ("departure delays 31-45 min") are
+ *   normal-ops noise and deliberately do NOT count — they used to trigger IROPS warm priority
+ *   and the extended inference grace, contradicting the documented GDP/GS/closure contract.
+ * - Uses the worst published delay figure (avg preferred, then min) of the active programs.
+ * - A ground stop or closure with no published figure still means nothing is moving: floor 60.
+ * - Any other active program with no published figure gets a nominal 15 so it still reads as
+ *   "disrupted" (warm priority) without wildly inflating the departed-inference grace.
+ */
+export function computeHubDisruptionMinutes(airport: FAAAirport | null | undefined): number {
+  if (!airport) return 0;
+  const active = airport.groundStop || airport.groundDelay || airport.closure;
+  if (!active) return 0;
+  const worst = Math.max(airport.avgDelay ?? 0, airport.minDelay ?? 0);
+  if (worst > 0) return worst;
+  if (airport.groundStop || airport.closure) return 60;
+  return 15;
+}
+
+async function fetchDisruptionMap(): Promise<Map<string, number>> {
+  const byAirport = new Map<string, number>();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FAA_DISRUPTION_FETCH_TIMEOUT_MS);
+    let upstream: Response;
+    try {
+      upstream = await fetch('https://nasstatus.faa.gov/api/airport-events', { signal: controller.signal });
+    } finally {
+      // finally, not the post-await pattern used elsewhere in this file: a rejected fetch would
+      // skip a trailing clearTimeout and leave the abort timer holding the controller up to 5s.
+      clearTimeout(timeout);
+    }
+    if (!upstream.ok) throw new Error(`HTTP ${upstream.status}`);
+    const json = await upstream.json();
+    if (!validateJsonResponse(json)) throw new Error('schema validation failed');
+    for (const airport of parseJsonResponse(json)) {
+      const minutes = computeHubDisruptionMinutes(airport);
+      if (minutes > 0) byAirport.set(airport.airportCode.toUpperCase(), minutes);
+    }
+    disruptionCache = { byAirport, expires: Date.now() + FAA_DISRUPTION_CACHE_TTL_MS };
+  } catch (e: any) {
+    console.warn('FAA disruption lookup failed (treating all hubs as undisrupted):', e?.message || e);
+    // Negative-cache the empty map briefly so a dead FAA endpoint doesn't add a fetch per board.
+    disruptionCache = { byAirport, expires: Date.now() + FAA_DISRUPTION_NEGATIVE_TTL_MS };
+  }
+  return byAirport;
+}
+
+/** Cached map of airportCode -> disruption minutes for every airport with an active program. */
+export async function getDisruptedAirportsMap(): Promise<Map<string, number>> {
+  if (disruptionCache && Date.now() < disruptionCache.expires) return disruptionCache.byAirport;
+  if (disruptionInFlight) return disruptionInFlight;
+  disruptionInFlight = fetchDisruptionMap().finally(() => { disruptionInFlight = null; });
+  return disruptionInFlight;
+}
+
+/**
+ * Synchronous, never-fetching peek at the cached disruption magnitude for one hub, in minutes.
+ * Returns the last-known cached value — even one past its TTL (a slightly stale magnitude beats
+ * a false 0 mid-GDP) — or 0 when nothing has been fetched yet. Serve paths use this instead of
+ * awaiting getHubDisruptionMinutes so a cache-hit board response never blocks up to 5s on a cold
+ * FAA fetch; pair with kickDisruptionRefresh() to warm a cold/expired cache in the background.
+ */
+export function peekHubDisruptionMinutes(hub: string): number {
+  if (!disruptionCache) return 0;
+  return disruptionCache.byAirport.get(String(hub || '').toUpperCase()) || 0;
+}
+
+/**
+ * Start (or join) a background refresh of the disruption map when the cache is cold or expired.
+ * Returns the in-flight promise — hand it to waitUntil so the lambda stays alive long enough —
+ * or null when the cache is fresh and nothing needs doing. Never rejects: fetchDisruptionMap
+ * catches internally and negative-caches failures.
+ */
+export function kickDisruptionRefresh(): Promise<Map<string, number>> | null {
+  if (disruptionCache && Date.now() < disruptionCache.expires) return null;
+  if (!disruptionInFlight) {
+    disruptionInFlight = fetchDisruptionMap().finally(() => { disruptionInFlight = null; });
+  }
+  return disruptionInFlight;
+}
+
+/** Current FAA disruption magnitude for one hub, in minutes (0 = none / lookup unavailable). */
+export async function getHubDisruptionMinutes(hub: string): Promise<number> {
+  try {
+    const map = await getDisruptedAirportsMap();
+    return map.get(String(hub || '').toUpperCase()) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 // --- Handler ---
 
 // Track consecutive JSON failures for exponential backoff
