@@ -4627,21 +4627,22 @@ async function loadScheduleData() {
       let msg = '';
       if (result.degraded && meta.dataAge != null) {
         // Absolute time + consequence, not just a relative age: "from 2h ago" made users do
-        // clock math and never said what it MEANS. "Statuses as of 7:12 PM CDT — live updates
-        // paused" states both. != null (not truthiness): a just-written snapshot has dataAge 0,
-        // which must still render with age context.
+        // clock math and never said what it MEANS. "Statuses as of 7:12 PM CDT — showing the
+        // latest data we have" states both without implying an intentional, resumable stop
+        // (owner Jul 4 2026: "paused" read as dishonest). != null (not truthiness): a
+        // just-written snapshot has dataAge 0, which must still render with age context.
         const age = formatDataAge(meta.dataAge);
         const asOf = formatBoardAsOf();
         msg = result.partial
-          ? `Statuses as of ${asOf} (partial board, ${age} old) — live updates paused.`
-          : `Statuses as of ${asOf} (${age} old) — live updates paused.`;
+          ? `Statuses as of ${asOf} (partial board, ${age} old) — showing the latest data we have.`
+          : `Statuses as of ${asOf} (${age} old) — showing the latest data we have.`;
       } else if (result.stale && !result.partial && meta.dataAge != null) {
         // Complete but aged out of the fresh window (degraded=false: nothing is missing). PR #207
         // made these boards degraded=false for honesty, but the banner gate never checked
         // result.stale — so hours-old complete boards rendered with NO warning. This branch (and
         // the gate above) restores the warning; without it the chain falls to the misleading
         // "Some flights may be missing." default, a lie for a complete board.
-        msg = `Statuses as of ${formatBoardAsOf()} (${formatDataAge(meta.dataAge)} old) — live updates paused.`;
+        msg = `Statuses as of ${formatBoardAsOf()} (${formatDataAge(meta.dataAge)} old) — showing the latest data we have.`;
       } else if (meta.liveFeedFallbackAdded) {
         msg = `Added ${meta.liveFeedFallbackAdded} live active flight(s) while the full schedule feed recovers.`;
       } else if (meta.partialReason === 'live_feed_fallback') {
