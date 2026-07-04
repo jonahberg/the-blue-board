@@ -4,6 +4,16 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-07-04
+
+### Added
+- Schedule: blank registrations backfill from live flight tracking (seen-today ledger; provider values never overwritten)
+
+### Fixed
+- Schedule: stale-board banner now says "showing the latest data we have" instead of "live updates paused"
+- Live Ops: Starlink aircraft render violet (#A78BFA) — glow halo removed
+- Delays: IROPS chip shows plain-language severity (Normal/Minor/Significant) instead of a 0–100 score; radar map opens framed to CONUS
+
 ## [1.5.26] - 2026-07-03
 
 ### Fixed
