@@ -16,6 +16,8 @@ import { peekHubDisruptionMinutes, kickDisruptionRefresh } from './faa.js';
 import { waitUntil } from '@vercel/functions';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
+import { peekRegSightings, kickRegSightingsRefresh, peekRegSightingsLoadedAt } from './_reg-sightings.js';
+import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
 
 const isRateLimited = createRateLimiter('schedule', 30);
 
@@ -1744,9 +1746,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // after a cold start reads 0 and the refresh warms the value for subsequent serves.
     const disruptionRefresh = kickDisruptionRefresh();
     if (disruptionRefresh) enqueueBackgroundTask(disruptionRefresh);
+    // Phase 2: reg-sightings merge, same non-blocking peek+kick contract as the FAA
+    // disruption context above — a cold cache means "no merge this serve", never a wait.
+    // applySightingsToBoard NEVER mutates its input (cache entries are shared objects);
+    // wrapping here covers every 200 path: hot cache, stale, degraded, snapshot, fresh.
+    const sightingsRefresh = kickRegSightingsRefresh();
+    if (sightingsRefresh) enqueueBackgroundTask(sightingsRefresh);
     const withDisruption = (payload: any) => ({
-      ...payload,
-      meta: { ...(payload?.meta || {}), hubDisruptionMinutes: peekHubDisruptionMinutes(hub) },
+      ...applySightingsToBoard(payload, peekRegSightings(), Date.now()),
+      meta: {
+        ...(payload?.meta || {}),
+        hubDisruptionMinutes: peekHubDisruptionMinutes(hub),
+        regSightingsAt: peekRegSightingsLoadedAt() || undefined,
+      },
     });
 
     // Authorized cron warms bypass every serve-from-cache path below: a complete snapshot would
