@@ -190,7 +190,7 @@ describe('warm-schedules handler IROPS integration', () => {
     await handler({ method: 'GET', headers: { authorization: `Bearer ${SECRET}` } }, res);
 
     expect(res.statusCode).toBe(200);
-    const scheduleKeys = Object.keys(res.body.results).filter((k) => k !== 'starlink-data');
+    const scheduleKeys = Object.keys(res.body.results).filter((k) => k !== 'starlink-data' && k !== 'regSightings');
     // Task budget unchanged (3), and both ORD today boards are in this run.
     expect(scheduleKeys).toHaveLength(3);
     expect(scheduleKeys).toContain('ORD-departures-today');
