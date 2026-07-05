@@ -4989,7 +4989,9 @@ function renderScheduleTable() {
     // departed one from whenever a session saw it airborne. A filled reg also unlocks the
     // FLEET_BY_REG enrichment below (type, Starlink ⚡, special livery) for free.
     const reg = schedRegFor(fl) || '—';
-    const regFromLive = reg !== '—' && !fl.aircraft?.registration;
+    // Server-merged tails arrive IN aircraft.registration tagged regSource:'live_feed';
+    // client-ledger fills leave registration empty. Both get the honesty tooltip.
+    const regFromLive = reg !== '—' && (!fl.aircraft?.registration || fl.aircraft?.regSource === 'live_feed');
 
     const oIata = orig?.code?.iata || '';
     const dIata = dest?.code?.iata || '';
@@ -5109,7 +5111,7 @@ function renderScheduleTable() {
     const presumedTip = statusDisp.presumed
       ? ` title="Presumed ${status.key === 'landed' ? 'landed' : 'departed'} \u2014 scheduled time passed without a live update"`
       : '';
-    let statusCell = `<span class="sched-status ${escapeHtml(statusDisp.cls)}"${presumedTip}>${escapeHtml(statusDisp.text)}${statusDisp.presumed ? '*' : ''}</span>`;
+    let statusCell = `<span class="sched-status ${escapeHtml(statusDisp.cls)}"${statusDisp.live ? ' title="Aircraft seen airborne by live flight tracking"' : presumedTip}>${escapeHtml(statusDisp.text)}${statusDisp.presumed ? '*' : ''}</span>${statusDisp.live ? '<span class="sched-live-chip">LIVE</span>' : ''}`;
     if (statusDisp.asOf) statusCell += `<div class="sched-asof">as of ${escapeHtml(boardAsOfStr)}</div>`;
 
     return `<tr>
