@@ -15,6 +15,8 @@ import { sendAlert } from '../_alert.js';
 import { hydrateAdbSpend, getAdbUnitsToday, getAdbDailyUnitBudget } from '../_cost-state.js';
 import { getDisruptedAirportsMap } from '../faa.js';
 import { getStartOfHubDay } from '../../src/lib/hubTz.js';
+import { parseFr24Feed } from '../../src/lib/feed-health.js';
+import { recordFeedSightings } from '../_reg-sightings.js';
 
 const HUBS = UNITED_HUBS;
 // Serialized with INTER_TASK_DELAY_MS between tasks. Budget math: each task worst-case is ~58s
@@ -26,6 +28,7 @@ const HUBS = UNITED_HUBS;
 // ~1.33×/day. That is ≈ 96 fresh boards × 4 units = 384 AeroDataBox units/day. (Default was 3 →
 // 8h cadence / 288 units/day; the +96 units/day buys the fresher cadence and stays far under the
 // 3× organic-budget bypass ceiling.) Serial (not Promise.allSettled) respects the 1 req/s limit.
+// Plus a ≤10s reg-sightings backstop fetch (Phase 2), keeping the worst case ≈264s.
 function envNumber(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) ? value : fallback;
@@ -309,6 +312,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (i < warmPlan.length - 1) {
       await new Promise(r => setTimeout(r, getInterTaskDelayMs()));
     }
+  }
+
+  // Phase 2 backstop: harvest reg sightings once per fire so the ledger stays populated
+  // overnight when no browser is polling /api/fr24-feed. Free upstream (public FR24 feed,
+  // same endpoint fr24-feed.ts proxies); failure never fails the cron. 10s timeout keeps
+  // the run inside the 300s maxDuration budget (see the budget math comment at the top).
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
+    const feedRes = await fetch('https://data-cloud.flightradar24.com/zones/fcgi/feed.js?airline=UAL', {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)', 'Accept': 'application/json' },
+    });
+    clearTimeout(t);
+    if (feedRes.ok) {
+      const recorded = await recordFeedSightings(parseFr24Feed(await feedRes.json()));
+      results.regSightings = { ok: true, recorded };
+    } else {
+      results.regSightings = { ok: false, status: feedRes.status };
+    }
+  } catch (e: any) {
+    console.warn('warm-schedules reg-sightings backstop failed:', e?.message || e);
+    results.regSightings = { ok: false, error: String(e?.message || e) };
   }
 
   // Phase 1.5: warm Starlink data cache (single fast request)

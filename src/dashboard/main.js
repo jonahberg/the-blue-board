@@ -16,7 +16,8 @@ import { firstFutureIndex, nowDividerIndex } from '../lib/board-now.js';
 import { deriveOpsHealth } from '../lib/ops-health.js';
 import { displayScheduleStatus } from '../lib/status-display.js';
 import { computeScheduleStatCounts } from '../lib/board-stats.js';
-import { recordSightings, lookupReg, pruneLedger, deserializeLedger } from '../lib/reg-ledger.js';
+import { recordSightings, lookupReg, pruneLedger, deserializeLedger, normalizeFlightNum } from '../lib/reg-ledger.js';
+import { applySightingsToBoard } from '../lib/reg-overlay.js';
 
 injectSpeedInsights();
 
@@ -4775,7 +4776,30 @@ function formatBoardAsOf(hub = schedCurrentHub) {
   }
 }
 
+// CDN reality (Phase 2 review): clean boards sit at the CDN for up to 6h, so server-stamped
+// live flags are usually past the status engine's 20-min recency gate by the time a cached
+// board reaches this browser — the server merge persists TAILS cross-user, but "airborne right
+// now" needs a fresh clock. The browser's own live feed refreshes every 30s, so re-apply the
+// same tested overlay client-side against it. schedRawByHub stays un-overlaid (raw provider
+// data for IROPS/equipment-swap paths), matching the server rule that snapshots stay pure.
+function applyLiveFeedOverlayToSchedule() {
+  if (!schedAllFlights.length || !allFlights.length || !lastGoodFeedTs) return;
+  const map = new Map();
+  for (const f of allFlights) {
+    if (!f || !f.reg) continue;
+    const key = normalizeFlightNum(f.flightIATA) || normalizeFlightNum(f.callsign);
+    if (!key) continue;
+    map.set(key, { reg: f.reg, origin: f.origin || '', dest: f.dest || '', seenAtMs: lastGoodFeedTs });
+  }
+  if (!map.size) return;
+  const out = applySightingsToBoard({ flights: schedAllFlights }, map, Date.now());
+  if (out.flights !== schedAllFlights) schedAllFlights = out.flights;
+}
+
 function getFilteredScheduleFlights(nowSec = schedNow()) {
+  // Overlay first: every consumer (table render, stat strip, filters) funnels through this
+  // function, so applying here keeps visible rows and stat counts reconciled by construction.
+  applyLiveFeedOverlayToSchedule();
   const statusFilter = document.getElementById('sched-status').value;
   const aircraftFilter = document.getElementById('sched-aircraft').value;
   const fleetFamilyFilter = document.getElementById('sched-fleet-family').value;
@@ -4989,7 +5013,9 @@ function renderScheduleTable() {
     // departed one from whenever a session saw it airborne. A filled reg also unlocks the
     // FLEET_BY_REG enrichment below (type, Starlink ⚡, special livery) for free.
     const reg = schedRegFor(fl) || '—';
-    const regFromLive = reg !== '—' && !fl.aircraft?.registration;
+    // Server-merged tails arrive IN aircraft.registration tagged regSource:'live_feed';
+    // client-ledger fills leave registration empty. Both get the honesty tooltip.
+    const regFromLive = reg !== '—' && (!fl.aircraft?.registration || fl.aircraft?.regSource === 'live_feed');
 
     const oIata = orig?.code?.iata || '';
     const dIata = dest?.code?.iata || '';
@@ -5109,7 +5135,7 @@ function renderScheduleTable() {
     const presumedTip = statusDisp.presumed
       ? ` title="Presumed ${status.key === 'landed' ? 'landed' : 'departed'} \u2014 scheduled time passed without a live update"`
       : '';
-    let statusCell = `<span class="sched-status ${escapeHtml(statusDisp.cls)}"${presumedTip}>${escapeHtml(statusDisp.text)}${statusDisp.presumed ? '*' : ''}</span>`;
+    let statusCell = `<span class="sched-status ${escapeHtml(statusDisp.cls)}"${statusDisp.live ? ' title="Aircraft seen airborne by live flight tracking"' : presumedTip}>${escapeHtml(statusDisp.text)}${statusDisp.presumed ? '*' : ''}</span>${statusDisp.live ? '<span class="sched-live-chip">LIVE</span>' : ''}`;
     if (statusDisp.asOf) statusCell += `<div class="sched-asof">as of ${escapeHtml(boardAsOfStr)}</div>`;
 
     return `<tr>

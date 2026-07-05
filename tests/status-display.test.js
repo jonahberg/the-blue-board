@@ -42,6 +42,11 @@ describe('displayScheduleStatus', () => {
     expect(d.text).toBe('Scheduled');
     expect(d.asOf).toBe(true);
   });
+
+  it('passes the live flag through (Phase 2)', () => {
+    const disp = displayScheduleStatus({ text: 'Departed', cls: 'departed', key: 'departed', live: true });
+    expect(disp.live).toBe(true);
+  });
 });
 
 describe('humanizeStatusText', () => {

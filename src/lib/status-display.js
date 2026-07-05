@@ -38,12 +38,13 @@ export function humanizeStatusText(text) {
  * Defensive against old cached payloads: every new contract field (label,
  * presumed, canceled_uncertain key) may be absent — degrades to prior behavior.
  *
- * @param {{text?:string, cls?:string, key?:string, inferred?:boolean, presumed?:boolean, label?:string}|null} status
- * @returns {{text:string, cls:string, presumed:boolean, asOf:boolean}}
+ * @param {{text?:string, cls?:string, key?:string, inferred?:boolean, presumed?:boolean, label?:string, live?:boolean}|null} status
+ * @returns {{text:string, cls:string, presumed:boolean, asOf:boolean, live?:boolean}}
  *   text     display label (without the presumed asterisk — caller appends "*")
  *   cls      CSS class for .sched-status
  *   presumed row is a time-inferred departure/landing (render "Departed*" + tooltip)
  *   asOf     caller should append an "as of <absolute board time>" sub-stamp
+ *   live     status confirmed by a live-feed sighting (Phase 2) — badge as LIVE, not presumed
  */
 export function displayScheduleStatus(status) {
   if (!status || typeof status !== 'object') {
@@ -63,8 +64,11 @@ export function displayScheduleStatus(status) {
     return { text: label, cls: status.cls || 'warn', presumed: false, asOf: false };
   }
 
+  // Live-sighting reclassifications (Phase 2) arrive here as departed/enroute keys with
+  // live:true — pass the flag through so the board can badge them LIVE, not presumed.
+  const live = status.live === true;
   let text = status.label || status.text || '';
-  if (!text) return { text: 'Scheduled', cls: status.cls || 'scheduled', presumed, asOf: true };
+  if (!text) return { text: 'Scheduled', cls: status.cls || 'scheduled', presumed, asOf: true, live };
   if (looksRawStatusText(text)) text = humanizeStatusText(text);
-  return { text, cls: status.cls || 'unknown', presumed, asOf: false };
+  return { text, cls: status.cls || 'unknown', presumed, asOf: false, live };
 }

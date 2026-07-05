@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
+import { waitUntil } from '@vercel/functions';
+import { parseFr24Feed } from '../src/lib/feed-health.js';
+import { recordFeedSightings } from './_reg-sightings.js';
 
 const isRateLimited = createRateLimiter('fr24-feed', 30);
 
@@ -80,6 +83,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // empty feed is an upstream glitch, never truth — surface it as an error so the client's
       // failure/retry path handles it and CDN/browser caches never store the empty body.
       if (countFeedAircraft(payload) === 0) throw new EmptyFeedError();
+      // Phase 2: harvest flight→tail sightings from every FRESH feed fetch (cache hits carry
+      // nothing new). Throttled inside recordFeedSightings (≤1 upsert/min/instance) and
+      // fire-and-forget — sighting capture must never delay or fail the feed serve.
+      const sightingsTask = recordFeedSightings(parseFr24Feed(payload));
+      try { waitUntil(sightingsTask); } catch { /* waitUntil unavailable (local dev) — promise still runs best-effort */ }
       return payload;
     };
 

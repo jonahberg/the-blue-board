@@ -191,7 +191,7 @@ describe('warm-schedules handler', () => {
     // All schedule tasks served frozen snapshots → none warmed; only starlink succeeded.
     expect(res.body.failed).toBeGreaterThanOrEqual(3);
     expect(res.body.warmed).toBe(1);
-    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
+    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data' && k !== 'regSightings');
     for (const [, r] of scheduleResults) expect(r.status).toBe('stale_served');
     // The Starlink ping has nothing to do with AeroDataBox and is built to never fail — its
     // success must not turn an every-board-frozen run into a green 200 (that 200-while-frozen
@@ -224,7 +224,7 @@ describe('warm-schedules handler', () => {
     await handler(createReq(), res);
     expect(res.body.scheduleWarmed).toBe(0);
     expect(res.statusCode).toBe(503);
-    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
+    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data' && k !== 'regSightings');
     for (const [, r] of scheduleResults) expect(r.status).toBe('not_refreshed');
   });
 
@@ -298,7 +298,7 @@ describe('warm-schedules handler', () => {
     mockFetchOk({ cached: false, stale: false, partial: true, total: 50, meta: { completeness: 0.5 } });
     const res = createRes();
     await handler(createReq(), res);
-    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
+    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data' && k !== 'regSightings');
     expect(scheduleResults.length).toBe(3);
     for (const [key, r] of scheduleResults) expect(r.status, key).toBe('degraded_partial');
     // A half-board did not warm anything: the schedule counters must reflect total failure even
@@ -313,7 +313,7 @@ describe('warm-schedules handler', () => {
     mockFetchOk({ cached: false, stale: false, partial: true, total: 0, meta: { completeness: 0 } });
     const res = createRes();
     await handler(createReq(), res);
-    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
+    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data' && k !== 'regSightings');
     expect(scheduleResults.length).toBe(3);
     for (const [key, r] of scheduleResults) expect(r.status, key).toBe('degraded_empty');
     expect(res.body.scheduleWarmed).toBe(0);
@@ -328,7 +328,7 @@ describe('warm-schedules handler', () => {
     });
     const res = createRes();
     await handler(createReq(), res);
-    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data');
+    const scheduleResults = Object.entries(res.body.results).filter(([k]) => k !== 'starlink-data' && k !== 'regSightings');
     expect(scheduleResults.length).toBe(3);
     for (const [key, r] of scheduleResults) {
       expect(r.status, key).toBe('error');
