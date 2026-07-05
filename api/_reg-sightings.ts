@@ -24,9 +24,21 @@ export function shouldWriteSightings(nowMs: number, lastMs: number, minIntervalM
   return nowMs - lastMs >= minIntervalMs;
 }
 
+/**
+ * Sightings are strictly optional: with no Supabase URL configured (vitest, bare local
+ * dev) every write/read is doomed, so both paths no-op INSTEAD of kicking a background
+ * task that fails every 60s. This is also what keeps schedule.test.js's exact
+ * waitUntil-count assertions deterministic — an unconfigured environment must never
+ * enqueue a sightings refresh (found as an order-dependent test flake, review Jul 5 2026).
+ */
+export function isRegSightingsConfigured(): boolean {
+  return !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+}
+
 /** Batch-upsert sightings from a parsed live feed. Never throws; 0 = throttled/failed/empty. */
 export async function recordFeedSightings(parsedFlights: any[], nowMs = Date.now()): Promise<number> {
   try {
+    if (!isRegSightingsConfigured()) return 0;
     if (!shouldWriteSightings(nowMs, lastWriteAt)) return 0;
     const rows = extractSightings(parsedFlights, nowMs);
     if (rows.length === 0) return 0;
@@ -80,6 +92,7 @@ export function peekRegSightingsLoadedAt(): number {
 
 /** Returns a refresh promise when the cache is cold/expired (caller enqueues it), else null. */
 export function kickRegSightingsRefresh(): Promise<Map<string, SightingRecord>> | null {
+  if (!isRegSightingsConfigured()) return null;
   if (sightingsCache && Date.now() < sightingsCache.expires) return null;
   if (!sightingsInFlight) {
     sightingsInFlight = fetchSightingsMap().finally(() => { sightingsInFlight = null; });

@@ -14,7 +14,7 @@ vi.mock('../api/_supabase.js', () => ({
 import {
   recordFeedSightings, peekRegSightings, kickRegSightingsRefresh,
   peekRegSightingsLoadedAt, shouldWriteSightings, __resetRegSightingsForTests,
-  REG_SIGHTINGS_WRITE_MIN_INTERVAL_MS,
+  isRegSightingsConfigured, REG_SIGHTINGS_WRITE_MIN_INTERVAL_MS,
 } from '../api/_reg-sightings.js';
 
 const FLIGHTS = [{ flightIATA: 'UA123', callsign: 'UAL123', reg: 'N12345', origin: 'ORD', dest: 'SFO' }];
@@ -23,6 +23,21 @@ beforeEach(() => {
   __resetRegSightingsForTests();
   upsertMock.mockClear();
   gtMock.mockClear();
+  // The module no-ops entirely without a Supabase URL (the unconfigured guard) — these
+  // tests exercise the configured path; the guard has its own describe block below.
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://test.supabase.co');
+});
+
+describe('unconfigured guard', () => {
+  it('write and kick are hard no-ops without a Supabase URL — never enqueue doomed work', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
+    expect(isRegSightingsConfigured()).toBe(false);
+    expect(await recordFeedSightings(FLIGHTS, 1_000_000)).toBe(0);
+    expect(upsertMock).not.toHaveBeenCalled();
+    expect(kickRegSightingsRefresh()).toBeNull();
+    expect(gtMock).not.toHaveBeenCalled();
+    expect(peekRegSightings().size).toBe(0);
+  });
 });
 
 describe('shouldWriteSightings', () => {

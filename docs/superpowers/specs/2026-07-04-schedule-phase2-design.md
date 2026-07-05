@@ -134,6 +134,15 @@ and slots into the same gate:
 - Phase 1's client-side ledger stays as the final fallback layer (covers the server
   cache's 60s cold window and any Supabase outage) — `schedRegFor` order becomes:
   provider (incl. server-merged) → client ledger.
+- **Client-side overlay re-application (review finding):** clean boards are CDN-cached up
+  to 6h, so server-stamped `live` flags are usually past the engine's 20-min recency gate
+  by the time a CDN-hit browser receives them — the server merge persists *tails*
+  cross-user, but "airborne right now" needs a fresh clock. The dashboard therefore
+  re-applies `applySightingsToBoard` client-side against its own live feed (30s polls,
+  `seenAtMs = lastGoodFeedTs`) inside `getFilteredScheduleFlights()` — the single funnel
+  for table render, stat strip, and filters, so visible rows and stat counts stay
+  reconciled by construction. `schedRawByHub` stays un-overlaid (raw provider data for
+  IROPS / equipment-swap paths), the client analogue of "snapshots stay pure".
 
 ## Failure modes
 
