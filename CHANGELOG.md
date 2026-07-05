@@ -4,6 +4,12 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-07-04
+
+### Added
+- Schedule: server-side registration ledger — every user now sees tails harvested from live flight tracking (Supabase `reg_sightings`, written from the live-feed function + hourly cron backstop, merged into every board response; provider values never overwritten)
+- Schedule: LIVE status overlay — a row still marked "Scheduled" whose aircraft was seen airborne in the last 15 minutes now shows "Departed · LIVE" (departures) or "En Route · LIVE" (arrivals); upgrade-only, never touches canceled/landed/diverted rows, and stat counts stay reconciled with visible rows
+
 ## [1.5.27] - 2026-07-04
 
 ### Added
