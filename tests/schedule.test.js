@@ -44,6 +44,17 @@ function createRes() {
 describe('schedule API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // Pin the wall clock — Date ONLY; real timers stay real so retry/deadline async
+    // behavior is untouched. Unpinned, this suite computes "today"/"tomorrow" from the
+    // machine clock, and during 00:00–06:00 ORD-local the day rollover makes the tests'
+    // tomorrow ts equal today's hub-day start — the API's same-day gates then cascade
+    // background fetches and a rotating victim test fails its exact fetch/waitUntil
+    // counts (flake proven on pristine main, Jul 5 2026). Midday UTC is safely inside
+    // the same hub-local day everywhere the suite reasons about time.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // (Sanity check for future readers: setting this to 07:00Z — 02:00 ORD — deterministically
+    // reproduces the overnight failure at any real time of day.)
+    vi.setSystemTime(new Date('2026-07-05T18:00:00Z'));
     __resetRateLimitersForTests();
     __resetScheduleCachesForTests();
     process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
@@ -55,6 +66,7 @@ describe('schedule API', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     delete process.env.FR24_API_TOKEN;
     delete process.env.AERODATABOX_API_KEY;
     delete process.env.AERODATABOX_BASE_URL;
