@@ -110,3 +110,58 @@ describe('classifySchedStatus — time-aware reclassification', () => {
     expect(classifySchedStatus({}, 'departures', NOW).key).toBe('unknown');
   });
 });
+
+describe('live-sighting reclassification (Phase 2)', () => {
+  const NOW_SEC = 1_750_000_000;
+  // classifyBase derives base.key from flight.status.generic.status.text (lowercase exact
+  // match for 'scheduled'; includes/startsWith for canceled/landed/departed), so the fixture
+  // lowercases the provider status text into generic.status.text to build a real Scheduled row
+  // (matches how the flight() helper above constructs scheduled rows).
+  const mk = (statusText, { liveAgoSec, schedDepAgoSec = 1800 } = {}) => ({
+    status: { text: statusText, generic: { status: { text: statusText.toLowerCase() } } },
+    time: { scheduled: { departure: NOW_SEC - schedDepAgoSec, arrival: NOW_SEC + 3 * 3600 } },
+    ...(liveAgoSec != null ? { live: { seenAt: (NOW_SEC - liveAgoSec) * 1000 } } : {}),
+  });
+
+  it('upgrades a scheduled departures row with a recent sighting to Departed · live', () => {
+    const s = classifySchedStatus(mk('Scheduled', { liveAgoSec: 300 }), 'departures', NOW_SEC);
+    expect(s.key).toBe('departed');
+    expect(s.live).toBe(true);
+    expect(s.presumed).toBeUndefined();
+  });
+
+  it('upgrades an arrivals row to En Route, never Landed', () => {
+    const s = classifySchedStatus(mk('Scheduled', { liveAgoSec: 300 }), 'arrivals', NOW_SEC);
+    expect(s.key).toBe('enroute');
+    expect(s.live).toBe(true);
+  });
+
+  it('live evidence beats time-inference (no presumed asterisk)', () => {
+    // scheduled 3h ago → the time path would mint presumed Departed; live must win instead
+    const s = classifySchedStatus(mk('Scheduled', { liveAgoSec: 300, schedDepAgoSec: 3 * 3600 }), 'departures', NOW_SEC);
+    expect(s.key).toBe('departed');
+    expect(s.live).toBe(true);
+    expect(s.presumed).toBeUndefined();
+  });
+
+  it('ignores stale sightings (engine-side recency re-check)', () => {
+    const s = classifySchedStatus(mk('Scheduled', { liveAgoSec: 1500 }), 'departures', NOW_SEC);
+    expect(s.live).toBeUndefined(); // > 20 min old — falls through to normal logic
+  });
+
+  it('never touches non-reclassifiable statuses', () => {
+    for (const [txt, key] of [['Canceled', 'canceled'], ['Landed', 'landed'], ['Departed', 'departed']]) {
+      const s = classifySchedStatus(mk(txt, { liveAgoSec: 300 }), 'departures', NOW_SEC);
+      expect(s.key).toBe(key);
+      expect(s.live).toBeUndefined();
+    }
+  });
+
+  it('works without a scheduled time (sighting is the only evidence)', () => {
+    const fl = mk('Scheduled', { liveAgoSec: 300 });
+    fl.time = {};
+    const s = classifySchedStatus(fl, 'departures', NOW_SEC);
+    expect(s.key).toBe('departed');
+    expect(s.live).toBe(true);
+  });
+});

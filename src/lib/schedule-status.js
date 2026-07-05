@@ -42,6 +42,11 @@ const ESTIMATED_DELAY_SECONDS = 900; // 15 minutes
 // "Not yet operated" provider states that are eligible for time-based reclassification.
 const RECLASSIFIABLE_KEYS = new Set(['scheduled', 'estimated', 'delayed']);
 
+// A live-feed sighting older than this is not proof the aircraft is airborne NOW — a
+// cached board can be served minutes after the merge stamped it. 20 min = the server's
+// 15-min "recent" gate plus one full board-cache staleness grace.
+const LIVE_SIGHTING_MAX_AGE_S = 1200;
+
 // Effective time = the most current expectation for when the flight leaves/arrives.
 // Math.max(scheduled, estimated) is deliberate and load-bearing:
 //   - genuine delay: estimated > scheduled, we use estimated (often still in the FUTURE → kept)
@@ -111,10 +116,11 @@ function classifyBase(flight) {
  *        meta.hubDisruptionMinutes, derived from live FAA programs) extends the operated-
  *        inference grace to max(3600, (hubDisruptionMinutes + 60) * 60) seconds so a GDP hub
  *        stops minting false time-inferred Departed rows. 0/undefined = legacy behavior.
- * @returns {{text:string, cls:string, key:string, inferred?:boolean, presumed?:boolean, label?:string}}
+ * @returns {{text:string, cls:string, key:string, inferred?:boolean, presumed?:boolean, live?:boolean, label?:string}}
  *        inferred:true / presumed:true both mark a status derived from elapsed time rather than
  *        confirmed by the provider — callers exclude these from on-time stats (no trustworthy
  *        actual time) and badge them as presumed in the UI.
+ *        live:true marks a status confirmed by a live-feed sighting (Phase 2) — badge as LIVE, not presumed.
  */
 export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.floor(Date.now() / 1000), opts = {}) {
   const base = classifyBase(flight);
@@ -134,6 +140,19 @@ export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.fl
   }
 
   if (!RECLASSIFIABLE_KEYS.has(base.key)) return base;
+
+  // Live-sighting reclassification (Phase 2): the aircraft was seen airborne by the live
+  // feed moments ago. Stronger evidence than elapsed time, so it runs BEFORE the
+  // time-inference below and carries live:true instead of presumed:true (there IS a
+  // trustworthy signal — just not a provider timestamp, so still excluded from OTP
+  // stats the same way presumed rows are, via the absence of time.real).
+  // Never 'landed' from a sighting: a recent sighting means airborne.
+  const liveSeenAtMs = Number(flight.live?.seenAt);
+  if (Number.isFinite(liveSeenAtMs) && liveSeenAtMs > 0 && nowSec - liveSeenAtMs / 1000 <= LIVE_SIGHTING_MAX_AGE_S) {
+    return isArr
+      ? { text: 'En Route', cls: 'enroute', key: 'enroute', live: true }
+      : { text: 'Departed', cls: 'departed', key: 'departed', live: true };
+  }
 
   // Reclassify purely on elapsed time. This path is only reached for not-yet-operated provider
   // statuses (scheduled / estimated / delayed); a confirmed real departure/arrival is already
