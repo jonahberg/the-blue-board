@@ -27,6 +27,18 @@ const aircraftGuideSchema = {
     "@type": "Thing",
     "name": `United Airlines ${data.displayName}`,
     "description": `${data.displayName} guide with fleet count, seat configuration, WiFi, delivery period, and aircraft registry details.`,
+    "additionalProperty": [
+      { "@type": "PropertyValue", "name": "Manufacturer", "value": data.aircraftSchema.manufacturer },
+      { "@type": "PropertyValue", "name": "Model", "value": data.aircraftSchema.model },
+      { "@type": "PropertyValue", "name": "Body type", "value": data.aircraftSchema.bodyType },
+      { "@type": "PropertyValue", "name": "Engines", "value": data.aircraftSchema.engines },
+      { "@type": "PropertyValue", "name": "Range", "value": data.aircraftSchema.range },
+      { "@type": "PropertyValue", "name": "Cruise speed", "value": data.aircraftSchema.cruiseSpeed },
+      { "@type": "PropertyValue", "name": "Wingspan", "value": data.aircraftSchema.wingspan },
+      { "@type": "PropertyValue", "name": "Length", "value": data.aircraftSchema.length },
+      { "@type": "PropertyValue", "name": "Fleet count", "value": String(data.count) },
+      { "@type": "PropertyValue", "name": "Total seats", "value": String(data.seatConfig.total) }
+    ]
   }
 };
 ---
@@ -49,6 +61,8 @@ const aircraftGuideSchema = {
 <meta property="og:url" content={`https://theblueboard.co/fleet/${slug}`}>
 <meta property="og:site_name" content="The Blue Board">
 <meta property="og:image" content="https://theblueboard.co/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:image:alt" content={data.ogImageAlt}>
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:creator" content="@theblueboard">
@@ -220,6 +234,26 @@ a:hover{text-decoration:underline}
 
   <!-- Content HTML -->
   <Fragment set:html={data.contentHtml} />
+
+  <!-- Specifications -->
+  <div class="section">
+    <h2 id="specs">Specifications</h2>
+    <p>Key technical specifications for the {data.displayName} as operated by United Airlines.</p>
+    <div style="overflow-x:auto">
+      <table class="config-table">
+        <tbody>
+          <tr><td style="color:var(--ua-muted);font-weight:600;width:38%">Manufacturer</td><td>{data.aircraftSchema.manufacturer}</td></tr>
+          <tr><td style="color:var(--ua-muted);font-weight:600">Model</td><td>{data.aircraftSchema.model}</td></tr>
+          <tr><td style="color:var(--ua-muted);font-weight:600">Body type</td><td>{data.aircraftSchema.bodyType}</td></tr>
+          <tr><td style="color:var(--ua-muted);font-weight:600">Engines</td><td>{data.aircraftSchema.engines}</td></tr>
+          <tr><td style="color:var(--ua-muted);font-weight:600">Range</td><td>{data.aircraftSchema.range}</td></tr>
+          <tr><td style="color:var(--ua-muted);font-weight:600">Cruise speed</td><td>{data.aircraftSchema.cruiseSpeed}</td></tr>
+          <tr><td style="color:var(--ua-muted);font-weight:600">Wingspan</td><td>{data.aircraftSchema.wingspan}</td></tr>
+          <tr><td style="color:var(--ua-muted);font-weight:600">Length</td><td>{data.aircraftSchema.length}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
   <!-- Aircraft Registry -->
   <div class="section">

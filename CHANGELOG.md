@@ -4,6 +4,36 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-07-07
+
+### Added
+- Fleet type pages: a **Specifications** section on all 19 aircraft pages (manufacturer, model, body type, engines, range, cruise speed, wingspan, length), rendered from each type's `aircraftSchema` — the data existed but was never shown to users or search engines
+- Fleet type pages: those specs are now emitted as structured data (`additionalProperty` on the aircraft guide schema), plus a "Specs" jump-nav link on every page
+- Fleet index (`/fleet`): a "What's New in United's Fleet — 2026" section (Polaris Studio, A321XLR entry into service, Starlink milestones, Signature Interior progress, United's centennial)
+- 787-9 page: a Polaris Studio / "Elevated" section — the new 8-suite premium product (787-9-exclusive), with the 222-seat Elevated layout shown alongside the standard 257-seat config
+- A321neo page: an A321XLR section + FAQ (entered service June 2026; United's first single-aisle with lie-flat Polaris + Premium Plus; the Boeing 757-200 replacement)
+
+### Changed
+- Fleet: full July-2026 fact-check refresh across all 19 aircraft-type pages, the fleet index, and the homepage, verified against current sources (AeroLOPA seat maps, United newsroom, aviation press)
+  - Starlink story added per type and refreshed site-wide: regional E175 led (May 2025), first mainline 737-800 (Oct 2025), first widebody 777 transatlantic (Jun 2026), free for MileagePlus; counts updated 258 → 425+/430 on the homepage and fleet index (stat card, Dataset schema, FAQs)
+  - United Next "Signature Interior" (seatback 4K screens, Bluetooth, larger bins) added to the 737 and A320-family pages, with factory-fit vs retrofit noted per type
+  - 757-200/-300 reframed as phasing out across 2026–2028, with the A321XLR replacing the transatlantic 757-200
+  - 767-300ER/-400ER: retirement-by-~2030 framing (787-9 replacement); 767-300ER two-config detail (167-seat high-Polaris / 203-seat standard); 767-400ER Polaris corrected to 1-1-1 staggered
+  - 777-200: draw-down / stored status (post-2021 PW4000 issue; N777UA retired Dec 2025); 777-300ER reinforced as the flagship/largest; first-widebody-Starlink hook on the ER pages
+  - Fleet index FAQs refreshed (the newest-aircraft answer now leads with the A321XLR); United Express regional context added; hub framing corrected to "8 hubs + Tokyo-Narita gateway"
+- Homepage: FAQ + fleet-tab Starlink copy updated (258 → 425+, free for MileagePlus, ~1,000 aircraft targeted by year-end)
+- llms.txt / llms-full.txt: Polaris Studio + A321XLR freshness added
+
+### Fixed
+- Engine specs corrected to United's actual fits (now surfaced in the visible Specifications section):
+  - 787-8 / 787-9: removed "or Rolls-Royce Trent 1000" — United's 787s are all GEnx-1B
+  - A319 / A320: narrowed to IAE V2500-A5 (United's selected engine)
+  - 777-200 (non-ER): corrected to Pratt & Whitney PW4077 only (removed GE90-77B; Continental never operated non-ER 777s)
+  - 777-200ER: corrected to the mixed PW4090 / GE90-94B fleet (was GE90-94B only)
+- 767-300ER seat range corrected (167–214 → 167–203; 214 was an obsolete pre-Premium-Plus figure)
+- Fleet type pages: added `og:image:width/height` meta (parity with hub pages)
+- Removed a phantom "MAX 10" from llms-full.txt (United does not operate the MAX 10) and added the missing 777-200 to the type list
+
 ## [1.6.1] - 2026-07-06
 
 ### Changed

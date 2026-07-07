@@ -50,9 +50,9 @@ Dedicated guides for each of United Airlines' 19 aircraft types:
 - **https://theblueboard.co/fleet/737-max-8** — Boeing 737 MAX 8: 123 aircraft. 166 seats. Next-gen narrowbody.
 - **https://theblueboard.co/fleet/a319** — Airbus A319: 76 aircraft. 128 seats. Being gradually retired.
 - **https://theblueboard.co/fleet/a320** — Airbus A320: 68 aircraft. 150 seats. Domestic workhorse.
-- **https://theblueboard.co/fleet/a321neo** — Airbus A321neo: 62 aircraft. 200 seats. Newest narrowbody, deliveries through 2026.
+- **https://theblueboard.co/fleet/a321neo** — Airbus A321neo: 62 aircraft. 200 seats. Newest narrowbody, deliveries through 2026; the related A321XLR (lie-flat Polaris suites, replacing the 757) entered service June 2026.
 - **https://theblueboard.co/fleet/777-200er** — Boeing 777-200ER: 55 aircraft. 276 seats. Polaris lie-flat. Workhorse widebody.
-- **https://theblueboard.co/fleet/787-9-dreamliner** — Boeing 787-9 Dreamliner: 48 aircraft. 257 seats. Polaris, Premium Plus. Core long-haul.
+- **https://theblueboard.co/fleet/787-9-dreamliner** — Boeing 787-9 Dreamliner: 48 aircraft. 257 seats (222 in the new "Elevated" layout). Polaris, Premium Plus, and the new Polaris Studio suite. Core long-haul flagship.
 - **https://theblueboard.co/fleet/737-700** — Boeing 737-700: 40 aircraft. 126 seats. Smallest mainline narrowbody.
 - **https://theblueboard.co/fleet/757-200** — Boeing 757-200: 40 aircraft. 176 seats. Lie-flat First on transcon routes.
 - **https://theblueboard.co/fleet/767-300er** — Boeing 767-300ER: 37 aircraft. Polaris. Transatlantic, being retired.
@@ -113,7 +113,7 @@ Each hub page includes: live flight count, hub overview, delay patterns and seas
 
 ### Fleet Database
 - 1,078+ mainline aircraft across 19 types
-- Aircraft families: Boeing 737 (MAX 8, MAX 9, MAX 10, -700, -800, -900), Boeing 757 (-200, -300), Boeing 767 (-300ER, -400ER), Boeing 777 (-200ER, -300ER), Boeing 787 (-8, -9, -10), Airbus A319, A320, A321neo
+- Aircraft families: Boeing 737 (MAX 8, MAX 9, -700, -800, -900), Boeing 757 (-200, -300), Boeing 767 (-300ER, -400ER), Boeing 777 (-200, -200ER, -300ER), Boeing 787 (-8, -9, -10), Airbus A319, A320, A321neo
 - Data per aircraft: registration, type, seat config (F/J/W/Y+/Y), WiFi type, IFE system, delivery date, status
 - Polaris business class on all widebody aircraft (777 and 787 families)
 
