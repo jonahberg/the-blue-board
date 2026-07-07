@@ -41,7 +41,7 @@ The Blue Board tracks every United Airlines flight in real time on a live map up
 - **Live Flight Map**: 600+ United flights tracked simultaneously, updated every 30 seconds via ADS-B data
 - **Hub Delay Alerts**: Real-time delay counts, cancellations, and on-time performance for all 9 hubs
 - **Ground Stop & FAA Monitoring**: NAS status alerts affecting United operations
-- **Starlink WiFi Checker**: 258+ United aircraft with Starlink satellite WiFi — search by tail number or flight
+- **Starlink WiFi Checker**: 425+ United aircraft (as of mid-2026) with Starlink satellite WiFi — search by tail number or flight
 - **Fleet Database**: 1,078+ aircraft with type, seat configuration, IFE details, and delivery dates
 - **Departure & Arrival Schedules**: Real-time schedules with on-time stats and equipment swap alerts
 - **NEXRAD Weather Radar**: Overlay on the live map showing precipitation affecting flights
@@ -74,12 +74,12 @@ The Blue Board is the only flight tracker built exclusively for United Airlines 
 |-----|------|---------|-----------------|
 | Chicago O'Hare | ORD | O'Hare International Airport | ~750 |
 | Denver | DEN | Denver International Airport | ~540 |
-| Houston | IAH | George Bush Intercontinental Airport | ~400 |
-| Newark | EWR | Newark Liberty International Airport | ~400 |
+| Houston | IAH | George Bush Intercontinental Airport | ~480 |
+| Newark | EWR | Newark Liberty International Airport | ~350-400 (FAA caps) |
 | San Francisco | SFO | San Francisco International Airport | ~300 |
 | Washington Dulles | IAD | Washington Dulles International Airport | ~250 |
 | Los Angeles | LAX | Los Angeles International Airport | ~200 |
-| Tokyo Narita | NRT | Narita International Airport | International hub |
+| Tokyo Narita | NRT | Narita International Airport | Asia-Pacific connecting point (most US-Tokyo service uses Haneda/HND) |
 | Guam | GUM | Antonio B. Won Pat International Airport | Pacific hub |
 
 ## Data Sources
