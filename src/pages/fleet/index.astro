@@ -35,7 +35,7 @@ for (const fam of fleetFamilies) {
 const totalAircraft = fleetOrder.reduce((sum, key) => sum + fleetTypes[key].count, 0);
 const polarisAircraft = fleetOrder.reduce((sum, key) => sum + (fleetTypes[key].seatConfig.hasPolaris ? fleetTypes[key].count : 0), 0);
 const widebodyAircraft = fleetOrder.reduce((sum, key) => sum + (fleetTypes[key].bodyType === 'widebody' ? fleetTypes[key].count : 0), 0);
-const starlinkEquipped = 258; // from unitedstarlinktracker.com, updated manually
+const starlinkEquipped = 430; // from unitedstarlinktracker.com / /api/starlink-data, updated manually (mid-2026)
 
 // Seat config table order: widebody (Polaris) first, then narrowbody
 const seatConfigOrder = [
@@ -104,13 +104,13 @@ const cabinShortLabel: Record<string, string> = {
   "url": "https://theblueboard.co/fleet",
   "license": "https://creativecommons.org/licenses/by-nc/4.0/",
   "creator": {"@type": "Organization", "name": "The Blue Board", "url": "https://theblueboard.co"},
-  "dateModified": "2026-03-17",
+  "dateModified": "2026-07-07",
   "temporalCoverage": "2025/..",
   "keywords": ["United Airlines", "fleet database", "aircraft", "seat configuration", "Starlink WiFi", "Polaris"],
   "variableMeasured": [
     {"@type": "PropertyValue", "name": "Aircraft Count", "value": "1078"},
     {"@type": "PropertyValue", "name": "Aircraft Types", "value": "19"},
-    {"@type": "PropertyValue", "name": "Starlink Equipped", "value": "258"}
+    {"@type": "PropertyValue", "name": "Starlink Equipped", "value": "430"}
   ]
 }
 </script>
@@ -139,7 +139,7 @@ const cabinShortLabel: Record<string, string> = {
       "name": "How many aircraft does United Airlines have?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "United Airlines operates a mainline fleet of 1,078 aircraft as of March 2026, spanning 19 aircraft types including the Boeing 737, 757, 767, 777, and 787 families, plus Airbus A319, A320, and A321neo. This does not include United Express regional aircraft operated by partner carriers."
+        "text": "United Airlines operates a mainline fleet of 1,078 aircraft as of mid-2026, spanning 19 aircraft types including the Boeing 737, 757, 767, 777, and 787 families, plus Airbus A319, A320, and A321neo. This mainline count excludes United's several-hundred-aircraft United Express regional fleet (Embraer E175, Bombardier CRJ550, and others) flown by partner carriers such as SkyWest and Republic."
       }
     },
     {
@@ -155,7 +155,7 @@ const cabinShortLabel: Record<string, string> = {
       "name": "Which United Airlines planes have Starlink WiFi?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "As of March 2026, 258 United Airlines aircraft are equipped with SpaceX Starlink satellite internet, including both mainline and United Express regional jets. Starlink provides gate-to-gate high-speed connectivity. Check if your specific plane has Starlink using The Blue Board's Starlink Tracker."
+        "text": "As of mid-2026, more than 425 United Airlines aircraft are equipped with free SpaceX Starlink satellite internet — the majority of them United Express regional jets, which led the rollout, followed by mainline Boeing 737s and, since June 2026, the first widebody Boeing 777s. United is targeting roughly 1,000 Starlink aircraft by the end of 2026. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity. Check if your specific plane has Starlink using The Blue Board's Starlink Tracker."
       }
     },
     {
@@ -171,7 +171,7 @@ const cabinShortLabel: Record<string, string> = {
       "name": "What is the newest aircraft in United's fleet?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The Airbus A321neo is the newest narrowbody type in United's fleet, with 62 aircraft delivered between 2023 and 2026. The Boeing 737 MAX 9 and MAX 8 are also recent additions. For widebodies, the Boeing 787-9 Dreamliner continues to receive new deliveries through 2025."
+        "text": "United's newest aircraft type is the Airbus A321XLR, which entered service in June 2026 — United's first single-aisle jet with lie-flat Polaris business suites and Premium Plus, replacing the Boeing 757 on long, thin transatlantic routes. The Airbus A321neo (62 aircraft, delivered 2023–2026) is the newest high-volume narrowbody, and United keeps taking new Boeing 737 MAX 9s. Among widebodies, the latest Boeing 787-9 Dreamliners now debut United's new Polaris Studio suites, with 787 deliveries continuing through the decade."
       }
     }
   ]
@@ -326,7 +326,7 @@ p{margin-bottom:12px}
 
   <!-- FLEET OVERVIEW -->
   <h3>Fleet Overview</h3>
-  <p>United Airlines operates one of the world's largest and most diverse fleets, with 1,078 mainline aircraft spanning narrowbody and widebody types from Boeing and Airbus.</p>
+  <p>United Airlines operates one of the world's largest and most diverse fleets, with 1,078 mainline aircraft spanning narrowbody and widebody types from Boeing and Airbus — and it is in the middle of its biggest fleet renewal in decades, taking 250+ new jets by 2028 while rolling out free Starlink WiFi and the new Polaris Studio suite.</p>
   <div class="card">
     <table class="fleet-table">
       <thead><tr><th>Family</th><th>Types</th><th>Aircraft</th><th>Role</th></tr></thead>
@@ -339,6 +339,18 @@ p{margin-bottom:12px}
         <tr><td style="font-weight:700;color:var(--ua-accent)">Boeing 767</td><td><a href="/fleet/767-300er">767-300ER</a>, <a href="/fleet/767-400er">-400ER</a></td><td style="font-weight:700">53</td><td>Transatlantic / Medium-haul</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <!-- WHAT'S NEW IN 2026 -->
+  <h3>What's New in United's Fleet — 2026</h3>
+  <div class="card">
+    <ul style="padding-left:20px;margin:0">
+      <li style="margin-bottom:8px"><strong>Polaris Studio debuts on the Boeing 787-9.</strong> United's newest "Elevated" <a href="/fleet/787-9-dreamliner">787-9 Dreamliners</a> carry eight ultra-premium Polaris Studio suites — sliding privacy doors, 27-inch 4K screens, and a companion seat — giving them the highest premium-seat ratio of any U.S. widebody. In service since April 2026.</li>
+      <li style="margin-bottom:8px"><strong>The Airbus A321XLR enters service.</strong> United's first long-range single-aisle jet arrived in June 2026 with 20 lie-flat Polaris suites and Premium Plus, replacing the <a href="/fleet/757-200">Boeing 757-200</a> on long, thin transatlantic routes.</li>
+      <li style="margin-bottom:8px"><strong>Free Starlink WiFi passes 425 aircraft.</strong> United Express regional jets led the rollout, mainline <a href="/fleet/737-800">737-800s</a> followed in October 2025, and the first widebody <a href="/fleet/777-200er">Boeing 777</a> went live in June 2026 — with roughly 1,000 aircraft targeted by year-end.</li>
+      <li style="margin-bottom:8px"><strong>The Signature Interior nears completion.</strong> Around 70% of the mainline narrowbody fleet now has seatback 4K screens, Bluetooth audio, and larger overhead bins, with new <a href="/fleet/a321neo">A321neo</a> and 737 MAX jets arriving factory-fit.</li>
+      <li><strong>United marks its 100th anniversary in 2026,</strong> tracing its roots to Varney Air Lines' first airmail flight on April 6, 1926.</li>
+    </ul>
   </div>
 
   <!-- AIRCRAFT TYPE GUIDES — grouped by family -->
@@ -405,7 +417,7 @@ p{margin-bottom:12px}
 
   <div class="faq-item">
     <div class="faq-q">How many aircraft does United Airlines have?</div>
-    <div class="faq-a">United Airlines operates a mainline fleet of 1,078 aircraft as of March 2026, spanning 19 aircraft types including the Boeing 737, 757, 767, 777, and 787 families, plus Airbus A319, A320, and A321neo. This does not include United Express regional aircraft operated by partner carriers.</div>
+    <div class="faq-a">United Airlines operates a mainline fleet of 1,078 aircraft as of mid-2026, spanning 19 aircraft types including the Boeing 737, 757, 767, 777, and 787 families, plus Airbus A319, A320, and A321neo. This mainline count excludes United's several-hundred-aircraft United Express regional fleet (Embraer E175, Bombardier CRJ550, and others) flown by partner carriers such as SkyWest and Republic.</div>
   </div>
 
   <div class="faq-item">
@@ -415,7 +427,7 @@ p{margin-bottom:12px}
 
   <div class="faq-item">
     <div class="faq-q">Which United Airlines planes have Starlink WiFi?</div>
-    <div class="faq-a">As of March 2026, 258 United Airlines aircraft are equipped with SpaceX Starlink satellite internet, including both mainline and United Express regional jets. Starlink provides gate-to-gate high-speed connectivity. Check if your specific plane has Starlink using the <a href="/?tab=fleet">Starlink Tracker</a> — search by tail number or aircraft type.</div>
+    <div class="faq-a">As of mid-2026, more than 425 United Airlines aircraft are equipped with free SpaceX Starlink satellite internet — the majority of them United Express regional jets, which led the rollout, followed by mainline Boeing 737s and, since June 2026, the first widebody Boeing 777s. United is targeting roughly 1,000 Starlink aircraft by the end of 2026. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity. Check if your specific plane has Starlink using the <a href="/?tab=fleet">Starlink Tracker</a> — search by tail number or aircraft type.</div>
   </div>
 
   <div class="faq-item">
@@ -425,12 +437,12 @@ p{margin-bottom:12px}
 
   <div class="faq-item">
     <div class="faq-q">What is the newest aircraft in United's fleet?</div>
-    <div class="faq-a">The <a href="/fleet/a321neo">Airbus A321neo</a> is the newest narrowbody type in United's fleet, with 62 aircraft delivered between 2023 and 2026. It features the latest cabin amenities, AVOD seatback screens at every seat, and Pratt & Whitney PW1100G engines for superior fuel efficiency. The <a href="/fleet/737-max-9">Boeing 737 MAX 9</a> and <a href="/fleet/737-max-8">MAX 8</a> are also recent additions.</div>
+    <div class="faq-a">United's newest aircraft type is the <a href="/fleet/a321neo">Airbus A321XLR</a>, which entered service in June 2026 — United's first single-aisle jet with lie-flat Polaris business suites and Premium Plus, replacing the Boeing 757 on long, thin transatlantic routes. The <a href="/fleet/a321neo">Airbus A321neo</a> (62 aircraft, 2023–2026) is the newest high-volume narrowbody, with Pratt &amp; Whitney PW1100G engines and 4K seatback screens at every seat, and United keeps adding <a href="/fleet/737-max-9">Boeing 737 MAX 9s</a>. Among widebodies, the latest <a href="/fleet/787-9-dreamliner">Boeing 787-9 Dreamliners</a> now feature United's new Polaris Studio suites.</div>
   </div>
 
   <!-- HUBS -->
   <h3>United Airlines Hubs</h3>
-  <p>United operates from 9 hubs across the US and Pacific. Each hub page shows live delays, on-time performance, and departure schedules.</p>
+  <p>United operates from eight hubs across the U.S. and the Pacific — including Guam — plus its Tokyo-Narita gateway. Each page shows live delays, on-time performance, and departure schedules.</p>
   <div class="hub-links">
     <a class="hub-link" href="/hubs/ord">ORD — Chicago O'Hare</a>
     <a class="hub-link" href="/hubs/den">DEN — Denver</a>
