@@ -30,7 +30,7 @@ The primary interface with 6 tabs:
 
 2. **Schedule**: Departure and arrival schedules at any United hub. Shows flight number, destination/origin, scheduled time, actual time, delay status, aircraft type, and equipment swap alerts. Filterable by hub.
 
-3. **Fleet**: Searchable database of all 1,078+ United mainline aircraft. Includes aircraft type, registration (tail number), seat configuration (first/business/economy plus/economy), WiFi type, IFE system, delivery date, and operational status. Dedicated Starlink WiFi tracker section showing 258+ equipped aircraft.
+3. **Fleet**: Searchable database of all 1,078+ United mainline aircraft. Includes aircraft type, registration (tail number), seat configuration (first/business/economy plus/economy), WiFi type, IFE system, delivery date, and operational status. Dedicated Starlink WiFi tracker section showing 425+ equipped aircraft (as of mid-2026).
 
 4. **Delays · Weather · Hubs**: Weather conditions at all hub airports (METAR observations), NEXRAD radar overlay on the map, FAA NAS status alerts, ground delay programs (GDPs), and ground stops.
 
@@ -77,12 +77,12 @@ Dedicated pages for each of the 9 United hubs:
 
 - **https://theblueboard.co/hubs/ord** — Chicago O'Hare: United's largest hub, ~750 daily departures, Terminal 1 (B & C), Terminal 2 (Express). United's global headquarters.
 - **https://theblueboard.co/hubs/den** — Denver: Second-largest hub, ~540 daily departures, Concourse B. Major domestic connecting hub.
-- **https://theblueboard.co/hubs/iah** — Houston Intercontinental: ~400 daily departures, Terminals C & E. Primary Latin America gateway.
-- **https://theblueboard.co/hubs/ewr** — Newark Liberty: ~400 daily departures, Terminal C + new Terminal A. East Coast transatlantic gateway.
+- **https://theblueboard.co/hubs/iah** — Houston Intercontinental: ~480 daily departures, Terminals B, C & E. Primary Latin America gateway.
+- **https://theblueboard.co/hubs/ewr** — Newark Liberty: ~350-400 daily departures under FAA caps, Terminal C + new Terminal A. East Coast transatlantic gateway. Operates under FAA flight caps (72 operations per hour) extended through October 2027.
 - **https://theblueboard.co/hubs/sfo** — San Francisco: ~300 daily departures, Terminal 3 & International G. Asia-Pacific gateway.
 - **https://theblueboard.co/hubs/iad** — Washington Dulles: ~250 daily departures, Concourses C & D. D.C. hub with transatlantic service.
 - **https://theblueboard.co/hubs/lax** — Los Angeles: ~200 daily departures, Terminals 7 & 8. Pacific gateway hub.
-- **https://theblueboard.co/hubs/nrt** — Tokyo Narita: Asian hub connecting to Pacific routes.
+- **https://theblueboard.co/hubs/nrt** — Tokyo Narita: Asia-Pacific connecting point; most US-Tokyo mainline service now uses Haneda (HND). Anchored by 787 long-haul (SFO, plus ORD from October 2026) and a fleet of Narita-based 737 MAX 8s serving regional Pacific/Asia routes.
 - **https://theblueboard.co/hubs/gum** — Guam: Pacific island hub connecting Micronesia and Pacific routes.
 
 Each hub page includes: live flight count, hub overview, delay patterns and seasonal trends, Starlink WiFi information, terminal/lounge details, construction updates (where applicable), and FAQs.
@@ -105,7 +105,7 @@ Each hub page includes: live flight count, hub overview, delay patterns and seas
 - IROPS ticker scrolls real-time disruption alerts (delays, cancellations, ground stops)
 
 ### Starlink WiFi Tracker
-- Tracks 258+ United Airlines aircraft equipped with SpaceX Starlink satellite internet
+- Tracks 425+ United Airlines aircraft (as of mid-2026) equipped with SpaceX Starlink satellite internet
 - Includes both mainline and United Express regional jets
 - Searchable by tail number or aircraft type
 - Shows Starlink status when looking up a specific flight

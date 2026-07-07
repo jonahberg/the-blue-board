@@ -4,6 +4,25 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-07-06
+
+### Changed
+- Hub pages: full July-2026 content refresh across all 9 hubs, fact-checked against current sources
+  - NRT rewritten — Haneda (HND) is United's primary Tokyo gateway; NRT reframed as the Asia-Pacific connecting point (787 SFO + new ORD route from Oct 24, plus the Narita-based 737 MAX 8 network); removed the stale Haneda route list and "15–20 daily flights" claim
+  - EWR: new "Newark ATC Crisis & FAA Flight Caps" section (72 ops/hr caps extended through Oct 30, 2027; United's schedule cuts); departures caveated to ~350–400 under caps; Polaris location tightened (C102–C120)
+  - ORD: Polaris Lounge corrected to Concourse C near C18 (was a nonexistent "B6"); O'Hare 21 timeline updated (Satellite Concourse 1 ~2028, Global Terminal ~2032, full program ~2034, T2 demolition starts 2026); FAA summer-cap note; departures framed as "up to ~750 at summer peak"
+  - DEN: four United Clubs (~100k sq ft, was "two"); B-West/B-East expansion dates corrected (2020/2022, not Oct 2024); Great Hall final phase (end 2027); 180+ destinations
+  - IAH: ~480 daily departures (was ~400); terminal model reconciled (B = Express, C = mainline domestic, E = international + Polaris); MLIT recast as complete; added Terminal B Transformation (22-gate North Concourse + world's largest United Club, late 2026)
+  - IAD: Concourse E updated from "planned" to opening fall 2026 with new ~40k sq ft United Club
+  - LAX: Polaris location corrected (between gates 73–75A, not 71A); APM target updated (Oct 2026); consistent "smallest mainland hub / Pacific gateway" framing
+  - GUM: Island Hopper stops corrected (exactly 5 intermediate; Palau/Yap are separate routes); added the 2026 737 MAX 8 + Starlink fleet-renewal story
+  - Starlink copy on every hub rewritten around the real rollout: E175 regional jets led (May 2025), first mainline 737-800 (Oct 2025), first widebody 777 transatlantic (Jun 2026), 425+ equipped as of mid-2026, free for MileagePlus members
+- Hubs index + llms.txt/llms-full.txt: departure counts, FAA-cap note, NRT reframing, and Starlink counts (258+ → 425+) aligned with the refreshed pages
+- Starlink static seed (`public/data/starlink.json`) refreshed from the live snapshot (258 → 428 aircraft)
+
+### Fixed
+- Hub page SEO: added `og:image:width/height` meta; removed a dead Place/Airport schema-comment stub in HubLayout
+
 ## [1.6.0] - 2026-07-04
 
 ### Added
