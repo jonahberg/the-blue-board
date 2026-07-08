@@ -235,41 +235,45 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button class="tab-btn" data-tab="tab-weather" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-weather"><span aria-hidden="true">🌦</span> DELAYS · WEATHER · HUBS</button>
   <button class="tab-btn" data-tab="tab-analytics" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-analytics" aria-label="Stats"><span aria-hidden="true">📊</span> STATS</button>
   <button class="tab-btn" data-tab="tab-sources" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-sources"><span aria-hidden="true">ℹ️</span> SOURCES</button>
-  <span class="dockdiv"></span>
-  <!-- Legal / about / donate popover — native details element, CSP-safe (no inline JS) -->
-  <details id="legal-details">
-    <summary id="legal-btn" title="About · Legal · Donate" aria-label="About, legal and donate links">ⓘ</summary>
-    <div id="legalpop" role="menu" aria-label="About and legal">
-      <div class="ltitle">About · Legal · Support</div>
-      <div class="lgrid">
-        <a href="#" data-action="show-disclaimer" data-prevent-default="1">About</a>
-        <a href="#" data-action="show-disclaimer" data-prevent-default="1">Disclaimer</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/fleet">Fleet Database</a>
-        <a href="https://github.com/notjbg/the-blue-board/issues" target="_blank" rel="noopener noreferrer">Support / Feedback</a>
-        <a class="donate" href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer">☕ Donate</a>
-        <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer">@theblueboard</a>
-      </div>
-      <nav class="lhubs" aria-label="United Airlines Hub Pages">
-        <a href="/hubs/ord">ORD</a>
-        <a href="/hubs/den">DEN</a>
-        <a href="/hubs/iah">IAH</a>
-        <a href="/hubs/ewr">EWR</a>
-        <a href="/hubs/sfo">SFO</a>
-        <a href="/hubs/iad">IAD</a>
-        <a href="/hubs/lax">LAX</a>
-        <a href="/hubs/nrt">NRT</a>
-        <a href="/hubs/gum">GUM</a>
-        <a href="/hubs">All Hubs</a>
-        <a href="/news">News</a>
-      </nav>
-      <div class="lnote">
-        Data: <a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer">AeroDataBox</a><span class="sep">·</span><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><br>
-        Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer">Jonah Berg</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
-      </div>
-    </div>
-  </details>
 </nav>
+<!-- Legal / about / donate popover — native details element, CSP-safe (no inline JS).
+     F065: moved out of #tab-bar (was nested inside the role="tablist" nav above, an invalid
+     ARIA child, and #tab-bar's transform made it the containing block for #legalpop's
+     position:fixed, so the popover rendered under the map instead of resolving against the
+     viewport). Kept as an independent fixed sibling right after the nav — same ids, so
+     main.js's delegated #legal-btn / #legal-details / #legalpop handlers are unaffected. -->
+<details id="legal-details">
+  <summary id="legal-btn" title="About · Legal · Donate" aria-label="About, legal and donate links">ⓘ</summary>
+  <div id="legalpop" role="menu" aria-label="About and legal">
+    <div class="ltitle">About · Legal · Support</div>
+    <div class="lgrid">
+      <a href="#" data-action="show-disclaimer" data-prevent-default="1">About</a>
+      <a href="#" data-action="show-disclaimer" data-prevent-default="1">Disclaimer</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/fleet">Fleet Database</a>
+      <a href="https://github.com/notjbg/the-blue-board/issues" target="_blank" rel="noopener noreferrer">Support / Feedback</a>
+      <a class="donate" href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer">☕ Donate</a>
+      <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer">@theblueboard</a>
+    </div>
+    <nav class="lhubs" aria-label="United Airlines Hub Pages">
+      <a href="/hubs/ord">ORD</a>
+      <a href="/hubs/den">DEN</a>
+      <a href="/hubs/iah">IAH</a>
+      <a href="/hubs/ewr">EWR</a>
+      <a href="/hubs/sfo">SFO</a>
+      <a href="/hubs/iad">IAD</a>
+      <a href="/hubs/lax">LAX</a>
+      <a href="/hubs/nrt">NRT</a>
+      <a href="/hubs/gum">GUM</a>
+      <a href="/hubs">All Hubs</a>
+      <a href="/news">News</a>
+    </nav>
+    <div class="lnote">
+      Data: <a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer">AeroDataBox</a><span class="sep">·</span><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><br>
+      Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer">Jonah Berg</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
+    </div>
+  </div>
+</details>
 
 <!-- ════════ ATTRIBUTION (fixed micro-text, bottom-left over the map) ════════ -->
 <div id="attribution">

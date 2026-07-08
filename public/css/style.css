@@ -23,9 +23,12 @@ h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
    VARIANT J — FLOATING CHROME (replaces the stacked bars)
    Panel recipe: solid linear-gradient fill, 1px border, 6px radius.
    NO backdrop-filter, NO blur, NO box-shadow.
-   Z-index ladder (Leaflet panes occupy 200-700; all chrome > 700):
+   Z-index ladder (Leaflet panes occupy 200-700, but #map z:0 and #tab-live.active z:1
+   are stacking contexts, so the ENTIRE map — popups included — always paints below every
+   root-level chrome layer regardless of pane z-index; map/chrome collisions must be
+   solved by layout bands, never by raising pane z-indexes):
      #map 0 · .tab-content non-map 750 · #attribution 710 · #controls 712
-     · #stats-bar 715 · #tab-bar 760
+     · #stats-bar 715 · #tab-bar 760 · #legal-details 760
      · banners 765 · #header 770 · #global-search-results 775
      · #legalpop 780 · #watch-panel 9999 · modals 10000+ · skip-link 100000
    ═══════════════════════════════════════════════════════════ */
@@ -166,9 +169,19 @@ main{display:contents}
 #attribution a:hover{color:var(--ua-accent)}
 #attribution .sep{color:rgba(148,163,184,.3);margin:0 3px}
 
-/* LEGAL POPOVER (new — native <details>, replaces footer links + disclaimer trigger) */
-#legal-details{position:relative;display:flex;align-items:stretch;flex:0 0 auto}
-#legal-details>summary{list-style:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 12px 7px;border-radius:6px;color:var(--ua-muted);min-width:0;background:none;font-size:15px;font-weight:700;font-family:var(--font-display);cursor:pointer;transition:background-color .15s,color .15s}
+/* LEGAL POPOVER (native <details>, replaces footer links + disclaimer trigger).
+   F065: this element used to live inside #tab-bar, whose position:fixed + transform makes
+   it the containing block for any position:fixed descendant — so #legalpop's fixed
+   bottom/right coordinates resolved against the *dock's* box instead of the viewport and
+   rendered under the map. Nesting a <details> inside #tab-bar's role="tablist" was also an
+   invalid ARIA child (axe: aria-required-children). Fix: index.html now places
+   #legal-details as its own fixed sibling immediately after </nav> — same ids throughout
+   (main.js's delegated handlers for #legal-btn / #legal-details / #legalpop are unaffected),
+   no longer a tablist child, and #legalpop's fixed coordinates now resolve against the real
+   viewport. Anchored bottom-right at the same bottom offset as the dock so it reads as a
+   companion floating control, styled with the same panel recipe (DESIGN.md card treatment). */
+#legal-details{position:fixed;bottom:24px;right:16px;z-index:760;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border)}
+#legal-details>summary{list-style:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 14px 7px;border-radius:6px;color:var(--ua-muted);min-width:0;background:none;font-size:15px;font-weight:700;font-family:var(--font-display);cursor:pointer;transition:background-color .15s,color .15s}
 #legal-details>summary::-webkit-details-marker{display:none}
 #legal-details>summary:hover{background:rgba(148,163,184,.07);color:var(--ua-text)}
 #legal-details[open]>summary{background:var(--ua-blue-soft);color:var(--ua-accent)}
@@ -183,7 +196,6 @@ main{display:contents}
 #legalpop .lnote{margin-top:9px;padding-top:9px;border-top:1px solid var(--ua-border);font-size:9px;color:var(--ua-dim);line-height:1.6}
 #legalpop .lnote a{color:var(--ua-muted)}
 #legalpop .lnote .sep{color:var(--ua-border);margin:0 3px}
-.dockdiv{width:1px;align-self:stretch;background:var(--ua-border);margin:4px 4px;flex-shrink:0}
 
 /* Map attribution (ODbL: OpenStreetMap/CARTO credit, both Leaflet maps) — restyle the default
    white pill for the dark NOC theme: micro-text, low-contrast but legible (--ua-dim is the
@@ -275,7 +287,11 @@ main{display:contents}
 .popup-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--ua-border);align-items:center}
 .popup-links a{color:var(--ua-accent);text-decoration:none;font-size:10px;padding:3px 8px;background:rgba(0,93,170,.1);border:1px solid rgba(0,93,170,.2);border-radius:3px;transition:background .15s,border-color .15s;display:inline-flex;align-items:center;gap:4px}
 .popup-links a:hover{background:rgba(0,93,170,.2);border-color:rgba(0,93,170,.4)}
-.hub-tooltip{background:rgba(10,14,20,.85)!important;border:1px solid var(--ua-blue)!important;color:var(--ua-accent)!important;font-size:10px!important;font-weight:700!important;padding:2px 6px!important;border-radius:3px!important;font-family:var(--font-mono)!important}
+/* F093: Leaflet's base .leaflet-tooltip rule sets white-space:nowrap with no max-width, so a
+   long hub condition label (e.g. "ORD MVFR (marginal ceilings/visibility)") clips off-screen
+   on narrow viewports. Cap the width and allow wrapping — matches the !important overrides
+   already needed here to beat Leaflet's own tooltip defaults. */
+.hub-tooltip{background:rgba(10,14,20,.85)!important;border:1px solid var(--ua-blue)!important;color:var(--ua-accent)!important;font-size:10px!important;font-weight:700!important;padding:2px 6px!important;border-radius:3px!important;font-family:var(--font-mono)!important;white-space:normal!important;max-width:min(280px,70vw)!important}
 
 /* ═══ MY FLIGHTS ═══ */
 .mf-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;margin-bottom:14px;overflow:hidden;contain:content}
@@ -734,8 +750,14 @@ tbody td{padding:5px 8px;white-space:nowrap}
 @media(max-width:900px){.metric-row{flex-wrap:wrap}}
 .metric-card{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 10px;border-right:1px solid var(--ua-border);min-width:0}
 .metric-card:last-child{border-right:none}
-.metric-val{font-size:16px;font-weight:700;color:var(--ua-accent);line-height:1}
-.metric-label{font-size:9px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+/* F092: .metric-card's flex-basis:0 (from flex:1) lets the CARD shrink below its content
+   width, but flex children default to an automatic min-width of "auto" (their own content
+   size) — for a nowrap label that's the full text width, so the label refused to shrink and
+   painted over the neighboring card instead (reproduced at 852x393). flex-shrink:0 keeps the
+   stat value always fully legible; min-width:0 + overflow/ellipsis let the label truncate
+   inside its own box instead of overflowing into the next card, at any width. */
+.metric-val{font-size:16px;font-weight:700;color:var(--ua-accent);line-height:1;flex-shrink:0;white-space:nowrap}
+.metric-label{font-size:9px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 
 /* ═══ TAB 5: SOURCES ═══ */
 #tab-sources{padding:20px;flex:1;min-height:0;overflow-y:auto}
@@ -846,6 +868,17 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #tab-live .sidebar #sidebar-filters-toggle{display:block}
   #tab-live .sidebar #sidebar-extra-filters.show{display:block}
   #mobile-sidebar-toggle{display:flex!important;position:fixed;top:96px;left:12px;z-index:707;width:auto;margin:0}
+  /* F091: #tab-live is exempt from the general non-map-tab reflow (the map is the background
+     layer), but its fixed controls — the filter toggle and the sidebar panel it opens — sat
+     inside the banner/tip-strip capsule band (z:765 vs. z:707/706) and were covered whenever
+     a banner was visible. Offset both below whichever capsule(s) are showing, mirroring the
+     band deltas used for .tab-content.active below (sidebar keeps its usual toggle+6 offset). */
+  #news-banner[style*="flex"]~main #mobile-sidebar-toggle{top:138px}
+  #tip-strip:not([style*="none"])~main #mobile-sidebar-toggle{top:138px}
+  #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main #mobile-sidebar-toggle{top:176px}
+  #news-banner[style*="flex"]~main #tab-live .sidebar{top:144px}
+  #tip-strip:not([style*="none"])~main #tab-live .sidebar{top:144px}
+  #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main #tab-live .sidebar{top:182px}
   /* ── Map controls: expandable FAB + floating panel ── */
   #tab-live #controls{top:auto;bottom:70px;right:auto;left:12px;transform:none;display:flex;flex-direction:column;align-items:flex-start;gap:8px;z-index:712}
   /* Legend lives in the desktop control ladder; the mobile controls collapse to a FAB, so hide it there (amber glow markers still convey the signal). */
@@ -945,7 +978,13 @@ tbody td{padding:5px 8px;white-space:nowrap}
 /* ── Mobile search toggle (hidden on desktop) ── */
 #mobile-search-toggle{display:none;background:none;border:none;color:var(--ua-muted);font-size:16px;cursor:pointer;padding:4px;align-items:center;justify-content:center}
 /* ── Mobile sidebar toggle (hidden on desktop) ── */
-#mobile-sidebar-toggle{display:none;align-items:center;gap:4px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:4px;color:var(--ua-accent);font-family:var(--font-ui);font-size:10px;padding:6px 12px;cursor:pointer;margin:6px 10px;width:calc(100% - 20px)}
+/* F091: dropped the legacy in-flow `margin:6px 10px;width:calc(100% - 20px)` (from when this
+   button lived inside the sidebar flow). Being later in source order at equal specificity,
+   they silently overrode the mobile rule's own `width:auto;margin:0`, stretching the fixed
+   toggle into a near-full-width bar whose right end covered marker-popup close buttons at the
+   map's top edge (and the margin made it render 6px below its declared `top`). The mobile
+   rule's intended compact chip now applies: popups' top-right close buttons clear it. */
+#mobile-sidebar-toggle{display:none;align-items:center;gap:4px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:4px;color:var(--ua-accent);font-family:var(--font-ui);font-size:10px;padding:6px 12px;cursor:pointer}
 /* Schedule Tab */
 .sched-day-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 10px;font-family:var(--font-ui);font-size:10px;cursor:pointer;border-radius:3px;transition:color .2s cubic-bezier(.4,0,.2,1),border-color .2s cubic-bezier(.4,0,.2,1),background-color .2s cubic-bezier(.4,0,.2,1),transform .15s cubic-bezier(.4,0,.2,1)}
 .sched-day-btn:hover{color:var(--ua-text);border-color:var(--ua-blue)}
@@ -969,9 +1008,24 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sched-load-more:disabled{opacity:.4;cursor:default}
 
 /* Onboarding Overlay */
-#onboarding-overlay{position:fixed;inset:0;background:rgba(10,14,20,.85);z-index:10000;display:flex;align-items:center;justify-content:center;opacity:0;animation:obFadeIn .4s ease forwards;backdrop-filter:blur(4px);pointer-events:none}
+/* F090: landscape lockout fix. Two independent problems, two independent fixes:
+   (1) align-items:center on a flex container with no overflow handling clips a tall child
+   symmetrically off BOTH edges when it doesn't fit (classic flex-center overflow trap) and
+   nothing here was a scroll container, so a short viewport (e.g. 852x393 landscape, card
+   ~671px tall) could clip the dismiss button below the fold with no way to reach it.
+   `align-items:safe center` keeps normal centering whenever the card fits, and falls back to
+   start-alignment only when it would overflow — combined with overflow-y:auto (now an actual
+   scroll container) the whole card, dismiss button included, is always reachable by scrolling.
+   No visual change at viewports where the card already fit (e.g. 1440x900, 393x852 portrait).
+   (2) pointer-events:none on the overlay made backdrop clicks pass straight through to the map
+   underneath, so the existing backdrop-click-dismiss handler (main.js) could never fire even
+   though it's wired up. Restoring default pointer-events (auto) is safe: hideOverlay() (main.js)
+   sets .ob-hidden immediately, which force-overrides pointer-events back to none for the 300ms
+   fade-out, and finishes by setting display:none — so the overlay never intercepts clicks once
+   dismissed, and can't during the fade-out either. */
+#onboarding-overlay{position:fixed;inset:0;background:rgba(10,14,20,.85);z-index:10000;display:flex;align-items:safe center;justify-content:center;overflow-y:auto;padding:24px 16px;opacity:0;animation:obFadeIn .4s ease forwards;backdrop-filter:blur(4px)}
 #onboarding-overlay.ob-hidden{opacity:0;pointer-events:none;transition:opacity .3s ease}
-#onboarding-card{pointer-events:auto;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;max-width:480px;width:90%;padding:32px;text-align:center;box-shadow:0 0 60px rgba(0,93,170,.15)}
+#onboarding-card{pointer-events:auto;flex-shrink:0;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;max-width:480px;width:90%;padding:32px;text-align:center;box-shadow:0 0 60px rgba(0,93,170,.15)}
 #onboarding-card h2{font-size:20px;color:#fff;margin-bottom:6px;letter-spacing:.5px}
 .onboarding-subtitle{color:var(--ua-muted);font-size:12px;margin-bottom:24px}
 .onboarding-features{text-align:left;display:flex;flex-direction:column;gap:12px;margin-bottom:24px}
@@ -1148,11 +1202,26 @@ table,thead th,tbody td,.stat-val,.metric-val,.big-number,.ticker,.ticker-item,.
 #news-banner[style*="flex"]~main .tab-content.active:not(#tab-live),
 #tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:122px}
 #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:160px}
+/* F091: #tab-live was fully exempt from this reservation, so the Live map's popups (and
+   their close buttons) could open underneath the capsules — and no pane z-index can fix
+   that, because #map (z:0) and #tab-live.active (z:1) are stacking contexts that pin the
+   whole map below root-level chrome (see ladder note at top). Instead, reserve the same
+   capsule band on the MAP CONTAINER itself: with #map's top edge below the capsules,
+   Leaflet's autoPan keeps every popup inside the container — nothing can open under the
+   banner, and the map stays maximally tall (the reclaimed strip was unusable under the
+   capsule anyway). Leaflet 1.9's trackResize (ResizeObserver) picks the container resize
+   up automatically, so showing/dismissing a banner reflows the map with no JS changes. */
+#news-banner[style*="flex"]~main #map,
+#tip-strip:not([style*="none"])~main #map{top:122px}
+#news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main #map{top:160px}
 /* Mobile anchors: capsules sit at 102px (one row) / 140px (stacked) below the two-row canopy. */
 @media(max-width:768px){
   #news-banner[style*="flex"]~main .tab-content.active:not(#tab-live),
   #tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:140px}
   #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:178px}
+  #news-banner[style*="flex"]~main #map,
+  #tip-strip:not([style*="none"])~main #map{top:140px}
+  #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main #map{top:178px}
 }
 
 /* ═══ DQ-JUL3: data-quality release (frontend) ═══ */
