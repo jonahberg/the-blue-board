@@ -38,13 +38,15 @@
         "api/cron/refresh-tsa.ts": { "maxDuration": 30 },
         "api/metar.ts": { "maxDuration": 15 },
         "api/support-stats.ts": { "maxDuration": 10 },
-        "api/cron/refresh-metar.ts": { "maxDuration": 30 }
+        "api/cron/refresh-metar.ts": { "maxDuration": 30 },
+        "api/cron/watch-alerts.ts": { "maxDuration": 120 }
     },
     "crons": [
         { "path": "/api/cron/warm-schedules", "schedule": "0 * * * *" },
         { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" },
         { "path": "/api/cron/refresh-tsa", "schedule": "0 * * * *" },
-        { "path": "/api/cron/refresh-metar", "schedule": "*/5 * * * *" }
+        { "path": "/api/cron/refresh-metar", "schedule": "*/5 * * * *" },
+        { "path": "/api/cron/watch-alerts", "schedule": "*/5 * * * *" }
     ],
   "buildCommand": "bun run build",
   "outputDirectory": "dist",

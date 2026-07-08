@@ -329,8 +329,10 @@ async function fetchScheduleCacheTimes(flight: string, dateParam = ''): Promise<
 
 // Run the FR24 → schedule-cache fallback chain and write the response. `reason` records WHY the
 // primary (FlightAware) tier failed, and is only surfaced when every tier fails.
-async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey: string, reason: string, dateParam = '') {
-  const fr24 = await fetchFr24Summary(flight);
+async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey: string, reason: string, dateParam = '', allowOfficial = true) {
+  // allowOfficial=false lets a caller (e.g. api/cron/watch-alerts.ts) skip the paid FR24 official
+  // API tier entirely and resolve only from the free FlightAware scrape + schedule-snapshot cache.
+  const fr24 = allowOfficial ? await fetchFr24Summary(flight) : null;
   if (fr24) {
     setCache(cacheKey, fr24);
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
@@ -369,6 +371,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rawDate = req.query.date;
   const dateParam = (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) ? rawDate : '';
 
+  // officialFallback=0 skips the paid FR24 official-API tier (used by the watch-alerts cron so a
+  // background diff never burns FR24 credits). Default on for interactive callers.
+  const allowOfficial = String(req.query.officialFallback ?? '1').toLowerCase() !== '0';
+
   const cacheKey = `fa:${flight}:${dateParam}`;
   const cached = getCached(cacheKey);
   if (cached) {
@@ -395,7 +401,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     clearTimeout(timeout);
 
     if (!resp.ok) {
-      return await respondViaFallbacks(res, flight, cacheKey, `flightaware HTTP ${resp.status}`);
+      return await respondViaFallbacks(res, flight, cacheKey, `flightaware HTTP ${resp.status}`, dateParam, allowOfficial);
     }
 
     // Cap response body size to prevent a misbehaving or malicious FlightAware
@@ -410,14 +416,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const match = html.match(/trackpollBootstrap\s*=\s*(\{[\s\S]{1,200000}?\});\s*(?:var|<\/script)/);
     if (!match) {
       // FlightAware blocked — fall down the chain
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware blocked (no bootstrap)', dateParam);
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware blocked (no bootstrap)', dateParam, allowOfficial);
     }
 
     let bootstrap: any;
     try {
       bootstrap = JSON.parse(match[1]);
     } catch (e) {
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap unparseable', dateParam);
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap unparseable', dateParam, allowOfficial);
     }
 
     // Find the most relevant flight — scan ALL activity log entries, then rank
@@ -443,7 +449,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // A bootstrap that parses but contains ZERO flights is FlightAware's bot-wall, not a
       // definitive "this flight does not exist" — treat it as a source failure and fall through
       // to FR24 / the schedule snapshot layer instead of 404ing every flight. (Jul 3 2026 audit.)
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap empty (bot-wall)', dateParam);
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap empty (bot-wall)', dateParam, allowOfficial);
     }
 
     const f = bestFlight;
@@ -502,6 +508,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(result);
   } catch (e) {
     console.error('FlightAware scrape error:', e);
-    return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error', dateParam);
+    return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error', dateParam, allowOfficial);
   }
 }

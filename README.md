@@ -55,7 +55,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 - **AI delay explanations** — Click any risk badge for a natural language briefing powered by Claude AI
 - **Inbound aircraft tracking** — "Where's My Plane?" shows your aircraft's current position operating its previous flight
 - **Deep-link hashes** — Share direct links to any tab (`#live`, `#schedule`, `#fleet`, `#weather`, `#stats`)
-- **Flight watch** — Pin a flight and get browser push notifications on status changes
+- **Flight watch** — Pin a flight and get browser push notifications on status changes, including background alerts that fire even when the tab is closed once the owner enables Web Push ([setup](docs/setup-push-alerts.md))
 - **Hub health bar** — At-a-glance on-time performance across all 8 United hubs plus the Tokyo-Narita gateway, with cancellation rate detection (shows `100% CX` when a hub is shut down)
 - **Equipment swap alerts** — Badges when scheduled aircraft type changes
 - **📱 Mobile-first design** — Map-maximized layout with bottom tab bar navigation, collapsible filters

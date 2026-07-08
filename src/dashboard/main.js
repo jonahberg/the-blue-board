@@ -6304,6 +6304,90 @@ function getFAADelayContext(originIata, destIata) {
 // ═══ FLIGHT WATCH ═══
 const MAX_WATCHED = 20;
 
+// ── Background push (server-side watch alerts) ──
+// GRACEFUL: every path below is wrapped so ANY failure leaves the existing in-tab watch behaviour
+// (checkWatchedFlightChanges) fully intact. Background push is a pure enhancement layered on top.
+// State: null = not yet bootstrapped, {configured, vapidPublicKey} once GET /api/push-subscribe
+// has answered. When configured is false (owner hasn't set VAPID keys), we stay in-tab-only.
+let bbPushConfig = null;
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+async function bbPushBootstrap() {
+  if (bbPushConfig !== null) return bbPushConfig;
+  try {
+    const r = await fetch('/api/push-subscribe', { method: 'GET' });
+    // A non-OK response (or a payload without configured:true) means treat as unconfigured.
+    bbPushConfig = r.ok ? await r.json() : { configured: false, vapidPublicKey: '' };
+  } catch (e) {
+    bbPushConfig = { configured: false, vapidPublicKey: '' };
+  }
+  return bbPushConfig;
+}
+
+// True only when the deployment has push configured AND the user has granted permission AND the
+// SW/push APIs exist. Callers use this to decide the honest UI copy under the watch list.
+function bbBackgroundPushActive() {
+  return !!(bbPushConfig && bbPushConfig.configured
+    && 'serviceWorker' in navigator && 'PushManager' in window
+    && 'Notification' in window && Notification.permission === 'granted');
+}
+
+// Push the current watch list to the server (subscribe/refresh), or tear down when empty.
+// Never throws; any failure is swallowed so in-tab watching continues unaffected.
+async function syncPushSubscription() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+    const cfg = await bbPushBootstrap();
+    if (!cfg || !cfg.configured || !cfg.vapidPublicKey) return; // deployment not enabled → in-tab only
+    if (Notification.permission !== 'granted') return;           // no permission → in-tab only
+
+    const reg = await navigator.serviceWorker.ready;
+    const watched = getWatchedFlights();
+
+    if (watched.length === 0) {
+      // Nothing to watch: unsubscribe from the push service and drop the server row.
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        const endpoint = existing.endpoint;
+        await existing.unsubscribe().catch(() => {});
+        await fetch('/api/push-subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'unsubscribe', subscription: { endpoint } }),
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(cfg.vapidPublicKey),
+      });
+    }
+    const json = sub.toJSON();
+    await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: { endpoint: sub.endpoint, keys: json.keys },
+        watches: watched.map((w) => ({ flight: w.flight })),
+      }),
+    }).catch(() => {});
+  } catch (e) {
+    // Intentionally silent — in-tab watching is the guaranteed fallback.
+  }
+}
+
 function getWatchedFlights() {
   try { return JSON.parse(localStorage.getItem('bb_watched_flights') || '[]'); } catch(e) { return []; }
 }
@@ -6344,6 +6428,9 @@ function toggleWatchFlight(flightNum, route, currentStatus) {
   if (document.getElementById('tab-myflight')?.classList.contains('active')) renderMyFlights();
   syncWatchButtons(flightNum, isWatched);
   showWatchNotification(isWatched ? `👁️ Watching ${flightNum}` : `✕ Removed ${flightNum} from watched flights`);
+  // Enhancement: mirror the watch list to the server so alerts fire even when this tab is closed.
+  // Fully guarded — never blocks or breaks the in-tab watch that just succeeded above.
+  syncPushSubscription();
   return isWatched;
 }
 
@@ -6392,7 +6479,29 @@ function renderWatchPanel() {
   list.innerHTML = watched.map(w => `<div class="watch-flight-item">
     <div class="watch-flight-info"><span class="wf-num">${escapeHtml(w.flight)}</span> <span class="wf-route">${escapeHtml(w.route)}</span></div>
     <div style="display:flex;align-items:center;gap:4px"><span class="watch-flight-status" style="font-size:9px;color:var(--ua-muted)">${escapeHtml(w.status)}</span><button class="watch-remove" data-action="toggle-watch-flight" data-flight="${escapeHtml(w.flight)}" data-stop-prop="1" aria-label="Remove watched flight" title="Remove">✕</button></div>
-  </div>`).join('');
+  </div>`).join('') + renderWatchAlertsFootnote();
+}
+
+// Honest, subtle status line under the watch list (DESIGN.md: --ua-dim, 9px, no emphasis).
+// Bootstraps push config lazily and re-renders the footnote once the answer arrives.
+function renderWatchAlertsFootnote() {
+  let text;
+  if (bbBackgroundPushActive()) {
+    text = 'Background alerts on — you’ll be notified even when this tab is closed.';
+  } else if (bbPushConfig && bbPushConfig.configured) {
+    // Deployment supports it, but this browser hasn’t granted permission.
+    text = 'Alerts work while this tab is open. Enable notifications for background alerts.';
+  } else if (bbPushConfig && !bbPushConfig.configured) {
+    text = 'Alerts work while this tab is open. Background alerts: not yet enabled on this deployment.';
+  } else {
+    // Not yet bootstrapped — kick it off, then re-render this panel when it resolves.
+    text = 'Alerts work while this tab is open.';
+    bbPushBootstrap().then(() => {
+      const panel = document.getElementById('watch-panel');
+      if (panel && panel.classList.contains('show')) renderWatchPanel();
+    });
+  }
+  return `<div style="padding:8px 12px;font-size:9px;line-height:1.5;color:var(--ua-dim);border-top:1px solid var(--ua-border-subtle)">${text}</div>`;
 }
 
 function clearAllWatched() {
@@ -7555,7 +7664,11 @@ document.addEventListener('click', function(e) {
     case 'enable-push':
       if ('Notification' in window) {
         Notification.requestPermission().then(p => {
-          if (p === 'granted') showWatchNotification('🔔 Push notifications enabled for watched flights');
+          if (p === 'granted') {
+            showWatchNotification('🔔 Push notifications enabled for watched flights');
+            // Now that permission exists, register the server-side subscription (if configured).
+            syncPushSubscription();
+          }
         });
       }
       try { localStorage.setItem('bb_push_prompted', '1'); } catch(e) {}

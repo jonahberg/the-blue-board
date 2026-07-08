@@ -171,18 +171,46 @@ self.addEventListener('fetch', (event) => {
   })());
 });
 
+// ═══ PUSH HANDLER (server-side background flight-watch alerts) ═══
+// Payload shape from api/cron/watch-alerts.ts:
+//   { title, body, tag, url }
+// Adding this handler does NOT change any cached asset, so per the header convention above
+// CACHE_VERSION is intentionally NOT bumped.
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_e) {
+    payload = { title: 'The Blue Board', body: event.data ? event.data.text() : '' };
+  }
+  const title = payload.title || 'The Blue Board';
+  const url = payload.url || '/';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body || '',
+      tag: payload.tag || undefined,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { url: url },
+    })
+  );
+});
+
 // ═══ NOTIFICATION CLICK HANDLER ═══
+// Handles both the in-tab watch notifications (data.flight) and the server push notifications
+// (data.url). data.url wins when present; otherwise fall back to the flight deep link.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const flight = event.notification.data?.flight || '';
-  const urlPath = flight ? '/?flight=' + encodeURIComponent(flight) : '/';
+  const data = event.notification.data || {};
+  const flight = data.flight || '';
+  const urlPath = data.url || (flight ? '/?flight=' + encodeURIComponent(flight) : '/');
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       // Focus existing window if available
       for (const client of clients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          if (flight) client.navigate(self.location.origin + urlPath);
+          if (urlPath && urlPath !== '/') client.navigate(self.location.origin + urlPath);
           return client.focus();
         }
       }
