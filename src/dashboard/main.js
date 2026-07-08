@@ -4148,12 +4148,15 @@ function updateAnalytics() {
     const flying = typeAirborne[t] || 0;
     const pct = total > 0 ? Math.round((flying / total) * 100) : 0;
     const color = pct > 60 ? '#22c55e' : pct > 30 ? '#005DAA' : pct > 0 ? '#f59e0b' : '#334155';
+    // Bar fill can use blue (decorative), but small stat-value TEXT must never use --ua-blue
+    // (2.61:1 on panel bg — fails contrast); use the sanctioned amber for that case instead.
+    const textColor = pct > 60 ? '#22c55e' : pct > 30 ? 'var(--ua-amber)' : pct > 0 ? '#f59e0b' : 'var(--ua-dim)';
     return `<div style="display:flex;align-items:center;padding:4px 0;border-bottom:1px solid rgba(30,41,59,.3)">
       <span style="font-size:10px;min-width:85px;color:var(--ua-text)">${t}</span>
       <div style="flex:1;margin:0 8px;height:10px;background:var(--ua-border);border-radius:4px;overflow:hidden;position:relative">
         <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;transition:width .5s"></div>
       </div>
-      <span style="font-size:10px;font-weight:700;min-width:70px;text-align:right"><span style="color:${color}">${flying}</span><span style="color:var(--ua-muted)">/${total}</span> <span style="color:${color};font-size:9px">${pct}%</span></span>
+      <span style="font-size:10px;font-weight:700;min-width:70px;text-align:right"><span style="color:${textColor}">${flying}</span><span style="color:var(--ua-muted)">/${total}</span> <span style="color:${textColor};font-size:9px">${pct}%</span></span>
     </div>`;
   }).join('');
 
@@ -4193,7 +4196,7 @@ function updateAnalytics() {
       <div style="flex:1;height:8px;background:var(--ua-border);border-radius:4px;overflow:hidden">
         <div style="height:100%;width:${pct}%;background:${phaseColors[p]};border-radius:4px;transition:width .5s"></div>
       </div>
-      <span style="font-size:10px;font-weight:700;color:${phaseColors[p]};min-width:45px;text-align:right">${count} <span style="font-size:8px;color:var(--ua-muted)">${pct}%</span></span>
+      <span style="font-size:10px;font-weight:700;color:${phaseColors[p] === '#005DAA' ? 'var(--ua-amber)' : phaseColors[p] === '#64748b' ? 'var(--ua-dim)' : phaseColors[p]};min-width:45px;text-align:right">${count} <span style="font-size:8px;color:var(--ua-muted)">${pct}%</span></span>
     </div>`;
   });
   phaseHtml += `</div></div>`;
@@ -5796,6 +5799,18 @@ let hubHealthServerHubs = new Set();
 // Latest IROPS severity index (0-100) from either computation path — feeds the
 // header ticker so it can never say "normal" during a red IROPS night.
 let lastIropsScore = null;
+// P2-C item 7: single writer for the one polite status live region — announces only when
+// the network-wide IROPS severity level actually changes class (normal→minor→significant),
+// never on every 30s refresh. Wired from both updateIrops() (client fallback) and
+// renderIropsFromAPI() (server, authoritative) since only one is the active writer at a time.
+let lastAnnouncedIropsLabel = null;
+function announceIropsLevelChange(scoreLabel) {
+  if (lastAnnouncedIropsLabel !== null && lastAnnouncedIropsLabel !== scoreLabel) {
+    const el = document.getElementById('irops-status-announcer');
+    if (el) el.textContent = `Operations status changed: ${scoreLabel.toLowerCase()}`;
+  }
+  lastAnnouncedIropsLabel = scoreLabel;
+}
 // F002: the server /api/irops response (all 9 hubs, one direction, one day, held-flight
 // aware) is the AUTHORITATIVE IROPS writer — the same "single writer" rule v1.5.26 applied
 // to OTP. Once the server has answered, the client-side updateIrops() recompute (partial
@@ -6155,6 +6170,7 @@ function updateIrops() {
   content.innerHTML = html;
 
   lastIropsScore = Number(score);
+  announceIropsLevelChange(scoreLabel);
   updateTicker(); // ticker health derives from the IROPS index — keep it in lockstep
 }
 
@@ -6255,6 +6271,7 @@ function renderIropsFromAPI(data) {
   // overwriting the panel / lastIropsScore. From here, this is the single writer.
   iropsServerValuePresent = true;
   lastIropsScore = Number(score);
+  announceIropsLevelChange(scoreLabel);
   updateTicker(); // ticker health derives from the IROPS index — keep it in lockstep
 
   if (document.getElementById('tab-schedule')?.classList.contains('active') && schedAllFlights.length) {
@@ -7384,6 +7401,18 @@ function toggleScheduleMoreFilters() {
   btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
   updateAdvFilterBtnText();
 }
+
+// P2-C item 6: Escape closes the schedule "more filters" drawer, focus returns to its toggle
+// button — matches the Escape-to-close behavior the app's modals already provide.
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  const panel = document.getElementById('sched-adv-filters');
+  const btn = document.getElementById('sched-more-filters-btn');
+  if (panel && btn && panel.style.display === 'flex') {
+    toggleScheduleMoreFilters();
+    btn.focus();
+  }
+});
 
 // Keyboard support: Enter/Space triggers click on [data-action][role="button"] elements
 document.addEventListener('keydown', function(e) {

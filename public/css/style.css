@@ -1,5 +1,5 @@
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#64748B;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
+:root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#7C8DA6;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
 /* Variant J — Canopy: body is a positioning context, not a flex column. Map is the page. */
 html,body{height:100%}
 body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);overflow:hidden;font-size:12px;line-height:1.4;height:100vh;height:100dvh}
@@ -69,7 +69,9 @@ h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
 /* canopy global search wrap — BUG 1 fix: protected fixed width, never crushed */
 #global-search-wrap{position:relative;flex:0 0 200px;min-width:200px;transition:flex-basis .2s ease}
 #global-search-input{width:100%;background:rgba(8,12,20,.7);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:6px;font-family:var(--font-mono);font-size:10px}
-#global-search-input:focus{outline:none;border-color:var(--ua-accent);background:rgba(8,12,20,.92)}
+#global-search-input:focus{border-color:var(--ua-accent);background:rgba(8,12,20,.92)}
+#global-search-input:focus:not(:focus-visible){outline:none}
+#global-search-input:focus-visible{outline:2px solid var(--ua-accent);outline-offset:2px}
 .status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;flex-shrink:0}
 .status-dot.live{background:var(--ua-green);box-shadow:0 0 6px rgba(34,197,94,.6);animation:pulse 2s ease-in-out infinite}
 #countdown{font-variant-numeric:tabular-nums;color:var(--ua-muted);font-family:var(--font-mono);font-size:10px;white-space:nowrap}
@@ -103,7 +105,7 @@ main{display:contents}
 /* Sidebar becomes a floating left panel over the map */
 #tab-live .sidebar{position:fixed;left:16px;top:84px;bottom:96px;width:260px;z-index:705;overflow-y:auto;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);contain:layout style paint}
 #sidebar-filters-toggle{display:none}
-#tab-live .sidebar h3{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;padding:12px 12px 6px;border-bottom:1px solid var(--ua-border)}
+#tab-live .sidebar h2,#tab-live .sidebar h3{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;padding:12px 12px 6px;border-bottom:1px solid var(--ua-border)}
 .hub-row{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-bottom:1px solid rgba(30,41,59,.4);transition:background .15s;cursor:default}
 .hub-row:hover{background:rgba(0,93,170,.06)}
 .hub-code{font-weight:700;color:var(--ua-accent);font-size:13px}
@@ -348,7 +350,7 @@ main{display:contents}
 /* ═══ TAB 2: FLEET ═══ */
 #tab-fleet{padding:16px;flex:1;min-height:0;overflow-y:auto}
 .card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:14px;margin-bottom:14px}
-.card h3{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.card h2,.card h3{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:900px){.two-col{grid-template-columns:1fr}}
 .fleet-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
@@ -689,7 +691,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .wx-layout{display:flex;height:100%}
 .wx-map-panel{flex:3;position:relative;min-width:0;display:flex;flex-direction:column}
 .wx-hero{flex:1;position:relative;min-height:0}
-.wx-hero h3{position:absolute;top:10px;left:14px;z-index:500;font-size:13px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+.wx-hero h2,.wx-hero h3{position:absolute;top:10px;left:14px;z-index:500;font-size:13px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7)}
 #radar-map{width:100%;height:100%}
 .wx-legend{display:flex;align-items:center;justify-content:center;gap:18px;padding:8px 16px;background:var(--ua-panel);border-top:1px solid var(--ua-border);font-size:10px;flex-shrink:0}
 .wx-legend-item{display:flex;align-items:center;gap:5px}
@@ -1019,7 +1021,9 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sched-status.landed{background:var(--ua-blue-soft);color:var(--ua-accent)}
 .sched-status.departed,.sched-status.enroute{background:rgba(14,165,233,.12);color:#0ea5e9}
 .sched-status.delayed{background:rgba(245,158,11,.15);color:var(--ua-yellow)}
-.sched-status.canceled,.sched-status.diverted{background:rgba(239,68,68,.15);color:var(--ua-red)}
+/* Lighter red text than --ua-red for this specific badge: --ua-red on its own 15%-tint
+   background measures 4.05:1 (fails 4.5:1); #F87171 clears 5.5:1 on the same tinted bg. */
+.sched-status.canceled,.sched-status.diverted{background:rgba(239,68,68,.15);color:#F87171}
 .sched-status.unknown{background:rgba(100,116,139,.12);color:var(--ua-muted)}
 .sched-fleet-match{font-size:9px;color:var(--ua-green)}
 .sched-fleet-miss{font-size:9px;color:var(--ua-muted)}

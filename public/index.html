@@ -150,7 +150,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 </div>
 </noscript>
 <!-- SEO keyword sentence (was the brand strip; now crawlable sr-only text) -->
-<div class="sr-only">The Blue Board is an independent United Airlines flight tracker and operations dashboard with live status, hub delays, fleet data, and Starlink coverage. Use the live dashboard to check flight status, hub delays, fleet data, and Starlink availability.</div>
+<div class="sr-only" role="region" aria-label="About The Blue Board">The Blue Board is an independent United Airlines flight tracker and operations dashboard with live status, hub delays, fleet data, and Starlink coverage. Use the live dashboard to check flight status, hub delays, fleet data, and Starlink availability.</div>
 <!-- Crawlable site navigation (always in DOM regardless of popover state) -->
 <nav class="sr-only" aria-label="United Airlines hub and site navigation">
   <a href="/hubs/ord">United at Chicago O'Hare (ORD)</a>
@@ -185,10 +185,10 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 </div>
 
 <!-- TIP STRIP (floating capsule below canopy; JS toggles inline display) -->
-<div id="tip-strip" style="display:none"><span class="tip-badge">Tip</span><span class="tip-text" id="tip-text"></span><button class="tip-dismiss" data-action="dismiss-tips" aria-label="Dismiss tips">&times;</button></div>
+<div id="tip-strip" role="region" aria-label="Tip" style="display:none"><span class="tip-badge">Tip</span><span class="tip-text" id="tip-text"></span><button class="tip-dismiss" data-action="dismiss-tips" aria-label="Dismiss tips">&times;</button></div>
 
 <!-- ════════ THE CANOPY (floating top bar = #header restyled) ════════ -->
-<div id="header">
+<header id="header">
   <h1><a href="#" data-action="go-home" style="text-decoration:none;color:inherit;cursor:pointer"><span class="ua">THE BLUE BOARD</span></a> <span style="font-size:9px;color:var(--ua-muted);font-weight:400;letter-spacing:0.5px">FOR UNITED FLYERS, BY UNITED FLYERS</span></h1>
   <span class="cdiv"></span>
 
@@ -204,6 +204,10 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="ticker-wrap" role="marquee" aria-label="Flight alerts ticker">
     <div class="ticker" id="ticker" aria-live="off"></div>
   </div>
+  <!-- P2-C item 7: the rotating ticker itself is aria-live="off" (a 30s-rotating feed would
+       spam screen readers). This is the ONE polite live region, updated only when the
+       network-wide IROPS severity level changes (normal/minor/significant). -->
+  <div id="irops-status-announcer" class="sr-only" role="status" aria-live="polite"></div>
   <span class="cdiv"></span>
 
   <!-- global search in the canopy -->
@@ -223,10 +227,13 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <button id="home-hub-btn" data-action="cycle-home-hub" title="Home hub (click to change)" aria-label="Change home hub" style="font-size:10px;font-family:var(--font-ui);cursor:pointer;background:none;border:1px solid var(--ua-border);color:var(--ua-accent);padding:2px 6px;border-radius:3px">🏠 <span id="home-hub-display">—</span></button>
     <button id="onboarding-help" title="About this dashboard" aria-label="About this dashboard">?</button>
   </div>
-</div>
+</header>
 
 <!-- ════════ TAB DOCK (floating bottom = #tab-bar restyled) ════════ -->
-<nav id="tab-bar" aria-label="Dashboard navigation" role="tablist">
+<!-- role="tablist" on the inner element overrides the implicit nav landmark role, so the
+     landmark is provided by this wrapping <nav> instead (axe 'region' rule, P2-C item 2). -->
+<nav aria-label="Dashboard navigation">
+<div id="tab-bar" role="tablist">
   <button class="tab-btn" data-tab="tab-myflight" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-myflight"><span aria-hidden="true">🎫</span> MY FLIGHTS</button>
   <button class="tab-btn active" data-tab="tab-live" role="tab" tabindex="0" aria-selected="true" aria-controls="tab-live"><span aria-hidden="true">📡</span> LIVE OPS</button>
   <button class="tab-btn" data-tab="tab-schedule" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-schedule"><span aria-hidden="true">📅</span> SCHEDULE</button>
@@ -235,6 +242,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button class="tab-btn" data-tab="tab-weather" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-weather"><span aria-hidden="true">🌦</span> DELAYS · WEATHER · HUBS</button>
   <button class="tab-btn" data-tab="tab-analytics" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-analytics" aria-label="Stats"><span aria-hidden="true">📊</span> STATS</button>
   <button class="tab-btn" data-tab="tab-sources" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-sources"><span aria-hidden="true">ℹ️</span> SOURCES</button>
+</div>
 </nav>
 <!-- Legal / about / donate popover — native details element, CSP-safe (no inline JS).
      F065: moved out of #tab-bar (was nested inside the role="tablist" nav above, an invalid
@@ -276,7 +284,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 </details>
 
 <!-- ════════ ATTRIBUTION (fixed micro-text, bottom-left over the map) ════════ -->
-<div id="attribution">
+<div id="attribution" role="contentinfo" aria-label="Data attribution">
   Data: <a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer">AeroDataBox</a><span class="sep">·</span><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
 </div>
 
@@ -328,16 +336,16 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="ops-layout">
     <button id="mobile-sidebar-toggle" aria-label="Toggle filters">🔍 Filters ▾</button>
     <div class="sidebar" id="sidebar">
-      <h3>🏢 Hub Operations</h3>
+      <h2>🏢 Hub Operations</h2>
       <div id="hub-stats"></div>
       <button id="sidebar-filters-toggle" data-action="toggle-sidebar-filters" aria-expanded="false" aria-controls="sidebar-extra-filters" style="width:100%;background:none;border:none;border-bottom:1px solid var(--ua-border);color:var(--ua-accent);font-family:var(--font-ui);font-size:10px;padding:6px 12px;cursor:pointer;text-align:center">Filters ▾</button>
       <div id="sidebar-extra-filters">
-      <h3 style="margin-top:4px">🔍 Search</h3>
+      <h2 style="margin-top:4px">🔍 Search</h2>
       <div style="padding:8px 12px">
         <input type="text" id="search-input-side" aria-label="Sidebar flight search" placeholder="Flight #, tail, airport..." style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 8px;border-radius:4px;font-family:var(--font-mono);font-size:10px">
-        <div id="search-results-side" aria-label="Sidebar search results" style="max-height:400px;overflow-y:auto;margin-top:4px"></div>
+        <div id="search-results-side" role="region" aria-label="Sidebar search results" style="max-height:400px;overflow-y:auto;margin-top:4px"></div>
       </div>
-      <h3>📊 Phase Breakdown</h3>
+      <h2>📊 Phase Breakdown</h2>
       <div id="phase-stats" style="padding:8px 12px"></div>
       </div>
     </div>
@@ -383,7 +391,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="card" style="margin-bottom:0;padding:12px 16px">
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:12px">
-        <h3 style="font-size:10px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1.5px;margin:0">📅 Flight Schedule</h3>
+        <h2 style="font-size:10px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1.5px;margin:0">📅 Flight Schedule</h2>
         <div id="sched-day-btns" style="display:flex;gap:4px">
           <button class="sched-day-btn" data-day="-1">Yesterday</button>
           <button class="sched-day-btn active" data-day="0">Today</button>
@@ -728,7 +736,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="wx-layout">
     <div class="wx-map-panel">
       <div class="wx-hero">
-        <h3 id="radar-title">🌧 NEXRAD Radar</h3>
+        <h2 id="radar-title">🌧 NEXRAD Radar</h2>
         <div id="radar-map" role="application" aria-label="NEXRAD weather radar map"></div>
       </div>
       <div class="wx-legend">
@@ -770,28 +778,28 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="metric-row" id="analytics-metrics"></div>
   <div class="two-col">
     <div class="card">
-      <h3>✈️ Live Fleet Utilization</h3>
+      <h2>✈️ Live Fleet Utilization</h2>
       <div style="font-size:9px;color:var(--ua-muted);margin-bottom:8px">Airborne now vs. total fleet · updates every 30s</div>
       <div id="util-chart"></div>
     </div>
     <div class="card">
-      <h3>🛫 Airborne by Flight Phase</h3>
+      <h2>🛫 Airborne by Flight Phase</h2>
       <div style="font-size:9px;color:var(--ua-muted);margin-bottom:8px">Current phase distribution · updates every 30s</div>
       <div id="phase-chart"></div>
     </div>
   </div>
   <div class="card">
-    <h3>🔥 Hub-to-Hub Flow Matrix</h3>
+    <h2>🔥 Hub-to-Hub Flow Matrix</h2>
     <div style="font-size:9px;color:var(--ua-muted);margin-bottom:8px">Active flights between UA hubs · darker = more traffic</div>
     <div id="hub-matrix" style="overflow-x:auto"></div>
   </div>
   <div class="two-col">
     <div class="card">
-      <h3>📈 Top Routes Right Now</h3>
+      <h2>📈 Top Routes Right Now</h2>
       <div id="route-heatmap" style="min-height:200px"></div>
     </div>
     <div class="card">
-      <h3>📅 Average Fleet Age by Type</h3>
+      <h2>📅 Average Fleet Age by Type</h2>
       <div id="avg-age-chart"></div>
     </div>
   </div>
