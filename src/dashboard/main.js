@@ -9,6 +9,7 @@ import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
 import { classifySchedStatus } from '../lib/schedule-status.js';
 import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
+import { classifyConnection, MIN_CONNECTION_TIMES, TERMINAL_WALK_TIMES } from '../lib/connection-risk.js';
 import { formatDataAge, dataAgeSeverity } from '../lib/data-age.js';
 import { parseFr24Feed, applyFeedResult, feedFreshness, nextFeedRetryDelay } from '../lib/feed-health.js';
 import { formatDelayMinutes, delayColorVar } from '../lib/delay-format.js';
@@ -59,6 +60,9 @@ function escapeHtml(str) {
 // ═══════════════════════════════════════════════
 
 let FLEET_DB = [];
+// F035: track a fleet.json load failure so the Fleet tab can render an honest
+// "database unavailable — retry" state instead of asserting "0 Mainline Aircraft".
+let fleetLoadFailed = false;
 let STARLINK_DB = [];
 let STARLINK_TAILS = new Set();
 let STARLINK_FLIGHTS_BY_TAIL = {};  // upcoming flights keyed by tail number
@@ -83,6 +87,7 @@ async function loadFleetData() {
     ]);
     if (!fleetRes.ok) throw new Error('Fleet data load failed');
     FLEET_DB = await fleetRes.json();
+    fleetLoadFailed = false;
 
     // Use live Starlink data if available
     let starlinkLoaded = false;
@@ -111,6 +116,7 @@ async function loadFleetData() {
     console.error('Fleet data load error:', err);
     FLEET_DB = [];
     STARLINK_DB = [];
+    fleetLoadFailed = true;
   }
 
   STARLINK_TAILS = new Set(STARLINK_DB.map(s => s.tail));
@@ -247,17 +253,10 @@ function updateHomeHubDisplay() {
 }
 
 // ═══ CONNECTION & DELAY DATA ═══
-const MIN_CONNECTION_TIMES = {
-  ORD:{dd:75,di:120,id:120,ii:120},DEN:{dd:60,di:90,id:90,ii:90},IAH:{dd:60,di:90,id:90,ii:120},
-  EWR:{dd:60,di:90,id:90,ii:90},SFO:{dd:60,di:90,id:90,ii:120},IAD:{dd:60,di:90,id:90,ii:90},
-  LAX:{dd:75,di:120,id:120,ii:120},NRT:{dd:60,di:90,id:90,ii:90},GUM:{dd:45,di:60,id:60,ii:60}
-};
-const TERMINAL_WALK_TIMES = {
-  ORD:{'1-2':8,'1-3':15,'2-3':10,'1-5':20,'2-5':18,'3-5':12,default:12},
-  DEN:{default:10},EWR:{'A-B':10,'A-C':15,'B-C':8,default:10},
-  IAH:{'A-B':8,'A-C':12,'A-D':15,'A-E':20,'B-C':8,'B-D':12,'B-E':15,'C-D':8,'C-E':12,'D-E':8,default:12},
-  SFO:{default:12},IAD:{default:10},LAX:{'7-8':5,'7-B':15,'8-B':12,default:10},NRT:{default:15},GUM:{default:5}
-};
+// MIN_CONNECTION_TIMES + TERMINAL_WALK_TIMES now live in ../lib/connection-risk.js
+// (imported above) alongside the pure classifyConnection() verdict logic, so the
+// cancelled/diverted + NaN guards (F003/F055) are unit-testable. Both tables are
+// re-exported unchanged.
 // Known United Airlines terminals at each hub (fallback when API doesn't provide terminal data)
 const UNITED_HUB_TERMINALS = {
   ORD:{domestic:'1',international:'1'},       // Terminal 1 (B & C); Express uses T2
@@ -1177,10 +1176,17 @@ async function refreshFlights() {
     try { if (document.getElementById('tab-analytics')?.classList.contains('active')) updateAnalytics(); } catch(e) { console.error('updateAnalytics:', e); }
     // Handle deep link: ?flight=UA1234 on first load (also supports ?q= for SearchAction compatibility)
     if (!deepLinkHandled) {
-      deepLinkHandled = true;
       const urlParams = new URLSearchParams(window.location.search);
       const flightParam = urlParams.get('flight') || urlParams.get('q');
-      if (flightParam && allFlights.length > 0) {
+      if (!flightParam) {
+        // Nothing to handle — mark done so we don't re-check every poll.
+        deepLinkHandled = true;
+      } else if (allFlights.length > 0) {
+        // F033: only mark handled once the feed actually loaded. A failed first
+        // poll left allFlights empty and the old code set the flag unconditionally,
+        // dropping the ?flight= deep link forever. Now it retries on the next
+        // successful poll.
+        deepLinkHandled = true;
         const q = flightParam.trim().toUpperCase().replace(/\s+/g, '');
         const match = allFlights.find(f => {
           const flt = (f.flightIATA || '').toUpperCase();
@@ -1193,6 +1199,7 @@ async function refreshFlights() {
           setTimeout(() => lookupFR24Flight(flightParam), 300);
         }
       }
+      // else: deep link present but feed empty — leave unhandled, retry next poll.
     }
   }
 }
@@ -2005,8 +2012,30 @@ let activeFleetType = '';
 let activeFleetView = 'all';
 
 let _fleetTabInitialized = false;
+function renderFleetLoadError() {
+  // F035: honest failure state — the fleet database genuinely didn't load, so
+  // don't assert "0 Mainline Aircraft" as fact. refresh-fleet-data reloads the
+  // page (fleet.json is fetched fresh on load), so it's a working retry.
+  const titleEl = document.getElementById('fleet-overview-title');
+  if (titleEl) titleEl.textContent = 'Fleet database unavailable';
+  const healthEl = document.getElementById('fleet-health-content');
+  if (healthEl) {
+    healthEl.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--ua-muted);line-height:1.6">'
+      + 'The fleet database could not be loaded, so counts and per-type stats are unavailable right now. '
+      + 'This is a load error — not zero aircraft.<br>'
+      + '<button data-action="refresh-fleet-data" style="margin-top:10px;padding:5px 14px;background:var(--ua-blue);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">↻ Retry</button>'
+      + '</div>';
+  }
+}
+
 function initFleetTab() {
   if (_fleetTabInitialized) return;
+  // F035: if fleet.json failed to load, show the honest error state and DON'T
+  // mark the tab initialized — a successful retry re-runs the full init.
+  if (fleetLoadFailed && !FLEET_DB.length) {
+    renderFleetLoadError();
+    return;
+  }
   _fleetTabInitialized = true;
   // Set dynamic fleet count in title
   document.getElementById('fleet-overview-title').textContent = 'Fleet Overview — ' + FLEET_DB.length + ' Mainline Aircraft';
@@ -4523,10 +4552,15 @@ async function preloadScheduleData() {
 
   // Fetch hubs sequentially to avoid overwhelming FR24 with concurrent aggregations
   const preloadHubs = ['ORD','DEN','EWR'];
-  const timestamp = getSchedDayTimestamp(0); // today
   let loaded = 0;
   for (const hub of preloadHubs) {
     try {
+      // F022: compute the start-of-day PER HUB. The old code computed ONE
+      // ET-anchored timestamp (schedCurrentHub is '' pre-tab-visit → Eastern
+      // fallback) and reused it for ORD/DEN/EWR; the API then snapped it to the
+      // hub-local day CONTAINING it, fetching YESTERDAY's DEN/ORD board 24/7 and
+      // burning AeroDataBox units on the wrong day.
+      const timestamp = getStartOfHubDay(hub, 0);
       const result = await fetchScheduleAggregated(hub, 'departures', timestamp);
       const hubKey = `${hub}-departures-0`;
       if (result.flights?.length && !schedRawByHub[hubKey]) {
@@ -4597,9 +4631,18 @@ async function loadScheduleData() {
   btn.disabled = true;
   btn.textContent = '⏳ Loading...';
 
+  // F034: freeze the hub/dir/day for the ENTIRE load. The retry loop used to
+  // re-read the live (mutable) schedCurrentHub each attempt, so switching hubs
+  // mid-backoff fetched the NEW hub's data but stored it under the OLD hub's key
+  // (frozen hubKey), polluting hub-health/IROPS aggregates. Now the fetch URL,
+  // timestamp, storage key, and swap detection all use the frozen values.
+  const loadHub = schedCurrentHub;
+  const loadDir = schedCurrentDir;
+  const loadDay = schedCurrentDay;
+
   try {
-    const timestamp = getSchedDayTimestamp(schedCurrentDay);
-    const hubKey = `${schedCurrentHub}-${schedCurrentDir}-${schedCurrentDay}`;
+    const timestamp = getStartOfHubDay(loadHub, loadDay);
+    const hubKey = `${loadHub}-${loadDir}-${loadDay}`;
 
     // Always fetch from schedule API for complete data (irops only has ~5 pages)
     let result;
@@ -4609,16 +4652,16 @@ async function loadScheduleData() {
       try {
         if (attempt > 0) {
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
-          loadEl.innerHTML = `<div style="font-size:24px;margin-bottom:8px;animation:pulse 1.5s infinite">✈️</div>Retrying ${escapeHtml(schedCurrentHub)} (attempt ${attempt + 1}/${MAX_RETRIES})...<br><span style="font-size:10px">Waiting ${delay / 1000}s before retry</span>`;
+          loadEl.innerHTML = `<div style="font-size:24px;margin-bottom:8px;animation:pulse 1.5s infinite">✈️</div>Retrying ${escapeHtml(loadHub)} (attempt ${attempt + 1}/${MAX_RETRIES})...<br><span style="font-size:10px">Waiting ${delay / 1000}s before retry</span>`;
           await new Promise(r => setTimeout(r, delay));
         }
-        result = await fetchScheduleAggregated(schedCurrentHub, schedCurrentDir, timestamp);
+        result = await fetchScheduleAggregated(loadHub, loadDir, timestamp);
         lastErr = null;
         // Retry partial page/deadline fetches, but do not hammer a known first-page outage.
         const partialReason = result.meta?.partialReason || '';
         const failedBeforeAnyFlight = partialReason === 'first_page_failed' && Number(result.total || 0) === 0;
         if (result.partial && !failedBeforeAnyFlight && attempt < MAX_RETRIES - 1) {
-          delete schedCache[`agg-${schedCurrentHub}-${schedCurrentDir}-${timestamp}`];
+          delete schedCache[`agg-${loadHub}-${loadDir}-${timestamp}`];
           continue;
         }
         break;
@@ -4627,11 +4670,19 @@ async function loadScheduleData() {
       }
     }
     if (lastErr) throw lastErr;
+
+    // F034: if the user switched hub/direction/day while this load was in flight,
+    // abort before storing or rendering — the finally block's _schedPendingReload
+    // re-runs the load for the current selection. Storing now would file this
+    // hub's flights under a stale key and paint them into the new hub's view.
+    if (schedCurrentHub !== loadHub || schedCurrentDir !== loadDir || schedCurrentDay !== loadDay) {
+      return;
+    }
     const allUAFlights = result.flights || [];
 
     // Show cache indicator
     if (result.cached || result.fromLocalCache) {
-      loadEl.innerHTML = `<div style="font-size:24px;margin-bottom:8px;animation:pulse 1.5s infinite">✈️</div>Loading ${escapeHtml(schedCurrentHub)} ${escapeHtml(schedCurrentDir)}...<br><span style="font-size:10px;color:#4ecdc4">⚡ Served from cache · ${allUAFlights.length} UA flights</span>`;
+      loadEl.innerHTML = `<div style="font-size:24px;margin-bottom:8px;animation:pulse 1.5s infinite">✈️</div>Loading ${escapeHtml(loadHub)} ${escapeHtml(loadDir)}...<br><span style="font-size:10px;color:#4ecdc4">⚡ Served from cache · ${allUAFlights.length} UA flights</span>`;
     }
 
     schedAllFlights = allUAFlights;
@@ -4639,9 +4690,9 @@ async function loadScheduleData() {
     schedBoardMeta = result.meta || null;
     schedMetaByHub[hubKey] = result.meta || null;
     schedBoardFetchedAtMs = Date.now();
-    schedAutoScrollPending = schedCurrentDay === 0; // anchor Today at NOW on load (tomorrow/yesterday boards skip)
+    schedAutoScrollPending = loadDay === 0; // anchor Today at NOW on load (tomorrow/yesterday boards skip)
     preloadWeatherAndFAA();
-    detectEquipmentSwaps(allUAFlights, schedCurrentHub, schedCurrentDir, schedCurrentDay);
+    detectEquipmentSwaps(allUAFlights, loadHub, loadDir, loadDay);
     populateAircraftFilter();
     // Reset advanced filters on hub/direction/day change
     document.getElementById('sched-route-type').value = '';
@@ -6172,6 +6223,12 @@ let myFlightsInterval = null;
 let myFlightsCountdownInterval = null;
 let myFlightsTimeData = {};
 let myFlightsRenderToken = 0;
+// F008: consecutive flight-times failures per watched flight. After a few misses
+// (all tiers dark for this number) the card shows a terminal "status unavailable"
+// state instead of re-rendering "LOADING…" on every 30s poll forever. Reset to 0
+// on any successful fetch so a recovered feed clears the terminal state.
+let myFlightsFailCount = {};
+const MY_FLIGHTS_FAIL_TERMINAL = 2;
 
 function getMyFlightCacheJitter(flightNumber) {
   return (flightNumber || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) % 20000;
@@ -6221,8 +6278,12 @@ async function renderMyFlights() {
     }
     return fetch('/api/flight-times?flight=' + encodeURIComponent(w.flight))
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) myFlightsTimeData[cacheKey] = { data: d, ts: Date.now() }; return d; })
-      .catch(() => cached ? cached.data : null);
+      .then(d => {
+        if (d) { myFlightsTimeData[cacheKey] = { data: d, ts: Date.now() }; myFlightsFailCount[w.flight] = 0; }
+        else { myFlightsFailCount[w.flight] = (myFlightsFailCount[w.flight] || 0) + 1; }
+        return d;
+      })
+      .catch(() => { myFlightsFailCount[w.flight] = (myFlightsFailCount[w.flight] || 0) + 1; return cached ? cached.data : null; });
   });
 
   const allResults = await Promise.allSettled([
@@ -6243,7 +6304,10 @@ async function renderMyFlights() {
   // with inbound data factored into risk scores (Signal 7)
   const journeyPromises = flights.map((w, i) => {
     const td2 = timeData[i];
-    const reg2 = td2 ? (td2.aircraft || '').replace('-', '') : null;
+    // F001: flight-times returns the real tail in `registration` now (`aircraft`
+    // is the human-readable TYPE string). Deriving a "reg" from the type used to
+    // fail aircraft-history's /^[A-Z0-9]{4,8}$/ and killed the journey chain.
+    const reg2 = td2 ? (td2.registration || '').replace('-', '') : null;
     if (!reg2) return Promise.resolve();
     const route2 = (w.route || '').split(/[→\-]/);
     return fetchAircraftJourney(reg2, w.flight, (route2[0] || '').trim(), (route2[1] || '').trim());
@@ -6255,6 +6319,11 @@ async function renderMyFlights() {
     if (container && document.getElementById('tab-myflight')?.classList.contains('active')) {
       container.innerHTML = flights.map((w, i) => buildMyFlightCard(w, timeData[i])).join('');
       detectAndRenderConnections(flights, timeData);
+      // F045/F053: the innerHTML rebuild recreates every "⚡ Checking…" placeholder.
+      // Re-run predictions so already-resolved badges re-apply instantly from
+      // starlinkPredictionCache and unresolved ones re-fetch — otherwise the badge
+      // was wiped back to "Checking…" forever on the very next render.
+      fetchStarlinkPredictions();
     }
   });
 
@@ -6504,7 +6573,19 @@ function buildMyFlightCard(watched, td) {
         break;
     }
   } else {
-    statusHtml = '<span class="mf-status" style="background:rgba(100,116,139,.2);color:var(--ua-muted)">LOADING...</span>';
+    // F008: after repeated all-tier failures for this flight, stop re-rendering an
+    // eternal "LOADING…" and show a terminal, honest state. The 30s poll keeps
+    // retrying silently, so a recovered feed still flips it back automatically.
+    const failed = (myFlightsFailCount[watched.flight] || 0) >= MY_FLIGHTS_FAIL_TERMINAL;
+    statusHtml = failed
+      ? '<span class="mf-status" style="background:rgba(100,116,139,.2);color:var(--ua-muted)">STATUS UNAVAILABLE</span>'
+      : '<span class="mf-status" style="background:rgba(100,116,139,.2);color:var(--ua-muted)">LOADING...</span>';
+  }
+
+  // F008: terminal-state body note (only when the loading state has given up).
+  let unavailableNote = '';
+  if (!(td && td.success !== false) && (myFlightsFailCount[watched.flight] || 0) >= MY_FLIGHTS_FAIL_TERMINAL) {
+    unavailableNote = `<div class="mf-unavailable" style="font-size:11px;color:var(--ua-muted);padding:2px 0">Live status is unavailable right now — check <a href="https://www.united.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent)">united.com</a> for the latest. We'll keep retrying.</div>`;
   }
 
   // Gate info
@@ -6524,7 +6605,9 @@ function buildMyFlightCard(watched, td) {
 
   // Equipment
   let equipHtml = '';
-  const reg = liveFlight ? liveFlight.reg?.replace('-','') : (td && td.aircraft ? td.aircraft.replace('-','') : null);
+  // F001: prefer the live-feed tail, then the flight-times `registration` field.
+  // `td.aircraft` is the TYPE string (displayed below) — never a tail.
+  const reg = liveFlight ? liveFlight.reg?.replace('-','') : (td && td.registration ? td.registration.replace('-','') : null);
   if (reg && FLEET_BY_REG[reg]) {
     const ac = FLEET_BY_REG[reg];
     const isStar = STARLINK_TAILS.has(reg);
@@ -6542,7 +6625,10 @@ function buildMyFlightCard(watched, td) {
     const forecastBadge = (flightNum && flightNum !== 'N/A')
       ? ` <span class="starlink-badge starlink-predict" data-flight="${escapeHtml(flightNum)}" data-mode="forecast" style="background:rgba(100,116,139,.15);color:var(--ua-muted)">⚡ Checking…</span>`
       : '';
-    equipHtml = `<div><span class="mf-label">Aircraft</span><div class="mf-value">${escapeHtml(td.aircraft)}${forecastBadge}</div></div>`;
+    // F001 graceful degradation: state honestly that the specific tail isn't known
+    // yet (rather than implying a fake lookup) when no registration resolved.
+    const noTailNote = reg ? '' : '<div style="font-size:9px;color:var(--ua-dim);margin-top:2px">Tail not yet assigned</div>';
+    equipHtml = `<div><span class="mf-label">Aircraft</span><div class="mf-value">${escapeHtml(td.aircraft)}${forecastBadge}</div>${noTailNote}</div>`;
   }
 
   // Inbound aircraft tracking + journey chain
@@ -6637,6 +6723,7 @@ function buildMyFlightCard(watched, td) {
       </div>
     </div>
     <div class="mf-body">
+      ${unavailableNote}
       ${gateHtml}
       ${equipHtml}
       ${inboundHtml}
@@ -6737,7 +6824,9 @@ function buildInboundRiskContext(reg, currentFlightNumber, originHub, allowInbou
 }
 
 function computeDelayRisk(watched, origHub, destHub, timeData, liveFlight) {
-  const reg = timeData && timeData.aircraft ? timeData.aircraft.replace('-', '') : '';
+  // F001: the inbound-turnaround signal keys on the real tail (registration), not
+  // the aircraft TYPE string — otherwise Signal 7 could never match a live-feed tail.
+  const reg = timeData && timeData.registration ? timeData.registration.replace('-', '') : '';
   const allowInbound = !!(timeData && !(liveFlight && !liveFlight.onGround));
   const inboundContext = buildInboundRiskContext(reg, watched.flight, origHub, allowInbound);
 
@@ -6874,18 +6963,21 @@ function computeConnectionRisk(conn) {
   const walkKey = [inTerminal, outTerminal].sort().join('-');
   const walkTime = inTerminal === outTerminal ? 5 : (TERMINAL_WALK_TIMES[hub]?.[walkKey] || TERMINAL_WALK_TIMES[hub]?.default || 10);
 
-  const arrEst = new Date(inTd.arrival?.gate?.estimated || inTd.arrival?.gate?.scheduled);
-  const depEst = new Date(outTd.departure?.gate?.estimated || outTd.departure?.gate?.scheduled);
-  const connectionMin = Math.round((depEst - arrEst) / 60000);
-  const buffer = connectionMin - walkTime;
-
-  let risk, color, label;
-  if (connectionMin <= 0) { risk = 'MISSED'; color = '#ef4444'; label = 'Inbound arrives after outbound departs'; }
-  else if (buffer < mct * 0.5) { risk = 'HIGH'; color = '#ef4444'; label = 'Very tight — high risk of misconnect'; }
-  else if (buffer < mct) { risk = 'MODERATE'; color = '#eab308'; label = 'Tight but possible if no further delays'; }
-  else { risk = 'SAFE'; color = '#22c55e'; label = 'Comfortable connection'; }
-
-  return { risk, color, label, connectionMin, mct, walkTime, inTerminal, outTerminal, buffer };
+  // F003/F055: delegate the verdict to the pure classifier so a cancelled/diverted
+  // leg (never SAFE) and missing/NaN gate times (→ "insufficient data", never SAFE)
+  // are gated BEFORE any buffer math. `new Date('')`/`new Date(undefined)` → NaN,
+  // which classifyConnection treats as insufficient rather than falling through
+  // to a green verdict.
+  const arrMs = new Date(inTd.arrival?.gate?.estimated || inTd.arrival?.gate?.scheduled).getTime();
+  const depMs = new Date(outTd.departure?.gate?.estimated || outTd.departure?.gate?.scheduled).getTime();
+  const result = classifyConnection({
+    arrMs, depMs, mct, walkTime,
+    inboundCancelled: !!inTd.cancelled, outboundCancelled: !!outTd.cancelled,
+    inboundDiverted: !!inTd.diverted, outboundDiverted: !!outTd.diverted,
+    inboundFlight: conn.inbound?.w?.flight || 'the inbound flight',
+    outboundFlight: conn.outbound?.w?.flight || 'the outbound flight',
+  });
+  return { ...result, inTerminal, outTerminal };
 }
 
 function renderConnectionRiskCard(conn, risk) {
@@ -6896,18 +6988,30 @@ function renderConnectionRiskCard(conn, risk) {
   const inOrig = escapeHtml(conn.inbound.td.origin?.iata || '?');
   const outDest = escapeHtml(conn.outbound.td.destination?.iata || '?');
 
+  // F055: only assert connection/buffer numbers when we actually scored the
+  // connection, and label the MCT honestly — MIN_CONNECTION_TIMES is OUR padded
+  // comfort guidance, not United's published minimum (which is lower).
+  let detailHtml = '';
+  if (risk.state === 'scored' && risk.hasData) {
+    detailHtml = `<div class="conn-risk-detail">
+      ${risk.connectionMin}min connection · ${risk.mct}min comfortable minimum (our conservative guidance — United's published MCT is lower) · T${escapeHtml(risk.inTerminal)} → T${escapeHtml(risk.outTerminal)} (~${risk.walkTime}min walk) · ${risk.buffer}min buffer after walking
+    </div>`;
+  } else if (risk.state === 'insufficient') {
+    detailHtml = `<div class="conn-risk-detail" style="color:var(--ua-muted)">We don't have gate times for one or both legs yet — check united.com for the latest before relying on this connection.</div>`;
+  } else if (risk.state === 'disrupted') {
+    detailHtml = `<div class="conn-risk-detail" style="color:var(--ua-muted)">A leg is cancelled or diverted — re-book or confirm with United before counting on this connection.</div>`;
+  }
+
   return `<div class="conn-risk-card" style="border-left-color:${risk.color}">
     <div class="conn-risk-header">
       <span class="conn-risk-label">Connection at ${hub} (${escapeHtml(hubCity)})</span>
-      <span class="conn-risk-badge" style="background:${risk.color}20;color:${risk.color}">${risk.risk}</span>
+      <span class="conn-risk-badge" style="background:${risk.color}20;color:${risk.color}">${escapeHtml(risk.risk)}</span>
     </div>
     <div class="conn-risk-flights">
       <div>${inFlight} ${inOrig} → <strong>${hub}</strong> &nbsp; Arrives → walks → departs</div>
       <div>${outFlight} <strong>${hub}</strong> → ${outDest}</div>
     </div>
-    <div class="conn-risk-detail">
-      ${risk.connectionMin}min connection · ${risk.mct}min minimum required · T${escapeHtml(risk.inTerminal)} → T${escapeHtml(risk.outTerminal)} (~${risk.walkTime}min walk) · ${risk.buffer}min buffer after walking
-    </div>
+    ${detailHtml}
     <div style="margin-top:6px;font-size:10px;color:${risk.color}">${escapeHtml(risk.label)}</div>
   </div>`;
 }
@@ -8204,7 +8308,7 @@ function lookupFR24Flight(query) {
         }
         return;
       }
-      renderFR24Modal(data.flight, data.source, data.cached);
+      renderFR24Modal(data.flight, data.source, data.cached, data);
     })
     .catch(err => {
       console.error('FR24 lookup error:', err);
@@ -8216,7 +8320,7 @@ function lookupFR24Flight(query) {
     });
 }
 
-function renderFR24Modal(f, source, cached) {
+function renderFR24Modal(f, source, cached, meta) {
   var modal = document.getElementById('fr24-modal');
   var statusColors = {'en-route':'#22c55e','on-ground':'#f59e0b','landed':'#3b82f6','scheduled':'#6b7280','unknown':'#6b7280'};
   var statusColor = statusColors[f.status] || statusColors['unknown'];
@@ -8271,6 +8375,20 @@ function renderFR24Modal(f, source, cached) {
   html += '<div style="flex:1;text-align:center;color:var(--ua-muted);font-size:16px">✈ →</div>';
   html += '<div style="text-align:center"><div style="font-size:18px;font-weight:700">' + escapeHtml(destLabel) + '</div><div style="font-size:9px;color:var(--ua-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(destName) + '</div></div>';
   html += '</div>';
+  // F048: the live/summary tier returns whichever leg of this flight number is
+  // currently active or most recent — not necessarily the user's date/route.
+  // Surface the leg's date and a one-line disclaimer so the modal isn't silently
+  // authoritative. Label only (no ranking change).
+  var liveLeg = !!(meta && meta.liveLeg) || (String(source || '').indexOf('live') !== -1);
+  if (liveLeg) {
+    var legDateStr = '';
+    var ld = meta && meta.legDate;
+    if (ld) { try { var ldd = new Date(ld); if (!isNaN(ldd)) legDateStr = ldd.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}); } catch(e) {} }
+    html += '<div style="margin-bottom:10px;padding:7px 10px;background:var(--ua-amber-soft);border-left:3px solid var(--ua-amber);border-radius:0 4px 4px 0;font-size:9px;line-height:1.5;color:var(--ua-muted)">'
+      + (legDateStr ? '<span style="color:var(--ua-amber);font-weight:600">Leg date: ' + escapeHtml(legDateStr) + '</span><br>' : '')
+      + 'Flight numbers fly multiple legs daily — this is the leg currently active or most recent, not necessarily your date or route.'
+      + '</div>';
+  }
   // Aircraft
   if (f.aircraft && (f.aircraft.type || f.aircraft.reg)) {
     html += '<div style="font-size:10px;margin-bottom:4px"><span style="color:var(--ua-muted)">Aircraft:</span> ' + escapeHtml(f.aircraft.type || '?') + (f.aircraft.reg ? ' • <span class="ac-reg-link" data-action="aircraft-detail" data-reg="' + escapeHtml(f.aircraft.reg) + '">' + escapeHtml(f.aircraft.reg) + '</span>' : '') + '</div>';

@@ -14,7 +14,7 @@ const snapshotMocks = vi.hoisted(() => ({
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => snapshotMocks);
 
 import handler from '../api/flight-times.js';
-import { getStartOfHubDay } from '../src/lib/hubTz.js';
+import { getStartOfHubDay, getHubLocalDate } from '../src/lib/hubTz.js';
 import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
 
 function createRes() {
@@ -236,5 +236,81 @@ describe('flight-times fallback chain (#1)', () => {
     expect(calls.some((u) => u.includes('fr24api.flightradar24.com'))).toBe(false);
     expect(res.statusCode).toBe(200);
     expect(res.body.source).toBe('schedule-cache');
+  });
+
+  // ── F001: every tier must expose a real `registration` field (separate from the
+  // human-readable aircraft TYPE string) so the client stops mis-treating the type
+  // as a tail number. ──
+  it('FR24 tier returns registration (tail) distinct from the aircraft type', async () => {
+    process.env.FR24_API_TOKEN = 'test-token';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('flightaware.com')) {
+        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
+      }
+      if (String(url).includes('fr24api.flightradar24.com')) {
+        return { ok: true, status: 200, json: async () => FR24_SUMMARY };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const res = createRes();
+    await handler(createReq('UA9002'), res);
+    expect(res.body.source).toBe('fr24');
+    expect(res.body.registration).toBe('N37502'); // the tail
+    expect(res.body.aircraft).toBe('B39M');       // the type, unchanged
+  });
+
+  it('schedule-cache tier returns registration from aircraft.registration', async () => {
+    const schedDep = 1_751_500_000;
+    const ordKey = `agg:ORD:departures:${getStartOfHubDay('ORD', 0)}`;
+    snapshotMocks.loadScheduleSnapshot.mockImplementation(async (key) =>
+      key === ordKey ? scheduleSnapshotRow('UA9007', schedDep, null, null, schedDep + 14400) : null
+    );
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('flightaware.com')) {
+        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
+      }
+      throw new Error(`paid/upstream fetch must not happen: ${url}`);
+    });
+    const res = createRes();
+    await handler(createReq('UA9007'), res);
+    expect(res.body.source).toBe('schedule-cache');
+    expect(res.body.registration).toBe('N37502');
+    expect(res.body.aircraft).toBe('Boeing 737 MAX 9'); // type, unchanged
+  });
+
+  // ── F005/F013: optional date param drives WHICH day's board the schedule-cache
+  // tier reads. Without it, today wins; with a tomorrow date, tomorrow's board wins. ──
+  it('date param selects tomorrow\'s board over today\'s for the same flight number', async () => {
+    const todayDep = 1_751_500_000;
+    const tomorrowDep = todayDep + 200_000;
+    const todayKey = `agg:ORD:departures:${getStartOfHubDay('ORD', 0)}`;
+    const tomorrowKey = `agg:ORD:departures:${getStartOfHubDay('ORD', 1)}`;
+    snapshotMocks.loadScheduleSnapshot.mockImplementation(async (key) => {
+      if (key === todayKey) return scheduleSnapshotRow('UA9008', todayDep, null, null, todayDep + 14400);
+      if (key === tomorrowKey) return scheduleSnapshotRow('UA9008', tomorrowDep, null, null, tomorrowDep + 14400);
+      return null;
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('flightaware.com')) {
+        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
+      }
+      throw new Error(`paid/upstream fetch must not happen: ${url}`);
+    });
+
+    // No date → today's leg.
+    const resToday = createRes();
+    await handler(createReq('UA9008'), resToday);
+    expect(resToday.body.source).toBe('schedule-cache');
+    expect(resToday.body.departure.gate.scheduled).toBe(new Date(todayDep * 1000).toISOString());
+
+    // date = ORD-local tomorrow → tomorrow's leg.
+    const d = getHubLocalDate('ORD', getStartOfHubDay('ORD', 1) * 1000);
+    const tomorrowDate = `${d.year}-${d.month}-${d.day}`;
+    const reqTomorrow = createReq('UA9008');
+    reqTomorrow.query.date = tomorrowDate;
+    const resTomorrow = createRes();
+    await handler(reqTomorrow, resTomorrow);
+    expect(resTomorrow.body.source).toBe('schedule-cache');
+    expect(resTomorrow.body.departure.gate.scheduled).toBe(new Date(tomorrowDep * 1000).toISOString());
   });
 });

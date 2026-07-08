@@ -3,6 +3,9 @@ import {
   normalizeFlightNumber,
   epochToISO,
   getClientIp,
+  extractFaRegistration,
+  faLocalDate,
+  pickBestFaCandidate,
 } from '../api/flight-times.js';
 
 describe('normalizeFlightNumber (FlightAware)', () => {
@@ -81,5 +84,75 @@ describe('getClientIp (FlightAware)', () => {
 
   it('returns unknown when both headers are missing', () => {
     expect(getClientIp({ headers: {} })).toBe('unknown');
+  });
+});
+
+// F001: flight-times must expose a real `registration` field so consumers stop
+// mis-treating the aircraft TYPE string as a tail number.
+describe('extractFaRegistration (F001)', () => {
+  it('reads a string aircraft field as the tail', () => {
+    expect(extractFaRegistration({ aircraft: 'N37502' })).toBe('N37502');
+  });
+  it('reads nested aircraft.registration', () => {
+    expect(extractFaRegistration({ aircraft: { registration: 'N12345' } })).toBe('N12345');
+  });
+  it('reads a top-level tailNumber / registration', () => {
+    expect(extractFaRegistration({ tailNumber: 'N-77066' })).toBe('N77066');
+    expect(extractFaRegistration({ registration: 'n14118' })).toBe('N14118');
+  });
+  it('returns empty string when no tail is present (graceful degradation)', () => {
+    expect(extractFaRegistration({ aircraftTypeFriendly: 'Boeing 737-900' })).toBe('');
+    expect(extractFaRegistration({})).toBe('');
+    expect(extractFaRegistration(null)).toBe('');
+  });
+});
+
+describe('faLocalDate (F013)', () => {
+  it('formats the departure epoch in the origin timezone (YYYY-MM-DD)', () => {
+    // 2026-07-08T02:00:00Z is still 2026-07-07 in America/Chicago.
+    const sec = Math.floor(Date.parse('2026-07-08T02:00:00Z') / 1000);
+    expect(faLocalDate(sec, ':America/Chicago')).toBe('2026-07-07');
+    expect(faLocalDate(sec, 'UTC')).toBe('2026-07-08');
+  });
+  it('returns empty string for a missing epoch', () => {
+    expect(faLocalDate(0, 'UTC')).toBe('');
+  });
+});
+
+describe('pickBestFaCandidate — date + phase ranking (F005/F013)', () => {
+  const nowSec = Math.floor(Date.parse('2026-07-08T12:00:00Z') / 1000);
+  const c = (phase, depSec, localDate) => ({ flight: { phase, depSec, localDate }, key: phase + depSec, phase, depSec, localDate });
+
+  it('todays scheduled beats a past landed leg (reverses the old landed-wins bug)', () => {
+    const landed = c('landed', nowSec - 6 * 3600, '2026-07-08');
+    const scheduled = c('scheduled', nowSec + 3 * 3600, '2026-07-08');
+    const best = pickBestFaCandidate([landed, scheduled], '', nowSec);
+    expect(best.phase).toBe('scheduled');
+  });
+
+  it('in-air wins over everything', () => {
+    const landed = c('landed', nowSec - 3600, '2026-07-08');
+    const scheduled = c('scheduled', nowSec + 3600, '2026-07-08');
+    const inair = c('inair', nowSec - 1800, '2026-07-08');
+    expect(pickBestFaCandidate([landed, scheduled, inair], '', nowSec).phase).toBe('inair');
+  });
+
+  it('a matching target date wins outright over phase', () => {
+    // Tomorrow's scheduled leg beats today's already-landed leg when date=tomorrow.
+    const landedToday = c('landed', nowSec - 3600, '2026-07-08');
+    const schedTomorrow = c('scheduled', nowSec + 20 * 3600, '2026-07-09');
+    const best = pickBestFaCandidate([landedToday, schedTomorrow], '2026-07-09', nowSec);
+    expect(best.localDate).toBe('2026-07-09');
+    expect(best.phase).toBe('scheduled');
+  });
+
+  it('scheduled ties pick the SOONEST upcoming leg, not the furthest-future', () => {
+    const soon = c('scheduled', nowSec + 2 * 3600, '2026-07-08');
+    const later = c('scheduled', nowSec + 8 * 3600, '2026-07-08');
+    expect(pickBestFaCandidate([later, soon], '', nowSec).depSec).toBe(soon.depSec);
+  });
+
+  it('returns null for an empty candidate list', () => {
+    expect(pickBestFaCandidate([], '', nowSec)).toBeNull();
   });
 });

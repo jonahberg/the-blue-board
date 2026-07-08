@@ -318,10 +318,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Remove raw debug data from client response
     const { _raw, ...cleanFlight } = flightData;
 
+    // F048: the live tier returns whichever leg of this flight number is CURRENTLY
+    // squawking (any date/route), and the summary tier takes flights[0] from a ±24h
+    // window — neither guarantees the leg the user meant. Surface a label the client
+    // can disclaim with, plus the leg's own date, so the modal isn't silently
+    // authoritative. Label only — no ranking change.
+    const liveLeg = source === 'live' || source === 'live+summary';
+    const legDate = cleanFlight.departure?.scheduled || cleanFlight.departure?.actual
+      || cleanFlight.arrival?.scheduled || cleanFlight.arrival?.estimated || '';
+
     const result = {
       success: true,
       flight: cleanFlight,
       source: `fr24-official-${source}`,
+      liveLeg,
+      legDate,
       cached: false,
     };
 
