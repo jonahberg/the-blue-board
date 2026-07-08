@@ -15,6 +15,7 @@ vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => snapshotMocks);
 
 import handler from '../api/flight-times.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
+import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
 
 function createRes() {
   return {
@@ -101,6 +102,9 @@ describe('flight-times fallback chain (#1)', () => {
     vi.restoreAllMocks();
     snapshotMocks.loadScheduleSnapshot.mockReset();
     snapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
+    // F038: this endpoint now checks the shared cross-instance FR24 quota block before its FR24
+    // tier; reset it so a 402 recorded elsewhere never leaks into these fallback-chain tests.
+    resetMirroredQuotaBlock();
   });
 
   afterEach(() => {

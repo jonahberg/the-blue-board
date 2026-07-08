@@ -168,6 +168,10 @@ function buildDegradedResponse(
 ) {
   const dataAge = Math.max(0, Math.round((Date.now() - entry.time) / 1000));
   const isBestKnownPartial = entry.data?.partial === true;
+  // F037/F026: prefer a generatedAt already stamped on the underlying board (set when it was
+  // originally fetched — see the aggPromise/triggerBackgroundRefresh callbacks below); fall back to
+  // this cache entry's own timestamp for older snapshots persisted before this field existed.
+  const generatedAt = Number(entry.data?.meta?.generatedAt) || Math.floor(entry.time / 1000);
   return {
     ...entry.data,
     cached: true,
@@ -176,6 +180,7 @@ function buildDegradedResponse(
     meta: {
       ...(entry.data?.meta || {}),
       dataAge,
+      generatedAt,
       fallbackScope,
       bestKnownPartial: isBestKnownPartial,
     }
@@ -317,6 +322,36 @@ export function shouldEnableProviderForBackgroundRefresh(
     lastProviderRefreshAt.delete(lastProviderRefreshAt.keys().next().value!);
   }
   lastProviderRefreshAt.set(aggKey, nowMs);
+  return true;
+}
+
+// F036: the official (paid, per-call) FR24 API had NO equivalent gate — background refreshes could
+// reach it on every degraded serve as long as the 1h isFreshComplete threshold + the env kill switch
+// allowed it, with no per-key cooldown and no minimum data age beyond that 1h check. Mirror the
+// provider gate's thresholds/shape exactly (>3h age + 1h per-key cooldown) so a credit-exhausted
+// account cannot be hammered by background traffic. This gate applies ONLY to background refreshes
+// (the triggerBackgroundRefresh call sites in the handler below); the user-facing on-demand fetch of
+// a genuinely uncached board (fetchAllPages's allowTargetedOfficialRescue / srcPriority=='official'
+// paths) is untouched and keeps working on every request.
+const OFFICIAL_REFRESH_KEY_COOLDOWN_MS = PROVIDER_REFRESH_KEY_COOLDOWN_MS;
+const lastOfficialRefreshAt = new Map<string, number>();
+
+export function shouldEnableOfficialForBackgroundRefresh(
+  aggKey: string,
+  dataAgeMs: number,
+  allowOfficialFallback: boolean,
+  nowMs = Date.now()
+): boolean {
+  // Same ACQUIRE contract as shouldEnableProviderForBackgroundRefresh: only call when the refresh
+  // will actually be dispatched (callers short-circuit on pendingAggs.has(aggKey) first).
+  if (!allowOfficialFallback || !process.env.FR24_API_TOKEN) return false;
+  if (dataAgeMs <= PROVIDER_REFRESH_STALE_MS) return false;
+  const last = lastOfficialRefreshAt.get(aggKey) || 0;
+  if (nowMs - last < OFFICIAL_REFRESH_KEY_COOLDOWN_MS) return false;
+  if (lastOfficialRefreshAt.size >= MAX_PROVIDER_REFRESH_KEYS) {
+    lastOfficialRefreshAt.delete(lastOfficialRefreshAt.keys().next().value!);
+  }
+  lastOfficialRefreshAt.set(aggKey, nowMs);
   return true;
 }
 
@@ -1202,6 +1237,10 @@ function triggerBackgroundRefresh(
   if (pendingAggs.has(aggKey)) return;
   const refreshHub = String(hub);
   const promise = fetchAllPages(refreshHub, dir, ts, undefined, Date.now() + 55000, options).then(async result => {
+    // F037/F026: stamp the build-time generatedAt on every freshly-fetched board, at the source, so
+    // every downstream serve path (hot cache, stale, degraded/fallback tiers) can report a real age
+    // instead of carrying zero staleness signal.
+    result.meta = { ...(result.meta || {}), generatedAt: Math.floor(Date.now() / 1000) };
     cacheSetGuarded(aggKey, result, result.partial ? 60000 : ttl);
     saveComplete(aggKey, result);
     await saveScheduleSnapshot({ cacheKey: aggKey, hub: refreshHub, dir, ts, data: result });
@@ -1263,6 +1302,7 @@ export function __resetScheduleCachesForTests(): void {
   lastCompleteByHubDir.clear();
   pendingAggs.clear();
   lastProviderRefreshAt.clear();
+  lastOfficialRefreshAt.clear();
 }
 
 async function tryOfficialFallback(
@@ -1785,8 +1825,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const shouldBypassPartialForComplete = !!cached && cachedIsPartial && Number(cached?.data?.total || 0) > 0 &&
       !!(getLastComplete(currentAggKey) || getLastCompleteByHubDir(hub, dir, ts));
     if (cached && !shouldBypassEmptyPartialCache && !shouldBypassPartialForComplete) {
+      // F037/F026: the hot-cache serve path used to return cached.data verbatim with zero staleness
+      // signal — a board could sit here for up to 6h (COMPLETE_CACHE_MAX_AGE) with no dataAge and no
+      // generatedAt. Stamp both from this cache entry's own timestamp (cached.time), falling back to
+      // it only when the board itself carries no generatedAt yet (e.g. a snapshot loaded before this
+      // field existed). Server-side only — CDN TTL policy (setAggregateCacheHeader) is unchanged.
+      const dataAge = Math.max(0, Math.round((Date.now() - cached.time) / 1000));
+      const generatedAt = Number(cached.data?.meta?.generatedAt) || Math.floor(cached.time / 1000);
       setAggregateCacheHeader(res, cached.data, cdnMaxAge, swr, wantsForce);
-      return res.status(200).json(withDisruption({ ...cached.data, cached: true }));
+      return res.status(200).json(withDisruption({
+        ...cached.data,
+        cached: true,
+        meta: { ...(cached.data?.meta || {}), dataAge, generatedAt },
+      }));
     }
 
     const stale = forceRefresh ? null : cacheGetStale(currentAggKey);
@@ -1796,15 +1847,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isFreshComplete(stale)) {
         triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
           allowTargetedOfficialRescue: false,
-          disableOfficialSource: !allowOfficialFallback,
+          // F036: background refresh of the paid official API is age+cooldown gated, same shape as
+          // the provider gate below — never enabled just because the on-demand param allows it.
+          disableOfficialSource: pendingAggs.has(currentAggKey) || !shouldEnableOfficialForBackgroundRefresh(
+            currentAggKey, Date.now() - stale.time, allowOfficialFallback
+          ),
           disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
             currentAggKey, Date.now() - stale.time, allowProviderFallback
           ),
           disableScraperFallback: true,
         });
       }
+      // F037/F026: same dataAge/generatedAt stamp as the hot-cache-hit path above.
+      const staleDataAge = Math.max(0, Math.round((Date.now() - stale.time) / 1000));
+      const staleGeneratedAt = Number(stale.data?.meta?.generatedAt) || Math.floor(stale.time / 1000);
       res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-      return res.status(200).json(withDisruption({ ...stale.data, cached: true, stale: !isFreshComplete(stale) }));
+      return res.status(200).json(withDisruption({
+        ...stale.data,
+        cached: true,
+        stale: !isFreshComplete(stale),
+        meta: { ...(stale.data?.meta || {}), dataAge: staleDataAge, generatedAt: staleGeneratedAt },
+      }));
     }
 
     const exactLastComplete = forceRefresh ? null : getLastComplete(currentAggKey);
@@ -1815,7 +1878,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isFreshComplete(fallbackComplete)) {
         triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
           allowTargetedOfficialRescue: false,
-          disableOfficialSource: !allowOfficialFallback,
+          // F036: same age+cooldown gate as above — no bare allowOfficialFallback passthrough.
+          disableOfficialSource: pendingAggs.has(currentAggKey) || !shouldEnableOfficialForBackgroundRefresh(
+            currentAggKey, Date.now() - fallbackComplete.time, allowOfficialFallback
+          ),
           disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
             currentAggKey, Date.now() - fallbackComplete.time, allowProviderFallback
           ),
@@ -1837,9 +1903,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // a refresh can only degrade it. A partial snapshot (or an old one) still refreshes so the
         // frozen-board recovery path is preserved. (Audit: board flapping.)
         if (!isFreshComplete(persistentFallback)) {
+          // F036: same age+cooldown gate as above, computed once so it also governs the targeted
+          // rescue flag below (srcPriority='scrape' path) — no path may bypass it.
+          const officialBackgroundRefreshAllowed = !pendingAggs.has(currentAggKey) && shouldEnableOfficialForBackgroundRefresh(
+            currentAggKey, Date.now() - persistentFallback.time, allowOfficialFallback
+          );
           triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
-            allowTargetedOfficialRescue: allowOfficialFallback && persistentFallback.fallbackScope === 'persistent_partial',
-            disableOfficialSource: !allowOfficialFallback,
+            allowTargetedOfficialRescue: officialBackgroundRefreshAllowed && persistentFallback.fallbackScope === 'persistent_partial',
+            disableOfficialSource: !officialBackgroundRefreshAllowed,
             disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
               currentAggKey, Date.now() - persistentFallback.time, allowProviderFallback
             ),
@@ -1870,6 +1941,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       disableScraperFallback: !allowScraperFallback,
       providerBudgetExempt: forceRefresh,
     }).then(async result => {
+      // F037/F026: same build-time generatedAt stamp as triggerBackgroundRefresh's callback.
+      result.meta = { ...(result.meta || {}), generatedAt: Math.floor(Date.now() / 1000) };
       cacheSetGuarded(currentAggKey, result, result.partial ? 60000 : ttl);
       saveComplete(currentAggKey, result);
       await saveScheduleSnapshot({ cacheKey: currentAggKey, hub, dir, ts, data: result });

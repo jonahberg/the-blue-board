@@ -14,7 +14,7 @@
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
-import { isOfficialFr24Enabled } from './_official-fr24.js';
+import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402 } from './_official-fr24.js';
 import { loadScheduleSnapshot } from './_schedule-snapshots.js';
 import { UNITED_HUBS } from './_hubs.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
@@ -91,6 +91,11 @@ async function fetchFr24Summary(flight: string): Promise<any | null> {
   if (!process.env.FR24_API_TOKEN) return null;
   // Paid official API: honour the operator kill switch (credits exhausted → OFF in prod).
   if (!isOfficialFr24Enabled()) return null;
+  // F038: honour the shared cross-instance 402 quota block before spending a call — this tier used
+  // to gate solely on the kill switch and ignore a credit-exhaustion block recorded by any other
+  // official-API caller (schedule.ts, fr24-flight, aircraft-history). Skips straight to the next
+  // fallback tier (schedule-cache) via the null return, same as any other tier failure.
+  if (await isOfficialApiQuotaBlocked()) return null;
   try {
     // Convert UAL2221 -> UA2221 for FR24
     const fr24Flight = flight.replace('UAL', 'UA');
@@ -112,6 +117,10 @@ async function fetchFr24Summary(flight: string): Promise<any | null> {
     );
     clearTimeout(timeout);
     if (!resp.ok) {
+      if (resp.status === 402) {
+        const body = await resp.text().catch(() => '');
+        recordOfficialApi402(body || 'flight-times 402');
+      }
       return null;
     }
     const data = await resp.json();

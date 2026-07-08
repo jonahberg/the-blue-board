@@ -160,4 +160,42 @@ describe('metar API', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual([]);
   });
+
+  // F040: last-known-good backfills must carry a staleness marker and expire after 6h instead of
+  // being served forever with no age signal.
+  it('marks a last-known-good backfill stale with a cachedAt epoch', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok([station('KORD', 'METAR KORD GOOD OBS')]));
+    let res = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { ids: 'KORD' } }, res);
+    expect(res.body[0].stale).toBeFalsy();
+
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(abortError());
+    res = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { ids: 'KORD' } }, res);
+
+    expect(res.body[0].stale).toBe(true);
+    expect(typeof res.body[0].cachedAt).toBe('number');
+  });
+
+  it('stops backfilling a last-known-good observation once it is older than 6h', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok([station('KORD', 'METAR KORD GOOD OBS')]));
+      let res = createRes();
+      await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { ids: 'KORD' } }, res);
+      expect(res.body[0].rawOb).toBe('METAR KORD GOOD OBS');
+
+      vi.advanceTimersByTime(6 * 60 * 60 * 1000 + 1000); // just past the 6h backfill ceiling
+      vi.restoreAllMocks();
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(abortError());
+      res = createRes();
+      await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { ids: 'KORD' } }, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual([]); // too old to backfill -> omitted, not silently stale forever
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

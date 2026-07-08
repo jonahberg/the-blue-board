@@ -6,7 +6,7 @@
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
-import { isOfficialFr24Enabled } from './_official-fr24.js';
+import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402 } from './_official-fr24.js';
 
 const isRateLimited = createRateLimiter('aircraft-history', 15);
 
@@ -107,6 +107,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Aircraft history temporarily unavailable' });
   }
 
+  // F038: honour the shared cross-instance 402 quota block — this endpoint used to gate solely on
+  // the kill switch and kept hitting the paid official API even after another lambda recorded a
+  // credit-exhaustion 402. This is the endpoint's only official-API tier.
+  if (await isOfficialApiQuotaBlocked()) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(503).json({ success: false, error: 'Aircraft history temporarily unavailable' });
+  }
+
   const reg = ((req.query.reg as string) || '').trim().toUpperCase().replace('-', '');
   if (!reg || !/^[A-Z0-9]{4,8}$/.test(reg)) {
     return res.status(400).json({ success: false, error: 'Invalid registration format' });
@@ -151,6 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
       console.error(`FR24 aircraft history error for ${reg}: status=${resp.status} ${text.slice(0, 200)}`);
+      if (resp.status === 402) recordOfficialApi402(text || 'aircraft-history 402');
       // Echo the upstream status so the failure is diagnosable from the response
       // alone (e.g. 402/403 = credit-blocked vs 5xx = outage). The frontend only
       // reads `success`, so this extra field is inert for consumers.

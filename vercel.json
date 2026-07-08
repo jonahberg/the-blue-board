@@ -22,6 +22,9 @@
     "functions": {
         "api/irops.ts": { "maxDuration": 90 },
         "api/schedule.ts": { "maxDuration": 60 },
+        "api/faa.ts": { "maxDuration": 30 },
+        "api/nas.ts": { "maxDuration": 30 },
+        "api/fr24-feed.ts": { "maxDuration": 30 },
         "api/cron/warm-schedules.ts": { "maxDuration": 300 },
         "api/delay-explain.ts": { "maxDuration": 15 },
         "api/cron/sync-starlink.ts": { "maxDuration": 30 },

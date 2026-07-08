@@ -6,7 +6,7 @@
 //   Flight summary: GET /api/flight-summary/light?flights={iata}
 
 import type { VercelRequest, VercelResponse } from './types.js';
-import { isOfficialFr24Enabled } from './_official-fr24.js';
+import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402 } from './_official-fr24.js';
 
 const FR24_BASE = 'https://fr24api.flightradar24.com';
 const LIVE_PATH = '/api/live/flight-positions/full';
@@ -223,6 +223,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Flight lookup temporarily unavailable' });
   }
 
+  // F038: honour the shared cross-instance 402 quota block — this endpoint used to gate solely on
+  // the kill switch and kept hitting the paid official API even after another lambda (or
+  // schedule.ts) recorded a credit-exhaustion 402. This is the endpoint's only official-API tier,
+  // so a block means the same "temporarily unavailable" response as the kill switch.
+  if (await isOfficialApiQuotaBlocked()) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(503).json({ success: false, error: 'Flight lookup temporarily unavailable' });
+  }
+
   const rawFlight = req.query.flight as string;
   if (!rawFlight) return res.status(400).json({ success: false, error: 'Missing flight parameter' });
 
@@ -260,8 +269,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(`FR24 live response for ${flight}: status=${liveResp.status}, entries=${liveData?.data?.length || 0}`);
       flightData = normalizeLiveResponse(liveData, flight);
     } else {
-      await liveResp.text().catch(() => '');
+      const body = await liveResp.text().catch(() => '');
       console.error(`FR24 live error for ${flight}: status=${liveResp.status}`);
+      if (liveResp.status === 402) recordOfficialApi402(body || 'fr24-flight live 402');
     }
 
     // 2. Also try flight summary for departure/arrival times (live endpoint often lacks them)
@@ -295,8 +305,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           flightData = summaryFlight;
         }
       } else {
-        await summaryResp.text().catch(() => '');
+        const body = await summaryResp.text().catch(() => '');
         console.error(`FR24 summary error for ${flight}: status=${summaryResp.status}`);
+        if (summaryResp.status === 402) recordOfficialApi402(body || 'fr24-flight summary 402');
       }
     }
 
