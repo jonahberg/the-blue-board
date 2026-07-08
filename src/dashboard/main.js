@@ -11,6 +11,7 @@ import { classifySchedStatus } from '../lib/schedule-status.js';
 import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
 import { classifyConnection, MIN_CONNECTION_TIMES, TERMINAL_WALK_TIMES } from '../lib/connection-risk.js';
 import { formatDataAge, dataAgeSeverity } from '../lib/data-age.js';
+import { formatTimeWithTz } from '../lib/time-format.js';
 import { parseFr24Feed, applyFeedResult, feedFreshness, nextFeedRetryDelay } from '../lib/feed-health.js';
 import { formatDelayMinutes, delayColorVar } from '../lib/delay-format.js';
 import { firstFutureIndex, nowDividerIndex, effectiveRowTime } from '../lib/board-now.js';
@@ -21,6 +22,57 @@ import { recordSightings, lookupReg, pruneLedger, deserializeLedger, normalizeFl
 import { applySightingsToBoard } from '../lib/reg-overlay.js';
 
 injectSpeedInsights();
+
+// ═══════════════════════════════════════════════
+// JARGON TOOLTIPS (P2-A item 1) — plain-English one-liners for the ops jargon
+// scattered across panels (IROPS, OTP, METAR, GDP, Ground Stop, equipment,
+// tail/registration). Dotted-underline term + CSS-only tooltip (:hover/
+// :focus-within — no JS needed to show/hide, so it costs nothing per DESIGN.md's
+// minimal-motion rule) with aria-describedby for screen readers. One delegated
+// handler (not per-element listeners) clamps the tooltip inside the viewport.
+// ═══════════════════════════════════════════════
+const JARGON_TERMS = {
+  irops: 'Irregular operations — cancellations, major delays, diversions',
+  otp: '% of departures within 30 min of schedule',
+  metar: 'standard aviation weather report',
+  gdp: 'Ground Delay Program — FAA slows arrivals to manage congestion',
+  groundstop: 'FAA order halting departures to this airport',
+  equipment: 'aircraft type',
+  tail: "aircraft's unique ID, like a license plate",
+};
+let jargonTipSeq = 0;
+// Renders `label` wrapped in a dotted-underline term with a hover/focus tooltip
+// showing JARGON_TERMS[termKey]. Callers are responsible for only calling this at
+// the first occurrence of a term per panel — this helper itself does no dedup so
+// call sites stay simple and explicit about "first occurrence" scoping.
+function jargonTerm(termKey, label) {
+  const desc = JARGON_TERMS[termKey];
+  const safeLabel = escapeHtml(label);
+  if (!desc) return safeLabel;
+  jargonTipSeq++;
+  const tipId = 'jgt-tip-' + jargonTipSeq;
+  return `<span class="jargon-term-wrap"><span class="jargon-term" tabindex="0" aria-describedby="${tipId}">${safeLabel}</span><span class="jargon-tooltip" id="${tipId}" role="tooltip">${escapeHtml(desc)}</span></span>`;
+}
+// One delegated handler (registered for both mouseover and focusin, container =
+// document) rather than a listener per jargon term. Keeps the tooltip's horizontal
+// position inside the viewport; the tooltip's actual show/hide is pure CSS
+// (:hover/:focus-within in style.css), so this never needs to run for anything to
+// be keyboard-accessible.
+function handleJargonHoverOrFocus(e) {
+  const wrap = e.target && e.target.closest && e.target.closest('.jargon-term-wrap');
+  if (!wrap) return;
+  const tip = wrap.querySelector('.jargon-tooltip');
+  if (!tip) return;
+  tip.style.left = '';
+  tip.style.right = '';
+  const rect = tip.getBoundingClientRect();
+  if (rect.right > window.innerWidth - 8) {
+    tip.style.left = 'auto';
+    tip.style.right = '0';
+  }
+}
+document.addEventListener('mouseover', handleJargonHoverOrFocus);
+document.addEventListener('focusin', handleJargonHoverOrFocus);
 
 // ═══════════════════════════════════════════════
 // SVG ICON CONSTANTS — clean icons for buttons
@@ -1469,26 +1521,12 @@ function showFlightPopup(f, marker) {
         const orig = data.origin || {};
         const dest = data.destination || {};
 
-        function fmtTimeInTz(iso, tz) {
-          if (!iso) return null;
-          try {
-            const d = new Date(iso);
-            if (isNaN(d)) return null;
-            const opts = { hour: 'numeric', minute: '2-digit', hour12: true };
-            if (tz) opts.timeZone = tz;
-            return d.toLocaleTimeString([], opts);
-          } catch(e) { return null; }
-        }
-        function fmtTimeWithTz(iso, tz) {
-          if (!iso) return null;
-          try {
-            const d = new Date(iso);
-            if (isNaN(d)) return null;
-            const opts = { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' };
-            if (tz) opts.timeZone = tz;
-            return d.toLocaleTimeString([], opts);
-          } catch(e) { return null; }
-        }
+        // Both departure and arrival now go through the same tz-labeled formatter
+        // (P2-A item 2 / F047 / F054) — previously departure used an unlabeled
+        // fmtTimeInTz while arrival used a labeled fmtTimeWithTz, so the popup
+        // silently mixed the viewer's local clock with the arrival airport's clock.
+        const fmtTimeInTz = formatTimeWithTz;
+        const fmtTimeWithTz = formatTimeWithTz;
         function deltaMin(schedIso, actualIso) {
           if (!schedIso || !actualIso) return null;
           try {
@@ -1763,7 +1801,8 @@ function updateStats() {
     }
   });
 
-  const filterLabel = (activeHubFilter || activePhaseFilter) ? ' (filtered)' : '';
+  const isFiltered = !!(activeHubFilter || activePhaseFilter);
+  const filterLabel = isFiltered ? ' (filtered)' : '';
   document.getElementById('st-airborne').textContent = airborne;
   document.getElementById('st-ground').textContent = ground;
   document.getElementById('st-climb').textContent = climbing;
@@ -1771,7 +1810,14 @@ function updateStats() {
   document.getElementById('st-desc').textContent = descending;
   document.getElementById('st-avgalt').textContent = altCount ? Math.round(totalAlt / altCount).toLocaleString() + 'ft' : '--';
   document.getElementById('st-avgspd').textContent = spdCount ? Math.round(totalSpd / spdCount) + 'kts' : '--';
-  document.getElementById('st-util').textContent = FLEET_DB.length ? Math.round((airborne / FLEET_DB.length) * 100) + '%' + filterLabel : '--';
+  // Small filtered samples produce a misleadingly precise/low % (e.g. "0% (filtered)"
+  // for 1 airborne flight matching a narrow hub+phase filter) — below a small threshold,
+  // say so plainly instead of asserting a number (P2-A item 5b).
+  document.getElementById('st-util').textContent = !FLEET_DB.length
+    ? '--'
+    : (isFiltered && airborne < 10)
+      ? 'n/a (small sample)'
+      : Math.round((airborne / FLEET_DB.length) * 100) + '%' + filterLabel;
   document.getElementById('st-starlink').textContent = starlinkAirborne;
 
   // Phase stats sidebar (always show total counts from allFlights, but make clickable)
@@ -3838,8 +3884,19 @@ async function initWeatherTab() {
 
   // Build cards + map markers
   let cardsHtml = '';
+  // First-occurrence-per-panel gates for the METAR/GDP/Ground Stop jargon tooltips
+  // (P2-A item 1) — this loop renders one card per hub, and only the first card
+  // to actually surface the term should carry the tooltip.
+  let metarJargonUsed = false;
+  let gdpJargonUsed = false;
+  let groundStopJargonUsed = false;
   metarResults.forEach(({hub, data}) => {
     const raw = data ? (data.rawOb || '') : '';
+    let metarPrefix = '';
+    if (raw && !metarJargonUsed) {
+      metarJargonUsed = true;
+      metarPrefix = jargonTerm('metar', 'METAR') + ' ';
+    }
     const apiCat = data ? (data.fltCat || data.fltcat || 'UNK') : 'UNK';
     const localCat = computeFlightCategory(raw);
     // Use the worse (more restrictive) of API vs local computation
@@ -3872,11 +3929,25 @@ async function initWeatherTab() {
         for (const prog of faa.programs) {
           const { label, window, extras } = describeFaaProgram(prog);
           // Unknown program type with no mapped label → fall back to its raw reason/type.
-          let text = (label === 'Delay' && !prog.type)
-            ? String(prog.reason || prog.type || 'Delay')
-            : `${label}${window}`;
-          if (extras.length) text += ` ${extras.join(' · ')}`;
-          statusParts.push(escapeHtml(text));
+          if (label === 'Delay' && !prog.type) {
+            statusParts.push(escapeHtml(String(prog.reason || prog.type || 'Delay')));
+            continue;
+          }
+          // Jargon tooltips (P2-A item 1): "GDP" and "Ground Stop" get a plain-English
+          // one-liner the first time either appears anywhere on the panel.
+          let labelHtml;
+          if (label === 'GDP' && !gdpJargonUsed) {
+            gdpJargonUsed = true;
+            labelHtml = jargonTerm('gdp', label);
+          } else if (label === 'Ground Stop' && !groundStopJargonUsed) {
+            groundStopJargonUsed = true;
+            labelHtml = jargonTerm('groundstop', label);
+          } else {
+            labelHtml = escapeHtml(label);
+          }
+          let text = `${labelHtml}${escapeHtml(window)}`;
+          if (extras.length) text += ` ${escapeHtml(extras.join(' · '))}`;
+          statusParts.push(text);
         }
       } else {
         statusParts.push(...faa.delays.map(d => escapeHtml(d.reason || d.type || 'Delay')));
@@ -3947,7 +4018,7 @@ async function initWeatherTab() {
         ${faaExplainer?`<div class="hub-explainer">${faaExplainer}</div>`:''}
         ${advisoryLinks}
         ${notamHtml}
-        ${raw?`<div class="hub-raw">${escapeHtml(raw)}</div>`:''}
+        ${raw?`<div class="hub-raw">${metarPrefix}${escapeHtml(raw)}</div>`:''}
       </div>` : ''}
     </div>`;
 
@@ -4776,7 +4847,17 @@ async function loadScheduleData() {
       loadEl.innerHTML = `<div style="padding:4px 12px;background:${bgColor};border:1px solid ${borderColor};border-radius:4px;font-size:11px;color:${textColor};margin:0">${icon} ${msg}${pct} <button data-action="schedule-retry-cached" style="background:none;border:none;color:var(--ua-accent);cursor:pointer;font-family:var(--font-ui);font-size:11px;text-decoration:underline">↻ Retry</button></div>`;
       loadEl.style.display = 'block';
     } else {
-      loadEl.style.display = 'none';
+      // Clean (non-partial/degraded/stale) board — no warning needed, but a board can
+      // still be sitting quietly on the CDN/hot-cache for a while (F026/F037: up to 6h
+      // with no staleness flag). A subtle, non-alarming age chip — not the amber/red
+      // warning styling above — keeps that honest without crying wolf (P2-A item 3a).
+      const ageSec = schedBoardMeta && schedBoardMeta.dataAge != null ? Number(schedBoardMeta.dataAge) : null;
+      if (Number.isFinite(ageSec) && ageSec > 600) {
+        loadEl.innerHTML = `<div class="sched-age-chip">data as of ${escapeHtml(formatBoardAsOf())}</div>`;
+        loadEl.style.display = 'block';
+      } else {
+        loadEl.style.display = 'none';
+      }
     }
     tableWrap.style.display = 'block';
     renderScheduleTable();
@@ -5328,7 +5409,7 @@ function renderScheduleStats(filtered, nowSec = schedNow()) {
     </div>
     <div class="metric-card">
       <span class="metric-val" style="color:${otpColor}">${otpStr}</span>
-      <span class="metric-label">On-Time (${counts.operated} operated)</span>
+      <span class="metric-label">${jargonTerm('otp', 'On-Time')} (${counts.operated} operated)</span>
     </div>
     <div class="metric-card">
       <span class="metric-val" style="color:var(--ua-green)">${counts.onTime}</span>
@@ -6048,7 +6129,7 @@ function updateIrops() {
   // wasn't helpful). The numeric score is still computed below for the ticker's gating.
   // F002: this is the client FALLBACK (server /api/irops unavailable) \u2014 mark it "estimated"
   // so it never masquerades as the authoritative network-wide figure.
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="irops-partial-tag" style="font-size:9px;color:var(--ua-muted);margin-left:6px;font-family:var(--font-mono)">est \u00b7 loaded boards</span><span class="hh-info" tabindex="0" role="button" aria-label="What does this mean?">?<span class="hh-tooltip">Estimated from the schedule boards loaded in your session (server IROPS feed unavailable). Severity weights cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
+  html += `<span class="irops-bar-item">${jargonTerm('irops', 'IROPS')} <span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="irops-partial-tag" style="font-size:9px;color:var(--ua-muted);margin-left:6px;font-family:var(--font-mono)">est \u00b7 loaded boards</span><span class="hh-info" tabindex="0" role="button" aria-label="What does this mean?">?<span class="hh-tooltip">Estimated from the schedule boards loaded in your session (server IROPS feed unavailable). Severity weights cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -6155,9 +6236,9 @@ function renderIropsFromAPI(data) {
   // NOTE: All values here are from the IROPS API (internal, not user input).
   let html = '<div class="irops-bar">';
   // Authoritative network-wide index (all 9 hubs). Tooltip states the exact F017 weights.
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info" tabindex="0" role="button" aria-label="What does this mean?">?<span class="hh-tooltip">Network-wide severity across all United hubs, weighting cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) \u2014 including flights held past schedule \u2014 per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
+  html += `<span class="irops-bar-item">${jargonTerm('irops', 'IROPS')} <span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info" tabindex="0" role="button" aria-label="What does this mean?">?<span class="hh-tooltip">Network-wide severity across all United hubs, weighting cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) \u2014 including flights held past schedule \u2014 per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
-  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.cancellations != null ? data.cancellations : '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-yellow)">${data.delayed30}</span><span class="irops-bar-label">&gt;30m</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -6716,6 +6797,15 @@ function buildMyFlightCard(watched, td) {
     equipHtml = `<div><span class="mf-label">Aircraft</span><div class="mf-value">${escapeHtml(td.aircraft)}${forecastBadge}</div>${noTailNote}</div>`;
   }
 
+  // Provenance chip (P2-A item 3b / F018): the 3-tier flight-times fallback (FlightAware live
+  // → FR24 official summary → schedule snapshot) is otherwise invisible today — a
+  // snapshot-sourced card can look exactly as authoritative as a live one. Only the
+  // cache/snapshot tier gets a chip; live tiers (flightaware/fr24) need no disclaimer.
+  let provenanceHtml = '';
+  if (td && td.success !== false && td.source === 'schedule-cache') {
+    provenanceHtml = '<div class="mf-provenance">via schedule snapshot</div>';
+  }
+
   // Inbound aircraft tracking + journey chain
   let inboundHtml = '';
   let inboundStr = '';
@@ -6811,6 +6901,7 @@ function buildMyFlightCard(watched, td) {
       ${unavailableNote}
       ${gateHtml}
       ${equipHtml}
+      ${provenanceHtml}
       ${inboundHtml}
     </div>
     <div class="mf-actions">
@@ -7967,13 +8058,16 @@ function hideDisclaimer() {
     // Heading
     var heading = document.createElement('div');
     heading.style.cssText = 'font-size:22px;font-weight:700;color:var(--ua-text);margin-bottom:8px;font-family:var(--font-display)';
-    heading.textContent = '\u2708 Enjoying The Blue Board?';
+    heading.textContent = '\u2708 Stay in the loop';
     content.appendChild(heading);
 
-    // Subtext
+    // Subtext \u2014 P2-A item 4a: this modal is now pure email capture. The "Pro features
+    // are coming" paywall-teaser line and the donation pitch that used to live here
+    // were misleading two-competing-CTAs-in-one-modal noise (review Part 2 #7); the
+    // donation ask now lives in its own dedicated post-landing moment (showLandedThanksCard).
     var sub = document.createElement('div');
     sub.style.cssText = 'font-size:14px;color:var(--ua-muted);margin-bottom:24px;line-height:1.5';
-    sub.textContent = 'Big updates are coming \u2014 Pro features, smarter alerts, and more.';
+    sub.textContent = 'Get launch updates and new-feature announcements \u2014 no spam.';
     content.appendChild(sub);
 
     // Form container (will be replaced on success)
@@ -8072,34 +8166,15 @@ function hideDisclaimer() {
     formWrap.appendChild(submitBtn);
     content.appendChild(formWrap);
 
-    // Trust badges
+    // Trust badge \u2014 email capture only now (P2-A item 4a); the donation ask and the
+    // unsourced user-count claim both moved out (donation \u2192 showLandedThanksCard,
+    // user-count dropped rather than repeat the site's other unverified 25,000+ figure).
     var badges = document.createElement('div');
     badges.style.cssText = 'margin-top:20px;font-size:12px;color:var(--ua-muted);line-height:1.8';
-    var badge1 = document.createElement('div');
-    badge1.textContent = '\u2713 22,000+ flyers have used The Blue Board';
-    badges.appendChild(badge1);
     var badge2 = document.createElement('div');
     badge2.textContent = '\u2713 No spam, just launch updates';
     badges.appendChild(badge2);
     content.appendChild(badges);
-
-    // Donation CTA (prominent)
-    var donateWrap = document.createElement('div');
-    donateWrap.style.cssText = 'margin-top:20px;padding-top:16px;border-top:1px solid var(--ua-border);text-align:center';
-    var donateText = document.createElement('div');
-    donateText.style.cssText = 'font-size:14px;color:var(--ua-fg);line-height:1.5;margin-bottom:12px';
-    donateText.textContent = 'Free. No ads. No paywalls. Just one United nerd who hates bad flight trackers. A $5 donation covers a full day of live flights, API calls, and everything that keeps this running.';
-    donateWrap.appendChild(donateText);
-    var donateBtn = document.createElement('a');
-    donateBtn.href = 'https://buymeacoffee.com/notjbg';
-    donateBtn.target = '_blank';
-    donateBtn.rel = 'noopener noreferrer';
-    donateBtn.style.cssText = 'display:inline-block;padding:10px 28px;background:rgba(255,255,255,0.08);border:1px solid var(--ua-accent);color:var(--ua-accent);border-radius:8px;font-size:14px;font-weight:600;font-family:var(--font-ui);text-decoration:none;transition:background .2s,color .2s;cursor:pointer';
-    donateBtn.textContent = 'Donate';
-    donateBtn.addEventListener('mouseenter', function() { donateBtn.style.background = 'var(--ua-accent)'; donateBtn.style.color = '#fff'; });
-    donateBtn.addEventListener('mouseleave', function() { donateBtn.style.background = 'rgba(255,255,255,0.08)'; donateBtn.style.color = 'var(--ua-accent)'; });
-    donateWrap.appendChild(donateBtn);
-    content.appendChild(donateWrap);
 
     card.appendChild(content);
     backdrop.appendChild(card);
@@ -8123,10 +8198,13 @@ function hideDisclaimer() {
     setTimeout(function() { emailInput.focus(); }, 100);
   }
 
-  // Trigger thresholds: aggressive for new visitors, gentle for returning
+  // Trigger thresholds: aggressive for new visitors, gentle for returning.
+  // P2-A item 4c: the 8-click/90s new-visitor trigger interrupted a first-timer
+  // mid-search (F044) — raised to 20 clicks/5min so it only fires on visitors who
+  // are genuinely engaged, not the first few taps of orientation.
   var isNewVisitor = !localStorage.getItem('bb-visited');
-  var TRIGGER_TIME_MS = isNewVisitor ? 90 * 1000 : 5 * 60 * 1000;    // 90s new, 5min returning
-  var TRIGGER_CLICKS  = isNewVisitor ? 8 : 30;                         // 8 new, 30 returning
+  var TRIGGER_TIME_MS = 5 * 60 * 1000;    // 5min for everyone now
+  var TRIGGER_CLICKS  = isNewVisitor ? 20 : 30;   // 20 new, 30 returning
 
   // Trigger 1: After time threshold of active use
   setTimeout(function() {
@@ -8143,13 +8221,50 @@ function hideDisclaimer() {
     }
   });
 
-  // Trigger 3: Flight watch landing payoff (called from checkWatchedFlightChanges)
+  // Trigger 3: Flight watch landing payoff (called from checkWatchedFlightChanges).
+  // P2-A item 4b: this used to force-open the generic email/donate modal, muddying
+  // the ask right at the one moment the app has clearly delivered value. It now shows
+  // a small dedicated "glad you landed" card with a single BMAC button, frequency-capped
+  // to once per 14 days.
+  var BMAC_LANDED_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
   window.showBmacLandingToast = function() {
-    if (waitlistSubmitted) return;
-    setTimeout(function() {
-      showWaitlistModal();
-    }, 3000);
+    if (document.getElementById('bmac-toast')) return;
+    try {
+      var last = Number(localStorage.getItem('bb-bmac-dismissed') || 0);
+      if (last && (Date.now() - last) < BMAC_LANDED_COOLDOWN_MS) return;
+    } catch (e) {}
+    setTimeout(showLandedThanksCard, 3000);
   };
+
+  function showLandedThanksCard() {
+    if (document.getElementById('bmac-toast')) return;
+    var toast = document.createElement('div');
+    toast.id = 'bmac-toast';
+    toast.setAttribute('role', 'status');
+    toast.className = 'bmac-toast';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'bmac-toast-close';
+    closeBtn.setAttribute('aria-label', 'Dismiss');
+    closeBtn.setAttribute('data-action', 'close-bmac');
+    closeBtn.textContent = '✕';
+    toast.appendChild(closeBtn);
+
+    var msg = document.createElement('div');
+    msg.className = 'bmac-toast-msg';
+    msg.textContent = 'Glad you landed ✈️ — if The Blue Board helped today, you can support the server costs.';
+    toast.appendChild(msg);
+
+    var btn = document.createElement('a');
+    btn.className = 'bmac-toast-btn';
+    btn.href = 'https://buymeacoffee.com/notjbg';
+    btn.target = '_blank';
+    btn.rel = 'noopener noreferrer';
+    btn.textContent = '☕ Buy Me a Coffee';
+    toast.appendChild(btn);
+
+    document.body.appendChild(toast);
+  }
 
   // Trigger 4: ?waitlist=1 deep link (from news articles, external links)
   // Force-open: intentional user action bypasses passive guards (session + TTL)
@@ -8334,8 +8449,8 @@ function buildAircraftDetailHTML(ac, reg) {
   // ── Header ──
   html += '<div class="ac-modal-header">';
   html += '<button class="ac-modal-close" data-action="close-aircraft-modal" aria-label="Close">✕</button>';
-  html += '<div class="ac-modal-reg">' + escapeHtml(reg) + '</div>';
-  html += '<div class="ac-modal-type">' + escapeHtml(ac.t);
+  html += '<div class="ac-modal-reg">' + jargonTerm('tail', reg) + '</div>';
+  html += '<div class="ac-modal-type">' + jargonTerm('equipment', ac.t);
   if (ac.a) html += ' <span class="ac-modal-acnum">AC# ' + escapeHtml(ac.a) + '</span>';
   html += '</div>';
   if (special) html += '<span class="special-badge" style="margin-top:4px;display:inline-block">⭐ ' + escapeHtml(special.name) + '</span> ';
