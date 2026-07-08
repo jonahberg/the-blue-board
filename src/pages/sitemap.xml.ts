@@ -8,6 +8,7 @@ import {
   getLastModified,
   homeLastmodPaths,
   hubIndexLastmodPaths,
+  newarkLastmodPaths,
   newsIndexLastmodPaths,
   xmlEscape,
 } from '../lib/buildMetadata.js';
@@ -42,6 +43,7 @@ export function GET() {
     ...hubOrder.map((key) =>
       renderUrl(`/hubs/${key}`, getLastModified(getHubRouteLastmodPaths(key)), 'weekly', '0.8')
     ),
+    renderUrl('/newark', getLastModified(newarkLastmodPaths), 'weekly', '0.8'),
     renderUrl('/news', getLastModified(newsIndexLastmodPaths), 'daily', '0.9'),
     // Per-article lastmod — use the article's own publication date so each
     // entry has a distinct value. The previous getNewsRouteLastmodPaths call

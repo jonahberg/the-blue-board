@@ -186,6 +186,9 @@ p{margin-bottom:12px}
           <div class="hub-name">{hub.name}</div>
           <div class="hub-info">{hub.subtitle}</div>
           <a class="hub-link" href={`/hubs/${key}`}>View {hub.iata} Hub Status &#8594;</a>
+          {key === 'ewr' && (
+            <div style="margin-top:8px"><a href="/newark" style="font-size:10px;color:var(--ua-accent)">FAA cap explained →</a></div>
+          )}
         </div>
       );
     })}

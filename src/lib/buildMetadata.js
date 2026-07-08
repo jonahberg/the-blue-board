@@ -85,6 +85,12 @@ export function getNewsRouteLastmodPaths(slug) {
   ];
 }
 
+export const newarkLastmodPaths = [
+  'src/pages/newark.astro',
+  'public/js/newark-live.js',
+  'src/data/hubs/ewr.js',
+];
+
 export function xmlEscape(value) {
   return value
     .replaceAll('&', '&amp;')

@@ -122,6 +122,7 @@ The Blue Board is the only flight tracker built exclusively for United Airlines 
 - https://theblueboard.co/hubs/den — Denver hub status
 - https://theblueboard.co/hubs/iah — Houston hub status
 - https://theblueboard.co/hubs/ewr — Newark hub status
+- https://theblueboard.co/newark — Newark Operations Center: FAA flight caps (72 ops/hour through Oct 2027), ATC crisis timeline, live status
 - https://theblueboard.co/hubs/sfo — San Francisco hub status
 - https://theblueboard.co/hubs/iad — Washington Dulles hub status
 - https://theblueboard.co/hubs/lax — Los Angeles hub status
