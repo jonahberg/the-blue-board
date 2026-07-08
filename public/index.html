@@ -471,17 +471,17 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <div style="font-size:24px;margin-bottom:8px">📅</div>
       Select a hub and click Refresh to load schedule data
     </div>
-    <div class="fleet-table-wrap" style="display:none" id="sched-table-wrap">
+    <div class="fleet-table-wrap" style="display:none" id="sched-table-wrap" tabindex="0" aria-label="Schedule table, scrollable region">
       <table id="sched-table">
         <thead>
           <tr>
-            <th scope="col" data-sort="time" style="cursor:pointer;min-width:100px">Time ↕</th>
-            <th scope="col" data-sort="flight" style="cursor:pointer">Flight ↕</th>
-            <th scope="col" data-sort="route" style="cursor:pointer;min-width:140px">Route</th>
-            <th scope="col" data-sort="aircraft" style="cursor:pointer">Aircraft</th>
-            <th scope="col" data-sort="reg" style="cursor:pointer">Reg</th>
+            <th scope="col" data-sort="time" tabindex="0" style="cursor:pointer;min-width:100px">Time ↕</th>
+            <th scope="col" data-sort="flight" tabindex="0" style="cursor:pointer">Flight ↕</th>
+            <th scope="col" data-sort="route" tabindex="0" style="cursor:pointer;min-width:140px">Route</th>
+            <th scope="col" data-sort="aircraft" tabindex="0" style="cursor:pointer">Aircraft</th>
+            <th scope="col" data-sort="reg" tabindex="0" style="cursor:pointer">Reg</th>
             <th scope="col">Term / Gate</th>
-            <th scope="col" data-sort="status" style="cursor:pointer;min-width:130px">Status ↕</th>
+            <th scope="col" data-sort="status" tabindex="0" style="cursor:pointer;min-width:130px">Status ↕</th>
             <th scope="col" style="min-width:80px">Delay / Risk</th>
             <th scope="col">Fleet</th>
             <th scope="col"><span aria-hidden="true">👁️</span><span class="sr-only">Watch</span></th>
@@ -586,22 +586,22 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <button class="refresh-btn" data-action="refresh-fleet-data">Refresh</button>
     </div>
     <!-- All Aircraft table -->
-    <div class="fleet-table-wrap fleet-view-panel active" id="fleet-view-all">
+    <div class="fleet-table-wrap fleet-view-panel active" id="fleet-view-all" tabindex="0" aria-label="Fleet table, scrollable region">
       <table id="fleet-table" aria-label="United Airlines fleet database">
-        <thead><tr><th scope="col" data-sort="r" aria-sort="none">Reg</th><th scope="col" data-sort="t" aria-sort="none">Type</th><th scope="col" data-sort="a" aria-sort="none">AC#</th><th scope="col" data-sort="c">Config</th><th scope="col" data-sort="tot" aria-sort="none">Seats</th><th scope="col" data-sort="w">WiFi</th><th scope="col" data-sort="i">IFE</th><th scope="col" data-sort="d" aria-sort="none">Del</th><th scope="col" data-sort="s">Status</th><th scope="col">SL</th></tr></thead>
+        <thead><tr><th scope="col" data-sort="r" aria-sort="none" tabindex="0">Reg</th><th scope="col" data-sort="t" aria-sort="none" tabindex="0">Type</th><th scope="col" data-sort="a" aria-sort="none" tabindex="0">AC#</th><th scope="col" data-sort="c" tabindex="0">Config</th><th scope="col" data-sort="tot" aria-sort="none" tabindex="0">Seats</th><th scope="col" data-sort="w" tabindex="0">WiFi</th><th scope="col" data-sort="i" tabindex="0">IFE</th><th scope="col" data-sort="d" aria-sort="none" tabindex="0">Del</th><th scope="col" data-sort="s" tabindex="0">Status</th><th scope="col">SL</th></tr></thead>
         <tbody id="fleet-tbody"></tbody>
       </table>
       <div class="fleet-zero-results" id="fleet-zero-results" style="display:none">No aircraft match your filters. <button class="fleet-clear-filters" data-action="fleet-clear-filters">Clear Filters</button></div>
     </div>
     <!-- Airborne Now table -->
-    <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-airborne" style="display:none">
+    <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-airborne" style="display:none" tabindex="0" aria-label="Airborne fleet table, scrollable region">
       <table id="airborne-table" aria-label="Currently airborne United aircraft">
-        <thead><tr><th scope="col" data-airborne-sort="reg">Reg</th><th scope="col" data-airborne-sort="type">Type</th><th scope="col" data-airborne-sort="flight">Flight</th><th scope="col">Route</th><th scope="col" data-airborne-sort="alt">Alt</th><th scope="col" data-airborne-sort="phase">Phase</th><th scope="col">SL</th><th scope="col"></th></tr></thead>
+        <thead><tr><th scope="col" data-airborne-sort="reg" tabindex="0" aria-sort="none">Reg</th><th scope="col" data-airborne-sort="type" tabindex="0" aria-sort="none">Type</th><th scope="col" data-airborne-sort="flight" tabindex="0" aria-sort="none">Flight</th><th scope="col">Route</th><th scope="col" data-airborne-sort="alt" tabindex="0" aria-sort="none">Alt</th><th scope="col" data-airborne-sort="phase" tabindex="0" aria-sort="none">Phase</th><th scope="col">SL</th><th scope="col"></th></tr></thead>
         <tbody id="airborne-tbody"></tbody>
       </table>
     </div>
     <!-- Special Aircraft table -->
-    <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-special" style="display:none">
+    <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-special" style="display:none" tabindex="0" aria-label="Special fleet table, scrollable region">
       <div id="special-aircraft-content"><div class="fleet-loading-text">Loading special aircraft...</div></div>
     </div>
   </div>
@@ -680,13 +680,13 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <button id="sl-filter-new" class="sl-new-toggle" aria-pressed="false" type="button">★ New this week</button>
       <span id="sl-filtered-count" class="fleet-filtered-count"></span>
     </div>
-    <div class="fleet-table-wrap sl-table-wrap">
+    <div class="fleet-table-wrap sl-table-wrap" tabindex="0" aria-label="Starlink fleet table, scrollable region">
       <table id="sl-table" aria-label="Starlink-equipped aircraft">
         <thead><tr>
-          <th scope="col" data-sl-sort="tail">Tail</th>
-          <th scope="col" data-sl-sort="fleet">Fleet</th>
-          <th scope="col" data-sl-sort="type">Type</th>
-          <th scope="col" data-sl-sort="operator">Operator</th>
+          <th scope="col" data-sl-sort="tail" tabindex="0" aria-sort="none">Tail</th>
+          <th scope="col" data-sl-sort="fleet" tabindex="0" aria-sort="none">Fleet</th>
+          <th scope="col" data-sl-sort="type" tabindex="0" aria-sort="none">Type</th>
+          <th scope="col" data-sl-sort="operator" tabindex="0" aria-sort="none">Operator</th>
           <th scope="col" id="sl-status-th">Status</th>
           <th scope="col" id="sl-next-th">Next Flight</th>
         </tr></thead>
@@ -706,7 +706,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <details class="sl-verify-details" open>
         <summary class="sl-verify-summary">Disputed claims <span class="sl-verify-summary-hint">— overruled by official verification</span></summary>
         <p class="sl-verify-note">These tails were claimed as Starlink in the community spreadsheet, but official united.com verification overruled the claim. Upstream <strong>already excludes</strong> them from the served fleet, so The Blue Board's equipped count is not affected. Verified equipment may be Viasat or Thales.</p>
-        <div class="fleet-table-wrap sl-verify-table-wrap">
+        <div class="fleet-table-wrap sl-verify-table-wrap" tabindex="0" aria-label="Starlink verification table, scrollable region">
           <table class="sl-verify-table" aria-label="Disputed Starlink claims">
             <thead><tr>
               <th scope="col">Tail</th>
@@ -766,7 +766,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 </div>
 
 <!-- TAB 4: ANALYTICS -->
-<div class="tab-content" id="tab-analytics" role="tabpanel" aria-label="Analytics and statistics">
+<div class="tab-content" id="tab-analytics" role="tabpanel" aria-label="Analytics and statistics" tabindex="0">
   <div class="metric-row" id="analytics-metrics"></div>
   <div class="two-col">
     <div class="card">

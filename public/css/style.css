@@ -813,6 +813,10 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .tab-content.active{animation:fadeIn .2s ease}
 
 #sched-table-wrap{max-height:calc(100dvh - 320px)}
+/* A3: brief background pulse when a search result navigates to a schedule row.
+   Respects prefers-reduced-motion via the global override below. */
+@keyframes schedRowHighlight{0%,100%{background:transparent}20%,60%{background:rgba(0,93,170,.25)}}
+.sched-row-highlight{animation:schedRowHighlight 2s ease}
 /* Prevent overflow:hidden on card from trapping scroll events when table is short */
 #tab-schedule .card[style*="overflow:hidden"]{overflow:visible!important}
 /* ═══ REDUCED MOTION (a11y) ═══ */
@@ -822,6 +826,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
   .ticker-cycle{animation:none!important}
   .pulse-dot{animation:none!important}
   .tab-content.active{animation:none!important}
+  .sched-row-highlight{animation:none!important;background:rgba(0,93,170,.25)!important}
 }
 
 /* ═══ MOBILE RESPONSIVE ═══ */
@@ -1044,11 +1049,13 @@ tbody td{padding:5px 8px;white-space:nowrap}
 /* Hub Health Bar — inline hub cluster inside the canopy (band styling unset) */
 #hub-health-bar{display:flex;align-items:center;gap:0;flex:0 1 auto;flex-shrink:1;min-width:0;background:none;border:none;padding:0;overflow:hidden;font-size:9px}
 #hub-health-bar .hh-label,#hub-health-bar .hh-explainer{display:none}
-/* BUG 2 fix (a): hide the info "?" badge, the │ separators, and the trailing avg label on
-   desktop too (mobile already hides all of these). These ate width and clipped the bar to
-   ~102px so only 1.5 of 9 hubs showed. Placed OUTSIDE any media query so they apply in both
-   the desktop canopy and the mobile row-2 contexts. */
-#hub-health-bar .hh-info,#hub-health-bar .hh-sep,#hub-health-bar .hh-avg{display:none}
+/* BUG 2 fix (a): hide the │ separators and the trailing avg label on desktop too (mobile
+   already hides all of these). These ate width and clipped the bar to ~102px so only 1.5 of
+   9 hubs showed. Placed OUTSIDE any media query so they apply in both the desktop canopy and
+   the mobile row-2 contexts. The "?" info badge (hh-info) is re-enabled below (F087) — the
+   header percentages had no explainer once this hid it, so it now has its own compact
+   treatment instead of being blanket-hidden. */
+#hub-health-bar .hh-sep,#hub-health-bar .hh-avg{display:none}
 /* BUG 2 fix (b): the status emoji (🟢🟡🔴⚪) is a bare text node inside .hh-hub — kill it with
    font-size:0, then restore the real children. .hh-pct keeps the colored % (status signal);
    the unclassed inline <span style="color:…">⚪ —</span> (no-data hubs, undefined pct) is also
@@ -1057,13 +1064,16 @@ tbody td{padding:5px 8px;white-space:nowrap}
 #hub-health-bar .hh-hub .hh-code{font-size:10px}
 #hub-health-bar .hh-hub .hh-pct{font-size:10px;margin-left:4px}
 #hub-health-bar .hh-hub > span[style]{font-size:10px;margin-left:4px}
-/* BUG 2 fix (a): info "?" badge hidden in the canopy (was display:inline-flex here, which —
-   being a later same-specificity rule — re-showed it and defeated the hide above). The hover
-   tooltip styling below is now dead but harmless. */
-#hub-health-bar .hh-info{display:none;color:var(--ua-dim);font-size:9px;cursor:pointer;margin-right:6px;opacity:.6;position:relative;border:1px solid var(--ua-border);border-radius:50%;width:14px;height:14px;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+/* F087: the "?" explainer was blanket display:none'd ("BUG 2 fix") leaving the header
+   percentages unexplained with no way to discover what they mean. Re-enable it, keyboard
+   reachable, hover AND :focus-visible both reveal the tooltip. Hidden below 600px (mobile
+   canopy is already tight — see media query) to stay unobtrusive. */
+#hub-health-bar .hh-info{display:inline-flex;color:var(--ua-dim);font-size:9px;cursor:pointer;margin-right:6px;opacity:.6;position:relative;border:1px solid var(--ua-border);border-radius:50%;width:14px;height:14px;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
 #hub-health-bar .hh-info:hover{opacity:1;color:var(--ua-accent)}
+#hub-health-bar .hh-info:focus-visible{opacity:1;color:var(--ua-accent);outline:2px solid var(--ua-accent);outline-offset:2px}
 #hub-health-bar .hh-tooltip{display:none;position:absolute;top:20px;left:0;background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:4px;padding:8px 10px;font-size:9px;color:var(--ua-text);white-space:normal;width:260px;z-index:9999;line-height:1.4}
-#hub-health-bar .hh-info:hover .hh-tooltip,#hub-health-bar .hh-info:focus .hh-tooltip,#hub-health-bar .hh-info:focus-within .hh-tooltip{display:block}
+#hub-health-bar .hh-info:hover .hh-tooltip,#hub-health-bar .hh-info:focus .hh-tooltip,#hub-health-bar .hh-info:focus-visible .hh-tooltip,#hub-health-bar .hh-info:focus-within .hh-tooltip{display:block}
+@media(max-width:600px){#hub-health-bar .hh-info{display:none}}
 /* BUG 2 fix (d): tighter padding so 9 compact hubs fit (~9×44px ≈ 400px budget). */
 .hh-hub{display:inline-flex;align-items:baseline;gap:4px;padding:2px 5px;border-radius:4px;white-space:nowrap;transition:background .15s;min-height:auto}
 .hh-hub:hover{background:rgba(148,163,184,.08)}

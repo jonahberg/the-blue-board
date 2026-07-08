@@ -1304,6 +1304,10 @@ function updateMarkers() {
     const isWatched = flightId && watchedSet.has(flightId);
     const isStarlink = isStarlinkFlight(f);
     const icon = createPlaneIcon(f.hdg, isLonghaul, phaseInfo.phase, isWatched, isStarlink);
+    // F084: cheap aria-label so screen readers get "UA123 ORD to DEN, cruising" instead
+    // of nothing — the icon is cached/shared across markers, so the label is applied to
+    // the marker's DOM element directly rather than baked into the cached icon HTML.
+    const markerLabel = `${(f.flightIATA || f.callsign || 'Flight').trim()} ${f.origin || '?'} to ${f.dest || '?'}, ${(phaseInfo.phase || 'en route').toLowerCase()}`;
 
     // Normalize longitude to nearest world copy relative to map center
     // so IDL-crossing flights (e.g. SFO→BNE) are always visible
@@ -1315,6 +1319,8 @@ function updateMarkers() {
     if (flightMarkers[f.icao24]) {
       flightMarkers[f.icao24].setLatLng([f.lat, lon]).setIcon(icon);
       flightMarkers[f.icao24].setZIndexOffset(isWatched ? 1000 : 0);
+      const elExisting = flightMarkers[f.icao24].getElement && flightMarkers[f.icao24].getElement();
+      if (elExisting) { elExisting.setAttribute('aria-label', markerLabel); elExisting.setAttribute('role', 'img'); }
     } else {
       const marker = L.marker([f.lat, lon], { icon, zIndexOffset: isWatched ? 1000 : 0 }).addTo(map);
       marker._icao24 = f.icao24;
@@ -1323,6 +1329,8 @@ function updateMarkers() {
         if (currentFlight) showFlightPopup(currentFlight, marker);
       });
       flightMarkers[f.icao24] = marker;
+      const elNew = marker.getElement && marker.getElement();
+      if (elNew) { elNew.setAttribute('aria-label', markerLabel); elNew.setAttribute('role', 'img'); }
     }
   });
 }
@@ -1390,7 +1398,7 @@ function showFlightPopup(f, marker) {
   // Aircraft info — FR24 type + fleet DB match
   if (aircraft) {
     html += `<div class="popup-aircraft">`;
-    html += `<div class="popup-aircraft-type">${escapeHtml(aircraft.t)} <span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(aircraft.r)}" style="font-size:10px">${escapeHtml(aircraft.r)}</span></div>`;
+    html += `<div class="popup-aircraft-type">${escapeHtml(aircraft.t)} <span class="ac-reg-link" role="button" tabindex="0" data-action="aircraft-detail" data-reg="${escapeHtml(aircraft.r)}" style="font-size:10px">${escapeHtml(aircraft.r)}</span></div>`;
     html += `<div style="font-size:10px;color:var(--ua-muted)">${escapeHtml(aircraft.c || '')} | ${escapeHtml(normalizeWifi(aircraft.w) || '')} | ${escapeHtml(aircraft.i || '')}</div>`;
     if (isStarlink) {
       html += `<span class="starlink-badge">⚡ STARLINK CONFIRMED</span> `;
@@ -1840,7 +1848,7 @@ function updateHubStats() {
     const pct = maxTotal > 0 ? (total / maxTotal * 100) : 0;
     const isBusiest = h === busiestHub;
     const isSelected = activeHubFilter === h;
-    return `<div class="hub-row${isSelected ? ' hub-selected' : ''}" data-action="toggle-hub-filter" data-hub="${h}">
+    return `<div class="hub-row${isSelected ? ' hub-selected' : ''}" data-action="toggle-hub-filter" data-hub="${h}" role="button" tabindex="0">
       <div><span class="hub-code">${h}</span>${isBusiest ? ' <span class="busiest-badge">BUSIEST</span>' : ''}${isSelected ? ' <span style="font-size:9px;color:var(--ua-green)">✓ FILTERED</span>' : ''}</div>
       <div class="hub-counts">↗ ${d.outbound} ↙ ${d.inbound}</div>
     </div>
@@ -2222,7 +2230,7 @@ function renderFleetTable() {
     const special = isSpecialAircraft(a.r);
     const rowCls = a.s ? (a.s.toLowerCase().includes('stored') ? 'row-stored' : (special ? '' : 'row-maint')) : '';
     return '<tr class="' + rowCls + '">' +
-      '<td class="fleet-td-reg"><span class="ac-reg-link" data-action="aircraft-detail" data-reg="' + escapeHtml(a.r) + '">' + escapeHtml(a.r) + '</span>' + (special ? ' <span class="special-badge">' + escapeHtml(special.name) + '</span>' : '') + '</td>' +
+      '<td class="fleet-td-reg"><span class="ac-reg-link" role="button" tabindex="0" data-action="aircraft-detail" data-reg="' + escapeHtml(a.r) + '">' + escapeHtml(a.r) + '</span>' + (special ? ' <span class="special-badge">' + escapeHtml(special.name) + '</span>' : '') + '</td>' +
       '<td>' + escapeHtml(a.t) + '</td><td>' + escapeHtml(a.a) + '</td><td>' + escapeHtml(a.c) + '</td>' +
       '<td>' + escapeHtml(String(a.tot ?? '')) + '</td><td>' + escapeHtml(normalizeWifi(a.w)) + '</td><td>' + escapeHtml(a.i) + '</td><td>' + escapeHtml(a.d) + '</td>' +
       '<td class="fleet-td-status">' + escapeHtml(a.s) + '</td>' +
@@ -2245,6 +2253,7 @@ document.querySelectorAll('#fleet-table thead th[data-sort]').forEach(th => {
     th.setAttribute('aria-sort', fleetSortAsc ? 'ascending' : 'descending');
     renderFleetTable();
   });
+  th.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); th.click(); } });
 });
 
 // ═══ FLEET HEALTH DASHBOARD (Zone 1 Right Panel) ═══
@@ -2315,7 +2324,7 @@ function renderSpecialAircraftPanel() {
     gridHtml += '<div class="special-aircraft-item">';
     gridHtml += '<div>';
     gridHtml += '<div class="sa-name">' + escapeHtml(special.name) + '</div>';
-    gridHtml += '<div><span class="sa-reg ac-reg-link" data-action="aircraft-detail" data-reg="' + escapeHtml(reg) + '">' + escapeHtml(reg) + '</span> <span class="sa-type">' + escapeHtml(ac.t) + ' · Del ' + escapeHtml(ac.d || '?') + '</span></div>';
+    gridHtml += '<div><span class="sa-reg ac-reg-link" role="button" tabindex="0" data-action="aircraft-detail" data-reg="' + escapeHtml(reg) + '">' + escapeHtml(reg) + '</span> <span class="sa-type">' + escapeHtml(ac.t) + ' · Del ' + escapeHtml(ac.d || '?') + '</span></div>';
     gridHtml += '</div>';
     gridHtml += '<div class="sa-status">';
     if (airborne) {
@@ -2373,7 +2382,7 @@ function renderAirborneTable() {
 
   const rowsHtml = airborne.map(a => {
     return '<tr>' +
-      '<td class="fleet-td-reg"><span class="ac-reg-link" data-action="aircraft-detail" data-reg="' + escapeHtml(a.reg) + '">' + escapeHtml(a.reg) + '</span></td>' +
+      '<td class="fleet-td-reg"><span class="ac-reg-link" role="button" tabindex="0" data-action="aircraft-detail" data-reg="' + escapeHtml(a.reg) + '">' + escapeHtml(a.reg) + '</span></td>' +
       '<td>' + escapeHtml(a.type) + '</td><td>' + escapeHtml(a.flight) + '</td><td>' + escapeHtml(a.route) + '</td>' +
       '<td>' + escapeHtml(a.alt) + '</td><td>' + escapeHtml(a.phase) + '</td>' +
       '<td>' + (a.starlink ? '<span class="starlink-badge">SL</span>' : '') + '</td>' +
@@ -2389,8 +2398,11 @@ document.querySelectorAll('#airborne-table thead th[data-airborne-sort]').forEac
     const col = th.getAttribute('data-airborne-sort');
     if (airborneSortCol === col) airborneSortAsc = !airborneSortAsc;
     else { airborneSortCol = col; airborneSortAsc = true; }
+    document.querySelectorAll('#airborne-table thead th[data-airborne-sort]').forEach(h => h.setAttribute('aria-sort', 'none'));
+    th.setAttribute('aria-sort', airborneSortAsc ? 'ascending' : 'descending');
     renderAirborneTable();
   });
+  th.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); th.click(); } });
 });
 
 // ═══ FLEET SUB-TABS ═══
@@ -2510,9 +2522,9 @@ function showConfigEmpty() {
   const emptyHtml = '<div class="fleet-config-empty" id="fleet-config-empty">' +
     '<div class="fleet-config-empty-text">Select an aircraft type above to see cabin layout</div>' +
     '<div class="fleet-config-quick-links">' +
-      '<span class="fleet-config-quick" data-action="filter-fleet-type" data-type="737-800">737-800</span>' +
-      '<span class="fleet-config-quick" data-action="filter-fleet-type" data-type="A321neo">A321neo</span>' +
-      '<span class="fleet-config-quick" data-action="filter-fleet-type" data-type="777-300ER">777-300ER</span>' +
+      '<span class="fleet-config-quick" data-action="filter-fleet-type" data-type="737-800" role="button" tabindex="0">737-800</span>' +
+      '<span class="fleet-config-quick" data-action="filter-fleet-type" data-type="A321neo" role="button" tabindex="0">A321neo</span>' +
+      '<span class="fleet-config-quick" data-action="filter-fleet-type" data-type="777-300ER" role="button" tabindex="0">777-300ER</span>' +
     '</div></div>';
   document.getElementById('config-display').innerHTML = emptyHtml;
   document.getElementById('fleet-lookup-seat-config').innerHTML = '';
@@ -2730,9 +2742,12 @@ function initStarlinkTab() {
         const key = th.getAttribute('data-sl-sort');
         if (slSortKey === key) slSortAsc = !slSortAsc;
         else { slSortKey = key; slSortAsc = true; }
+        document.querySelectorAll('[data-sl-sort]').forEach(h => h.setAttribute('aria-sort', 'none'));
+        th.setAttribute('aria-sort', slSortAsc ? 'ascending' : 'descending');
         slExpandedTail = null;
         renderSlTable();
       });
+      th.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); th.click(); } });
     });
   }
   renderSlHero();
@@ -4506,6 +4521,7 @@ function initScheduleTab() {
         else { schedSortCol = col; schedSortAsc = true; }
         renderScheduleTable();
       });
+      th.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); th.click(); } });
     });
     // Auto-load if hub already selected
     if (!schedCurrentHub) {
@@ -5128,7 +5144,7 @@ function renderScheduleTable() {
       const hasDown = impacts.some(i => i.cls === 'downgrade');
       const hasUp = impacts.some(i => i.cls === 'upgrade');
       const icon = hasDown ? '🔴' : hasUp ? '🟢' : '⚠️';
-      const regLink = reg !== '—' ? ` <span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}" style="font-size:8px">${escapeHtml(reg)}</span>` : '';
+      const regLink = reg !== '—' ? ` <span class="ac-reg-link" role="button" tabindex="0" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}" style="font-size:8px">${escapeHtml(reg)}</span>` : '';
       equipBadge = `<div class="equip-change-badge" style="background:${hasDown ? 'rgba(239,68,68,.15);color:var(--ua-red)' : hasUp ? 'rgba(34,197,94,.15);color:var(--ua-green)' : ''}">${icon} ${escapeHtml(oldType)} → ${escapeHtml(newType)}${regLink}</div>`;
       if (impacts.length) {
         equipBadge += `<div class="equip-swap-detail">`;
@@ -5165,7 +5181,7 @@ function renderScheduleTable() {
     const schedRiskIrops = iropsHubData[depHub];
     const schedRiskIropsStr = iropsContextStr(schedRiskIrops);
     const schedRiskFaa = formatDelayExplainFAAStatus(depHub, arrHub, faaDelayIndex);
-    const riskCell = dRisk ? `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(statusDisp.text)}" data-risk-label="${dRisk.label}" data-risk-score="${dRisk.score}" data-risk-factors="${escapeHtml(dRisk.factors.join('|'))}" data-hub="${escapeHtml(depHub)}"${schedRiskOtp !== undefined ? ' data-otp="' + schedRiskOtp + '"' : ''}${schedRiskWxOrig ? ' data-weather="' + escapeHtml(schedRiskWxOrig.level + (schedRiskWxOrig.reasons.length ? ': ' + schedRiskWxOrig.reasons.join(', ') : '')) + '"' : ''}${schedRiskWxDest ? ' data-dest-weather="' + escapeHtml(schedRiskWxDest.level + (schedRiskWxDest.reasons.length ? ': ' + schedRiskWxDest.reasons.join(', ') : '')) + '"' : ''}${schedRiskIropsStr ? ' data-irops="' + escapeHtml(schedRiskIropsStr) + '"' : ''}${schedRiskFaa ? ' data-faa-status="' + escapeHtml(schedRiskFaa) + '"' : ''} style="background:${dRisk.color}20;color:${dRisk.color};cursor:pointer" title="Click for AI analysis">RISK: ${dRisk.label}</span>` : '';
+    const riskCell = dRisk ? `<span class="delay-risk-badge" role="button" tabindex="0" data-action="explain-delay" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(statusDisp.text)}" data-risk-label="${dRisk.label}" data-risk-score="${dRisk.score}" data-risk-factors="${escapeHtml(dRisk.factors.join('|'))}" data-hub="${escapeHtml(depHub)}"${schedRiskOtp !== undefined ? ' data-otp="' + schedRiskOtp + '"' : ''}${schedRiskWxOrig ? ' data-weather="' + escapeHtml(schedRiskWxOrig.level + (schedRiskWxOrig.reasons.length ? ': ' + schedRiskWxOrig.reasons.join(', ') : '')) + '"' : ''}${schedRiskWxDest ? ' data-dest-weather="' + escapeHtml(schedRiskWxDest.level + (schedRiskWxDest.reasons.length ? ': ' + schedRiskWxDest.reasons.join(', ') : '')) + '"' : ''}${schedRiskIropsStr ? ' data-irops="' + escapeHtml(schedRiskIropsStr) + '"' : ''}${schedRiskFaa ? ' data-faa-status="' + escapeHtml(schedRiskFaa) + '"' : ''} style="background:${dRisk.color}20;color:${dRisk.color};cursor:pointer" title="Click for AI analysis">RISK: ${dRisk.label}</span>` : '';
 
     // DELAY / RISK cell (#2): facts beat predictions. A row with a known
     // actual/estimated delta shows the REAL delay (right-aligned tabular figures,
@@ -5195,12 +5211,12 @@ function renderScheduleTable() {
     let statusCell = `<span class="sched-status ${escapeHtml(statusDisp.cls)}"${statusDisp.live ? ' title="Aircraft seen airborne by live flight tracking"' : presumedTip}>${escapeHtml(statusDisp.text)}${statusDisp.presumed ? '*' : ''}</span>${statusDisp.live ? '<span class="sched-live-chip">LIVE</span>' : ''}`;
     if (statusDisp.asOf) statusCell += `<div class="sched-asof">as of ${escapeHtml(boardAsOfStr)}</div>`;
 
-    return `<tr>
+    return `<tr data-flight-row="${escapeHtml(ident)}">
       <td>${escapeHtml(timeStr)}${dateChip}${timeExtra}</td>
       <td style="font-weight:600;color:var(--ua-accent)">${escapeHtml(ident)}</td>
       <td>${routeStr}</td>
       <td title="${escapeHtml(acText)}">${escapeHtml(acCode)}${acShort ? `<div style="font-size:9px;color:var(--ua-muted)">${escapeHtml(acShort)}</div>` : ''}${equipBadge}</td>
-      <td style="font-family:var(--font-mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}"${regFromLive ? ' title="Tail from live flight tracking (not in the schedule feed)"' : ''}>${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
+      <td style="font-family:var(--font-mono);font-size:10px">${reg !== '—' ? `<span class="ac-reg-link" role="button" tabindex="0" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}"${regFromLive ? ' title="Tail from live flight tracking (not in the schedule feed)"' : ''}>${escapeHtml(reg)}</span>` : '—'}${schedSpecial ? ' <span class="special-badge">⭐ ' + escapeHtml(schedSpecial.name) + '</span>' : ''}${fleetEnrich}</td>
       <td>${escapeHtml(gate)}</td>
       <td>${statusCell}${faaContext}</td>
       <td class="sched-delay-cell">${delayCell}</td>
@@ -5366,64 +5382,133 @@ window.addEventListener('offline', updateOnlineStatus);
 // ═══ GLOBAL SEARCH ═══
 document.getElementById('global-search-input').addEventListener('input', debounce(function() {
   hideGlobalSearchError();
-  const q = this.value.trim().toUpperCase();
+  const qRaw = this.value.trim().toUpperCase();
   const results = document.getElementById('global-search-results');
-  if (q.length < 2) { results.style.display = 'none'; return; }
+  if (qRaw.length < 2) { results.style.display = 'none'; return; }
 
-  // Normalize route queries: "ORD-DEN", "ORD DEN", "ORD → DEN" all become "ORDDEN"
+  // Normalize ALL matching against a space/punctuation-stripped form so "UA 373",
+  // "UA373", "ua373" and tail numbers with spaces all match the same way (F042).
+  // "ORD to DEN" is treated the same as "ORD-DEN"/"ORD DEN" for route queries.
+  const q = qRaw.replace(/\s+TO\s+/g, ' ');
   const qNorm = q.replace(/[\s\-→>]+/g, '');
   const matches = [];
   // Search live flights
   allFlights.forEach(f => {
-    const cs = (f.callsign || '').toUpperCase();
-    const flt = (f.flightIATA || '').toUpperCase();
-    const reg = (f.reg || '').toUpperCase();
+    const cs = (f.callsign || '').toUpperCase().replace(/[\s\-]+/g, '');
+    const flt = (f.flightIATA || '').toUpperCase().replace(/[\s\-]+/g, '');
+    const reg = (f.reg || '').toUpperCase().replace(/[\s\-]+/g, '');
     const routeStr = ((f.origin || '') + (f.dest || '')).toUpperCase();
     const routeRev = ((f.dest || '') + (f.origin || '')).toUpperCase();
-    if (cs.includes(q) || flt.includes(q) || reg.includes(q) || routeStr.includes(qNorm) || routeRev.includes(qNorm)) {
+    if (cs.includes(qNorm) || flt.includes(qNorm) || reg.includes(qNorm) || routeStr.includes(qNorm) || routeRev.includes(qNorm)) {
       matches.push({ type: 'live', label: `${f.flightIATA || f.callsign} ${f.origin||'?'}→${f.dest||'?'} ${f.reg||''}`, icao24: f.icao24 });
     }
   });
-  // Search schedule data
+  // Search schedule data (already loaded schedule pages, if any)
+  const scheduleMatch = (fl) => {
+    const ident = (fl.identification?.number?.default || '').toUpperCase().replace(/[\s\-]+/g, '');
+    const reg = (fl.aircraft?.registration || '').toUpperCase().replace(/[\s\-]+/g, '');
+    const dest = (fl.airport?.destination?.code?.iata || '').toUpperCase();
+    const orig = (fl.airport?.origin?.code?.iata || '').toUpperCase();
+    return ident.includes(qNorm) || reg.includes(qNorm) || dest.includes(qNorm) || orig.includes(qNorm);
+  };
   if (schedAllFlights.length) {
     schedAllFlights.forEach(fl => {
-      const ident = (fl.identification?.number?.default || '').toUpperCase();
-      const reg = (fl.aircraft?.registration || '').toUpperCase();
-      const dest = (fl.airport?.destination?.code?.iata || '').toUpperCase();
-      const orig = (fl.airport?.origin?.code?.iata || '').toUpperCase();
-      if (ident.includes(q) || reg.includes(q) || dest.includes(q) || orig.includes(q)) {
-        matches.push({ type: 'sched', label: `📅 ${fl.identification?.number?.default||'?'} ${orig||'?'}→${dest||'?'} ${fl.aircraft?.registration||''}` });
+      if (scheduleMatch(fl)) {
+        matches.push({ type: 'sched', label: `📅 ${fl.identification?.number?.default||'?'} ${(fl.airport?.origin?.code?.iata||'?')}→${(fl.airport?.destination?.code?.iata||'?')} ${fl.aircraft?.registration||''}`, flight: fl });
       }
     });
+  } else {
+    // F043: schedAllFlights only populates once the user opens the Schedule tab.
+    // Reuse the existing preload path (already fetches home hub + cached hub set)
+    // so a scheduled-but-not-yet-airborne flight is still searchable from the
+    // live tab. Search whatever pages have already landed in schedRawByHub, and
+    // kick off (or ride along with) the preload for anything still missing.
+    Object.values(schedRawByHub).forEach(flights => {
+      (flights || []).forEach(fl => { if (scheduleMatch(fl)) matches.push({ type: 'sched', label: `📅 ${fl.identification?.number?.default||'?'} ${(fl.airport?.origin?.code?.iata||'?')}→${(fl.airport?.destination?.code?.iata||'?')} ${fl.aircraft?.registration||''}`, flight: fl }); });
+    });
+    if (matches.length === 0) {
+      preloadScheduleData().then(() => {
+        // Only re-render if the input still holds the same query (user hasn't typed since)
+        if ((document.getElementById('global-search-input')?.value || '').trim().toUpperCase() === qRaw) {
+          const late = [];
+          Object.values(schedRawByHub).forEach(flights => {
+            (flights || []).forEach(fl => { if (scheduleMatch(fl)) late.push({ type: 'sched', label: `📅 ${fl.identification?.number?.default||'?'} ${(fl.airport?.origin?.code?.iata||'?')}→${(fl.airport?.destination?.code?.iata||'?')} ${fl.aircraft?.registration||''}`, flight: fl }); });
+          });
+          if (late.length) renderGlobalSearchResults(late, qRaw, q);
+        }
+      }).catch(() => {});
+    }
   }
 
+  renderGlobalSearchResults(matches, qRaw, q);
+}, 150));
+
+function renderGlobalSearchResults(matches, qRaw, q) {
+  const results = document.getElementById('global-search-results');
+  if (!results) return;
   // Check if query looks like a flight number for FR24 lookup
   const flightPattern = /^(UA[L]?\s*\d{1,4}|\d{1,4})$/i;
-  const normalizedQ = q.replace(/\s+/g, '');
+  const normalizedQ = qRaw.replace(/\s+/g, '');
   const looksLikeFlight = flightPattern.test(normalizedQ);
-  const fr24Option = looksLikeFlight ? `<div class="search-result" style="border-top:1px solid var(--ua-border);color:var(--ua-accent);font-size:10px" data-action="lookup-fr24" data-query="${escapeHtml(normalizedQ)}" data-close-global="1">🔍 Look up ${escapeHtml(normalizedQ.startsWith('UA') || normalizedQ.startsWith('UAL') ? normalizedQ : 'UA' + normalizedQ)} via FlightRadar24...</div>` : '';
+  const fr24Option = looksLikeFlight ? `<div class="search-result" role="button" tabindex="0" style="border-top:1px solid var(--ua-border);color:var(--ua-accent);font-size:10px" data-action="lookup-fr24" data-query="${escapeHtml(normalizedQ)}" data-close-global="1">🔍 Look up ${escapeHtml(normalizedQ.startsWith('UA') || normalizedQ.startsWith('UAL') ? normalizedQ : 'UA' + normalizedQ)} via FlightRadar24...</div>` : '';
 
   if (matches.length === 0) {
     // Contextual "no results" message based on query format — all user input passed through escapeHtml()
     const tailPattern = /^N\d{3,5}[A-Z]{0,2}$/i;
     let noResultMsg;
     if (looksLikeFlight) {
-      noResultMsg = escapeHtml(normalizedQ.startsWith('UA') || normalizedQ.startsWith('UAL') ? normalizedQ : 'UA' + normalizedQ) + ' is not currently airborne';
+      noResultMsg = escapeHtml(normalizedQ.startsWith('UA') || normalizedQ.startsWith('UAL') ? normalizedQ : 'UA' + normalizedQ) + ' has no live match. If your flight is scheduled for later, check the <span data-action="switch-tab" data-tab="tab-schedule" data-close-global="1" role="button" tabindex="0" style="text-decoration:underline;cursor:pointer">Schedule tab →</span>';
     } else if (tailPattern.test(normalizedQ)) {
       noResultMsg = escapeHtml(normalizedQ) + ' not found in live feed';
     } else {
-      noResultMsg = 'No results for "' + escapeHtml(q) + '"';
+      noResultMsg = 'No results for "' + escapeHtml(qRaw) + '"';
     }
     results.innerHTML = '<div style="padding:10px 12px;color:var(--ua-muted);font-size:10px">' + noResultMsg + '</div>' + fr24Option;
   } else {
-    results.innerHTML = matches.slice(0, 20).map(m => {
-      if (m.type === 'live') return `<div class="search-result" data-action="focus-flight" data-icao24="${escapeHtml(m.icao24)}" data-close-global="1">${escapeHtml(m.label)}</div>`;
-      return `<div class="search-result" data-action="switch-tab" data-tab="tab-schedule" data-close-global="1"><span style="color:var(--ua-muted)">${escapeHtml(m.label)}</span></div>`;
+    results.innerHTML = matches.slice(0, 20).map((m, i) => {
+      if (m.type === 'live') return `<div class="search-result" role="button" tabindex="0" data-action="focus-flight" data-icao24="${escapeHtml(m.icao24)}" data-close-global="1">${escapeHtml(m.label)}</div>`;
+      const hub = m.flight?.airport?.origin?.code?.iata || '';
+      const dir = 'departures';
+      return `<div class="search-result" role="button" tabindex="0" data-action="goto-schedule-result" data-hub="${escapeHtml(hub)}" data-dir="${dir}" data-flight="${escapeHtml(m.flight?.identification?.number?.default || '')}" data-close-global="1"><span style="color:var(--ua-muted)">${escapeHtml(m.label)}</span></div>`;
     }).join('') + fr24Option;
   }
   results.style.display = 'block';
-}, 150));
+}
 document.addEventListener('click', function(e) { if (!document.getElementById('global-search-wrap').contains(e.target)) document.getElementById('global-search-results').style.display = 'none'; });
+
+// F083: minimal keyboard bridge from the search input into its results list —
+// not full combobox semantics, just enough to be usable without a mouse.
+document.getElementById('global-search-input').addEventListener('keydown', function(e) {
+  const results = document.getElementById('global-search-results');
+  if (e.key === 'ArrowDown') {
+    if (results && results.style.display !== 'none') {
+      const first = results.querySelector('.search-result');
+      if (first) { e.preventDefault(); first.focus(); }
+    }
+  } else if (e.key === 'Escape') {
+    this.value = '';
+    if (results) results.style.display = 'none';
+  }
+});
+// Arrow-key navigation between result rows once focus has moved into the list.
+document.getElementById('global-search-results').addEventListener('keydown', function(e) {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Escape') return;
+  const items = Array.from(this.querySelectorAll('.search-result'));
+  const idx = items.indexOf(document.activeElement);
+  if (e.key === 'Escape') {
+    this.style.display = 'none';
+    document.getElementById('global-search-input').focus();
+    return;
+  }
+  e.preventDefault();
+  if (e.key === 'ArrowDown') {
+    const next = items[idx + 1] || items[0];
+    if (next) next.focus();
+  } else if (e.key === 'ArrowUp') {
+    if (idx <= 0) { document.getElementById('global-search-input').focus(); }
+    else items[idx - 1].focus();
+  }
+});
 
 // ═══ EQUIPMENT SWAP DETECTION ═══
 const ICAO_TO_FLEET_TYPE = {
@@ -5649,13 +5734,13 @@ function renderHubHealthBar() {
   // is never color-alone), e.g. "EWR ⛔ 84%".
   const tooltip = '% of operated departures within 30 min of schedule, blended with active FAA programs. 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50% · ⛔ ground stop/closure (→red) · ⚠ ground delay/departure program (→amber)';
   if (!Object.keys(hubHealthData).length) {
-    bar.innerHTML = `<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">${tooltip}</span></span><span style="color:var(--ua-muted)">Load schedule data for hub health</span>`;
+    bar.innerHTML = `<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info" tabindex="0" role="button" aria-label="What does this mean?">?<span class="hh-tooltip">${tooltip}</span></span><span style="color:var(--ua-muted)">Load schedule data for hub health</span>`;
     return;
   }
   const SEV_RANK = { red: 3, amber: 2, green: 1 };
   const SEV_COLOR = { red: '#ef4444', amber: '#f59e0b', green: '#22c55e' };
   const homeHub = getHomeAirport();
-  let html = `<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">${tooltip}</span></span>`;
+  let html = `<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info" tabindex="0" role="button" aria-label="What does this mean?">?<span class="hh-tooltip">${tooltip}</span></span>`;
   hubs.forEach((hub, i) => {
     const isHome = hub === homeHub;
     const homeStyle = isHome ? ';border:1px solid var(--ua-accent);border-radius:3px;padding:2px 6px' : '';
@@ -5963,7 +6048,7 @@ function updateIrops() {
   // wasn't helpful). The numeric score is still computed below for the ticker's gating.
   // F002: this is the client FALLBACK (server /api/irops unavailable) \u2014 mark it "estimated"
   // so it never masquerades as the authoritative network-wide figure.
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="irops-partial-tag" style="font-size:9px;color:var(--ua-muted);margin-left:6px;font-family:var(--font-mono)">est \u00b7 loaded boards</span><span class="hh-info">?<span class="hh-tooltip">Estimated from the schedule boards loaded in your session (server IROPS feed unavailable). Severity weights cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="irops-partial-tag" style="font-size:9px;color:var(--ua-muted);margin-left:6px;font-family:var(--font-mono)">est \u00b7 loaded boards</span><span class="hh-info" tabindex="0" role="button" aria-label="What does this mean?">?<span class="hh-tooltip">Estimated from the schedule boards loaded in your session (server IROPS feed unavailable). Severity weights cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -6070,7 +6155,7 @@ function renderIropsFromAPI(data) {
   // NOTE: All values here are from the IROPS API (internal, not user input).
   let html = '<div class="irops-bar">';
   // Authoritative network-wide index (all 9 hubs). Tooltip states the exact F017 weights.
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">Network-wide severity across all United hubs, weighting cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) \u2014 including flights held past schedule \u2014 per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info" tabindex="0" role="button" aria-label="What does this mean?">?<span class="hh-tooltip">Network-wide severity across all United hubs, weighting cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) \u2014 including flights held past schedule \u2014 per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -6613,7 +6698,7 @@ function buildMyFlightCard(watched, td) {
     const isStar = STARLINK_TAILS.has(reg);
     const seatStr = ac.seats ? Object.entries(ac.seats).map(([cls,cnt]) => cnt + cls).join('/') : (ac.c || '');
     equipHtml = `<div class="mf-grid">
-      <div><span class="mf-label">Aircraft</span><div class="mf-value">${escapeHtml(ac.t)} <span class="ac-reg-link" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}" style="font-size:10px">${escapeHtml(reg)}</span></div></div>
+      <div><span class="mf-label">Aircraft</span><div class="mf-value">${escapeHtml(ac.t)} <span class="ac-reg-link" role="button" tabindex="0" data-action="aircraft-detail" data-reg="${escapeHtml(reg)}" style="font-size:10px">${escapeHtml(reg)}</span></div></div>
       <div><span class="mf-label">Config</span><div class="mf-value">${escapeHtml(seatStr)}${isStar ? ' <span class="starlink-badge">⚡ Starlink Confirmed</span>' : ` <span class="starlink-badge starlink-predict" data-flight="${escapeHtml(flightNum)}" style="background:rgba(100,116,139,.15);color:var(--ua-muted)">⚡ Checking…</span>`}</div></div>
     </div>`;
   } else if (td && td.aircraft) {
@@ -6700,7 +6785,7 @@ function buildMyFlightCard(watched, td) {
     ? 'Connecting from ' + riskConn.connFlight + ' via ' + riskConn.hub + ', ' + riskConn.minutes + 'min layover (' + riskConn.risk + ')'
     : 'Connects to ' + riskConn.connFlight + ' ' + riskConn.hub + '\u2192' + (riskConn.dest || '?') + ', ' + riskConn.minutes + 'min layover (' + riskConn.risk + ')') : '';
   if (risk && (resolvedStatus === 'scheduled' || resolvedStatus === 'delayed' || resolvedStatus === '' || !resolvedStatus)) {
-    riskHtml = `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIropsStr ? ' data-irops="' + escapeHtml(riskIropsStr) + '"' : ''}${riskFaaStatus ? ' data-faa-status="' + escapeHtml(riskFaaStatus) + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''} style="background:${risk.color}20;color:${risk.color};cursor:pointer" title="Click for AI analysis">${risk.label} RISK</span>`;
+    riskHtml = `<span class="delay-risk-badge" role="button" tabindex="0" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIropsStr ? ' data-irops="' + escapeHtml(riskIropsStr) + '"' : ''}${riskFaaStatus ? ' data-faa-status="' + escapeHtml(riskFaaStatus) + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''} style="background:${risk.color}20;color:${risk.color};cursor:pointer" title="Click for AI analysis">${risk.label} RISK</span>`;
   } else if (riskNA && (resolvedStatus === 'scheduled' || resolvedStatus === 'delayed' || resolvedStatus === '' || !resolvedStatus)) {
     riskHtml = `<span class="delay-risk-badge" style="background:rgba(100,116,139,.15);color:var(--ua-muted);cursor:default" title="Not enough live data to score this flight">RISK N/A</span>`;
   }
@@ -7386,6 +7471,33 @@ document.addEventListener('click', function(e) {
       switchToTab(actionEl.dataset.tab);
       if (actionEl.dataset.closeGlobal) hideGlobalSearchResults();
       break;
+    case 'goto-schedule-result': {
+      // A3: a 📅 search result should not just switch tabs — it should select the
+      // matching hub/direction and scroll to + briefly highlight the row.
+      const hub = actionEl.dataset.hub;
+      const dir = actionEl.dataset.dir || 'departures';
+      const flightNum = actionEl.dataset.flight;
+      switchToTab('tab-schedule');
+      if (actionEl.dataset.closeGlobal) hideGlobalSearchResults();
+      const applyAndFind = () => {
+        const hubSel = document.getElementById('sched-hub');
+        const dirSel = document.getElementById('sched-dir');
+        if (hub && hubSel && hubSel.value !== hub) { hubSel.value = hub; schedCurrentHub = hub; }
+        if (dirSel && dirSel.value !== dir) { dirSel.value = dir; schedCurrentDir = dir; }
+        loadScheduleData().then(() => {
+          renderScheduleTable();
+          const row = flightNum && document.querySelector('[data-flight-row="' + CSS.escape(flightNum) + '"]');
+          if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('sched-row-highlight');
+            setTimeout(() => row.classList.remove('sched-row-highlight'), 2000);
+          }
+        }).catch(() => {});
+      };
+      // Give initScheduleTab a tick to finish wiring the hub/dir selects on first visit
+      setTimeout(applyAndFind, 50);
+      break;
+    }
     case 'go-home':
       e.preventDefault();
       switchToTab('tab-live');
@@ -7726,8 +7838,54 @@ function hideDisclaimer() {
   var overlay=document.getElementById('onboarding-overlay');
   var btn=document.getElementById('onboarding-dismiss');
   var helpBtn=document.getElementById('onboarding-help');
-  function hideOverlay(){var hubSel=document.getElementById('onboarding-home-hub');if(hubSel&&hubSel.value){setHomeAirport(hubSel.value)}overlay.classList.add('ob-hidden');localStorage.setItem('bb-onboarded','1');try{localStorage.setItem('bb_onboarding_dismissed',String(Date.now()))}catch(e){}setTimeout(function(){overlay.style.display='none'},300)}
-  function showOverlay(){overlay.style.display='flex';overlay.classList.remove('ob-hidden');overlay.style.animation='none';requestAnimationFrame(function(){requestAnimationFrame(function(){overlay.style.animation='obFadeIn .4s ease forwards'})})}
+
+  // F079: real focus trap + Escape-to-dismiss + initial focus + focus return, matching
+  // the pattern the other two modals (waitlist, delay-explain) already use. Doesn't touch
+  // the existing backdrop-click dismissal or overlay scrolling above.
+  var onboardingReturnFocus = null;
+  var onboardingKeyCtrl = null;
+  function getOnboardingFocusables(){
+    return Array.prototype.slice.call(overlay.querySelectorAll('button, [href], select, input, textarea, [tabindex]:not([tabindex="-1"])'))
+      .filter(function(el){ return !el.disabled && el.getClientRects().length > 0; });
+  }
+  function armOnboardingTrap(){
+    if (onboardingKeyCtrl) onboardingKeyCtrl.abort();
+    onboardingKeyCtrl = new AbortController();
+    document.addEventListener('keydown', function(e){
+      if (overlay.style.display === 'none' || overlay.classList.contains('ob-hidden')) return;
+      if (e.key === 'Escape') { e.preventDefault(); hideOverlay(); return; }
+      if (e.key !== 'Tab') return;
+      var focusables = getOnboardingFocusables();
+      if (!focusables.length) return;
+      var first = focusables[0], last = focusables[focusables.length - 1];
+      if (!overlay.contains(document.activeElement)) { e.preventDefault(); first.focus(); return; }
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }, { signal: onboardingKeyCtrl.signal });
+  }
+  function disarmOnboardingTrap(){ if (onboardingKeyCtrl) { onboardingKeyCtrl.abort(); onboardingKeyCtrl = null; } }
+  function focusOnboardingCard(){
+    var focusables = getOnboardingFocusables();
+    if (focusables.length) focusables[0].focus();
+  }
+
+  function hideOverlay(){
+    var hubSel=document.getElementById('onboarding-home-hub');if(hubSel&&hubSel.value){setHomeAirport(hubSel.value)}
+    overlay.classList.add('ob-hidden');
+    localStorage.setItem('bb-onboarded','1');
+    try{localStorage.setItem('bb_onboarding_dismissed',String(Date.now()))}catch(e){}
+    setTimeout(function(){overlay.style.display='none'},300);
+    disarmOnboardingTrap();
+    var returnTo = (onboardingReturnFocus && document.body.contains(onboardingReturnFocus)) ? onboardingReturnFocus : helpBtn;
+    onboardingReturnFocus = null;
+    setTimeout(function(){ (returnTo || document.body).focus(); }, 310);
+  }
+  function showOverlay(){
+    onboardingReturnFocus = document.activeElement;
+    overlay.style.display='flex';overlay.classList.remove('ob-hidden');overlay.style.animation='none';requestAnimationFrame(function(){requestAnimationFrame(function(){overlay.style.animation='obFadeIn .4s ease forwards'})});
+    armOnboardingTrap();
+    setTimeout(focusOnboardingCard, 50);
+  }
 
   // ═══ WAITLIST / ENGAGEMENT MODAL ═══
   var DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -8002,6 +8160,10 @@ function hideDisclaimer() {
   var visited=localStorage.getItem('bb-visited');
   if(!visited){localStorage.setItem('bb-visited','1');if(isDismissedRecently('bb_onboarding_dismissed')){overlay.style.display='none'}}
   else if(localStorage.getItem('bb-onboarded')||isDismissedRecently('bb_onboarding_dismissed')){overlay.style.display='none'}
+  if (overlay.style.display !== 'none') {
+    armOnboardingTrap();
+    setTimeout(focusOnboardingCard, 50);
+  }
   btn.addEventListener('click',hideOverlay);
   overlay.addEventListener('click',function(e){if(e.target===overlay)hideOverlay()});
   helpBtn.addEventListener('click',showOverlay);
@@ -8391,7 +8553,7 @@ function renderFR24Modal(f, source, cached, meta) {
   }
   // Aircraft
   if (f.aircraft && (f.aircraft.type || f.aircraft.reg)) {
-    html += '<div style="font-size:10px;margin-bottom:4px"><span style="color:var(--ua-muted)">Aircraft:</span> ' + escapeHtml(f.aircraft.type || '?') + (f.aircraft.reg ? ' • <span class="ac-reg-link" data-action="aircraft-detail" data-reg="' + escapeHtml(f.aircraft.reg) + '">' + escapeHtml(f.aircraft.reg) + '</span>' : '') + '</div>';
+    html += '<div style="font-size:10px;margin-bottom:4px"><span style="color:var(--ua-muted)">Aircraft:</span> ' + escapeHtml(f.aircraft.type || '?') + (f.aircraft.reg ? ' • <span class="ac-reg-link" role="button" tabindex="0" data-action="aircraft-detail" data-reg="' + escapeHtml(f.aircraft.reg) + '">' + escapeHtml(f.aircraft.reg) + '</span>' : '') + '</div>';
   }
   // Times
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;font-size:10px">';
