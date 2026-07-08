@@ -76,7 +76,12 @@ function getCacheKey(ctx: DelayContext): string {
   const inboundKey = ctx.inbound ? ctx.inbound.slice(0, 100) : '';
   const weatherKey = (ctx.weather || '').slice(0, 40) + '|' + (ctx.destWeather || '').slice(0, 40);
   const faaKey = (ctx.faaStatus || '').slice(0, 120);
-  return `${ctx.flight}:${ctx.route || ''}:${ctx.status || ''}:${ctx.riskScore}:${(ctx.factors || []).join(',')}:${ctx.otp || ''}:${ctx.hub || ''}:${ctx.irops || ''}:${inboundKey}:${weatherKey}:${faaKey}`;
+  // F009: connection is injected into the prompt (see `Passenger connection:` line below) but
+  // was missing from the cache key — two different connections on the same flight/risk profile
+  // would collide and serve one passenger's cached explanation to the other. Keep it short;
+  // it's already truncated to 100 chars when used in the prompt.
+  const connectionKey = (ctx.connection || '').slice(0, 100);
+  return `${ctx.flight}:${ctx.route || ''}:${ctx.status || ''}:${ctx.riskScore}:${(ctx.factors || []).join(',')}:${ctx.otp || ''}:${ctx.hub || ''}:${ctx.irops || ''}:${inboundKey}:${weatherKey}:${faaKey}:${connectionKey}`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -125,7 +130,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const route = sanitize(ctx.route, 20);
     const status = sanitize(ctx.status, 30);
     const riskLabel = sanitize(ctx.riskLabel, 20);
-    const riskScore = typeof ctx.riskScore === 'number' ? Math.max(0, Math.min(100, ctx.riskScore)) : 0;
+    // F011: defense in depth — coerce a numeric string (e.g. a client that skipped its own
+    // Number() conversion) before the typeof gate, instead of silently zeroing a real score.
+    const riskScoreNum = typeof ctx.riskScore === 'number' ? ctx.riskScore : Number(ctx.riskScore);
+    const riskScore = Number.isFinite(riskScoreNum) ? Math.max(0, Math.min(100, riskScoreNum)) : 0;
 
     const lines = [
       `Flight: ${flight} (${route || 'unknown route'})`,

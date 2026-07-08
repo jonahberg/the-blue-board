@@ -13,9 +13,9 @@ import {
 const META_ONLY_PAYLOAD = { full_count: 22684, version: 4 };
 
 // One healthy FR24 feed entry, index-mapped like the upstream array format:
-// [icao24, lat, lon, hdg, alt_ft, spd_kt, _, _, acType, reg, _, origin, dest, flightIATA, onGround, vr_fpm, callsign, _, airline]
+// [icao24, lat, lon, hdg, alt_ft, spd_kt, squawk, _, acType, reg, _, origin, dest, flightIATA, onGround, vr_fpm, callsign, _, airline]
 const HEALTHY_ENTRY = [
-  'a1b2c3', 41.97, -87.9, 270, 36000, 450, null, null,
+  'a1b2c3', 41.97, -87.9, 270, 36000, 450, '1200', null,
   'B739', 'N37462', null, 'ORD', 'SFO', 'UA123', 0, -704, 'UAL123', null, 'UAL',
 ];
 
@@ -34,6 +34,24 @@ describe('parseFr24Feed', () => {
     expect(f.alt).toBeCloseTo(36000 / 3.28084, 3); // feet → meters
     expect(f.spd).toBeCloseTo(450 / 1.944, 3);     // knots → m/s
     expect(f.vr).toBeCloseTo(-704 / 196.85, 3);    // fpm → m/s
+    expect(f.squawk).toBe('1200');                 // F016 — squawk read from arr[6], not hardcoded null
+  });
+
+  // F016: parser used to hardcode squawk:null, so emergency squawks (7500/7600/7700) could
+  // never reach decodeSquawk() in main.js. Verify both the alert codes and the empty case.
+  it('parses squawk from index 6, including emergency codes, and nulls it when absent', () => {
+    const emergencyEntry = [...HEALTHY_ENTRY];
+    emergencyEntry[6] = '7700';
+    const parsed = parseFr24Feed({ abc123: emergencyEntry });
+    expect(parsed[0].squawk).toBe('7700');
+
+    const noSquawkEntry = [...HEALTHY_ENTRY];
+    noSquawkEntry[6] = '';
+    expect(parseFr24Feed({ abc123: noSquawkEntry })[0].squawk).toBeNull();
+
+    const nullSquawkEntry = [...HEALTHY_ENTRY];
+    nullSquawkEntry[6] = null;
+    expect(parseFr24Feed({ abc123: nullSquawkEntry })[0].squawk).toBeNull();
   });
 
   it('returns [] for the meta-only payload seen live (zero aircraft entries)', () => {

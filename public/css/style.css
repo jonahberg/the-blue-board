@@ -1,5 +1,5 @@
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#64748B;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
+:root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#7C8DA6;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
 /* Variant J — Canopy: body is a positioning context, not a flex column. Map is the page. */
 html,body{height:100%}
 body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);overflow:hidden;font-size:12px;line-height:1.4;height:100vh;height:100dvh}
@@ -23,9 +23,12 @@ h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
    VARIANT J — FLOATING CHROME (replaces the stacked bars)
    Panel recipe: solid linear-gradient fill, 1px border, 6px radius.
    NO backdrop-filter, NO blur, NO box-shadow.
-   Z-index ladder (Leaflet panes occupy 200-700; all chrome > 700):
+   Z-index ladder (Leaflet panes occupy 200-700, but #map z:0 and #tab-live.active z:1
+   are stacking contexts, so the ENTIRE map — popups included — always paints below every
+   root-level chrome layer regardless of pane z-index; map/chrome collisions must be
+   solved by layout bands, never by raising pane z-indexes):
      #map 0 · .tab-content non-map 750 · #attribution 710 · #controls 712
-     · #stats-bar 715 · #tab-bar 760
+     · #stats-bar 715 · #tab-bar 760 · #legal-details 760
      · banners 765 · #header 770 · #global-search-results 775
      · #legalpop 780 · #watch-panel 9999 · modals 10000+ · skip-link 100000
    ═══════════════════════════════════════════════════════════ */
@@ -66,7 +69,9 @@ h1,h2,h3,h4,h5,h6,.tab-btn{font-family:var(--font-display)}
 /* canopy global search wrap — BUG 1 fix: protected fixed width, never crushed */
 #global-search-wrap{position:relative;flex:0 0 200px;min-width:200px;transition:flex-basis .2s ease}
 #global-search-input{width:100%;background:rgba(8,12,20,.7);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 10px;border-radius:6px;font-family:var(--font-mono);font-size:10px}
-#global-search-input:focus{outline:none;border-color:var(--ua-accent);background:rgba(8,12,20,.92)}
+#global-search-input:focus{border-color:var(--ua-accent);background:rgba(8,12,20,.92)}
+#global-search-input:focus:not(:focus-visible){outline:none}
+#global-search-input:focus-visible{outline:2px solid var(--ua-accent);outline-offset:2px}
 .status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;flex-shrink:0}
 .status-dot.live{background:var(--ua-green);box-shadow:0 0 6px rgba(34,197,94,.6);animation:pulse 2s ease-in-out infinite}
 #countdown{font-variant-numeric:tabular-nums;color:var(--ua-muted);font-family:var(--font-mono);font-size:10px;white-space:nowrap}
@@ -100,7 +105,7 @@ main{display:contents}
 /* Sidebar becomes a floating left panel over the map */
 #tab-live .sidebar{position:fixed;left:16px;top:84px;bottom:96px;width:260px;z-index:705;overflow-y:auto;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);contain:layout style paint}
 #sidebar-filters-toggle{display:none}
-#tab-live .sidebar h3{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;padding:12px 12px 6px;border-bottom:1px solid var(--ua-border)}
+#tab-live .sidebar h2,#tab-live .sidebar h3{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;padding:12px 12px 6px;border-bottom:1px solid var(--ua-border)}
 .hub-row{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-bottom:1px solid rgba(30,41,59,.4);transition:background .15s;cursor:default}
 .hub-row:hover{background:rgba(0,93,170,.06)}
 .hub-code{font-weight:700;color:var(--ua-accent);font-size:13px}
@@ -166,9 +171,19 @@ main{display:contents}
 #attribution a:hover{color:var(--ua-accent)}
 #attribution .sep{color:rgba(148,163,184,.3);margin:0 3px}
 
-/* LEGAL POPOVER (new — native <details>, replaces footer links + disclaimer trigger) */
-#legal-details{position:relative;display:flex;align-items:stretch;flex:0 0 auto}
-#legal-details>summary{list-style:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 12px 7px;border-radius:6px;color:var(--ua-muted);min-width:0;background:none;font-size:15px;font-weight:700;font-family:var(--font-display);cursor:pointer;transition:background-color .15s,color .15s}
+/* LEGAL POPOVER (native <details>, replaces footer links + disclaimer trigger).
+   F065: this element used to live inside #tab-bar, whose position:fixed + transform makes
+   it the containing block for any position:fixed descendant — so #legalpop's fixed
+   bottom/right coordinates resolved against the *dock's* box instead of the viewport and
+   rendered under the map. Nesting a <details> inside #tab-bar's role="tablist" was also an
+   invalid ARIA child (axe: aria-required-children). Fix: index.html now places
+   #legal-details as its own fixed sibling immediately after </nav> — same ids throughout
+   (main.js's delegated handlers for #legal-btn / #legal-details / #legalpop are unaffected),
+   no longer a tablist child, and #legalpop's fixed coordinates now resolve against the real
+   viewport. Anchored bottom-right at the same bottom offset as the dock so it reads as a
+   companion floating control, styled with the same panel recipe (DESIGN.md card treatment). */
+#legal-details{position:fixed;bottom:24px;right:16px;z-index:760;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border)}
+#legal-details>summary{list-style:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 14px 7px;border-radius:6px;color:var(--ua-muted);min-width:0;background:none;font-size:15px;font-weight:700;font-family:var(--font-display);cursor:pointer;transition:background-color .15s,color .15s}
 #legal-details>summary::-webkit-details-marker{display:none}
 #legal-details>summary:hover{background:rgba(148,163,184,.07);color:var(--ua-text)}
 #legal-details[open]>summary{background:var(--ua-blue-soft);color:var(--ua-accent)}
@@ -183,7 +198,6 @@ main{display:contents}
 #legalpop .lnote{margin-top:9px;padding-top:9px;border-top:1px solid var(--ua-border);font-size:9px;color:var(--ua-dim);line-height:1.6}
 #legalpop .lnote a{color:var(--ua-muted)}
 #legalpop .lnote .sep{color:var(--ua-border);margin:0 3px}
-.dockdiv{width:1px;align-self:stretch;background:var(--ua-border);margin:4px 4px;flex-shrink:0}
 
 /* Map attribution (ODbL: OpenStreetMap/CARTO credit, both Leaflet maps) — restyle the default
    white pill for the dark NOC theme: micro-text, low-contrast but legible (--ua-dim is the
@@ -192,6 +206,16 @@ main{display:contents}
 .leaflet-control-attribution{background:rgba(11,16,24,.65)!important;color:var(--ua-dim)!important;font-family:var(--font-ui)!important;font-size:9px!important;line-height:1.5;padding:2px 6px;border-radius:3px 0 0 0}
 .leaflet-control-attribution a{color:var(--ua-muted)!important;text-decoration:none}
 .leaflet-control-attribution a:hover{color:var(--ua-accent)!important;text-decoration:underline}
+
+/* Marker hit-area (P2-B item 2): plane icons render as small as 10x10px CSS (main.js
+   createPlaneIcon), a real click hazard on touch. main.js sets width/height/anchor inline via
+   L.divIcon, so we can't resize the element itself without breaking Leaflet's positioning math.
+   Instead we grow the *clickable* box with a ::after pseudo-element — pseudo-elements are part
+   of the parent's own box for hit-testing purposes, so a click anywhere in the padded area still
+   fires on .leaflet-marker-icon itself (the element Leaflet's click handler is bound to). This
+   is purely a hit-slop: the visible plane glyph inside stays exactly the size main.js drew it. */
+.leaflet-marker-icon.leaflet-interactive{position:relative}
+.leaflet-marker-icon.leaflet-interactive::after{content:'';position:absolute;inset:-5px;background:transparent}
 
 /* Popups */
 .leaflet-popup-content-wrapper{background:rgba(17,24,39,.96)!important;color:var(--ua-text)!important;border:1px solid var(--ua-border)!important;border-radius:8px!important;box-shadow:0 8px 32px rgba(0,0,0,.6)!important;backdrop-filter:blur(12px)!important;font-family:var(--font-mono)!important}
@@ -275,7 +299,11 @@ main{display:contents}
 .popup-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--ua-border);align-items:center}
 .popup-links a{color:var(--ua-accent);text-decoration:none;font-size:10px;padding:3px 8px;background:rgba(0,93,170,.1);border:1px solid rgba(0,93,170,.2);border-radius:3px;transition:background .15s,border-color .15s;display:inline-flex;align-items:center;gap:4px}
 .popup-links a:hover{background:rgba(0,93,170,.2);border-color:rgba(0,93,170,.4)}
-.hub-tooltip{background:rgba(10,14,20,.85)!important;border:1px solid var(--ua-blue)!important;color:var(--ua-accent)!important;font-size:10px!important;font-weight:700!important;padding:2px 6px!important;border-radius:3px!important;font-family:var(--font-mono)!important}
+/* F093: Leaflet's base .leaflet-tooltip rule sets white-space:nowrap with no max-width, so a
+   long hub condition label (e.g. "ORD MVFR (marginal ceilings/visibility)") clips off-screen
+   on narrow viewports. Cap the width and allow wrapping — matches the !important overrides
+   already needed here to beat Leaflet's own tooltip defaults. */
+.hub-tooltip{background:rgba(10,14,20,.85)!important;border:1px solid var(--ua-blue)!important;color:var(--ua-accent)!important;font-size:10px!important;font-weight:700!important;padding:2px 6px!important;border-radius:3px!important;font-family:var(--font-mono)!important;white-space:normal!important;max-width:min(280px,70vw)!important}
 
 /* ═══ MY FLIGHTS ═══ */
 .mf-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;margin-bottom:14px;overflow:hidden;contain:content}
@@ -322,7 +350,7 @@ main{display:contents}
 /* ═══ TAB 2: FLEET ═══ */
 #tab-fleet{padding:16px;flex:1;min-height:0;overflow-y:auto}
 .card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:14px;margin-bottom:14px}
-.card h3{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.card h2,.card h3{font-size:11px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:900px){.two-col{grid-template-columns:1fr}}
 .fleet-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
@@ -663,7 +691,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .wx-layout{display:flex;height:100%}
 .wx-map-panel{flex:3;position:relative;min-width:0;display:flex;flex-direction:column}
 .wx-hero{flex:1;position:relative;min-height:0}
-.wx-hero h3{position:absolute;top:10px;left:14px;z-index:500;font-size:13px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+.wx-hero h2,.wx-hero h3{position:absolute;top:10px;left:14px;z-index:500;font-size:13px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7)}
 #radar-map{width:100%;height:100%}
 .wx-legend{display:flex;align-items:center;justify-content:center;gap:18px;padding:8px 16px;background:var(--ua-panel);border-top:1px solid var(--ua-border);font-size:10px;flex-shrink:0}
 .wx-legend-item{display:flex;align-items:center;gap:5px}
@@ -734,8 +762,14 @@ tbody td{padding:5px 8px;white-space:nowrap}
 @media(max-width:900px){.metric-row{flex-wrap:wrap}}
 .metric-card{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 10px;border-right:1px solid var(--ua-border);min-width:0}
 .metric-card:last-child{border-right:none}
-.metric-val{font-size:16px;font-weight:700;color:var(--ua-accent);line-height:1}
-.metric-label{font-size:9px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+/* F092: .metric-card's flex-basis:0 (from flex:1) lets the CARD shrink below its content
+   width, but flex children default to an automatic min-width of "auto" (their own content
+   size) — for a nowrap label that's the full text width, so the label refused to shrink and
+   painted over the neighboring card instead (reproduced at 852x393). flex-shrink:0 keeps the
+   stat value always fully legible; min-width:0 + overflow/ellipsis let the label truncate
+   inside its own box instead of overflowing into the next card, at any width. */
+.metric-val{font-size:16px;font-weight:700;color:var(--ua-accent);line-height:1;flex-shrink:0;white-space:nowrap}
+.metric-label{font-size:9px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 
 /* ═══ TAB 5: SOURCES ═══ */
 #tab-sources{padding:20px;flex:1;min-height:0;overflow-y:auto}
@@ -791,6 +825,10 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .tab-content.active{animation:fadeIn .2s ease}
 
 #sched-table-wrap{max-height:calc(100dvh - 320px)}
+/* A3: brief background pulse when a search result navigates to a schedule row.
+   Respects prefers-reduced-motion via the global override below. */
+@keyframes schedRowHighlight{0%,100%{background:transparent}20%,60%{background:rgba(0,93,170,.25)}}
+.sched-row-highlight{animation:schedRowHighlight 2s ease}
 /* Prevent overflow:hidden on card from trapping scroll events when table is short */
 #tab-schedule .card[style*="overflow:hidden"]{overflow:visible!important}
 /* ═══ REDUCED MOTION (a11y) ═══ */
@@ -800,6 +838,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
   .ticker-cycle{animation:none!important}
   .pulse-dot{animation:none!important}
   .tab-content.active{animation:none!important}
+  .sched-row-highlight{animation:none!important;background:rgba(0,93,170,.25)!important}
 }
 
 /* ═══ MOBILE RESPONSIVE ═══ */
@@ -846,6 +885,17 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #tab-live .sidebar #sidebar-filters-toggle{display:block}
   #tab-live .sidebar #sidebar-extra-filters.show{display:block}
   #mobile-sidebar-toggle{display:flex!important;position:fixed;top:96px;left:12px;z-index:707;width:auto;margin:0}
+  /* F091: #tab-live is exempt from the general non-map-tab reflow (the map is the background
+     layer), but its fixed controls — the filter toggle and the sidebar panel it opens — sat
+     inside the banner/tip-strip capsule band (z:765 vs. z:707/706) and were covered whenever
+     a banner was visible. Offset both below whichever capsule(s) are showing, mirroring the
+     band deltas used for .tab-content.active below (sidebar keeps its usual toggle+6 offset). */
+  #news-banner[style*="flex"]~main #mobile-sidebar-toggle{top:138px}
+  #tip-strip:not([style*="none"])~main #mobile-sidebar-toggle{top:138px}
+  #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main #mobile-sidebar-toggle{top:176px}
+  #news-banner[style*="flex"]~main #tab-live .sidebar{top:144px}
+  #tip-strip:not([style*="none"])~main #tab-live .sidebar{top:144px}
+  #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main #tab-live .sidebar{top:182px}
   /* ── Map controls: expandable FAB + floating panel ── */
   #tab-live #controls{top:auto;bottom:70px;right:auto;left:12px;transform:none;display:flex;flex-direction:column;align-items:flex-start;gap:8px;z-index:712}
   /* Legend lives in the desktop control ladder; the mobile controls collapse to a FAB, so hide it there (amber glow markers still convey the signal). */
@@ -866,9 +916,13 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #tab-schedule select,#tab-schedule input[type="text"]{width:100%!important;min-height:44px;font-size:14px!important;padding:8px 10px!important}
   #tab-schedule button{min-height:44px}
   #sched-stats.metric-row{flex-wrap:wrap;gap:0}
-  #sched-table-wrap{max-height:none}
+  /* P2-B item 3: keep #sched-table-wrap a bounded, internally-scrolling box on mobile (rather
+     than max-height:none/static headers) so sticky column headers actually have a scrolling
+     ancestor to stick within — matches the desktop pattern, tuned for the mobile chrome above
+     the table (search controls + day-tabs card). */
+  #sched-table-wrap{max-height:calc(100dvh - 360px)}
+  .sl-table-wrap{max-height:calc(100dvh - 360px)}
   .fleet-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  #sched-table th{position:static}
   table{min-width:600px}
   /* Fleet tab mobile */
   #tab-fleet{padding:10px}
@@ -924,7 +978,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #mobile-bottom-nav button .bnav-label{font-size:11px}
   #mobile-bottom-nav .bnav-overflow-item{display:none}
   #mobile-more-btn{display:flex!important}
-  #mobile-more-menu{display:none;position:fixed;bottom:74px;right:12px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:6px 0;z-index:781;box-shadow:0 -4px 20px rgba(0,0,0,.5);min-width:160px}
+  #mobile-more-menu{display:none;position:fixed;bottom:calc(74px + env(safe-area-inset-bottom));right:calc(12px + env(safe-area-inset-right));background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:6px 0;z-index:781;box-shadow:0 -4px 20px rgba(0,0,0,.5);min-width:160px}
   #mobile-more-menu.open{display:block}
   #mobile-more-menu button{display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;color:var(--ua-text);font-family:var(--font-ui);font-size:13px;padding:10px 16px;cursor:pointer;transition:background-color .15s cubic-bezier(.4,0,.2,1)}
   #mobile-more-menu button:hover{background:rgba(30,41,59,.5)}
@@ -935,7 +989,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #header-flight-count{font-size:11px!important;color:var(--ua-accent)!important;font-weight:600}
 }
 /* ── Mobile Bottom Nav / floating dock (hidden on desktop) ── */
-#mobile-bottom-nav{display:none;position:fixed;bottom:12px;left:12px;right:12px;height:auto;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;z-index:760;align-items:stretch;justify-content:space-around;padding:6px 6px}
+#mobile-bottom-nav{display:none;position:fixed;bottom:calc(12px + env(safe-area-inset-bottom));left:calc(12px + env(safe-area-inset-left));right:calc(12px + env(safe-area-inset-right));height:auto;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;z-index:760;align-items:stretch;justify-content:space-around;padding:6px 6px}
 #mobile-bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;border-radius:6px;color:var(--ua-muted);font-family:var(--font-ui);font-size:11px;cursor:pointer;padding:6px 2px 5px;transition:color .2s cubic-bezier(.4,0,.2,1),background-color .15s;min-height:44px}
 #mobile-bottom-nav button .bnav-icon{font-size:20px;line-height:1}
 #mobile-bottom-nav button.active{color:var(--ua-accent);background:var(--ua-blue-soft)}
@@ -945,7 +999,13 @@ tbody td{padding:5px 8px;white-space:nowrap}
 /* ── Mobile search toggle (hidden on desktop) ── */
 #mobile-search-toggle{display:none;background:none;border:none;color:var(--ua-muted);font-size:16px;cursor:pointer;padding:4px;align-items:center;justify-content:center}
 /* ── Mobile sidebar toggle (hidden on desktop) ── */
-#mobile-sidebar-toggle{display:none;align-items:center;gap:4px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:4px;color:var(--ua-accent);font-family:var(--font-ui);font-size:10px;padding:6px 12px;cursor:pointer;margin:6px 10px;width:calc(100% - 20px)}
+/* F091: dropped the legacy in-flow `margin:6px 10px;width:calc(100% - 20px)` (from when this
+   button lived inside the sidebar flow). Being later in source order at equal specificity,
+   they silently overrode the mobile rule's own `width:auto;margin:0`, stretching the fixed
+   toggle into a near-full-width bar whose right end covered marker-popup close buttons at the
+   map's top edge (and the margin made it render 6px below its declared `top`). The mobile
+   rule's intended compact chip now applies: popups' top-right close buttons clear it. */
+#mobile-sidebar-toggle{display:none;align-items:center;gap:4px;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:4px;color:var(--ua-accent);font-family:var(--font-ui);font-size:10px;padding:6px 12px;cursor:pointer}
 /* Schedule Tab */
 .sched-day-btn{background:none;border:1px solid var(--ua-border);color:var(--ua-muted);padding:3px 10px;font-family:var(--font-ui);font-size:10px;cursor:pointer;border-radius:3px;transition:color .2s cubic-bezier(.4,0,.2,1),border-color .2s cubic-bezier(.4,0,.2,1),background-color .2s cubic-bezier(.4,0,.2,1),transform .15s cubic-bezier(.4,0,.2,1)}
 .sched-day-btn:hover{color:var(--ua-text);border-color:var(--ua-blue)}
@@ -953,13 +1013,17 @@ tbody td{padding:5px 8px;white-space:nowrap}
 #sched-table th{position:sticky;top:0;background:var(--ua-panel);z-index:2;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-muted);padding:8px 10px;border-bottom:1px solid var(--ua-border);white-space:nowrap}
 #sched-table td{padding:6px 10px;font-size:11px;border-bottom:1px solid rgba(51,65,85,.3);white-space:nowrap}
 #sched-table tr:hover{background:rgba(0,93,170,.06)}
+/* Starlink fleet table: same sticky-header treatment as #sched-table (P2-B item 3) */
+#sl-table th{position:sticky;top:0;background:var(--ua-panel);z-index:2;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-muted);padding:8px 10px;border-bottom:1px solid var(--ua-border);white-space:nowrap}
 .sched-status{display:inline-block;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:.3px}
 .sched-live-chip{margin-left:4px;padding:1px 4px;border-radius:3px;background:rgba(34,197,94,.15);color:var(--ua-green);font-family:var(--font-mono);font-size:8px;font-weight:700;letter-spacing:.5px;vertical-align:middle}
 .sched-status.on-time,.sched-status.scheduled,.sched-status.estimated{background:rgba(34,197,94,.12);color:var(--ua-green)}
 .sched-status.landed{background:var(--ua-blue-soft);color:var(--ua-accent)}
 .sched-status.departed,.sched-status.enroute{background:rgba(14,165,233,.12);color:#0ea5e9}
 .sched-status.delayed{background:rgba(245,158,11,.15);color:var(--ua-yellow)}
-.sched-status.canceled,.sched-status.diverted{background:rgba(239,68,68,.15);color:var(--ua-red)}
+/* Lighter red text than --ua-red for this specific badge: --ua-red on its own 15%-tint
+   background measures 4.05:1 (fails 4.5:1); #F87171 clears 5.5:1 on the same tinted bg. */
+.sched-status.canceled,.sched-status.diverted{background:rgba(239,68,68,.15);color:#F87171}
 .sched-status.unknown{background:rgba(100,116,139,.12);color:var(--ua-muted)}
 .sched-fleet-match{font-size:9px;color:var(--ua-green)}
 .sched-fleet-miss{font-size:9px;color:var(--ua-muted)}
@@ -969,9 +1033,24 @@ tbody td{padding:5px 8px;white-space:nowrap}
 .sched-load-more:disabled{opacity:.4;cursor:default}
 
 /* Onboarding Overlay */
-#onboarding-overlay{position:fixed;inset:0;background:rgba(10,14,20,.85);z-index:10000;display:flex;align-items:center;justify-content:center;opacity:0;animation:obFadeIn .4s ease forwards;backdrop-filter:blur(4px);pointer-events:none}
+/* F090: landscape lockout fix. Two independent problems, two independent fixes:
+   (1) align-items:center on a flex container with no overflow handling clips a tall child
+   symmetrically off BOTH edges when it doesn't fit (classic flex-center overflow trap) and
+   nothing here was a scroll container, so a short viewport (e.g. 852x393 landscape, card
+   ~671px tall) could clip the dismiss button below the fold with no way to reach it.
+   `align-items:safe center` keeps normal centering whenever the card fits, and falls back to
+   start-alignment only when it would overflow — combined with overflow-y:auto (now an actual
+   scroll container) the whole card, dismiss button included, is always reachable by scrolling.
+   No visual change at viewports where the card already fit (e.g. 1440x900, 393x852 portrait).
+   (2) pointer-events:none on the overlay made backdrop clicks pass straight through to the map
+   underneath, so the existing backdrop-click-dismiss handler (main.js) could never fire even
+   though it's wired up. Restoring default pointer-events (auto) is safe: hideOverlay() (main.js)
+   sets .ob-hidden immediately, which force-overrides pointer-events back to none for the 300ms
+   fade-out, and finishes by setting display:none — so the overlay never intercepts clicks once
+   dismissed, and can't during the fade-out either. */
+#onboarding-overlay{position:fixed;inset:0;background:rgba(10,14,20,.85);z-index:10000;display:flex;align-items:safe center;justify-content:center;overflow-y:auto;padding:24px 16px;opacity:0;animation:obFadeIn .4s ease forwards;backdrop-filter:blur(4px)}
 #onboarding-overlay.ob-hidden{opacity:0;pointer-events:none;transition:opacity .3s ease}
-#onboarding-card{pointer-events:auto;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;max-width:480px;width:90%;padding:32px;text-align:center;box-shadow:0 0 60px rgba(0,93,170,.15)}
+#onboarding-card{pointer-events:auto;flex-shrink:0;background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:10px;max-width:480px;width:90%;padding:32px;text-align:center;box-shadow:0 0 60px rgba(0,93,170,.15)}
 #onboarding-card h2{font-size:20px;color:#fff;margin-bottom:6px;letter-spacing:.5px}
 .onboarding-subtitle{color:var(--ua-muted);font-size:12px;margin-bottom:24px}
 .onboarding-features{text-align:left;display:flex;flex-direction:column;gap:12px;margin-bottom:24px}
@@ -990,11 +1069,13 @@ tbody td{padding:5px 8px;white-space:nowrap}
 /* Hub Health Bar — inline hub cluster inside the canopy (band styling unset) */
 #hub-health-bar{display:flex;align-items:center;gap:0;flex:0 1 auto;flex-shrink:1;min-width:0;background:none;border:none;padding:0;overflow:hidden;font-size:9px}
 #hub-health-bar .hh-label,#hub-health-bar .hh-explainer{display:none}
-/* BUG 2 fix (a): hide the info "?" badge, the │ separators, and the trailing avg label on
-   desktop too (mobile already hides all of these). These ate width and clipped the bar to
-   ~102px so only 1.5 of 9 hubs showed. Placed OUTSIDE any media query so they apply in both
-   the desktop canopy and the mobile row-2 contexts. */
-#hub-health-bar .hh-info,#hub-health-bar .hh-sep,#hub-health-bar .hh-avg{display:none}
+/* BUG 2 fix (a): hide the │ separators and the trailing avg label on desktop too (mobile
+   already hides all of these). These ate width and clipped the bar to ~102px so only 1.5 of
+   9 hubs showed. Placed OUTSIDE any media query so they apply in both the desktop canopy and
+   the mobile row-2 contexts. The "?" info badge (hh-info) is re-enabled below (F087) — the
+   header percentages had no explainer once this hid it, so it now has its own compact
+   treatment instead of being blanket-hidden. */
+#hub-health-bar .hh-sep,#hub-health-bar .hh-avg{display:none}
 /* BUG 2 fix (b): the status emoji (🟢🟡🔴⚪) is a bare text node inside .hh-hub — kill it with
    font-size:0, then restore the real children. .hh-pct keeps the colored % (status signal);
    the unclassed inline <span style="color:…">⚪ —</span> (no-data hubs, undefined pct) is also
@@ -1003,13 +1084,16 @@ tbody td{padding:5px 8px;white-space:nowrap}
 #hub-health-bar .hh-hub .hh-code{font-size:10px}
 #hub-health-bar .hh-hub .hh-pct{font-size:10px;margin-left:4px}
 #hub-health-bar .hh-hub > span[style]{font-size:10px;margin-left:4px}
-/* BUG 2 fix (a): info "?" badge hidden in the canopy (was display:inline-flex here, which —
-   being a later same-specificity rule — re-showed it and defeated the hide above). The hover
-   tooltip styling below is now dead but harmless. */
-#hub-health-bar .hh-info{display:none;color:var(--ua-dim);font-size:9px;cursor:pointer;margin-right:6px;opacity:.6;position:relative;border:1px solid var(--ua-border);border-radius:50%;width:14px;height:14px;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+/* F087: the "?" explainer was blanket display:none'd ("BUG 2 fix") leaving the header
+   percentages unexplained with no way to discover what they mean. Re-enable it, keyboard
+   reachable, hover AND :focus-visible both reveal the tooltip. Hidden below 600px (mobile
+   canopy is already tight — see media query) to stay unobtrusive. */
+#hub-health-bar .hh-info{display:inline-flex;color:var(--ua-dim);font-size:9px;cursor:pointer;margin-right:6px;opacity:.6;position:relative;border:1px solid var(--ua-border);border-radius:50%;width:14px;height:14px;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
 #hub-health-bar .hh-info:hover{opacity:1;color:var(--ua-accent)}
+#hub-health-bar .hh-info:focus-visible{opacity:1;color:var(--ua-accent);outline:2px solid var(--ua-accent);outline-offset:2px}
 #hub-health-bar .hh-tooltip{display:none;position:absolute;top:20px;left:0;background:rgba(17,24,39,.97);border:1px solid var(--ua-border);border-radius:4px;padding:8px 10px;font-size:9px;color:var(--ua-text);white-space:normal;width:260px;z-index:9999;line-height:1.4}
-#hub-health-bar .hh-info:hover .hh-tooltip,#hub-health-bar .hh-info:focus .hh-tooltip,#hub-health-bar .hh-info:focus-within .hh-tooltip{display:block}
+#hub-health-bar .hh-info:hover .hh-tooltip,#hub-health-bar .hh-info:focus .hh-tooltip,#hub-health-bar .hh-info:focus-visible .hh-tooltip,#hub-health-bar .hh-info:focus-within .hh-tooltip{display:block}
+@media(max-width:600px){#hub-health-bar .hh-info{display:none}}
 /* BUG 2 fix (d): tighter padding so 9 compact hubs fit (~9×44px ≈ 400px budget). */
 .hh-hub{display:inline-flex;align-items:baseline;gap:4px;padding:2px 5px;border-radius:4px;white-space:nowrap;transition:background .15s;min-height:auto}
 .hh-hub:hover{background:rgba(148,163,184,.08)}
@@ -1148,11 +1232,26 @@ table,thead th,tbody td,.stat-val,.metric-val,.big-number,.ticker,.ticker-item,.
 #news-banner[style*="flex"]~main .tab-content.active:not(#tab-live),
 #tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:122px}
 #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:160px}
+/* F091: #tab-live was fully exempt from this reservation, so the Live map's popups (and
+   their close buttons) could open underneath the capsules — and no pane z-index can fix
+   that, because #map (z:0) and #tab-live.active (z:1) are stacking contexts that pin the
+   whole map below root-level chrome (see ladder note at top). Instead, reserve the same
+   capsule band on the MAP CONTAINER itself: with #map's top edge below the capsules,
+   Leaflet's autoPan keeps every popup inside the container — nothing can open under the
+   banner, and the map stays maximally tall (the reclaimed strip was unusable under the
+   capsule anyway). Leaflet 1.9's trackResize (ResizeObserver) picks the container resize
+   up automatically, so showing/dismissing a banner reflows the map with no JS changes. */
+#news-banner[style*="flex"]~main #map,
+#tip-strip:not([style*="none"])~main #map{top:122px}
+#news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main #map{top:160px}
 /* Mobile anchors: capsules sit at 102px (one row) / 140px (stacked) below the two-row canopy. */
 @media(max-width:768px){
   #news-banner[style*="flex"]~main .tab-content.active:not(#tab-live),
   #tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:140px}
   #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main .tab-content.active:not(#tab-live){top:178px}
+  #news-banner[style*="flex"]~main #map,
+  #tip-strip:not([style*="none"])~main #map{top:140px}
+  #news-banner[style*="flex"]~#tip-strip:not([style*="none"])~main #map{top:178px}
 }
 
 /* ═══ DQ-JUL3: data-quality release (frontend) ═══ */
@@ -1177,3 +1276,76 @@ table,thead th,tbody td,.stat-val,.metric-val,.big-number,.ticker,.ticker-item,.
 .sched-note-warn{color:var(--ua-yellow);font-family:var(--font-ui);font-size:10px}
 /* Compact disclaimer/attribution item in the ticker rotation */
 .ticker-item.disclaimer{color:var(--ua-dim)}
+
+/* === P2-A: jargon tooltip / provenance & age chip / donation-moment styles === */
+/* Jargon term tooltips (dotted-underline term + CSS-only hover/focus reveal).
+   Per DESIGN.md motion rules: opacity fade only, 150ms, no movement. */
+.jargon-term-wrap{position:relative;display:inline-block}
+.jargon-term{border-bottom:1px dotted var(--ua-dim);cursor:help}
+.jargon-tooltip{
+  position:absolute;left:0;top:100%;margin-top:4px;
+  background:var(--ua-panel-elevated);border:1px solid var(--ua-border);
+  color:var(--ua-text);font-family:var(--font-ui);font-size:10px;line-height:1.4;
+  padding:6px 8px;border-radius:4px;max-width:220px;width:max-content;
+  z-index:500;opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity 150ms ease-out;
+}
+.jargon-term-wrap:hover .jargon-tooltip,
+.jargon-term-wrap:focus-within .jargon-tooltip{opacity:1;visibility:visible}
+@media (prefers-reduced-motion:reduce){.jargon-tooltip{transition:none}}
+
+/* Schedule board age chip — muted/gray, not a warning. Only shown for clean boards
+   sitting quietly past ~10 minutes old (see item 3a); the amber/red staleness
+   banner above this in the DOM handles the genuinely-degraded case. */
+.sched-age-chip{
+  display:inline-block;padding:3px 10px;border-radius:3px;
+  font-family:var(--font-mono);font-size:10px;color:var(--ua-muted);
+  background:rgba(100,116,139,.10);border:1px solid rgba(100,116,139,.25);
+}
+
+/* My Flights provenance line — "via schedule snapshot" etc. Muted, same status-badge
+   sizing convention as .sched-age-chip; never amber/red (this is informational, not a warning). */
+.mf-provenance{
+  margin-top:4px;font-family:var(--font-mono);font-size:9px;
+  text-transform:uppercase;letter-spacing:.4px;color:var(--ua-dim);
+}
+
+/* "Glad you landed" donation-moment toast (item 4b) — small dismissible card,
+   bottom-anchored, distinct from the email-capture modal. */
+.bmac-toast{
+  position:fixed;bottom:16px;right:16px;z-index:10002;max-width:300px;
+  background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.9) 100%);
+  border:1px solid var(--ua-border);border-radius:8px;padding:14px 16px;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);
+}
+.bmac-toast-close{
+  position:absolute;top:6px;right:8px;background:none;border:none;
+  color:var(--ua-muted);cursor:pointer;font-size:12px;padding:4px;
+}
+.bmac-toast-msg{font-family:var(--font-ui);font-size:12px;color:var(--ua-text);line-height:1.5;margin:0 16px 10px 0}
+.bmac-toast-btn{
+  display:inline-block;padding:8px 16px;border-radius:6px;
+  background:var(--ua-blue);color:#fff;font-family:var(--font-ui);
+  font-size:12px;font-weight:600;text-decoration:none;
+}
+@media(max-width:600px){.bmac-toast{left:12px;right:12px;bottom:12px;max-width:none}}
+
+/* === P3: cost-transparency meter — #legalpop's "what it costs to keep this free" widget ===
+   Lazily rendered by public/js/support-meter.js into #support-meter, above the existing .donate
+   link so it powers the ask. Mono labels per DESIGN.md ("Data/metadata" row: JetBrains Mono,
+   10-11px). Thin bar uses --ua-blue fill on --ua-border track; crosses to --ua-amber past 85%
+   used (a "heads up, getting tight" state — not an error red). Empty until populated; adds
+   nothing to layout when #support-meter has no children. */
+#support-meter:empty{display:none}
+.sm-wrap{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--ua-border)}
+.sm-row+.sm-row{margin-top:6px}
+.sm-row-label{
+  display:flex;justify-content:space-between;gap:8px;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.3px;color:var(--ua-muted);
+  margin-bottom:3px;
+}
+.sm-bar{height:4px;border-radius:2px;background:var(--ua-border);overflow:hidden}
+.sm-bar-fill{height:100%;border-radius:2px;background:var(--ua-blue);transition:width .3s ease-out}
+.sm-bar-fill.sm-bar-fill-warn{background:var(--ua-amber)}
+.sm-note{margin-top:8px;font-family:var(--font-mono);font-size:9px;line-height:1.5;color:var(--ua-dim)}
+@media (prefers-reduced-motion:reduce){.sm-bar-fill{transition:none}}

@@ -6,6 +6,11 @@
 
 ![The Blue Board — Live Operations Map](public/og-image.png)
 
+<!-- This is a static Markdown file and cannot import src/data/facts.js.
+     Hub-count language, Starlink counts, and the fleet database count below
+     must be kept in sync BY HAND with src/data/facts.js — the single source
+     of truth for these figures. -->
+
 ---
 
 ## What Is This?
@@ -22,13 +27,13 @@ The Blue Board is a fan-built operations dashboard that lets you see United Airl
 Real-time map tracking 600+ United flights, updated every 30 seconds. Filter by hub, toggle longhaul routes, overlay NEXRAD weather radar. Hub status sidebar shows departure/arrival counts and identifies the busiest hub. Search any flight by number, tail, or route. Great circle route lines show flight paths with city names.
 
 ### ⚠️ IROPS Monitor + AI Delay Prediction
-Server-side disruption scoring across all 9 hubs — cancellations, delays (30m/60m), diversions, and FAA ground stops. **AI-powered delay risk engine** uses 8 signals (actual delay, FAA programs, weather, hub OTP, time-of-day, inbound aircraft, hub risk profile) to score delay risk 0–100. Click any risk badge for a **natural language AI explanation** powered by Claude. Preloaded automatically on page load with 5-minute server-side caching.
+Server-side disruption scoring across all 8 United hubs plus the Tokyo-Narita gateway — cancellations, delays (30m/60m), diversions, and FAA ground stops. **AI-powered delay risk engine** uses 8 signals (actual delay, FAA programs, weather, hub OTP, time-of-day, inbound aircraft, hub risk profile) to score delay risk 0–100. Click any risk badge for a **natural language AI explanation** powered by Claude. Preloaded automatically on page load with 5-minute server-side caching.
 
 ### 📅 [Schedule](https://theblueboard.co#schedule)
 Departure and arrival boards for all 9 UA hubs (ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, GUM). Filter by status or aircraft type. Equipment swap detection flags when a plane type changes. On-time performance stats. All times in airport-local timezone.
 
 ### ✈️ [Fleet](https://theblueboard.co#fleet)
-Complete database of 1,078+ mainline aircraft — searchable and sortable by type, registration, seat config, WiFi, and IFE. Starlink tracker for 258+ equipped aircraft with sortable columns and filters by fleet, type, and operator. Live fleet status correlates airborne flights with the database. **19 dedicated fleet type pages** ([737 MAX 9](https://theblueboard.co/fleet/737-max-9), [A321neo](https://theblueboard.co/fleet/a321neo), [787-9](https://theblueboard.co/fleet/787-9-dreamliner), etc.) with full aircraft registries, structured data, and cross-type navigation.
+Complete database of 1,078+ mainline aircraft — searchable and sortable by type, registration, seat config, WiFi, and IFE. Starlink tracker for 425+ equipped aircraft with sortable columns and filters by fleet, type, and operator. Live fleet status correlates airborne flights with the database. **19 dedicated fleet type pages** ([737 MAX 9](https://theblueboard.co/fleet/737-max-9), [A321neo](https://theblueboard.co/fleet/a321neo), [787-9](https://theblueboard.co/fleet/787-9-dreamliner), etc.) with full aircraft registries, structured data, and cross-type navigation.
 
 ### 🌦 [Delays · Weather · Hubs](https://theblueboard.co#weather)
 FAA NAS delay and ground stop alerts, METAR observations with plain-English explainers, NEXRAD radar overlay, and hub health indicators. Each hub gets a unified card with conditions, visibility, wind, ceiling, and current delay status. **Ops Impact Assessment** goes beyond standard flight categories to flag real operational risks — snow, gusts, freezing precipitation, thunderstorms — even when conditions are technically VFR. Radar map renders instantly; weather data loads in parallel via batched API calls.
@@ -40,7 +45,7 @@ Live fleet utilization by aircraft type (airborne vs. total), flight phase distr
 Look up any UA flight number from the header search bar. Returns live position, route, aircraft details, and scheduled/actual times via the official Flightradar24 API.
 
 ### 🏢 [Hub Pages](https://theblueboard.co/hubs/ord)
-Dedicated SEO-rich pages for each of United's 9 hubs ([ORD](https://theblueboard.co/hubs/ord) · [DEN](https://theblueboard.co/hubs/den) · [IAH](https://theblueboard.co/hubs/iah) · [EWR](https://theblueboard.co/hubs/ewr) · [SFO](https://theblueboard.co/hubs/sfo) · [IAD](https://theblueboard.co/hubs/iad) · [LAX](https://theblueboard.co/hubs/lax) · [NRT](https://theblueboard.co/hubs/nrt) · [GUM](https://theblueboard.co/hubs/gum)). Each page includes live flight counts, hub overview with terminal/concourse details, United Club and Polaris lounge locations, delay pattern analysis by season, Starlink WiFi info, construction alerts with links to official project pages, structured FAQ, and FAQPage + Airport schema markup for search engines. Jump navigation and scroll hints guide visitors through the content.
+Dedicated SEO-rich pages for the 9 airports The Blue Board tracks — United's 8 hubs plus the Tokyo-Narita gateway ([ORD](https://theblueboard.co/hubs/ord) · [DEN](https://theblueboard.co/hubs/den) · [IAH](https://theblueboard.co/hubs/iah) · [EWR](https://theblueboard.co/hubs/ewr) · [SFO](https://theblueboard.co/hubs/sfo) · [IAD](https://theblueboard.co/hubs/iad) · [LAX](https://theblueboard.co/hubs/lax) · [NRT](https://theblueboard.co/hubs/nrt) · [GUM](https://theblueboard.co/hubs/gum)). Each page includes live flight counts, hub overview with terminal/concourse details, United Club and Polaris lounge locations, delay pattern analysis by season, Starlink WiFi info, construction alerts with links to official project pages, structured FAQ, and FAQPage + Airport schema markup for search engines. Jump navigation and scroll hints guide visitors through the content.
 
 ### 📰 [News](https://theblueboard.co/news)
 Curated United Airlines news hub with individual article pages, source links, and cross-links to related hub and fleet pages via tags. Google News sitemap and dynamic RSS feed for indexing. "Latest News" banner on the dashboard links to the newest article. Optional email digest via Resend Broadcasts notifies waitlist subscribers of new articles.
@@ -50,8 +55,8 @@ Curated United Airlines news hub with individual article pages, source links, an
 - **AI delay explanations** — Click any risk badge for a natural language briefing powered by Claude AI
 - **Inbound aircraft tracking** — "Where's My Plane?" shows your aircraft's current position operating its previous flight
 - **Deep-link hashes** — Share direct links to any tab (`#live`, `#schedule`, `#fleet`, `#weather`, `#stats`)
-- **Flight watch** — Pin a flight and get browser push notifications on status changes
-- **Hub health bar** — At-a-glance on-time performance across all 9 hubs, with cancellation rate detection (shows `100% CX` when a hub is shut down)
+- **Flight watch** — Pin a flight and get browser push notifications on status changes, including background alerts that fire even when the tab is closed once the owner enables Web Push ([setup](docs/setup-push-alerts.md))
+- **Hub health bar** — At-a-glance on-time performance across all 8 United hubs plus the Tokyo-Narita gateway, with cancellation rate detection (shows `100% CX` when a hub is shut down)
 - **Equipment swap alerts** — Badges when scheduled aircraft type changes
 - **📱 Mobile-first design** — Map-maximized layout with bottom tab bar navigation, collapsible filters
 - **PWA support** — Installable as a home screen app on iOS/Android with offline caching
@@ -110,7 +115,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 - **Caching** — Complete schedule boards cached up to 6h at the edge (60s when partial), IROPS cached 5min, reducing upstream load by 90%+
 - **UA filtering** — Server filters to United flights only, shrinking payloads dramatically
 - **CORS** — Some sources (AWC, FAA) don't allow direct browser requests
-- **Batching** — METAR data for all 9 hubs fetched in a single request
+- **Batching** — METAR data for all 9 tracked boards (United's 8 hubs plus the Tokyo-Narita gateway) fetched in a single request
 
 ---
 
@@ -136,7 +141,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 - **Frontend:** Vanilla HTML/CSS/JS — single-file dashboard, Astro-templated content pages
 - **Map:** [Leaflet](https://leafletjs.com) + CartoDB dark tiles
 - **Radar:** Iowa State NEXRAD WMS tiles
-- **Fonts:** [Inter](https://rsms.me/inter/) (UI) + [JetBrains Mono](https://www.jetbrains.com/lp/mono/) (data) — self-hosted WOFF2
+- **Fonts:** Satoshi (headings) + DM Sans (body) + [JetBrains Mono](https://www.jetbrains.com/lp/mono/) (data) — self-hosted WOFF2 (see [DESIGN.md](DESIGN.md))
 - **Build:** [Astro](https://astro.build) (static pages) + [Vite](https://vite.dev) (dashboard bundle)
 - **Hosting:** [Vercel](https://vercel.com) (serverless functions + edge CDN)
 - **Database:** [Supabase](https://supabase.com) (waitlist, schedule snapshots, news notifications)
@@ -184,7 +189,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 │   │   ├── feed.xml.ts           # Dynamic RSS feed (news + updates)
 │   │   ├── news-sitemap.xml.ts   # Google News sitemap
 │   │   ├── hubs/
-│   │   │   └── [hub].astro       # Dynamic route → 9 hub pages
+│   │   │   └── [hub].astro       # Dynamic route → 9 tracked-board pages (8 hubs + NRT gateway)
 │   │   ├── fleet/
 │   │   │   ├── index.astro       # Fleet overview (all 19 types)
 │   │   │   └── [type].astro      # Dynamic route → 19 fleet type pages
@@ -192,13 +197,13 @@ Curated United Airlines news hub with individual article pages, source links, an
 │   │       ├── index.astro       # News hub index
 │   │       └── [slug].astro      # Dynamic route → individual articles
 │   └── data/
-│       ├── hubs.js               # Hub metadata (all 9 hubs)
+│       ├── hubs.js               # Hub metadata (8 hubs + NRT gateway, 9 boards)
 │       ├── fleet/                 # Fleet type data (19 aircraft types)
 │       └── news/                  # News article data
 ├── public/
 │   ├── index.html                # The entire dashboard (single file)
 │   ├── css/style.css             # Extracted dashboard styles
-│   ├── fonts/                    # Self-hosted Inter + JetBrains Mono (WOFF2)
+│   ├── fonts/                    # Self-hosted Satoshi + DM Sans + JetBrains Mono (WOFF2)
 │   ├── data/                     # Fleet + Starlink JSON databases
 │   ├── og-image.png              # Social media preview image (1200×630)
 │   ├── manifest.json             # PWA manifest

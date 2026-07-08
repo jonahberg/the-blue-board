@@ -45,7 +45,11 @@ export function computeScheduleStatCounts(flights, { dir = 'departures', nowSec 
       continue;
     }
 
-    const hasOperated = key === 'departed' || key === 'enroute' || key === 'landed';
+    // F021: on arrivals boards, "departed"/"enroute" only prove the flight LEFT the
+    // origin, not that it arrived — an en-route flight must not count as operated for
+    // arrivals OTP purposes (no arrival evidence yet). Departures boards are unaffected:
+    // departed/enroute/landed all prove departure evidence exists.
+    const hasOperated = isArr ? key === 'landed' : (key === 'departed' || key === 'enroute' || key === 'landed');
     if (!hasOperated) {
       if (key === 'scheduled' || key === 'estimated' || key === 'delayed' || key === 'unknown') upcoming++;
       // anything else (diverted, novel keys) falls into the uncategorized remainder
@@ -62,7 +66,10 @@ export function computeScheduleStatCounts(flights, { dir = 'departures', nowSec 
     const derived = isArr
       ? fl._source?.scheduleTimeDerivedFromActual?.arrival
       : fl._source?.scheduleTimeDerivedFromActual?.departure;
-    const realT = fl.time?.real?.departure || fl.time?.real?.arrival;
+    // F021: direction-aware, mirroring schedT above — an arrivals board must score
+    // against the real ARRIVAL time, not a real departure (a 90-min-late arrival was
+    // scoring as on-time because it compared scheduled-arrival to real-departure).
+    const realT = isArr ? fl.time?.real?.arrival : fl.time?.real?.departure;
     const actT = realT || (isArr ? fl.time?.estimated?.arrival : fl.time?.estimated?.departure);
     if (!schedT || !actT || derived) continue;
     if (actT > schedT + 1800) late++;

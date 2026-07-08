@@ -13,7 +13,20 @@ const STATION_TIMEOUT_MS = Math.max(2000, Number(process.env.METAR_STATION_TIMEO
 // Last-known-good observation per ICAO id, ephemeral per warm instance (same pattern as
 // _rate-limit.ts). This is the store the `stale-while-revalidate` header always implied but never
 // had: a momentarily-slow station serves its previous observation instead of blanking its hub card.
-const lastKnownGood = new Map<string, any>();
+//
+// F040: the store used to never expire and carried no age marker, so a station that stopped
+// reporting entirely could backfill the same observation indefinitely with nothing in the payload
+// to tell the client it was stale. Each entry now also records when it was captured (cachedAt, ms
+// epoch) so a backfill beyond BACKFILL_MAX_AGE_MS is refused (the station is omitted from the
+// response instead of silently going stale forever), and any backfill that IS served carries an
+// additive `stale: true` + `cachedAt` marker the client can render later — additive fields only, so
+// the batched response shape stays backward compatible.
+const lastKnownGood = new Map<string, { rec: any; cachedAt: number }>();
+// Beyond this age, a backfilled observation is more likely to be actively misleading (a real METAR
+// changes at least hourly) than merely "a bit old" — stop backfilling it and let the station be
+// omitted (the existing "weather unavailable" client fallback) rather than serve a stale marker
+// so old it approaches worthless.
+const BACKFILL_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6h
 
 /** Test helper: clear the last-known-good cache so module state doesn't leak across tests. */
 export function __resetMetarCacheForTests(): void {
@@ -71,21 +84,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const settled = await Promise.allSettled(stations.map(fetchOneStation));
 
   const byStation = new Map<string, any>();
+  const now = Date.now();
   for (const result of settled) {
     if (result.status !== 'fulfilled' || !Array.isArray(result.value)) continue;
     for (const rec of result.value) {
       const key = stationKey(rec);
       if (!key) continue;
       byStation.set(key, rec);
-      lastKnownGood.set(key, rec); // refresh last-known-good with every fresh observation
+      lastKnownGood.set(key, { rec, cachedAt: now }); // refresh last-known-good with every fresh observation
     }
   }
 
-  // Backfill any requested station that didn't answer this round from last-known-good.
+  // Backfill any requested station that didn't answer this round from last-known-good, as long as
+  // that observation isn't older than BACKFILL_MAX_AGE_MS (F040). A backfill is additively marked
+  // `stale: true` + `cachedAt` so the client CAN render an age signal; a too-old entry is dropped
+  // instead of being backfilled — the station is simply omitted, same as the existing no-data case.
   for (const id of stations) {
-    if (!byStation.has(id) && lastKnownGood.has(id)) {
-      byStation.set(id, lastKnownGood.get(id));
+    if (byStation.has(id)) continue;
+    const entry = lastKnownGood.get(id);
+    if (!entry) continue;
+    const age = now - entry.cachedAt;
+    if (age > BACKFILL_MAX_AGE_MS) {
+      lastKnownGood.delete(id);
+      continue;
     }
+    byStation.set(id, { ...entry.rec, stale: true, cachedAt: entry.cachedAt });
   }
 
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');

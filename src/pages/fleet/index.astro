@@ -1,6 +1,7 @@
 ---
 import { fleetOrder, fleetNavLabels, fleetTypes } from '../../data/fleet/index.js';
 import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
+import { STARLINK_EQUIPPED, STARLINK_EQUIPPED_LABEL, STARLINK_TARGET_2026, FLEET_DB_COUNT } from '../../data/facts.js';
 
 // Build type summaries for the grid
 const typeSummaries: Record<string, { displayName: string; count: number; role: string; bodyType: string; seatTotal: string; slug: string }> = {};
@@ -35,7 +36,7 @@ for (const fam of fleetFamilies) {
 const totalAircraft = fleetOrder.reduce((sum, key) => sum + fleetTypes[key].count, 0);
 const polarisAircraft = fleetOrder.reduce((sum, key) => sum + (fleetTypes[key].seatConfig.hasPolaris ? fleetTypes[key].count : 0), 0);
 const widebodyAircraft = fleetOrder.reduce((sum, key) => sum + (fleetTypes[key].bodyType === 'widebody' ? fleetTypes[key].count : 0), 0);
-const starlinkEquipped = 430; // from unitedstarlinktracker.com / /api/starlink-data, updated manually (mid-2026)
+const starlinkEquipped = STARLINK_EQUIPPED; // canonical value from src/data/facts.js (matches public/data/starlink.json seed)
 
 // Seat config table order: widebody (Polaris) first, then narrowbody
 const seatConfigOrder = [
@@ -72,7 +73,7 @@ const cabinShortLabel: Record<string, string> = {
 <meta property="og:description" content="Complete United Airlines fleet database. Every mainline aircraft — 737, 757, 767, 777, 787, A319, A320, A321neo — with seat configs, WiFi, and detailed type guides.">
 <meta property="og:url" content="https://theblueboard.co/fleet">
 <meta property="og:site_name" content="The Blue Board">
-<meta property="og:image" content="https://theblueboard.co/og-image.png">
+<meta property="og:image" content="https://theblueboard.co/og/og-fleet.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The Blue Board — United Airlines Fleet Database">
@@ -80,7 +81,7 @@ const cabinShortLabel: Record<string, string> = {
 <meta name="twitter:creator" content="@theblueboard">
 <meta name="twitter:title" content="United Airlines Fleet — 1,078 Aircraft Database | The Blue Board">
 <meta name="twitter:description" content="Complete United Airlines fleet. 1,078 aircraft, 19 types. Seat maps, WiFi, Starlink status. Updated daily.">
-<meta name="twitter:image" content="https://theblueboard.co/og-image.png">
+<meta name="twitter:image" content="https://theblueboard.co/og/og-fleet.jpg">
 <meta name="twitter:site" content="@theblueboard">
 
 <!-- Schema: BreadcrumbList -->
@@ -110,7 +111,7 @@ const cabinShortLabel: Record<string, string> = {
   "variableMeasured": [
     {"@type": "PropertyValue", "name": "Aircraft Count", "value": "1078"},
     {"@type": "PropertyValue", "name": "Aircraft Types", "value": "19"},
-    {"@type": "PropertyValue", "name": "Starlink Equipped", "value": "430"}
+    {"@type": "PropertyValue", "name": "Starlink Equipped", "value": "428"}
   ]
 }
 </script>

@@ -14,10 +14,75 @@
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
-import { isOfficialFr24Enabled } from './_official-fr24.js';
+import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402 } from './_official-fr24.js';
 import { loadScheduleSnapshot } from './_schedule-snapshots.js';
 import { UNITED_HUBS } from './_hubs.js';
-import { getStartOfHubDay } from '../src/lib/hubTz.js';
+import { getStartOfHubDay, getHubLocalDate } from '../src/lib/hubTz.js';
+
+// ═══ Registration + date-aware candidate ranking (F001, F005/F013) ═══
+
+// FlightAware's trackpollBootstrap carries the tail number, but the exact field
+// name has drifted across page versions. Try the plausible shapes in priority
+// order and validate against a registration-ish token; return '' when none is
+// present (the client degrades to "tail not yet assigned" rather than a fake
+// lookup). The type string stays in the separate `aircraft` field.
+export function extractFaRegistration(f: any): string {
+  const raw =
+    (typeof f?.aircraft === 'string' ? f.aircraft : '') ||
+    f?.aircraft?.registration || f?.aircraft?.tail ||
+    f?.registration || f?.tailNumber || f?.aircraftTailNumber ||
+    f?.flightPlan?.tailNumber || '';
+  const reg = String(raw || '').replace(/-/g, '').toUpperCase().trim();
+  return /^[A-Z0-9]{2,8}$/.test(reg) ? reg : '';
+}
+
+export type FaPhase = 'inair' | 'landed' | 'scheduled';
+export interface FaCandidate { flight: any; key: string; phase: FaPhase; depSec: number; localDate: string; }
+
+// Local calendar date (YYYY-MM-DD) of a departure epoch, in the origin timezone
+// the FlightAware payload reports. Falls back to UTC when the tz is absent.
+export function faLocalDate(depSec: number, tz: string): string {
+  if (!depSec) return '';
+  const zone = (tz || '').replace(/^:/, '') || 'UTC';
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(depSec * 1000));
+  } catch {
+    return new Date(depSec * 1000).toISOString().slice(0, 10);
+  }
+}
+
+// Pick the most relevant FlightAware candidate. When a target date is supplied
+// (F013), candidates whose local departure date matches win outright. Within a
+// tier, the phase preference is in-air > current/future scheduled > landed >
+// stale (past-scheduled, never departed) — REVERSING the old "any past LANDED
+// leg beats today's scheduled leg" bug (F005). Scheduled ties pick the SOONEST
+// upcoming leg, not the furthest-future one.
+export function pickBestFaCandidate(
+  candidates: FaCandidate[], targetDate: string, nowSec: number
+): FaCandidate | null {
+  if (!candidates.length) return null;
+  const rank = (c: FaCandidate): number => {
+    if (c.phase === 'inair') return 3;
+    if (c.phase === 'scheduled' && c.depSec >= nowSec - 1800) return 2;
+    if (c.phase === 'landed') return 1;
+    return 0; // stale: scheduled but the departure time is well in the past
+  };
+  const sorted = candidates.slice().sort((a, b) => {
+    if (targetDate) {
+      const ad = a.localDate === targetDate ? 1 : 0;
+      const bd = b.localDate === targetDate ? 1 : 0;
+      if (ad !== bd) return bd - ad;
+    }
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return rb - ra;
+    // Same phase: soonest upcoming for scheduled, most-recent for everything else.
+    if (ra === 2) return a.depSec - b.depSec;
+    return b.depSec - a.depSec;
+  });
+  return sorted[0];
+}
 
 const CACHE_TTL_MS = 60_000; // 1 minute
 const cache = new Map<string, { data: any; ts: number }>();
@@ -91,6 +156,11 @@ async function fetchFr24Summary(flight: string): Promise<any | null> {
   if (!process.env.FR24_API_TOKEN) return null;
   // Paid official API: honour the operator kill switch (credits exhausted → OFF in prod).
   if (!isOfficialFr24Enabled()) return null;
+  // F038: honour the shared cross-instance 402 quota block before spending a call — this tier used
+  // to gate solely on the kill switch and ignore a credit-exhaustion block recorded by any other
+  // official-API caller (schedule.ts, fr24-flight, aircraft-history). Skips straight to the next
+  // fallback tier (schedule-cache) via the null return, same as any other tier failure.
+  if (await isOfficialApiQuotaBlocked()) return null;
   try {
     // Convert UAL2221 -> UA2221 for FR24
     const fr24Flight = flight.replace('UAL', 'UA');
@@ -112,6 +182,10 @@ async function fetchFr24Summary(flight: string): Promise<any | null> {
     );
     clearTimeout(timeout);
     if (!resp.ok) {
+      if (resp.status === 402) {
+        const body = await resp.text().catch(() => '');
+        recordOfficialApi402(body || 'flight-times 402');
+      }
       return null;
     }
     const data = await resp.json();
@@ -145,6 +219,7 @@ async function fetchFr24Summary(flight: string): Promise<any | null> {
         gate: { scheduled: '', estimated: '', actual: '' },
       },
       aircraft: f.type || '',
+      registration: f.reg || f.registration || '',
       status: f.flight_ended ? 'landed' : 'en-route',
       cancelled: false,
       diverted: !!(f.dest_icao_actual && f.dest_icao && f.dest_icao !== f.dest_icao_actual),
@@ -163,66 +238,87 @@ async function fetchFr24Summary(flight: string): Promise<any | null> {
 // (api/schedule.ts caches + api/_schedule-snapshots.ts persistence). Look the flight number up
 // across today's persisted hub boards — departures first (richer origin-side data), then
 // arrivals. Reads only the durable snapshot layer (shared across lambdas); no upstream calls.
-async function fetchScheduleCacheTimes(flight: string): Promise<any | null> {
-  const flightNum = flight.replace('UAL', 'UA');
-  try {
-    for (const dir of ['departures', 'arrivals'] as const) {
-      const snapshots = await Promise.all(
-        UNITED_HUBS.map(async (hub) => {
-          const ts = getStartOfHubDay(hub, 0);
-          return loadScheduleSnapshot(`agg:${hub}:${dir}:${ts}`);
-        })
-      );
-      for (const snapshot of snapshots) {
-        const flights = snapshot?.data?.flights;
-        if (!Array.isArray(flights)) continue;
-        const match = flights.find(
-          (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
-        );
-        if (!match) continue;
+// Which hub-local day offset (relative to today) matches a YYYY-MM-DD date, or
+// null if it falls outside the ±1-day window the snapshot layer retains.
+function hubDayOffsetForDate(hub: string, dateStr: string): number | null {
+  for (const off of [0, 1, -1]) {
+    const d = getHubLocalDate(hub, getStartOfHubDay(hub, off) * 1000);
+    if (`${d.year}-${d.month}-${d.day}` === dateStr) return off;
+  }
+  return null;
+}
 
-        const time = match.time || {};
-        const generic = match.status?.generic?.status || {};
-        return {
-          success: true,
-          flight: flightNum,
-          origin: {
-            iata: match.airport?.origin?.code?.iata || '',
-            name: match.airport?.origin?.name || '',
-            terminal: match.airport?.origin?.info?.terminal || '',
-            gate: match.airport?.origin?.info?.gate || '',
-            tz: '',
-          },
-          destination: {
-            iata: match.airport?.destination?.code?.iata || '',
-            name: match.airport?.destination?.name || '',
-            terminal: match.airport?.destination?.info?.terminal || '',
-            gate: match.airport?.destination?.info?.gate || '',
-            tz: '',
-          },
-          departure: {
-            gate: {
-              scheduled: epochToISO(time.scheduled?.departure),
-              estimated: epochToISO(time.estimated?.departure),
-              actual: epochToISO(time.real?.departure),
+async function fetchScheduleCacheTimes(flight: string, dateParam = ''): Promise<any | null> {
+  const flightNum = flight.replace('UAL', 'UA');
+  // Search today first, then tomorrow (the "next occurrence" for a not-yet-run
+  // flight) — F013. When a specific date is requested, each hub only loads the
+  // one offset whose hub-local date matches, so we read the right day's board.
+  const offsets = dateParam ? [0, 1, -1] : [0, 1];
+  try {
+    for (const off of offsets) {
+      for (const dir of ['departures', 'arrivals'] as const) {
+        const snapshots = await Promise.all(
+          UNITED_HUBS.map(async (hub) => {
+            if (dateParam) {
+              const d = getHubLocalDate(hub, getStartOfHubDay(hub, off) * 1000);
+              if (`${d.year}-${d.month}-${d.day}` !== dateParam) return null;
+            }
+            const ts = getStartOfHubDay(hub, off);
+            return loadScheduleSnapshot(`agg:${hub}:${dir}:${ts}`);
+          })
+        );
+        for (const snapshot of snapshots) {
+          const flights = snapshot?.data?.flights;
+          if (!Array.isArray(flights)) continue;
+          const match = flights.find(
+            (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
+          );
+          if (!match) continue;
+
+          const time = match.time || {};
+          const generic = match.status?.generic?.status || {};
+          return {
+            success: true,
+            flight: flightNum,
+            origin: {
+              iata: match.airport?.origin?.code?.iata || '',
+              name: match.airport?.origin?.name || '',
+              terminal: match.airport?.origin?.info?.terminal || '',
+              gate: match.airport?.origin?.info?.gate || '',
+              tz: '',
             },
-            takeoff: { scheduled: '', estimated: '', actual: '' },
-          },
-          arrival: {
-            landing: { scheduled: '', estimated: '', actual: '' },
-            gate: {
-              scheduled: epochToISO(time.scheduled?.arrival),
-              estimated: epochToISO(time.estimated?.arrival),
-              actual: epochToISO(time.real?.arrival),
+            destination: {
+              iata: match.airport?.destination?.code?.iata || '',
+              name: match.airport?.destination?.name || '',
+              terminal: match.airport?.destination?.info?.terminal || '',
+              gate: match.airport?.destination?.info?.gate || '',
+              tz: '',
             },
-          },
-          aircraft: match.aircraft?.model?.text || match.aircraft?.model?.code || '',
-          status: generic.text || '',
-          cancelled: match.status?.generic?.type === 'canceled' || generic.text === 'canceled',
-          diverted: !!generic.diverted,
-          source: 'schedule-cache',
-          cached: false,
-        };
+            departure: {
+              gate: {
+                scheduled: epochToISO(time.scheduled?.departure),
+                estimated: epochToISO(time.estimated?.departure),
+                actual: epochToISO(time.real?.departure),
+              },
+              takeoff: { scheduled: '', estimated: '', actual: '' },
+            },
+            arrival: {
+              landing: { scheduled: '', estimated: '', actual: '' },
+              gate: {
+                scheduled: epochToISO(time.scheduled?.arrival),
+                estimated: epochToISO(time.estimated?.arrival),
+                actual: epochToISO(time.real?.arrival),
+              },
+            },
+            aircraft: match.aircraft?.model?.text || match.aircraft?.model?.code || '',
+            registration: match.aircraft?.registration || '',
+            status: generic.text || '',
+            cancelled: match.status?.generic?.type === 'canceled' || generic.text === 'canceled',
+            diverted: !!generic.diverted,
+            source: 'schedule-cache',
+            cached: false,
+          };
+        }
       }
     }
   } catch (e: any) {
@@ -233,14 +329,16 @@ async function fetchScheduleCacheTimes(flight: string): Promise<any | null> {
 
 // Run the FR24 → schedule-cache fallback chain and write the response. `reason` records WHY the
 // primary (FlightAware) tier failed, and is only surfaced when every tier fails.
-async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey: string, reason: string) {
-  const fr24 = await fetchFr24Summary(flight);
+async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey: string, reason: string, dateParam = '', allowOfficial = true) {
+  // allowOfficial=false lets a caller (e.g. api/cron/watch-alerts.ts) skip the paid FR24 official
+  // API tier entirely and resolve only from the free FlightAware scrape + schedule-snapshot cache.
+  const fr24 = allowOfficial ? await fetchFr24Summary(flight) : null;
   if (fr24) {
     setCache(cacheKey, fr24);
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json(fr24);
   }
-  const schedCache = await fetchScheduleCacheTimes(flight);
+  const schedCache = await fetchScheduleCacheTimes(flight, dateParam);
   if (schedCache) {
     setCache(cacheKey, schedCache);
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
@@ -267,7 +365,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid flight number' });
   }
 
-  const cacheKey = `fa:${flight}`;
+  // Optional date dimension (F005/F013): YYYY-MM-DD (flight's local date). Lets a
+  // caller resolve tomorrow's scheduled leg instead of today's completed one.
+  // Anything malformed is ignored (treated as "today or next occurrence").
+  const rawDate = req.query.date;
+  const dateParam = (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) ? rawDate : '';
+
+  // officialFallback=0 skips the paid FR24 official-API tier (used by the watch-alerts cron so a
+  // background diff never burns FR24 credits). Default on for interactive callers.
+  const allowOfficial = String(req.query.officialFallback ?? '1').toLowerCase() !== '0';
+
+  const cacheKey = `fa:${flight}:${dateParam}`;
   const cached = getCached(cacheKey);
   if (cached) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
@@ -293,7 +401,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     clearTimeout(timeout);
 
     if (!resp.ok) {
-      return await respondViaFallbacks(res, flight, cacheKey, `flightaware HTTP ${resp.status}`);
+      return await respondViaFallbacks(res, flight, cacheKey, `flightaware HTTP ${resp.status}`, dateParam, allowOfficial);
     }
 
     // Cap response body size to prevent a misbehaving or malicious FlightAware
@@ -308,40 +416,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const match = html.match(/trackpollBootstrap\s*=\s*(\{[\s\S]{1,200000}?\});\s*(?:var|<\/script)/);
     if (!match) {
       // FlightAware blocked — fall down the chain
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware blocked (no bootstrap)');
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware blocked (no bootstrap)', dateParam, allowOfficial);
     }
 
     let bootstrap: any;
     try {
       bootstrap = JSON.parse(match[1]);
     } catch (e) {
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap unparseable');
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap unparseable', dateParam, allowOfficial);
     }
 
-    // Find the most relevant flight — scan ALL activity log entries, prefer in-air
+    // Find the most relevant flight — scan ALL activity log entries, then rank
+    // with date + phase awareness (F005/F013): a requested date wins, then
+    // in-air > current/future scheduled > landed > stale, with scheduled ties
+    // picking the SOONEST upcoming leg (not the furthest-future one).
     const flights = bootstrap?.flights || {};
-    const candidates: { flight: any; key: string; priority: number; depTime: number }[] = [];
+    const candidates: FaCandidate[] = [];
 
     for (const [key, val] of Object.entries(flights) as [string, any][]) {
       const actLog = val?.activityLog?.flights || [];
       for (const f of actLog) {
         const hasActualDep = !!(f.takeoffTimes?.actual || f.gateDepartureTimes?.actual);
         const hasLanded = !!f.landingTimes?.actual;
-        const depTime = f.gateDepartureTimes?.scheduled || f.gateDepartureTimes?.estimated || f.gateDepartureTimes?.actual || f.takeoffTimes?.scheduled || 0;
-        // Priority: in-air (departed but not landed) > landed > scheduled
-        const priority = (hasActualDep && !hasLanded) ? 2 : hasActualDep ? 1 : 0;
-        candidates.push({ flight: f, key, priority, depTime });
+        const depSec = f.gateDepartureTimes?.scheduled || f.gateDepartureTimes?.estimated || f.gateDepartureTimes?.actual || f.takeoffTimes?.scheduled || 0;
+        const phase: FaPhase = (hasActualDep && !hasLanded) ? 'inair' : hasLanded ? 'landed' : 'scheduled';
+        candidates.push({ flight: f, key, phase, depSec, localDate: faLocalDate(depSec, f.origin?.TZ || '') });
       }
     }
-    // Sort by priority desc, then by most recent departure
-    candidates.sort((a, b) => b.priority - a.priority || b.depTime - a.depTime);
-    const bestFlight = candidates[0]?.flight || null;
+    const bestFlight = pickBestFaCandidate(candidates, dateParam, Math.floor(Date.now() / 1000))?.flight || null;
 
     if (!bestFlight) {
       // A bootstrap that parses but contains ZERO flights is FlightAware's bot-wall, not a
       // definitive "this flight does not exist" — treat it as a source failure and fall through
       // to FR24 / the schedule snapshot layer instead of 404ing every flight. (Jul 3 2026 audit.)
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap empty (bot-wall)');
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap empty (bot-wall)', dateParam, allowOfficial);
     }
 
     const f = bestFlight;
@@ -387,6 +495,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       },
       aircraft: f.aircraftTypeFriendly || '',
+      registration: extractFaRegistration(f),
       status: f.flightStatus || '',
       cancelled: !!f.cancelled,
       diverted: !!f.diverted,
@@ -399,6 +508,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(result);
   } catch (e) {
     console.error('FlightAware scrape error:', e);
-    return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error');
+    return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error', dateParam, allowOfficial);
   }
 }

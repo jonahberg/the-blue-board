@@ -1,5 +1,7 @@
 /**
- * Hub data for all 9 United Airlines hub pages.
+ * Hub data for the 9 airport pages The Blue Board tracks: United's 8 official
+ * hubs (ORD, DEN, IAH, EWR, SFO, IAD, LAX, GUM) plus the Tokyo-Narita (NRT)
+ * gateway. See src/data/facts.js for the canonical hub-count constants.
  * Split into per-hub files for maintainability.
  */
 

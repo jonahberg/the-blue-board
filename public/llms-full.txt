@@ -1,12 +1,16 @@
 # The Blue Board — Full Documentation
 
+<!-- This is a static text file and cannot import src/data/facts.js. Hub-count
+     language, Starlink counts, and the fleet database count must be kept in
+     sync BY HAND with src/data/facts.js — the single source of truth. -->
+
 > A free, independent real-time operations dashboard for United Airlines flights.
 > Built for United frequent flyers, 1K/Global Services members, MileagePlus members, and AvGeeks.
 > Not affiliated with United Airlines, Inc.
 
 ## Overview
 
-The Blue Board (https://theblueboard.co) is the only real-time flight tracker built exclusively for United Airlines operations. It tracks every United Airlines flight in the air on a live map updated every 30 seconds, monitors delays and cancellations at all 9 United hubs, tracks which aircraft have Starlink satellite WiFi, provides a searchable fleet database of 1,078+ aircraft, and offers operational analytics including hub-to-hub traffic flow, fleet utilization, and route patterns.
+The Blue Board (https://theblueboard.co) is the only real-time flight tracker built exclusively for United Airlines operations. It tracks every United Airlines flight in the air on a live map updated every 30 seconds, monitors delays and cancellations at all 8 United hubs plus the Tokyo-Narita gateway, tracks which aircraft have Starlink satellite WiFi, provides a searchable fleet database of 1,078+ aircraft, and offers operational analytics including hub-to-hub traffic flow, fleet utilization, and route patterns.
 
 The site is designed as a dark-themed operations dashboard, inspired by airline operations centers. It is free, community-built, and fully independent from United Airlines, Inc.
 
@@ -26,7 +30,7 @@ The site is designed as a dark-themed operations dashboard, inspired by airline 
 ### Main Dashboard (https://theblueboard.co)
 The primary interface with 6 tabs:
 
-1. **Live Ops**: Interactive map showing all 600+ airborne United flights. Click any flight for details (flight number, aircraft type, route, altitude, speed, delay status). Hub health bar at top shows on-time % at all 9 hubs. IROPS ticker shows real-time disruption alerts.
+1. **Live Ops**: Interactive map showing all 600+ airborne United flights. Click any flight for details (flight number, aircraft type, route, altitude, speed, delay status). Hub health bar at top shows on-time % across all 8 United hubs plus the Tokyo-Narita gateway. IROPS ticker shows real-time disruption alerts.
 
 2. **Schedule**: Departure and arrival schedules at any United hub. Shows flight number, destination/origin, scheduled time, actual time, delay status, aircraft type, and equipment swap alerts. Filterable by hub.
 
@@ -70,10 +74,10 @@ Each type page includes: fleet count, seat configuration tables, WiFi and IFE de
 Curated United Airlines news: fleet deliveries, route changes, lounge updates, and operations news. Each article includes original commentary, links to official sources, and cross-links to relevant hub and fleet pages on The Blue Board. Individual article pages at https://theblueboard.co/news/{slug}.
 
 ### Hubs Overview (https://theblueboard.co/hubs)
-Index page listing all 9 United Airlines hub airports with key stats (daily departures, terminals, role in network). Links to individual hub status pages.
+Index page listing the 9 airports The Blue Board tracks: United's 8 hubs plus the Tokyo-Narita gateway, with key stats (daily departures, terminals, role in network). Links to individual hub status pages.
 
 ### Individual Hub Pages (https://theblueboard.co/hubs/{iata})
-Dedicated pages for each of the 9 United hubs:
+Dedicated pages for each of the 9 airports The Blue Board tracks (United's 8 hubs plus the Tokyo-Narita gateway):
 
 - **https://theblueboard.co/hubs/ord** — Chicago O'Hare: United's largest hub, ~750 daily departures, Terminal 1 (B & C), Terminal 2 (Express). United's global headquarters.
 - **https://theblueboard.co/hubs/den** — Denver: Second-largest hub, ~540 daily departures, Concourse B. Major domestic connecting hub.
@@ -99,7 +103,7 @@ Each hub page includes: live flight count, hub overview, delay patterns and seas
 - Flight search by UA flight number (e.g., "UA 1234"), tail number (e.g., "N12345"), or airport code (e.g., "ORD")
 
 ### Hub Health Monitoring
-- Real-time on-time percentage for all 9 hubs displayed in a health bar
+- Real-time on-time percentage for all 8 United hubs plus the Tokyo-Narita gateway displayed in a health bar
 - Color-coded: green (>70% on-time), yellow (50-70%), red (<50%)
 - Based on schedule comparison — flights departing within 30 minutes of schedule count as "on-time"
 - IROPS ticker scrolls real-time disruption alerts (delays, cancellations, ground stops)

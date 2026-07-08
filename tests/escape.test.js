@@ -23,11 +23,19 @@ describe('escapeHtml', () => {
     expect(escapeHtml('<&>')).toBe('&lt;&amp;&gt;');
   });
 
-  it('returns empty string for non-strings', () => {
+  it('returns empty string for null/undefined/objects', () => {
     expect(escapeHtml(null)).toBe('');
     expect(escapeHtml(undefined)).toBe('');
-    expect(escapeHtml(123)).toBe('');
     expect(escapeHtml({})).toBe('');
+  });
+
+  // F051: fleet.json's `tot` (seat count) is a number; escapeHtml used to return '' for it,
+  // rendering the SEATS column blank for all rows. Numbers/booleans now coerce via String().
+  it('coerces numbers and booleans to their string form (bug F051)', () => {
+    expect(escapeHtml(123)).toBe('123');
+    expect(escapeHtml(0)).toBe('0');
+    expect(escapeHtml(true)).toBe('true');
+    expect(escapeHtml(false)).toBe('false');
   });
 
   it('is safe to embed as an href attribute value', () => {

@@ -22,10 +22,15 @@
     public/sitemap.xml — hub page entries
     public/hubs/       — individual hub HTML pages + cross-nav
   ═══════════════════════════════════════════════════════════════
+  NOTE: This is a static HTML file and cannot import src/data/facts.js.
+  Hub-count language ("8 hubs + NRT gateway"), Starlink counts (428 /
+  "425+"), and the fleet database count (1,078) here must be kept in
+  sync BY HAND with src/data/facts.js — the single source of truth.
+  ═══════════════════════════════════════════════════════════════
 -->
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0B1018">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E">
 <link rel="manifest" href="/manifest.json">
@@ -95,7 +100,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <div class="onboarding-features">
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📡</span><div><strong>Live Map</strong><span class="onboarding-desc">See where every United flight is right now — updated every 30 seconds</span></div></div>
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">⚠️</span><div><strong>AI Delay Prediction</strong><span class="onboarding-desc">8-signal risk scoring with AI-powered explanations — plus hub delays, cancellations, and ground stops</span></div></div>
-      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📅</span><div><strong>Schedules</strong><span class="onboarding-desc">Departures &amp; arrivals at all 9 hubs with on-time stats and equipment swap alerts</span></div></div>
+      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📅</span><div><strong>Schedules</strong><span class="onboarding-desc">Departures &amp; arrivals at all 8 United hubs plus the Tokyo-Narita gateway, with on-time stats and equipment swap alerts</span></div></div>
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">🌦</span><div><strong>Weather &amp; Hub Status</strong><span class="onboarding-desc">Conditions at every hub airport — radar, visibility, wind, and how it's affecting flights</span></div></div>
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">✈️</span><div><strong>Fleet &amp; WiFi</strong><span class="onboarding-desc">Check if your plane has Starlink WiFi, seat config, and aircraft details</span></div></div>
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📊</span><div><strong>Stats</strong><span class="onboarding-desc">Fleet utilization, route patterns, and network health — the truly nerdy stuff</span></div></div>
@@ -123,7 +128,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 <noscript>
 <div style="background:#111827;color:#e2e8f0;padding:40px;font-family:monospace;max-width:900px;margin:0 auto">
 <h2 style="text-align:center;margin-bottom:16px">The Blue Board — United Airlines Flight Tracker & Live Status</h2>
-<p>Track every United Airlines flight in real time with The Blue Board — a free, independent operations dashboard built for United frequent flyers, 1K members, and AvGeeks. See live flight positions on an interactive map updated every 30 seconds. Check delays, cancellations, and ground stops at all 9 United hubs. Look up any flight by number to see status, aircraft type, and route. Browse the full United fleet database of 1,078+ aircraft and check which planes have Starlink WiFi. View departure and arrival schedules with on-time performance stats and equipment swap alerts. Monitor weather conditions with radar, METAR observations, and FAA NAS alerts. Explore fleet utilization, route analytics, and hub-to-hub traffic patterns.</p>
+<p>Track every United Airlines flight in real time with The Blue Board — a free, independent operations dashboard built for United frequent flyers, 1K members, and AvGeeks. See live flight positions on an interactive map updated every 30 seconds. Check delays, cancellations, and ground stops at all 8 United hubs plus the Tokyo-Narita gateway. Look up any flight by number to see status, aircraft type, and route. Browse the full United fleet database of 1,078+ aircraft and check which planes have Starlink WiFi. View departure and arrival schedules with on-time performance stats and equipment swap alerts. Monitor weather conditions with radar, METAR observations, and FAA NAS alerts. Explore fleet utilization, route analytics, and hub-to-hub traffic patterns.</p>
 <h3 style="margin:20px 0 10px">United Airlines Hub Status Pages</h3>
 <nav style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
 <a href="/hubs/ord" style="color:#6BAAED">United at Chicago O'Hare (ORD)</a> ·
@@ -145,7 +150,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 </div>
 </noscript>
 <!-- SEO keyword sentence (was the brand strip; now crawlable sr-only text) -->
-<div class="sr-only">The Blue Board is an independent United Airlines flight tracker and operations dashboard with live status, hub delays, fleet data, and Starlink coverage. Use the live dashboard to check flight status, hub delays, fleet data, and Starlink availability.</div>
+<div class="sr-only" role="region" aria-label="About The Blue Board">The Blue Board is an independent United Airlines flight tracker and operations dashboard with live status, hub delays, fleet data, and Starlink coverage. Use the live dashboard to check flight status, hub delays, fleet data, and Starlink availability.</div>
 <!-- Crawlable site navigation (always in DOM regardless of popover state) -->
 <nav class="sr-only" aria-label="United Airlines hub and site navigation">
   <a href="/hubs/ord">United at Chicago O'Hare (ORD)</a>
@@ -180,10 +185,10 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 </div>
 
 <!-- TIP STRIP (floating capsule below canopy; JS toggles inline display) -->
-<div id="tip-strip" style="display:none"><span class="tip-badge">Tip</span><span class="tip-text" id="tip-text"></span><button class="tip-dismiss" data-action="dismiss-tips" aria-label="Dismiss tips">&times;</button></div>
+<div id="tip-strip" role="region" aria-label="Tip" style="display:none"><span class="tip-badge">Tip</span><span class="tip-text" id="tip-text"></span><button class="tip-dismiss" data-action="dismiss-tips" aria-label="Dismiss tips">&times;</button></div>
 
 <!-- ════════ THE CANOPY (floating top bar = #header restyled) ════════ -->
-<div id="header">
+<header id="header">
   <h1><a href="#" data-action="go-home" style="text-decoration:none;color:inherit;cursor:pointer"><span class="ua">THE BLUE BOARD</span></a> <span style="font-size:9px;color:var(--ua-muted);font-weight:400;letter-spacing:0.5px">FOR UNITED FLYERS, BY UNITED FLYERS</span></h1>
   <span class="cdiv"></span>
 
@@ -199,6 +204,10 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="ticker-wrap" role="marquee" aria-label="Flight alerts ticker">
     <div class="ticker" id="ticker" aria-live="off"></div>
   </div>
+  <!-- P2-C item 7: the rotating ticker itself is aria-live="off" (a 30s-rotating feed would
+       spam screen readers). This is the ONE polite live region, updated only when the
+       network-wide IROPS severity level changes (normal/minor/significant). -->
+  <div id="irops-status-announcer" class="sr-only" role="status" aria-live="polite"></div>
   <span class="cdiv"></span>
 
   <!-- global search in the canopy -->
@@ -218,10 +227,13 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <button id="home-hub-btn" data-action="cycle-home-hub" title="Home hub (click to change)" aria-label="Change home hub" style="font-size:10px;font-family:var(--font-ui);cursor:pointer;background:none;border:1px solid var(--ua-border);color:var(--ua-accent);padding:2px 6px;border-radius:3px">🏠 <span id="home-hub-display">—</span></button>
     <button id="onboarding-help" title="About this dashboard" aria-label="About this dashboard">?</button>
   </div>
-</div>
+</header>
 
 <!-- ════════ TAB DOCK (floating bottom = #tab-bar restyled) ════════ -->
-<nav id="tab-bar" aria-label="Dashboard navigation" role="tablist">
+<!-- role="tablist" on the inner element overrides the implicit nav landmark role, so the
+     landmark is provided by this wrapping <nav> instead (axe 'region' rule, P2-C item 2). -->
+<nav aria-label="Dashboard navigation">
+<div id="tab-bar" role="tablist">
   <button class="tab-btn" data-tab="tab-myflight" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-myflight"><span aria-hidden="true">🎫</span> MY FLIGHTS</button>
   <button class="tab-btn active" data-tab="tab-live" role="tab" tabindex="0" aria-selected="true" aria-controls="tab-live"><span aria-hidden="true">📡</span> LIVE OPS</button>
   <button class="tab-btn" data-tab="tab-schedule" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-schedule"><span aria-hidden="true">📅</span> SCHEDULE</button>
@@ -230,44 +242,53 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button class="tab-btn" data-tab="tab-weather" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-weather"><span aria-hidden="true">🌦</span> DELAYS · WEATHER · HUBS</button>
   <button class="tab-btn" data-tab="tab-analytics" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-analytics" aria-label="Stats"><span aria-hidden="true">📊</span> STATS</button>
   <button class="tab-btn" data-tab="tab-sources" role="tab" tabindex="-1" aria-selected="false" aria-controls="tab-sources"><span aria-hidden="true">ℹ️</span> SOURCES</button>
-  <span class="dockdiv"></span>
-  <!-- Legal / about / donate popover — native details element, CSP-safe (no inline JS) -->
-  <details id="legal-details">
-    <summary id="legal-btn" title="About · Legal · Donate" aria-label="About, legal and donate links">ⓘ</summary>
-    <div id="legalpop" role="menu" aria-label="About and legal">
-      <div class="ltitle">About · Legal · Support</div>
-      <div class="lgrid">
-        <a href="#" data-action="show-disclaimer" data-prevent-default="1">About</a>
-        <a href="#" data-action="show-disclaimer" data-prevent-default="1">Disclaimer</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/fleet">Fleet Database</a>
-        <a href="https://github.com/notjbg/the-blue-board/issues" target="_blank" rel="noopener noreferrer">Support / Feedback</a>
-        <a class="donate" href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer">☕ Donate</a>
-        <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer">@theblueboard</a>
-      </div>
-      <nav class="lhubs" aria-label="United Airlines Hub Pages">
-        <a href="/hubs/ord">ORD</a>
-        <a href="/hubs/den">DEN</a>
-        <a href="/hubs/iah">IAH</a>
-        <a href="/hubs/ewr">EWR</a>
-        <a href="/hubs/sfo">SFO</a>
-        <a href="/hubs/iad">IAD</a>
-        <a href="/hubs/lax">LAX</a>
-        <a href="/hubs/nrt">NRT</a>
-        <a href="/hubs/gum">GUM</a>
-        <a href="/hubs">All Hubs</a>
-        <a href="/news">News</a>
-      </nav>
-      <div class="lnote">
-        Data: <a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer">AeroDataBox</a><span class="sep">·</span><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><br>
-        Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer">Jonah Berg</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
-      </div>
-    </div>
-  </details>
+</div>
 </nav>
+<!-- Legal / about / donate popover — native details element, CSP-safe (no inline JS).
+     F065: moved out of #tab-bar (was nested inside the role="tablist" nav above, an invalid
+     ARIA child, and #tab-bar's transform made it the containing block for #legalpop's
+     position:fixed, so the popover rendered under the map instead of resolving against the
+     viewport). Kept as an independent fixed sibling right after the nav — same ids, so
+     main.js's delegated #legal-btn / #legal-details / #legalpop handlers are unaffected. -->
+<details id="legal-details">
+  <summary id="legal-btn" title="About · Legal · Donate" aria-label="About, legal and donate links">ⓘ</summary>
+  <div id="legalpop" role="menu" aria-label="About and legal">
+    <div class="ltitle">About · Legal · Support</div>
+    <!-- P3 cost-transparency meter: lazily populated by public/js/support-meter.js only when
+         this popover first opens (details "toggle" listener). Empty/hidden until then, and
+         stays empty on fetch failure or {configured:false} so the popover never regresses. -->
+    <div id="support-meter"></div>
+    <div class="lgrid">
+      <a href="#" data-action="show-disclaimer" data-prevent-default="1">About</a>
+      <a href="#" data-action="show-disclaimer" data-prevent-default="1">Disclaimer</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/fleet">Fleet Database</a>
+      <a href="https://github.com/notjbg/the-blue-board/issues" target="_blank" rel="noopener noreferrer">Support / Feedback</a>
+      <a class="donate" href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer">☕ Donate</a>
+      <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer">@theblueboard</a>
+    </div>
+    <nav class="lhubs" aria-label="United Airlines Hub Pages">
+      <a href="/hubs/ord">ORD</a>
+      <a href="/hubs/den">DEN</a>
+      <a href="/hubs/iah">IAH</a>
+      <a href="/hubs/ewr">EWR</a>
+      <a href="/hubs/sfo">SFO</a>
+      <a href="/hubs/iad">IAD</a>
+      <a href="/hubs/lax">LAX</a>
+      <a href="/hubs/nrt">NRT</a>
+      <a href="/hubs/gum">GUM</a>
+      <a href="/hubs">All Hubs</a>
+      <a href="/news">News</a>
+    </nav>
+    <div class="lnote">
+      Data: <a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer">AeroDataBox</a><span class="sep">·</span><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><br>
+      Built by <a href="https://github.com/notjbg" target="_blank" rel="noopener noreferrer">Jonah Berg</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
+    </div>
+  </div>
+</details>
 
 <!-- ════════ ATTRIBUTION (fixed micro-text, bottom-left over the map) ════════ -->
-<div id="attribution">
+<div id="attribution" role="contentinfo" aria-label="Data attribution">
   Data: <a href="https://aerodatabox.com" target="_blank" rel="noopener noreferrer">AeroDataBox</a><span class="sep">·</span><a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer">FR24</a><span class="sep">·</span><a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">AWC</a><span class="sep">·</span><a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer">FAA</a><span class="sep">·</span>Not affiliated with United Airlines, Inc.
 </div>
 
@@ -276,16 +297,16 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <button data-tab="tab-live" class="active" role="tab" aria-selected="true" aria-controls="tab-live"><span class="bnav-icon" aria-hidden="true">📡</span><span class="bnav-label">Live</span></button>
   <button data-tab="tab-weather" role="tab" aria-selected="false" aria-controls="tab-weather"><span class="bnav-icon" aria-hidden="true">🌦</span><span class="bnav-label">Weather</span></button>
   <button data-tab="tab-schedule" role="tab" aria-selected="false" aria-controls="tab-schedule"><span class="bnav-icon" aria-hidden="true">📅</span><span class="bnav-label">Schedule</span></button>
-  <button data-tab="tab-fleet" role="tab" aria-selected="false" aria-controls="tab-fleet"><span class="bnav-icon" aria-hidden="true">✈️</span><span class="bnav-label">Fleet</span></button>
+  <button data-tab="tab-myflight" role="tab" aria-selected="false" aria-controls="tab-myflight"><span class="bnav-icon" aria-hidden="true">🎫</span><span class="bnav-label">My Flights</span></button>
   <button data-tab="tab-starlink" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-starlink"><span class="bnav-icon" aria-hidden="true">🛰️</span><span class="bnav-label">Starlink</span></button>
-  <button data-tab="tab-myflight" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-myflight"><span class="bnav-icon" aria-hidden="true">🎫</span><span class="bnav-label">My Flights</span></button>
+  <button data-tab="tab-fleet" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-fleet"><span class="bnav-icon" aria-hidden="true">✈️</span><span class="bnav-label">Fleet</span></button>
   <button data-tab="tab-analytics" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-analytics"><span class="bnav-icon" aria-hidden="true">📊</span><span class="bnav-label">Stats</span></button>
   <button data-tab="tab-sources" class="bnav-overflow-item" role="tab" aria-selected="false" aria-controls="tab-sources"><span class="bnav-icon" aria-hidden="true">ℹ️</span><span class="bnav-label">Sources</span></button>
   <button id="mobile-more-btn" aria-label="More tabs" aria-expanded="false" aria-controls="mobile-more-menu"><span class="bnav-icon" aria-hidden="true">▾</span><span class="bnav-label">More</span></button>
 </nav>
 <div id="mobile-more-menu" aria-label="Additional navigation tabs">
   <button data-tab="tab-starlink"><span class="bnav-icon" aria-hidden="true">🛰️</span> Starlink</button>
-  <button data-tab="tab-myflight"><span class="bnav-icon" aria-hidden="true">🎫</span> My Flights</button>
+  <button data-tab="tab-fleet"><span class="bnav-icon" aria-hidden="true">✈️</span> Fleet</button>
   <button data-tab="tab-analytics"><span class="bnav-icon" aria-hidden="true">📊</span> Stats</button>
   <button data-tab="tab-sources"><span class="bnav-icon" aria-hidden="true">ℹ️</span> Sources</button>
 </div>
@@ -319,16 +340,16 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="ops-layout">
     <button id="mobile-sidebar-toggle" aria-label="Toggle filters">🔍 Filters ▾</button>
     <div class="sidebar" id="sidebar">
-      <h3>🏢 Hub Operations</h3>
+      <h2>🏢 Hub Operations</h2>
       <div id="hub-stats"></div>
       <button id="sidebar-filters-toggle" data-action="toggle-sidebar-filters" aria-expanded="false" aria-controls="sidebar-extra-filters" style="width:100%;background:none;border:none;border-bottom:1px solid var(--ua-border);color:var(--ua-accent);font-family:var(--font-ui);font-size:10px;padding:6px 12px;cursor:pointer;text-align:center">Filters ▾</button>
       <div id="sidebar-extra-filters">
-      <h3 style="margin-top:4px">🔍 Search</h3>
+      <h2 style="margin-top:4px">🔍 Search</h2>
       <div style="padding:8px 12px">
         <input type="text" id="search-input-side" aria-label="Sidebar flight search" placeholder="Flight #, tail, airport..." style="width:100%;background:rgba(15,23,41,.8);border:1px solid var(--ua-border);color:var(--ua-text);padding:6px 8px;border-radius:4px;font-family:var(--font-mono);font-size:10px">
-        <div id="search-results-side" aria-label="Sidebar search results" style="max-height:400px;overflow-y:auto;margin-top:4px"></div>
+        <div id="search-results-side" role="region" aria-label="Sidebar search results" style="max-height:400px;overflow-y:auto;margin-top:4px"></div>
       </div>
-      <h3>📊 Phase Breakdown</h3>
+      <h2>📊 Phase Breakdown</h2>
       <div id="phase-stats" style="padding:8px 12px"></div>
       </div>
     </div>
@@ -374,7 +395,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="card" style="margin-bottom:0;padding:12px 16px">
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:12px">
-        <h3 style="font-size:10px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1.5px;margin:0">📅 Flight Schedule</h3>
+        <h2 style="font-size:10px;color:var(--ua-accent);text-transform:uppercase;letter-spacing:1.5px;margin:0">📅 Flight Schedule</h2>
         <div id="sched-day-btns" style="display:flex;gap:4px">
           <button class="sched-day-btn" data-day="-1">Yesterday</button>
           <button class="sched-day-btn active" data-day="0">Today</button>
@@ -462,17 +483,17 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <div style="font-size:24px;margin-bottom:8px">📅</div>
       Select a hub and click Refresh to load schedule data
     </div>
-    <div class="fleet-table-wrap" style="display:none" id="sched-table-wrap">
+    <div class="fleet-table-wrap" style="display:none" id="sched-table-wrap" tabindex="0" aria-label="Schedule table, scrollable region">
       <table id="sched-table">
         <thead>
           <tr>
-            <th scope="col" data-sort="time" style="cursor:pointer;min-width:100px">Time ↕</th>
-            <th scope="col" data-sort="flight" style="cursor:pointer">Flight ↕</th>
-            <th scope="col" data-sort="route" style="cursor:pointer;min-width:140px">Route</th>
-            <th scope="col" data-sort="aircraft" style="cursor:pointer">Aircraft</th>
-            <th scope="col" data-sort="reg" style="cursor:pointer">Reg</th>
+            <th scope="col" data-sort="time" tabindex="0" style="cursor:pointer;min-width:100px">Time ↕</th>
+            <th scope="col" data-sort="flight" tabindex="0" style="cursor:pointer">Flight ↕</th>
+            <th scope="col" data-sort="route" tabindex="0" style="cursor:pointer;min-width:140px">Route</th>
+            <th scope="col" data-sort="aircraft" tabindex="0" style="cursor:pointer">Aircraft</th>
+            <th scope="col" data-sort="reg" tabindex="0" style="cursor:pointer">Reg</th>
             <th scope="col">Term / Gate</th>
-            <th scope="col" data-sort="status" style="cursor:pointer;min-width:130px">Status ↕</th>
+            <th scope="col" data-sort="status" tabindex="0" style="cursor:pointer;min-width:130px">Status ↕</th>
             <th scope="col" style="min-width:80px">Delay / Risk</th>
             <th scope="col">Fleet</th>
             <th scope="col"><span aria-hidden="true">👁️</span><span class="sr-only">Watch</span></th>
@@ -577,22 +598,22 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <button class="refresh-btn" data-action="refresh-fleet-data">Refresh</button>
     </div>
     <!-- All Aircraft table -->
-    <div class="fleet-table-wrap fleet-view-panel active" id="fleet-view-all">
+    <div class="fleet-table-wrap fleet-view-panel active" id="fleet-view-all" tabindex="0" aria-label="Fleet table, scrollable region">
       <table id="fleet-table" aria-label="United Airlines fleet database">
-        <thead><tr><th scope="col" data-sort="r" aria-sort="none">Reg</th><th scope="col" data-sort="t" aria-sort="none">Type</th><th scope="col" data-sort="a" aria-sort="none">AC#</th><th scope="col" data-sort="c">Config</th><th scope="col" data-sort="tot" aria-sort="none">Seats</th><th scope="col" data-sort="w">WiFi</th><th scope="col" data-sort="i">IFE</th><th scope="col" data-sort="d" aria-sort="none">Del</th><th scope="col" data-sort="s">Status</th><th scope="col">SL</th></tr></thead>
+        <thead><tr><th scope="col" data-sort="r" aria-sort="none" tabindex="0">Reg</th><th scope="col" data-sort="t" aria-sort="none" tabindex="0">Type</th><th scope="col" data-sort="a" aria-sort="none" tabindex="0">AC#</th><th scope="col" data-sort="c" tabindex="0">Config</th><th scope="col" data-sort="tot" aria-sort="none" tabindex="0">Seats</th><th scope="col" data-sort="w" tabindex="0">WiFi</th><th scope="col" data-sort="i" tabindex="0">IFE</th><th scope="col" data-sort="d" aria-sort="none" tabindex="0">Del</th><th scope="col" data-sort="s" tabindex="0">Status</th><th scope="col">SL</th></tr></thead>
         <tbody id="fleet-tbody"></tbody>
       </table>
       <div class="fleet-zero-results" id="fleet-zero-results" style="display:none">No aircraft match your filters. <button class="fleet-clear-filters" data-action="fleet-clear-filters">Clear Filters</button></div>
     </div>
     <!-- Airborne Now table -->
-    <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-airborne" style="display:none">
+    <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-airborne" style="display:none" tabindex="0" aria-label="Airborne fleet table, scrollable region">
       <table id="airborne-table" aria-label="Currently airborne United aircraft">
-        <thead><tr><th scope="col" data-airborne-sort="reg">Reg</th><th scope="col" data-airborne-sort="type">Type</th><th scope="col" data-airborne-sort="flight">Flight</th><th scope="col">Route</th><th scope="col" data-airborne-sort="alt">Alt</th><th scope="col" data-airborne-sort="phase">Phase</th><th scope="col">SL</th><th scope="col"></th></tr></thead>
+        <thead><tr><th scope="col" data-airborne-sort="reg" tabindex="0" aria-sort="none">Reg</th><th scope="col" data-airborne-sort="type" tabindex="0" aria-sort="none">Type</th><th scope="col" data-airborne-sort="flight" tabindex="0" aria-sort="none">Flight</th><th scope="col">Route</th><th scope="col" data-airborne-sort="alt" tabindex="0" aria-sort="none">Alt</th><th scope="col" data-airborne-sort="phase" tabindex="0" aria-sort="none">Phase</th><th scope="col">SL</th><th scope="col"></th></tr></thead>
         <tbody id="airborne-tbody"></tbody>
       </table>
     </div>
     <!-- Special Aircraft table -->
-    <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-special" style="display:none">
+    <div class="fleet-table-wrap fleet-view-panel" id="fleet-view-special" style="display:none" tabindex="0" aria-label="Special fleet table, scrollable region">
       <div id="special-aircraft-content"><div class="fleet-loading-text">Loading special aircraft...</div></div>
     </div>
   </div>
@@ -671,13 +692,13 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <button id="sl-filter-new" class="sl-new-toggle" aria-pressed="false" type="button">★ New this week</button>
       <span id="sl-filtered-count" class="fleet-filtered-count"></span>
     </div>
-    <div class="fleet-table-wrap sl-table-wrap">
+    <div class="fleet-table-wrap sl-table-wrap" tabindex="0" aria-label="Starlink fleet table, scrollable region">
       <table id="sl-table" aria-label="Starlink-equipped aircraft">
         <thead><tr>
-          <th scope="col" data-sl-sort="tail">Tail</th>
-          <th scope="col" data-sl-sort="fleet">Fleet</th>
-          <th scope="col" data-sl-sort="type">Type</th>
-          <th scope="col" data-sl-sort="operator">Operator</th>
+          <th scope="col" data-sl-sort="tail" tabindex="0" aria-sort="none">Tail</th>
+          <th scope="col" data-sl-sort="fleet" tabindex="0" aria-sort="none">Fleet</th>
+          <th scope="col" data-sl-sort="type" tabindex="0" aria-sort="none">Type</th>
+          <th scope="col" data-sl-sort="operator" tabindex="0" aria-sort="none">Operator</th>
           <th scope="col" id="sl-status-th">Status</th>
           <th scope="col" id="sl-next-th">Next Flight</th>
         </tr></thead>
@@ -697,7 +718,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       <details class="sl-verify-details" open>
         <summary class="sl-verify-summary">Disputed claims <span class="sl-verify-summary-hint">— overruled by official verification</span></summary>
         <p class="sl-verify-note">These tails were claimed as Starlink in the community spreadsheet, but official united.com verification overruled the claim. Upstream <strong>already excludes</strong> them from the served fleet, so The Blue Board's equipped count is not affected. Verified equipment may be Viasat or Thales.</p>
-        <div class="fleet-table-wrap sl-verify-table-wrap">
+        <div class="fleet-table-wrap sl-verify-table-wrap" tabindex="0" aria-label="Starlink verification table, scrollable region">
           <table class="sl-verify-table" aria-label="Disputed Starlink claims">
             <thead><tr>
               <th scope="col">Tail</th>
@@ -719,7 +740,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <div class="wx-layout">
     <div class="wx-map-panel">
       <div class="wx-hero">
-        <h3 id="radar-title">🌧 NEXRAD Radar</h3>
+        <h2 id="radar-title">🌧 NEXRAD Radar</h2>
         <div id="radar-map" role="application" aria-label="NEXRAD weather radar map"></div>
       </div>
       <div class="wx-legend">
@@ -757,32 +778,32 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 </div>
 
 <!-- TAB 4: ANALYTICS -->
-<div class="tab-content" id="tab-analytics" role="tabpanel" aria-label="Analytics and statistics">
+<div class="tab-content" id="tab-analytics" role="tabpanel" aria-label="Analytics and statistics" tabindex="0">
   <div class="metric-row" id="analytics-metrics"></div>
   <div class="two-col">
     <div class="card">
-      <h3>✈️ Live Fleet Utilization</h3>
+      <h2>✈️ Live Fleet Utilization</h2>
       <div style="font-size:9px;color:var(--ua-muted);margin-bottom:8px">Airborne now vs. total fleet · updates every 30s</div>
       <div id="util-chart"></div>
     </div>
     <div class="card">
-      <h3>🛫 Airborne by Flight Phase</h3>
+      <h2>🛫 Airborne by Flight Phase</h2>
       <div style="font-size:9px;color:var(--ua-muted);margin-bottom:8px">Current phase distribution · updates every 30s</div>
       <div id="phase-chart"></div>
     </div>
   </div>
   <div class="card">
-    <h3>🔥 Hub-to-Hub Flow Matrix</h3>
+    <h2>🔥 Hub-to-Hub Flow Matrix</h2>
     <div style="font-size:9px;color:var(--ua-muted);margin-bottom:8px">Active flights between UA hubs · darker = more traffic</div>
     <div id="hub-matrix" style="overflow-x:auto"></div>
   </div>
   <div class="two-col">
     <div class="card">
-      <h3>📈 Top Routes Right Now</h3>
+      <h2>📈 Top Routes Right Now</h2>
       <div id="route-heatmap" style="min-height:200px"></div>
     </div>
     <div class="card">
-      <h3>📅 Average Fleet Age by Type</h3>
+      <h2>📅 Average Fleet Age by Type</h2>
       <div id="avg-age-chart"></div>
     </div>
   </div>
@@ -834,7 +855,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <div class="source-icon">🌦</div>
     <div>
       <div class="source-name">Aviation Weather — AWC <span class="freshness fresh-live">LIVE</span></div>
-      <div class="source-desc">METAR observations and TAF forecasts for hub airports.</div>
+      <div class="source-desc">METAR observations for hub airports.</div>
       <a class="source-link" href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">aviationweather.gov →</a>
     </div>
   </div>
@@ -944,6 +965,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 
 <script defer src="/_vercel/insights/script.js"></script>
 <script defer src="/js/sw-register.js"></script>
+<script defer src="/js/support-meter.js"></script>
 <!-- Structured data (moved from head to avoid blocking resource discovery) -->
 <script type="application/ld+json">
 {
@@ -1008,7 +1030,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   "isPartOf": {"@id": "https://theblueboard.co/#website"},
   "featureList": [
     "Real-time United Airlines flight tracking map with 600+ flights updated every 30 seconds",
-    "Live delay and cancellation alerts for all 9 United hubs",
+    "Live delay and cancellation alerts for all 8 United hubs plus the Tokyo-Narita gateway",
     "Ground stop and FAA NAS status monitoring",
     "Departure and arrival schedules for ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, GUM",
     "Equipment swap detection and alerts",
@@ -1038,7 +1060,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       "name": "How do I check if my United Airlines flight is on time?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The Blue Board shows real-time status for every United Airlines flight. Use the search bar to look up your flight number (e.g., UA 1234) and see its current position, delays, and estimated arrival. The hub health bar at the top shows at-a-glance delay conditions at all 9 United hubs."
+        "text": "The Blue Board shows real-time status for every United Airlines flight. Use the search bar to look up your flight number (e.g., UA 1234) and see its current position, delays, and estimated arrival. The hub health bar at the top shows at-a-glance delay conditions across all 8 United hubs plus the Tokyo-Narita gateway."
       }
     },
     {
@@ -1054,7 +1076,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       "name": "Are there delays at United Airlines hubs today?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The Blue Board monitors delays, cancellations, and ground stops at all 9 United hubs (Chicago O'Hare, Denver, Houston, Newark, San Francisco, Dulles, Los Angeles, Tokyo Narita, and Guam) in real time. The hub health bar shows on-time performance, and the IROPS monitor breaks down disruption types at each hub."
+        "text": "The Blue Board monitors delays, cancellations, and ground stops at United's 8 hubs (Chicago O'Hare, Denver, Houston, Newark, San Francisco, Dulles, Los Angeles, and Guam) plus the Tokyo-Narita gateway in real time. The hub health bar shows on-time performance, and the IROPS monitor breaks down disruption types at each hub."
       }
     },
     {
@@ -1086,7 +1108,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       "name": "Is United Airlines delayed today?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The Blue Board shows real-time delay conditions at all 9 United Airlines hubs. The hub health bar at the top of the dashboard displays on-time performance percentages and cancellation rates for ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM. Tap any hub to see its full schedule with delay counts, ground stops, and weather conditions affecting operations."
+        "text": "The Blue Board shows real-time delay conditions across United's 8 hubs plus the Tokyo-Narita gateway. The hub health bar at the top of the dashboard displays on-time performance percentages and cancellation rates for ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM. Tap any hub to see its full schedule with delay counts, ground stops, and weather conditions affecting operations."
       }
     },
     {
@@ -1105,7 +1127,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   "@context": "https://schema.org",
   "@type": "Dataset",
   "name": "United Airlines Live Flight & Fleet Data",
-  "description": "Real-time dataset of United Airlines flight positions, delays, cancellations, on-time performance across 9 hubs, and fleet information including 1,078+ aircraft with Starlink WiFi status, seat configurations, and equipment details. Updated every 30 seconds.",
+  "description": "Real-time dataset of United Airlines flight positions, delays, cancellations, on-time performance across all 8 United hubs plus the Tokyo-Narita gateway, and fleet information including 1,078+ aircraft with Starlink WiFi status, seat configurations, and equipment details. Updated every 30 seconds.",
   "url": "https://theblueboard.co",
   "license": "https://theblueboard.co",
   "creator": {"@type": "Person", "name": "Jonah Berg", "url": "https://github.com/notjbg"},

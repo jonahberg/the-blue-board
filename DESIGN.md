@@ -48,7 +48,7 @@ The Blue Board uses a dark NOC (Network Operations Center) aesthetic with cockpi
 | `--ua-border-subtle` | `#172236` | Lighter borders for table rows, inner dividers. |
 | `--ua-text` | `#E2E8F0` | Primary text. High contrast on dark backgrounds. |
 | `--ua-muted` | `#94A3B8` | Secondary text: dates, metadata, labels, subtitles. |
-| `--ua-dim` | `#64748B` | Tertiary text: placeholder, disabled, micro-labels. |
+| `--ua-dim` | `#7C8DA6` | Tertiary text: placeholder, disabled, micro-labels. Lightened 2026-07-08 from `#64748B` (see Decisions Log) — the old value measured 3.44–4.01:1 against panel backgrounds while being used for real informational text. |
 | `--ua-accent` | `#6BAAED` | Links, interactive text, hover states. Slightly deeper than the old `#8ab4f8` — more intentional, less washed out. |
 | `--ua-amber` | `#C4A35A` | **NEW.** Cockpit instrument amber. Featured stat values, highlight borders, hover warmth, premium callouts. Use sparingly — this is the personality color. |
 | `--ua-amber-soft` | `rgba(196, 163, 90, 0.12)` | Amber background tint for badges and hover states. |
@@ -62,7 +62,20 @@ The Blue Board uses a dark NOC (Network Operations Center) aesthetic with cockpi
 - **Restrained** — blue primary + amber secondary + deep neutrals. Color is meaningful, never decorative.
 - The amber secondary (`--ua-amber`) is borrowed from cockpit instrument lighting. Warm amber against cool blue is a classic aviation palette that no competitor uses. It gives the dashboard soul.
 - **Amber usage rules:** Stat values on featured cards, `border-left` on highlight boxes, hover warmth on interactive elements, section labels. **NOT** buttons (use `--ua-blue`), **NOT** large backgrounds (too heavy), **NOT** body text.
+- **`--ua-blue` is never text.** `#005DAA` on the dark panel backgrounds measures ~2.6:1 — nowhere close to 4.5:1 — so it must stay confined to CTAs, active/pressed states, borders, and decorative fills (bar-chart fills, map lines). Any stat value, label, or other small text that would otherwise be blue should use `--ua-amber` (mid-range/featured values) or `--ua-text`/`--ua-dim` (neutral values) instead.
 - Neutrals shifted from generic slate-gray to atmospheric blue-black. Background `#0B1018`, panel `#111A27`, border `#1E2940` — all carry a subtle blue tint that makes the dark theme feel intentional rather than default.
+
+#### Contrast against panel backgrounds
+The ratios in the Accessibility section below are quoted against `--ua-dark` (`#0B1018`), the page background. Most dashboard text actually sits on `--ua-panel` (`#111A27`) or `--ua-panel-elevated` (`#152032`), which are lighter, so text tokens must clear 4.5:1 against those too, not just against `--ua-dark`:
+
+| Token | vs `--ua-panel-elevated` (#152032) | vs `--ua-panel` (#111A27) |
+|-------|-------------------------------------|----------------------------|
+| `--ua-text` (#E2E8F0) | 13.26:1 | 14.19:1 |
+| `--ua-muted` (#94A3B8) | 6.38:1 | 6.82:1 |
+| `--ua-dim` (#7C8DA6) | 4.84:1 | 5.18:1 |
+| `--ua-amber` (#C4A35A) | 6.80:1 | 7.27:1 |
+
+`--ua-dim` is the tightest token in the palette by design (it's the "tertiary" tier) — any new dark surface it's used against should be spot-checked at ≥4.6:1 to leave margin.
 
 ### Dark mode
 This is a dark-only product. No light mode. `color-scheme: dark` on `<html>`.
@@ -147,6 +160,7 @@ Single breakpoint at **600px**.
 - No emoji overload. One functional emoji per label maximum.
 - **No Inter.** Satoshi for headings/nav, DM Sans for body. Inter is the "I didn't choose a font" font.
 - **No amber overuse.** Amber is the personality color — if it's everywhere, it's nowhere. Stat values, highlight borders, section labels. That's it.
+- **No `--ua-blue` as text.** It fails contrast (~2.6:1) on every dark panel background in this system — CTAs, active states, borders, and decorative fills only.
 
 ## Decisions Log
 
@@ -158,3 +172,5 @@ Single breakpoint at **600px**.
 | 2026-03-19 | Neutral warmth shift | Background/panel/border shifted from generic slate to atmospheric blue-black. Panels get subtle gradient depth. |
 | 2026-03-19 | Accent blue refinement | `#8ab4f8` → `#6BAAED`. Less washed out, more intentional. |
 | 2026-03-19 | Highlight borders to amber | Featured/highlight `border-left` changed from `--ua-blue` to `--ua-amber`. Blue is for interactive; amber is for emphasis. |
+| 2026-07-08 | `--ua-dim` lightened `#64748B` → `#7C8DA6` | Persona/a11y review (axe color-contrast) found `--ua-dim` measured 3.44–4.01:1 against panel backgrounds while being used for real informational text (Starlink meta labels, NAS details, as-of stamps, hub codes) — not just the "disabled/placeholder" role its doc entry implied. New value clears 4.84:1 on `--ua-panel-elevated` (the darkest surface it appears on), 5.18:1 on `--ua-panel`. |
+| 2026-07-08 | `--ua-blue` banned as text color | Same review found `--ua-blue` used as 9–10px stat-value text on the Stats tab (2.61:1, fails 4.5:1). Blue was always meant for CTAs/active states per the color-approach section above, never body/stat text — codified as an explicit anti-pattern and fixed the two call sites (`util-chart`, `phase-chart` in `main.js`) to use `--ua-amber` for mid-range values instead. |

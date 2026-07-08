@@ -35,6 +35,19 @@ export function buildEmailFooterHtml(mode: EmailFooterMode): string {
   const line = 'font-size:11px;color:#6b7280;margin:6px 0 0;text-align:center;line-height:1.6;';
   const link = 'color:#4a90d9;text-decoration:underline;';
 
+  const unsubscribeLink =
+    mode === 'broadcast'
+      ? `<a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="${link}">unsubscribe here</a>`
+      : `<a href="mailto:${EMAIL_CONTACT}?subject=unsubscribe" style="${link}">unsubscribe here</a>`;
+
+  // Lightweight double-opt-in substitute (P2-B item 6a): we send the welcome email on the same
+  // request that recorded the signup, with no separate confirmation step. Full double opt-in is
+  // out of scope, but a courtesy line covering the "someone typed my email by mistake / signed
+  // me up without asking" case is cheap and honest — and it reuses the SAME real unsubscribe
+  // mechanism as the line below (mailto "unsubscribe" for transactional sends, Resend's one-click
+  // link for broadcasts), so the "unsubscribe here" it offers actually works.
+  const didntSignUp = `Didn't sign up? Ignore this email and you won't hear from us again — or ${unsubscribeLink}.`;
+
   const unsubscribe =
     mode === 'broadcast'
       ? `<a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="${link}">Unsubscribe</a> anytime — one click, no questions asked.`
@@ -47,6 +60,7 @@ export function buildEmailFooterHtml(mode: EmailFooterMode): string {
 
   return `
   <div style="margin-top:28px;padding-top:16px;border-top:1px solid #1a2035;">
+    <p style="${line}">${didntSignUp}</p>
     <p style="${line}">${unsubscribe}</p>
     <p style="${line}"><a href="${PRIVACY_URL}" style="${link}">Privacy Policy</a></p>${postal}
   </div>`;

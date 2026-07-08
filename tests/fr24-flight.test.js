@@ -210,6 +210,7 @@ describe('getClientIp (FR24)', () => {
 // paid FR24 Official API and must refuse cleanly when SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false.
 import { vi, beforeEach, afterEach } from 'vitest';
 import handler from '../api/fr24-flight.js';
+import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
 
 function createRes() {
   return {
@@ -227,6 +228,8 @@ describe('fr24-flight official-FR24 kill switch', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     process.env.FR24_API_TOKEN = 'test-token';
+    // F038: keeps a 402 recorded by one test from blocking the shared quota check in the next.
+    resetMirroredQuotaBlock();
   });
 
   afterEach(() => {

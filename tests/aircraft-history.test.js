@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler, { normalizeSegments } from '../api/aircraft-history.js';
+import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
 
 function createRes() {
   return {
@@ -30,6 +31,9 @@ describe('aircraft-history API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     process.env.FR24_API_TOKEN = 'test-token';
+    // F038: a 402 test below records the shared cross-instance quota block; without resetting it
+    // here, that block leaks into every subsequent test in this file.
+    resetMirroredQuotaBlock();
   });
 
   // --- Method / validation ---
@@ -139,6 +143,9 @@ describe('aircraft-history API', () => {
     for (const status of [402, 403, 429]) {
       vi.restoreAllMocks();
       process.env.FR24_API_TOKEN = 'test-token';
+      // F038: the 402 sub-iteration below now records the shared quota block; reset it before each
+      // sub-iteration so it doesn't short-circuit the 403/429 cases that follow in this same test.
+      resetMirroredQuotaBlock();
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: false,
         status,
@@ -152,6 +159,42 @@ describe('aircraft-history API', () => {
       expect(res.body.success).toBe(false);
       expect(res.body.upstreamStatus).toBe(status);
     }
+  });
+
+  // F038: this endpoint used to gate solely on isOfficialFr24Enabled() and never consulted (or
+  // recorded) the shared cross-instance 402 quota block that api/schedule.ts already honours.
+  it('skips the FR24 call and returns 503 while the shared quota block is active', async () => {
+    const { persistQuotaBlock } = await import('../api/_cost-state.js');
+    await persistQuotaBlock(Date.now() + 60_000, 'test-induced block');
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(503);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('records the shared quota block when FR24 responds 402', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 402,
+      text: async () => 'credit limit reached',
+    });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.upstreamStatus).toBe(402);
+
+    // A second call (even to a different registration) must now be blocked without hitting FR24
+    // again — the whole point of the shared block.
+    fetchSpy.mockClear();
+    const res2 = createRes();
+    await handler(makeReq(), res2);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(res2.statusCode).toBe(503);
   });
 
   it('returns 504 on fetch timeout (AbortError)', async () => {
@@ -287,6 +330,9 @@ describe('aircraft-history official-FR24 kill switch', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     process.env.FR24_API_TOKEN = 'test-token';
+    // F038: a 402 test below records the shared cross-instance quota block; without resetting it
+    // here, that block leaks into every subsequent test in this file.
+    resetMirroredQuotaBlock();
   });
 
   afterEach(() => {

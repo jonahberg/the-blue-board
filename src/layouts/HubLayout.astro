@@ -8,6 +8,8 @@ const iata = data.iata;
 const iataLower = iata.toLowerCase();
 const variant = data.variant;
 const airport = data.airportSchema;
+// P2-B item 5: per-hub OG image (scripts/generate-og.py) instead of the shared og-image.png
+const ogImage = `https://theblueboard.co/og/og-hub-${iataLower}.jpg`;
 
 // Build Airport schema with optional icaoCode
 const airportSchemaObj: Record<string, any> = {
@@ -50,7 +52,7 @@ airportSchemaObj.url = airport.url;
 <meta property="og:description" content={data.ogDescription}>
 <meta property="og:url" content={`https://theblueboard.co/hubs/${iataLower}`}>
 <meta property="og:site_name" content="The Blue Board">
-<meta property="og:image" content="https://theblueboard.co/og-image.png">
+<meta property="og:image" content={ogImage}>
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content={data.ogImageAlt}>
@@ -58,7 +60,7 @@ airportSchemaObj.url = airport.url;
 <meta name="twitter:creator" content="@theblueboard">
 <meta name="twitter:title" content={data.twitterTitle}>
 <meta name="twitter:description" content={data.twitterDescription}>
-<meta name="twitter:image" content="https://theblueboard.co/og-image.png">
+<meta name="twitter:image" content={ogImage}>
 <meta name="twitter:site" content="@theblueboard">
 
 <!-- Schema: BreadcrumbList -->
