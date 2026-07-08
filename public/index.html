@@ -254,6 +254,10 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   <summary id="legal-btn" title="About · Legal · Donate" aria-label="About, legal and donate links">ⓘ</summary>
   <div id="legalpop" role="menu" aria-label="About and legal">
     <div class="ltitle">About · Legal · Support</div>
+    <!-- P3 cost-transparency meter: lazily populated by public/js/support-meter.js only when
+         this popover first opens (details "toggle" listener). Empty/hidden until then, and
+         stays empty on fetch failure or {configured:false} so the popover never regresses. -->
+    <div id="support-meter"></div>
     <div class="lgrid">
       <a href="#" data-action="show-disclaimer" data-prevent-default="1">About</a>
       <a href="#" data-action="show-disclaimer" data-prevent-default="1">Disclaimer</a>
@@ -961,6 +965,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 
 <script defer src="/_vercel/insights/script.js"></script>
 <script defer src="/js/sw-register.js"></script>
+<script defer src="/js/support-meter.js"></script>
 <!-- Structured data (moved from head to avoid blocking resource discovery) -->
 <script type="application/ld+json">
 {

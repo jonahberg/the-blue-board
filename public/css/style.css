@@ -1329,3 +1329,23 @@ table,thead th,tbody td,.stat-val,.metric-val,.big-number,.ticker,.ticker-item,.
   font-size:12px;font-weight:600;text-decoration:none;
 }
 @media(max-width:600px){.bmac-toast{left:12px;right:12px;bottom:12px;max-width:none}}
+
+/* === P3: cost-transparency meter — #legalpop's "what it costs to keep this free" widget ===
+   Lazily rendered by public/js/support-meter.js into #support-meter, above the existing .donate
+   link so it powers the ask. Mono labels per DESIGN.md ("Data/metadata" row: JetBrains Mono,
+   10-11px). Thin bar uses --ua-blue fill on --ua-border track; crosses to --ua-amber past 85%
+   used (a "heads up, getting tight" state — not an error red). Empty until populated; adds
+   nothing to layout when #support-meter has no children. */
+#support-meter:empty{display:none}
+.sm-wrap{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--ua-border)}
+.sm-row+.sm-row{margin-top:6px}
+.sm-row-label{
+  display:flex;justify-content:space-between;gap:8px;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.3px;color:var(--ua-muted);
+  margin-bottom:3px;
+}
+.sm-bar{height:4px;border-radius:2px;background:var(--ua-border);overflow:hidden}
+.sm-bar-fill{height:100%;border-radius:2px;background:var(--ua-blue);transition:width .3s ease-out}
+.sm-bar-fill.sm-bar-fill-warn{background:var(--ua-amber)}
+.sm-note{margin-top:8px;font-family:var(--font-mono);font-size:9px;line-height:1.5;color:var(--ua-dim)}
+@media (prefers-reduced-motion:reduce){.sm-bar-fill{transition:none}}

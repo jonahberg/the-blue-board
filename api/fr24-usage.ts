@@ -16,6 +16,31 @@ const isRateLimited = createRateLimiter('fr24-usage', 10);
 
 let usageCache: { data: any; ts: number } | null = null;
 
+// MINIMAL EXPORT (added for api/support-stats.ts): the raw upstream fetch, with no auth/caching
+// of its own — support-stats.ts is a separate, publicly-cached endpoint that only ever derives a
+// coarse rounded percentage from the result and never re-exposes this raw shape. This function
+// does NOT weaken the CRON_SECRET gate above; it is just the fetch call factored out so it isn't
+// duplicated. Callers must still guard on FR24_API_TOKEN being present themselves.
+export async function fetchFr24UsageRaw(): Promise<any> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const resp = await fetch(`${FR24_BASE}/api/usage`, {
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${process.env.FR24_API_TOKEN}`,
+        'Accept': 'application/json',
+        'Accept-Version': 'v1',
+        'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
+      },
+    });
+    if (!resp.ok) throw new Error(`FR24 usage API returned ${resp.status}`);
+    return await resp.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function corsHeaders(req: VercelRequest): Record<string, string> {
   const origin = req.headers?.origin || '';
   const allowed = origin === 'https://theblueboard.co' || /^http:\/\/localhost(:\d+)?$/.test(origin as string);
