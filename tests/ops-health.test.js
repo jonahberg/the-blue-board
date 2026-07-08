@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveOpsHealth, extractHubPrograms } from '../src/lib/ops-health.js';
+import { deriveOpsHealth, extractHubPrograms, hubProgramMarker } from '../src/lib/ops-health.js';
 
 const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
 
@@ -81,5 +81,48 @@ describe('deriveOpsHealth', () => {
   it('degrades gracefully with no inputs at all (old cached payloads)', () => {
     expect(deriveOpsHealth({}).level).toBe('normal');
     expect(deriveOpsHealth().level).toBe('normal');
+  });
+});
+
+describe('hubProgramMarker (F046/F076: chip severity blends FAA programs)', () => {
+  it('returns null when no program is active', () => {
+    expect(hubProgramMarker({ EWR: {} }, 'EWR')).toBeNull();
+    expect(hubProgramMarker({}, 'EWR')).toBeNull();
+    expect(hubProgramMarker(undefined, 'EWR')).toBeNull();
+    expect(hubProgramMarker({ EWR: null }, 'EWR')).toBeNull();
+  });
+
+  it('flags a ground stop as red with a color-independent marker', () => {
+    const m = hubProgramMarker({ EWR: { groundStop: true } }, 'EWR');
+    expect(m.severity).toBe('red');
+    expect(m.marker).toBe('⛔');
+  });
+
+  it('detects a ground stop via programs[].type', () => {
+    const m = hubProgramMarker({ EWR: { programs: [{ type: 'ground_stop' }] } }, 'EWR');
+    expect(m.severity).toBe('red');
+  });
+
+  it('flags a GDP as amber', () => {
+    const m = hubProgramMarker({ ORD: { groundDelay: true } }, 'ORD');
+    expect(m.severity).toBe('amber');
+    expect(m.marker).toBe('⚠');
+  });
+
+  it('flags a departure-delay program as amber (previously ignored by the chips)', () => {
+    const m = hubProgramMarker({ EWR: { programs: [{ type: 'departure_delay', minDelay: 46, maxDelay: 180 }] } }, 'EWR');
+    expect(m.severity).toBe('amber');
+  });
+
+  it('a ground stop outranks a co-listed departure delay (red beats amber)', () => {
+    const m = hubProgramMarker({
+      EWR: { programs: [{ type: 'departure_delay' }, { type: 'ground_stop', endTime: '1049Z' }] },
+    }, 'EWR');
+    expect(m.severity).toBe('red');
+    expect(m.label).toBe('Ground stop');
+  });
+
+  it('closure is red', () => {
+    expect(hubProgramMarker({ SFO: { closure: true } }, 'SFO').severity).toBe('red');
   });
 });

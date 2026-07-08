@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { firstFutureIndex, nowDividerIndex, NOW_GRACE_SECONDS } from '../src/lib/board-now.js';
+import { firstFutureIndex, nowDividerIndex, NOW_GRACE_SECONDS, effectiveRowTime } from '../src/lib/board-now.js';
 
 const NOW = 1_800_000_000; // arbitrary anchor
 
@@ -53,5 +53,49 @@ describe('nowDividerIndex', () => {
 
   it('skips the divider on an empty board', () => {
     expect(nowDividerIndex([], NOW)).toBe(-1);
+  });
+});
+
+describe('effectiveRowTime (F075: held-flight divider placement)', () => {
+  it('uses scheduled time when there is no real or estimated time', () => {
+    expect(effectiveRowTime({ scheduled: NOW - 3600 })).toBe(NOW - 3600);
+  });
+
+  it('keeps the scheduled anchor once a real time exists (departed rows stay put)', () => {
+    // A flight that pushed back late (real 2h after schedule) still anchors on scheduled,
+    // preserving the pre-fix behavior for resolved rows.
+    expect(effectiveRowTime({ scheduled: NOW - 7200, real: NOW - 3600 })).toBe(NOW - 7200);
+  });
+
+  it('floats a held flight (past schedule, estimated future, no real) down to its estimate', () => {
+    // The bug: scheduled 2h ago → sorted above NOW as if resolved. With max(sched, est)
+    // the row anchors to its future estimate and falls below the divider.
+    const held = { scheduled: NOW - 7200, estimated: NOW + 1800 };
+    expect(effectiveRowTime(held)).toBe(NOW + 1800);
+  });
+
+  it('ignores an estimate earlier than schedule', () => {
+    expect(effectiveRowTime({ scheduled: NOW + 600, estimated: NOW - 600 })).toBe(NOW + 600);
+  });
+
+  it('is defensive against missing/zero fields', () => {
+    expect(effectiveRowTime()).toBe(0);
+    expect(effectiveRowTime({})).toBe(0);
+    expect(effectiveRowTime({ scheduled: 0, estimated: 0, real: 0 })).toBe(0);
+  });
+
+  it('a held flight now lands below the NOW divider (end-to-end with the divider math)', () => {
+    // Board sorted by scheduled departure ascending: an early departed flight, then a held
+    // flight scheduled in the past (est future), then genuinely-future rows.
+    const rows = [
+      { scheduled: NOW - 7200, real: NOW - 7000 },  // departed, resolved
+      { scheduled: NOW - 3600, estimated: NOW + 2400 }, // HELD 1h past schedule, est +40m
+      { scheduled: NOW + 3600 },                    // future
+    ];
+    const times = rows.map(effectiveRowTime);
+    // Before the fix, times were [-7200, -3600, +3600] → divider at index 2, leaving the
+    // held flight above NOW. Now the held row's effective time is future, so the divider
+    // moves up to index 1 and the held flight renders below "── NOW ──".
+    expect(nowDividerIndex(times, NOW)).toBe(1);
   });
 });

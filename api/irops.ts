@@ -76,7 +76,29 @@ interface WorstDelay {
 // likely-canceled rows vanish from the IROPS index and the Delays tab cancellation counts.
 const CANCELED_STATUSES = new Set(['canceled', 'cancelled', 'canceled_uncertain']);
 
-export function computeMetrics(flightsByHub: Record<string, any[]>) {
+// F073: a flight "held on the ground" during a ground stop keeps a pre-departure
+// status (scheduled/delayed) with NO real departure while its scheduled time slides
+// into the past. The old code counted it toward totalFlights but never toward
+// delayed30/60, so the IROPS index UNDERstated disruption exactly during ground stops
+// (the "MINOR DISRUPTION at 13.6 vs the ≥15 SIGNIFICANT threshold" case). Treat such
+// an overdue flight as delayed by the minutes elapsed since its scheduled departure —
+// the same time-inference philosophy the board uses for "Departed*" rows.
+//
+// A flight is NOT overdue once it has left (departed/en-route/landed/diverted) or is
+// canceled — those are terminal/resolved and counted elsewhere. We deliberately keep a
+// fixed 30/60-min bucketing (rather than importing the schedule pipeline's disruption-
+// scaled inference grace) so this module stays self-contained; the buckets already
+// mirror the >30/>60 real-delay thresholds below. Returns 0 when not overdue.
+function overdueDelayMinutes(fl: any, status: string, nowSec: number): number {
+  if (CANCELED_STATUSES.has(status)) return 0;
+  if (status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted') return 0;
+  if (fl.time?.real?.departure) return 0;
+  const schedT = fl.time?.scheduled?.departure;
+  if (!schedT || !nowSec || nowSec <= schedT) return 0;
+  return Math.round((nowSec - schedT) / 60);
+}
+
+export function computeMetrics(flightsByHub: Record<string, any[]>, nowSec: number = Math.floor(Date.now() / 1000)) {
   let allFlights: any[] = [];
   const hubMetrics: Record<string, HubMetric> = {};
 
@@ -88,6 +110,13 @@ export function computeMetrics(flightsByHub: Record<string, any[]>) {
       const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
       if (CANCELED_STATUSES.has(status)) { hubMetrics[hub].cancellations++; continue; }
       if (status === 'diverted') hubMetrics[hub].diversions++;
+
+      // F073: held/overdue flights count toward delayed30/60 (numerator only; total is
+      // untouched so the denominator semantics are unchanged). overdueDelayMinutes returns
+      // 0 for anything that has already departed, so operated flights are unaffected.
+      const overdueMin = overdueDelayMinutes(fl, status, nowSec);
+      if (overdueMin > 30) hubMetrics[hub].delayed30++;
+      if (overdueMin > 60) hubMetrics[hub].delayed60++;
 
       const hasOperated = status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted';
       const realDep = fl.time?.real?.departure;
@@ -134,14 +163,33 @@ export function computeMetrics(flightsByHub: Record<string, any[]>) {
         const dest = fl.airport?.destination?.code?.iata || '?';
         worstDelays.push({ ident, route: `${orig}→${dest}`, delay: delayMin });
       }
+    } else {
+      // F073: held/overdue flights (past schedule, not yet departed) — the core of a
+      // ground stop. overdueDelayMinutes is 0 for anything already departed, so this
+      // never double-counts a flight already scored above.
+      const overdueMin = overdueDelayMinutes(fl, status, nowSec);
+      if (overdueMin > 30) delayed30++;
+      if (overdueMin > 60) delayed60++;
+      if (overdueMin > 15) {
+        const ident = fl.identification?.number?.default || '?';
+        const orig = fl.airport?.origin?.code?.iata || '?';
+        const dest = fl.airport?.destination?.code?.iata || '?';
+        worstDelays.push({ ident, route: `${orig}→${dest}`, delay: overdueMin });
+      }
     }
   }
 
   worstDelays.sort((a, b) => b.delay - a.delay);
 
   const totalFlights = allFlights.length;
+  // F017: delayed30 is CUMULATIVE (every delay >30m, including those >60m) so the UI's
+  // ">30m" / ">60m" cards stay backward-compatible and truthful. The SCORE, however,
+  // must weight each flight once: a 61-min delay is a single 2-point event, not 1+2=3
+  // (which had equalled a cancellation). Split into an exclusive 30–60m bucket (×1) and
+  // the 60m+ bucket (×2).
+  const delayed30to60 = Math.max(0, delayed30 - delayed60);
   const score = totalFlights > 0
-    ? ((cancellations * 3 + delayed60 * 2 + delayed30 + diversions * 2) / totalFlights * 100)
+    ? ((cancellations * 3 + delayed60 * 2 + delayed30to60 + diversions * 2) / totalFlights * 100)
     : 0;
 
   return {

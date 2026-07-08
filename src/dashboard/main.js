@@ -1,6 +1,6 @@
 import { injectSpeedInsights } from '@vercel/speed-insights';
 import { computeDelayRiskModel, HUB_COORDINATES, HUB_RISK_PROFILES } from '../lib/delay-risk.js';
-import { formatDelayExplainFAAStatus, getScheduleRiskContext } from '../lib/delay-explain-context.js';
+import { formatDelayExplainFAAStatus, getScheduleRiskContext, describeFaaProgram } from '../lib/delay-explain-context.js';
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi } from '../lib/fleet-utils.js';
@@ -12,8 +12,8 @@ import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
 import { formatDataAge, dataAgeSeverity } from '../lib/data-age.js';
 import { parseFr24Feed, applyFeedResult, feedFreshness, nextFeedRetryDelay } from '../lib/feed-health.js';
 import { formatDelayMinutes, delayColorVar } from '../lib/delay-format.js';
-import { firstFutureIndex, nowDividerIndex } from '../lib/board-now.js';
-import { deriveOpsHealth } from '../lib/ops-health.js';
+import { firstFutureIndex, nowDividerIndex, effectiveRowTime } from '../lib/board-now.js';
+import { deriveOpsHealth, hubProgramMarker } from '../lib/ops-health.js';
 import { displayScheduleStatus } from '../lib/status-display.js';
 import { computeScheduleStatCounts } from '../lib/board-stats.js';
 import { recordSightings, lookupReg, pruneLedger, deserializeLedger, normalizeFlightNum } from '../lib/reg-ledger.js';
@@ -3790,6 +3790,7 @@ async function initWeatherTab() {
   // Index FAA data by airport code
   const faaIndex = buildFaaIndex(faaData);
   faaDelayIndex = faaIndex;
+  renderHubHealthBar(); // F046/F076: chips blend FAA programs — refresh once programs land
 
   // Build cards + map markers
   let cardsHtml = '';
@@ -3817,23 +3818,24 @@ async function initWeatherTab() {
     // Status line: FAA delays take priority, then ops impact, then normal
     let faaLine;
     if (hasDelay) {
-      // Build enhanced FAA status with programs data
+      // Build enhanced FAA status with programs data. F074: every program type is now
+      // formatted via the shared describeFaaProgram() helper (previously only ground_stop
+      // and ground_delay were special-cased, so a concurrent departure_delay fell through
+      // to its bare reason string and its delay window was lost). Upstream fields are
+      // escapeHtml()'d here (F030 hygiene while we're in this line).
       const statusParts = [];
       if (faa.programs && faa.programs.length) {
         for (const prog of faa.programs) {
-          let text = prog.reason || prog.type || 'Delay';
-          if (prog.type === 'ground_stop') {
-            text = 'Ground Stop';
-            if (prog.endTime) text += ` until ${prog.endTime}`;
-            if (prog.probabilityOfExtension) text += ` · ext: ${prog.probabilityOfExtension}`;
-          } else if (prog.type === 'ground_delay' && prog.avgDelay) {
-            text = `GDP (avg ${prog.avgDelay}m)`;
-          }
-          if (prog.trend) text += ` ${trendIndicator(prog.trend)}`;
-          statusParts.push(text);
+          const { label, window, extras } = describeFaaProgram(prog);
+          // Unknown program type with no mapped label → fall back to its raw reason/type.
+          let text = (label === 'Delay' && !prog.type)
+            ? String(prog.reason || prog.type || 'Delay')
+            : `${label}${window}`;
+          if (extras.length) text += ` ${extras.join(' · ')}`;
+          statusParts.push(escapeHtml(text));
         }
       } else {
-        statusParts.push(...faa.delays.map(d => d.reason || d.type || 'Delay'));
+        statusParts.push(...faa.delays.map(d => escapeHtml(d.reason || d.type || 'Delay')));
       }
       faaLine = `<div class="hub-faa delay">⚠ ${statusParts.join(', ')}</div>`;
     } else if (ops.level === 'severe') {
@@ -3959,6 +3961,7 @@ async function initWeatherTab() {
 
       // Rebuild FAA index
       faaDelayIndex = buildFaaIndex(freshFaa);
+      renderHubHealthBar(); // F046/F076: keep chips' FAA-program blend fresh
 
       // Update weatherOpsByHub + hub card colors/statuses
       hubs.forEach(hub => {
@@ -5109,8 +5112,9 @@ function renderScheduleTable() {
     const schedRiskWxOrig = weatherOpsByHub[depHub];
     const schedRiskWxDest = weatherOpsByHub[arrHub];
     const schedRiskIrops = iropsHubData[depHub];
+    const schedRiskIropsStr = iropsContextStr(schedRiskIrops);
     const schedRiskFaa = formatDelayExplainFAAStatus(depHub, arrHub, faaDelayIndex);
-    const riskCell = dRisk ? `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(statusDisp.text)}" data-risk-label="${dRisk.label}" data-risk-score="${dRisk.score}" data-risk-factors="${escapeHtml(dRisk.factors.join('|'))}" data-hub="${escapeHtml(depHub)}"${schedRiskOtp !== undefined ? ' data-otp="' + schedRiskOtp + '"' : ''}${schedRiskWxOrig ? ' data-weather="' + escapeHtml(schedRiskWxOrig.level + (schedRiskWxOrig.reasons.length ? ': ' + schedRiskWxOrig.reasons.join(', ') : '')) + '"' : ''}${schedRiskWxDest ? ' data-dest-weather="' + escapeHtml(schedRiskWxDest.level + (schedRiskWxDest.reasons.length ? ': ' + schedRiskWxDest.reasons.join(', ') : '')) + '"' : ''}${schedRiskIrops ? ' data-irops="' + escapeHtml(schedRiskIrops.cancellationRate + '% cancelled, ' + (schedRiskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${schedRiskFaa ? ' data-faa-status="' + escapeHtml(schedRiskFaa) + '"' : ''} style="background:${dRisk.color}20;color:${dRisk.color};cursor:pointer" title="Click for AI analysis">RISK: ${dRisk.label}</span>` : '';
+    const riskCell = dRisk ? `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${escapeHtml(ident)}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(statusDisp.text)}" data-risk-label="${dRisk.label}" data-risk-score="${dRisk.score}" data-risk-factors="${escapeHtml(dRisk.factors.join('|'))}" data-hub="${escapeHtml(depHub)}"${schedRiskOtp !== undefined ? ' data-otp="' + schedRiskOtp + '"' : ''}${schedRiskWxOrig ? ' data-weather="' + escapeHtml(schedRiskWxOrig.level + (schedRiskWxOrig.reasons.length ? ': ' + schedRiskWxOrig.reasons.join(', ') : '')) + '"' : ''}${schedRiskWxDest ? ' data-dest-weather="' + escapeHtml(schedRiskWxDest.level + (schedRiskWxDest.reasons.length ? ': ' + schedRiskWxDest.reasons.join(', ') : '')) + '"' : ''}${schedRiskIropsStr ? ' data-irops="' + escapeHtml(schedRiskIropsStr) + '"' : ''}${schedRiskFaa ? ' data-faa-status="' + escapeHtml(schedRiskFaa) + '"' : ''} style="background:${dRisk.color}20;color:${dRisk.color};cursor:pointer" title="Click for AI analysis">RISK: ${dRisk.label}</span>` : '';
 
     // DELAY / RISK cell (#2): facts beat predictions. A row with a known
     // actual/estimated delta shows the REAL delay (right-aligned tabular figures,
@@ -5161,7 +5165,17 @@ function renderScheduleTable() {
   // returns -1 when there are no past rows to divide from.
   schedLastFutureIdx = -1;
   if (schedCurrentDay === 0 && schedSortCol === 'time' && schedSortAsc) {
-    const rowTimes = sorted.map(f => (schedCurrentDir === 'departures' ? f.time?.scheduled?.departure : f.time?.scheduled?.arrival) || 0);
+    // F075: anchor each row against the divider by its EFFECTIVE expected time —
+    // max(scheduled, estimated) when no real time exists — so a flight held on the
+    // ground (scheduled in the past, not yet departed) floats down below "── NOW ──"
+    // instead of masquerading as resolved above it. Rows with a real time keep the
+    // scheduled anchor (unchanged). The TIME-column sort order is untouched.
+    const dep = schedCurrentDir === 'departures';
+    const rowTimes = sorted.map(f => effectiveRowTime({
+      scheduled: dep ? f.time?.scheduled?.departure : f.time?.scheduled?.arrival,
+      real: dep ? f.time?.real?.departure : f.time?.real?.arrival,
+      estimated: dep ? f.time?.estimated?.departure : f.time?.estimated?.arrival,
+    }));
     schedLastFutureIdx = firstFutureIndex(rowTimes, now);
     const divIdx = nowDividerIndex(rowTimes, now);
     if (divIdx >= 0) {
@@ -5565,28 +5579,54 @@ let hubHealthServerHubs = new Set();
 // Latest IROPS severity index (0-100) from either computation path — feeds the
 // header ticker so it can never say "normal" during a red IROPS night.
 let lastIropsScore = null;
+// F002: the server /api/irops response (all 9 hubs, one direction, one day, held-flight
+// aware) is the AUTHORITATIVE IROPS writer — the same "single writer" rule v1.5.26 applied
+// to OTP. Once the server has answered, the client-side updateIrops() recompute (partial
+// boards, mixing directions/days, estimated-time delays) must NOT overwrite the panel or
+// lastIropsScore; it may only fill the gap when the server value is absent (e.g. /api/irops
+// failed), and it labels itself "estimated" when it does.
+let iropsServerValuePresent = false;
 
 // Single renderer for the hub health bar — reads from hubHealthData (shared state).
 // Both IROPS and schedule paths write to hubHealthData, then call this.
 function renderHubHealthBar() {
   const bar = document.getElementById('hub-health-bar');
   const hubs = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
+  // F046/F076: chip severity is the WORSE of on-time% and any active FAA program at the
+  // hub, so a ground-stopped hub can't render 🟢 while the ticker says "Disrupted". A
+  // color-independent marker (⛔/⚠) is shown when a program is active (DESIGN.md: status
+  // is never color-alone), e.g. "EWR ⛔ 84%".
+  const tooltip = '% of operated departures within 30 min of schedule, blended with active FAA programs. 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50% · ⛔ ground stop/closure (→red) · ⚠ ground delay/departure program (→amber)';
   if (!Object.keys(hubHealthData).length) {
-    bar.innerHTML = '<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">% of operated departures within 30 min of schedule. 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span><span style="color:var(--ua-muted)">Load schedule data for hub health</span>';
+    bar.innerHTML = `<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">${tooltip}</span></span><span style="color:var(--ua-muted)">Load schedule data for hub health</span>`;
     return;
   }
+  const SEV_RANK = { red: 3, amber: 2, green: 1 };
+  const SEV_COLOR = { red: '#ef4444', amber: '#f59e0b', green: '#22c55e' };
   const homeHub = getHomeAirport();
-  let html = '<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">% of operated departures within 30 min of schedule. 🟢 &gt;70% · 🟡 50–70% · 🔴 &lt;50%</span></span>';
+  let html = `<span class="hh-label">Hub Health</span><span class="hh-explainer">ON-TIME %</span><span class="hh-info">?<span class="hh-tooltip">${tooltip}</span></span>`;
   hubs.forEach((hub, i) => {
     const isHome = hub === homeHub;
     const homeStyle = isHome ? ';border:1px solid var(--ua-accent);border-radius:3px;padding:2px 6px' : '';
     const pct = hubHealthData[hub];
+    const prog = hubProgramMarker(faaDelayIndex, hub);
+    const otpSev = pct === undefined ? null : (pct > 70 ? 'green' : pct >= 50 ? 'amber' : 'red');
+    // Blend: worst of OTP severity and FAA-program severity.
+    let sev = otpSev;
+    if (prog && (!sev || SEV_RANK[prog.severity] > SEV_RANK[sev])) sev = prog.severity;
+    const codeLink = `<a href="/hubs/${hub.toLowerCase()}" class="hh-code" style="color:inherit;text-decoration:none" title="${hub} Hub Guide">${isHome ? '🏠 ' : ''}${hub}</a>`;
+    // When a program is active, its glyph replaces the plain severity circle (and is
+    // colored by the blended severity); otherwise show the on-time circle.
+    const progMark = prog ? `<span title="${escapeHtml(prog.label)}" style="color:${SEV_COLOR[sev]}">${prog.marker}</span> ` : '';
     if (pct === undefined) {
-      html += `<span class="hh-hub" style="${homeStyle}"><a href="/hubs/${hub.toLowerCase()}" class="hh-code" style="color:inherit;text-decoration:none" title="${hub} Hub Guide">${isHome ? '🏠 ' : ''}${hub}</a> <span style="color:var(--ua-muted)">⚪ —</span></span>`;
+      // No OTP reading yet. If a program is active, still surface it in its severity color.
+      const valSpan = prog
+        ? `<span style="color:${SEV_COLOR[sev]}">—</span>`
+        : '<span style="color:var(--ua-muted)">⚪ —</span>';
+      html += `<span class="hh-hub" style="${homeStyle}">${codeLink} ${progMark}${valSpan}</span>`;
     } else {
-      const emoji = pct > 70 ? '🟢' : pct >= 50 ? '🟡' : '🔴';
-      const color = pct > 70 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
-      html += `<span class="hh-hub" style="${homeStyle}"><a href="/hubs/${hub.toLowerCase()}" class="hh-code" style="color:inherit;text-decoration:none" title="${hub} Hub Guide">${isHome ? '🏠 ' : ''}${hub}</a> ${emoji} <span class="hh-pct" style="color:${color}">${pct}%</span></span>`;
+      const emoji = prog ? '' : (sev === 'green' ? '🟢' : sev === 'amber' ? '🟡' : '🔴');
+      html += `<span class="hh-hub" style="${homeStyle}">${codeLink} ${progMark}${emoji ? emoji + ' ' : ''}<span class="hh-pct" style="color:${SEV_COLOR[sev]}">${pct}%</span></span>`;
     }
     if (i < hubs.length - 1) html += '<span class="hh-sep">│</span>';
   });
@@ -5681,6 +5721,20 @@ function buildFaaIndex(faaResponse) {
   return index;
 }
 let iropsHubData = {};    // Global IROPS cancellation/delay rates per hub — for delay risk engine
+
+// Compact IROPS descriptor for the delay-risk badge's AI context. F007/F015: when the
+// hub cleared the small-sample floor we report the rates; below the floor we expose the
+// raw cancellation COUNT (never a rate a single flight inflated), and say so. Returns ''
+// when there is nothing meaningful to report.
+function iropsContextStr(irops) {
+  if (!irops) return '';
+  if (irops.cancellationRate !== null && irops.cancellationRate !== undefined) {
+    return `${irops.cancellationRate}% cancelled, ${irops.delayed60Rate || 0}% delayed 60min+`;
+  }
+  const c = irops.cancellations || 0;
+  if (c > 0) return `${c} of ${irops.total || '?'} cancelled (small sample — rate withheld)`;
+  return '';
+}
 let aircraftJourneyCache = {};  // { reg: { segments, ts } } — aircraft history cache (5min TTL)
 let connectionIndex = {};  // { flightNum: { connFlight, hub, minutes, risk } } — connection context for AI
 
@@ -5771,6 +5825,7 @@ async function _doPreloadWeatherAndFAA() {
     // Parse FAA data (covers ALL airports with active delays, not just hubs)
     if (faaResult.status === 'fulfilled' && Array.isArray(faaResult.value)) {
       faaDelayIndex = buildFaaIndex(faaResult.value);
+      renderHubHealthBar(); // F046/F076: chips blend FAA programs — refresh once programs land
     }
 
     if (document.getElementById('tab-schedule')?.classList.contains('active') && schedAllFlights.length) {
@@ -5783,12 +5838,23 @@ async function _doPreloadWeatherAndFAA() {
 }
 
 function updateIrops() {
+  // F002 single-writer rule: the server value is authoritative. Once /api/irops has
+  // populated the panel + lastIropsScore, this client recompute must not touch either —
+  // it exists only to fill the gap when the server never answered.
+  if (iropsServerValuePresent) return;
+
   const content = document.getElementById('irops-content');
-  // Gather all schedule data
+  // Gather schedule data. F002: restrict the fallback to today's DEPARTURES boards only —
+  // the old path mixed directions and days (double-counting the same physical flight from
+  // an arrivals board, and mixing tomorrow's schedule into a "today" index). One board per
+  // hub, one direction, one day keeps the fallback's denominator honest.
   let allSchedFlts = [];
   for (const [key, flights] of Object.entries(schedRawByHub)) {
     if (!Array.isArray(flights)) continue;
-    const dir = key.split('-')[1] === 'arrivals' ? 'arrivals' : 'departures';
+    const parts = key.split('-');
+    const dir = parts[1] === 'arrivals' ? 'arrivals' : 'departures';
+    const day = parts[2];
+    if (dir !== 'departures' || day !== '0') continue;
     for (const fl of flights) allSchedFlts.push({ fl, dir, key });
   }
 
@@ -5828,7 +5894,11 @@ function updateIrops() {
     return d.groundStop || (d.delays && d.delays.some(dl => (dl.type||'') === 'ground_stop'));
   }).length;
 
-  const score = totalFlights > 0 ? ((cancellations * 3 + delayed60 * 2 + delayed30 + diversions * 2) / totalFlights * 100).toFixed(1) : 0;
+  // F017: weight each flight once — 60m+ delays are ×2, the exclusive 30–60m bucket is ×1
+  // (a 61-min delay must not score 1+2=3, i.e. as much as a cancellation). delayed30 stays
+  // cumulative so the ">30m" card below remains truthful.
+  const delayed30to60 = Math.max(0, delayed30 - delayed60);
+  const score = totalFlights > 0 ? ((cancellations * 3 + delayed60 * 2 + delayed30to60 + diversions * 2) / totalFlights * 100).toFixed(1) : 0;
   const scoreCls = score < 5 ? 'low' : score < 15 ? 'med' : 'high';
   const scoreLabel = score < 5 ? 'NORMAL OPERATIONS' : score < 15 ? 'MINOR DISRUPTION' : 'SIGNIFICANT DISRUPTION';
 
@@ -5840,7 +5910,9 @@ function updateIrops() {
   let html = '<div class="irops-bar">';
   // Plain-language severity instead of a bare 0-100 index (owner Jul 4 2026: the number
   // wasn't helpful). The numeric score is still computed below for the ticker's gating.
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">Severity from weighted cancellations, 60min+ delays and diversions per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
+  // F002: this is the client FALLBACK (server /api/irops unavailable) \u2014 mark it "estimated"
+  // so it never masquerades as the authoritative network-wide figure.
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="irops-partial-tag" style="font-size:9px;color:var(--ua-muted);margin-left:6px;font-family:var(--font-mono)">est \u00b7 loaded boards</span><span class="hh-info">?<span class="hh-tooltip">Estimated from the schedule boards loaded in your session (server IROPS feed unavailable). Severity weights cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${cancellations}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -5897,14 +5969,24 @@ async function _doFetchIropsFromAPI() {
 }
 
 function renderIropsFromAPI(data) {
-  // Store IROPS hub data globally for delay risk engine
+  // Store IROPS hub data globally for delay risk engine.
+  // F007/F015: a cancellation RATE from a tiny sample is a lie — one cancelled GUM flight
+  // on a 4-flight board is not a "25% cancellation rate" to feed the delay-risk engine
+  // (up to 12 pts) and the AI explanation. Apply the same small-sample floor the OTP path
+  // uses just below: only publish a rate when total >= 10 OR cancellations >= 3. Below the
+  // floor, expose the raw counts (so consumers can still say "1 of 4 cancelled") but leave
+  // the rates null so every rate threshold degrades to "signal omitted", never a zero or a
+  // small-sample spike.
   if (data.hubMetrics) {
     for (const [hub, m] of Object.entries(data.hubMetrics)) {
       if (m && m.total > 0) {
+        const cancellations = m.cancellations || 0;
+        const hasRateFloor = m.total >= 10 || cancellations >= 3;
         iropsHubData[hub] = {
-          cancellationRate: Math.round(((m.cancellations || 0) / m.total) * 100),
-          delayed60Rate: Math.round(((m.delayed60 || 0) / m.total) * 100),
+          cancellations,
           total: m.total,
+          cancellationRate: hasRateFloor ? Math.round((cancellations / m.total) * 100) : null,
+          delayed60Rate: hasRateFloor ? Math.round(((m.delayed60 || 0) / m.total) * 100) : null,
         };
       }
     }
@@ -5936,8 +6018,8 @@ function renderIropsFromAPI(data) {
 
   // NOTE: All values here are from the IROPS API (internal, not user input).
   let html = '<div class="irops-bar">';
-  // Same scale/label + tooltip treatment as the client-computed IROPS bar above.
-  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">Severity from weighted cancellations, 60min+ delays and diversions per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
+  // Authoritative network-wide index (all 9 hubs). Tooltip states the exact F017 weights.
+  html += `<span class="irops-bar-item"><span class="irops-score ${scoreCls}" style="font-size:12px;padding:2px 8px">${scoreLabel}</span><span class="hh-info">?<span class="hh-tooltip">Network-wide severity across all United hubs, weighting cancellations (\u00d73), diversions (\u00d72), 60min+ delays (\u00d72) and 30\u201360min delays (\u00d71) \u2014 including flights held past schedule \u2014 per 100 scheduled flights: Normal \u00b7 Minor \u00b7 Significant.</span></span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
   html += `<span class="irops-bar-item"><span class="irops-bar-val" style="color:var(--ua-red)">${data.cancellations || '—'}</span><span class="irops-bar-label">Cancellations</span></span>`;
   html += '<span class="irops-bar-sep">│</span>';
@@ -5952,6 +6034,9 @@ function renderIropsFromAPI(data) {
 
   content.innerHTML = html;
 
+  // F002: mark the server value present so the client fallback (updateIrops) stops
+  // overwriting the panel / lastIropsScore. From here, this is the single writer.
+  iropsServerValuePresent = true;
   lastIropsScore = Number(score);
   updateTicker(); // ticker health derives from the IROPS index — keep it in lockstep
 
@@ -6522,13 +6607,14 @@ function buildMyFlightCard(watched, td) {
   const riskWx = weatherOpsByHub[origCode];
   const riskWxDest = weatherOpsByHub[destCode];
   const riskIrops = iropsHubData[origCode];
+  const riskIropsStr = iropsContextStr(riskIrops);
   const riskFaaStatus = formatDelayExplainFAAStatus(origCode, destCode, faaDelayIndex);
   const riskConn = connectionIndex[flightNum];
   const riskConnStr = riskConn ? (riskConn.isOutbound
     ? 'Connecting from ' + riskConn.connFlight + ' via ' + riskConn.hub + ', ' + riskConn.minutes + 'min layover (' + riskConn.risk + ')'
     : 'Connects to ' + riskConn.connFlight + ' ' + riskConn.hub + '\u2192' + (riskConn.dest || '?') + ', ' + riskConn.minutes + 'min layover (' + riskConn.risk + ')') : '';
   if (risk && (resolvedStatus === 'scheduled' || resolvedStatus === 'delayed' || resolvedStatus === '' || !resolvedStatus)) {
-    riskHtml = `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIrops ? ' data-irops="' + escapeHtml(riskIrops.cancellationRate + '% cancelled, ' + (riskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${riskFaaStatus ? ' data-faa-status="' + escapeHtml(riskFaaStatus) + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''} style="background:${risk.color}20;color:${risk.color};cursor:pointer" title="Click for AI analysis">${risk.label} RISK</span>`;
+    riskHtml = `<span class="delay-risk-badge" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIropsStr ? ' data-irops="' + escapeHtml(riskIropsStr) + '"' : ''}${riskFaaStatus ? ' data-faa-status="' + escapeHtml(riskFaaStatus) + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''} style="background:${risk.color}20;color:${risk.color};cursor:pointer" title="Click for AI analysis">${risk.label} RISK</span>`;
   } else if (riskNA && (resolvedStatus === 'scheduled' || resolvedStatus === 'delayed' || resolvedStatus === '' || !resolvedStatus)) {
     riskHtml = `<span class="delay-risk-badge" style="background:rgba(100,116,139,.15);color:var(--ua-muted);cursor:default" title="Not enough live data to score this flight">RISK N/A</span>`;
   }
@@ -6558,7 +6644,7 @@ function buildMyFlightCard(watched, td) {
     <div class="mf-actions">
       ${liveFlight ? `<button data-action="focus-flight" data-icao24="${escapeHtml(liveFlight.icao24)}">View on Map</button>` : ''}
       ${reg ? `<button data-action="aircraft-detail" data-reg="${escapeHtml(reg)}">Aircraft Details</button>` : ''}
-      ${risk ? `<button class="delay-explain-btn" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIrops ? ' data-irops="' + escapeHtml(riskIrops.cancellationRate + '% cancelled, ' + (riskIrops.delayed60Rate || 0) + '% delayed 60min+') + '"' : ''}${riskFaaStatus ? ' data-faa-status="' + escapeHtml(riskFaaStatus) + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''}>Explain Delay Risk</button>` : ''}
+      ${risk ? `<button class="delay-explain-btn" data-action="explain-delay" data-flight="${flightNum}" data-route="${escapeHtml(origCode + '\u2192' + destCode)}" data-status="${escapeHtml(resolvedStatus || 'scheduled')}" data-risk-label="${risk.label}" data-risk-score="${risk.score}" data-risk-factors="${escapeHtml(risk.factors.join('|'))}" data-hub="${escapeHtml(origCode)}"${riskOtp !== undefined ? ' data-otp="' + riskOtp + '"' : ''}${riskWx ? ' data-weather="' + escapeHtml(riskWx.level + (riskWx.reasons.length ? ': ' + riskWx.reasons.join(', ') : '')) + '"' : ''}${riskWxDest ? ' data-dest-weather="' + escapeHtml(riskWxDest.level + (riskWxDest.reasons.length ? ': ' + riskWxDest.reasons.join(', ') : '')) + '"' : ''}${riskIropsStr ? ' data-irops="' + escapeHtml(riskIropsStr) + '"' : ''}${riskFaaStatus ? ' data-faa-status="' + escapeHtml(riskFaaStatus) + '"' : ''}${riskConnStr ? ' data-connection="' + escapeHtml(riskConnStr) + '"' : ''}${inboundStr ? ' data-inbound="' + escapeHtml(inboundStr) + '"' : ''}>Explain Delay Risk</button>` : ''}
       <button data-action="toggle-watch-flight" data-flight="${flightNum}" data-route="${escapeHtml(watched.route)}" data-status="${escapeHtml(watched.status)}" data-stop-prop="1">Unwatch</button>
     </div>
   </div>`;

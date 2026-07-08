@@ -25,6 +25,29 @@ export function firstFutureIndex(timesSec, nowSec, graceSec = NOW_GRACE_SECONDS)
 }
 
 /**
+ * Effective time (unix seconds) to place a row against the NOW divider (F075).
+ *
+ * The divider was anchored to scheduled time only, so a flight held on the ground during
+ * a GDP/ground stop — hours past its scheduled push, but not yet departed — sat ABOVE
+ * "── NOW ──" as if it had already resolved, precisely when it matters most. The fix:
+ * when the flight has NO real (out/off) time yet, anchor it to max(scheduled, estimated),
+ * so a delayed-but-not-departed flight floats down to its expected time and lands below
+ * the divider. A row that HAS a real time keeps the existing behavior (scheduled anchor)
+ * so already-departed rows stay put. The TIME-column sort order is unchanged; this only
+ * affects where the divider falls.
+ *
+ * @param {{scheduled?:number, real?:number, estimated?:number}} times  unix seconds (0/null = unknown).
+ * @returns {number} effective unix seconds (0 when nothing is known).
+ */
+export function effectiveRowTime({ scheduled = 0, real = 0, estimated = 0 } = {}) {
+  const sched = Number(scheduled) > 0 ? Number(scheduled) : 0;
+  const realT = Number(real) > 0 ? Number(real) : 0;
+  if (realT > 0) return sched; // real time exists → keep current (scheduled-anchored) behavior
+  const est = Number(estimated) > 0 ? Number(estimated) : 0;
+  return Math.max(sched, est);
+}
+
+/**
  * Where to insert the "── NOW ──" divider row, or -1 when a divider makes no sense:
  *  - no future rows (whole board is in the past — e.g. late-night today board), or
  *  - no past rows (divider would sit uselessly at the very top — e.g. tomorrow board

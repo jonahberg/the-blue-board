@@ -97,16 +97,81 @@ describe('computeMetrics', () => {
     expect(result.score).toBe(200);
   });
 
-  it('weights 60-min delays at 2x', () => {
+  it('weights 60-min delays at 2x (F017: no longer double-counted)', () => {
     const t = 1700000000;
     const flights = [
       makeFlight('ORD', { schedDep: t, realDep: t + 3700, status: 'landed' }), // 61 min late
     ];
     const result = computeMetrics({ ORD: flights });
-    // delayed30 = 1, delayed60 = 1 => score = (2 + 1) / 1 * 100 = 300
+    // Reported fields stay cumulative (delayed30 counts every delay >30m, incl. >60m)
+    // so the UI's ">30m"/">60m" cards remain truthful.
     expect(result.delayed30).toBe(1);
     expect(result.delayed60).toBe(1);
-    expect(result.score).toBe(300);
+    // F017: the score weights each flight once. A 61-min delay is a single 60m+ event
+    // (×2), NOT 1 (>30) + 2 (>60) = 3. score = (delayed60*2 + (delayed30-delayed60)*1) / 1 * 100
+    //       = (1*2 + 0*1) / 1 * 100 = 200 (previously an incorrect 300 — equal to a cancellation).
+    expect(result.score).toBe(200);
+  });
+
+  it('F017: a 45-min delay contributes 1 point, a 61-min delay contributes 2', () => {
+    const t = 1700000000;
+    // Two flights: one 45m late (30–60 bucket), one 61m late (60+ bucket).
+    const result = computeMetrics({
+      ORD: [
+        makeFlight('ORD', { schedDep: t, realDep: t + 2700, status: 'landed' }), // 45 min
+        makeFlight('ORD', { schedDep: t, realDep: t + 3700, status: 'landed' }), // 61 min
+      ],
+    });
+    expect(result.delayed30).toBe(2); // both are >30m (cumulative)
+    expect(result.delayed60).toBe(1); // only one is >60m
+    // score = (60m+ *2 + 30–60 *1) / 2 * 100 = (1*2 + 1*1) / 2 * 100 = 150
+    expect(result.score).toBe(150);
+  });
+
+  it('F073: held flights during a ground stop push the score across SIGNIFICANT', () => {
+    // Seeded-scenario shape: a hub under a ground stop with flights still on the ground,
+    // scheduled hours ago, no real departure, status still "scheduled". The OLD code scored
+    // 0 for these (they lacked a real departure timestamp) while inflating totalFlights —
+    // undercounting the disruption exactly when it matters.
+    const t = 1700000000;
+    const now = t + 2 * 3600; // "now" is 2 hours past the scheduled departures
+    const flights = [];
+    // 10 held flights (scheduled 2h ago, never departed) + 20 uneventful on-time flights.
+    for (let i = 0; i < 10; i++) {
+      flights.push(makeFlight('EWR', { schedDep: t, realDep: null, status: 'scheduled', flightNum: `UA${200 + i}` }));
+    }
+    for (let i = 0; i < 20; i++) {
+      flights.push(makeFlight('EWR', { schedDep: t, realDep: t, status: 'landed', flightNum: `UA${300 + i}` }));
+    }
+    const oldStyle = computeMetrics({ EWR: flights }, t); // "now" == schedule → nothing overdue yet
+    expect(oldStyle.delayed60).toBe(0);
+    expect(oldStyle.score).toBeLessThan(15); // MINOR — the bug's behaviour
+
+    const result = computeMetrics({ EWR: flights }, now);
+    // Each held flight is >60m overdue → counts in both cumulative buckets.
+    expect(result.delayed30).toBe(10);
+    expect(result.delayed60).toBe(10);
+    // score = (delayed60*2 + (delayed30-delayed60)*1) / total * 100 = (10*2 + 0) / 30 * 100 ≈ 66.7
+    expect(result.score).toBeGreaterThanOrEqual(15); // SIGNIFICANT
+    // Held flights also surface in worstDelays with their overdue magnitude.
+    expect(result.worstDelays.length).toBeGreaterThan(0);
+    expect(result.worstDelays[0].delay).toBeGreaterThanOrEqual(120);
+  });
+
+  it('F073: does not treat departed/landed/canceled flights as overdue', () => {
+    const t = 1700000000;
+    const now = t + 3 * 3600;
+    const result = computeMetrics({
+      ORD: [
+        makeFlight('ORD', { schedDep: t, realDep: null, status: 'departed', estDep: t }), // left, no timestamp
+        makeFlight('ORD', { schedDep: t, realDep: null, status: 'en-route' }),            // airborne
+        makeFlight('ORD', { schedDep: t, realDep: null, status: 'canceled' }),            // canceled
+      ],
+    }, now);
+    // None of these are "held on the ground" — overdue scoring must skip them all.
+    expect(result.delayed30).toBe(0);
+    expect(result.delayed60).toBe(0);
+    expect(result.cancellations).toBe(1);
   });
 
   it('counts diversions', () => {
