@@ -16,6 +16,21 @@ function flight(statusKey, { sched, real, est, source, presumed, inferred } = {}
   };
 }
 
+// Arrivals-board variant: mirrors flight() but populates the arrival leg of each
+// timestamp instead of departure (F021 regression coverage — arrivals OTP must be
+// scored against real/estimated ARRIVAL, not real departure).
+function arrFlight(statusKey, { sched, real, est, realDep, source, presumed, inferred } = {}) {
+  return {
+    __status: { key: statusKey, presumed, inferred },
+    time: {
+      scheduled: { arrival: sched ?? null },
+      real: { arrival: real ?? null, departure: realDep ?? null },
+      estimated: { arrival: est ?? null },
+    },
+    _source: source || undefined,
+  };
+}
+
 const classify = (fl) => fl.__status;
 
 describe('computeScheduleStatCounts', () => {
@@ -81,5 +96,44 @@ describe('computeScheduleStatCounts', () => {
     const c = computeScheduleStatCounts(null, { nowSec: NOW, classify });
     expect(c.total).toBe(0);
     expect(c.uncategorized).toBe(0);
+  });
+
+  // F021 — arrivals-board OTP must compare scheduled ARRIVAL against real/estimated
+  // ARRIVAL, not real departure. Before the fix, a 90-min-late arrival with a real
+  // departure timestamp scored as on-time (or even inflated otp to 100).
+  describe('arrivals direction (F021)', () => {
+    it('scores a late arrival as late even though its real departure was on time', () => {
+      const arrClassify = (fl) => fl.__status;
+      const flights = [
+        arrFlight('landed', { sched: NOW - 3600, real: NOW - 3600 + 5400, realDep: NOW - 9000 }), // +90m late arrival
+      ];
+      const c = computeScheduleStatCounts(flights, { dir: 'arrivals', nowSec: NOW, classify: arrClassify });
+      expect(c.late).toBe(1);
+      expect(c.onTime).toBe(0);
+      expect(c.otp).toBe(0);
+    });
+
+    it('scores an on-time arrival as on time', () => {
+      const arrClassify = (fl) => fl.__status;
+      const flights = [
+        arrFlight('landed', { sched: NOW - 3600, real: NOW - 3500, realDep: NOW - 9000 }), // +100s → on time
+      ];
+      const c = computeScheduleStatCounts(flights, { dir: 'arrivals', nowSec: NOW, classify: arrClassify });
+      expect(c.onTime).toBe(1);
+      expect(c.late).toBe(0);
+      expect(c.otp).toBe(100);
+    });
+
+    it('does not count an en-route flight (real departure, no real/estimated arrival) as operated', () => {
+      const arrClassify = (fl) => fl.__status;
+      const flights = [
+        arrFlight('enroute', { sched: NOW - 3600, realDep: NOW - 5400 }), // departed, still airborne
+      ];
+      const c = computeScheduleStatCounts(flights, { dir: 'arrivals', nowSec: NOW, classify: arrClassify });
+      expect(c.operated).toBe(0);
+      expect(c.onTime).toBe(0);
+      expect(c.late).toBe(0);
+      expect(c.otp).toBeNull();
+    });
   });
 });

@@ -2195,7 +2195,7 @@ function renderFleetTable() {
     return '<tr class="' + rowCls + '">' +
       '<td class="fleet-td-reg"><span class="ac-reg-link" data-action="aircraft-detail" data-reg="' + escapeHtml(a.r) + '">' + escapeHtml(a.r) + '</span>' + (special ? ' <span class="special-badge">' + escapeHtml(special.name) + '</span>' : '') + '</td>' +
       '<td>' + escapeHtml(a.t) + '</td><td>' + escapeHtml(a.a) + '</td><td>' + escapeHtml(a.c) + '</td>' +
-      '<td>' + escapeHtml(a.tot || '') + '</td><td>' + escapeHtml(normalizeWifi(a.w)) + '</td><td>' + escapeHtml(a.i) + '</td><td>' + escapeHtml(a.d) + '</td>' +
+      '<td>' + escapeHtml(String(a.tot ?? '')) + '</td><td>' + escapeHtml(normalizeWifi(a.w)) + '</td><td>' + escapeHtml(a.i) + '</td><td>' + escapeHtml(a.d) + '</td>' +
       '<td class="fleet-td-status">' + escapeHtml(a.s) + '</td>' +
       '<td>' + (isSL ? '<span class="starlink-badge">SL</span>' : '') + '</td>' +
     '</tr>';
@@ -4860,7 +4860,9 @@ function getFilteredScheduleFlights(nowSec = schedNow()) {
       if (['scheduled', 'estimated', 'delayed'].includes(status.key)) {
         const risk = computeDelayRiskForScheduleFlight(fl, schedCurrentHub, nowSec);
         const riskLabel = risk ? risk.label : 'LOW';
-        if (riskFilter === 'high' && riskLabel !== 'HIGH') return false;
+        // F004: RISK_BANDS (src/lib/delay-risk.js) has two bands at/above the "high" threshold —
+        // HIGH and V.HIGH — so the "High Delay" filter must accept both, not just HIGH.
+        if (riskFilter === 'high' && riskLabel !== 'HIGH' && riskLabel !== 'V.HIGH') return false;
         if (riskFilter === 'moderate' && riskLabel === 'LOW') return false;
         if (riskFilter === 'low' && riskLabel !== 'LOW') return false;
       } else if (riskFilter === 'high' || riskFilter === 'moderate') {
@@ -7882,6 +7884,10 @@ async function fetchDelayExplanation(ctx) {
   if (!contentEl) return;
 
   try {
+    // F011: ctx.riskScore originates from el.dataset.riskScore (always a string); the
+    // server's `typeof === 'number'` check zeroed it out before this fix. Number() it
+    // here and omit entirely (JSON.stringify drops undefined) rather than send NaN.
+    const numRiskScore = Number(ctx.riskScore);
     const resp = await fetch('/api/delay-explain', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -7890,7 +7896,7 @@ async function fetchDelayExplanation(ctx) {
         route: ctx.route,
         status: ctx.status,
         riskLabel: ctx.riskLabel,
-        riskScore: ctx.riskScore,
+        riskScore: Number.isFinite(numRiskScore) ? numRiskScore : undefined,
         factors: ctx.factors,
         hub: ctx.hub,
         otp: ctx.otp,

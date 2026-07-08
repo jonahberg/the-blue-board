@@ -27,7 +27,10 @@ export function parseFr24Feed(data) {
       alt: arr[4] ? arr[4] / 3.28084 : 0, // FR24 gives feet, convert to meters for compatibility
       spd: arr[5] ? arr[5] / 1.944 : 0,   // FR24 gives knots, convert to m/s for compatibility
       vr: arr[15] ? arr[15] / 196.85 : 0, // FR24 gives fpm, convert to m/s for compatibility
-      squawk: null,
+      // F016: FR24's array carries the transponder squawk at index 6 (a string like "1200" or
+      // "7700"); this was hardcoded null, so emergency-squawk alerts (7500/7600/7700) could
+      // never fire. Empty/falsy stays null — decodeSquawk() already treats falsy as "no squawk".
+      squawk: arr[6] || null,
       acType: arr[8] || '',
       reg: arr[9] || '',
       origin: arr[11] || '',
