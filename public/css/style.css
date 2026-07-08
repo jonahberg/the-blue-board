@@ -205,6 +205,16 @@ main{display:contents}
 .leaflet-control-attribution a{color:var(--ua-muted)!important;text-decoration:none}
 .leaflet-control-attribution a:hover{color:var(--ua-accent)!important;text-decoration:underline}
 
+/* Marker hit-area (P2-B item 2): plane icons render as small as 10x10px CSS (main.js
+   createPlaneIcon), a real click hazard on touch. main.js sets width/height/anchor inline via
+   L.divIcon, so we can't resize the element itself without breaking Leaflet's positioning math.
+   Instead we grow the *clickable* box with a ::after pseudo-element — pseudo-elements are part
+   of the parent's own box for hit-testing purposes, so a click anywhere in the padded area still
+   fires on .leaflet-marker-icon itself (the element Leaflet's click handler is bound to). This
+   is purely a hit-slop: the visible plane glyph inside stays exactly the size main.js drew it. */
+.leaflet-marker-icon.leaflet-interactive{position:relative}
+.leaflet-marker-icon.leaflet-interactive::after{content:'';position:absolute;inset:-5px;background:transparent}
+
 /* Popups */
 .leaflet-popup-content-wrapper{background:rgba(17,24,39,.96)!important;color:var(--ua-text)!important;border:1px solid var(--ua-border)!important;border-radius:8px!important;box-shadow:0 8px 32px rgba(0,0,0,.6)!important;backdrop-filter:blur(12px)!important;font-family:var(--font-mono)!important}
 .leaflet-popup-tip{background:rgba(17,24,39,.96)!important}
@@ -904,9 +914,13 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #tab-schedule select,#tab-schedule input[type="text"]{width:100%!important;min-height:44px;font-size:14px!important;padding:8px 10px!important}
   #tab-schedule button{min-height:44px}
   #sched-stats.metric-row{flex-wrap:wrap;gap:0}
-  #sched-table-wrap{max-height:none}
+  /* P2-B item 3: keep #sched-table-wrap a bounded, internally-scrolling box on mobile (rather
+     than max-height:none/static headers) so sticky column headers actually have a scrolling
+     ancestor to stick within — matches the desktop pattern, tuned for the mobile chrome above
+     the table (search controls + day-tabs card). */
+  #sched-table-wrap{max-height:calc(100dvh - 360px)}
+  .sl-table-wrap{max-height:calc(100dvh - 360px)}
   .fleet-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  #sched-table th{position:static}
   table{min-width:600px}
   /* Fleet tab mobile */
   #tab-fleet{padding:10px}
@@ -962,7 +976,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #mobile-bottom-nav button .bnav-label{font-size:11px}
   #mobile-bottom-nav .bnav-overflow-item{display:none}
   #mobile-more-btn{display:flex!important}
-  #mobile-more-menu{display:none;position:fixed;bottom:74px;right:12px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:6px 0;z-index:781;box-shadow:0 -4px 20px rgba(0,0,0,.5);min-width:160px}
+  #mobile-more-menu{display:none;position:fixed;bottom:calc(74px + env(safe-area-inset-bottom));right:calc(12px + env(safe-area-inset-right));background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:6px 0;z-index:781;box-shadow:0 -4px 20px rgba(0,0,0,.5);min-width:160px}
   #mobile-more-menu.open{display:block}
   #mobile-more-menu button{display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;color:var(--ua-text);font-family:var(--font-ui);font-size:13px;padding:10px 16px;cursor:pointer;transition:background-color .15s cubic-bezier(.4,0,.2,1)}
   #mobile-more-menu button:hover{background:rgba(30,41,59,.5)}
@@ -973,7 +987,7 @@ tbody td{padding:5px 8px;white-space:nowrap}
   #header-flight-count{font-size:11px!important;color:var(--ua-accent)!important;font-weight:600}
 }
 /* ── Mobile Bottom Nav / floating dock (hidden on desktop) ── */
-#mobile-bottom-nav{display:none;position:fixed;bottom:12px;left:12px;right:12px;height:auto;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;z-index:760;align-items:stretch;justify-content:space-around;padding:6px 6px}
+#mobile-bottom-nav{display:none;position:fixed;bottom:calc(12px + env(safe-area-inset-bottom));left:calc(12px + env(safe-area-inset-left));right:calc(12px + env(safe-area-inset-right));height:auto;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px;z-index:760;align-items:stretch;justify-content:space-around;padding:6px 6px}
 #mobile-bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;border-radius:6px;color:var(--ua-muted);font-family:var(--font-ui);font-size:11px;cursor:pointer;padding:6px 2px 5px;transition:color .2s cubic-bezier(.4,0,.2,1),background-color .15s;min-height:44px}
 #mobile-bottom-nav button .bnav-icon{font-size:20px;line-height:1}
 #mobile-bottom-nav button.active{color:var(--ua-accent);background:var(--ua-blue-soft)}
@@ -997,6 +1011,8 @@ tbody td{padding:5px 8px;white-space:nowrap}
 #sched-table th{position:sticky;top:0;background:var(--ua-panel);z-index:2;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-muted);padding:8px 10px;border-bottom:1px solid var(--ua-border);white-space:nowrap}
 #sched-table td{padding:6px 10px;font-size:11px;border-bottom:1px solid rgba(51,65,85,.3);white-space:nowrap}
 #sched-table tr:hover{background:rgba(0,93,170,.06)}
+/* Starlink fleet table: same sticky-header treatment as #sched-table (P2-B item 3) */
+#sl-table th{position:sticky;top:0;background:var(--ua-panel);z-index:2;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-muted);padding:8px 10px;border-bottom:1px solid var(--ua-border);white-space:nowrap}
 .sched-status{display:inline-block;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:.3px}
 .sched-live-chip{margin-left:4px;padding:1px 4px;border-radius:3px;background:rgba(34,197,94,.15);color:var(--ua-green);font-family:var(--font-mono);font-size:8px;font-weight:700;letter-spacing:.5px;vertical-align:middle}
 .sched-status.on-time,.sched-status.scheduled,.sched-status.estimated{background:rgba(34,197,94,.12);color:var(--ua-green)}
@@ -1256,3 +1272,56 @@ table,thead th,tbody td,.stat-val,.metric-val,.big-number,.ticker,.ticker-item,.
 .sched-note-warn{color:var(--ua-yellow);font-family:var(--font-ui);font-size:10px}
 /* Compact disclaimer/attribution item in the ticker rotation */
 .ticker-item.disclaimer{color:var(--ua-dim)}
+
+/* === P2-A: jargon tooltip / provenance & age chip / donation-moment styles === */
+/* Jargon term tooltips (dotted-underline term + CSS-only hover/focus reveal).
+   Per DESIGN.md motion rules: opacity fade only, 150ms, no movement. */
+.jargon-term-wrap{position:relative;display:inline-block}
+.jargon-term{border-bottom:1px dotted var(--ua-dim);cursor:help}
+.jargon-tooltip{
+  position:absolute;left:0;top:100%;margin-top:4px;
+  background:var(--ua-panel-elevated);border:1px solid var(--ua-border);
+  color:var(--ua-text);font-family:var(--font-ui);font-size:10px;line-height:1.4;
+  padding:6px 8px;border-radius:4px;max-width:220px;width:max-content;
+  z-index:500;opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity 150ms ease-out;
+}
+.jargon-term-wrap:hover .jargon-tooltip,
+.jargon-term-wrap:focus-within .jargon-tooltip{opacity:1;visibility:visible}
+@media (prefers-reduced-motion:reduce){.jargon-tooltip{transition:none}}
+
+/* Schedule board age chip — muted/gray, not a warning. Only shown for clean boards
+   sitting quietly past ~10 minutes old (see item 3a); the amber/red staleness
+   banner above this in the DOM handles the genuinely-degraded case. */
+.sched-age-chip{
+  display:inline-block;padding:3px 10px;border-radius:3px;
+  font-family:var(--font-mono);font-size:10px;color:var(--ua-muted);
+  background:rgba(100,116,139,.10);border:1px solid rgba(100,116,139,.25);
+}
+
+/* My Flights provenance line — "via schedule snapshot" etc. Muted, same status-badge
+   sizing convention as .sched-age-chip; never amber/red (this is informational, not a warning). */
+.mf-provenance{
+  margin-top:4px;font-family:var(--font-mono);font-size:9px;
+  text-transform:uppercase;letter-spacing:.4px;color:var(--ua-dim);
+}
+
+/* "Glad you landed" donation-moment toast (item 4b) — small dismissible card,
+   bottom-anchored, distinct from the email-capture modal. */
+.bmac-toast{
+  position:fixed;bottom:16px;right:16px;z-index:10002;max-width:300px;
+  background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.9) 100%);
+  border:1px solid var(--ua-border);border-radius:8px;padding:14px 16px;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);
+}
+.bmac-toast-close{
+  position:absolute;top:6px;right:8px;background:none;border:none;
+  color:var(--ua-muted);cursor:pointer;font-size:12px;padding:4px;
+}
+.bmac-toast-msg{font-family:var(--font-ui);font-size:12px;color:var(--ua-text);line-height:1.5;margin:0 16px 10px 0}
+.bmac-toast-btn{
+  display:inline-block;padding:8px 16px;border-radius:6px;
+  background:var(--ua-blue);color:#fff;font-family:var(--font-ui);
+  font-size:12px;font-weight:600;text-decoration:none;
+}
+@media(max-width:600px){.bmac-toast{left:12px;right:12px;bottom:12px;max-width:none}}
