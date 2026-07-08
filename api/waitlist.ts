@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { getSupabase } from './_supabase.js';
 import { buildEmailFooterHtml, listUnsubscribeHeaders } from './_email-footer.js';
+import { SOCIAL_PROOF_USERS, HUB_LINE_LONG } from '../src/data/facts.js';
 
 // 5 submissions per IP per hour → ~5 per 60 minutes
 // Rate limiter works in 60s windows, so allow 5 per 60s window
@@ -54,7 +55,7 @@ function buildWelcomeEmail(): string {
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background-color:#0a0e1a;color:#e0e0e0;padding:0;margin:0;">
   <!-- Preheader (inbox preview text) -->
   <div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#0a0e1a;">
-    You just joined 25,000+ United flyers. Here's what's live right now.
+    You just joined ${SOCIAL_PROOF_USERS} United flyers. Here's what's live right now.
   </div>
 
   <div style="max-width:560px;margin:0 auto;padding:40px 24px;">
@@ -70,7 +71,7 @@ function buildWelcomeEmail(): string {
     </h1>
 
     <p style="${p}">
-      You just joined 25,000+ United flyers who are tired of checking three different apps to figure out what's happening with their flight.
+      You just joined ${SOCIAL_PROOF_USERS} United flyers who are tired of checking three different apps to figure out what's happening with their flight.
     </p>
 
     <p style="${p}">
@@ -104,7 +105,7 @@ function buildWelcomeEmail(): string {
       <tr>
         <td style="padding:8px 12px 8px 0;vertical-align:top;width:24px;font-size:15px;">&#x1F4C5;</td>
         <td style="padding:8px 0;font-size:15px;line-height:1.5;color:#b0b0b0;">
-          <strong style="color:#e0e0e0;">Departure boards for all 9 hubs</strong> — with equipment swap alerts
+          <strong style="color:#e0e0e0;">Departure boards for ${HUB_LINE_LONG}</strong> — with equipment swap alerts
         </td>
       </tr>
       <tr>

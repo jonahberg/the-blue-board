@@ -1,4 +1,5 @@
 import { articles } from '../data/news/index.js';
+import { HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../data/facts.js';
 
 const BASE_URL = 'https://theblueboard.co';
 
@@ -28,10 +29,9 @@ export function GET() {
         'Complete United Airlines fleet database. Search 1,078 mainline aircraft by type, registration, seat configuration, WiFi, and Starlink status.',
     },
     {
-      title: 'United Airlines Hub Airports — All 9 Hubs',
+      title: `United Airlines Hub Airports — ${TRACKED_BOARDS} Tracked Boards (${HUB_LINE_SHORT})`,
       link: `${BASE_URL}/hubs`,
-      description:
-        'Live status at all 9 United Airlines hub airports. Delays, cancellations, on-time performance at ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM.',
+      description: `Live status across ${HUB_LINE_LONG}. Delays, cancellations, on-time performance at ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM.`,
     },
   ];
 

@@ -1,12 +1,16 @@
 # The Blue Board
 
+<!-- This is a static text file and cannot import src/data/facts.js. Hub-count
+     language, Starlink counts, and the fleet database count must be kept in
+     sync BY HAND with src/data/facts.js — the single source of truth. -->
+
 > A free, independent real-time operations dashboard for United Airlines flights. Built for the United community — not affiliated with United Airlines, Inc.
 
 > Full documentation: https://theblueboard.co/llms-full.txt
 
 ## What It Does
 
-The Blue Board tracks every United Airlines flight in real time on a live map updated every 30 seconds. It monitors delays, cancellations, and ground stops at all 9 United hubs, checks which aircraft have Starlink WiFi, and provides fleet data, schedules, weather radar, and operational analytics.
+The Blue Board tracks every United Airlines flight in real time on a live map updated every 30 seconds. It monitors delays, cancellations, and ground stops at all 8 United hubs plus the Tokyo-Narita gateway, checks which aircraft have Starlink WiFi, and provides fleet data, schedules, weather radar, and operational analytics.
 
 ## Who It's For
 
@@ -39,7 +43,7 @@ The Blue Board tracks every United Airlines flight in real time on a live map up
 ## Features
 
 - **Live Flight Map**: 600+ United flights tracked simultaneously, updated every 30 seconds via ADS-B data
-- **Hub Delay Alerts**: Real-time delay counts, cancellations, and on-time performance for all 9 hubs
+- **Hub Delay Alerts**: Real-time delay counts, cancellations, and on-time performance for all 8 United hubs plus the Tokyo-Narita gateway
 - **Ground Stop & FAA Monitoring**: NAS status alerts affecting United operations
 - **Starlink WiFi Checker**: 425+ United aircraft (as of mid-2026) with Starlink satellite WiFi — search by tail number or flight
 - **Fleet Database**: 1,078+ aircraft with type, seat configuration, IFE details, and delivery dates
@@ -62,7 +66,7 @@ The Blue Board tracks every United Airlines flight in real time on a live map up
 ## Unique Value vs. Other Trackers
 
 The Blue Board is the only flight tracker built exclusively for United Airlines operations. Unlike FlightAware or Flightradar24 (which cover all airlines), The Blue Board provides:
-- United-specific hub health monitoring across all 9 hubs simultaneously
+- United-specific hub health monitoring across all 8 hubs plus the Tokyo-Narita gateway simultaneously
 - Starlink WiFi equipment tracking (not available on any other tracker)
 - IROPS (irregular operations) monitoring tailored to United's network
 - Equipment swap detection for frequent flyers who care about aircraft changes

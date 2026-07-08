@@ -22,6 +22,11 @@
     public/sitemap.xml — hub page entries
     public/hubs/       — individual hub HTML pages + cross-nav
   ═══════════════════════════════════════════════════════════════
+  NOTE: This is a static HTML file and cannot import src/data/facts.js.
+  Hub-count language ("8 hubs + NRT gateway"), Starlink counts (428 /
+  "425+"), and the fleet database count (1,078) here must be kept in
+  sync BY HAND with src/data/facts.js — the single source of truth.
+  ═══════════════════════════════════════════════════════════════
 -->
 <head>
 <meta charset="UTF-8">
@@ -95,7 +100,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <div class="onboarding-features">
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📡</span><div><strong>Live Map</strong><span class="onboarding-desc">See where every United flight is right now — updated every 30 seconds</span></div></div>
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">⚠️</span><div><strong>AI Delay Prediction</strong><span class="onboarding-desc">8-signal risk scoring with AI-powered explanations — plus hub delays, cancellations, and ground stops</span></div></div>
-      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📅</span><div><strong>Schedules</strong><span class="onboarding-desc">Departures &amp; arrivals at all 9 hubs with on-time stats and equipment swap alerts</span></div></div>
+      <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📅</span><div><strong>Schedules</strong><span class="onboarding-desc">Departures &amp; arrivals at all 8 United hubs plus the Tokyo-Narita gateway, with on-time stats and equipment swap alerts</span></div></div>
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">🌦</span><div><strong>Weather &amp; Hub Status</strong><span class="onboarding-desc">Conditions at every hub airport — radar, visibility, wind, and how it's affecting flights</span></div></div>
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">✈️</span><div><strong>Fleet &amp; WiFi</strong><span class="onboarding-desc">Check if your plane has Starlink WiFi, seat config, and aircraft details</span></div></div>
       <div class="onboarding-feature"><span class="onboarding-icon" aria-hidden="true">📊</span><div><strong>Stats</strong><span class="onboarding-desc">Fleet utilization, route patterns, and network health — the truly nerdy stuff</span></div></div>
@@ -123,7 +128,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 <noscript>
 <div style="background:#111827;color:#e2e8f0;padding:40px;font-family:monospace;max-width:900px;margin:0 auto">
 <h2 style="text-align:center;margin-bottom:16px">The Blue Board — United Airlines Flight Tracker & Live Status</h2>
-<p>Track every United Airlines flight in real time with The Blue Board — a free, independent operations dashboard built for United frequent flyers, 1K members, and AvGeeks. See live flight positions on an interactive map updated every 30 seconds. Check delays, cancellations, and ground stops at all 9 United hubs. Look up any flight by number to see status, aircraft type, and route. Browse the full United fleet database of 1,078+ aircraft and check which planes have Starlink WiFi. View departure and arrival schedules with on-time performance stats and equipment swap alerts. Monitor weather conditions with radar, METAR observations, and FAA NAS alerts. Explore fleet utilization, route analytics, and hub-to-hub traffic patterns.</p>
+<p>Track every United Airlines flight in real time with The Blue Board — a free, independent operations dashboard built for United frequent flyers, 1K members, and AvGeeks. See live flight positions on an interactive map updated every 30 seconds. Check delays, cancellations, and ground stops at all 8 United hubs plus the Tokyo-Narita gateway. Look up any flight by number to see status, aircraft type, and route. Browse the full United fleet database of 1,078+ aircraft and check which planes have Starlink WiFi. View departure and arrival schedules with on-time performance stats and equipment swap alerts. Monitor weather conditions with radar, METAR observations, and FAA NAS alerts. Explore fleet utilization, route analytics, and hub-to-hub traffic patterns.</p>
 <h3 style="margin:20px 0 10px">United Airlines Hub Status Pages</h3>
 <nav style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
 <a href="/hubs/ord" style="color:#6BAAED">United at Chicago O'Hare (ORD)</a> ·
@@ -834,7 +839,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     <div class="source-icon">🌦</div>
     <div>
       <div class="source-name">Aviation Weather — AWC <span class="freshness fresh-live">LIVE</span></div>
-      <div class="source-desc">METAR observations and TAF forecasts for hub airports.</div>
+      <div class="source-desc">METAR observations for hub airports.</div>
       <a class="source-link" href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer">aviationweather.gov →</a>
     </div>
   </div>
@@ -1008,7 +1013,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   "isPartOf": {"@id": "https://theblueboard.co/#website"},
   "featureList": [
     "Real-time United Airlines flight tracking map with 600+ flights updated every 30 seconds",
-    "Live delay and cancellation alerts for all 9 United hubs",
+    "Live delay and cancellation alerts for all 8 United hubs plus the Tokyo-Narita gateway",
     "Ground stop and FAA NAS status monitoring",
     "Departure and arrival schedules for ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, GUM",
     "Equipment swap detection and alerts",
@@ -1038,7 +1043,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       "name": "How do I check if my United Airlines flight is on time?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The Blue Board shows real-time status for every United Airlines flight. Use the search bar to look up your flight number (e.g., UA 1234) and see its current position, delays, and estimated arrival. The hub health bar at the top shows at-a-glance delay conditions at all 9 United hubs."
+        "text": "The Blue Board shows real-time status for every United Airlines flight. Use the search bar to look up your flight number (e.g., UA 1234) and see its current position, delays, and estimated arrival. The hub health bar at the top shows at-a-glance delay conditions across all 8 United hubs plus the Tokyo-Narita gateway."
       }
     },
     {
@@ -1054,7 +1059,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       "name": "Are there delays at United Airlines hubs today?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The Blue Board monitors delays, cancellations, and ground stops at all 9 United hubs (Chicago O'Hare, Denver, Houston, Newark, San Francisco, Dulles, Los Angeles, Tokyo Narita, and Guam) in real time. The hub health bar shows on-time performance, and the IROPS monitor breaks down disruption types at each hub."
+        "text": "The Blue Board monitors delays, cancellations, and ground stops at United's 8 hubs (Chicago O'Hare, Denver, Houston, Newark, San Francisco, Dulles, Los Angeles, and Guam) plus the Tokyo-Narita gateway in real time. The hub health bar shows on-time performance, and the IROPS monitor breaks down disruption types at each hub."
       }
     },
     {
@@ -1086,7 +1091,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
       "name": "Is United Airlines delayed today?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The Blue Board shows real-time delay conditions at all 9 United Airlines hubs. The hub health bar at the top of the dashboard displays on-time performance percentages and cancellation rates for ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM. Tap any hub to see its full schedule with delay counts, ground stops, and weather conditions affecting operations."
+        "text": "The Blue Board shows real-time delay conditions across United's 8 hubs plus the Tokyo-Narita gateway. The hub health bar at the top of the dashboard displays on-time performance percentages and cancellation rates for ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM. Tap any hub to see its full schedule with delay counts, ground stops, and weather conditions affecting operations."
       }
     },
     {
@@ -1105,7 +1110,7 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
   "@context": "https://schema.org",
   "@type": "Dataset",
   "name": "United Airlines Live Flight & Fleet Data",
-  "description": "Real-time dataset of United Airlines flight positions, delays, cancellations, on-time performance across 9 hubs, and fleet information including 1,078+ aircraft with Starlink WiFi status, seat configurations, and equipment details. Updated every 30 seconds.",
+  "description": "Real-time dataset of United Airlines flight positions, delays, cancellations, on-time performance across all 8 United hubs plus the Tokyo-Narita gateway, and fleet information including 1,078+ aircraft with Starlink WiFi status, seat configurations, and equipment details. Updated every 30 seconds.",
   "url": "https://theblueboard.co",
   "license": "https://theblueboard.co",
   "creator": {"@type": "Person", "name": "Jonah Berg", "url": "https://github.com/notjbg"},
