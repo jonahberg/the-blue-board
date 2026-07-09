@@ -37,7 +37,7 @@
         "api/tsa.ts": { "maxDuration": 30 },
         "api/cron/refresh-tsa.ts": { "maxDuration": 30 },
         "api/metar.ts": { "maxDuration": 15 },
-        "api/support-stats.ts": { "maxDuration": 10 },
+        "api/support-stats.ts": { "maxDuration": 15 },
         "api/cron/refresh-metar.ts": { "maxDuration": 30 },
         "api/cron/watch-alerts.ts": { "maxDuration": 120 }
     },

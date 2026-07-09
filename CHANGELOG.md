@@ -4,6 +4,19 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.3] - 2026-07-08
+
+### Fixed
+- **The live map's zoom-out button was unclickable on desktop.** The v2.0 program moved `#legal-details` (the About/Donate "ⓘ" control) from an in-flow nav child to `position:fixed; bottom:24px; right:16px; z-index:760`. Leaflet mounts the map's zoom control at `bottomright`, where it occupies roughly the first 42px in from the right edge — so the panel sat directly on top of the `−` button. `document.elementFromPoint()` at the button's centre returned `#legal-btn`: clicking zoom-out opened the About popover. Moved the control (and its popover, to keep them aligned) to `right:56px`. Same failure family as the v1.7.1 marker bug — a positioning change from the v2.0 program quietly eating a map control.
+- **Mobile bottom nav lit up two tabs at once.** The v2.0 program promoted My Flights to primary mobile nav but left `tab-myflight` in the hardcoded `overflowTabs` list, so tapping it activated both "My Flights" and "More" — while Fleet and Starlink, which had moved *into* the More menu, activated nothing. `overflowTabs` is now derived from `#mobile-more-menu`'s own contents, which is the definition of "reachable only via More" and cannot desync from the markup again.
+- **`/api/support-stats` was an unauthenticated amplifier onto FR24's metered usage API.** It is public, had no rate limiter (19 sibling handlers have one), and the CDN cache is keyed by the full URL — so `?z=<random>` was an origin MISS every time, and every MISS fired a fresh *authenticated* upstream call. Added a 5-minute memo (the real guard: one upstream call per TTL per warm instance, regardless of request volume) plus `createRateLimiter('support-stats', 60)`. The `429` is sent with `Cache-Control: no-store` so it can never enter the shared CDN cache.
+- **The support meter flapped between "configured" and "not configured" on identical requests.** A failed FR24 fetch returned `{configured:false}` — the same shape the endpoint uses to mean "no token set" — so a flaky upstream made the meter silently vanish rather than admit a bad fetch. A last-known-good reading is now served for up to 30 minutes when the upstream is failing.
+- `api/support-stats.ts` `maxDuration` 10s → 15s. Its only upstream (`fetchFr24UsageRaw`) aborts at exactly 10000ms, so the function was killed before its own `catch` could return the documented graceful fallback.
+- Regression guards: `tests/leaflet-required-styles.test.js` now also fails CI if a fixed bottom-right overlay intrudes on the 52px reserved for Leaflet's zoom control; `tests/support-stats.test.js` adds memo, stale-serve and rate-limit cases. Each new test was confirmed to fail against the old code and pass against the new.
+
+### Note
+No unit test covers the mobile-nav fix — this repo has no DOM test environment (`jsdom`/`happy-dom` are not devDependencies), which is also why the v2.0 program's "axe: 0 violations" claim was never a CI gate. Verified instead by driving the built bundle in a real browser. Adding a DOM test environment is the natural follow-up.
+
 ## [1.7.2] - 2026-07-08
 
 ### Fixed
