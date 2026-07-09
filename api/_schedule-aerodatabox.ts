@@ -225,25 +225,31 @@ function normalizeFlight(flight: any, hub: string, dir: string) {
   const status = String(flight?.status || '');
   const departedLike = ['Departed', 'EnRoute', 'Approaching', 'Arrived', 'Diverted'].includes(status);
   const arrivedLike = ['Arrived', 'Diverted'].includes(status);
-  // INSTRUMENTATION ONLY — behaviour unchanged, see docs/specs/irops-delay-measurement.md.
+  // Measure delay at the GATE, not the runway. See docs/specs/irops-delay-measurement.md.
   //
-  // `runwayTime` is the actual RUNWAY time (wheels-up on departure, wheels-down on arrival);
-  // `revisedTime` is a revised GATE time, "if any". Preferring runwayTime and then comparing it
-  // against `scheduledTime` — a scheduled GATE time — mixes units, so every delay we report
-  // silently includes taxi. Measured over 10,518 operated departures: median "delay" +24 min with
-  // only 3.7% at/before schedule, while the same days' arrivals skew −18 min with 73.9% at/before
-  // schedule. That asymmetry is taxi-out/taxi-in, not operations.
+  // `scheduledTime` is a scheduled GATE time. `runwayTime` is the actual runway time — wheels-up on
+  // departure, wheels-down on arrival. Comparing the two mixes units, so a delay computed from
+  // runwayTime silently carries taxi-out, and an arrival computed from it lands before the aircraft
+  // reaches the gate. `revisedTime` is the gate time. Prefer it; fall back to runwayTime only when
+  // the provider omits it.
   //
-  // We cannot simply prefer revisedTime: it exists only when a schedule was revised, so a naive
-  // swap could leave on-time flights taxi-inflated while delayed ones become gate-based — a mixed
-  // distribution that is worse than a uniformly wrong one. `schedule_snapshots` upserts by
-  // cache_key and keeps no intermediate states, so coverage cannot be recovered retroactively.
-  // Record the raw availability and the gate timestamp so one hour of production traffic answers
-  // it. Delete this block in the PR that fixes the measurement.
-  const gateDep = departedLike ? revisedDep : null;
-  const gateArr = arrivedLike ? revisedArr : null;
-  const realDep = departedLike ? (runwayDep || revisedDep) : null;
-  const realArr = arrivedLike ? (runwayArr || revisedArr) : null;
+  // Measured on 521 operated legs from live EWR + SFO boards (2026-07-09), after shipping
+  // instrumentation rather than guessing:
+  //   - revisedTime coverage is 100% — it is not the sparse "if any" field the vendor docs imply
+  //   - the gate time is NEVER after the runway time (0 of 255 departures), so this swap can only
+  //     shrink a reported delay, never grow one. That is the safety property that makes it shippable
+  //   - where the two differ (92 of 255 departures) the median gap is 26 min, p90 39 min — taxi
+  //   - departures at/before schedule: 2.4% by runwayTime → 26.3% by gate. delayed30: 85 → 53
+  //   - arrivals: runwayTime put 78.2% at/before schedule (touchdown), gate puts 72.2% (the gate)
+  //
+  // Honest limit: for 64% of departures the provider sets revisedTime == runwayTime, giving us no
+  // distinct gate report. Those rows stay taxi-inflated and we cannot do better with this feed.
+  // `_source.timeSource.gateDistinct` marks the rows where we genuinely have a gate time, so
+  // consumers can tell the difference instead of assuming.
+  const realDep = departedLike ? (revisedDep || runwayDep) : null;
+  const realArr = arrivedLike ? (revisedArr || runwayArr) : null;
+  const gateDistinctDep = departedLike && revisedDep != null && revisedDep !== runwayDep;
+  const gateDistinctArr = arrivedLike && revisedArr != null && revisedArr !== runwayArr;
   const estDep = !realDep ? (revisedDep || toUnixDateTime(departureMovement?.predictedTime)) : null;
   const estArr = !realArr ? (revisedArr || toUnixDateTime(arrivalMovement?.predictedTime)) : null;
 
@@ -287,16 +293,18 @@ function normalizeFlight(flight: any, hub: string, dir: string) {
         ...(arrivalMovement?.quality || []),
         ...(movement?.quality || []),
       ],
-      // See the INSTRUMENTATION ONLY note above. Measurement-only; nothing reads these yet.
-      // `gate.*` is revisedTime (gate) for an already-operated leg; `has*` records which raw
-      // fields the provider actually sent, so coverage is measurable instead of assumed.
+      // `gateDistinct*` is true when the provider gave a gate time that differs from the runway
+      // time — i.e. when time.real.* is genuinely gate-based rather than a taxi-inflated runway
+      // time the provider happened to copy into revisedTime. 36% of departures on the measured
+      // sample. Consumers that care about honest delay stats should prefer these rows.
       timeSource: {
+        gateDistinctDep,
+        gateDistinctArr,
         hasGateDep: revisedDep != null,
         hasRunwayDep: runwayDep != null,
         hasGateArr: revisedArr != null,
         hasRunwayArr: runwayArr != null,
       },
-      gate: { departure: gateDep, arrival: gateArr },
     },
   };
 }

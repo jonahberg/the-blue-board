@@ -4,6 +4,15 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.7] - 2026-07-09
+
+### Fixed
+- **The Blue Board was measuring taxi time, not delay.** `time.real.departure` was AeroDataBox's `runwayTime` — the actual *runway* time, wheels-up on departure and wheels-down on arrival — compared against `scheduledTime`, which is a scheduled **gate** time. Every reported delay silently carried taxi-out, and every arrival was timestamped before the aircraft reached the gate. Over 10,518 operated departures the median "delay" was **+24 min** with only **3.7%** at or before schedule, while the same days' arrivals skewed **−18 min** with **73.9%** at or before schedule. Departures late by a taxi, arrivals early by a taxi: operations cannot produce that asymmetry. Now `revisedTime` (the gate time) is preferred, falling back to `runwayTime` only when the provider omits it.
+- Verified before changing anything. v1.7.6 shipped instrumentation only, and one hour of production traffic (521 operated legs, live EWR + SFO boards) settled it: `revisedTime` coverage is **100%** (the vendor's "if any" concern was unfounded), and the gate time is **never after** the runway time — 0 of 255 departures — so this swap can only shrink a reported delay, never grow one.
+- Measured effect on that sample: departures at or before schedule **2.4% → 26.3%**; `delayed30` **85 → 53** (−38%); `delayed60` 20 → 18. Arrivals now land at the gate rather than on the runway.
+- **Honest limit, and a correction to our own spec.** For **64% of departures the provider sets `revisedTime == runwayTime`**, so the fix corrects only the other 36% — where the median gap is 26 min (p90 39 min), which is exactly taxi. The gate-based median departure delay is **+15 min, not ~0**: EWR and SFO at midday are genuinely late. The earlier spec claimed the delay layer was essentially all taxi. It is not, and the instrumentation is what caught the overstatement. `_source.timeSource.gateDistinctDep` / `gateDistinctArr` now mark the rows where `time.real.*` is honestly gate-based, so consumers can tell the difference instead of assuming.
+- Downstream, this lowers the IROPS `score`, `delayed30`/`delayed60` and `worstDelays`, and raises hub OTP. The `SIGNIFICANT DISRUPTION` banner (`score >= 15`) is **not** fixed by this alone — that is Phase 2, and it needs a week of gate-based data before thresholds are re-derived. Do not hand-pick new cutoffs.
+
 ## [1.7.6] - 2026-07-09
 
 ### Added
