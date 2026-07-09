@@ -4,6 +4,15 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2026-07-08
+
+### Fixed
+- **IROPS index was manufacturing a network meltdown out of stale board rows.** The `overdueDelayMinutes()` rule added by the v2.0 program (F073) charged `now - scheduledDeparture` minutes to any row that lacked a terminal status — uncapped, and with no way to tell a flight held at the gate from a flight that departed hours ago whose status never updated. Because the board carries a full local day, a 07:00 departure was still accruing "hold" minutes at 23:00. Measured on production: 548 rows scored overdue >30m (122 of them beyond six hours), worst 1,028 minutes — a 17.1-hour hold on a 90-minute regional hop — driving the index to 74.4 against a SIGNIFICANT threshold of 15 and putting impossible phantom holds in the user-visible "worst delays" list.
+- Two guards, in order of trust: a flight cannot still be awaiting departure once the clock has passed its **scheduled arrival** (decisive, removes 61% of the phantoms with no policy judgment); and an absolute `OVERDUE_MAX_MIN = 240` cap for the ~25 production rows that carry no scheduled arrival, chosen above the FAA's 3-hour tarmac limit, past which a hold is cancelled rather than held. Beyond that we cannot distinguish a hold from a stale row, so we under-report rather than fabricate — the same honest-degradation rule the boards and freshness chip already follow.
+- The F073 ground-stop signal the rule exists for is preserved: a genuine hold still short of its scheduled arrival still counts toward `delayed30`/`delayed60` and still surfaces in `worstDelays`.
+- On live production data this moves `delayed30` 1184 → 906, `delayed60` 638 → 378, the worst reported hold 944min → 415min (and that 415 is a real, timestamp-backed delay, not an inferred one). The index reads 74.4 → 55.5. It remains above the SIGNIFICANT threshold: there is a real delay backlog underneath, and this change removes only the fabricated part of it. Scoring calibration is a separate, pre-existing question.
+- Regression guard: five new `F073b` cases in `tests/irops.test.js`, including a 15-hour stale row, an unknown-arrival row past the cap, and an assertion that `worstDelays` never reports a hold beyond the cap.
+
 ## [1.7.1] - 2026-07-08
 
 ### Fixed

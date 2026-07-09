@@ -89,13 +89,40 @@ const CANCELED_STATUSES = new Set(['canceled', 'cancelled', 'canceled_uncertain'
 // fixed 30/60-min bucketing (rather than importing the schedule pipeline's disruption-
 // scaled inference grace) so this module stays self-contained; the buckets already
 // mirror the >30/>60 real-delay thresholds below. Returns 0 when not overdue.
+//
+// F073b: the rule above, unbounded, manufactures disruption. The board carries a FULL
+// LOCAL DAY, and a row whose status never advanced to a terminal value is indistinguishable
+// from a held flight — so a 07:00 departure that flew but never got a "departed" status was
+// still accruing overdue minutes at 23:00. Measured on production 2026-07-08: 548 rows
+// scored overdue >30m, 122 of them beyond 6 hours, worst 1028 minutes — a 17.1-hour "hold"
+// on a 90-minute regional hop — driving the index to 74.4 against a SIGNIFICANT threshold
+// of 15, and putting impossible phantom holds in the user-visible worstDelays list.
+//
+// Two guards, in order of how much we trust them:
+//   1. Scheduled arrival. A plane cannot still be awaiting departure once the clock has
+//      passed the time it was scheduled to LAND. This is decisive and removes 332 of the
+//      548 (61%) with no policy judgment at all.
+//   2. An absolute cap, for the ~25 production rows that carry no scheduled arrival.
+//      Beyond it we genuinely cannot tell a held flight from a stale row, so we
+//      under-report rather than fabricate — the same honest-degradation rule the boards
+//      and the freshness chip already follow. 240min sits above the FAA's 3-hour tarmac
+//      limit, past which a hold is cancelled rather than held.
+// Together: overdue-driven delayed30 falls 548 -> 186 and the worst hold 1028 -> 235 min,
+// while the F073 ground-stop signal the rule exists for is preserved (see tests).
+const OVERDUE_MAX_MIN = 240;
+
 function overdueDelayMinutes(fl: any, status: string, nowSec: number): number {
   if (CANCELED_STATUSES.has(status)) return 0;
   if (status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted') return 0;
   if (fl.time?.real?.departure) return 0;
   const schedT = fl.time?.scheduled?.departure;
   if (!schedT || !nowSec || nowSec <= schedT) return 0;
-  return Math.round((nowSec - schedT) / 60);
+
+  const schedArr = fl.time?.scheduled?.arrival;
+  if (schedArr && nowSec > schedArr) return 0;
+
+  const overdue = Math.round((nowSec - schedT) / 60);
+  return overdue > OVERDUE_MAX_MIN ? 0 : overdue;
 }
 
 export function computeMetrics(flightsByHub: Record<string, any[]>, nowSec: number = Math.floor(Date.now() / 1000)) {

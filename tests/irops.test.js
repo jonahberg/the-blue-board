@@ -5,6 +5,7 @@ import { computeMetrics, getStartOfDayForHub } from '../api/irops.js';
 function makeFlight(hub, {
   status = 'landed',
   schedDep = 1700000000,
+  schedArr = null,
   realDep = null,
   estDep = null,
   flightNum = 'UA100',
@@ -19,7 +20,7 @@ function makeFlight(hub, {
     },
     status: { generic: { status: { text: status } } },
     time: {
-      scheduled: { departure: schedDep },
+      scheduled: { departure: schedDep, arrival: schedArr },
       real: { departure: realDep },
       estimated: { departure: estDep },
     },
@@ -156,6 +157,78 @@ describe('computeMetrics', () => {
     // Held flights also surface in worstDelays with their overdue magnitude.
     expect(result.worstDelays.length).toBeGreaterThan(0);
     expect(result.worstDelays[0].delay).toBeGreaterThanOrEqual(120);
+  });
+
+  // ── F073b: overdue scoring must not manufacture disruption out of stale rows ──
+  // The board holds a full local day. A row whose status never advanced to a terminal
+  // value looks identical to a held flight, and the original F073 rule charged it
+  // (now - scheduledDeparture) minutes forever. Measured on production 2026-07-08:
+  // 548 rows scored as "overdue >30m", 122 of them over 6 hours, worst 1028 minutes
+  // (a 17.1-hour "hold" on a 90-minute regional hop), driving score 74.4 vs the
+  // SIGNIFICANT threshold of 15. A plane cannot still be at the gate after the clock
+  // has passed the time it was scheduled to land.
+
+  it('F073b: a row past its scheduled arrival is a stale row, not a held flight', () => {
+    const t = 1700000000;
+    const now = t + 15 * 3600; // 15h past scheduled departure
+    const result = computeMetrics({
+      ORD: [
+        // Scheduled to land 13.5h ago. It flew; the board never got a terminal status.
+        makeFlight('ORD', { schedDep: t, schedArr: t + 5400, realDep: null, status: 'scheduled' }),
+      ],
+    }, now);
+    expect(result.delayed30).toBe(0);
+    expect(result.delayed60).toBe(0);
+    expect(result.worstDelays).toEqual([]);
+  });
+
+  it('F073b: still counts a genuine ground-stop hold short of its scheduled arrival', () => {
+    const t = 1700000000;
+    const now = t + 2 * 3600; // held 2h at the gate
+    const result = computeMetrics({
+      EWR: [
+        // A 4-hour block: scheduled arrival is still 2h in the future, so it can
+        // plausibly still be sitting at the gate. This is the F073 signal — keep it.
+        makeFlight('EWR', { schedDep: t, schedArr: t + 4 * 3600, realDep: null, status: 'scheduled' }),
+      ],
+    }, now);
+    expect(result.delayed30).toBe(1);
+    expect(result.delayed60).toBe(1);
+    expect(result.worstDelays[0].delay).toBe(120);
+  });
+
+  it('F073b: caps overdue when scheduled arrival is unknown', () => {
+    const t = 1700000000;
+    const result = computeMetrics({
+      ORD: [
+        // No arrival time to reason with (25 such rows in production). Beyond the cap we
+        // cannot tell a held flight from a stale row, so we under-report rather than invent.
+        makeFlight('ORD', { schedDep: t, schedArr: null, realDep: null, status: 'scheduled' }),
+      ],
+    }, t + 5 * 3600);
+    expect(result.delayed30).toBe(0);
+    expect(result.worstDelays).toEqual([]);
+  });
+
+  it('F073b: an unknown-arrival hold inside the cap still counts', () => {
+    const t = 1700000000;
+    const result = computeMetrics({
+      ORD: [makeFlight('ORD', { schedDep: t, schedArr: null, realDep: null, status: 'scheduled' })],
+    }, t + 2 * 3600);
+    expect(result.delayed30).toBe(1);
+    expect(result.delayed60).toBe(1);
+  });
+
+  it('F073b: worstDelays never reports an overdue hold beyond the cap', () => {
+    const t = 1700000000;
+    const now = t + 20 * 3600;
+    const flights = [];
+    for (let i = 0; i < 30; i++) {
+      flights.push(makeFlight('ORD', { schedDep: t + i * 60, schedArr: null, realDep: null, status: 'scheduled', flightNum: `UA${i}` }));
+    }
+    const result = computeMetrics({ ORD: flights }, now);
+    for (const w of result.worstDelays) expect(w.delay).toBeLessThanOrEqual(240);
+    expect(result.score).toBe(0);
   });
 
   it('F073: does not treat departed/landed/canceled flights as overdue', () => {

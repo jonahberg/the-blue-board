@@ -6,7 +6,7 @@
   "repository": "notjbg/the-blue-board",
   "private": true,
   "type": "module",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "packageManager": "bun@1.3.14",
   "engines": {
     "node": "24.x"
