@@ -288,15 +288,16 @@ describe('fetchViaAeroDataBox end-to-end board hygiene', () => {
   });
 });
 
-// ── Gate-vs-runway time instrumentation ────────────────────────────────────────────────
-// See docs/specs/irops-delay-measurement.md. The board reports runwayTime (wheels-up) as the
-// actual departure and compares it against scheduledTime (a GATE time), so every delay silently
-// includes taxi-out: across 10,518 operated departures the median "delay" was +24 min with only
-// 3.7% at/before schedule, while the same days' arrivals skewed -18 min with 73.9% at/before
-// schedule. Preferring revisedTime is NOT a safe blind swap — the provider sends it only "if any",
-// so on-time flights could stay taxi-inflated while delayed ones became gate-based. These fields
-// record raw availability and the gate timestamp, changing nothing, so coverage can be measured.
-describe('gate-vs-runway time instrumentation', () => {
+// ── Delay is measured at the GATE, not the runway ───────────────────────────────────────
+// docs/specs/irops-delay-measurement.md. `scheduledTime` is a gate time; `runwayTime` is wheels-up
+// (departure) or wheels-down (arrival). Comparing them mixed units, so every reported delay carried
+// taxi-out and every arrival landed before reaching the gate. `revisedTime` is the gate time.
+//
+// Measured on 521 operated legs from live EWR + SFO boards before this change: revisedTime coverage
+// is 100%; the gate time is NEVER after the runway time (0 of 255 departures), so preferring it can
+// only shrink a reported delay, never grow one; where they differ (36% of departures) the median gap
+// is 26 min. Departures at/before schedule went 2.4% -> 26.3%; delayed30 went 85 -> 53.
+describe('gate-based delay measurement', () => {
   const nowSec = 1_700_000_000;
   const iso = (offsetS) => new Date((nowSec + offsetS) * 1000).toISOString();
 
@@ -312,11 +313,11 @@ describe('gate-vs-runway time instrumentation', () => {
     __resetAdbSpendForTests();
   });
 
-  async function board(departure, status = 'Departed') {
+  async function board(departure, arrival = {}, status = 'Departed') {
     const departures = [{
       number: 'UA 100', status, airline: { iata: 'UA', name: 'United Airlines' },
       departure: { scheduledTime: { utc: iso(0) }, airport: { iata: 'ORD' }, ...departure },
-      arrival: { scheduledTime: { utc: iso(7200) }, airport: { iata: 'DEN', name: 'Denver' } },
+      arrival: { scheduledTime: { utc: iso(7200) }, airport: { iata: 'DEN', name: 'Denver' }, ...arrival },
       aircraft: { model: 'A320', reg: 'N12345' },
     }];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
@@ -328,35 +329,48 @@ describe('gate-vs-runway time instrumentation', () => {
     return result.flights[0];
   }
 
-  it('records a runway time with no gate time', async () => {
+  it('reports the GATE departure, not wheels-up', async () => {
+    // Pushback +10 min (a real 10-minute delay); wheels-up +36 min (10 delay + 26 taxi).
+    const f = await board({ revisedTime: { utc: iso(600) }, runwayTime: { utc: iso(2160) } });
+    expect(f.time.real.departure).toBe(nowSec + 600);
+    expect(f._source.timeSource.gateDistinctDep).toBe(true);
+  });
+
+  it('an on-time pushback is no longer reported as a 26-minute delay', async () => {
+    // Departed exactly on schedule; 26 min taxi. Old code called this +26 min late.
+    const f = await board({ revisedTime: { utc: iso(0) }, runwayTime: { utc: iso(1560) } });
+    expect(f.time.real.departure - f.time.scheduled.departure).toBe(0);
+  });
+
+  it('falls back to the runway time when the provider omits the gate time', async () => {
     const f = await board({ runwayTime: { utc: iso(1500) } });
-    expect(f._source.timeSource).toEqual({
-      hasGateDep: false, hasRunwayDep: true, hasGateArr: false, hasRunwayArr: false,
-    });
-    expect(f._source.gate.departure).toBeNull();
+    expect(f.time.real.departure).toBe(nowSec + 1500);
+    expect(f._source.timeSource.gateDistinctDep).toBe(false);
+    expect(f._source.timeSource.hasGateDep).toBe(false);
   });
 
-  it('records the gate timestamp when the provider sends revisedTime', async () => {
-    // revisedTime = gate-out at +10 min; runwayTime = wheels-up at +30 min. The gap is taxi-out.
-    const f = await board({ revisedTime: { utc: iso(600) }, runwayTime: { utc: iso(1800) } });
+  it('marks the row as not-gate-distinct when the provider copies runwayTime into revisedTime', async () => {
+    // 64% of real departures look like this. The delay stays taxi-inflated; say so honestly.
+    const f = await board({ revisedTime: { utc: iso(1500) }, runwayTime: { utc: iso(1500) } });
+    expect(f.time.real.departure).toBe(nowSec + 1500);
+    expect(f._source.timeSource.gateDistinctDep).toBe(false);
     expect(f._source.timeSource.hasGateDep).toBe(true);
-    expect(f._source.timeSource.hasRunwayDep).toBe(true);
-    expect(f._source.gate.departure).toBe(nowSec + 600);
   });
 
-  it('does NOT change which timestamp becomes time.real.departure', async () => {
-    // The point of this change: instrument, do not fix. runwayTime must still win.
-    const f = await board({ revisedTime: { utc: iso(600) }, runwayTime: { utc: iso(1800) } });
-    expect(f.time.real.departure).toBe(nowSec + 1800);
-
-    const g = await board({ revisedTime: { utc: iso(600) } });
-    expect(g.time.real.departure).toBe(nowSec + 600); // unchanged fallback
+  it('reports the GATE arrival, not wheels-down', async () => {
+    // Touchdown at +7200; on-blocks 18 min later. Old code called this an 18-min-early arrival.
+    const f = await board(
+      { runwayTime: { utc: iso(1500) } },
+      { runwayTime: { utc: iso(7200) }, revisedTime: { utc: iso(8280) } },
+      'Arrived'
+    );
+    expect(f.time.real.arrival).toBe(nowSec + 8280);
+    expect(f._source.timeSource.gateDistinctArr).toBe(true);
   });
 
-  it('leaves gate.departure null for a leg that has not operated', async () => {
-    const f = await board({ revisedTime: { utc: iso(600) } }, 'Scheduled');
+  it('leaves a not-yet-operated leg alone', async () => {
+    const f = await board({ revisedTime: { utc: iso(600) } }, {}, 'Scheduled');
     expect(f.time.real.departure).toBeNull();
-    expect(f._source.gate.departure).toBeNull();
-    expect(f._source.timeSource.hasGateDep).toBe(true); // provider sent it; the leg just hasn't gone
+    expect(f._source.timeSource.gateDistinctDep).toBe(false);
   });
 });
