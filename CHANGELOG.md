@@ -4,6 +4,13 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-07-08
+
+### Fixed
+- **Live map: every aircraft was drawn in the wrong place.** The marker hit-slop rule added in the v2.0 program set `position:relative` on `.leaflet-marker-icon`, overriding the `position:absolute` that leaflet.css declares under "required styles". Marker icons are `display:block`, so relative positioning returned all 700+ planes to normal flow inside the marker pane: each one stacked below the previous before Leaflet applied its `translate3d()`, sinking marker N by exactly 5N pixels. On a 1280x800 viewport only ~70 of 766 markers landed on screen; the rest smeared south across South America and off the map. Hub markers were unaffected because they are `L.circleMarker` (SVG in the overlay pane), which is what made the outage look partial rather than total.
+- The 10px→20px touch target that rule was added for is unchanged: the `::after` hit-slop still resolves against the icon, because an absolutely positioned element is already a containing block for its abspos descendants. `position:relative` was never needed.
+- Regression guard: `tests/leaflet-required-styles.test.js` fails CI on any rule that sets `position` on the elements leaflet.css positions itself.
+
 ## [1.7.0] - 2026-07-07
 
 ### Added
