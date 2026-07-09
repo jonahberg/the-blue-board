@@ -1,5 +1,11 @@
 # Owner setup: background push alerts
 
+> **STATUS: COMPLETED 2026-07-09.** All steps below were performed and verified live: VAPID keys
+> generated and set in Vercel Production (`WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`,
+> `WEB_PUSH_CONTACT=mailto:hello@theblueboard.co`), `sql/014` applied with RLS verified default-deny,
+> and `GET /api/push-subscribe` returns `configured:true` in production. This document is retained as
+> the runbook for key rotation or re-setup on a new deployment — do not re-run it as if pending.
+
 Background flight-watch alerts let The Blue Board notify a user about a watched flight's status,
 gate, or equipment change **even after they close the tab**. This rides on the Web Push standard
 (VAPID + `web-push`), a Supabase table of subscriptions, and a 5-minute diff cron.
