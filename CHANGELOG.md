@@ -4,6 +4,20 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.5] - 2026-07-09
+
+### Fixed
+- **Production had not deployed for 11 hours.** The TypeScript 6 → 7 upgrade (#222) silently broke every production build. `main` kept merging; nothing shipped. The last deploy to reach production was v1.7.3, which means v1.7.4's Schedule fixes never went live.
+  ```
+  Using TypeScript 7.0.2 (local user-provided)
+  Error: Cannot read properties of undefined (reading 'readFile')
+  ```
+  TypeScript 7 is the native port. Its package ships the CLI but drops the legacy programmatic compiler API — `ts.sys`, `ts.createProgram` and friends are simply gone. `@vercel/node` compiles the `api/*.ts` functions and reads `tsconfig` through `ts.sys.readFile`, so it throws before building a single function. Every published `@vercel/node`, checked through the current 5.8.22, still calls it: there is no TS7-compatible version today. Reverted to `typescript@^6.0.3`.
+- **Nothing in CI could have caught it, which is the more interesting problem.** `bun run test`, `tsc --noEmit` and `bun run build` were all green under TS7 — the `tsc` CLI works fine, only the programmatic surface is missing — and the PR's Vercel check reported "pass" because its preview build was skipped by the Ignored Build Step. A failed *production* deploy is not wired to any GitHub check. Added `tests/vercel-build-compat.test.js`, which asserts the installed TypeScript still exposes the API `@vercel/node` compiles with, and that `package.json` pins a major that ships it. Confirmed it fails under 7.0.2 and passes under 6.0.3.
+
+### Note
+Restoring TS7 requires `@vercel/node` to support it. When that lands, bump `typescript` and delete `tests/vercel-build-compat.test.js` in the same PR.
+
 ## [1.7.4] - 2026-07-09
 
 ### Fixed
