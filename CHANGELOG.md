@@ -4,6 +4,17 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.4] - 2026-07-09
+
+### Fixed
+- **The Schedule tab was empty and useless overnight.** Opened at 00:23 hub-local, it defaulted to "Today" — a board of 644 flights that had not happened yet: `0 OPERATED`, `0 ON TIME`, `0 LATE`, `0 CANCELED`, `644 UPCOMING`, and every row reading `Expected · RISK: LOW`. The completed day, with all of its real data, sat one click away under "Yesterday". `api/irops.ts` has applied the right rule server-side all along — *"Before 6 AM local: no flights have departed yet, show yesterday's data"* — but the client never did. The Schedule board now opens on the completed day before the hub's 6 AM rollover, via a new shared `defaultSchedDayOffset()` in `src/lib/hubTz.js` so client and server can't drift apart again. Today and Tomorrow remain one click away.
+- **`ORD → ?` in the route column.** 7 of 644 rows on a real ORD board carry a destination city but no IATA code, and the renderer printed a bare `?` while stranding the city in the subtitle. The city is now promoted into the route line when the code is missing (`ORD → Los Angeles`), with no duplicated subtitle.
+- **One flight in 644 read `Unknown` while the rest read `Expected`.** Both had the same normalized `generic.status.text: "scheduled"`, no estimated time, no real time, and were hours in the future. `classifyBase()` surfaced AeroDataBox's free-text `status.text` verbatim — its `|| 'Scheduled'` fallback never fired because `"Unknown"` is truthy. A meaningless provider word now falls back to `Scheduled`; a meaningful one (`Expected`) is still shown. The status `key` is untouched, so time-based reclassification to `Departed` still works.
+- Also restamps the Yesterday/Today/Tomorrow date labels after the home hub resolves. They were previously rendered before `schedCurrentHub` was known and fell back to the wrong timezone.
+
+### Note
+`tests/schedule.test.js > honors officialFallback=0 when scraping fails` failed twice while this branch was being built (both runs ≈00:45 America/Chicago) and passes on this branch and on `main` at other hours. It is **not** caused by this change: the same commit is green now, and clean `main` shows the identical behaviour. That suite pins `Date` (`vi.setSystemTime`) but leaves real timers real, and `api/_rate-limit.ts:9` captures `Date.now()` at import — before the fake clock installs. Worth chasing separately; flagged rather than papered over.
+
 ## [1.7.3] - 2026-07-08
 
 ### Fixed

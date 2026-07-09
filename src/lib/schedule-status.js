@@ -94,7 +94,17 @@ function classifyBase(flight) {
   // A flight is en-route if: FR24 says so, OR it's live with a real departure (actually airborne)
   const isAirborne = s.live === true && (flight.time?.real?.departure != null);
   if (statusText === 'en-route' || txtLower.includes('en route') || isAirborne) return { text: txt || 'En Route', cls: 'enroute', key: 'enroute' };
-  if (statusText === 'scheduled') return { text: txt || 'Scheduled', cls: 'scheduled', key: 'scheduled' };
+  if (statusText === 'scheduled') {
+    // `txt` is the provider's free-text status and is shown verbatim in the Status column.
+    // AeroDataBox emits both 'Expected' and the meaningless 'Unknown' for rows that are
+    // identically not-yet-departed, so one flight in a board of 644 read "Unknown" while the
+    // rest read "Expected" — same generic status, no estimated time, no real time, both hours
+    // away. The `|| 'Scheduled'` fallback below never fired because "Unknown" is truthy.
+    // generic.status.text is the normalized truth; use it whenever the provider word carries no
+    // meaning. `key` stays 'scheduled' either way, so time-based reclassification is unaffected.
+    const meaningful = txt && txtLower !== 'unknown';
+    return { text: meaningful ? txt : 'Scheduled', cls: 'scheduled', key: 'scheduled' };
+  }
   if (statusText === 'estimated') {
     const schedTime = flight.time?.scheduled?.departure || flight.time?.scheduled?.arrival;
     const estTime = flight.time?.estimated?.departure || flight.time?.estimated?.arrival;

@@ -8,7 +8,7 @@ import { bucketInstallsByMonth, computeInstallPace, buildDeparturesBoard } from 
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
 import { classifySchedStatus } from '../lib/schedule-status.js';
-import { getStartOfHubDay, getHubDayLabel } from '../lib/hubTz.js';
+import { getStartOfHubDay, getHubDayLabel, defaultSchedDayOffset } from '../lib/hubTz.js';
 import { classifyConnection, MIN_CONNECTION_TIMES, TERMINAL_WALK_TIMES } from '../lib/connection-risk.js';
 import { formatDataAge, dataAgeSeverity } from '../lib/data-age.js';
 import { formatTimeWithTz } from '../lib/time-format.js';
@@ -4611,6 +4611,16 @@ function initScheduleTab() {
       document.getElementById('sched-hub').value = homeHub;
       schedCurrentHub = homeHub;
     }
+    // Before the hub's first departures roll, "today" is an empty board: every flight upcoming,
+    // 0 operated, every stat zero. Open on the completed day instead — the same rule api/irops.ts
+    // applies server-side. The Today button is still one click away.
+    schedCurrentDay = defaultSchedDayOffset(schedCurrentHub);
+    document.querySelectorAll('.sched-day-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.day, 10) === schedCurrentDay);
+    });
+    // Labels were rendered above before schedCurrentHub was resolved, so they used the fallback
+    // timezone. Now that the hub is known, restamp them in hub-local dates.
+    updateSchedDayLabels();
     loadScheduleData();
   }
 }
@@ -5160,13 +5170,25 @@ function renderScheduleTable() {
 
     const dest = fl.airport?.destination;
     const orig = fl.airport?.origin;
+    // Some provider rows carry a city name but no IATA code (7 of 644 on a real ORD board), which
+    // rendered as a bare "ORD → ?" with the city stranded in the subtitle. Promote the city into
+    // the route line when the code is missing rather than showing the user a question mark.
+    const shortName = (a) => (a?.name ? a.name.replace(/ Airport| International/g, '').substring(0, 30) : '');
+    const routeCell = (code, name, other, dirIsDep) => {
+      const primary = code || name || '—';
+      const line = dirIsDep
+        ? `${escapeHtml(other)} → ${escapeHtml(primary)}`
+        : `${escapeHtml(primary)} → ${escapeHtml(other)}`;
+      // Only add the subtitle when it is not already the primary text.
+      return code && name
+        ? `${line}<div style="font-size:9px;color:var(--ua-muted)">${escapeHtml(name)}</div>`
+        : line;
+    };
     let routeStr;
     if (schedCurrentDir === 'departures') {
-      routeStr = `${escapeHtml(hub)} → ${escapeHtml(dest?.code?.iata || '?')}`;
-      if (dest?.name) routeStr += `<div style="font-size:9px;color:var(--ua-muted)">${escapeHtml(dest.name.replace(/ Airport| International/g, '').substring(0, 30))}</div>`;
+      routeStr = routeCell(dest?.code?.iata, shortName(dest), hub, true);
     } else {
-      routeStr = `${escapeHtml(orig?.code?.iata || '?')} → ${escapeHtml(hub)}`;
-      if (orig?.name) routeStr += `<div style="font-size:9px;color:var(--ua-muted)">${escapeHtml(orig.name.replace(/ Airport| International/g, '').substring(0, 30))}</div>`;
+      routeStr = routeCell(orig?.code?.iata, shortName(orig), hub, false);
     }
 
     const acCode = fl.aircraft?.model?.code || '—';
