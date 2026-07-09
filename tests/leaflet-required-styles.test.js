@@ -61,6 +61,28 @@ describe('Leaflet required styles are not overridden', () => {
     });
   }
 
+  // The live map mounts Leaflet's zoom control at 'bottomright'. leaflet.css gives it a 10px
+  // margin and a 30px-wide button stack, so it owns roughly the first 42px in from the viewport's
+  // right edge and the first 89px up from the bottom. #legal-details shipped at right:16px and
+  // covered the zoom-OUT button outright — document.elementFromPoint at the button's centre
+  // returned #legal-btn, so clicking "−" opened the About popover instead of zooming.
+  const LEAFLET_ZOOM_RIGHT_RESERVED_PX = 52;
+
+  it('keeps fixed bottom-right overlays clear of the Leaflet zoom control', () => {
+    const rule = stripped.match(/#legal-details\s*\{([^}]*)\}/);
+    expect(rule, '#legal-details rule not found').toBeTruthy();
+
+    const body = rule[1];
+    expect(body, 'expected #legal-details to be position:fixed').toMatch(/position\s*:\s*fixed/);
+
+    const right = Number((body.match(/(?:^|;)\s*right\s*:\s*(\d+)px/) || [])[1]);
+    expect(
+      right,
+      `#legal-details must sit at least ${LEAFLET_ZOOM_RIGHT_RESERVED_PX}px from the right edge ` +
+        "so it does not swallow the map's zoom-out button"
+    ).toBeGreaterThanOrEqual(LEAFLET_ZOOM_RIGHT_RESERVED_PX);
+  });
+
   it('keeps the marker hit-slop pseudo-element', () => {
     // The accessibility win from PR #220 (10px touch targets are a click hazard)
     // is preserved by the ::after alone — an absolutely positioned marker is

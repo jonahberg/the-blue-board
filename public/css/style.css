@@ -181,13 +181,23 @@ main{display:contents}
    (main.js's delegated handlers for #legal-btn / #legal-details / #legalpop are unaffected),
    no longer a tablist child, and #legalpop's fixed coordinates now resolve against the real
    viewport. Anchored bottom-right at the same bottom offset as the dock so it reads as a
-   companion floating control, styled with the same panel recipe (DESIGN.md card treatment). */
-#legal-details{position:fixed;bottom:24px;right:16px;z-index:760;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border)}
+   companion floating control, styled with the same panel recipe (DESIGN.md card treatment).
+
+   RIGHT OFFSET IS LOAD-BEARING: the live map puts Leaflet's zoom control at 'bottomright'
+   (main.js L.control.zoom), where leaflet.css's 10px margin makes it occupy roughly 10-42px
+   from the viewport's right edge and 10-89px from its bottom. At right:16px this panel (45px
+   wide, z-index 760) sat directly on top of the zoom-OUT button and swallowed its clicks —
+   document.elementFromPoint at the button's centre returned #legal-btn. Keep right >= 52px so
+   the two controls sit side by side. Guarded by tests/leaflet-required-styles.test.js. */
+#legal-details{position:fixed;bottom:24px;right:56px;z-index:760;border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border)}
 #legal-details>summary{list-style:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 14px 7px;border-radius:6px;color:var(--ua-muted);min-width:0;background:none;font-size:15px;font-weight:700;font-family:var(--font-display);cursor:pointer;transition:background-color .15s,color .15s}
 #legal-details>summary::-webkit-details-marker{display:none}
 #legal-details>summary:hover{background:rgba(148,163,184,.07);color:var(--ua-text)}
 #legal-details[open]>summary{background:var(--ua-blue-soft);color:var(--ua-accent)}
-#legalpop{position:fixed;bottom:96px;right:16px;z-index:780;width:300px;max-width:calc(100vw - 32px);padding:13px 14px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px}
+/* Tracks #legal-details' right offset so the popover stays anchored over its button; the
+   gutter in max-width follows suit (56px right + 16px left). bottom:96px clears the zoom
+   control's 89px reach, so the open popover does not cover it either. */
+#legalpop{position:fixed;bottom:96px;right:56px;z-index:780;width:300px;max-width:calc(100vw - 72px);padding:13px 14px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.96) 100%);border:1px solid var(--ua-border);border-radius:6px}
 #legalpop .ltitle{font-family:var(--font-display);font-weight:700;font-size:11px;letter-spacing:.5px;color:var(--ua-text);margin-bottom:8px;text-transform:uppercase}
 #legalpop .lgrid{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11px;line-height:1.5}
 #legalpop a{color:var(--ua-muted);text-decoration:none}

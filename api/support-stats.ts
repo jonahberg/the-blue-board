@@ -20,8 +20,32 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
 import { fetchFr24UsageRaw } from './fr24-usage.js';
+import { createRateLimiter } from './_rate-limit.js';
 
 const MONTHLY_COST_NOTE = 'Data feeds, hosting, and AI explanations cost real money every month';
+
+// This endpoint is public and unauthenticated, and the CDN cache is keyed by the full URL — so
+// `?z=<random>` is a MISS every time and reaches the origin. Before the memo below, each MISS
+// fired a fresh *authenticated* call to FR24's usage API, which made an anonymous loop an
+// amplifier onto a metered upstream this project has exhausted before. The rate limiter is
+// per-instance (serverless) and so only partial cover; the memo is the real guard, because it
+// bounds upstream calls to one per TTL per warm instance no matter how many requests arrive.
+const isRateLimited = createRateLimiter('support-stats', 60);
+
+const LIVE_FEED_TTL_MS = 5 * 60 * 1000;
+// How long a last-known-good reading may be served after the upstream starts failing. Without
+// this, a flaky FR24 made the response flap between {configured:true} and {configured:false} on
+// consecutive identical requests — and {configured:false} is the same shape the endpoint uses to
+// mean "no token configured", so the meter silently vanished rather than admitting a bad fetch.
+const LIVE_FEED_STALE_MS = 30 * 60 * 1000;
+
+type LiveFeed = { configured: false } | { configured: true; usedPct: number };
+let liveFeedMemo: { at: number; value: { configured: true; usedPct: number } } | null = null;
+
+/** Test seam: module-level memo would otherwise leak across cases. */
+export function __resetLiveFeedMemo(): void {
+  liveFeedMemo = null;
+}
 
 // Coarse denominator for the live-feed percentage. There is no published per-account credit
 // ceiling in the FR24 usage response itself, so this is an operator-configured estimate of the
@@ -38,8 +62,10 @@ function roundToNearest5(pct: number): number {
   return Math.round(clamped / 5) * 5;
 }
 
-async function getLiveFeedUsage(): Promise<{ configured: false } | { configured: true; usedPct: number }> {
+async function getLiveFeedUsage(now: number = Date.now()): Promise<LiveFeed> {
   if (!process.env.FR24_API_TOKEN) return { configured: false };
+
+  if (liveFeedMemo && now - liveFeedMemo.at < LIVE_FEED_TTL_MS) return liveFeedMemo.value;
 
   try {
     const raw = await fetchFr24UsageRaw();
@@ -47,9 +73,13 @@ async function getLiveFeedUsage(): Promise<{ configured: false } | { configured:
     const totalCredits = rows.reduce((sum, row) => sum + (Number(row?.credits) || 0), 0);
     const budget = getFr24MonthlyCreditBudget();
     const pct = budget > 0 ? (totalCredits / budget) * 100 : 0;
-    return { configured: true, usedPct: roundToNearest5(pct) };
+    const value = { configured: true as const, usedPct: roundToNearest5(pct) };
+    liveFeedMemo = { at: now, value };
+    return value;
   } catch (e: any) {
     console.error('support-stats: FR24 usage fetch failed:', e?.message || e);
+    // Prefer a slightly stale truth over a false "not configured".
+    if (liveFeedMemo && now - liveFeedMemo.at < LIVE_FEED_STALE_MS) return liveFeedMemo.value;
     return { configured: false };
   }
 }
@@ -60,6 +90,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  if (isRateLimited(req)) {
+    // Never let a 429 into the shared CDN cache — it would be served to innocent visitors.
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(429).json({ error: 'Rate limited — try again shortly' });
+  }
 
   // Public, unauthenticated, identical for everyone — safe to cache hard at the CDN.
   res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');

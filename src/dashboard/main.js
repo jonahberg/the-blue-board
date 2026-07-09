@@ -662,7 +662,15 @@ function applyFleetDeepLinkFilter(filter, { render = true } = {}) {
 const _origSwitchToTab = switchToTab;
 switchToTab = function(tabId, updateHash) {
   _origSwitchToTab(tabId, updateHash);
-  var overflowTabs = ['tab-myflight','tab-analytics','tab-sources'];
+  // Read the overflow set out of the More menu rather than hardcoding it. The old literal
+  // ['tab-myflight','tab-analytics','tab-sources'] silently desynced when My Flights was
+  // promoted to primary mobile nav: tapping it lit up BOTH "My Flights" and "More", while
+  // Fleet and Starlink — which had moved INTO the More menu — lit up nothing at all.
+  // The menu's own contents are the definition of "reachable only via More", so derive from it.
+  var moreMenu = document.getElementById('mobile-more-menu');
+  var overflowTabs = moreMenu
+    ? Array.prototype.map.call(moreMenu.querySelectorAll('[data-tab]'), function(b) { return b.dataset.tab; })
+    : [];
   var moreBtn = document.getElementById('mobile-more-btn');
   document.querySelectorAll('#mobile-bottom-nav button[data-tab]:not(.bnav-overflow-item)').forEach(function(b) {
     b.classList.toggle('active', b.dataset.tab === tabId);
