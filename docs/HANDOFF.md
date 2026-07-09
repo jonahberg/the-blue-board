@@ -28,7 +28,7 @@ A seven-persona hands-on review + five-domain code audit + independent fact-chec
 
 ## Owner actions required (in order)
 
-1. **Enable background push** (~5 min): follow `docs/setup-push-alerts.md` — generate VAPID keys, set 3 env vars in Vercel, run `sql/014` in Supabase, redeploy. Until then the watch feature honestly shows "in-tab only".
+1. ~~**Enable background push**~~ **DONE 2026-07-09**: VAPID keys generated and set in Vercel Production, `sql/014` applied (RLS verified default-deny: one `service_role` policy; the anon/authenticated grants are inert under RLS), deployed. Verified live: `GET /api/push-subscribe` returns `configured:true`; the `*/5` watch-alerts cron fails closed without `CRON_SECRET` (401) and no-ops cheaply at zero subscribers (first run logged `subscriptions:0, sends:0`, zero upstream calls).
 2. **Set `FR24_MONTHLY_CREDIT_BUDGET`** env to the real FR24 plan credit total (support-stats meter assumes 100,000).
 3. **Before charging any money** (legal sequencing from the review — SWMonkey / Air Canada v. seats.aero precedents): replace the FlightAware HTML scrape (`api/flight-times.ts` FA tier) with licensed AeroAPI or drop it; obtain written permission for the unitedstarlinktracker.com upstream (TODOS.md items); confirm FR24 API tier covers a commercial dashboard; set `EMAIL_POSTAL_ADDRESS` (CAN-SPAM).
 
@@ -54,4 +54,12 @@ A seven-persona hands-on review + five-domain code audit + independent fact-chec
 - `docs/setup-push-alerts.md` — push-alert owner setup.
 - `DESIGN.md` — design system (updated 2026-07-08: contrast tables, dim-token change, blue-is-never-text).
 - `TODOS.md` — pre-existing backlog; compliance items there are now load-bearing for monetization (see owner action 3).
-- `CHANGELOG.md` — not yet updated for this program; suggest one consolidated v1.8.0 entry summarizing the PR when merging.
+- `CHANGELOG.md` — now current through v1.7.7 (2026-07-09). The v2.0 program itself shipped unversioned; the seven hotfix releases that followed it (v1.7.1–v1.7.7: map markers, IROPS phantom holds, zoom-control/nav/support-stats, overnight-empty Schedule board, TypeScript-7 deploy freeze revert, gate-vs-runway instrumentation, gate-based delay measurement) are each documented there. Do NOT create a consolidated v1.8.0 entry — that guidance predates the hotfix series and would duplicate history.
+
+## Post-program addendum (2026-07-09, after the v2.0 review-and-remediation session)
+
+The program's own gates (`bun run test` + `tsc --noEmit` + `bun run build`, all green) missed four classes of runtime failure; the next agent should know these are the blind spots:
+1. **CSS cascade vs a JS library's required styles** — the marker hit-slop rule set `position:relative` on `.leaflet-marker-icon` and destroyed the map (fixed v1.7.1; guarded by `tests/leaflet-required-styles.test.js`).
+2. **Unbounded time-based inference on a stale board** — F073's overdue scoring charged `now − scheduledDeparture` forever, inventing 17-hour "holds" (fixed v1.7.2; guarded by F073b tests).
+3. **A failed PRODUCTION deploy fails no GitHub check** — the TypeScript 6→7 bump froze deploys for 11h while `main` merged green; TS7 drops `ts.sys`, which `@vercel/node` requires (reverted v1.7.5; guarded by `tests/vercel-build-compat.test.js`; deploy-status visibility is still an open follow-up).
+4. **Units mismatch in the delay layer** — `time.real.*` was AeroDataBox `runwayTime` (wheels-up/-down) compared against scheduled GATE times, so delays carried taxi (fixed v1.7.7 after shipping instrumentation first; see `docs/specs/irops-delay-measurement.md`, which also holds Phase 2/3 follow-ups: threshold recalibration after ~1 week of gate-based data, and the `canceled_uncertain` ×3 weighting).
