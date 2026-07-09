@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { getStartOfHubDay, getHubDayLabel, getHubLocalDate, HUB_TZ } from '../src/lib/hubTz.js';
+import {
+  getStartOfHubDay,
+  getHubDayLabel,
+  getHubLocalDate,
+  getHubLocalHour,
+  defaultSchedDayOffset,
+  HUB_TZ,
+} from '../src/lib/hubTz.js';
 
 // Helper: assert that `ts` (Unix seconds) falls exactly at midnight in the
 // given tz. Formats back via Intl.DateTimeFormat and compares the hour/minute.
@@ -126,5 +133,54 @@ describe('getHubLocalDate', () => {
     expect(month).toBe('04');
     // 15:00 UTC on 04-24 is 00:00 JST on 04-25.
     expect(day).toBe('25');
+  });
+});
+
+describe('defaultSchedDayOffset', () => {
+  // The Schedule tab opened at 00:23 hub-local and showed 644 flights that had not happened yet:
+  // 0 operated, 0 on-time, 0 late, 0 cancelled, every row "Expected · RISK: LOW". The completed
+  // day sat one click away under "Yesterday". api/irops.ts has always applied this rule
+  // server-side ("Before 6 AM local: no flights have departed yet, show yesterday's data");
+  // this is the client half of it.
+
+  it('defaults to yesterday before the rollover hour, hub-local', () => {
+    // 05:23 UTC = 00:23 CDT — the exact case from the bug report.
+    const now = new Date('2026-07-09T05:23:00Z');
+    expect(defaultSchedDayOffset('ORD', now)).toBe(-1);
+  });
+
+  it('defaults to today once the hub-local day is underway', () => {
+    // 14:00 UTC = 09:00 CDT.
+    const now = new Date('2026-07-09T14:00:00Z');
+    expect(defaultSchedDayOffset('ORD', now)).toBe(0);
+  });
+
+  it('switches exactly at the rollover hour, not before', () => {
+    // 10:59:59 UTC = 05:59:59 CDT (still yesterday); 11:00 UTC = 06:00 CDT (today).
+    expect(defaultSchedDayOffset('ORD', new Date('2026-07-09T10:59:59Z'))).toBe(-1);
+    expect(defaultSchedDayOffset('ORD', new Date('2026-07-09T11:00:00Z'))).toBe(0);
+  });
+
+  it('is hub-local, not viewer-local: NRT and ORD disagree at the same instant', () => {
+    // 05:23 UTC → 00:23 in Chicago (before rollover) but 14:23 in Tokyo (well after).
+    const now = new Date('2026-07-09T05:23:00Z');
+    expect(defaultSchedDayOffset('ORD', now)).toBe(-1);
+    expect(defaultSchedDayOffset('NRT', now)).toBe(0);
+  });
+
+  it('handles the midnight hour="24" ICU quirk', () => {
+    // 05:00 UTC = exactly 00:00 CDT. partsToObj normalizes hour 24 → 0; 0 < 6 ⇒ yesterday.
+    expect(defaultSchedDayOffset('ORD', new Date('2026-07-09T05:00:00Z'))).toBe(-1);
+  });
+
+  it('agrees with the server rule in api/irops.ts (hour < 6)', () => {
+    for (let h = 0; h < 24; h++) {
+      const now = new Date(Date.UTC(2026, 6, 9, (h + 5) % 24, 30));
+      const hubHour = Number(
+        new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: '2-digit', hour12: false })
+          .format(now)
+      ) % 24;
+      expect(defaultSchedDayOffset('ORD', now)).toBe(hubHour < 6 ? -1 : 0);
+    }
   });
 });

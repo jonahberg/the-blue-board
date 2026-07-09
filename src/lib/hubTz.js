@@ -110,6 +110,25 @@ export function getHubDayLabel(hub, dayOffset = 0, now = new Date()) {
  * Hub-local calendar date parts (year/month/day) as zero-padded strings.
  * Useful when constructing API queries keyed on hub-local date.
  */
+// A hub's "today" board is empty until its first departures roll. Opening the Schedule tab at
+// 00:23 hub-local showed 644 flights that had not happened yet — 0 operated, 0 on-time, 0 late,
+// 0 cancelled, every row "Expected · RISK: LOW" — while the completed day sat one click away
+// under "Yesterday". api/irops.ts has always applied this rule server-side ("Before 6 AM local:
+// no flights have departed yet, show yesterday's data"); these two must stay in sync.
+export const BOARD_ROLLOVER_HOUR = 6;
+
+/** Hub-local hour of day, 0-23. */
+export function getHubLocalHour(hub, now = new Date()) {
+  const tz = HUB_TZ[hub] || 'America/New_York';
+  // partsToObj normalizes the ICU hour="24" midnight quirk to "00".
+  return +partsToObj(getFmt(tz).formatToParts(now)).hour;
+}
+
+/** Which day the Schedule board should open on: -1 (yesterday) before rollover, else 0 (today). */
+export function defaultSchedDayOffset(hub, now = new Date()) {
+  return getHubLocalHour(hub, now) < BOARD_ROLLOVER_HOUR ? -1 : 0;
+}
+
 export function getHubLocalDate(hub, timestampMs = Date.now()) {
   const tz = HUB_TZ[hub] || 'America/New_York';
   const parts = new Intl.DateTimeFormat('en-US', {

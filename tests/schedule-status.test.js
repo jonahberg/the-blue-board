@@ -165,3 +165,44 @@ describe('live-sighting reclassification (Phase 2)', () => {
     expect(s.live).toBe(true);
   });
 });
+
+describe('classifySchedStatus — provider vocabulary must not leak into the status column', () => {
+  // On a real ORD board of 644 flights, 643 rows read "Expected" and exactly one read "Unknown"
+  // — UA2666. Both rows were identical: generic.status.text 'scheduled', no estimated time, no
+  // real time, both hours in the future. The difference was AeroDataBox's free-text status.text,
+  // which classifyBase surfaced verbatim via `text: txt || 'Scheduled'` — the fallback never
+  // fired because txt was the truthy string "Unknown".
+
+  it('does not show the provider\'s "unknown" for a plainly scheduled flight', () => {
+    const fl = flight({ statusText: 'scheduled', text: 'unknown', schedDep: NOW + 5 * 3600 });
+    const s = classifySchedStatus(fl, 'departures', NOW);
+    expect(s.key).toBe('scheduled');
+    expect(s.text).toBe('Scheduled');
+  });
+
+  it('still shows a meaningful provider word like "Expected"', () => {
+    const fl = flight({ statusText: 'scheduled', text: 'expected', schedDep: NOW + 5 * 3600 });
+    const s = classifySchedStatus(fl, 'departures', NOW);
+    expect(s.key).toBe('scheduled');
+    expect(s.text).toBe('Expected');
+  });
+
+  it('falls back to "Scheduled" when the provider says nothing at all', () => {
+    const fl = flight({ statusText: 'scheduled', text: '', schedDep: NOW + 5 * 3600 });
+    expect(classifySchedStatus(fl, 'departures', NOW).text).toBe('Scheduled');
+  });
+
+  it('two identically-scheduled flights never render two different words', () => {
+    const a = flight({ statusText: 'scheduled', text: 'unknown', schedDep: NOW + 5 * 3600 });
+    const b = flight({ statusText: 'scheduled', text: '', schedDep: NOW + 5 * 3600 });
+    expect(classifySchedStatus(a, 'departures', NOW).text).toBe(classifySchedStatus(b, 'departures', NOW).text);
+  });
+
+  it('an "unknown"-texted row is still reclassified as departed once it is long past', () => {
+    // key stays 'scheduled', so it remains in RECLASSIFIABLE_KEYS — this must not regress.
+    const fl = flight({ statusText: 'scheduled', text: 'unknown', schedDep: NOW - 6 * 3600 });
+    const s = classifySchedStatus(fl, 'departures', NOW);
+    expect(s.key).toBe('departed');
+    expect(s.presumed).toBe(true);
+  });
+});
