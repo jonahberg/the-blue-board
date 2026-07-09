@@ -7,6 +7,7 @@ import {
   dedupeBoardFlights,
   validateRegistration,
   fetchViaAeroDataBox,
+  modelTextToIcaoCode,
 } from '../api/_schedule-aerodatabox.js';
 import { __resetAdbSpendForTests } from '../api/_cost-state.js';
 
@@ -372,5 +373,137 @@ describe('gate-based delay measurement', () => {
     const f = await board({ revisedTime: { utc: iso(600) } }, {}, 'Scheduled');
     expect(f.time.real.departure).toBeNull();
     expect(f._source.timeSource.gateDistinctDep).toBe(false);
+  });
+});
+
+// ── Aircraft model.code is derived from AeroDataBox's free-text model (#8) ────────────────────
+// AeroDataBox ships only a human-readable model name and never a code (0 of 647 live rows had
+// one). The dashboard keys three features off aircraft.model.code — the equipment-swap detector,
+// the Aircraft column, and the type filter — so with the code hardcoded to '' all three were
+// structurally dead. modelTextToIcaoCode() fills it, in the client's ICAO_TO_FLEET_TYPE
+// vocabulary. Ambiguous/unknown text must return '' (never a guessed variant: a wrong code mints
+// a FALSE swap alert, which is worse than the dead banner it revives).
+describe('modelTextToIcaoCode — free-text model → ICAO code', () => {
+  it('maps each live mainline/regional model to its client-vocabulary code', () => {
+    const cases = [
+      ['Airbus A319', 'A319'],
+      ['Airbus A320', 'A320'],
+      ['Airbus A321 NEO', 'A21N'],
+      ['Boeing 737-700', 'B737'],
+      ['Boeing 737-800', 'B738'],
+      ['Boeing 737-900', 'B739'],
+      ['Boeing 737 MAX 8', 'B38M'],
+      ['Boeing 737 MAX 9', 'B39M'],
+      ['Boeing 757-200', 'B752'],
+      ['Boeing 757-300', 'B753'],
+      ['Boeing 767-300', 'B763'],
+      ['Boeing 767-400', 'B764'],
+      ['Boeing 777-200', 'B772'],
+      ['Boeing 777-200ER', 'B77E'],
+      ['Boeing 777-300ER', 'B77W'],
+      ['Boeing 787-8', 'B788'],
+      ['Boeing 787-9', 'B789'],
+      ['Boeing 787-10', 'B78X'],
+      ['Embraer 175', 'E175'],
+      ['Embraer 170', 'E170'],
+      ['Bombardier CRJ 200', 'CRJ2'],
+      ['Bombardier CRJ 700', 'CRJ7'],
+      ['Bombardier CRJ 550', 'CRJ7'],
+      ['Bombardier CRJ 900', 'CRJ9'],
+    ];
+    for (const [text, code] of cases) {
+      expect(modelTextToIcaoCode(text)).toBe(code);
+    }
+  });
+
+  it('every derived mainline code is a key the client ICAO_TO_FLEET_TYPE map understands', () => {
+    // Guards the vocabulary contract: these are exactly the keys in src/dashboard/main.js.
+    const CLIENT_MAINLINE_KEYS = new Set([
+      'A319', 'A320', 'A21N',
+      'B737', 'B738', 'B739', 'B39M', 'B38M',
+      'B752', 'B753', 'B763', 'B764',
+      'B772', 'B77E', 'B77W', 'B788', 'B789', 'B78X',
+    ]);
+    for (const text of ['Airbus A319', 'Airbus A321 NEO', 'Boeing 737 MAX 9', 'Boeing 777-200ER', 'Boeing 787-10']) {
+      expect(CLIENT_MAINLINE_KEYS.has(modelTextToIcaoCode(text))).toBe(true);
+    }
+  });
+
+  it("returns '' for a bare 'Boeing 737' — ambiguous across -700/-800/-900, never guess", () => {
+    expect(modelTextToIcaoCode('Boeing 737')).toBe('');
+  });
+
+  it("returns '' for other ambiguous bare families (787, A321 ceo/neo, CRJ)", () => {
+    expect(modelTextToIcaoCode('Boeing 787')).toBe('');
+    expect(modelTextToIcaoCode('Airbus A321')).toBe('');
+    expect(modelTextToIcaoCode('Bombardier CRJ')).toBe('');
+    expect(modelTextToIcaoCode('Boeing 777')).toBe('');
+  });
+
+  it("returns '' for unknown / empty / nullish text", () => {
+    expect(modelTextToIcaoCode('Cessna 172')).toBe('');
+    expect(modelTextToIcaoCode('Saab 340')).toBe('');
+    expect(modelTextToIcaoCode('')).toBe('');
+    expect(modelTextToIcaoCode(undefined)).toBe('');
+    expect(modelTextToIcaoCode(null)).toBe('');
+  });
+
+  it('tolerates casing and whitespace noise', () => {
+    expect(modelTextToIcaoCode('  boeing   787-9  ')).toBe('B789');
+    expect(modelTextToIcaoCode('AIRBUS A321NEO')).toBe('A21N');
+  });
+});
+
+// ── End-to-end: the derived code rides the normalized board (swap-detector precondition) ──────
+describe('fetchViaAeroDataBox — aircraft.model.code end-to-end', () => {
+  const nowSec = 1_700_000_000;
+  const iso = (offsetS) => new Date((nowSec + offsetS) * 1000).toISOString();
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetAdbSpendForTests();
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
+  });
+  afterEach(() => {
+    delete process.env.AERODATABOX_API_KEY;
+    delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
+    __resetAdbSpendForTests();
+  });
+
+  async function boardWithModel(model) {
+    const departures = [{
+      number: 'UA 100', status: 'Scheduled', airline: { iata: 'UA', name: 'United Airlines' },
+      departure: { scheduledTime: { utc: iso(3600) }, airport: { iata: 'ORD' } },
+      arrival: { scheduledTime: { utc: iso(10800) }, airport: { iata: 'DEN' } },
+      aircraft: { model, reg: 'N12345' },
+    }];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      String(url).includes('aedbx/aerodatabox')
+        ? { ok: true, status: 200, json: async () => ({ departures }) }
+        : { ok: false, status: 403, text: async () => 'blocked', headers: { get: () => null } }
+    );
+    const result = await fetchViaAeroDataBox('ORD', 'departures', nowSec, 8000);
+    return result.flights[0];
+  }
+
+  it('carries the derived code AND the raw text on the normalized row', async () => {
+    const f = await boardWithModel('Embraer 175');
+    expect(f.aircraft.model.code).toBe('E175');
+    expect(f.aircraft.model.text).toBe('Embraer 175');
+  });
+
+  it('two boards with changed model text produce DIFFERING codes (the swap precondition)', async () => {
+    const before = await boardWithModel('Boeing 787-9');
+    const after = await boardWithModel('Boeing 777-300ER');
+    expect(before.aircraft.model.code).toBe('B789');
+    expect(after.aircraft.model.code).toBe('B77W');
+    expect(before.aircraft.model.code).not.toBe(after.aircraft.model.code);
+  });
+
+  it("leaves the code empty for a bare 'Boeing 737' — no false swap, honest '—' in the column", async () => {
+    const f = await boardWithModel('Boeing 737');
+    expect(f.aircraft.model.code).toBe('');
+    expect(f.aircraft.model.text).toBe('Boeing 737');
   });
 });

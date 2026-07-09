@@ -4,6 +4,13 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.8] - 2026-07-09
+
+### Fixed
+- **The equipment-swap banner never fired, the Aircraft column was all `—`, and the type filter matched nothing — because the aircraft code was hardcoded empty.** `api/_schedule-aerodatabox.ts` built every schedule row with `model.code: ''`. AeroDataBox only ships a free-text model name and *never* a code — 0 of 647 live rows carried one, 610 carried text like `Airbus A321 NEO`, `Boeing 737 MAX 9`, `Boeing 787-9`. The dashboard keys three features off `aircraft.model.code`: the `⚠️ N equipment swaps detected` detector (`detectEquipmentSwaps` gates on `if (fnum && acCode)`, so its baseline map stayed empty and no swap could ever be recorded), the Schedule table's Aircraft column (rendered `—` on every row), and the aircraft-type filter (could never match). The adapter now derives an ICAO-style designator from the model text via a new pure, exported `modelTextToIcaoCode()`, in the same vocabulary the client's `ICAO_TO_FLEET_TYPE` map already speaks (A319/A320/A21N, B737/B738/B739, B38M/B39M, B752/B753, B763/B764, B772/B77E/B77W, B788/B789/B78X) plus the United Express regionals the boards carry (E170/E175, CRJ2/CRJ7/CRJ9).
+- **Honest by design: ambiguous text maps to nothing, never a guess.** A bare `Boeing 737` with no `-700`/`-800`/`-900`/`MAX` suffix is ambiguous across four codes, so it returns `''` — likewise bare `Boeing 787`, `Boeing 777`, `Airbus A321` (ceo vs neo), `Bombardier CRJ`, and any unrecognised string. An empty code is honest: the swap detector skips the row and the column shows `—`. A *guessed* variant would be worse than the dead banner it revives — two polls that resolved the same physical jet to different guessed codes would mint a **false** swap alert. AeroDataBox's free text also can't distinguish a 777-200 from a 777-200ER unless it spells out `ER`, so plain `Boeing 777-200` collapses to the generic `B772` (consistent, so it can't fabricate a swap; it only loses the ER split for fleet-stats display).
+- User-visible effect: the equipment-swap banner can now actually fire when a flight's aircraft type changes between polls, the Aircraft column shows real type codes (with the full model name beneath), and the aircraft-type filter works. Rows the provider left genuinely ambiguous still read `—`, as they should. `time.*` and `_source.timeSource` (the v1.7.7 gate-vs-runway fix) are untouched.
+
 ## [1.7.7] - 2026-07-09
 
 ### Fixed

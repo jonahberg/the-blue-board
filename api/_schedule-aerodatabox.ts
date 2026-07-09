@@ -179,6 +179,91 @@ function isUnitedFlight(flight: any): boolean {
   );
 }
 
+/**
+ * Derive an ICAO-style type designator from AeroDataBox's free-text aircraft model.
+ *
+ * AeroDataBox ships only a human-readable model name ("Airbus A321 NEO", "Boeing 737 MAX 9")
+ * and NEVER a code — 0 of 647 rows on the live board carried one, 610 carried text. The
+ * dashboard keys three features off `aircraft.model.code`: the equipment-swap detector
+ * (detectEquipmentSwaps), the Aircraft column, and the aircraft-type filter
+ * (populateAircraftFilter). With the code hardcoded to '' all three were structurally dead.
+ * This maps the text into the client's ICAO_TO_FLEET_TYPE vocabulary (src/dashboard/main.js):
+ * A319/A320/A21N, B737/B738/B739, B38M/B39M, B752/B753, B763/B764, B772/B77E/B77W,
+ * B788/B789/B78X, plus the United Express regional designators the boards also carry
+ * (E170/E175, CRJ2/CRJ7/CRJ9).
+ *
+ * HONESTY OVER COMPLETENESS: any text that does not resolve to a SINGLE variant returns ''.
+ * A bare "Boeing 737" (no -700/-800/-900/MAX suffix) is ambiguous across four codes, so it
+ * maps to nothing — likewise bare "Boeing 787" / "Boeing 777", "Airbus A321" (ceo vs neo),
+ * "Bombardier CRJ", and any unrecognised string. An empty code is honest: the swap detector
+ * skips the row and the Aircraft column shows '—'. A GUESSED variant would be worse than the
+ * dead banner it revives — two polls that resolved the same physical jet to different guessed
+ * codes would mint a FALSE "equipment swap detected" alert. Never guess a variant.
+ *
+ * Note on 777-200: AeroDataBox free text cannot distinguish a 777-200 from a 777-200ER unless
+ * it spells out "ER", so plain "Boeing 777-200" maps to the generic B772. This is consistent
+ * (all -200s without an ER marker collapse to one code) so it cannot fabricate a swap; it only
+ * loses the ER distinction for getTypicalFleetStats, a display nicety, not a correctness issue.
+ */
+export function modelTextToIcaoCode(text: string): string {
+  const t = String(text || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+
+  // ── Airbus ──
+  if (t.includes('A319')) return 'A319';
+  if (t.includes('A320')) return 'A320';
+  if (t.includes('A321')) return /NEO/.test(t) ? 'A21N' : ''; // bare A321 = ceo/neo ambiguous
+
+  // ── Boeing 737 (check MAX + numbered variants; bare "737" is ambiguous) ──
+  if (t.includes('737')) {
+    if (/MAX ?8/.test(t)) return 'B38M';
+    if (/MAX ?9/.test(t)) return 'B39M';
+    if (/737-?700/.test(t)) return 'B737';
+    if (/737-?800/.test(t)) return 'B738';
+    if (/737-?900/.test(t)) return 'B739';
+    return ''; // bare "Boeing 737" — could be -700/-800/-900, never guess
+  }
+
+  // ── Boeing 757 / 767 ──
+  if (/757-?200/.test(t)) return 'B752';
+  if (/757-?300/.test(t)) return 'B753';
+  if (/767-?300/.test(t)) return 'B763';
+  if (/767-?400/.test(t)) return 'B764';
+
+  // ── Boeing 777 (check -300 and -200ER before plain -200) ──
+  if (t.includes('777')) {
+    if (/777-?300/.test(t)) return 'B77W'; // United 777-300 is 777-300ER only
+    if (/777-?200ER/.test(t)) return 'B77E';
+    if (/777-?200/.test(t)) return 'B772';
+    return ''; // bare "Boeing 777"
+  }
+
+  // ── Boeing 787 (check -10 before -1x/-8/-9) ──
+  if (t.includes('787')) {
+    if (/787-?10/.test(t)) return 'B78X';
+    if (/787-?9/.test(t)) return 'B789';
+    if (/787-?8/.test(t)) return 'B788';
+    return ''; // bare "Boeing 787"
+  }
+
+  // ── Embraer (United Express) ──
+  if (t.includes('EMBRAER') || /\bE-?1[0-9][0-9]\b/.test(t)) {
+    if (/175|E-?175|E-?75/.test(t)) return 'E175';
+    if (/170|E-?170|E-?70/.test(t)) return 'E170';
+    return '';
+  }
+
+  // ── Bombardier CRJ (CRJ-550 is an ICAO CRJ7 airframe) ──
+  if (t.includes('CRJ') || t.includes('BOMBARDIER') || t.includes('CANADAIR')) {
+    if (/CRJ ?-?900/.test(t)) return 'CRJ9';
+    if (/CRJ ?-?(550|700)/.test(t)) return 'CRJ7';
+    if (/CRJ ?-?200/.test(t)) return 'CRJ2';
+    return ''; // bare "Bombardier CRJ" — 200/550/700/900 all possible
+  }
+
+  return '';
+}
+
 function normalizeFlight(flight: any, hub: string, dir: string) {
   if (!isUnitedFlight(flight)) return null;
 
@@ -283,7 +368,7 @@ function normalizeFlight(flight: any, hub: string, dir: string) {
       },
     },
     aircraft: {
-      model: { code: '', text: flight?.aircraft?.model || '' },
+      model: { code: modelTextToIcaoCode(flight?.aircraft?.model || ''), text: flight?.aircraft?.model || '' },
       registration: validateRegistration(flight?.aircraft?.reg) || '',
     },
     _source: {
