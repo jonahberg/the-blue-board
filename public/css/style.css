@@ -213,8 +213,11 @@ main{display:contents}
    Instead we grow the *clickable* box with a ::after pseudo-element — pseudo-elements are part
    of the parent's own box for hit-testing purposes, so a click anywhere in the padded area still
    fires on .leaflet-marker-icon itself (the element Leaflet's click handler is bound to). This
-   is purely a hit-slop: the visible plane glyph inside stays exactly the size main.js drew it. */
-.leaflet-marker-icon.leaflet-interactive{position:relative}
+   is purely a hit-slop: the visible plane glyph inside stays exactly the size main.js drew it.
+   Do NOT add `position:relative` here to anchor the ::after — leaflet.css lists
+   position:absolute on .leaflet-marker-icon under "required styles", and the icons are
+   display:block, so relative positioning returns 600+ markers to normal flow and stacks them
+   down the pane. The icon is already a containing block for the ::after as-is. */
 .leaflet-marker-icon.leaflet-interactive::after{content:'';position:absolute;inset:-5px;background:transparent}
 
 /* Popups */
