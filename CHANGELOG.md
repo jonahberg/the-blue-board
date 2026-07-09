@@ -4,6 +4,13 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.6] - 2026-07-09
+
+### Added
+- **Instrumentation for the taxi-vs-delay bug** (`docs/specs/irops-delay-measurement.md`). The board reports AeroDataBox's `runwayTime` (wheels-up) as the actual departure and compares it against `scheduledTime`, which is a scheduled *gate* time — so every delay the site reports silently includes taxi-out. Across 10,518 operated departures the median "delay" is **+24 min** with only **3.7%** at or before schedule, while the same days' arrivals skew **−18 min** with **73.9%** at or before schedule. That asymmetry is taxi-out and taxi-in, not operations.
+- The obvious fix — prefer `revisedTime` (gate) — is **not safe blind.** The provider sends `revisedTime` only "if any", so a naive swap could leave on-time flights taxi-inflated while delayed ones became gate-based: a mixed distribution worse than a uniformly wrong one. `schedule_snapshots` upserts by `cache_key` and keeps no intermediate states, so coverage cannot be recovered retroactively, and the one raw provider call that would settle it needs a credential this session declined to materialize.
+- Therefore: `_source.timeSource` now records which raw fields the provider actually sent (`hasGateDep`, `hasRunwayDep`, `hasGateArr`, `hasRunwayArr`), and `_source.gate` carries the gate timestamp for an already-operated leg. **No behaviour change** — `time.real.departure` is still `runwayTime || revisedTime`, pinned by a test. One hour of production traffic makes the coverage measurable, after which the fix is a one-line preference swap with evidence behind it.
+
 ## [1.7.5] - 2026-07-09
 
 ### Fixed

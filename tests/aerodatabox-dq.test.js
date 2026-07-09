@@ -287,3 +287,76 @@ describe('fetchViaAeroDataBox end-to-end board hygiene', () => {
     expect(ua2610.status.icon).toBe('yellow');
   });
 });
+
+// ── Gate-vs-runway time instrumentation ────────────────────────────────────────────────
+// See docs/specs/irops-delay-measurement.md. The board reports runwayTime (wheels-up) as the
+// actual departure and compares it against scheduledTime (a GATE time), so every delay silently
+// includes taxi-out: across 10,518 operated departures the median "delay" was +24 min with only
+// 3.7% at/before schedule, while the same days' arrivals skewed -18 min with 73.9% at/before
+// schedule. Preferring revisedTime is NOT a safe blind swap — the provider sends it only "if any",
+// so on-time flights could stay taxi-inflated while delayed ones became gate-based. These fields
+// record raw availability and the gate timestamp, changing nothing, so coverage can be measured.
+describe('gate-vs-runway time instrumentation', () => {
+  const nowSec = 1_700_000_000;
+  const iso = (offsetS) => new Date((nowSec + offsetS) * 1000).toISOString();
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetAdbSpendForTests();
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
+  });
+  afterEach(() => {
+    delete process.env.AERODATABOX_API_KEY;
+    delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
+    __resetAdbSpendForTests();
+  });
+
+  async function board(departure, status = 'Departed') {
+    const departures = [{
+      number: 'UA 100', status, airline: { iata: 'UA', name: 'United Airlines' },
+      departure: { scheduledTime: { utc: iso(0) }, airport: { iata: 'ORD' }, ...departure },
+      arrival: { scheduledTime: { utc: iso(7200) }, airport: { iata: 'DEN', name: 'Denver' } },
+      aircraft: { model: 'A320', reg: 'N12345' },
+    }];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      String(url).includes('aedbx/aerodatabox')
+        ? { ok: true, status: 200, json: async () => ({ departures }) }
+        : { ok: false, status: 403, text: async () => 'blocked', headers: { get: () => null } }
+    );
+    const result = await fetchViaAeroDataBox('ORD', 'departures', nowSec, 8000);
+    return result.flights[0];
+  }
+
+  it('records a runway time with no gate time', async () => {
+    const f = await board({ runwayTime: { utc: iso(1500) } });
+    expect(f._source.timeSource).toEqual({
+      hasGateDep: false, hasRunwayDep: true, hasGateArr: false, hasRunwayArr: false,
+    });
+    expect(f._source.gate.departure).toBeNull();
+  });
+
+  it('records the gate timestamp when the provider sends revisedTime', async () => {
+    // revisedTime = gate-out at +10 min; runwayTime = wheels-up at +30 min. The gap is taxi-out.
+    const f = await board({ revisedTime: { utc: iso(600) }, runwayTime: { utc: iso(1800) } });
+    expect(f._source.timeSource.hasGateDep).toBe(true);
+    expect(f._source.timeSource.hasRunwayDep).toBe(true);
+    expect(f._source.gate.departure).toBe(nowSec + 600);
+  });
+
+  it('does NOT change which timestamp becomes time.real.departure', async () => {
+    // The point of this change: instrument, do not fix. runwayTime must still win.
+    const f = await board({ revisedTime: { utc: iso(600) }, runwayTime: { utc: iso(1800) } });
+    expect(f.time.real.departure).toBe(nowSec + 1800);
+
+    const g = await board({ revisedTime: { utc: iso(600) } });
+    expect(g.time.real.departure).toBe(nowSec + 600); // unchanged fallback
+  });
+
+  it('leaves gate.departure null for a leg that has not operated', async () => {
+    const f = await board({ revisedTime: { utc: iso(600) } }, 'Scheduled');
+    expect(f.time.real.departure).toBeNull();
+    expect(f._source.gate.departure).toBeNull();
+    expect(f._source.timeSource.hasGateDep).toBe(true); // provider sent it; the leg just hasn't gone
+  });
+});
