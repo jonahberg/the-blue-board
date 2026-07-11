@@ -100,6 +100,9 @@ Curated United Airlines news hub with individual article pages, source links, an
     │  Cron jobs (vercel.json):                │
     │  /api/cron/warm-schedules  — hourly      │
     │  /api/cron/sync-starlink   — every 4hrs  │
+    │  /api/cron/refresh-tsa     — hourly      │
+    │  /api/cron/refresh-metar   — every 5min  │
+    │  /api/cron/watch-alerts    — every 5min  │
     └──────────┬──────────────────────────────┘
                │
     ┌──────────▼──────────────────────────────┐
@@ -124,7 +127,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 | Source | Data | Freshness | Notes |
 |--------|------|-----------|-------|
 | [Flightradar24](https://flightradar24.com) | Live positions, schedules, flight lookup | ~15s–60s | Server-side proxy with caching; schedules can recover through a configured FR24 scraper transport when direct fetches are blocked |
-| [AeroDataBox](https://aerodatabox.com) | Hub schedule boards (refresh + fallback) | Hourly warm + on-demand | Metered RapidAPI provider; spend capped by a cross-instance daily unit budget |
+| [AeroDataBox](https://aerodatabox.com) | Hub schedule boards (refresh + fallback) | Hourly warm + on-demand | Metered api.market (MagicAPI) gateway (RapidAPI-compatible); spend capped by a cross-instance daily unit budget |
 | [Aviation Weather Center](https://aviationweather.gov) | METAR observations | ~5min | NOAA/CORS proxy, batched |
 | [FAA NAS Status](https://nasstatus.faa.gov) | Delays & ground stops | ~5min | XML→JSON proxy |
 | [United Fleet Site](https://unitedfleetsite.com/) | Fleet database | Daily | Community-maintained |
@@ -223,7 +226,10 @@ Curated United Airlines news hub with individual article pages, source links, an
 │   ├── news-notify.ts            # News digest email broadcasts
 │   ├── fr24-usage.ts             # FR24 credit usage monitor
 │   ├── cron/warm-schedules.ts    # Schedule cache warming (hourly, quota-budgeted)
-│   └── cron/sync-starlink.ts     # Starlink data sync (every 4hrs)
+│   ├── cron/sync-starlink.ts     # Starlink data sync (every 4hrs)
+│   ├── cron/refresh-tsa.ts       # TSA wait-time cache refresh (hourly)
+│   ├── cron/refresh-metar.ts     # METAR weather cache refresh (every 5min)
+│   └── cron/watch-alerts.ts      # Background flight-watch push alerts (every 5min)
 ├── sql/                          # Supabase migration files
 ├── scripts/                      # Build + seed scripts
 ├── tests/                        # Vitest test suite
