@@ -265,23 +265,83 @@ describe('cleanupExpiredSnapshots', () => {
     vi.restoreAllMocks();
   });
 
-  it('deletes only rows whose expires_at is already in the past', async () => {
-    const lt = vi.fn(async () => ({ error: null }));
-    const del = vi.fn(() => ({ lt }));
-    supa.from = vi.fn(() => ({ delete: del }));
+  // Wire the fake so each select batch returns the next entry of `batches` and every delete
+  // records the keys it was asked to remove. Mirrors the PostgREST select→delete.in two-step.
+  function mockCleanupSupabase(batches, { selectError = null, deleteError = null } = {}) {
+    let call = 0;
+    const selectLt = vi.fn();
+    const deleted = [];
+    supa.from = vi.fn(() => ({
+      select: () => ({
+        lt: (col, iso) => {
+          selectLt(col, iso);
+          return {
+            order: () => ({
+              limit: async () => {
+                if (selectError) return { data: null, error: selectError };
+                const rows = (batches[call++] || []).map((k) => ({ cache_key: k }));
+                return { data: rows, error: null };
+              },
+            }),
+          };
+        },
+      }),
+      delete: () => ({
+        in: async (col, keys) => {
+          if (deleteError) return { error: deleteError };
+          deleted.push([col, keys]);
+          return { error: null };
+        },
+      }),
+    }));
+    return { selectLt, deleted };
+  }
+
+  it('deletes expired rows in bounded key batches and stops after a short batch', async () => {
+    const full = Array.from({ length: 300 }, (_, i) => `agg:EWR:departures:${i}`);
+    const m = mockCleanupSupabase([full, ['agg:SFO:arrivals:1', 'agg:SFO:arrivals:2']]);
     const before = Date.now();
     await cleanupExpiredSnapshots();
     expect(supa.from).toHaveBeenCalledWith('schedule_snapshots');
-    expect(del).toHaveBeenCalledTimes(1);
-    expect(lt).toHaveBeenCalledTimes(1);
-    const [column, iso] = lt.mock.calls[0];
+    // Two select+delete rounds: a full batch, then the 2-row remainder ends the loop.
+    expect(m.selectLt).toHaveBeenCalledTimes(2);
+    const [column, iso] = m.selectLt.mock.calls[0];
     expect(column).toBe('expires_at');
     expect(Date.parse(iso)).toBeGreaterThanOrEqual(before);
     expect(Date.parse(iso)).toBeLessThanOrEqual(Date.now());
+    expect(m.deleted).toHaveLength(2);
+    expect(m.deleted[0][0]).toBe('cache_key');
+    expect(m.deleted[0][1]).toEqual(full);
+    expect(m.deleted[1][1]).toEqual(['agg:SFO:arrivals:1', 'agg:SFO:arrivals:2']);
   });
 
-  it('swallows a delete error instead of throwing', async () => {
-    supa.from = vi.fn(() => ({ delete: () => ({ lt: async () => ({ error: { message: 'boom' } }) }) }));
+  it('issues no delete when nothing is expired', async () => {
+    const m = mockCleanupSupabase([[]]);
+    await cleanupExpiredSnapshots();
+    expect(m.selectLt).toHaveBeenCalledTimes(1);
+    expect(m.deleted).toHaveLength(0);
+  });
+
+  it('caps the work per run at the batch ceiling even with a deep backlog', async () => {
+    const full = Array.from({ length: 300 }, (_, i) => `k${i}`);
+    // Every select returns a full batch — the run must stop at the ceiling, not drain forever.
+    const m = mockCleanupSupabase([full, full, full, full, full, full]);
+    await cleanupExpiredSnapshots();
+    expect(m.selectLt).toHaveBeenCalledTimes(4);
+    expect(m.deleted).toHaveLength(4);
+  });
+
+  it('swallows a select error instead of throwing and issues no delete', async () => {
+    const m = mockCleanupSupabase([], { selectError: { message: 'boom' } });
     await expect(cleanupExpiredSnapshots()).resolves.toBeUndefined();
+    expect(m.deleted).toHaveLength(0);
+  });
+
+  it('swallows a delete error instead of throwing and stops batching', async () => {
+    const full = Array.from({ length: 300 }, (_, i) => `k${i}`);
+    const m = mockCleanupSupabase([full, full], { deleteError: { message: 'canceling statement due to statement timeout' } });
+    await expect(cleanupExpiredSnapshots()).resolves.toBeUndefined();
+    // The failed delete must end the run — no second select round.
+    expect(m.selectLt).toHaveBeenCalledTimes(1);
   });
 });
