@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { matchAircraft, icao24ToNNumber } from '../src/lib/fleet-match.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FLEET_PATH = resolve(__dirname, '../public/data/fleet.json');
@@ -28,37 +29,52 @@ describe('fleet.json data integrity', () => {
   });
 });
 
-// Build the same FLEET_BY_REG index the dashboard builds, so we test the
-// real lookup path (not just the file). Mirrors src/dashboard/main.js:96.
+// Build the same FLEET_BY_REG index the dashboard builds, so we exercise the
+// REAL matchAircraft (imported from src/lib/fleet-match.js) — the same lookup
+// path the dashboard uses — not a copy. Mirrors src/dashboard/main.js:176.
 function buildIndex(db) {
   const idx = {};
   db.forEach(a => { idx[a.r] = a; });
   return idx;
 }
 
-// Mirrors src/dashboard/main.js matchAircraft (lines 851-864), minus the
-// icao24 fallback which depends on icao24ToNNumber from main.js. The
-// reg-first path is what FR24 hits in 99%+ of cases.
-function matchByReg(idx, reg) {
-  if (!reg) return null;
-  const stripped = reg.replace('-', '');
-  if (idx[stripped]) return idx[stripped];
-  if (idx[reg]) return idx[reg];
-  return null;
-}
-
 describe('matchAircraft regression cases', () => {
   const idx = buildIndex(FLEET);
 
   it('resolves N66808 (the reported bug) to a 737-900ER mainline entry', () => {
-    const ac = matchByReg(idx, 'N66808');
+    const ac = matchAircraft({ reg: 'N66808' }, idx);
     expect(ac).toBeTruthy();
     expect(ac.r).toBe('N66808');
     expect(ac.t).toBe('737-900ER');
+    expect(ac.nnum).toBe('N66808');
+  });
+
+  it('strips a dash from the FR24 registration before looking up', () => {
+    const ac = matchAircraft({ reg: 'N6-6808' }, idx);
+    expect(ac).toBeTruthy();
+    expect(ac.r).toBe('N66808');
   });
 
   it('returns null for genuine non-mainline tails', () => {
-    const ac = matchByReg(idx, 'N999XX');
-    expect(ac).toBeNull();
+    expect(matchAircraft({ reg: 'N999XX' }, idx)).toBeNull();
+  });
+
+  it('falls back to the ICAO24 -> N-number conversion when reg is absent', () => {
+    // The copy this test used to run skipped this branch entirely. Drive the REAL
+    // fallback: convert a US ICAO24 hex, index a synthetic tail under it, and confirm
+    // matchAircraft recovers it via icao24 alone.
+    const hex = 'A12345';
+    const nnum = icao24ToNNumber(hex);
+    expect(nnum).toMatch(/^N/);
+    const synthetic = { [nnum]: { r: nnum, t: 'TEST-TYPE' } };
+    const ac = matchAircraft({ icao24: hex }, synthetic);
+    expect(ac).toBeTruthy();
+    expect(ac.t).toBe('TEST-TYPE');
+    expect(ac.nnum).toBe(nnum);
+  });
+
+  it('icao24ToNNumber rejects non-US (out-of-range) hex codes', () => {
+    expect(icao24ToNNumber('400000')).toBeNull(); // below the A00001 US block
+    expect(icao24ToNNumber('C00001')).toBeNull(); // above AFFFFF
   });
 });

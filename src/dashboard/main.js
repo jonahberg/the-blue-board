@@ -3,7 +3,7 @@ import { computeDelayRiskModel, HUB_COORDINATES, HUB_RISK_PROFILES } from '../li
 import { formatDelayExplainFAAStatus, getScheduleRiskContext, describeFaaProgram } from '../lib/delay-explain-context.js';
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
-import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi } from '../lib/fleet-utils.js';
+import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, sortFleetData, filterFleetData } from '../lib/fleet-utils.js';
 import { bucketInstallsByMonth, computeInstallPace, buildDeparturesBoard } from '../lib/starlink-utils.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
@@ -20,6 +20,13 @@ import { displayScheduleStatus } from '../lib/status-display.js';
 import { computeScheduleStatCounts } from '../lib/board-stats.js';
 import { recordSightings, lookupReg, pruneLedger, deserializeLedger, normalizeFlightNum } from '../lib/reg-ledger.js';
 import { applySightingsToBoard } from '../lib/reg-overlay.js';
+import { resolveFlightStatus } from '../lib/flight-status-resolve.js';
+import { computeFlightCategory, computeOpsImpact } from '../lib/metar-category.js';
+import { iropsScore, iropsScoreCls, iropsScoreLabel, iropsRateFloor } from '../lib/irops-score.js';
+import { matchAircraft as matchAircraftInFleet } from '../lib/fleet-match.js';
+import { matchesScheduleFilters } from '../lib/schedule-board-filters.js';
+import { analyzeSwapImpact as classifySwapImpact, CABIN_RANK } from '../lib/swap-impact.js';
+import { escapeHtml } from '../lib/escape.js';
 
 injectSpeedInsights();
 
@@ -101,11 +108,7 @@ const ICO_EXTLINK = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none"
 // ═══ DEBOUNCE UTILITY ═══
 function debounce(fn, ms) { let t; return function(...a) { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); }; }
 
-// ═══ HTML SANITIZATION ═══
-function escapeHtml(str) {
-  if (typeof str !== 'string') return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+// escapeHtml imported from ../lib/escape.js (F051 numeric/boolean coercion lives there)
 
 // ═══════════════════════════════════════════════
 // EMBEDDED DATA
@@ -446,7 +449,7 @@ function recordRegSightings(flights) {
 function schedRegFor(fl) {
   return fl.aircraft?.registration
     || lookupReg(regLedger, fl.identification?.number?.default,
-         fl.time?.scheduled?.departure, fl.time?.scheduled?.arrival, Date.now())
+         fl.time?.scheduled?.departure, fl.time?.scheduled?.arrival)
     || '';
 }
 let activeHubFilter = null, activePhaseFilter = null;
@@ -484,6 +487,8 @@ function switchToTab(tabId, updateHash) {
   btn.setAttribute('aria-selected', 'true');
   btn.setAttribute('tabindex', '0');
   document.getElementById(tabId).classList.add('active');
+  // Stop the My Flights 1s countdown ticker when navigating away; renderMyFlights re-arms it on return.
+  if (tabId !== 'tab-myflight' && myFlightsCountdownInterval) { clearInterval(myFlightsCountdownInterval); myFlightsCountdownInterval = null; }
   if (updateHash !== false && TAB_HASHES[tabId]) history.replaceState(null, '', TAB_HASHES[tabId]);
   // Defer heavy tab-specific init to next frame so the click event completes fast (INP fix)
   requestAnimationFrame(() => {
@@ -926,59 +931,11 @@ function decodeSquawk(sq) {
   return null;
 }
 
-// ═══ ICAO24 to N-number (approximate) ═══
-function icao24ToNNumber(hex) {
-  // US registrations: A00001-AFFFFF (hex)
-  const h = parseInt(hex, 16);
-  if (h < 0xA00001 || h > 0xAFFFFF) return null;
-  const offset = h - 0xA00001;
-  // Simplified mapping - not perfectly accurate but works for many
-  const d1 = Math.floor(offset / 101711);
-  const rem1 = offset % 101711;
-  const d2 = Math.floor(rem1 / 10111);
-  const rem2 = rem1 % 10111;
-  const d3 = Math.floor(rem2 / 951);
-  const rem3 = rem2 % 951;
-
-  let nnum = 'N' + (d1 + 1);
-  if (d2 > 0) {
-    nnum += d2 - 1;
-    if (d3 > 0) {
-      nnum += d3 - 1;
-      if (rem3 > 0) {
-        if (rem3 <= 25) nnum += String.fromCharCode(64 + rem3);
-        else {
-          const d4 = Math.floor((rem3 - 1) / 25);
-          const r4 = (rem3 - 1) % 25;
-          nnum += d4;
-          if (r4 > 0) nnum += String.fromCharCode(64 + r4);
-        }
-      }
-    } else if (rem3 > 0) {
-      if (rem3 <= 25) nnum += String.fromCharCode(64 + rem3);
-      else {
-        nnum += Math.floor((rem3 - 1) / 25);
-      }
-    }
-  } else if (rem2 > 0) {
-    if (rem2 <= 25) nnum += String.fromCharCode(64 + rem2);
-  }
-  return nnum;
-}
-
+// Match a live flight to its fleet entry; icao24ToNNumber + the reg/icao24 lookup
+// order live in src/lib/fleet-match.js (importable + tested). FLEET_BY_REG is the
+// module-global index injected here.
 function matchAircraft(f) {
-  // FR24 gives us registration directly — try that first
-  if (f.reg) {
-    const reg = f.reg.replace('-', '');
-    if (FLEET_BY_REG[reg]) return { ...FLEET_BY_REG[reg], nnum: reg };
-    if (FLEET_BY_REG[f.reg]) return { ...FLEET_BY_REG[f.reg], nnum: f.reg };
-  }
-  // Fallback to ICAO24 conversion
-  if (f.icao24) {
-    const nnum = icao24ToNNumber(f.icao24);
-    if (nnum && FLEET_BY_REG[nnum]) return { ...FLEET_BY_REG[nnum], nnum };
-  }
-  return null;
+  return matchAircraftInFleet(f, FLEET_BY_REG);
 }
 
 // Single source of truth for "is this live flight a Starlink-equipped tail?".
@@ -2252,24 +2209,13 @@ function renderFleetTable() {
   const statusF = document.getElementById('fleet-filter-status').value;
   const searchF = document.getElementById('fleet-search').value.toUpperCase();
 
-  let data = FLEET_DB.filter(a => {
-    if (typeF && a.t !== typeF) return false;
-    if (wifiF && normalizeWifi(a.w) !== wifiF) return false;
-    if (statusF === 'active' && a.s) return false;
-    if (statusF === 'stored' && !a.s) return false;
-    if (statusF === 'starlink' && !STARLINK_TAILS.has(a.r)) return false;
-    if (statusF === 'special' && !isSpecialAircraft(a.r)) return false;
-    if (searchF && !a.r.toUpperCase().includes(searchF) && !a.c.toUpperCase().includes(searchF) && !a.t.toUpperCase().includes(searchF)) return false;
-    return true;
+  let data = filterFleetData(FLEET_DB, {
+    type: typeF, wifi: wifiF, status: statusF, search: searchF,
+    starlinkTails: STARLINK_TAILS,
+    specialAircraftSet: { has: r => !!isSpecialAircraft(r) },
   });
 
-  data.sort((a, b) => {
-    let va = a[fleetSortCol] || '', vb = b[fleetSortCol] || '';
-    if (fleetSortCol === 'tot' || fleetSortCol === 'd' || fleetSortCol === 'a') {
-      va = parseInt(va) || 0; vb = parseInt(vb) || 0;
-    }
-    return fleetSortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
-  });
+  data = sortFleetData(data, fleetSortCol, fleetSortAsc);
 
   const zeroEl = document.getElementById('fleet-zero-results');
   if (data.length === 0 && (typeF || wifiF || statusF || searchF)) {
@@ -3488,87 +3434,9 @@ let _wxHintObserver = null;
 const HUB_NAMES = {EWR:"Newark Liberty",IAH:"Houston Intercontinental",ORD:"O'Hare International",DEN:"Denver International",SFO:"San Francisco Int'l",LAX:"Los Angeles Int'l",IAD:"Washington Dulles",NRT:"Tokyo Narita",GUM:"Guam Int'l"};
 const CAT_COLORS = {VFR:'#22c55e',MVFR:'#eab308',IFR:'#ef4444',LIFR:'#c026d3'};
 
-// Compute flight category from raw METAR — strict AIM standard (ceiling + vis only)
-function computeFlightCategory(rawMetar) {
-  if (!rawMetar) return null;
-  // Parse visibility (handle "1 1/2SM", "3SM", "1/2SM")
-  let visSM = 99;
-  const vmMixed = rawMetar.match(/\b(\d+)\s+(\d+)\/(\d+)SM\b/);
-  if (vmMixed) visSM = parseInt(vmMixed[1]) + parseInt(vmMixed[2]) / parseInt(vmMixed[3]);
-  else { const vm = rawMetar.match(/\b(\d+)\s*SM\b/); if (vm) visSM = parseInt(vm[1]); }
-  const vf = rawMetar.match(/\b(\d+)\/(\d+)SM\b/);
-  if (vf && !vmMixed) visSM = parseInt(vf[1]) / parseInt(vf[2]);
-  // Parse ceiling (lowest BKN or OVC)
-  let ceiling = 99999;
-  const cm = [...rawMetar.matchAll(/(BKN|OVC)(\d{3})/g)];
-  if (cm.length) ceiling = parseInt(cm[0][2]) * 100;
-  // Standard AIM flight category rules
-  if (visSM < 1 || ceiling < 500) return 'LIFR';
-  if (visSM < 3 || ceiling < 1000) return 'IFR';
-  if (visSM <= 5 || ceiling <= 3000) return 'MVFR';
-  return 'VFR';
-}
-
-// Compute operational impact — considers wind, precip, phenomena beyond just ceiling/vis
-// Returns: {level: 'normal'|'caution'|'warning'|'severe', reasons: string[], color: string}
-const OPS_COLORS = {normal:'#22c55e',caution:'#eab308',warning:'#ef4444',severe:'#c026d3'};
-function computeOpsImpact(rawMetar, fltCat) {
-  const reasons = [];
-  let level = 'normal';
-  const bump = (to) => {
-    const rank = {normal:0,caution:1,warning:2,severe:3};
-    if (rank[to] > rank[level]) level = to;
-  };
-
-  if (!rawMetar) return {level, reasons, color: OPS_COLORS[level]};
-
-  // Flight category impact
-  if (fltCat === 'LIFR') { bump('severe'); reasons.push('very low ceilings/visibility'); }
-  else if (fltCat === 'IFR') { bump('warning'); reasons.push('instrument conditions'); }
-  else if (fltCat === 'MVFR') { bump('caution'); reasons.push('marginal ceilings/visibility'); }
-
-  // Wind/gusts
-  const wm = rawMetar.match(/\b\d{3}(\d{2,3})(G(\d{2,3}))?KT\b/);
-  if (wm) {
-    const spd = parseInt(wm[1]), gust = wm[3] ? parseInt(wm[3]) : spd;
-    if (gust >= 40) { bump('warning'); reasons.push(`gusts ${gust}kt`); }
-    else if (gust >= 30) { bump('caution'); reasons.push(`gusts ${gust}kt`); }
-  }
-
-  // Weather phenomena — parse ALL groups, not just first
-  const wxAll = [...rawMetar.matchAll(/\s([+-]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)+)(?=\s)/g)];
-  const wxCombined = wxAll.map(m => m[1]).join(' ');
-  if (wxCombined.includes('TS')) { bump('warning'); reasons.push('thunderstorms'); }
-  if (wxCombined.includes('FZ')) { bump('warning'); reasons.push('freezing precipitation'); }
-  if (wxCombined.includes('SN')) { bump('caution'); reasons.push('snow'); }
-  if (wxCombined.match(/\+/) && (wxCombined.includes('RA') || wxCombined.includes('SN'))) { bump('warning'); reasons.push('heavy precipitation'); }
-  else if (wxCombined.includes('RA') || wxCombined.includes('DZ') || wxCombined.includes('SH')) { bump('caution'); reasons.push('precipitation'); }
-  if (wxCombined.includes('FG')) { bump('caution'); reasons.push('fog'); }
-
-  // Low clouds + active precip (even if not technically ceiling)
-  const allClouds = [...rawMetar.matchAll(/(FEW|SCT|BKN|OVC)(\d{3})/g)];
-  const lowestAlt = allClouds.length ? parseInt(allClouds[0][2]) * 100 : 99999;
-  if (lowestAlt <= 1500 && wxAll.length > 0 && level === 'normal') {
-    bump('caution'); reasons.push('low clouds with active weather');
-  }
-
-  // Extract gust speed for delay risk engine
-  const gustMatch = rawMetar.match(/\b\d{3}\d{2,3}G(\d{2,3})KT\b/);
-  const gustKt = gustMatch ? parseInt(gustMatch[1]) : 0;
-
-  // Extract temperature for de-icing awareness
-  const tempMatch = rawMetar.match(/\b(M?\d{2})\/M?\d{2}\b/);
-  const tempC = tempMatch ? parseInt(tempMatch[1].replace('M', '-')) : null;
-
-  // Deduplicate reasons
-  const unique = [...new Set(reasons)];
-  return {level, reasons: unique, color: OPS_COLORS[level], gustKt, tempC,
-    hasThunderstorms: unique.includes('thunderstorms'),
-    hasFreezingPrecip: unique.includes('freezing precipitation'),
-    hasSnow: unique.includes('snow'),
-    hasFog: unique.includes('fog'),
-  };
-}
+// computeFlightCategory (AIM category) and computeOpsImpact (ops severity + gust/temp/
+// phenomena for the delay-risk engine) live in src/lib/metar-category.js — pure regex
+// parsers, importable + tested.
 
 function formatStructuredVisibility(visib) {
   if (visib === null || visib === undefined || visib === '') return '--';
@@ -3809,14 +3677,6 @@ function renderNasPanel() {
   panelEl.innerHTML = html;
 }
 
-function trendIndicator(trend) {
-  if (!trend) return '';
-  const t = String(trend).toLowerCase();
-  if (t === 'increasing') return '<span style="color:var(--ua-red)">↑ Increasing</span>';
-  if (t === 'decreasing') return '<span style="color:var(--ua-green)">↓ Decreasing</span>';
-  return '<span style="color:var(--ua-muted)">→ Stable</span>';
-}
-
 async function initWeatherTab() {
   if (weatherInitialized) return;
   weatherInitialized = true;
@@ -4022,8 +3882,8 @@ async function initWeatherTab() {
       ${availabilityLine}
       ${hasDetailContent ? `<div class="hub-card-expand" data-action="hub-card-toggle" tabindex="0" role="button" aria-expanded="false" style="text-align:center;padding:4px 0;cursor:pointer;color:var(--ua-dim);font-size:10px;font-family:'JetBrains Mono',monospace;transition:color 150ms ease">▾ Details</div>
       <div class="hub-card-detail" style="display:none">
-        ${explainer?`<div class="hub-explainer">${explainer}</div>`:''}
-        ${faaExplainer?`<div class="hub-explainer">${faaExplainer}</div>`:''}
+        ${explainer?`<div class="hub-explainer">${escapeHtml(explainer)}</div>`:''}
+        ${faaExplainer?`<div class="hub-explainer">${escapeHtml(faaExplainer)}</div>`:''}
         ${advisoryLinks}
         ${notamHtml}
         ${raw?`<div class="hub-raw">${metarPrefix}${escapeHtml(raw)}</div>`:''}
@@ -4064,6 +3924,9 @@ async function initWeatherTab() {
   // Refresh weather + FAA + NAS data every 5 minutes so the tab stays current
   if (_weatherRefreshInterval) clearInterval(_weatherRefreshInterval);
   _weatherRefreshInterval = setInterval(async () => {
+    // Hidden tab: skip the refresh (polling is paused to save FAA/METAR/NAS API
+    // credits), matching the live-map poll's visibilitychange guard.
+    if (document.hidden) return;
     try {
       const [newMetar, newFaa, newNas] = await Promise.allSettled([
         fetchMetarBatch(allStations),
@@ -4981,81 +4844,24 @@ function getFilteredScheduleFlights(nowSec = schedNow()) {
   const riskFilter = document.getElementById('sched-risk').value;
   const searchFilter = document.getElementById('sched-search').value.toLowerCase().trim();
 
-  return schedAllFlights.filter(fl => {
-    // Status filter. canceled_uncertain ("Likely Canceled") groups under the
-    // Canceled filter per the dq-jul3 contract — it is a cancellation for
-    // filtering purposes, just an unconfirmed one.
-    if (statusFilter) {
-      const s = classifySchedStatus(fl, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta));
-      const filterKey = s.key === 'canceled_uncertain' ? 'canceled' : s.key;
-      if (filterKey !== statusFilter) return false;
-    }
-    // Aircraft filter
-    if (aircraftFilter && fl.aircraft?.model?.code !== aircraftFilter) return false;
-    // Fleet family filter
-    if (fleetFamilyFilter) {
-      const family = getScheduleFleetFamily(fl.aircraft?.model?.code, fl.aircraft?.model?.text);
-      if (family !== fleetFamilyFilter) return false;
-    }
-    // Route type filter (domestic / international)
-    if (routeTypeFilter) {
-      const endpoint = schedCurrentDir === 'departures'
-        ? fl.airport?.destination?.code?.iata
-        : fl.airport?.origin?.code?.iata;
-      const isIntl = endpoint && INTL_AIRPORTS.has(endpoint);
-      if (routeTypeFilter === 'domestic' && isIntl) return false;
-      if (routeTypeFilter === 'international' && !isIntl) return false;
-    }
-    // Starlink filter (schedRegFor: backfilled tails must match the filter their ⚡ badge implies)
-    if (starlinkFilter) {
-      const reg = schedRegFor(fl);
-      const hasSL = reg && STARLINK_TAILS.has(reg);
-      if (starlinkFilter === 'starlink' && !hasSL) return false;
-      if (starlinkFilter === 'no-starlink' && hasSL) return false;
-    }
-    // Time range filter
-    if (timeRangeFilter) {
-      const ts = schedCurrentDir === 'departures'
-        ? fl.time?.scheduled?.departure
-        : fl.time?.scheduled?.arrival;
-      if (ts) {
-        const h = parseInt(new Date(ts * 1000).toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: SCHED_HUB_TZ[schedCurrentHub] || 'America/Chicago' }));
-        if (timeRangeFilter === 'morning' && !(h >= 5 && h < 12)) return false;
-        if (timeRangeFilter === 'afternoon' && !(h >= 12 && h < 17)) return false;
-        if (timeRangeFilter === 'evening' && !(h >= 17 && h < 22)) return false;
-        if (timeRangeFilter === 'redeye' && !(h >= 22 || h < 5)) return false;
-      }
-    }
-    // Delay risk filter
-    if (riskFilter) {
-      const status = classifySchedStatus(fl, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta));
-      if (['scheduled', 'estimated', 'delayed'].includes(status.key)) {
-        const risk = computeDelayRiskForScheduleFlight(fl, schedCurrentHub, nowSec);
-        const riskLabel = risk ? risk.label : 'LOW';
-        // F004: RISK_BANDS (src/lib/delay-risk.js) has two bands at/above the "high" threshold —
-        // HIGH and V.HIGH — so the "High Delay" filter must accept both, not just HIGH.
-        if (riskFilter === 'high' && riskLabel !== 'HIGH' && riskLabel !== 'V.HIGH') return false;
-        if (riskFilter === 'moderate' && riskLabel === 'LOW') return false;
-        if (riskFilter === 'low' && riskLabel !== 'LOW') return false;
-      } else if (riskFilter === 'high' || riskFilter === 'moderate') {
-        return false;
-      }
-    }
-    // Search filter
-    if (searchFilter) {
-      const flNum = fl.identification?.number?.default?.toLowerCase() || '';
-      const callsign = fl.identification?.callsign?.toLowerCase() || '';
-      const reg = schedRegFor(fl).toLowerCase(); // incl. backfilled tails — searching a visible reg must hit
-      const destName = (fl.airport?.destination?.name || '').toLowerCase();
-      const destCode = (fl.airport?.destination?.code?.iata || '').toLowerCase();
-      const origName = (fl.airport?.origin?.name || '').toLowerCase();
-      const origCode = (fl.airport?.origin?.code?.iata || '').toLowerCase();
-      const acType = (fl.aircraft?.model?.code || '').toLowerCase();
-      const haystack = `${flNum} ${callsign} ${reg} ${destName} ${destCode} ${origName} ${origCode} ${acType}`;
-      if (!haystack.includes(searchFilter)) return false;
-    }
-    return true;
-  });
+  // The row predicate (time buckets, domestic/intl, F004 risk-band gating, etc.)
+  // lives in src/lib/schedule-board-filters.js. Feed it the DOM-read filter strings
+  // as a plain object plus the classifiers/lookups it needs via ctx.
+  const filterValues = {
+    statusFilter, aircraftFilter, fleetFamilyFilter, routeTypeFilter,
+    starlinkFilter, timeRangeFilter, riskFilter, searchFilter,
+  };
+  const ctx = {
+    dir: schedCurrentDir,
+    hubTz: SCHED_HUB_TZ[schedCurrentHub] || 'America/Chicago',
+    intlAirports: INTL_AIRPORTS,
+    starlinkTails: STARLINK_TAILS,
+    classify: (fl) => classifySchedStatus(fl, schedCurrentDir, nowSec, classifyOptsFor(schedBoardMeta)),
+    fleetFamily: getScheduleFleetFamily,
+    regFor: schedRegFor,
+    computeRisk: (fl) => computeDelayRiskForScheduleFlight(fl, schedCurrentHub, nowSec),
+  };
+  return schedAllFlights.filter(fl => matchesScheduleFilters(fl, filterValues, ctx));
 }
 
 function sortScheduleFlights(flights, nowSec = schedNow()) {
@@ -5635,17 +5441,9 @@ const ICAO_TO_FLEET_TYPE = {
   'B788':'787-8','B789':'787-9','B78X':'787-10'
 };
 
-// Cabin class rankings: higher = more premium
-const CABIN_RANK = { 'J': 4, 'F': 3, 'PP': 2, 'PE': 2, 'E+': 1, 'Y': 0 };
-
-// WiFi display name normalization (raw data → clean labels)
-// normalizeWifi imported from ../lib/fleet-utils.js
-
-// WiFi quality ranking: higher = better (uses normalized names)
-const WIFI_RANK = { 'Starlink': 3, 'ViaSat Ka': 2, 'Satellite Ka': 1, 'Satellite Ka (US)': 1, 'Satellite Ku': 1, 'NO': 0 };
-
-// IFE quality ranking
-const IFE_RANK = { 'AVOD': 3, 'AVOD+PDE': 3, 'AVOD/PDE': 3, 'Seatback': 2, 'DTV/PDE': 1, 'PDE': 0 };
+// Cabin/WiFi/IFE quality rankings (higher = more premium) live in src/lib/swap-impact.js
+// alongside analyzeSwapImpact; CABIN_RANK is imported here so getTypicalFleetStats and
+// the swap classifier share one source of truth.
 
 function getTypicalFleetStats(icaoCode) {
   const fleetType = ICAO_TO_FLEET_TYPE[icaoCode];
@@ -5678,88 +5476,14 @@ function getTypicalFleetStats(icaoCode) {
   };
 }
 
+// The upgrade/downgrade/lateral classification lives in src/lib/swap-impact.js;
+// inject the module-global fleet lookups it needs.
 function analyzeSwapImpact(oldAcCode, newAcCode, newReg) {
-  const impacts = [];
-  const oldStats = getTypicalFleetStats(oldAcCode);
-  const newStats = getTypicalFleetStats(newAcCode);
-
-  // If we have the actual new aircraft registration, use it for precise data
-  let newActual = null;
-  if (newReg && newReg !== '—') {
-    const regClean = newReg.replace(/-/g, '');
-    newActual = FLEET_BY_REG[regClean] || FLEET_BY_REG[newReg];
-  }
-
-  if (!oldStats && !newStats) return impacts;
-
-  // Cabin class comparison
-  if (oldStats && (newActual || newStats)) {
-    const oldTop = oldStats.topCabin;
-    const newSeats = newActual?.seats || newStats?.seats || {};
-    const newTop = Object.keys(newSeats).reduce((best, cls) =>
-      (CABIN_RANK[cls] || 0) > (CABIN_RANK[best] || 0) ? cls : best, 'Y');
-    const oldRank = CABIN_RANK[oldTop] || 0;
-    const newRank = CABIN_RANK[newTop] || 0;
-    const cabinLabels = { 'J': 'Polaris', 'F': 'First', 'PP': 'Premium Plus', 'PE': 'Premium Plus', 'E+': 'Economy Plus', 'Y': 'Economy' };
-    if (oldRank > newRank) {
-      impacts.push({ text: 'Lost ' + (cabinLabels[oldTop] || oldTop), cls: 'downgrade' });
-    } else if (newRank > oldRank) {
-      impacts.push({ text: '+ ' + (cabinLabels[newTop] || newTop), cls: 'upgrade' });
-    }
-  }
-
-  // Seat count comparison
-  const oldTot = oldStats?.tot || 0;
-  const newTot = newActual?.tot || newStats?.tot || 0;
-  if (oldTot && newTot && oldTot !== newTot) {
-    const delta = newTot - oldTot;
-    impacts.push({
-      text: (delta > 0 ? '+' : '') + delta + ' seats',
-      cls: delta > 0 ? 'lateral' : 'downgrade'
-    });
-  }
-
-  // WiFi comparison
-  const oldWifi = normalizeWifi(oldStats?.wifi || '');
-  const newWifi = normalizeWifi(newActual?.w || newStats?.wifi || '');
-  if (oldWifi && newWifi && oldWifi !== newWifi) {
-    const oldWR = WIFI_RANK[oldWifi] ?? 1;
-    const newWR = WIFI_RANK[newWifi] ?? 1;
-    if (oldWR !== newWR) {
-      const shortWifi = (newActual && STARLINK_TAILS.has(newActual.r)) ? 'Starlink' : newWifi;
-      impacts.push({
-        text: shortWifi + ' WiFi',
-        cls: newWR > oldWR ? 'upgrade' : 'downgrade'
-      });
-    }
-  }
-
-  // Starlink specifically (even if WiFi field doesn't change, Starlink is special)
-  if (newActual && STARLINK_TAILS.has(newActual.r) && oldStats && !oldStats.hasStarlink) {
-    if (!impacts.some(i => i.text.includes('Starlink'))) {
-      impacts.push({ text: '⚡ Starlink', cls: 'upgrade' });
-    }
-  } else if (newActual && !STARLINK_TAILS.has(newActual.r) && oldStats?.hasStarlink) {
-    if (!impacts.some(i => i.text.includes('Starlink'))) {
-      impacts.push({ text: 'Lost Starlink', cls: 'downgrade' });
-    }
-  }
-
-  // IFE comparison
-  const oldIfe = oldStats?.ife || '';
-  const newIfe = newActual?.i || newStats?.ife || '';
-  if (oldIfe && newIfe && oldIfe !== newIfe) {
-    const oldIR = IFE_RANK[oldIfe] ?? 1;
-    const newIR = IFE_RANK[newIfe] ?? 1;
-    if (oldIR !== newIR) {
-      impacts.push({
-        text: newIfe.replace('AVOD/PDE', 'AVOD').replace('AVOD+PDE', 'AVOD').replace('DTV/PDE', 'DTV'),
-        cls: newIR > oldIR ? 'upgrade' : 'downgrade'
-      });
-    }
-  }
-
-  return impacts;
+  return classifySwapImpact(oldAcCode, newAcCode, newReg, {
+    getTypicalFleetStats,
+    fleetByReg: FLEET_BY_REG,
+    starlinkTails: STARLINK_TAILS,
+  });
 }
 
 let equipmentChanges = [];
@@ -5939,9 +5663,15 @@ function updateHubHealth() {
       // (Audit P1: degraded-rows-inflate-hub-otp.)
       if (fl._source?.liveFeedFallback) return;
       if (fl._source?.scheduleTimeDerivedFromActual?.departure || fl._source?.scheduleTimeDerivedFromActual?.arrival) return;
-      const schedT = fl.time?.scheduled?.departure || fl.time?.scheduled?.arrival;
-      const realT = fl.time?.real?.departure || fl.time?.real?.arrival;
-      if (!realT || !schedT) return; // skip flights without real timestamps
+      // F021: direction-aware, mirroring the per-board OTP card (board-stats.js) — an
+      // arrivals board must score scheduled-arrival vs real-arrival, a departures board
+      // scheduled-departure vs real-departure. Never fall back across legs: a completed
+      // departures row that backfilled real.arrival but not real.departure would otherwise
+      // score flight_duration as delay and deflate hub OTP.
+      const isArr = boardDir === 'arrivals';
+      const schedT = isArr ? fl.time?.scheduled?.arrival : fl.time?.scheduled?.departure;
+      const realT = isArr ? fl.time?.real?.arrival : fl.time?.real?.departure;
+      if (!realT || !schedT) return; // skip flights without the direction-appropriate real timestamp
       totalsByHub[hub].operated++;
       if (realT <= schedT + 1800) totalsByHub[hub].onTime++;
     });
@@ -6127,8 +5857,6 @@ function updateIrops() {
 
   let cancellations = 0, delayed30 = 0, delayed60 = 0, diversions = 0, totalFlights = allSchedFlts.length;
 
-  const worstDelays = [];
-
   allSchedFlts.forEach(({ fl, dir, key }) => {
     // Direction matters here: canceled_uncertain resolves via the direction-appropriate real
     // timestamp (an arrivals row with real.arrival must clear the suspicion) — a hardcoded
@@ -6142,30 +5870,14 @@ function updateIrops() {
       const delayMin = Math.round((actT - schedT) / 60);
       if (delayMin > 30) delayed30++;
       if (delayMin > 60) delayed60++;
-      if (delayMin > 15) {
-        const ident = fl.identification?.number?.default || '?';
-        const orig = fl.airport?.origin?.code?.iata || '?';
-        const dest = fl.airport?.destination?.code?.iata || '?';
-        worstDelays.push({ ident, route: `${orig}→${dest}`, delay: delayMin });
-      }
     }
   });
 
-  // Ground stops from FAA
-  const groundStops = Object.values(faaDelayIndex).filter(d => {
-    return d.groundStop || (d.delays && d.delays.some(dl => (dl.type||'') === 'ground_stop'));
-  }).length;
-
-  // F017: weight each flight once — 60m+ delays are ×2, the exclusive 30–60m bucket is ×1
-  // (a 61-min delay must not score 1+2=3, i.e. as much as a cancellation). delayed30 stays
-  // cumulative so the ">30m" card below remains truthful.
-  const delayed30to60 = Math.max(0, delayed30 - delayed60);
-  const score = totalFlights > 0 ? ((cancellations * 3 + delayed60 * 2 + delayed30to60 + diversions * 2) / totalFlights * 100).toFixed(1) : 0;
-  const scoreCls = score < 5 ? 'low' : score < 15 ? 'med' : 'high';
-  const scoreLabel = score < 5 ? 'NORMAL OPERATIONS' : score < 15 ? 'MINOR DISRUPTION' : 'SIGNIFICANT DISRUPTION';
-
-  worstDelays.sort((a, b) => b.delay - a.delay);
-  const top5 = worstDelays.slice(0, 5);
+  // F017 weighting + the <5/<15 label thresholds live in src/lib/irops-score.js,
+  // shared with renderIropsFromAPI so the two paths can never drift apart.
+  const score = iropsScore({ cancellations, delayed60, delayed30, diversions, total: totalFlights });
+  const scoreCls = iropsScoreCls(score);
+  const scoreLabel = iropsScoreLabel(score);
 
   // NOTE: All values here are computed numbers/strings from internal schedule data,
   // not user input. FAA alerts use escapeHtml() below.
@@ -6244,7 +5956,7 @@ function renderIropsFromAPI(data) {
     for (const [hub, m] of Object.entries(data.hubMetrics)) {
       if (m && m.total > 0) {
         const cancellations = m.cancellations || 0;
-        const hasRateFloor = m.total >= 10 || cancellations >= 3;
+        const hasRateFloor = iropsRateFloor(m.total, cancellations);
         iropsHubData[hub] = {
           cancellations,
           total: m.total,
@@ -6276,8 +5988,8 @@ function renderIropsFromAPI(data) {
 
   const content = document.getElementById('irops-content');
   const score = data.score;
-  const scoreCls = score < 5 ? 'low' : score < 15 ? 'med' : 'high';
-  const scoreLabel = score < 5 ? 'NORMAL OPERATIONS' : score < 15 ? 'MINOR DISRUPTION' : 'SIGNIFICANT DISRUPTION';
+  const scoreCls = iropsScoreCls(score);
+  const scoreLabel = iropsScoreLabel(score);
 
   // NOTE: All values here are from the IROPS API (internal, not user input).
   let html = '<div class="irops-bar">';
@@ -6541,7 +6253,6 @@ function clearAllWatched() {
 }
 
 // ═══ MY FLIGHTS DASHBOARD ═══
-let myFlightsInterval = null;
 let myFlightsCountdownInterval = null;
 let myFlightsTimeData = {};
 let myFlightsRenderToken = 0;
@@ -6654,31 +6365,8 @@ async function renderMyFlights() {
   myFlightsCountdownInterval = setInterval(updateMyFlightsCountdowns, 1000);
 }
 
-function resolveFlightStatus(td, liveFlight) {
-  if (!td || td.success === false) return '';
-  if (td.cancelled) return 'cancelled';
-  if (td.diverted) return 'diverted';
-  const st = (td.status || '').toLowerCase();
-  if (st.includes('land') || st.includes('arrived')) return 'landed';
-  if (st.includes('en-route') || st.includes('en route') || st.includes('airborne') ||
-      st.includes('in air') || st.includes('active') || st.includes('in flight')) return 'en-route';
-  if (st.includes('depart') || st.includes('taxiing')) return 'departed';
-  if (st.includes('delay')) return 'delayed';
-  // Cross-reference with live FR24 feed data
-  if (liveFlight && !liveFlight.onGround) return 'en-route';
-  if (liveFlight && liveFlight.onGround) {
-    const hasActualDep = td.departure?.takeoff?.actual || td.departure?.gate?.actual;
-    if (hasActualDep) return 'landed';
-  }
-  // Detect delay from time comparison (estimated vs scheduled gate departure)
-  const schedDep = td.departure?.gate?.scheduled;
-  const estDep = td.departure?.gate?.estimated;
-  if (schedDep && estDep) {
-    const diffMin = (new Date(estDep) - new Date(schedDep)) / 60000;
-    if (diffMin >= 15) return 'delayed';
-  }
-  return 'scheduled';
-}
+// resolveFlightStatus (provider status text + live-feed onGround -> flight state,
+// with delay measured at the GATE) lives in src/lib/flight-status-resolve.js.
 
 // ═══ AIRCRAFT JOURNEY CHAIN ═══
 
