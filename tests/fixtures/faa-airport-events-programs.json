@@ -1,0 +1,57 @@
+[
+    {
+        "airportId": "DCA",
+        "groundStop": null,
+        "groundDelay": null,
+        "airportClosure": {
+            "id": "b1c2d3e4-0000-4a11-9c00-abc123def456",
+            "airportId": "DCA",
+            "createdAt": "2026-03-28T13:00:00Z",
+            "updatedAt": "2026-03-28T13:05:00Z",
+            "startTime": "2026-03-28T13:00:00Z",
+            "endTime": "2026-03-28T15:00:00Z",
+            "reason": "snow and ice removal",
+            "simpleText": "DCA AD CLSD SNOW/ICE REMOVAL"
+        },
+        "freeForm": null,
+        "arrivalDelay": null,
+        "departureDelay": null,
+        "airportConfig": null,
+        "deicing": true,
+        "airportLongName": "Ronald Reagan Washington National",
+        "latitude": "38.8512",
+        "longitude": "-77.0402"
+    },
+    {
+        "airportId": "BOS",
+        "groundStop": null,
+        "groundDelay": null,
+        "airportClosure": null,
+        "freeForm": null,
+        "arrivalDelay": {
+            "airportId": "BOS",
+            "reason": "WX:Low Ceilings",
+            "arrivalDeparture": {
+                "type": "Arrival",
+                "min": "16 minutes",
+                "max": "30 minutes",
+                "trend": "Increasing"
+            },
+            "updateTime": "2026-03-28T16:12:00Z",
+            "trend": "increasing"
+        },
+        "departureDelay": null,
+        "airportConfig": {
+            "id": "c9d8e7f6-1111-4b22-8d33-fed654cba987",
+            "airportId": "BOS",
+            "arrivalRunwayConfig": "04R",
+            "departureRunwayConfig": "09",
+            "arrivalRate": 32,
+            "sourceTimeStamp": "2026-03-28T16:11:00Z"
+        },
+        "deicing": null,
+        "airportLongName": "Boston Logan International",
+        "latitude": "42.3656",
+        "longitude": "-71.0096"
+    }
+]

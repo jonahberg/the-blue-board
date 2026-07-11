@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRateLimiter } from '../api/_rate-limit.js';
 
 describe('createRateLimiter', () => {
@@ -84,5 +84,64 @@ describe('createRateLimiter', () => {
 
     // Same IP, different endpoint — should still be allowed
     expect(limiterB(req)).toBe(false);
+  });
+
+  // ── Sliding-window time behavior ──────────────────────────────────────────
+  // The eviction (`while (log[0] < now - windowMs) log.shift()`) is the only
+  // time-dependent branch in the limiter. Every synchronous test above still
+  // passes if that window is broken (widened or removed), which would silently
+  // block legitimate IPs long past the intended window — hence these fake-timer
+  // tests that actually advance the clock.
+
+  it('resets the sliding window so a blocked IP is allowed again once the window elapses', () => {
+    vi.useFakeTimers();
+    try {
+      const limiter = createRateLimiter('test-window-reset', 2);
+      const req = { headers: { 'x-real-ip': '7.7.7.7' } };
+
+      expect(limiter(req)).toBe(false);
+      expect(limiter(req)).toBe(false);
+      expect(limiter(req)).toBe(true); // 3rd within the 60s window → blocked
+
+      vi.advanceTimersByTime(61_000); // window has fully elapsed
+      expect(limiter(req)).toBe(false); // allowed again — not blocked for 10 minutes
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps counting requests within a partial (sub-window) interval', () => {
+    vi.useFakeTimers();
+    try {
+      const limiter = createRateLimiter('test-partial-window', 2);
+      const req = { headers: { 'x-real-ip': '8.8.8.8' } };
+
+      expect(limiter(req)).toBe(false); // t=0
+      vi.advanceTimersByTime(30_000);
+      expect(limiter(req)).toBe(false); // t=30s, still inside the same 60s window
+      expect(limiter(req)).toBe(true); // 3rd inside the window → blocked (t=0 entry not yet evicted)
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('honors a custom window: entries persist far past the default 60s', () => {
+    vi.useFakeTimers();
+    try {
+      const limiter = createRateLimiter('test-custom-window', 2, 60 * 60 * 1000); // 1h window
+      const req = { headers: { 'x-real-ip': '9.9.9.9' } };
+
+      expect(limiter(req)).toBe(false);
+      expect(limiter(req)).toBe(false);
+      expect(limiter(req)).toBe(true); // 3rd → blocked
+
+      vi.advanceTimersByTime(5 * 60 * 1000); // 5 min — well past the default 60s window
+      expect(limiter(req)).toBe(true); // still blocked: the 1h window has not elapsed
+
+      vi.advanceTimersByTime(56 * 60 * 1000); // now past the full hour
+      expect(limiter(req)).toBe(false); // window elapsed → allowed
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

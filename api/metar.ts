@@ -28,6 +28,17 @@ const lastKnownGood = new Map<string, { rec: any; cachedAt: number }>();
 // so old it approaches worthless.
 const BACKFILL_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6h
 
+// Ceiling on the last-known-good store. The `ids` param admits up to ~40 distinct valid ICAO
+// codes per request, and an entry is only ever evicted when its exact id is re-requested and
+// found too old — so a caller enumerating valid codes could otherwise grow the map without limit
+// on a warm instance. Cap it (same size-cap guard as flight-times.ts) and re-insert on refresh so
+// actively-served hubs are never the eviction target. Operator-overridable; the fixed hub set is
+// far under the default.
+function lastKnownGoodMax(): number {
+  const n = Number(process.env.METAR_LKG_MAX);
+  return Number.isFinite(n) && n > 0 ? n : 500;
+}
+
 /** Test helper: clear the last-known-good cache so module state doesn't leak across tests. */
 export function __resetMetarCacheForTests(): void {
   lastKnownGood.clear();
@@ -91,7 +102,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const key = stationKey(rec);
       if (!key) continue;
       byStation.set(key, rec);
-      lastKnownGood.set(key, { rec, cachedAt: now }); // refresh last-known-good with every fresh observation
+      // Refresh last-known-good with every fresh observation. Re-insert (delete then set) so the
+      // key moves to the most-recent position, and evict the oldest once the store is at capacity,
+      // bounding growth under valid-ICAO enumeration.
+      lastKnownGood.delete(key);
+      if (lastKnownGood.size >= lastKnownGoodMax()) {
+        const oldest = lastKnownGood.keys().next().value;
+        if (oldest !== undefined) lastKnownGood.delete(oldest);
+      }
+      lastKnownGood.set(key, { rec, cachedAt: now });
     }
   }
 

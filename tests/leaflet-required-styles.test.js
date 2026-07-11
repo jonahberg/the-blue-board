@@ -19,6 +19,11 @@ const REQUIRED_ABSOLUTE = [
   'leaflet-pane',
   'leaflet-tile',
   'leaflet-marker-icon',
+  // Every interactive marker icon also carries .leaflet-interactive; a `position`
+  // override written against it alone (without the .leaflet-marker-icon qualifier
+  // that the PR #220 rule happened to include) reproduces the exact outage and would
+  // otherwise slip past this guard.
+  'leaflet-interactive',
   'leaflet-marker-shadow',
   'leaflet-tile-container',
   'leaflet-zoom-box',
@@ -81,6 +86,28 @@ describe('Leaflet required styles are not overridden', () => {
       `#legal-details must sit at least ${LEAFLET_ZOOM_RIGHT_RESERVED_PX}px from the right edge ` +
         "so it does not swallow the map's zoom-out button"
     ).toBeGreaterThanOrEqual(LEAFLET_ZOOM_RIGHT_RESERVED_PX);
+  });
+
+  // Prove the guard would actually catch the PR #220 failure mode written the sneaky
+  // way — against .leaflet-interactive alone, with no .leaflet-marker-icon qualifier.
+  it('flags a synthetic `.leaflet-interactive{position:relative}` offender', () => {
+    const synthetic = [['.leaflet-interactive', 'position:relative']];
+    const cls = 'leaflet-interactive';
+    const offenders = synthetic.filter(([selector, body]) => {
+      const targetsElementItself = new RegExp(`\\.${cls}(?![\\w-])(?![^,]*::)`).test(selector);
+      const setsPosition = /(^|[;\s])position\s*:/.test(body);
+      return targetsElementItself && setsPosition;
+    });
+    expect(offenders.map(([s]) => s)).toEqual(['.leaflet-interactive']);
+
+    // The legal hit-slop ::after rule must NOT be flagged (the (?![^,]*::) lookahead).
+    const legal = [['.leaflet-marker-icon.leaflet-interactive::after', "content:'';position:absolute;inset:-5px"]];
+    const legalOffenders = legal.filter(([selector, body]) => {
+      const targetsElementItself = new RegExp(`\\.${cls}(?![\\w-])(?![^,]*::)`).test(selector);
+      const setsPosition = /(^|[;\s])position\s*:/.test(body);
+      return targetsElementItself && setsPosition;
+    });
+    expect(legalOffenders).toEqual([]);
   });
 
   it('keeps the marker hit-slop pseudo-element', () => {

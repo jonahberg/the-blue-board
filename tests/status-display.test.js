@@ -47,6 +47,23 @@ describe('displayScheduleStatus', () => {
     const disp = displayScheduleStatus({ text: 'Departed', cls: 'departed', key: 'departed', live: true });
     expect(disp.live).toBe(true);
   });
+
+  it('degrades a keyed status with empty text to Scheduled, preserving presumed + as-of', () => {
+    // An old cached payload can carry a real key ('departed') but no text/label.
+    // This must render "Scheduled" with the as-of stamp while still preserving the
+    // presumed flag — not silently drop to a bare, unmarked label.
+    const d = displayScheduleStatus({ key: 'departed', cls: 'departed', text: '', presumed: true });
+    expect(d.text).toBe('Scheduled');
+    expect(d.cls).toBe('departed');
+    expect(d.asOf).toBe(true);
+    expect(d.presumed).toBe(true);
+  });
+
+  it('preserves the live flag on a keyed, empty-text degradation', () => {
+    const d = displayScheduleStatus({ key: 'departed', text: '', live: true });
+    expect(d.text).toBe('Scheduled');
+    expect(d.live).toBe(true);
+  });
 });
 
 describe('humanizeStatusText', () => {

@@ -89,6 +89,49 @@ describe('support-stats API', () => {
     expect(res.body.liveFeed).toEqual({ configured: true, usedPct: 65 });
   });
 
+  it('rounds a non-multiple-of-5 percentage to the nearest 5% (rounds up)', async () => {
+    process.env.FR24_API_TOKEN = 'test-token';
+    process.env.FR24_MONTHLY_CREDIT_BUDGET = '1000';
+    vi.spyOn(fr24Usage, 'fetchFr24UsageRaw').mockResolvedValue({
+      data: [{ endpoint: '/api/flight-summary', request_count: 10, credits: 630 }],
+    });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    // 630 / 1000 = 63% → nearest 5% is 65.
+    expect(res.body.liveFeed).toEqual({ configured: true, usedPct: 65 });
+  });
+
+  it('rounds a non-multiple-of-5 percentage to the nearest 5% (rounds down)', async () => {
+    process.env.FR24_API_TOKEN = 'test-token';
+    process.env.FR24_MONTHLY_CREDIT_BUDGET = '1000';
+    vi.spyOn(fr24Usage, 'fetchFr24UsageRaw').mockResolvedValue({
+      data: [{ endpoint: '/api/flight-summary', request_count: 10, credits: 615 }],
+    });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    // 615 / 1000 = 61.5% → nearest 5% is 60.
+    expect(res.body.liveFeed).toEqual({ configured: true, usedPct: 60 });
+  });
+
+  it('clamps usage over budget to 100% instead of leaking a >100 meter', async () => {
+    process.env.FR24_API_TOKEN = 'test-token';
+    process.env.FR24_MONTHLY_CREDIT_BUDGET = '1000';
+    // FR24_MONTHLY_CREDIT_BUDGET is an operator estimate; real credits can exceed it.
+    vi.spyOn(fr24Usage, 'fetchFr24UsageRaw').mockResolvedValue({
+      data: [{ endpoint: '/api/flight-summary', request_count: 10, credits: 1500 }],
+    });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    // 1500 / 1000 = 150% → clamped to 100, NOT 150.
+    expect(res.body.liveFeed).toEqual({ configured: true, usedPct: 100 });
+  });
+
   it('never leaks raw credit counts or dollar amounts, only the rounded percentage', async () => {
     process.env.FR24_API_TOKEN = 'test-token';
     process.env.FR24_MONTHLY_CREDIT_BUDGET = '1000';

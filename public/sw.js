@@ -117,12 +117,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // The app's own code (dashboard bundle + stylesheet) is NOT content-hashed, so serve it
-  // network-first: always fetch the latest when online so shipped fixes reach returning users,
-  // falling back to cache only when offline. Other static assets (fonts, images) stay
+  // The app's own first-party code (every /js/ script + the stylesheet) is NOT content-hashed, so
+  // serve it network-first: always fetch the latest when online so shipped fixes reach returning
+  // users, falling back to cache only when offline. Other static assets (fonts, images) stay
   // stale-while-revalidate below. (Audit critic #1: immutable + non-hashed + SW precache pinning
-  // meant deploys never reached users.)
-  const isAppCode = url.pathname === '/js/dashboard.js' || url.pathname === '/css/style.css';
+  // meant deploys never reached users. Originally only dashboard.js/style.css were network-first,
+  // so a fix to a sibling widget — support-meter/news-banner/hub-live-data/etc. — reached returning
+  // users one navigation late; the whole /js/ tree gets the same treatment now.)
+  const isAppCode = url.pathname.startsWith('/js/') || url.pathname === '/css/style.css';
   if (isAppCode) {
     event.respondWith((async () => {
       try {

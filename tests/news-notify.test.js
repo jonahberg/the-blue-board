@@ -239,6 +239,39 @@ describe('news-notify API', () => {
     expect(created.html).toContain('Unsubscribe');
   });
 
+  it('escapes a hostile article title/category in the html body and strips control chars from the subject', async () => {
+    // The handler must route title/category through escapeHtml (body) and sanitizeHeaderValue
+    // (subject). Proves the wiring end-to-end, not just the helpers in isolation.
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              slug: 'x',
+              title: '<script>alert(1)</script>\r\nBcc: evil',
+              category: 'Fleet<img src=x onerror=alert(1)>',
+              date: '2026-01-01',
+            },
+          ]),
+      })
+    );
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    expect(res.body.status).toBe('sent');
+    const created = mockBroadcastCreate.mock.calls[0][0];
+
+    // Body: title + category are HTML-escaped, never interpolated raw.
+    expect(created.html).toContain('&lt;script&gt;');
+    expect(created.html).not.toContain('<script>alert(1)</script>');
+    expect(created.html).not.toContain('<img src=x onerror=alert(1)>');
+
+    // Subject is an email header: control chars (CR/LF) must be stripped to prevent SMTP injection.
+    expect(created.subject).not.toMatch(/[\r\n]/);
+  });
+
   it('does not leak err.message in the JSON response', async () => {
     // Upstream throws with a schema-revealing message — the handler must
     // log internally but respond with a generic error.

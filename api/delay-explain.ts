@@ -73,9 +73,13 @@ function sanitize(val: string | undefined, maxLen: number): string {
 }
 
 function getCacheKey(ctx: DelayContext): string {
-  const inboundKey = ctx.inbound ? ctx.inbound.slice(0, 100) : '';
-  const weatherKey = (ctx.weather || '').slice(0, 40) + '|' + (ctx.destWeather || '').slice(0, 40);
-  const faaKey = (ctx.faaStatus || '').slice(0, 120);
+  // Slice each field to the SAME length the prompt uses below (inbound/faaStatus 300, weather 200),
+  // not shorter — a key truncated ahead of the prompt lets two contexts that share the truncated
+  // prefix but diverge later collide, serving one flight's cached explanation to another (the F009
+  // wrong-explanation class the connection key already guards against).
+  const inboundKey = ctx.inbound ? ctx.inbound.slice(0, 300) : '';
+  const weatherKey = (ctx.weather || '').slice(0, 200) + '|' + (ctx.destWeather || '').slice(0, 200);
+  const faaKey = (ctx.faaStatus || '').slice(0, 300);
   // F009: connection is injected into the prompt (see `Passenger connection:` line below) but
   // was missing from the cache key — two different connections on the same flight/risk profile
   // would collide and serve one passenger's cached explanation to the other. Keep it short;

@@ -5,7 +5,9 @@
 // decide whether a resolved flight state warrants a push — WITHOUT a Supabase or push
 // dependency, so it is unit-testable in isolation.
 //
-// Ported rules (must stay in lockstep with main.js so in-tab and background alerts agree):
+// Ported rules (kept in step with main.js so in-tab and background alerts agree). The status
+// classifier here maps provider-vocabulary synonyms to one canonical phase class before diffing
+// (main.js's literal-keyword isSignificantStatusChange still flags a same-state tier flip):
 //   1. NEVER notify on Unknown (v1.5.26 / Jul 3 2026 audit): a transition INTO an unknown /
 //      empty status is pipeline noise, not a flight event. Don't notify AND don't overwrite the
 //      stored status, so the next REAL transition still compares against the last meaningful state.
@@ -46,17 +48,44 @@ export function isUnknownStatus(status: string | undefined | null): boolean {
   return s === 'unknown' || s === 'n/a' || s === 'scheduled?' || s === '—' || s === '-';
 }
 
-// Ported verbatim (behaviour) from main.js isSignificantStatusChange.
+// Canonical flight-phase classes. The upstream status text arrives in two vocabularies for the
+// SAME physical state — the FlightAware scrape tier ("En Route", "Departed") and the FR24
+// schedule-cache tier ("en route", "estimated") — and which tier answers flips run-to-run on
+// scrape success. Classifying both sides through one enum before diffing is what stops a
+// same-state vocabulary flip (e.g. "En Route" ⇄ "estimated") from minting an endless false push.
+type FlightPhase = 'cancelled' | 'diverted' | 'landed' | 'delayed' | 'airborne' | 'scheduled' | 'unknown';
+
+function statusPhase(status: string): FlightPhase {
+  const s = String(status || '').toLowerCase().trim();
+  if (!s) return 'unknown';
+  if (s.includes('cancel')) return 'cancelled';
+  if (s.includes('divert')) return 'diverted';
+  if (s.includes('landed') || s.includes('arrived')) return 'landed';
+  if (s.includes('delay')) return 'delayed';
+  // Airborne synonyms across both provider tiers: departed / en route / estimated / in air.
+  if (
+    s.includes('departed') ||
+    s.includes('en route') ||
+    s.includes('en-route') ||
+    s.includes('estimated') ||
+    s.includes('airborne') ||
+    s.includes('in air')
+  )
+    return 'airborne';
+  // Scheduled / on time / boarding and any other known-but-pre-departure text.
+  return 'scheduled';
+}
+
+// Significant only when the canonical PHASE CLASS changes. Provider-vocabulary synonyms for the
+// same physical state map to one class and therefore never notify. Preserves every documented
+// notify trigger (rule 2): scheduled→airborne (departed / en route), →delayed, →cancelled,
+// →diverted, →landed all cross a class boundary.
 export function isSignificantStatusChange(oldStatus: string, newStatus: string): boolean {
   if (!oldStatus || !newStatus || oldStatus === newStatus) return false;
-  const nl = newStatus.toLowerCase();
-  const ol = oldStatus.toLowerCase();
-  if (nl.includes('cancel') || nl.includes('divert') || nl.includes('landed') || nl.includes('departed')) return true;
-  if (nl.includes('delay')) return true;
-  if (nl.includes('gate') && nl !== ol) return true;
-  const significantKeys = ['cancel', 'divert', 'landed', 'departed', 'en route', 'en-route', 'delay', 'gate'];
-  if (significantKeys.some((k) => nl.includes(k) || ol.includes(k))) return true;
-  return false;
+  const op = statusPhase(oldStatus);
+  const np = statusPhase(newStatus);
+  if (op === 'unknown' || np === 'unknown') return false;
+  return op !== np;
 }
 
 function norm(v: string | undefined | null): string {

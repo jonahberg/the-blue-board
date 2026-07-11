@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 import handler from '../api/nas.js';
+
+// Captured upstream shapes (nasstatus.faa.gov) — richer than the inline mocks, so an upstream
+// field rename that silently zeroes an enroute program or advisory fails a test instead of shipping green.
+function loadFixture(name) {
+  return JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+}
+const enrouteEventsFixture = loadFixture('faa-enroute-events.json');
+const operationsPlanFixture = loadFixture('faa-operations-plan.json');
 
 function createRes() {
   return {
@@ -208,7 +217,6 @@ describe('NAS API', () => {
   });
 
   it('handles partial FAA API failure (enroute fails, plan succeeds)', async () => {
-    let callCount = 0;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       if (String(url).includes('enroute-events')) {
         throw new Error('HTTP 500');
@@ -261,5 +269,66 @@ describe('NAS API', () => {
     await handler(makeReq(), res);
     expect(res.headers['Cache-Control']).toBe('s-maxage=300, stale-while-revalidate=600');
     expect(res.headers['Content-Type']).toBe('application/json');
+  });
+
+  it('parses the captured enroute-events fixture: six airspace flow programs', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('enroute-events')) {
+        return { ok: true, json: async () => enrouteEventsFixture };
+      }
+      return { ok: true, json: async () => ({ terminalPlanned: [], enRoutePlanned: [] }) };
+    });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.active).toHaveLength(6);
+    expect(res.body.active.map((p) => p.name)).toEqual([
+      'FCAMUN', 'FCAPV2', 'FCAPV3', 'FCASD1', 'FCAMA5', 'FCAJX1',
+    ]);
+
+    const byName = Object.fromEntries(res.body.active.map((p) => [p.name, p]));
+
+    // avgDelay rounded from the float upstream fields
+    expect(byName.FCAMUN.avgDelay).toBe(99); // 99.30
+    expect(byName.FCAPV3.avgDelay).toBe(224); // 224.10
+    expect(byName.FCAMA5.avgDelay).toBe(122); // 121.90
+
+    // Only departsAny/arrivesAny feed affectedFacilities; arrivesNone is ignored
+    expect(byName.FCAMUN.affectedFacilities).toEqual(['MMUN']);
+    expect(byName.FCASD1.affectedFacilities).toEqual(['MMSD']);
+    expect(byName.FCAMA5.affectedFacilities).toEqual([]); // arrivesNone MBPV not counted
+
+    // reason + scope carried verbatim
+    expect(byName.FCAMUN.reason).toBe('airport volume');
+    expect(byName.FCAJX1.reason).toBe('airspace volume');
+    expect(byName.FCASD1.startTime).toBe('2026-03-28T17:00:00Z');
+    expect(byName.FCASD1.endTime).toBe('2026-03-28T21:59:00Z');
+  });
+
+  it('parses the captured operations-plan fixture: enroute CDRS/SWAP advisory', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('operations-plan')) {
+        return { ok: true, json: async () => operationsPlanFixture };
+      }
+      return { ok: true, json: async () => [] };
+    });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.advisoryUrl).toBe(operationsPlanFixture.link);
+    expect(res.body.advisoryUrl.startsWith('https://')).toBe(true);
+    expect(res.body.planned).toHaveLength(1);
+
+    const [tmi] = res.body.planned;
+    expect(tmi.type).toBe('enroute');
+    expect(tmi.time).toBe('AFTER 1800');
+    expect(tmi.event).toBe('SOUTH FLORIDA CDRS/SWAP POSSIBLE'); // leading dash stripped
+    expect(tmi.decoded).toContain('Coded Departure Routes');
+    expect(tmi.decoded).toContain('Severe Weather Avoidance');
+    expect(tmi.affectedAirports).toEqual([]); // spelled-out region, no bare 3-letter codes
   });
 });

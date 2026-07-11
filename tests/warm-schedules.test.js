@@ -1,4 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Stub the snapshot module so the cron's best-effort snapshot GC (cleanupExpiredSnapshots) is a
+// spy, and _cost-state's getSupabaseAdmin returns null (in-memory spend accounting, as in prod
+// test env). load/saveScheduleSnapshot are unused by this handler but stubbed for completeness.
+const snapshotMocks = vi.hoisted(() => ({
+  getSupabaseAdmin: vi.fn(async () => null),
+  loadScheduleSnapshot: vi.fn(async () => null),
+  saveScheduleSnapshot: vi.fn(async () => {}),
+  cleanupExpiredSnapshots: vi.fn(async () => {}),
+}));
+vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => snapshotMocks);
+
 import handler, { buildScheduleWarmUrl, buildWarmPlan } from '../api/cron/warm-schedules.js';
 import { __resetAlertThrottleForTests } from '../api/_alert.js';
 import { recordAdbUnits, __resetAdbSpendForTests } from '../api/_cost-state.js';
@@ -49,9 +61,10 @@ describe('warm-schedules buildWarmPlan', () => {
     expect(buildWarmPlan(t)).toEqual(buildWarmPlan(t));
   });
 
-  it('limits plan size to WARM_TASKS_PER_RUN (default 3)', () => {
-    // 3 tasks × 24 hourly fires = 72 slots/day = one full ring: today boards 3×/day, tomorrow 1×/day,
-    // ≈ 72 fresh boards × 4 units = 288 AeroDataBox units/day — the metered-plan budget.
+  it('limits plan size to WARM_TASKS_PER_RUN (pinned to 3 in this suite; prod default is 4)', () => {
+    // This suite pins the env to 3 (see beforeEach) so the count assertions below tile the 72-slot
+    // ring cleanly over 24 hourly fires. The real production default is 4 (see the stride-4 describe
+    // for its own tiling proof); do not read this as the shipped default.
     expect(buildWarmPlan().length).toBe(3);
   });
 
@@ -99,6 +112,40 @@ describe('warm-schedules buildWarmPlan', () => {
     expect(url).toContain('scraperFallback=0');
     // The whole point of the warm is a FRESH board: bypass the frozen-snapshot serve paths.
     expect(url).toContain('forceRefresh=1');
+  });
+});
+
+describe('warm-schedules buildWarmPlan — production default stride (4)', () => {
+  // Unlike the suite above, do NOT pin the env: exercise the real shipped default. Delete it so an
+  // ambient export in a dev/CI shell can't stand in for the code default.
+  beforeEach(() => { delete process.env.SCHEDULE_WARM_TASKS_PER_RUN; });
+  afterEach(() => { delete process.env.SCHEDULE_WARM_TASKS_PER_RUN; });
+
+  const SLOT_MS = 60 * 60 * 1000;
+  const UNIQUE_WINDOWS = 9 * 4;                    // 9 hubs × (today+tomorrow) × 2 dirs
+  const TODAY_ROUNDS = 3;
+  const RING_SIZE = 9 * 2 * TODAY_ROUNDS + 9 * 2;  // 54 today + 18 tomorrow = 72
+
+  it('defaults the stride to 4 when SCHEDULE_WARM_TASKS_PER_RUN is unset', () => {
+    expect(buildWarmPlan().length).toBe(4);
+  });
+
+  it('tiles the 72-slot ring exactly over 18 hourly fires at stride 4 — today 3× / tomorrow 1×, no skips', () => {
+    // 18 consecutive fires × 4 tasks = 72 slots = exactly one full ring pass (the divide-by-stride
+    // tiling the code relies on, comment lines 72-74 of warm-schedules.ts). Every window must appear
+    // — today boards TODAY_ROUNDS× per ring, tomorrow boards once — with nothing skipped.
+    const counts = new Map();
+    const start = new Date('2026-04-03T00:00:00Z').getTime();
+    for (let i = 0; i < RING_SIZE / 4; i++) {
+      for (const task of buildWarmPlan(start + i * SLOT_MS)) {
+        const key = `${task.hub}-${task.dir}-${task.label}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+    expect(counts.size).toBe(UNIQUE_WINDOWS);
+    for (const [key, n] of counts) {
+      expect(n, key).toBe(key.endsWith('today') ? TODAY_ROUNDS : 1);
+    }
   });
 });
 
@@ -198,6 +245,13 @@ describe('warm-schedules handler', () => {
     // masking is the exact incident this commit exists to surface).
     expect(res.body.scheduleWarmed).toBe(0);
     expect(res.statusCode).toBe(503);
+  });
+
+  it('prunes expired snapshot rows once per run (best-effort GC piggyback)', async () => {
+    snapshotMocks.cleanupExpiredSnapshots.mockClear();
+    mockFetchOk({ cached: false, stale: false, partial: false, total: 312, meta: { completeness: 1 } });
+    await handler(createReq(), createRes());
+    expect(snapshotMocks.cleanupExpiredSnapshots).toHaveBeenCalledTimes(1);
   });
 
   it('counts a fresh complete board as warmed', async () => {

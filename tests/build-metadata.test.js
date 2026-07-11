@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }));
+
+import { execFileSync } from 'node:child_process';
 import {
   xmlEscape,
   getFleetRouteLastmodPaths,
@@ -8,7 +12,10 @@ import {
   fleetIndexLastmodPaths,
   hubIndexLastmodPaths,
   newsIndexLastmodPaths,
+  getLastModified,
 } from '../src/lib/buildMetadata.js';
+
+const TODAY = new Date().toISOString().slice(0, 10); // matches the module's FALLBACK_DATE
 
 describe('xmlEscape', () => {
   it('escapes ampersands', () => {
@@ -57,6 +64,43 @@ describe('route lastmod path helpers', () => {
     const paths = getNewsRouteLastmodPaths('some-article');
     expect(paths).toContain('src/layouts/NewsLayout.astro');
     expect(paths).toContain('src/data/news/index.js');
+  });
+});
+
+describe('getLastModified', () => {
+  // Drives the sitemap lastmod dates: a git shell-out, an output-vs-fallback
+  // branch, and a cross-call memo. Each case uses a unique path list so the
+  // module-level cache never bleeds between tests.
+  it('returns the git commit date as a YYYY-MM-DD string', () => {
+    execFileSync.mockReturnValue('2026-05-01\n');
+    const value = getLastModified(['fixture/tracked-a.js']);
+    expect(value).toBe('2026-05-01');
+    expect(value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('falls back to the build date when git produces no output', () => {
+    execFileSync.mockReturnValue('');
+    const value = getLastModified(['fixture/untracked-b.js']);
+    expect(value).toBe(TODAY);
+  });
+
+  it('falls back to the build date when the git shell-out throws', () => {
+    execFileSync.mockImplementation(() => {
+      throw new Error('not a git repository');
+    });
+    const value = getLastModified(['fixture/throws-c.js']);
+    expect(value).toBe(TODAY);
+  });
+
+  it('memoizes per path list — git is invoked once across repeat calls', () => {
+    execFileSync.mockReset();
+    execFileSync.mockReturnValue('2026-06-15\n');
+    const paths = ['fixture/memo-d.js'];
+    const first = getLastModified(paths);
+    const second = getLastModified(paths);
+    expect(first).toBe('2026-06-15');
+    expect(second).toBe('2026-06-15');
+    expect(execFileSync).toHaveBeenCalledTimes(1);
   });
 });
 

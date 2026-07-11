@@ -69,7 +69,10 @@ function getLocalHour(timeZone, baseTime, nowMs) {
       hour12: false,
       hour: 'numeric',
     });
-    return parseInt(hourStr, 10);
+    const hour = parseInt(hourStr, 10);
+    // Some Node/ICU builds emit hour="24" for local midnight in en-US + hour12:false;
+    // left unguarded it crosses the >=19 late-evening threshold. Normalize to 0, matching hubTz.js.
+    return hour === 24 ? 0 : hour;
   } catch {
     return new Date(nowMs).getHours();
   }

@@ -102,4 +102,38 @@ describe('normalizeStarlinkPayload', () => {
     expect(normalizeStarlinkPayload(null).aircraft).toEqual([]);
     expect(normalizeStarlinkPayload({ starlinkPlanes: [] }).fleetStats).toBeNull();
   });
+
+  // Upstream occasionally ships departure_time as millisecond epochs or ISO strings instead of
+  // UNIX seconds; toTime() guards the ms case with a >1e12 divide-by-1000 (a 1000x-error guard).
+  it('normalises a millisecond-epoch flight time down to seconds', () => {
+    const msUpstream = {
+      starlinkPlanes: [{ TailNumber: 'N32', fleet: 'express', Aircraft: 'CRJ-550', OperatedBy: 'SkyWest dba UAX' }],
+      flightsByTail: {
+        N32: [
+          { flight_number: 'SKW1', departure_airport: 'DEN', arrival_airport: 'MKE', departure_time: 1780270800000, arrival_time: 1780280100000, airline: 'UA' },
+        ],
+      },
+    };
+    const out = normalizeStarlinkPayload(msUpstream, '2026-05-31T23:40:00.000Z');
+    const flight = out.flightsByTail.N32[0];
+    expect(flight.departure_ts).toBe(1780270800);
+    expect(flight.departure_time).toBe(new Date(1780270800 * 1000).toISOString());
+    expect(flight.arrival_time).toBe(new Date(1780280100 * 1000).toISOString());
+  });
+
+  it('parses an ISO-string flight time into the same numeric ts', () => {
+    const iso = new Date(1780270800 * 1000).toISOString();
+    const isoUpstream = {
+      starlinkPlanes: [{ TailNumber: 'N32', fleet: 'express', Aircraft: 'CRJ-550', OperatedBy: 'SkyWest dba UAX' }],
+      flightsByTail: {
+        N32: [
+          { flight_number: 'SKW1', departure_airport: 'DEN', arrival_airport: 'MKE', departure_time: iso, arrival_time: '', airline: 'UA' },
+        ],
+      },
+    };
+    const out = normalizeStarlinkPayload(isoUpstream, '2026-05-31T23:40:00.000Z');
+    const flight = out.flightsByTail.N32[0];
+    expect(flight.departure_ts).toBe(1780270800);
+    expect(flight.departure_time).toBe(iso);
+  });
 });

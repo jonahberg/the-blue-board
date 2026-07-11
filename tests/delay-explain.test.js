@@ -11,6 +11,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 }));
 
 import handler from '../api/delay-explain.js';
+import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 
 function createRes() {
   return {
@@ -39,6 +40,7 @@ describe('delay-explain API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     mockCreate.mockReset();
+    __resetRateLimitersForTests();
     process.env.AI_GATEWAY_API_KEY = 'test-key';
     mockCreate.mockResolvedValue({
       content: [{ type: 'text', text: 'This flight is delayed due to weather.' }],
@@ -144,6 +146,28 @@ describe('delay-explain API', () => {
     expect(mockCreate).toHaveBeenCalledTimes(1); // Only one API call
   });
 
+  it('does not collide two contexts that differ only past the cache-key prefix', async () => {
+    // Two flights identical in the first 120 FAA chars but divergent after — both within the 300
+    // chars the prompt actually uses. Truncating the key shorter than the prompt would serve the
+    // first flight's cached explanation to the second (the F009 wrong-explanation collision class).
+    const commonPrefix = 'x'.repeat(130);
+    const shared = { flight: 'UACOLLIDE', route: 'ORD-SFO', riskScore: 50 };
+
+    mockCreate.mockReset();
+    mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'explanation ALPHA' }] });
+    const res1 = createRes();
+    await handler(makeReq({ body: { ...shared, faaStatus: commonPrefix + 'ALPHA' } }), res1);
+    expect(res1.body.explanation).toBe('explanation ALPHA');
+    expect(res1.body.cached).toBe(false);
+
+    mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'explanation BETA' }] });
+    const res2 = createRes();
+    await handler(makeReq({ body: { ...shared, faaStatus: commonPrefix + 'BETA' } }), res2);
+    expect(res2.body.cached).toBeFalsy();
+    expect(res2.body.explanation).toBe('explanation BETA');
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
   // --- Error handling ---
 
   it('returns 503 for API auth errors (401)', async () => {
@@ -172,6 +196,23 @@ describe('delay-explain API', () => {
     await handler(makeReq({ body: { flight: 'UAERR3' } }), res);
 
     expect(res.statusCode).toBe(502);
+  });
+
+  it('returns 504 when the AI call aborts on the 12s timeout, leaving the circuit closed', async () => {
+    mockCreate.mockRejectedValueOnce(Object.assign(new Error('Request was aborted'), { name: 'AbortError' }));
+
+    const res = createRes();
+    await handler(makeReq({ body: { flight: 'UAABORT' } }), res);
+
+    expect(res.statusCode).toBe(504);
+    expect(res.body.error).toMatch(/timed out/i);
+
+    // A timeout is request-specific, not an account outage: the circuit must stay closed.
+    mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'fresh after abort' }] });
+    const res2 = createRes();
+    await handler(makeReq(), res2);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.explanation).toBe('fresh after abort');
   });
 
   // --- Input sanitization ---

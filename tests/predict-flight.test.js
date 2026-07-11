@@ -33,6 +33,15 @@ describe('predict-flight API', () => {
     expect(res.statusCode).toBe(405);
   });
 
+  it('rejects a disallowed origin with 403 and never hits upstream', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const res = createRes();
+    await handler(makeReq({ headers: { origin: 'https://evil.com' }, query: { flight_number: 'UA100' } }), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error).toMatch(/Forbidden/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when flight_number is missing', async () => {
     const res = createRes();
     await handler(makeReq({ query: {} }), res);

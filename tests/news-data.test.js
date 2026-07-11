@@ -62,6 +62,15 @@ describe('resolveTag', () => {
     expect(result.url).toBe('/fleet/737-max-8');
   });
 
+  it('formats the fleet cross-link label from the slug', () => {
+    // The label is the user-facing cross-link text on every news article; the
+    // multi-step regex chain (Boeing prefix, Airbus prefix, MAX/ER upcase,
+    // Dreamliner suffix) has broken silently before with only the url asserted.
+    expect(resolveTag('737-max-8').label).toBe('Boeing 737 MAX 8');
+    expect(resolveTag('a321neo').label).toBe('A321neo');
+    expect(resolveTag('787-9-dreamliner').label).toBe('Boeing 787 9 Dreamliner');
+  });
+
   it('returns null for unknown tags', () => {
     const result = resolveTag('nonexistent-tag');
     expect(result).toBeNull();

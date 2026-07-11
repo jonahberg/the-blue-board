@@ -80,6 +80,30 @@ describe('formatDelayExplainFAAStatus', () => {
     expect(out).toContain('EWR Ground stop: thunderstorms (until 1049Z, ext: high)');
     expect(out).toContain('EWR Departure delays (46-180m): thunderstorms (↑ increasing)');
   });
+
+  it('appends runway-config capacity context for the AI prompt', () => {
+    const faaDelayIndex = {
+      ORD: { runwayConfig: { arrivalRunways: '28L', departureRunways: '28R', arrivalRate: 20 } },
+    };
+    expect(formatDelayExplainFAAStatus('ORD', '', faaDelayIndex)).toBe('ORD config: 28L/28R, rate 20/hr');
+  });
+
+  it('appends de-icing context so the AI may cite it', () => {
+    const faaDelayIndex = { ORD: { deicing: true } };
+    expect(formatDelayExplainFAAStatus('ORD', '', faaDelayIndex)).toBe('De-icing active at ORD');
+  });
+
+  it('formats a legacy arrival_delay row with its delay window', () => {
+    const faaDelayIndex = {
+      ORD: { minDelay: '20', maxDelay: '40', delays: [{ type: 'arrival_delay', reason: 'volume' }] },
+    };
+    expect(formatDelayExplainFAAStatus('ORD', '', faaDelayIndex)).toBe('ORD Arrival delays (20-40m): volume');
+  });
+
+  it('formats a legacy closure row', () => {
+    const faaDelayIndex = { ORD: { delays: [{ type: 'closure' }] } };
+    expect(formatDelayExplainFAAStatus('ORD', '', faaDelayIndex)).toBe('ORD Airport closure');
+  });
 });
 
 describe('describeFaaProgram (F074: shared program formatter)', () => {

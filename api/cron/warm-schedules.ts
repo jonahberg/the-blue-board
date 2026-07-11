@@ -17,6 +17,7 @@ import { getDisruptedAirportsMap } from '../faa.js';
 import { getStartOfHubDay } from '../../src/lib/hubTz.js';
 import { parseFr24Feed } from '../../src/lib/feed-health.js';
 import { recordFeedSightings } from '../_reg-sightings.js';
+import { cleanupExpiredSnapshots } from '../_schedule-snapshots.js';
 
 const HUBS = UNITED_HUBS;
 // Serialized with INTER_TASK_DELAY_MS between tasks. Budget math: each task worst-case is ~58s
@@ -312,6 +313,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (i < warmPlan.length - 1) {
       await new Promise(r => setTimeout(r, getInterTaskDelayMs()));
     }
+  }
+
+  // Best-effort snapshot GC: prune schedule_snapshots rows past their TTL so the table doesn't
+  // grow without bound (cache_key embeds a per-day ts, so every calendar day mints fresh keys and
+  // nothing else deletes the stale ones). At most once per run; a failure never fails the cron.
+  try {
+    await cleanupExpiredSnapshots();
+  } catch (e: any) {
+    console.warn('warm-schedules snapshot cleanup failed:', e?.message || e);
   }
 
   // Phase 2 backstop: harvest reg sightings once per fire so the ledger stays populated
