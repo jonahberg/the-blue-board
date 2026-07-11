@@ -1,6 +1,14 @@
 const SNAPSHOT_TABLE = 'schedule_snapshots';
 const SNAPSHOT_TTL_MS = 72 * 60 * 60 * 1000;
 const MIN_PARTIAL_SNAPSHOT_COMPLETENESS = 0.25;
+// A complete board is accepted over a stored complete snapshot only if it retains at least this
+// fraction of the stored total. A hub DAY board's flight count is stable within the day, so a board
+// that lost more than half its flights while still reporting partial=false is almost certainly a
+// transient truncated 200 (provider returned HTTP 200 on both FIDS windows but with a short
+// `departures` array), not a real schedule shrink — and it must not clobber the richer stored board
+// and then be served as the degraded fallback for the 72h TTL. Deliberately generous so ordinary
+// churn and any same-or-larger board always writes through.
+const COMPLETE_SNAPSHOT_MIN_RETAIN = 0.5;
 
 interface PersistedSnapshotRow {
   payload: any;
@@ -76,6 +84,20 @@ export function isSnapshotCandidateBetter(candidate: any, existing: any): boolea
   const candidatePages = Number(candidate?.meta?.pagesSucceeded || 0);
   const existingPages = Number(existing?.meta?.pagesSucceeded || 0);
   return candidatePages > existingPages;
+}
+
+// Gate the COMPLETE-snapshot write path (isSnapshotCandidateBetter only guards partial boards —
+// it treats every complete candidate as always-better, line 59). Without this a thin-but-complete
+// board (transient truncated 200) upserts unconditionally over a richer complete snapshot. Never
+// blocks a complete board over a stored partial one, and never blocks a same-or-larger board; only
+// a drop past COMPLETE_SNAPSHOT_MIN_RETAIN of the stored complete total is refused.
+export function isCompleteSnapshotAcceptable(candidate: any, existing: any): boolean {
+  if (!existing) return true;
+  if (existing?.partial) return true;
+  const existingTotal = Number(existing?.total || 0);
+  if (!(existingTotal > 0)) return true;
+  const candidateTotal = Number(candidate?.total || 0);
+  return candidateTotal >= existingTotal * COMPLETE_SNAPSHOT_MIN_RETAIN;
 }
 
 function getSupabaseConfig(): { url: string; key: string } | null {
@@ -161,20 +183,27 @@ export async function saveScheduleSnapshot({ cacheKey, hub, dir, ts, data }: Sav
   const expiresAtIso = new Date(Math.max(Date.now() + SNAPSHOT_TTL_MS, (ts * 1000) + SNAPSHOT_TTL_MS)).toISOString();
 
   try {
-    if (!isCompleteSnapshot) {
-      const { data: existingRows, error: existingError } = await supabase
-        .from(SNAPSHOT_TABLE)
-        .select('payload')
-        .eq('cache_key', cacheKey)
-        .limit(1);
+    const { data: existingRows, error: existingError } = await supabase
+      .from(SNAPSHOT_TABLE)
+      .select('payload')
+      .eq('cache_key', cacheKey)
+      .limit(1);
 
-      if (existingError) {
-        console.error(`Schedule snapshot read-before-write failed for ${cacheKey}:`, existingError.message);
+    if (existingError) {
+      console.error(`Schedule snapshot read-before-write failed for ${cacheKey}:`, existingError.message);
+      return;
+    }
+
+    const existingPayload = (existingRows as PersistedSnapshotRow[] | null)?.[0]?.payload;
+    if (isCompleteSnapshot) {
+      if (!isCompleteSnapshotAcceptable(data, existingPayload)) {
+        console.warn(
+          `Schedule snapshot skip for ${cacheKey}: complete board (${Number(data?.total || 0)} flights) is materially thinner than the stored complete snapshot (${Number(existingPayload?.total || 0)}); likely a truncated fetch`
+        );
         return;
       }
-
-      const existingPayload = (existingRows as PersistedSnapshotRow[] | null)?.[0]?.payload;
-      if (!isSnapshotCandidateBetter(data, existingPayload)) return;
+    } else if (!isSnapshotCandidateBetter(data, existingPayload)) {
+      return;
     }
 
     const { error } = await supabase
@@ -199,5 +228,28 @@ export async function saveScheduleSnapshot({ cacheKey, hub, dir, ts, data }: Sav
     }
   } catch (error: any) {
     console.error(`Schedule snapshot write threw for ${cacheKey}:`, error?.message || error);
+  }
+}
+
+// Prune snapshot rows past their TTL. cache_key embeds a per-day timestamp (agg:${hub}:${dir}:${ts}
+// in api/schedule.ts), so every calendar day mints fresh keys and the upsert only dedupes WITHIN a
+// day — nothing else ever deletes the stale rows, so the table grows without bound. loadScheduleSnapshot
+// merely filters live rows via .gt('expires_at', now); this is the DELETE the idx_schedule_snapshots_expires_at
+// index (sql/003) was created for. Best-effort and idempotent: piggy-backed on the hourly warm cron,
+// at most once per run, and any failure is logged, never thrown.
+export async function cleanupExpiredSnapshots(): Promise<void> {
+  const supabase = await getSupabaseAdmin();
+  if (!supabase) return;
+
+  try {
+    const { error } = await supabase
+      .from(SNAPSHOT_TABLE)
+      .delete()
+      .lt('expires_at', new Date().toISOString());
+    if (error) {
+      console.error('Schedule snapshot cleanup failed:', error.message);
+    }
+  } catch (error: any) {
+    console.error('Schedule snapshot cleanup threw:', error?.message || error);
   }
 }

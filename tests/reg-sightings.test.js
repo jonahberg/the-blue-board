@@ -88,6 +88,16 @@ describe('peek + kick', () => {
     expect(peekRegSightings().get('UA123').reg).toBe('N12345');
     expect(kickRegSightingsRefresh()).toBeNull(); // cache fresh → no refetch
   });
+  it('queries with a 36h staleness cutoff (serving day-old tails is a freshness regression)', async () => {
+    const before = Date.now();
+    await kickRegSightingsRefresh();
+    const after = Date.now();
+    expect(gtMock).toHaveBeenCalledWith('seen_at', expect.any(String));
+    const cutoffMs = Date.parse(gtMock.mock.calls[0][1]);
+    // The cutoff must sit ~36h before "now" — pin it against widening/removing the window.
+    expect(cutoffMs).toBeGreaterThanOrEqual(before - 36 * 3600e3 - 5000);
+    expect(cutoffMs).toBeLessThanOrEqual(after - 36 * 3600e3 + 5000);
+  });
   it('a failed load caches an empty map (no hammering) and never throws', async () => {
     gtMock.mockResolvedValueOnce({ data: null, error: { message: 'down' } });
     await kickRegSightingsRefresh();

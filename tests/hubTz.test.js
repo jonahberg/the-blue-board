@@ -3,10 +3,10 @@ import {
   getStartOfHubDay,
   getHubDayLabel,
   getHubLocalDate,
-  getHubLocalHour,
   defaultSchedDayOffset,
   HUB_TZ,
 } from '../src/lib/hubTz.js';
+import { UNITED_HUBS } from '../api/_hubs.js';
 
 // Helper: assert that `ts` (Unix seconds) falls exactly at midnight in the
 // given tz. Formats back via Intl.DateTimeFormat and compares the hour/minute.
@@ -105,6 +105,32 @@ describe('getStartOfHubDay — DST transitions (bug #18 regression)', () => {
     const today = getStartOfHubDay('GUM', 0, someDate);
     const tomorrow = getStartOfHubDay('GUM', 1, someDate);
     expect(tomorrow - today).toBe(86400);
+  });
+});
+
+describe('HUB_TZ stays in sync with the canonical UNITED_HUBS list', () => {
+  // getStartOfHubDay/getHubLocalHour/etc. all silently fall back to
+  // 'America/New_York' for any hub missing from HUB_TZ. A hub added to
+  // api/_hubs.ts but not HUB_TZ would compute the wrong hub-local board day —
+  // e.g. a Pacific hub opening on Eastern's clock, reproducing the
+  // empty-board-before-rollover incident. Pin the cross-file invariant.
+  it('has a timezone entry for every United hub', () => {
+    for (const hub of UNITED_HUBS) {
+      expect(HUB_TZ[hub], `HUB_TZ is missing a timezone for ${hub}`).toBeDefined();
+    }
+  });
+
+  it('does not silently collapse a Pacific hub onto the Eastern fallback', () => {
+    const now = new Date('2026-04-24T15:00:00Z');
+    // An unknown hub exercises the exact `HUB_TZ[hub] || 'America/New_York'`
+    // fallback a dropped entry would hit.
+    const easternFallback = getStartOfHubDay('ZZZ', 0, now);
+    expect(easternFallback).toBe(getStartOfHubDay('EWR', 0, now));
+    // SFO must resolve on Pacific, three hours behind Eastern midnight — so if it
+    // ever fell out of HUB_TZ it would compute the wrong day and this fails.
+    const sfo = getStartOfHubDay('SFO', 0, now);
+    expect(sfo).not.toBe(easternFallback);
+    expect(sfo - easternFallback).toBe(3 * 3600);
   });
 });
 

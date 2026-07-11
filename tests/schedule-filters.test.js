@@ -44,6 +44,16 @@ describe('getScheduleFleetFamily', () => {
     expect(getScheduleFleetFamily(undefined, undefined)).toBe('');
   });
 
+  it('classifies FR24 ICAO codes with empty model text', () => {
+    // FR24 official-API and live-feed normalizers emit ICAO type codes with
+    // model.text === '' (api/schedule.ts), so the code branch must stand alone.
+    expect(getScheduleFleetFamily('B38M', '')).toBe('737'); // 737 MAX 8
+    expect(getScheduleFleetFamily('B39M', '')).toBe('737'); // 737 MAX 9
+    expect(getScheduleFleetFamily('A21N', '')).toBe('A320'); // A321neo
+    expect(getScheduleFleetFamily('A20N', '')).toBe('A320'); // A320neo
+    expect(getScheduleFleetFamily('E75L', '')).toBe('E175'); // Embraer 175
+  });
+
   it('returns empty string for unknown equipment', () => {
     expect(getScheduleFleetFamily('CRJ7', 'Canadair Regional Jet')).toBe('');
   });

@@ -1,15 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   categorizeFleetStatus,
-  FLEET_HEALTH_CATEGORIES,
   FLEET_FAMILIES,
   normalizeWifi,
-  WIFI_DISPLAY,
   sortFleetData,
   filterFleetData,
-  parseFleetDeepLink,
-  TAB_MAP,
-  VALID_FLEET_VIEWS,
 } from '../src/lib/fleet-utils.js';
 
 // ═══════════════════════════════════════════════
@@ -46,8 +41,10 @@ describe('categorizeFleetStatus', () => {
   it('returns "painting" when status contains "paint" as a word', () => {
     expect(categorizeFleetStatus('In paint shop')).toBe('painting');
     expect(categorizeFleetStatus('Paint')).toBe('painting');
-    // "repaint" should NOT match because \bpaint\b requires word boundary
+    // "repaint" should NOT match because \bpaint\b requires word boundary —
+    // a non-empty status with no other keyword falls through to maintenance.
     expect(categorizeFleetStatus('repaint')).not.toBe('painting');
+    expect(categorizeFleetStatus('Repaint scheduled')).toBe('maintenance');
   });
 
   it('returns "starlink_install" when status contains "starlink"', () => {
@@ -204,89 +201,23 @@ describe('sortFleetData', () => {
     expect(sorted[0].tot ?? '').toBeFalsy();
     expect(sorted[sorted.length - 1].tot).toBe('120');
   });
-});
 
-// ═══════════════════════════════════════════════
-// 4. parseFleetDeepLink
-// ═══════════════════════════════════════════════
-describe('parseFleetDeepLink', () => {
-  it('returns null when no tab param is present', () => {
-    expect(parseFleetDeepLink('')).toBeNull();
-    expect(parseFleetDeepLink('?foo=bar')).toBeNull();
-  });
-
-  it('maps ?tab=fleet to tab-fleet', () => {
-    const result = parseFleetDeepLink('?tab=fleet');
-    expect(result.tab).toBe('fleet');
-    expect(result.tabId).toBe('tab-fleet');
-  });
-
-  it('maps ?tab=fleet&view=starlink to starlink sub-tab', () => {
-    const result = parseFleetDeepLink('?tab=fleet&view=starlink');
-    expect(result.fleetView).toBe('starlink');
-  });
-
-  it('maps ?tab=fleet&view=airborne to airborne sub-tab', () => {
-    const result = parseFleetDeepLink('?tab=fleet&view=airborne');
-    expect(result.fleetView).toBe('airborne');
-  });
-
-  it('maps ?tab=fleet&view=special to special sub-tab', () => {
-    const result = parseFleetDeepLink('?tab=fleet&view=special');
-    expect(result.fleetView).toBe('special');
-  });
-
-  it('rejects invalid fleet views', () => {
-    const result = parseFleetDeepLink('?tab=fleet&view=invalid');
-    expect(result.fleetView).toBeNull();
-  });
-
-  it('maps ?tab=fleet&type=737-800 to the type filter', () => {
-    const result = parseFleetDeepLink('?tab=fleet&type=737-800');
-    expect(result.fleetFilter).toBe('737-800');
-  });
-
-  it('uses ?filter= as fallback when ?type= is absent', () => {
-    const result = parseFleetDeepLink('?tab=fleet&filter=stored');
-    expect(result.fleetFilter).toBe('stored');
-  });
-
-  it('prefers ?type= over ?filter= when both are present', () => {
-    const result = parseFleetDeepLink('?tab=fleet&type=A321neo&filter=stored');
-    expect(result.fleetFilter).toBe('A321neo');
-  });
-
-  it('handles combined params: type + view', () => {
-    const result = parseFleetDeepLink('?tab=fleet&type=787-9&view=starlink');
-    expect(result.fleetFilter).toBe('787-9');
-    expect(result.fleetView).toBe('starlink');
-    expect(result.tabId).toBe('tab-fleet');
-  });
-
-  it('ignores fleet-specific params for non-fleet tabs', () => {
-    const result = parseFleetDeepLink('?tab=weather&type=737-800&view=starlink');
-    expect(result.tab).toBe('weather');
-    expect(result.tabId).toBe('tab-weather');
-    expect(result.fleetFilter).toBeNull();
-    expect(result.fleetView).toBeNull();
-  });
-
-  it('returns null tabId for unknown tab values', () => {
-    const result = parseFleetDeepLink('?tab=nonexistent');
-    expect(result.tabId).toBeNull();
-  });
-
-  it('maps known tabs correctly', () => {
-    expect(parseFleetDeepLink('?tab=live').tabId).toBe('tab-live');
-    expect(parseFleetDeepLink('?tab=schedule').tabId).toBe('tab-schedule');
-    expect(parseFleetDeepLink('?tab=irops').tabId).toBe('tab-weather');
-    expect(parseFleetDeepLink('?tab=stats').tabId).toBe('tab-analytics');
-    expect(parseFleetDeepLink('?tab=sources').tabId).toBe('tab-sources');
+  it('keeps tied rows in their input order (comparator returns 0 on equality)', () => {
+    // Many aircraft share a delivery year 'd'. A comparator that returns ±1 for
+    // equal keys scrambles the tie group; a stable comparator (0 on equality)
+    // preserves input order in both directions.
+    const tied = [
+      { r: 'E', d: '1998' },
+      { r: 'C', d: '1998' },
+      { r: 'A', d: '1998' },
+    ];
+    expect(sortFleetData(tied, 'd', true).map(a => a.r)).toEqual(['E', 'C', 'A']);
+    expect(sortFleetData(tied, 'd', false).map(a => a.r)).toEqual(['E', 'C', 'A']);
   });
 });
 
 // ═══════════════════════════════════════════════
-// 5. filterFleetData
+// 4. filterFleetData
 // ═══════════════════════════════════════════════
 describe('filterFleetData', () => {
   const MOCK_FLEET = [
@@ -389,6 +320,21 @@ describe('filterFleetData', () => {
   it('returns empty starlink filter results when no starlinkTails provided', () => {
     const result = filterFleetData(MOCK_FLEET, { status: 'starlink' });
     expect(result).toHaveLength(0);
+  });
+
+  it('does not throw when a partial row is missing config/type during search', () => {
+    // Fleet DB rows occasionally arrive with only a registration; .toUpperCase()
+    // on an undefined config/type would throw and blank the whole table.
+    const partial = [{ r: 'N1' }];
+    expect(() => filterFleetData(partial, { search: 'X' })).not.toThrow();
+    expect(filterFleetData(partial, { search: 'X' })).toEqual([]);
+  });
+
+  it('matches a partial row on its present registration field', () => {
+    const partial = [{ r: 'N1' }];
+    const result = filterFleetData(partial, { search: 'N1' });
+    expect(result).toHaveLength(1);
+    expect(result[0].r).toBe('N1');
   });
 });
 

@@ -40,7 +40,7 @@ export function recordSightings(ledger, flights, nowMs) {
 }
 
 /** Backfill lookup for one schedule row. Times in unix SECONDS (schedule feed shape). */
-export function lookupReg(ledger, flightNumRaw, schedDepSec, schedArrSec, nowMs = 0) {
+export function lookupReg(ledger, flightNumRaw, schedDepSec, schedArrSec) {
   const key = normalizeFlightNum(flightNumRaw);
   if (!key) return null;
   const entry = ledger ? ledger[key] : null;

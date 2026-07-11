@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler from '../api/cron/sync-starlink.js';
+import { saveStarlinkSnapshot } from '../api/_starlink-snapshot.js';
+
+// The durable cross-instance handoff is the Supabase snapshot, not globalThis (which does not
+// survive across serverless instances — the bug the cron header documents it replaces). In the
+// test env getSupabaseAdmin() returns null, so the real saveStarlinkSnapshot is a silent no-op;
+// mock it so the persistence call itself is observable.
+vi.mock('../api/_starlink-snapshot.js', () => ({ saveStarlinkSnapshot: vi.fn() }));
 
 function createRes() {
   return {
@@ -43,6 +50,7 @@ function mockUpstream(planes = 2) {
 describe('sync-starlink cron', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(saveStarlinkSnapshot).mockClear();
     vi.stubEnv('CRON_SECRET', 'test-secret');
     delete (globalThis).__starlinkCache;
   });
@@ -82,6 +90,12 @@ describe('sync-starlink cron', () => {
     expect(cache).toBeDefined();
     expect(cache.aircraft).toHaveLength(3);
     expect(cache.syncedAt).toBeDefined();
+
+    // The durable cross-instance handoff: the enriched payload must be persisted to Supabase.
+    // Without this assertion, deleting the saveStarlinkSnapshot call regresses to the prior
+    // globalThis-only no-op incident with the whole suite still green.
+    expect(saveStarlinkSnapshot).toHaveBeenCalledTimes(1);
+    expect(saveStarlinkSnapshot.mock.calls[0][0].aircraft).toHaveLength(3);
   });
 
   it('normalizes aircraft data format', async () => {
@@ -113,6 +127,8 @@ describe('sync-starlink cron', () => {
     expect(res.statusCode).toBe(502);
     expect(res.body.error).toMatch(/0 Starlink/);
     expect((globalThis).__starlinkCache).toBeUndefined();
+    // An empty board must never reach the durable snapshot.
+    expect(saveStarlinkSnapshot).not.toHaveBeenCalled();
   });
 
   it('returns 502 when upstream returns error status', async () => {

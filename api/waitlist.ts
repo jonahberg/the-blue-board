@@ -4,10 +4,11 @@ import { getSupabase } from './_supabase.js';
 import { buildEmailFooterHtml, listUnsubscribeHeaders } from './_email-footer.js';
 import { SOCIAL_PROOF_USERS, HUB_LINE_LONG } from '../src/data/facts.js';
 
-// 5 submissions per IP per hour → ~5 per 60 minutes
-// Rate limiter works in 60s windows, so allow 5 per 60s window
-// For hourly semantics we use a tighter per-minute limit
-const isRateLimited = createRateLimiter('waitlist', 5);
+// 5 submissions per IP per hour. Each new address that passes here triggers a welcome email
+// (sendWelcomeEmail → Resend), so the ceiling is the backstop against welcome-email spam to
+// attacker-chosen recipients. Pass an explicit 1h window: the limiter's default is 60s, which
+// would be 5-per-60s (≈300/hr) — 60x looser than the stated hourly intent.
+const isRateLimited = createRateLimiter('waitlist', 5, 60 * 60 * 1000);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

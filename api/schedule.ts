@@ -289,10 +289,6 @@ function hasForceRefreshParam(req: VercelRequest): boolean {
   );
 }
 
-function isAuthorizedForceRefresh(req: VercelRequest): boolean {
-  return hasForceRefreshParam(req) && isAuthorizedCronRequest(req);
-}
-
 // ── Background provider refresh gate ──
 // The degraded serve paths trigger a background refresh, but letting every user request fan that
 // refresh out to the metered provider would let traffic stampede the quota. Gate it: the provider
@@ -1435,6 +1431,20 @@ async function fetchAllPages(
       const officialTimeout = Math.min(Math.floor((effectiveDeadline - Date.now()) * 0.7), 45000);
       const officialResult = await fetchViaOfficialAPI(logHub, dir, ts, officialTimeout);
       if (officialResult) {
+        // An empty official board (total:0) returns non-partial, which the hot cache + CDN treat as a
+        // clean, 6h-pinnable board — a single transient empty official response for a United hub
+        // (never legitimately empty same-day) would then freeze a 0-flight board on that edge for 6h.
+        // Flag it partial so the empty-board guards in cacheSetGuarded / saveComplete /
+        // setAggregateCacheHeader apply (60s hot TTL, 30s CDN, no durable snapshot) and the live-feed
+        // rescue can run, mirroring the scrape path's empty_200_suspected_block handling below.
+        if (!officialResult.partial && Number(officialResult.total || 0) === 0) {
+          officialResult.partial = true;
+          officialResult.meta = {
+            ...(officialResult.meta || {}),
+            partialReason: officialResult.meta?.partialReason || 'official_empty',
+            completeness: 0,
+          };
+        }
         return await maybeAugmentWithLiveFeedFallback(officialResult, logHub, dir, ts, effectiveDeadline);
       }
     } catch (e: any) {
@@ -1764,7 +1774,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const sched = await fetchOnePage(hub, dir, ts, pageNum, functionDeadline, {
         disableScraperFallback: !allowScraperFallback,
       });
-      if (!sched) {
+      // A truthy _rateLimited sentinel (fetchOnePage returns { _rateLimited: true } on an FR24 block
+      // with no scraper recovery) carries no flight data; caching it and serving it 200 would pin a
+      // zero-row board for hours. Treat it as an upstream failure, same as a null result — the
+      // aggregation path guards this sentinel too, but this legacy single-page path used to skip it.
+      if (!sched || sched._rateLimited) {
         return res.status(502).json({ error: 'Upstream service unavailable' });
       }
       const scrapeTransport = sched._scrapeTransport || 'direct';

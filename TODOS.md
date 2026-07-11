@@ -8,7 +8,6 @@
 
 - [ ] Integration-test harness: real Supabase local instance, hit API routes with service-role + anon-key both, RLS enforcement tests, template-escaping snapshot tests.
 - [ ] CI lint: ban inline `<script>` in public/index.html, ban raw `innerHTML` with template-literal interpolation, ban inline event handlers (`on*=` attributes).
-- [ ] Migrate inline event handlers (`onclick`, `onkeydown`, `onload`) at `public/index.html:75`, `src/dashboard/main.js:2956/3704/3717` to delegated `data-action` attributes.
 - [ ] Tighten CSP: drop `style-src 'unsafe-inline'` after inline-style audit.
 - [ ] Cost alerting: Anthropic + FR24 spend anomaly detection via Vercel log drain.
 - [ ] Circuit breakers / graceful degradation for FR24, Anthropic, Resend, Supabase. (partial: 60s negative cache + 4s timeout shipped for `api/predict-flight.ts` and `api/check-flight.ts` in v1.5.8)
@@ -20,7 +19,6 @@
 - [ ] [compliance] Starlink upstream (unitedstarlinktracker.com) is consumed against its robots.txt with no documented permission — ask @martinamps for written permission and record it in docs. (Deferred from v1.5.17.)
 - [ ] [compliance] Set `EMAIL_POSTAL_ADDRESS` in Vercel env (real postal address / PO Box — CAN-SPAM requires it; the email footer renders it once set). Optional follow-up: an HTTPS one-click unsubscribe endpoint enables the RFC 8058 List-Unsubscribe-Post header.
 
-- [ ] [#6] CRON_SECRET timing-safe compare across `api/cron/refresh-tsa.ts:10`, `api/cron/sync-starlink.ts:11`, `api/news-notify.ts:50-51`. Bundle with auth hardening pass. (partial: warm-schedules + the /api/schedule forceRefresh gate shipped timing-safe fail-closed auth in v1.5.16 via `api/_cron-auth.ts` — reuse it for the remaining three)
 - [ ] [#26 extension] Evaluate moving waitlist off hand-rolled Supabase+Resend → Loops/Resend Audiences/ConvertKit.
 - [ ] [README drift] Audit README claims vs actual codebase ("strict CSP", "zero inline handlers", "fully escaped") and either fix the code or fix the docs.
 

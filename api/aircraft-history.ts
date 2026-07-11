@@ -7,6 +7,7 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402 } from './_official-fr24.js';
+import { icaoToIata } from '../src/lib/airport-metadata.js';
 
 const isRateLimited = createRateLimiter('aircraft-history', 15);
 
@@ -48,11 +49,15 @@ export function normalizeSegments(data: any): NormalizedSegment[] {
   if (!flights.length) return [];
 
   return flights.map((f: any) => {
-    const depSched = f.departure?.scheduled || f.scheduled_departure || '';
-    const depActual = f.departure?.actual || f.actual_departure || '';
-    const arrSched = f.arrival?.scheduled || f.scheduled_arrival || '';
-    const arrActual = f.arrival?.actual || f.actual_arrival || '';
-    const arrEst = f.arrival?.estimated || f.estimated_arrival || '';
+    // The live FR24 /api/flight-summary/light response is FLAT (orig_icao / dest_icao /
+    // datetime_takeoff / datetime_scheduled_departure) — the same endpoint schedule.ts
+    // (normalizeSummaryFlight) and flight-times.ts parse. Read those flat fields too or every
+    // real segment is silently dropped by the origin/destination filter below.
+    const depSched = f.departure?.scheduled || f.scheduled_departure || f.datetime_scheduled_departure || '';
+    const depActual = f.departure?.actual || f.actual_departure || f.datetime_takeoff || '';
+    const arrSched = f.arrival?.scheduled || f.scheduled_arrival || f.datetime_scheduled_arrival || '';
+    const arrActual = f.arrival?.actual || f.actual_arrival || f.datetime_landed || '';
+    const arrEst = f.arrival?.estimated || f.estimated_arrival || f.datetime_estimated_arrival || '';
 
     // Compute departure delay in minutes
     let delayMin: number | null = null;
@@ -69,9 +74,9 @@ export function normalizeSegments(data: any): NormalizedSegment[] {
     if (typeof status === 'string') status = status.toLowerCase();
 
     return {
-      flightNumber: f.flight_iata || f.flight_number?.iata || f.callsign || '',
-      origin: f.origin?.iata || f.airport?.origin?.code?.iata || '',
-      destination: f.destination?.iata || f.airport?.destination?.code?.iata || '',
+      flightNumber: f.flight_iata || f.flight_number?.iata || f.flight || f.callsign || '',
+      origin: f.origin?.iata || f.airport?.origin?.code?.iata || f.orig_iata || icaoToIata(f.orig_icao || f.origin?.icao || ''),
+      destination: f.destination?.iata || f.airport?.destination?.code?.iata || f.dest_iata || icaoToIata(f.dest_icao_actual || f.dest_icao || f.destination?.icao || ''),
       status,
       departure: { scheduled: depSched, actual: depActual },
       arrival: { scheduled: arrSched, actual: arrActual, estimated: arrEst },
@@ -115,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Aircraft history temporarily unavailable' });
   }
 
-  const reg = ((req.query.reg as string) || '').trim().toUpperCase().replace('-', '');
+  const reg = ((req.query.reg as string) || '').trim().toUpperCase().replace(/-/g, '');
   if (!reg || !/^[A-Z0-9]{4,8}$/.test(reg)) {
     return res.status(400).json({ success: false, error: 'Invalid registration format' });
   }

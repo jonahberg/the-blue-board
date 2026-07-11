@@ -311,4 +311,25 @@ describe('waitlist API', () => {
     expect(res._status).toBe(429);
     expect(res._json.error).toMatch(/too many/i);
   });
+
+  it('enforces an HOURLY signup window — 5 submissions stay blocked long after 60s', async () => {
+    // The stated intent is 5 signups per IP per hour. A per-minute (60s) window would reset here
+    // and let a 6th welcome email fire minutes later; the hourly window must keep it blocked.
+    vi.useFakeTimers();
+    try {
+      const ip = '10.55.55.55';
+      const req = () => makeReq({ headers: { origin: 'https://theblueboard.co', 'x-real-ip': ip } });
+      for (let i = 0; i < 5; i++) {
+        const res = makeRes();
+        await handler(req(), res);
+        expect(res._status).toBe(200);
+      }
+      vi.advanceTimersByTime(5 * 60 * 1000); // 5 min — well past any per-minute window
+      const res = makeRes();
+      await handler(req(), res);
+      expect(res._status).toBe(429); // still blocked inside the hour
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

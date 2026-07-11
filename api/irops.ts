@@ -5,6 +5,7 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
+import { getStartOfHubDay, defaultSchedDayOffset } from '../src/lib/hubTz.js';
 
 const isRateLimited = createRateLimiter('irops', 60);
 
@@ -111,6 +112,17 @@ const CANCELED_STATUSES = new Set(['canceled', 'cancelled', 'canceled_uncertain'
 // while the F073 ground-stop signal the rule exists for is preserved (see tests).
 const OVERDUE_MAX_MIN = 240;
 
+// F073c: a CONFIRMED delay is real.departure − scheduled.departure. Unlike the inferred
+// overdue path, a real departure timestamp is trustworthy, so genuine multi-hour weather
+// holds — exactly the IROPS signal — must survive. But real.departure is a raw provider
+// datetime (revisedTime || runwayTime) with no proximity guard, and a value stamped on the
+// WRONG calendar day (a known DQ artifact under IROPS) yields an impossible ~24h "delay" that
+// would sort to the top of the user-visible worstDelays list and inflate the delay buckets —
+// the same index-inflation symptom as the overdue incident, on the real-delay branch. A single
+// hub-local day cannot legitimately contain a 16h+ gate delay, so beyond that we drop the row
+// rather than fabricate — the same honest-degradation rule as overdueDelayMinutes' cap.
+const CONFIRMED_DELAY_MAX_MIN = 16 * 60;
+
 function overdueDelayMinutes(fl: any, status: string, nowSec: number): number {
   if (CANCELED_STATUSES.has(status)) return 0;
   if (status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted') return 0;
@@ -164,8 +176,11 @@ export function computeMetrics(flightsByHub: Record<string, any[]>, nowSec: numb
         hubMetrics[hub].onTime++;
       } else {
         const delayMin = Math.round((realDep - schedT) / 60);
-        if (delayMin > 30) hubMetrics[hub].delayed30++;
-        if (delayMin > 60) hubMetrics[hub].delayed60++;
+        // F073c: ignore an impossible delay from a wrong-calendar-day real departure.
+        if (delayMin <= CONFIRMED_DELAY_MAX_MIN) {
+          if (delayMin > 30) hubMetrics[hub].delayed30++;
+          if (delayMin > 60) hubMetrics[hub].delayed60++;
+        }
       }
     }
   }
@@ -176,19 +191,26 @@ export function computeMetrics(flightsByHub: Record<string, any[]>, nowSec: numb
   for (const fl of allFlights) {
     const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
     if (CANCELED_STATUSES.has(status)) cancellations++;
-    if (status === 'diverted') diversions++;
+    // F017: a diverted flight is weighted once, as a diversion. It normally has a (late) real
+    // departure, so without this early-out it would also fall into the delay buckets below and
+    // score diversions*2 + delayed60*2 = 4 points — more than a cancellation (×3).
+    if (status === 'diverted') { diversions++; continue; }
 
     const schedT = fl.time?.scheduled?.departure || 0;
     const actT = fl.time?.real?.departure || 0;
     if (schedT && actT && actT > schedT) {
       const delayMin = Math.round((actT - schedT) / 60);
-      if (delayMin > 30) delayed30++;
-      if (delayMin > 60) delayed60++;
-      if (delayMin > 15) {
-        const ident = fl.identification?.number?.default || '?';
-        const orig = fl.airport?.origin?.code?.iata || '?';
-        const dest = fl.airport?.destination?.code?.iata || '?';
-        worstDelays.push({ ident, route: `${orig}→${dest}`, delay: delayMin });
+      // F073c: ignore an impossible delay from a wrong-calendar-day real departure — it would
+      // otherwise top the worstDelays list and inflate the delay buckets.
+      if (delayMin <= CONFIRMED_DELAY_MAX_MIN) {
+        if (delayMin > 30) delayed30++;
+        if (delayMin > 60) delayed60++;
+        if (delayMin > 15) {
+          const ident = fl.identification?.number?.default || '?';
+          const orig = fl.airport?.origin?.code?.iata || '?';
+          const dest = fl.airport?.destination?.code?.iata || '?';
+          worstDelays.push({ ident, route: `${orig}→${dest}`, delay: delayMin });
+        }
       }
     } else {
       // F073: held/overdue flights (past schedule, not yet departed) — the core of a
@@ -233,38 +255,14 @@ export function computeMetrics(flightsByHub: Record<string, any[]>, nowSec: numb
 }
 
 export function getStartOfDayForHub(hub: string): number {
-  const tz = HUB_TZ[hub] || 'America/New_York';
-  const now = new Date();
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-  });
-  const parts = fmt.formatToParts(now);
-  const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0');
-  const hour = get('hour'), minute = get('minute'), second = get('second');
-
-  // DST-safe midnight calculation: compute an approximate midnight, then verify
-  // and adjust. The naive formula (now - localSecondsSinceMidnight) can be off by
-  // ±1 hour across DST transitions because the UTC offset at midnight may differ
-  // from the current offset.
-  const localSecsSinceMidnight = hour * 3600 + minute * 60 + second;
-  const approxMidnight = Math.floor(now.getTime() / 1000) - localSecsSinceMidnight;
-
-  // Verify: what local time does our guess correspond to?
-  const verifyParts = fmt.formatToParts(new Date(approxMidnight * 1000));
-  const vH = parseInt(verifyParts.find(p => p.type === 'hour')?.value || '0');
-  const vM = parseInt(verifyParts.find(p => p.type === 'minute')?.value || '0');
-  const vS = parseInt(verifyParts.find(p => p.type === 'second')?.value || '0');
-  const drift = vH * 3600 + vM * 60 + vS;
-
-  // Correct for DST drift (typically ±3600s on transition days)
-  const startOfToday = drift > 43200
-    ? approxMidnight + (86400 - drift)  // Went past midnight into previous day
-    : approxMidnight - drift;            // Fine-tune forward to exact midnight
-
-  // Before 6 AM local: no flights have departed yet, show yesterday's data
-  if (hour < 6) return startOfToday - 86400;
-  return startOfToday;
+  // Single source of truth: the shared, DST-hardened hub-day math in src/lib/hubTz.js.
+  // Its partsToObj normalizes the ICU hour="24" midnight quirk, and re-snapping the day
+  // offset keeps "yesterday" at exact hub-local midnight the morning after a DST transition —
+  // the old inline copy computed startOfToday correctly but then did a naive
+  // `startOfToday - 86400` rollback that landed an hour off across a 23/25-hour day.
+  // defaultSchedDayOffset encodes the same "before 6 AM local -> yesterday" rule
+  // (BOARD_ROLLOVER_HOUR) this function has always applied.
+  return getStartOfHubDay(hub, defaultSchedDayOffset(hub));
 }
 
 async function buildIropsData() {

@@ -24,6 +24,11 @@ const PAGE_SIZE = 500;
 const MAX_DISTINCT_FLIGHTS = 50; // upstream lookup budget per run
 const MAX_SENDS_PER_RUN = 200;
 const MAX_FAILS = 3; // delete a subscription after this many consecutive failures
+const RESOLVE_ABORT_MS = 9000; // per-flight upstream timeout
+// Stop resolving once this much wall clock has elapsed, leaving >=20s headroom under the 120s
+// maxDuration (vercel.json) for the send + persist passes so the run never gets force-killed
+// mid-persist (which would drop state and re-notify next run).
+const RESOLVE_DEADLINE_MS = 100_000;
 
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
@@ -53,8 +58,6 @@ interface ResolvedFlight {
   status?: string;
   gate?: string;
   equip?: string;
-  /** Epoch ms of the soonest known departure, for prioritization. Infinity when unknown. */
-  depMs: number;
 }
 
 async function loadAllSubscriptions(supabase: ReturnType<typeof getSupabase>): Promise<SubscriptionRow[]> {
@@ -66,7 +69,11 @@ async function loadAllSubscriptions(supabase: ReturnType<typeof getSupabase>): P
       .select('id, endpoint, p256dh, auth, watches, failed_count')
       .order('last_seen_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
+    if (error) {
+      const err = new Error(error.message);
+      (err as any).code = error.code;
+      throw err;
+    }
     const rows = (data || []) as SubscriptionRow[];
     out.push(...rows);
     if (rows.length < PAGE_SIZE) break;
@@ -81,7 +88,7 @@ async function resolveFlight(flight: string, date?: string): Promise<ResolvedFli
   if (date) params.set('date', date);
   try {
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 9000);
+    const t = setTimeout(() => controller.abort(), RESOLVE_ABORT_MS);
     const resp = await fetch(`${BASE_URL}/api/flight-times?${params}`, {
       signal: controller.signal,
       headers: { 'User-Agent': 'BlueBoard-WatchAlerts/1.0' },
@@ -90,15 +97,11 @@ async function resolveFlight(flight: string, date?: string): Promise<ResolvedFli
     if (!resp.ok) return null;
     const d = (await resp.json()) as any;
     if (!d || d.success === false) return null;
-    const dep = d.departure?.gate || {};
-    const depIso = dep.actual || dep.estimated || dep.scheduled || '';
-    const depMs = depIso ? Date.parse(depIso) : NaN;
     return {
       status: String(d.status || ''),
       gate: String(d.origin?.gate || ''),
       // Registration (tail) is the sharpest equipment-swap signal; fall back to type text.
       equip: String(d.registration || d.aircraft || ''),
-      depMs: Number.isFinite(depMs) ? depMs : Infinity,
     };
   } catch {
     return null;
@@ -106,6 +109,7 @@ async function resolveFlight(flight: string, date?: string): Promise<ResolvedFli
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const runStart = Date.now();
   if (!isAuthorizedCronRequest(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -120,6 +124,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     subs = await loadAllSubscriptions(getSupabase());
   } catch (e: any) {
+    // Deploy-ordering footgun: VAPID env can land before sql/014 creates watch_subscriptions.
+    // Postgres 42P01 (relation does not exist) means the migration hasn't run — degrade to the
+    // graceful-unconfigured 200 instead of a 5-minute 500 storm until the table exists.
+    if (e?.code === '42P01') {
+      return res.status(200).json({ configured: false, skipped: 'watch_subscriptions table not provisioned' });
+    }
     console.error('watch-alerts: subscription load failed:', e?.message || e);
     return res.status(500).json({ error: 'subscription load failed' });
   }
@@ -137,8 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Prioritize by date (dated/today first, undated treated as today), then flight number, and cap
-  // at the upstream budget. Departure-time prioritization refines this once resolved, but the cap
-  // must be applied before we spend any lookups.
+  // at the upstream budget before we spend any lookups.
   const candidates = Array.from(distinct.values()).sort((a, b) => {
     const ad = a.date || '', bd = b.date || '';
     if (ad !== bd) return ad < bd ? -1 : 1;
@@ -147,9 +156,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const capped = candidates.slice(0, MAX_DISTINCT_FLIGHTS);
   const flightsCapped = candidates.length > MAX_DISTINCT_FLIGHTS;
 
-  // Resolve each once (serial to be gentle on the free upstream tiers).
+  // Resolve each once (serial to be gentle on the free upstream tiers). A slow FlightAware tier can
+  // take up to RESOLVE_ABORT_MS each, so bound the loop by wall clock: stop resolving once
+  // RESOLVE_DEADLINE_MS elapses, leaving >=20s headroom under maxDuration (vercel.json) for the
+  // send + persist passes below. Unresolved flights keep their stored state and alert next run.
   const resolved = new Map<string, ResolvedFlight>();
+  let resolveDeadlineHit = false;
   for (const c of capped) {
+    if (Date.now() - runStart > RESOLVE_DEADLINE_MS) {
+      resolveDeadlineHit = true;
+      break;
+    }
     const r = await resolveFlight(c.flight, c.date);
     if (r) resolved.set(`${c.flight}:${c.date || ''}`, r);
   }
@@ -160,6 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let subsUpdated = 0;
   let subsDeleted = 0;
   let failuresBumped = 0;
+  let writeErrors = 0;
   const supabase = getSupabase();
 
   for (const sub of subs) {
@@ -205,41 +223,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (JSON.stringify(updated) !== JSON.stringify(w)) mutated = true;
     }
 
-    // Persist state / failure bookkeeping.
+    // Persist state / failure bookkeeping. A push has already fired for notifying watches, so an
+    // unpersisted state write means a duplicate notification next run — capture and count write
+    // errors instead of silently swallowing them (supabase-js resolves with {error}, never throws).
     if (sub.failed_count >= MAX_FAILS) {
-      await supabase.from('watch_subscriptions').delete().eq('id', sub.id);
-      subsDeleted++;
+      const { error } = await supabase.from('watch_subscriptions').delete().eq('id', sub.id);
+      if (error) {
+        writeErrors++;
+        console.error(`watch-alerts: delete failed for sub ${sub.id}:`, error.message);
+      } else {
+        subsDeleted++;
+      }
       continue;
     }
     if (sawFailure) {
       failuresBumped++;
-      await supabase
+      const { error } = await supabase
         .from('watch_subscriptions')
         .update({ failed_count: (sub.failed_count || 0) + 1, watches: newWatches })
         .eq('id', sub.id);
-      subsUpdated++;
+      if (error) {
+        writeErrors++;
+        console.error(`watch-alerts: failure-bump update failed for sub ${sub.id}:`, error.message);
+      } else {
+        subsUpdated++;
+      }
     } else if (mutated) {
-      await supabase
+      const { error } = await supabase
         .from('watch_subscriptions')
         .update({ watches: newWatches, failed_count: 0 })
         .eq('id', sub.id);
-      subsUpdated++;
+      if (error) {
+        writeErrors++;
+        console.error(`watch-alerts: state update failed for sub ${sub.id}:`, error.message);
+      } else {
+        subsUpdated++;
+      }
     }
   }
 
   if (capped200) {
     console.warn(`watch-alerts: send cap reached (${MAX_SENDS_PER_RUN}); remaining notifications deferred to next run`);
   }
+  if (resolveDeadlineHit) {
+    console.warn(`watch-alerts: resolve deadline (${RESOLVE_DEADLINE_MS}ms) reached; remaining flights deferred to next run`);
+  }
+  if (writeErrors > 0) {
+    console.error(`watch-alerts: ${writeErrors} subscription write(s) failed; state may re-notify next run`);
+  }
   const summary = {
     subscriptions: subs.length,
     distinctFlights: distinct.size,
     resolved: resolved.size,
     flightsCapped,
+    resolveDeadlineHit,
     sends,
     sendCapReached: capped200,
     subsUpdated,
     subsDeleted,
     failuresBumped,
+    writeErrors,
     timestamp: new Date().toISOString(),
   };
   console.log('watch-alerts run:', summary);

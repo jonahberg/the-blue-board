@@ -119,6 +119,19 @@ describe('aircraft-history API', () => {
     expect(res.body.reg).toBe('NABCDE');
   });
 
+  it('strips EVERY hyphen from a multi-hyphen registration', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [] }),
+    });
+
+    const res = createRes();
+    await handler(makeReq({ query: { reg: 'G-A-BCD' } }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.reg).toBe('GABCD');
+  });
+
   // --- Error paths ---
 
   it('returns 502 when FR24 responds with error status', async () => {
@@ -269,6 +282,29 @@ describe('normalizeSegments', () => {
     expect(normalizeSegments(null)).toEqual([]);
     expect(normalizeSegments(undefined)).toEqual([]);
     expect(normalizeSegments({})).toEqual([]);
+  });
+
+  // The live FR24 /api/flight-summary/light response is FLAT — orig_icao/dest_icao/
+  // datetime_takeoff/datetime_scheduled_departure — not the nested {origin:{iata},
+  // departure:{scheduled}} shape. schedule.ts normalizeSummaryFlight and flight-times.ts
+  // both read those flat fields off this same endpoint; normalizeSegments must too or it
+  // silently drops every real segment.
+  it('parses the live FR24 flat/light shape (orig_icao/datetime_takeoff)', () => {
+    const result = normalizeSegments({
+      data: [{
+        flight: 'UA123',
+        callsign: 'UAL123',
+        orig_icao: 'KORD',
+        dest_icao: 'KLAX',
+        datetime_scheduled_departure: '2026-04-04T10:00:00Z',
+        datetime_takeoff: '2026-04-04T10:15:00Z',
+        datetime_landed: '2026-04-04T13:00:00Z',
+      }],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].origin).toBe('ORD');
+    expect(result[0].destination).toBe('LAX');
+    expect(result[0].delayMin).toBe(15);
   });
 
   it('filters out segments with missing airports', () => {

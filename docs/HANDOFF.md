@@ -1,7 +1,7 @@
 # Handoff — v2.0 Review & Remediation Program
 
-**Date:** 2026-07-08 · **Branch:** `claude/blue-board-personas-2ebjuv` (PR open against `main`)
-**State:** all planned work COMPLETE and pushed. Gates at branch head: `bun run test` 1033/1033 (was 942 at baseline) · `tsc --noEmit` clean · `bun run build` green (43 pages).
+**Date:** 2026-07-08 · **Branch:** `claude/blue-board-personas-2ebjuv` (merged as PR #220)
+**State:** all planned work COMPLETE and merged. Gates at branch head: `bun run test` 1033/1033 (was 942 at baseline) · `tsc --noEmit` clean · `bun run build` green (43 pages). The suite has since grown to 1079+ across the v1.7.1–v1.7.8 hotfixes.
 
 ## What happened (one paragraph)
 
@@ -46,6 +46,7 @@ A seven-persona hands-on review + five-domain code audit + independent fact-chec
 - **Dev-server gotcha (TODOS #28, bit us during this program):** `scripts/run-astro-dev.mjs` stamps `public/index.html` and restores a startup snapshot on exit — if killed after other commits touched that file, it reverts them on disk. Run `bunx astro dev` directly for agent work, or fix the script to stamp a copy.
 - **Review harness:** persona/verification testing used a session-local mock-API proxy (realistic FR24/schedule/METAR/FAA/IROPS payloads + seeded EWR-ground-stop scenario) serving the dashboard fully hydrated; it lived outside the repo and is gone with the session. Rebuilding it is documented by example in the review's "How this review was done" — a committed fixture harness is a worthwhile future package (the review's "dev/prod parity" recommendation).
 - **`public/js/dashboard.js`** is a gitignored build artifact — `bun run build:dashboard` after editing `src/dashboard/main.js`.
+- **PWA icon generators are one-off, not part of `bun run build`.** The committed OG images come from `python scripts/generate-og.py` and the committed maskable icons (`public/icons/icon-192-maskable.png`, `icon-512-maskable.png`, referenced by `public/manifest.json`) come from `python scripts/generate-maskable-icons.py`. Both write their assets into `public/` and are checked in; rerun the relevant script by hand only when the source art or safe-area padding changes, then commit the regenerated PNGs.
 - **Facts discipline:** page-level factual numbers come from `src/data/facts.js`; static files (index.html, llms*.txt, README) carry sync comments. When a fact changes, update facts.js then grep for stragglers.
 
 ## Key documents
@@ -54,7 +55,7 @@ A seven-persona hands-on review + five-domain code audit + independent fact-chec
 - `docs/setup-push-alerts.md` — push-alert owner setup.
 - `DESIGN.md` — design system (updated 2026-07-08: contrast tables, dim-token change, blue-is-never-text).
 - `TODOS.md` — pre-existing backlog; compliance items there are now load-bearing for monetization (see owner action 3).
-- `CHANGELOG.md` — now current through v1.7.7 (2026-07-09). The v2.0 program itself shipped unversioned; the seven hotfix releases that followed it (v1.7.1–v1.7.7: map markers, IROPS phantom holds, zoom-control/nav/support-stats, overnight-empty Schedule board, TypeScript-7 deploy freeze revert, gate-vs-runway instrumentation, gate-based delay measurement) are each documented there. Do NOT create a consolidated v1.8.0 entry — that guidance predates the hotfix series and would duplicate history.
+- `CHANGELOG.md` — now current through v1.7.8 (2026-07-09). The v2.0 program itself shipped unversioned (documented retroactively in the `## [Unversioned]` PR #220 section); the eight hotfix releases that followed it (v1.7.1–v1.7.8: map markers, IROPS phantom holds, zoom-control/nav/support-stats, overnight-empty Schedule board, TypeScript-7 deploy freeze revert, gate-vs-runway instrumentation, gate-based delay measurement, equipment-swap aircraft-code derivation) are each documented there. Do NOT create a consolidated v1.8.0 entry — that guidance predates the hotfix series and would duplicate history.
 
 ## Post-program addendum (2026-07-09, after the v2.0 review-and-remediation session)
 

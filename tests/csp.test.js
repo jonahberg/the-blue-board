@@ -58,6 +58,22 @@ describe('Content-Security-Policy configuration', () => {
   it('disallows framing (frame-ancestors none)', () => {
     expect(csp).toMatch(/frame-ancestors\s+'none'/);
   });
+
+  it('allows the basemap + radar tile hosts in img-src (dropping one blanks the map)', () => {
+    // Leaflet loads the CARTO basemap and Iowa Mesonet NEXRAD radar as <img> tiles;
+    // both are gated by img-src. Removing a host silently blanks the map/radar —
+    // the same visible outcome as the guarded Leaflet-CSS incident.
+    const imgSrc = directive('img-src');
+    expect(imgSrc).toContain('https://*.basemaps.cartocdn.com');
+    expect(imgSrc).toContain('https://*.tile.openstreetmap.org');
+    expect(imgSrc).toContain('https://mesonet.agron.iastate.edu');
+  });
+
+  it('allows self and Vercel vitals in connect-src (dropping them breaks /api fetches)', () => {
+    const connectSrc = directive('connect-src');
+    expect(connectSrc).toContain("'self'");
+    expect(connectSrc).toContain('https://vitals.vercel-insights.com');
+  });
 });
 
 describe('public/index.html inline script audit', () => {

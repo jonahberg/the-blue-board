@@ -254,3 +254,84 @@ describe('fr24-flight official-FR24 kill switch', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+// F048: the success path merges the live position with summary times, 404s when neither
+// tier has data, and labels the leg (liveLeg/legDate) so the modal isn't silently
+// authoritative. None of that was covered — only the kill-switch 503 above.
+function fr24Resp(body, { ok = true, status = 200 } = {}) {
+  return {
+    ok,
+    status,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  };
+}
+
+describe('fr24-flight handler success orchestration (F048)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    process.env.FR24_API_TOKEN = 'test-token';
+    delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED; // kill switch defaults ON
+    resetMirroredQuotaBlock();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete process.env.FR24_API_TOKEN;
+  });
+
+  it('merges summary times into a live position and labels the leg', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const u = String(url);
+      if (u.includes('/api/live/flight-positions/full')) {
+        // Live: has a position but NO times — forces the summary top-up.
+        return fr24Resp({ data: [{ flight_iata: 'UA838', on_ground: false, orig_iata: 'SFO', dest_iata: 'EWR', registration: 'N29975', lat: 37.6, lon: -122.4, flight_id: 'live1' }] });
+      }
+      return fr24Resp({ data: [{ flight_iata: 'UA838', status: 'scheduled', origin: { iata: 'SFO' }, destination: { iata: 'EWR' }, departure: { scheduled: '2026-04-04T10:00:00Z', actual: '' }, arrival: { scheduled: '2026-04-04T18:00:00Z', estimated: '2026-04-04T17:50:00Z' }, flight_id: 'sum1' }] });
+    });
+
+    const res = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { flight: 'UA838' } }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.source).toBe('fr24-official-live+summary');
+    expect(res.body.liveLeg).toBe(true);
+    expect(res.body.legDate).toBe('2026-04-04T10:00:00Z');
+    expect(res.body.flight.departure.scheduled).toBe('2026-04-04T10:00:00Z');
+    expect(res.body.flight.arrival.scheduled).toBe('2026-04-04T18:00:00Z');
+    expect(res.body.flight.arrival.estimated).toBe('2026-04-04T17:50:00Z');
+    expect(res.body.flight.position.lat).toBe(37.6); // live position preserved
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('404s when neither the live nor the summary tier has data', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => fr24Resp({ data: [] }));
+
+    const res = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { flight: 'UA404' } }, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/No data found/);
+    expect(fetchSpy).toHaveBeenCalledTimes(2); // live empty → summary top-up attempted
+  });
+
+  it('serves a live-only leg (with times) without a summary call', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const u = String(url);
+      if (u.includes('/api/live/flight-positions/full')) {
+        return fr24Resp({ data: [{ flight_iata: 'UA515', on_ground: false, orig_iata: 'DEN', dest_iata: 'IAH', scheduled_departure: '2026-04-05T14:00:00Z', lat: 40, lon: -105, flight_id: 'live2' }] });
+      }
+      throw new Error('summary should not be called when live already has times');
+    });
+
+    const res = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { flight: 'UA515' } }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.source).toBe('fr24-official-live');
+    expect(res.body.liveLeg).toBe(true);
+    expect(res.body.legDate).toBe('2026-04-05T14:00:00Z');
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // no summary top-up
+  });
+});

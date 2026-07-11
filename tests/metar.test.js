@@ -38,6 +38,20 @@ describe('metar API', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('allows the production origin (https://theblueboard.co) — the cron/SPA caller', async () => {
+    // The refresh-metar cron and the live SPA both send this exact Origin. A typo in the
+    // allowlist literal would 403 production while the localhost/evil.com tests stayed green.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok([station('KORD')]));
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'https://theblueboard.co' },
+      query: { ids: 'KORD' },
+    }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.map((r) => r.icaoId)).toContain('KORD');
+  });
+
   it('rejects invalid airport IDs', async () => {
     const res = createRes();
     await handler({
@@ -176,6 +190,38 @@ describe('metar API', () => {
 
     expect(res.body[0].stale).toBe(true);
     expect(typeof res.body[0].cachedAt).toBe('number');
+  });
+
+  it('bounds the last-known-good store, evicting the oldest station under enumeration pressure', async () => {
+    // A caller can request many distinct valid ICAO ids; without a size cap the store grows with
+    // every station ever queried on a warm instance. With the cap, the oldest entry is evicted so
+    // a once-queried station is no longer backfilled after it falls out of the working set.
+    process.env.METAR_LKG_MAX = '3';
+    try {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        const id = String(url).match(/ids=([A-Z]+)/)?.[1] || '';
+        return ok([station(id)]);
+      });
+
+      // Prime KAAA as last-known-good.
+      let res = createRes();
+      await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { ids: 'KAAA' } }, res);
+      expect(res.body[0].icaoId).toBe('KAAA');
+
+      // Fill the store past the cap (3) with distinct fresh stations, evicting KAAA.
+      res = createRes();
+      await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { ids: 'KBBB,KCCC,KDDD' } }, res);
+
+      // KAAA now fails upstream. If it were still cached it would backfill stale; because it was
+      // evicted by the size cap, it is omitted entirely.
+      vi.restoreAllMocks();
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(abortError());
+      res = createRes();
+      await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { ids: 'KAAA' } }, res);
+      expect(res.body).toEqual([]);
+    } finally {
+      delete process.env.METAR_LKG_MAX;
+    }
   });
 
   it('stops backfilling a last-known-good observation once it is older than 6h', async () => {

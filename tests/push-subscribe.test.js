@@ -112,6 +112,27 @@ describe('push-subscribe API', () => {
     expect(row.failed_count).toBe(0);
   });
 
+  it('POST normalizes UAL-prefix / bare-number flights, dedupes, and drops bad dates', async () => {
+    const res = makeRes();
+    await handler(makeReq({
+      body: {
+        subscription: VALID_SUB,
+        watches: [
+          { flight: 'UAL789' },              // UAL → UA789
+          { flight: '123' },                 // bare → UA123
+          { flight: 'UA1' },
+          { flight: 'UA1' },                 // exact duplicate → collapsed
+          { flight: 'UA5', date: 'not-a-date' }, // bad date → dropped, watch kept
+        ],
+      },
+    }), res);
+    expect(res._status).toBe(200);
+    const [row] = mockUpsert.mock.calls[0];
+    expect(row.watches.map((w) => w.flight)).toEqual(['UA789', 'UA123', 'UA1', 'UA5']);
+    const ua5 = row.watches.find((w) => w.flight === 'UA5');
+    expect(ua5.date).toBeUndefined();
+  });
+
   it('POST rejects an invalid (non-https) endpoint', async () => {
     const res = makeRes();
     await handler(makeReq({

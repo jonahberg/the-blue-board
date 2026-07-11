@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler from '../api/starlink-data.js';
 
 function createRes() {
@@ -154,5 +154,111 @@ describe('starlink-data API', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.aircraft).toBeDefined();
     spy.mockRestore();
+  });
+});
+
+// The durable Supabase snapshot serving decision (fresh vs >6h stale) and the rate-limit degrade
+// branches never run under the tests above — in that env loadStarlinkSnapshot always returns null.
+// These tests mock the snapshot module and reset the handler's module-level state (inMemoryCache,
+// the shared rate limiter) per test via resetModules, so each snapshot/rate-limit branch is exercised.
+describe('starlink-data API — Supabase snapshot + rate-limit branches', () => {
+  let handler;
+  let loadStarlinkSnapshot;
+
+  function snapshotPayload() {
+    return {
+      aircraft: [{ tail: 'N100', fleet: 'Mainline', type: '737-800', operator: 'United Airlines', dateFound: '', wifi: 'Starlink' }],
+      totalCount: 1,
+      fleetStats: null,
+      flightsByTail: {},
+      lastUpdated: '',
+      syncedAt: '2026-05-31T00:00:00.000Z',
+    };
+  }
+
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+    delete (globalThis).__starlinkCache;
+    vi.doMock('../api/_starlink-snapshot.js', () => ({ loadStarlinkSnapshot: vi.fn() }));
+    ({ default: handler } = await import('../api/starlink-data.js'));
+    ({ loadStarlinkSnapshot } = await import('../api/_starlink-snapshot.js'));
+  });
+
+  afterEach(() => {
+    vi.doUnmock('../api/_starlink-snapshot.js');
+    vi.resetModules();
+  });
+
+  it('serves a fresh snapshot directly (source "supabase") without hitting upstream', async () => {
+    loadStarlinkSnapshot.mockResolvedValue({ refreshedAt: Date.now(), data: snapshotPayload() });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => mockUpstreamResponse() });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['X-Starlink-Source']).toBe('supabase');
+    expect(res.body.aircraft).toHaveLength(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('falls through to upstream when the snapshot is older than the 6h freshness window', async () => {
+    loadStarlinkSnapshot.mockResolvedValue({ refreshedAt: Date.now() - 7 * 60 * 60 * 1000, data: snapshotPayload() });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => mockUpstreamResponse() });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['X-Starlink-Source']).toBe('upstream');
+    expect(res.body.aircraft).toHaveLength(2);
+  });
+
+  it('degrades to the stale snapshot ("supabase-stale") when the rate limiter trips', async () => {
+    loadStarlinkSnapshot.mockResolvedValue({ refreshedAt: Date.now() - 7 * 60 * 60 * 1000, data: snapshotPayload() });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('upstream down'));
+
+    // Exhaust the 30-request window. Each request reaches the limiter, tries upstream (which
+    // throws), and degrades to the stale snapshot via the catch path.
+    for (let i = 0; i < 30; i++) {
+      const r = createRes();
+      await handler(makeReq(), r);
+      expect(r.headers['X-Starlink-Source']).toBe('supabase-stale');
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(30);
+
+    // The 31st request is rate-limited: it must short-circuit to the stale snapshot BEFORE any
+    // upstream fetch (proving the rate-limit branch, not the catch branch, served it).
+    fetchSpy.mockClear();
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['X-Starlink-Source']).toBe('supabase-stale');
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    errSpy.mockRestore();
+  });
+
+  it('degrades to the static file ("static") under the rate limit when no snapshot exists', async () => {
+    loadStarlinkSnapshot.mockResolvedValue(null);
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('upstream down'));
+
+    for (let i = 0; i < 30; i++) {
+      const r = createRes();
+      await handler(makeReq(), r);
+      expect(r.headers['X-Starlink-Source']).toBe('static');
+    }
+
+    fetchSpy.mockClear();
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['X-Starlink-Source']).toBe('static');
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    errSpy.mockRestore();
   });
 });

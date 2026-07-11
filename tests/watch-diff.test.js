@@ -22,6 +22,10 @@ describe('_watch-diff meaningful-change engine', () => {
     it('notifies Scheduled → En Route', () => {
       expect(isSignificantStatusChange('Scheduled', 'En Route')).toBe(true);
     });
+    it('notifies on an appearing delay (Scheduled → Delayed)', () => {
+      expect(isSignificantStatusChange('Scheduled', 'Delayed')).toBe(true);
+      expect(isSignificantStatusChange('Scheduled', 'Delayed 45 min')).toBe(true);
+    });
     it('notifies on cancellation / diversion / landing', () => {
       expect(isSignificantStatusChange('En Route', 'Cancelled')).toBe(true);
       expect(isSignificantStatusChange('En Route', 'Diverted')).toBe(true);
@@ -29,6 +33,18 @@ describe('_watch-diff meaningful-change engine', () => {
     });
     it('does not notify on identical status', () => {
       expect(isSignificantStatusChange('Scheduled', 'Scheduled')).toBe(false);
+    });
+    it('does not notify on provider-vocabulary synonyms for the same phase', () => {
+      // FlightAware scrape tier says "En Route"; the FR24 schedule-cache tier says "estimated" /
+      // "en route" for the SAME physical state. Which tier answers flips run-to-run — a phase
+      // classifier must treat these as one phase so they never mint a false push.
+      expect(isSignificantStatusChange('En Route', 'estimated')).toBe(false);
+      expect(isSignificantStatusChange('estimated', 'En Route')).toBe(false);
+      expect(isSignificantStatusChange('En Route', 'en-route')).toBe(false);
+      expect(isSignificantStatusChange('En Route', 'en route')).toBe(false);
+      expect(isSignificantStatusChange('Departed', 'En Route')).toBe(false);
+      // Case-only difference between tiers must not notify either.
+      expect(isSignificantStatusChange('Landed', 'landed')).toBe(false);
     });
     it('does not notify with empty operands', () => {
       expect(isSignificantStatusChange('', 'Departed')).toBe(false);
@@ -58,6 +74,23 @@ describe('_watch-diff meaningful-change engine', () => {
       expect(r.title).toContain('UA123');
       expect(r.title).toContain('Departed');
       expect(r.nextState.lastStatus).toBe('Departed');
+    });
+
+    it('notifies on an appearing delay and stores the delayed status', () => {
+      const r = diffWatch('UA123', { lastStatus: 'Scheduled' }, { status: 'Delayed 45 min' });
+      expect(r.notify).toBe(true);
+      expect(r.kind).toBe('status');
+      expect(r.nextState.lastStatus).toBe('Delayed 45 min');
+    });
+
+    it('does NOT notify on a provider-vocabulary flip for the same phase', () => {
+      // Stored "En Route" (FlightAware tier); this run resolved via the schedule-cache tier which
+      // reports "estimated" for the identical airborne state. No real event → no push, but the
+      // freshest label is still persisted.
+      const r = diffWatch('UA123', { lastStatus: 'En Route' }, { status: 'estimated' });
+      expect(r.notify).toBe(false);
+      expect(r.kind).toBe('none');
+      expect(r.nextState.lastStatus).toBe('estimated');
     });
 
     it('does NOT duplicate-notify when nothing changed', () => {

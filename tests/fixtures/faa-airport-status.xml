@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AIRPORT_STATUS_INFORMATION>
+  <Delay_type>
+    <Ground_Delay>
+      <Delay>
+        <ARPT>ORD</ARPT>
+        <Reason>WEATHER / THUNDERSTORMS</Reason>
+        <Avg>5 hours and 45 minutes</Avg>
+        <Max>6 hours</Max>
+      </Delay>
+      <Delay>
+        <ARPT>LGA</ARPT>
+        <Reason>VOLUME</Reason>
+        <Avg>45 minutes</Avg>
+        <Max>1 hour and 15 minutes</Max>
+      </Delay>
+    </Ground_Delay>
+    <Ground_Stop>
+      <Delay>
+        <ARPT>SFO</ARPT>
+        <Reason>LOW CEILINGS</Reason>
+        <End_Time>1500</End_Time>
+      </Delay>
+    </Ground_Stop>
+    <Arrival_Departure_Delay>
+      <Delay>
+        <ARPT>EWR</ARPT>
+        <Reason>Departure delays due to volume</Reason>
+        <Min>16 minutes</Min>
+        <Max>30 minutes</Max>
+      </Delay>
+    </Arrival_Departure_Delay>
+    <Airport_Closure>
+      <Airport>
+        <ARPT>DCA</ARPT>
+        <Reason>Runway closed for snow and ice removal operations in progress now</Reason>
+      </Airport>
+    </Airport_Closure>
+  </Delay_type>
+</AIRPORT_STATUS_INFORMATION>

@@ -17,6 +17,7 @@ import { getStartOfDayForHub } from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 import { recordAdbUnits } from '../api/_cost-state.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
+import { classifySchedStatus } from '../src/lib/schedule-status.js';
 
 function formatForFR24Test(date) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -115,16 +116,22 @@ describe('schedule API', () => {
     expect(res.body.meta.partialReason).toBe(null);
   });
 
-  it('returns valid empty result when official API returns 0 flights', async () => {
+  it('does not serve an empty official board as a clean 6h-pinned board', async () => {
+    // An empty official response for a United hub — never legitimately empty same-day — used to come
+    // back non-partial (total:0), so the hot cache pinned it for 6h and the CDN pinned s-maxage=21600:
+    // one transient empty upstream froze a 0-flight board on that edge for 6h. The empty official
+    // board must instead be flagged degraded (partial) so the empty-board cache/CDN guards apply,
+    // mirroring the scrape path's empty_200_suspected_block handling.
     process.env.FR24_API_TOKEN = 'test-token-12345678';
     process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [] }),
+      headers: { get: () => null },
+      json: async () => ({ data: [] }), // official empty; the today live-feed URL also yields no rows
     });
 
-    // Use a distinct timestamp to avoid hitting cache from previous test
+    // A TODAY board: cdnMaxAge would be 21600 (6h) for a clean board.
     const ts = Math.floor(Date.now() / 1000) - 3600;
     const req = {
       method: 'GET',
@@ -136,10 +143,11 @@ describe('schedule API', () => {
     await handler(req, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.partial).toBe(false);
     expect(res.body.total).toBe(0);
     expect(res.body.meta.source).toBe('official-api');
-    expect(res.body.meta.partialReason).toBe(null);
+    // The empty board is degraded, so it is NOT served/pinned as a clean 6h board.
+    expect(res.body.partial).toBe(true);
+    expect(res.headers['Cache-Control']).not.toContain('s-maxage=21600');
   });
 
   it('parses numeric-string timestamps from official API so schedule times are populated', async () => {
@@ -297,6 +305,12 @@ describe('schedule API', () => {
     expect(res.statusCode).toBe(200);
     // Should have fallen back to scraping since official API was sparse
     expect(callCount).toBeGreaterThan(1); // official API call + scraping call(s)
+    // Assert the SCRAPED board was actually served — not the rejected sparse official rows, and not
+    // an empty board. Without these, any second fetch (callCount>1) still passes even if the wrong
+    // (or empty) board ships to the client.
+    expect(res.body.meta.source).toBe('scraping');
+    expect(res.body.total).toBe(1);
+    expect(res.body.flights[0].identification.number.default).toBe('UA500');
   });
 
   it('filters individual sparse flights but keeps good ones from official API', async () => {
@@ -1878,6 +1892,250 @@ describe('schedule API', () => {
     for (const call of fetchSpy.mock.calls) {
       expect(String(call[0])).not.toContain('fr24api.flightradar24.com');
     }
+  });
+
+  it('official API: derives diverted status and reroutes destination on an ICAO mismatch', async () => {
+    // A real diversion arrives as dest_icao !== dest_icao_actual. mapStatus must set diverted, and
+    // normalizeSummaryFlight must display where the flight actually landed (IAD), not the scheduled
+    // destination (EWR). Every other fixture sets the two ICAOs equal, so this derivation was never
+    // exercised — a diversion would be mislabeled with no test to catch it.
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
+
+    const ts = getStartOfDayForHub('ORD');
+    const takeoff = ts + 9 * 3600;
+    const landed = takeoff + 2 * 3600;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('fr24api.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{
+              fr24_id: 'div1', flight: 'UA88', callsign: 'UAL88', operating_as: 'UAL',
+              type: 'B39M', reg: 'N123',
+              orig_icao: 'KORD',
+              dest_icao: 'KEWR',           // scheduled destination
+              dest_icao_actual: 'KIAD',    // actually landed at IAD -> diverted
+              datetime_takeoff: new Date(takeoff * 1000).toISOString().replace('.000Z', 'Z'),
+              datetime_landed: new Date(landed * 1000).toISOString().replace('.000Z', 'Z'),
+              flight_ended: true,
+            }],
+          }),
+        };
+      }
+      return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.total).toBe(1);
+    const flight = res.body.flights[0];
+    expect(flight.status.generic.status.diverted).toBe(true);
+    expect(flight.airport.destination.code.iata).toBe('IAD');
+    // The downstream display classifier keys off the derived diverted flag.
+    expect(classifySchedStatus(flight, 'departures').key).toBe('diverted');
+  });
+
+  it('rejects non-GET, foreign-origin, and out-of-range/NaN timestamps before any upstream fetch', async () => {
+    // The 405/403/400 request guards (esp. the ±7d timestamp range, a cache-cardinality + quota spend
+    // guard) had no coverage, unlike every sibling handler. All must reject before any metered fetch.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true, headers: { get: () => null },
+      json: async () => ({ result: { response: { airport: { pluginData: {} } } } }),
+    });
+    const now = Math.floor(Date.now() / 1000);
+    const validTs = String(getStartOfDayForHub('ORD'));
+
+    // Non-GET -> 405
+    const resMethod = createRes();
+    await handler({ method: 'POST', headers: { origin: 'http://localhost:3000' }, query: { hub: 'ORD', dir: 'departures', timestamp: validTs } }, resMethod);
+    expect(resMethod.statusCode).toBe(405);
+
+    // Foreign origin -> 403
+    const resOrigin = createRes();
+    await handler({ method: 'GET', headers: { origin: 'https://evil.example' }, query: { hub: 'ORD', dir: 'departures', timestamp: validTs } }, resOrigin);
+    expect(resOrigin.statusCode).toBe(403);
+
+    // NaN timestamp -> 400
+    const resNaN = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { hub: 'ORD', dir: 'departures', timestamp: 'abc' } }, resNaN);
+    expect(resNaN.statusCode).toBe(400);
+    expect(resNaN.body.error).toBe('Invalid timestamp');
+
+    // Timestamp far in the future (> now + 7d) -> 400
+    const resFuture = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { hub: 'ORD', dir: 'departures', timestamp: String(now + 86400 * 30) } }, resFuture);
+    expect(resFuture.statusCode).toBe(400);
+    expect(resFuture.body.error).toBe('Invalid timestamp');
+
+    // Timestamp far in the past (< now - 7d) -> 400
+    const resPast = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { hub: 'ORD', dir: 'departures', timestamp: String(now - 86400 * 30) } }, resPast);
+    expect(resPast.statusCode).toBe(400);
+    expect(resPast.body.error).toBe('Invalid timestamp');
+
+    // Every rejection above is a pre-fetch spend guard: no upstream call should have fired.
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // A server-to-server request with NO origin header still succeeds.
+    const resNoOrigin = createRes();
+    await handler({ method: 'GET', headers: {}, query: { hub: 'ORD', dir: 'departures', timestamp: validTs } }, resNoOrigin);
+    expect(resNoOrigin.statusCode).toBe(200);
+  });
+
+  it('single-page mode: rejects out-of-range page numbers with 400 before any fetch', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true, headers: { get: () => null },
+      json: async () => ({ result: { response: { airport: { pluginData: {} } } } }),
+    });
+    const ts = getStartOfDayForHub('ORD');
+    for (const page of ['-1', '101']) {
+      const res = createRes();
+      await handler({
+        method: 'GET',
+        headers: { origin: 'http://localhost:3000' },
+        query: { hub: 'ORD', dir: 'departures', timestamp: String(ts), page },
+      }, res);
+      expect(res.statusCode, `page=${page}`).toBe(400);
+      expect(res.body.error, `page=${page}`).toBe('Invalid page number');
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('single-page mode: serves a scraped page and re-serves it from cache', async () => {
+    const depTime = getStartOfDayForHub('ORD') + 8 * 3600;
+    const arrTime = depTime + 3 * 3600;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      headers: { get: () => null },
+      json: async () => ({
+        result: { response: { airport: { pluginData: { schedule: { departures: {
+          page: { current: 1, total: 1 },
+          data: [{
+            flight: {
+              airline: { code: { iata: 'UA' } },
+              identification: { number: { default: 'UA700' } },
+              time: { scheduled: { departure: depTime, arrival: arrTime } },
+              airport: { origin: { code: { iata: 'ORD' } }, destination: { code: { iata: 'LAX' } } },
+            },
+          }],
+        } } } } } },
+      }),
+    });
+
+    const ts = getStartOfDayForHub('ORD');
+    const query = { hub: 'ORD', dir: 'departures', timestamp: String(ts), page: '1' };
+
+    const res1 = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query }, res1);
+    expect(res1.statusCode).toBe(200);
+    expect(res1.body.cached).toBe(false);
+    expect(res1.body.meta.source).toBe('scraping');
+    expect(res1.body.meta.scrapeTransport).toBe('direct');
+    expect(res1.body.data).toHaveLength(1);
+
+    const callsAfterFirst = fetchSpy.mock.calls.length;
+    // Second identical request is served from the single-page cache — no new fetch.
+    const res2 = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query }, res2);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.cached).toBe(true);
+    expect(fetchSpy.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  it('single-page mode: returns 502 when the upstream page fetch fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 500, text: async () => 'error', headers: { get: () => null },
+    });
+    const ts = getStartOfDayForHub('ORD');
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(ts), page: '1' },
+    }, res);
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error).toBe('Upstream service unavailable');
+  });
+
+  it('single-page mode: treats the FR24 rate-limit sentinel as a 502, never a cacheable 200', async () => {
+    // fetchOnePage returns the truthy sentinel { _rateLimited: true } (no flight data) when FR24
+    // hard-blocks and no scraper transport recovers it. The legacy page path must not cache that
+    // sentinel and serve it 200 with zero rows pinned for hours.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () => 'blocked',
+      headers: { get: (name) => String(name).toLowerCase() === 'cf-mitigated' ? 'challenge' : null },
+    });
+    const ts = getStartOfDayForHub('ORD');
+    const query = { hub: 'ORD', dir: 'departures', timestamp: String(ts), page: '1' };
+
+    const res1 = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query }, res1);
+    expect(res1.statusCode).toBe(502);
+    expect(res1.body._rateLimited).toBeUndefined();
+
+    // And it must not have poisoned the single-page cache: a second request re-attempts (still 502),
+    // never served a cached 200 carrying the sentinel.
+    const res2 = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query }, res2);
+    expect(res2.statusCode).toBe(502);
+  });
+
+  it('live-feed fallback: drops malformed short rows and out-of-window stale sightings', async () => {
+    // normalizeLiveFeedFlight's defensive guards (arr.length < 19, and lastSeen outside
+    // [ts-6h, dayEnd+6h]) had no coverage. A drifting short row or a parked aircraft's stale
+    // sighting must never leak onto a degraded board.
+    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '0';
+
+    const ts = getStartOfDayForHub('IAH');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('data-cloud.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            full_count: 3, version: 4,
+            // Valid in-window IAH arrival — the only row that should survive.
+            'v-valid': ['A2A3B5', 30.2, -91.4, 270, 33000, 430, '', '', 'B38M', 'N27263', ts + 13 * 3600, 'BOS', 'IAH', 'UA1976', 0, -500, 'UAL1976', '', 'UAL'],
+            // Malformed SHORT row (18 elements, < 19) that would otherwise be a valid IAH arrival.
+            'v-short': ['C1', 30.0, -91.0, 270, 33000, 430, '', '', 'B738', 'N222', ts + 12 * 3600, 'ORD', 'IAH', 'UA2222', 0, -500, 'UAL2222', ''],
+            // Full 19-element row but lastSeen is 2 days stale (far before ts-6h) -> out of window.
+            'v-stale': ['D1', 30.0, -91.0, 270, 33000, 430, '', '', 'B739', 'N333', ts - 2 * 86400, 'DEN', 'IAH', 'UA3333', 0, -500, 'UAL3333', '', 'UAL'],
+          }),
+        };
+      }
+      return {
+        ok: false,
+        status: 403,
+        text: async () => 'Cloudflare challenge',
+        headers: { get: (name) => String(name).toLowerCase() === 'cf-mitigated' ? 'challenge' : null },
+      };
+    });
+
+    const req = {
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'IAH', dir: 'arrivals', timestamp: String(ts) }
+    };
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.meta.source).toBe('live-feed');
+    // Only the valid in-window, full-length row survives; the short and stale rows are dropped.
+    expect(res.body.total).toBe(1);
+    expect(res.body.flights.map((f) => f.identification.number.default)).toEqual(['UA1976']);
   });
 });
 

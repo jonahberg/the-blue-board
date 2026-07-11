@@ -152,6 +152,26 @@ describe('pickBestFaCandidate — date + phase ranking (F005/F013)', () => {
     expect(pickBestFaCandidate([later, soon], '', nowSec).depSec).toBe(soon.depSec);
   });
 
+  // A stale board row (scheduled but the departure time is well in the past, never
+  // departed) must rank BELOW a real landed leg — the incident-#3 failure class.
+  it('a stale past-scheduled leg loses to a real landed leg', () => {
+    const stale = c('scheduled', nowSec - 6 * 3600, '2026-07-08');
+    const landed = c('landed', nowSec - 3 * 3600, '2026-07-08');
+    expect(pickBestFaCandidate([stale, landed], '', nowSec).phase).toBe('landed');
+  });
+
+  it('the scheduled grace boundary is 30 minutes past nowSec', () => {
+    // Just inside the grace window (rank 2): current scheduled beats a landed leg.
+    const current = c('scheduled', nowSec - 1799, '2026-07-08');
+    const landedA = c('landed', nowSec - 3 * 3600, '2026-07-08');
+    expect(pickBestFaCandidate([current, landedA], '', nowSec).phase).toBe('scheduled');
+
+    // Just past the grace window (rank 0, stale): the landed leg wins instead.
+    const stale = c('scheduled', nowSec - 1801, '2026-07-08');
+    const landedB = c('landed', nowSec - 3 * 3600, '2026-07-08');
+    expect(pickBestFaCandidate([stale, landedB], '', nowSec).phase).toBe('landed');
+  });
+
   it('returns null for an empty candidate list', () => {
     expect(pickBestFaCandidate([], '', nowSec)).toBeNull();
   });

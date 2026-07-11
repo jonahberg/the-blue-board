@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { computeMetrics, getStartOfDayForHub } from '../api/irops.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import handler, { computeMetrics, getStartOfDayForHub, HUB_TZ } from '../api/irops.js';
+import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 
 // Helper to build a flight object matching FR24's schedule structure
 function makeFlight(hub, {
@@ -356,6 +357,64 @@ describe('computeMetrics', () => {
     expect(result.hubMetrics.DEN).toHaveProperty('operated', 1);
     expect(result.hubMetrics.DEN).toHaveProperty('onTime', 1);
   });
+
+  it('excludes degraded synthetic rows from hub OTP (P1: degraded-rows-inflate-hub-otp)', () => {
+    // Live-feed rescue and schedule-derived-from-actual rows carry scheduled == actual, so they
+    // always score on-time; counting them inflates hub OTP exactly when the FR24 feed is degraded.
+    const t = 1700000000;
+    const flights = [
+      makeFlight('ORD', { schedDep: t, realDep: t + 600, status: 'landed' }), // genuine on-time — counts
+      { ...makeFlight('ORD', { schedDep: t, realDep: t, status: 'landed' }), _source: { liveFeedFallback: true } },
+      { ...makeFlight('ORD', { schedDep: t, realDep: t, status: 'landed' }), _source: { scheduleTimeDerivedFromActual: { departure: true } } },
+      { ...makeFlight('ORD', { schedDep: t, realDep: t, status: 'landed' }), _source: { scheduleTimeDerivedFromActual: { arrival: true } } },
+    ];
+    const result = computeMetrics({ ORD: flights });
+    // Only the genuine row is operated/on-time; the three degraded rows are excluded.
+    expect(result.hubMetrics.ORD.operated).toBe(1);
+    expect(result.hubMetrics.ORD.onTime).toBe(1);
+  });
+
+  it('drops a confirmed delay computed from a wrong-calendar-day real departure (DQ artifact)', () => {
+    // A provider date-shift stamps real.departure a full day after scheduled, minting a phantom
+    // ~24h "delay". It must not top the user-visible worstDelays list nor inflate the buckets.
+    const t = 1700000000;
+    const result = computeMetrics({
+      ORD: [makeFlight('ORD', { schedDep: t, realDep: t + 86400, status: 'landed' })],
+    });
+    expect(result.worstDelays).toEqual([]);
+    expect(result.delayed30).toBe(0);
+    expect(result.delayed60).toBe(0);
+    expect(result.hubMetrics.ORD.delayed30).toBe(0);
+    expect(result.hubMetrics.ORD.delayed60).toBe(0);
+  });
+
+  it('still surfaces a genuine multi-hour confirmed delay (guard is not over-aggressive)', () => {
+    // A real 5-hour weather hold is exactly the IROPS signal; the DQ cap must not clip it.
+    const t = 1700000000;
+    const result = computeMetrics({
+      ORD: [makeFlight('ORD', { schedDep: t, realDep: t + 300 * 60, status: 'landed' })],
+    });
+    expect(result.delayed30).toBe(1);
+    expect(result.delayed60).toBe(1);
+    expect(result.worstDelays[0].delay).toBe(300);
+    expect(result.hubMetrics.ORD.delayed60).toBe(1);
+  });
+
+  it('counts a diverted-and-late flight once (as a diversion), not twice in the score', () => {
+    // F017 invariant: each flight must weight the score once. A diverted flight that also departed
+    // late must NOT land in both the diversions bucket (x2) and the delayed60 bucket (x2) = 4 points,
+    // which would exceed a cancellation (x3).
+    const t = 1700000000;
+    const result = computeMetrics({
+      ORD: [makeFlight('ORD', { schedDep: t, realDep: t + 66 * 60, status: 'diverted' })], // 66 min late
+    });
+    expect(result.diversions).toBe(1);
+    expect(result.delayed30).toBe(0);
+    expect(result.delayed60).toBe(0);
+    expect(result.worstDelays).toEqual([]);
+    // score = diversions*2 / total * 100 = 2/1*100 = 200 (NOT 400).
+    expect(result.score).toBe(200);
+  });
 });
 
 // ═══ DELAY RISK ENGINE v3 TESTS ═══
@@ -668,6 +727,26 @@ describe('computeDelayRisk v3 algorithm', () => {
 });
 
 describe('getStartOfDayForHub', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  // Assert `tsSec` (Unix seconds) falls exactly at midnight in the given IANA tz.
+  function assertHubMidnight(tsSec, tz) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    }).formatToParts(new Date(tsSec * 1000));
+    const g = (t) => parts.find((p) => p.type === t)?.value;
+    const hour = g('hour') === '24' ? '00' : g('hour'); // normalize the ICU midnight quirk
+    expect(`${hour}:${g('minute')}:${g('second')}`).toBe('00:00:00');
+  }
+  // Hub-local calendar date (YYYY-MM-DD) of a timestamp.
+  function hubLocalDate(tsSec, tz) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date(tsSec * 1000));
+    const g = (t) => parts.find((p) => p.type === t)?.value;
+    return `${g('year')}-${g('month')}-${g('day')}`;
+  }
+
   it('returns a Unix timestamp (seconds)', () => {
     const ts = getStartOfDayForHub('ORD');
     expect(typeof ts).toBe('number');
@@ -675,19 +754,129 @@ describe('getStartOfDayForHub', () => {
     expect(ts).toBeLessThan(3_000_000_000); // reasonable range
   });
 
-  it('returns different timestamps for different timezones', () => {
-    const ord = getStartOfDayForHub('ORD'); // Central
-    const nrt = getStartOfDayForHub('NRT'); // JST
-    // They may coincidentally match if tested at the right hour, but generally differ
-    // At minimum, both should be valid timestamps
-    expect(typeof ord).toBe('number');
-    expect(typeof nrt).toBe('number');
+  it('returns exact hub-local midnight for every hub on an ordinary afternoon', () => {
+    // 15:00 UTC: every hub is well past its rollover hour and clear of its midnight boundary.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-24T15:00:00Z'));
+    for (const hub of Object.keys(HUB_TZ)) {
+      assertHubMidnight(getStartOfDayForHub(hub), HUB_TZ[hub]);
+    }
   });
 
-  it('falls back to America/New_York for unknown hubs', () => {
-    // Should not throw
-    const ts = getStartOfDayForHub('XYZ');
-    expect(typeof ts).toBe('number');
+  it('falls back to America/New_York for unknown hubs (still hub-local midnight)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-24T15:00:00Z'));
+    assertHubMidnight(getStartOfDayForHub('XYZ'), 'America/New_York');
+  });
+
+  it('rolls back to yesterday before the 6 AM hub-local rollover', () => {
+    // 14:00 UTC = 09:00 CDT (after rollover -> today); 08:00 UTC = 03:00 CDT (before -> yesterday).
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-24T14:00:00Z'));
+    const today = getStartOfDayForHub('ORD');
+    vi.setSystemTime(new Date('2026-04-24T08:00:00Z'));
+    const beforeRollover = getStartOfDayForHub('ORD');
+    assertHubMidnight(beforeRollover, HUB_TZ.ORD);
+    expect(beforeRollover).toBe(today - 86400); // ordinary day: yesterday is exactly 24h back
+  });
+
+  it('DST fall-back: the morning after, before rollover, is hub-local midnight (not 01:00)', () => {
+    // 2026-11-01 was a 25h day. At 2026-11-02 05:00 PST the naive `startOfToday - 86400`
+    // lands at 01:00 the day before; the result must be exact 2026-11-01 hub-local midnight.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-02T13:00:00Z'));
+    const ts = getStartOfDayForHub('SFO');
+    assertHubMidnight(ts, HUB_TZ.SFO);
+    expect(hubLocalDate(ts, HUB_TZ.SFO)).toBe('2026-11-01');
+  });
+
+  it('DST spring-forward: the morning after, before rollover, is hub-local midnight (not 23:00)', () => {
+    // 2026-03-08 was a 23h day. At 2026-03-09 05:30 PDT the naive rollback lands at 23:00 two
+    // days prior; the result must be exact 2026-03-08 hub-local midnight.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-09T12:30:00Z'));
+    const ts = getStartOfDayForHub('SFO');
+    assertHubMidnight(ts, HUB_TZ.SFO);
+    expect(hubLocalDate(ts, HUB_TZ.SFO)).toBe('2026-03-08');
+  });
+});
+
+describe('IROPS API handler', () => {
+  function createRes() {
+    return {
+      statusCode: 200,
+      headers: {},
+      body: null,
+      setHeader(name, value) { this.headers[name] = value; },
+      status(code) { this.statusCode = code; return this; },
+      json(payload) { this.body = payload; return this; },
+    };
+  }
+  function makeReq(overrides = {}) {
+    return { method: 'GET', headers: {}, query: {}, ...overrides };
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetRateLimitersForTests();
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('rejects non-GET requests with 405', async () => {
+    const res = createRes();
+    await handler(makeReq({ method: 'POST' }), res);
+    expect(res.statusCode).toBe(405);
+  });
+
+  it('rejects forbidden origins with 403', async () => {
+    const res = createRes();
+    await handler(makeReq({ headers: { origin: 'https://evil.com' } }), res);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('allows theblueboard.co and sets the fresh Cache-Control', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ flights: [] }) });
+    const res = createRes();
+    await handler(makeReq({ headers: { origin: 'https://theblueboard.co' } }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['Cache-Control']).toBe('s-maxage=900, stale-while-revalidate=300');
+  });
+
+  it('allows requests with no origin header', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ flights: [] }) });
+    const res = createRes();
+    await handler(makeReq({ headers: {} }), res);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('rate-limits with 429 once the per-minute budget is exhausted', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ flights: [] }) });
+    let last;
+    for (let i = 0; i < 61; i++) { // limiter allows 60/min per IP
+      last = createRes();
+      await handler(makeReq(), last);
+    }
+    expect(last.statusCode).toBe(429);
+  });
+
+  it('serves stale cached data (200) when a rebuild fails, instead of 502', async () => {
+    vi.useFakeTimers();
+    // Far-future base so any cache primed by an earlier test at real time has expired.
+    vi.setSystemTime(new Date('2027-06-01T12:00:00Z'));
+    // 1) Prime the cache with a good build.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ flights: [] }) });
+    const first = createRes();
+    await handler(makeReq(), first);
+    expect(first.statusCode).toBe(200);
+    // 2) Expire the 15-min cache but stay inside the 1-hour stale grace window.
+    vi.setSystemTime(new Date('2027-06-01T12:20:00Z'));
+    // 3) The rebuild throws (malformed provider payload -> computeMetrics iterates a non-array).
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ flights: { length: 3 } }) });
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.stale).toBe(true);
+    expect(res.headers['Cache-Control']).toBe('s-maxage=60');
   });
 });
 

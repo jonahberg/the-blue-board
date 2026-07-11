@@ -8,8 +8,10 @@ import {
   validateRegistration,
   fetchViaAeroDataBox,
   modelTextToIcaoCode,
+  mapAeroStatus,
+  __resetScheduleWarnsForTests,
 } from '../api/_schedule-aerodatabox.js';
-import { __resetAdbSpendForTests } from '../api/_cost-state.js';
+import { __resetAdbSpendForTests, recordAdbUnits, getAdbDailyUnitBudget } from '../api/_cost-state.js';
 
 function row({ ident, orig = 'ORD', dest = 'LHR', schedDep = null, realDep = null, estDep = null, schedArr = null, realArr = null }) {
   return {
@@ -505,5 +507,223 @@ describe('fetchViaAeroDataBox — aircraft.model.code end-to-end', () => {
     const f = await boardWithModel('Boeing 737');
     expect(f.aircraft.model.code).toBe('');
     expect(f.aircraft.model.text).toBe('Boeing 737');
+  });
+});
+
+// ── mapAeroStatus — direct status mapping (#18) ───────────────────────────────────────────────
+// generic.status.diverted / text / live / icon feed the client classifier and the diversions,
+// terminal-row and connection-risk paths. Status mapping was a real incident class (Delayed and
+// CanceledUncertain were both wrong at one point), so every live-status branch gets a direct
+// assertion here, not just the classifier's downstream behaviour.
+describe('mapAeroStatus — direct status mapping', () => {
+  it('maps Diverted to a diverted landed row (red, not live)', () => {
+    const m = mapAeroStatus('Diverted');
+    expect(m.generic.status.diverted).toBe(true);
+    expect(m.generic.status.text).toBe('landed');
+    expect(m.icon).toBe('red');
+    expect(m.live).toBe(false);
+  });
+
+  it('maps EnRoute and Approaching to a live en-route row (green)', () => {
+    for (const s of ['EnRoute', 'Approaching']) {
+      const m = mapAeroStatus(s);
+      expect(m.generic.status.text, s).toBe('en-route');
+      expect(m.live, s).toBe(true);
+      expect(m.icon, s).toBe('green');
+      expect(m.generic.status.diverted, s).toBe(false);
+    }
+  });
+
+  it('maps Departed to a live departed row (green)', () => {
+    const m = mapAeroStatus('Departed');
+    expect(m.generic.status.text).toBe('departed');
+    expect(m.live).toBe(true);
+    expect(m.icon).toBe('green');
+  });
+
+  it('maps Arrived to a landed row (green, not live, not diverted)', () => {
+    const m = mapAeroStatus('Arrived');
+    expect(m.generic.status.text).toBe('landed');
+    expect(m.icon).toBe('green');
+    expect(m.live).toBe(false);
+    expect(m.generic.status.diverted).toBe(false);
+  });
+
+  it('defaults unknown / empty / nullish status to scheduled (not live, no icon)', () => {
+    for (const s of ['', 'Expected', 'Unknown', undefined, null]) {
+      const m = mapAeroStatus(s);
+      expect(m.generic.status.text, String(s)).toBe('scheduled');
+      expect(m.live, String(s)).toBe(false);
+      expect(m.icon, String(s)).toBe('');
+      expect(m.generic.status.diverted, String(s)).toBe(false);
+    }
+  });
+});
+
+// ── Estimated ETD/ETA for not-yet-operated legs (#17) ─────────────────────────────────────────
+// estDep/estArr (revisedTime, else predictedTime) feed time.estimated.* — the ETD/ETA the UI shows
+// for Scheduled/Delayed rows. A regression that swapped these to null or to runwayTime would ship
+// green while every delayed flight's shown estimate went wrong, so assert them directly.
+describe('estimated ETD/ETA for not-yet-operated legs', () => {
+  const nowSec = 1_700_000_000;
+  const iso = (offsetS) => new Date((nowSec + offsetS) * 1000).toISOString();
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetAdbSpendForTests();
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
+  });
+  afterEach(() => {
+    delete process.env.AERODATABOX_API_KEY;
+    delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
+    __resetAdbSpendForTests();
+  });
+
+  async function board(departure, arrival = {}, status = 'Scheduled') {
+    const departures = [{
+      number: 'UA 100', status, airline: { iata: 'UA', name: 'United Airlines' },
+      departure: { scheduledTime: { utc: iso(0) }, airport: { iata: 'ORD' }, ...departure },
+      arrival: { scheduledTime: { utc: iso(7200) }, airport: { iata: 'DEN', name: 'Denver' }, ...arrival },
+      aircraft: { model: 'A320', reg: 'N12345' },
+    }];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      String(url).includes('aedbx/aerodatabox')
+        ? { ok: true, status: 200, json: async () => ({ departures }) }
+        : { ok: false, status: 403, text: async () => 'blocked', headers: { get: () => null } }
+    );
+    const result = await fetchViaAeroDataBox('ORD', 'departures', nowSec, 8000);
+    return result.flights[0];
+  }
+
+  it('derives the estimated departure from revisedTime for a Scheduled leg (real stays null)', async () => {
+    const f = await board({ revisedTime: { utc: iso(600) } }, {}, 'Scheduled');
+    expect(f.time.real.departure).toBeNull();
+    expect(f.time.estimated.departure).toBe(nowSec + 600);
+    expect(f._source.timeSource.gateDistinctDep).toBe(false);
+  });
+
+  it('surfaces a Delayed departure as an estimated (not real) departure', async () => {
+    const f = await board({ revisedTime: { utc: iso(5400) } }, {}, 'Delayed');
+    expect(f.time.real.departure).toBeNull();
+    expect(f.time.estimated.departure).toBe(nowSec + 5400);
+  });
+
+  it('falls back to predictedTime for the estimate when the provider gives no revisedTime', async () => {
+    const f = await board({ predictedTime: { utc: iso(900) } }, {}, 'Scheduled');
+    expect(f.time.real.departure).toBeNull();
+    expect(f.time.estimated.departure).toBe(nowSec + 900);
+  });
+
+  it('derives the estimated arrival from revisedTime for a not-yet-arrived leg', async () => {
+    const f = await board({}, { revisedTime: { utc: iso(9000) } }, 'Scheduled');
+    expect(f.time.real.arrival).toBeNull();
+    expect(f.time.estimated.arrival).toBe(nowSec + 9000);
+  });
+
+  it('marks an operated arrival not-gate-distinct when revisedArr equals runwayArr', async () => {
+    const f = await board(
+      { runwayTime: { utc: iso(1500) } },
+      { runwayTime: { utc: iso(7200) }, revisedTime: { utc: iso(7200) } },
+      'Arrived'
+    );
+    expect(f.time.real.arrival).toBe(nowSec + 7200);
+    expect(f._source.timeSource.gateDistinctArr).toBe(false);
+    expect(f._source.timeSource.hasGateArr).toBe(true);
+  });
+});
+
+// ── Provider partial board: one FIDS window fails, the other survives (#16) ────────────────────
+// fetchViaAeroDataBox splits each board into two FIDS windows (00:00–11:59, 12:00–23:59). When one
+// window fails persistently the board is partial: the surviving window's flights are kept, and
+// meta records which page(s) were lost and how complete the board is. This is the 'degraded/partial
+// board' failure class from the incident priors. A both-windows-fail board is still a (degraded)
+// object — distinct from a hard budget-breaker trip, which returns null so the caller can tell
+// 'provider degraded' from 'we deliberately did not call the provider'.
+describe('fetchViaAeroDataBox — provider partial board', () => {
+  const nowSec = 1_700_000_000;
+  const iso = (offsetS) => new Date((nowSec + offsetS) * 1000).toISOString();
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetAdbSpendForTests();
+    __resetScheduleWarnsForTests();
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
+  });
+  afterEach(() => {
+    delete process.env.AERODATABOX_API_KEY;
+    delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
+    __resetAdbSpendForTests();
+  });
+
+  function depRow(number, dest, schedIso) {
+    return {
+      number, status: 'Scheduled', airline: { iata: 'UA', name: 'United Airlines' },
+      departure: { scheduledTime: { utc: schedIso }, airport: { iata: 'ORD' } },
+      arrival: { scheduledTime: { utc: iso(20000) }, airport: { iata: dest } },
+      aircraft: { model: 'Boeing 737-800', reg: 'N12345' },
+    };
+  }
+
+  // Window 1 is 00:00–11:59, window 2 is 12:00–23:59, so the encoded URL for window 2 contains
+  // 'T12' where window 1 has 'T00' — key the per-window outcome off that.
+  function mockWindows({ window1, window2 }) {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const s = String(url);
+      if (s.includes('aedbx/aerodatabox')) {
+        const spec = s.includes('T12') ? window2 : window1;
+        if (spec.status === 200) {
+          return { ok: true, status: 200, json: async () => ({ departures: spec.departures || [] }) };
+        }
+        return { ok: false, status: spec.status, text: async () => 'upstream error', headers: { get: () => null } };
+      }
+      return { ok: false, status: 403, text: async () => 'blocked', headers: { get: () => null } };
+    });
+  }
+
+  it('keeps the surviving window and flags the board partial when the second window fails', async () => {
+    const departures = [
+      depRow('UA101', 'SFO', iso(0)),
+      depRow('UA102', 'LAX', iso(3600)),
+      depRow('UA103', 'DEN', iso(7200)),
+    ];
+    mockWindows({ window1: { status: 200, departures }, window2: { status: 500 } });
+    const result = await fetchViaAeroDataBox('ORD', 'departures', nowSec, 8000);
+    expect(result).toBeTruthy();
+    expect(result.partial).toBe(true);
+    expect(result.total).toBe(3);
+    expect(result.meta.completeness).toBe(0.5);
+    expect(result.meta.pagesFailed).toBe(1);
+    expect(result.meta.missingPages).toEqual([2]);
+    expect(result.meta.partialReason).toBe('provider_partial');
+  });
+
+  it('records the first window as the missing page when it is the one that fails', async () => {
+    const departures = [depRow('UA201', 'SFO', iso(46800))]; // 13:00, lands in window 2
+    mockWindows({ window1: { status: 500 }, window2: { status: 200, departures } });
+    const result = await fetchViaAeroDataBox('ORD', 'departures', nowSec, 8000);
+    expect(result.partial).toBe(true);
+    expect(result.total).toBe(1);
+    expect(result.meta.missingPages).toEqual([1]);
+    expect(result.meta.pagesFailed).toBe(1);
+  });
+
+  it('both windows failing yields total 0 / completeness 0 but a NON-null degraded board', async () => {
+    mockWindows({ window1: { status: 500 }, window2: { status: 500 } });
+    const result = await fetchViaAeroDataBox('ORD', 'departures', nowSec, 8000);
+    expect(result).not.toBeNull();
+    expect(result.total).toBe(0);
+    expect(result.partial).toBe(true);
+    expect(result.meta.completeness).toBe(0);
+    expect(result.meta.missingPages).toEqual([1, 2]);
+    expect(result.meta.partialReason).toBe('provider_partial');
+  });
+
+  it('a hard budget-breaker trip returns null — distinct from a degraded empty board', async () => {
+    mockWindows({ window1: { status: 200, departures: [] }, window2: { status: 200, departures: [] } });
+    await recordAdbUnits(getAdbDailyUnitBudget()); // exhaust the day's budget
+    const result = await fetchViaAeroDataBox('ORD', 'departures', nowSec, 8000);
+    expect(result).toBeNull();
   });
 });

@@ -77,7 +77,8 @@ export function sortFleetData(data, sortCol, sortAsc) {
       va = parseInt(va) || 0;
       vb = parseInt(vb) || 0;
     }
-    return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+    const d = va < vb ? -1 : va > vb ? 1 : 0;
+    return sortAsc ? d : -d;
   });
 }
 
@@ -102,39 +103,4 @@ export function filterFleetData(fleetDb, { type, wifi, status, search, starlinkT
     }
     return true;
   });
-}
-
-// ─── Deep Link Parsing ───
-export const TAB_MAP = {
-  'myflight': 'tab-myflight',
-  'live': 'tab-live',
-  'schedule': 'tab-schedule',
-  'fleet': 'tab-fleet',
-  'weather': 'tab-weather',
-  'irops': 'tab-weather',
-  'stats': 'tab-analytics',
-  'sources': 'tab-sources'
-};
-
-export const VALID_FLEET_VIEWS = ['starlink', 'airborne', 'special'];
-
-/**
- * Parse fleet-related deep link parameters from a URL search string.
- * Returns { tab, tabId, fleetFilter, fleetView } or null if no tab param found.
- */
-export function parseFleetDeepLink(searchString) {
-  const params = new URLSearchParams(searchString);
-  const tab = params.get('tab');
-  if (!tab) return null;
-
-  const tabId = TAB_MAP[tab] || null;
-  const fleetFilter = params.get('type') || params.get('filter') || null;
-  const fleetView = params.get('view');
-
-  return {
-    tab,
-    tabId,
-    fleetFilter: tab === 'fleet' ? fleetFilter : null,
-    fleetView: (tab === 'fleet' && fleetView && VALID_FLEET_VIEWS.includes(fleetView)) ? fleetView : null,
-  };
 }
