@@ -237,17 +237,44 @@ export async function saveScheduleSnapshot({ cacheKey, hub, dir, ts, data }: Sav
 // merely filters live rows via .gt('expires_at', now); this is the DELETE the idx_schedule_snapshots_expires_at
 // index (sql/003) was created for. Best-effort and idempotent: piggy-backed on the hourly warm cron,
 // at most once per run, and any failure is logged, never thrown.
+// Bounded batches, not one statement. The single `DELETE ... WHERE expires_at < now()` was rolled
+// back whole by the Postgres statement timeout on its first production run (Jul 11 2026: 4,110
+// expired rows / ~320 MB of TOASTed JSONB accumulated since March — precisely the backlog this GC
+// exists to prevent), so it could never make progress no matter how often the cron retried.
+// Deleting by primary-key batches keeps every statement small enough to finish, and a deep backlog
+// drains incrementally at up to CLEANUP_MAX_BATCHES × CLEANUP_BATCH_SIZE rows per hourly fire,
+// while steady-state runs (~18 new rows/day) finish in one short round.
+const CLEANUP_BATCH_SIZE = 300;
+const CLEANUP_MAX_BATCHES = 4;
+
 export async function cleanupExpiredSnapshots(): Promise<void> {
   const supabase = await getSupabaseAdmin();
   if (!supabase) return;
 
   try {
-    const { error } = await supabase
-      .from(SNAPSHOT_TABLE)
-      .delete()
-      .lt('expires_at', new Date().toISOString());
-    if (error) {
-      console.error('Schedule snapshot cleanup failed:', error.message);
+    for (let batch = 0; batch < CLEANUP_MAX_BATCHES; batch++) {
+      const { data, error } = await supabase
+        .from(SNAPSHOT_TABLE)
+        .select('cache_key')
+        .lt('expires_at', new Date().toISOString())
+        .order('expires_at', { ascending: true })
+        .limit(CLEANUP_BATCH_SIZE);
+      if (error) {
+        console.error('Schedule snapshot cleanup select failed:', error.message);
+        return;
+      }
+      const keys = ((data || []) as Array<{ cache_key: string }>).map((r) => r.cache_key);
+      if (!keys.length) return;
+
+      const { error: delError } = await supabase
+        .from(SNAPSHOT_TABLE)
+        .delete()
+        .in('cache_key', keys);
+      if (delError) {
+        console.error('Schedule snapshot cleanup failed:', delError.message);
+        return;
+      }
+      if (keys.length < CLEANUP_BATCH_SIZE) return;
     }
   } catch (error: any) {
     console.error('Schedule snapshot cleanup threw:', error?.message || error);

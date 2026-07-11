@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.10] - 2026-07-11
+
+### Fixed
+- **The v1.7.9 snapshot GC could never actually delete anything.** Its first production run hit `canceling statement due to statement timeout`: `schedule_snapshots` had accumulated **4,110 expired rows (~320 MB of JSONB, 98% of the table) since March**, and a timed-out `DELETE` rolls back whole — so the single-statement sweep would fail identically every hour forever, which is the quiet-failure mode the GC was added to prevent. It now deletes by primary-key batches (300 rows × up to 4 batches per warm-cron fire): every statement is small enough to finish, a deep backlog drains incrementally (~4 hours for the current one), and steady state (~18 new rows/day) completes in one short round. A failed batch still logs and never fails the cron. (`api/_schedule-snapshots.ts`)
+
 ## [1.7.9] - 2026-07-11
 
 Full-codebase audit: 20 scoped review agents produced 106 findings, every one adversarially verified (95 confirmed, 11 refuted), then 93 were applied. The suite grew **1,079 → 1,259 tests** (75 → 85 files), and the production diff is a net −150 lines. Every new test was proven load-bearing — sabotage the code, watch it fail, revert — not just green.
