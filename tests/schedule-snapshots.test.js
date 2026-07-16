@@ -344,4 +344,79 @@ describe('cleanupExpiredSnapshots', () => {
     // The failed delete must end the run — no second select round.
     expect(m.selectLt).toHaveBeenCalledTimes(1);
   });
+
+  // ── Observability: the GC used to log only failures, so a clean run left no trace it had run
+  // or how much it deleted. It now emits ONE info summary whenever it deleted anything.
+  const cleanupSummaries = (logSpy) =>
+    logSpy.mock.calls.map((c) => String(c[0])).filter((m) => /Schedule snapshot cleanup: deleted/.test(m));
+
+  it('logs a single success summary with the total deleted across batches', async () => {
+    const full = Array.from({ length: 300 }, (_, i) => `k${i}`);
+    mockCleanupSupabase([full, ['agg:SFO:arrivals:1', 'agg:SFO:arrivals:2']]);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await cleanupExpiredSnapshots();
+
+    const summaries = cleanupSummaries(logSpy);
+    expect(summaries).toHaveLength(1);
+    // 300 (full batch) + 2 (short remainder) — one line, the true total, no backlog note.
+    expect(summaries[0]).toBe('Schedule snapshot cleanup: deleted 302 expired rows');
+  });
+
+  it('stays silent when nothing was deleted (no hourly log noise on the common empty run)', async () => {
+    mockCleanupSupabase([[]]);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await cleanupExpiredSnapshots();
+
+    expect(cleanupSummaries(logSpy)).toHaveLength(0);
+  });
+
+  it('flags a likely backlog when the batch cap is reached with a full final batch', async () => {
+    const full = Array.from({ length: 300 }, (_, i) => `k${i}`);
+    // Every batch is full, so the run stops at CLEANUP_MAX_BATCHES with rows still likely expired.
+    mockCleanupSupabase([full, full, full, full, full, full]);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await cleanupExpiredSnapshots();
+
+    const summaries = cleanupSummaries(logSpy);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toBe(
+      'Schedule snapshot cleanup: deleted 1200 expired rows (batch cap reached; backlog may remain)'
+    );
+  });
+
+  it('still reports the rows already deleted when a later batch errors mid-run', async () => {
+    // First batch deletes cleanly; the second delete fails (e.g. statement timeout). The error
+    // logs on its own channel, but the summary must still credit what WAS deleted — and, since
+    // the run ended on an error rather than the cap, it must NOT claim a backlog.
+    const full = Array.from({ length: 300 }, (_, i) => `k${i}`);
+    let deleteCall = 0;
+    supa.from = vi.fn(() => ({
+      select: () => ({
+        lt: () => ({
+          order: () => ({
+            limit: async () => ({ data: full.map((k) => ({ cache_key: k })), error: null }),
+          }),
+        }),
+      }),
+      delete: () => ({
+        in: async () => {
+          deleteCall++;
+          return deleteCall === 1
+            ? { error: null }
+            : { error: { message: 'canceling statement due to statement timeout' } };
+        },
+      }),
+    }));
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await cleanupExpiredSnapshots();
+
+    const summaries = cleanupSummaries(logSpy);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toBe('Schedule snapshot cleanup: deleted 300 expired rows');
+  });
 });
