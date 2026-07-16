@@ -3,9 +3,14 @@
 //
 // Renders the About/Donate popover's support meter (public/js/support-meter.js). Everything
 // returned here is deliberately SANITIZED and COARSE:
-//   - boards.{used,budget}: today's AeroDataBox schedule-refresh unit counter, reused as-is from
-//     api/_cost-state.ts (getAdbUnitsToday / getAdbDailyUnitBudget). AeroDataBox is already
-//     publicly credited on the Sources page, so naming it is fine; no raw account/plan info.
+//   - boards.{used,budget}: today's AeroDataBox schedule-refresh unit total + the daily budget
+//     (api/_cost-state.ts). This lambda never records ADB spend itself — only the schedule/warm-cron
+//     paths call recordAdbUnits — so its per-instance getAdbUnitsToday counter is structurally 0.
+//     We therefore call hydrateAdbSpend() first to pull the real CROSS-INSTANCE total from Supabase
+//     (schedule_provider_spend); it is TTL-limited, never throws, and degrades to the in-memory
+//     value on any failure, so a broken read shows a stale/zero meter rather than erroring.
+//     AeroDataBox is already publicly credited on the Sources page, so naming it is fine; no raw
+//     account/plan info.
 //   - liveFeed.usedPct: a coarse (rounded to nearest 5%) FR24 billing-period credit-consumption
 //     percentage. Computed from the SAME upstream fetch used by the CRON_SECRET-gated
 //     api/fr24-usage.ts (fetchFr24UsageRaw, a minimal export added there for this reuse — that
@@ -18,7 +23,7 @@
 // second and it is public, unauthenticated, and safe to share across all visitors.
 
 import type { VercelRequest, VercelResponse } from './types.js';
-import { getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
+import { hydrateAdbSpend, getAdbDailyUnitBudget } from './_cost-state.js';
 import { fetchFr24UsageRaw } from './fr24-usage.js';
 import { createRateLimiter } from './_rate-limit.js';
 
@@ -100,11 +105,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Public, unauthenticated, identical for everyone — safe to cache hard at the CDN.
   res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
 
-  const liveFeed = await getLiveFeedUsage();
+  // Both never throw; run them concurrently. hydrateAdbSpend returns the cross-instance ADB unit
+  // total (this lambda's own per-instance counter is always 0 — see the header note).
+  const [liveFeed, boardsUsed] = await Promise.all([getLiveFeedUsage(), hydrateAdbSpend()]);
 
   return res.status(200).json({
     boards: {
-      used: getAdbUnitsToday(),
+      used: boardsUsed,
       budget: getAdbDailyUnitBudget(),
     },
     liveFeed,

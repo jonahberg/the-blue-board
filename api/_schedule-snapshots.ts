@@ -251,6 +251,13 @@ export async function cleanupExpiredSnapshots(): Promise<void> {
   const supabase = await getSupabaseAdmin();
   if (!supabase) return;
 
+  // Observability: the GC previously logged only failures, so a clean run left no trace it had
+  // run or how much it deleted — an audit couldn't confirm from logs that the backlog was
+  // draining. Count what we delete and emit ONE summary at the end when deleted > 0. A run that
+  // exhausts every batch with a still-full final batch likely left a backlog, which is the
+  // operationally important signal to surface.
+  let deleted = 0;
+  let batchCapReached = false;
   try {
     for (let batch = 0; batch < CLEANUP_MAX_BATCHES; batch++) {
       const { data, error } = await supabase
@@ -261,10 +268,10 @@ export async function cleanupExpiredSnapshots(): Promise<void> {
         .limit(CLEANUP_BATCH_SIZE);
       if (error) {
         console.error('Schedule snapshot cleanup select failed:', error.message);
-        return;
+        break;
       }
       const keys = ((data || []) as Array<{ cache_key: string }>).map((r) => r.cache_key);
-      if (!keys.length) return;
+      if (!keys.length) break;
 
       const { error: delError } = await supabase
         .from(SNAPSHOT_TABLE)
@@ -272,11 +279,22 @@ export async function cleanupExpiredSnapshots(): Promise<void> {
         .in('cache_key', keys);
       if (delError) {
         console.error('Schedule snapshot cleanup failed:', delError.message);
-        return;
+        break;
       }
-      if (keys.length < CLEANUP_BATCH_SIZE) return;
+      deleted += keys.length;
+      if (keys.length < CLEANUP_BATCH_SIZE) break;
+      // A full batch on the last allowed iteration means we stopped at the cap, not because the
+      // backlog was drained — more expired rows probably remain for the next hourly fire.
+      if (batch === CLEANUP_MAX_BATCHES - 1) batchCapReached = true;
     }
   } catch (error: any) {
     console.error('Schedule snapshot cleanup threw:', error?.message || error);
+  }
+
+  if (deleted > 0) {
+    console.log(
+      `Schedule snapshot cleanup: deleted ${deleted} expired rows` +
+      (batchCapReached ? ' (batch cap reached; backlog may remain)' : '')
+    );
   }
 }

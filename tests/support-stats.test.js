@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler, { __resetLiveFeedMemo } from '../api/support-stats.js';
 import * as costState from '../api/_cost-state.js';
 import * as fr24Usage from '../api/fr24-usage.js';
+import * as scheduleSnapshots from '../api/_schedule-snapshots.js';
 
 function createRes() {
   return {
@@ -24,6 +25,9 @@ describe('support-stats API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     __resetLiveFeedMemo();
+    // boards.used is now hydrated from cross-instance spend via hydrateAdbSpend, which carries
+    // module-level counter + TTL state; reset it so cases do not leak into each other.
+    costState.__resetAdbSpendForTests();
     delete process.env.FR24_API_TOKEN;
     delete process.env.FR24_MONTHLY_CREDIT_BUDGET;
   });
@@ -53,7 +57,9 @@ describe('support-stats API', () => {
   });
 
   it('returns the sanitized boards summary from _cost-state helpers', async () => {
-    vi.spyOn(costState, 'getAdbUnitsToday').mockReturnValue(340);
+    // used comes from hydrateAdbSpend (the cross-instance total), not the per-instance
+    // getAdbUnitsToday counter, which is structurally 0 in this lambda.
+    vi.spyOn(costState, 'hydrateAdbSpend').mockResolvedValue(340);
     vi.spyOn(costState, 'getAdbDailyUnitBudget').mockReturnValue(400);
 
     const res = createRes();
@@ -61,6 +67,46 @@ describe('support-stats API', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.boards).toEqual({ used: 340, budget: 400 });
+  });
+
+  it('reports boards.used from the cross-instance Supabase total, not the per-instance 0 counter', async () => {
+    // The support-stats lambda never records AeroDataBox spend itself, so its in-memory counter
+    // (getAdbUnitsToday) is structurally 0 while the real cross-instance total lives in the
+    // schedule_provider_spend table. hydrateAdbSpend must read that table so the public meter is
+    // truthful. Wire getSupabaseAdmin to return today's row of 123 units.
+    vi.spyOn(scheduleSnapshots, 'getSupabaseAdmin').mockResolvedValue({
+      from: (table) => ({
+        select: () => ({
+          eq: () => ({
+            limit: async () => ({
+              data: table === 'schedule_provider_spend' ? [{ units: 123 }] : [],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.boards.used).toBe(123);
+  });
+
+  it('degrades to the in-memory value and still 200s when Supabase is unavailable', async () => {
+    // hydrateAdbSpend never throws: when getSupabaseAdmin yields null (schema missing, blip, or a
+    // test that mocks it away) the response must still return the last-known in-memory count
+    // instead of erroring the whole endpoint. Prime the in-memory counter so this proves the
+    // fallback carries a real value through, not a hardcoded 0.
+    vi.spyOn(scheduleSnapshots, 'getSupabaseAdmin').mockResolvedValue(null);
+    await costState.recordAdbUnits(45); // stays in-memory (Supabase null)
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.boards.used).toBe(45);
   });
 
   it('reports liveFeed as unconfigured when FR24_API_TOKEN is absent', async () => {

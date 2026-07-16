@@ -4,6 +4,12 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.11] - 2026-07-16
+
+### Fixed
+- **The public support meter's "boards used" bar was structurally stuck at 0.** `/api/support-stats` read `getAdbUnitsToday()`, a per-instance in-memory counter — but the support-stats lambda never records AeroDataBox spend itself (only the schedule and warm-cron paths call `recordAdbUnits`), so that counter is always 0 while the real cross-instance total (Supabase `schedule_provider_spend`, maintained by the `increment_adb_units` RPC) runs past the 700/day budget. Production served `{"boards":{"used":0,…}}` at every hour of the day, understating the site's cost to visitors. The handler now calls `hydrateAdbSpend()` — the existing TTL-limited, never-throwing cross-instance reader — concurrently with the FR24 usage fetch and reports its total, so the meter reflects real spend and degrades to the in-memory value (never an error) if Supabase is unavailable. The FR24 live-feed reading is untouched: its ~0% is truthful, since the FR24 kill-switch keeps credit consumption near zero. (`api/support-stats.ts`)
+- **The snapshot GC ran silently on success, so an audit couldn't confirm from logs that it was draining the backlog.** `cleanupExpiredSnapshots` logged only failures; a clean run left no trace of whether it fired or how many rows it removed. It now counts deletions across batches and emits one info summary — `Schedule snapshot cleanup: deleted <N> expired rows` — whenever it deleted anything, appending ` (batch cap reached; backlog may remain)` when it stops at the per-run batch ceiling with a still-full final batch (the operationally important signal that expired rows remain for the next hourly fire). The common empty hourly run stays silent to avoid log noise, and a mid-run select/delete error still reports what was already deleted. (`api/_schedule-snapshots.ts`)
+
 ## [1.7.10] - 2026-07-11
 
 ### Fixed
