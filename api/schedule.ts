@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadScheduleSnapshot, saveScheduleSnapshot, isSnapshotCandidateBetter } from './_schedule-snapshots.js';
-import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock, __resetAdbSpendForTests } from './_cost-state.js';
+import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock, __resetAdbSpendForTests, isOfficialFr24DailyCapReached, recordOfficialFr24Call, getOfficialFr24CallsToday, getOfficialFr24DailyCap } from './_cost-state.js';
 import { UNITED_HUB_SET, getHubTerminal } from './_hubs.js';
 import { isAuthorizedCronRequest } from './_cron-auth.js';
 import { isOfficialFr24Enabled } from './_official-fr24.js';
@@ -956,6 +956,14 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
     console.warn(`Official FR24 API: quota block active for ${logHub}, skipping for ${secondsRemaining}s`);
     return null;
   }
+  // Proactive absolute daily ceiling on paid official-API calls (denial-of-wallet guard): the 402
+  // block and 15-min circuit breaker are reactive/resetting, so this hard-stops before we ever reach
+  // the account credit limit. Every caller of the paid API funnels through here, so this is the one
+  // chokepoint that bounds the day. See _cost-state.ts for the per-instance limitation.
+  if (isOfficialFr24DailyCapReached()) {
+    console.warn(`Official FR24 API: daily call cap reached (${getOfficialFr24CallsToday()}/${getOfficialFr24DailyCap()}), skipping ${logHub} ${dir} until next UTC day`);
+    return null;
+  }
 
   timeoutMs = timeoutMs || HUB_TIMEOUT_MS[logHub.toUpperCase()] || 45000;
   const startTime = Date.now();
@@ -972,6 +980,11 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
     console.log(`Official FR24 API: window for ${logHub} ${dir} starts ${formatForFR24(dayStart)} (tomorrow UTC or later) — FR24 cannot serve it, skipping`);
     return null;
   }
+
+  // Count this as a committed paid official-API call for today's proactive ceiling. Recorded here —
+  // past all pre-flight skips (no token / quota block / cap reached / unservable-tomorrow window) —
+  // so skipped requests never burn the budget; the cap itself is enforced by the gate above.
+  recordOfficialFr24Call();
 
   console.log(`Official FR24 API: fetching ${logHub} ${dir} (filter=${dir === 'departures' ? 'outbound' : 'inbound'}:${logHub}) from=${formatForFR24(dayStart)} to=${formatForFR24(dayEnd)} limit=${OFFICIAL_API_PAGE_SIZE}`);
 
