@@ -201,12 +201,66 @@ export async function hydrateAdbSpend(): Promise<number> {
   }
 }
 
-/** Test helper: clear ADB spend state so it does not leak across tests. Production never calls it. */
+// ── Official FR24 API daily call ceiling (proactive, per-instance) ──
+//
+// The paid FR24 Official API (schedule.ts's fetchViaOfficialAPI) is bounded only REACTIVELY today:
+// the cross-instance 402 "credit limit reached" block (persistQuotaBlock/getMirroredQuotaBlockedUntil)
+// and an in-memory 15-min sliding-window circuit breaker (MAX_FALLBACKS_PER_WINDOW). Neither is an
+// ABSOLUTE daily ceiling — the 15-min window resets, so a low-and-slow attacker forcing scrape
+// outages on the public /api/schedule endpoint can keep the paid official API firing all day, each
+// 402 block expiring after 30m and spend resuming, up to the account credit limit. This counter is a
+// PROACTIVE absolute per-UTC-day cap so we stop before ever hitting the paid credit ceiling.
+//
+// LIMITATION: unlike the AeroDataBox unit budget above, this is in-memory PER LAMBDA INSTANCE (no
+// Supabase write-through) — matching the existing 15-min circuit breaker's own scope. Under wide
+// fan-out the cross-instance bound remains the reactive 402 block. A fully cross-instance ceiling
+// would need a new provider-spend row/RPC (see sql/009 for the ADB pattern); this in-file counter is
+// the smaller extension that closes the "window resets → unbounded daily total" gap without new DDL.
+
+let officialFr24Day = '';
+let officialFr24Calls = 0;
+
+function rollOfficialFr24Day(): void {
+  const today = utcToday();
+  if (officialFr24Day !== today) {
+    officialFr24Day = today;
+    officialFr24Calls = 0;
+  }
+}
+
+export function getOfficialFr24CallsToday(): number {
+  rollOfficialFr24Day();
+  return officialFr24Calls;
+}
+
+export function getOfficialFr24DailyCap(): number {
+  // An explicit 0 is a kill switch (stop ALL paid official-API calls now) and must be honoured.
+  // Garbage (negative, NaN) falls back to the default. Default 200 sits comfortably above organic
+  // official-fallback volume (bounded to 5/15min by the circuit breaker) while capping an attacker-
+  // driven day well under the account credit limit.
+  const configured = Number(process.env.OFFICIAL_FR24_DAILY_CALL_CAP);
+  return Number.isFinite(configured) && configured >= 0 ? configured : 200;
+}
+
+/** True once today's known official-API calls have reached the daily cap. Sync; safe in the hot path. */
+export function isOfficialFr24DailyCapReached(): boolean {
+  return getOfficialFr24CallsToday() >= getOfficialFr24DailyCap();
+}
+
+/** Count one committed paid official-API call against today's ceiling. Never throws. */
+export function recordOfficialFr24Call(): void {
+  rollOfficialFr24Day();
+  officialFr24Calls += 1;
+}
+
+/** Test helper: clear ADB spend + official-FR24 counters so they do not leak across tests. Production never calls it. */
 export function __resetAdbSpendForTests(): void {
   adbDay = '';
   adbUnits = 0;
   lastAdbHydratedAt = 0;
   warnedAdbSchemaMissing = false;
+  officialFr24Day = '';
+  officialFr24Calls = 0;
 }
 
 /**
