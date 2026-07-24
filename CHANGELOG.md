@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.12] - 2026-07-23
+
+### Added
+- **Five July 2026 stories filed to the United News Hub.** The July 18 SHARES-outage post-mortem (75 minutes of downtime, ~268 cancellations, the industry-wide 2,437 figure kept honestly distinct); Q2 earnings ($1.99 adjusted EPS beat, guidance raised despite ~$6B more fuel, full schedule restored this fall, 80+ retirements in 2027); the A321XLR "extra elbow room" Economy Plus row — the productized blocked middle our June 12 story flagged as speculation; the N61101 Elevated 787-9 TCAS saga (returned to Boeing, "fixed," grounded again days later); and United's first transatlantic Starlink flight (UA14, Newark–Heathrow, Boeing 777). The home-page news banner needs no separate update: it rotates the top three stories from the index and re-surfaces for visitors who had dismissed the previous top story. (`src/data/news/index.js`)
+
 ## [1.7.11] - 2026-07-16
 
 ### Fixed

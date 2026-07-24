@@ -86,6 +86,118 @@ export function resolveTag(tag) {
 
 export const articles = [
   {
+    slug: 'united-shares-outage-summer-saturday',
+    title: '75 Minutes of Downtime, a Full Day of Chaos: Anatomy of United\'s July 18 Meltdown',
+    date: '2026-07-18',
+    category: 'Operations',
+    sources: [
+      { name: 'AP via Yahoo', url: 'https://travel.yahoo.com/news/articles/united-airlines-flights-delayed-nationwide-142019752.html' },
+      { name: 'The Travel', url: 'https://www.thetravel.com/united-airlines-tech-outage-ground-stops-us-flight-cancellations/' },
+      { name: 'AeroXplorer', url: 'https://aeroxplorer.com/articles/united-airlines-technology-outage-disrupts-thousands-of-passengers-across-the-us' },
+    ],
+    summary: 'United\'s SHARES reservation system went down for about 75 minutes on the morning of July 18 — and that was enough, on a peak-summer Saturday with East Coast storms already brewing, to cancel roughly 268 United flights and delay nearly four in ten. A case study in why airline IT failures never stay small.',
+    body: `<p>If you were watching this board on Saturday, July 18, you saw it happen in real time: the delay bars going orange, then red, the cancellation count climbing, Dulles and Newark seizing up. Here's what was behind it. At about 6:00 a.m. Central, SHARES — the passenger service system that underpins United's check-in, boarding, and reservations — went down. It was restored by roughly 7:15 a.m. Seventy-five minutes of downtime. The disruption it caused lasted the rest of the weekend.</p>
+
+<p>The mechanics of why are worth understanding, because they're the same every time. When the reservation system is down, airplanes are fine and crews are fine — but nobody can be checked in, bags can't be tagged, and boarding stops. Every departure in that window leaves late or not at all. Late aircraft miss their next turn, crews time out, and the schedule starts eating itself. Do that at 6 a.m. — the morning bank, when the whole day's schedule is stacked up and ready to launch — on a summer Saturday, and you've poisoned the entire operation before breakfast.</p>
+
+<p>Then the weather arrived. Severe East Coast storms hammered exactly the hubs that were already wounded, and the two failures compounded. By day's end the U.S. system had logged about 2,437 cancellations — to be precise, that's the industry-wide, all-causes number for the day, not a United-only figure. United's own share was roughly 268 cancellations, about 8% of its schedule, plus the worst delay rate of the five biggest carriers: about 39% of its flights ran late. The hardest-hit stations were Washington-Dulles, Newark, and San Francisco — two of them the same hubs United has spent the year holding up as operational success stories.</p>
+
+<p>The uncomfortable part of this story is the system at the center of it. SHARES is old — a Continental inheritance that United has been patching and extending for well over a decade, and the airline has had a string of high-profile outages on it over the years. Every airline has IT failures; Delta's 2024 CrowdStrike recovery took nearly a week. But there's a reason "SHARES outage" is a recognizable phrase to United frequent flyers in a way that has no real equivalent at some competitors. An airline spending billions on Starlink, seatback screens, and new interiors is still running its most operationally critical software on foundations from another era.</p>
+
+<p>The honest framing: United's recovery, by meltdown standards, was actually decent — one bad Saturday and a rough Sunday, not a week-long cascade. But for an airline whose entire premium strategy depends on being the reliable choice, the lesson of July 18 is blunt. The product in the cabin has been transformed. The plumbing underneath it hasn't — and on the wrong Saturday, the plumbing is the product.</p>`,
+    tags: ['iad', 'ewr', 'sfo'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-q2-2026-earnings-guidance-raise',
+    title: 'The $175-Oil Bet Pays Out: United Beats Q2, Raises Guidance, Restores the Schedule',
+    date: '2026-07-15',
+    category: 'Operations',
+    sources: [
+      { name: 'United via PR Newswire', url: 'https://www.prnewswire.com/news-releases/united-posts-q2-results-above-wall-street-expectations-and-raises-full-year-2026-adjusted-eps-guidance-despite-a-nearly-6-billion-increase-in-anticipated-fuel-costs-302826793.html' },
+      { name: 'CNBC', url: 'https://www.cnbc.com/2026/07/15/united-airlines-ual-2q-2026-earnings.html' },
+      { name: 'Aviation A2Z', url: 'https://aviationa2z.com/index.php/2026/07/17/united-airlines-to-retire-80-old-aircraft-in-2027/' },
+    ],
+    summary: 'United posted $1.99 in adjusted EPS against a $1.88 consensus and raised full-year guidance — while absorbing a fuel bill that\'s up 84% and nearly $6 billion higher than planned. The earnings call had the real news: the full schedule comes back this fall, 80-plus old jets retire in 2027, and Kirby says 20%-higher fares are here to stay.',
+    body: `<p>Back in March, when jet fuel doubled in three weeks and Scott Kirby told employees United would plan for $175 oil by investing more instead of retrenching, we called it the boldest bet in the industry and said the proof would come in the numbers. The numbers are in. For the second quarter, United reported adjusted earnings of $1.99 per share against a Wall Street consensus of $1.88, on $17.67 billion in revenue, up 16% year over year. And rather than merely surviving the fuel shock, United raised its full-year adjusted EPS guidance to $9.00–$11.00 — while telling investors that fuel will cost it nearly $6 billion more this year than it planned. The quarter's fuel bill alone was $5.1 billion, up 84% from a year ago.</p>
+
+<p>Look inside the revenue and you see exactly the airline United has spent five years building. Premium revenue up 16%. Loyalty up 11%. Cargo up 23%. Even basic economy up 11%. The premium-heavy mix — all those Polaris suites and Premium Plus cabins we keep writing about — is precisely what's cushioning the fuel blow, because the customers up front don't disappear when fares rise. Margins did compress: 6.2% operating margin versus 8.7% a year ago, and United flagged that fuel volatility since early July will cost about $1.12 per share in the third quarter. The oil is real. The point is that United is absorbing it and still out-earning the estimates.</p>
+
+<p>The earnings call is where the fleet-watchers should lean in. First: the roughly five points of capacity United cut in the spring — the trimmed redeyes, the off-peak days, the point pulled out of O'Hare — comes back this fall. The full schedule returns. (Tel Aviv and Dubai remain suspended through at least early September.) Second: CFO Mike Leskinen said United will retire at least 80 older, less fuel-efficient aircraft in 2027, "a step up from previous years," with the Airbus A319 and A320 fleets wound down by 2030 as the A321neos scale up. At $175 oil, every old thirsty airframe is a liability, and United is acting like it. Third: the first Boeing 737 MAX 10s — 147 on order — are now expected in mid-to-late 2027, up to 20 of them that year. And the Starlink counter keeps spinning: roughly 450 aircraft equipped, a target of 1,000 by the end of this year, the whole fleet by the end of 2027.</p>
+
+<p>Kirby's bluntest line was about your wallet: fares are up about 20% this year, and he framed that as structural — fuel, maintenance, labor, and airport costs have permanently reset, and ticket prices have reset with them. That's a rough message for travelers, but pay attention to the strategic subtext. United and Delta were essentially 100% of U.S. industry profits last year; at these input costs, carriers without a premium revenue base can't cover their bills at prices their customers will pay. Kirby has spent months positioning United to be the buyer, not the seller, if weaker airlines start shedding assets.</p>
+
+<p>The honest caveat is that one good quarter doesn't settle a bet this size — oil could keep climbing, and a $1.12-a-share Q3 headwind is not nothing. But the March playbook — keep the deliveries, keep the clubs, keep the investment, let the balance sheet carry the shock — was designed for exactly this moment, and so far it's doing exactly what Kirby said it would. File this one next to "Scott Kirby's Playbook for $175 Oil" and check back in October.</p>`,
+    tags: ['ord', 'ewr', 'a319', 'a320'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-a321xlr-elbow-room-economy-plus',
+    title: 'Called It: United Will Now Sell You the A321XLR\'s Blocked Middle Seat',
+    date: '2026-07-14',
+    category: 'Policy',
+    sources: [
+      { name: 'United via PR Newswire', url: 'https://www.prnewswire.com/news-releases/united-launches-another-economy-class-innovation-economy-plus-seats-with-extra-elbow-room-302825022.html' },
+      { name: 'View from the Wing', url: 'https://viewfromthewing.com/united-turns-coach-middle-seats-into-tables-selling-extra-elbow-room-and-staffing-fewer-flight-attendants/' },
+      { name: 'Live and Let\'s Fly', url: 'https://liveandletsfly.com/united-airlines-blocked-middle-seats-airbus-jets/' },
+    ],
+    summary: 'The blocked middle seats we covered in June are now an official product: United will sell an "extra elbow room" Economy Plus row on all 50 A321XLRs, with a custom table where the middle seat used to be and three extra inches of legroom. The staffing math we flagged hasn\'t gone anywhere — United just found a way to get paid for it.',
+    body: `<p>A month ago we wrote about the strangest detail on United's brand-new A321XLR: two middle seats, 32B and 32E, deliberately blocked off with fixed tray tables, and the quiet flight-attendant staffing math that explained why. We ended that piece with "file it under: confirmed on the XLR, fascinating everywhere else." Consider the file updated. On July 14, United made it official — and turned it into a product with a price tag.</p>
+
+<p>Here's the announcement: all 50 of United's A321XLRs will feature a special Economy Plus row where the middle seat is replaced by a custom table spanning armrest to armrest, plus three additional inches of legroom over standard Economy Plus. United is pitching it as "extra elbow room" — an economy seat with guaranteed space next to you, no middle-seat roulette, somewhere to put your laptop and your drink at the same time. It becomes bookable later this year; pricing hasn't been announced. Domestic XLR flying starts this fall, with international service into early 2027.</p>
+
+<p>Credit where due: as a product, this is genuinely clever. The premium-economy-without-the-premium-cabin idea — a blocked middle sold as a feature — is what European carriers have done in short-haul business for decades, and travelers demonstrably pay for it. If you're taking a nine-hour narrowbody flight to Europe and can't justify Polaris, a guaranteed empty middle with a table might be the single best value on the airplane, depending entirely on what "pricing to be announced" turns out to mean.</p>
+
+<p>But let's not lose the plot from June, because it hasn't changed. Blocking those middles holds the XLR's seat count at exactly 150 — and under the FAA's one-flight-attendant-per-50-seats rule, that's the line between staffing brackets. Commentators immediately noted that the configuration lets the jet operate domestically with three flight attendants instead of four. United, for its part, points out that it plans to staff most transatlantic XLR flights with five flight attendants, consistent with the 757s the jet replaces — a fair counterpoint, and worth taking at face value for the routes where it applies. Both things can be true: the cabin can be more comfortable and the crew requirement can be lower. What's elegant — or cynical, depending on your seat — is that United found a way to convert a regulatory threshold into ancillary revenue. The seat it blocked to save a crew position is now a seat it sells twice: once as labor savings, once as elbow room.</p>
+
+<p>What we're watching next: the price point, whether the flight attendants' union has anything to say now that the strategy is official, and whether this stays an XLR quirk or starts showing up on other narrowbodies. In June, the fleet-wide version was a single-sourced rumor. After this announcement, it reads a lot more like a roadmap.</p>`,
+    tags: ['ewr', 'a321neo'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-787-9-elevated-n61101-grounded-again',
+    title: 'The Flagship Is a Hangar Queen: N61101 Grounded Again, Days After Boeing "Fixed" It',
+    date: '2026-07-04',
+    category: 'Fleet',
+    sources: [
+      { name: 'Paddle Your Own Kanoo', url: 'https://www.paddleyourownkanoo.com/2026/07/04/uniteds-brand-new-787-dreamliner-that-was-sent-back-to-boeing-because-it-kept-breaking-has-been-grounded-just-days-after-being-fixed/' },
+      { name: 'Paddle Your Own Kanoo', url: 'https://www.paddleyourownkanoo.com/2026/06/20/uniteds-brand-new-boeing-787-dreamliner-with-swanky-new-cabins-has-been-returned-to-boeing-because-it-keeps-breaking/' },
+      { name: 'View from the Wing', url: 'https://viewfromthewing.com/uniteds-brand-new-boeing-787-with-fancy-polaris-suites-is-going-back-to-boeing-because-it-keeps-breaking/' },
+    ],
+    summary: 'N61101 — the first 787-9 with United\'s Elevated interior and the Polaris Studio suites — spent ten days back at Boeing for recurring collision-avoidance system failures, returned "fixed" on June 30, flew one clean domestic leg, and was grounded again on July 3. The most important airplane in United\'s fleet story keeps refusing to fly.',
+    body: `<p>In March we wrote about United opening ticket sales for its first Boeing 787-9 with the new Elevated interior — the eight Polaris Studio suites, the next-generation pods with doors, the 99 premium seats that make it the showcase for everything United Next promises. That airplane is N61101. It is four months old. And it has now been grounded twice in two weeks, including once immediately after Boeing supposedly fixed it.</p>
+
+<p>The timeline reads like a bad relationship. Delivered from Boeing's Charleston line in late February, N61101 was trouble almost immediately — most visibly on April 24, when it turned around minutes after departing Singapore over an electrical burning smell. The recurring gremlin, though, is the TCAS — the traffic alert and collision avoidance system, the electronic last line of defense against midair collisions. An airliner cannot legally be dispatched with TCAS inoperative, so every failure strands the jet wherever it happens to be sitting. After repeated failures disrupted Singapore, London, and domestic rotations, United gave up on line maintenance and, on June 20, ferried the jet to Boeing's Moses Lake facility — the manufacturer taking its own four-month-old airplane back to figure out why it keeps breaking.</p>
+
+<p>Ten days later, on June 30, it came back. Boeing had reportedly replaced both antennas feeding the TCAS — worth noting that detail comes from a single outlet's reporting, but it's consistent with the failure pattern. On July 2, N61101 flew a clean San Francisco–Houston leg and it looked like the saga was over. On July 3, it was supposed to operate the return transatlantic leg of UA939. Cancelled. The TCAS, again. Whatever Boeing fixed in Moses Lake, it wasn't the thing.</p>
+
+<p>Every new airliner has teething problems, and one lemon does not indict a fleet — United has dozens of 787s that fly reliably every day, and 47 more Elevated Dreamliners are scheduled through April 2028. But the specifics here sting. This is the airplane United built its product story around, the one with the suites from the press events, and it has spent a meaningful fraction of its young life either stranded at outstations or parked at the factory. It's also an uncomfortable data point on Boeing delivery quality at the exact moment United's entire fleet plan — the 787s, the incoming MAX 10s — depends on Boeing getting its act together.</p>
+
+<p>For now, the practical takeaway if you've booked the Studio: check your tail number, and don't get attached. The interior is the future of United's long-haul product. The airframe it's bolted into is, so far, a very expensive reminder that the future still has to pass its preflight checks.</p>`,
+    tags: ['787-9-dreamliner', 'sfo', 'iah'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-first-transatlantic-starlink-777',
+    title: 'Starlink Crosses the Atlantic: UA14 Becomes United\'s First Connected Widebody Flight',
+    date: '2026-06-22',
+    category: 'Fleet',
+    sources: [
+      { name: 'AeroTime', url: 'https://www.aerotime.aero/articles/united-starlink-transatlantic-widebody-flight' },
+      { name: 'AirlineGeeks', url: 'https://airlinegeeks.com/2026/06/22/united-reaches-new-milestone-in-starlink-rollout/' },
+    ],
+    summary: 'On June 22, a Boeing 777 operating UA14 from Newark to London Heathrow became United\'s first Starlink-equipped mainline widebody flight — free, fast internet finally arriving on the flights where it matters most, with roughly 400 aircraft equipped and the entire widebody fleet targeted by summer 2027.',
+    body: `<p>The Starlink rollout we've been tracking since March just cleared its most meaningful milestone yet. On June 22, United flight UA14 from Newark to London Heathrow — flown by a Boeing 777 — became the airline's first mainline widebody service with Starlink aboard, and with it, United's first transatlantic flight offering the home-speed, free-for-MileagePlus-members internet it has been promising. The rollout that started on regional jets and worked through the 737s has finally reached the airplanes that cross oceans.</p>
+
+<p>This is the milestone that actually matters, and it's worth being clear about why. On a 90-minute hop, Wi-Fi is a nice-to-have. On a seven-hour crossing, connectivity is the difference between a workday and a write-off — and long-haul is precisely where legacy satellite systems have been at their worst: overloaded, oversubscribed, and priced like it's 2012. Low-earth-orbit service doesn't degrade mid-ocean the way the old geostationary systems do. The passengers with the most hours in the air, paying the highest fares, have had the worst internet. That inversion is what ended on June 22.</p>
+
+<p>The pace from here is aggressive. As of the UA14 flight, United had roughly 400 aircraft equipped across its regional and mainline fleet, with up to 60 widebodies targeted by the end of this year and the entire widebody fleet by summer 2027. On the Q2 earnings call three weeks later, United updated the count to about 450 and reiterated the bigger targets: 1,000 aircraft by the end of 2026, everything by the end of 2027. For a program that only reached its first mainline narrowbody last fall, that's a remarkable installation tempo — this is why the first A321XLR went to Tampa for its Starlink fit before ever carrying a passenger.</p>
+
+<p>The free part still deserves emphasis, because it's the strategic move. Any MileagePlus member — the free account, not a status tier — gets the full-speed service at no charge. Delta gates its free Wi-Fi behind SkyMiles too, but nobody else is promising Starlink-class speed across an entire widebody fleet on this timeline. If United hits summer 2027, there will be a stretch where the difference between a connected flight to Europe and a frustrating one is simply which airline's logo is on the tail. That's the kind of moat that doesn't show up on a seat map — and exactly the kind United keeps quietly digging.</p>`,
+    tags: ['ewr'],
+    ogImage: null,
+  },
+  {
     slug: 'united-a321xlr-blocked-middle-seat',
     title: 'The Blocked Middle Seat: Inside United\'s Plan to Fly the A321XLR With a Leaner Crew',
     date: '2026-06-12',
