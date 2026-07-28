@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.13] - 2026-07-27
+
+### Fixed
+- **The TSA page is indexable again.** `/tsa` still carried the `noindex, follow` meta from March (v1.5.x era), added when the live wait-times data was pulled and the page was dropped from the sitemap. The page has since been rebuilt as a full checkpoint guide (the WP2 truth sweep) and live TSA data is back via `/api/tsa` with an hourly refresh cron — but the stale `noindex` remained, and Google Search Console flagged it on July 27 as "Excluded by 'noindex' tag." The meta is now `index, follow` and `/tsa` is restored to the sitemap with its own lastmod paths. (`src/pages/tsa.astro`, `src/pages/sitemap.xml.ts`, `src/lib/buildMetadata.js`)
+
 ## [1.7.12] - 2026-07-23
 
 ### Added

@@ -91,6 +91,11 @@ export const newarkLastmodPaths = [
   'src/data/hubs/ewr.js',
 ];
 
+export const tsaLastmodPaths = [
+  'src/pages/tsa.astro',
+  'src/data/tsa/united-terminals.js',
+];
+
 export function xmlEscape(value) {
   return value
     .replaceAll('&', '&amp;')
