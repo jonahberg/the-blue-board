@@ -23,10 +23,12 @@ const TONE_COLOR = {
 ---
 
 <div class="trk-map" data-trk-map>
+  <!-- role=group (not img): img would make the focusable marker buttons
+       presentational to AT — axe nested-interactive -->
   <svg
     viewBox="0 0 960 600"
     class="trk-map-svg"
-    role="img"
+    role="group"
     aria-label={ariaLabel}
   >
     <g class="trk-map-outline" aria-hidden="true">

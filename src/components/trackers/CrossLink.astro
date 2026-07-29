@@ -4,11 +4,11 @@
 const { title, body, href, linkText } = Astro.props;
 ---
 
-<aside class="trk-crosslink">
+<div class="trk-crosslink">
   <div class="trk-crosslink-title">{title}</div>
   <p class="trk-crosslink-body">{body}</p>
   <a class="trk-crosslink-link" href={href}>{linkText} &rarr;</a>
-</aside>
+</div>
 
 <style>
   .trk-crosslink {

@@ -10,7 +10,9 @@ import StatusBadge from './StatusBadge.astro';
 const { caption, columns, rows } = Astro.props;
 ---
 
-<div class="trk-table-wrap" tabindex="0" role="region" aria-label={caption}>
+<!-- No tabindex on the scroll wrapper: it contains focusable sort buttons, so keyboard
+     users can already reach and scroll it — a tabindex here trips axe nested-interactive. -->
+<div class="trk-table-wrap">
   <table class="trk-table">
     <caption class="trk-table-caption">{caption}</caption>
     <thead>
@@ -66,10 +68,6 @@ const { caption, columns, rows } = Astro.props;
     overflow-x: auto;
     border: 1px solid var(--ua-border);
     border-radius: 6px;
-  }
-  .trk-table-wrap:focus-visible {
-    outline: 2px solid var(--ua-accent);
-    outline-offset: 2px;
   }
   .trk-table {
     width: 100%;

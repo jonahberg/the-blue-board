@@ -94,7 +94,6 @@ export const unitedProjects = [
     sources: [
       "https://www.fly2houston.com/airport-business/newsroom/articles/item/visible-progress-defines-the-iah-terminal-b-transformation/",
       "https://www.fly2houston.com/airport-business/newsroom/articles/item/iah-terminal-b-update-houstons-bold-blueprint-for-the-future-of-travel/",
-      "https://stocktitan.net/news/UAL/united-houston-airport-system-invest-more-than-2b-in-terminal-b-o13kihdu1b03.html",
       "https://simpleflying.com/36-new-gates-one-us-airline-wins-big-airport-expansions-2026/",
     ],
   },
