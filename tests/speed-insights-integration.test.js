@@ -34,6 +34,9 @@ describe('Speed Insights integration', () => {
       'src/pages/hubs/index.astro',
       'src/pages/news/index.astro',
       'src/pages/tsa.astro',
+      'src/pages/trackers/index.astro',
+      'src/pages/trackers/atc.astro',
+      'src/pages/trackers/united-hubs.astro',
     ];
 
     for (const file of entrypoints) {

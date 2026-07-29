@@ -8,10 +8,12 @@ import {
   getFleetRouteLastmodPaths,
   getHubRouteLastmodPaths,
   getNewsRouteLastmodPaths,
+  getTrackerRouteLastmodPaths,
   homeLastmodPaths,
   fleetIndexLastmodPaths,
   hubIndexLastmodPaths,
   newsIndexLastmodPaths,
+  trackersIndexLastmodPaths,
   getLastModified,
 } from '../src/lib/buildMetadata.js';
 
@@ -122,5 +124,20 @@ describe('static lastmod path arrays', () => {
   it('newsIndexLastmodPaths includes news page and data', () => {
     expect(newsIndexLastmodPaths).toContain('src/pages/news/index.astro');
     expect(newsIndexLastmodPaths).toContain('src/data/news/index.js');
+  });
+
+  it('trackersIndexLastmodPaths includes the index page and both data files', () => {
+    expect(trackersIndexLastmodPaths).toContain('src/pages/trackers/index.astro');
+    expect(trackersIndexLastmodPaths).toContain('src/data/trackers/atc.js');
+    expect(trackersIndexLastmodPaths).toContain('src/data/trackers/united-hubs.js');
+  });
+
+  it('per-tracker lastmod paths include the slug-specific page AND data file so the two trackers never share a lastmod', () => {
+    const atc = getTrackerRouteLastmodPaths('atc');
+    const united = getTrackerRouteLastmodPaths('united-hubs');
+    expect(atc).toContain('src/pages/trackers/atc.astro');
+    expect(atc).toContain('src/data/trackers/atc.js');
+    expect(united).toContain('src/data/trackers/united-hubs.js');
+    expect(atc.filter((p) => !united.includes(p)).length).toBeGreaterThan(0);
   });
 });

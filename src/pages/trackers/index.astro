@@ -1,0 +1,150 @@
+---
+import { trackers, trackerOrder } from '../../data/trackers/index.js';
+import LastUpdated from '../../components/trackers/LastUpdated.astro';
+import Footer from '../../components/Footer.astro';
+import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
+
+const canonical = 'https://theblueboard.co/trackers';
+const ogImage = 'https://theblueboard.co/og/og-trackers.jpg';
+---
+
+<!doctype html>
+<html lang="en" style="color-scheme:dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0B1018" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E" />
+    <title>Trackers — Living Maps of Aviation's Long Stories | The Blue Board</title>
+    <meta
+      name="description"
+      content="Living, data-driven pages that follow aviation's long-running stories: the FAA's paper-to-digital flight strip rollout, and United's biggest-ever hub construction buildout. Updated monthly."
+    />
+    <meta name="author" content="The Blue Board" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="Trackers | The Blue Board" />
+    <meta
+      property="og:description"
+      content="Living maps of aviation's long stories: the FAA's paper flight strip phase-out, and United's hub construction boom."
+    />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="The Blue Board" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Blue Board Trackers" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:creator" content="@theblueboard" />
+    <meta name="twitter:title" content="Trackers | The Blue Board" />
+    <meta name="twitter:description" content="Living maps of aviation's long stories, updated monthly." />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:site" content="@theblueboard" />
+
+    <!-- Schema: BreadcrumbList -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'The Blue Board', item: 'https://theblueboard.co' },
+        { '@type': 'ListItem', position: 2, name: 'Trackers', item: canonical },
+      ],
+    })} />
+    <!-- Schema: ItemList -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      itemListElement: trackerOrder.map((slug, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: trackers[slug].name,
+        url: `https://theblueboard.co${trackers[slug].href}`,
+      })),
+    })} />
+
+    <link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin fetchpriority="low" />
+
+    <style is:inline>
+      @font-face{font-family:'Satoshi';font-style:normal;font-weight:300 900;font-display:swap;src:url(/fonts/satoshi-latin.woff2) format('woff2')}
+      @font-face{font-family:'DM Sans';font-style:normal;font-weight:100 900;font-display:swap;src:url(/fonts/dm-sans-latin.woff2) format('woff2')}
+      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+      *{margin:0;padding:0;box-sizing:border-box}
+      :root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#7C8DA6;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
+      body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);font-size:13px;line-height:1.7;min-height:100vh}
+      h1,h2,h3{font-family:var(--font-display)}
+      a{color:var(--ua-accent);text-decoration:none}
+      a:hover{text-decoration:underline}
+      .container{max-width:900px;margin:0 auto;padding:20px 16px}
+      .trk-nav{font-family:var(--font-display);font-size:11px;font-weight:500;color:var(--ua-muted);margin-bottom:16px}
+      .trk-kicker{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber)}
+      h1{font-size:22px;font-weight:700;letter-spacing:-.5px;text-wrap:balance;margin:2px 0 6px}
+      .trk-subtitle{font-size:13px;color:var(--ua-muted);max-width:680px;margin-bottom:28px}
+      .trk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:40px}
+      .trk-card{display:block;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.6) 100%);border:1px solid var(--ua-border);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:18px 20px;transition:border-color .2s;color:var(--ua-text)}
+      .trk-card:hover{border-color:var(--ua-blue);border-left-color:var(--ua-amber);text-decoration:none}
+      .trk-card-question{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--ua-text);margin-bottom:6px}
+      .trk-card-name{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--ua-amber);margin-bottom:8px}
+      .trk-card-desc{font-size:12px;line-height:1.65;color:var(--ua-muted);margin-bottom:12px}
+      .trk-card-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-dim)}
+      .trk-card-open{color:var(--ua-accent)}
+      .trk-about{border-top:1px solid var(--ua-border);padding-top:24px}
+      .trk-about h2{font-size:16px;font-weight:700;padding-bottom:6px;border-bottom:1px solid var(--ua-border);margin-bottom:14px}
+      .trk-about p{max-width:680px;margin-bottom:12px;color:var(--ua-muted);font-size:12px}
+      @media (max-width:600px){h1{font-size:18px}.trk-grid{grid-template-columns:1fr}}
+      @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <div class="trk-nav"><a href="/">&larr; The Blue Board</a> / Trackers</div>
+
+      <header>
+        <div class="trk-kicker">Living Pages</div>
+        <h1>Trackers</h1>
+        <p class="trk-subtitle">
+          Aviation's biggest stories don't happen in a news cycle — they happen over years, one
+          airport at a time. Trackers are living pages that follow them: a map, the real numbers, a
+          searchable table of every site, and a changelog. Updated monthly.
+        </p>
+      </header>
+
+      <div class="trk-grid">
+        {
+          trackerOrder.map((slug) => {
+            const t = trackers[slug];
+            return (
+              <a class="trk-card" href={t.href}>
+                <div class="trk-card-name">{t.name}</div>
+                <div class="trk-card-question">{t.question}</div>
+                <p class="trk-card-desc">{t.description}</p>
+                <div class="trk-card-foot">
+                  <span>
+                    {t.entryCount} {t.entryNoun} · <LastUpdated iso={t.lastUpdated} prefix="updated" />
+                  </span>
+                  <span class="trk-card-open">Open tracker &rarr;</span>
+                </div>
+              </a>
+            );
+          })
+        }
+      </div>
+
+      <section class="trk-about">
+        <h2>What a tracker is</h2>
+        <p>
+          Every entry cites a source — an FAA audit, an airline press release, an airport
+          authority's own numbers. Where an agency publishes no date, the tracker says so instead
+          of guessing. Where a claim traces to one press release, it's attributed, not asserted.
+          When something changes, the changelog records it. Screenshot freely; the data underneath
+          is versioned.
+        </p>
+      </section>
+    </main>
+    <Footer />
+    <VercelSpeedInsights />
+  </body>
+</html>

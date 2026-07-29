@@ -95,6 +95,18 @@
       ]
     },
     {
+      "source": "/trackers/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=600" }
+      ]
+    },
+    {
+      "source": "/_astro/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
       "source": "/tsa",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=300, s-maxage=3600, stale-while-revalidate=600" }

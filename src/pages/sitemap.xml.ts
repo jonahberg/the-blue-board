@@ -6,13 +6,16 @@ import {
   getFleetRouteLastmodPaths,
   getHubRouteLastmodPaths,
   getLastModified,
+  getTrackerRouteLastmodPaths,
   homeLastmodPaths,
   hubIndexLastmodPaths,
   newarkLastmodPaths,
   newsIndexLastmodPaths,
+  trackersIndexLastmodPaths,
   tsaLastmodPaths,
   xmlEscape,
 } from '../lib/buildMetadata.js';
+import { trackerOrder } from '../data/trackers/index.js';
 
 const BASE_URL = 'https://theblueboard.co';
 
@@ -46,6 +49,10 @@ export function GET() {
     ),
     renderUrl('/newark', getLastModified(newarkLastmodPaths), 'weekly', '0.8'),
     renderUrl('/tsa', getLastModified(tsaLastmodPaths), 'weekly', '0.8'),
+    renderUrl('/trackers', getLastModified(trackersIndexLastmodPaths), 'weekly', '0.9'),
+    ...trackerOrder.map((slug: string) =>
+      renderUrl(`/trackers/${slug}`, getLastModified(getTrackerRouteLastmodPaths(slug)), 'weekly', '0.8')
+    ),
     renderUrl('/news', getLastModified(newsIndexLastmodPaths), 'daily', '0.9'),
     // Per-article lastmod — use the article's own publication date so each
     // entry has a distinct value. The previous getNewsRouteLastmodPaths call

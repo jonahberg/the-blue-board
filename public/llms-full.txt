@@ -91,6 +91,12 @@ Dedicated pages for each of the 9 airports The Blue Board tracks (United's 8 hub
 
 Each hub page includes: live flight count, hub overview, delay patterns and seasonal trends, Starlink WiFi information, terminal/lounge details, construction updates (where applicable), and FAQs.
 
+### Trackers (https://theblueboard.co/trackers)
+Living, data-driven pages that follow aviation's long-running stories with a map, headline stats, a searchable table of every site, and a changelog. Updated monthly. Every entry cites a source.
+
+- **https://theblueboard.co/trackers/atc** — Modern Skies Tracker: the FAA's paper-to-digital flight strip conversion (Leidos TFDM). Airport-by-airport status for all 89 program airports — which towers are live on electronic strips, which are scheduled, which are still on paper with no date — plus verified go-live dates, program funding context ($12.5B from the 2025 One Big Beautiful Bill), and an explainer on what flight strips are.
+- **https://theblueboard.co/trackers/united-hubs** — United Hub Tracker: United's ground-infrastructure buildout across IAH, IAD, SFO, DEN, ORD, EWR, LAX, and GUM. Every club, Polaris lounge, terminal, and gate project with status (open / under construction / announced / rumored), sizes, costs, target dates, and builder attribution (United vs airport authority).
+
 ---
 
 ## Key Features in Detail

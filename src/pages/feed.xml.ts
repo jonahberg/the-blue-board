@@ -33,6 +33,18 @@ export function GET() {
       link: `${BASE_URL}/hubs`,
       description: `Live status across ${HUB_LINE_LONG}. Delays, cancellations, on-time performance at ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM.`,
     },
+    {
+      title: 'Modern Skies Tracker — Is Your Airport Off Paper Yet?',
+      link: `${BASE_URL}/trackers/atc`,
+      description:
+        "Airport-by-airport tracker of the FAA's paper-to-digital flight strip rollout: all 89 program airports, live status, sourced go-live dates, and a changelog. Updated monthly.",
+    },
+    {
+      title: "United Hub Tracker — What's United Building at Your Hub?",
+      link: `${BASE_URL}/trackers/united-hubs`,
+      description:
+        'Every United club, terminal, and gate project across all eight hubs, with honest status labels (open, under construction, announced, rumored). Updated monthly.',
+    },
   ];
 
   const newsItems = articles.map((a) => ({
