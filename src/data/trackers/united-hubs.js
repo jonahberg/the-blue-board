@@ -192,27 +192,31 @@ export const unitedProjects = [
     sources: ["https://thepointsguy.com/news/united-club-washington-dulles-makeover-new-space/"],
   },
   {
-    id: "iad-kirby-second-club",
+    id: "iad-polaris-master-plan",
     hub: "IAD",
-    name: "A second, even bigger Dulles club",
-    projectType: "club",
-    status: "rumored",
+    name: "Flagship Polaris lounge (master plan)",
+    projectType: "polaris",
+    status: "announced",
     builder: "united",
     details:
-      "Kirby has teased a future Dulles club bigger than both the Concourse E club and the Houston flagship, sited on a proposed connector between the main terminal and the A/B concourse. His entire on-record commitment: 'It'll be a big club.' The connector itself only exists inside MWAA's not-yet-released master plan. File under rumor until United says otherwise.",
-    sources: ["https://thepointsguy.com/news/united-airlines-lounge-plans-2026/"],
+      "Upgraded from rumor on July 29, 2026: the officially unveiled Dulles master plan includes 'more United Club space and plans for one of the largest United Polaris lounges in the world.' No size, date, or location yet — and note the evolution: Kirby's April tease ('It'll be a big club') was a United Club; the official language is Polaris. Inside a decade-long program, 'plans for' is a direction, not a construction schedule.",
+    sources: [
+      "https://united.mediaroom.com/2026-07-29-Americas-Newest-Capital-Gateway-Unveiled-More-Than-20-Billion-Transformation-at-Washington-Dulles-International-Airport",
+      "https://thepointsguy.com/news/united-airlines-lounge-plans-2026/",
+    ],
   },
   {
     id: "iad-concourse-e-phase-2",
     hub: "IAD",
-    name: "Concourse E phase 2",
-    projectType: "gates",
+    name: "Dulles master plan ($20B+, incl. Concourse E phase 2)",
+    projectType: "terminal",
     status: "announced",
     builder: "airport-authority",
-    targetDate: "start ~2028",
+    targetDate: "phased over the next decade",
     details:
-      "MWAA plans to extend Concourse E with more gates plus screening for connecting passengers, reportedly starting around 2028 — part of a Dulles-wide revitalization plan (estimates run $20B+) that MWAA was 'putting final touches on' as of mid-July 2026. Proposal-stage dates; treat as soft.",
+      "Officially unveiled July 29, 2026: a more-than-$20B transformation — up from the $7B previously allocated — adding or renovating some 5 million sq ft over the next decade. Replaces the 1980s C/D concourses, expands the AeroTrain and retires the mobile lounges, adds a central walking tunnel from the Saarinen terminal, a new customs facility, more gates (Concourse E's next phase reportedly starts ~2028), and more lounge space. MWAA finances much of it through municipal bonds; phases and dates beyond Concourse E are not yet scheduled.",
     sources: [
+      "https://united.mediaroom.com/2026-07-29-Americas-Newest-Capital-Gateway-Unveiled-More-Than-20-Billion-Transformation-at-Washington-Dulles-International-Airport",
       "https://www.ffxnow.com/2026/05/20/dulles-airport-lands-41m-federal-grant-for-concourse-e-construction/",
       "https://www.ffxnow.com/2026/07/17/mwaa-almost-ready-to-unveil-dulles-expansion-plan-sought-by-trump/",
     ],
@@ -503,7 +507,7 @@ export const unitedProjects = [
 export const unitedHubsMeta = {
   slug: "united-hubs",
   name: "United Hub Tracker",
-  lastUpdated: "2026-07-27",
+  lastUpdated: "2026-07-29",
   // Headline stats that can't be derived from the entries above. Counts of projects/clubs ARE
   // derived at build time — never hardcode them here (tests pin that).
   stats: {
@@ -527,6 +531,7 @@ export const unitedHubsMeta = {
     },
   },
   changelog: [
+    { date: "2026-07-29", entry: "The $20B+ Dulles master plan goes official — a decade-long rebuild including 'plans for one of the largest United Polaris lounges in the world.' The rumored second Dulles lounge graduates to announced (and turns out to be a Polaris)." },
     { date: "2026-07-27", entry: "Tracker first published — 8 hubs, 26 projects." },
     { date: "2026-07-26", entry: "United pulls 11 planned O'Hare routes after the FAA extends its ORD schedule cap through October 2027." },
     { date: "2026-07-09", entry: "O'Hare's annual gate shuffle lands: American wins back three gates effective October 2026, though United still nets two more than last year (one via reallocation, one bought from Spirit)." },
