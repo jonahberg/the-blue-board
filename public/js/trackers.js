@@ -20,12 +20,16 @@
   function applyFilter(query) {
     var q = normalize(query);
     var rows = document.querySelectorAll('[data-trk-row]');
+    /* when the page renders the same entity in two surfaces (cards + table), only
+       rows marked data-trk-count-item are tallied; pages with a single surface
+       mark none and every row counts */
+    var hasCountItems = !!document.querySelector('[data-trk-row][data-trk-count-item]');
     var visible = 0;
     for (var i = 0; i < rows.length; i++) {
       var hay = rows[i].getAttribute('data-trk-search-text') || '';
       var show = q === '' || hay.indexOf(q) !== -1;
       rows[i].hidden = !show;
-      if (show) visible++;
+      if (show && (!hasCountItems || rows[i].hasAttribute('data-trk-count-item'))) visible++;
     }
     /* collapse hub groups whose every row is hidden */
     var groups = document.querySelectorAll('[data-trk-group]');

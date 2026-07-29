@@ -1,0 +1,556 @@
+---
+import outline from '../../data/trackers/us-outline.json';
+import { unitedHubsMeta, unitedHubs, unitedProjects } from '../../data/trackers/united-hubs.js';
+import { atcAirports } from '../../data/trackers/atc.js';
+import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
+import StatStrip from '../../components/trackers/StatStrip.astro';
+import TrackerMap from '../../components/trackers/TrackerMap.astro';
+import TrackerSearch from '../../components/trackers/TrackerSearch.astro';
+import TrackerTable from '../../components/trackers/TrackerTable.astro';
+import StatusBadge from '../../components/trackers/StatusBadge.astro';
+import Changelog from '../../components/trackers/Changelog.astro';
+import LastUpdated from '../../components/trackers/LastUpdated.astro';
+import CrossLink from '../../components/trackers/CrossLink.astro';
+import Footer from '../../components/Footer.astro';
+import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
+
+const paths = outlinePaths(outline);
+
+// ---- status + type vocabulary ----
+const STATUS = {
+  open: { label: 'Open', tone: 'green', glyph: '●', rank: 2 },
+  'under-construction': { label: 'Under construction', tone: 'yellow', glyph: '◆', rank: 0 },
+  announced: { label: 'Announced', tone: 'accent', glyph: '◇', rank: 1 },
+  rumored: { label: 'Rumored', tone: 'dim', glyph: '?', rank: 3 },
+};
+const TYPE_LABEL = {
+  club: 'Club',
+  polaris: 'Polaris',
+  'club-fly': 'Club Fly',
+  terminal: 'Terminal',
+  gates: 'Gates',
+  other: 'Other',
+};
+// traveler-facing overrides for the generic 'other' bucket
+const TYPE_OVERRIDE = {
+  'ewr-airtrain': 'Transit',
+  'lax-people-mover': 'Transit',
+  'gum-lobby': 'Check-in',
+};
+const typeLabelFor = (p) => TYPE_OVERRIDE[p.id] ?? TYPE_LABEL[p.projectType];
+
+const hubOrder = ['IAH', 'IAD', 'SFO', 'DEN', 'ORD', 'EWR', 'LAX', 'GUM'];
+const projectsByHub = Object.fromEntries(hubOrder.map((h) => [h, unitedProjects.filter((p) => p.hub === h)]));
+const atcCodes = new Set(atcAirports.map((a) => a.code));
+
+// ---- per-hub map status: colored by United-funded activity, not airport megaprojects,
+// or every hub would read "construction". Legend explains the distinction. ----
+const hubMapMeta = {
+  IAH: { shape: 'diamond', tone: 'yellow', badge: { label: 'United building', tone: 'yellow', glyph: '◆' },
+    line1: '4 projects — the 54,000 sq ft flagship club and 22 new gates target fall 2026.' },
+  IAD: { shape: 'diamond', tone: 'yellow', badge: { label: 'United building', tone: 'yellow', glyph: '◆' },
+    line1: "5 projects — a 14-gate concourse and United's new 40,000 sq ft club open this fall." },
+  SFO: { shape: 'diamond', tone: 'accent', badge: { label: 'Club announced', tone: 'accent', glyph: '◇' },
+    line1: '2 projects — a 25,000 sq ft club with an outdoor terrace, due by end of 2026.' },
+  DEN: { shape: 'diamond', tone: 'accent', badge: { label: 'Polaris announced', tone: 'accent', glyph: '◇' },
+    line1: '6 projects — two big clubs already open; the promised Polaris lounge still has no date.' },
+  ORD: { shape: 'dot', tone: 'green', badge: { label: 'Recently delivered', tone: 'green', glyph: '●' },
+    line1: '4 projects — the expanded Polaris reopened in 2025; the big terminal work is the city’s, and slow.' },
+  EWR: { shape: 'dot', tone: 'green', badge: { label: 'Recently delivered', tone: 'green', glyph: '●' },
+    line1: '3 projects — United finished its lounge buildout in 2023–25; the Port Authority builds on.' },
+  LAX: { shape: 'ring', tone: 'dim', badge: { label: 'Quiet', tone: 'dim', glyph: '○' },
+    line1: '1 project — nothing United-funded is active; the airport’s people mover inches toward opening.' },
+  GUM: { shape: 'ring', tone: 'dim', badge: { label: 'Quiet', tone: 'dim', glyph: '○' },
+    line1: '1 project — a check-in lobby refresh opened in December 2025.' },
+};
+
+const mapPoints = [];
+const offMap = [];
+for (const code of hubOrder) {
+  const h = unitedHubs[code];
+  const m = hubMapMeta[code];
+  const p = projectPoint(h.lng, h.lat);
+  const card = { title: `${code} — ${h.name}`, badge: m.badge, line1: m.line1, line2: h.quietNote ?? '' };
+  if (!p) {
+    offMap.push({ title: `${code} — ${h.city}`, badge: m.badge });
+    continue;
+  }
+  mapPoints.push({ id: `hub-${code.toLowerCase()}`, code, x: p.x, y: p.y, shape: m.shape, tone: m.tone, label: true, card });
+}
+
+const legend = [
+  { label: 'United building now', shape: 'diamond', tone: 'yellow' },
+  { label: 'United project announced', shape: 'diamond', tone: 'accent' },
+  { label: 'Recently delivered', shape: 'dot', tone: 'green' },
+  { label: 'Quiet right now', shape: 'ring', tone: 'dim' },
+];
+
+// ---- formatting ----
+const fmtDate = (d) => {
+  if (!d) return '';
+  const opts = d.length === 7 ? { year: 'numeric', month: 'short' } : { year: 'numeric', month: 'short', day: 'numeric' };
+  return new Date((d.length === 7 ? d + '-15' : d) + 'T12:00:00Z').toLocaleDateString('en-US', opts);
+};
+const fmtSqFt = (n) => `${n.toLocaleString('en-US')} sq ft`;
+const fmtCost = (n) => (n >= 1e9 ? `$${(n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 2).replace(/\.?0+$/, '')}B` : `$${Math.round(n / 1e6)}M`);
+
+const metaLineFor = (p) => {
+  const bits = [];
+  if (p.status === 'open' && p.openedDate) bits.push(`Opened ${fmtDate(p.openedDate)}`);
+  else if (p.targetDate) bits.push(`Target: ${p.targetDate}`);
+  if (p.sizeSqFt) bits.push(fmtSqFt(p.sizeSqFt));
+  if (p.costUsd) bits.push(fmtCost(p.costUsd));
+  if (p.gates) bits.push(`${p.gates} gates`);
+  return bits.join(' · ');
+};
+
+// ---- table ----
+const sortedProjects = [...unitedProjects].sort(
+  (a, b) => hubOrder.indexOf(a.hub) - hubOrder.indexOf(b.hub) || STATUS[a.status].rank - STATUS[b.status].rank
+);
+const tableRows = sortedProjects.map((p) => {
+  const s = STATUS[p.status];
+  const scale = [p.sizeSqFt && fmtSqFt(p.sizeSqFt), p.costUsd && fmtCost(p.costUsd), p.gates && `${p.gates} gates`]
+    .filter(Boolean)
+    .join(' · ');
+  return {
+    id: `t-${p.id}`,
+    searchText: `${p.hub} ${unitedHubs[p.hub].city} ${unitedHubs[p.hub].state} ${unitedHubs[p.hub].searchAlias ?? ''} ${unitedHubs[p.hub].name} ${p.name} ${typeLabelFor(p)} ${s.label}`.toLowerCase(),
+    cells: {
+      project: { primary: p.name, secondary: p.builder === 'airport-authority' ? 'airport builds' : p.builder === 'joint' ? 'joint build' : '', sortVal: p.name.toLowerCase() },
+      hub: { primary: p.hub, mono: true, sortVal: `${hubOrder.indexOf(p.hub)}`.padStart(2, '0') },
+      type: { primary: typeLabelFor(p), sortVal: typeLabelFor(p) },
+      status: { badge: { label: s.label, tone: s.tone, glyph: s.glyph }, sortVal: String(s.rank) },
+      date: p.status === 'open' && p.openedDate
+        ? { primary: fmtDate(p.openedDate), mono: true, sortVal: p.openedDate }
+        : p.targetDate
+          ? { primary: p.targetDate, dim: true, sortVal: '' }
+          : { primary: '—', dim: true, sortVal: '' },
+      scale: { primary: scale || '—', ...(scale ? {} : { dim: true }) },
+    },
+  };
+});
+const columns = [
+  { key: 'project', label: 'Project', sortable: true },
+  { key: 'hub', label: 'Hub', sortable: true },
+  { key: 'type', label: 'Type', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'date', label: 'Opened / target', sortable: true },
+  { key: 'scale', label: 'Scale' },
+];
+
+// ---- stats ----
+const stats = [
+  { label: 'new flagship clubs in 2026', value: '3', tone: 'green', sub: 'IAH · IAD · SFO' },
+  { label: 'new club space this year', value: '~119k', tone: 'amber', sub: 'sq ft — IAH 54k + IAD 40k + SFO 25k' },
+  { label: 'new gates targeted fall 2026', value: '36', sub: '22 at IAH · 14 at IAD' },
+  { label: 'largest club, once IAH opens', value: '54,000', sub: 'sq ft — DEN holds the title today' },
+];
+
+// ---- FAQ ----
+const faq = [
+  {
+    question: 'When does the new United Club at Houston (IAH) open?',
+    answer:
+      'United has committed to "by the end of 2026." The 54,000 sq ft club rides on the new Terminal B North Concourse, targeted for fall 2026 — if the concourse slips, the club slips.',
+  },
+  {
+    question: 'What is the largest United Club?',
+    answer:
+      'Today: the ~35,000 sq ft United Club B-East in Denver. Once Houston’s Terminal B club opens, that crown moves to IAH at 54,000 sq ft — likely the largest airline-branded lounge in the country.',
+  },
+  {
+    question: 'What is United building at Washington Dulles?',
+    answer:
+      'A new 14-gate, 435,000 sq ft Concourse E (built by the airports authority, occupied entirely by United) with a ~40,000 sq ft flagship United Club above the AeroTrain station — both targeting fall 2026.',
+  },
+  {
+    question: 'Is United building anything at LAX?',
+    answer:
+      'Not right now. United’s Terminal 7/8 rebuild wrapped in 2019, and LAX is not on United’s 2026 club list. The active construction at LAX is the airport’s people mover, whose east station serves United’s terminals.',
+  },
+  {
+    question: 'When does the Denver Polaris Lounge open?',
+    answer:
+      'Unknown. United announced it in May 2023 as coming "in a couple of years," and as of mid-2026 has said only that design work started. No date, no size, no construction — which is why this tracker files it as announced, not under construction.',
+  },
+];
+
+const canonical = 'https://theblueboard.co/trackers/united-hubs';
+const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
+---
+
+<!doctype html>
+<html lang="en" style="color-scheme:dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0B1018" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E" />
+    <title>What's United Building at Your Hub? Club &amp; Terminal Construction Tracker | The Blue Board</title>
+    <meta
+      name="description"
+      content="Every United club, terminal, and gate project across all 8 hubs — IAH's 54,000 sq ft club, Dulles' new Concourse E, SFO's terrace club — with honest labels for what's real and what's just teased."
+    />
+    <meta name="author" content="The Blue Board" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="What's United Building at Your Hub? — United Hub Tracker" />
+    <meta
+      property="og:description"
+      content="3 flagship clubs and 36 new gates land in 2026. Every project at every United hub, tracked — with honest labels for what's real and what's a Kirby tease."
+    />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="The Blue Board" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="United Hub Tracker — construction and club projects across United's eight hubs" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:creator" content="@theblueboard" />
+    <meta name="twitter:title" content="What's United Building at Your Hub?" />
+    <meta name="twitter:description" content="3 flagship clubs and 36 new gates land in 2026. Every United hub project, tracked." />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:site" content="@theblueboard" />
+
+    <!-- Schema: BreadcrumbList -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'The Blue Board', item: 'https://theblueboard.co' },
+        { '@type': 'ListItem', position: 2, name: 'Trackers', item: 'https://theblueboard.co/trackers' },
+        { '@type': 'ListItem', position: 3, name: 'United Hub Tracker', item: canonical },
+      ],
+    })} />
+    <!-- Schema: FAQPage -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faq.map((f) => ({
+        '@type': 'Question',
+        name: f.question,
+        acceptedAnswer: { '@type': 'Answer', text: f.answer },
+      })),
+    })} />
+    <!-- Schema: Dataset -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Dataset',
+      name: "United Airlines hub construction projects — clubs, terminals, gates",
+      description:
+        "Every tracked United Airlines ground-infrastructure project across its eight hubs, with status (open / under construction / announced / rumored), dates, sizes, costs, and sources.",
+      url: canonical,
+      dateModified: unitedHubsMeta.lastUpdated,
+      creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
+    })} />
+
+    <link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin fetchpriority="low" />
+
+    <style is:inline>
+      @font-face{font-family:'Satoshi';font-style:normal;font-weight:300 900;font-display:swap;src:url(/fonts/satoshi-latin.woff2) format('woff2')}
+      @font-face{font-family:'DM Sans';font-style:normal;font-weight:100 900;font-display:swap;src:url(/fonts/dm-sans-latin.woff2) format('woff2')}
+      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+      *{margin:0;padding:0;box-sizing:border-box}
+      :root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#7C8DA6;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
+      body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);font-size:13px;line-height:1.7;min-height:100vh}
+      h1,h2,h3,h4,h5,h6{font-family:var(--font-display)}
+      a{color:var(--ua-accent);text-decoration:none}
+      a:hover{text-decoration:underline}
+      .trk-section p a,.trk-section li a{text-decoration:underline;text-decoration-color:rgba(107,170,237,.4);text-underline-offset:2px}
+      .trk-section p a:hover,.trk-section li a:hover{text-decoration-color:var(--ua-accent)}
+      .container{max-width:900px;margin:0 auto;padding:20px 16px}
+      .trk-nav{font-family:var(--font-display);font-size:11px;font-weight:500;color:var(--ua-muted);margin-bottom:16px}
+      .trk-header h1{font-size:22px;font-weight:700;letter-spacing:-.5px;text-wrap:balance;margin:2px 0 6px}
+      .trk-kicker{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber)}
+      .trk-subtitle{font-size:13px;color:var(--ua-muted);max-width:680px;margin-bottom:10px}
+      .trk-jump{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 6px}
+      .trk-jump a{font-family:var(--font-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--ua-muted);background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:20px;padding:6px 14px;transition:all .15s ease}
+      .trk-jump a:hover{color:#fff;border-color:var(--ua-blue);background:var(--ua-blue);text-decoration:none;transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,93,170,.3)}
+      .trk-section{margin-bottom:40px;padding-top:24px;border-top:1px solid var(--ua-border)}
+      .trk-section:first-of-type{border-top:none;padding-top:0}
+      .trk-section h2{font-size:16px;font-weight:700;padding-bottom:6px;border-bottom:1px solid var(--ua-border);margin-bottom:14px}
+      .trk-section h3{font-size:13px;font-weight:600;color:var(--ua-accent);margin:18px 0 8px}
+      .trk-section p{max-width:680px;margin-bottom:12px}
+      .trk-section p:last-child{margin-bottom:0}
+      .trk-hub{margin-bottom:28px}
+      .trk-hub-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid var(--ua-border);margin-bottom:12px}
+      .trk-hub-code{font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--ua-accent)}
+      .trk-hub-name{font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--ua-text)}
+      .trk-hub-meta{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-dim)}
+      .trk-hub-atc{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-left:auto}
+      .trk-hub-quiet{font-size:12px;color:var(--ua-muted);font-style:italic;max-width:680px;margin-bottom:10px}
+      .trk-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+      .trk-card{background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.6) 100%);border:1px solid var(--ua-border);border-radius:6px;padding:14px 16px;transition:border-color .2s}
+      .trk-card:hover{border-color:var(--ua-blue)}
+      .trk-card-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+      .trk-card-name{font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--ua-text);margin-bottom:4px}
+      .trk-card-meta{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--ua-amber);letter-spacing:.3px;margin-bottom:6px}
+      .trk-card-details{font-size:12px;line-height:1.6;color:var(--ua-muted)}
+      .trk-type-badge{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:3px;border:1px solid var(--ua-border);color:var(--ua-muted);background:transparent}
+      .trk-builder-badge{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:3px;border:1px dashed var(--ua-border);color:var(--ua-dim);background:transparent}
+      .trk-aside{background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.6) 100%);border:1px solid var(--ua-border);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:18px 20px;margin-bottom:40px}
+      .trk-aside h2{font-size:16px;font-weight:700;margin-bottom:12px;border:none;padding:0}
+      .trk-aside p{font-size:13px;max-width:680px;margin-bottom:12px}
+      .trk-aside p:last-child{margin-bottom:0}
+      .trk-aside-kicker{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber);margin-bottom:4px}
+      .trk-math{list-style:none;margin:0;padding:0}
+      .trk-math li{display:flex;gap:12px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--ua-border-subtle,var(--ua-border))}
+      .trk-math li:last-child{border-bottom:none}
+      .trk-math-num{font-family:var(--font-mono);font-size:14px;font-weight:700;color:var(--ua-amber);flex:0 0 96px;text-align:right}
+      .trk-math-text{font-size:12px;color:var(--ua-muted);line-height:1.6}
+      .trk-faq-q{font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--ua-text);margin:14px 0 4px}
+      .trk-faq-a{font-size:12px;color:var(--ua-muted);max-width:680px;line-height:1.7}
+      .trk-method{font-size:11px;color:var(--ua-dim);max-width:680px;line-height:1.7;margin-top:14px}
+      .trk-updated-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+      @media (max-width:600px){.trk-header h1{font-size:18px}.trk-cards{grid-template-columns:1fr}.trk-hub-atc{margin-left:0;flex-basis:100%}}
+      @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+    </style>
+  </head>
+  <body data-trk-page="united-hubs">
+    <main class="container">
+      <div class="trk-nav">
+        <a href="/">&larr; The Blue Board</a> / <a href="/trackers">Trackers</a> / United Hubs
+      </div>
+
+      <header class="trk-header trk-section">
+        <div class="trk-kicker">Tracker &middot; United Ground Buildout</div>
+        <h1>What's United Building at Your Hub?</h1>
+        <p class="trk-subtitle">
+          United is in the middle of its biggest ground-infrastructure buildout ever — new
+          concourses, new gates, and the largest clubs it has ever opened. Here's every project at
+          all eight hubs, with honest labels for what's under construction, what's merely
+          announced, and what a CEO teased once at a press roundtable.
+        </p>
+        <div class="trk-updated-row">
+          <LastUpdated iso={unitedHubsMeta.lastUpdated} />
+        </div>
+        <nav class="trk-jump" aria-label="Section navigation">
+          <a href="#map">The map</a>
+          <a href="#check">Check your hub</a>
+          {hubOrder.map((h) => <a href={`#hub-${h.toLowerCase()}`}>{h}</a>)}
+          <a href="#all">All projects</a>
+          <a href="#why">Why</a>
+          <a href="#changelog">Changelog</a>
+        </nav>
+      </header>
+
+      <section class="trk-section" aria-label="Headline numbers">
+        <StatStrip stats={stats} />
+      </section>
+
+      <section class="trk-section" id="map">
+        <h2>The map: where the money is</h2>
+        <TrackerMap
+          paths={paths}
+          points={mapPoints}
+          legend={legend}
+          offMap={offMap}
+          ariaLabel="US map of United's eight hubs, marked by construction activity. Full details in the hub sections below."
+          hint="Hover or tap a hub for its summary — full breakdown below"
+        />
+      </section>
+
+      <section class="trk-section" id="check">
+        <h2>Check your hub</h2>
+        <TrackerSearch
+          label="Search hubs and projects"
+          noun="projects"
+          placeholder="Hub code, city, or project — try IAH, Dulles, Polaris&hellip;"
+          emptyTitle="No matching project"
+          emptyBody="No tracked project matches that. United's hubs are IAH, IAD, SFO, DEN, ORD, EWR, LAX, and GUM — if something's under construction at one of them and missing here, it either isn't United's project or it hasn't been announced."
+        />
+      </section>
+
+      <section class="trk-section" id="hubs" aria-label="Projects by hub">
+        <h2>Hub by hub</h2>
+        {
+          hubOrder.map((code) => {
+            const h = unitedHubs[code];
+            const projects = projectsByHub[code];
+            return (
+              <div class="trk-hub" id={`hub-${code.toLowerCase()}`} data-trk-group>
+                <div class="trk-hub-head">
+                  <span class="trk-hub-code">{code}</span>
+                  <span class="trk-hub-name">{h.name}</span>
+                  <span class="trk-hub-meta">
+                    {h.city}, {h.state} · {projects.length} {projects.length === 1 ? 'project' : 'projects'}
+                  </span>
+                  {atcCodes.has(code) && (
+                    <a class="trk-hub-atc" href="/trackers/atc">
+                      also in the FAA paper-strips rollout &rarr;
+                    </a>
+                  )}
+                </div>
+                {h.quietNote && <p class="trk-hub-quiet">{h.quietNote}</p>}
+                <div class="trk-cards">
+                  {projects.map((p) => {
+                    const s = STATUS[p.status];
+                    return (
+                      <article
+                        class="trk-card"
+                        data-trk-row
+                        data-trk-count-item
+                        data-trk-search-text={`${p.hub} ${h.city} ${h.state} ${h.searchAlias ?? ''} ${h.name} ${p.name} ${typeLabelFor(p)} ${s.label}`.toLowerCase()}
+                        id={p.id}
+                      >
+                        <div class="trk-card-badges">
+                          <span class="trk-type-badge">{typeLabelFor(p)}</span>
+                          <StatusBadge label={s.label} tone={s.tone} glyph={s.glyph} />
+                          {p.builder !== 'united' && (
+                            <span class="trk-builder-badge">{p.builder === 'joint' ? 'joint build' : 'airport builds'}</span>
+                          )}
+                        </div>
+                        <div class="trk-card-name">{p.name}</div>
+                        {metaLineFor(p) && <div class="trk-card-meta">{metaLineFor(p)}</div>}
+                        <p class="trk-card-details">{p.details}</p>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })
+        }
+      </section>
+
+      <section class="trk-section" id="all">
+        <h2>All projects, one table</h2>
+        <TrackerTable caption="All tracked United hub projects" columns={columns} rows={tableRows} />
+        <p class="trk-method">
+          "Airport builds" marks projects funded and built by the airport authority — MWAA at
+          Dulles, Houston Airports, Chicago's aviation department, the Port Authority at Newark,
+          LAWA, and DEN — where United is the tenant or a funding partner, not the builder. They're
+          tracked here because they change your trip, but the credit (and the schedule risk)
+          belongs to the airport.
+        </p>
+      </section>
+
+      <section class="trk-section" id="why">
+        <h2>Why United is doing this</h2>
+        <p>
+          Start with the quote. Asked about lounge size at an April 2026 press roundtable, CEO
+          Scott Kirby told reporters:
+          <a href="https://thepointsguy.com/news/united-airlines-lounge-plans-2026/">"I want them to build a club that is oversized. That we look at it and say, 'That club is too big.'"</a>
+          He added that it keeps not happening: "I've now been told seven or eight times, 'This one
+          is going to be the one.' It's never true." That is the buildout in one anecdote — United
+          says it came out of the pandemic with 49% more club space than it had before 2020, and
+          it still can't build ahead of demand.
+        </p>
+        <p>
+          The demand side is deliberate. Under United Next, premium seats per North American
+          departure are
+          <a href="https://united.mediaroom.com/2026-03-24-United-to-Add-250-Planes-in-Next-Two-Years-Most-by-Any-Airline-Includes-New,-Premium-Customer-Experiences,-Aircraft-Variants,-Subfleet,-Seats-and-Amenities">up 40% since 2021</a>,
+          and every one of those seats comes with lounge expectations. Crowding is the metric the
+          executives themselves use: no survey ranks it, but United's commercial chief Andrew
+          Nocella defined success as the day the <em>"no one-day passes"</em> sign disappears from
+          club doors. The squeeze also shows up in policy: membership went two-tier with higher
+          fees in March 2025, and in April 2026 United quietly cut Polaris Lounge access for most
+          Star Alliance partners.
+        </p>
+        <p>
+          Competition is real too. Delta's flagship
+          <a href="https://news.delta.com/delta-deepens-investment-lax-phase-1-second-delta-one-lounge-now-open">Delta One Lounge at JFK</a>
+          runs about 40,000 sq ft — the number Houston's 54,000 was built to beat — and Amex keeps
+          expanding Centurion. In the hub-lounge arms race, "largest in America" is a marketing
+          asset with a construction schedule attached.
+        </p>
+        <h3>Who's actually paying</h3>
+        <p>
+          Read the badges carefully: much of this buildout rides on airport capital programs.
+          MWAA is building Dulles' Concourse E; Houston is a partner on Terminal B; Chicago's
+          aviation department builds the O'Hare satellites with airline money flowing through
+          rates; the Port Authority owns everything moving at Newark. United's own capital is
+          concentrated where its brand lives — the clubs — plus the lion's share of Houston's
+          Terminal B. When an airport builds, the schedule risk is the airport's too.
+        </p>
+        <h3>The honest read</h3>
+        <p>
+          Dates slip, and teases are not commitments. The Denver Polaris Lounge was announced in
+          May 2023 as <em>"a couple of years"</em> out and still has no date. The original Polaris
+          lounge rollout missed its published schedule at every single hub. O'Hare's Global
+          Terminal was announced in 2018 for 2026 and now reads 2032 — construction hasn't
+          started. And Kirby's "even bigger" second Dulles club exists, so far, as one sentence at
+          a press roundtable. That's why every project here carries one of four labels — open,
+          under construction, announced, rumored — and why <em>announced without a date</em> is
+          treated as a promise, not a plan.
+        </p>
+      </section>
+
+      <aside class="trk-aside" id="club-math" aria-label="Club math">
+        <div class="trk-aside-kicker">Sidebar</div>
+        <h2>Club math</h2>
+        <ul class="trk-math">
+          <li>
+            <span class="trk-math-num">54,000</span>
+            <span class="trk-math-text">
+              sq ft — the Houston club, roughly the floor area of the entire White House, and a
+              little over a football field of playing turf. Largest airline lounge in the country
+              when it opens.
+            </span>
+          </li>
+          <li>
+            <span class="trk-math-num">~119,000</span>
+            <span class="trk-math-text">
+              sq ft of new club space opening in 2026 alone — more than United's entire Denver club
+              footprint (~100,000 sq ft across four locations), which is currently the biggest at
+              any hub.
+            </span>
+          </li>
+          <li>
+            <span class="trk-math-num">4,000</span>
+            <span class="trk-math-text">
+              sq ft of open-air terrace at the new SFO club — about a tennis court and a half,
+              outdoors, at an airport. United's largest-ever outdoor lounge space.
+            </span>
+          </li>
+          <li>
+            <span class="trk-math-num">650</span>
+            <span class="trk-math-text">
+              seats in the new Dulles club — more than a 787-10 carries twice over.
+            </span>
+          </li>
+        </ul>
+      </aside>
+
+      <section class="trk-section">
+        <CrossLink
+          title="The government's buildout, same airports"
+          body="Seven of these eight hubs are also in the FAA's paper-to-digital flight strip rollout — the other half of the biggest infrastructure decade US aviation has had."
+          href="/trackers/atc"
+          linkText="Modern Skies Tracker"
+        />
+      </section>
+
+      <section class="trk-section" id="faq">
+        <h2>Quick answers</h2>
+        {faq.map((f) => (
+          <div>
+            <div class="trk-faq-q">{f.question}</div>
+            <p class="trk-faq-a">{f.answer}</p>
+          </div>
+        ))}
+      </section>
+
+      <section class="trk-section" id="changelog">
+        <h2>Changelog</h2>
+        <Changelog entries={unitedHubsMeta.changelog} />
+        <p class="trk-method">
+          How this page is maintained: projects are verified against United's newsroom, airport
+          authority releases (MWAA, Houston Airports, Chicago DOA, Port Authority, LAWA, DEN), and
+          the frequent-flyer trade press. Every project in the underlying dataset cites at least
+          one source. Sizes, costs, and dates appear only where a source supports them; disputed
+          figures are explained in prose instead of printed as facts. Updated monthly, or when
+          United opens or announces something.
+        </p>
+      </section>
+    </main>
+    <Footer />
+    <VercelSpeedInsights />
+    <script defer src="/js/trackers.js"></script>
+  </body>
+</html>

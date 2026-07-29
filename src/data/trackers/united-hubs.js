@@ -51,7 +51,9 @@
 /**
  * Hub display data. Coordinates match the hub pages' own airportSchema values
  * (src/data/hubs/*.js) so the two surfaces can never disagree.
- * @type {Record<string, {name: string, city: string, state: string, lat: number, lng: number, quietNote?: string}>}
+ * searchAlias: extra tokens the search box should match (e.g. "Guam" for GUM, whose city is
+ * Tamuning and whose airport name contains neither).
+ * @type {Record<string, {name: string, city: string, state: string, lat: number, lng: number, quietNote?: string, searchAlias?: string}>}
  */
 export const unitedHubs = {
   IAH: { name: "George Bush Intercontinental", city: "Houston", state: "TX", lat: 29.9902, lng: -95.3368 },
@@ -69,6 +71,7 @@ export const unitedHubs = {
   },
   GUM: {
     name: "A.B. Won Pat International", city: "Tamuning", state: "GU", lat: 13.4834, lng: 144.796,
+    searchAlias: "Guam",
     quietNote: "Mostly quiet. A local report of a new United Club 'nearing completion' couldn't be corroborated — the article has since vanished and neither United nor the airport has announced one.",
   },
 };
