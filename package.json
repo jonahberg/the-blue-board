@@ -1,9 +1,9 @@
 {
   "name": "the-blue-board",
   "description": "The Blue Board — Unofficial United Airlines operations dashboard",
-  "author": "Jonah Berg (https://github.com/notjbg)",
+  "author": "Jonah Berg (https://github.com/jonahberg)",
   "license": "FSL-1.1-MIT",
-  "repository": "notjbg/the-blue-board",
+  "repository": "jonahberg/the-blue-board",
   "private": true,
   "type": "module",
   "version": "1.7.13",

@@ -2,7 +2,7 @@
 
 **An unofficial, real-time operations dashboard for United Airlines — built by flyers, for flyers.**
 
-**[→ Live Dashboard](https://theblueboard.co)** · **[📋 Changelog](CHANGELOG.md)** · **[🎨 Design System](DESIGN.md)** · **[☕ Support the Project](https://buymeacoffee.com/notjbg)** · **[💡 Suggest a Feature](https://github.com/notjbg/the-blue-board/issues)** · **[𝕏 Follow @theblueboard](https://x.com/theblueboard)**
+**[→ Live Dashboard](https://theblueboard.co)** · **[📋 Changelog](CHANGELOG.md)** · **[🎨 Design System](DESIGN.md)** · **[☕ Support the Project](https://buymeacoffee.com/notjbg)** · **[💡 Suggest a Feature](https://github.com/jonahberg/the-blue-board/issues)** · **[𝕏 Follow @theblueboard](https://x.com/theblueboard)**
 
 ![The Blue Board — Live Operations Map](public/og-image.png)
 
@@ -254,7 +254,7 @@ Every donation helps cover server costs and keeps the dashboard free for everyon
 
 ## 💡 Feature Requests & Contributing
 
-Got an idea? Found a bug? **[Open an issue →](https://github.com/notjbg/the-blue-board/issues)**
+Got an idea? Found a bug? **[Open an issue →](https://github.com/jonahberg/the-blue-board/issues)**
 
 The community drives this project. Some of the best features came from user suggestions on Reddit and FlyerTalk. PRs welcome too — the dashboard is a single HTML file, and content pages are Astro templates, so the barrier to entry is low.
 
@@ -276,4 +276,4 @@ All flight data is provided for informational purposes only and may be delayed, 
 
 ---
 
-*Built on a ✈️ by [Jonah Berg](https://github.com/notjbg)*
+*Built on a ✈️ by [Jonah Berg](https://github.com/jonahberg)*

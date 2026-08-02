@@ -135,12 +135,12 @@ https://theblueboard.co
 
 ## Creator
 
-Jonah Berg — https://x.com/jonahberg — https://github.com/notjbg
+Jonah Berg — https://x.com/jonahberg — https://github.com/jonahberg
 
 ## Social
 
 - Twitter/X: https://x.com/theblueboard
-- GitHub: https://github.com/notjbg/the-blue-board
+- GitHub: https://github.com/jonahberg/the-blue-board
 
 ## License
 
