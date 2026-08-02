@@ -188,8 +188,8 @@ Terms frequently used on The Blue Board:
 
 Built by Jonah Berg.
 - Twitter/X: https://x.com/jonahberg
-- GitHub: https://github.com/notjbg
-- Project: https://github.com/notjbg/the-blue-board
+- GitHub: https://github.com/jonahberg
+- Project: https://github.com/jonahberg/the-blue-board
 - The Blue Board Twitter/X: https://x.com/theblueboard
 
 ---

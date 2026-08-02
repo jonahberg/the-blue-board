@@ -136,7 +136,7 @@ function buildWelcomeEmail(): string {
     </p>
 
     <p style="margin:16px 0 0;">
-      <a href="https://github.com/notjbg/the-blue-board/issues" style="color:#4a90d9;text-decoration:none;font-size:14px;">Suggest a Feature on GitHub &rarr;</a>
+      <a href="https://github.com/jonahberg/the-blue-board/issues" style="color:#4a90d9;text-decoration:none;font-size:14px;">Suggest a Feature on GitHub &rarr;</a>
       &nbsp;&nbsp;&middot;&nbsp;&nbsp;
       <a href="https://x.com/theblueboard" style="color:#4a90d9;text-decoration:none;font-size:14px;">Follow @theblueboard &rarr;</a>
     </p>
