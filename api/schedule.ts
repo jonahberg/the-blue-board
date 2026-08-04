@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadScheduleSnapshot, saveScheduleSnapshot, isSnapshotCandidateBetter } from './_schedule-snapshots.js';
-import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock, __resetAdbSpendForTests, isOfficialFr24DailyCapReached, recordOfficialFr24Call, getOfficialFr24CallsToday, getOfficialFr24DailyCap } from './_cost-state.js';
+import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock, __resetAdbSpendForTests, isOfficialFr24DailyCapReached, recordOfficialFr24Call, getOfficialFr24CallsToday, getOfficialFr24DailyCap, isAdbOrganicRefreshGated, isAdbBudgetExhausted } from './_cost-state.js';
 import { UNITED_HUB_SET, getHubTerminal } from './_hubs.js';
 import { isAuthorizedCronRequest } from './_cron-auth.js';
 import { isOfficialFr24Enabled } from './_official-fr24.js';
@@ -1415,6 +1415,26 @@ async function fetchAllPages(
   }
 
   if (srcPriority === 'provider') {
+    // SPEND GUARD, SNAPSHOT BEFORE THE PROVIDER CALL: fetchViaAeroDataBox returns null for the PACED
+    // organic gate too — spend is ahead of the day's pro-rated line while the absolute budget is
+    // untouched (_cost-state.ts). That state covers many more hours/day than the old flat gate ever
+    // did, and falling through it to the PAID official API would push organic traffic onto a
+    // COSTLIER provider whose only daily ceiling is per-instance — the pacing guard would then
+    // increase spend instead of bounding it. So: while only pacing is holding the provider back,
+    // official stays off. When the budget is TRULY exhausted the legacy behaviour is preserved
+    // (official still allowed, bounded by its own 402 block / 15-min breaker / daily cap), as it is
+    // for budget-exempt cron warms. The FREE live-feed rescue inside tryScheduleRescue runs either
+    // way, so the board still degrades gracefully.
+    //
+    // Read BEFORE the attempt, not after, because the attempt itself moves both inputs. The provider
+    // records its units before the HTTP call, so a call that then 5xx'd or timed out can push spend
+    // past the paced line and self-trigger this guard — suppressing the healthy paid rescue for a
+    // failure that had nothing to do with pacing. Same for a missing key or a thrown error landing
+    // near the line. Suppression must mean "pacing was already gating us when we asked", so a
+    // provider FAILURE with the gate open beforehand keeps the official rescue available exactly as
+    // it was before pacing existed.
+    const pacedOnlyGate = !options.providerBudgetExempt && isAdbOrganicRefreshGated() && !isAdbBudgetExhausted();
+
     // Primary: AeroDataBox returns the full forward schedule (incl. not-yet-departed flights).
     if (allowProviderFallback && process.env.AERODATABOX_API_KEY) {
       try {
@@ -1432,9 +1452,10 @@ async function fetchAllPages(
     }
     // Provider unavailable/empty -> FR24 official (active+completed, breaker-gated) + free live feed.
     // disableOfficialSource (officialFallback=0, e.g. cron) keeps official off so background warming
-    // never burns FR24 credits; it then degrades to the free live feed.
+    // never burns FR24 credits; it then degrades to the free live feed. `pacedOnlyGate` is the
+    // snapshot taken above, before the provider attempt (see its comment for why).
     const fallback = await tryScheduleRescue(
-      logHub, dir, ts, effectiveDeadline, false, !options.disableOfficialSource, !!options.providerBudgetExempt
+      logHub, dir, ts, effectiveDeadline, false, !options.disableOfficialSource && !pacedOnlyGate, !!options.providerBudgetExempt
     );
     if (fallback) return fallback;
   }
