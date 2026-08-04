@@ -75,6 +75,19 @@ export function feedFreshness(msSinceLastGood, freshMs = FEED_FRESH_MS) {
 }
 
 /**
+ * Read the server's `X-BB-Feed-Stale` header into milliseconds. /api/fr24-feed sets it
+ * (in SECONDS) when it answers a 200 from ITS last-known-good payload because upstream
+ * failed — a real body, but already up to FEED_FRESH_MS old. Anything absent, blank,
+ * zero, negative, or unparseable means "not a stale-serve" and returns 0, so the poll
+ * loop's normal fresh-success path applies unchanged. The caller uses the returned age
+ * to backdate lastGoodFeedTs, keeping the LIVE/STALE chip honest about what it is showing.
+ */
+export function parseStaleHeader(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n * 1000 : 0;
+}
+
+/**
  * Fast-retry schedule after a failed/empty poll, separate from the normal 30s
  * cadence: 5s → 10s → 20s, then capped at the normal 30s poll interval.
  */
