@@ -4,6 +4,15 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.14] - 2026-08-04
+
+### Fixed
+- **The live map no longer errors when FR24's feed glitches — which it now does on ~20% of requests.** Since July 3, `/api/fr24-feed` returned 503 whenever FR24 served an empty body, and a direct probe showed those empties arrive in streaks (8 of 12 sequential upstream fetches, in runs of 2–5). The endpoint now retries once (UAL only — for United an empty feed is never truth) and, when upstream stays broken, serves its last-known-good UAL payload from up to 3 minutes ago as a 200 with an `X-BB-Feed-Stale` header. The ceiling is the client's own `FEED_FRESH_MS`, imported so the two can never drift, and the env override (`FR24_FEED_STALE_SERVE_MAX_MS`) can only tighten it. The dashboard reads the header, back-dates its freshness clock so the LIVE/STALE chip stays honest, and keeps the fast-retry ladder armed. The fallback state is deliberately United-only: the airline param is caller-controlled, and any per-airline store would hand curl a way to evict the one payload real users depend on. "Empty" is now decided by the client's own `parseFr24Feed` (entries need real positions), so a degraded all-null-position payload can't poison the fallback. First paint during a glitch shows planes instead of an error. (`api/fr24-feed.ts`, `src/lib/feed-health.js`, `src/dashboard/main.js`, `vercel.json`)
+- **AI delay explanations no longer hammer the gateway through a permission outage.** From Jul 28 to Aug 2 the AI Gateway rejected calls with 403 "Free tier users do not have access…", and because the AI-unavailable circuit only tripped on 402/billing-400, every click re-hit the gateway and logged a fresh error for the whole window. Account-level 403s now open the same 5-minute circuit and serve the calm fallback message; request-specific 403s get the graceful answer without switching the feature off for every visitor. (`api/delay-explain.ts`)
+
+### Changed
+- **Schedule refreshes are paced across the whole day instead of first-come-first-served.** The AeroDataBox daily budget resets at UTC midnight — 7 PM CDT — so evening traffic plus overnight warming drained the pool by ~1 PM and the board froze for exactly the afternoon hours delay drama peaks (observed Aug 4: 732/700 units spent, board stuck at "Statuses as of 1:02 PM CDT (3h old)"). On-demand refreshes are now gated against a pro-rated share of the budget (1-hour head start, same daily ceiling; `AERODATABOX_BUDGET_PACING=off` restores the old flat gate for deliberate backfills). Cron warming is unaffected, and while pacing — rather than true exhaustion — is holding the provider back, the paid FR24 official fallback stays off, so the pacing guard can never increase spend. A once-a-day warning now fires when the configured budget can't clear the warm cron's ~384 units/day floor. (`api/_cost-state.ts`, `api/_schedule-aerodatabox.ts`, `api/schedule.ts`, `.env.example`)
+
 ## [1.7.13] - 2026-07-27
 
 ### Fixed
