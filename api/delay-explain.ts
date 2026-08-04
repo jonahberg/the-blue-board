@@ -43,6 +43,25 @@ const AI_UNAVAILABLE_MSG =
 const AI_UNAVAILABLE_COOLDOWN_MS = 5 * 60 * 1000;
 let aiUnavailableUntil = 0;
 
+// One place to open the circuit, so the three ACCOUNT-level failure modes that share it (gateway 402
+// budget ceiling, gateway 403 tier/permission loss, Anthropic billing-400) cannot drift apart in
+// cooldown length or in what they log. `reason` is the only thing that varies.
+function openAiCircuit(reason: string): void {
+  aiUnavailableUntil = Date.now() + AI_UNAVAILABLE_COOLDOWN_MS;
+  console.warn(`Delay explain: ${reason} — AI-unavailable circuit open ${AI_UNAVAILABLE_COOLDOWN_MS / 1000}s`);
+}
+
+/**
+ * Test helper: close the AI-unavailable circuit and drop the explanation cache so module state does
+ * not leak between tests (repo convention: __resetRateLimitersForTests, __resetFeedStateForTests).
+ * Without this seam, tests that trip the circuit had to be ordered last or re-import the module.
+ * Production never calls it.
+ */
+export function __resetDelayExplainForTests(): void {
+  aiUnavailableUntil = 0;
+  cache.clear();
+}
+
 // Per-request input spend cap. Output is already bounded by max_tokens: 400; this bounds input so a
 // crafted-but-origin-valid POST can't inflate prompt tokens. Each field is already truncated by
 // sanitize(); this is a belt-and-suspenders ceiling on the assembled prompt.
@@ -221,8 +240,33 @@ Deliver 2-4 sentences of direct, specific analysis grounded in the provided data
     // gateway analog of Anthropic's billing-400 below. Trip the same circuit so we stop hammering it
     // and serve the calm 200 the modal renders as plain text.
     if (e.status === 402) {
-      aiUnavailableUntil = Date.now() + AI_UNAVAILABLE_COOLDOWN_MS;
-      console.warn(`Delay explain: AI Gateway budget/credit error (402) — AI-unavailable circuit open ${AI_UNAVAILABLE_COOLDOWN_MS / 1000}s`);
+      openAiCircuit('AI Gateway budget/credit error (402)');
+      return res.status(200).json({ explanation: AI_UNAVAILABLE_MSG, unavailable: true });
+    }
+    // The gateway rejects with 403 PermissionDenied when the ACCOUNT tier loses access to the
+    // model — observed Jul 28–Aug 2 2026 as "Free tier users do not have access to …" after the
+    // gateway's credits dipped to free tier. Without special handling that fell to the generic 502
+    // and every click re-hit the gateway for the whole outage window. (The handler's own
+    // origin-check 403 is a plain return before the try, so a THROWN 403 here is always from the
+    // gateway/SDK call.)
+    //
+    // Every 403 still gets the graceful 200 — it is never retryable for this request — but only an
+    // ACCOUNT-level one opens the SHARED circuit, mirroring the billing-400 branch below. A
+    // request-specific gateway 403 (a rejected model route, a per-request policy denial) must not
+    // disable "Explain Delay Risk" for every visitor for the next five minutes.
+    //
+    // The matcher is deliberately narrow on WHOLE phrases: bare `tier`/`plan`/`account` are
+    // substrings of 'frontier', 'plane'/'flight plan' and 'accounted', all flight-context words that
+    // can echo back inside an upstream error message and open a shared five-minute circuit on a
+    // request-specific rejection. `permission` stays in with eyes open — an Anthropic-shaped 403 body
+    // carries "type":"permission_error", so a per-request policy denial can match it — because in
+    // this stack gateway 403s are near-always account-level, the cost of a false positive is one
+    // self-healing 5-minute window of the calm 200, and the cost of a false NEGATIVE is missing the
+    // real outage signature and re-hitting the gateway on every click for hours (Jul 28–Aug 2).
+    if (e.status === 403) {
+      const msg = String(e?.error?.error?.message || e?.message || '').toLowerCase();
+      const isAccountLevel = /free tier|do not have access|permission/i.test(msg);
+      if (isAccountLevel) openAiCircuit('AI Gateway permission error (403)');
       return res.status(200).json({ explanation: AI_UNAVAILABLE_MSG, unavailable: true });
     }
     // Anthropic rejects a credit/billing problem as a 400 (no tokens billed). Don't surface it as a
@@ -233,10 +277,7 @@ Deliver 2-4 sentences of direct, specific analysis grounded in the provided data
     if (e.status === 400) {
       const msg = String(e?.error?.error?.message || e?.message || '').toLowerCase();
       const isBilling = /credit balance|too low|billing|payment|insufficient|quota|upgrade|plan/.test(msg);
-      if (isBilling) {
-        aiUnavailableUntil = Date.now() + AI_UNAVAILABLE_COOLDOWN_MS;
-        console.warn(`Delay explain: Anthropic billing/credit error — AI-unavailable circuit open ${AI_UNAVAILABLE_COOLDOWN_MS / 1000}s`);
-      }
+      if (isBilling) openAiCircuit('Anthropic billing/credit error');
       return res.status(200).json({ explanation: AI_UNAVAILABLE_MSG, unavailable: true });
     }
     return res.status(502).json({ error: 'AI analysis temporarily unavailable' });

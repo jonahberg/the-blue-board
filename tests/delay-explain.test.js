@@ -10,7 +10,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
   }),
 }));
 
-import handler from '../api/delay-explain.js';
+import handler, { __resetDelayExplainForTests } from '../api/delay-explain.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 
 function createRes() {
@@ -41,6 +41,10 @@ describe('delay-explain API', () => {
     vi.restoreAllMocks();
     mockCreate.mockReset();
     __resetRateLimitersForTests();
+    // Close the module-level AI-unavailable circuit and drop the explanation cache. Before this
+    // seam existed, any test that tripped the circuit poisoned every later test in the file, which
+    // is why the circuit cases had to be declared last and re-import the module to be meaningful.
+    __resetDelayExplainForTests();
     process.env.AI_GATEWAY_API_KEY = 'test-key';
     mockCreate.mockResolvedValue({
       content: [{ type: 'text', text: 'This flight is delayed due to weather.' }],
@@ -245,8 +249,9 @@ describe('delay-explain API', () => {
     expect(prompt).not.toContain('999');
   });
 
-  // --- Graceful AI-unavailable handling (must stay LAST: the billing case opens a module-level
-  // circuit breaker for 5 min, which would short-circuit any normal test that ran after it) ---
+  // --- Graceful AI-unavailable handling. These open a module-level circuit breaker for 5 min;
+  // __resetDelayExplainForTests() in beforeEach closes it again, so declaration order no longer
+  // matters and each case starts from a genuinely CLOSED circuit. ---
 
   it('returns a graceful 200 (not 502) for a non-billing Anthropic 400, leaving the circuit closed', async () => {
     mockCreate.mockRejectedValueOnce(Object.assign(new Error('invalid request: bad field'), { status: 400 }));
@@ -265,6 +270,7 @@ describe('delay-explain API', () => {
   });
 
   it('returns a graceful 200 for an Anthropic credit/billing 400 and opens the circuit', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mockCreate.mockRejectedValueOnce(
       Object.assign(new Error('Your credit balance is too low to access the Anthropic API'), { status: 400 }),
     );
@@ -273,6 +279,10 @@ describe('delay-explain API', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.unavailable).toBe(true);
     expect(res.body.explanation).toMatch(/temporarily unavailable/i);
+    // All three circuit-opening branches share one logger (openAiCircuit), so the reason string is
+    // the only thing that distinguishes them in the error feed. Pin it.
+    expect(warnSpy.mock.calls.map((c) => String(c[0])).join('\n'))
+      .toMatch(/billing\/credit error — AI-unavailable circuit open 300s/);
 
     // Circuit now open: a subsequent click serves the graceful message WITHOUT calling Anthropic.
     mockCreate.mockClear();
@@ -283,30 +293,83 @@ describe('delay-explain API', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
-  // Gateway budget/credit failure (402) trips the same circuit breaker as the
-  // billing-400 case above. Isolated via resetModules + dynamic re-import so it
-  // runs against a CLOSED circuit — the billing-400 test above leaves the shared
-  // module's circuit open, and without a fresh module the early circuit-open
-  // return would make this pass vacuously without ever exercising the 402 branch.
+  // Gateway budget/credit failure (402) trips the same circuit breaker as the billing-400 case.
   it('returns a graceful 200 for a gateway 402 and opens the circuit', async () => {
-    vi.resetModules();
-    const { default: freshHandler } = await import('../api/delay-explain.js');
-    mockCreate.mockReset();
-    process.env.AI_GATEWAY_API_KEY = 'test-key';
-
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mockCreate.mockRejectedValueOnce(Object.assign(new Error('Payment Required'), { status: 402 }));
     const res = createRes();
-    await freshHandler(makeReq({ body: { flight: 'UAGW402' } }), res);
+    await handler(makeReq({ body: { flight: 'UAGW402' } }), res);
     expect(res.statusCode).toBe(200);
     expect(res.body.unavailable).toBe(true);
     expect(res.body.explanation).toMatch(/temporarily unavailable/i);
+    expect(warnSpy.mock.calls.map((c) => String(c[0])).join('\n'))
+      .toMatch(/budget\/credit error \(402\) — AI-unavailable circuit open 300s/);
 
     // Circuit now open: a subsequent click serves the graceful message WITHOUT calling the gateway.
     mockCreate.mockClear();
     const res2 = createRes();
-    await freshHandler(makeReq({ body: { flight: 'UAGW402B' } }), res2);
+    await handler(makeReq({ body: { flight: 'UAGW402B' } }), res2);
     expect(res2.statusCode).toBe(200);
     expect(res2.body.unavailable).toBe(true);
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  // Jul 28 – Aug 2 2026: the gateway's credits dipped to free tier and every call came back 403
+  // PermissionDenied ("Free tier users do not have access to …"). That fell through to the generic
+  // 502 branch, so each click re-hit the gateway and logged a fresh error for the whole outage.
+  // A tier/permission rejection is account-wide, so it belongs on the same circuit as the 402.
+  it('returns a graceful 200 for an ACCOUNT-level gateway 403 and opens the circuit', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockCreate.mockRejectedValueOnce(
+      Object.assign(new Error('Free tier users do not have access to this model'), { status: 403 }),
+    );
+    const res = createRes();
+    await handler(makeReq({ body: { flight: 'UAGW403' } }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.unavailable).toBe(true);
+    expect(res.body.explanation).toMatch(/temporarily unavailable/i);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls.map((c) => String(c[0])).join('\n'))
+      .toMatch(/permission error \(403\) — AI-unavailable circuit open 300s/);
+
+    // Circuit now open: the next click never reaches the gateway (no re-hit, no fresh error log).
+    mockCreate.mockClear();
+    const res2 = createRes();
+    await handler(makeReq({ body: { flight: 'UAGW403B' } }), res2);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.unavailable).toBe(true);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('keeps the circuit CLOSED for a request-specific gateway 403 (flight words are not account words)', async () => {
+    // Not every 403 is account-wide: a rejected model route or a per-request policy denial is one
+    // request's problem. Disabling "Explain Delay Risk" for every visitor for five minutes over it
+    // would be a self-inflicted outage, so only the account-level wording above trips the circuit.
+    //
+    // These messages are the reason the matcher stopped accepting bare tokens: 'plan' lives inside
+    // 'flight plan' and 'plane', 'tier' inside 'frontier', 'account' inside 'accounted' — all words
+    // that turn up in flight context and can echo back through an upstream error string.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const requestSpecific = [
+      'flight plan rejected for this route',
+      'no Frontier codeshare route available',
+      'this segment is already accounted for',
+    ];
+    for (const [i, message] of requestSpecific.entries()) {
+      mockCreate.mockRejectedValueOnce(Object.assign(new Error(message), { status: 403 }));
+      const res = createRes();
+      await handler(makeReq({ body: { flight: `UA403REQ${i}` } }), res);
+      // Still graceful — a 403 is never retryable for THIS request.
+      expect(res.statusCode, message).toBe(200);
+      expect(res.body.unavailable, message).toBe(true);
+      expect(warnSpy.mock.calls.map((c) => String(c[0])).join('\n'), message).not.toMatch(/circuit open/);
+    }
+
+    // ...and the next click still reaches the gateway.
+    mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'fresh after 403' }] });
+    const res2 = createRes();
+    await handler(makeReq({ body: { flight: 'UA403REQB' } }), res2);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.explanation).toBe('fresh after 403');
   });
 });
