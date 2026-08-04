@@ -12,6 +12,9 @@ import {
   recordAdbUnits,
   getAdbUnitsToday,
   isAdbBudgetExhausted,
+  isAdbOrganicRefreshGated,
+  isAdbBudgetPacingDisabled,
+  getAdbPacedAllowance,
   hydrateAdbSpend,
   __resetAdbSpendForTests,
 } from '../api/_cost-state.js';
@@ -149,6 +152,171 @@ describe('AeroDataBox daily unit budget (cost-state)', () => {
   });
 });
 
+// The UTC-midnight reset lands at 7 PM CDT, so a flat first-come-first-served budget was drained by
+// the US evening + overnight warm crons before the US afternoon peak ever started (Aug 4 2026:
+// 732/700 units by 21:00 UTC, boards frozen at "1:02 PM CDT (3h old)"). Pacing hands out only the
+// day's pro-rated slice — same daily ceiling, spread across all 24 hours.
+describe('AeroDataBox paced organic allowance', () => {
+  const atUtc = (h, m = 0) => Date.UTC(2026, 7, 4, h, m, 0);
+
+  beforeEach(() => {
+    __resetAdbSpendForTests();
+    supabaseMocks.getSupabaseAdmin.mockReset();
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete process.env.AERODATABOX_DAILY_UNIT_BUDGET;
+    delete process.env.AERODATABOX_BUDGET_PACING;
+    __resetAdbSpendForTests();
+  });
+
+  it('pro-rates the budget across the UTC day, with a 1h head start and a full-budget cap', () => {
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    // Literal expected values, not a copy of the implementation's formula — a copied formula would
+    // happily agree with a broken implementation. Derivations for budget=700:
+    //   00:00 UTC -> floor(700 x  1/24) =  29   (the 1h head start, immediately usable)
+    //   12:00 UTC -> floor(700 x 13/24) = 379
+    //   23:00 UTC -> floor(700 x 24/24) = 700   (head start makes the full budget reachable at 23:00)
+    // Right at rollover the pool is not zero, so the 7 PM CDT crowd is throttled, not locked out.
+    expect(getAdbPacedAllowance(atUtc(0))).toBe(29);
+    expect(getAdbPacedAllowance(atUtc(12))).toBe(379);
+    // ...and never exceeds the budget after — the total daily ceiling is unchanged by pacing.
+    expect(getAdbPacedAllowance(atUtc(23))).toBe(700);
+    expect(getAdbPacedAllowance(atUtc(23, 59))).toBe(700);
+  });
+
+  it('never hands out a literal zero for a small-but-nonzero budget', () => {
+    // floor(budget x 1/24) is 0 for every budget under 24, so at 00:00 UTC a deliberately small
+    // budget used to gate organic refreshes to a DEAD STOP — the exact opposite of the "never
+    // literally zero" promise, and a silent full outage for the operators who tuned the knob down.
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '20';
+    expect(getAdbPacedAllowance(atUtc(0))).toBeGreaterThanOrEqual(1);
+    expect(isAdbOrganicRefreshGated(atUtc(0))).toBe(false); // 0 units spent — the gate must be open
+    // The floor never lets the allowance exceed the budget itself.
+    expect(getAdbPacedAllowance(atUtc(0))).toBeLessThanOrEqual(20);
+  });
+
+  it('keeps a negative epoch (clock skew) inside [1..budget]', () => {
+    // The double modulo exists so a pre-1970 clock still lands inside a day; pin the invariant
+    // rather than the arithmetic, since the only thing that matters is that it stays in range.
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    for (const nowMs of [-1, -1000, -86_400_000, -86_400_000 * 3 - 43_200_000]) {
+      const allowance = getAdbPacedAllowance(nowMs);
+      expect(allowance, `nowMs=${nowMs}`).toBeGreaterThanOrEqual(1);
+      expect(allowance, `nowMs=${nowMs}`).toBeLessThanOrEqual(700);
+    }
+  });
+
+  it('treats an explicit 0 budget as an absolute kill switch, and a garbage budget as the 400 default', () => {
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '0';
+    expect(getAdbPacedAllowance(atUtc(12))).toBe(0);
+    expect(isAdbOrganicRefreshGated(atUtc(12))).toBe(true);
+    // Even with pacing switched off, an explicit 0 must still mean STOP — this is metered money.
+    process.env.AERODATABOX_BUDGET_PACING = '0';
+    expect(isAdbOrganicRefreshGated(atUtc(12))).toBe(true);
+
+    // Garbage is NOT "allow nothing": it falls back to the 400 default and gets that budget's paced
+    // line (floor(400 x 13/24) = 216 at noon). Failing closed on a typo would take the boards down;
+    // the explicit 0 above is the deliberate way to stop spend.
+    delete process.env.AERODATABOX_BUDGET_PACING;
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = 'abc';
+    expect(getAdbPacedAllowance(atUtc(12))).toBe(216);
+    expect(isAdbOrganicRefreshGated(atUtc(12))).toBe(false);
+  });
+
+  it('gates the organic path once today’s spend passes the paced line, not just the daily budget', async () => {
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    const noonAllowance = 379; // floor(700 x 13/24)
+    await recordAdbUnits(noonAllowance - 4);
+    expect(isAdbOrganicRefreshGated(atUtc(12))).toBe(false);
+    await recordAdbUnits(4);
+    expect(isAdbOrganicRefreshGated(atUtc(12))).toBe(true);
+    // Same spend is still WELL under the absolute daily budget — pacing is what's holding it back,
+    // and the units it withheld are what the 18:00–24:00 UTC peak gets to spend.
+    expect(isAdbBudgetExhausted()).toBe(false);
+    // ...and later in the day that same spend is under the line again, so refreshes resume.
+    expect(isAdbOrganicRefreshGated(atUtc(18))).toBe(false);
+  });
+
+  it('AERODATABOX_BUDGET_PACING off-words restore the flat first-come-first-served gate', async () => {
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    await recordAdbUnits(300); // way past the 00:30 UTC paced line, way under the daily budget
+    expect(isAdbOrganicRefreshGated(atUtc(0, 30))).toBe(true);
+    // Trimmed + lowercased, and the same off-words the rest of the codebase honours: an env value
+    // pasted with a stray space, or written 'false', must do what the operator plainly meant.
+    for (const off of ['0', 'off', 'OFF', ' off ', 'false', 'FALSE', 'no']) {
+      process.env.AERODATABOX_BUDGET_PACING = off;
+      expect(isAdbBudgetPacingDisabled(), `pacing=${JSON.stringify(off)}`).toBe(true);
+      expect(isAdbOrganicRefreshGated(atUtc(0, 30)), `pacing=${JSON.stringify(off)}`).toBe(false);
+    }
+    // Anything else — including the affirmative values and an unset/blank var — keeps pacing ON.
+    for (const on of ['1', 'on', 'true', 'yes', '', '  ']) {
+      process.env.AERODATABOX_BUDGET_PACING = on;
+      expect(isAdbBudgetPacingDisabled(), `pacing=${JSON.stringify(on)}`).toBe(false);
+      expect(isAdbOrganicRefreshGated(atUtc(0, 30)), `pacing=${JSON.stringify(on)}`).toBe(true);
+    }
+    delete process.env.AERODATABOX_BUDGET_PACING;
+    expect(isAdbBudgetPacingDisabled()).toBe(false);
+
+    // Disabling pacing does not disable the absolute budget.
+    process.env.AERODATABOX_BUDGET_PACING = 'off';
+    await recordAdbUnits(400);
+    expect(isAdbOrganicRefreshGated(atUtc(0, 30))).toBe(true);
+  });
+
+  it('warns ONCE per UTC day when the budget cannot fund the warm cron plus organic refreshes', async () => {
+    // The hourly warm cron bypasses the organic gate but records ~384 units/day against the SAME
+    // counter the paced line measures, so the code default of 400 leaves ~16 organic units for the
+    // whole day — the boards do not error, they just silently stop refreshing outside the cron ring.
+    // That is a config mistake nobody would ever see without this warning.
+    vi.useFakeTimers({ now: new Date('2026-08-04T09:00:00Z'), toFake: ['Date'] });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const starveWarns = () => warnSpy.mock.calls.filter((c) => /cannot fund the warm cron/.test(String(c[0])));
+
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '400';
+    isAdbOrganicRefreshGated(Date.now());
+    isAdbOrganicRefreshGated(Date.now());
+    expect(starveWarns()).toHaveLength(1);
+    expect(String(starveWarns()[0][0])).toMatch(/~384 units\/day/);
+    expect(String(starveWarns()[0][0])).toMatch(/production runs 700/);
+
+    // A budget with real headroom is silent — this must not become background noise for a healthy
+    // deployment.
+    __resetAdbSpendForTests();
+    warnSpy.mockClear();
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    isAdbOrganicRefreshGated(Date.now());
+    expect(starveWarns()).toHaveLength(0);
+
+    // The explicit-0 kill switch is a deliberate operator choice, not a starved budget.
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '0';
+    isAdbOrganicRefreshGated(Date.now());
+    expect(starveWarns()).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
+  it('reopens the gate at UTC midnight: both the counter AND the paced line reset', async () => {
+    // The gate reads two day-scoped values. If only one rolled over, a day that ended gated would
+    // start the next one gated too — the frozen-board failure this whole pass exists to prevent.
+    vi.useFakeTimers({ now: new Date('2026-08-04T23:59:00Z'), toFake: ['Date'] });
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    await recordAdbUnits(700);
+    // After 23:00 UTC the paced line has reached the full budget, so late-day gating is the
+    // absolute ceiling doing the work — pacing neither adds nor removes headroom here.
+    expect(getAdbPacedAllowance(Date.now())).toBe(700);
+    expect(isAdbOrganicRefreshGated(Date.now())).toBe(true);
+
+    vi.setSystemTime(new Date('2026-08-05T00:01:00Z'));
+    expect(getAdbUnitsToday()).toBe(0);
+    // The line resets to the head-start slice, not the full budget — the new day is paced too.
+    expect(getAdbPacedAllowance(Date.now())).toBe(29);
+    expect(isAdbOrganicRefreshGated(Date.now())).toBe(false);
+    vi.useRealTimers();
+  });
+});
+
 describe('fetchViaAeroDataBox budget enforcement', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -160,8 +328,10 @@ describe('fetchViaAeroDataBox budget enforcement', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     delete process.env.AERODATABOX_API_KEY;
     delete process.env.AERODATABOX_DAILY_UNIT_BUDGET;
+    delete process.env.AERODATABOX_BUDGET_PACING;
     delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
     __resetAdbSpendForTests();
   });
@@ -188,24 +358,85 @@ describe('fetchViaAeroDataBox budget enforcement', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('logs the budget-exhausted warning at most ONCE per UTC day (no per-request log spam)', async () => {
+  it('logs the organic gate warning at most ONCE per UTC hour (no per-request log spam)', async () => {
     // The warning previously fired on EVERY gated organic request — dozens/hour for ~11h/day,
-    // burying genuine warnings and inflating log-query latency. It must throttle to once per
-    // instance per UTC day (reset here so prior exhausted-path tests don't consume the one allowance).
+    // burying genuine warnings and inflating log-query latency. It throttles to once per instance
+    // per UTC HOUR: the paced gate is episodic (spend crosses the line, the line catches up, spend
+    // crosses again), so a once-per-DAY latch would report the morning episode and swallow every
+    // afternoon one. Reset here so prior gated-path tests don't consume this hour's allowance.
+    vi.useFakeTimers({ now: new Date('2026-08-04T14:20:00Z'), toFake: ['Date'] });
     __resetScheduleWarnsForTests();
     await recordAdbUnits(400);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false, status: 500, headers: { get: () => null }, json: async () => ({}), text: async () => '',
     });
+    const gateWarns = () => warnSpy.mock.calls.filter((c) => /organic budget gate/.test(String(c[0])));
 
     const ts = Math.floor(Date.now() / 1000);
     await fetchViaAeroDataBox('ORD', 'departures', ts, 5000);
     await fetchViaAeroDataBox('SFO', 'arrivals', ts, 5000);
     await fetchViaAeroDataBox('DEN', 'departures', ts, 5000);
 
-    const budgetWarns = warnSpy.mock.calls.filter((c) => /daily unit budget exhausted/.test(String(c[0])));
-    expect(budgetWarns).toHaveLength(1);
+    expect(gateWarns()).toHaveLength(1);
+    // The warn must name the PACED line, not just the budget — "400/400" would read as
+    // "we spent the whole day's money" even when the gate tripped at 09:00 UTC on 160 paced units.
+    expect(String(gateWarns()[0][0])).toMatch(/paced allowance \d+ \(budget \d+\/day\)/);
+
+    // Still the same hour: silent.
+    vi.setSystemTime(new Date('2026-08-04T14:59:00Z'));
+    await fetchViaAeroDataBox('IAH', 'departures', ts, 5000);
+    expect(gateWarns()).toHaveLength(1);
+
+    // Next hour is a NEW episode and must be visible — the whole reason this is hourly.
+    vi.setSystemTime(new Date('2026-08-04T15:00:00Z'));
+    await fetchViaAeroDataBox('IAH', 'departures', ts, 5000);
+    expect(gateWarns()).toHaveLength(2);
+  });
+
+  it('names the ABSOLUTE budget (not a phantom paced line) in the warn when pacing is disabled', async () => {
+    // With AERODATABOX_BUDGET_PACING off the gate IS the flat daily budget. Printing a paced
+    // allowance nobody is enforcing sends whoever reads the log chasing a line that doesn't exist.
+    vi.useFakeTimers({ now: new Date('2026-08-04T09:00:00Z'), toFake: ['Date'] });
+    __resetScheduleWarnsForTests();
+    process.env.AERODATABOX_BUDGET_PACING = 'off';
+    await recordAdbUnits(400);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 500, headers: { get: () => null }, json: async () => ({}), text: async () => '',
+    });
+
+    const result = await fetchViaAeroDataBox('ORD', 'departures', Math.floor(Date.now() / 1000), 5000);
+    expect(result).toBeNull();
+    const messages = warnSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(messages).toMatch(/daily unit budget exhausted \(400\/400\); pacing disabled/);
+    expect(messages).not.toMatch(/paced allowance/);
+    delete process.env.AERODATABOX_BUDGET_PACING;
+  });
+
+  it('gates an organic fetch that is inside the daily budget but ahead of the paced line', async () => {
+    // 00:30 UTC = 7:30 PM CDT, the hour the old flat gate let the evening crowd eat the whole day.
+    vi.useFakeTimers({ now: new Date('2026-08-04T00:30:00Z'), toFake: ['Date'] });
+    __resetScheduleWarnsForTests();
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    await recordAdbUnits(300); // 43% of the day's money, 30 minutes into the day
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true, status: 200, headers: { get: () => null }, json: async () => ({ departures: [] }),
+    });
+
+    const result = await fetchViaAeroDataBox('ORD', 'departures', Math.floor(Date.now() / 1000), 5000);
+    expect(result).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // The absolute budget is nowhere near gone — those units are being saved for the peak.
+    expect(isAdbBudgetExhausted()).toBe(false);
+
+    // Cron warms must still get through: they are the path that keeps boards from freezing.
+    const warm = await fetchViaAeroDataBox('ORD', 'departures', Math.floor(Date.now() / 1000), 5000, {
+      bypassDailyBudget: true,
+    });
+    expect(warm).not.toBeNull();
+    expect(fetchSpy).toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it('bypassDailyBudget (authorized cron warms, ring-bounded at ~288/day) skips the gate but still records spend', async () => {

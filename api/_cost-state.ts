@@ -133,6 +133,88 @@ export function isAdbBudgetExhausted(): boolean {
   return getAdbUnitsToday() >= getAdbDailyUnitBudget();
 }
 
+// ── Pacing the organic share of that budget across the UTC day ──
+//
+// The budget resets at UTC midnight, which is 7 PM CDT — the middle of the US evening. A flat
+// first-come-first-served gate therefore hands the whole day's pool to whoever asks first: US
+// evening traffic plus the overnight warm crons (~384 units/day, recorded against the organic pool
+// even though the cron path bypasses this gate) drain it by ~18:00 UTC, leaving ZERO organic units
+// for 18:00–24:00 UTC — 1 PM to 7 PM CDT, the exact hours delay drama peaks. Observed Aug 4 2026:
+// 732/700 units spent by 21:00 UTC with boards frozen at warm-ring cadence since "1:02 PM CDT
+// (3h old)".
+//
+// Linear pacing gives each moment of the UTC day only its pro-rated slice, so organic refreshes
+// trickle all day instead of binging early and starving the peak. The 1h head start means the pool
+// is never at literally zero right after rollover (~budget/24 is available immediately), which
+// keeps the first evening hour usable. The TOTAL daily ceiling is unchanged — at 23:00 UTC the
+// allowance is the full budget — and cron warms are unaffected (they take the bypassDailyBudget
+// path with its own 3x absolute ceiling).
+
+/** Units the organic path is allowed to have spent by `nowMs` within the current UTC day. */
+export function getAdbPacedAllowance(nowMs = Date.now()): number {
+  const budget = getAdbDailyUnitBudget();
+  if (budget <= 0) return 0;
+  const DAY_MS = 86_400_000;
+  const HEAD_START_MS = 3_600_000;
+  // Modulo twice so a negative epoch (pre-1970 clock skew) still lands inside the day.
+  const msIntoDay = ((nowMs % DAY_MS) + DAY_MS) % DAY_MS;
+  // Floor at 1 for any non-zero budget. floor(budget × 1h/24h) is 0 for every budget under 24, so a
+  // small-but-deliberate budget (say 12 units/day) would be gated to a complete standstill right
+  // after rollover — the opposite of the "never literally zero" promise above, and a silent full
+  // stop for exactly the operators who tuned the knob down on purpose. Only an explicit budget of 0
+  // — the kill switch, already returned above — is allowed to hand out nothing.
+  return Math.max(1, Math.min(budget, Math.floor((budget * (msIntoDay + HEAD_START_MS)) / DAY_MS)));
+}
+
+/**
+ * True when AERODATABOX_BUDGET_PACING is explicitly switched off, restoring the flat
+ * first-come-first-served gate. Trimmed + lowercased and accepting the same off-words as the rest
+ * of the codebase (see _official-fr24.ts), so a value pasted with stray whitespace or written as
+ * 'false' still does what the operator plainly meant.
+ */
+export function isAdbBudgetPacingDisabled(): boolean {
+  const setting = String(process.env.AERODATABOX_BUDGET_PACING ?? '').trim().toLowerCase();
+  return setting === '0' || setting === 'off' || setting === 'false' || setting === 'no';
+}
+
+// The hourly warm cron BYPASSES the organic gate but still records its units against this same
+// counter (~384/day at the default stride: 96 boards x 4 units). So the pool the organic path is
+// paced against is really "budget minus whatever the cron already booked" — and at the code default
+// of 400 that leaves ~16 units for the entire day. The boards do not break; they just quietly stop
+// refreshing outside the cron's ~6h ring, which reads as "the data is old" rather than "the budget
+// is misconfigured". Prod runs 700 for exactly this reason. One warn per instance per UTC day: this
+// is a config mistake that will not fix itself, and a per-call warn would drown the gate's own
+// (already hourly-throttled) log line.
+const ADB_CRON_UNITS_PER_DAY = 384;
+const ADB_MIN_WORKABLE_BUDGET = 450;
+let warnedStarvedBudgetDay = '';
+function warnIfBudgetStarvesOrganic(budget: number): void {
+  if (budget <= 0 || budget > ADB_MIN_WORKABLE_BUDGET) return;
+  const today = utcToday();
+  if (warnedStarvedBudgetDay === today) return;
+  warnedStarvedBudgetDay = today;
+  console.warn(
+    `AERODATABOX_DAILY_UNIT_BUDGET=${budget} cannot fund the warm cron AND organic refreshes: the ` +
+    `hourly warm cron alone consumes ~${ADB_CRON_UNITS_PER_DAY} units/day of this shared budget, so ` +
+    `organic refreshes will be starved from the start of the day. Raise it (production runs 700).`
+  );
+}
+
+/**
+ * True when the ORGANIC path should stop calling the provider right now — either the absolute
+ * daily budget is gone or today's spend has run ahead of its paced allowance. Sync; hot-path safe.
+ */
+export function isAdbOrganicRefreshGated(nowMs = Date.now()): boolean {
+  const budget = getAdbDailyUnitBudget();
+  warnIfBudgetStarvesOrganic(budget);
+  // The explicit-0 kill switch is absolute and must never be softened by pacing arithmetic.
+  if (budget === 0) return true;
+  // Escape hatch: AERODATABOX_BUDGET_PACING off restores the flat first-come-first-served gate
+  // (e.g. during a one-off backfill where front-loading the day is actually what you want).
+  if (isAdbBudgetPacingDisabled()) return isAdbBudgetExhausted();
+  return getAdbUnitsToday() >= getAdbPacedAllowance(nowMs);
+}
+
 /**
  * Record provider spend: bump the in-memory counter immediately, then write-through via the
  * atomic increment RPC and adopt the returned cross-instance total. Callers may ignore the
@@ -259,6 +341,7 @@ export function __resetAdbSpendForTests(): void {
   adbUnits = 0;
   lastAdbHydratedAt = 0;
   warnedAdbSchemaMissing = false;
+  warnedStarvedBudgetDay = '';
   officialFr24Day = '';
   officialFr24Calls = 0;
 }

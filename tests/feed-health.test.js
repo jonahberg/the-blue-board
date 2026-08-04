@@ -4,6 +4,7 @@ import {
   applyFeedResult,
   feedFreshness,
   nextFeedRetryDelay,
+  parseStaleHeader,
   FEED_FRESH_MS,
   FEED_RETRY_DELAYS_MS,
 } from '../src/lib/feed-health.js';
@@ -131,6 +132,26 @@ describe('feedFreshness — chip keyed to payload age, not transport signals', (
   it('threshold sits in the sensible 2-3 minute band', () => {
     expect(FEED_FRESH_MS).toBeGreaterThanOrEqual(120000);
     expect(FEED_FRESH_MS).toBeLessThanOrEqual(180000);
+  });
+});
+
+// Aug 4 2026: /api/fr24-feed can answer a 200 from ITS last-known-good payload when upstream fails,
+// tagging it X-BB-Feed-Stale: <seconds>. The poll loop backdates lastGoodFeedTs by that age so the
+// chip keeps telling the truth; anything that is not a positive number must read as "not stale".
+describe('parseStaleHeader — server stale-serve age', () => {
+  it('converts a positive seconds header to milliseconds', () => {
+    expect(parseStaleHeader('40')).toBe(40000);
+    expect(parseStaleHeader('180')).toBe(180000);
+    expect(parseStaleHeader(1)).toBe(1000);
+  });
+
+  it('is 0 for a missing, blank, zero, negative, or unparseable header', () => {
+    expect(parseStaleHeader(null)).toBe(0);        // headers.get() on an absent header
+    expect(parseStaleHeader(undefined)).toBe(0);
+    expect(parseStaleHeader('')).toBe(0);          // Number('') is 0 — must not read as "stale by 0"
+    expect(parseStaleHeader('0')).toBe(0);
+    expect(parseStaleHeader('-5')).toBe(0);
+    expect(parseStaleHeader('abc')).toBe(0);
   });
 });
 

@@ -2,7 +2,7 @@ import { waitUntil } from '@vercel/functions';
 import { HUB_TZ } from './irops.js';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
 import { getHubTerminal } from './_hubs.js';
-import { hydrateAdbSpend, isAdbBudgetExhausted, recordAdbUnits, getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
+import { hydrateAdbSpend, isAdbOrganicRefreshGated, isAdbBudgetPacingDisabled, getAdbPacedAllowance, recordAdbUnits, getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
 
 const AERODATABOX_BASE_URL = 'https://prod.api.market/api/v1/aedbx/aerodatabox';
 // Each FIDS window request is billed at 2 units by the provider (1 board = 2 windows = 4 units).
@@ -12,14 +12,18 @@ const ADB_UNITS_PER_REQUEST = 2;
 // spend far below this.
 const ADB_BYPASS_CEILING_MULTIPLIER = 3;
 
-// The "budget exhausted" warning previously fired on every gated organic request — dozens/hour for
-// ~11h/day once the budget trips, burying genuine warnings and inflating log-query latency. Throttle
-// it to once per instance per UTC day (mirrors warnedAdbSchemaMissing in _cost-state.ts).
-let lastBudgetWarnDay = '';
+// The gate warning previously fired on every gated organic request — dozens/hour for ~11h/day once
+// the budget tripped, burying genuine warnings and inflating log-query latency. Throttle it, but per
+// UTC HOUR rather than per UTC day: unlike the old flat budget (trips once, stays tripped), the
+// PACED gate is episodic by construction — spend crosses the pro-rated line, the line catches up,
+// spend crosses it again — so a once-per-day latch would report the 09:00 UTC episode and silently
+// swallow every afternoon one, hiding exactly the peak-hours behaviour this pacing was built for.
+// Hourly caps the volume at ≤24 lines per instance per day while preserving the shape of the day.
+let lastGateWarnHour = '';
 
-/** Test-only: clear the once-per-day warn throttle so per-test assertions start from a clean slate. */
+/** Test-only: clear the once-per-hour warn throttle so per-test assertions start from a clean slate. */
 export function __resetScheduleWarnsForTests(): void {
-  lastBudgetWarnDay = '';
+  lastGateWarnHour = '';
 }
 
 // Persist the spend write even if Vercel freezes the lambda right after the response is sent —
@@ -627,14 +631,23 @@ export async function fetchViaAeroDataBox(
       );
       return null;
     }
-  } else if (isAdbBudgetExhausted()) {
-    // Throttle: once the day's budget trips, every organic board load would otherwise log this —
-    // emit it once per instance per UTC day so the signal isn't drowned in its own repetition.
-    const today = new Date().toISOString().slice(0, 10);
-    if (lastBudgetWarnDay !== today) {
-      lastBudgetWarnDay = today;
+  } else if (isAdbOrganicRefreshGated()) {
+    // Paced gate (see _cost-state.ts): organic spend is capped at the day's pro-rated allowance,
+    // not just the absolute daily budget, so the US afternoon peak still has units left after the
+    // 7 PM CDT (UTC midnight) rollover crowd and the overnight warms.
+    // Throttle: once the gate trips, every organic board load would otherwise log this — emit it
+    // at most once per instance per UTC HOUR (see lastGateWarnHour above) so the signal isn't
+    // drowned in its own repetition without hiding the later episodes of a paced day.
+    const nowHour = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
+    if (lastGateWarnHour !== nowHour) {
+      lastGateWarnHour = nowHour;
+      // Report the rule that ACTUALLY tripped. With pacing switched off the gate is the flat
+      // absolute budget, and printing a paced allowance nobody is enforcing sends whoever reads
+      // this log chasing a line that does not exist.
       console.warn(
-        `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); skipping further organic schedule fetches until next UTC day`
+        isAdbBudgetPacingDisabled()
+          ? `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); pacing disabled; skipping organic schedule fetch`
+          : `AeroDataBox organic budget gate: ${getAdbUnitsToday()} units >= paced allowance ${getAdbPacedAllowance()} (budget ${getAdbDailyUnitBudget()}/day); skipping organic schedule fetch (cron warms unaffected)`
       );
     }
     return null;

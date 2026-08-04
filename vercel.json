@@ -66,6 +66,7 @@
       "source": "/api/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "https://theblueboard.co" },
+        { "key": "Access-Control-Expose-Headers", "value": "X-BB-Feed-Stale" },
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]
     },

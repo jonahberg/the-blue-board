@@ -10,7 +10,7 @@
 - [ ] CI lint: ban inline `<script>` in public/index.html, ban raw `innerHTML` with template-literal interpolation, ban inline event handlers (`on*=` attributes).
 - [ ] Tighten CSP: drop `style-src 'unsafe-inline'` after inline-style audit.
 - [ ] Cost alerting: Anthropic + FR24 spend anomaly detection via Vercel log drain.
-- [ ] Circuit breakers / graceful degradation for FR24, Anthropic, Resend, Supabase. (partial: 60s negative cache + 4s timeout shipped for `api/predict-flight.ts` and `api/check-flight.ts` in v1.5.8)
+- [ ] Circuit breakers / graceful degradation for FR24, Anthropic, Resend, Supabase. (partial: 60s negative cache + 4s timeout shipped for `api/predict-flight.ts` and `api/check-flight.ts` in v1.5.8; FR24 live-feed last-known-good stale-serve + delay-explain gateway-403 circuit shipped in v1.7.14)
 - [ ] Feature kill-switches for non-core (waitlist, news-notify, delay-explain) via env flags.
 
 ### Security hygiene (backlog)

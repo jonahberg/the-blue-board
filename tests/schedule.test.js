@@ -15,7 +15,7 @@ vi.mock('@vercel/functions', () => vercelFunctionMocks);
 import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker, __resetScheduleCachesForTests, shouldEnableProviderForBackgroundRefresh } from '../api/schedule.js';
 import { getStartOfDayForHub } from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
-import { recordAdbUnits } from '../api/_cost-state.js';
+import { recordAdbUnits, isAdbOrganicRefreshGated, __resetAdbSpendForTests } from '../api/_cost-state.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { classifySchedStatus } from '../src/lib/schedule-status.js';
 
@@ -2361,6 +2361,125 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
       query: { ...baseQuery(), forceRefresh: '1' },
     }, createRes());
     expect(fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url))).length).toBeGreaterThan(0);
+  });
+});
+
+// The paced organic gate (api/_cost-state.ts) makes fetchViaAeroDataBox return null for many more
+// hours/day than the old flat budget ever did. Provider-mode's fallthrough answers a null provider
+// by reaching for the PAID FR24 official API — whose only daily ceiling is per-instance — so without
+// a guard the pacing "spend guard" would quietly MOVE organic traffic onto a costlier provider for
+// most of the day. That is the opposite of what it was built to do.
+describe('paced provider gate must not spill onto the paid official API', () => {
+  beforeEach(() => {
+    resetScheduleTestState();
+    resetFallbackBreaker(); // also clears the ADB counters via __resetAdbSpendForTests
+    __resetAdbSpendForTests();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    // 00:30 UTC = 7:30 PM CDT: half an hour into the day, so the paced line is tiny while the
+    // absolute budget is nearly untouched — precisely the state that only pacing can be gating.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-04T00:30:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete process.env.AERODATABOX_DAILY_UNIT_BUDGET;
+    cleanupScheduleTestEnv();
+  });
+
+  // Provider-mode board whose provider call is gated, so the fallthrough decides everything.
+  async function loadGatedBoard() {
+    const ts = getStartOfHubDay('IAH', 0);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('fr24api.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{
+              fr24_id: 'x1', flight: 'UA795', callsign: 'UAL795', operating_as: 'UAL', type: 'A21N', reg: 'N1',
+              orig_icao: 'KIAH', datetime_takeoff: new Date((ts + 9 * 3600) * 1000).toISOString().replace('.000Z', 'Z'),
+              dest_icao: 'KEWR', dest_icao_actual: 'KEWR', datetime_landed: new Date((ts + 12 * 3600) * 1000).toISOString().replace('.000Z', 'Z'),
+              flight_ended: true,
+            }],
+          }),
+        };
+      }
+      if (urlStr.includes('data-cloud.flightradar24.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            full_count: 1, version: 4,
+            'live-1': ['B1', 29.98, -95.34, 270, 35000, 430, '', '', 'B38M', 'N2', ts + 14 * 3600, 'IAH', 'SFO', 'UA999', 0, -500, 'UAL999', '', 'UAL'],
+          }),
+        };
+      }
+      return { ok: false, status: 403, text: async () => 'blocked', headers: { get: () => null } };
+    });
+
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'IAH', dir: 'departures', timestamp: String(ts) },
+    }, res);
+
+    const calledHost = (needle) => fetchSpy.mock.calls.some((c) => String(c[0]).includes(needle));
+    return { res, fetchSpy, calledHost };
+  }
+
+  it('keeps the paid official API OFF while only pacing is holding the provider back', async () => {
+    await recordAdbUnits(300); // way past the 00:30 paced line (43), way under the 700 budget
+
+    const { res, calledHost } = await loadGatedBoard();
+
+    expect(res.statusCode).toBe(200);
+    // The provider really was gated (setup sanity — otherwise the assertion below is vacuous)...
+    expect(calledHost('aedbx/aerodatabox')).toBe(false);
+    // ...and the gate did NOT hand the traffic to the costlier provider.
+    expect(calledHost('fr24api.flightradar24.com')).toBe(false);
+    // The FREE live-feed rescue still runs, so the board degrades gracefully rather than going dark.
+    expect(calledHost('data-cloud.flightradar24.com')).toBe(true);
+  });
+
+  it('still allows the official API once the budget is TRULY exhausted (legacy behaviour preserved)', async () => {
+    await recordAdbUnits(700); // the absolute daily budget, not merely the paced line
+
+    const { res, calledHost } = await loadGatedBoard();
+
+    expect(res.statusCode).toBe(200);
+    expect(calledHost('aedbx/aerodatabox')).toBe(false);
+    // Exhaustion is the pre-existing state this fallthrough was written for; official stays
+    // reachable there, bounded by its own 402 block / 15-min breaker / daily call cap.
+    expect(calledHost('fr24api.flightradar24.com')).toBe(true);
+  });
+
+  it('keeps the official rescue AVAILABLE when the gate was open and the provider merely FAILED', async () => {
+    // The gate has to be read BEFORE the provider attempt, because the attempt moves the very inputs
+    // it is read from: fetchViaAeroDataBox bills its units before each HTTP call, so a call that then
+    // fails can push spend past the paced line and make the post-hoc check say "pacing is gating us"
+    // — suppressing the healthy paid rescue for a failure pacing had nothing to do with. 40 units at
+    // the 00:30 line of 43 is exactly that knife edge: open on entry, closed by the failed attempt's
+    // own 4 units.
+    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0'; // both windows fail; don't burn 1.5s waiting
+    await recordAdbUnits(40);
+    expect(isAdbOrganicRefreshGated(Date.now())).toBe(false); // setup sanity: the gate is OPEN
+
+    // loadGatedBoard's catch-all answers the AeroDataBox host with a 403, so the provider is really
+    // attempted and really fails.
+    const { res, calledHost } = await loadGatedBoard();
+
+    expect(res.statusCode).toBe(200);
+    expect(calledHost('aedbx/aerodatabox')).toBe(true);
+    // The attempt's own spend closed the gate behind it — which is precisely what must NOT decide
+    // this. Legacy behaviour (provider down => official rescue) is preserved.
+    expect(isAdbOrganicRefreshGated(Date.now())).toBe(true);
+    expect(calledHost('fr24api.flightradar24.com')).toBe(true);
+    // (cleanupScheduleTestEnv in afterEach clears AERODATABOX_INTER_WINDOW_DELAY_MS)
   });
 });
 

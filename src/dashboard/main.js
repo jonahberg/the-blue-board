@@ -12,7 +12,7 @@ import { getStartOfHubDay, getHubDayLabel, defaultSchedDayOffset } from '../lib/
 import { classifyConnection, MIN_CONNECTION_TIMES, TERMINAL_WALK_TIMES } from '../lib/connection-risk.js';
 import { formatDataAge, dataAgeSeverity } from '../lib/data-age.js';
 import { formatTimeWithTz } from '../lib/time-format.js';
-import { parseFr24Feed, applyFeedResult, feedFreshness, nextFeedRetryDelay } from '../lib/feed-health.js';
+import { parseFr24Feed, applyFeedResult, feedFreshness, nextFeedRetryDelay, parseStaleHeader } from '../lib/feed-health.js';
 import { formatDelayMinutes, delayColorVar } from '../lib/delay-format.js';
 import { firstFutureIndex, nowDividerIndex, effectiveRowTime } from '../lib/board-now.js';
 import { deriveOpsHealth, hubProgramMarker } from '../lib/ops-health.js';
@@ -1126,18 +1126,47 @@ async function refreshFlights() {
     const result = applyFeedResult(allFlights, parseFr24Feed(data));
     if (!result.ok) throw new Error('empty feed (zero aircraft in payload)');
 
-    // Healthy live feed: commit the new flights and show LIVE.
+    // Commit the flights either way: the payload is real whether it came from a live upstream
+    // fetch or the server's bounded stale-serve.
     allFlights = result.flights;
     recordRegSightings(allFlights);
-    lastGoodFeedTs = Date.now();
-    feedRetryAttempt = 0;
-    const dot = document.getElementById('status-dot');
-    dot.className = 'status-dot live';
-    dot.style.background = ''; // clear the yellow inline override a prior failure set — dot and label must agree
-    document.getElementById('status-text').textContent = 'LIVE';
-    document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights';
     const errOverlay = document.getElementById('map-error-overlay');
     if (errOverlay) errOverlay.remove();
+
+    // X-BB-Feed-Stale (seconds) marks a 200 the server built from ITS last-known-good payload
+    // because upstream failed (api/fr24-feed.ts). Treating that as a clean poll would lie twice:
+    // lastGoodFeedTs = now makes the chip claim LIVE off data already up to FEED_FRESH_MS old, and
+    // zeroing feedRetryAttempt disarms the fast-retry ladder at the exact moment upstream is known
+    // broken. Instead: backdate the timestamp by the reported staleness and stay on the failure
+    // cadence, so the client keeps probing until it gets a genuinely fresh feed.
+    const staleMs = parseStaleHeader(res.headers.get('X-BB-Feed-Stale'));
+    const dot = document.getElementById('status-dot');
+    if (staleMs > 0) {
+      lastGoodFeedTs = Date.now() - staleMs;
+      feedFailed = true; // keeps the finally block on the 5s → 10s → 20s → 30s retry ladder
+      // Chip from the same age-keyed rule the catch path uses. The server bounds staleMs at
+      // FEED_FRESH_MS, so a LIVE reading here is exactly as honest as a failed poll against
+      // still-fresh data — never an overclaim.
+      if (feedFreshness(staleMs) === 'live') {
+        dot.className = 'status-dot live';
+        dot.style.background = '';
+        document.getElementById('status-text').textContent = 'LIVE';
+        document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights';
+      } else {
+        dot.className = 'status-dot';
+        dot.style.background = '#EAB308';
+        document.getElementById('status-text').textContent = 'STALE';
+        document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights (stale)';
+      }
+    } else {
+      // Healthy live feed: commit the new flights and show LIVE.
+      lastGoodFeedTs = Date.now();
+      feedRetryAttempt = 0;
+      dot.className = 'status-dot live';
+      dot.style.background = ''; // clear the yellow inline override a prior failure set — dot and label must agree
+      document.getElementById('status-text').textContent = 'LIVE';
+      document.getElementById('header-flight-count').textContent = '· ' + allFlights.length + ' flights';
+    }
   } catch (e) {
     // Shared failure path for zero-flight 200s, 5xx (incl. the server's new empty-upstream 503),
     // and network errors. Never wipes allFlights; a fast retry is scheduled in finally.
