@@ -22,24 +22,38 @@ function makeReq(overrides = {}) {
 
 // Mirrors the live upstream: totalCount is the WHOLE tracked fleet (not the Starlink count),
 // fleetStats has no `combined`, departure_time is a UNIX-seconds integer, operator/type casing
-// is inconsistent.
+// is inconsistent. Sized to the live equipped count (513 on 2026-08-11) so it clears the §05
+// absolute floor; the two hand-written aircraft stay at indexes 0 and 1 for the normalisation
+// assertions, and fleetStats (170 mainline + 343 express) sums to the record count.
 function mockUpstreamResponse() {
+  const starlinkPlanes = [
+    { TailNumber: 'N37559', fleet: 'mainline', Aircraft: 'Boeing 737-824', OperatedBy: 'United Airlines', DateFound: '2020-01-01', WiFi: 'Starlink' },
+    { TailNumber: 'N77296', fleet: 'express', Aircraft: 'Bombardier CRJ-550', OperatedBy: 'Skywest dba UAX', DateFound: '2020-01-01', WiFi: 'StrLnk' },
+  ];
+  while (starlinkPlanes.length < 513) {
+    const i = starlinkPlanes.length;
+    starlinkPlanes.push({
+      TailNumber: `N${20000 + i}`,
+      fleet: i < 170 ? 'mainline' : 'express',
+      Aircraft: 'Boeing 737-824',
+      OperatedBy: 'United Airlines',
+      DateFound: '2020-01-01',
+      WiFi: 'Starlink',
+    });
+  }
   return {
-    starlinkPlanes: [
-      { TailNumber: 'N37559', fleet: 'mainline', Aircraft: 'Boeing 737-824', OperatedBy: 'United Airlines', DateFound: '2020-01-01', WiFi: 'Starlink' },
-      { TailNumber: 'N77296', fleet: 'express', Aircraft: 'Bombardier CRJ-550', OperatedBy: 'Skywest dba UAX', DateFound: '2020-01-01', WiFi: 'StrLnk' },
-    ],
+    starlinkPlanes,
     totalCount: 1781,
     fleetStats: {
-      mainline: { starlink: 51, total: 1122 },
-      express: { starlink: 320, total: 659 },
+      mainline: { starlink: 170, total: 1122 },
+      express: { starlink: 343, total: 659 },
     },
     flightsByTail: {
       N37559: [
         { flight_number: 'UA1234', departure_airport: 'ORD', arrival_airport: 'LAX', departure_time: 1780270800, arrival_time: 1780280100, airline: 'UA' },
       ],
     },
-    lastUpdated: '2026-05-31T23:02:04.479Z',
+    lastUpdated: new Date().toISOString(),
   };
 }
 
@@ -118,7 +132,7 @@ describe('starlink-data API', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['X-Starlink-Source']).toBe('upstream');
-    expect(res.body.aircraft).toHaveLength(2);
+    expect(res.body.aircraft).toHaveLength(513);
     expect(res.body.aircraft[0].tail).toBe('N37559');
     expect(res.body.aircraft[0].fleet).toBe('Mainline');
     expect(res.body.aircraft[1].fleet).toBe('Express');
@@ -126,10 +140,10 @@ describe('starlink-data API', () => {
     expect(res.body.aircraft[0].type).toBe('737-800');   // from "Boeing 737-824"
     expect(res.body.aircraft[1].type).toBe('CRJ-550');   // from "Bombardier CRJ-550"
     expect(res.body.aircraft[1].operator).toBe('SkyWest dba UAX'); // from "Skywest dba UAX"
-    expect(res.body.fleetStats.mainline).toBe(51);
-    expect(res.body.fleetStats.express).toBe(320);
+    expect(res.body.fleetStats.mainline).toBe(170);
+    expect(res.body.fleetStats.express).toBe(343);
     // The headline fix: serve the real Starlink count, NOT upstream.totalCount (1781 = whole fleet)
-    expect(res.body.totalCount).toBe(2);
+    expect(res.body.totalCount).toBe(513);
     expect(res.body.totalCount).not.toBe(1781);
 
     // Verify flight normalization: epoch → ISO string + numeric ts
@@ -212,7 +226,27 @@ describe('starlink-data API — Supabase snapshot + rate-limit branches', () => 
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['X-Starlink-Source']).toBe('upstream');
-    expect(res.body.aircraft).toHaveLength(2);
+    expect(res.body.aircraft).toHaveLength(513);
+  });
+
+  // §05 validators on the direct-fetch path: a structurally broken upstream 200 must not be
+  // served just because it parsed. The stale snapshot is better data than a 10-aircraft board.
+  it('rejects a structurally broken upstream 200 and degrades to the stale snapshot', async () => {
+    loadStarlinkSnapshot.mockResolvedValue({ refreshedAt: Date.now() - 7 * 60 * 60 * 1000, data: snapshotPayload() });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const broken = mockUpstreamResponse();
+    broken.starlinkPlanes = broken.starlinkPlanes.slice(0, 10);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => broken });
+
+    const res = createRes();
+    await handler(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['X-Starlink-Source']).toBe('supabase-stale');
+    expect(res.body.aircraft).toHaveLength(1);
+    errSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it('degrades to the stale snapshot ("supabase-stale") when the rate limiter trips', async () => {

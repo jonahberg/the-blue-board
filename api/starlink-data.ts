@@ -11,7 +11,7 @@
 import { createRequire } from 'node:module';
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
-import { normalizeStarlinkPayload, normalizeOperator, normalizeType, type StarlinkPayload } from './_starlink-normalize.js';
+import { normalizeStarlinkPayload, normalizeOperator, normalizeType, validateStarlinkPayload, type StarlinkPayload } from './_starlink-normalize.js';
 import { loadStarlinkSnapshot, type PersistedStarlinkSnapshot } from './_starlink-snapshot.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/data';
@@ -67,7 +67,7 @@ function staticPayload(): StarlinkPayload | null {
   };
 }
 
-async function fetchUpstream(): Promise<StarlinkPayload> {
+async function fetchUpstream(previousTotal?: number): Promise<StarlinkPayload> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -78,7 +78,19 @@ async function fetchUpstream(): Promise<StarlinkPayload> {
   clearTimeout(timeout);
 
   if (!resp.ok) throw new Error(`Upstream ${resp.status}`);
-  return normalizeStarlinkPayload(await resp.json());
+  const payload = normalizeStarlinkPayload(await resp.json());
+
+  // §05 validators: a parseable 200 is not proof of a usable feed. Throwing here routes a
+  // structurally broken payload into the existing degrade ladder (stale snapshot → static)
+  // instead of serving it and caching it in memory for the next 4h.
+  const validation = validateStarlinkPayload(payload, previousTotal);
+  for (const warning of validation.warnings) {
+    console.warn(`Starlink data warning: ${warning}`);
+  }
+  if (!validation.ok) {
+    throw new Error(`Upstream payload failed validation: ${validation.failures.join('; ')}`);
+  }
+  return payload;
 }
 
 function serveFresh(res: VercelResponse, payload: StarlinkPayload, source: string) {
@@ -128,7 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(429).json({ error: 'Too many requests' });
     }
 
-    inMemoryCache = await fetchUpstream();
+    inMemoryCache = await fetchUpstream(snapshot?.data.aircraft.length);
     lastFetch = Date.now();
     return serveFresh(res, inMemoryCache, 'upstream');
   } catch (err: any) {

@@ -189,3 +189,59 @@ export function normalizeStarlinkPayload(upstream: any, syncedAt: string = new D
     syncedAt,
   };
 }
+
+// §05 validators (research audit 2026-08-11): the length===0 guard the cron
+// used accepts a structurally broken feed — e.g. a TailNumber field rename
+// yields 513 records with empty tails, persists, and silently breaks all tail
+// matching while every endpoint returns green 200s. These checks reject that
+// class of payload before it can poison the durable snapshot.
+
+export const STARLINK_MIN_AIRCRAFT = 400;            // absolute floor (live count 513 on 2026-08-11)
+export const STARLINK_MIN_VALID_TAIL_RATIO = 0.98;   // catches field renames → empty tails
+export const STARLINK_MIN_RELATIVE_RATIO = 0.9;      // catches partial feeds vs the last snapshot
+export const STARLINK_STALE_MS = 6 * 60 * 60 * 1000; // upstream refreshes ~5-minutely
+
+export interface StarlinkValidation {
+  ok: boolean;
+  failures: string[];  // reject the payload
+  warnings: string[];  // log, but the payload is still the best data available
+}
+
+export function validateStarlinkPayload(payload: StarlinkPayload, previousTotal?: number): StarlinkValidation {
+  const failures: string[] = [];
+  const warnings: string[] = [];
+  const n = payload.aircraft.length;
+
+  if (n < STARLINK_MIN_AIRCRAFT) {
+    failures.push(`aircraft count ${n} below absolute floor ${STARLINK_MIN_AIRCRAFT}`);
+  }
+
+  const validTails = payload.aircraft.filter((a) => /^N\d/.test(a.tail)).length;
+  if (n > 0 && validTails / n < STARLINK_MIN_VALID_TAIL_RATIO) {
+    failures.push(`only ${validTails}/${n} aircraft carry a valid N-number tail — upstream field rename?`);
+  }
+
+  if (typeof previousTotal === 'number' && previousTotal > 0 && n < STARLINK_MIN_RELATIVE_RATIO * previousTotal) {
+    failures.push(`aircraft count ${n} under 90% of previous snapshot ${previousTotal} — partial feed?`);
+  }
+
+  const fs = payload.fleetStats;
+  if (fs) {
+    // Tolerance, not equality: upstream double-counts the MAX 9 (±1 today), and a
+    // benign small drift must not freeze snapshot updates.
+    const statsTotal = fs.mainline + fs.express;
+    const tolerance = Math.max(5, Math.round(0.02 * n));
+    if (Math.abs(statsTotal - n) > tolerance) {
+      failures.push(`fleetStats total ${statsTotal} disagrees with aircraft count ${n} beyond ±${tolerance}`);
+    }
+  } else {
+    warnings.push('fleetStats missing from upstream payload');
+  }
+
+  const updatedMs = Date.parse(payload.lastUpdated);
+  if (Number.isFinite(updatedMs) && Date.now() - updatedMs > STARLINK_STALE_MS) {
+    warnings.push(`upstream lastUpdated ${payload.lastUpdated} is over 6h old`);
+  }
+
+  return { ok: failures.length === 0, failures, warnings };
+}
