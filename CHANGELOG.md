@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.16] - 2026-08-11
+
+### Changed
+- **The public Starlink figure now refreshes at every deploy instead of being hand-synced.** The site said "425+ United aircraft (as of mid-2026)" across 7 hub pages, 3 fleet-type pages, the fleet index, the home page and both llms files while the live count had reached 513 — the number was correct when written and rotted silently, because keeping it honest meant a hand-edit in 13 places. A new build step (`scripts/refresh-starlink-facts.mjs`) fetches upstream's `fleet-summary` endpoint before Vite and Astro run, writes `src/data/starlink-live.json`, and `src/data/facts.js` derives `STARLINK_EQUIPPED`, `STARLINK_EQUIPPED_LABEL` and the new `STARLINK_AS_OF` from it. Astro-importable copy interpolates those constants; the three verbatim-copied `public/` files (`index.html`, `llms.txt`, `llms-full.txt`) keep readable committed strings in source and are stamped with the live values in `dist/` by `scripts/stamp-seo-build-date.mjs`. The prose label floors to the nearest 25 and can never print below the committed last-good value, so between deploys the copy can only be stale in the conservative direction ("500+" while reality is 520). A failed fetch, a bad payload shape, or an implausible count keeps the committed values and never fails the build; a `public/` string that drifts from the JSON's `source` block does fail it, rather than shipping a half-stamped page. (`scripts/refresh-starlink-facts.mjs`, `scripts/stamp-seo-build-date.mjs`, `src/lib/starlink-facts.js`, `src/data/starlink-live.json`, `src/data/facts.js`, `src/data/hubs/*.js`, `src/data/fleet/*.js`, `src/pages/fleet/index.astro`)
+
 ## [1.7.15] - 2026-08-11
 
 ### Fixed

@@ -1,7 +1,7 @@
 ---
 import { fleetOrder, fleetNavLabels, fleetTypes } from '../../data/fleet/index.js';
 import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
-import { STARLINK_EQUIPPED, STARLINK_EQUIPPED_LABEL, STARLINK_TARGET_2026, FLEET_DB_COUNT } from '../../data/facts.js';
+import { STARLINK_EQUIPPED, STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF, STARLINK_TARGET_2026, FLEET_DB_COUNT } from '../../data/facts.js';
 
 // Build type summaries for the grid
 const typeSummaries: Record<string, { displayName: string; count: number; role: string; bodyType: string; seatTotal: string; slug: string }> = {};
@@ -36,7 +36,7 @@ for (const fam of fleetFamilies) {
 const totalAircraft = fleetOrder.reduce((sum, key) => sum + fleetTypes[key].count, 0);
 const polarisAircraft = fleetOrder.reduce((sum, key) => sum + (fleetTypes[key].seatConfig.hasPolaris ? fleetTypes[key].count : 0), 0);
 const widebodyAircraft = fleetOrder.reduce((sum, key) => sum + (fleetTypes[key].bodyType === 'widebody' ? fleetTypes[key].count : 0), 0);
-const starlinkEquipped = STARLINK_EQUIPPED; // canonical value from src/data/facts.js (matches public/data/starlink.json seed)
+const starlinkEquipped = STARLINK_EQUIPPED; // canonical value from src/data/facts.js (refreshed at build)
 
 // Seat config table order: widebody (Polaris) first, then narrowbody
 const seatConfigOrder = [
@@ -96,7 +96,9 @@ const cabinShortLabel: Record<string, string> = {
 }
 </script>
 <!-- Schema: Dataset -->
-<script type="application/ld+json">
+<!-- set:html (not raw script text) because Astro does not evaluate expressions
+     inside <script>; the Starlink figure has to come from facts.js. -->
+<script type="application/ld+json" set:html={`
 {
   "@context": "https://schema.org",
   "@type": "Dataset",
@@ -111,10 +113,10 @@ const cabinShortLabel: Record<string, string> = {
   "variableMeasured": [
     {"@type": "PropertyValue", "name": "Aircraft Count", "value": "1078"},
     {"@type": "PropertyValue", "name": "Aircraft Types", "value": "19"},
-    {"@type": "PropertyValue", "name": "Starlink Equipped", "value": "428"}
+    {"@type": "PropertyValue", "name": "Starlink Equipped", "value": "${STARLINK_EQUIPPED}"}
   ]
 }
-</script>
+`} />
 <!-- Schema: ItemList -->
 <script type="application/ld+json" set:html={JSON.stringify({
   "@context": "https://schema.org",
@@ -130,7 +132,9 @@ const cabinShortLabel: Record<string, string> = {
   }))
 })} />
 <!-- Schema: FAQPage -->
-<script type="application/ld+json">
+<!-- set:html for the same reason as the Dataset block above: the Starlink
+     answer interpolates the build-time figure. -->
+<script type="application/ld+json" set:html={`
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
@@ -156,7 +160,7 @@ const cabinShortLabel: Record<string, string> = {
       "name": "Which United Airlines planes have Starlink WiFi?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "As of mid-2026, more than 425 United Airlines aircraft are equipped with free SpaceX Starlink satellite internet — the majority of them United Express regional jets, which led the rollout, followed by mainline Boeing 737s and, since June 2026, the first widebody Boeing 777s. United is targeting roughly 1,000 Starlink aircraft by the end of 2026. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity. Check if your specific plane has Starlink using The Blue Board's Starlink Tracker."
+        "text": "As of ${STARLINK_AS_OF}, ${STARLINK_EQUIPPED_LABEL} United Airlines aircraft are equipped with free SpaceX Starlink satellite internet — the majority of them United Express regional jets, which led the rollout, followed by mainline Boeing 737s and, since June 2026, the first widebody Boeing 777s. United is targeting roughly 1,000 Starlink aircraft by the end of 2026. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity. Check if your specific plane has Starlink using The Blue Board's Starlink Tracker."
       }
     },
     {
@@ -177,7 +181,7 @@ const cabinShortLabel: Record<string, string> = {
     }
   ]
 }
-</script>
+`} />
 
 <link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -348,7 +352,7 @@ p{margin-bottom:12px}
     <ul style="padding-left:20px;margin:0">
       <li style="margin-bottom:8px"><strong>Polaris Studio debuts on the Boeing 787-9.</strong> United's newest "Elevated" <a href="/fleet/787-9-dreamliner">787-9 Dreamliners</a> carry eight ultra-premium Polaris Studio suites — sliding privacy doors, 27-inch 4K screens, and a companion seat — giving them the highest premium-seat ratio of any U.S. widebody. In service since April 2026.</li>
       <li style="margin-bottom:8px"><strong>The Airbus A321XLR enters service.</strong> United's first long-range single-aisle jet arrived in June 2026 with 20 lie-flat Polaris suites and Premium Plus, replacing the <a href="/fleet/757-200">Boeing 757-200</a> on long, thin transatlantic routes.</li>
-      <li style="margin-bottom:8px"><strong>Free Starlink WiFi passes 425 aircraft.</strong> United Express regional jets led the rollout, mainline <a href="/fleet/737-800">737-800s</a> followed in October 2025, and the first widebody <a href="/fleet/777-200er">Boeing 777</a> went live in June 2026 — with roughly 1,000 aircraft targeted by year-end.</li>
+      <li style="margin-bottom:8px"><strong>Free Starlink WiFi passes {STARLINK_EQUIPPED_LABEL} aircraft.</strong> United Express regional jets led the rollout, mainline <a href="/fleet/737-800">737-800s</a> followed in October 2025, and the first widebody <a href="/fleet/777-200er">Boeing 777</a> went live in June 2026 — with roughly 1,000 aircraft targeted by year-end.</li>
       <li style="margin-bottom:8px"><strong>The Signature Interior nears completion.</strong> Around 70% of the mainline narrowbody fleet now has seatback 4K screens, Bluetooth audio, and larger overhead bins, with new <a href="/fleet/a321neo">A321neo</a> and 737 MAX jets arriving factory-fit.</li>
       <li><strong>United marks its 100th anniversary in 2026,</strong> tracing its roots to Varney Air Lines' first airmail flight on April 6, 1926.</li>
     </ul>
@@ -428,7 +432,7 @@ p{margin-bottom:12px}
 
   <div class="faq-item">
     <div class="faq-q">Which United Airlines planes have Starlink WiFi?</div>
-    <div class="faq-a">As of mid-2026, more than 425 United Airlines aircraft are equipped with free SpaceX Starlink satellite internet — the majority of them United Express regional jets, which led the rollout, followed by mainline Boeing 737s and, since June 2026, the first widebody Boeing 777s. United is targeting roughly 1,000 Starlink aircraft by the end of 2026. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity. Check if your specific plane has Starlink using the <a href="/?tab=fleet">Starlink Tracker</a> — search by tail number or aircraft type.</div>
+    <div class="faq-a">As of {STARLINK_AS_OF}, {STARLINK_EQUIPPED_LABEL} United Airlines aircraft are equipped with free SpaceX Starlink satellite internet — the majority of them United Express regional jets, which led the rollout, followed by mainline Boeing 737s and, since June 2026, the first widebody Boeing 777s. United is targeting roughly 1,000 Starlink aircraft by the end of 2026. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity. Check if your specific plane has Starlink using the <a href="/?tab=fleet">Starlink Tracker</a> — search by tail number or aircraft type.</div>
   </div>
 
   <div class="faq-item">
