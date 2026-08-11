@@ -26,9 +26,10 @@
  *    confirm status changes with press/OIG before editing this file.
  *  - Go-live events: Leidos newsroom (leidos.com/insights), FAA newsroom, FedScoop (Lindsey
  *    Wilkinson's beat), local TV in the airport's market.
- *  - After edits: bump atcMeta.lastUpdated, add a changelog entry, run `bun run test`.
+ *  - After every source pass: bump atcMeta.lastVerified. If facts changed, also bump
+ *    atcMeta.lastUpdated and add a changelog entry. Then run `bun run test`.
  *
- * Last verified: 2026-07-27
+ * Last verified: 2026-08-11
  */
 
 /** @typedef {'live'|'in-progress'|'planned'|'paper'} AtcStatus */
@@ -53,6 +54,7 @@ export const atcMeta = {
   slug: "atc",
   name: "Modern Skies Tracker",
   lastUpdated: "2026-07-27",
+  lastVerified: "2026-08-11",
   // Headline stats that can't be derived from the entries below. Live/paper counts ARE derived —
   // never hardcode them here (tests pin that).
   stats: {

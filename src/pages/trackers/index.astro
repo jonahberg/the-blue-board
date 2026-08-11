@@ -6,6 +6,8 @@ import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
 
 const canonical = 'https://theblueboard.co/trackers';
 const ogImage = 'https://theblueboard.co/og/og-trackers.jpg';
+const fmtShort = (iso) =>
+  new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 ---
 
 <!doctype html>
@@ -89,6 +91,16 @@ const ogImage = 'https://theblueboard.co/og/og-trackers.jpg';
       .trk-card-question{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--ua-text);margin-bottom:6px}
       .trk-card-name{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--ua-amber);margin-bottom:8px}
       .trk-card-desc{font-size:12px;line-height:1.65;color:var(--ua-muted);margin-bottom:12px}
+      .trk-card-viz{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:12px;margin:14px 0;padding:10px 0;border-top:1px solid var(--ua-border-subtle);border-bottom:1px solid var(--ua-border-subtle)}
+      .trk-card-metric{font-family:var(--font-mono);font-size:14px;font-weight:700;color:var(--ua-text);white-space:nowrap}
+      .trk-card-bars{display:flex;gap:2px;height:8px;min-width:0}
+      .trk-card-bar{min-width:3px;border-radius:1px;background:var(--ua-dim)}
+      .trk-card-bar[data-tone='green']{background:var(--ua-green)}
+      .trk-card-bar[data-tone='amber']{background:var(--ua-amber)}
+      .trk-card-bar[data-tone='accent']{background:var(--ua-accent)}
+      .trk-card-legend{grid-column:2;display:flex;gap:8px;flex-wrap:wrap;margin-top:-7px;color:var(--ua-dim);font-family:var(--font-mono);font-size:8px;text-transform:uppercase}
+      .trk-card-latest{margin-bottom:12px;color:var(--ua-muted);font-size:10px;line-height:1.5}
+      .trk-card-latest strong{color:var(--ua-amber);font-family:var(--font-mono);font-size:8px;letter-spacing:.6px;text-transform:uppercase}
       .trk-card-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-dim)}
       .trk-card-open{color:var(--ua-accent)}
       .trk-about{border-top:1px solid var(--ua-border);padding-top:24px}
@@ -121,9 +133,24 @@ const ogImage = 'https://theblueboard.co/og/og-trackers.jpg';
                 <div class="trk-card-name">{t.name}</div>
                 <div class="trk-card-question">{t.question}</div>
                 <p class="trk-card-desc">{t.description}</p>
+                <div class="trk-card-viz" aria-label={`${t.metric}. ${t.segments.map((s) => `${s.count} ${s.label}`).join(', ')}`}>
+                  <div class="trk-card-metric">{t.metric}</div>
+                  <div class="trk-card-bars" aria-hidden="true">
+                    {t.segments.map((segment) => (
+                      <span class="trk-card-bar" data-tone={segment.tone} style={`flex:${segment.count}`}></span>
+                    ))}
+                  </div>
+                  <div class="trk-card-legend" aria-hidden="true">
+                    {t.segments.map((segment) => <span>{segment.count} {segment.label}</span>)}
+                  </div>
+                </div>
+                <div class="trk-card-latest">
+                  <strong>Latest · {fmtShort(t.latestChange.date)}</strong><br />
+                  {t.latestChange.entry}
+                </div>
                 <div class="trk-card-foot">
                   <span>
-                    {t.entryCount} {t.entryNoun} · <LastUpdated iso={t.lastUpdated} prefix="updated" />
+                    {t.entryCount} {t.entryNoun} · <LastUpdated iso={t.lastVerified} prefix="verified" />
                   </span>
                   <span class="trk-card-open">Open tracker &rarr;</span>
                 </div>

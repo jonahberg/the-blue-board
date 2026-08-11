@@ -29,6 +29,8 @@ describe('tracker barrel coherence', () => {
     expect(trackers['united-hubs'].entryCount).toBe(unitedProjects.length);
     expect(trackers.atc.lastUpdated).toBe(atcMeta.lastUpdated);
     expect(trackers['united-hubs'].lastUpdated).toBe(unitedHubsMeta.lastUpdated);
+    expect(trackers.atc.lastVerified).toBe(atcMeta.lastVerified);
+    expect(trackers['united-hubs'].lastVerified).toBe(unitedHubsMeta.lastVerified);
   });
 });
 
@@ -110,8 +112,10 @@ describe('united hub data', () => {
 
 describe('changelogs', () => {
   for (const [name, meta] of [['atc', atcMeta], ['united-hubs', unitedHubsMeta]]) {
-    it(`${name}: reverse-chronological, ISO-dated, none newer than lastUpdated`, () => {
+    it(`${name}: reverse-chronological, ISO-dated, and verification is current`, () => {
       expect(meta.lastUpdated).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(meta.lastVerified).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(meta.lastVerified >= meta.lastUpdated).toBe(true);
       let prev = '9999-99-99';
       for (const c of meta.changelog) {
         expect(c.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);

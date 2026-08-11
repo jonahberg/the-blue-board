@@ -1,11 +1,12 @@
 ---
 import StatusBadge from './StatusBadge.astro';
+import SourceDisclosure from './SourceDisclosure.astro';
 
 // The sortable registry table — also the SEO surface: every entry is real text at build time.
 // Sorting/filtering is progressive enhancement via /js/trackers.js reading data-sort /
 // data-trk-search attributes; with JS off this is a complete static table.
 //
-// Cell descriptor: { primary, secondary?, mono?, dim?, badge?: {label, tone, glyph} }
+// Cell descriptor: { primary, secondary?, mono?, dim?, badge?: {label, tone, glyph}, evidence? }
 /** @type {{ caption: string, columns: { key: string, label: string, sortable?: boolean }[], rows: { id: string, searchText: string, cells: Record<string, any> }[] }} */
 const { caption, columns, rows } = Astro.props;
 ---
@@ -52,6 +53,16 @@ const { caption, columns, rows } = Astro.props;
                     <a class="trk-td-link" href={cell.link.href}>
                       {cell.link.text}
                     </a>
+                  ) : null}
+                  {cell.evidence ? (
+                    <SourceDisclosure
+                      sources={cell.evidence.sources}
+                      verified={cell.evidence.verified}
+                      entryId={cell.evidence.entryId}
+                      entryLabel={cell.evidence.entryLabel}
+                      shareHref={cell.evidence.shareHref}
+                      compact
+                    />
                   ) : null}
                 </td>
               );

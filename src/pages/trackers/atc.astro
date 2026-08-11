@@ -10,6 +10,7 @@ import TrackerTable from '../../components/trackers/TrackerTable.astro';
 import Changelog from '../../components/trackers/Changelog.astro';
 import LastUpdated from '../../components/trackers/LastUpdated.astro';
 import CrossLink from '../../components/trackers/CrossLink.astro';
+import TrackerPulse from '../../components/trackers/TrackerPulse.astro';
 import Footer from '../../components/Footer.astro';
 import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
 
@@ -37,6 +38,25 @@ const plannedCount = atcAirports.filter((a) => a.status === 'planned').length;
 const paperNoDateCount = atcAirports.filter((a) => a.status === 'paper').length;
 const stillOnPaper = atcAirports.length - liveCount;
 const hubCodes = new Set(Object.keys(unitedHubs));
+const atcPulseEntities = Object.fromEntries(
+  atcAirports.map((a) => {
+    const status = STATUS[a.status].label.toLowerCase();
+    const timing =
+      a.status === 'live' && a.goLiveDate
+        ? ` since ${fmtDate(a.goLiveDate)}`
+        : a.status === 'planned'
+          ? ` · ${fmtDate(a.plannedIoc)} in the FAA's 2023 sequence`
+          : '';
+    return [
+      a.code,
+      {
+        label: `${a.code} · ${a.city}`,
+        summary: `${status}${timing}. ${a.note ?? ''}`.trim(),
+        href: `/trackers/atc#row-${a.id}`,
+      },
+    ];
+  })
+);
 
 // ---- map ----
 const mapPoints = [];
@@ -111,6 +131,15 @@ const tableRows = sortedAirports.map((a) => {
           ? { link: { href: `/trackers/united-hubs#hub-${a.code.toLowerCase()}`, text: 'United hub →' } }
           : {}),
       },
+      sources: {
+        evidence: {
+          sources: a.sources,
+          verified: atcMeta.lastVerified,
+          entryId: a.id,
+          entryLabel: `${a.code} · ${a.name}`,
+          shareHref: `/trackers/atc#row-${a.id}`,
+        },
+      },
     },
   };
 });
@@ -121,6 +150,7 @@ const columns = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'date', label: 'Went digital', sortable: true },
   { key: 'notes', label: 'Notes' },
+  { key: 'sources', label: 'Evidence' },
 ];
 
 // ---- stats ----
@@ -141,7 +171,7 @@ const faq = [
   },
   {
     question: 'Which airports already use electronic flight strips?',
-    answer: `${liveCount} airports are live on the FAA's TFDM system as of ${fmtDate(atcMeta.lastUpdated)}: ${liveCodes}.`,
+    answer: `${liveCount} airports are live on the FAA's TFDM system as verified ${fmtDate(atcMeta.lastVerified)}: ${liveCodes}.`,
   },
   {
     question: 'When will my airport stop using paper?',
@@ -293,6 +323,7 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-atc.jpg';
         </p>
         <div class="trk-updated-row">
           <LastUpdated iso={atcMeta.lastUpdated} />
+          <LastUpdated iso={atcMeta.lastVerified} prefix="Verified" />
         </div>
         <nav class="trk-jump" aria-label="Section navigation">
           <a href="#map">The map</a>
@@ -303,6 +334,15 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-atc.jpg';
           <a href="#changelog">Changelog</a>
         </nav>
       </header>
+
+      <TrackerPulse
+        slug="atc"
+        kind="airport"
+        lastUpdated={atcMeta.lastUpdated}
+        lastVerified={atcMeta.lastVerified}
+        changes={atcMeta.changelog}
+        entities={atcPulseEntities}
+      />
 
       <section class="trk-section" aria-label="Headline numbers">
         <StatStrip stats={stats} />
@@ -332,7 +372,7 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-atc.jpg';
       </section>
 
       <section class="trk-section" id="all">
-        <h2>All 89 airports</h2>
+        <h2 data-trk-result-heading data-trk-heading-all="All 89 airports" data-trk-heading-noun="airport">All 89 airports</h2>
         <TrackerTable
           caption="FAA TFDM rollout status for all 89 program airports"
           columns={columns}

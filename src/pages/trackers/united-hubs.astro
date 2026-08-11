@@ -11,6 +11,8 @@ import StatusBadge from '../../components/trackers/StatusBadge.astro';
 import Changelog from '../../components/trackers/Changelog.astro';
 import LastUpdated from '../../components/trackers/LastUpdated.astro';
 import CrossLink from '../../components/trackers/CrossLink.astro';
+import SourceDisclosure from '../../components/trackers/SourceDisclosure.astro';
+import TrackerPulse from '../../components/trackers/TrackerPulse.astro';
 import Footer from '../../components/Footer.astro';
 import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
 
@@ -42,6 +44,20 @@ const typeLabelFor = (p) => TYPE_OVERRIDE[p.id] ?? TYPE_LABEL[p.projectType];
 const hubOrder = ['IAH', 'IAD', 'SFO', 'DEN', 'ORD', 'EWR', 'LAX', 'GUM'];
 const projectsByHub = Object.fromEntries(hubOrder.map((h) => [h, unitedProjects.filter((p) => p.hub === h)]));
 const atcCodes = new Set(atcAirports.map((a) => a.code));
+const hubPulseEntities = Object.fromEntries(
+  hubOrder.map((code) => {
+    const projects = projectsByHub[code];
+    const moving = projects.filter((p) => p.status === 'under-construction' || p.status === 'announced').length;
+    return [
+      code,
+      {
+        label: `${code} · ${unitedHubs[code].city}`,
+        summary: `${projects.length} tracked ${projects.length === 1 ? 'project' : 'projects'} · ${moving} active or announced.`,
+        href: `/trackers/united-hubs#hub-${code.toLowerCase()}`,
+      },
+    ];
+  })
+);
 
 // ---- per-hub map status: colored by United-funded activity, not airport megaprojects,
 // or every hub would read "construction". Legend explains the distinction. ----
@@ -127,6 +143,15 @@ const tableRows = sortedProjects.map((p) => {
           ? { primary: p.targetDate, dim: true, sortVal: '' }
           : { primary: '—', dim: true, sortVal: '' },
       scale: { primary: scale || '—', ...(scale ? {} : { dim: true }) },
+      sources: {
+        evidence: {
+          sources: p.sources,
+          verified: unitedHubsMeta.lastVerified,
+          entryId: p.id,
+          entryLabel: `${p.hub} · ${p.name}`,
+          shareHref: `/trackers/united-hubs#${p.id}`,
+        },
+      },
     },
   };
 });
@@ -137,6 +162,7 @@ const columns = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'date', label: 'Opened / target', sortable: true },
   { key: 'scale', label: 'Scale' },
+  { key: 'sources', label: 'Evidence' },
 ];
 
 // ---- stats ----
@@ -187,7 +213,7 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0B1018" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E" />
-    <title>What's United Building at Your Hub? Club &amp; Terminal Construction Tracker | The Blue Board</title>
+    <title>What's Changing at United's Hubs? Club &amp; Terminal Tracker | The Blue Board</title>
     <meta
       name="description"
       content="Every United club, terminal, and gate project across all 8 hubs — IAH's 54,000 sq ft club, Dulles' new Concourse E, SFO's terrace club — with honest labels for what's real and what's just teased."
@@ -197,7 +223,7 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
     <link rel="canonical" href={canonical} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="en_US" />
-    <meta property="og:title" content="What's United Building at Your Hub? — United Hub Tracker" />
+    <meta property="og:title" content="What's Changing at United's Hubs? — United Hub Tracker" />
     <meta
       property="og:description"
       content="3 flagship clubs and 36 new gates land in 2026. Every project at every United hub, tracked — with honest labels for what's real and what's a Kirby tease."
@@ -210,7 +236,7 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
     <meta property="og:image:alt" content="United Hub Tracker — construction and club projects across United's eight hubs" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:creator" content="@theblueboard" />
-    <meta name="twitter:title" content="What's United Building at Your Hub?" />
+    <meta name="twitter:title" content="What's Changing at United's Hubs?" />
     <meta name="twitter:description" content="3 flagship clubs and 36 new gates land in 2026. Every United hub project, tracked." />
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:site" content="@theblueboard" />
@@ -319,7 +345,7 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
 
       <header class="trk-header trk-section">
         <div class="trk-kicker">Tracker &middot; United Ground Buildout</div>
-        <h1>What's United Building at Your Hub?</h1>
+        <h1>What's Changing at United's Hubs?</h1>
         <p class="trk-subtitle">
           United is in the middle of its biggest ground-infrastructure buildout ever — new
           concourses, new gates, and the largest clubs it has ever opened. Here's every project at
@@ -328,23 +354,33 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
         </p>
         <div class="trk-updated-row">
           <LastUpdated iso={unitedHubsMeta.lastUpdated} />
+          <LastUpdated iso={unitedHubsMeta.lastVerified} prefix="Verified" />
         </div>
         <nav class="trk-jump" aria-label="Section navigation">
           <a href="#map">The map</a>
           <a href="#check">Check your hub</a>
-          {hubOrder.map((h) => <a href={`#hub-${h.toLowerCase()}`}>{h}</a>)}
+          <a href="#hubs">Hub by hub</a>
           <a href="#all">All projects</a>
           <a href="#why">Why</a>
           <a href="#changelog">Changelog</a>
         </nav>
       </header>
 
+      <TrackerPulse
+        slug="united-hubs"
+        kind="hub"
+        lastUpdated={unitedHubsMeta.lastUpdated}
+        lastVerified={unitedHubsMeta.lastVerified}
+        changes={unitedHubsMeta.changelog}
+        entities={hubPulseEntities}
+      />
+
       <section class="trk-section" aria-label="Headline numbers">
         <StatStrip stats={stats} />
       </section>
 
       <section class="trk-section" id="map">
-        <h2>The map: where the money is</h2>
+        <h2>The map: where the work is</h2>
         <TrackerMap
           paths={paths}
           points={mapPoints}
@@ -408,6 +444,13 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
                         <div class="trk-card-name">{p.name}</div>
                         {metaLineFor(p) && <div class="trk-card-meta">{metaLineFor(p)}</div>}
                         <p class="trk-card-details">{p.details}</p>
+                        <SourceDisclosure
+                          sources={p.sources}
+                          verified={unitedHubsMeta.lastVerified}
+                          entryId={p.id}
+                          entryLabel={`${p.hub} · ${p.name}`}
+                          shareHref={`/trackers/united-hubs#${p.id}`}
+                        />
                       </article>
                     );
                   })}
@@ -419,7 +462,7 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
       </section>
 
       <section class="trk-section" id="all">
-        <h2>All projects, one table</h2>
+        <h2 data-trk-result-heading data-trk-heading-all="All projects, one table" data-trk-heading-noun="project">All projects, one table</h2>
         <TrackerTable caption="All tracked United hub projects" columns={columns} rows={tableRows} />
         <p class="trk-method">
           "Airport builds" marks projects funded and built by the airport authority — MWAA at

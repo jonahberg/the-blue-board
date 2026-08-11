@@ -13,11 +13,12 @@ src/data/trackers/index.js        ← validate() — bad data fails the build on
 
 ## The ritual (both trackers)
 
-1. Skim the sources below for anything new since `lastUpdated`.
+1. Skim the sources below for anything new since `lastVerified`.
 2. Edit the data file: flip statuses, add entries, adjust dates. **Every change needs a source
    URL in the entry's `sources`, and dates only get precision the source supports.**
 3. Add a `changelog` entry (top of the array — it's reverse-chronological and validated).
-4. Bump `lastUpdated`.
+4. Always bump `lastVerified`. Bump `lastUpdated` and add a changelog entry only when a
+   published fact changes. A clean verification pass is not a content update.
 5. `bun run test && bun run typecheck && bun run build` — the validators catch shape mistakes,
    ordering mistakes, and status/date incoherence.
 6. If a **headline stat** changed (see "Stats that live outside the data files" below), refresh
@@ -35,7 +36,8 @@ src/data/trackers/index.js        ← validate() — bad data fails the build on
 
 **When an airport goes live:** status → `"live"`, add `goLiveDate` ONLY if a source states the
 date (else omit it — eight live airports legitimately have none), delete its `plannedIoc`, add
-the event source URL, write a one-line `note` if the story earns one, changelog, `lastUpdated`.
+the event source URL, write a one-line `note` if the story earns one, changelog, `lastUpdated`,
+and `lastVerified`.
 
 **What NOT to do:** don't backfill `goLiveDate` from `plannedIoc`; don't sharpen "this summer"
 into a month; don't trust a Leidos airport-count (they've contradicted the FAA's own count in

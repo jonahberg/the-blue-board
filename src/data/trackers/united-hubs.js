@@ -22,9 +22,10 @@
  * MAINTENANCE (see MAINTENANCE.md):
  *  - United newsroom (united.mediaroom.com), The Points Guy's United coverage, airport-authority
  *    newsrooms (fly2houston, flydulles/MWAA, flychicago, flydenver, panynj, flysfo, lawa).
- *  - After edits: bump unitedHubsMeta.lastUpdated, add a changelog entry, run `bun run test`.
+ *  - After every source pass: bump unitedHubsMeta.lastVerified. If facts changed, also bump
+ *    unitedHubsMeta.lastUpdated and add a changelog entry. Then run `bun run test`.
  *
- * Last verified: 2026-07-27
+ * Last verified: 2026-08-11
  */
 
 /** @typedef {'club'|'polaris'|'club-fly'|'terminal'|'gates'|'other'} UnitedProjectType */
@@ -508,6 +509,7 @@ export const unitedHubsMeta = {
   slug: "united-hubs",
   name: "United Hub Tracker",
   lastUpdated: "2026-07-29",
+  lastVerified: "2026-08-11",
   // Headline stats that can't be derived from the entries above. Counts of projects/clubs ARE
   // derived at build time — never hardcode them here (tests pin that).
   stats: {

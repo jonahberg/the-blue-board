@@ -39,7 +39,16 @@
     }
     if (countEl) {
       var noun = countEl.getAttribute('data-trk-noun') || 'results';
-      countEl.textContent = q === '' ? '' : visible + ' ' + noun;
+      var countedNoun = visible === 1 && /s$/.test(noun) ? noun.slice(0, -1) : noun;
+      countEl.textContent = q === '' ? '' : visible + ' ' + countedNoun;
+    }
+    var heading = document.querySelector('[data-trk-result-heading]');
+    if (heading) {
+      var allLabel = heading.getAttribute('data-trk-heading-all') || heading.textContent;
+      var headingNoun = heading.getAttribute('data-trk-heading-noun') || 'result';
+      heading.textContent = q === ''
+        ? allLabel
+        : visible + ' matching ' + headingNoun + (visible === 1 ? '' : 's');
     }
     if (emptyEl) emptyEl.hidden = !(q !== '' && visible === 0);
   }
@@ -140,4 +149,135 @@
       }
     });
   }
+
+  /* ---------- return loop, personalization, watch + share ---------- */
+  var pageSlug = document.body.getAttribute('data-trk-page') || '';
+  var WATCH_KEY = 'bb_tracker_watches';
+
+  function readWatches() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(WATCH_KEY) || '[]');
+      return Array.isArray(parsed) ? parsed.filter(function (w) {
+        return w && typeof w.slug === 'string' && typeof w.id === 'string';
+      }) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveWatches(watches) {
+    try { localStorage.setItem(WATCH_KEY, JSON.stringify(watches.slice(0, 50))); } catch (e) {}
+  }
+
+  function isWatched(id) {
+    return readWatches().some(function (w) { return w.slug === pageSlug && w.id === id; });
+  }
+
+  function syncWatchButtons() {
+    var buttons = document.querySelectorAll('[data-trk-watch], [data-trk-pulse-watch]');
+    for (var i = 0; i < buttons.length; i++) {
+      var id = buttons[i].getAttribute('data-trk-watch-id');
+      if (!id) continue;
+      var active = isWatched(id);
+      buttons[i].setAttribute('aria-pressed', active ? 'true' : 'false');
+      buttons[i].textContent = active ? 'Watching' : (buttons[i].hasAttribute('data-trk-pulse-watch') ? 'Watch this ' + (buttons[i].getAttribute('data-trk-watch-kind') || 'place') : 'Watch');
+    }
+    var pulse = document.querySelector('[data-trk-pulse-watch]');
+    var status = document.querySelector('[data-trk-watch-status]');
+    if (pulse && status && pulse.getAttribute('data-trk-watch-id') && pulse.getAttribute('aria-pressed') === 'true') {
+      status.textContent = 'Changes highlighted on return';
+    }
+  }
+
+  function toggleWatch(id, label) {
+    var watches = readWatches();
+    var index = watches.findIndex(function (w) { return w.slug === pageSlug && w.id === id; });
+    var active;
+    if (index >= 0) {
+      watches.splice(index, 1);
+      active = false;
+    } else {
+      watches.push({ slug: pageSlug, id: id, label: label || id, addedAt: new Date().toISOString() });
+      active = true;
+    }
+    saveWatches(watches);
+    syncWatchButtons();
+    var status = document.querySelector('[data-trk-watch-status]');
+    if (status) status.textContent = active ? 'Changes highlighted on return' : 'Watch removed';
+  }
+
+  function fmtDay(iso) {
+    try {
+      return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  var configEl = document.querySelector('[data-trk-config]');
+  if (configEl) {
+    try {
+      var config = JSON.parse(configEl.textContent || '{}');
+      var seenKey = 'bb_tracker_seen_' + config.slug;
+      var lastSeen = localStorage.getItem(seenKey) || '';
+      var delta = document.querySelector('[data-trk-delta]');
+      var unseen = lastSeen
+        ? (config.changes || []).filter(function (change) { return change.date > lastSeen.slice(0, 10); })
+        : [];
+      if (delta && lastSeen) {
+        delta.textContent = unseen.length
+          ? unseen.length + ' change' + (unseen.length === 1 ? '' : 's') + ' since your last visit. ' + unseen[0].entry
+          : 'No changes since ' + fmtDay(lastSeen.slice(0, 10)) + '. Sources rechecked ' + fmtDay(config.lastVerified) + '.';
+      }
+
+      var home = (localStorage.getItem('bb_home_airport') || '').toUpperCase();
+      var entity = config.entities && config.entities[home];
+      var personal = document.querySelector('[data-trk-personal]');
+      var personalEmpty = document.querySelector('[data-trk-personal-empty]');
+      var pulseWatch = document.querySelector('[data-trk-pulse-watch]');
+      if (entity && personal) {
+        personal.hidden = false;
+        if (personalEmpty) personalEmpty.hidden = true;
+        var codeEl = personal.querySelector('[data-trk-personal-code]');
+        var summaryEl = personal.querySelector('[data-trk-personal-summary]');
+        var linkEl = personal.querySelector('[data-trk-personal-link]');
+        if (codeEl) codeEl.textContent = entity.label;
+        if (summaryEl) summaryEl.textContent = entity.summary;
+        if (linkEl) linkEl.href = entity.href;
+        if (pulseWatch) {
+          pulseWatch.hidden = false;
+          pulseWatch.setAttribute('data-trk-watch-id', home.toLowerCase());
+          pulseWatch.setAttribute('data-trk-watch-label', entity.label);
+          pulseWatch.setAttribute('data-trk-watch-kind', config.kind);
+        }
+      }
+      try { localStorage.setItem(seenKey, new Date().toISOString()); } catch (e) {}
+    } catch (e) {
+      /* A malformed enhancement config must never hide the static tracker. */
+    }
+  }
+
+  syncWatchButtons();
+
+  document.addEventListener('click', function (ev) {
+    var watch = ev.target && ev.target.closest ? ev.target.closest('[data-trk-watch], [data-trk-pulse-watch]') : null;
+    if (watch) {
+      toggleWatch(watch.getAttribute('data-trk-watch-id') || '', watch.getAttribute('data-trk-watch-label') || '');
+      return;
+    }
+    var share = ev.target && ev.target.closest ? ev.target.closest('[data-trk-share]') : null;
+    if (!share) return;
+    var href = share.getAttribute('data-trk-share-href') || location.pathname;
+    var url = new URL(href, location.origin).toString();
+    var label = share.getAttribute('data-trk-share-label') || document.title;
+    if (navigator.share) {
+      navigator.share({ title: label, url: url }).catch(function () {});
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () {
+        var before = share.textContent;
+        share.textContent = 'Copied';
+        setTimeout(function () { share.textContent = before; }, 1600);
+      }).catch(function () {});
+    }
+  });
 })();

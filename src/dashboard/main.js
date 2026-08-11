@@ -27,6 +27,7 @@ import { matchAircraft as matchAircraftInFleet } from '../lib/fleet-match.js';
 import { matchesScheduleFilters } from '../lib/schedule-board-filters.js';
 import { analyzeSwapImpact as classifySwapImpact, CABIN_RANK } from '../lib/swap-impact.js';
 import { escapeHtml } from '../lib/escape.js';
+import { atcAirports, atcMeta, unitedHubsMeta, unitedProjects } from '../data/trackers/index.js';
 
 injectSpeedInsights();
 
@@ -301,10 +302,72 @@ function setHomeAirport(code) {
   if (code) localStorage.setItem('bb_home_airport', code);
   else localStorage.removeItem('bb_home_airport');
   updateHomeHubDisplay();
+  updateTrackerBriefing();
 }
 function updateHomeHubDisplay() {
   const el = document.getElementById('home-hub-display');
   if (el) el.textContent = getHomeAirport() || '—';
+}
+
+const TRACKER_ATC_BY_CODE = new Map(atcAirports.map((airport) => [airport.code, airport]));
+const TRACKER_STATUS_LABEL = {
+  live: 'Tower is live on electronic flight strips',
+  'in-progress': 'Tower modernization is in progress',
+  planned: "Tower has a date in the FAA's 2023 sequence",
+  paper: 'Tower is still on paper with no published date',
+};
+
+function readTrackerWatches() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('bb_tracker_watches') || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function updateTrackerBriefing() {
+  const box = document.getElementById('tracker-briefing');
+  const title = document.getElementById('tracker-briefing-title');
+  const summary = document.getElementById('tracker-briefing-summary');
+  const hubLink = document.getElementById('tracker-briefing-hub-link');
+  const atcLink = document.getElementById('tracker-briefing-atc-link');
+  const watch = document.getElementById('tracker-briefing-watch');
+  if (!box || !title || !summary || !hubLink || !atcLink || !watch) return;
+
+  const home = getHomeAirport();
+  const airport = TRACKER_ATC_BY_CODE.get(home);
+  const projects = unitedProjects.filter((project) => project.hub === home);
+  const activeProjects = projects.filter((project) => project.status === 'under-construction' || project.status === 'announced').length;
+
+  if (!home || (!airport && projects.length === 0)) {
+    const liveCount = atcAirports.filter((item) => item.status === 'live').length;
+    title.textContent = 'Infrastructure trackers';
+    summary.textContent = `${liveCount} of ${atcAirports.length} towers are digital. ${unitedProjects.length} projects are tracked across United's eight hubs. Set a home hub for the local briefing.`;
+    hubLink.href = '/trackers/united-hubs';
+    hubLink.textContent = 'All hub projects →';
+    atcLink.href = '/trackers/atc';
+    atcLink.textContent = 'All 89 towers →';
+    watch.textContent = `Verified ${atcMeta.lastVerified}`;
+    return;
+  }
+
+  title.textContent = `${home} infrastructure briefing`;
+  const facts = [];
+  if (airport) facts.push(TRACKER_STATUS_LABEL[airport.status] || 'tower status is tracked');
+  if (projects.length) facts.push(`${projects.length} hub ${projects.length === 1 ? 'project' : 'projects'}, ${activeProjects} active or announced`);
+  summary.textContent = facts.join('. ') + '.';
+  hubLink.href = `/trackers/united-hubs#hub-${home.toLowerCase()}`;
+  hubLink.textContent = projects.length ? `${home} projects →` : 'Hub projects →';
+  atcLink.href = airport ? `/trackers/atc#row-${home.toLowerCase()}` : '/trackers/atc';
+  atcLink.textContent = airport ? `${home} tower →` : 'Tower modernization →';
+
+  const watchedIds = new Set(readTrackerWatches().map((item) => `${item.slug}:${item.id}`));
+  const watchingHub = watchedIds.has(`united-hubs:${home.toLowerCase()}`) || projects.some((project) => watchedIds.has(`united-hubs:${project.id}`));
+  const watchingAtc = watchedIds.has(`atc:${home.toLowerCase()}`);
+  watch.textContent = watchingHub || watchingAtc
+    ? 'Watching on this device'
+    : `Verified ${unitedHubsMeta.lastVerified}`;
 }
 
 // ═══ CONNECTION & DELAY DATA ═══
@@ -7719,6 +7782,7 @@ document.addEventListener('click', function(e) {
 async function initApp() {
   updateWatchBadge();
   updateHomeHubDisplay();
+  updateTrackerBriefing();
   // My Flights quick-add search
   var mfSearch = document.getElementById('myflight-search');
   if (mfSearch) mfSearch.addEventListener('keydown', function(e) {

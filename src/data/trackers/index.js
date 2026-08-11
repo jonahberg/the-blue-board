@@ -37,9 +37,11 @@ function checkCommon(where, entry) {
   }
 }
 
-/** @param {string} where @param {{lastUpdated: string, changelog: {date: string, entry: string}[]}} meta */
+/** @param {string} where @param {{lastUpdated: string, lastVerified: string, changelog: {date: string, entry: string}[]}} meta */
 function checkMeta(where, meta) {
   if (!ISO_DAY_RE.test(meta.lastUpdated)) fail(where, `lastUpdated "${meta.lastUpdated}" is not YYYY-MM-DD`);
+  if (!ISO_DAY_RE.test(meta.lastVerified)) fail(where, `lastVerified "${meta.lastVerified}" is not YYYY-MM-DD`);
+  if (meta.lastVerified < meta.lastUpdated) fail(where, 'lastVerified cannot be older than lastUpdated');
   if (!Array.isArray(meta.changelog) || meta.changelog.length === 0) fail(where, 'changelog is empty');
   let prev = '9999-99-99';
   for (const c of meta.changelog) {
@@ -120,18 +122,35 @@ export const trackers = {
     description:
       "The FAA is finally replacing paper flight strips at 89 airport towers. Airport-by-airport status of the rollout — who's live, who's next, who's still waiting.",
     lastUpdated: atcMeta.lastUpdated,
+    lastVerified: atcMeta.lastVerified,
     entryCount: atcAirports.length,
     entryNoun: 'airports',
+    metric: `${atcAirports.filter((a) => a.status === 'live').length}/${atcAirports.length} digital`,
+    segments: [
+      { label: 'Live', count: atcAirports.filter((a) => a.status === 'live').length, tone: 'green' },
+      { label: 'Scheduled', count: atcAirports.filter((a) => a.status === 'planned').length, tone: 'amber' },
+      { label: 'No date', count: atcAirports.filter((a) => a.status === 'paper').length, tone: 'dim' },
+    ],
+    latestChange: atcMeta.changelog[0],
   },
   'united-hubs': {
     slug: 'united-hubs',
     name: unitedHubsMeta.name,
     href: '/trackers/united-hubs',
-    question: "What's United actually building at your hub?",
+    question: "What's changing at United's hubs?",
     description:
       "United's biggest ground buildout ever: every club, terminal, and gate project across all eight hubs — with honest labels for what's real, what's dated, and what's just a Kirby tease.",
     lastUpdated: unitedHubsMeta.lastUpdated,
+    lastVerified: unitedHubsMeta.lastVerified,
     entryCount: unitedProjects.length,
     entryNoun: 'projects',
+    metric: `${unitedProjects.filter((p) => p.status === 'under-construction' || p.status === 'announced').length} active`,
+    segments: [
+      { label: 'Building', count: unitedProjects.filter((p) => p.status === 'under-construction').length, tone: 'amber' },
+      { label: 'Announced', count: unitedProjects.filter((p) => p.status === 'announced').length, tone: 'accent' },
+      { label: 'Open', count: unitedProjects.filter((p) => p.status === 'open').length, tone: 'green' },
+      { label: 'Rumored', count: unitedProjects.filter((p) => p.status === 'rumored').length, tone: 'dim' },
+    ],
+    latestChange: unitedHubsMeta.changelog[0],
   },
 };
