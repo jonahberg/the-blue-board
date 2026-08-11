@@ -6,8 +6,8 @@
 // Config in vercel.json: { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" }
 
 import type { VercelRequest, VercelResponse } from '../types.js';
-import { normalizeStarlinkPayload } from '../_starlink-normalize.js';
-import { saveStarlinkSnapshot } from '../_starlink-snapshot.js';
+import { normalizeStarlinkPayload, validateStarlinkPayload } from '../_starlink-normalize.js';
+import { loadStarlinkSnapshot, saveStarlinkSnapshot } from '../_starlink-snapshot.js';
 import { isAuthorizedCronRequest } from '../_cron-auth.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/data';
@@ -35,10 +35,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const upstream = await resp.json();
     const enriched = normalizeStarlinkPayload(upstream);
 
-    // Refuse to persist an empty board — a transient empty 200 must not poison the durable snapshot
+    // §05 validators: refuse to persist a structurally broken payload — a
+    // transient empty/partial/renamed feed must not poison the durable snapshot
     // and get served as the "good" fallback for the next 12h.
-    if (enriched.aircraft.length === 0) {
-      return res.status(502).json({ error: 'Upstream returned 0 Starlink aircraft — snapshot not updated' });
+    const previous = await loadStarlinkSnapshot();
+    const validation = validateStarlinkPayload(enriched, previous?.data.aircraft.length);
+    for (const warning of validation.warnings) {
+      console.warn(`Cron sync-starlink warning: ${warning}`);
+    }
+    if (!validation.ok) {
+      console.error(`Cron sync-starlink rejected upstream payload: ${validation.failures.join('; ')}`);
+      return res.status(502).json({
+        error: 'Upstream payload failed validation — snapshot not updated',
+        reasons: validation.failures,
+      });
     }
 
     // Same-instance fast path (cheap; harmless). The durable cross-instance handoff is Supabase.

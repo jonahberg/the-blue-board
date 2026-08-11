@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.17] - 2026-08-11
+
+### Fixed
+- **The Starlink sync accepted structurally broken upstream feeds and persisted them as the durable "good" snapshot.** The cron's only guard was `length === 0`, which passes anything non-empty — so the failure mode that matters most goes through untouched: if unitedstarlinktracker.com renames `TailNumber` (it already reshaped `flights[]`/`fallback.segments[]` into `flightsByTail` between June and August without notice), the normalizer emits 513 records with empty tails, the guard waves them through, Supabase stores them for 12h, every tail lookup on the board silently stops matching, and every endpoint keeps returning green 200s. The cron now runs §05 structural validators before persisting: an absolute floor of 400 aircraft (live count is 513), a ≥98% valid-N-number tail ratio, a ≥90%-of-previous-snapshot relative check (read back via `loadStarlinkSnapshot`, skipped when no snapshot exists), and a fleetStats-vs-record-count agreement check with a ±max(5, 2%) tolerance — tolerance rather than equality, since upstream double-counts the MAX 9 and a benign one-off drift must not freeze snapshot updates. A rejected payload returns 502 with the specific `reasons`, and the snapshot, the globalThis fast path, and the in-memory cache are all left holding the last good data. Missing fleetStats and a >6h-old upstream `lastUpdated` are logged as warnings, not failures: degraded metadata is still the best data available. The same validators now run on `/api/starlink-data`'s direct-fetch fallback, where a failure throws into the existing degrade ladder (stale snapshot → committed static file) instead of serving a 10-aircraft board and caching it for the next four hours. (`api/_starlink-normalize.ts`, `api/cron/sync-starlink.ts`, `api/starlink-data.ts`)
+
 ## [1.7.16] - 2026-08-11
 
 ### Changed

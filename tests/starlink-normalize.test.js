@@ -3,6 +3,7 @@ import {
   normalizeOperator,
   normalizeType,
   normalizeStarlinkPayload,
+  validateStarlinkPayload,
 } from '../api/_starlink-normalize.js';
 
 describe('normalizeOperator', () => {
@@ -135,5 +136,90 @@ describe('normalizeStarlinkPayload', () => {
     const flight = out.flightsByTail.N32[0];
     expect(flight.departure_ts).toBe(1780270800);
     expect(flight.departure_time).toBe(iso);
+  });
+});
+
+describe('validateStarlinkPayload', () => {
+  // Builds the NORMALIZED payload shape (the validator's input) rather than raw upstream —
+  // validation runs after normalizeStarlinkPayload at both call sites.
+  function makePayload({ count = 513, tail, fleetStats, lastUpdated = new Date().toISOString() } = {}) {
+    const aircraft = Array.from({ length: count }, (_, i) => ({
+      tail: tail ? tail(i) : `N${100 + i}`,
+      fleet: i % 2 === 0 ? 'Mainline' : 'Express',
+      type: '737-800',
+      operator: 'United Airlines',
+      dateFound: '2026-01-01',
+      wifi: 'Starlink',
+    }));
+    const mainline = Math.ceil(count / 2);
+    const express = Math.floor(count / 2);
+    return {
+      aircraft,
+      totalCount: count,
+      fleetStats: fleetStats === undefined
+        ? { mainline, express, total: count, mainlineTotal: 1122, expressTotal: 659, fleetTotal: 1781, mainlinePct: 15, expressPct: 52 }
+        : fleetStats,
+      flightsByTail: {},
+      lastUpdated,
+      syncedAt: new Date().toISOString(),
+    };
+  }
+
+  it('accepts a healthy full-size payload', () => {
+    const out = validateStarlinkPayload(makePayload());
+    expect(out.ok).toBe(true);
+    expect(out.failures).toEqual([]);
+    expect(out.warnings).toEqual([]);
+  });
+
+  it('rejects a payload under the absolute aircraft floor', () => {
+    const out = validateStarlinkPayload(makePayload({ count: 300 }));
+    expect(out.ok).toBe(false);
+    expect(out.failures.join('; ')).toMatch(/absolute floor/);
+  });
+
+  it('rejects a partial feed relative to the previous snapshot', () => {
+    const out = validateStarlinkPayload(makePayload({ count: 500 }), 600);
+    expect(out.ok).toBe(false);
+    expect(out.failures.join('; ')).toMatch(/previous snapshot/);
+  });
+
+  it('skips the relative check when no previous snapshot is supplied', () => {
+    const out = validateStarlinkPayload(makePayload());
+    expect(out.ok).toBe(true);
+  });
+
+  // The June-flagged failure mode: an upstream TailNumber → tail_number rename yields a full-size
+  // record count with empty tails, which the old length===0 guard waved through.
+  it('rejects a full-size payload whose tails are all empty (upstream field rename)', () => {
+    const out = validateStarlinkPayload(makePayload({ tail: () => '' }));
+    expect(out.ok).toBe(false);
+    expect(out.failures.join('; ')).toMatch(/valid N-number/);
+  });
+
+  it('rejects fleetStats that disagree with the aircraft count beyond tolerance', () => {
+    const fleetStats = { mainline: 300, express: 300, total: 600, mainlineTotal: 1122, expressTotal: 659, fleetTotal: 1781, mainlinePct: 27, expressPct: 46 };
+    const out = validateStarlinkPayload(makePayload({ fleetStats }));
+    expect(out.ok).toBe(false);
+    expect(out.failures.join('; ')).toMatch(/fleetStats/);
+  });
+
+  it('tolerates a ±1 fleetStats drift (upstream double-counts the MAX 9)', () => {
+    const fleetStats = { mainline: 257, express: 257, total: 514, mainlineTotal: 1122, expressTotal: 659, fleetTotal: 1781, mainlinePct: 23, expressPct: 39 };
+    const out = validateStarlinkPayload(makePayload({ fleetStats }));
+    expect(out.ok).toBe(true);
+  });
+
+  it('warns but accepts when fleetStats is missing', () => {
+    const out = validateStarlinkPayload(makePayload({ fleetStats: null }));
+    expect(out.ok).toBe(true);
+    expect(out.warnings.join('; ')).toMatch(/fleetStats/);
+  });
+
+  it('warns but accepts a stale upstream lastUpdated', () => {
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+    const out = validateStarlinkPayload(makePayload({ lastUpdated: twelveHoursAgo }));
+    expect(out.ok).toBe(true);
+    expect(out.warnings.join('; ')).toMatch(/6h old/);
   });
 });
