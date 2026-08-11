@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.18] - 2026-08-11
+
+### Changed
+- The "Built by Jonah Berg" footer credit now links to [jonahberg.com](https://jonahberg.com) instead of the GitHub profile, across the dashboard footer, the shared Astro footer, and the hubs/fleet index pages. GitHub remains reachable via the existing Support/Feedback repo links. (`public/index.html`, `src/components/Footer.astro`, `src/pages/hubs/index.astro`, `src/pages/fleet/index.astro`)
+
 ## [1.7.17] - 2026-08-11
 
 ### Fixed
