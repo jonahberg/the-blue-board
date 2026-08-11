@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.15] - 2026-08-11
+
+### Fixed
+- **The Starlink badge read upstream's current responses wrong in three different ways, and invented a number in a fourth.** The check-flight adapter still assumed the single `{hasStarlink, confidence, flights}` shape from the endpoint's documentation, but a live probe on Aug 11 found three: a statistical prediction when no tail is assigned yet, a verified result carried in `fallback.segments[]`, and a verified result carried in top-level `flights[]`. Only the last one worked. A legitimate "~71% of recent departures, 4 observations" forecast was discarded and rendered as nothing; a verified-negative segment (tail `N838UA`, Panasonic wifi) had its data thrown away; and `confidence ?? 'likely'` turned any positive response upstream didn't label into a fabricated 70% badge reading "0 observations". The adapter now derives truth from the segments and the prediction object rather than branching on top-level `hasStarlink`/`confidence`, which also covers the unprobed-but-plausible positive-via-fallback shape. Segment wifi values are matched against both live spellings (`Starlink` and `StrLnk` — 170 and 343 aircraft respectively, so an exact-match check would have missed two thirds of the fleet). Predictions now need real evidence behind them: zero observations or a `fleet_prior_*` method is a fleet-wide average rather than an answer about this flight, and upstream serves those as confident-looking 200s, so both are suppressed instead of shown. Predicted responses reach the badge as `confidence: 'predicted'` carrying the real upstream probability, and the dashboard gives them the forecast treatment — "likely ~71%", low-data gating, and a tooltip that reads as an estimate — instead of the deterministic verified badge. The verified path renders exactly as before. (`api/check-flight.ts`, `src/dashboard/main.js`)
+
 ## [1.7.14] - 2026-08-04
 
 ### Fixed

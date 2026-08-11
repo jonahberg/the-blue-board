@@ -1726,7 +1726,11 @@ function applyStarlinkPrediction(el, data) {
   // check-flight badge (tail already resolved) must render exactly as it did on
   // main — otherwise a verified-95% confirmation (n_observations≈1) would be
   // demoted to a muted "· low data" with a self-contradictory tooltip.
-  const forecast = el.getAttribute('data-mode') === 'forecast';
+  // check-flight now returns confidence:'predicted' when no tail is assigned
+  // yet; that is a statistical estimate, so it must get the forecast treatment
+  // ("likely ~N%", low-data gating) — never the deterministic verified badge.
+  // Verified responses are untouched, keeping that path byte-identical.
+  const forecast = el.getAttribute('data-mode') === 'forecast' || data.confidence === 'predicted';
 
   if (!forecast) {
     // ---- Legacy check-flight badge — byte-identical to main ----
