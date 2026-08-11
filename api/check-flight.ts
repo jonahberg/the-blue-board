@@ -1,7 +1,7 @@
-// Proxy endpoint for Starlink flight status (documented upstream contract).
-// Wraps unitedstarlinktracker.com/api/check-flight and adapts the
-// {hasStarlink, confidence, flights} shape into a probability-bearing payload
-// so the existing dashboard render code keeps working.
+// Proxy endpoint for Starlink flight status.
+// Wraps unitedstarlinktracker.com/api/check-flight and adapts its three live
+// response shapes (see adapt() below) into a probability-bearing payload so the
+// existing dashboard render code keeps working.
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
@@ -20,50 +20,125 @@ export function _resetCacheForTest(): void {
   upstreamUnhealthyUntil = 0;
 }
 
-interface UpstreamFlight {
+interface UpstreamSegment {
   tail_number?: string;
   aircraft_type?: string;
+  aircraft_model?: string;
   flight_number?: string;
   ua_flight_number?: string;
   departure_airport?: string;
   arrival_airport?: string;
+  origin?: string;
+  destination?: string;
   departure_time?: number;
   arrival_time?: number;
   departure_time_formatted?: string;
   arrival_time_formatted?: string;
   operated_by?: string | null;
   fleet_type?: string | null;
+  hasStarlink?: boolean;
+  confidence?: string;
+  verified_wifi?: string;
+  verified_at?: number | string;
+}
+
+interface UpstreamPrediction {
+  probability?: number;
+  confidence?: string;
+  n_observations?: number;
 }
 
 interface UpstreamResponse {
-  hasStarlink: boolean;
-  confidence?: 'verified' | 'likely';
-  flights?: UpstreamFlight[];
+  hasStarlink?: boolean;
+  confidence?: string;
+  method?: string;
+  prediction?: UpstreamPrediction;
+  flights?: UpstreamSegment[];
+  fallback?: { segments?: UpstreamSegment[] };
   message?: string;
 }
 
 interface AdaptedResponse {
   hasStarlink: boolean;
   probability: number;
-  confidence: 'verified' | 'likely' | 'none';
+  confidence: 'verified' | 'likely' | 'predicted' | 'none';
   n_observations: number;
-  flights: UpstreamFlight[];
+  flights: UpstreamSegment[];
 }
 
-// Maps upstream's discrete {hasStarlink, confidence} into a 0..1 score the
-// existing badge UI can render. Verified matches read as 95%, likely as 70%,
-// no-match as 0% (the dashboard hides the badge below 5%).
+// Matches both live spellings of the wifi value ("Starlink" 170 / "StrLnk" 343
+// as of 2026-08-11) — an exact-match check would drop 67% of the fleet.
+const STARLINK_WIFI_RE = /star\s*l|strlnk/i;
+
+// Adapts the three live response shapes (verified via segments, verified via
+// top-level, statistical prediction) into the probability payload the badge
+// renders. Truth is derived from segment data and the prediction object first;
+// top-level hasStarlink/confidence alone can no longer mint a badge — that
+// default was the fabricated-70% path.
 function adapt(u: UpstreamResponse): AdaptedResponse {
-  const hasStarlink = !!u.hasStarlink;
-  const confidence = u.confidence ?? (hasStarlink ? 'likely' : 'none');
-  const probability = !hasStarlink ? 0 : confidence === 'verified' ? 0.95 : 0.7;
-  return {
-    hasStarlink,
-    probability,
-    confidence,
-    n_observations: u.flights?.length ?? 0,
-    flights: u.flights ?? [],
-  };
+  const segments = [
+    ...(Array.isArray(u.flights) ? u.flights : []),
+    ...(Array.isArray(u.fallback?.segments) ? u.fallback!.segments! : []),
+  ];
+
+  // 1) Per-segment verification signals (only fallback-path segments carry them).
+  const signal = segments.filter((s) => typeof s.hasStarlink === 'boolean' || s.verified_wifi != null);
+  if (signal.length > 0) {
+    const positive = signal.some(
+      (s) => s.hasStarlink === true || STARLINK_WIFI_RE.test(String(s.verified_wifi ?? '')),
+    );
+    return {
+      hasStarlink: positive,
+      probability: positive ? 0.95 : 0,
+      confidence: 'verified',
+      n_observations: segments.length,
+      flights: segments,
+    };
+  }
+
+  // 2) Top-level verified (primary path: tail assigned, flights[] populated).
+  if (u.confidence === 'verified') {
+    const positive = u.hasStarlink === true;
+    return {
+      hasStarlink: positive,
+      probability: positive ? 0.95 : 0,
+      confidence: 'verified',
+      n_observations: segments.length,
+      flights: segments,
+    };
+  }
+
+  // 3) Statistical prediction — only with real evidence. n_observations of 0 or
+  //    a fleet_prior_* method is a fleet-wide average, not an answer about this
+  //    flight; upstream returns those as confident-looking 200s.
+  const p = u.prediction;
+  if (p && typeof p.probability === 'number') {
+    const n = Number(p.n_observations) || 0;
+    const isPrior = n === 0 || /^fleet_prior/.test(String(u.method ?? ''));
+    if (!isPrior) {
+      return {
+        hasStarlink: false,
+        probability: p.probability,
+        confidence: 'predicted',
+        n_observations: n,
+        flights: segments,
+      };
+    }
+    return { hasStarlink: false, probability: 0, confidence: 'none', n_observations: 0, flights: segments };
+  }
+
+  // 4) Legacy documented shape: an explicit top-level 'likely'.
+  if (u.hasStarlink === true && u.confidence === 'likely') {
+    return {
+      hasStarlink: true,
+      probability: 0.7,
+      confidence: 'likely',
+      n_observations: segments.length,
+      flights: segments,
+    };
+  }
+
+  return { hasStarlink: false, probability: 0, confidence: 'none', n_observations: segments.length, flights: segments };
 }
 
 function isValidDate(s: string): boolean {
