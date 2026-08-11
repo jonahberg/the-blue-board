@@ -8,9 +8,12 @@
  * stragglers that couldn't import directly (see note below).
  *
  * Static, non-importable surfaces (public/index.html, public/llms.txt,
- * public/llms-full.txt, README.md) cannot `import` this module — each of
- * those files carries an HTML/text comment near its top noting it must be
- * kept in sync with this file by hand.
+ * public/llms-full.txt, README.md) cannot `import` this module. Their
+ * Starlink figures are no longer hand-synced: scripts/stamp-seo-build-date.mjs
+ * rewrites them in dist/ at build from src/data/starlink-live.json, so the
+ * committed source keeps readable last-good strings. Only the NON-Starlink
+ * facts in those files (hub counts, fleet database size) still need hand-sync,
+ * per the comment near each file's top.
  *
  * Verified against United's FY2025 10-K, United newsroom releases, and
  * Federal Register orders as of FACTS_AS_OF below.
@@ -31,11 +34,18 @@ export const HUB_LINE_LONG = "all 8 United hubs plus the Tokyo-Narita gateway";
 /** Short-label approved editorial line for hub-count claims (tight spaces). */
 export const HUB_LINE_SHORT = "8 hubs + NRT gateway";
 
-/** Starlink-equipped aircraft count (matches public/data/starlink.json seed). */
-export const STARLINK_EQUIPPED = 428;
+// Vite-bundled only (src/** + Astro). NEVER import facts.js from api/** — a
+// bare JSON import crashes Vercel's Node-ESM functions (prod incident 2026-06-01).
+import starlinkLive from './starlink-live.json';
 
-/** Rounded-down prose label for Starlink-equipped count ("425+" acceptable in copy). */
-export const STARLINK_EQUIPPED_LABEL = '425+';
+/** Starlink-equipped aircraft count — refreshed at build by scripts/refresh-starlink-facts.mjs. */
+export const STARLINK_EQUIPPED = starlinkLive.live.count;
+
+/** Floored prose label ("500+") — can only be stale in the conservative direction. */
+export const STARLINK_EQUIPPED_LABEL = starlinkLive.live.label;
+
+/** "August 2026" — the month the count was fetched. */
+export const STARLINK_AS_OF = starlinkLive.live.asOf;
 
 /** United's public target for Starlink-equipped aircraft by end of 2026. */
 export const STARLINK_TARGET_2026 = '~1,000';

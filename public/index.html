@@ -23,9 +23,13 @@
     public/hubs/       — individual hub HTML pages + cross-nav
   ═══════════════════════════════════════════════════════════════
   NOTE: This is a static HTML file and cannot import src/data/facts.js.
-  Hub-count language ("8 hubs + NRT gateway"), Starlink counts (428 /
-  "425+"), and the fleet database count (1,078) here must be kept in
-  sync BY HAND with src/data/facts.js — the single source of truth.
+  The Starlink count/label and its as-of month are NOT hand-synced: the
+  strings committed here are stamped with live values in dist/ at build by
+  scripts/stamp-seo-build-date.mjs, sourced from src/data/starlink-live.json.
+  Edit those strings only alongside that file's "source" block, or the build
+  fails. Everything else — hub-count language ("8 hubs + NRT gateway") and the
+  fleet database count (1,078) — must still be kept in sync BY HAND with
+  src/data/facts.js, the single source of truth.
   ═══════════════════════════════════════════════════════════════
 -->
 <head>

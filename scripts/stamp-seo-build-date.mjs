@@ -15,3 +15,28 @@ const updatedHtml = html.replaceAll('__HOME_LASTMOD__', homeLastModified);
 await writeFile(distIndexPath, updatedHtml);
 
 console.log(`Stamped dist/index.html with home dateModified ${homeLastModified}`);
+
+// Stamp the deploy-time Starlink figures into the verbatim-copied public/
+// files. Source keeps the committed strings (readable in dev); dist gets the
+// live values. A missing source string means someone edited the copy without
+// updating starlink-live.json's "source" block — fail the build loudly rather
+// than ship a half-stamped page.
+const starlink = JSON.parse(
+  await readFile(resolve('src/data/starlink-live.json'), 'utf8'),
+);
+const starlinkReplacements = [
+  [starlink.source.label, starlink.live.label],
+  [starlink.source.asOf, starlink.live.asOf],
+];
+for (const rel of ['dist/index.html', 'dist/llms.txt', 'dist/llms-full.txt']) {
+  const path = resolve(rel);
+  let text = await readFile(path, 'utf8');
+  for (const [from, to] of starlinkReplacements) {
+    if (!text.includes(from)) {
+      throw new Error(`Expected "${from}" in ${rel} — copy drifted from starlink-live.json "source"`);
+    }
+    text = text.replaceAll(from, to);
+  }
+  await writeFile(path, text);
+  console.log(`Stamped ${rel} with Starlink figures ${starlink.live.label} / ${starlink.live.asOf}`);
+}
