@@ -9,6 +9,7 @@ import {
   getHubRouteLastmodPaths,
   getNewsRouteLastmodPaths,
   getTrackerRouteLastmodPaths,
+  getTrackerDetailRouteLastmodPaths,
   homeLastmodPaths,
   fleetIndexLastmodPaths,
   hubIndexLastmodPaths,
@@ -139,5 +140,15 @@ describe('static lastmod path arrays', () => {
     expect(atc).toContain('src/data/trackers/atc.js');
     expect(united).toContain('src/data/trackers/united-hubs.js');
     expect(atc.filter((p) => !united.includes(p)).length).toBeGreaterThan(0);
+  });
+
+  it('tracker detail lastmod paths include the route template, shared layout, helper, and own data', () => {
+    const atc = getTrackerDetailRouteLastmodPaths('atc');
+    const united = getTrackerDetailRouteLastmodPaths('united-hubs');
+    expect(atc).toContain('src/pages/trackers/atc/[code].astro');
+    expect(atc).toContain('src/data/trackers/atc.js');
+    expect(united).toContain('src/pages/trackers/united-hubs/[code].astro');
+    expect(united).toContain('src/data/trackers/united-hubs.js');
+    expect(atc).toContain('src/components/trackers/TrackerDetailLayout.astro');
   });
 });

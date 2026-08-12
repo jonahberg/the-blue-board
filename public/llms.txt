@@ -131,6 +131,9 @@ The Blue Board is the only flight tracker built exclusively for United Airlines 
 - https://theblueboard.co/trackers — Trackers index: living, data-driven pages following aviation's long-running stories
 - https://theblueboard.co/trackers/atc — Modern Skies Tracker: FAA paper-to-digital flight strip (TFDM) rollout, all 89 airports with status, map, and sourced dates
 - https://theblueboard.co/trackers/united-hubs — United Hub Tracker: every United club, terminal, and gate project across all 8 hubs with honest status labels
+- https://theblueboard.co/trackers/atc/{iah|iad|sfo|den|ord|ewr|lax} — Focused, sourced FAA electronic-flight-strip status for each United hub in the 89-airport TFDM program
+- https://theblueboard.co/trackers/united-hubs/{iah|iad|sfo|den|ord|ewr|lax|gum} — Focused construction, club, terminal, and gate tracker for one United hub
+- Tracker data downloads: https://theblueboard.co/trackers/atc.csv, https://theblueboard.co/trackers/atc.json, https://theblueboard.co/trackers/united-hubs.csv, https://theblueboard.co/trackers/united-hubs.json
 
 ## URL
 

@@ -3,6 +3,7 @@ import outline from '../../data/trackers/us-outline.json';
 import { unitedHubsMeta, unitedHubs, unitedProjects } from '../../data/trackers/united-hubs.js';
 import { atcAirports } from '../../data/trackers/atc.js';
 import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
+import { trackerParentSeo } from '../../lib/tracker-detail.js';
 import StatStrip from '../../components/trackers/StatStrip.astro';
 import TrackerMap from '../../components/trackers/TrackerMap.astro';
 import TrackerSearch from '../../components/trackers/TrackerSearch.astro';
@@ -13,6 +14,7 @@ import LastUpdated from '../../components/trackers/LastUpdated.astro';
 import CrossLink from '../../components/trackers/CrossLink.astro';
 import SourceDisclosure from '../../components/trackers/SourceDisclosure.astro';
 import TrackerPulse from '../../components/trackers/TrackerPulse.astro';
+import TrackerDataActions from '../../components/trackers/TrackerDataActions.astro';
 import Footer from '../../components/Footer.astro';
 import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
 
@@ -134,7 +136,12 @@ const tableRows = sortedProjects.map((p) => {
     searchText: `${p.hub} ${unitedHubs[p.hub].city} ${unitedHubs[p.hub].state} ${unitedHubs[p.hub].searchAlias ?? ''} ${unitedHubs[p.hub].name} ${p.name} ${typeLabelFor(p)} ${s.label}`.toLowerCase(),
     cells: {
       project: { primary: p.name, secondary: p.builder === 'airport-authority' ? 'airport builds' : p.builder === 'joint' ? 'joint build' : '', sortVal: p.name.toLowerCase() },
-      hub: { primary: p.hub, mono: true, sortVal: `${hubOrder.indexOf(p.hub)}`.padStart(2, '0') },
+      hub: {
+        primary: p.hub,
+        mono: true,
+        sortVal: `${hubOrder.indexOf(p.hub)}`.padStart(2, '0'),
+        link: { href: `/trackers/united-hubs/${p.hub.toLowerCase()}`, text: `${p.hub} projects →` },
+      },
       type: { primary: typeLabelFor(p), sortVal: typeLabelFor(p) },
       status: { badge: { label: s.label, tone: s.tone, glyph: s.glyph }, sortVal: String(s.rank) },
       date: p.status === 'open' && p.openedDate
@@ -213,10 +220,10 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0B1018" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E" />
-    <title>What's Changing at United's Hubs? Club &amp; Terminal Tracker | The Blue Board</title>
+    <title>{trackerParentSeo['united-hubs'].title}</title>
     <meta
       name="description"
-      content="Every United club, terminal, and gate project across all 8 hubs — IAH's 54,000 sq ft club, Dulles' new Concourse E, SFO's terrace club — with honest labels for what's real and what's just teased."
+      content={trackerParentSeo['united-hubs'].description}
     />
     <meta name="author" content="The Blue Board" />
     <meta name="robots" content="index, follow" />
@@ -269,8 +276,22 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
       description:
         "Every tracked United Airlines ground-infrastructure project across its eight hubs, with status (open / under construction / announced / rumored), dates, sizes, costs, and sources.",
       url: canonical,
-      dateModified: unitedHubsMeta.lastUpdated,
+      dateModified: unitedHubsMeta.lastVerified,
       creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
+      spatialCoverage: 'United States and Guam',
+      keywords: ['United Airlines hubs', 'United Club construction', 'airport terminals', 'airport gates'],
+      distribution: [
+        {
+          '@type': 'DataDownload',
+          encodingFormat: 'text/csv',
+          contentUrl: 'https://theblueboard.co/trackers/united-hubs.csv',
+        },
+        {
+          '@type': 'DataDownload',
+          encodingFormat: 'application/json',
+          contentUrl: 'https://theblueboard.co/trackers/united-hubs.json',
+        },
+      ],
     })} />
 
     <link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin />
@@ -307,6 +328,8 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
       .trk-hub-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid var(--ua-border);margin-bottom:12px}
       .trk-hub-code{font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--ua-accent)}
       .trk-hub-name{font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--ua-text)}
+      a.trk-hub-name{text-decoration:none}
+      a.trk-hub-name:hover{text-decoration:underline;text-underline-offset:2px}
       .trk-hub-meta{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--ua-dim)}
       .trk-hub-atc{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-left:auto}
       .trk-hub-quiet{font-size:12px;color:var(--ua-muted);font-style:italic;max-width:680px;margin-bottom:10px}
@@ -412,12 +435,12 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
               <div class="trk-hub" id={`hub-${code.toLowerCase()}`} data-trk-group>
                 <div class="trk-hub-head">
                   <span class="trk-hub-code">{code}</span>
-                  <span class="trk-hub-name">{h.name}</span>
+                  <a class="trk-hub-name" href={`/trackers/united-hubs/${code.toLowerCase()}`}>{h.name}</a>
                   <span class="trk-hub-meta">
                     {h.city}, {h.state} · {projects.length} {projects.length === 1 ? 'project' : 'projects'}
                   </span>
                   {atcCodes.has(code) && (
-                    <a class="trk-hub-atc" href="/trackers/atc">
+                    <a class="trk-hub-atc" href={`/trackers/atc/${code.toLowerCase()}`}>
                       also in the FAA paper-strips rollout &rarr;
                     </a>
                   )}
@@ -591,6 +614,7 @@ const ogImage = 'https://theblueboard.co/og/og-tracker-united-hubs.jpg';
           figures are explained in prose instead of printed as facts. Updated monthly, or when
           United opens or announces something.
         </p>
+        <TrackerDataActions slug="united-hubs" pageLabel="United hub construction tracker" pagePath="/trackers/united-hubs" />
       </section>
     </main>
     <Footer />

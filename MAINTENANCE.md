@@ -5,6 +5,10 @@ tracker per month**. Everything renders from two data files — edit those, and 
 table, search, and changelog all update at build time. No UI code should ever need touching for
 a data update.
 
+The eight United hub detail pages and seven overlapping ATC hub pages are generated from the same
+files. The CSV/JSON downloads, page schema, internal counts, and sitemap entries update with them;
+do not hand-edit a detail page for a monthly data change.
+
 ```
 src/data/trackers/atc.js          ← Modern Skies Tracker data (89 airports)
 src/data/trackers/united-hubs.js  ← United Hub Tracker data (hubs + projects)
@@ -23,6 +27,9 @@ src/data/trackers/index.js        ← validate() — bad data fails the build on
    ordering mistakes, and status/date incoherence.
 6. If a **headline stat** changed (see "Stats that live outside the data files" below), refresh
    the OG images.
+7. Spot-check one detail route and each download after a structural data change:
+   `/trackers/united-hubs/iah`, `/trackers/atc/iah`, `/trackers/united-hubs.csv`,
+   `/trackers/atc.json`.
 
 ## Modern Skies Tracker (`atc.js`) — sources to check
 
