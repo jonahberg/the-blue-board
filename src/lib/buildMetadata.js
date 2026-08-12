@@ -115,6 +115,15 @@ export function getTrackerRouteLastmodPaths(slug) {
   ];
 }
 
+export function getTrackerDetailRouteLastmodPaths(slug) {
+  return [
+    `src/pages/trackers/${slug}/[code].astro`,
+    `src/data/trackers/${slug}.js`,
+    'src/components/trackers/TrackerDetailLayout.astro',
+    'src/lib/tracker-detail.js',
+  ];
+}
+
 export function xmlEscape(value) {
   return value
     .replaceAll('&', '&amp;')

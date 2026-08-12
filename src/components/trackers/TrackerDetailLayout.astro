@@ -1,0 +1,178 @@
+---
+import LastUpdated from './LastUpdated.astro';
+import TrackerDataActions from './TrackerDataActions.astro';
+import Footer from '../Footer.astro';
+import VercelSpeedInsights from '../VercelSpeedInsights.astro';
+
+/**
+ * @type {{
+ *   title: string,
+ *   description: string,
+ *   canonical: string,
+ *   ogImage: string,
+ *   ogImageAlt: string,
+ *   parentHref: string,
+ *   parentLabel: string,
+ *   breadcrumbLabel: string,
+ *   kicker: string,
+ *   heading: string,
+ *   subtitle: string,
+ *   lastUpdated: string,
+ *   lastVerified: string,
+ *   schemas?: Record<string, unknown>[],
+ *   dataSlug: 'atc' | 'united-hubs',
+ *   pagePath: string,
+ *   pageLabel: string,
+ *   peerLabel: string,
+ *   peerLinks: {href: string, label: string, active?: boolean}[],
+ * }}
+ */
+const {
+  title,
+  description,
+  canonical,
+  ogImage,
+  ogImageAlt,
+  parentHref,
+  parentLabel,
+  breadcrumbLabel,
+  kicker,
+  heading,
+  subtitle,
+  lastUpdated,
+  lastVerified,
+  schemas = [],
+  dataSlug,
+  pagePath,
+  pageLabel,
+  peerLabel,
+  peerLinks,
+} = Astro.props;
+
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'The Blue Board', item: 'https://theblueboard.co' },
+    { '@type': 'ListItem', position: 2, name: 'Trackers', item: 'https://theblueboard.co/trackers' },
+    { '@type': 'ListItem', position: 3, name: parentLabel, item: `https://theblueboard.co${parentHref}` },
+    { '@type': 'ListItem', position: 4, name: breadcrumbLabel, item: canonical },
+  ],
+};
+---
+
+<!doctype html>
+<html lang="en" style="color-scheme:dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0B1018" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="author" content="The Blue Board" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="article" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content={heading} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="The Blue Board" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={ogImageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:creator" content="@theblueboard" />
+    <meta name="twitter:title" content={heading} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:site" content="@theblueboard" />
+    <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
+    {schemas.map((schema) => <script type="application/ld+json" set:html={JSON.stringify(schema)} />)}
+    <link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin fetchpriority="low" />
+  </head>
+  <body data-trk-page={dataSlug}>
+    <main class="trk-detail container">
+      <nav class="trk-detail-breadcrumb" aria-label="Breadcrumb">
+        <a href="/">&larr; The Blue Board</a> / <a href="/trackers">Trackers</a> / <a href={parentHref}>{parentLabel}</a> / {breadcrumbLabel}
+      </nav>
+
+      <header class="trk-detail-header">
+        <div class="trk-detail-kicker">{kicker}</div>
+        <h1>{heading}</h1>
+        <p>{subtitle}</p>
+        <div class="trk-detail-dates">
+          <LastUpdated iso={lastUpdated} />
+          <LastUpdated iso={lastVerified} prefix="Verified" />
+        </div>
+        <a class="trk-detail-parent" href={parentHref}>&larr; Open the complete {parentLabel}</a>
+      </header>
+
+      <slot />
+
+      <section class="trk-detail-section trk-detail-peers" aria-labelledby="tracker-peer-heading">
+        <h2 id="tracker-peer-heading">{peerLabel}</h2>
+        <nav aria-label={peerLabel}>
+          {peerLinks.map((link) => (
+            <a href={link.href} aria-current={link.active ? 'page' : undefined}>{link.label}</a>
+          ))}
+        </nav>
+      </section>
+
+      <section class="trk-detail-section">
+        <TrackerDataActions slug={dataSlug} pageLabel={pageLabel} pagePath={pagePath} />
+      </section>
+    </main>
+    <Footer />
+    <VercelSpeedInsights />
+    <script defer src="/js/trackers.js"></script>
+  </body>
+</html>
+
+<style is:global>
+  @font-face{font-family:'Satoshi';font-style:normal;font-weight:300 900;font-display:swap;src:url(/fonts/satoshi-latin.woff2) format('woff2')}
+  @font-face{font-family:'DM Sans';font-style:normal;font-weight:100 900;font-display:swap;src:url(/fonts/dm-sans-latin.woff2) format('woff2')}
+  @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2')}
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#7C8DA6;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
+  body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);font-size:13px;line-height:1.7;min-height:100vh}
+  a{color:var(--ua-accent)}
+  .container{max-width:900px;margin:0 auto;padding:20px 16px}
+  .trk-detail-breadcrumb{margin-bottom:16px;color:var(--ua-muted);font-family:var(--font-display);font-size:11px;font-weight:500}
+  .trk-detail-breadcrumb a{color:var(--ua-accent);text-decoration:none}
+  .trk-detail-breadcrumb a:hover{text-decoration:underline}
+  .trk-detail-header{margin-bottom:32px}
+  .trk-detail-kicker{color:var(--ua-amber);font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
+  .trk-detail-header h1{margin:2px 0 6px;font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:-.5px;text-wrap:balance}
+  .trk-detail-header > p{max-width:680px;margin-bottom:10px;color:var(--ua-muted)}
+  .trk-detail-dates{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+  .trk-detail-parent{display:inline-flex;min-height:44px;align-items:center;font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-underline-offset:2px}
+  .trk-detail-section{margin-bottom:40px;padding-top:24px;border-top:1px solid var(--ua-border)}
+  .trk-detail-section h2{margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid var(--ua-border);font-family:var(--font-display);font-size:16px;font-weight:700}
+  .trk-detail-section h3{margin-bottom:5px;font-family:var(--font-display);font-size:13px;font-weight:600}
+  .trk-detail-section p{max-width:680px;margin-bottom:12px}
+  .trk-detail-section p:last-child{margin-bottom:0}
+  .trk-detail-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .trk-detail-stat{padding:14px 16px;border:1px solid var(--ua-border);border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.6) 100%)}
+  .trk-detail-stat strong{display:block;color:var(--ua-amber);font-family:var(--font-mono);font-size:18px;font-weight:700;line-height:1.3}
+  .trk-detail-stat span{color:var(--ua-dim);font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+  .trk-detail-card{margin-bottom:12px;padding:14px 16px;border:1px solid var(--ua-border);border-radius:6px;background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.6) 100%)}
+  .trk-detail-card:last-child{margin-bottom:0}
+  .trk-detail-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:7px}
+  .trk-detail-card-badges{display:flex;gap:5px;flex-wrap:wrap}
+  .trk-detail-meta{display:flex;gap:6px 14px;flex-wrap:wrap;margin-bottom:7px;color:var(--ua-dim);font-family:var(--font-mono);font-size:9px;letter-spacing:.25px;text-transform:uppercase}
+  .trk-detail-card p{color:var(--ua-muted);font-size:12px;line-height:1.65}
+  .trk-detail-note{padding:12px 16px;border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;background:var(--ua-panel);color:var(--ua-muted);font-size:12px}
+  .trk-detail-faq h3{margin-top:15px;color:var(--ua-text)}
+  .trk-detail-faq p{color:var(--ua-muted);font-size:12px}
+  .trk-detail-peers nav{display:flex;gap:6px;flex-wrap:wrap}
+  .trk-detail-peers a{display:inline-flex;min-height:44px;align-items:center;padding:6px 12px;border:1px solid var(--ua-border);border-radius:4px;color:var(--ua-muted);font-family:var(--font-mono);font-size:10px;font-weight:600;text-decoration:none}
+  .trk-detail-peers a:hover,.trk-detail-peers a[aria-current='page']{border-color:var(--ua-blue);background:var(--ua-blue-soft);color:var(--ua-accent)}
+  .trk-detail a:focus-visible{outline:2px solid var(--ua-accent);outline-offset:2px}
+  @media (max-width:600px){.trk-detail-header h1{font-size:18px}.trk-detail-card-head{flex-direction:column}.trk-detail-summary{grid-template-columns:1fr 1fr}}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>

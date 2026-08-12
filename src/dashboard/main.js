@@ -357,9 +357,15 @@ function updateTrackerBriefing() {
   if (airport) facts.push(TRACKER_STATUS_LABEL[airport.status] || 'tower status is tracked');
   if (projects.length) facts.push(`${projects.length} hub ${projects.length === 1 ? 'project' : 'projects'}, ${activeProjects} active or announced`);
   summary.textContent = facts.join('. ') + '.';
-  hubLink.href = `/trackers/united-hubs#hub-${home.toLowerCase()}`;
+  hubLink.href = projects.length
+    ? `/trackers/united-hubs/${home.toLowerCase()}`
+    : '/trackers/united-hubs';
   hubLink.textContent = projects.length ? `${home} projects →` : 'Hub projects →';
-  atcLink.href = airport ? `/trackers/atc#row-${home.toLowerCase()}` : '/trackers/atc';
+  atcLink.href = airport
+    ? projects.length
+      ? `/trackers/atc/${home.toLowerCase()}`
+      : `/trackers/atc#row-${home.toLowerCase()}`
+    : '/trackers/atc';
   atcLink.textContent = airport ? `${home} tower →` : 'Tower modernization →';
 
   const watchedIds = new Set(readTrackerWatches().map((item) => `${item.slug}:${item.id}`));

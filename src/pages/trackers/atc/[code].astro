@@ -1,0 +1,197 @@
+---
+import { atcMeta } from '../../../data/trackers/atc.js';
+import { unitedHubs } from '../../../data/trackers/united-hubs.js';
+import { atcHubDetailCodes, formatTrackerDate, getAtcAirport, getHubProjects, countLabel, atcAirportSeo } from '../../../lib/tracker-detail.js';
+import TrackerDetailLayout from '../../../components/trackers/TrackerDetailLayout.astro';
+import StatusBadge from '../../../components/trackers/StatusBadge.astro';
+import SourceDisclosure from '../../../components/trackers/SourceDisclosure.astro';
+
+export function getStaticPaths() {
+  return atcHubDetailCodes.map((code) => ({ params: { code: code.toLowerCase() }, props: { code } }));
+}
+
+const { code } = Astro.props;
+const airport = getAtcAirport(code);
+const hub = unitedHubs[code];
+const hubProjects = getHubProjects(code);
+
+if (!airport || !hub) throw new Error(`Missing tracker detail data for ${code}`);
+
+const STATUS = {
+  live: { label: 'Electronic strips live', tone: 'green', glyph: '●' },
+  'in-progress': { label: 'Installation in progress', tone: 'yellow', glyph: '●' },
+  planned: { label: 'Scheduled', tone: 'yellow', glyph: '◆' },
+  paper: { label: 'On paper · no date', tone: 'dim', glyph: '○' },
+};
+const status = STATUS[airport.status];
+const publishedDate = airport.goLiveDate ?? airport.plannedIoc;
+const dateLabel = airport.goLiveDate ? 'Went live' : airport.plannedIoc ? 'Published target' : 'Published date';
+const statusSentence =
+  airport.status === 'live'
+    ? `${code} is live on the FAA's Terminal Flight Data Manager electronic flight strip system.${airport.goLiveDate ? ` The sourced go-live date is ${formatTrackerDate(airport.goLiveDate)}.` : ' The FAA has not published the exact cutover date.'}`
+    : airport.status === 'planned'
+      ? `${code} is still awaiting its TFDM cutover, with a published planning target of ${formatTrackerDate(airport.plannedIoc)}. FAA program dates have moved before, so the tracker treats this as a schedule marker rather than a guarantee.`
+      : airport.status === 'in-progress'
+        ? `${code} is in the installation and cutover phase for FAA electronic flight strips. It remains labeled in progress until a source confirms operational use.`
+        : `${code} remains on paper with no airport-specific TFDM date published by the FAA.`;
+
+const { title, description } = atcAirportSeo(airport);
+const canonical = `https://theblueboard.co/trackers/atc/${code.toLowerCase()}`;
+const heading = `Does ${code} Still Use Paper Flight Strips?`;
+const subtitle = `${airport.name} is one of 89 airports in the FAA's TFDM modernization program. This page isolates its current status, published schedule, evidence, and latest verification.`;
+const faq = [
+  {
+    question: `Does ${code} use electronic flight strips?`,
+    answer: statusSentence,
+  },
+  {
+    question: `When will ${code} stop using paper flight strips?`,
+    answer: airport.status === 'live'
+      ? `${code} is already listed as live on electronic flight strips.${airport.goLiveDate ? ` The sourced go-live date is ${formatTrackerDate(airport.goLiveDate)}.` : ' The FAA does not publish the exact cutover date.'}`
+      : airport.plannedIoc
+        ? `The latest published planning date is ${formatTrackerDate(airport.plannedIoc)}. It can move as the FAA resequences installations, so the tracker will not call it complete until a source confirms the go-live.`
+        : `The FAA has not published an airport-specific date for ${code}.`,
+  },
+  {
+    question: `What is TFDM at ${code}?`,
+    answer: `Terminal Flight Data Manager is the FAA system replacing paper flight strips with electronic flight data displays and surface-management tools. At ${code}, the tracker follows the airport-specific installation status rather than the broader national program promise.`,
+  },
+];
+
+const schemas = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: heading,
+    description,
+    url: canonical,
+    dateModified: atcMeta.lastVerified,
+    author: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
+    publisher: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
+    about: [
+      { '@type': 'GovernmentOrganization', name: 'Federal Aviation Administration' },
+      { '@type': 'Airport', name: airport.name, iataCode: code },
+    ],
+    isPartOf: { '@type': 'Dataset', name: 'FAA TFDM electronic flight strips rollout', url: 'https://theblueboard.co/trackers/atc' },
+    mainEntityOfPage: canonical,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Dataset',
+    name: `${code} FAA TFDM electronic flight strips status`,
+    description,
+    url: canonical,
+    dateModified: atcMeta.lastVerified,
+    creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
+    spatialCoverage: { '@type': 'Place', name: `${airport.city}, ${airport.state}` },
+    isPartOf: 'https://theblueboard.co/trackers/atc',
+    distribution: [
+      { '@type': 'DataDownload', encodingFormat: 'text/csv', contentUrl: 'https://theblueboard.co/trackers/atc.csv' },
+      { '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: 'https://theblueboard.co/trackers/atc.json' },
+    ],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: { '@type': 'Answer', text: item.answer },
+    })),
+  },
+];
+
+const peerLinks = atcHubDetailCodes.map((peer) => ({
+  href: `/trackers/atc/${peer.toLowerCase()}`,
+  label: peer,
+  active: peer === code,
+}));
+---
+
+<TrackerDetailLayout
+  title={title}
+  description={description}
+  canonical={canonical}
+  ogImage="https://theblueboard.co/og/og-tracker-atc.jpg"
+  ogImageAlt={`${code} FAA electronic flight strips status`}
+  parentHref="/trackers/atc"
+  parentLabel="Modern Skies Tracker"
+  breadcrumbLabel={code}
+  kicker={`FAA modernization · ${airport.city}`}
+  heading={heading}
+  subtitle={subtitle}
+  lastUpdated={atcMeta.lastUpdated}
+  lastVerified={atcMeta.lastVerified}
+  schemas={schemas}
+  dataSlug="atc"
+  pagePath={`/trackers/atc/${code.toLowerCase()}`}
+  pageLabel={`${code} electronic flight strips status`}
+  peerLabel="Check another United hub tower"
+  peerLinks={peerLinks}
+>
+  <section class="trk-detail-section" aria-label={`${code} TFDM status summary`}>
+    <div class="trk-detail-summary">
+      <div class="trk-detail-stat"><strong>{code}</strong><span>Airport</span></div>
+      <div class="trk-detail-stat"><strong>{status.label}</strong><span>Current status</span></div>
+      <div class="trk-detail-stat"><strong>{publishedDate ? formatTrackerDate(publishedDate) : 'Not published'}</strong><span>{dateLabel}</span></div>
+    </div>
+  </section>
+
+  <section class="trk-detail-section" aria-labelledby="airport-status-heading">
+    <h2 id="airport-status-heading">{code}'s electronic flight strips status</h2>
+    <article class="trk-detail-card" id={`airport-${airport.id}`}>
+      <div class="trk-detail-card-head">
+        <h3>{airport.name}</h3>
+        <StatusBadge label={status.label} tone={status.tone} glyph={status.glyph} />
+      </div>
+      <div class="trk-detail-meta">
+        <span>{airport.city}, {airport.state}</span>
+        {publishedDate && <span>{dateLabel} {formatTrackerDate(publishedDate)}</span>}
+      </div>
+      <p>{statusSentence}</p>
+      {airport.note && <p>{airport.note}</p>}
+      <SourceDisclosure
+        sources={airport.sources}
+        verified={atcMeta.lastVerified}
+        entryId={airport.id}
+        entryLabel={`${code} · ${airport.name}`}
+        shareHref={`/trackers/atc/${code.toLowerCase()}`}
+      />
+    </article>
+  </section>
+
+  <section class="trk-detail-section" aria-labelledby="airport-change-heading">
+    <h2 id="airport-change-heading">What changes when {code} goes digital</h2>
+    <p>
+      Paper flight strips are physical records controllers print, mark by hand, and pass between
+      positions. TFDM moves that workflow to electronic displays and connects it to surface tools
+      that help sequence departures and manage taxi-out demand. It is an airport-tower rollout,
+      separate from the radar and telecom programs also included in the FAA's Modern Skies banner.
+    </p>
+    <p>
+      The status above follows airport-specific evidence. A national deadline or an old waterfall
+      schedule is not treated as proof that {code} is live; the page changes only when the cited
+      sources support the new status.
+    </p>
+  </section>
+
+  <section class="trk-detail-section" aria-labelledby="airport-united-heading">
+    <h2 id="airport-united-heading">United construction at {code}</h2>
+    <p>
+      Tower modernization is only one infrastructure story here. The United hub tracker follows
+      {` ${countLabel(hubProjects.length, 'club, terminal, gate, or airport project')} at ${code}`},
+      with separate labels for United-funded work and airport-authority construction.
+    </p>
+    <p><a href={`/trackers/united-hubs/${code.toLowerCase()}`}>See every tracked United project at {code} &rarr;</a></p>
+  </section>
+
+  <section class="trk-detail-section trk-detail-faq" aria-labelledby="airport-faq-heading">
+    <h2 id="airport-faq-heading">Quick answers</h2>
+    {faq.map((item) => (
+      <div>
+        <h3>{item.question}</h3>
+        <p>{item.answer}</p>
+      </div>
+    ))}
+  </section>
+</TrackerDetailLayout>

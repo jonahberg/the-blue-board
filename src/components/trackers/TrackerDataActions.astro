@@ -1,0 +1,96 @@
+---
+/**
+ * Shared download and correction affordance for tracker landing and detail pages.
+ *
+ * @type {{slug: 'atc' | 'united-hubs', pageLabel: string, pagePath: string}}
+ */
+const { slug, pageLabel, pagePath } = Astro.props;
+const issueTitle = `Tracker correction: ${pageLabel}`;
+const issueBody = `Page: https://theblueboard.co${pagePath}\n\nWhat looks wrong or out of date?\n\nSource that supports the correction:`;
+const correctionHref = `https://github.com/jonahberg/the-blue-board/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
+---
+
+<aside class="trk-data-actions" aria-label="Tracker downloads and corrections">
+  <div>
+    <strong>Use the data</strong>
+    <span>Versioned, sourced, and ready to cite.</span>
+  </div>
+  <nav aria-label="Download tracker data or report a correction">
+    <a href={`/trackers/${slug}.csv`} download>Download CSV</a>
+    <a href={`/trackers/${slug}.json`} download>Download JSON</a>
+    <a href={correctionHref} target="_blank" rel="noopener noreferrer">Report a correction ↗</a>
+  </nav>
+</aside>
+
+<style>
+  .trk-data-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 18px 0 0;
+    padding: 12px 16px;
+    border: 1px solid var(--ua-border);
+    border-left: 3px solid var(--ua-amber);
+    border-radius: 0 6px 6px 0;
+    background: linear-gradient(180deg, var(--ua-panel) 0%, rgba(17, 26, 39, 0.6) 100%);
+  }
+  .trk-data-actions > div {
+    min-width: 0;
+  }
+  .trk-data-actions strong {
+    display: block;
+    color: var(--ua-amber);
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .trk-data-actions span {
+    color: var(--ua-muted);
+    font-size: 11px;
+  }
+  .trk-data-actions nav {
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .trk-data-actions a {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    padding: 6px 10px;
+    border: 1px solid var(--ua-border);
+    border-radius: 4px;
+    color: var(--ua-accent);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.35px;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: border-color 150ms ease, background 150ms ease;
+  }
+  .trk-data-actions a:hover {
+    border-color: var(--ua-blue);
+    background: var(--ua-blue-soft);
+  }
+  .trk-data-actions a:focus-visible {
+    outline: 2px solid var(--ua-accent);
+    outline-offset: 2px;
+  }
+  @media (max-width: 600px) {
+    .trk-data-actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .trk-data-actions nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .trk-data-actions a:last-child {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

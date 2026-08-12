@@ -1,0 +1,210 @@
+---
+import { unitedHubsMeta, unitedHubs } from '../../../data/trackers/united-hubs.js';
+import { getAtcAirport, getHubProjects, unitedHubDetailCodes, formatCompactNumber, formatTrackerDate, countLabel, unitedHubSeo } from '../../../lib/tracker-detail.js';
+import TrackerDetailLayout from '../../../components/trackers/TrackerDetailLayout.astro';
+import StatusBadge from '../../../components/trackers/StatusBadge.astro';
+import SourceDisclosure from '../../../components/trackers/SourceDisclosure.astro';
+
+export function getStaticPaths() {
+  return unitedHubDetailCodes.map((code) => ({ params: { code: code.toLowerCase() }, props: { code } }));
+}
+
+const { code } = Astro.props;
+const hub = unitedHubs[code];
+const projects = getHubProjects(code);
+const atcAirport = getAtcAirport(code);
+
+const STATUS = {
+  open: { label: 'Open', tone: 'green', glyph: '●' },
+  'under-construction': { label: 'Under construction', tone: 'yellow', glyph: '◆' },
+  announced: { label: 'Announced', tone: 'accent', glyph: '◇' },
+  rumored: { label: 'Rumored', tone: 'dim', glyph: '?' },
+};
+const TYPE_LABEL = {
+  club: 'United Club',
+  polaris: 'Polaris lounge',
+  'club-fly': 'Club Fly',
+  terminal: 'Terminal',
+  gates: 'Gates',
+  other: 'Airport project',
+};
+const BUILDER_LABEL = {
+  united: 'United builds',
+  'airport-authority': 'Airport builds',
+  joint: 'Joint build',
+};
+
+const activeCount = projects.filter((project) => project.status === 'under-construction' || project.status === 'announced').length;
+const openCount = projects.filter((project) => project.status === 'open').length;
+const totalGates = projects.reduce((sum, project) => sum + (project.gates ?? 0), 0);
+const unitedLedCount = projects.filter((project) => project.builder === 'united' || project.builder === 'joint').length;
+const leadProject =
+  projects.find((project) => project.status === 'under-construction') ??
+  projects.find((project) => project.status === 'announced') ??
+  projects.find((project) => project.status === 'open') ??
+  projects[0];
+const nextDatedProject = projects
+  .find((project) => project.status !== 'open' && project.targetDate);
+
+const { title, description } = unitedHubSeo(code, projects.length);
+const canonical = `https://theblueboard.co/trackers/united-hubs/${code.toLowerCase()}`;
+const heading = `What United Is Building at ${code}`;
+const subtitle = `${hub.name} has ${countLabel(projects.length, 'tracked project')}. See what is open, under construction, announced, or still only rumored — with a source beside every claim.`;
+const projectList = projects.map((project) => project.name).join(', ');
+const faq = [
+  {
+    question: `What is United building at ${code}?`,
+    answer: `${countLabel(projects.length, 'project')} are tracked at ${code}: ${projectList}. Each item is labeled by current status and by whether United or the airport authority is doing the work.`,
+  },
+  {
+    question: `How many active United projects are at ${code}?`,
+    answer: `${activeCount} ${activeCount === 1 ? 'project is' : 'projects are'} under construction or announced, ${openCount} ${openCount === 1 ? 'is' : 'are'} already open, and the remaining items are explicitly labeled if they are only rumored.`,
+  },
+  {
+    question: `Which United project at ${code} has a published timeline?`,
+    answer: nextDatedProject
+      ? `${nextDatedProject.name} carries a published target of ${formatTrackerDate(nextDatedProject.targetDate)}. It remains labeled ${STATUS[nextDatedProject.status].label.toLowerCase()} until a source confirms that it opened.`
+      : `No not-yet-open project at ${code} has a reliable published opening date in the tracker. The page leaves the date blank instead of guessing.`,
+  },
+];
+
+const schemas = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: heading,
+    description,
+    url: canonical,
+    dateModified: unitedHubsMeta.lastVerified,
+    author: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
+    publisher: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
+    about: [
+      { '@type': 'Organization', name: 'United Airlines' },
+      { '@type': 'Airport', name: hub.name, iataCode: code },
+    ],
+    isPartOf: { '@type': 'Dataset', name: 'United Airlines hub construction projects', url: 'https://theblueboard.co/trackers/united-hubs' },
+    mainEntityOfPage: canonical,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: `United projects at ${code}`,
+    itemListElement: projects.map((project, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: project.name,
+      url: `${canonical}#${project.id}`,
+    })),
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: { '@type': 'Answer', text: item.answer },
+    })),
+  },
+];
+
+const peerLinks = unitedHubDetailCodes.map((peer) => ({
+  href: `/trackers/united-hubs/${peer.toLowerCase()}`,
+  label: peer,
+  active: peer === code,
+}));
+---
+
+<TrackerDetailLayout
+  title={title}
+  description={description}
+  canonical={canonical}
+  ogImage="https://theblueboard.co/og/og-tracker-united-hubs.jpg"
+  ogImageAlt={`United projects at ${code}`}
+  parentHref="/trackers/united-hubs"
+  parentLabel="United Hub Tracker"
+  breadcrumbLabel={code}
+  kicker={`United hub · ${hub.city}`}
+  heading={heading}
+  subtitle={subtitle}
+  lastUpdated={unitedHubsMeta.lastUpdated}
+  lastVerified={unitedHubsMeta.lastVerified}
+  schemas={schemas}
+  dataSlug="united-hubs"
+  pagePath={`/trackers/united-hubs/${code.toLowerCase()}`}
+  pageLabel={`United projects at ${code}`}
+  peerLabel="Explore another United hub"
+  peerLinks={peerLinks}
+>
+  <section class="trk-detail-section" aria-label={`${code} project summary`}>
+    <div class="trk-detail-summary">
+      <div class="trk-detail-stat"><strong>{projects.length}</strong><span>Tracked projects</span></div>
+      <div class="trk-detail-stat"><strong>{activeCount}</strong><span>Building or announced</span></div>
+      <div class="trk-detail-stat"><strong>{openCount}</strong><span>Already open</span></div>
+      <div class="trk-detail-stat"><strong>{totalGates || '—'}</strong><span>Tracked new gates</span></div>
+    </div>
+  </section>
+
+  <section class="trk-detail-section" aria-labelledby="hub-projects-heading">
+    <h2 id="hub-projects-heading">United projects at {code}</h2>
+    {projects.map((project) => {
+      const status = STATUS[project.status];
+      return (
+        <article class="trk-detail-card" id={project.id}>
+          <div class="trk-detail-card-head">
+            <h3>{project.name}</h3>
+            <div class="trk-detail-card-badges">
+              <StatusBadge label={status.label} tone={status.tone} glyph={status.glyph} />
+              <StatusBadge label={TYPE_LABEL[project.projectType]} tone="neutral" />
+            </div>
+          </div>
+          <div class="trk-detail-meta">
+            <span>{BUILDER_LABEL[project.builder]}</span>
+            {project.targetDate && <span>Target {formatTrackerDate(project.targetDate)}</span>}
+            {project.openedDate && <span>Opened {formatTrackerDate(project.openedDate)}</span>}
+            {project.sizeSqFt && <span>{project.sizeSqFt.toLocaleString('en-US')} sq ft</span>}
+            {project.costUsd && <span>${formatCompactNumber(project.costUsd)}</span>}
+            {project.gates && <span>{countLabel(project.gates, 'gate')}</span>}
+          </div>
+          <p>{project.details}</p>
+          <SourceDisclosure
+            sources={project.sources}
+            verified={unitedHubsMeta.lastVerified}
+            entryId={project.id}
+            entryLabel={`${code} · ${project.name}`}
+            shareHref={`/trackers/united-hubs/${code.toLowerCase()}#${project.id}`}
+          />
+        </article>
+      );
+    })}
+  </section>
+
+  <section class="trk-detail-section" aria-labelledby="hub-read-heading">
+    <h2 id="hub-read-heading">The read on {code}</h2>
+    <p>
+      {leadProject.name} is the clearest headline at {code}: {leadProject.details}
+      {` Across the full list, ${unitedLedCount} of ${projects.length} projects are led or jointly built by United; the rest belong to the airport authority and affect United's operation without being United capital projects.`}
+    </p>
+    {hub.quietNote && <p class="trk-detail-note">{hub.quietNote}</p>}
+  </section>
+
+  {atcAirport && (
+    <section class="trk-detail-section" aria-labelledby="hub-tower-heading">
+      <h2 id="hub-tower-heading">Is the {code} tower still on paper?</h2>
+      <p>
+        The FAA tracker currently labels {code} <strong>{atcAirport.status === 'live' ? 'live on electronic flight strips' : atcAirport.status === 'planned' ? 'scheduled for TFDM' : atcAirport.status.replace('-', ' ')}</strong>.
+        {' '}The tower rollout is tracked separately from United's terminal and club construction.
+      </p>
+      <p><a href={`/trackers/atc/${code.toLowerCase()}`}>Open the sourced {code} electronic flight strips status &rarr;</a></p>
+    </section>
+  )}
+
+  <section class="trk-detail-section trk-detail-faq" aria-labelledby="hub-faq-heading">
+    <h2 id="hub-faq-heading">Quick answers</h2>
+    {faq.map((item) => (
+      <div>
+        <h3>{item.question}</h3>
+        <p>{item.answer}</p>
+      </div>
+    ))}
+  </section>
+</TrackerDetailLayout>
