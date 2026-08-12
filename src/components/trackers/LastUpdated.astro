@@ -1,0 +1,39 @@
+---
+// Renders from data, never hardcoded. Noon-UTC anchor matches the news pages' formatter so a
+// bare YYYY-MM-DD never renders a day early west of UTC.
+/** @type {{ iso: string, prefix?: string }} */
+const { iso, prefix = 'Updated' } = Astro.props;
+const display = new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+---
+
+<span class="trk-updated"
+  ><span class="trk-updated-dot" aria-hidden="true"></span>{prefix}
+  <time datetime={iso}>{display}</time></span
+>
+
+<style>
+  .trk-updated {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ua-muted);
+  }
+  .trk-updated time {
+    color: var(--ua-text);
+  }
+  .trk-updated-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ua-green);
+  }
+</style>

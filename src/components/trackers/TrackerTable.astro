@@ -1,0 +1,207 @@
+---
+import StatusBadge from './StatusBadge.astro';
+import SourceDisclosure from './SourceDisclosure.astro';
+
+// The sortable registry table — also the SEO surface: every entry is real text at build time.
+// Sorting/filtering is progressive enhancement via /js/trackers.js reading data-sort /
+// data-trk-search attributes; with JS off this is a complete static table.
+//
+// Cell descriptor: { primary, secondary?, mono?, dim?, badge?: {label, tone, glyph}, evidence? }
+/** @type {{ caption: string, columns: { key: string, label: string, sortable?: boolean }[], rows: { id: string, searchText: string, cells: Record<string, any> }[] }} */
+const { caption, columns, rows } = Astro.props;
+---
+
+<!-- No tabindex on the scroll wrapper: it contains focusable sort buttons, so keyboard
+     users can already reach and scroll it — a tabindex here trips axe nested-interactive. -->
+<div class="trk-table-wrap">
+  <table class="trk-table">
+    <caption class="trk-table-caption">{caption}</caption>
+    <thead>
+      <tr>
+        {
+          columns.map((c) =>
+            c.sortable ? (
+              <th scope="col" aria-sort="none" data-trk-sort={c.key}>
+                <button type="button" class="trk-th-btn">
+                  {c.label}
+                  <span class="trk-th-arrow" aria-hidden="true" />
+                </button>
+              </th>
+            ) : (
+              <th scope="col">{c.label}</th>
+            )
+          )
+        }
+      </tr>
+    </thead>
+    <tbody data-trk-tbody>
+      {
+        rows.map((row) => (
+          <tr data-trk-row data-trk-search-text={row.searchText} id={`row-${row.id}`}>
+            {columns.map((c) => {
+              const cell = row.cells[c.key] ?? {};
+              return (
+                <td data-sort={cell.sortVal ?? ''} class:list={[{ 'trk-td-dim': cell.dim }]}>
+                  {cell.badge ? (
+                    <StatusBadge label={cell.badge.label} tone={cell.badge.tone} glyph={cell.badge.glyph} />
+                  ) : null}
+                  {cell.primary ? (
+                    <span class:list={['trk-td-primary', { 'trk-td-mono': cell.mono }]}>{cell.primary}</span>
+                  ) : null}
+                  {cell.secondary ? <span class="trk-td-secondary">{cell.secondary}</span> : null}
+                  {cell.link ? (
+                    <a class="trk-td-link" href={cell.link.href}>
+                      {cell.link.text}
+                    </a>
+                  ) : null}
+                  {cell.evidence ? (
+                    <SourceDisclosure
+                      sources={cell.evidence.sources}
+                      verified={cell.evidence.verified}
+                      entryId={cell.evidence.entryId}
+                      entryLabel={cell.evidence.entryLabel}
+                      shareHref={cell.evidence.shareHref}
+                      compact
+                    />
+                  ) : null}
+                </td>
+              );
+            })}
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>
+
+<style>
+  .trk-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--ua-border);
+    border-radius: 6px;
+  }
+  .trk-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .trk-table-caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .trk-table th {
+    background: var(--ua-panel);
+    color: var(--ua-muted);
+    text-align: left;
+    padding: 0;
+    border-bottom: 2px solid var(--ua-blue);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    white-space: nowrap;
+  }
+  .trk-table th:not([data-trk-sort]) {
+    padding: 8px;
+  }
+  .trk-th-btn {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+  }
+  .trk-th-btn:hover {
+    color: var(--ua-accent);
+  }
+  .trk-th-btn:focus-visible {
+    outline: 2px solid var(--ua-accent);
+    outline-offset: -2px;
+  }
+  .trk-th-arrow::after {
+    content: '↕';
+    opacity: 0.45;
+    font-size: 8px;
+  }
+  th[aria-sort='ascending'] .trk-th-arrow::after {
+    content: '↑';
+    opacity: 1;
+    color: var(--ua-accent);
+  }
+  th[aria-sort='descending'] .trk-th-arrow::after {
+    content: '↓';
+    opacity: 1;
+    color: var(--ua-accent);
+  }
+  .trk-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(30, 41, 64, 0.55);
+    vertical-align: top;
+  }
+  .trk-table tbody tr:hover {
+    background: rgba(30, 41, 64, 0.4);
+  }
+  .trk-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .trk-td-primary {
+    display: block;
+    color: var(--ua-text);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .trk-td-mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .trk-td-secondary {
+    display: block;
+    color: var(--ua-muted);
+    font-size: 11px;
+    line-height: 1.5;
+    margin-top: 1px;
+  }
+  .trk-td-dim .trk-td-primary,
+  .trk-td-dim .trk-td-secondary {
+    color: var(--ua-dim);
+  }
+  .trk-td-link {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ua-accent);
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+  .trk-badge + .trk-td-primary {
+    margin-top: 4px;
+  }
+  @media (max-width: 600px) {
+    .trk-table td {
+      padding: 5px 6px;
+    }
+    .trk-td-primary {
+      font-size: 11px;
+    }
+    .trk-td-secondary {
+      font-size: 10px;
+    }
+  }
+</style>

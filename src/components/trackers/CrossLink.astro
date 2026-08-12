@@ -1,0 +1,39 @@
+---
+// Amber highlight-box cross-link — same idiom as the hub pages' TSA cross-link.
+/** @type {{ title: string, body: string, href: string, linkText: string }} */
+const { title, body, href, linkText } = Astro.props;
+---
+
+<div class="trk-crosslink">
+  <div class="trk-crosslink-title">{title}</div>
+  <p class="trk-crosslink-body">{body}</p>
+  <a class="trk-crosslink-link" href={href}>{linkText} &rarr;</a>
+</div>
+
+<style>
+  .trk-crosslink {
+    background: var(--ua-panel);
+    border-left: 3px solid var(--ua-amber);
+    padding: 12px 16px;
+    border-radius: 0 6px 6px 0;
+  }
+  .trk-crosslink-title {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ua-amber);
+    margin-bottom: 4px;
+  }
+  .trk-crosslink-body {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--ua-muted);
+    margin: 0 0 6px;
+  }
+  .trk-crosslink-link {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ua-accent);
+  }
+</style>

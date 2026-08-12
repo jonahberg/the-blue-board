@@ -1,0 +1,145 @@
+---
+/** @type {{ slug: string, kind: string, lastUpdated: string, lastVerified: string, changes: {date: string, entry: string}[], entities: Record<string, {label: string, summary: string, href: string}> }} */
+const { slug, kind, lastUpdated, lastVerified, changes, entities } = Astro.props;
+const latest = changes[0];
+const config = JSON.stringify({ slug, kind, lastUpdated, lastVerified, changes, entities }).replace(/</g, '\\u003c');
+---
+
+<section class="trk-pulse" data-trk-pulse aria-labelledby="trk-pulse-title">
+  <div class="trk-pulse-rail" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="trk-pulse-main">
+    <div class="trk-pulse-kicker" id="trk-pulse-title">Your tracker briefing</div>
+    <div class="trk-pulse-delta" data-trk-delta>
+      <strong>Latest:</strong> {latest.entry}
+    </div>
+    <div class="trk-pulse-personal" data-trk-personal hidden>
+      <span class="trk-pulse-code" data-trk-personal-code></span>
+      <span data-trk-personal-summary></span>
+      <a data-trk-personal-link href="#">Open entry &rarr;</a>
+    </div>
+    <div class="trk-pulse-empty" data-trk-personal-empty>
+      Set your home airport on <a href="/">The Blue Board</a> to put its status here.
+    </div>
+  </div>
+  <div class="trk-pulse-action">
+    <button type="button" data-trk-pulse-watch hidden aria-pressed="false" title="Highlight changes when you return">Watch this {kind}</button>
+    <span data-trk-watch-status aria-live="polite"></span>
+  </div>
+  <script type="application/json" data-trk-config set:html={config}></script>
+</section>
+
+<style>
+  .trk-pulse {
+    position: relative;
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+    overflow: hidden;
+    margin: 4px 0 32px;
+    padding: 14px 16px 14px 12px;
+    border: 1px solid var(--ua-border);
+    border-radius: 6px;
+    background: linear-gradient(90deg, rgba(0, 93, 170, 0.12), rgba(17, 26, 39, 0.72) 58%, rgba(17, 26, 39, 0.35));
+  }
+  .trk-pulse-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-self: stretch;
+    justify-content: center;
+  }
+  .trk-pulse-rail span {
+    display: block;
+    height: 18%;
+    border-radius: 2px;
+    background: var(--ua-blue);
+  }
+  .trk-pulse-rail span:nth-child(2) { background: var(--ua-amber); }
+  .trk-pulse-rail span:nth-child(3) { background: var(--ua-green); }
+  .trk-pulse-kicker {
+    color: var(--ua-amber);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+  }
+  .trk-pulse-delta {
+    margin-top: 2px;
+    color: var(--ua-text);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .trk-pulse-delta strong { color: var(--ua-accent); }
+  .trk-pulse-personal {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 7px;
+    margin-top: 6px;
+    color: var(--ua-muted);
+    font-size: 11px;
+  }
+  .trk-pulse-code {
+    color: var(--ua-text);
+    font-family: var(--font-mono);
+    font-weight: 700;
+  }
+  .trk-pulse-personal a {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .trk-pulse-empty {
+    margin-top: 6px;
+    color: var(--ua-dim);
+    font-size: 10px;
+  }
+  .trk-pulse-action {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .trk-pulse-action button {
+    border: 1px solid var(--ua-blue);
+    border-radius: 4px;
+    background: rgba(0, 93, 170, 0.18);
+    color: var(--ua-accent);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 7px 10px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .trk-pulse-action button:hover,
+  .trk-pulse-action button:focus-visible {
+    background: var(--ua-blue);
+    color: #fff;
+  }
+  .trk-pulse-action button:focus-visible {
+    outline: 2px solid var(--ua-accent);
+    outline-offset: 2px;
+  }
+  .trk-pulse-action button[aria-pressed='true'] {
+    border-color: rgba(34, 197, 94, 0.55);
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--ua-green);
+  }
+  [data-trk-watch-status] {
+    min-height: 14px;
+    color: var(--ua-dim);
+    font-family: var(--font-mono);
+    font-size: 8px;
+    text-transform: uppercase;
+  }
+  @media (max-width: 600px) {
+    .trk-pulse { grid-template-columns: 7px 1fr; }
+    .trk-pulse-action { grid-column: 2; align-items: flex-start; }
+  }
+</style>

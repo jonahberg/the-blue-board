@@ -96,6 +96,25 @@ export const tsaLastmodPaths = [
   'src/data/tsa/united-terminals.js',
 ];
 
+export const trackersIndexLastmodPaths = [
+  'src/pages/trackers/index.astro',
+  'src/data/trackers/index.js',
+  'src/data/trackers/atc.js',
+  'src/data/trackers/united-hubs.js',
+];
+
+// Per-tracker paths MUST include the tracker's own data file so the two pages
+// never report identical lastmod (the shared-template trap the news sitemap
+// was explicitly fixed away from — see sitemap.xml.ts).
+export function getTrackerRouteLastmodPaths(slug) {
+  return [
+    `src/pages/trackers/${slug}.astro`,
+    `src/data/trackers/${slug}.js`,
+    'src/data/trackers/index.js',
+    'src/lib/tracker-map.js',
+  ];
+}
+
 export function xmlEscape(value) {
   return value
     .replaceAll('&', '&amp;')

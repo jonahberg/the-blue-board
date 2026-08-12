@@ -18,6 +18,9 @@ const PAGES = [
   { name: 'hubs-lax', path: '/hubs/lax' },
   { name: 'hubs-nrt', path: '/hubs/nrt' },
   { name: 'hubs-gum', path: '/hubs/gum' },
+  { name: 'trackers',        path: '/trackers' },
+  { name: 'tracker-atc',     path: '/trackers/atc' },
+  { name: 'tracker-united',  path: '/trackers/united-hubs' },
   { name: '404',      path: '/this-page-does-not-exist' },
 ];
 

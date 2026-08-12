@@ -28,13 +28,20 @@ AMBER = (196, 163, 90, 255)   # --ua-amber
 TEXT = (226, 232, 240, 255)   # --ua-text
 MUTED = (148, 163, 184, 255)  # --ua-muted
 
+# Entries are either a path or a (path, ttc_index) tuple. macOS entries use Menlo
+# (closest system mono to JetBrains Mono); the PIL bitmap-font fallback renders
+# illegible 1200x630 cards, so load_font now fails loudly instead of falling back.
 FONT_CANDIDATES_BOLD = [
     "/mnt/skills/examples/canvas-design/canvas-fonts/JetBrainsMono-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+    ("/System/Library/Fonts/Menlo.ttc", 1),
+    "/System/Library/Fonts/Supplemental/Courier New Bold.ttf",
 ]
 FONT_CANDIDATES_REG = [
     "/mnt/skills/examples/canvas-design/canvas-fonts/JetBrainsMono-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    ("/System/Library/Fonts/Menlo.ttc", 0),
+    "/System/Library/Fonts/Supplemental/Courier New.ttf",
 ]
 
 HUBS = {
@@ -51,10 +58,14 @@ HUBS = {
 
 
 def load_font(candidates, size):
-    for path in candidates:
+    for entry in candidates:
+        path, index = entry if isinstance(entry, tuple) else (entry, 0)
         if os.path.exists(path):
-            return ImageFont.truetype(path, size)
-    return ImageFont.load_default()
+            return ImageFont.truetype(path, size, index=index)
+    raise SystemExit(
+        "generate-og: no usable TTF found — PIL's bitmap fallback renders illegible "
+        "cards. Add a font path to FONT_CANDIDATES_* for this machine."
+    )
 
 
 def render(label_top, label_main, label_sub, out_path):
@@ -104,6 +115,26 @@ if __name__ == "__main__":
         "United Airlines News",
         "Route changes, fleet updates & ops news, tracked live",
         os.path.join(OUT_DIR, "og-news.jpg"),
+    )
+    # Trackers — the sub line carries the headline stat, so re-run this script
+    # when the numbers move (see MAINTENANCE.md monthly ritual).
+    render(
+        "THE BLUE BOARD · TRACKERS",
+        "Trackers",
+        "Living maps of aviation's long stories, updated monthly",
+        os.path.join(OUT_DIR, "og-trackers.jpg"),
+    )
+    render(
+        "THE BLUE BOARD · MODERN SKIES TRACKER",
+        "Is Your Airport Off Paper Yet?",
+        "18 towers off paper flight strips, 71 to go — check yours",
+        os.path.join(OUT_DIR, "og-tracker-atc.jpg"),
+    )
+    render(
+        "THE BLUE BOARD · UNITED HUB TRACKER",
+        "What's United Building at Your Hub?",
+        "3 flagship clubs & 36 new gates land in 2026 — every project, tracked",
+        os.path.join(OUT_DIR, "og-tracker-united-hubs.jpg"),
     )
     for iata, city in HUBS.items():
         render(

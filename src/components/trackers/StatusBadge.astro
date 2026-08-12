@@ -1,0 +1,68 @@
+---
+// Status badge per DESIGN.md: mono 9px uppercase, tint background + toned border + solid-token
+// text. Status is never conveyed by color alone — every badge carries its text label, and the
+// glyph gives a second non-color channel where the label alone is ambiguous in dense tables.
+const { label, tone = 'neutral', glyph = '' } = Astro.props;
+/** @type {Record<string, string>} */
+const tones = {
+  green: 'trk-b-green',
+  yellow: 'trk-b-yellow',
+  accent: 'trk-b-accent',
+  amber: 'trk-b-amber',
+  neutral: 'trk-b-neutral',
+  dim: 'trk-b-dim',
+};
+const cls = tones[tone] ?? 'trk-b-neutral';
+---
+
+<span class={`trk-badge ${cls}`}>{glyph && <span class="trk-badge-glyph" aria-hidden="true">{glyph}</span>}{label}</span>
+
+<style>
+  .trk-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .trk-badge-glyph {
+    font-size: 8px;
+    line-height: 1;
+  }
+  .trk-b-green {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--ua-green);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+  }
+  .trk-b-yellow {
+    background: rgba(234, 179, 8, 0.12);
+    color: var(--ua-yellow);
+    border: 1px solid rgba(234, 179, 8, 0.2);
+  }
+  .trk-b-accent {
+    background: rgba(107, 170, 237, 0.1);
+    color: var(--ua-accent);
+    border: 1px solid rgba(107, 170, 237, 0.2);
+  }
+  .trk-b-amber {
+    background: rgba(196, 163, 90, 0.1);
+    color: var(--ua-amber);
+    border: 1px solid rgba(196, 163, 90, 0.2);
+  }
+  .trk-b-neutral {
+    background: rgba(148, 163, 184, 0.1);
+    color: var(--ua-muted);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  .trk-b-dim {
+    background: rgba(124, 141, 166, 0.08);
+    color: var(--ua-dim);
+    border: 1px solid rgba(124, 141, 166, 0.18);
+  }
+</style>

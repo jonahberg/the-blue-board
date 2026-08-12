@@ -31,6 +31,19 @@ describe('static asset caching (vercel.json)', () => {
     expect(cacheControl('/')).toMatch(/no-store|no-cache/);
     expect(cacheControl('/index.html')).toMatch(/no-store|no-cache/);
   });
+
+  it('caches /trackers/* pages like the other content sections', () => {
+    const cc = cacheControl('/trackers/(.*)');
+    expect(cc).toBeTruthy();
+    expect(Number(cc.match(/max-age=(\d+)/)[1])).toBeGreaterThanOrEqual(3600);
+    expect(cc).toMatch(/stale-while-revalidate=\d+/);
+  });
+
+  it('caches hashed /_astro/* bundles as immutable — their filenames change on every content change', () => {
+    const cc = cacheControl('/_astro/(.*)');
+    expect(cc).toMatch(/immutable/);
+    expect(Number(cc.match(/max-age=(\d+)/)[1])).toBeGreaterThanOrEqual(31536000);
+  });
 });
 
 describe('TSA cron cadence (vercel.json)', () => {

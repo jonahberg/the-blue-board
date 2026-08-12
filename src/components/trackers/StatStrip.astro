@@ -1,0 +1,76 @@
+---
+// The scoreboard. 3-4 tiles, mono values, one amber "featured" tile max per DESIGN.md's
+// amber-discipline rule. This is the strip people screenshot — keep it clean.
+/** @type {{ stats: { label: string, value: string, tone?: 'amber' | 'green' | 'yellow' | 'default', sub?: string }[] }} */
+const { stats } = Astro.props;
+---
+
+<div class="trk-stats">
+  {
+    stats.map((s) => (
+      <div class={`trk-stat ${s.tone === 'amber' ? 'trk-stat-featured' : ''}`}>
+        <div class="trk-stat-label">{s.label}</div>
+        <div class={`trk-stat-value trk-stat-${s.tone ?? 'default'}`}>{s.value}</div>
+        {s.sub && <div class="trk-stat-sub">{s.sub}</div>}
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .trk-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .trk-stat {
+    background: linear-gradient(180deg, var(--ua-panel) 0%, rgba(17, 26, 39, 0.6) 100%);
+    border: 1px solid var(--ua-border);
+    border-radius: 6px;
+    padding: 16px 12px;
+    text-align: center;
+  }
+  .trk-stat-featured {
+    border-left: 3px solid var(--ua-amber);
+  }
+  .trk-stat-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--ua-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .trk-stat-value {
+    font-family: var(--font-mono);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--ua-text);
+    line-height: 1.1;
+  }
+  .trk-stat-amber {
+    color: var(--ua-amber);
+  }
+  .trk-stat-green {
+    color: var(--ua-green);
+  }
+  .trk-stat-yellow {
+    color: var(--ua-yellow);
+  }
+  .trk-stat-sub {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--ua-dim);
+    margin-top: 5px;
+    letter-spacing: 0.3px;
+  }
+  @media (max-width: 600px) {
+    .trk-stats {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .trk-stat-value {
+      font-size: 20px;
+    }
+  }
+</style>

@@ -1,0 +1,65 @@
+---
+// Reverse-chronological update ledger. Dates render mono; entries in body type.
+/** @type {{ entries: { date: string, entry: string }[], id?: string }} */
+const { entries, id = 'changelog' } = Astro.props;
+const fmt = (iso) =>
+  new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+---
+
+<ol class="trk-changelog" id={id}>
+  {
+    entries.map((e) => (
+      <li class="trk-changelog-row">
+        <time class="trk-changelog-date" datetime={e.date}>
+          {fmt(e.date)}
+        </time>
+        <span class="trk-changelog-entry">{e.entry}</span>
+      </li>
+    ))
+  }
+</ol>
+
+<style>
+  .trk-changelog {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .trk-changelog-row {
+    display: flex;
+    gap: 14px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--ua-border-subtle, var(--ua-border));
+    align-items: baseline;
+  }
+  .trk-changelog-row:last-child {
+    border-bottom: none;
+  }
+  .trk-changelog-date {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ua-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    flex: 0 0 92px;
+  }
+  .trk-changelog-entry {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ua-text);
+  }
+  @media (max-width: 600px) {
+    .trk-changelog-row {
+      flex-direction: column;
+      gap: 2px;
+    }
+    .trk-changelog-date {
+      flex-basis: auto;
+    }
+  }
+</style>
