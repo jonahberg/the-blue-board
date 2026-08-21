@@ -96,7 +96,8 @@ are not a public API, so please read the pages rather than scraping \`/api/\`.
 | FAA NAS status and ground stops | every 60 seconds |
 | Schedules (AeroDataBox) | hourly, warmed on a cron |
 | METAR weather observations | every 5 minutes |
-| Fleet and Starlink equipment | daily |
+| Starlink equipment | every 4 hours |
+| Fleet database | curated; updated as aircraft enter and leave the fleet |
 | TSA checkpoint volumes | hourly |
 
 ## Sources

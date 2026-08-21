@@ -197,8 +197,8 @@ Living, data-driven pages that follow aviation's long-running stories with a map
 | Ground stops & NAS alerts | FAA National Airspace System Status | Every 60 seconds |
 | Weather (METAR) | Aviation Weather Center (AWC) | Each observation cycle (~hourly) |
 | Weather (radar) | Iowa State NEXRAD | Every 5 minutes |
-| Fleet composition | Public aviation databases & United records | Daily |
-| Starlink WiFi status | Curated tracking data | Daily |
+| Fleet composition | Public aviation databases & United records | Curated; as the fleet changes |
+| Starlink WiFi status | Curated tracking data | Every 4 hours |
 
 ---
 

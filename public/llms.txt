@@ -105,7 +105,8 @@ rate-limited, and marked `noindex` — please read the pages rather than scrapin
 - **Flight positions**: Updated every 30 seconds (real-time ADS-B via Flightradar24)
 - **Delay & cancellation data**: Updated every 30 seconds
 - **FAA NAS status / ground stops**: Updated every 60 seconds
-- **Fleet & Starlink data**: Updated daily
+- **Starlink equipment status**: Refreshed every 4 hours
+- **Fleet database**: Curated; updated as aircraft enter and leave the fleet
 - **Weather (METAR)**: Updated with each airport observation cycle (~hourly)
 
 ## Unique Value vs. Other Trackers
