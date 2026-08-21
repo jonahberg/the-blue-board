@@ -17,7 +17,7 @@ import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-border:#1E2940;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-accent:#6BAAED;--ua-green:#22C55E;--ua-amber:#C4A35A;--font-mono:'JetBrains Mono',monospace}
 body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-mono);min-height:100vh;display:flex;flex-direction:column}
-main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
+main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 20px 56px;text-align:center}
 a{color:var(--ua-accent);text-decoration:none}
 a:hover{text-decoration:underline}
 .code{font-size:120px;font-weight:700;color:var(--ua-accent);line-height:1;margin-bottom:8px;letter-spacing:-4px}
@@ -28,6 +28,8 @@ a:hover{text-decoration:underline}
 .hubs{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:500px}
 .hub-link{font-size:10px;color:var(--ua-muted);padding:4px 10px;border:1px solid var(--ua-border);border-radius:4px;transition:color .2s,border-color .2s}
 .hub-link:hover{color:var(--ua-accent);border-color:var(--ua-accent);text-decoration:none}
+.section-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber);margin:28px 0 10px}
+.agent-links{font-size:10px;color:var(--ua-muted);margin-top:24px;max-width:500px;line-height:2}
 .footer{position:fixed;bottom:16px;font-size:9px;color:var(--ua-muted)}
 </style>
 </head>
@@ -37,10 +39,27 @@ a:hover{text-decoration:underline}
   <div class="title">Flight not found.</div>
   <div class="subtitle">This page doesn't exist — but every United flight does. Head back to the dashboard or check a hub below.</div>
   <a href="/" class="cta">← Back to The Blue Board</a>
+  <div class="section-label">Hub status</div>
   <div class="hubs">
     {hubOrder.map(hub => (
       <a href={`/hubs/${hub}`} class="hub-link">{hubNavLabels[hub]}</a>
     ))}
+  </div>
+  <div class="section-label">Or jump to a section</div>
+  <div class="hubs">
+    <a href="/fleet" class="hub-link">Fleet database</a>
+    <a href="/hubs" class="hub-link">All hubs</a>
+    <a href="/trackers" class="hub-link">Trackers</a>
+    <a href="/news" class="hub-link">News</a>
+    <a href="/tsa" class="hub-link">TSA wait times</a>
+    <a href="/newark" class="hub-link">Newark ops</a>
+  </div>
+  <div class="agent-links">
+    Crawlers and agents: <a href="/sitemap.xml">/sitemap.xml</a> &middot;
+    <a href="/llms.txt">/llms.txt</a> &middot;
+    <a href="/llms-full.txt">/llms-full.txt</a> &middot;
+    <a href="/feed.xml">/feed.xml</a><br>
+    Send <code>Accept: text/markdown</code> for a Markdown 404 with the same links.
   </div>
 </main>
   <div class="footer">The Blue Board · Independent · Not affiliated with United Airlines, Inc.</div>

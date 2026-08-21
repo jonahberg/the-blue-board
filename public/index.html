@@ -155,8 +155,29 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
 <p style="font-size:11px;color:#64748b">Built for the United community by <a href="https://github.com/jonahberg" style="color:#6BAAED">Jonah Berg</a>. Not affiliated with United Airlines, Inc. JavaScript is required for the live dashboard.</p>
 </div>
 </noscript>
-<!-- SEO keyword sentence (was the brand strip; now crawlable sr-only text) -->
-<div class="sr-only" role="region" aria-label="About The Blue Board">The Blue Board is an independent United Airlines flight tracker and operations dashboard with live status, hub delays, fleet data, and Starlink coverage. Use the live dashboard to check flight status, hub delays, fleet data, and Starlink availability.</div>
+<!-- ════════ CRAWLABLE PAGE BRIEF ════════
+     The dashboard's real content arrives from JS, so this block is what a no-JS crawler
+     or an AI extractor actually reads. It carries the page h1: the canopy's brand h1
+     element sits inside the page header, and readability-style extractors — the ones AI
+     crawlers run — strip header/nav regions as boilerplate, so that one is invisible.
+     Visually hidden via .sr-only, fully present for screen readers and parsers.
+     Keep the Markdown twin in src/lib/agent-markdown.js in step with any edits here.
+     No Starlink figures: those are stamped into dist/ at build (see the file header). -->
+<section class="sr-only" aria-labelledby="page-brief-title">
+  <h1 id="page-brief-title">The Blue Board — United Airlines Flight Tracker and Live Operations Dashboard</h1>
+  <p>The Blue Board is a free, independent, real-time operations dashboard for United Airlines flights. It plots every airborne United flight on a live map refreshed every 30 seconds, and tracks delays, cancellations, and FAA ground stops across all 8 United hubs plus the Tokyo-Narita gateway — Chicago O'Hare (ORD), Denver (DEN), Houston Intercontinental (IAH), Newark Liberty (EWR), San Francisco (SFO), Washington Dulles (IAD), Los Angeles (LAX), Guam (GUM), and Tokyo Narita (NRT). It is built for the United community and is not affiliated with United Airlines, Inc.</p>
+  <h2>What you can check here</h2>
+  <ul>
+    <li><strong>Live flight status.</strong> Look up any United flight by number, tail number, or route to see its position, altitude, route, delay status, and estimated arrival. Deep-link straight to a flight with /?flight=UA1234.</li>
+    <li><strong>Hub delays and ground stops.</strong> On-time percentage, cancellation counts, ground delay programs, and FAA National Airspace System alerts for each hub, updated continuously.</li>
+    <li><strong>Delay risk prediction.</strong> An eight-signal risk score — inbound aircraft, turnaround pressure, hub congestion, weather, and FAA programs — with a plain-language explanation of what is driving it.</li>
+    <li><strong>Starlink WiFi and fleet data.</strong> A searchable database of 1,078 United mainline airframes with seat configuration by cabin, in-flight entertainment, delivery date, and whether the aircraft has SpaceX Starlink satellite WiFi.</li>
+    <li><strong>Departure and arrival boards.</strong> Hub schedules with on-time statistics and equipment-swap alerts, sourced from AeroDataBox.</li>
+    <li><strong>Weather and airport conditions.</strong> NEXRAD radar over the live map, METAR observations at every hub, and TSA checkpoint volumes.</li>
+  </ul>
+  <h2>How to use this site</h2>
+  <p>Use The Blue Board when the question is specific to United Airlines operations and needs an answer from the last few minutes rather than a published timetable: whether United is delayed at a given hub right now, where a particular flight is, what aircraft is operating it, and whether that aircraft has Starlink. It covers United only, it is not a booking tool, and united.com and the airport display remain the systems of record for a flight you are about to board. Machine-readable summaries of the whole site live at <a href="/llms.txt">/llms.txt</a> and <a href="/llms-full.txt">/llms-full.txt</a>, every indexable URL is listed in <a href="/sitemap.xml">/sitemap.xml</a>, and this page is also available as Markdown to any client that sends an Accept: text/markdown request header.</p>
+</section>
 <!-- Crawlable site navigation (always in DOM regardless of popover state) -->
 <nav class="sr-only" aria-label="United Airlines hub and site navigation">
   <a href="/hubs/ord">United at Chicago O'Hare (ORD)</a>
@@ -1004,6 +1025,21 @@ body{background:#0B1018;color:#e2e8f0;margin:0;overflow:hidden;font-family:'DM S
     "@type": "Person",
     "name": "Jonah Berg",
     "url": "https://github.com/jonahberg"
+  },
+  "email": "hello@theblueboard.co",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "contactType": "customer support",
+    "email": "hello@theblueboard.co",
+    "url": "https://theblueboard.co/privacy",
+    "availableLanguage": ["English"],
+    "areaServed": "US"
+  },
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Los Angeles",
+    "addressRegion": "CA",
+    "addressCountry": "US"
   },
   "sameAs": [
     "https://x.com/theblueboard",
