@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { FLEET_DB_COUNT, TRACKED_BOARDS } from '../src/data/facts.js';
 import { PRODUCES, resolveAgentResponse } from '../src/lib/agent-negotiation.js';
-import { agentMarkdown, notAcceptableText, notFoundMarkdown } from '../src/lib/agent-markdown.js';
+import {
+  agentMarkdown,
+  agentMarkdownAssetPath,
+  notAcceptableText,
+  notFoundMarkdown,
+} from '../src/lib/agent-markdown.js';
 import { isKnownRoutePath, normalizePathname } from '../src/lib/site-routes.js';
 import { GET as getSitemap } from '../src/pages/sitemap.xml.ts';
 
@@ -21,6 +26,8 @@ const llmsFullTxt = readFileSync(new URL('../public/llms-full.txt', import.meta.
 const notFoundPage = readFileSync(new URL('../src/pages/404.astro', import.meta.url), 'utf8');
 const vercelJson = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
 const middlewareSource = readFileSync(new URL('../middleware.ts', import.meta.url), 'utf8');
+const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const robotsTxt = readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
 
 /** Visible text of an HTML document, the way a crawler's extractor counts it. */
 function textContent(html) {
@@ -142,15 +149,36 @@ describe('2b. the route surface stays in step with the sitemap', () => {
     expect(normalizePathname('/fleet/')).toBe('/fleet');
     expect(normalizePathname('/')).toBe('/');
     expect(normalizePathname('')).toBe('/');
-    expect(resolveAgentResponse({ pathname: '/hubs/', accept: 'text/markdown' }).status).toBe(200);
+    expect(resolveAgentResponse({ pathname: '/hubs/', accept: 'text/markdown' }))
+      .toEqual({ kind: 'markdown-asset', assetPath: '/_agent/hubs.md' });
   });
 });
 
 describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
-  it('serves Markdown for the homepage', () => {
-    const decision = resolveAgentResponse({ pathname: '/', accept: 'text/markdown' });
-    expect(decision).toMatchObject({ kind: 'markdown', status: 200 });
-    expect(decision.body.startsWith('# The Blue Board')).toBe(true);
+  it('rewrites the homepage to its prerendered Markdown twin', () => {
+    // A rewrite rather than an authored body: Vercel strips Content-Type from any
+    // middleware-authored HEAD response, and `curl -sI` is acceptmarkdown.com's own check.
+    expect(resolveAgentResponse({ pathname: '/', accept: 'text/markdown' }))
+      .toEqual({ kind: 'markdown-asset', assetPath: '/_agent/home.md' });
+    expect(agentMarkdown['/'].startsWith('# The Blue Board')).toBe(true);
+  });
+
+  it('maps every negotiable route to an asset, and nothing else', () => {
+    for (const route of Object.keys(agentMarkdown)) {
+      expect(agentMarkdownAssetPath(route), route).toMatch(/^\/_agent\/[a-z-]+\.md$/);
+    }
+    for (const route of ['/tsa', '/hubs/ord', '/nope', '/_agent/home.md']) {
+      expect(agentMarkdownAssetPath(route), route).toBe(null);
+    }
+  });
+
+  it('writes those assets as part of the production build', () => {
+    expect(packageJson.scripts.build).toContain('bun scripts/build-agent-markdown.mjs');
+    expect(existsSync(new URL('../scripts/build-agent-markdown.mjs', import.meta.url))).toBe(true);
+  });
+
+  it('keeps the rewrite target out of the index — same content as the HTML pages', () => {
+    expect(robotsTxt).toContain('Disallow: /_agent/');
   });
 
   it('serves HTML to every browser Accept header', () => {
@@ -180,7 +208,7 @@ describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
         .toEqual({ kind: 'html' });
     }
     expect(resolveAgentResponse({ pathname: '/', accept: 'text/markdown', method: 'HEAD' }).kind)
-      .toBe('markdown');
+      .toBe('markdown-asset');
   });
 
   it('declares HTML first so an unconstrained client keeps getting the dashboard', () => {
@@ -194,8 +222,9 @@ describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
     expect(vary.value.toLowerCase()).toContain('accept');
   });
 
-  it('sets Content-Type, Vary, and nosniff on the synthesised Markdown response', () => {
+  it('sets Content-Type, Vary, and nosniff on the authored 404/406 responses', () => {
     expect(middlewareSource).toContain("'Content-Type': 'text/markdown; charset=utf-8'");
+    expect(middlewareSource).toContain("'Content-Type': 'text/plain; charset=utf-8'");
     expect(middlewareSource).toContain("Vary: 'Accept, Accept-Encoding'");
     expect(middlewareSource).toContain("'X-Content-Type-Options': 'nosniff'");
   });
@@ -211,7 +240,8 @@ describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
     const re = new RegExp(`^${matcher.replace(/\\\\/g, '\\')}$`);
     for (const skipped of ['/api/irops', '/js/dashboard.js', '/css/style.css', '/data/fleet.json',
       '/fonts/satoshi-latin.woff2', '/icons/icon-192.png', '/og/og-news.jpg', '/sw.js',
-      '/manifest.json', '/robots.txt', '/favicon.svg', '/og-image.png', '/_astro/x.js']) {
+      '/manifest.json', '/robots.txt', '/favicon.svg', '/og-image.png', '/_astro/x.js',
+      '/_agent/home.md']) {
       expect(re.test(skipped), `should skip ${skipped}`).toBe(false);
     }
     for (const matched of ['/', '/hubs/ord', '/fleet', '/llms.txt', '/sitemap.xml',

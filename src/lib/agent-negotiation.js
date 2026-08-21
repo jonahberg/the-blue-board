@@ -4,17 +4,19 @@
 // descriptor returned here into a Response.
 
 import { preferredType } from './accept-negotiation.js';
-import { agentMarkdown, notAcceptableText, notFoundMarkdown } from './agent-markdown.js';
+import {
+  agentMarkdownAssetPath,
+  notAcceptableText,
+  notFoundMarkdown,
+} from './agent-markdown.js';
 import { isKnownRoutePath, normalizePathname } from './site-routes.js';
 
 /** Media types this site can emit, most-preferred first. HTML stays the default. */
 export const PRODUCES = Object.freeze(['text/html', 'text/markdown']);
 
-/** Markdown pages change about as often as the HTML around them. */
-const MARKDOWN_CACHE_CONTROL = 'public, max-age=300, s-maxage=300, stale-while-revalidate=600';
-
 /**
  * @typedef {{kind: 'html'}
+ *   | {kind: 'markdown-asset', assetPath: string}
  *   | {kind: 'markdown', status: number, body: string, cacheControl: string}
  *   | {kind: 'not-acceptable', status: 406, body: string}} AgentDecision
  */
@@ -43,10 +45,10 @@ export function resolveAgentResponse({ pathname = '/', accept = null, method = '
 
   const path = normalizePathname(pathname);
 
-  const body = agentMarkdown[path];
-  if (body) {
-    return { kind: 'markdown', status: 200, body, cacheControl: MARKDOWN_CACHE_CONTROL };
-  }
+  // Prerendered twin: rewrite rather than synthesise, so HEAD keeps its Content-Type and
+  // the edge can cache the Markdown variant alongside the HTML one.
+  const assetPath = agentMarkdownAssetPath(path);
+  if (assetPath) return { kind: 'markdown-asset', assetPath };
 
   // Dead URL: answer 404 in the format the client asked for, with pointers it can act on.
   if (!isKnownRoutePath(path)) {

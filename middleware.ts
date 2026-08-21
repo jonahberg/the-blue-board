@@ -8,10 +8,17 @@
 // is platform-level and runs before the cache on every matched request, which is the only
 // interception point this site has.
 //
+// Why a rewrite for the 200 case rather than a body written here: Vercel strips
+// Content-Type from any middleware-authored response to a HEAD request (it goes with the
+// body), and `curl -sI -H "Accept: text/markdown"` is the check acceptmarkdown.com
+// prescribes. Rewriting to the prerendered twin under /_agent/ (written at build time by
+// scripts/build-agent-markdown.mjs) keeps HEAD honest and lets the edge cache the Markdown
+// variant. 404 and 406 still have to be authored here — a rewrite can't set a status.
+//
 // The decision logic lives in src/lib/agent-negotiation.js so it is unit-testable without
 // a Vercel runtime (see tests/accept-negotiation.test.js and tests/agent-readiness.test.js).
 
-import { next } from '@vercel/functions';
+import { next, rewrite } from '@vercel/functions';
 
 import { resolveAgentResponse } from './src/lib/agent-negotiation.js';
 
@@ -19,8 +26,9 @@ export const config = {
   // Pages only. Static assets and /api/* are excluded so the dashboard's 30-second polling
   // never pays for a middleware invocation — this project already watches denial-of-wallet
   // on the API surface, and none of these paths has a Markdown representation anyway.
+  // `_agent/` is excluded too: it is the rewrite target, and re-entering would loop.
   matcher: [
-    '/((?!_astro/|_vercel/|api/|css/|data/|fonts/|icons/|js/|og/|favicon\\.svg|favicon\\.ico|manifest\\.json|og-image\\.png|robots\\.txt|sw\\.js).*)',
+    '/((?!_agent/|_astro/|_vercel/|api/|css/|data/|fonts/|icons/|js/|og/|favicon\\.svg|favicon\\.ico|manifest\\.json|og-image\\.png|robots\\.txt|sw\\.js).*)',
   ],
 };
 
@@ -39,13 +47,20 @@ export default function middleware(request: Request): Response {
     return next();
   }
 
+  if (decision.kind === 'markdown-asset') {
+    return rewrite(new URL(decision.assetPath, request.url));
+  }
+
+  // Authored bodies: 404 and 406 only. Both are status-carrying, so neither can be a
+  // rewrite. A HEAD request to one of these loses its Content-Type to the platform strip
+  // described above; the status code is the signal that matters for both.
   if (decision.kind === 'markdown') {
-    return new Response(decision.body, {
+    return new Response(request.method === 'HEAD' ? null : decision.body, {
       status: decision.status,
       headers: {
         'Content-Type': 'text/markdown; charset=utf-8',
-        // Set here as well as in vercel.json: a middleware-synthesised response does not
-        // pass through the static header layer.
+        // Set here as well as in vercel.json: a middleware-authored response does not pass
+        // through the static header layer.
         Vary: 'Accept, Accept-Encoding',
         'Cache-Control': decision.cacheControl,
         'X-Content-Type-Options': 'nosniff',
@@ -54,7 +69,7 @@ export default function middleware(request: Request): Response {
   }
 
   if (decision.kind === 'not-acceptable') {
-    return new Response(decision.body, {
+    return new Response(request.method === 'HEAD' ? null : decision.body, {
       status: decision.status,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',

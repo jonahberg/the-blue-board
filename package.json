@@ -13,7 +13,7 @@
   },
   "scripts": {
     "dev": "bun scripts/run-astro-dev.mjs",
-    "build": "bun scripts/refresh-starlink-facts.mjs && vite build --config vite.dashboard.config.js && astro build && bun scripts/stamp-seo-build-date.mjs",
+    "build": "bun scripts/refresh-starlink-facts.mjs && vite build --config vite.dashboard.config.js && astro build && bun scripts/stamp-seo-build-date.mjs && bun scripts/build-agent-markdown.mjs",
     "build:dashboard": "vite build --config vite.dashboard.config.js",
     "preview": "astro preview",
     "seed:schedules": "bun scripts/seed-schedules.mjs",

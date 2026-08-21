@@ -198,6 +198,24 @@ export const agentMarkdown = Object.freeze({
 });
 
 /**
+ * Prerendered asset path for a route's Markdown twin.
+ *
+ * Why an asset and not a body synthesised in middleware: Vercel drops Content-Type from
+ * any middleware-authored response to a HEAD request (it strips the header along with the
+ * body), and `curl -sI -H 'Accept: text/markdown'` is the check acceptmarkdown.com
+ * prescribes. Rewriting to a real static file keeps HEAD honest and lets the edge cache
+ * the Markdown variant. scripts/build-agent-markdown.mjs writes these files from the same
+ * strings above, so the two can never drift.
+ *
+ * @param {string} path normalised route path
+ * @returns {string|null} asset path under /_agent/, or null when the route has no twin
+ */
+export function agentMarkdownAssetPath(path) {
+  if (!Object.prototype.hasOwnProperty.call(agentMarkdown, path)) return null;
+  return path === '/' ? '/_agent/home.md' : `/_agent${path}.md`;
+}
+
+/**
  * Markdown body for a 404. An agent that walked into a dead URL should be able to recover
  * from the response alone, so this names the machine-readable indexes rather than just
  * apologising.
