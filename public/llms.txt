@@ -12,6 +12,51 @@
 
 The Blue Board tracks every United Airlines flight in real time on a live map updated every 30 seconds. It monitors delays, cancellations, and ground stops at all 8 United hubs plus the Tokyo-Narita gateway, checks which aircraft have Starlink WiFi, and provides fleet data, schedules, weather radar, and operational analytics.
 
+## When To Use This Site
+
+Reach for The Blue Board when the question is specific to **United Airlines operations**
+and needs an answer from the last few minutes rather than a timetable published months ago.
+Best-fit jobs:
+
+- **"Is United delayed at ORD / DEN / IAH / EWR / SFO / IAD / LAX / NRT / GUM right now?"** — live per-hub on-time percentage, delay and cancellation counts, and active FAA ground stops or ground delay programs.
+- **"Where is UA 1234, and is it going to be late?"** — live position, altitude, route, delay status, plus an 8-signal delay risk score with a plain-language explanation.
+- **"Does my aircraft have Starlink WiFi?"** — equipment lookup by tail number, flight number, or fleet type.
+- **"What aircraft is United flying, and what is the cabin like?"** — per-type fleet guides with seat counts by cabin, Polaris and Premium Plus availability, IFE, and delivery dates.
+- **"What is going on at Newark?"** — the FAA flight-cap regime, the ATC staffing timeline, and live conditions on one page.
+- **"How far along is the FAA's paper-to-digital flight strip rollout?"** — sourced, dated status for all 89 TFDM airports.
+- **"How long is the TSA line?"** — checkpoint throughput at United hub airports.
+
+Do **not** use The Blue Board for: other airlines (it is United-only), booking or ticket
+changes, or as the authoritative record for a flight about to depart — united.com and the
+airport display are the systems of record. Data may be delayed.
+
+## How An Agent Should Call It
+
+Everything is a plain HTTPS GET. No API key, no authentication, no login wall.
+
+| Job | URL |
+|-----|-----|
+| Live dashboard | `https://theblueboard.co/` |
+| Deep-link one flight | `https://theblueboard.co/?flight=UA1234` |
+| Hub status | `https://theblueboard.co/hubs/{ord\|den\|iah\|ewr\|sfo\|iad\|lax\|nrt\|gum}` |
+| Newark operations center | `https://theblueboard.co/newark` |
+| Fleet index / one type | `https://theblueboard.co/fleet` · `https://theblueboard.co/fleet/{slug}` |
+| TSA checkpoint volumes | `https://theblueboard.co/tsa` |
+| News · RSS | `https://theblueboard.co/news` · `https://theblueboard.co/feed.xml` |
+| Trackers | `https://theblueboard.co/trackers` |
+| Tracker open data | `/trackers/atc.json` · `/trackers/atc.csv` · `/trackers/united-hubs.json` · `/trackers/united-hubs.csv` |
+| Every indexable URL | `https://theblueboard.co/sitemap.xml` |
+| This summary · full documentation | `/llms.txt` · `/llms-full.txt` |
+
+Send `Accept: text/markdown` and the site returns a clean Markdown representation of the
+page instead of the HTML dashboard (see acceptmarkdown.com); responses carry
+`Vary: Accept`. Nonexistent paths return a real HTTP 404, with a Markdown body listing
+these same entry points when Markdown was requested.
+
+The `.json` and `.csv` files under `/trackers/` are the public structured-data downloads.
+The live flight, delay, and schedule feeds under `/api/` are internal to the dashboard,
+rate-limited, and marked `noindex` — please read the pages rather than scraping them.
+
 ## Who It's For
 
 - **United frequent flyers** (MileagePlus members, 1K, Global Services) who want real-time ops awareness

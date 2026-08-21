@@ -28,6 +28,9 @@ const newsArticleSchema = {
   "author": { "@type": "Person", "name": "Jonah Berg", "url": "https://jonahberg.com" },
   "publisher": {
     "@type": "Organization",
+    // Same node as the homepage Organization (which carries contactPoint + address) so
+    // crawlers consolidate the two instead of seeing a second, thinner publisher entity.
+    "@id": "https://theblueboard.co/#organization",
     "name": "The Blue Board",
     "url": "https://theblueboard.co",
   },
