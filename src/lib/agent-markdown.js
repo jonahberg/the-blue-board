@@ -29,7 +29,7 @@ The Blue Board tracks every airborne United Airlines flight on a live map refres
 plus the Tokyo-Narita gateway. It also carries a searchable database of 1,078 United
 mainline airframes with seat configuration, WiFi type, and in-flight entertainment detail,
 hub departure and arrival boards with equipment-swap detection, NEXRAD radar and METAR
-weather, TSA checkpoint volumes, and long-running aviation trackers.
+weather, a TSA checkpoint guide, and long-running aviation trackers.
 
 ## When to use this site
 
@@ -64,7 +64,7 @@ Everything below is a plain HTTPS GET. There is no API key and no authentication
 | Hub status page | \`https://theblueboard.co/hubs/{ord\\|den\\|iah\\|ewr\\|sfo\\|iad\\|lax\\|nrt\\|gum}\` |
 | Newark operations center | \`https://theblueboard.co/newark\` |
 | Fleet index / one fleet type | \`https://theblueboard.co/fleet\` · \`https://theblueboard.co/fleet/{slug}\` |
-| TSA checkpoint volumes | \`https://theblueboard.co/tsa\` |
+| TSA checkpoint guide (lanes, hours) | \`https://theblueboard.co/tsa\` |
 | United news · RSS | \`https://theblueboard.co/news\` · \`https://theblueboard.co/feed.xml\` |
 | Trackers index | \`https://theblueboard.co/trackers\` |
 | Tracker open data | \`/trackers/atc.json\` · \`/trackers/atc.csv\` · \`/trackers/united-hubs.json\` · \`/trackers/united-hubs.csv\` |
@@ -98,7 +98,7 @@ are not a public API, so please read the pages rather than scraping \`/api/\`.
 | METAR weather observations | every 5 minutes |
 | Starlink equipment | every 4 hours |
 | Fleet database | curated; updated as aircraft enter and leave the fleet |
-| TSA checkpoint volumes | hourly |
+| TSA checkpoint guide | static reference; no live wait-time feed exists |
 
 ## Sources
 
