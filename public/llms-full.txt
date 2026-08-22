@@ -37,7 +37,7 @@ Best-fit jobs:
 - **"What aircraft is United flying, and what is the cabin like?"** — per-type fleet guides with seat counts by cabin, Polaris and Premium Plus availability, IFE, and delivery dates.
 - **"What is going on at Newark?"** — the FAA flight-cap regime, the ATC staffing timeline, and live conditions on one page.
 - **"How far along is the FAA's paper-to-digital flight strip rollout?"** — sourced, dated status for all 89 TFDM airports.
-- **"How long is the TSA line?"** — checkpoint throughput at United hub airports.
+- **"Which security line should I use at ORD?"** — TSA checkpoint guide for the 7 mainland hubs: Pre✓, CLEAR, Priority, and standard lane availability by terminal, checkpoint hours, and tips. (Live wait-time minutes are not available anywhere — the TSA public feed was decommissioned.)
 
 Do **not** use The Blue Board for: other airlines (it is United-only), booking or ticket
 changes, or as the authoritative record for a flight about to depart — united.com and the
@@ -54,7 +54,7 @@ Everything is a plain HTTPS GET. No API key, no authentication, no login wall.
 | Hub status | `https://theblueboard.co/hubs/{ord\|den\|iah\|ewr\|sfo\|iad\|lax\|nrt\|gum}` |
 | Newark operations center | `https://theblueboard.co/newark` |
 | Fleet index / one type | `https://theblueboard.co/fleet` · `https://theblueboard.co/fleet/{slug}` |
-| TSA checkpoint volumes | `https://theblueboard.co/tsa` |
+| TSA checkpoint guide (lanes, hours) | `https://theblueboard.co/tsa` |
 | News · RSS | `https://theblueboard.co/news` · `https://theblueboard.co/feed.xml` |
 | Trackers | `https://theblueboard.co/trackers` |
 | Tracker open data | `/trackers/atc.json` · `/trackers/atc.csv` · `/trackers/united-hubs.json` · `/trackers/united-hubs.csv` |

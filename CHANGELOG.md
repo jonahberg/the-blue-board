@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.20] - 2026-08-21
+
+### Fixed
+- **The new agent-facing copy promised TSA wait times the site cannot produce.** v1.7.19 shipped "How long is the TSA line?" as a best-fit job in both llms files, listed "TSA checkpoint volumes" in the homepage brief, the Markdown representation, and the URL tables, and gave it an "hourly" row in the data-freshness table. A post-merge production check found /api/tsa returning all-null for every hub — which is correct and by design: the MyTSA upstream was decommissioned, /api/tsa reports `feedDown`, and /tsa already says so in the page. The page's real value is the checkpoint guide it was rebuilt around — Pre✓, CLEAR, Priority, and standard lane availability by terminal, checkpoint hours, and tips for the 7 mainland hubs (GUM and NRT have no TSA checkpoints). All nine claims now describe that, name the decommissioned feed so an agent doesn't go looking for live minutes elsewhere on the site, and the 404 page's "TSA wait times" chip is now "TSA checkpoints". (`public/llms.txt`, `public/llms-full.txt`, `public/index.html`, `src/lib/agent-markdown.js`, `src/pages/404.astro`)
+
 ## [1.7.19] - 2026-08-21
 
 ### Added
