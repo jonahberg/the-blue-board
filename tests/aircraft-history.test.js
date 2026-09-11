@@ -388,3 +388,12 @@ describe('aircraft-history official-FR24 kill switch', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('FR24 request parameters', () => {
+  it("filters by `registrations` — FR24's name; `regs` 400s with \"None of the required fields were provided\"", async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../api/aircraft-history.ts', import.meta.url), 'utf8');
+    expect(src).toContain("searchParams.set('registrations', reg)");
+    expect(src).not.toMatch(/searchParams\.set\('regs'/);
+  });
+});

@@ -1,7 +1,7 @@
 // Aircraft History API — Fetch recent flight segments for a tail number
 // Usage: /api/aircraft-history?reg=N12345
 //
-// Uses FR24 Official API flight-summary endpoint with `regs` parameter
+// Uses FR24 Official API flight-summary endpoint with the `registrations` parameter
 // Returns the last 5 flight segments for the aircraft within a 36-hour window
 
 import type { VercelRequest, VercelResponse } from './types.js';
@@ -143,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const to = new Date(now.getTime() + 6 * 60 * 60 * 1000); // 6h ahead
 
     const url = new URL(FR24_BASE + SUMMARY_PATH);
-    url.searchParams.set('regs', reg);
+    url.searchParams.set('registrations', reg); // FR24 filter name is `registrations` (was `regs` → 400 "None of the required fields were provided")
     url.searchParams.set('flight_datetime_from', fr24Datetime(from));
     url.searchParams.set('flight_datetime_to', fr24Datetime(to));
 
