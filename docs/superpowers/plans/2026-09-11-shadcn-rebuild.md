@@ -58,7 +58,7 @@ public/sw.js                      rewritten for hashed assets
 
 ---
 
-## WP0 — Toolchain, design tokens, BaseLayout (proof on `/privacy`)
+## Task 0 — Toolchain, design tokens, BaseLayout (proof on `/privacy`)
 
 **Files:** Modify `astro.config.mjs`, `tsconfig.json`, `package.json`; Create `components.json`, `src/styles/global.css`, `src/styles/content.css` (empty scaffold), `src/components/ui/*` (via CLI), `src/components/site/{BaseLayout,SiteHeader,SiteFooter,Seo,JsonLd,Breadcrumbs}.astro`, `src/scripts/sw-register.ts`; Modify `src/pages/privacy.astro`; Modify tests: `tests/web-analytics-integration.test.js`, `tests/csp.test.js` (only if they fail).
 
@@ -82,7 +82,7 @@ public/sw.js                      rewritten for hashed assets
 
 ---
 
-## WP1 — Extract dashboard logic from `main.js` into tested `src/lib` modules (zero UI change)
+## Task 1 — Extract dashboard logic from `main.js` into tested `src/lib` modules (zero UI change)
 
 Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in `src/dashboard/main.js`).
 
@@ -119,7 +119,7 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 
 ---
 
-## WP2 — Dashboard island shell + Live tab, `index.astro`, test retargeting
+## Task 2 — Dashboard island shell + Live tab, `index.astro`, test retargeting
 
 **Depends on:** WP0, WP1.
 **Files:** Create `src/pages/index.astro`, `src/lib/home-seo.js`, `src/app/**` (shell, state, data, map, LiveView, FlightSheet, SearchPalette, placeholders for the other views), `tests/home-seo.test.js`; Move `public/index.html` → `legacy/index.html` and `public/css/style.css` → `legacy/style.css` (reference only; `legacy/` is not copied to dist); Modify `package.json` build (drop `vite build --config vite.dashboard.config.js`; `dev` = `astro dev`), `scripts/stamp-seo-build-date.mjs` (stamp only `dist/llms.txt` and `dist/llms-full.txt`; delete the `__HOME_LASTMOD__` requirement), delete `scripts/run-astro-dev.mjs`, `src/lib/buildMetadata.js` (`homeLastmodPaths` = `['src/pages/index.astro', 'src/app', 'src/lib/home-seo.js', 'public/data/fleet.json', 'public/data/starlink.json']`); Modify tests: `agent-readiness`, `csp`, `compliance`, `fleet-consistency`, `web-analytics-integration`, `basemap`, `leaflet-required-styles`, `build-metadata`.
@@ -152,7 +152,7 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 
 ---
 
-## WP3 — Schedule tab
+## Task 3 — Schedule tab
 
 **Depends on:** WP2. Runs in parallel with WP4–WP8 (own worktree).
 **Files:** `src/app/views/ScheduleView.tsx` (+ `schedule/*.tsx` subcomponents), fill `src/app/state/schedule.tsx`, `src/app/data/schedule.ts`; tests for any new lib helper.
@@ -168,7 +168,7 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 - [ ] `goto-schedule-result` from the palette: set hub/dir, load, scroll + 2 s highlight.
 - [ ] Commit: `feat(schedule): port Schedule tab`
 
-## WP4 — Weather / Delays tab
+## Task 4 — Weather / Delays tab
 
 **Depends on:** WP2. **Files:** `src/app/views/WeatherView.tsx` (+ `weather/*.tsx`), fill `src/app/state/weather.tsx`, `src/app/map/RadarMap.tsx`.
 
@@ -181,7 +181,7 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 - [ ] Tracker briefing from `src/data/trackers/index.js` with home-hub branch and `bb_tracker_watches`.
 - [ ] Commit: `feat(weather): port Weather/Delays tab incl. IROPS + NAS`
 
-## WP5 — Fleet tab + Aircraft detail dialog
+## Task 5 — Fleet tab + Aircraft detail dialog
 
 **Depends on:** WP2. **Files:** `src/app/views/FleetView.tsx` (+ `fleet/*.tsx`), `src/app/features/AircraftDetailDialog.tsx`.
 
@@ -189,14 +189,14 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 - [ ] `AircraftDetailDialog` (shadcn Dialog) per §27 incl. jargon terms, seat bar, live status click → focus map, footer actions, `?aircraft=` share.
 - [ ] Commit: `feat(fleet): port Fleet tab + aircraft detail dialog`
 
-## WP6 — Starlink tab
+## Task 6 — Starlink tab
 
 **Depends on:** WP2. **Files:** `src/app/views/StarlinkView.tsx` (+ `starlink/*.tsx`).
 
 - [ ] Hero, velocity SVG chart (outlier cap, footnotes, thinned labels), pace caption (`starlink-utils.js`), industry strip (`/api/fleet-summary`), hub departures board (`buildDeparturesBoard`, window toggle, cap policy from `starlink-view.js`, pills, show-all, Track buttons, freshness), roster table (filters, sort, hidden columns, NEW badge, integrity dot, one-row expansion), verification ledger (`/api/starlink-mismatches`, tripwire alert), degraded-tier behaviour, source footer.
 - [ ] Commit: `feat(starlink): port Starlink tab`
 
-## WP7 — My Flights + watch + push + AI/FR24 dialogs
+## Task 7 — My Flights + watch + push + AI/FR24 dialogs
 
 **Depends on:** WP2. **Files:** `src/app/views/MyFlightsView.tsx` (+ `myflight/*.tsx`), `src/app/features/{DelayExplainDialog,Fr24LookupDialog}.tsx`, finish `src/app/state/watch.tsx` push flow.
 
@@ -206,7 +206,7 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 - [ ] `Fr24LookupDialog` (never blocking on failure → palette error slot; leg-date disclaimer; fleet cross-ref; Share).
 - [ ] Commit: `feat(my-flights): port My Flights, watch list, push, AI explain, FR24 lookup`
 
-## WP8 — Stats + Sources + engagement surfaces + PWA
+## Task 8 — Stats + Sources + engagement surfaces + PWA
 
 **Depends on:** WP2. **Files:** `src/app/views/{StatsView,SourcesView}.tsx`, `src/app/features/{Onboarding,WaitlistDialog,DisclaimerDialog,TipStrip,NewsBanner,BmacToast,LegalPopover,SupportMeter}.tsx`, `public/sw.js`, `tests/sw.test.js`, `tests/popup-triggers.test.js` (keep; engagement.js must satisfy it or the test is retargeted to `engagement.js`).
 
@@ -217,7 +217,7 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 - [ ] PWA: rewrite `public/sw.js` v11 — precache `['/']` + navigation network-first; `/api/*`,`/data/*` network-first no-store; `/_astro/*` cache-first immutable; everything else same-origin stale-while-revalidate; push + notificationclick unchanged. Update `tests/sw.test.js` (replace `/js/support-meter.js` & `/css/style.css` cases with a `/_astro/x-abc123.js` cache-first case and a navigation case; keep cross-origin pass-through using a CARTO tile URL instead of unpkg). Register from `src/scripts/sw-register.ts`.
 - [ ] Commit: `feat(dashboard): Stats, Sources, engagement surfaces, PWA on hashed assets`
 
-## WP9 — Content pages on BaseLayout (hubs, fleet, news, newark, 404)
+## Task 9 — Content pages on BaseLayout (hubs, fleet, news, newark, 404)
 
 **Depends on:** WP0. Can run in parallel with WP2–WP8 (touches `src/pages`, `src/layouts`, `src/data` classes only).
 **Files:** Modify `src/layouts/{HubLayout,FleetTypeLayout,NewsLayout}.astro`, `src/pages/{404,newark}.astro`, `src/pages/{hubs,fleet,news}/index.astro`; Create `src/scripts/{hub-live,newark-live,scroll-hint}.ts`, `src/styles/content.css`; Delete `src/components/Footer.astro` (replaced by `SiteFooter`); Modify `tests/build-metadata.test.js` only if paths change (keep layout file names).
@@ -229,7 +229,7 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 - [ ] Gates + a browse screenshot pass of `/hubs`, `/hubs/ord`, `/hubs/nrt`, `/fleet`, `/fleet/737-800`, `/news`, one article, `/newark`, `/404` at 1440 and 400 px.
 - [ ] Commit: `feat(pages): hubs, fleet, news, newark, 404 on the new design system`
 
-## WP10 — Trackers on BaseLayout
+## Task 10 — Trackers on BaseLayout
 
 **Depends on:** WP0. Parallel with WP9. **Files:** `src/components/trackers/*.astro` (12), `src/pages/trackers/**`, Create `src/scripts/trackers.ts` (from `public/js/trackers.js`), delete the public copy.
 
@@ -237,11 +237,11 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 - [ ] `tracker-seo`, `tracker-data`, `tracker-map` tests stay green untouched.
 - [ ] Commit: `feat(trackers): trackers on the new design system`
 
-## WP11 — TSA removal (one atomic commit)
+## Task 11 — TSA removal (one atomic commit)
 
 **Depends on:** WP2, WP9. Follow `2026-09-11-inventory-tsa-removal.md` deletion order; additionally add `{ "source": "/tsa", "destination": "/hubs", "permanent": true }` to `vercel.json` redirects, remove the `/tsa` header block, cron, both function entries, and update `tests/asset-cache.test.js`, `tests/agent-readiness.test.js`, `tests/web-analytics-integration.test.js`, `README.md`, `TODOS.md`, `public/llms*.txt`, `src/lib/agent-markdown.js`, `api/waitlist.ts`. Gates. Commit: `feat!: remove the TSA checkpoint guide`.
 
-## WP12 — Cleanup, config, docs, version
+## Task 12 — Cleanup, config, docs, version
 
 **Depends on:** WP3–WP11.
 - [ ] Delete `src/dashboard/`, `vite.dashboard.config.js`, `legacy/`, `public/js/*` (all ported), `public/fonts/*`, `public/css/`, `scripts/run-astro-dev.mjs`; `package.json` scripts `dev: astro dev`, `build: bun scripts/refresh-starlink-facts.mjs && astro build && bun scripts/stamp-seo-build-date.mjs && bun scripts/build-agent-markdown.mjs`, remove `build:dashboard`; remove `tests/main-js-imports.test.js`.
@@ -250,7 +250,7 @@ Runs in parallel with WP0 (touches only `src/lib`, `tests`, and import lines in 
 - [ ] `CHANGELOG.md` 1.8.0 entry; `package.json` version 1.8.0; `src/data/facts.js` untouched.
 - [ ] Commit: `chore(release): v1.8.0 — shadcn/ui rebuild, TSA removed`
 
-## WP13 — Parity audit, browser QA, PR
+## Task 13 — Parity audit, browser QA, PR
 
 - [ ] Fresh Opus reviewer: walk all three inventories, tick each item with a file reference in `docs/superpowers/specs/2026-09-11-parity-audit.md`; unticked = gap list. Fix gaps (new WP if large).
 - [ ] Browse QA (`bun run preview` behind the `/api` proxy): every tab desktop + 400 px, every content page, ⌘K, sheet, dialogs, deep links (`/?flight=UA1`, `/?tab=irops`, `/?hub=ord&tab=schedule`, `/?aircraft=`, `/?waitlist=1`, `#stats`), offline banner toggle, console clean.
