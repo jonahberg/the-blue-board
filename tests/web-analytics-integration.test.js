@@ -8,30 +8,43 @@ function readProjectFile(path) {
   return readFileSync(resolve(ROOT, path), 'utf8');
 }
 
-/** True when `source` imports the component whose path ends with `suffix`. */
-function importsComponent(source, suffix) {
-  return source.includes(`${suffix}'`) || source.includes(`${suffix}"`);
+const ANALYTICS_FILE = resolve(ROOT, 'src/components/VercelAnalytics.astro');
+const BASE_LAYOUT_FILE = resolve(ROOT, 'src/components/site/BaseLayout.astro');
+
+/** Default imports of a relative `.astro` file, capturing the local binding name. */
+const ASTRO_IMPORT = /^\s*import\s+(\w+)\s+from\s+['"](\.[^'"]+\.astro)['"]\s*;?\s*$/gm;
+
+/** Every default `.astro` import in a file, as `{ local, specifier }`. */
+function astroImports(source) {
+  return [...source.matchAll(ASTRO_IMPORT)].map(([, local, specifier]) => ({ local, specifier }));
 }
 
-const ANALYTICS = '/VercelAnalytics.astro';
-const BASE_LAYOUT = '/site/BaseLayout.astro';
-const RELATIVE_ASTRO_IMPORT = /from\s+['"](\.[^'"]+\.astro)['"]/g;
+/** True when `local` is actually rendered, not merely imported. */
+function isMounted(source, local) {
+  return new RegExp(`<${local}[\\s/>]`).test(source);
+}
 
 /**
- * A document is instrumented when it mounts the analytics wrapper itself, uses
- * BaseLayout (which mounts it), or imports another `.astro` file that does —
- * that last case is how the `[hub]`, `[type]`, `[slug]` and `[code]` pages
+ * A document is instrumented when it renders the analytics wrapper itself, renders
+ * BaseLayout (which renders the wrapper), or renders another `.astro` component that
+ * does — that last case is how the `[hub]`, `[type]`, `[slug]` and `[code]` pages
  * inherit it from their layouts.
+ *
+ * Importing is never enough: an unrendered import ships no script tag, so every step
+ * of the chain has to be a real `import … from './x.astro'` statement AND a real
+ * `<X …>` mount.
  */
 function isInstrumented(absolutePath, seen = new Set()) {
   if (seen.has(absolutePath) || !existsSync(absolutePath)) return false;
   seen.add(absolutePath);
 
   const source = readFileSync(absolutePath, 'utf8');
-  if (importsComponent(source, ANALYTICS) || importsComponent(source, BASE_LAYOUT)) return true;
+  for (const { local, specifier } of astroImports(source)) {
+    if (!isMounted(source, local)) continue;
 
-  for (const [, specifier] of source.matchAll(RELATIVE_ASTRO_IMPORT)) {
-    if (isInstrumented(resolve(dirname(absolutePath), specifier), seen)) return true;
+    const target = resolve(dirname(absolutePath), specifier);
+    if (target === ANALYTICS_FILE || target === BASE_LAYOUT_FILE) return true;
+    if (isInstrumented(target, seen)) return true;
   }
   return false;
 }
@@ -70,20 +83,43 @@ describe('Web Analytics integration', () => {
     expect(dashboardEntry).not.toContain('speed-insights');
   });
 
-  it('BaseLayout mounts the shared wrapper, so every page built on it is instrumented', () => {
+  it('BaseLayout imports AND mounts the shared wrapper, so pages built on it are instrumented', () => {
     const baseLayout = readProjectFile('src/components/site/BaseLayout.astro');
 
-    expect(importsComponent(baseLayout, ANALYTICS)).toBe(true);
+    expect(baseLayout).toMatch(/^\s*import\s+VercelAnalytics\s+from\s+'\.\.\/VercelAnalytics\.astro';\s*$/m);
     expect(baseLayout).toContain('<VercelAnalytics />');
   });
 
-  it('every page and layout is instrumented, directly or through a layout it imports', () => {
+  it('every page and layout renders the wrapper, directly or through a layout it renders', () => {
     const documents = [...astroFilesIn('src/pages'), ...astroFilesIn('src/layouts')];
 
     expect(documents.length).toBeGreaterThan(10);
     for (const file of documents) {
       expect(isInstrumented(resolve(ROOT, file)), file).toBe(true);
     }
+  });
+
+  it('an import without a mount does not count as instrumented', () => {
+    // Guards the check itself: an entrypoint that imports VercelAnalytics or BaseLayout but
+    // never renders it ships no analytics script, and a substring match would have passed it.
+    const importedButUnused = [
+      "---",
+      "import VercelAnalytics from '../components/VercelAnalytics.astro';",
+      "import BaseLayout from '../components/site/BaseLayout.astro';",
+      "---",
+      "<p>no analytics here</p>",
+    ].join('\n');
+
+    for (const local of ['VercelAnalytics', 'BaseLayout']) {
+      expect(isMounted(importedButUnused, local), local).toBe(false);
+    }
+    // Both are real import statements, so the file-level scan does see them...
+    expect(astroImports(importedButUnused).map((i) => i.local)).toEqual([
+      'VercelAnalytics',
+      'BaseLayout',
+    ]);
+    // ...while a mention in prose or a comment is not an import statement at all.
+    expect(astroImports('// see ../components/VercelAnalytics.astro for details')).toHaveLength(0);
   });
 
   it('Speed Insights (canceled on the Vercel project Jul 2026) is fully removed', () => {
