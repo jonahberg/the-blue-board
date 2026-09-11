@@ -1,7 +1,7 @@
 ---
 import { fleetOrder, fleetNavLabels } from '../data/fleet/index.js';
 import Footer from '../components/Footer.astro';
-import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
+import VercelAnalytics from '../components/VercelAnalytics.astro';
 import fleetDb from '../../public/data/fleet.json';
 
 const { data } = Astro.props;
@@ -323,7 +323,7 @@ a:hover{text-decoration:underline}
 
 <Footer />
 
-<VercelSpeedInsights />
+<VercelAnalytics />
 
 <!-- Scroll Hint — external file so CSP can drop 'unsafe-inline' from script-src. -->
 <script defer src="/js/scroll-hint.js"></script>

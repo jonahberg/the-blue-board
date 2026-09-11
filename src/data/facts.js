@@ -34,18 +34,12 @@ export const HUB_LINE_LONG = "all 8 United hubs plus the Tokyo-Narita gateway";
 /** Short-label approved editorial line for hub-count claims (tight spaces). */
 export const HUB_LINE_SHORT = "8 hubs + NRT gateway";
 
-// Vite-bundled only (src/** + Astro). NEVER import facts.js from api/** — a
-// bare JSON import crashes Vercel's Node-ESM functions (prod incident 2026-06-01).
-import starlinkLive from './starlink-live.json';
-
-/** Starlink-equipped aircraft count — refreshed at build by scripts/refresh-starlink-facts.mjs. */
-export const STARLINK_EQUIPPED = starlinkLive.live.count;
-
-/** Floored prose label ("500+") — can only be stale in the conservative direction. */
-export const STARLINK_EQUIPPED_LABEL = starlinkLive.live.label;
-
-/** "August 2026" — the month the count was fetched. */
-export const STARLINK_AS_OF = starlinkLive.live.asOf;
+// The three Starlink figures (STARLINK_EQUIPPED, STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF) live in
+// ./starlink-facts.js, which imports src/data/starlink-live.json. They are deliberately NOT here:
+// this module is imported by api/waitlist.ts, and a bare JSON import anywhere in an api/** import
+// graph crashes the function at module load on Vercel's native Node ESM runtime
+// (ERR_IMPORT_ATTRIBUTE_MISSING — prod incidents 2026-06-01 and 2026-08-11→09-10, the latter
+// silently 500'd every waitlist signup for a month). tests/api-esm-json-imports.test.js guards it.
 
 /** United's public target for Starlink-equipped aircraft by end of 2026. */
 export const STARLINK_TARGET_2026 = '~1,000';

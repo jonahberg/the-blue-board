@@ -69,10 +69,13 @@ describe('Content-Security-Policy configuration', () => {
     expect(imgSrc).toContain('https://mesonet.agron.iastate.edu');
   });
 
-  it('allows self and Vercel vitals in connect-src (dropping them breaks /api fetches)', () => {
+  it('allows self and the Web Analytics beacon host in connect-src (dropping self breaks /api fetches)', () => {
     const connectSrc = directive('connect-src');
     expect(connectSrc).toContain("'self'");
-    expect(connectSrc).toContain('https://vitals.vercel-insights.com');
+    expect(connectSrc).toContain('https://va.vercel-scripts.com');
+    // Speed Insights was canceled on the project in Jul 2026 and removed in 1.7.22; its vitals
+    // endpoint must not creep back into the allowlist as dead weight.
+    expect(connectSrc).not.toContain('https://vitals.vercel-insights.com');
   });
 });
 

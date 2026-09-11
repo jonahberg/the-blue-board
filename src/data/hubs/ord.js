@@ -1,4 +1,4 @@
-import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../facts.js';
+import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../starlink-facts.js';
 
 export const ord = {
   "iata": "ORD",

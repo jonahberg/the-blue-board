@@ -1,7 +1,7 @@
 ---
 import { unitedTerminals, tsaHubOrder, getAllFaqEntries } from '../data/tsa/united-terminals.js';
 import Footer from '../components/Footer.astro';
-import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
+import VercelAnalytics from '../components/VercelAnalytics.astro';
 
 const faqEntries = getAllFaqEntries();
 ---
@@ -279,6 +279,6 @@ const faqEntries = getAllFaqEntries();
 </div>
 
 <script defer src="/js/tsa-gate.js"></script>
-<VercelSpeedInsights />
+<VercelAnalytics />
 </body>
 </html>
