@@ -69,8 +69,17 @@ describe('shouldShowOnboarding', () => {
     expect(s.getItem('bb-visited')).toBe('1'); // still recorded
   });
 
-  it('shows the overlay when storage throws rather than trapping the visitor (edge case)', () => {
-    expect(shouldShowOnboarding({ getItem() { throw new Error('SecurityError'); }, setItem() {} }, NOW)).toBe(true);
+  it('lets a throwing store propagate, as main.js\'s bare read did (edge case)', () => {
+    // main.js :8243-8245 read bb-visited/bb-onboarded with no try/catch, so a throw
+    // aborted the whole onboarding block. Pinned here so nobody "fixes" it into
+    // fail-open without deciding to: that is a behaviour change, not a refactor.
+    const throwing = { getItem() { throw new Error('SecurityError'); }, setItem() {} };
+    expect(() => shouldShowOnboarding(throwing, NOW)).toThrow('SecurityError');
+  });
+
+  it('lets a throwing setItem propagate on a first visit too (edge case)', () => {
+    const throwingWrite = { getItem: () => null, setItem() { throw new Error('QuotaExceeded'); } };
+    expect(() => shouldShowOnboarding(throwingWrite, NOW)).toThrow('QuotaExceeded');
   });
 });
 
@@ -82,12 +91,20 @@ describe('waitlistState', () => {
     expect(st.suppressed).toBe(false);
   });
 
-  it('is permanently suppressed once the visitor has submitted', () => {
+  it('reports a completed submission but does NOT fold it into suppressed', () => {
+    // main.js's first gate is the in-memory `waitlistSubmitted` var (:7980), seeded
+    // from this field at init; `suppressed` is only its third gate, the dismissal TTL.
+    // Folding `submitted` in here would double-gate and diverge from main.js.
     const s = fakeStorage({ bb_waitlist_submitted: 'true' });
     expect(waitlistState(s, NOW, {}).submitted).toBe(true);
-    expect(waitlistState(s, NOW, {}).suppressed).toBe(true);
-    // Even a forced open respects a completed submission.
-    expect(waitlistState(s, NOW, { forced: true }).suppressed).toBe(true);
+    expect(waitlistState(s, NOW, {}).suppressed).toBe(false);
+    expect(waitlistState(s, NOW, { forced: true }).suppressed).toBe(false);
+  });
+
+  it('suppresses on the dismissal TTL alone, submitted or not', () => {
+    const dismissed = { bb_waitlist_dismissed: String(NOW - DAY) };
+    expect(waitlistState(fakeStorage(dismissed), NOW, {}).suppressed).toBe(true);
+    expect(waitlistState(fakeStorage({ ...dismissed, bb_waitlist_submitted: 'true' }), NOW, {}).suppressed).toBe(true);
   });
 
   it('is suppressed for 7 days after a dismissal, then opens again', () => {
@@ -114,11 +131,12 @@ describe('waitlistState', () => {
     expect(waitlistState(s, NOW, { clicks: 31 }).clicksReached).toBe(false);
   });
 
-  it('treats an unreadable store as "nothing dismissed" (edge case)', () => {
-    const st = waitlistState({ getItem() { throw new Error('SecurityError'); } }, NOW, {});
-    expect(st.submitted).toBe(false);
-    expect(st.dismissedRecently).toBe(false);
-    expect(st.suppressed).toBe(false);
+  it('propagates a throwing store from the bare bb-visited read (edge case)', () => {
+    // bb_waitlist_submitted is read inside a try/catch (main.js :7953) so it swallows,
+    // but bb-visited is bare (main.js :8173) and throws — matching the original, where
+    // a throwing store aborted the trigger-setup block before any modal could open.
+    const throwing = { getItem() { throw new Error('SecurityError'); } };
+    expect(() => waitlistState(throwing, NOW, {})).toThrow('SecurityError');
   });
 });
 
