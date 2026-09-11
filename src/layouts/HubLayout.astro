@@ -1,7 +1,7 @@
 ---
 import { hubOrder, hubNavLabels } from '../data/hubs/index.js';
 import Footer from '../components/Footer.astro';
-import VercelSpeedInsights from '../components/VercelSpeedInsights.astro';
+import VercelAnalytics from '../components/VercelAnalytics.astro';
 
 const { data } = Astro.props;
 const iata = data.iata;
@@ -298,7 +298,7 @@ nav.jump-nav a:hover{border-color:var(--ua-accent);color:var(--ua-accent);text-d
 
 <Footer />
 
-<VercelSpeedInsights />
+<VercelAnalytics />
 
 <!-- Live Data + Scroll Hint — extracted to external files so CSP can drop
      'unsafe-inline' from script-src. Scripts read data-hub-iata from <body>. -->

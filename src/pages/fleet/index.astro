@@ -1,7 +1,8 @@
 ---
 import { fleetOrder, fleetNavLabels, fleetTypes } from '../../data/fleet/index.js';
-import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
-import { STARLINK_EQUIPPED, STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF, STARLINK_TARGET_2026, FLEET_DB_COUNT } from '../../data/facts.js';
+import VercelAnalytics from '../../components/VercelAnalytics.astro';
+import { STARLINK_TARGET_2026, FLEET_DB_COUNT } from '../../data/facts.js';
+import { STARLINK_EQUIPPED, STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../../data/starlink-facts.js';
 
 // Build type summaries for the grid
 const typeSummaries: Record<string, { displayName: string; count: number; role: string; bodyType: string; seatTotal: string; slug: string }> = {};
@@ -475,7 +476,7 @@ p{margin-bottom:12px}
   </div>
 </div>
 
-<VercelSpeedInsights />
+<VercelAnalytics />
 
 </body>
 </html>

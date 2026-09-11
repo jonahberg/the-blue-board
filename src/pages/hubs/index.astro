@@ -1,6 +1,6 @@
 ---
 import { hubOrder, hubNavLabels, hubs } from '../../data/hubs/index.js';
-import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
+import VercelAnalytics from '../../components/VercelAnalytics.astro';
 import { HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../../data/facts.js';
 
 const hubSummaries: Record<string, { name: string; city: string; subtitle: string; iata: string }> = {};
@@ -250,7 +250,7 @@ p{margin-bottom:12px}
   </div>
 </div>
 
-<VercelSpeedInsights />
+<VercelAnalytics />
 
 </body>
 </html>

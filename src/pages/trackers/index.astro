@@ -3,7 +3,7 @@ import { trackers, trackerOrder } from '../../data/trackers/index.js';
 import { trackerParentSeo } from '../../lib/tracker-detail.js';
 import LastUpdated from '../../components/trackers/LastUpdated.astro';
 import Footer from '../../components/Footer.astro';
-import VercelSpeedInsights from '../../components/VercelSpeedInsights.astro';
+import VercelAnalytics from '../../components/VercelAnalytics.astro';
 
 const canonical = 'https://theblueboard.co/trackers';
 const ogImage = 'https://theblueboard.co/og/og-trackers.jpg';
@@ -173,6 +173,6 @@ const fmtShort = (iso) =>
       </section>
     </main>
     <Footer />
-    <VercelSpeedInsights />
+    <VercelAnalytics />
   </body>
 </html>

@@ -1,4 +1,3 @@
-import { injectSpeedInsights } from '@vercel/speed-insights';
 import { computeDelayRiskModel, HUB_COORDINATES, HUB_RISK_PROFILES } from '../lib/delay-risk.js';
 import { formatDelayExplainFAAStatus, getScheduleRiskContext, describeFaaProgram } from '../lib/delay-explain-context.js';
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
@@ -30,7 +29,6 @@ import { escapeHtml } from '../lib/escape.js';
 import { cartoBasemapUrl } from '../lib/basemap.js';
 import { atcAirports, atcMeta, unitedHubsMeta, unitedProjects } from '../data/trackers/index.js';
 
-injectSpeedInsights();
 
 // ═══════════════════════════════════════════════
 // JARGON TOOLTIPS (P2-A item 1) — plain-English one-liners for the ops jargon
