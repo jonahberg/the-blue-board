@@ -1,7 +1,248 @@
 /*
- * Long-form content styles (prose, hub/fleet `contentHtml` blocks, news bodies).
+ * Styles for the raw HTML strings the content pages render with `set:html`:
+ * `contentHtml`/`headerTitle` in `src/data/hubs/*.js` and `src/data/fleet/*.js`,
+ * and `body` in `src/data/news/index.js`.
  *
- * Scaffold only — Tasks 9 and 10 move the `set:html` content rules here as the
- * `.astro` pages come off the old `--ua-*` stylesheet. Imported at the END of
+ * Those strings are data, not markup we can hand-class with Tailwind utilities,
+ * so every element default and every class they use is declared here, scoped
+ * under `.bb-content` and built from the shadcn tokens. Imported at the END of
  * `global.css` so these rules win ties against the base layer above.
+ *
+ * `.bb-content` itself declares NOTHING — the hub and fleet headers put the
+ * class on an `<h1>` so the `.iata` / `.type-badge` spans inside a raw
+ * `headerTitle` string are styled without the h1 inheriting prose rules.
+ *
+ * Keep this file in sync with:
+ *   grep -ohE 'class=\\?"[^"\\]+' src/data/hubs/*.js src/data/fleet/*.js \
+ *     src/data/news/index.js | sed -E 's/^class=\\?"//' | tr ' ' '\n' | sort -u
  */
+
+@layer base {
+  /*
+   * Two status hues the shadcn palette does not carry. Amber reads as
+   * "caution" and green as "clear" in the hub and fleet content. Every use
+   * ships with an icon or a text label next to it, so colour is never the only
+   * signal (design spec §2.4). Tuned for the dark palette, which is the product
+   * default; these belong in `global.css`'s `@theme` once the dashboard lands
+   * its own status palette.
+   */
+  :root {
+    --bb-warn: oklch(0.76 0.12 85);
+    --bb-ok: oklch(0.74 0.16 150);
+  }
+}
+
+@layer components {
+  /* ── Element defaults ─────────────────────────────────────────────────── */
+
+  .bb-content h1 {
+    @apply mb-1 text-2xl font-bold tracking-tight text-balance text-foreground;
+  }
+
+  .bb-content h2 {
+    @apply mt-8 mb-3 border-b border-border pb-1.5 text-base font-bold tracking-tight text-balance text-foreground;
+  }
+
+  .bb-content h3 {
+    @apply mt-5 mb-2 text-sm font-semibold tracking-tight text-balance text-foreground;
+  }
+
+  .bb-content h4 {
+    @apply mt-4 mb-1.5 text-sm font-semibold text-foreground;
+  }
+
+  .bb-content p {
+    @apply mb-3 text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .bb-content ul {
+    @apply mb-3 list-disc space-y-1 pl-5;
+  }
+
+  .bb-content ol {
+    @apply mb-3 list-decimal space-y-1 pl-5;
+  }
+
+  .bb-content li {
+    @apply text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .bb-content li::marker {
+    @apply text-muted-foreground;
+  }
+
+  .bb-content strong {
+    @apply font-semibold text-foreground;
+  }
+
+  .bb-content em {
+    @apply italic;
+  }
+
+  .bb-content code {
+    @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-xs text-foreground;
+  }
+
+  .bb-content blockquote {
+    @apply my-4 border-l-2 border-border pl-4 text-sm leading-relaxed text-muted-foreground italic;
+  }
+
+  .bb-content a {
+    @apply font-medium text-foreground underline decoration-muted-foreground/50 underline-offset-2 hover:decoration-foreground;
+  }
+
+  .bb-content table {
+    @apply my-3 w-full border-collapse text-xs;
+  }
+
+  .bb-content th {
+    @apply border-b border-border bg-muted px-2 py-2 text-left text-[10px] font-semibold tracking-wider text-muted-foreground uppercase;
+  }
+
+  .bb-content td {
+    @apply border-b border-border px-2 py-1.5 align-top text-xs leading-relaxed text-muted-foreground;
+  }
+
+  .bb-content tbody tr:hover {
+    @apply bg-muted/40;
+  }
+
+  .bb-content hr {
+    @apply my-6 border-t border-border;
+  }
+
+  /* ── Layout blocks ────────────────────────────────────────────────────── */
+
+  /* Every hub/fleet `contentHtml` is a stack of `<div class="section">`.
+     `overflow-x: auto` is the safety valve for a wide table inside: the raw
+     strings give us no wrapper element to scroll, so the section scrolls. */
+  .bb-content .section {
+    @apply mt-8 overflow-x-auto border-t border-border pt-6;
+  }
+
+  .bb-content .section:first-child {
+    @apply mt-0 border-t-0 pt-0;
+  }
+
+  /* The section heading already carries the divider, so drop the duplicate. */
+  .bb-content .section > h2:first-child {
+    @apply mt-0;
+  }
+
+  .bb-content .subtitle {
+    @apply mb-5 text-xs text-muted-foreground;
+  }
+
+  /* ── Highlight callouts ───────────────────────────────────────────────── */
+
+  .bb-content .highlight-box {
+    @apply my-4 rounded-r-md border-l-2 border-l-primary bg-card px-4 py-3 text-xs leading-relaxed text-muted-foreground;
+  }
+
+  .bb-content .highlight-warn {
+    border-left-color: var(--bb-warn);
+  }
+
+  .bb-content .highlight-ok {
+    border-left-color: var(--bb-ok);
+  }
+
+  .bb-content .highlight-alert {
+    @apply border-l-destructive;
+  }
+
+  /* ── Call to action ───────────────────────────────────────────────────── */
+
+  /* Wins over `.bb-content a` on source order at equal specificity.
+     `min-h-11` is the 44 px touch-target floor. */
+  .bb-content .cta {
+    @apply inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 text-xs font-semibold text-primary-foreground no-underline hover:bg-primary/90;
+  }
+
+  /* ── Jump navigation (compact hub pages) ──────────────────────────────── */
+
+  .bb-content .jump-nav {
+    @apply my-6 flex flex-wrap gap-2;
+  }
+
+  .bb-content .jump-nav a {
+    @apply inline-flex min-h-11 items-center rounded-full border border-border bg-card px-4 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase no-underline hover:border-primary hover:bg-primary hover:text-primary-foreground;
+  }
+
+  .bb-content .scroll-hint {
+    @apply my-3 text-center text-[10px] text-muted-foreground transition-opacity duration-500;
+  }
+
+  /* ── Live bar (compact hub pages: NRT, GUM) ───────────────────────────── */
+
+  .bb-content .live-bar {
+    @apply mb-6 flex flex-col gap-3 rounded-lg border border-border bg-card p-4;
+  }
+
+  /* Paired with the literal text "LIVE", so the dot is never the only signal. */
+  .bb-content .live-dot {
+    @apply size-2 shrink-0 rounded-full;
+    background-color: var(--bb-ok);
+  }
+
+  .bb-content .live-count {
+    @apply font-mono text-2xl font-bold text-foreground tabular-nums;
+  }
+
+  .bb-content .live-note {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .bb-content .live-updated {
+    @apply font-mono text-[10px] text-muted-foreground;
+  }
+
+  .bb-content .live-meta {
+    @apply border-t border-border pt-2 text-[10px] leading-relaxed text-muted-foreground;
+  }
+
+  .bb-content .live-link {
+    @apply inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2;
+  }
+
+  /* ── Inline accents inside `headerTitle` ──────────────────────────────── */
+
+  .bb-content .iata,
+  .bb-content .type-badge {
+    @apply font-mono font-bold text-primary;
+  }
+
+  /* ── Tables in the data strings ───────────────────────────────────────── */
+
+  .bb-content .config-table {
+    @apply tabular-nums;
+  }
+
+  /* ── Cabin tags ───────────────────────────────────────────────────────── */
+
+  .bb-content .cabin-tag {
+    @apply mr-1 inline-block rounded-sm px-1.5 py-0.5 text-[10px] font-semibold text-foreground;
+  }
+
+  .bb-content .cabin-polaris {
+    @apply bg-primary/25;
+  }
+
+  .bb-content .cabin-pp {
+    background-color: color-mix(in oklab, var(--bb-warn) 22%, transparent);
+  }
+
+  .bb-content .cabin-ep {
+    background-color: color-mix(in oklab, var(--bb-ok) 22%, transparent);
+  }
+
+  .bb-content .cabin-note {
+    @apply font-normal text-muted-foreground;
+  }
+
+  /* Paired with the word "Starlink", so colour is never the only signal. */
+  .bb-content .starlink-on {
+    @apply font-semibold;
+    color: var(--bb-ok);
+  }
+}
