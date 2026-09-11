@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.23] - 2026-09-10
+
+### Fixed
+- **Every FR24 flight-summary lookup was a 400.** Re-enabling the official API in 1.7.22 exposed it: `/api/fr24-flight`, `/api/aircraft-history` and `/api/flight-times` all sent `flight_datetime_from/to` as `Date.toISOString()` — millisecond precision (`…SS.mmmZ`) — while FR24 documents whole seconds (`YYYY-MM-DDTHH:MM:SSZ`) and rejects the rest with 400. `api/schedule.ts` had its own correct `formatForFR24()` all along, with a comment saying exactly that; the other three callers never used it. One shared `fr24Datetime()` in `api/_official-fr24.ts` now formats every datetime sent to the official API, the live and summary error paths log the response body (only the status was logged, which is why this took a re-enable to notice), and a test pins the format and greps every official-API caller for a raw `toISOString()` next to a `flight_datetime` parameter. (`api/_official-fr24.ts`, `api/fr24-flight.ts`, `api/aircraft-history.ts`, `api/flight-times.ts`, `tests/fr24-datetime-format.test.js`)
+
 ## [1.7.22] - 2026-09-10
 
 ### Fixed

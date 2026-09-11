@@ -6,7 +6,7 @@
 //   Flight summary: GET /api/flight-summary/light?flights={iata}
 
 import type { VercelRequest, VercelResponse } from './types.js';
-import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402 } from './_official-fr24.js';
+import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime } from './_official-fr24.js';
 
 const FR24_BASE = 'https://fr24api.flightradar24.com';
 const LIVE_PATH = '/api/live/flight-positions/full';
@@ -270,7 +270,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       flightData = normalizeLiveResponse(liveData, flight);
     } else {
       const body = await liveResp.text().catch(() => '');
-      console.error(`FR24 live error for ${flight}: status=${liveResp.status}`);
+      console.error(`FR24 live error for ${flight}: status=${liveResp.status} ${body.slice(0, 200)}`);
       if (liveResp.status === 402) recordOfficialApi402(body || 'fr24-flight live 402');
     }
 
@@ -284,8 +284,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         SUMMARY_PATH,
         {
           flights: flight,
-          flight_datetime_from: from.toISOString(),
-          flight_datetime_to: to.toISOString(),
+          flight_datetime_from: fr24Datetime(from),
+          flight_datetime_to: fr24Datetime(to),
         },
         handlerDeadline
       );
@@ -306,7 +306,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       } else {
         const body = await summaryResp.text().catch(() => '');
-        console.error(`FR24 summary error for ${flight}: status=${summaryResp.status}`);
+        console.error(`FR24 summary error for ${flight}: status=${summaryResp.status} ${body.slice(0, 200)}`);
         if (summaryResp.status === 402) recordOfficialApi402(body || 'fr24-flight summary 402');
       }
     }
