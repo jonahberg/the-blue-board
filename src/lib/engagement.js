@@ -1,7 +1,14 @@
 // ═══ ONBOARDING / WAITLIST / BMAC FREQUENCY RULES ═══
 // When each of the three asks is allowed to appear. All three read the same pattern —
-// an epoch timestamp in localStorage plus a TTL — and all three fail OPEN: if storage
-// throws, the visitor still sees the thing rather than being silently locked out.
+// an epoch timestamp in localStorage plus a TTL.
+//
+// Storage guarding is copied from main.js read for read, NOT normalised. The reads
+// main.js wrapped in try/catch (`bb_waitlist_submitted`, and the shared TTL check over
+// `bb_onboarding_dismissed` / `bb_waitlist_dismissed` / `bb-bmac-dismissed`) still
+// swallow; the reads and the write it left bare (`bb-visited`, `bb-onboarded`) still
+// throw. A throwing store therefore aborts the caller at exactly the point it always
+// did. Do NOT normalise this into uniform fail-open here — that is a behaviour change,
+// and it belongs to the React port, made deliberately and documented there.
 //
 // Extracted verbatim from src/dashboard/main.js (:7979-7984 the suppression guards,
 // :8169-8249 the triggers, :8197-8205 the BMAC cooldown, :8243-8249 the onboarding
@@ -45,22 +52,25 @@ function isDismissedRecently(storage, key, now) {
  * @returns {boolean}
  */
 export function shouldShowOnboarding(storage, now = Date.now()) {
-  let visited;
-  try { visited = storage.getItem('bb-visited'); } catch (e) { return true; }
+  // Bare, like main.js :8243-8245 — a throwing store propagates out to the caller and
+  // aborts the onboarding block, which is what it has always done.
+  const visited = storage.getItem('bb-visited');
   if (!visited) {
-    try { storage.setItem('bb-visited', '1'); } catch (e) { /* storage unavailable */ }
+    storage.setItem('bb-visited', '1');
     return !isDismissedRecently(storage, 'bb_onboarding_dismissed', now);
   }
-  let onboarded;
-  try { onboarded = storage.getItem('bb-onboarded'); } catch (e) { onboarded = null; }
+  const onboarded = storage.getItem('bb-onboarded');
   return !(onboarded || isDismissedRecently(storage, 'bb_onboarding_dismissed', now));
 }
 
 /**
  * Storage-derived state for the waitlist modal.
  *
- * `suppressed` covers only the persistent guards. main.js additionally checks the
- * per-session "already shown" flag and whether the onboarding overlay is still up.
+ * `suppressed` is exactly main.js's third gate, `!force && isDismissedRecently(...)`.
+ * It deliberately does NOT fold in `submitted`: main.js's first gate reads the
+ * in-memory `waitlistSubmitted` var, so a failed write still suppresses the modal for
+ * the rest of the session. `submitted` is returned only so main.js can seed that var.
+ * The remaining gates (per-session "already shown", onboarding overlay up) stay there.
  *
  * @param {{getItem: Function}} storage
  * @param {number} [now]  epoch ms.
@@ -72,8 +82,9 @@ export function waitlistState(storage, now = Date.now(), { clicks = 0, forced = 
   let submitted = false;
   try { submitted = storage.getItem('bb_waitlist_submitted') === 'true'; } catch (e) { /* unreadable */ }
 
-  let isNewVisitor = true;
-  try { isNewVisitor = !storage.getItem('bb-visited'); } catch (e) { /* unreadable */ }
+  // Bare, like main.js :8173. Every caller sits after the point the original read it,
+  // so a throwing store aborts the same work it always aborted.
+  const isNewVisitor = !storage.getItem('bb-visited');
 
   const dismissedRecently = isDismissedRecently(storage, 'bb_waitlist_dismissed', now);
   const triggerClicks = isNewVisitor ? TRIGGER_CLICKS_NEW : TRIGGER_CLICKS_RETURNING;
@@ -85,7 +96,7 @@ export function waitlistState(storage, now = Date.now(), { clicks = 0, forced = 
     triggerClicks,
     // Exactly ON the threshold — the click handler fires once, not on every later click.
     clicksReached: clicks === triggerClicks,
-    suppressed: submitted || (!forced && dismissedRecently),
+    suppressed: !forced && dismissedRecently,
   };
 }
 

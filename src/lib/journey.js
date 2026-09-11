@@ -30,11 +30,16 @@ export function shapeJourney(segments, myFlight, orig, dest) {
 
 /**
  * Delay severity class for one segment.
+ *
+ * Strict `=== null` on purpose: main.js is `delay === null ? '' : delay <= 5 ? ...`,
+ * so an `undefined` delayMin fails both `<=` comparisons and lands on 'major'. Quirk
+ * preserved rather than fixed — a missing field currently renders as a major delay.
+ *
  * @param {number|null|undefined} delayMin
- * @returns {''|'on-time'|'minor'|'major'} '' when the delay is unknown.
+ * @returns {''|'on-time'|'minor'|'major'} '' only when delayMin is exactly null.
  */
 export function journeyDelayClass(delayMin) {
-  if (delayMin === null || delayMin === undefined) return '';
+  if (delayMin === null) return '';
   return delayMin <= 5 ? 'on-time' : delayMin <= 45 ? 'minor' : 'major';
 }
 

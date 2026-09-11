@@ -51,8 +51,12 @@ describe('journeyDelayClass', () => {
     expect(journeyDelayClass(-10)).toBe('on-time');
   });
 
-  it('returns an empty class for an unknown delay (edge case)', () => {
+  it('returns an empty class for a null delay, but NOT for undefined (edge case)', () => {
+    // main.js: `delay === null ? '' : delay <= 5 ? 'on-time' : delay <= 45 ? 'minor' : 'major'`.
+    // `undefined <= 5` and `undefined <= 45` are both false, so a missing delayMin has
+    // always rendered as 'major'. Preserved deliberately — do not "fix" it here.
     expect(journeyDelayClass(null)).toBe('');
+    expect(journeyDelayClass(undefined)).toBe('major');
   });
 });
 
