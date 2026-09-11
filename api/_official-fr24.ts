@@ -41,3 +41,14 @@ export function recordOfficialApi402(reason: string): void {
   console.warn(`Official FR24 API quota blocked for 30m: ${reason}`);
   void persistQuotaBlock(blockedUntil, reason);
 }
+
+/**
+ * FR24's flight-summary endpoints document `flight_datetime_from/to` as `YYYY-MM-DDTHH:MM:SSZ`
+ * (whole seconds). `Date.prototype.toISOString()` emits `YYYY-MM-DDTHH:MM:SS.mmmZ`, which the API
+ * rejected with 400 on every call (found Sep 10 2026 when the official API was re-enabled: every
+ * /api/fr24-flight summary lookup and every /api/aircraft-history lookup was 400ing). Use this for
+ * every datetime sent to the official API.
+ */
+export function fr24Datetime(d: Date): string {
+  return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}

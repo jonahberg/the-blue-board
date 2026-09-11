@@ -6,7 +6,7 @@
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
-import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402 } from './_official-fr24.js';
+import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime } from './_official-fr24.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
 
 const isRateLimited = createRateLimiter('aircraft-history', 15);
@@ -144,8 +144,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const url = new URL(FR24_BASE + SUMMARY_PATH);
     url.searchParams.set('regs', reg);
-    url.searchParams.set('flight_datetime_from', from.toISOString());
-    url.searchParams.set('flight_datetime_to', to.toISOString());
+    url.searchParams.set('flight_datetime_from', fr24Datetime(from));
+    url.searchParams.set('flight_datetime_to', fr24Datetime(to));
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);

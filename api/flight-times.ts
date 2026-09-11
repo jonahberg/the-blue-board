@@ -14,7 +14,7 @@
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
-import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402 } from './_official-fr24.js';
+import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime } from './_official-fr24.js';
 import { loadScheduleSnapshot } from './_schedule-snapshots.js';
 import { UNITED_HUBS } from './_hubs.js';
 import { getStartOfHubDay, getHubLocalDate } from '../src/lib/hubTz.js';
@@ -170,7 +170,7 @@ async function fetchFr24Summary(flight: string): Promise<any | null> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     const resp = await fetch(
-      `https://fr24api.flightradar24.com/api/flight-summary/light?flights=${encodeURIComponent(fr24Flight)}&flight_datetime_from=${from.toISOString()}&flight_datetime_to=${to.toISOString()}`,
+      `https://fr24api.flightradar24.com/api/flight-summary/light?flights=${encodeURIComponent(fr24Flight)}&flight_datetime_from=${fr24Datetime(from)}&flight_datetime_to=${fr24Datetime(to)}`,
       {
         signal: controller.signal,
         headers: {
