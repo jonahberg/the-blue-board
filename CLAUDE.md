@@ -12,3 +12,10 @@ Bun's built-in test runner reports ~28 false failures and silently drops ~33 tes
 the suite is written for vitest's API (vi.stubEnv, fake timers, vi.mock). The canonical, green
 command is `bun run test`. `tsc --noEmit` (via `bun run typecheck`) and `bun run build` must also
 pass before any PR. This note overrides the global "use `bun test`" default for this repo.
+
+## Branch note — `feat/shadcn-rebuild` (Sep 2026)
+On this branch the site is being rebuilt on Tailwind v4 + shadcn/ui with Jonah's explicit
+approval. DESIGN.md describes the OLD system until WP12 rewrites it; until then the design
+authority is `docs/superpowers/specs/2026-09-11-shadcn-rebuild-design.md` and the plan in
+`docs/superpowers/plans/2026-09-11-shadcn-rebuild.md`. The three inventory files next to the
+spec are the parity contract: nothing they list may be dropped except TSA.
