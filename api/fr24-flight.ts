@@ -7,6 +7,7 @@
 
 import type { VercelRequest, VercelResponse } from './types.js';
 import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime } from './_official-fr24.js';
+import { icaoToIata } from '../src/lib/airport-metadata.js';
 
 const FR24_BASE = 'https://fr24api.flightradar24.com';
 const LIVE_PATH = '/api/live/flight-positions/full';
@@ -172,33 +173,44 @@ export function normalizeSummaryResponse(data: any, flightNumber: string): any |
   const flights = data?.data || [];
   if (!flights.length) return null;
 
+  // The live /api/flight-summary/light response is FLAT — flight / callsign / orig_iata /
+  // orig_icao / dest_iata / dest_icao / dest_icao_actual / datetime_scheduled_departure /
+  // datetime_takeoff / datetime_landed / reg / type / flight_ended / fr24_id — not the nested
+  // { origin: { iata }, departure: { scheduled } } shape this function originally assumed.
+  // schedule.ts normalizeSummaryFlight and aircraft-history.ts normalizeSegments read the flat
+  // fields; until Sep 10 2026 this one did not, so every summary-only lookup came back with
+  // empty origin/destination/aircraft/times and status "unknown". Nested keys stay as fallbacks.
   const f = flights[0];
-  const status = f.status || '';
+  const landed = !!(f.datetime_landed || f.arrival?.actual || f.flight_ended);
+  const airborne = !landed && !!(f.datetime_takeoff || f.departure?.actual);
+  const status = f.status || (landed ? 'landed' : airborne ? 'en-route' : 'scheduled');
+  const origIcao = f.orig_icao || f.origin?.icao || '';
+  const destIcao = f.dest_icao_actual || f.dest_icao || f.destination?.icao || '';
   return {
-    flightNumber: f.flight_iata || f.flight_number?.iata || flightNumber,
+    flightNumber: f.flight_iata || f.flight_number?.iata || f.flight || flightNumber,
     callsign: f.callsign || f.flight_number?.icao || '',
-    status: status || 'unknown',
+    status,
     origin: {
-      iata: f.origin?.iata || f.airport?.origin?.code?.iata || '',
-      icao: f.origin?.icao || '',
+      iata: f.orig_iata || f.origin?.iata || f.airport?.origin?.code?.iata || icaoToIata(origIcao),
+      icao: origIcao,
       name: f.origin?.name || '',
     },
     destination: {
-      iata: f.destination?.iata || f.airport?.destination?.code?.iata || '',
-      icao: f.destination?.icao || '',
+      iata: f.dest_iata || f.destination?.iata || f.airport?.destination?.code?.iata || icaoToIata(destIcao),
+      icao: destIcao,
       name: f.destination?.name || '',
     },
     aircraft: {
-      type: f.aircraft?.type || f.aircraft_type || '',
-      reg: f.aircraft?.registration || f.registration || '',
+      type: f.aircraft?.type || f.aircraft_type || f.type || '',
+      reg: f.aircraft?.registration || f.registration || f.reg || '',
     },
     departure: {
-      scheduled: f.departure?.scheduled || f.scheduled_departure || '',
-      actual: f.departure?.actual || f.actual_departure || '',
+      scheduled: f.departure?.scheduled || f.scheduled_departure || f.datetime_scheduled_departure || '',
+      actual: f.departure?.actual || f.actual_departure || f.datetime_takeoff || '',
     },
     arrival: {
-      scheduled: f.arrival?.scheduled || f.scheduled_arrival || '',
-      estimated: f.arrival?.estimated || f.estimated_arrival || '',
+      scheduled: f.arrival?.scheduled || f.scheduled_arrival || f.datetime_scheduled_arrival || '',
+      estimated: f.arrival?.estimated || f.estimated_arrival || f.datetime_landed || '',
     },
     position: null,
     flightId: f.flight_id || f.fr24_id || '',

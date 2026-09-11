@@ -156,6 +156,47 @@ describe('normalizeSummaryResponse', () => {
     expect(result.flightId).toBe('sum123');
   });
 
+  it('parses the real FLAT /flight-summary/light shape (orig_icao / datetime_takeoff / reg / type)', () => {
+    const result = normalizeSummaryResponse({
+      data: [{
+        fr24_id: '41993080',
+        flight: 'UA803',
+        callsign: 'UAL803',
+        operating_as: 'UAL',
+        painted_as: 'UAL',
+        type: 'B78X',
+        reg: 'N12010',
+        orig_icao: 'KSFO',
+        orig_iata: 'SFO',
+        datetime_scheduled_departure: '2026-09-11T00:20:00Z',
+        datetime_takeoff: '2026-09-11T00:41:00Z',
+        dest_icao: 'RJTT',
+        dest_iata: 'HND',
+        datetime_landed: null,
+        flight_ended: false,
+      }],
+    }, 'UA803');
+
+    expect(result.flightNumber).toBe('UA803');
+    expect(result.callsign).toBe('UAL803');
+    expect(result.status).toBe('en-route');
+    expect(result.origin).toEqual({ iata: 'SFO', icao: 'KSFO', name: '' });
+    expect(result.destination).toEqual({ iata: 'HND', icao: 'RJTT', name: '' });
+    expect(result.aircraft).toEqual({ type: 'B78X', reg: 'N12010' });
+    expect(result.departure).toEqual({ scheduled: '2026-09-11T00:20:00Z', actual: '2026-09-11T00:41:00Z' });
+    expect(result.flightId).toBe('41993080');
+  });
+
+  it('derives landed status from datetime_landed / flight_ended and maps ICAO-only airports', () => {
+    const result = normalizeSummaryResponse({
+      data: [{ flight: 'UA1', callsign: 'UAL1', orig_icao: 'KSFO', dest_icao: 'VHHH', dest_icao_actual: 'RJTT', datetime_takeoff: '2026-09-10T20:00:00Z', datetime_landed: '2026-09-11T06:00:00Z', flight_ended: true }],
+    }, 'UA1');
+    expect(result.status).toBe('landed');
+    expect(result.origin.iata).toBe('SFO');
+    expect(result.destination.icao).toBe('RJTT'); // actual destination wins over filed
+    expect(result.arrival.estimated).toBe('2026-09-11T06:00:00Z');
+  });
+
   it('returns null for empty data', () => {
     expect(normalizeSummaryResponse({ data: [] }, 'UA100')).toBeNull();
     expect(normalizeSummaryResponse({}, 'UA100')).toBeNull();

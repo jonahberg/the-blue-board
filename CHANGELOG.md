@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.24] - 2026-09-10
+
+### Fixed
+- **Flight lookup came back empty; aircraft history still 400'd.** With the datetime format fixed in 1.7.23, `/api/fr24-flight` got a real summary row back but rendered it as `status: "unknown"` with blank origin, destination, aircraft and times: its normalizer only read the nested `{ origin: { iata } }` shape, while the live `/flight-summary/light` response is flat (`orig_iata`, `dest_icao_actual`, `datetime_takeoff`, `reg`, `type`, `flight_ended` …) — the same shape `schedule.ts` and `aircraft-history.ts` already parse. It now reads the flat fields first, maps ICAO-only airports through `icaoToIata`, prefers the actual destination over the filed one, and derives landed / en-route / scheduled from `datetime_landed` / `flight_ended` / `datetime_takeoff`. `/api/aircraft-history` was failing for a different reason: it filtered by `regs`, and FR24's parameter is `registrations`, so the API answered 400 "None of the required fields were provided". Both are pinned by tests, including a fixture in the real flat shape. (`api/fr24-flight.ts`, `api/aircraft-history.ts`, `tests/fr24-flight.test.js`, `tests/aircraft-history.test.js`)
+
 ## [1.7.23] - 2026-09-10
 
 ### Fixed
