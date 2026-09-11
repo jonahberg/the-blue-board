@@ -1,0 +1,25 @@
+---
+/**
+ * One labelled figure in a stat row (hub live panel, fleet type header,
+ * fleet index summary).
+ *
+ * `id` is passed through to the value element so a page script can update it
+ * in place — the hub live panel writes the active-flight count into `#active`.
+ */
+
+interface Props {
+  label: string;
+  value: string | number;
+  /** DOM id for the value element, for scripts that refresh it. */
+  id?: string;
+  class?: string;
+}
+
+const { label, value, id, class: className = '' } = Astro.props;
+---
+<div class:list={['rounded-lg border border-border bg-card p-3 text-center', className]}>
+  <div class="font-mono text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+    {label}
+  </div>
+  <div id={id} class="mt-1 font-mono text-2xl font-bold tabular-nums text-foreground">{value}</div>
+</div>

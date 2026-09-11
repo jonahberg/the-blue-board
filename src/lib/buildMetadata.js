@@ -87,7 +87,7 @@ export function getNewsRouteLastmodPaths(slug) {
 
 export const newarkLastmodPaths = [
   'src/pages/newark.astro',
-  'public/js/newark-live.js',
+  'src/scripts/newark-live.ts',
   'src/data/hubs/ewr.js',
 ];
 
