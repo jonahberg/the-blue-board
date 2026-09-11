@@ -236,6 +236,16 @@
     background-color: color-mix(in oklab, var(--bb-ok) 22%, transparent);
   }
 
+  /* `cabin-first` and `cabin-y` never appear in a `contentHtml` string — they
+     reach the page through `seatConfig.cabins[].cssClass` on the fleet index. */
+  .bb-content .cabin-first {
+    background-color: color-mix(in oklab, var(--bb-warn) 18%, transparent);
+  }
+
+  .bb-content .cabin-y {
+    @apply bg-muted text-muted-foreground;
+  }
+
   .bb-content .cabin-note {
     @apply font-normal text-muted-foreground;
   }
