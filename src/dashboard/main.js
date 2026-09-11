@@ -24,9 +24,31 @@ import { computeFlightCategory, computeOpsImpact } from '../lib/metar-category.j
 import { iropsScore, iropsScoreCls, iropsScoreLabel, iropsRateFloor } from '../lib/irops-score.js';
 import { matchAircraft as matchAircraftInFleet } from '../lib/fleet-match.js';
 import { matchesScheduleFilters } from '../lib/schedule-board-filters.js';
-import { analyzeSwapImpact as classifySwapImpact, CABIN_RANK } from '../lib/swap-impact.js';
+import { analyzeSwapImpact as classifySwapImpact } from '../lib/swap-impact.js';
 import { escapeHtml } from '../lib/escape.js';
 import { cartoBasemapUrl } from '../lib/basemap.js';
+import { getPhase, getPhaseGroup, decodeSquawk } from '../lib/flight-phase.js';
+import { haversineNm, greatCirclePoints, normalizeLonContinuity, isLonghaul } from '../lib/geo.js';
+import { AIRPORTS, AIRPORT_COORDS, IATA_CITIES, cityFor } from '../lib/airports.js';
+import { estimateRoute } from '../lib/route-estimate.js';
+import { planeIconSpec } from '../lib/plane-icon.js';
+import { getUnitedTerminal } from '../lib/hub-terminals.js';
+import { indexSpecialAircraft, ENGINE_BY_TYPE, SEAT_BAR_COLORS, CABIN_COLORS } from '../lib/special-aircraft.js';
+import { readHomeAirport, writeHomeAirport, nextHomeAirport } from '../lib/home-airport.js';
+import { pickTip, TIP_ROTATE_MS, TIP_DISMISS_DAYS } from '../lib/tips.js';
+import { ICAO_TO_FLEET_TYPE, getTypicalFleetStats, detectEquipmentSwaps } from '../lib/equipment-swaps.js';
+import { parseMetarQuick, hasRenderableMetarData, explainMETAR, worstCategory, CAT_COLORS } from '../lib/metar-explain.js';
+import { buildFaaIndex, explainFAAStatus, getFAADelayContext } from '../lib/faa-context.js';
+import { tierNasEvents, sevBadgeClass } from '../lib/nas-severity.js';
+import { HUB_ORDER, computeBoardOtp, mergeHubHealth, serverOtpFromMetrics, hubHealthSeverity, networkLabel } from '../lib/hub-health.js';
+import { buildTickerItems } from '../lib/ticker.js';
+import { computeLiveStats } from '../lib/live-stats.js';
+import { typeUtilization, phaseBreakdown, hubMatrix, topRoutes, avgAgeByType } from '../lib/analytics.js';
+import { normalizeQuery, matchLiveFlights, matchScheduleFlights, classifyEmptyState, FR24_LOOKUP_RE } from '../lib/global-search.js';
+import { isRecentlyFound, getServedConflictTails, formatFlightTime, airborneByTail, boardCapPolicy } from '../lib/starlink-view.js';
+import { readWatched, writeWatched, isSignificantStatusChange, flightTimesCacheTtl } from '../lib/watch-utils.js';
+import { shapeJourney, journeyDelayClass, buildJourneyContextStr } from '../lib/journey.js';
+import { shouldShowOnboarding, waitlistState, bmacEligible, TRIGGER_TIME_MS } from '../lib/engagement.js';
 import { atcAirports, atcMeta, unitedHubsMeta, unitedProjects } from '../data/trackers/index.js';
 
 
@@ -183,123 +205,28 @@ async function loadFleetData() {
 // FLEET_HEALTH_CATEGORIES and categorizeFleetStatus imported from ../lib/fleet-utils.js
 
 // ═══ SPECIAL AIRCRAFT DETECTION ═══
+// The ⭐ index itself (and ENGINE_BY_TYPE) live in ../lib/special-aircraft.js; this
+// object is the module-global view of it, rebuilt whenever FLEET_DB is reloaded.
 const SPECIAL_AIRCRAFT = {};
 
 function buildSpecialAircraftIndex() {
   Object.keys(SPECIAL_AIRCRAFT).forEach(k => delete SPECIAL_AIRCRAFT[k]);
-  FLEET_DB.forEach(a => {
-    if (!a.s) return;
-    if (a.s.startsWith('*')) {
-      SPECIAL_AIRCRAFT[a.r] = { name: a.s.replace(/^\*+|\*+$/g, '').trim(), type: 'named' };
-    } else if (/100 Year Sticker/i.test(a.s)) {
-      SPECIAL_AIRCRAFT[a.r] = { name: '100 Year Sticker', type: 'livery' };
-    } else if (/Eco Demonstrator/i.test(a.s)) {
-      SPECIAL_AIRCRAFT[a.r] = { name: 'Eco Demonstrator Explorer', type: 'livery' };
-    }
-  });
+  for (const [reg, entry] of indexSpecialAircraft(FLEET_DB)) SPECIAL_AIRCRAFT[reg] = entry;
 }
 
 function isSpecialAircraft(reg) {
   return SPECIAL_AIRCRAFT[reg] || null;
 }
 
-// ═══ ENGINE TYPE LOOKUP ═══
-const ENGINE_BY_TYPE = {
-  'A319':'IAE V2524-A5','A320':'IAE V2527-A5','A321neo':'CFM LEAP-1A',
-  '737-700':'CFM56-7B22','737-800':'CFM56-7B26','737-900':'CFM56-7B26',
-  '737-900ER':'CFM56-7B27','737 MAX 8':'CFM LEAP-1B28','737 MAX 9':'CFM LEAP-1B28',
-  '757-200':'RB211-535E4B','757-300':'RB211-535E4B',
-  '767-300ER':'CF6-80C2B7F','767-400ER':'CF6-80C2B8F',
-  '777-200':'PW4077','777-200ER':'PW4090','777-300ER':'GE90-115B',
-  '787-8':'GEnx-1B64','787-9':'GEnx-1B74','787-10':'GEnx-1B76'
-};
-
-// ═══ AIRPORT DATABASE (150 airports) ═══
-const AIRPORTS = [
-  // United Hubs
-  {iata:"EWR",lat:40.6925,lon:-74.1687,hub:true},{iata:"IAH",lat:29.9844,lon:-95.3414,hub:true},
-  {iata:"ORD",lat:41.9742,lon:-87.9073,hub:true},{iata:"DEN",lat:39.8561,lon:-104.6737,hub:true},
-  {iata:"SFO",lat:37.6213,lon:-122.3790,hub:true},{iata:"LAX",lat:33.9425,lon:-118.4081,hub:true},
-  {iata:"IAD",lat:38.9531,lon:-77.4565,hub:true},
-  // Major US
-  {iata:"ATL",lat:33.6407,lon:-84.4277},{iata:"DFW",lat:32.8998,lon:-97.0403},
-  {iata:"JFK",lat:40.6413,lon:-73.7781},{iata:"LGA",lat:40.7769,lon:-73.8740},
-  {iata:"SEA",lat:47.4502,lon:-122.3088},{iata:"BOS",lat:42.3656,lon:-71.0096},
-  {iata:"PHX",lat:33.4373,lon:-112.0078},{iata:"MCO",lat:28.4312,lon:-81.3081},
-  {iata:"CLT",lat:35.2140,lon:-80.9431},{iata:"MIA",lat:25.7959,lon:-80.2870},
-  {iata:"FLL",lat:26.0742,lon:-80.1506},{iata:"MSP",lat:44.8848,lon:-93.2223},
-  {iata:"DTW",lat:42.2162,lon:-83.3554},{iata:"PHL",lat:39.8744,lon:-75.2424},
-  {iata:"SLC",lat:40.7899,lon:-111.9791},{iata:"SAN",lat:32.7338,lon:-117.1933},
-  {iata:"TPA",lat:27.9755,lon:-82.5332},{iata:"PDX",lat:45.5898,lon:-122.5951},
-  {iata:"BNA",lat:36.1263,lon:-86.6774},{iata:"STL",lat:38.7487,lon:-90.3700},
-  {iata:"AUS",lat:30.1975,lon:-97.6664},{iata:"RDU",lat:35.8801,lon:-78.7880},
-  {iata:"MCI",lat:39.2976,lon:-94.7139},{iata:"SMF",lat:38.6954,lon:-121.5908},
-  {iata:"SJC",lat:37.3626,lon:-121.9290},{iata:"OAK",lat:37.7213,lon:-122.2208},
-  {iata:"CLE",lat:41.4117,lon:-81.8498},{iata:"CMH",lat:39.9980,lon:-82.8919},
-  {iata:"PIT",lat:40.4915,lon:-80.2329},{iata:"IND",lat:39.7173,lon:-86.2944},
-  {iata:"MKE",lat:42.9472,lon:-87.8966},{iata:"RSW",lat:26.5362,lon:-81.7552},
-  {iata:"JAX",lat:30.4941,lon:-81.6879},{iata:"BDL",lat:41.9389,lon:-72.6832},
-  {iata:"ABQ",lat:35.0402,lon:-106.6090},{iata:"ONT",lat:34.0560,lon:-117.6012},
-  {iata:"BUR",lat:34.2005,lon:-118.3585},{iata:"HNL",lat:21.3187,lon:-157.9225},
-  {iata:"OGG",lat:20.8986,lon:-156.4305},{iata:"KOA",lat:19.7388,lon:-156.0456},
-  {iata:"LIH",lat:21.9760,lon:-159.3390},{iata:"ANC",lat:61.1743,lon:-149.9962},
-  {iata:"SNA",lat:33.6757,lon:-117.8682},{iata:"DAL",lat:32.8471,lon:-96.8518},
-  {iata:"HOU",lat:29.6454,lon:-95.2789},{iata:"MDW",lat:41.7868,lon:-87.7522},
-  {iata:"BWI",lat:39.1754,lon:-76.6683},{iata:"DCA",lat:38.8512,lon:-77.0402},
-  {iata:"MSY",lat:29.9934,lon:-90.2580},{iata:"RNO",lat:39.4991,lon:-119.7681},
-  {iata:"LAS",lat:36.0840,lon:-115.1537},{iata:"PBI",lat:26.6832,lon:-80.0956},
-  {iata:"SAT",lat:29.5337,lon:-98.4698},{iata:"CHS",lat:32.8986,lon:-80.0405},
-  {iata:"BOI",lat:43.5644,lon:-116.2228},{iata:"TUS",lat:32.1161,lon:-110.9410},
-  {iata:"OMA",lat:41.3032,lon:-95.8941},{iata:"DSM",lat:41.5340,lon:-93.6631},
-  {iata:"BUF",lat:42.9405,lon:-78.7322},{iata:"ROC",lat:43.1189,lon:-77.6724},
-  {iata:"SYR",lat:43.1112,lon:-76.1063},{iata:"ALB",lat:42.7483,lon:-73.8017},
-  {iata:"RIC",lat:37.5052,lon:-77.3197},{iata:"ORF",lat:36.8946,lon:-76.2012},
-  {iata:"GSO",lat:36.0978,lon:-79.9373},{iata:"CVG",lat:39.0488,lon:-84.6678},
-  {iata:"MEM",lat:35.0424,lon:-89.9767},{iata:"OKC",lat:35.3931,lon:-97.6007},
-  {iata:"TUL",lat:36.1984,lon:-95.8881},{iata:"ELP",lat:31.8073,lon:-106.3778},
-  {iata:"GEG",lat:47.6199,lon:-117.5338},{iata:"PSP",lat:33.8297,lon:-116.5067},
-  {iata:"SBN",lat:41.7087,lon:-86.3173},{iata:"GRR",lat:42.8808,lon:-85.5228},
-  {iata:"MSN",lat:43.1399,lon:-89.3375},{iata:"XNA",lat:36.2819,lon:-94.3068},
-  {iata:"ICT",lat:37.6499,lon:-97.4331},{iata:"LIT",lat:34.7294,lon:-92.2243},
-  // International
-  {iata:"LHR",lat:51.4700,lon:-0.4543},{iata:"FRA",lat:50.0379,lon:8.5622},
-  {iata:"CDG",lat:49.0097,lon:2.5479},{iata:"AMS",lat:52.3105,lon:4.7683},
-  {iata:"MUC",lat:48.3538,lon:11.7861},{iata:"ZRH",lat:47.4647,lon:8.5492},
-  {iata:"FCO",lat:41.8003,lon:12.2389},{iata:"MAD",lat:40.4983,lon:-3.5676},
-  {iata:"BCN",lat:41.2974,lon:2.0833},{iata:"LIS",lat:38.7813,lon:-9.1359},
-  {iata:"DUB",lat:53.4213,lon:-6.2701},{iata:"EDI",lat:55.9508,lon:-3.3615},
-  {iata:"GUM",lat:13.4834,lon:144.7960,hub:true},{iata:"NRT",lat:35.7720,lon:140.3929,hub:true},{iata:"HND",lat:35.5494,lon:139.7798},
-  {iata:"ICN",lat:37.4602,lon:126.4407},{iata:"PEK",lat:40.0799,lon:116.6031},
-  {iata:"PVG",lat:31.1443,lon:121.8083},{iata:"HKG",lat:22.3080,lon:113.9185},
-  {iata:"SIN",lat:1.3644,lon:103.9915},{iata:"BKK",lat:13.6900,lon:100.7501},
-  {iata:"DEL",lat:28.5562,lon:77.1000},{iata:"BOM",lat:19.0896,lon:72.8656},
-  {iata:"SYD",lat:-33.9399,lon:151.1753},{iata:"MEL",lat:-37.6690,lon:144.8410},
-  {iata:"GRU",lat:-23.4356,lon:-46.4731},{iata:"EZE",lat:-34.8222,lon:-58.5358},
-  {iata:"SCL",lat:-33.3930,lon:-70.7858},{iata:"BOG",lat:4.7016,lon:-74.1469},
-  {iata:"MEX",lat:19.4363,lon:-99.0721},{iata:"CUN",lat:21.0365,lon:-86.8771},
-  {iata:"GDL",lat:20.5218,lon:-103.3113},{iata:"SJD",lat:23.1518,lon:-109.7215},
-  {iata:"PVR",lat:20.6801,lon:-105.2544},{iata:"LIM",lat:-12.0219,lon:-77.1143},
-  {iata:"PTY",lat:9.0714,lon:-79.3835},{iata:"SJO",lat:9.9939,lon:-84.2088},
-  {iata:"YYZ",lat:43.6777,lon:-79.6248},{iata:"YVR",lat:49.1967,lon:-123.1815},
-  {iata:"YUL",lat:45.4706,lon:-73.7408},{iata:"YYC",lat:51.1315,lon:-114.0106},
-  {iata:"TLV",lat:32.0114,lon:34.8867},{iata:"DOH",lat:25.2731,lon:51.6082},
-  {iata:"DXB",lat:25.2532,lon:55.3657},{iata:"ADD",lat:8.9779,lon:38.7993},
-  {iata:"ACC",lat:5.6052,lon:-0.1668},{iata:"CPT",lat:-33.9649,lon:18.6017},
-  {iata:"JNB",lat:-26.1392,lon:28.2460},{iata:"CAI",lat:30.1219,lon:31.4056},
-  {iata:"IST",lat:41.2753,lon:28.7519},{iata:"MNL",lat:14.5086,lon:121.0198},
-  {iata:"TPE",lat:25.0777,lon:121.2327},{iata:"BRU",lat:50.9014,lon:4.4844},
-  {iata:"OSL",lat:60.1976,lon:11.1004},{iata:"CPH",lat:55.6180,lon:12.6560},
-  {iata:"ARN",lat:59.6519,lon:17.9186},{iata:"HEL",lat:60.3172,lon:24.9633}
-];
-
 const HUBS = AIRPORTS.filter(a => a.hub);
 const HUB_CODES = HUBS.map(h => h.iata);
 
 // ═══ HOME AIRPORT ═══
-function getHomeAirport() { return localStorage.getItem('bb_home_airport') || ''; }
+// Storage rules + the header button's cycle live in ../lib/home-airport.js; these
+// two wrappers bind them to localStorage and the DOM side effects.
+function getHomeAirport() { return readHomeAirport(localStorage); }
 function setHomeAirport(code) {
-  if (code) localStorage.setItem('bb_home_airport', code);
-  else localStorage.removeItem('bb_home_airport');
+  writeHomeAirport(localStorage, code);
   updateHomeHubDisplay();
   updateTrackerBriefing();
 }
@@ -380,122 +307,7 @@ function updateTrackerBriefing() {
 // (imported above) alongside the pure classifyConnection() verdict logic, so the
 // cancelled/diverted + NaN guards (F003/F055) are unit-testable. Both tables are
 // re-exported unchanged.
-// Known United Airlines terminals at each hub (fallback when API doesn't provide terminal data)
-const UNITED_HUB_TERMINALS = {
-  ORD:{domestic:'1',international:'1'},       // Terminal 1 (B & C); Express uses T2
-  DEN:{domestic:'B',international:'B'},       // Concourse B
-  EWR:{domestic:'C',international:'C'},       // Terminal C (primary)
-  IAH:{domestic:'C',international:'E'},       // Terminal C (domestic), Terminal E (international)
-  SFO:{domestic:'3',international:'G'},       // Terminal 3 (domestic), International Terminal G
-  LAX:{domestic:'7',international:'7'},       // Terminals 7 & 8
-  IAD:{domestic:'C',international:'D'},       // Concourse C (domestic), Concourse D (international)
-  NRT:{domestic:'1',international:'1'},       // Terminal 1
-  GUM:{domestic:'1',international:'1'},       // Single terminal
-};
-function getUnitedTerminal(iata, origIata, destIata) {
-  const hub = UNITED_HUB_TERMINALS[iata];
-  if (!hub) return '';
-  const isIntl = INTL_AIRPORTS.has(origIata) || INTL_AIRPORTS.has(destIata);
-  return isIntl ? hub.international : hub.domestic;
-}
-
-// ═══ UA ROUTE LOOKUP TABLE ═══
-// Static mapping of UA flight numbers to known city pairs (fallback for missing FR24 route data)
-const UA_ROUTES = {
-  1:{from:'SFO',to:'SIN'},2:{from:'SIN',to:'SFO'},3:{from:'SFO',to:'HKG'},4:{from:'HKG',to:'SFO'},
-  5:{from:'SFO',to:'SYD'},6:{from:'SYD',to:'SFO'},7:{from:'SFO',to:'NRT'},8:{from:'NRT',to:'SFO'},
-  9:{from:'EWR',to:'CDG'},10:{from:'CDG',to:'EWR'},11:{from:'EWR',to:'BRU'},12:{from:'BRU',to:'EWR'},
-  17:{from:'EWR',to:'LHR'},18:{from:'LHR',to:'EWR'},21:{from:'EWR',to:'LIS'},22:{from:'LIS',to:'EWR'},
-  23:{from:'SFO',to:'ICN'},24:{from:'ICN',to:'SFO'},25:{from:'EWR',to:'FRA'},26:{from:'FRA',to:'EWR'},
-  27:{from:'EWR',to:'ZRH'},28:{from:'ZRH',to:'EWR'},29:{from:'EWR',to:'DUB'},30:{from:'DUB',to:'EWR'},
-  31:{from:'EWR',to:'FCO'},32:{from:'FCO',to:'EWR'},33:{from:'EWR',to:'AMS'},34:{from:'AMS',to:'EWR'},
-  35:{from:'SFO',to:'TPE'},36:{from:'TPE',to:'SFO'},37:{from:'EWR',to:'IST'},38:{from:'IST',to:'EWR'},
-  39:{from:'EWR',to:'MAD'},40:{from:'MAD',to:'EWR'},41:{from:'EWR',to:'BCN'},42:{from:'BCN',to:'EWR'},
-  43:{from:'SFO',to:'BKK'},44:{from:'BKK',to:'SFO'},45:{from:'IAH',to:'LHR'},46:{from:'LHR',to:'IAH'},
-  50:{from:'EWR',to:'TLV'},51:{from:'TLV',to:'EWR'},52:{from:'IAD',to:'LHR'},53:{from:'LHR',to:'IAD'},
-  54:{from:'SFO',to:'DEL'},55:{from:'DEL',to:'SFO'},56:{from:'EWR',to:'DEL'},57:{from:'DEL',to:'EWR'},
-  58:{from:'EWR',to:'EDI'},59:{from:'EDI',to:'EWR'},60:{from:'EWR',to:'MUC'},61:{from:'MUC',to:'EWR'},
-  62:{from:'EWR',to:'CPH'},63:{from:'CPH',to:'EWR'},64:{from:'EWR',to:'HEL'},65:{from:'HEL',to:'EWR'},
-  66:{from:'EWR',to:'ARN'},67:{from:'ARN',to:'EWR'},68:{from:'EWR',to:'OSL'},69:{from:'OSL',to:'EWR'},
-  70:{from:'IAD',to:'CDG'},71:{from:'CDG',to:'IAD'},72:{from:'IAD',to:'FRA'},73:{from:'FRA',to:'IAD'},
-  78:{from:'ORD',to:'LHR'},79:{from:'LHR',to:'ORD'},80:{from:'ORD',to:'FRA'},81:{from:'FRA',to:'ORD'},
-  82:{from:'ORD',to:'CDG'},83:{from:'CDG',to:'ORD'},84:{from:'ORD',to:'MUC'},85:{from:'MUC',to:'ORD'},
-  86:{from:'ORD',to:'NRT'},87:{from:'NRT',to:'ORD'},88:{from:'ORD',to:'PEK'},89:{from:'PEK',to:'ORD'},
-  90:{from:'ORD',to:'ICN'},91:{from:'ICN',to:'ORD'},92:{from:'ORD',to:'HND'},93:{from:'HND',to:'ORD'},
-  94:{from:'ORD',to:'DEL'},95:{from:'DEL',to:'ORD'},96:{from:'SFO',to:'PVG'},97:{from:'PVG',to:'SFO'},
-  100:{from:'EWR',to:'PEK'},101:{from:'PEK',to:'EWR'},102:{from:'EWR',to:'PVG'},103:{from:'PVG',to:'EWR'},
-  106:{from:'EWR',to:'HND'},107:{from:'HND',to:'EWR'},108:{from:'EWR',to:'NRT'},109:{from:'NRT',to:'EWR'},
-  116:{from:'SFO',to:'MNL'},117:{from:'MNL',to:'SFO'},118:{from:'IAH',to:'NRT'},119:{from:'NRT',to:'IAH'},
-  120:{from:'LAX',to:'SYD'},121:{from:'SYD',to:'LAX'},122:{from:'LAX',to:'MEL'},123:{from:'MEL',to:'LAX'},
-  130:{from:'IAD',to:'TLV'},131:{from:'TLV',to:'IAD'},132:{from:'IAH',to:'EZE'},133:{from:'EZE',to:'IAH'},
-  134:{from:'IAH',to:'GRU'},135:{from:'GRU',to:'IAH'},136:{from:'EWR',to:'GRU'},137:{from:'GRU',to:'EWR'},
-  138:{from:'IAH',to:'SCL'},139:{from:'SCL',to:'IAH'},142:{from:'IAH',to:'BOG'},143:{from:'BOG',to:'IAH'},
-  146:{from:'IAH',to:'LIM'},147:{from:'LIM',to:'IAH'},148:{from:'EWR',to:'BOG'},149:{from:'BOG',to:'EWR'},
-  150:{from:'DEN',to:'NRT'},151:{from:'NRT',to:'DEN'},152:{from:'LAX',to:'NRT'},153:{from:'NRT',to:'LAX'},
-  154:{from:'LAX',to:'ICN'},155:{from:'ICN',to:'LAX'},156:{from:'LAX',to:'PVG'},157:{from:'PVG',to:'LAX'},
-  160:{from:'SFO',to:'LHR'},161:{from:'LHR',to:'SFO'},162:{from:'IAH',to:'FRA'},163:{from:'FRA',to:'IAH'},
-  168:{from:'EWR',to:'SIN'},169:{from:'SIN',to:'EWR'},170:{from:'SFO',to:'FRA'},171:{from:'FRA',to:'SFO'},
-  174:{from:'EWR',to:'HKG'},175:{from:'HKG',to:'EWR'},176:{from:'EWR',to:'BOM'},177:{from:'BOM',to:'EWR'},
-  178:{from:'DEN',to:'LHR'},179:{from:'LHR',to:'DEN'},180:{from:'DEN',to:'FRA'},181:{from:'FRA',to:'DEN'},
-  182:{from:'IAH',to:'MEX'},183:{from:'MEX',to:'IAH'},186:{from:'ORD',to:'DUB'},187:{from:'DUB',to:'ORD'},
-  194:{from:'LAX',to:'LHR'},195:{from:'LHR',to:'LAX'},198:{from:'IAH',to:'CUN'},199:{from:'CUN',to:'IAH'},
-  200:{from:'SFO',to:'GRU'},201:{from:'GRU',to:'SFO'},204:{from:'IAH',to:'PTY'},205:{from:'PTY',to:'IAH'},
-  214:{from:'IAD',to:'IST'},215:{from:'IST',to:'IAD'},218:{from:'DEN',to:'NRT'},219:{from:'NRT',to:'DEN'},
-  234:{from:'ORD',to:'AMS'},235:{from:'AMS',to:'ORD'},238:{from:'ORD',to:'IST'},239:{from:'IST',to:'ORD'},
-  250:{from:'ORD',to:'BCN'},251:{from:'BCN',to:'ORD'},252:{from:'ORD',to:'ZRH'},253:{from:'ZRH',to:'ORD'},
-  254:{from:'ORD',to:'FCO'},255:{from:'FCO',to:'ORD'},262:{from:'ORD',to:'EDI'},263:{from:'EDI',to:'ORD'},
-  315:{from:'DEN',to:'HND'},316:{from:'HND',to:'DEN'},400:{from:'DEN',to:'SFO'},401:{from:'SFO',to:'DEN'},
-  444:{from:'EWR',to:'LAX'},445:{from:'LAX',to:'EWR'},500:{from:'SFO',to:'EWR'},501:{from:'EWR',to:'SFO'},
-  507:{from:'LAX',to:'HNL'},508:{from:'HNL',to:'LAX'},509:{from:'SFO',to:'HNL'},510:{from:'HNL',to:'SFO'},
-  708:{from:'ORD',to:'DOH'},709:{from:'DOH',to:'ORD'},730:{from:'IAD',to:'ADD'},731:{from:'ADD',to:'IAD'},
-  733:{from:'IAD',to:'ACC'},734:{from:'ACC',to:'IAD'},735:{from:'IAD',to:'JNB'},736:{from:'JNB',to:'IAD'},
-  737:{from:'EWR',to:'CPT'},738:{from:'CPT',to:'EWR'},780:{from:'EWR',to:'DOH'},781:{from:'DOH',to:'EWR'},
-  788:{from:'EWR',to:'DXB'},789:{from:'DXB',to:'EWR'},838:{from:'SFO',to:'ICN'},839:{from:'ICN',to:'SFO'},
-  857:{from:'SFO',to:'PEK'},858:{from:'PEK',to:'SFO'},872:{from:'SFO',to:'HND'},873:{from:'HND',to:'SFO'},
-  875:{from:'SFO',to:'NRT'},876:{from:'NRT',to:'SFO'},881:{from:'LAX',to:'HND'},882:{from:'HND',to:'LAX'},
-  893:{from:'IAH',to:'SYD'},894:{from:'SYD',to:'IAH'},896:{from:'SFO',to:'MEL'},897:{from:'MEL',to:'SFO'},
-  1100:{from:'EWR',to:'SFO'},1101:{from:'SFO',to:'EWR'},1200:{from:'SFO',to:'ORD'},1201:{from:'ORD',to:'SFO'},
-  1300:{from:'DEN',to:'EWR'},1301:{from:'EWR',to:'DEN'},1400:{from:'IAH',to:'SFO'},1401:{from:'SFO',to:'IAH'},
-  1500:{from:'DEN',to:'LAX'},1501:{from:'LAX',to:'DEN'},1600:{from:'ORD',to:'LAX'},1601:{from:'LAX',to:'ORD'},
-  1700:{from:'DEN',to:'ORD'},1701:{from:'ORD',to:'DEN'},1800:{from:'IAH',to:'EWR'},1801:{from:'EWR',to:'IAH'},
-  1900:{from:'IAD',to:'LAX'},1901:{from:'LAX',to:'IAD'},2000:{from:'IAD',to:'SFO'},2001:{from:'SFO',to:'IAD'}
-};
-
-// ═══ IATA → CITY NAME MAPPING ═══
-const IATA_CITIES = {
-  // United Hubs
-  EWR:'Newark',IAH:'Houston',ORD:'Chicago O\'Hare',DEN:'Denver',SFO:'San Francisco',LAX:'Los Angeles',IAD:'Washington Dulles',
-  // Major US
-  ATL:'Atlanta',DFW:'Dallas/Fort Worth',JFK:'New York JFK',LGA:'New York LaGuardia',SEA:'Seattle',BOS:'Boston',
-  PHX:'Phoenix',MCO:'Orlando',CLT:'Charlotte',MIA:'Miami',FLL:'Fort Lauderdale',MSP:'Minneapolis',
-  DTW:'Detroit',PHL:'Philadelphia',SLC:'Salt Lake City',SAN:'San Diego',TPA:'Tampa',PDX:'Portland',
-  BNA:'Nashville',STL:'St. Louis',AUS:'Austin',RDU:'Raleigh-Durham',MCI:'Kansas City',SMF:'Sacramento',
-  SJC:'San José',OAK:'Oakland',CLE:'Cleveland',CMH:'Columbus',PIT:'Pittsburgh',IND:'Indianapolis',
-  MKE:'Milwaukee',RSW:'Fort Myers',JAX:'Jacksonville',BDL:'Hartford',ABQ:'Albuquerque',ONT:'Ontario',
-  BUR:'Burbank',HNL:'Honolulu',OGG:'Maui Kahului',KOA:'Kona',LIH:'Kauai Lihue',ANC:'Anchorage',
-  SNA:'Orange County',DAL:'Dallas Love',HOU:'Houston Hobby',MDW:'Chicago Midway',BWI:'Baltimore',
-  DCA:'Washington Reagan',MSY:'New Orleans',RNO:'Reno',LAS:'Las Vegas',PBI:'West Palm Beach',
-  SAT:'San Antonio',CHS:'Charleston',BOI:'Boise',TUS:'Tucson',OMA:'Omaha',DSM:'Des Moines',
-  BUF:'Buffalo',ROC:'Rochester',SYR:'Syracuse',ALB:'Albany',RIC:'Richmond',ORF:'Norfolk',
-  GSO:'Greensboro',CVG:'Cincinnati',MEM:'Memphis',OKC:'Oklahoma City',TUL:'Tulsa',ELP:'El Paso',
-  GEG:'Spokane',PSP:'Palm Springs',SBN:'South Bend',GRR:'Grand Rapids',MSN:'Madison',XNA:'Fayetteville',
-  ICT:'Wichita',LIT:'Little Rock',
-  // Europe
-  LHR:'London Heathrow',FRA:'Frankfurt',CDG:'Paris CDG',AMS:'Amsterdam',MUC:'Munich',ZRH:'Zurich',
-  FCO:'Rome Fiumicino',MAD:'Madrid',BCN:'Barcelona',LIS:'Lisbon',DUB:'Dublin',EDI:'Edinburgh',
-  BRU:'Brussels',OSL:'Oslo',CPH:'Copenhagen',ARN:'Stockholm',HEL:'Helsinki',IST:'Istanbul',
-  // Asia-Pacific
-  GUM:'Guam',NRT:'Tokyo Narita',HND:'Tokyo Haneda',ICN:'Seoul Incheon',PEK:'Beijing',PVG:'Shanghai Pudong',
-  HKG:'Hong Kong',SIN:'Singapore',BKK:'Bangkok',DEL:'Delhi',BOM:'Mumbai',MNL:'Manila',TPE:'Taipei',
-  SYD:'Sydney',MEL:'Melbourne',
-  // Americas (International)
-  GRU:'São Paulo',EZE:'Buenos Aires',SCL:'Santiago',BOG:'Bogotá',MEX:'Mexico City',CUN:'Cancún',
-  GDL:'Guadalajara',SJD:'Los Cabos',PVR:'Puerto Vallarta',LIM:'Lima',PTY:'Panama City',SJO:'San José CR',
-  YYZ:'Toronto',YVR:'Vancouver',YUL:'Montreal',YYC:'Calgary',
-  // Middle East & Africa
-  TLV:'Tel Aviv',DOH:'Doha',DXB:'Dubai',ADD:'Addis Ababa',ACC:'Accra',CPT:'Cape Town',
-  JNB:'Johannesburg',CAI:'Cairo'
-};
+// UNITED_HUB_TERMINALS + getUnitedTerminal live in ../lib/hub-terminals.js.
 
 // ═══ GLOBALS ═══
 let map, flightMarkers = {}, routeLine = null, routeGroup = null, hubMarkers = [], wxLayer = null;
@@ -908,103 +720,6 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// ═══ AIRPORT MATCHING ═══
-function toRad(d) { return d * Math.PI / 180; }
-function toDeg(r) { return r * 180 / Math.PI; }
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 3440.065; // nm
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-function bearing(lat1, lon1, lat2, lon2) {
-  const dLon = toRad(lon2 - lon1);
-  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
-  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
-function angleDiff(a, b) { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
-
-function estimateRoute(lat, lon, hdg, alt, vr, flightNum) {
-  // Try static UA route lookup first
-  if (flightNum) {
-    const num = parseInt(String(flightNum).replace(/^UA/i, '').replace(/^UAL/i, ''), 10);
-    if (num && UA_ROUTES[num]) {
-      const r = UA_ROUTES[num];
-      const oApt = AIRPORTS.find(a => a.iata === r.from);
-      const dApt = AIRPORTS.find(a => a.iata === r.to);
-      if (oApt && dApt) return { origin: oApt, dest: dApt };
-    }
-  }
-  if (!lat || !lon || hdg === null || hdg === undefined) return { origin: null, dest: null };
-  const reverseHdg = (hdg + 180) % 360;
-  let bestOrigin = null, bestDest = null;
-  let bestOrigDist = Infinity, bestDestDist = Infinity;
-  const lowAlt = alt !== null && alt < 5000;
-  const tolerance = lowAlt ? 90 : 60;
-
-  for (const apt of AIRPORTS) {
-    const dist = haversine(lat, lon, apt.lat, apt.lon);
-    const brng = bearing(lat, lon, apt.lat, apt.lon);
-
-    // Behind aircraft = origin
-    if (angleDiff(brng, reverseHdg) < tolerance && dist < bestOrigDist && dist < 2000) {
-      bestOrigDist = dist; bestOrigin = apt;
-    }
-    // Ahead = destination
-    if (angleDiff(brng, hdg) < tolerance && dist < bestDestDist && dist < 2000) {
-      bestDestDist = dist; bestDest = apt;
-    }
-  }
-
-  // For low altitude, nearest airport is likely origin or dest
-  if (lowAlt) {
-    let nearest = null, nearDist = Infinity;
-    for (const apt of AIRPORTS) {
-      const d = haversine(lat, lon, apt.lat, apt.lon);
-      if (d < nearDist) { nearDist = d; nearest = apt; }
-    }
-    if (nearest && nearDist < 50) {
-      if (vr > 0) bestOrigin = nearest;
-      else bestDest = nearest;
-    }
-  }
-
-  // Don't let origin = dest
-  if (bestOrigin && bestDest && bestOrigin.iata === bestDest.iata) {
-    if (bestOrigDist < bestDestDist) bestDest = null;
-    else bestOrigin = null;
-  }
-
-  return { origin: bestOrigin, dest: bestDest };
-}
-
-// ═══ FLIGHT PHASE ═══
-function getPhase(alt, vr, spd) {
-  const altFt = alt != null ? alt * 3.28084 : null;
-  const vrFpm = vr != null ? vr * 196.85 : null; // m/s to fpm
-  const spdKts = spd != null ? spd * 1.944 : null;
-
-  if (altFt !== null && altFt < 100 && spdKts !== null && spdKts < 50) return { phase: 'Ground', icon: '🅿️', cls: 'phase-ground' };
-  if (altFt !== null && altFt < 5000 && vrFpm !== null && vrFpm > 500) return { phase: 'Takeoff', icon: '🛫', cls: 'phase-climb' };
-  if (altFt !== null && altFt < 5000 && vrFpm !== null && vrFpm < -300) return { phase: 'Approach', icon: '🛬', cls: 'phase-approach' };
-  if (vrFpm !== null && vrFpm > 300) return { phase: 'Climb', icon: '↗️', cls: 'phase-climb' };
-  if (vrFpm !== null && vrFpm < -300) return { phase: 'Descent', icon: '↘️', cls: 'phase-descent' };
-  if (altFt !== null && altFt > 25000) return { phase: 'Cruise', icon: '✈️', cls: 'phase-cruise' };
-  return { phase: 'En Route', icon: '✈️', cls: 'phase-cruise' };
-}
-
-// ═══ SQUAWK DECODER ═══
-function decodeSquawk(sq) {
-  if (!sq) return null;
-  const s = String(sq);
-  if (s === '7500') return { text: '⚠️ HIJACK', cls: 'squawk-alert' };
-  if (s === '7600') return { text: '⚠️ RADIO FAILURE', cls: 'squawk-alert' };
-  if (s === '7700') return { text: '⚠️ EMERGENCY', cls: 'squawk-alert' };
-  if (s === '1200') return { text: 'VFR', cls: '' };
-  return null;
-}
-
 // Match a live flight to its fleet entry; icao24ToNNumber + the reg/icao24 lookup
 // order live in src/lib/fleet-match.js (importable + tested). FLEET_BY_REG is the
 // module-global index injected here.
@@ -1324,51 +1039,20 @@ async function refreshFlights() {
   }
 }
 
-const AIRPORT_COORDS = {};
-AIRPORTS.forEach(a => { AIRPORT_COORDS[a.iata] = a; });
-
-function haversineNm(lat1, lon1, lat2, lon2) {
-  const R = 3440.065; // Earth radius in nautical miles
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-function isLonghaulFlight(f) {
-  // Use airport coords to calculate distance; >2500nm = longhaul
-  const orig = AIRPORT_COORDS[f.origin];
-  const dest = AIRPORT_COORDS[f.dest];
-  if (orig && dest) return haversineNm(orig.lat, orig.lon, dest.lat, dest.lon) > 2500;
-  // Fallback: old flight number heuristic (sub-100) for flights without matched airports
-  const num = parseInt((f.callsign || '').replace(/^UAL/, ''));
-  return num > 0 && num < 100;
-}
-
 // Icon cache: key = "hdg_rounded|isLonghaul|phase|isWatched|isStarlink" → L.divIcon
 const _iconCache = {};
 function createPlaneIcon(hdg, isLonghaul, phase, isWatched, isStarlink) {
-  // Round heading to nearest 5° to maximize cache hits
-  const hdgRounded = Math.round((hdg || 0) / 5) * 5;
-  const cacheKey = `${hdgRounded}|${isLonghaul?1:0}|${phase}|${isWatched?1:0}|${isStarlink?1:0}`;
-  if (_iconCache[cacheKey]) return _iconCache[cacheKey];
-  // Starlink marker treatment: distinct violet FILL, no glow halo (owner Jul 4 2026 — the
-  // stacked drop-shadow "orb" look is gone). Fill priority: watched green → Starlink violet
-  // → long-haul amber → phase color. Accepted trade-off: phase color is not visible on
-  // Starlink aircraft — the popup and the Starlink-only filter still carry it.
-  const color = isWatched ? '#22c55e'
-    : isStarlink ? '#A78BFA'
-    : isLonghaul ? '#fbbf24'
-    : (phase === 'Ground' ? '#64748B' : '#6BAAED');
-  const size = isWatched ? 16 : (isLonghaul ? 14 : 10);
-  const filter = `drop-shadow(0 0 2px ${color})`;
-  // SVG plane pointing north (0°) — classic top-down aircraft silhouette, cross-platform consistent
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="filter:${filter}"><path d="M128 16c-4 0-8 3-9 7l-15 72-88 34c-3 1-4 4-4 7s2 5 5 6l87 20 4 52-28 18c-2 1-3 3-3 5v8c0 2 1 4 3 4l20-6h28l20 6c2 0 3-2 3-4v-8c0-2-1-4-3-5l-28-18 4-52 87-20c3-1 5-3 5-6s-1-6-4-7l-88-34-15-72c-1-4-5-7-9-7z"/></svg>`;
+  // Colours, sizing, heading rounding and the SVG itself live in ../lib/plane-icon.js;
+  // only the Leaflet wrapper and its cache stay here.
+  const { size, svg, key, hdgRounded } = planeIconSpec(hdg, {
+    longhaul: isLonghaul, phase, watched: isWatched, starlink: isStarlink,
+  });
+  if (_iconCache[key]) return _iconCache[key];
   const icon = L.divIcon({
     html: `<div style="transform:rotate(${hdgRounded}deg);line-height:0">${svg}</div>`,
     iconSize: [size, size], iconAnchor: [size/2, size/2], className: ''
   });
-  _iconCache[cacheKey] = icon;
+  _iconCache[key] = icon;
   return icon;
 }
 
@@ -1378,7 +1062,7 @@ function getFilteredFlights() {
       const hub = HUBS.find(h => h.iata === activeHubFilter);
       // FR24 gives real origin/dest — use those first, fall back to estimation
       const matchesHub = f.origin === activeHubFilter || f.dest === activeHubFilter ||
-        (f.onGround && hub && haversine(f.lat, f.lon, hub.lat, hub.lon) < 93); // ~50nm
+        (f.onGround && hub && haversineNm(f.lat, f.lon, hub.lat, hub.lon) < 93); // ~50nm
       if (!matchesHub) return false;
     }
     if (activePhaseFilter) {
@@ -1389,15 +1073,6 @@ function getFilteredFlights() {
     if (showStarlinkOnly && !isStarlinkFlight(f)) return false;
     return true;
   });
-}
-
-function getPhaseGroup(phase) {
-  if (phase === 'Ground') return 'Ground';
-  if (phase === 'Takeoff' || phase === 'Climb') return 'Climb';
-  if (phase === 'Cruise' || phase === 'En Route') return 'Cruise';
-  if (phase === 'Descent') return 'Descent';
-  if (phase === 'Approach') return 'Approach';
-  return 'Cruise';
 }
 
 function updateMarkers() {
@@ -1418,12 +1093,12 @@ function updateMarkers() {
   });
 
   filtered.forEach(f => {
-    const isLonghaul = showLonghaul && isLonghaulFlight(f);
+    const longhaul = showLonghaul && isLonghaul(f.origin, f.dest, f.callsign, AIRPORT_COORDS);
     const phaseInfo = getPhase(f.alt, f.vr, f.spd);
     const flightId = f.flightIATA || '';
     const isWatched = flightId && watchedSet.has(flightId);
     const isStarlink = isStarlinkFlight(f);
-    const icon = createPlaneIcon(f.hdg, isLonghaul, phaseInfo.phase, isWatched, isStarlink);
+    const icon = createPlaneIcon(f.hdg, longhaul, phaseInfo.phase, isWatched, isStarlink);
     // F084: cheap aria-label so screen readers get "UA123 ORD to DEN, cruising" instead
     // of nothing — the icon is cached/shared across markers, so the label is applied to
     // the marker's DOM element directly rather than baked into the cached icon HTML.
@@ -1491,8 +1166,8 @@ function showFlightPopup(f, marker) {
 
   const origCode = f.origin || originObj?.iata || '???';
   const destCode = f.dest || destObj?.iata || '???';
-  const origCity = IATA_CITIES[origCode] || '';
-  const destCity = IATA_CITIES[destCode] || '';
+  const origCity = cityFor(origCode);
+  const destCity = cityFor(destCode);
   const hasCityNames = origCity && destCity;
   const routeStr = origCode + ' → ' + destCode;
 
@@ -1708,43 +1383,6 @@ function showFlightPopup(f, marker) {
   }
 }
 
-function greatCirclePoints(lat1, lon1, lat2, lon2, n) {
-  const φ1 = toRad(lat1), λ1 = toRad(lon1), φ2 = toRad(lat2), λ2 = toRad(lon2);
-  const d = Math.acos(Math.min(1, Math.max(-1,
-    Math.sin(φ1)*Math.sin(φ2) + Math.cos(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1)
-  )));
-  if (d < 1e-6) return [[lat1,lon1],[lat2,lon2]];
-  const sinD = Math.sin(d);
-  const pts = [];
-  for (let i = 0; i <= n; i++) {
-    const f = i / n;
-    const a = Math.sin((1-f)*d) / sinD;
-    const b = Math.sin(f*d) / sinD;
-    const x = a*Math.cos(φ1)*Math.cos(λ1) + b*Math.cos(φ2)*Math.cos(λ2);
-    const y = a*Math.cos(φ1)*Math.sin(λ1) + b*Math.cos(φ2)*Math.sin(λ2);
-    const z = a*Math.sin(φ1) + b*Math.sin(φ2);
-    pts.push([toDeg(Math.atan2(z, Math.sqrt(x*x + y*y))), toDeg(Math.atan2(y, x))]);
-  }
-  return pts;
-}
-
-// Normalize a polyline so longitudes are continuous (no >180° jumps).
-// Leaflet handles coordinates outside [-180,180] fine — this lets
-// transpacific routes render correctly across the antimeridian.
-function normalizeLonContinuity(pts) {
-  if (!pts || pts.length < 2) return pts || [];
-  const out = [[pts[0][0], pts[0][1]]];
-  for (let i = 1; i < pts.length; i++) {
-    let lon = pts[i][1];
-    const prevLon = out[i - 1][1];
-    // Shift lon to be within ±180 of previous point
-    while (lon - prevLon > 180) lon -= 360;
-    while (lon - prevLon < -180) lon += 360;
-    out.push([pts[i][0], lon]);
-  }
-  return out;
-}
-
 // Legacy wrapper — no longer splits; just returns a single continuous segment
 function splitAtAntimeridian(pts) {
   return [normalizeLonContinuity(pts)];
@@ -1851,63 +1489,28 @@ function applyStarlinkPrediction(el, data) {
 
 // ═══ STATS ═══
 function updateStats() {
-  const filtered = getFilteredFlights();
-  let airborne = 0, ground = 0, climbing = 0, cruising = 0, descending = 0;
-  let totalAlt = 0, altCount = 0, totalSpd = 0, spdCount = 0, starlinkAirborne = 0;
-
-  filtered.forEach(f => {
-    const p = getPhase(f.alt, f.vr, f.spd);
-    if (f.onGround) ground++;
-    else {
-      airborne++;
-      if (p.phase === 'Climb' || p.phase === 'Takeoff') climbing++;
-      else if (p.phase === 'Cruise' || p.phase === 'En Route') cruising++;
-      else if (p.phase === 'Descent' || p.phase === 'Approach') descending++;
-
-      if (f.alt) { totalAlt += f.alt * 3.28084; altCount++; }
-      if (f.spd) { totalSpd += f.spd * 1.944; spdCount++; }
-
-      const ac = matchAircraft(f);
-      if (ac && STARLINK_TAILS.has(ac.r)) starlinkAirborne++;
-      else if (f.reg && STARLINK_TAILS.has(f.reg)) starlinkAirborne++;
-    }
+  // Counting, averages and the utilization copy live in ../lib/live-stats.js.
+  const s = computeLiveStats(allFlights, getFilteredFlights(), FLEET_DB.length, STARLINK_TAILS, {
+    matchAircraft,
+    isFiltered: !!(activeHubFilter || activePhaseFilter),
   });
 
-  const isFiltered = !!(activeHubFilter || activePhaseFilter);
-  const filterLabel = isFiltered ? ' (filtered)' : '';
-  document.getElementById('st-airborne').textContent = airborne;
-  document.getElementById('st-ground').textContent = ground;
-  document.getElementById('st-climb').textContent = climbing;
-  document.getElementById('st-cruise').textContent = cruising;
-  document.getElementById('st-desc').textContent = descending;
-  document.getElementById('st-avgalt').textContent = altCount ? Math.round(totalAlt / altCount).toLocaleString() + 'ft' : '--';
-  document.getElementById('st-avgspd').textContent = spdCount ? Math.round(totalSpd / spdCount) + 'kts' : '--';
-  // Small filtered samples produce a misleadingly precise/low % (e.g. "0% (filtered)"
-  // for 1 airborne flight matching a narrow hub+phase filter) — below a small threshold,
-  // say so plainly instead of asserting a number (P2-A item 5b).
-  document.getElementById('st-util').textContent = !FLEET_DB.length
-    ? '--'
-    : (isFiltered && airborne < 10)
-      ? 'n/a (small sample)'
-      : Math.round((airborne / FLEET_DB.length) * 100) + '%' + filterLabel;
-  document.getElementById('st-starlink').textContent = starlinkAirborne;
+  document.getElementById('st-airborne').textContent = s.airborne;
+  document.getElementById('st-ground').textContent = s.ground;
+  document.getElementById('st-climb').textContent = s.climbing;
+  document.getElementById('st-cruise').textContent = s.cruising;
+  document.getElementById('st-desc').textContent = s.descending;
+  document.getElementById('st-avgalt').textContent = s.avgAlt;
+  document.getElementById('st-avgspd').textContent = s.avgSpd;
+  document.getElementById('st-util').textContent = s.utilization;
+  document.getElementById('st-starlink').textContent = s.starlink;
 
   // Phase stats sidebar (always show total counts from allFlights, but make clickable)
-  let allGround = 0, allClimb = 0, allCruise = 0, allDescent = 0, allApproach = 0;
-  allFlights.forEach(f => {
-    const p = getPhase(f.alt, f.vr, f.spd);
-    const g = getPhaseGroup(p.phase);
-    if (g === 'Ground') allGround++;
-    else if (g === 'Climb') allClimb++;
-    else if (g === 'Cruise') allCruise++;
-    else if (g === 'Descent') allDescent++;
-    else if (g === 'Approach') allApproach++;
-  });
-
+  const g = s.phaseGroups;
   document.getElementById('phase-stats').innerHTML = [
-    ['🅿️ Ground', allGround, 'Ground'], ['🛫 Climb', allClimb, 'Climb'],
-    ['✈️ Cruise', allCruise, 'Cruise'], ['↘️ Descent', allDescent, 'Descent'],
-    ['🛬 Approach', allApproach, 'Approach']
+    ['🅿️ Ground', g.Ground, 'Ground'], ['🛫 Climb', g.Climb, 'Climb'],
+    ['✈️ Cruise', g.Cruise, 'Cruise'], ['↘️ Descent', g.Descent, 'Descent'],
+    ['🛬 Approach', g.Approach, 'Approach']
   ].map(([label, val, key]) =>
     `<div class="phase-row${activePhaseFilter === key ? ' phase-selected' : ''}" data-action="toggle-phase-filter" data-phase="${key}" role="button" tabindex="0"><span style="color:var(--ua-muted)">${label}</span><span style="color:var(--ua-accent);font-weight:700">${val}</span></div>`
   ).join('');
@@ -2022,49 +1625,28 @@ function focusFlight(icao24) {
 
 // ═══ TICKER ═══
 function updateTicker() {
-  const airborne = allFlights.filter(f=>!f.onGround).length;
-  const items = [];
-
-  // Ops health first: derived from the SAME inputs the IROPS panel uses (hub OTP,
-  // FAA programs at UA hubs, IROPS index) so the ticker can never say "all systems
-  // normal" while the Delays tab shows a red IROPS night. (Audit Jul 3 2026.)
-  const opsHealth = deriveOpsHealth({
-    hubOtps: hubHealthData,
-    faaIndex: faaDelayIndex,
-    hubCodes: ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'],
-    iropsScore: lastIropsScore,
-  });
-  if (opsHealth.level !== 'normal') {
-    items.push({ text: `⚠️ ${opsHealth.text}`, cls: 'advisory' });
-  }
-
-  if (allFlights.length > 0) {
-    items.push({ text: `${airborne} United flights airborne`, cls: 'info' });
-    // Show fleet counts only after fleet data has loaded — avoids misleading "0 aircraft" on initial render
-    if (FLEET_DB.length > 0) {
-      items.push({ text: `Fleet: ${FLEET_DB.length} mainline aircraft`, cls: 'info' });
-      items.push({ text: `${STARLINK_TAILS.size} Starlink-equipped aircraft (incl. United Express)`, cls: 'info' });
-    }
-  }
-
-  // Check for emergency squawks
+  // Item priority and copy live in ../lib/ticker.js.
+  const squawks = [];
   allFlights.forEach(f => {
     const sq = decodeSquawk(f.squawk);
-    if (sq && sq.cls === 'squawk-alert') {
-      items.push({ text: `${sq.text}: ${escapeHtml(f.callsign)} (${escapeHtml(f.squawk)})`, cls: 'critical' });
-    }
+    if (sq && sq.cls === 'squawk-alert') squawks.push({ text: sq.text, callsign: f.callsign, squawk: f.squawk });
   });
-
-  // Default message only when nothing above is an advisory/critical item — an
-  // active disruption item suppresses the green "all systems normal" line.
-  if (items.length === 0 || items.every(i => i.cls === 'info')) {
-    const countStr = allFlights.length > 0 ? ` — tracking ${allFlights.length} United flights` : '';
-    items.unshift({ text: `✅ All systems normal${countStr}`, cls: 'info' });
-  }
-
-  // Compact disclaimer/attribution in the rotation so it is visible in the mobile
-  // first viewport (the footer is far below the fold on phones).
-  items.push({ text: 'Unofficial — not affiliated with United Airlines · Data: AeroDataBox · FR24 · AWC · FAA', cls: 'disclaimer' });
+  const items = buildTickerItems({
+    // Ops health is derived from the SAME inputs the IROPS panel uses (hub OTP, FAA
+    // programs at UA hubs, IROPS index) so the ticker can never say "all systems
+    // normal" while the Delays tab shows a red IROPS night. (Audit Jul 3 2026.)
+    opsHealth: deriveOpsHealth({
+      hubOtps: hubHealthData,
+      faaIndex: faaDelayIndex,
+      hubCodes: HUB_ORDER,
+      iropsScore: lastIropsScore,
+    }),
+    airborne: allFlights.filter(f => !f.onGround).length,
+    total: allFlights.length,
+    fleetCount: FLEET_DB.length,
+    starlinkCount: STARLINK_TAILS.size,
+    squawks,
+  });
 
   const tickerHtml = items.map(i => `<span class="ticker-item ${escapeHtml(i.cls)}">${escapeHtml(i.text)}</span>`).join('');
   const tickerEl = document.getElementById('ticker');
@@ -2604,7 +2186,7 @@ function showConfigGallery(type) {
     configs[key].count++;
   });
 
-  const colors = { J: '#2563eb', PP: '#0d9488', PE: '#0d9488', F: '#7c3aed', 'E+': '#16a34a', Y: '#475569', Domestic: '#6366f1' };
+  const colors = CABIN_COLORS;
   let html = '<div class="fleet-config-title">' + escapeHtml(type) + ' Configurations</div>';
 
   for (const [cfg, data] of Object.entries(configs)) {
@@ -2774,45 +2356,8 @@ let slBoardHub = null;       // active hub filter; null = all hubs
 let slBoardWindow = 12;      // departure window in hours: 12 (default) | 48
 let slBoardShowAll = false;  // bypass the per-hub render cap (48h view)
 
-// A plane counts as "newly equipped" if upstream first recorded its Starlink (DateFound) within the
-// last 7 days. Computed against the live clock so the badge ages out on its own.
-function isRecentlyFound(dateFound) {
-  if (!dateFound) return false;
-  const t = Date.parse(dateFound);
-  if (isNaN(t)) return false;
-  const now = Date.now();
-  return t <= now + 86400000 && (now - t) <= 7 * 86400000;
-}
-
-// Format an upstream departure timestamp (UNIX seconds) as a short HH:MM hint.
-// Hub-local with the hub TZ abbreviation when the airport is a known hub — the
-// Schedule tab is hub-local, and the FIDS board showing unlabeled viewer-local
-// times next to it was silently inconsistent (audit Jul 3 2026). Non-hub airports
-// fall back to viewer-local but ALWAYS carry a TZ label so the time is never
-// ambiguous.
-function formatFlightTime(ts, airportIata) {
-  if (!ts) return '';
-  const d = new Date(ts * 1000);
-  if (isNaN(d.getTime())) return '';
-  const tz = SCHED_HUB_TZ[airportIata];
-  if (tz) {
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })
-      + ' ' + getHubTzAbbrev(airportIata);
-  }
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' });
-}
-
-// Map of tail → live airborne flight from the LIVE OPS feed. One pass over allFlights; cheap enough
-// to rebuild per render.
-function getStarlinkAirborneMap() {
-  const live = {};
-  for (const f of allFlights) {
-    if (f.onGround) continue;
-    const reg = (f.reg || '').replace(/-/g, '').toUpperCase();
-    if (reg && STARLINK_TAILS.has(reg)) live[reg] = f;
-  }
-  return live;
-}
+// isRecentlyFound, formatFlightTime, airborneByTail (the tail → live flight map) and
+// the departures-board cap policy live in ../lib/starlink-view.js.
 
 // Idempotent init for the STARLINK tab — wires filters/sort once, then (re)renders hero + table.
 function initStarlinkTab() {
@@ -2903,17 +2448,9 @@ function fetchStarlinkMismatches() {
 // normal, self-healing race (next cron prunes it) — not a pipeline fault. Alert only when the
 // snapshot POST-dates the verification and still contains the tail. Observed live Jul 2 2026:
 // N34131 verified 18:17Z against a 16:00Z snapshot rendered a false "check the data pipeline".
-function getServedConflictTails() {
-  const set = new Set();
-  const syncedMs = STARLINK_SYNCED_AT ? Date.parse(STARLINK_SYNCED_AT) : NaN;
-  for (const d of STARLINK_DISPUTED) {
-    if (!d || !d.tail || !STARLINK_TAILS.has(d.tail)) continue;
-    const verifiedMs = d.verifiedAt ? Date.parse(d.verifiedAt) : NaN;
-    // Both timestamps known and the dispute is newer than the served snapshot → propagation lag.
-    if (!isNaN(syncedMs) && !isNaN(verifiedMs) && verifiedMs > syncedMs) continue;
-    set.add(d.tail);
-  }
-  return set;
+// getServedConflictTails lives in ../lib/starlink-view.js — bind it to the served fleet.
+function servedConflictTails() {
+  return getServedConflictTails(STARLINK_DISPUTED, STARLINK_TAILS, STARLINK_SYNCED_AT);
 }
 
 function formatVerifyDate(iso) {
@@ -2954,7 +2491,7 @@ function renderSlVerification() {
   document.getElementById('sl-verify-unverified').textContent = (v.unverified != null) ? v.unverified : '—';
 
   // Load-bearing guard.
-  const conflicts = getServedConflictTails();
+  const conflicts = servedConflictTails();
   const alertEl = document.getElementById('sl-verify-alert');
   if (conflicts.size > 0) {
     const tails = [...conflicts].map(escapeHtml).join(', ');
@@ -3197,19 +2734,14 @@ function renderSlRoutesBoard() {
 
   const aircraftByTail = {};
   for (const s of STARLINK_DB) aircraftByTail[s.tail] = s;
-  const airborneByTail = getStarlinkAirborneMap(); // tail → live flight (has icao24)
+  const airborneMap = airborneByTail(allFlights, STARLINK_TAILS); // tail → live flight (has icao24)
 
   const now = Date.now() / 1000;
   const windowSec = slBoardWindow * 3600;
-  // Tame the default. The all-hubs 12h list is ~180 rows — a wall that buries the roster and the
-  // ledger below it. Cap to a tight per-hub slice in the all-hubs view (the "Show all" button
-  // expands it); a single-hub 12h view shows everything; the wide 48h view stays capped at 40/hub.
-  const capPerHub = slBoardShowAll ? Infinity
-    : !slBoardHub ? 6
-    : slBoardWindow >= 48 ? 40
-    : Infinity;
+  // The per-hub render cap rule lives in ../lib/starlink-view.js.
+  const capPerHub = boardCapPolicy({ showAll: slBoardShowAll, hub: slBoardHub, windowH: slBoardWindow });
 
-  const data = buildDeparturesBoard(STARLINK_FLIGHTS_BY_TAIL, aircraftByTail, airborneByTail, HUB_CODES, {
+  const data = buildDeparturesBoard(STARLINK_FLIGHTS_BY_TAIL, aircraftByTail, airborneMap, HUB_CODES, {
     now, windowSec, graceSec: 1800, hub: slBoardHub, capPerHub,
   });
 
@@ -3274,7 +2806,7 @@ function renderSlRoutesBoard() {
 // airframe, and live status (📡 Track reuses the existing delegated sl-track → focusFlight action;
 // the callsign opens the existing aircraft-detail modal). All fields are escaped.
 function renderSlBoardRow(r, now) {
-  const t = formatFlightTime(r.departure_ts, r.origin);
+  const t = formatFlightTime(r.departure_ts, r.origin, getHubTzAbbrev);
   const mins = Math.round((r.departure_ts - now) / 60);
   let rel;
   if (mins < 0) rel = Math.abs(mins) + 'm ago';
@@ -3328,7 +2860,7 @@ function renderSlHero() {
   // Chips: new this week (amber) + airborne now (green; only when the live feed has data).
   // Note: counts are integers derived from our own data — safe for innerHTML.
   const newThisWeek = STARLINK_DB.filter(s => isRecentlyFound(s.dateFound)).length;
-  const airborneCount = Object.keys(getStarlinkAirborneMap()).length;
+  const airborneCount = Object.keys(airborneByTail(allFlights, STARLINK_TAILS)).length;
   let chips = '';
   if (newThisWeek > 0) chips += '<span class="sl-chip sl-chip-new">+' + newThisWeek + ' NEW THIS WEEK</span>';
   // The live chip is a click-through to the LIVE OPS map with the Starlink filter pre-enabled.
@@ -3420,11 +2952,11 @@ function renderSlTable() {
   document.getElementById('sl-filtered-count').textContent = filtered.length < STARLINK_DB.length ? `${filtered.length} of ${STARLINK_DB.length}` : '';
 
   const hasFlights = Object.keys(STARLINK_FLIGHTS_BY_TAIL).length > 0;
-  const liveMap = getStarlinkAirborneMap();
+  const liveMap = airborneByTail(allFlights, STARLINK_TAILS);
   const hasLive = allFlights.length > 0;
   const nowSec = Date.now() / 1000;
   // Disputed-but-still-served tails (normally empty). Marked with a red integrity dot below.
-  const conflictTails = getServedConflictTails();
+  const conflictTails = servedConflictTails();
 
   // Hide the Status / Next Flight columns when the data behind them is unavailable (degraded modes)
   document.getElementById('sl-status-th').style.display = hasLive ? '' : 'none';
@@ -3454,7 +2986,7 @@ function renderSlTable() {
         // Next UPCOMING departure (flights are chronological; 30-min grace for one that just left),
         // falling back to the latest known flight if all are in the past.
         const next = flights.find(f => (f.departure_ts || 0) >= nowSec - 1800) || flights[flights.length - 1];
-        const t = formatFlightTime(next.departure_ts, next.origin);
+        const t = formatFlightTime(next.departure_ts, next.origin, getHubTzAbbrev);
         nextHtml = `<td style="font-size:9px">${escapeHtml(next.flight_number || '')} ${escapeHtml((next.origin || '') + '→' + (next.destination || ''))}${t ? ` <span class="starlink-next-time">${escapeHtml(t)}</span>` : ''}</td>`;
       } else {
         nextHtml = '<td style="font-size:9px;color:var(--ua-muted)">—</td>';
@@ -3489,9 +3021,9 @@ function renderSlExpand(s, live, hasFlights, hasLive, nowSec) {
   let timelineHtml = '<div class="sl-timeline-label">Upcoming Flights</div>';
   if (upcoming.length > 0) {
     timelineHtml += upcoming.map(f => {
-      const dep = formatFlightTime(f.departure_ts, f.origin);
+      const dep = formatFlightTime(f.departure_ts, f.origin, getHubTzAbbrev);
       const arrMs = f.arrival_time ? Date.parse(f.arrival_time) : NaN;
-      const arr = isNaN(arrMs) ? '' : formatFlightTime(arrMs / 1000, f.destination);
+      const arr = isNaN(arrMs) ? '' : formatFlightTime(arrMs / 1000, f.destination, getHubTzAbbrev);
       return `<div class="sl-fl-row"><span class="sl-fl-num">${escapeHtml(f.flight_number || '')}</span>` +
         `<span class="sl-fl-route">${escapeHtml(f.origin || '')} <span class="sl-arrow">→</span> ${escapeHtml(f.destination || '')}</span>` +
         `<span class="sl-fl-time">${escapeHtml(dep)}${arr ? ' – ' + escapeHtml(arr) : ''}</span></div>`;
@@ -3539,77 +3071,11 @@ let _weatherRefreshInterval = null;
 // way to release the observed nodes is an explicit disconnect().
 let _wxHintObserver = null;
 const HUB_NAMES = {EWR:"Newark Liberty",IAH:"Houston Intercontinental",ORD:"O'Hare International",DEN:"Denver International",SFO:"San Francisco Int'l",LAX:"Los Angeles Int'l",IAD:"Washington Dulles",NRT:"Tokyo Narita",GUM:"Guam Int'l"};
-const CAT_COLORS = {VFR:'#22c55e',MVFR:'#eab308',IFR:'#ef4444',LIFR:'#c026d3'};
-
-// computeFlightCategory (AIM category) and computeOpsImpact (ops severity + gust/temp/
-// phenomena for the delay-risk engine) live in src/lib/metar-category.js — pure regex
-// parsers, importable + tested.
-
-function formatStructuredVisibility(visib) {
-  if (visib === null || visib === undefined || visib === '') return '--';
-  const value = String(visib).trim();
-  if (!value) return '--';
-  if (/SM$/i.test(value) || /m$/i.test(value)) return value;
-  if (/^\d+(\.\d+)?$/.test(value) && Number(value) > 50) return `${Math.round(Number(value))}m`;
-  return `${value} SM`;
-}
-
-function applyStructuredMetarFallback(parsed, metar) {
-  if (!metar || typeof metar !== 'object') return parsed;
-
-  if (parsed.temp === '--' && Number.isFinite(metar.temp)) {
-    parsed.temp = `${Math.round(metar.temp)}°C / ${Math.round((metar.temp * 9) / 5 + 32)}°F`;
-  }
-
-  if (parsed.wind === '--' && Number.isFinite(metar.wspd)) {
-    if (metar.wspd === 0) parsed.wind = 'Calm';
-    else if (Number.isFinite(metar.wdir)) parsed.wind = `${String(Math.round(metar.wdir)).padStart(3, '0')}° @ ${Math.round(metar.wspd)}kt`;
-    else parsed.wind = `${Math.round(metar.wspd)}kt`;
-  }
-
-  if (parsed.vis === '--') {
-    parsed.vis = formatStructuredVisibility(metar.visib);
-  }
-
-  if (parsed.clouds === '--') {
-    const cloudLayer = Array.isArray(metar.clouds) && metar.clouds.length ? metar.clouds[0] : null;
-    const cloudCover = cloudLayer?.cover || metar.cover || '';
-    const cloudBase = Number.isFinite(cloudLayer?.base) ? cloudLayer.base : null;
-    const cloudNames = {FEW:'Few',SCT:'Scattered',BKN:'Broken',OVC:'Overcast'};
-    if (cloudCover && cloudBase !== null) parsed.clouds = `${cloudNames[cloudCover] || cloudCover} ${cloudBase}ft`;
-    else if (cloudCover === 'CLR' || cloudCover === 'SKC') parsed.clouds = 'Clear';
-  }
-
-  return parsed;
-}
-
-function parseMetarQuick(metar) {
-  const raw = typeof metar === 'string' ? metar : (metar?.rawOb || '');
-  const r = {temp:'--',wind:'--',vis:'--',clouds:'--'};
-  if (!raw) return typeof metar === 'object' ? applyStructuredMetarFallback(r, metar) : r;
-  const wm = raw.match(/\b(\d{3})(\d{2,3})(G(\d{2,3}))?KT\b/);
-  if (wm) { r.wind = `${wm[1]}° @ ${wm[2]}kt${wm[4]?' G'+wm[4]:''}`;} else if(raw.includes('00000KT')){r.wind='Calm';}
-  const vm = raw.match(/\b(\d+)\s*SM\b/) || raw.match(/\b(\d+\/\d+)SM\b/);
-  if (vm) r.vis = vm[0].replace('SM','').trim()+' SM';
-  const tm = raw.match(/\b(M?\d{2})\/(M?\d{2})\b/);
-  if (tm) { const c=parseInt(tm[1].replace('M','-')); r.temp=`${c}°C / ${Math.round(c*9/5+32)}°F`;}
-  const cm = [...raw.matchAll(/(FEW|SCT|BKN|OVC)(\d{3})/g)];
-  const cn = {FEW:'Few',SCT:'Scattered',BKN:'Broken',OVC:'Overcast'};
-  if (cm.length) { const l=cm[0]; r.clouds=`${cn[l[1]]||l[1]} ${parseInt(l[2])*100}ft`;} else if(raw.includes('CLR')||raw.includes('SKC')){r.clouds='Clear';}
-  return typeof metar === 'object' ? applyStructuredMetarFallback(r, metar) : r;
-}
-
-function hasRenderableMetarData(metar) {
-  if (!metar || typeof metar !== 'object') return false;
-  return Boolean(
-    metar.rawOb ||
-    Number.isFinite(metar.temp) ||
-    Number.isFinite(metar.wspd) ||
-    (typeof metar.visib === 'string' && metar.visib.trim()) ||
-    (Array.isArray(metar.clouds) && metar.clouds.length) ||
-    metar.cover
-  );
-}
+// CAT_COLORS, the quick METAR parse (parseMetarQuick / applyStructuredMetarFallback /
+// formatStructuredVisibility / hasRenderableMetarData) and the worse-of-two category
+// rule live in ../lib/metar-explain.js. computeFlightCategory (AIM category) and
+// computeOpsImpact (ops severity + gust/temp/phenomena for the delay-risk engine)
+// live in ../lib/metar-category.js — pure regex parsers, importable + tested.
 
 async function fetchMetarBatch(allStations) {
   const stationChunks = chunkMetarStationIds(allStations);
@@ -3649,94 +3115,10 @@ function renderNasPanel() {
 
   panelEl.style.display = 'block';
 
-  // --- Severity detection & classification helpers ---
-  // All user-facing text is sanitized via escapeHtml before DOM insertion.
-
-  const SEV_LABELS = {
-    GS: 'Ground Stop', GDP: 'Ground Delay Program', AFP: 'Airspace Flow Program',
-    MIT: 'Miles-in-Trail', MINIT: 'Minutes-in-Trail', CDR: 'Coded Departure Routes',
-    SWAP: 'Severe Weather Avoidance', EDCT: 'Expect Departure Clearance Time',
-    FCA: 'Flow Constrained Area', DSP: 'Departure Spacing Program',
-  };
-
-  function detectSevType(text) {
-    const t = text.toUpperCase();
-    if (t.includes('GROUND STOP') || /\bGS\b/.test(t) || /\bGDS\b/.test(t)) return 'GS';
-    if (t.includes('GROUND DELAY') || /\bGDP\b/.test(t)) return 'GDP';
-    if (t.includes('AIRSPACE FLOW') || /\bAFP\b/.test(t)) return 'AFP';
-    if (t.includes('MILES-IN-TRAIL') || t.includes('MINUTES-IN-TRAIL') || /\bMINIT\b/.test(t) || /\bMIT\b/.test(t)) return 'MIT';
-    if (t.includes('CODED DEPARTURE') || /\bCDRS?\b/.test(t)) return 'CDR';
-    if (t.includes('SEVERE WEATHER') || /\bSWAP\b/.test(t)) return 'SWAP';
-    if (/\bEDCT\b/.test(t)) return 'EDCT';
-    if (/\bFCA\b/.test(t)) return 'FCA';
-    if (/\bDSP\b/.test(t)) return 'DSP';
-    return 'OTHER';
-  }
-
-  // Map severity types to CSS badge classes (known safe string values)
-  function sevBadgeClass(sevType) {
-    const map = { GS:'gs', GDP:'gdp', AFP:'afp', MIT:'mit', SWAP:'mit', MINIT:'mit', CDR:'cdr', EDCT:'cdr', FCA:'cdr', DSP:'cdr' };
-    return 'sev-' + (map[sevType] || 'other');
-  }
-
-  // --- Build unified, classified items list ---
-
-  const items = [];
-  const allHubs = new Set();
-
-  // Active en-route programs
-  for (const prog of (nasData.active || [])) {
-    const sevType = detectSevType(prog.name);
-    const nameParts = prog.name.split('-');
-    const typeCode = nameParts[0] || '';
-    const facility = nameParts.length > 1 && /^[A-Z]{3}$/.test(nameParts[1]) ? nameParts[1] : '';
-    const typeName = SEV_LABELS[sevType] || typeCode;
-    const hubs = [...new Set((prog.affectedFacilities || []).filter(a => UA_HUBS.has(a)))];
-    hubs.forEach(h => allHubs.add(h));
-
-    const detailParts = [];
-    if (prog.reason) detailParts.push(escapeHtml(prog.reason));
-    if (prog.avgDelay) detailParts.push('avg <span class="nas-delay-val">' + escapeHtml(String(prog.avgDelay)) + 'm</span>');
-    if (prog.endTime) {
-      const endZ = prog.endTime.includes('T') ? prog.endTime.split('T')[1].slice(0, 5) + 'Z' : prog.endTime;
-      detailParts.push('ends ' + escapeHtml(endZ));
-    }
-
-    items.push({
-      tier: sevType === 'GS' ? 'critical' : 'active',
-      sevType,
-      title: facility ? escapeHtml(facility) + ' ' + escapeHtml(typeName) : escapeHtml(prog.name),
-      detail: detailParts.join(' \u00b7 '),
-      hubs,
-    });
-  }
-
-  // Planned TMIs
-  for (const tmi of (nasData.planned || [])) {
-    const sevType = detectSevType(tmi.event);
-    const hubs = (tmi.affectedAirports || []).filter(a => UA_HUBS.has(a));
-    hubs.forEach(h => allHubs.add(h));
-
-    let tier;
-    if (sevType === 'GS') tier = 'critical';
-    else if (sevType === 'GDP' || sevType === 'AFP') tier = 'active';
-    else tier = 'monitoring';
-
-    items.push({
-      tier,
-      sevType,
-      title: escapeHtml(tmi.decoded || tmi.event),
-      detail: tmi.time ? escapeHtml(tmi.time) : '',
-      hubs,
-    });
-  }
-
-  // Group by tier
-  const tiers = {
-    critical: items.filter(i => i.tier === 'critical'),
-    active: items.filter(i => i.tier === 'active'),
-    monitoring: items.filter(i => i.tier === 'monitoring'),
-  };
+  // Classification, hub tagging and the three-tier split live in ../lib/nas-severity.js.
+  // Item `title`/`detail` come back pre-escaped, ready for innerHTML.
+  const tiers = tierNasEvents(nasData, UA_HUBS);
+  const allHubs = new Set([...tiers.critical, ...tiers.active, ...tiers.monitoring].flatMap(i => i.hubs));
 
   // --- Render Priority Stack ---
   // All values inserted below are pre-escaped via escapeHtml or derived from
@@ -3875,8 +3257,7 @@ async function initWeatherTab() {
     const apiCat = data ? (data.fltCat || data.fltcat || 'UNK') : 'UNK';
     const localCat = computeFlightCategory(raw);
     // Use the worse (more restrictive) of API vs local computation
-    const catRank = {LIFR:0,IFR:1,MVFR:2,VFR:3,UNK:3};
-    const cat = localCat && (catRank[localCat] ?? 3) < (catRank[apiCat] ?? 3) ? localCat : apiCat;
+    const cat = worstCategory(apiCat, localCat);
     const catColor = CAT_COLORS[cat] || '#64748b';
     const m = parseMetarQuick(data || raw);
     const faa = faaIndex[hub];
@@ -4063,8 +3444,7 @@ async function initWeatherTab() {
         const raw = data.rawOb || '';
         const apiCat = data.fltCat || data.fltcat || 'UNK';
         const localCat = computeFlightCategory(raw);
-        const catRank = {LIFR:0,IFR:1,MVFR:2,VFR:3,UNK:3};
-        const cat = localCat && (catRank[localCat] ?? 3) < (catRank[apiCat] ?? 3) ? localCat : apiCat;
+        const cat = worstCategory(apiCat, localCat);
         const ops = computeOpsImpact(raw, cat);
         weatherOpsByHub[hub] = { level: ops.level, reasons: ops.reasons, fltCat: cat,
           hasThunderstorms: ops.hasThunderstorms, hasFreezingPrecip: ops.hasFreezingPrecip,
@@ -4089,9 +3469,9 @@ async function initWeatherTab() {
 function updateAnalytics() {
   const airborneFlights = allFlights.filter(f => !f.onGround);
   const airborne = airborneFlights.length;
-  const currentYear = new Date().getFullYear();
-  const ages = FLEET_DB.filter(a => parseInt(a.d)).map(a => currentYear - parseInt(a.d));
-  const avgAge = ages.length ? (ages.reduce((a, b) => a + b, 0) / ages.length).toFixed(1) : '--';
+  // Per-type ages and the fleet-wide mean live in ../lib/analytics.js.
+  const ageStats = avgAgeByType(FLEET_DB, new Date().getFullYear());
+  const avgAge = ageStats.fleetAvg;
 
   // Count Starlink airborne
   let starlinkAirborne = 0;
@@ -4110,21 +3490,7 @@ function updateAnalytics() {
   ].map(m => `<div class="metric-card"><div class="metric-val">${m.val}</div><div class="metric-label">${m.label}</div>${m.sub ? `<div style="font-size:8px;color:var(--ua-muted);margin-top:2px">${m.sub}</div>` : ''}</div>`).join('');
 
   // ═══ LIVE FLEET UTILIZATION ═══
-  const typeOrder = ["A319","A320","A321neo","737-700","737-800","737-900","737-900ER","737 MAX 8","737 MAX 9","757-200","757-300","767-300ER","767-400ER","777-200","777-200ER","777-300ER","787-8","787-9","787-10"];
-  const typeTotals = {};
-  const typeAirborne = {};
-  FLEET_DB.forEach(a => { typeTotals[a.t] = (typeTotals[a.t] || 0) + 1; });
-  typeOrder.forEach(t => { typeAirborne[t] = 0; });
-
-  airborneFlights.forEach(f => {
-    const ac = matchAircraft(f);
-    if (ac && typeAirborne[ac.t] !== undefined) typeAirborne[ac.t]++;
-  });
-
-  document.getElementById('util-chart').innerHTML = typeOrder.map(t => {
-    const total = typeTotals[t] || 0;
-    const flying = typeAirborne[t] || 0;
-    const pct = total > 0 ? Math.round((flying / total) * 100) : 0;
+  document.getElementById('util-chart').innerHTML = typeUtilization(airborneFlights, FLEET_DB, { matchAircraft }).map(({ type: t, flying, total, pct }) => {
     const color = pct > 60 ? '#22c55e' : pct > 30 ? '#005DAA' : pct > 0 ? '#f59e0b' : '#334155';
     // Bar fill can use blue (decorative), but small stat-value TEXT must never use --ua-blue
     // (2.61:1 on panel bg — fails contrast); use the sanctioned amber for that case instead.
@@ -4139,22 +3505,15 @@ function updateAnalytics() {
   }).join('');
 
   // ═══ AIRBORNE BY FLIGHT PHASE ═══
-  const phaseCounts = { 'Takeoff': 0, 'Climb': 0, 'Cruise': 0, 'En Route': 0, 'Descent': 0, 'Approach': 0, 'Ground': 0 };
+  const { counts: phaseCounts, total: phaseTotal, order: donutData } = phaseBreakdown(allFlights);
   const phaseColors = { 'Takeoff': '#22c55e', 'Climb': '#3b82f6', 'Cruise': '#005DAA', 'En Route': '#6366f1', 'Descent': '#f59e0b', 'Approach': '#ef4444', 'Ground': '#64748b' };
   const phaseIcons = { 'Takeoff': '🛫', 'Climb': '↗️', 'Cruise': '✈️', 'En Route': '✈️', 'Descent': '↘️', 'Approach': '🛬', 'Ground': '🅿️' };
 
-  allFlights.forEach(f => {
-    const p = getPhase(f.alt, f.vr, f.spd);
-    if (phaseCounts[p.phase] !== undefined) phaseCounts[p.phase]++;
-  });
-
-  const phaseTotal = Object.values(phaseCounts).reduce((a, b) => a + b, 0) || 1;
   const phaseOrder = ['Cruise', 'Climb', 'Descent', 'En Route', 'Takeoff', 'Approach', 'Ground'];
 
   // Donut segments
   let donutSegments = '';
   let offset = 0;
-  const donutData = phaseOrder.filter(p => phaseCounts[p] > 0);
   donutData.forEach(p => {
     const pct = (phaseCounts[p] / phaseTotal) * 100;
     donutSegments += `<circle cx="50" cy="50" r="36" fill="none" stroke="${phaseColors[p]}" stroke-width="12" stroke-dasharray="${pct * 2.26} ${226 - pct * 2.26}" stroke-dashoffset="${-offset * 2.26}" />`;
@@ -4181,20 +3540,9 @@ function updateAnalytics() {
   document.getElementById('phase-chart').innerHTML = phaseHtml;
 
   // ═══ HUB-TO-HUB FLOW MATRIX ═══
-  const hubCodes = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
-  const hubSet = new Set(hubCodes);
-  const matrix = {};
-  hubCodes.forEach(o => { matrix[o] = {}; hubCodes.forEach(d => { matrix[o][d] = 0; }); });
-
-  airborneFlights.forEach(f => {
-    if (f.origin && f.dest && hubSet.has(f.origin) && hubSet.has(f.dest) && f.origin !== f.dest) {
-      matrix[f.origin][f.dest]++;
-    }
-  });
-
-  // Find max for color scaling
-  let matrixMax = 1;
-  hubCodes.forEach(o => hubCodes.forEach(d => { if (matrix[o][d] > matrixMax) matrixMax = matrix[o][d]; }));
+  const hubCodes = HUB_ORDER;
+  // Matrix, per-origin totals and the colour-scaling max live in ../lib/analytics.js.
+  const { matrix, rowTotals, max: matrixMax } = hubMatrix(airborneFlights, hubCodes);
 
   let mHtml = `<table style="border-collapse:collapse;width:100%;font-family:var(--font-mono);font-size:10px">`;
   mHtml += `<thead><tr><th style="padding:4px 6px;color:var(--ua-muted);font-size:9px">FROM \\ TO</th>`;
@@ -4202,11 +3550,10 @@ function updateAnalytics() {
   mHtml += `<th style="padding:4px 6px;color:var(--ua-muted);text-align:center;font-size:9px">TOTAL</th></tr></thead><tbody>`;
 
   hubCodes.forEach(o => {
-    let rowTotal = 0;
+    const rowTotal = rowTotals[o];
     mHtml += `<tr><td style="padding:4px 6px;color:var(--ua-accent);font-weight:700">${o}</td>`;
     hubCodes.forEach(d => {
       const v = matrix[o][d];
-      rowTotal += v;
       if (o === d) {
         mHtml += `<td style="padding:4px 6px;text-align:center;background:rgba(30,41,59,.3);color:var(--ua-muted)">—</td>`;
       } else {
@@ -4222,16 +3569,10 @@ function updateAnalytics() {
   document.getElementById('hub-matrix').innerHTML = mHtml;
 
   // ═══ TOP ROUTES ═══
-  const routeCount = {};
-  airborneFlights.filter(f => f.origin && f.dest).forEach(f => {
-    const key = f.origin + '→' + f.dest;
-    routeCount[key] = (routeCount[key] || 0) + 1;
-  });
+  const routeRows = topRoutes(airborneFlights, 15);
+  const maxRouteCount = routeRows[0] ? routeRows[0].count : 1;
 
-  const topRoutes = Object.entries(routeCount).sort((a, b) => b[1] - a[1]).slice(0, 15);
-  const maxRouteCount = topRoutes[0] ? topRoutes[0][1] : 1;
-
-  document.getElementById('route-heatmap').innerHTML = topRoutes.map(([route, count], i) =>
+  document.getElementById('route-heatmap').innerHTML = routeRows.map(({ route, count }, i) =>
     `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
       <span style="font-size:9px;color:var(--ua-muted);min-width:16px;text-align:right">${i+1}</span>
       <span style="font-size:11px;min-width:100px;font-weight:600">${route}</span>
@@ -4243,18 +3584,7 @@ function updateAnalytics() {
   ).join('') || '<div style="color:var(--ua-muted)">Waiting for flight data…</div>';
 
   // ═══ AVERAGE FLEET AGE ═══
-  const typeAges = {};
-  FLEET_DB.forEach(a => {
-    const y = parseInt(a.d);
-    if (y) {
-      if (!typeAges[a.t]) typeAges[a.t] = [];
-      typeAges[a.t].push(currentYear - y);
-    }
-  });
-
-  document.getElementById('avg-age-chart').innerHTML = typeOrder.map(t => {
-    const tAges = typeAges[t] || [];
-    const avg = tAges.length ? (tAges.reduce((a, b) => a + b, 0) / tAges.length).toFixed(1) : 0;
+  document.getElementById('avg-age-chart').innerHTML = ageStats.rows.map(({ type: t, avg }) => {
     const maxAge = 30;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(30,41,59,.3)">
       <span style="font-size:10px;min-width:85px">${t}</span>
@@ -4327,158 +3657,8 @@ function updateLiveFleetPanel() {
   if (activeFleetView === 'airborne') renderAirborneTable();
 }
 
-// ═══ WEATHER EXPLAINERS ═══
-function explainMETAR(rawMetar, hub, cat) {
-  if (!rawMetar) return '';
-  const hubNames = {EWR:"Newark",IAH:"Houston Intercontinental",ORD:"O'Hare",DEN:"Denver International",SFO:"San Francisco",LAX:"Los Angeles",IAD:"Washington Dulles",NRT:"Tokyo Narita",GUM:"Guam"};
-  const name = hubNames[hub] || hub;
-
-  // Build context-aware assessment instead of static category blurbs
-
-  let parts = [];
-
-  // Wind
-  const windMatch = rawMetar.match(/\b(\d{3})(\d{2,3})(G(\d{2,3}))?KT\b/);
-  if (windMatch) {
-    const dir = parseInt(windMatch[1]), spd = parseInt(windMatch[2]), gust = windMatch[4] ? parseInt(windMatch[4]) : null;
-    const dirs = ['north','north-northeast','northeast','east-northeast','east','east-southeast','southeast','south-southeast','south','south-southwest','southwest','west-southwest','west','west-northwest','northwest','north-northwest'];
-    const dirName = dirs[Math.round(dir / 22.5) % 16];
-    parts.push(`Winds from the ${dirName} at ${spd} knots${gust ? ' gusting to ' + gust : ''}`);
-  } else if (rawMetar.includes('00000KT')) {
-    parts.push('Winds are calm');
-  }
-
-  // Visibility
-  const visMatch = rawMetar.match(/\b(\d+)\s*SM\b/) || rawMetar.match(/\b(\d+)\/(\d+)SM\b/) || rawMetar.match(/\bM?(\d+\/\d+)SM\b/);
-  if (visMatch) {
-    const vis = visMatch[0].replace('SM', '').trim();
-    parts.push(`Visibility is ${vis} statute miles`);
-  }
-
-  // Ceiling / clouds
-  const cloudMatches = [...rawMetar.matchAll(/(FEW|SCT|BKN|OVC)(\d{3})/g)];
-  const cloudNames = {FEW:'few clouds',SCT:'scattered',BKN:'broken ceiling',OVC:'overcast ceiling'};
-  if (cloudMatches.length) {
-    const lowest = cloudMatches[0];
-    const altHun = parseInt(lowest[2]) * 100;
-    parts.push(`${cloudNames[lowest[1]] || lowest[1]} at ${altHun.toLocaleString()} feet`);
-  } else if (rawMetar.includes('CLR') || rawMetar.includes('SKC')) {
-    parts.push('Clear skies');
-  }
-
-  // Weather phenomena
-  const wxCodes = {RA:'rain',SN:'snow',DZ:'drizzle',FG:'fog',BR:'mist',HZ:'haze',TS:'thunderstorms',FZ:'freezing',SH:'showers',GR:'hail',PL:'ice pellets'};
-  const wxMatch = rawMetar.match(/\s([+-]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)+)\s/);
-  if (wxMatch) {
-    const wx = wxMatch[1];
-    let desc = [];
-    if (wx.startsWith('-')) desc.push('light');
-    else if (wx.startsWith('+')) desc.push('heavy');
-    for (const [code, name] of Object.entries(wxCodes)) {
-      if (wx.includes(code)) desc.push(name);
-    }
-    if (desc.length) parts.push(desc.join(' '));
-  }
-
-  // Temperature
-  const tempMatch = rawMetar.match(/\b(M?\d{2})\/(M?\d{2})\b/);
-  if (tempMatch) {
-    const t = tempMatch[1].replace('M', '-');
-    const tempC = parseInt(t);
-    const tempF = Math.round(tempC * 9/5 + 32);
-    parts.push(`Temperature is ${tempC}°C (${tempF}°F)`);
-  }
-
-  // Altimeter
-  const altMatch = rawMetar.match(/A(\d{4})/);
-  if (altMatch) {
-    const alt = (parseInt(altMatch[1]) / 100).toFixed(2);
-    parts.push(`altimeter setting of ${alt} inHg`);
-  }
-
-  let text = `${name} is currently reporting ${cat || 'unknown'} conditions`;
-  if (parts.length) text += '. ' + parts.join('. ') + '.';
-
-  // Build dynamic operational assessment from actual conditions
-  const assessParts = [];
-  // Check for active weather phenomena
-  const wxMatch2 = rawMetar.match(/\s([+-]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)+)\s/);
-  if (wxMatch2) {
-    const wx = wxMatch2[1];
-    if (wx.includes('SN') || wx.includes('FZ')) assessParts.push('winter weather active');
-    else if (wx.includes('TS')) assessParts.push('thunderstorm activity');
-    else if (wx.includes('RA') || wx.includes('DZ') || wx.includes('SH')) assessParts.push('precipitation');
-    else if (wx.includes('FG')) assessParts.push('fog');
-    else if (wx.includes('BR') || wx.includes('HZ')) assessParts.push('reduced visibility');
-  }
-  // Check winds
-  const wm2 = rawMetar.match(/\b\d{3}(\d{2,3})(G(\d{2,3}))?KT\b/);
-  if (wm2) {
-    const gust = wm2[3] ? parseInt(wm2[3]) : parseInt(wm2[1]);
-    if (gust >= 30) assessParts.push('strong/gusty winds');
-    else if (gust >= 20) assessParts.push('gusty conditions');
-  }
-  // Check ceiling
-  const ceil = [...rawMetar.matchAll(/(BKN|OVC)(\d{3})/g)];
-  if (ceil.length) {
-    const ceilFt = parseInt(ceil[0][2]) * 100;
-    if (ceilFt < 500) assessParts.push('very low ceilings');
-    else if (ceilFt < 1000) assessParts.push('low ceilings');
-    else if (ceilFt <= 3000) assessParts.push('low overcast');
-  }
-
-  if (cat === 'LIFR') {
-    text += ` Very low ceilings/visibility — major operational impact, expect ground stops and diversions.`;
-  } else if (cat === 'IFR') {
-    text += ` Instrument conditions${assessParts.length ? ' with ' + assessParts.join(', ') : ''} — expect significant delays and possible diversions.`;
-  } else if (cat === 'MVFR') {
-    text += ` Marginal conditions${assessParts.length ? ' with ' + assessParts.join(', ') : ''} — some delays possible.`;
-  } else if (assessParts.length) {
-    // VFR but with notable conditions
-    text += ` ${assessParts.join(', ').replace(/^./, c => c.toUpperCase())} — monitor for changes.`;
-  } else {
-    text += ` Clear skies, good visibility — no impact on operations.`;
-  }
-
-  return text;
-}
-
-function explainFAAStatus(airportCode, delays, rawData) {
-  if (!delays || delays.length === 0) {
-    return `${airportCode} is operating normally — no reported delays or restrictions.`;
-  }
-
-  const explanations = delays.map(d => {
-    let text = `${airportCode} is currently experiencing `;
-    const dtype = (d.type || '').toLowerCase();
-    const reason = d.reason || 'unknown causes';
-
-    if (dtype.includes('departure')) text += `departure delays`;
-    else if (dtype.includes('arrival')) text += `arrival delays`;
-    else if (dtype.includes('ground stop') || dtype.includes('groundstop')) text += `a ground stop`;
-    else if (dtype.includes('ground delay') || dtype.includes('gdp')) text += `a ground delay program`;
-    else if (dtype.includes('closure') || dtype.includes('closed')) {
-      return `${airportCode} is closed${d.startTime ? ' from ' + d.startTime : ''}${d.endTime ? ' to ' + d.endTime : ''}${reason !== 'unknown causes' ? ' due to ' + reason : ''} per NOTAM. This is a recurring restriction.`;
-    }
-    else text += `delays`;
-
-    if (d.avgDelay || d.minDelay || d.maxDelay) {
-      const range = d.minDelay && d.maxDelay ? `${d.minDelay}-${d.maxDelay} minutes` : d.avgDelay ? `approximately ${d.avgDelay} minutes` : '';
-      if (range) text += ` of ${range}`;
-    }
-
-    text += ` due to ${reason}.`;
-
-    if (d.trend) {
-      if (d.trend.toLowerCase().includes('increas')) text += ` This is an increasing trend — delays may get worse.`;
-      else if (d.trend.toLowerCase().includes('decreas')) text += ` Delays are decreasing — conditions improving.`;
-    }
-
-    return text;
-  });
-
-  return explanations.join(' ');
-}
+// explainMETAR and explainFAAStatus live in ../lib/metar-explain.js and
+// ../lib/faa-context.js.
 
 // ═══ SCHEDULE TAB ═══
 const SCHED_HUB_TZ = {ORD:'America/Chicago',DEN:'America/Denver',IAH:'America/Chicago',EWR:'America/New_York',SFO:'America/Los_Angeles',IAD:'America/New_York',LAX:'America/Los_Angeles',NRT:'Asia/Tokyo',GUM:'Pacific/Guam'};
@@ -4770,7 +3950,8 @@ async function loadScheduleData() {
     schedBoardFetchedAtMs = Date.now();
     schedAutoScrollPending = loadDay === 0; // anchor Today at NOW on load (tomorrow/yesterday boards skip)
     preloadWeatherAndFAA();
-    detectEquipmentSwaps(allUAFlights, loadHub, loadDir, loadDay);
+    equipmentChanges = detectEquipmentSwaps(allUAFlights, `bb_sched_${loadHub}_${loadDir}_${loadDay}`, localStorage).swaps;
+    updateEquipChangeSummary();
     populateAircraftFilter();
     // Reset advanced filters on hub/direction/day change
     document.getElementById('sched-route-type').value = '';
@@ -5190,7 +4371,7 @@ function renderScheduleTable() {
     if (status.cls === 'delayed' || (status.key === 'estimated' && status.cls === 'delayed')) {
       const origIata = fl.airport?.origin?.code?.iata;
       const destIata = fl.airport?.destination?.code?.iata;
-      const ctx = getFAADelayContext(origIata, destIata);
+      const ctx = getFAADelayContext(faaDelayIndex, origIata, destIata);
       if (ctx) faaContext = `<div class="faa-delay-context">${escapeHtml(ctx)}</div>`;
     }
 
@@ -5413,37 +4594,11 @@ document.getElementById('global-search-input').addEventListener('input', debounc
   const results = document.getElementById('global-search-results');
   if (qRaw.length < 2) { results.style.display = 'none'; return; }
 
-  // Normalize ALL matching against a space/punctuation-stripped form so "UA 373",
-  // "UA373", "ua373" and tail numbers with spaces all match the same way (F042).
-  // "ORD to DEN" is treated the same as "ORD-DEN"/"ORD DEN" for route queries.
-  const q = qRaw.replace(/\s+TO\s+/g, ' ');
-  const qNorm = q.replace(/[\s\-→>]+/g, '');
-  const matches = [];
-  // Search live flights
-  allFlights.forEach(f => {
-    const cs = (f.callsign || '').toUpperCase().replace(/[\s\-]+/g, '');
-    const flt = (f.flightIATA || '').toUpperCase().replace(/[\s\-]+/g, '');
-    const reg = (f.reg || '').toUpperCase().replace(/[\s\-]+/g, '');
-    const routeStr = ((f.origin || '') + (f.dest || '')).toUpperCase();
-    const routeRev = ((f.dest || '') + (f.origin || '')).toUpperCase();
-    if (cs.includes(qNorm) || flt.includes(qNorm) || reg.includes(qNorm) || routeStr.includes(qNorm) || routeRev.includes(qNorm)) {
-      matches.push({ type: 'live', label: `${f.flightIATA || f.callsign} ${f.origin||'?'}→${f.dest||'?'} ${f.reg||''}`, icao24: f.icao24 });
-    }
-  });
-  // Search schedule data (already loaded schedule pages, if any)
-  const scheduleMatch = (fl) => {
-    const ident = (fl.identification?.number?.default || '').toUpperCase().replace(/[\s\-]+/g, '');
-    const reg = (fl.aircraft?.registration || '').toUpperCase().replace(/[\s\-]+/g, '');
-    const dest = (fl.airport?.destination?.code?.iata || '').toUpperCase();
-    const orig = (fl.airport?.origin?.code?.iata || '').toUpperCase();
-    return ident.includes(qNorm) || reg.includes(qNorm) || dest.includes(qNorm) || orig.includes(qNorm);
-  };
+  // Normalization + the three matchers live in ../lib/global-search.js.
+  const { q, qNorm } = normalizeQuery(qRaw);
+  const matches = matchLiveFlights(allFlights, qNorm);
   if (schedAllFlights.length) {
-    schedAllFlights.forEach(fl => {
-      if (scheduleMatch(fl)) {
-        matches.push({ type: 'sched', label: `📅 ${fl.identification?.number?.default||'?'} ${(fl.airport?.origin?.code?.iata||'?')}→${(fl.airport?.destination?.code?.iata||'?')} ${fl.aircraft?.registration||''}`, flight: fl });
-      }
-    });
+    matches.push(...matchScheduleFlights(schedAllFlights, qNorm));
   } else {
     // F043: schedAllFlights only populates once the user opens the Schedule tab.
     // Reuse the existing preload path (already fetches home hub + cached hub set)
@@ -5451,7 +4606,7 @@ document.getElementById('global-search-input').addEventListener('input', debounc
     // live tab. Search whatever pages have already landed in schedRawByHub, and
     // kick off (or ride along with) the preload for anything still missing.
     Object.values(schedRawByHub).forEach(flights => {
-      (flights || []).forEach(fl => { if (scheduleMatch(fl)) matches.push({ type: 'sched', label: `📅 ${fl.identification?.number?.default||'?'} ${(fl.airport?.origin?.code?.iata||'?')}→${(fl.airport?.destination?.code?.iata||'?')} ${fl.aircraft?.registration||''}`, flight: fl }); });
+      matches.push(...matchScheduleFlights(flights, qNorm));
     });
     if (matches.length === 0) {
       preloadScheduleData().then(() => {
@@ -5459,7 +4614,7 @@ document.getElementById('global-search-input').addEventListener('input', debounc
         if ((document.getElementById('global-search-input')?.value || '').trim().toUpperCase() === qRaw) {
           const late = [];
           Object.values(schedRawByHub).forEach(flights => {
-            (flights || []).forEach(fl => { if (scheduleMatch(fl)) late.push({ type: 'sched', label: `📅 ${fl.identification?.number?.default||'?'} ${(fl.airport?.origin?.code?.iata||'?')}→${(fl.airport?.destination?.code?.iata||'?')} ${fl.aircraft?.registration||''}`, flight: fl }); });
+            late.push(...matchScheduleFlights(flights, qNorm));
           });
           if (late.length) renderGlobalSearchResults(late, qRaw, q);
         }
@@ -5474,19 +4629,18 @@ function renderGlobalSearchResults(matches, qRaw, q) {
   const results = document.getElementById('global-search-results');
   if (!results) return;
   // Check if query looks like a flight number for FR24 lookup
-  const flightPattern = /^(UA[L]?\s*\d{1,4}|\d{1,4})$/i;
   const normalizedQ = qRaw.replace(/\s+/g, '');
-  const looksLikeFlight = flightPattern.test(normalizedQ);
+  const looksLikeFlight = FR24_LOOKUP_RE.test(normalizedQ);
   const fr24Option = looksLikeFlight ? `<div class="search-result" role="button" tabindex="0" style="border-top:1px solid var(--ua-border);color:var(--ua-accent);font-size:10px" data-action="lookup-fr24" data-query="${escapeHtml(normalizedQ)}" data-close-global="1">🔍 Look up ${escapeHtml(normalizedQ.startsWith('UA') || normalizedQ.startsWith('UAL') ? normalizedQ : 'UA' + normalizedQ)} via FlightRadar24...</div>` : '';
 
   if (matches.length === 0) {
     // Contextual "no results" message based on query format — all user input passed through escapeHtml()
-    const tailPattern = /^N\d{3,5}[A-Z]{0,2}$/i;
+    const empty = classifyEmptyState(normalizedQ);
     let noResultMsg;
-    if (looksLikeFlight) {
-      noResultMsg = escapeHtml(normalizedQ.startsWith('UA') || normalizedQ.startsWith('UAL') ? normalizedQ : 'UA' + normalizedQ) + ' has no live match. If your flight is scheduled for later, check the <span data-action="switch-tab" data-tab="tab-schedule" data-close-global="1" role="button" tabindex="0" style="text-decoration:underline;cursor:pointer">Schedule tab →</span>';
-    } else if (tailPattern.test(normalizedQ)) {
-      noResultMsg = escapeHtml(normalizedQ) + ' not found in live feed';
+    if (empty.kind === 'flight') {
+      noResultMsg = escapeHtml(empty.display) + ' has no live match. If your flight is scheduled for later, check the <span data-action="switch-tab" data-tab="tab-schedule" data-close-global="1" role="button" tabindex="0" style="text-decoration:underline;cursor:pointer">Schedule tab →</span>';
+    } else if (empty.kind === 'tail') {
+      noResultMsg = escapeHtml(empty.display) + ' not found in live feed';
     } else {
       noResultMsg = 'No results for "' + escapeHtml(qRaw) + '"';
     }
@@ -5538,90 +4692,22 @@ document.getElementById('global-search-results').addEventListener('keydown', fun
 });
 
 // ═══ EQUIPMENT SWAP DETECTION ═══
-const ICAO_TO_FLEET_TYPE = {
-  'A319':'A319','A320':'A320','A21N':'A321neo',
-  'B737':'737-700','B738':'737-800','B739':'737-900',
-  'B39M':'737 MAX 9','B38M':'737 MAX 8',
-  'B752':'757-200','B753':'757-300',
-  'B763':'767-300ER','B764':'767-400ER',
-  'B772':'777-200','B77E':'777-200ER','B77W':'777-300ER',
-  'B788':'787-8','B789':'787-9','B78X':'787-10'
-};
-
-// Cabin/WiFi/IFE quality rankings (higher = more premium) live in src/lib/swap-impact.js
-// alongside analyzeSwapImpact; CABIN_RANK is imported here so getTypicalFleetStats and
-// the swap classifier share one source of truth.
-
-function getTypicalFleetStats(icaoCode) {
-  const fleetType = ICAO_TO_FLEET_TYPE[icaoCode];
-  if (!fleetType || !FLEET_DB.length) return null;
-  // Find all aircraft of this type to get typical stats
-  const ofType = FLEET_DB.filter(a => a.t === fleetType && categorizeFleetStatus(a.s) === 'active');
-  if (!ofType.length) return null;
-  // Use the most common config (mode)
-  const configCounts = {};
-  ofType.forEach(a => { const k = a.c || ''; configCounts[k] = (configCounts[k] || 0) + 1; });
-  const topConfig = Object.entries(configCounts).sort((a, b) => b[1] - a[1])[0][0];
-  const representative = ofType.find(a => (a.c || '') === topConfig) || ofType[0];
-  // Collect WiFi types used by this fleet type
-  const wifiCounts = {};
-  ofType.forEach(a => { if (a.w) { const nw = normalizeWifi(a.w); wifiCounts[nw] = (wifiCounts[nw] || 0) + 1; } });
-  const topWifi = Object.entries(wifiCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-  // Check if any have Starlink
-  const hasStarlink = ofType.some(a => STARLINK_TAILS.has(a.r));
-  // Premium cabin: highest cabin class available
-  const topCabin = representative.seats ? Object.keys(representative.seats).reduce((best, cls) =>
-    (CABIN_RANK[cls] || 0) > (CABIN_RANK[best] || 0) ? cls : best, 'Y') : 'Y';
-  return {
-    type: fleetType,
-    seats: representative.seats || {},
-    tot: representative.tot || 0,
-    wifi: topWifi,
-    ife: representative.i || '',
-    topCabin,
-    hasStarlink
-  };
-}
+// ICAO_TO_FLEET_TYPE, getTypicalFleetStats and detectEquipmentSwaps live in
+// ../lib/equipment-swaps.js. Cabin/WiFi/IFE quality rankings (higher = more premium)
+// live in src/lib/swap-impact.js alongside analyzeSwapImpact, so getTypicalFleetStats
+// and the swap classifier share one source of truth.
 
 // The upgrade/downgrade/lateral classification lives in src/lib/swap-impact.js;
 // inject the module-global fleet lookups it needs.
 function analyzeSwapImpact(oldAcCode, newAcCode, newReg) {
   return classifySwapImpact(oldAcCode, newAcCode, newReg, {
-    getTypicalFleetStats,
+    getTypicalFleetStats: (icaoCode) => getTypicalFleetStats(icaoCode, FLEET_DB, STARLINK_TAILS),
     fleetByReg: FLEET_BY_REG,
     starlinkTails: STARLINK_TAILS,
   });
 }
 
 let equipmentChanges = [];
-
-function detectEquipmentSwaps(flights, hub, dir, day) {
-  const storageKey = `bb_sched_${hub}_${dir}_${day}`;
-  const newMap = {};
-  const regMap = {};
-  flights.forEach(fl => {
-    const fnum = fl.identification?.number?.default;
-    const acCode = fl.aircraft?.model?.code;
-    if (fnum && acCode) {
-      newMap[fnum] = acCode;
-      regMap[fnum] = fl.aircraft?.registration || '';
-    }
-  });
-  equipmentChanges = [];
-  try {
-    const oldData = localStorage.getItem(storageKey);
-    if (oldData) {
-      const oldMap = JSON.parse(oldData);
-      for (const [fnum, newAc] of Object.entries(newMap)) {
-        if (oldMap[fnum] && oldMap[fnum] !== newAc) {
-          equipmentChanges.push({ flight: fnum, oldAc: oldMap[fnum], newAc, reg: regMap[fnum] || '' });
-        }
-      }
-    }
-    localStorage.setItem(storageKey, JSON.stringify(newMap));
-  } catch(e) { /* localStorage full or unavailable */ }
-  updateEquipChangeSummary();
-}
 
 function updateEquipChangeSummary() {
   const el = document.getElementById('equip-change-summary');
@@ -5684,7 +4770,7 @@ let iropsServerValuePresent = false;
 // Both IROPS and schedule paths write to hubHealthData, then call this.
 function renderHubHealthBar() {
   const bar = document.getElementById('hub-health-bar');
-  const hubs = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
+  const hubs = HUB_ORDER;
   // F046/F076: chip severity is the WORSE of on-time% and any active FAA program at the
   // hub, so a ground-stopped hub can't render 🟢 while the ticker says "Disrupted". A
   // color-independent marker (⛔/⚠) is shown when a program is active (DESIGN.md: status
@@ -5703,7 +4789,7 @@ function renderHubHealthBar() {
     const homeStyle = isHome ? ';border:1px solid var(--ua-accent);border-radius:3px;padding:2px 6px' : '';
     const pct = hubHealthData[hub];
     const prog = hubProgramMarker(faaDelayIndex, hub);
-    const otpSev = pct === undefined ? null : (pct > 70 ? 'green' : pct >= 50 ? 'amber' : 'red');
+    const otpSev = hubHealthSeverity(pct);
     // Blend: worst of OTP severity and FAA-program severity.
     let sev = otpSev;
     if (prog && (!sev || SEV_RANK[prog.severity] > SEV_RANK[sev])) sev = prog.severity;
@@ -5723,12 +4809,9 @@ function renderHubHealthBar() {
     }
     if (i < hubs.length - 1) html += '<span class="hh-sep">│</span>';
   });
-  const pcts = hubs.map(h => hubHealthData[h]).filter(p => p !== undefined);
-  if (pcts.length) {
-    const avg = Math.round(pcts.reduce((a,b)=>a+b,0) / pcts.length);
-    const avgLabel = avg > 70 ? 'Smooth Ops' : avg >= 50 ? 'Some Delays' : 'Rough Day';
-    const avgColor = avg > 70 ? '#22c55e' : avg >= 50 ? '#f59e0b' : '#ef4444';
-    html += `<span class="hh-sep">│</span><span class="hh-avg" style="color:${avgColor};font-size:9px;font-weight:700">${avgLabel}</span>`;
+  const network = networkLabel(hubs.map(h => hubHealthData[h]).filter(p => p !== undefined));
+  if (network) {
+    html += `<span class="hh-sep">│</span><span class="hh-avg" style="color:${network.color};font-size:9px;font-weight:700">${network.label}</span>`;
   }
   bar.innerHTML = html;
 }
@@ -5737,65 +4820,12 @@ function renderHubHealthBar() {
 // Only SETS data for hubs with sufficient operated flights — never deletes
 // IROPS-derived data for hubs without schedule data.
 function updateHubHealth() {
-  const hubs = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
-  const totalsByHub = {};
-  hubs.forEach(hub => { totalsByHub[hub] = { onTime: 0, operated: 0 }; });
-
-  // Gather OTP from all loaded schedule data.
-  // Multiple keys can exist per hub (arrivals/departures + day), so aggregate
-  // instead of letting whichever key is iterated last overwrite the hub value.
-  for (const key of Object.keys(schedRawByHub)) {
-    const flights = schedRawByHub[key];
-    if (!flights || !flights.length) continue;
-    const keyParts = key.split('-');
-    const hub = keyParts[0];
-    const boardDir = keyParts[1] === 'arrivals' ? 'arrivals' : 'departures';
-    if (!totalsByHub[hub]) continue;
-    flights.forEach(fl => {
-      // The key carries each board's true direction — use it (a hardcoded 'departures' misreads
-      // arrivals rows: direction picks which real timestamp resolves inference and
-      // canceled_uncertain). Disruption opts are per-hub too. (review Jul 3 2026)
-      const status = classifySchedStatus(fl, boardDir, schedNow(), classifyOptsForKey(key));
-      const hasOp = status.key === 'departed' || status.key === 'enroute' || status.key === 'landed';
-      if (!hasOp) return;
-      // Time-inferred operated rows (a long-past "scheduled" the classifier reclassified, with no
-      // real out-time) have no trustworthy baseline — exclude them, exactly as renderScheduleStats
-      // does. Without this, a stale arrival carrying real.arrival but no real.departure would slip
-      // past the realT check below and score a bogus cross-leg delay. (maintainability review)
-      if (status.inferred) return;
-      // Exclude degraded synthetic rows, exactly as the per-board OTP card does (updateSchedStats):
-      // live-feed rescue rows carry last-seen/ETA times (not a true schedule baseline), and rows
-      // whose schedule time was derived from the actual time always score on-time (delay 0) —
-      // inflating hub OTP toward 100% precisely when the FR24 feed is degraded.
-      // (Audit P1: degraded-rows-inflate-hub-otp.)
-      if (fl._source?.liveFeedFallback) return;
-      if (fl._source?.scheduleTimeDerivedFromActual?.departure || fl._source?.scheduleTimeDerivedFromActual?.arrival) return;
-      // F021: direction-aware, mirroring the per-board OTP card (board-stats.js) — an
-      // arrivals board must score scheduled-arrival vs real-arrival, a departures board
-      // scheduled-departure vs real-departure. Never fall back across legs: a completed
-      // departures row that backfilled real.arrival but not real.departure would otherwise
-      // score flight_duration as delay and deflate hub OTP.
-      const isArr = boardDir === 'arrivals';
-      const schedT = isArr ? fl.time?.scheduled?.arrival : fl.time?.scheduled?.departure;
-      const realT = isArr ? fl.time?.real?.arrival : fl.time?.real?.departure;
-      if (!realT || !schedT) return; // skip flights without the direction-appropriate real timestamp
-      totalsByHub[hub].operated++;
-      if (realT <= schedT + 1800) totalsByHub[hub].onTime++;
-    });
-  }
-
-  hubs.forEach(hub => {
-    // Server /api/irops OTP is authoritative when present — the client-side
-    // computation only fills hubs the server response lacks, and never writes
-    // from a thin sample (n < 25). Audit Jul 3 2026: DEN flapped 68→100 because
-    // a 5-flight client sample overwrote the server's reading.
-    if (hubHealthServerHubs.has(hub)) return;
-    const { onTime, operated } = totalsByHub[hub];
-    if (operated >= 25) {
-      hubHealthData[hub] = Math.round((onTime / operated) * 100);
-    }
-    // Don't delete hubHealthData[hub] — IROPS may have set it
+  // The direction-aware aggregation, the exclusion rules and the 25-flight floor live
+  // in ../lib/hub-health.js; mergeHubHealth drops any hub the server already owns.
+  const clientOtp = computeBoardOtp(schedRawByHub, {
+    classify: (fl, boardDir, key) => classifySchedStatus(fl, boardDir, schedNow(), classifyOptsForKey(key)),
   });
+  Object.assign(hubHealthData, mergeHubHealth(clientOtp, hubHealthServerHubs));
 
   renderHubHealthBar();
   updateTicker(); // ticker health derives from hub OTP — keep it in lockstep
@@ -5806,19 +4836,7 @@ let faaDelayIndex = {};
 let nasData = null;       // Global NAS status (en-route programs + planned TMIs) — populated by initWeatherTab
 let weatherOpsByHub = {};  // Global METAR-derived ops impact per hub — populated by preloadWeatherAndFAA or initWeatherTab
 
-/** Build faaDelayIndex from the /api/faa response (new per-airport shape with programs[]) */
-function buildFaaIndex(faaResponse) {
-  const index = {};
-  if (!Array.isArray(faaResponse)) return index;
-  for (const airport of faaResponse) {
-    const code = airport.airportCode;
-    if (!code) continue;
-    // The new API returns per-airport objects directly — store them as-is
-    // with backward-compat fields already populated by the server
-    index[code] = airport;
-  }
-  return index;
-}
+// buildFaaIndex lives in ../lib/faa-context.js.
 let iropsHubData = {};    // Global IROPS cancellation/delay rates per hub — for delay risk engine
 
 // Compact IROPS descriptor for the delay-risk badge's AI context. F007/F015: when the
@@ -5912,8 +4930,7 @@ async function _doPreloadWeatherAndFAA() {
         const raw = data.rawOb || '';
         const apiCat = data.fltCat || data.fltcat || 'UNK';
         const localCat = computeFlightCategory(raw);
-        const catRank = {LIFR:0,IFR:1,MVFR:2,VFR:3,UNK:3};
-        const cat = localCat && (catRank[localCat] ?? 3) < (catRank[apiCat] ?? 3) ? localCat : apiCat;
+        const cat = worstCategory(apiCat, localCat);
         const ops = computeOpsImpact(raw, cat);
         weatherOpsByHub[apt] = { level: ops.level, reasons: ops.reasons, fltCat: cat,
           hasThunderstorms: ops.hasThunderstorms, hasFreezingPrecip: ops.hasFreezingPrecip,
@@ -6077,18 +5094,11 @@ function renderIropsFromAPI(data) {
   // Populate hubHealthData from IROPS hubMetrics, then render the shared bar.
   if (data.hubMetrics) {
     for (const [hub, m] of Object.entries(data.hubMetrics)) {
-      if (!m || !m.total) continue;
-      const operated = Number(m.operated || 0);
-      const onTime = Number(m.onTime || 0);
-      const cancelRate = m.total > 10 ? Number(m.cancellations || 0) / m.total : 0;
-      if (operated < 5 && cancelRate >= 0.5) {
-        hubHealthData[hub] = 0; // mostly cancelled — show as critical
-        hubHealthServerHubs.add(hub); // server value is authoritative from here on
-      } else if (operated >= 5) {
-        hubHealthData[hub] = Math.round((onTime / operated) * 100);
-        hubHealthServerHubs.add(hub); // server value is authoritative from here on
-      }
-      // operated < 5 and low cancel rate: leave hub alone (no data yet)
+      const pct = serverOtpFromMetrics(m);
+      // null = operated < 5 with a low cancel rate: leave hub alone (no data yet)
+      if (pct === null) continue;
+      hubHealthData[hub] = pct;
+      hubHealthServerHubs.add(hub); // server value is authoritative from here on
     }
     renderHubHealthBar();
   }
@@ -6129,29 +5139,11 @@ function renderIropsFromAPI(data) {
   }
 }
 
-// ═══ FAA DELAY CONTEXT ═══
-function getFAADelayContext(originIata, destIata) {
-  const contexts = [];
-  [originIata, destIata].forEach(apt => {
-    if (!apt) return;
-    const faa = faaDelayIndex[apt];
-    if (!faa || !faa.delays || !faa.delays.length) return;
-    faa.delays.forEach(d => {
-      const dtype = (d.type || '').toLowerCase();
-      let label = 'Delay';
-      if (dtype.includes('ground stop')) label = 'Ground Stop';
-      else if (dtype.includes('ground delay') || dtype.includes('gdp')) label = 'GDP';
-      else if (dtype.includes('departure')) label = 'Dep Delay';
-      else if (dtype.includes('arrival')) label = 'Arr Delay';
-      const avg = d.avgDelay ? `, avg ${d.avgDelay} min` : '';
-      contexts.push(`${label} at ${apt}${avg}`);
-    });
-  });
-  return contexts.join(' · ');
-}
+// getFAADelayContext lives in ../lib/faa-context.js.
 
 // ═══ FLIGHT WATCH ═══
-const MAX_WATCHED = 20;
+// MAX_WATCHED, the storage read/write, the significant-change gate and the
+// flight-times cache TTL live in ../lib/watch-utils.js.
 
 // ── Background push (server-side watch alerts) ──
 // GRACEFUL: every path below is wrapped so ANY failure leaves the existing in-tab watch behaviour
@@ -6238,11 +5230,11 @@ async function syncPushSubscription() {
 }
 
 function getWatchedFlights() {
-  try { return JSON.parse(localStorage.getItem('bb_watched_flights') || '[]'); } catch(e) { return []; }
+  return readWatched(localStorage);
 }
 
 function saveWatchedFlights(list) {
-  try { localStorage.setItem('bb_watched_flights', JSON.stringify(list.slice(0, MAX_WATCHED))); } catch(e) {}
+  writeWatched(localStorage, list);
   updateWatchBadge();
 }
 
@@ -6370,24 +5362,8 @@ let myFlightsRenderToken = 0;
 let myFlightsFailCount = {};
 const MY_FLIGHTS_FAIL_TERMINAL = 2;
 
-function getMyFlightCacheJitter(flightNumber) {
-  return (flightNumber || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) % 20000;
-}
-
 function getMyFlightTimeCacheTTL(flightNumber, timeData) {
-  const jitter = getMyFlightCacheJitter(flightNumber);
-  if (!timeData || timeData.success === false) return 30000 + jitter;
-
-  const status = resolveFlightStatus(timeData, null);
-  if (status === 'cancelled' || status === 'diverted' || status === 'landed') {
-    return 300000 + jitter;
-  }
-
-  const departureTime = timeData.departure?.gate?.estimated || timeData.departure?.gate?.scheduled;
-  const departureMs = departureTime ? new Date(departureTime).getTime() : null;
-  if (departureMs && departureMs - Date.now() < 90 * 60000) return 45000 + jitter;
-  if (departureMs && departureMs - Date.now() < 6 * 60 * 60 * 1000) return 60000 + jitter;
-  return 120000 + jitter;
+  return flightTimesCacheTtl(timeData, flightNumber);
 }
 
 async function renderMyFlights() {
@@ -6478,11 +5454,8 @@ async function renderMyFlights() {
 // ═══ AIRCRAFT JOURNEY CHAIN ═══
 
 function buildJourneyChainHtml(reg, segments, myFlight, origCode, destCode) {
-  // Filter out our own flight, show prior segments (most recent last for visual timeline)
-  const priorSegs = segments
-    .filter(s => s.flightNumber !== myFlight)
-    .slice(0, 3)
-    .reverse(); // chronological order (oldest first)
+  // Shaping (drop our own flight, keep 3, oldest-first) lives in ../lib/journey.js.
+  const priorSegs = shapeJourney(segments, myFlight, origCode, destCode).prior;
 
   if (!priorSegs.length) return '';
 
@@ -6491,7 +5464,7 @@ function buildJourneyChainHtml(reg, segments, myFlight, origCode, destCode) {
 
   priorSegs.forEach(function(seg) {
     var delay = seg.delayMin;
-    var delayCls = delay === null ? '' : delay <= 5 ? 'on-time' : delay <= 45 ? 'minor' : 'major';
+    var delayCls = journeyDelayClass(delay);
     var delayText = delay === null ? '' : delay <= 0 ? 'On time' : '+' + delay + 'min';
     var statusLower = (seg.status || '').toLowerCase();
     var isAirborne = statusLower === 'en-route' || statusLower === 'airborne' || statusLower === 'en route';
@@ -6518,33 +5491,9 @@ function buildJourneyChainHtml(reg, segments, myFlight, origCode, destCode) {
   return html;
 }
 
-function buildJourneyContextStr(reg, segments, myFlight, origCode, destCode) {
-  var priorSegs = segments
-    .filter(function(s) { return s.flightNumber !== myFlight; })
-    .slice(0, 3)
-    .reverse();
-
-  if (!priorSegs.length) return '';
-
-  var lines = ['Aircraft ' + reg + ' journey today:'];
-  priorSegs.forEach(function(seg, i) {
-    var delay = seg.delayMin;
-    var delayStr = delay === null ? 'unknown delay' : delay <= 0 ? 'on time' : 'departed ' + delay + 'min late';
-    var statusLower = (seg.status || '').toLowerCase();
-    var statusStr = statusLower === 'en-route' || statusLower === 'airborne' || statusLower === 'en route'
-      ? ', currently airborne'
-      : statusLower === 'landed' || statusLower === 'arrived' ? ', landed' : '';
-    lines.push('Seg ' + (i + 1) + ': ' + seg.flightNumber + ' ' + seg.origin + '\u2192' + seg.destination + ', ' + delayStr + statusStr);
-  });
-
-  // Summary
-  var delays = priorSegs.map(function(s) { return s.delayMin; }).filter(function(d) { return d !== null && d > 0; });
-  if (delays.length > 0) {
-    var avg = Math.round(delays.reduce(function(a, b) { return a + b; }, 0) / delays.length);
-    lines.push('Your flight ' + myFlight + ' ' + origCode + '\u2192' + destCode + ' \u2014 aircraft averaging +' + avg + 'min delays across ' + delays.length + ' prior segment' + (delays.length > 1 ? 's' : ''));
-  }
-
-  return lines.join('\n');
+// buildJourneyContextStr lives in ../lib/journey.js; bind it to the shaped journey.
+function journeyContextStr(reg, segments, myFlight, origCode, destCode) {
+  return buildJourneyContextStr(reg, shapeJourney(segments, myFlight, origCode, destCode));
 }
 
 async function fetchAircraftJourney(reg, myFlight, origCode, destCode) {
@@ -6589,7 +5538,7 @@ async function fetchAircraftJourney(reg, myFlight, origCode, destCode) {
       container.innerHTML = buildJourneyChainHtml(reg, data.segments, myFlight, origCode, destCode);
 
       // Also update the data-inbound attribute on any risk badges/buttons for this flight
-      var richInbound = buildJourneyContextStr(reg, data.segments, myFlight, origCode, destCode);
+      var richInbound = journeyContextStr(reg, data.segments, myFlight, origCode, destCode);
       if (richInbound) {
         document.querySelectorAll('[data-action="explain-delay"][data-flight="' + myFlight + '"]').forEach(function(el) {
           el.dataset.inbound = richInbound;
@@ -6775,7 +5724,7 @@ function buildMyFlightCard(watched, td) {
     const cacheFresh = cached && Date.now() - cached.ts < 300000;
     if (cacheFresh && cached.segments && cached.segments.length > 0) {
       inboundHtml = buildJourneyChainHtml(reg, cached.segments, watched.flight, origCode, destCode);
-      inboundStr = buildJourneyContextStr(reg, cached.segments, watched.flight, origCode, destCode);
+      inboundStr = journeyContextStr(reg, cached.segments, watched.flight, origCode, destCode);
     } else if (inbound) {
       const inbCity = IATA_CITIES[inbound.origin] || inbound.origin;
       inboundHtml = `<div class="mf-inbound">
@@ -7188,21 +6137,6 @@ async function checkManualConnection() {
   }
 }
 
-function isSignificantStatusChange(oldStatus, newStatus) {
-  if (!oldStatus || !newStatus || oldStatus === newStatus) return false;
-  const nl = newStatus.toLowerCase();
-  // Always notify: cancelled, diverted, landed, departed
-  if (nl.includes('cancel') || nl.includes('divert') || nl.includes('landed') || nl.includes('departed')) return true;
-  // Notify if delay appeared or gate changed
-  if (nl.includes('delay')) return true;
-  if (nl.includes('gate') && nl !== oldStatus.toLowerCase()) return true;
-  // Generic status text changed (e.g. scheduled → en route)
-  const ol = oldStatus.toLowerCase();
-  const significantKeys = ['cancel', 'divert', 'landed', 'departed', 'en route', 'delay', 'gate'];
-  if (significantKeys.some(k => nl.includes(k) || ol.includes(k))) return true;
-  return false;
-}
-
 function checkWatchedFlightChanges(flights) {
   let watched = getWatchedFlights();
   if (!watched.length) return;
@@ -7575,11 +6509,7 @@ document.addEventListener('click', function(e) {
       checkManualConnection();
       break;
     case 'cycle-home-hub': {
-      const hubs = ['','ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
-      const cur = getHomeAirport();
-      const idx = hubs.indexOf(cur);
-      const next = hubs[(idx + 1) % hubs.length];
-      setHomeAirport(next);
+      setHomeAirport(nextHomeAirport(getHomeAirport()));
       break;
     }
     case 'close-bmac': {
@@ -7727,32 +6657,12 @@ document.addEventListener('click', function(e) {
 // ═══ INIT ═══
 // ═══ TIP STRIP ═══
 (function() {
-  const TIPS = {
-    'tab-live': [
-      'Click any aircraft registration (N-number) in a popup to see full details, seat config & Starlink status',
-      'Click a hub name in the sidebar to filter the map to just that hub\'s flights',
-      'Toggle the weather radar overlay with the rain cloud button on the map'
-    ],
-    'tab-schedule': [
-      'Use "Filter: Fleet, Aircraft, Starlink…" to narrow by family, equipment, or WiFi',
-      'Click any registration in the schedule table to see full aircraft details'
-    ],
-    'tab-myflight': [
-      'Watch 2+ connecting flights and we\'ll automatically check your connection risk',
-      'The "Where\'s My Plane?" section shows the inbound aircraft for your watched flight'
-    ],
-    'tab-weather': [
-      'Load schedule data in the Schedule tab to unlock the IROPS disruption monitor'
-    ],
-    'tab-fleet': [
-      'Click any fleet type chip to filter the aircraft database instantly'
-    ]
-  };
+  // The tip copy, the pick rule and the two timing constants live in ../lib/tips.js.
   const strip = document.getElementById('tip-strip');
   const textEl = document.getElementById('tip-text');
   if (!strip || !textEl) return;
   const DISMISS_KEY = 'bb_tips_dismissed';
-  const DISMISS_DAYS = 7;
+  const DISMISS_DAYS = TIP_DISMISS_DAYS;
   function isDismissed() {
     const ts = localStorage.getItem(DISMISS_KEY);
     return ts && (Date.now() - parseInt(ts)) < DISMISS_DAYS * 86400000;
@@ -7764,9 +6674,7 @@ document.addEventListener('click', function(e) {
   let tipTimer = null;
   function showTip() {
     if (isDismissed()) { strip.style.display = 'none'; return; }
-    const tab = getActiveTab();
-    const pool = TIPS[tab] || TIPS['tab-live'];
-    const tip = pool[Math.floor(Math.random() * pool.length)];
+    const tip = pickTip(getActiveTab());
     textEl.classList.add('tip-fade');
     setTimeout(() => { textEl.textContent = tip; textEl.classList.remove('tip-fade'); }, 300);
     strip.style.display = '';
@@ -7774,7 +6682,7 @@ document.addEventListener('click', function(e) {
   function startRotation() {
     showTip();
     if (tipTimer) clearInterval(tipTimer);
-    tipTimer = setInterval(showTip, 45000);
+    tipTimer = setInterval(showTip, TIP_ROTATE_MS);
   }
   // Listen for tab switches
   document.getElementById('tab-bar')?.addEventListener('click', (e) => {
@@ -7947,18 +6855,12 @@ function hideDisclaimer() {
   }
 
   // ═══ WAITLIST / ENGAGEMENT MODAL ═══
-  var DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  // TTLs, the click thresholds and the storage-derived suppression rules live in
+  // ../lib/engagement.js. `waitlistShownThisSession` stays here — it is session
+  // state, not storage.
   var waitlistShownThisSession = false;
-  var waitlistSubmitted = false;
-  try { waitlistSubmitted = localStorage.getItem('bb_waitlist_submitted') === 'true'; } catch(e) {}
+  var waitlistSubmitted = waitlistState(localStorage).submitted;
   var engagementInteractions = 0;
-
-  function isDismissedRecently(key) {
-    try {
-      var ts = parseInt(localStorage.getItem(key), 10);
-      return ts > 0 && (Date.now() - ts) < DISMISS_TTL_MS;
-    } catch(e) { return false; }
-  }
 
   // AbortController for the modal's document-level Escape listener. Tying it
   // to modal lifecycle means the listener is torn down on close rather than
@@ -7979,7 +6881,7 @@ function hideDisclaimer() {
   function showWaitlistModal(force) {
     if (waitlistSubmitted) return;
     if (!force && waitlistShownThisSession) return;
-    if (!force && isDismissedRecently('bb_waitlist_dismissed')) return;
+    if (waitlistState(localStorage, Date.now(), { forced: force }).suppressed) return;
     // Don't stack on top of onboarding overlay (Codex P2 finding)
     if (!force && overlay && overlay.style.display !== 'none' && !overlay.classList.contains('ob-hidden')) return;
     if (document.getElementById('waitlist-modal')) {
@@ -8170,9 +7072,9 @@ function hideDisclaimer() {
   // P2-A item 4c: the 8-click/90s new-visitor trigger interrupted a first-timer
   // mid-search (F044) — raised to 20 clicks/5min so it only fires on visitors who
   // are genuinely engaged, not the first few taps of orientation.
-  var isNewVisitor = !localStorage.getItem('bb-visited');
-  var TRIGGER_TIME_MS = 5 * 60 * 1000;    // 5min for everyone now
-  var TRIGGER_CLICKS  = isNewVisitor ? 20 : 30;   // 20 new, 30 returning
+  // Read ONCE here, before the onboarding block below records `bb-visited` — a
+  // first-time visitor must get the 20-click threshold, not the returning 30.
+  var TRIGGER_CLICKS = waitlistState(localStorage).triggerClicks;
 
   // Trigger 1: After time threshold of active use
   setTimeout(function() {
@@ -8194,13 +7096,9 @@ function hideDisclaimer() {
   // the ask right at the one moment the app has clearly delivered value. It now shows
   // a small dedicated "glad you landed" card with a single BMAC button, frequency-capped
   // to once per 14 days.
-  var BMAC_LANDED_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
   window.showBmacLandingToast = function() {
     if (document.getElementById('bmac-toast')) return;
-    try {
-      var last = Number(localStorage.getItem('bb-bmac-dismissed') || 0);
-      if (last && (Date.now() - last) < BMAC_LANDED_COOLDOWN_MS) return;
-    } catch (e) {}
+    if (!bmacEligible(localStorage)) return;
     setTimeout(showLandedThanksCard, 3000);
   };
 
@@ -8240,9 +7138,9 @@ function hideDisclaimer() {
     showWaitlistModal(true);
   }
 
-  var visited=localStorage.getItem('bb-visited');
-  if(!visited){localStorage.setItem('bb-visited','1');if(isDismissedRecently('bb_onboarding_dismissed')){overlay.style.display='none'}}
-  else if(localStorage.getItem('bb-onboarded')||isDismissedRecently('bb_onboarding_dismissed')){overlay.style.display='none'}
+  // NOTE: shouldShowOnboarding also records the first visit (`bb-visited`), which is
+  // what sets the waitlist click threshold above — hence the ordering.
+  if(!shouldShowOnboarding(localStorage)){overlay.style.display='none'}
   if (overlay.style.display !== 'none') {
     armOnboardingTrap();
     setTimeout(focusOnboardingCard, 50);
@@ -8253,11 +7151,7 @@ function hideDisclaimer() {
 })();
 
 // ═══ AIRCRAFT DETAIL MODAL ═══
-const SEAT_BAR_COLORS = {
-  'J':'rgba(0,93,170,.5)','F':'rgba(139,92,246,.5)',
-  'PP':'rgba(20,184,166,.5)','PE':'rgba(20,184,166,.5)',
-  'E+':'rgba(34,197,94,.5)','Y':'rgba(100,116,139,.5)'
-};
+// SEAT_BAR_COLORS lives in ../lib/special-aircraft.js.
 
 // ═══ AI DELAY EXPLANATION MODAL ═══
 function showDelayExplanation(ctx) {
@@ -8460,8 +7354,8 @@ function buildAircraftDetailHTML(ac, reg) {
     var fltNum = liveFlight.flightIATA || liveFlight.callsign || '?';
     var origCode = liveFlight.origin || '?';
     var destCode = liveFlight.dest || '?';
-    var origCity = IATA_CITIES[origCode] || '';
-    var destCity = IATA_CITIES[destCode] || '';
+    var origCity = cityFor(origCode);
+    var destCity = cityFor(destCode);
     var altFt = liveFlight.alt ? Math.round(liveFlight.alt * 3.28084) : null;
     var spdKts = liveFlight.spd ? Math.round(liveFlight.spd * 1.944) : null;
     var phaseInfo = getPhase(liveFlight.alt, liveFlight.vr, liveFlight.spd);
