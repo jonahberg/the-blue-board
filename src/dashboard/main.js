@@ -37,6 +37,10 @@ import { indexSpecialAircraft, ENGINE_BY_TYPE, SEAT_BAR_COLORS, CABIN_COLORS } f
 import { readHomeAirport, writeHomeAirport, nextHomeAirport } from '../lib/home-airport.js';
 import { pickTip, TIP_ROTATE_MS, TIP_DISMISS_DAYS } from '../lib/tips.js';
 import { ICAO_TO_FLEET_TYPE, getTypicalFleetStats, detectEquipmentSwaps } from '../lib/equipment-swaps.js';
+import { parseMetarQuick, hasRenderableMetarData, explainMETAR, worstCategory, CAT_COLORS } from '../lib/metar-explain.js';
+import { buildFaaIndex, explainFAAStatus, getFAADelayContext } from '../lib/faa-context.js';
+import { tierNasEvents, sevBadgeClass } from '../lib/nas-severity.js';
+import { HUB_ORDER, computeBoardOtp, mergeHubHealth, serverOtpFromMetrics, hubHealthSeverity, networkLabel } from '../lib/hub-health.js';
 import { atcAirports, atcMeta, unitedHubsMeta, unitedProjects } from '../data/trackers/index.js';
 
 
@@ -3165,77 +3169,11 @@ let _weatherRefreshInterval = null;
 // way to release the observed nodes is an explicit disconnect().
 let _wxHintObserver = null;
 const HUB_NAMES = {EWR:"Newark Liberty",IAH:"Houston Intercontinental",ORD:"O'Hare International",DEN:"Denver International",SFO:"San Francisco Int'l",LAX:"Los Angeles Int'l",IAD:"Washington Dulles",NRT:"Tokyo Narita",GUM:"Guam Int'l"};
-const CAT_COLORS = {VFR:'#22c55e',MVFR:'#eab308',IFR:'#ef4444',LIFR:'#c026d3'};
-
-// computeFlightCategory (AIM category) and computeOpsImpact (ops severity + gust/temp/
-// phenomena for the delay-risk engine) live in src/lib/metar-category.js — pure regex
-// parsers, importable + tested.
-
-function formatStructuredVisibility(visib) {
-  if (visib === null || visib === undefined || visib === '') return '--';
-  const value = String(visib).trim();
-  if (!value) return '--';
-  if (/SM$/i.test(value) || /m$/i.test(value)) return value;
-  if (/^\d+(\.\d+)?$/.test(value) && Number(value) > 50) return `${Math.round(Number(value))}m`;
-  return `${value} SM`;
-}
-
-function applyStructuredMetarFallback(parsed, metar) {
-  if (!metar || typeof metar !== 'object') return parsed;
-
-  if (parsed.temp === '--' && Number.isFinite(metar.temp)) {
-    parsed.temp = `${Math.round(metar.temp)}°C / ${Math.round((metar.temp * 9) / 5 + 32)}°F`;
-  }
-
-  if (parsed.wind === '--' && Number.isFinite(metar.wspd)) {
-    if (metar.wspd === 0) parsed.wind = 'Calm';
-    else if (Number.isFinite(metar.wdir)) parsed.wind = `${String(Math.round(metar.wdir)).padStart(3, '0')}° @ ${Math.round(metar.wspd)}kt`;
-    else parsed.wind = `${Math.round(metar.wspd)}kt`;
-  }
-
-  if (parsed.vis === '--') {
-    parsed.vis = formatStructuredVisibility(metar.visib);
-  }
-
-  if (parsed.clouds === '--') {
-    const cloudLayer = Array.isArray(metar.clouds) && metar.clouds.length ? metar.clouds[0] : null;
-    const cloudCover = cloudLayer?.cover || metar.cover || '';
-    const cloudBase = Number.isFinite(cloudLayer?.base) ? cloudLayer.base : null;
-    const cloudNames = {FEW:'Few',SCT:'Scattered',BKN:'Broken',OVC:'Overcast'};
-    if (cloudCover && cloudBase !== null) parsed.clouds = `${cloudNames[cloudCover] || cloudCover} ${cloudBase}ft`;
-    else if (cloudCover === 'CLR' || cloudCover === 'SKC') parsed.clouds = 'Clear';
-  }
-
-  return parsed;
-}
-
-function parseMetarQuick(metar) {
-  const raw = typeof metar === 'string' ? metar : (metar?.rawOb || '');
-  const r = {temp:'--',wind:'--',vis:'--',clouds:'--'};
-  if (!raw) return typeof metar === 'object' ? applyStructuredMetarFallback(r, metar) : r;
-  const wm = raw.match(/\b(\d{3})(\d{2,3})(G(\d{2,3}))?KT\b/);
-  if (wm) { r.wind = `${wm[1]}° @ ${wm[2]}kt${wm[4]?' G'+wm[4]:''}`;} else if(raw.includes('00000KT')){r.wind='Calm';}
-  const vm = raw.match(/\b(\d+)\s*SM\b/) || raw.match(/\b(\d+\/\d+)SM\b/);
-  if (vm) r.vis = vm[0].replace('SM','').trim()+' SM';
-  const tm = raw.match(/\b(M?\d{2})\/(M?\d{2})\b/);
-  if (tm) { const c=parseInt(tm[1].replace('M','-')); r.temp=`${c}°C / ${Math.round(c*9/5+32)}°F`;}
-  const cm = [...raw.matchAll(/(FEW|SCT|BKN|OVC)(\d{3})/g)];
-  const cn = {FEW:'Few',SCT:'Scattered',BKN:'Broken',OVC:'Overcast'};
-  if (cm.length) { const l=cm[0]; r.clouds=`${cn[l[1]]||l[1]} ${parseInt(l[2])*100}ft`;} else if(raw.includes('CLR')||raw.includes('SKC')){r.clouds='Clear';}
-  return typeof metar === 'object' ? applyStructuredMetarFallback(r, metar) : r;
-}
-
-function hasRenderableMetarData(metar) {
-  if (!metar || typeof metar !== 'object') return false;
-  return Boolean(
-    metar.rawOb ||
-    Number.isFinite(metar.temp) ||
-    Number.isFinite(metar.wspd) ||
-    (typeof metar.visib === 'string' && metar.visib.trim()) ||
-    (Array.isArray(metar.clouds) && metar.clouds.length) ||
-    metar.cover
-  );
-}
+// CAT_COLORS, the quick METAR parse (parseMetarQuick / applyStructuredMetarFallback /
+// formatStructuredVisibility / hasRenderableMetarData) and the worse-of-two category
+// rule live in ../lib/metar-explain.js. computeFlightCategory (AIM category) and
+// computeOpsImpact (ops severity + gust/temp/phenomena for the delay-risk engine)
+// live in ../lib/metar-category.js — pure regex parsers, importable + tested.
 
 async function fetchMetarBatch(allStations) {
   const stationChunks = chunkMetarStationIds(allStations);
@@ -3275,94 +3213,10 @@ function renderNasPanel() {
 
   panelEl.style.display = 'block';
 
-  // --- Severity detection & classification helpers ---
-  // All user-facing text is sanitized via escapeHtml before DOM insertion.
-
-  const SEV_LABELS = {
-    GS: 'Ground Stop', GDP: 'Ground Delay Program', AFP: 'Airspace Flow Program',
-    MIT: 'Miles-in-Trail', MINIT: 'Minutes-in-Trail', CDR: 'Coded Departure Routes',
-    SWAP: 'Severe Weather Avoidance', EDCT: 'Expect Departure Clearance Time',
-    FCA: 'Flow Constrained Area', DSP: 'Departure Spacing Program',
-  };
-
-  function detectSevType(text) {
-    const t = text.toUpperCase();
-    if (t.includes('GROUND STOP') || /\bGS\b/.test(t) || /\bGDS\b/.test(t)) return 'GS';
-    if (t.includes('GROUND DELAY') || /\bGDP\b/.test(t)) return 'GDP';
-    if (t.includes('AIRSPACE FLOW') || /\bAFP\b/.test(t)) return 'AFP';
-    if (t.includes('MILES-IN-TRAIL') || t.includes('MINUTES-IN-TRAIL') || /\bMINIT\b/.test(t) || /\bMIT\b/.test(t)) return 'MIT';
-    if (t.includes('CODED DEPARTURE') || /\bCDRS?\b/.test(t)) return 'CDR';
-    if (t.includes('SEVERE WEATHER') || /\bSWAP\b/.test(t)) return 'SWAP';
-    if (/\bEDCT\b/.test(t)) return 'EDCT';
-    if (/\bFCA\b/.test(t)) return 'FCA';
-    if (/\bDSP\b/.test(t)) return 'DSP';
-    return 'OTHER';
-  }
-
-  // Map severity types to CSS badge classes (known safe string values)
-  function sevBadgeClass(sevType) {
-    const map = { GS:'gs', GDP:'gdp', AFP:'afp', MIT:'mit', SWAP:'mit', MINIT:'mit', CDR:'cdr', EDCT:'cdr', FCA:'cdr', DSP:'cdr' };
-    return 'sev-' + (map[sevType] || 'other');
-  }
-
-  // --- Build unified, classified items list ---
-
-  const items = [];
-  const allHubs = new Set();
-
-  // Active en-route programs
-  for (const prog of (nasData.active || [])) {
-    const sevType = detectSevType(prog.name);
-    const nameParts = prog.name.split('-');
-    const typeCode = nameParts[0] || '';
-    const facility = nameParts.length > 1 && /^[A-Z]{3}$/.test(nameParts[1]) ? nameParts[1] : '';
-    const typeName = SEV_LABELS[sevType] || typeCode;
-    const hubs = [...new Set((prog.affectedFacilities || []).filter(a => UA_HUBS.has(a)))];
-    hubs.forEach(h => allHubs.add(h));
-
-    const detailParts = [];
-    if (prog.reason) detailParts.push(escapeHtml(prog.reason));
-    if (prog.avgDelay) detailParts.push('avg <span class="nas-delay-val">' + escapeHtml(String(prog.avgDelay)) + 'm</span>');
-    if (prog.endTime) {
-      const endZ = prog.endTime.includes('T') ? prog.endTime.split('T')[1].slice(0, 5) + 'Z' : prog.endTime;
-      detailParts.push('ends ' + escapeHtml(endZ));
-    }
-
-    items.push({
-      tier: sevType === 'GS' ? 'critical' : 'active',
-      sevType,
-      title: facility ? escapeHtml(facility) + ' ' + escapeHtml(typeName) : escapeHtml(prog.name),
-      detail: detailParts.join(' \u00b7 '),
-      hubs,
-    });
-  }
-
-  // Planned TMIs
-  for (const tmi of (nasData.planned || [])) {
-    const sevType = detectSevType(tmi.event);
-    const hubs = (tmi.affectedAirports || []).filter(a => UA_HUBS.has(a));
-    hubs.forEach(h => allHubs.add(h));
-
-    let tier;
-    if (sevType === 'GS') tier = 'critical';
-    else if (sevType === 'GDP' || sevType === 'AFP') tier = 'active';
-    else tier = 'monitoring';
-
-    items.push({
-      tier,
-      sevType,
-      title: escapeHtml(tmi.decoded || tmi.event),
-      detail: tmi.time ? escapeHtml(tmi.time) : '',
-      hubs,
-    });
-  }
-
-  // Group by tier
-  const tiers = {
-    critical: items.filter(i => i.tier === 'critical'),
-    active: items.filter(i => i.tier === 'active'),
-    monitoring: items.filter(i => i.tier === 'monitoring'),
-  };
+  // Classification, hub tagging and the three-tier split live in ../lib/nas-severity.js.
+  // Item `title`/`detail` come back pre-escaped, ready for innerHTML.
+  const tiers = tierNasEvents(nasData, UA_HUBS);
+  const allHubs = new Set([...tiers.critical, ...tiers.active, ...tiers.monitoring].flatMap(i => i.hubs));
 
   // --- Render Priority Stack ---
   // All values inserted below are pre-escaped via escapeHtml or derived from
@@ -3501,8 +3355,7 @@ async function initWeatherTab() {
     const apiCat = data ? (data.fltCat || data.fltcat || 'UNK') : 'UNK';
     const localCat = computeFlightCategory(raw);
     // Use the worse (more restrictive) of API vs local computation
-    const catRank = {LIFR:0,IFR:1,MVFR:2,VFR:3,UNK:3};
-    const cat = localCat && (catRank[localCat] ?? 3) < (catRank[apiCat] ?? 3) ? localCat : apiCat;
+    const cat = worstCategory(apiCat, localCat);
     const catColor = CAT_COLORS[cat] || '#64748b';
     const m = parseMetarQuick(data || raw);
     const faa = faaIndex[hub];
@@ -3689,8 +3542,7 @@ async function initWeatherTab() {
         const raw = data.rawOb || '';
         const apiCat = data.fltCat || data.fltcat || 'UNK';
         const localCat = computeFlightCategory(raw);
-        const catRank = {LIFR:0,IFR:1,MVFR:2,VFR:3,UNK:3};
-        const cat = localCat && (catRank[localCat] ?? 3) < (catRank[apiCat] ?? 3) ? localCat : apiCat;
+        const cat = worstCategory(apiCat, localCat);
         const ops = computeOpsImpact(raw, cat);
         weatherOpsByHub[hub] = { level: ops.level, reasons: ops.reasons, fltCat: cat,
           hasThunderstorms: ops.hasThunderstorms, hasFreezingPrecip: ops.hasFreezingPrecip,
@@ -3953,158 +3805,8 @@ function updateLiveFleetPanel() {
   if (activeFleetView === 'airborne') renderAirborneTable();
 }
 
-// ═══ WEATHER EXPLAINERS ═══
-function explainMETAR(rawMetar, hub, cat) {
-  if (!rawMetar) return '';
-  const hubNames = {EWR:"Newark",IAH:"Houston Intercontinental",ORD:"O'Hare",DEN:"Denver International",SFO:"San Francisco",LAX:"Los Angeles",IAD:"Washington Dulles",NRT:"Tokyo Narita",GUM:"Guam"};
-  const name = hubNames[hub] || hub;
-
-  // Build context-aware assessment instead of static category blurbs
-
-  let parts = [];
-
-  // Wind
-  const windMatch = rawMetar.match(/\b(\d{3})(\d{2,3})(G(\d{2,3}))?KT\b/);
-  if (windMatch) {
-    const dir = parseInt(windMatch[1]), spd = parseInt(windMatch[2]), gust = windMatch[4] ? parseInt(windMatch[4]) : null;
-    const dirs = ['north','north-northeast','northeast','east-northeast','east','east-southeast','southeast','south-southeast','south','south-southwest','southwest','west-southwest','west','west-northwest','northwest','north-northwest'];
-    const dirName = dirs[Math.round(dir / 22.5) % 16];
-    parts.push(`Winds from the ${dirName} at ${spd} knots${gust ? ' gusting to ' + gust : ''}`);
-  } else if (rawMetar.includes('00000KT')) {
-    parts.push('Winds are calm');
-  }
-
-  // Visibility
-  const visMatch = rawMetar.match(/\b(\d+)\s*SM\b/) || rawMetar.match(/\b(\d+)\/(\d+)SM\b/) || rawMetar.match(/\bM?(\d+\/\d+)SM\b/);
-  if (visMatch) {
-    const vis = visMatch[0].replace('SM', '').trim();
-    parts.push(`Visibility is ${vis} statute miles`);
-  }
-
-  // Ceiling / clouds
-  const cloudMatches = [...rawMetar.matchAll(/(FEW|SCT|BKN|OVC)(\d{3})/g)];
-  const cloudNames = {FEW:'few clouds',SCT:'scattered',BKN:'broken ceiling',OVC:'overcast ceiling'};
-  if (cloudMatches.length) {
-    const lowest = cloudMatches[0];
-    const altHun = parseInt(lowest[2]) * 100;
-    parts.push(`${cloudNames[lowest[1]] || lowest[1]} at ${altHun.toLocaleString()} feet`);
-  } else if (rawMetar.includes('CLR') || rawMetar.includes('SKC')) {
-    parts.push('Clear skies');
-  }
-
-  // Weather phenomena
-  const wxCodes = {RA:'rain',SN:'snow',DZ:'drizzle',FG:'fog',BR:'mist',HZ:'haze',TS:'thunderstorms',FZ:'freezing',SH:'showers',GR:'hail',PL:'ice pellets'};
-  const wxMatch = rawMetar.match(/\s([+-]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)+)\s/);
-  if (wxMatch) {
-    const wx = wxMatch[1];
-    let desc = [];
-    if (wx.startsWith('-')) desc.push('light');
-    else if (wx.startsWith('+')) desc.push('heavy');
-    for (const [code, name] of Object.entries(wxCodes)) {
-      if (wx.includes(code)) desc.push(name);
-    }
-    if (desc.length) parts.push(desc.join(' '));
-  }
-
-  // Temperature
-  const tempMatch = rawMetar.match(/\b(M?\d{2})\/(M?\d{2})\b/);
-  if (tempMatch) {
-    const t = tempMatch[1].replace('M', '-');
-    const tempC = parseInt(t);
-    const tempF = Math.round(tempC * 9/5 + 32);
-    parts.push(`Temperature is ${tempC}°C (${tempF}°F)`);
-  }
-
-  // Altimeter
-  const altMatch = rawMetar.match(/A(\d{4})/);
-  if (altMatch) {
-    const alt = (parseInt(altMatch[1]) / 100).toFixed(2);
-    parts.push(`altimeter setting of ${alt} inHg`);
-  }
-
-  let text = `${name} is currently reporting ${cat || 'unknown'} conditions`;
-  if (parts.length) text += '. ' + parts.join('. ') + '.';
-
-  // Build dynamic operational assessment from actual conditions
-  const assessParts = [];
-  // Check for active weather phenomena
-  const wxMatch2 = rawMetar.match(/\s([+-]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)+)\s/);
-  if (wxMatch2) {
-    const wx = wxMatch2[1];
-    if (wx.includes('SN') || wx.includes('FZ')) assessParts.push('winter weather active');
-    else if (wx.includes('TS')) assessParts.push('thunderstorm activity');
-    else if (wx.includes('RA') || wx.includes('DZ') || wx.includes('SH')) assessParts.push('precipitation');
-    else if (wx.includes('FG')) assessParts.push('fog');
-    else if (wx.includes('BR') || wx.includes('HZ')) assessParts.push('reduced visibility');
-  }
-  // Check winds
-  const wm2 = rawMetar.match(/\b\d{3}(\d{2,3})(G(\d{2,3}))?KT\b/);
-  if (wm2) {
-    const gust = wm2[3] ? parseInt(wm2[3]) : parseInt(wm2[1]);
-    if (gust >= 30) assessParts.push('strong/gusty winds');
-    else if (gust >= 20) assessParts.push('gusty conditions');
-  }
-  // Check ceiling
-  const ceil = [...rawMetar.matchAll(/(BKN|OVC)(\d{3})/g)];
-  if (ceil.length) {
-    const ceilFt = parseInt(ceil[0][2]) * 100;
-    if (ceilFt < 500) assessParts.push('very low ceilings');
-    else if (ceilFt < 1000) assessParts.push('low ceilings');
-    else if (ceilFt <= 3000) assessParts.push('low overcast');
-  }
-
-  if (cat === 'LIFR') {
-    text += ` Very low ceilings/visibility — major operational impact, expect ground stops and diversions.`;
-  } else if (cat === 'IFR') {
-    text += ` Instrument conditions${assessParts.length ? ' with ' + assessParts.join(', ') : ''} — expect significant delays and possible diversions.`;
-  } else if (cat === 'MVFR') {
-    text += ` Marginal conditions${assessParts.length ? ' with ' + assessParts.join(', ') : ''} — some delays possible.`;
-  } else if (assessParts.length) {
-    // VFR but with notable conditions
-    text += ` ${assessParts.join(', ').replace(/^./, c => c.toUpperCase())} — monitor for changes.`;
-  } else {
-    text += ` Clear skies, good visibility — no impact on operations.`;
-  }
-
-  return text;
-}
-
-function explainFAAStatus(airportCode, delays, rawData) {
-  if (!delays || delays.length === 0) {
-    return `${airportCode} is operating normally — no reported delays or restrictions.`;
-  }
-
-  const explanations = delays.map(d => {
-    let text = `${airportCode} is currently experiencing `;
-    const dtype = (d.type || '').toLowerCase();
-    const reason = d.reason || 'unknown causes';
-
-    if (dtype.includes('departure')) text += `departure delays`;
-    else if (dtype.includes('arrival')) text += `arrival delays`;
-    else if (dtype.includes('ground stop') || dtype.includes('groundstop')) text += `a ground stop`;
-    else if (dtype.includes('ground delay') || dtype.includes('gdp')) text += `a ground delay program`;
-    else if (dtype.includes('closure') || dtype.includes('closed')) {
-      return `${airportCode} is closed${d.startTime ? ' from ' + d.startTime : ''}${d.endTime ? ' to ' + d.endTime : ''}${reason !== 'unknown causes' ? ' due to ' + reason : ''} per NOTAM. This is a recurring restriction.`;
-    }
-    else text += `delays`;
-
-    if (d.avgDelay || d.minDelay || d.maxDelay) {
-      const range = d.minDelay && d.maxDelay ? `${d.minDelay}-${d.maxDelay} minutes` : d.avgDelay ? `approximately ${d.avgDelay} minutes` : '';
-      if (range) text += ` of ${range}`;
-    }
-
-    text += ` due to ${reason}.`;
-
-    if (d.trend) {
-      if (d.trend.toLowerCase().includes('increas')) text += ` This is an increasing trend — delays may get worse.`;
-      else if (d.trend.toLowerCase().includes('decreas')) text += ` Delays are decreasing — conditions improving.`;
-    }
-
-    return text;
-  });
-
-  return explanations.join(' ');
-}
+// explainMETAR and explainFAAStatus live in ../lib/metar-explain.js and
+// ../lib/faa-context.js.
 
 // ═══ SCHEDULE TAB ═══
 const SCHED_HUB_TZ = {ORD:'America/Chicago',DEN:'America/Denver',IAH:'America/Chicago',EWR:'America/New_York',SFO:'America/Los_Angeles',IAD:'America/New_York',LAX:'America/Los_Angeles',NRT:'Asia/Tokyo',GUM:'Pacific/Guam'};
@@ -4817,7 +4519,7 @@ function renderScheduleTable() {
     if (status.cls === 'delayed' || (status.key === 'estimated' && status.cls === 'delayed')) {
       const origIata = fl.airport?.origin?.code?.iata;
       const destIata = fl.airport?.destination?.code?.iata;
-      const ctx = getFAADelayContext(origIata, destIata);
+      const ctx = getFAADelayContext(faaDelayIndex, origIata, destIata);
       if (ctx) faaContext = `<div class="faa-delay-context">${escapeHtml(ctx)}</div>`;
     }
 
@@ -5243,7 +4945,7 @@ let iropsServerValuePresent = false;
 // Both IROPS and schedule paths write to hubHealthData, then call this.
 function renderHubHealthBar() {
   const bar = document.getElementById('hub-health-bar');
-  const hubs = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
+  const hubs = HUB_ORDER;
   // F046/F076: chip severity is the WORSE of on-time% and any active FAA program at the
   // hub, so a ground-stopped hub can't render 🟢 while the ticker says "Disrupted". A
   // color-independent marker (⛔/⚠) is shown when a program is active (DESIGN.md: status
@@ -5262,7 +4964,7 @@ function renderHubHealthBar() {
     const homeStyle = isHome ? ';border:1px solid var(--ua-accent);border-radius:3px;padding:2px 6px' : '';
     const pct = hubHealthData[hub];
     const prog = hubProgramMarker(faaDelayIndex, hub);
-    const otpSev = pct === undefined ? null : (pct > 70 ? 'green' : pct >= 50 ? 'amber' : 'red');
+    const otpSev = hubHealthSeverity(pct);
     // Blend: worst of OTP severity and FAA-program severity.
     let sev = otpSev;
     if (prog && (!sev || SEV_RANK[prog.severity] > SEV_RANK[sev])) sev = prog.severity;
@@ -5282,12 +4984,9 @@ function renderHubHealthBar() {
     }
     if (i < hubs.length - 1) html += '<span class="hh-sep">│</span>';
   });
-  const pcts = hubs.map(h => hubHealthData[h]).filter(p => p !== undefined);
-  if (pcts.length) {
-    const avg = Math.round(pcts.reduce((a,b)=>a+b,0) / pcts.length);
-    const avgLabel = avg > 70 ? 'Smooth Ops' : avg >= 50 ? 'Some Delays' : 'Rough Day';
-    const avgColor = avg > 70 ? '#22c55e' : avg >= 50 ? '#f59e0b' : '#ef4444';
-    html += `<span class="hh-sep">│</span><span class="hh-avg" style="color:${avgColor};font-size:9px;font-weight:700">${avgLabel}</span>`;
+  const network = networkLabel(hubs.map(h => hubHealthData[h]).filter(p => p !== undefined));
+  if (network) {
+    html += `<span class="hh-sep">│</span><span class="hh-avg" style="color:${network.color};font-size:9px;font-weight:700">${network.label}</span>`;
   }
   bar.innerHTML = html;
 }
@@ -5296,65 +4995,12 @@ function renderHubHealthBar() {
 // Only SETS data for hubs with sufficient operated flights — never deletes
 // IROPS-derived data for hubs without schedule data.
 function updateHubHealth() {
-  const hubs = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
-  const totalsByHub = {};
-  hubs.forEach(hub => { totalsByHub[hub] = { onTime: 0, operated: 0 }; });
-
-  // Gather OTP from all loaded schedule data.
-  // Multiple keys can exist per hub (arrivals/departures + day), so aggregate
-  // instead of letting whichever key is iterated last overwrite the hub value.
-  for (const key of Object.keys(schedRawByHub)) {
-    const flights = schedRawByHub[key];
-    if (!flights || !flights.length) continue;
-    const keyParts = key.split('-');
-    const hub = keyParts[0];
-    const boardDir = keyParts[1] === 'arrivals' ? 'arrivals' : 'departures';
-    if (!totalsByHub[hub]) continue;
-    flights.forEach(fl => {
-      // The key carries each board's true direction — use it (a hardcoded 'departures' misreads
-      // arrivals rows: direction picks which real timestamp resolves inference and
-      // canceled_uncertain). Disruption opts are per-hub too. (review Jul 3 2026)
-      const status = classifySchedStatus(fl, boardDir, schedNow(), classifyOptsForKey(key));
-      const hasOp = status.key === 'departed' || status.key === 'enroute' || status.key === 'landed';
-      if (!hasOp) return;
-      // Time-inferred operated rows (a long-past "scheduled" the classifier reclassified, with no
-      // real out-time) have no trustworthy baseline — exclude them, exactly as renderScheduleStats
-      // does. Without this, a stale arrival carrying real.arrival but no real.departure would slip
-      // past the realT check below and score a bogus cross-leg delay. (maintainability review)
-      if (status.inferred) return;
-      // Exclude degraded synthetic rows, exactly as the per-board OTP card does (updateSchedStats):
-      // live-feed rescue rows carry last-seen/ETA times (not a true schedule baseline), and rows
-      // whose schedule time was derived from the actual time always score on-time (delay 0) —
-      // inflating hub OTP toward 100% precisely when the FR24 feed is degraded.
-      // (Audit P1: degraded-rows-inflate-hub-otp.)
-      if (fl._source?.liveFeedFallback) return;
-      if (fl._source?.scheduleTimeDerivedFromActual?.departure || fl._source?.scheduleTimeDerivedFromActual?.arrival) return;
-      // F021: direction-aware, mirroring the per-board OTP card (board-stats.js) — an
-      // arrivals board must score scheduled-arrival vs real-arrival, a departures board
-      // scheduled-departure vs real-departure. Never fall back across legs: a completed
-      // departures row that backfilled real.arrival but not real.departure would otherwise
-      // score flight_duration as delay and deflate hub OTP.
-      const isArr = boardDir === 'arrivals';
-      const schedT = isArr ? fl.time?.scheduled?.arrival : fl.time?.scheduled?.departure;
-      const realT = isArr ? fl.time?.real?.arrival : fl.time?.real?.departure;
-      if (!realT || !schedT) return; // skip flights without the direction-appropriate real timestamp
-      totalsByHub[hub].operated++;
-      if (realT <= schedT + 1800) totalsByHub[hub].onTime++;
-    });
-  }
-
-  hubs.forEach(hub => {
-    // Server /api/irops OTP is authoritative when present — the client-side
-    // computation only fills hubs the server response lacks, and never writes
-    // from a thin sample (n < 25). Audit Jul 3 2026: DEN flapped 68→100 because
-    // a 5-flight client sample overwrote the server's reading.
-    if (hubHealthServerHubs.has(hub)) return;
-    const { onTime, operated } = totalsByHub[hub];
-    if (operated >= 25) {
-      hubHealthData[hub] = Math.round((onTime / operated) * 100);
-    }
-    // Don't delete hubHealthData[hub] — IROPS may have set it
+  // The direction-aware aggregation, the exclusion rules and the 25-flight floor live
+  // in ../lib/hub-health.js; mergeHubHealth drops any hub the server already owns.
+  const clientOtp = computeBoardOtp(schedRawByHub, {
+    classify: (fl, boardDir, key) => classifySchedStatus(fl, boardDir, schedNow(), classifyOptsForKey(key)),
   });
+  Object.assign(hubHealthData, mergeHubHealth(clientOtp, hubHealthServerHubs));
 
   renderHubHealthBar();
   updateTicker(); // ticker health derives from hub OTP — keep it in lockstep
@@ -5365,19 +5011,7 @@ let faaDelayIndex = {};
 let nasData = null;       // Global NAS status (en-route programs + planned TMIs) — populated by initWeatherTab
 let weatherOpsByHub = {};  // Global METAR-derived ops impact per hub — populated by preloadWeatherAndFAA or initWeatherTab
 
-/** Build faaDelayIndex from the /api/faa response (new per-airport shape with programs[]) */
-function buildFaaIndex(faaResponse) {
-  const index = {};
-  if (!Array.isArray(faaResponse)) return index;
-  for (const airport of faaResponse) {
-    const code = airport.airportCode;
-    if (!code) continue;
-    // The new API returns per-airport objects directly — store them as-is
-    // with backward-compat fields already populated by the server
-    index[code] = airport;
-  }
-  return index;
-}
+// buildFaaIndex lives in ../lib/faa-context.js.
 let iropsHubData = {};    // Global IROPS cancellation/delay rates per hub — for delay risk engine
 
 // Compact IROPS descriptor for the delay-risk badge's AI context. F007/F015: when the
@@ -5471,8 +5105,7 @@ async function _doPreloadWeatherAndFAA() {
         const raw = data.rawOb || '';
         const apiCat = data.fltCat || data.fltcat || 'UNK';
         const localCat = computeFlightCategory(raw);
-        const catRank = {LIFR:0,IFR:1,MVFR:2,VFR:3,UNK:3};
-        const cat = localCat && (catRank[localCat] ?? 3) < (catRank[apiCat] ?? 3) ? localCat : apiCat;
+        const cat = worstCategory(apiCat, localCat);
         const ops = computeOpsImpact(raw, cat);
         weatherOpsByHub[apt] = { level: ops.level, reasons: ops.reasons, fltCat: cat,
           hasThunderstorms: ops.hasThunderstorms, hasFreezingPrecip: ops.hasFreezingPrecip,
@@ -5636,18 +5269,11 @@ function renderIropsFromAPI(data) {
   // Populate hubHealthData from IROPS hubMetrics, then render the shared bar.
   if (data.hubMetrics) {
     for (const [hub, m] of Object.entries(data.hubMetrics)) {
-      if (!m || !m.total) continue;
-      const operated = Number(m.operated || 0);
-      const onTime = Number(m.onTime || 0);
-      const cancelRate = m.total > 10 ? Number(m.cancellations || 0) / m.total : 0;
-      if (operated < 5 && cancelRate >= 0.5) {
-        hubHealthData[hub] = 0; // mostly cancelled — show as critical
-        hubHealthServerHubs.add(hub); // server value is authoritative from here on
-      } else if (operated >= 5) {
-        hubHealthData[hub] = Math.round((onTime / operated) * 100);
-        hubHealthServerHubs.add(hub); // server value is authoritative from here on
-      }
-      // operated < 5 and low cancel rate: leave hub alone (no data yet)
+      const pct = serverOtpFromMetrics(m);
+      // null = operated < 5 with a low cancel rate: leave hub alone (no data yet)
+      if (pct === null) continue;
+      hubHealthData[hub] = pct;
+      hubHealthServerHubs.add(hub); // server value is authoritative from here on
     }
     renderHubHealthBar();
   }
@@ -5688,26 +5314,7 @@ function renderIropsFromAPI(data) {
   }
 }
 
-// ═══ FAA DELAY CONTEXT ═══
-function getFAADelayContext(originIata, destIata) {
-  const contexts = [];
-  [originIata, destIata].forEach(apt => {
-    if (!apt) return;
-    const faa = faaDelayIndex[apt];
-    if (!faa || !faa.delays || !faa.delays.length) return;
-    faa.delays.forEach(d => {
-      const dtype = (d.type || '').toLowerCase();
-      let label = 'Delay';
-      if (dtype.includes('ground stop')) label = 'Ground Stop';
-      else if (dtype.includes('ground delay') || dtype.includes('gdp')) label = 'GDP';
-      else if (dtype.includes('departure')) label = 'Dep Delay';
-      else if (dtype.includes('arrival')) label = 'Arr Delay';
-      const avg = d.avgDelay ? `, avg ${d.avgDelay} min` : '';
-      contexts.push(`${label} at ${apt}${avg}`);
-    });
-  });
-  return contexts.join(' · ');
-}
+// getFAADelayContext lives in ../lib/faa-context.js.
 
 // ═══ FLIGHT WATCH ═══
 const MAX_WATCHED = 20;
