@@ -27,6 +27,10 @@ import { matchesScheduleFilters } from '../lib/schedule-board-filters.js';
 import { analyzeSwapImpact as classifySwapImpact, CABIN_RANK } from '../lib/swap-impact.js';
 import { escapeHtml } from '../lib/escape.js';
 import { cartoBasemapUrl } from '../lib/basemap.js';
+import { getPhase, getPhaseGroup, decodeSquawk } from '../lib/flight-phase.js';
+import { haversineNm, greatCirclePoints, normalizeLonContinuity, isLonghaul } from '../lib/geo.js';
+import { AIRPORTS, AIRPORT_COORDS, IATA_CITIES, cityFor } from '../lib/airports.js';
+import { estimateRoute } from '../lib/route-estimate.js';
 import { atcAirports, atcMeta, unitedHubsMeta, unitedProjects } from '../data/trackers/index.js';
 
 
@@ -214,84 +218,6 @@ const ENGINE_BY_TYPE = {
   '787-8':'GEnx-1B64','787-9':'GEnx-1B74','787-10':'GEnx-1B76'
 };
 
-// ═══ AIRPORT DATABASE (150 airports) ═══
-const AIRPORTS = [
-  // United Hubs
-  {iata:"EWR",lat:40.6925,lon:-74.1687,hub:true},{iata:"IAH",lat:29.9844,lon:-95.3414,hub:true},
-  {iata:"ORD",lat:41.9742,lon:-87.9073,hub:true},{iata:"DEN",lat:39.8561,lon:-104.6737,hub:true},
-  {iata:"SFO",lat:37.6213,lon:-122.3790,hub:true},{iata:"LAX",lat:33.9425,lon:-118.4081,hub:true},
-  {iata:"IAD",lat:38.9531,lon:-77.4565,hub:true},
-  // Major US
-  {iata:"ATL",lat:33.6407,lon:-84.4277},{iata:"DFW",lat:32.8998,lon:-97.0403},
-  {iata:"JFK",lat:40.6413,lon:-73.7781},{iata:"LGA",lat:40.7769,lon:-73.8740},
-  {iata:"SEA",lat:47.4502,lon:-122.3088},{iata:"BOS",lat:42.3656,lon:-71.0096},
-  {iata:"PHX",lat:33.4373,lon:-112.0078},{iata:"MCO",lat:28.4312,lon:-81.3081},
-  {iata:"CLT",lat:35.2140,lon:-80.9431},{iata:"MIA",lat:25.7959,lon:-80.2870},
-  {iata:"FLL",lat:26.0742,lon:-80.1506},{iata:"MSP",lat:44.8848,lon:-93.2223},
-  {iata:"DTW",lat:42.2162,lon:-83.3554},{iata:"PHL",lat:39.8744,lon:-75.2424},
-  {iata:"SLC",lat:40.7899,lon:-111.9791},{iata:"SAN",lat:32.7338,lon:-117.1933},
-  {iata:"TPA",lat:27.9755,lon:-82.5332},{iata:"PDX",lat:45.5898,lon:-122.5951},
-  {iata:"BNA",lat:36.1263,lon:-86.6774},{iata:"STL",lat:38.7487,lon:-90.3700},
-  {iata:"AUS",lat:30.1975,lon:-97.6664},{iata:"RDU",lat:35.8801,lon:-78.7880},
-  {iata:"MCI",lat:39.2976,lon:-94.7139},{iata:"SMF",lat:38.6954,lon:-121.5908},
-  {iata:"SJC",lat:37.3626,lon:-121.9290},{iata:"OAK",lat:37.7213,lon:-122.2208},
-  {iata:"CLE",lat:41.4117,lon:-81.8498},{iata:"CMH",lat:39.9980,lon:-82.8919},
-  {iata:"PIT",lat:40.4915,lon:-80.2329},{iata:"IND",lat:39.7173,lon:-86.2944},
-  {iata:"MKE",lat:42.9472,lon:-87.8966},{iata:"RSW",lat:26.5362,lon:-81.7552},
-  {iata:"JAX",lat:30.4941,lon:-81.6879},{iata:"BDL",lat:41.9389,lon:-72.6832},
-  {iata:"ABQ",lat:35.0402,lon:-106.6090},{iata:"ONT",lat:34.0560,lon:-117.6012},
-  {iata:"BUR",lat:34.2005,lon:-118.3585},{iata:"HNL",lat:21.3187,lon:-157.9225},
-  {iata:"OGG",lat:20.8986,lon:-156.4305},{iata:"KOA",lat:19.7388,lon:-156.0456},
-  {iata:"LIH",lat:21.9760,lon:-159.3390},{iata:"ANC",lat:61.1743,lon:-149.9962},
-  {iata:"SNA",lat:33.6757,lon:-117.8682},{iata:"DAL",lat:32.8471,lon:-96.8518},
-  {iata:"HOU",lat:29.6454,lon:-95.2789},{iata:"MDW",lat:41.7868,lon:-87.7522},
-  {iata:"BWI",lat:39.1754,lon:-76.6683},{iata:"DCA",lat:38.8512,lon:-77.0402},
-  {iata:"MSY",lat:29.9934,lon:-90.2580},{iata:"RNO",lat:39.4991,lon:-119.7681},
-  {iata:"LAS",lat:36.0840,lon:-115.1537},{iata:"PBI",lat:26.6832,lon:-80.0956},
-  {iata:"SAT",lat:29.5337,lon:-98.4698},{iata:"CHS",lat:32.8986,lon:-80.0405},
-  {iata:"BOI",lat:43.5644,lon:-116.2228},{iata:"TUS",lat:32.1161,lon:-110.9410},
-  {iata:"OMA",lat:41.3032,lon:-95.8941},{iata:"DSM",lat:41.5340,lon:-93.6631},
-  {iata:"BUF",lat:42.9405,lon:-78.7322},{iata:"ROC",lat:43.1189,lon:-77.6724},
-  {iata:"SYR",lat:43.1112,lon:-76.1063},{iata:"ALB",lat:42.7483,lon:-73.8017},
-  {iata:"RIC",lat:37.5052,lon:-77.3197},{iata:"ORF",lat:36.8946,lon:-76.2012},
-  {iata:"GSO",lat:36.0978,lon:-79.9373},{iata:"CVG",lat:39.0488,lon:-84.6678},
-  {iata:"MEM",lat:35.0424,lon:-89.9767},{iata:"OKC",lat:35.3931,lon:-97.6007},
-  {iata:"TUL",lat:36.1984,lon:-95.8881},{iata:"ELP",lat:31.8073,lon:-106.3778},
-  {iata:"GEG",lat:47.6199,lon:-117.5338},{iata:"PSP",lat:33.8297,lon:-116.5067},
-  {iata:"SBN",lat:41.7087,lon:-86.3173},{iata:"GRR",lat:42.8808,lon:-85.5228},
-  {iata:"MSN",lat:43.1399,lon:-89.3375},{iata:"XNA",lat:36.2819,lon:-94.3068},
-  {iata:"ICT",lat:37.6499,lon:-97.4331},{iata:"LIT",lat:34.7294,lon:-92.2243},
-  // International
-  {iata:"LHR",lat:51.4700,lon:-0.4543},{iata:"FRA",lat:50.0379,lon:8.5622},
-  {iata:"CDG",lat:49.0097,lon:2.5479},{iata:"AMS",lat:52.3105,lon:4.7683},
-  {iata:"MUC",lat:48.3538,lon:11.7861},{iata:"ZRH",lat:47.4647,lon:8.5492},
-  {iata:"FCO",lat:41.8003,lon:12.2389},{iata:"MAD",lat:40.4983,lon:-3.5676},
-  {iata:"BCN",lat:41.2974,lon:2.0833},{iata:"LIS",lat:38.7813,lon:-9.1359},
-  {iata:"DUB",lat:53.4213,lon:-6.2701},{iata:"EDI",lat:55.9508,lon:-3.3615},
-  {iata:"GUM",lat:13.4834,lon:144.7960,hub:true},{iata:"NRT",lat:35.7720,lon:140.3929,hub:true},{iata:"HND",lat:35.5494,lon:139.7798},
-  {iata:"ICN",lat:37.4602,lon:126.4407},{iata:"PEK",lat:40.0799,lon:116.6031},
-  {iata:"PVG",lat:31.1443,lon:121.8083},{iata:"HKG",lat:22.3080,lon:113.9185},
-  {iata:"SIN",lat:1.3644,lon:103.9915},{iata:"BKK",lat:13.6900,lon:100.7501},
-  {iata:"DEL",lat:28.5562,lon:77.1000},{iata:"BOM",lat:19.0896,lon:72.8656},
-  {iata:"SYD",lat:-33.9399,lon:151.1753},{iata:"MEL",lat:-37.6690,lon:144.8410},
-  {iata:"GRU",lat:-23.4356,lon:-46.4731},{iata:"EZE",lat:-34.8222,lon:-58.5358},
-  {iata:"SCL",lat:-33.3930,lon:-70.7858},{iata:"BOG",lat:4.7016,lon:-74.1469},
-  {iata:"MEX",lat:19.4363,lon:-99.0721},{iata:"CUN",lat:21.0365,lon:-86.8771},
-  {iata:"GDL",lat:20.5218,lon:-103.3113},{iata:"SJD",lat:23.1518,lon:-109.7215},
-  {iata:"PVR",lat:20.6801,lon:-105.2544},{iata:"LIM",lat:-12.0219,lon:-77.1143},
-  {iata:"PTY",lat:9.0714,lon:-79.3835},{iata:"SJO",lat:9.9939,lon:-84.2088},
-  {iata:"YYZ",lat:43.6777,lon:-79.6248},{iata:"YVR",lat:49.1967,lon:-123.1815},
-  {iata:"YUL",lat:45.4706,lon:-73.7408},{iata:"YYC",lat:51.1315,lon:-114.0106},
-  {iata:"TLV",lat:32.0114,lon:34.8867},{iata:"DOH",lat:25.2731,lon:51.6082},
-  {iata:"DXB",lat:25.2532,lon:55.3657},{iata:"ADD",lat:8.9779,lon:38.7993},
-  {iata:"ACC",lat:5.6052,lon:-0.1668},{iata:"CPT",lat:-33.9649,lon:18.6017},
-  {iata:"JNB",lat:-26.1392,lon:28.2460},{iata:"CAI",lat:30.1219,lon:31.4056},
-  {iata:"IST",lat:41.2753,lon:28.7519},{iata:"MNL",lat:14.5086,lon:121.0198},
-  {iata:"TPE",lat:25.0777,lon:121.2327},{iata:"BRU",lat:50.9014,lon:4.4844},
-  {iata:"OSL",lat:60.1976,lon:11.1004},{iata:"CPH",lat:55.6180,lon:12.6560},
-  {iata:"ARN",lat:59.6519,lon:17.9186},{iata:"HEL",lat:60.3172,lon:24.9633}
-];
-
 const HUBS = AIRPORTS.filter(a => a.hub);
 const HUB_CODES = HUBS.map(h => h.iata);
 
@@ -398,104 +324,6 @@ function getUnitedTerminal(iata, origIata, destIata) {
   const isIntl = INTL_AIRPORTS.has(origIata) || INTL_AIRPORTS.has(destIata);
   return isIntl ? hub.international : hub.domestic;
 }
-
-// ═══ UA ROUTE LOOKUP TABLE ═══
-// Static mapping of UA flight numbers to known city pairs (fallback for missing FR24 route data)
-const UA_ROUTES = {
-  1:{from:'SFO',to:'SIN'},2:{from:'SIN',to:'SFO'},3:{from:'SFO',to:'HKG'},4:{from:'HKG',to:'SFO'},
-  5:{from:'SFO',to:'SYD'},6:{from:'SYD',to:'SFO'},7:{from:'SFO',to:'NRT'},8:{from:'NRT',to:'SFO'},
-  9:{from:'EWR',to:'CDG'},10:{from:'CDG',to:'EWR'},11:{from:'EWR',to:'BRU'},12:{from:'BRU',to:'EWR'},
-  17:{from:'EWR',to:'LHR'},18:{from:'LHR',to:'EWR'},21:{from:'EWR',to:'LIS'},22:{from:'LIS',to:'EWR'},
-  23:{from:'SFO',to:'ICN'},24:{from:'ICN',to:'SFO'},25:{from:'EWR',to:'FRA'},26:{from:'FRA',to:'EWR'},
-  27:{from:'EWR',to:'ZRH'},28:{from:'ZRH',to:'EWR'},29:{from:'EWR',to:'DUB'},30:{from:'DUB',to:'EWR'},
-  31:{from:'EWR',to:'FCO'},32:{from:'FCO',to:'EWR'},33:{from:'EWR',to:'AMS'},34:{from:'AMS',to:'EWR'},
-  35:{from:'SFO',to:'TPE'},36:{from:'TPE',to:'SFO'},37:{from:'EWR',to:'IST'},38:{from:'IST',to:'EWR'},
-  39:{from:'EWR',to:'MAD'},40:{from:'MAD',to:'EWR'},41:{from:'EWR',to:'BCN'},42:{from:'BCN',to:'EWR'},
-  43:{from:'SFO',to:'BKK'},44:{from:'BKK',to:'SFO'},45:{from:'IAH',to:'LHR'},46:{from:'LHR',to:'IAH'},
-  50:{from:'EWR',to:'TLV'},51:{from:'TLV',to:'EWR'},52:{from:'IAD',to:'LHR'},53:{from:'LHR',to:'IAD'},
-  54:{from:'SFO',to:'DEL'},55:{from:'DEL',to:'SFO'},56:{from:'EWR',to:'DEL'},57:{from:'DEL',to:'EWR'},
-  58:{from:'EWR',to:'EDI'},59:{from:'EDI',to:'EWR'},60:{from:'EWR',to:'MUC'},61:{from:'MUC',to:'EWR'},
-  62:{from:'EWR',to:'CPH'},63:{from:'CPH',to:'EWR'},64:{from:'EWR',to:'HEL'},65:{from:'HEL',to:'EWR'},
-  66:{from:'EWR',to:'ARN'},67:{from:'ARN',to:'EWR'},68:{from:'EWR',to:'OSL'},69:{from:'OSL',to:'EWR'},
-  70:{from:'IAD',to:'CDG'},71:{from:'CDG',to:'IAD'},72:{from:'IAD',to:'FRA'},73:{from:'FRA',to:'IAD'},
-  78:{from:'ORD',to:'LHR'},79:{from:'LHR',to:'ORD'},80:{from:'ORD',to:'FRA'},81:{from:'FRA',to:'ORD'},
-  82:{from:'ORD',to:'CDG'},83:{from:'CDG',to:'ORD'},84:{from:'ORD',to:'MUC'},85:{from:'MUC',to:'ORD'},
-  86:{from:'ORD',to:'NRT'},87:{from:'NRT',to:'ORD'},88:{from:'ORD',to:'PEK'},89:{from:'PEK',to:'ORD'},
-  90:{from:'ORD',to:'ICN'},91:{from:'ICN',to:'ORD'},92:{from:'ORD',to:'HND'},93:{from:'HND',to:'ORD'},
-  94:{from:'ORD',to:'DEL'},95:{from:'DEL',to:'ORD'},96:{from:'SFO',to:'PVG'},97:{from:'PVG',to:'SFO'},
-  100:{from:'EWR',to:'PEK'},101:{from:'PEK',to:'EWR'},102:{from:'EWR',to:'PVG'},103:{from:'PVG',to:'EWR'},
-  106:{from:'EWR',to:'HND'},107:{from:'HND',to:'EWR'},108:{from:'EWR',to:'NRT'},109:{from:'NRT',to:'EWR'},
-  116:{from:'SFO',to:'MNL'},117:{from:'MNL',to:'SFO'},118:{from:'IAH',to:'NRT'},119:{from:'NRT',to:'IAH'},
-  120:{from:'LAX',to:'SYD'},121:{from:'SYD',to:'LAX'},122:{from:'LAX',to:'MEL'},123:{from:'MEL',to:'LAX'},
-  130:{from:'IAD',to:'TLV'},131:{from:'TLV',to:'IAD'},132:{from:'IAH',to:'EZE'},133:{from:'EZE',to:'IAH'},
-  134:{from:'IAH',to:'GRU'},135:{from:'GRU',to:'IAH'},136:{from:'EWR',to:'GRU'},137:{from:'GRU',to:'EWR'},
-  138:{from:'IAH',to:'SCL'},139:{from:'SCL',to:'IAH'},142:{from:'IAH',to:'BOG'},143:{from:'BOG',to:'IAH'},
-  146:{from:'IAH',to:'LIM'},147:{from:'LIM',to:'IAH'},148:{from:'EWR',to:'BOG'},149:{from:'BOG',to:'EWR'},
-  150:{from:'DEN',to:'NRT'},151:{from:'NRT',to:'DEN'},152:{from:'LAX',to:'NRT'},153:{from:'NRT',to:'LAX'},
-  154:{from:'LAX',to:'ICN'},155:{from:'ICN',to:'LAX'},156:{from:'LAX',to:'PVG'},157:{from:'PVG',to:'LAX'},
-  160:{from:'SFO',to:'LHR'},161:{from:'LHR',to:'SFO'},162:{from:'IAH',to:'FRA'},163:{from:'FRA',to:'IAH'},
-  168:{from:'EWR',to:'SIN'},169:{from:'SIN',to:'EWR'},170:{from:'SFO',to:'FRA'},171:{from:'FRA',to:'SFO'},
-  174:{from:'EWR',to:'HKG'},175:{from:'HKG',to:'EWR'},176:{from:'EWR',to:'BOM'},177:{from:'BOM',to:'EWR'},
-  178:{from:'DEN',to:'LHR'},179:{from:'LHR',to:'DEN'},180:{from:'DEN',to:'FRA'},181:{from:'FRA',to:'DEN'},
-  182:{from:'IAH',to:'MEX'},183:{from:'MEX',to:'IAH'},186:{from:'ORD',to:'DUB'},187:{from:'DUB',to:'ORD'},
-  194:{from:'LAX',to:'LHR'},195:{from:'LHR',to:'LAX'},198:{from:'IAH',to:'CUN'},199:{from:'CUN',to:'IAH'},
-  200:{from:'SFO',to:'GRU'},201:{from:'GRU',to:'SFO'},204:{from:'IAH',to:'PTY'},205:{from:'PTY',to:'IAH'},
-  214:{from:'IAD',to:'IST'},215:{from:'IST',to:'IAD'},218:{from:'DEN',to:'NRT'},219:{from:'NRT',to:'DEN'},
-  234:{from:'ORD',to:'AMS'},235:{from:'AMS',to:'ORD'},238:{from:'ORD',to:'IST'},239:{from:'IST',to:'ORD'},
-  250:{from:'ORD',to:'BCN'},251:{from:'BCN',to:'ORD'},252:{from:'ORD',to:'ZRH'},253:{from:'ZRH',to:'ORD'},
-  254:{from:'ORD',to:'FCO'},255:{from:'FCO',to:'ORD'},262:{from:'ORD',to:'EDI'},263:{from:'EDI',to:'ORD'},
-  315:{from:'DEN',to:'HND'},316:{from:'HND',to:'DEN'},400:{from:'DEN',to:'SFO'},401:{from:'SFO',to:'DEN'},
-  444:{from:'EWR',to:'LAX'},445:{from:'LAX',to:'EWR'},500:{from:'SFO',to:'EWR'},501:{from:'EWR',to:'SFO'},
-  507:{from:'LAX',to:'HNL'},508:{from:'HNL',to:'LAX'},509:{from:'SFO',to:'HNL'},510:{from:'HNL',to:'SFO'},
-  708:{from:'ORD',to:'DOH'},709:{from:'DOH',to:'ORD'},730:{from:'IAD',to:'ADD'},731:{from:'ADD',to:'IAD'},
-  733:{from:'IAD',to:'ACC'},734:{from:'ACC',to:'IAD'},735:{from:'IAD',to:'JNB'},736:{from:'JNB',to:'IAD'},
-  737:{from:'EWR',to:'CPT'},738:{from:'CPT',to:'EWR'},780:{from:'EWR',to:'DOH'},781:{from:'DOH',to:'EWR'},
-  788:{from:'EWR',to:'DXB'},789:{from:'DXB',to:'EWR'},838:{from:'SFO',to:'ICN'},839:{from:'ICN',to:'SFO'},
-  857:{from:'SFO',to:'PEK'},858:{from:'PEK',to:'SFO'},872:{from:'SFO',to:'HND'},873:{from:'HND',to:'SFO'},
-  875:{from:'SFO',to:'NRT'},876:{from:'NRT',to:'SFO'},881:{from:'LAX',to:'HND'},882:{from:'HND',to:'LAX'},
-  893:{from:'IAH',to:'SYD'},894:{from:'SYD',to:'IAH'},896:{from:'SFO',to:'MEL'},897:{from:'MEL',to:'SFO'},
-  1100:{from:'EWR',to:'SFO'},1101:{from:'SFO',to:'EWR'},1200:{from:'SFO',to:'ORD'},1201:{from:'ORD',to:'SFO'},
-  1300:{from:'DEN',to:'EWR'},1301:{from:'EWR',to:'DEN'},1400:{from:'IAH',to:'SFO'},1401:{from:'SFO',to:'IAH'},
-  1500:{from:'DEN',to:'LAX'},1501:{from:'LAX',to:'DEN'},1600:{from:'ORD',to:'LAX'},1601:{from:'LAX',to:'ORD'},
-  1700:{from:'DEN',to:'ORD'},1701:{from:'ORD',to:'DEN'},1800:{from:'IAH',to:'EWR'},1801:{from:'EWR',to:'IAH'},
-  1900:{from:'IAD',to:'LAX'},1901:{from:'LAX',to:'IAD'},2000:{from:'IAD',to:'SFO'},2001:{from:'SFO',to:'IAD'}
-};
-
-// ═══ IATA → CITY NAME MAPPING ═══
-const IATA_CITIES = {
-  // United Hubs
-  EWR:'Newark',IAH:'Houston',ORD:'Chicago O\'Hare',DEN:'Denver',SFO:'San Francisco',LAX:'Los Angeles',IAD:'Washington Dulles',
-  // Major US
-  ATL:'Atlanta',DFW:'Dallas/Fort Worth',JFK:'New York JFK',LGA:'New York LaGuardia',SEA:'Seattle',BOS:'Boston',
-  PHX:'Phoenix',MCO:'Orlando',CLT:'Charlotte',MIA:'Miami',FLL:'Fort Lauderdale',MSP:'Minneapolis',
-  DTW:'Detroit',PHL:'Philadelphia',SLC:'Salt Lake City',SAN:'San Diego',TPA:'Tampa',PDX:'Portland',
-  BNA:'Nashville',STL:'St. Louis',AUS:'Austin',RDU:'Raleigh-Durham',MCI:'Kansas City',SMF:'Sacramento',
-  SJC:'San José',OAK:'Oakland',CLE:'Cleveland',CMH:'Columbus',PIT:'Pittsburgh',IND:'Indianapolis',
-  MKE:'Milwaukee',RSW:'Fort Myers',JAX:'Jacksonville',BDL:'Hartford',ABQ:'Albuquerque',ONT:'Ontario',
-  BUR:'Burbank',HNL:'Honolulu',OGG:'Maui Kahului',KOA:'Kona',LIH:'Kauai Lihue',ANC:'Anchorage',
-  SNA:'Orange County',DAL:'Dallas Love',HOU:'Houston Hobby',MDW:'Chicago Midway',BWI:'Baltimore',
-  DCA:'Washington Reagan',MSY:'New Orleans',RNO:'Reno',LAS:'Las Vegas',PBI:'West Palm Beach',
-  SAT:'San Antonio',CHS:'Charleston',BOI:'Boise',TUS:'Tucson',OMA:'Omaha',DSM:'Des Moines',
-  BUF:'Buffalo',ROC:'Rochester',SYR:'Syracuse',ALB:'Albany',RIC:'Richmond',ORF:'Norfolk',
-  GSO:'Greensboro',CVG:'Cincinnati',MEM:'Memphis',OKC:'Oklahoma City',TUL:'Tulsa',ELP:'El Paso',
-  GEG:'Spokane',PSP:'Palm Springs',SBN:'South Bend',GRR:'Grand Rapids',MSN:'Madison',XNA:'Fayetteville',
-  ICT:'Wichita',LIT:'Little Rock',
-  // Europe
-  LHR:'London Heathrow',FRA:'Frankfurt',CDG:'Paris CDG',AMS:'Amsterdam',MUC:'Munich',ZRH:'Zurich',
-  FCO:'Rome Fiumicino',MAD:'Madrid',BCN:'Barcelona',LIS:'Lisbon',DUB:'Dublin',EDI:'Edinburgh',
-  BRU:'Brussels',OSL:'Oslo',CPH:'Copenhagen',ARN:'Stockholm',HEL:'Helsinki',IST:'Istanbul',
-  // Asia-Pacific
-  GUM:'Guam',NRT:'Tokyo Narita',HND:'Tokyo Haneda',ICN:'Seoul Incheon',PEK:'Beijing',PVG:'Shanghai Pudong',
-  HKG:'Hong Kong',SIN:'Singapore',BKK:'Bangkok',DEL:'Delhi',BOM:'Mumbai',MNL:'Manila',TPE:'Taipei',
-  SYD:'Sydney',MEL:'Melbourne',
-  // Americas (International)
-  GRU:'São Paulo',EZE:'Buenos Aires',SCL:'Santiago',BOG:'Bogotá',MEX:'Mexico City',CUN:'Cancún',
-  GDL:'Guadalajara',SJD:'Los Cabos',PVR:'Puerto Vallarta',LIM:'Lima',PTY:'Panama City',SJO:'San José CR',
-  YYZ:'Toronto',YVR:'Vancouver',YUL:'Montreal',YYC:'Calgary',
-  // Middle East & Africa
-  TLV:'Tel Aviv',DOH:'Doha',DXB:'Dubai',ADD:'Addis Ababa',ACC:'Accra',CPT:'Cape Town',
-  JNB:'Johannesburg',CAI:'Cairo'
-};
 
 // ═══ GLOBALS ═══
 let map, flightMarkers = {}, routeLine = null, routeGroup = null, hubMarkers = [], wxLayer = null;
@@ -908,103 +736,6 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// ═══ AIRPORT MATCHING ═══
-function toRad(d) { return d * Math.PI / 180; }
-function toDeg(r) { return r * 180 / Math.PI; }
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 3440.065; // nm
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-function bearing(lat1, lon1, lat2, lon2) {
-  const dLon = toRad(lon2 - lon1);
-  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
-  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
-function angleDiff(a, b) { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
-
-function estimateRoute(lat, lon, hdg, alt, vr, flightNum) {
-  // Try static UA route lookup first
-  if (flightNum) {
-    const num = parseInt(String(flightNum).replace(/^UA/i, '').replace(/^UAL/i, ''), 10);
-    if (num && UA_ROUTES[num]) {
-      const r = UA_ROUTES[num];
-      const oApt = AIRPORTS.find(a => a.iata === r.from);
-      const dApt = AIRPORTS.find(a => a.iata === r.to);
-      if (oApt && dApt) return { origin: oApt, dest: dApt };
-    }
-  }
-  if (!lat || !lon || hdg === null || hdg === undefined) return { origin: null, dest: null };
-  const reverseHdg = (hdg + 180) % 360;
-  let bestOrigin = null, bestDest = null;
-  let bestOrigDist = Infinity, bestDestDist = Infinity;
-  const lowAlt = alt !== null && alt < 5000;
-  const tolerance = lowAlt ? 90 : 60;
-
-  for (const apt of AIRPORTS) {
-    const dist = haversine(lat, lon, apt.lat, apt.lon);
-    const brng = bearing(lat, lon, apt.lat, apt.lon);
-
-    // Behind aircraft = origin
-    if (angleDiff(brng, reverseHdg) < tolerance && dist < bestOrigDist && dist < 2000) {
-      bestOrigDist = dist; bestOrigin = apt;
-    }
-    // Ahead = destination
-    if (angleDiff(brng, hdg) < tolerance && dist < bestDestDist && dist < 2000) {
-      bestDestDist = dist; bestDest = apt;
-    }
-  }
-
-  // For low altitude, nearest airport is likely origin or dest
-  if (lowAlt) {
-    let nearest = null, nearDist = Infinity;
-    for (const apt of AIRPORTS) {
-      const d = haversine(lat, lon, apt.lat, apt.lon);
-      if (d < nearDist) { nearDist = d; nearest = apt; }
-    }
-    if (nearest && nearDist < 50) {
-      if (vr > 0) bestOrigin = nearest;
-      else bestDest = nearest;
-    }
-  }
-
-  // Don't let origin = dest
-  if (bestOrigin && bestDest && bestOrigin.iata === bestDest.iata) {
-    if (bestOrigDist < bestDestDist) bestDest = null;
-    else bestOrigin = null;
-  }
-
-  return { origin: bestOrigin, dest: bestDest };
-}
-
-// ═══ FLIGHT PHASE ═══
-function getPhase(alt, vr, spd) {
-  const altFt = alt != null ? alt * 3.28084 : null;
-  const vrFpm = vr != null ? vr * 196.85 : null; // m/s to fpm
-  const spdKts = spd != null ? spd * 1.944 : null;
-
-  if (altFt !== null && altFt < 100 && spdKts !== null && spdKts < 50) return { phase: 'Ground', icon: '🅿️', cls: 'phase-ground' };
-  if (altFt !== null && altFt < 5000 && vrFpm !== null && vrFpm > 500) return { phase: 'Takeoff', icon: '🛫', cls: 'phase-climb' };
-  if (altFt !== null && altFt < 5000 && vrFpm !== null && vrFpm < -300) return { phase: 'Approach', icon: '🛬', cls: 'phase-approach' };
-  if (vrFpm !== null && vrFpm > 300) return { phase: 'Climb', icon: '↗️', cls: 'phase-climb' };
-  if (vrFpm !== null && vrFpm < -300) return { phase: 'Descent', icon: '↘️', cls: 'phase-descent' };
-  if (altFt !== null && altFt > 25000) return { phase: 'Cruise', icon: '✈️', cls: 'phase-cruise' };
-  return { phase: 'En Route', icon: '✈️', cls: 'phase-cruise' };
-}
-
-// ═══ SQUAWK DECODER ═══
-function decodeSquawk(sq) {
-  if (!sq) return null;
-  const s = String(sq);
-  if (s === '7500') return { text: '⚠️ HIJACK', cls: 'squawk-alert' };
-  if (s === '7600') return { text: '⚠️ RADIO FAILURE', cls: 'squawk-alert' };
-  if (s === '7700') return { text: '⚠️ EMERGENCY', cls: 'squawk-alert' };
-  if (s === '1200') return { text: 'VFR', cls: '' };
-  return null;
-}
-
 // Match a live flight to its fleet entry; icao24ToNNumber + the reg/icao24 lookup
 // order live in src/lib/fleet-match.js (importable + tested). FLEET_BY_REG is the
 // module-global index injected here.
@@ -1324,27 +1055,6 @@ async function refreshFlights() {
   }
 }
 
-const AIRPORT_COORDS = {};
-AIRPORTS.forEach(a => { AIRPORT_COORDS[a.iata] = a; });
-
-function haversineNm(lat1, lon1, lat2, lon2) {
-  const R = 3440.065; // Earth radius in nautical miles
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-function isLonghaulFlight(f) {
-  // Use airport coords to calculate distance; >2500nm = longhaul
-  const orig = AIRPORT_COORDS[f.origin];
-  const dest = AIRPORT_COORDS[f.dest];
-  if (orig && dest) return haversineNm(orig.lat, orig.lon, dest.lat, dest.lon) > 2500;
-  // Fallback: old flight number heuristic (sub-100) for flights without matched airports
-  const num = parseInt((f.callsign || '').replace(/^UAL/, ''));
-  return num > 0 && num < 100;
-}
-
 // Icon cache: key = "hdg_rounded|isLonghaul|phase|isWatched|isStarlink" → L.divIcon
 const _iconCache = {};
 function createPlaneIcon(hdg, isLonghaul, phase, isWatched, isStarlink) {
@@ -1378,7 +1088,7 @@ function getFilteredFlights() {
       const hub = HUBS.find(h => h.iata === activeHubFilter);
       // FR24 gives real origin/dest — use those first, fall back to estimation
       const matchesHub = f.origin === activeHubFilter || f.dest === activeHubFilter ||
-        (f.onGround && hub && haversine(f.lat, f.lon, hub.lat, hub.lon) < 93); // ~50nm
+        (f.onGround && hub && haversineNm(f.lat, f.lon, hub.lat, hub.lon) < 93); // ~50nm
       if (!matchesHub) return false;
     }
     if (activePhaseFilter) {
@@ -1389,15 +1099,6 @@ function getFilteredFlights() {
     if (showStarlinkOnly && !isStarlinkFlight(f)) return false;
     return true;
   });
-}
-
-function getPhaseGroup(phase) {
-  if (phase === 'Ground') return 'Ground';
-  if (phase === 'Takeoff' || phase === 'Climb') return 'Climb';
-  if (phase === 'Cruise' || phase === 'En Route') return 'Cruise';
-  if (phase === 'Descent') return 'Descent';
-  if (phase === 'Approach') return 'Approach';
-  return 'Cruise';
 }
 
 function updateMarkers() {
@@ -1418,12 +1119,12 @@ function updateMarkers() {
   });
 
   filtered.forEach(f => {
-    const isLonghaul = showLonghaul && isLonghaulFlight(f);
+    const longhaul = showLonghaul && isLonghaul(f.origin, f.dest, f.callsign, AIRPORT_COORDS);
     const phaseInfo = getPhase(f.alt, f.vr, f.spd);
     const flightId = f.flightIATA || '';
     const isWatched = flightId && watchedSet.has(flightId);
     const isStarlink = isStarlinkFlight(f);
-    const icon = createPlaneIcon(f.hdg, isLonghaul, phaseInfo.phase, isWatched, isStarlink);
+    const icon = createPlaneIcon(f.hdg, longhaul, phaseInfo.phase, isWatched, isStarlink);
     // F084: cheap aria-label so screen readers get "UA123 ORD to DEN, cruising" instead
     // of nothing — the icon is cached/shared across markers, so the label is applied to
     // the marker's DOM element directly rather than baked into the cached icon HTML.
@@ -1491,8 +1192,8 @@ function showFlightPopup(f, marker) {
 
   const origCode = f.origin || originObj?.iata || '???';
   const destCode = f.dest || destObj?.iata || '???';
-  const origCity = IATA_CITIES[origCode] || '';
-  const destCity = IATA_CITIES[destCode] || '';
+  const origCity = cityFor(origCode);
+  const destCity = cityFor(destCode);
   const hasCityNames = origCity && destCity;
   const routeStr = origCode + ' → ' + destCode;
 
@@ -1706,43 +1407,6 @@ function showFlightPopup(f, marker) {
       routeGroup = L.layerGroup(layers).addTo(map);
     }
   }
-}
-
-function greatCirclePoints(lat1, lon1, lat2, lon2, n) {
-  const φ1 = toRad(lat1), λ1 = toRad(lon1), φ2 = toRad(lat2), λ2 = toRad(lon2);
-  const d = Math.acos(Math.min(1, Math.max(-1,
-    Math.sin(φ1)*Math.sin(φ2) + Math.cos(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1)
-  )));
-  if (d < 1e-6) return [[lat1,lon1],[lat2,lon2]];
-  const sinD = Math.sin(d);
-  const pts = [];
-  for (let i = 0; i <= n; i++) {
-    const f = i / n;
-    const a = Math.sin((1-f)*d) / sinD;
-    const b = Math.sin(f*d) / sinD;
-    const x = a*Math.cos(φ1)*Math.cos(λ1) + b*Math.cos(φ2)*Math.cos(λ2);
-    const y = a*Math.cos(φ1)*Math.sin(λ1) + b*Math.cos(φ2)*Math.sin(λ2);
-    const z = a*Math.sin(φ1) + b*Math.sin(φ2);
-    pts.push([toDeg(Math.atan2(z, Math.sqrt(x*x + y*y))), toDeg(Math.atan2(y, x))]);
-  }
-  return pts;
-}
-
-// Normalize a polyline so longitudes are continuous (no >180° jumps).
-// Leaflet handles coordinates outside [-180,180] fine — this lets
-// transpacific routes render correctly across the antimeridian.
-function normalizeLonContinuity(pts) {
-  if (!pts || pts.length < 2) return pts || [];
-  const out = [[pts[0][0], pts[0][1]]];
-  for (let i = 1; i < pts.length; i++) {
-    let lon = pts[i][1];
-    const prevLon = out[i - 1][1];
-    // Shift lon to be within ±180 of previous point
-    while (lon - prevLon > 180) lon -= 360;
-    while (lon - prevLon < -180) lon += 360;
-    out.push([pts[i][0], lon]);
-  }
-  return out;
 }
 
 // Legacy wrapper — no longer splits; just returns a single continuous segment
@@ -8460,8 +8124,8 @@ function buildAircraftDetailHTML(ac, reg) {
     var fltNum = liveFlight.flightIATA || liveFlight.callsign || '?';
     var origCode = liveFlight.origin || '?';
     var destCode = liveFlight.dest || '?';
-    var origCity = IATA_CITIES[origCode] || '';
-    var destCity = IATA_CITIES[destCode] || '';
+    var origCity = cityFor(origCode);
+    var destCity = cityFor(destCode);
     var altFt = liveFlight.alt ? Math.round(liveFlight.alt * 3.28084) : null;
     var spdKts = liveFlight.spd ? Math.round(liveFlight.spd * 1.944) : null;
     var phaseInfo = getPhase(liveFlight.alt, liveFlight.vr, liveFlight.spd);
