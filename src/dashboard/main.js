@@ -24,13 +24,19 @@ import { computeFlightCategory, computeOpsImpact } from '../lib/metar-category.j
 import { iropsScore, iropsScoreCls, iropsScoreLabel, iropsRateFloor } from '../lib/irops-score.js';
 import { matchAircraft as matchAircraftInFleet } from '../lib/fleet-match.js';
 import { matchesScheduleFilters } from '../lib/schedule-board-filters.js';
-import { analyzeSwapImpact as classifySwapImpact, CABIN_RANK } from '../lib/swap-impact.js';
+import { analyzeSwapImpact as classifySwapImpact } from '../lib/swap-impact.js';
 import { escapeHtml } from '../lib/escape.js';
 import { cartoBasemapUrl } from '../lib/basemap.js';
 import { getPhase, getPhaseGroup, decodeSquawk } from '../lib/flight-phase.js';
 import { haversineNm, greatCirclePoints, normalizeLonContinuity, isLonghaul } from '../lib/geo.js';
 import { AIRPORTS, AIRPORT_COORDS, IATA_CITIES, cityFor } from '../lib/airports.js';
 import { estimateRoute } from '../lib/route-estimate.js';
+import { planeIconSpec } from '../lib/plane-icon.js';
+import { getUnitedTerminal } from '../lib/hub-terminals.js';
+import { indexSpecialAircraft, ENGINE_BY_TYPE, SEAT_BAR_COLORS, CABIN_COLORS } from '../lib/special-aircraft.js';
+import { readHomeAirport, writeHomeAirport, nextHomeAirport } from '../lib/home-airport.js';
+import { pickTip, TIP_ROTATE_MS, TIP_DISMISS_DAYS } from '../lib/tips.js';
+import { ICAO_TO_FLEET_TYPE, getTypicalFleetStats, detectEquipmentSwaps } from '../lib/equipment-swaps.js';
 import { atcAirports, atcMeta, unitedHubsMeta, unitedProjects } from '../data/trackers/index.js';
 
 
@@ -187,45 +193,28 @@ async function loadFleetData() {
 // FLEET_HEALTH_CATEGORIES and categorizeFleetStatus imported from ../lib/fleet-utils.js
 
 // ═══ SPECIAL AIRCRAFT DETECTION ═══
+// The ⭐ index itself (and ENGINE_BY_TYPE) live in ../lib/special-aircraft.js; this
+// object is the module-global view of it, rebuilt whenever FLEET_DB is reloaded.
 const SPECIAL_AIRCRAFT = {};
 
 function buildSpecialAircraftIndex() {
   Object.keys(SPECIAL_AIRCRAFT).forEach(k => delete SPECIAL_AIRCRAFT[k]);
-  FLEET_DB.forEach(a => {
-    if (!a.s) return;
-    if (a.s.startsWith('*')) {
-      SPECIAL_AIRCRAFT[a.r] = { name: a.s.replace(/^\*+|\*+$/g, '').trim(), type: 'named' };
-    } else if (/100 Year Sticker/i.test(a.s)) {
-      SPECIAL_AIRCRAFT[a.r] = { name: '100 Year Sticker', type: 'livery' };
-    } else if (/Eco Demonstrator/i.test(a.s)) {
-      SPECIAL_AIRCRAFT[a.r] = { name: 'Eco Demonstrator Explorer', type: 'livery' };
-    }
-  });
+  for (const [reg, entry] of indexSpecialAircraft(FLEET_DB)) SPECIAL_AIRCRAFT[reg] = entry;
 }
 
 function isSpecialAircraft(reg) {
   return SPECIAL_AIRCRAFT[reg] || null;
 }
 
-// ═══ ENGINE TYPE LOOKUP ═══
-const ENGINE_BY_TYPE = {
-  'A319':'IAE V2524-A5','A320':'IAE V2527-A5','A321neo':'CFM LEAP-1A',
-  '737-700':'CFM56-7B22','737-800':'CFM56-7B26','737-900':'CFM56-7B26',
-  '737-900ER':'CFM56-7B27','737 MAX 8':'CFM LEAP-1B28','737 MAX 9':'CFM LEAP-1B28',
-  '757-200':'RB211-535E4B','757-300':'RB211-535E4B',
-  '767-300ER':'CF6-80C2B7F','767-400ER':'CF6-80C2B8F',
-  '777-200':'PW4077','777-200ER':'PW4090','777-300ER':'GE90-115B',
-  '787-8':'GEnx-1B64','787-9':'GEnx-1B74','787-10':'GEnx-1B76'
-};
-
 const HUBS = AIRPORTS.filter(a => a.hub);
 const HUB_CODES = HUBS.map(h => h.iata);
 
 // ═══ HOME AIRPORT ═══
-function getHomeAirport() { return localStorage.getItem('bb_home_airport') || ''; }
+// Storage rules + the header button's cycle live in ../lib/home-airport.js; these
+// two wrappers bind them to localStorage and the DOM side effects.
+function getHomeAirport() { return readHomeAirport(localStorage); }
 function setHomeAirport(code) {
-  if (code) localStorage.setItem('bb_home_airport', code);
-  else localStorage.removeItem('bb_home_airport');
+  writeHomeAirport(localStorage, code);
   updateHomeHubDisplay();
   updateTrackerBriefing();
 }
@@ -306,24 +295,7 @@ function updateTrackerBriefing() {
 // (imported above) alongside the pure classifyConnection() verdict logic, so the
 // cancelled/diverted + NaN guards (F003/F055) are unit-testable. Both tables are
 // re-exported unchanged.
-// Known United Airlines terminals at each hub (fallback when API doesn't provide terminal data)
-const UNITED_HUB_TERMINALS = {
-  ORD:{domestic:'1',international:'1'},       // Terminal 1 (B & C); Express uses T2
-  DEN:{domestic:'B',international:'B'},       // Concourse B
-  EWR:{domestic:'C',international:'C'},       // Terminal C (primary)
-  IAH:{domestic:'C',international:'E'},       // Terminal C (domestic), Terminal E (international)
-  SFO:{domestic:'3',international:'G'},       // Terminal 3 (domestic), International Terminal G
-  LAX:{domestic:'7',international:'7'},       // Terminals 7 & 8
-  IAD:{domestic:'C',international:'D'},       // Concourse C (domestic), Concourse D (international)
-  NRT:{domestic:'1',international:'1'},       // Terminal 1
-  GUM:{domestic:'1',international:'1'},       // Single terminal
-};
-function getUnitedTerminal(iata, origIata, destIata) {
-  const hub = UNITED_HUB_TERMINALS[iata];
-  if (!hub) return '';
-  const isIntl = INTL_AIRPORTS.has(origIata) || INTL_AIRPORTS.has(destIata);
-  return isIntl ? hub.international : hub.domestic;
-}
+// UNITED_HUB_TERMINALS + getUnitedTerminal live in ../lib/hub-terminals.js.
 
 // ═══ GLOBALS ═══
 let map, flightMarkers = {}, routeLine = null, routeGroup = null, hubMarkers = [], wxLayer = null;
@@ -1058,27 +1030,17 @@ async function refreshFlights() {
 // Icon cache: key = "hdg_rounded|isLonghaul|phase|isWatched|isStarlink" → L.divIcon
 const _iconCache = {};
 function createPlaneIcon(hdg, isLonghaul, phase, isWatched, isStarlink) {
-  // Round heading to nearest 5° to maximize cache hits
-  const hdgRounded = Math.round((hdg || 0) / 5) * 5;
-  const cacheKey = `${hdgRounded}|${isLonghaul?1:0}|${phase}|${isWatched?1:0}|${isStarlink?1:0}`;
-  if (_iconCache[cacheKey]) return _iconCache[cacheKey];
-  // Starlink marker treatment: distinct violet FILL, no glow halo (owner Jul 4 2026 — the
-  // stacked drop-shadow "orb" look is gone). Fill priority: watched green → Starlink violet
-  // → long-haul amber → phase color. Accepted trade-off: phase color is not visible on
-  // Starlink aircraft — the popup and the Starlink-only filter still carry it.
-  const color = isWatched ? '#22c55e'
-    : isStarlink ? '#A78BFA'
-    : isLonghaul ? '#fbbf24'
-    : (phase === 'Ground' ? '#64748B' : '#6BAAED');
-  const size = isWatched ? 16 : (isLonghaul ? 14 : 10);
-  const filter = `drop-shadow(0 0 2px ${color})`;
-  // SVG plane pointing north (0°) — classic top-down aircraft silhouette, cross-platform consistent
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="filter:${filter}"><path d="M128 16c-4 0-8 3-9 7l-15 72-88 34c-3 1-4 4-4 7s2 5 5 6l87 20 4 52-28 18c-2 1-3 3-3 5v8c0 2 1 4 3 4l20-6h28l20 6c2 0 3-2 3-4v-8c0-2-1-4-3-5l-28-18 4-52 87-20c3-1 5-3 5-6s-1-6-4-7l-88-34-15-72c-1-4-5-7-9-7z"/></svg>`;
+  // Colours, sizing, heading rounding and the SVG itself live in ../lib/plane-icon.js;
+  // only the Leaflet wrapper and its cache stay here.
+  const { size, svg, key, hdgRounded } = planeIconSpec(hdg, {
+    longhaul: isLonghaul, phase, watched: isWatched, starlink: isStarlink,
+  });
+  if (_iconCache[key]) return _iconCache[key];
   const icon = L.divIcon({
     html: `<div style="transform:rotate(${hdgRounded}deg);line-height:0">${svg}</div>`,
     iconSize: [size, size], iconAnchor: [size/2, size/2], className: ''
   });
-  _iconCache[cacheKey] = icon;
+  _iconCache[key] = icon;
   return icon;
 }
 
@@ -2268,7 +2230,7 @@ function showConfigGallery(type) {
     configs[key].count++;
   });
 
-  const colors = { J: '#2563eb', PP: '#0d9488', PE: '#0d9488', F: '#7c3aed', 'E+': '#16a34a', Y: '#475569', Domestic: '#6366f1' };
+  const colors = CABIN_COLORS;
   let html = '<div class="fleet-config-title">' + escapeHtml(type) + ' Configurations</div>';
 
   for (const [cfg, data] of Object.entries(configs)) {
@@ -4434,7 +4396,8 @@ async function loadScheduleData() {
     schedBoardFetchedAtMs = Date.now();
     schedAutoScrollPending = loadDay === 0; // anchor Today at NOW on load (tomorrow/yesterday boards skip)
     preloadWeatherAndFAA();
-    detectEquipmentSwaps(allUAFlights, loadHub, loadDir, loadDay);
+    equipmentChanges = detectEquipmentSwaps(allUAFlights, `bb_sched_${loadHub}_${loadDir}_${loadDay}`, localStorage).swaps;
+    updateEquipChangeSummary();
     populateAircraftFilter();
     // Reset advanced filters on hub/direction/day change
     document.getElementById('sched-route-type').value = '';
@@ -5202,90 +5165,22 @@ document.getElementById('global-search-results').addEventListener('keydown', fun
 });
 
 // ═══ EQUIPMENT SWAP DETECTION ═══
-const ICAO_TO_FLEET_TYPE = {
-  'A319':'A319','A320':'A320','A21N':'A321neo',
-  'B737':'737-700','B738':'737-800','B739':'737-900',
-  'B39M':'737 MAX 9','B38M':'737 MAX 8',
-  'B752':'757-200','B753':'757-300',
-  'B763':'767-300ER','B764':'767-400ER',
-  'B772':'777-200','B77E':'777-200ER','B77W':'777-300ER',
-  'B788':'787-8','B789':'787-9','B78X':'787-10'
-};
-
-// Cabin/WiFi/IFE quality rankings (higher = more premium) live in src/lib/swap-impact.js
-// alongside analyzeSwapImpact; CABIN_RANK is imported here so getTypicalFleetStats and
-// the swap classifier share one source of truth.
-
-function getTypicalFleetStats(icaoCode) {
-  const fleetType = ICAO_TO_FLEET_TYPE[icaoCode];
-  if (!fleetType || !FLEET_DB.length) return null;
-  // Find all aircraft of this type to get typical stats
-  const ofType = FLEET_DB.filter(a => a.t === fleetType && categorizeFleetStatus(a.s) === 'active');
-  if (!ofType.length) return null;
-  // Use the most common config (mode)
-  const configCounts = {};
-  ofType.forEach(a => { const k = a.c || ''; configCounts[k] = (configCounts[k] || 0) + 1; });
-  const topConfig = Object.entries(configCounts).sort((a, b) => b[1] - a[1])[0][0];
-  const representative = ofType.find(a => (a.c || '') === topConfig) || ofType[0];
-  // Collect WiFi types used by this fleet type
-  const wifiCounts = {};
-  ofType.forEach(a => { if (a.w) { const nw = normalizeWifi(a.w); wifiCounts[nw] = (wifiCounts[nw] || 0) + 1; } });
-  const topWifi = Object.entries(wifiCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-  // Check if any have Starlink
-  const hasStarlink = ofType.some(a => STARLINK_TAILS.has(a.r));
-  // Premium cabin: highest cabin class available
-  const topCabin = representative.seats ? Object.keys(representative.seats).reduce((best, cls) =>
-    (CABIN_RANK[cls] || 0) > (CABIN_RANK[best] || 0) ? cls : best, 'Y') : 'Y';
-  return {
-    type: fleetType,
-    seats: representative.seats || {},
-    tot: representative.tot || 0,
-    wifi: topWifi,
-    ife: representative.i || '',
-    topCabin,
-    hasStarlink
-  };
-}
+// ICAO_TO_FLEET_TYPE, getTypicalFleetStats and detectEquipmentSwaps live in
+// ../lib/equipment-swaps.js. Cabin/WiFi/IFE quality rankings (higher = more premium)
+// live in src/lib/swap-impact.js alongside analyzeSwapImpact, so getTypicalFleetStats
+// and the swap classifier share one source of truth.
 
 // The upgrade/downgrade/lateral classification lives in src/lib/swap-impact.js;
 // inject the module-global fleet lookups it needs.
 function analyzeSwapImpact(oldAcCode, newAcCode, newReg) {
   return classifySwapImpact(oldAcCode, newAcCode, newReg, {
-    getTypicalFleetStats,
+    getTypicalFleetStats: (icaoCode) => getTypicalFleetStats(icaoCode, FLEET_DB, STARLINK_TAILS),
     fleetByReg: FLEET_BY_REG,
     starlinkTails: STARLINK_TAILS,
   });
 }
 
 let equipmentChanges = [];
-
-function detectEquipmentSwaps(flights, hub, dir, day) {
-  const storageKey = `bb_sched_${hub}_${dir}_${day}`;
-  const newMap = {};
-  const regMap = {};
-  flights.forEach(fl => {
-    const fnum = fl.identification?.number?.default;
-    const acCode = fl.aircraft?.model?.code;
-    if (fnum && acCode) {
-      newMap[fnum] = acCode;
-      regMap[fnum] = fl.aircraft?.registration || '';
-    }
-  });
-  equipmentChanges = [];
-  try {
-    const oldData = localStorage.getItem(storageKey);
-    if (oldData) {
-      const oldMap = JSON.parse(oldData);
-      for (const [fnum, newAc] of Object.entries(newMap)) {
-        if (oldMap[fnum] && oldMap[fnum] !== newAc) {
-          equipmentChanges.push({ flight: fnum, oldAc: oldMap[fnum], newAc, reg: regMap[fnum] || '' });
-        }
-      }
-    }
-    localStorage.setItem(storageKey, JSON.stringify(newMap));
-  } catch(e) { /* localStorage full or unavailable */ }
-  updateEquipChangeSummary();
-}
 
 function updateEquipChangeSummary() {
   const el = document.getElementById('equip-change-summary');
@@ -7239,11 +7134,7 @@ document.addEventListener('click', function(e) {
       checkManualConnection();
       break;
     case 'cycle-home-hub': {
-      const hubs = ['','ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
-      const cur = getHomeAirport();
-      const idx = hubs.indexOf(cur);
-      const next = hubs[(idx + 1) % hubs.length];
-      setHomeAirport(next);
+      setHomeAirport(nextHomeAirport(getHomeAirport()));
       break;
     }
     case 'close-bmac': {
@@ -7391,32 +7282,12 @@ document.addEventListener('click', function(e) {
 // ═══ INIT ═══
 // ═══ TIP STRIP ═══
 (function() {
-  const TIPS = {
-    'tab-live': [
-      'Click any aircraft registration (N-number) in a popup to see full details, seat config & Starlink status',
-      'Click a hub name in the sidebar to filter the map to just that hub\'s flights',
-      'Toggle the weather radar overlay with the rain cloud button on the map'
-    ],
-    'tab-schedule': [
-      'Use "Filter: Fleet, Aircraft, Starlink…" to narrow by family, equipment, or WiFi',
-      'Click any registration in the schedule table to see full aircraft details'
-    ],
-    'tab-myflight': [
-      'Watch 2+ connecting flights and we\'ll automatically check your connection risk',
-      'The "Where\'s My Plane?" section shows the inbound aircraft for your watched flight'
-    ],
-    'tab-weather': [
-      'Load schedule data in the Schedule tab to unlock the IROPS disruption monitor'
-    ],
-    'tab-fleet': [
-      'Click any fleet type chip to filter the aircraft database instantly'
-    ]
-  };
+  // The tip copy, the pick rule and the two timing constants live in ../lib/tips.js.
   const strip = document.getElementById('tip-strip');
   const textEl = document.getElementById('tip-text');
   if (!strip || !textEl) return;
   const DISMISS_KEY = 'bb_tips_dismissed';
-  const DISMISS_DAYS = 7;
+  const DISMISS_DAYS = TIP_DISMISS_DAYS;
   function isDismissed() {
     const ts = localStorage.getItem(DISMISS_KEY);
     return ts && (Date.now() - parseInt(ts)) < DISMISS_DAYS * 86400000;
@@ -7428,9 +7299,7 @@ document.addEventListener('click', function(e) {
   let tipTimer = null;
   function showTip() {
     if (isDismissed()) { strip.style.display = 'none'; return; }
-    const tab = getActiveTab();
-    const pool = TIPS[tab] || TIPS['tab-live'];
-    const tip = pool[Math.floor(Math.random() * pool.length)];
+    const tip = pickTip(getActiveTab());
     textEl.classList.add('tip-fade');
     setTimeout(() => { textEl.textContent = tip; textEl.classList.remove('tip-fade'); }, 300);
     strip.style.display = '';
@@ -7438,7 +7307,7 @@ document.addEventListener('click', function(e) {
   function startRotation() {
     showTip();
     if (tipTimer) clearInterval(tipTimer);
-    tipTimer = setInterval(showTip, 45000);
+    tipTimer = setInterval(showTip, TIP_ROTATE_MS);
   }
   // Listen for tab switches
   document.getElementById('tab-bar')?.addEventListener('click', (e) => {
@@ -7917,11 +7786,7 @@ function hideDisclaimer() {
 })();
 
 // ═══ AIRCRAFT DETAIL MODAL ═══
-const SEAT_BAR_COLORS = {
-  'J':'rgba(0,93,170,.5)','F':'rgba(139,92,246,.5)',
-  'PP':'rgba(20,184,166,.5)','PE':'rgba(20,184,166,.5)',
-  'E+':'rgba(34,197,94,.5)','Y':'rgba(100,116,139,.5)'
-};
+// SEAT_BAR_COLORS lives in ../lib/special-aircraft.js.
 
 // ═══ AI DELAY EXPLANATION MODAL ═══
 function showDelayExplanation(ctx) {
