@@ -20,6 +20,12 @@ interface Props {
   ogImage?: string;
   ogType?: string;
   noindex?: boolean;
+  /** Share-card copy. Each falls back to the page title/description. */
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImageAlt?: string;
+  twitterTitle?: string;
+  twitterDescription?: string;
   jsonLd?: Record<string, unknown>[];
   bodyClass?: string;
   dataAttrs?: Record<string, string>;
@@ -34,6 +40,11 @@ const {
   ogImage,
   ogType,
   noindex,
+  ogTitle,
+  ogDescription,
+  ogImageAlt,
+  twitterTitle,
+  twitterDescription,
   jsonLd = [],
   bodyClass,
   dataAttrs = {},
@@ -51,6 +62,11 @@ const {
       ogImage={ogImage}
       ogType={ogType}
       noindex={noindex}
+      ogTitle={ogTitle}
+      ogDescription={ogDescription}
+      ogImageAlt={ogImageAlt}
+      twitterTitle={twitterTitle}
+      twitterDescription={twitterDescription}
     />
     <slot name="head" />
   </head>
