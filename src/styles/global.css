@@ -1,0 +1,299 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* Bundled by Vite into `_astro/*.woff2` — CSP is `font-src 'self'`, so no Google Fonts. */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Light palette kept for completeness only — dark is the product default and
+   `<html class="dark" style="color-scheme:dark">` is set by BaseLayout. */
+:root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* `--primary` is United blue. */
+.dark {
+    --background: oklch(0.145 0.005 260);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.66 0.17 255);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.66 0.17 255);
+    --chart-1: oklch(0.66 0.17 255);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  /* Keyboard users see a ring, mouse users don't. shadcn components carry their
+     own `outline-none` + `focus-visible:ring-*`, and utilities outrank this
+     base rule, so they keep their own treatment. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* Visually hidden but readable by screen readers and crawlers. The site brief,
+   the crawlable nav and the fleet summary all depend on this. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Leaflet integration ──────────────────────────────────────────────────────
+   Leaflet ships its own stylesheet from npm and the React island will import it
+   as a separate CSS chunk, so these overrides must beat it on SPECIFICITY, not
+   on source order. Leaflet's rules are single-class (0,1,x) except the
+   attribution and close button, which it scopes to `.leaflet-container`
+   (0,2,x) — hence the `.leaflet-container` prefix on everything here and the
+   extra `.leaflet-popup` level on the close button. These carry over the
+   behaviour-encoding rules from the old style.css (inventory §32). */
+/* leaflet.css sets `.leaflet-container{background:#ddd}` and its own font stack
+   at the same specificity, so the class is doubled to win without !important —
+   a tie here means a light-grey map on a dark page. */
+.leaflet-container.leaflet-container {
+  font: inherit;
+  background: var(--background);
+}
+
+/* ODbL: the OpenStreetMap/CARTO credit must stay visible wherever tiles render.
+   Never `display:none` this — restyle only. Leaflet's own rule is already
+   `.leaflet-container .leaflet-control-attribution`, so the `.leaflet-control`
+   class (added to every control container by `Control.addTo`) breaks the tie. */
+.leaflet-container .leaflet-control-attribution.leaflet-control {
+  background: color-mix(in oklab, var(--background) 85%, transparent);
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  line-height: 1.5;
+  padding: 2px 6px;
+  border-radius: 3px 0 0 0;
+  margin: 0;
+}
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+.leaflet-container .leaflet-control-attribution a:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+/* Marker hit-area: plane icons render as small as 10x10px CSS, a real click
+   hazard on touch. The icon element's size and anchor are set inline by
+   L.divIcon, so grow the *clickable* box with a ::after pseudo-element instead
+   — pseudo-elements are part of the parent's own box for hit-testing, so a
+   click in the padded area still fires on .leaflet-marker-icon.
+   Do NOT add `position:relative` here: leaflet.css lists `position:absolute`
+   on .leaflet-marker-icon under "required styles", and removing it returns
+   600+ markers to normal flow and stacks them down the pane. */
+.leaflet-container .leaflet-marker-icon.leaflet-interactive::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  background: transparent;
+}
+
+.leaflet-container .leaflet-popup-content-wrapper {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.6);
+}
+.leaflet-container .leaflet-popup-tip {
+  background: var(--popover);
+}
+.leaflet-container .leaflet-popup-content {
+  margin: 0;
+  font-size: 11px;
+  min-width: 280px;
+}
+/* 44x44 touch target (WCAG 2.5.5). Leaflet's own rule is
+   `.leaflet-container a.leaflet-popup-close-button` at 24x24, so this needs the
+   extra `.leaflet-popup` level (the close button is its direct child) to win. */
+.leaflet-container .leaflet-popup a.leaflet-popup-close-button {
+  top: 4px;
+  right: 4px;
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.leaflet-container .leaflet-popup a.leaflet-popup-close-button:hover,
+.leaflet-container .leaflet-popup a.leaflet-popup-close-button:focus {
+  color: var(--foreground);
+}
+
+.leaflet-container .leaflet-bar a {
+  background: var(--card);
+  color: var(--foreground);
+  border-bottom-color: var(--border);
+}
+.leaflet-container .leaflet-bar a:hover {
+  background: var(--accent);
+}
+/* leaflet.css themes the disabled zoom button light; without this the button
+   flips to #f4f4f4 on a dark map at the end of a zoom range. */
+.leaflet-container .leaflet-bar a.leaflet-disabled {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+/* Leaflet's base tooltip rule is `white-space:nowrap` with no max-width, so a
+   long hub condition label clips off-screen on narrow viewports. */
+.leaflet-container .leaflet-tooltip {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  box-shadow: none;
+  white-space: normal;
+  max-width: min(280px, 70vw);
+}
+.leaflet-container .leaflet-tooltip-top:before {
+  border-top-color: var(--border);
+}
+
+/* Keyless basemap fallback: darken OSM tiles in CSS. */
+.bb-osm-dark {
+  filter: invert(1) hue-rotate(180deg) brightness(0.65) contrast(1.15) saturate(0.35);
+}
+
+@import "./content.css";

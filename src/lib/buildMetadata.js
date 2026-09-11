@@ -91,6 +91,11 @@ export const newarkLastmodPaths = [
   'src/data/hubs/ewr.js',
 ];
 
+export const privacyLastmodPaths = [
+  'src/pages/privacy.astro',
+  'src/components/site/BaseLayout.astro',
+];
+
 export const tsaLastmodPaths = [
   'src/pages/tsa.astro',
   'src/data/tsa/united-terminals.js',

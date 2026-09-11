@@ -1,0 +1,56 @@
+---
+/**
+ * Visible breadcrumb trail plus the matching BreadcrumbList structured data.
+ *
+ * The trail always starts at the site root, so callers pass only the levels
+ * below it. The last item is the current page and is not a link.
+ */
+import JsonLd from './JsonLd.astro';
+
+const SITE_URL = 'https://theblueboard.co';
+
+export interface Crumb {
+  label: string;
+  /** Site-root path, e.g. `/hubs`. Omit on the current page. */
+  href?: string;
+}
+
+interface Props {
+  items: Crumb[];
+}
+
+const { items } = Astro.props;
+const trail: Crumb[] = [{ label: 'The Blue Board', href: '/' }, ...items];
+
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: trail.map((crumb, index) => ({
+    '@type': 'ListItem',
+    position: index + 1,
+    name: crumb.label,
+    ...(crumb.href ? { item: `${SITE_URL}${crumb.href === '/' ? '' : crumb.href}` } : {}),
+  })),
+};
+---
+<nav aria-label="Breadcrumb" class="text-xs text-muted-foreground">
+  <ol class="flex flex-wrap items-center gap-1.5">
+    {
+      trail.map((crumb, index) => (
+        <li class="flex items-center gap-1.5">
+          {index > 0 && <span aria-hidden="true">/</span>}
+          {crumb.href ? (
+            <a href={crumb.href} class="underline underline-offset-2 hover:text-foreground">
+              {crumb.label}
+            </a>
+          ) : (
+            <span aria-current="page" class="text-foreground">
+              {crumb.label}
+            </span>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+</nav>
+<JsonLd data={schema} />

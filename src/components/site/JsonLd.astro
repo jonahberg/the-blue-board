@@ -1,0 +1,17 @@
+---
+/**
+ * One JSON-LD block.
+ *
+ * The opening tag must stay exactly `<script type="application/ld+json">` —
+ * `tests/agent-readiness.test.js` extracts structured data with a literal
+ * match on that string. `<` is escaped so a value can never close the tag.
+ */
+
+interface Props {
+  data: Record<string, unknown>;
+}
+
+const { data } = Astro.props;
+const json = JSON.stringify(data).replaceAll('<', '\\u003c');
+---
+<script type="application/ld+json" set:html={json} />

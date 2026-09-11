@@ -1,0 +1,72 @@
+---
+/**
+ * The single base layout for every Astro-rendered document.
+ *
+ * Owns the `<html>`/`<head>` contract (dark by default), the shared chrome,
+ * Web Analytics, and the JSON-LD blocks at the end of `<body>`. Pages add
+ * page-specific head tags through the named `head` slot.
+ */
+import VercelAnalytics from '../VercelAnalytics.astro';
+import JsonLd from './JsonLd.astro';
+import Seo from './Seo.astro';
+import SiteFooter from './SiteFooter.astro';
+import SiteHeader from './SiteHeader.astro';
+import '../../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  canonical: string;
+  ogImage?: string;
+  ogType?: string;
+  noindex?: boolean;
+  jsonLd?: Record<string, unknown>[];
+  bodyClass?: string;
+  dataAttrs?: Record<string, string>;
+  /** The dashboard renders its own header; every other page uses SiteHeader. */
+  hideSiteHeader?: boolean;
+}
+
+const {
+  title,
+  description,
+  canonical,
+  ogImage,
+  ogType,
+  noindex,
+  jsonLd = [],
+  bodyClass,
+  dataAttrs = {},
+  hideSiteHeader = false,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="dark" style="color-scheme:dark">
+  <head>
+    <Seo
+      title={title}
+      description={description}
+      canonical={canonical}
+      ogImage={ogImage}
+      ogType={ogType}
+      noindex={noindex}
+    />
+    <slot name="head" />
+  </head>
+  <body class={bodyClass} {...dataAttrs}>
+    <a
+      href="#main"
+      class="absolute left-4 top-4 z-100 -translate-y-20 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground focus:translate-y-0"
+    >
+      Skip to main content
+    </a>
+    {!hideSiteHeader && <SiteHeader />}
+    <main id="main">
+      <slot />
+    </main>
+    <SiteFooter />
+    {jsonLd.map((data) => <JsonLd data={data} />)}
+    <VercelAnalytics />
+  </body>
+</html>

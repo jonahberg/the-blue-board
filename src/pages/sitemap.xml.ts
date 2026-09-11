@@ -12,6 +12,7 @@ import {
   hubIndexLastmodPaths,
   newarkLastmodPaths,
   newsIndexLastmodPaths,
+  privacyLastmodPaths,
   trackersIndexLastmodPaths,
   tsaLastmodPaths,
   xmlEscape,
@@ -51,6 +52,7 @@ export function GET() {
     ),
     renderUrl('/newark', getLastModified(newarkLastmodPaths), 'weekly', '0.8'),
     renderUrl('/tsa', getLastModified(tsaLastmodPaths), 'weekly', '0.8'),
+    renderUrl('/privacy', getLastModified(privacyLastmodPaths), 'yearly', '0.3'),
     renderUrl('/trackers', getLastModified(trackersIndexLastmodPaths), 'weekly', '0.9'),
     ...trackerOrder.map((slug: string) =>
       renderUrl(`/trackers/${slug}`, getLastModified(getTrackerRouteLastmodPaths(slug)), 'weekly', '0.8')

@@ -1,9 +1,49 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+const ROOT = resolve(process.cwd());
+
 function readProjectFile(path) {
-  return readFileSync(resolve(process.cwd(), path), 'utf8');
+  return readFileSync(resolve(ROOT, path), 'utf8');
+}
+
+/** True when `source` imports the component whose path ends with `suffix`. */
+function importsComponent(source, suffix) {
+  return source.includes(`${suffix}'`) || source.includes(`${suffix}"`);
+}
+
+const ANALYTICS = '/VercelAnalytics.astro';
+const BASE_LAYOUT = '/site/BaseLayout.astro';
+const RELATIVE_ASTRO_IMPORT = /from\s+['"](\.[^'"]+\.astro)['"]/g;
+
+/**
+ * A document is instrumented when it mounts the analytics wrapper itself, uses
+ * BaseLayout (which mounts it), or imports another `.astro` file that does —
+ * that last case is how the `[hub]`, `[type]`, `[slug]` and `[code]` pages
+ * inherit it from their layouts.
+ */
+function isInstrumented(absolutePath, seen = new Set()) {
+  if (seen.has(absolutePath) || !existsSync(absolutePath)) return false;
+  seen.add(absolutePath);
+
+  const source = readFileSync(absolutePath, 'utf8');
+  if (importsComponent(source, ANALYTICS) || importsComponent(source, BASE_LAYOUT)) return true;
+
+  for (const [, specifier] of source.matchAll(RELATIVE_ASTRO_IMPORT)) {
+    if (isInstrumented(resolve(dirname(absolutePath), specifier), seen)) return true;
+  }
+  return false;
+}
+
+function astroFilesIn(dir) {
+  const found = [];
+  for (const entry of readdirSync(resolve(ROOT, dir), { withFileTypes: true })) {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) found.push(...astroFilesIn(path));
+    else if (entry.name.endsWith('.astro')) found.push(path);
+  }
+  return found;
 }
 
 // Sep 2026: Vercel Web Analytics showed requestPath "/" and nothing else for a month — every
@@ -30,34 +70,24 @@ describe('Web Analytics integration', () => {
     expect(dashboardEntry).not.toContain('speed-insights');
   });
 
-  it('mounts the shared wrapper from every static Astro document entrypoint', () => {
-    const entrypoints = [
-      'src/layouts/FleetTypeLayout.astro',
-      'src/layouts/HubLayout.astro',
-      'src/layouts/NewsLayout.astro',
-      'src/pages/404.astro',
-      'src/pages/fleet/index.astro',
-      'src/pages/hubs/index.astro',
-      'src/pages/news/index.astro',
-      'src/pages/newark.astro',
-      'src/pages/privacy.astro',
-      'src/pages/tsa.astro',
-      'src/pages/trackers/index.astro',
-      'src/pages/trackers/atc.astro',
-      'src/pages/trackers/united-hubs.astro',
-      'src/components/trackers/TrackerDetailLayout.astro',
-    ];
+  it('BaseLayout mounts the shared wrapper, so every page built on it is instrumented', () => {
+    const baseLayout = readProjectFile('src/components/site/BaseLayout.astro');
 
-    for (const file of entrypoints) {
-      const source = readProjectFile(file);
+    expect(importsComponent(baseLayout, ANALYTICS)).toBe(true);
+    expect(baseLayout).toContain('<VercelAnalytics />');
+  });
 
-      expect(source, file).toContain("/VercelAnalytics.astro'");
-      expect(source, file).toContain('<VercelAnalytics />');
+  it('every page and layout is instrumented, directly or through a layout it imports', () => {
+    const documents = [...astroFilesIn('src/pages'), ...astroFilesIn('src/layouts')];
+
+    expect(documents.length).toBeGreaterThan(10);
+    for (const file of documents) {
+      expect(isInstrumented(resolve(ROOT, file)), file).toBe(true);
     }
   });
 
   it('Speed Insights (canceled on the Vercel project Jul 2026) is fully removed', () => {
-    expect(existsSync(resolve(process.cwd(), 'src/components/VercelSpeedInsights.astro'))).toBe(false);
+    expect(existsSync(resolve(ROOT, 'src/components/VercelSpeedInsights.astro'))).toBe(false);
     const pkg = JSON.parse(readProjectFile('package.json'));
     expect(pkg.dependencies?.['@vercel/speed-insights']).toBeUndefined();
     expect(pkg.devDependencies?.['@vercel/speed-insights']).toBeUndefined();

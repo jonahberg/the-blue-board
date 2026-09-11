@@ -1,0 +1,7 @@
+/*
+ * Long-form content styles (prose, hub/fleet `contentHtml` blocks, news bodies).
+ *
+ * Scaffold only — Tasks 9 and 10 move the `set:html` content rules here as the
+ * `.astro` pages come off the old `--ua-*` stylesheet. Imported at the END of
+ * `global.css` so these rules win ties against the base layer above.
+ */
