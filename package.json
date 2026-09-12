@@ -1,6 +1,6 @@
 {
   "name": "the-blue-board",
-  "description": "The Blue Board — Unofficial United Airlines operations dashboard",
+  "description": "The Blue Board \u2014 Unofficial United Airlines operations dashboard",
   "author": "Jonah Berg (https://github.com/jonahberg)",
   "license": "FSL-1.1-MIT",
   "repository": "jonahberg/the-blue-board",
@@ -12,8 +12,8 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "bun scripts/run-astro-dev.mjs",
-    "build": "bun scripts/refresh-starlink-facts.mjs && vite build --config vite.dashboard.config.js && astro build && bun scripts/stamp-seo-build-date.mjs && bun scripts/build-agent-markdown.mjs",
+    "dev": "astro dev",
+    "build": "bun scripts/refresh-starlink-facts.mjs && astro build && bun scripts/stamp-seo-build-date.mjs && bun scripts/build-agent-markdown.mjs && bun scripts/verify-csp-hashes.mjs",
     "build:dashboard": "vite build --config vite.dashboard.config.js",
     "preview": "astro preview",
     "seed:schedules": "bun scripts/seed-schedules.mjs",

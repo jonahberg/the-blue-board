@@ -25,6 +25,8 @@ interface Props {
   dataAttrs?: Record<string, string>;
   /** The dashboard renders its own header; every other page uses SiteHeader. */
   hideSiteHeader?: boolean;
+  /** The dashboard fills the viewport and carries its own attribution footer. */
+  hideSiteFooter?: boolean;
 }
 
 const {
@@ -38,6 +40,7 @@ const {
   bodyClass,
   dataAttrs = {},
   hideSiteHeader = false,
+  hideSiteFooter = false,
 } = Astro.props;
 ---
 
@@ -65,7 +68,7 @@ const {
     <main id="main">
       <slot />
     </main>
-    <SiteFooter />
+    {!hideSiteFooter && <SiteFooter />}
     {jsonLd.map((data) => <JsonLd data={data} />)}
     <VercelAnalytics />
   </body>

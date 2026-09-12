@@ -73,14 +73,16 @@ describe('Web Analytics integration', () => {
     expect(component).not.toContain('speed-insights');
   });
 
-  it('the dashboard loads the same script exactly once, as a static tag', () => {
-    const dashboardEntry = readProjectFile('src/dashboard/main.js');
-    const dashboardHtml = readProjectFile('public/index.html');
+  it('the dashboard is instrumented through BaseLayout like every other page', () => {
+    // The homepage used to be a hand-written public/index.html carrying its own analytics
+    // tag. It is src/pages/index.astro now, so it inherits the single shared wrapper — and
+    // the island must not pull in a second analytics client of its own.
+    const homepage = readProjectFile('src/pages/index.astro');
 
-    expect(dashboardHtml.match(/\/_vercel\/insights\/script\.js/g)).toHaveLength(1);
-    expect(dashboardHtml).toContain('<script defer src="/_vercel/insights/script.js"></script>');
-    expect(dashboardEntry).not.toContain('@vercel/analytics');
-    expect(dashboardEntry).not.toContain('speed-insights');
+    expect(homepage).toMatch(/^\s*import\s+BaseLayout\s+from\s+'\.\.\/components\/site\/BaseLayout\.astro';\s*$/m);
+    expect(isMounted(homepage, 'BaseLayout')).toBe(true);
+    expect(homepage).not.toContain('/_vercel/insights/script.js');
+    expect(isInstrumented(resolve(ROOT, 'src/pages/index.astro'))).toBe(true);
   });
 
   it('BaseLayout imports AND mounts the shared wrapper, so pages built on it are instrumented', () => {

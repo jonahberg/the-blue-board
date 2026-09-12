@@ -4,14 +4,11 @@ const FALLBACK_DATE = new Date().toISOString().slice(0, 10);
 const lastModifiedCache = new Map();
 
 export const homeLastmodPaths = [
-  'public/index.html',
-  'public/css/style.css',
+  'src/pages/index.astro',
+  'src/app',
+  'src/lib/home-seo.js',
   'public/data/fleet.json',
   'public/data/starlink.json',
-  'src/pages/hubs/index.astro',
-  'src/pages/fleet/index.astro',
-  'src/layouts/HubLayout.astro',
-  'src/layouts/FleetTypeLayout.astro',
 ];
 
 export const fleetIndexLastmodPaths = [

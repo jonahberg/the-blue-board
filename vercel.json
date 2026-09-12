@@ -64,7 +64,7 @@
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
         { "key": "Vary", "value": "Accept, Accept-Encoding" },
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://unpkg.com https://va.vercel-scripts.com; style-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://mesonet.agron.iastate.edu https://theblueboard.co; connect-src 'self' https://theblueboard.co https://va.vercel-scripts.com; frame-ancestors 'none'" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://unpkg.com https://va.vercel-scripts.com 'sha256-/0dziVO/LeW8Lf08T/VEd+PyeIDljhKdzM7rb8q2SSQ=' 'sha256-eIXWvAmxkr251LJZkjniEK5LcPF3NkapbJepohwYRIc=' 'sha256-SaCkFfPruIdTXT8/97JArQmGxiJAL2o4bBDvSgJ5y3Q='; style-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://mesonet.agron.iastate.edu https://theblueboard.co; connect-src 'self' https://theblueboard.co https://va.vercel-scripts.com; frame-ancestors 'none'" }
       ]
     },
     {

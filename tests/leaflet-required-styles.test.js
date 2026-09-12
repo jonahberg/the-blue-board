@@ -32,8 +32,10 @@ const REQUIRED_ABSOLUTE = [
 ];
 
 describe('Leaflet required styles are not overridden', () => {
+  // The dashboard's stylesheet is src/styles/global.css now; public/css/style.css is
+  // retired (kept for reference under legacy/, not served or built).
   const css = readFileSync(
-    resolve(__dirname, '..', 'public', 'css', 'style.css'),
+    resolve(__dirname, '..', 'src', 'styles', 'global.css'),
     'utf8'
   );
 
@@ -67,25 +69,29 @@ describe('Leaflet required styles are not overridden', () => {
   }
 
   // The live map mounts Leaflet's zoom control at 'bottomright'. leaflet.css gives it a 10px
-  // margin and a 30px-wide button stack, so it owns roughly the first 42px in from the viewport's
-  // right edge and the first 89px up from the bottom. #legal-details shipped at right:16px and
+  // margin and a 30px-wide button stack, so it owns roughly the first 42px in from the map's
+  // right edge and the first 89px up from its bottom. #legal-details shipped at right:16px and
   // covered the zoom-OUT button outright — document.elementFromPoint at the button's centre
   // returned #legal-btn, so clicking "−" opened the About popover instead of zooming.
+  //
+  // The rebuild has no fixed full-bleed map, so nothing should be pinned into that corner at
+  // all. This asserts the absence rather than a specific rule's offset: any position:fixed
+  // rule that plants itself in the bottom-right corner is the same bug.
   const LEAFLET_ZOOM_RIGHT_RESERVED_PX = 52;
 
-  it('keeps fixed bottom-right overlays clear of the Leaflet zoom control', () => {
-    const rule = stripped.match(/#legal-details\s*\{([^}]*)\}/);
-    expect(rule, '#legal-details rule not found').toBeTruthy();
+  it('leaves the map\'s bottom-right corner clear of fixed overlays', () => {
+    const offenders = rules.filter(([, body]) => {
+      if (!/position\s*:\s*fixed/.test(body)) return false;
+      if (!/(^|[;\s])bottom\s*:/.test(body)) return false;
+      const right = Number((body.match(/(?:^|[;\s])right\s*:\s*(\d+)px/) || [])[1]);
+      return Number.isFinite(right) && right < LEAFLET_ZOOM_RIGHT_RESERVED_PX;
+    });
 
-    const body = rule[1];
-    expect(body, 'expected #legal-details to be position:fixed').toMatch(/position\s*:\s*fixed/);
-
-    const right = Number((body.match(/(?:^|;)\s*right\s*:\s*(\d+)px/) || [])[1]);
     expect(
-      right,
-      `#legal-details must sit at least ${LEAFLET_ZOOM_RIGHT_RESERVED_PX}px from the right edge ` +
-        "so it does not swallow the map's zoom-out button"
-    ).toBeGreaterThanOrEqual(LEAFLET_ZOOM_RIGHT_RESERVED_PX);
+      offenders.map(([selector]) => selector),
+      `a fixed bottom-right overlay within ${LEAFLET_ZOOM_RIGHT_RESERVED_PX}px of the edge ` +
+        "swallows the map's zoom-out button"
+    ).toEqual([]);
   });
 
   // Prove the guard would actually catch the PR #220 failure mode written the sneaky

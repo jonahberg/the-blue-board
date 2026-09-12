@@ -1,37 +1,31 @@
+// Stamps the deploy-time Starlink figures into the two verbatim-copied text files.
+//
+// `dist/index.html` used to be stamped here too: it was a static file in `public/` that
+// could not import anything, so both the `__HOME_LASTMOD__` date and the Starlink figures
+// had to be patched into the built output. `src/pages/index.astro` imports
+// `src/data/starlink-live.json` and `getLastModified()` directly, so the HTML needs no
+// stamping at all now.
+//
+// `public/llms.txt` and `public/llms-full.txt` are still plain text copied verbatim into
+// `dist/`, so they still do. The committed source keeps the last-good strings (readable in
+// dev); `dist/` gets the live values. A missing source string means someone edited the copy
+// without updating `starlink-live.json`'s "source" block — fail the build loudly rather than
+// ship a half-stamped page.
+
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import { getLastModified, homeLastmodPaths } from '../src/lib/buildMetadata.js';
+const starlink = JSON.parse(await readFile(resolve('src/data/starlink-live.json'), 'utf8'));
 
-const distIndexPath = resolve('dist/index.html');
-const homeLastModified = getLastModified(homeLastmodPaths);
-
-const html = await readFile(distIndexPath, 'utf8');
-if (!html.includes('__HOME_LASTMOD__')) {
-  throw new Error('Expected __HOME_LASTMOD__ placeholder in dist/index.html');
-}
-
-const updatedHtml = html.replaceAll('__HOME_LASTMOD__', homeLastModified);
-await writeFile(distIndexPath, updatedHtml);
-
-console.log(`Stamped dist/index.html with home dateModified ${homeLastModified}`);
-
-// Stamp the deploy-time Starlink figures into the verbatim-copied public/
-// files. Source keeps the committed strings (readable in dev); dist gets the
-// live values. A missing source string means someone edited the copy without
-// updating starlink-live.json's "source" block — fail the build loudly rather
-// than ship a half-stamped page.
-const starlink = JSON.parse(
-  await readFile(resolve('src/data/starlink-live.json'), 'utf8'),
-);
-const starlinkReplacements = [
+const replacements = [
   [starlink.source.label, starlink.live.label],
   [starlink.source.asOf, starlink.live.asOf],
 ];
-for (const rel of ['dist/index.html', 'dist/llms.txt', 'dist/llms-full.txt']) {
+
+for (const rel of ['dist/llms.txt', 'dist/llms-full.txt']) {
   const path = resolve(rel);
   let text = await readFile(path, 'utf8');
-  for (const [from, to] of starlinkReplacements) {
+  for (const [from, to] of replacements) {
     if (!text.includes(from)) {
       throw new Error(`Expected "${from}" in ${rel} — copy drifted from starlink-live.json "source"`);
     }

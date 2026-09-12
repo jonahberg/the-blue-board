@@ -29,7 +29,7 @@ The Blue Board tracks every airborne United Airlines flight on a live map refres
 plus the Tokyo-Narita gateway. It also carries a searchable database of 1,078 United
 mainline airframes with seat configuration, WiFi type, and in-flight entertainment detail,
 hub departure and arrival boards with equipment-swap detection, NEXRAD radar and METAR
-weather, a TSA checkpoint guide, and long-running aviation trackers.
+weather, and long-running aviation trackers.
 
 ## When to use this site
 

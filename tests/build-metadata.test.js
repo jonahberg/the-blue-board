@@ -108,9 +108,16 @@ describe('getLastModified', () => {
 });
 
 describe('static lastmod path arrays', () => {
-  it('homeLastmodPaths includes index.html and style.css', () => {
-    expect(homeLastmodPaths).toContain('public/index.html');
-    expect(homeLastmodPaths).toContain('public/css/style.css');
+  it('homeLastmodPaths tracks the Astro page, the island and the data it renders', () => {
+    // The homepage stopped being public/index.html + public/css/style.css: its dateModified
+    // now has to move when the page, the dashboard island, the SEO copy or the fleet and
+    // Starlink data change.
+    expect(homeLastmodPaths).toContain('src/pages/index.astro');
+    expect(homeLastmodPaths).toContain('src/app');
+    expect(homeLastmodPaths).toContain('src/lib/home-seo.js');
+    expect(homeLastmodPaths).toContain('public/data/fleet.json');
+    expect(homeLastmodPaths).toContain('public/data/starlink.json');
+    expect(homeLastmodPaths).not.toContain('public/index.html');
   });
 
   it('fleetIndexLastmodPaths includes fleet page and data', () => {
