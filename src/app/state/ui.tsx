@@ -52,6 +52,9 @@ export type UiValue = {
   openFr24: (query: string | null) => void;
   waitlistOpen: boolean;
   setWaitlistOpen: (open: boolean) => void;
+  /** The canopy's "?" reopens onboarding; Task 8 renders it. */
+  onboardingOpen: boolean;
+  setOnboardingOpen: (open: boolean) => void;
 
   /** The current text of the single polite live region. */
   announcement: string;
@@ -84,6 +87,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [delayExplain, setDelayExplain] = useState<Record<string, unknown> | null>(null);
   const [fr24Query, setFr24Query] = useState<string | null>(null);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const lastAnnouncement = useRef('');
 
@@ -133,6 +137,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
       openFr24: setFr24Query,
       waitlistOpen,
       setWaitlistOpen,
+      onboardingOpen,
+      setOnboardingOpen,
       announcement,
       announce,
     }),
@@ -149,6 +155,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
       delayExplain,
       fr24Query,
       waitlistOpen,
+      onboardingOpen,
       announcement,
       announce,
     ],
