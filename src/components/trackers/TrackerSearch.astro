@@ -1,95 +1,46 @@
 ---
 // "Check your airport / hub." Progressive enhancement: the page renders everything at build
-// time; this input (wired up by /js/trackers.js) only filters what's already there. With JS
-// off, the search hides itself and the full table stands alone.
-/** @type {{ label: string, placeholder: string, emptyTitle: string, emptyBody: string, noun?: string }} */
+// time; this input (wired up by `src/scripts/trackers.ts`) only filters what is already there.
+// With JS off the wrapper keeps its `hidden` attribute and the full table stands alone — so
+// never give this element a `display` rule in a stylesheet, or `hidden` stops hiding it.
+interface Props {
+  label: string;
+  placeholder: string;
+  emptyTitle: string;
+  emptyBody: string;
+  noun?: string;
+}
+
 const { label, placeholder, emptyTitle, emptyBody, noun = 'matches' } = Astro.props;
 ---
 
-<div class="trk-search" hidden data-trk-search-wrap>
-  <label class="trk-search-label" for="trk-search-input">{label}</label>
-  <div class="trk-search-row">
+<div hidden data-trk-search-wrap>
+  <label
+    class="mb-2 block font-mono text-[10px] font-semibold uppercase tracking-widest text-amber-400"
+    for="trk-search-input">{label}</label
+  >
+  <div class="flex items-center gap-3">
     <input
       type="search"
       id="trk-search-input"
-      class="trk-search-input"
+      class="min-h-11 w-full max-w-105 flex-1 rounded-md border border-border bg-card px-3.5 py-2.5 text-sm text-foreground transition-colors placeholder:text-muted-foreground hover:border-primary"
       placeholder={placeholder}
       autocomplete="off"
       spellcheck="false"
       data-trk-search
     />
-    <span class="trk-search-count" data-trk-count data-trk-noun={noun} aria-live="polite"></span>
+    <span
+      class="whitespace-nowrap font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+      data-trk-count
+      data-trk-noun={noun}
+      aria-live="polite"></span>
   </div>
-  <div class="trk-search-empty" hidden data-trk-empty>
-    <div class="trk-search-empty-title">{emptyTitle}</div>
-    <p class="trk-search-empty-body">{emptyBody}</p>
+  <div
+    class="mt-3 rounded-r-md border-l-[3px] border-amber-400 bg-card px-4 py-3"
+    hidden
+    data-trk-empty
+  >
+    <div class="mb-1 text-xs font-semibold text-amber-400">{emptyTitle}</div>
+    <p class="text-xs leading-relaxed text-muted-foreground">{emptyBody}</p>
   </div>
 </div>
-
-<style>
-  .trk-search-label {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--ua-amber);
-    margin-bottom: 8px;
-  }
-  .trk-search-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .trk-search-input {
-    flex: 1;
-    max-width: 420px;
-    background: var(--ua-panel);
-    border: 1px solid var(--ua-border);
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-family: var(--font-ui);
-    font-size: 13px;
-    color: var(--ua-text);
-    transition: border-color 0.2s;
-  }
-  .trk-search-input::placeholder {
-    color: var(--ua-dim);
-  }
-  .trk-search-input:hover {
-    border-color: var(--ua-blue);
-  }
-  .trk-search-input:focus-visible {
-    outline: 2px solid var(--ua-accent);
-    outline-offset: 2px;
-  }
-  .trk-search-count {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--ua-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-  }
-  .trk-search-empty {
-    margin-top: 12px;
-    background: var(--ua-panel);
-    border-left: 3px solid var(--ua-amber);
-    border-radius: 0 6px 6px 0;
-    padding: 12px 16px;
-  }
-  .trk-search-empty-title {
-    font-family: var(--font-display);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--ua-amber);
-    margin-bottom: 4px;
-  }
-  .trk-search-empty-body {
-    font-size: 12px;
-    line-height: 1.6;
-    color: var(--ua-muted);
-    margin: 0;
-  }
-</style>
