@@ -1,33 +1,50 @@
 ---
 // Build-time inline SVG US map — zero dependencies, zero render JS. Status is encoded twice:
-// color AND marker shape (dot / diamond / ring), per the site's never-color-alone rule.
-// Interaction model is an inspector card below the map (populated by /js/trackers.js on
+// colour AND marker shape (dot / diamond / ring), per the site's never-colour-alone rule.
+// Interaction is an inspector card below the map (populated by `src/scripts/trackers.ts` on
 // hover/focus/tap of a marker); with JS off the map is a static overview and the table below
-// the page carries the detail. Airports outside CONUS/AK/HI render as an honest
-// "beyond the map" strip rather than being silently dropped.
+// carries the detail. Airports outside CONUS/AK/HI render as an honest "beyond the map" strip
+// rather than being silently dropped.
+//
+// Shapes draw with `currentColor`, so one tone class on the wrapping `<g>` colours the marker,
+// and the legend reuses the same map.
 import StatusBadge from './StatusBadge.astro';
+import { TONE_TEXT, toneClass } from './tones';
 
-/**
- * point: { id, code, x, y, shape: 'dot'|'diamond'|'ring', tone: 'green'|'yellow'|'accent'|'dim',
- *          label?: boolean, card: { title, badge: {label, tone, glyph}, line1?, line2? } }
- */
+interface MapPoint {
+  id: string;
+  code: string;
+  x: number;
+  y: number;
+  shape: 'dot' | 'diamond' | 'ring';
+  tone: string;
+  label?: boolean;
+  card: {
+    title: string;
+    badge: { label: string; tone: string; glyph: string };
+    line1?: string;
+    line2?: string;
+  };
+}
+
+interface Props {
+  paths: { conus: string; alaska: string; hawaii: string };
+  points: MapPoint[];
+  legend: { label: string; shape: 'dot' | 'diamond' | 'ring'; tone: string }[];
+  offMap?: { title: string; badge: { label: string; tone: string; glyph: string } }[];
+  ariaLabel: string;
+  hint: string;
+}
+
 const { paths, points, legend, offMap = [], ariaLabel, hint } = Astro.props;
-
-/** @type {Record<string, string>} */
-const TONE_COLOR = {
-  green: 'var(--ua-green)',
-  yellow: 'var(--ua-yellow)',
-  accent: 'var(--ua-accent)',
-  dim: 'var(--ua-dim)',
-};
 ---
 
-<div class="trk-map" data-trk-map>
+<div data-trk-map>
   <!-- role=group (not img): img would make the focusable marker buttons
        presentational to AT — axe nested-interactive -->
   <svg
     viewBox="0 0 960 600"
-    class="trk-map-svg"
+    class="block h-auto w-full rounded-md border border-border bg-card"
     role="group"
     aria-label={ariaLabel}
   >
@@ -36,18 +53,29 @@ const TONE_COLOR = {
       <path d={paths.alaska}></path>
       <path d={paths.hawaii}></path>
     </g>
-    <g class="trk-map-markers">
+    <g>
       {
         points.map((p) => (
           <g
-            class="trk-marker"
+            class:list={[
+              'trk-marker group cursor-pointer focus-visible:outline-none',
+              toneClass(TONE_TEXT, p.tone),
+            ]}
             data-trk-marker={p.id}
             tabindex="0"
             role="button"
             aria-label={`${p.card.title} — ${p.card.badge.label}`}
           >
-            <circle class="trk-marker-hit" cx={p.x} cy={p.y} r="9" />
-            {p.shape === 'dot' && <circle class="trk-marker-shape" cx={p.x} cy={p.y} r="4.5" fill={TONE_COLOR[p.tone]} />}
+            <circle class="fill-transparent" cx={p.x} cy={p.y} r="14" />
+            {p.shape === 'dot' && (
+              <circle
+                class="trk-marker-shape"
+                cx={p.x}
+                cy={p.y}
+                r="4.5"
+                fill="currentColor"
+              />
+            )}
             {p.shape === 'diamond' && (
               <rect
                 class="trk-marker-shape"
@@ -55,15 +83,28 @@ const TONE_COLOR = {
                 y={p.y - 3.8}
                 width="7.6"
                 height="7.6"
-                fill={TONE_COLOR[p.tone]}
+                fill="currentColor"
                 transform={`rotate(45 ${p.x} ${p.y})`}
               />
             )}
             {p.shape === 'ring' && (
-              <circle class="trk-marker-shape" cx={p.x} cy={p.y} r="3.6" fill="none" stroke={TONE_COLOR[p.tone]} stroke-width="1.6" />
+              <circle
+                class="trk-marker-shape"
+                cx={p.x}
+                cy={p.y}
+                r="3.6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+              />
             )}
             {p.label && (
-              <text class="trk-marker-label" x={p.x} y={p.y - 9} text-anchor="middle">
+              <text
+                class="fill-muted-foreground font-mono text-[9px] font-semibold tracking-wide"
+                x={p.x}
+                y={p.y - 9}
+                text-anchor="middle"
+              >
                 {p.code}
               </text>
             )}
@@ -73,14 +114,32 @@ const TONE_COLOR = {
     </g>
   </svg>
 
-  <div class="trk-map-legend" role="list" aria-label="Map legend">
+  <div class="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5" role="list" aria-label="Map legend">
     {
       legend.map((l) => (
-        <span class="trk-legend-item" role="listitem">
-          <svg viewBox="0 0 14 14" class="trk-legend-glyph" aria-hidden="true">
-            {l.shape === 'dot' && <circle cx="7" cy="7" r="4.5" fill={TONE_COLOR[l.tone]} />}
-            {l.shape === 'diamond' && <rect x="3.2" y="3.2" width="7.6" height="7.6" fill={TONE_COLOR[l.tone]} transform="rotate(45 7 7)" />}
-            {l.shape === 'ring' && <circle cx="7" cy="7" r="3.6" fill="none" stroke={TONE_COLOR[l.tone]} stroke-width="1.6" />}
+        <span
+          class="inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          role="listitem"
+        >
+          <svg
+            viewBox="0 0 14 14"
+            class:list={['size-3.5 shrink-0', toneClass(TONE_TEXT, l.tone)]}
+            aria-hidden="true"
+          >
+            {l.shape === 'dot' && <circle cx="7" cy="7" r="4.5" fill="currentColor" />}
+            {l.shape === 'diamond' && (
+              <rect
+                x="3.2"
+                y="3.2"
+                width="7.6"
+                height="7.6"
+                fill="currentColor"
+                transform="rotate(45 7 7)"
+              />
+            )}
+            {l.shape === 'ring' && (
+              <circle cx="7" cy="7" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6" />
+            )}
           </svg>
           {l.label}
         </span>
@@ -88,17 +147,34 @@ const TONE_COLOR = {
     }
   </div>
 
-  <div class="trk-map-card" data-trk-card-slot aria-live="polite">
-    <div class="trk-map-card-hint" data-trk-card-hint>{hint}</div>
+  <div
+    class="mt-2.5 min-h-15 rounded-md border border-border bg-card px-3.5 py-2.5"
+    data-trk-card-slot
+    aria-live="polite"
+  >
+    <div
+      class="pt-2.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+      data-trk-card-hint
+    >
+      {hint}
+    </div>
     {
       points.map((p) => (
-        <div class="trk-map-card-body" hidden data-trk-card={p.id}>
-          <div class="trk-map-card-head">
-            <span class="trk-map-card-title">{p.card.title}</span>
-            <StatusBadge label={p.card.badge.label} tone={p.card.badge.tone} glyph={p.card.badge.glyph} />
+        <div hidden data-trk-card={p.id}>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <span class="text-sm font-bold text-foreground">{p.card.title}</span>
+            <StatusBadge
+              label={p.card.badge.label}
+              tone={p.card.badge.tone}
+              glyph={p.card.badge.glyph}
+            />
           </div>
-          {p.card.line1 && <div class="trk-map-card-line">{p.card.line1}</div>}
-          {p.card.line2 && <div class="trk-map-card-line trk-map-card-line2">{p.card.line2}</div>}
+          {p.card.line1 && (
+            <div class="mt-1 text-xs leading-relaxed text-muted-foreground">{p.card.line1}</div>
+          )}
+          {p.card.line2 && (
+            <div class="mt-1 text-[11px] leading-relaxed text-muted-foreground">{p.card.line2}</div>
+          )}
         </div>
       ))
     }
@@ -106,12 +182,14 @@ const TONE_COLOR = {
 
   {
     offMap.length > 0 && (
-      <div class="trk-map-offmap">
-        <span class="trk-map-offmap-label">Beyond the map:</span>
+      <div class="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-2">
+        <span class="font-mono text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Beyond the map:
+        </span>
         {offMap.map((o) => (
-          <span class="trk-map-offmap-item">
+          <span class="inline-flex items-center gap-1.5">
             <StatusBadge label={o.badge.label} tone={o.badge.tone} glyph={o.badge.glyph} />
-            <span class="trk-map-offmap-name">{o.title}</span>
+            <span class="text-[11px] text-muted-foreground">{o.title}</span>
           </span>
         ))}
       </div>
@@ -120,126 +198,20 @@ const TONE_COLOR = {
 </div>
 
 <style>
-  .trk-map-svg {
-    width: 100%;
-    height: auto;
-    display: block;
-    background: linear-gradient(180deg, var(--ua-panel) 0%, rgba(17, 26, 39, 0.6) 100%);
-    border: 1px solid var(--ua-border);
-    border-radius: 6px;
-  }
+  /* The land outline is drawn from data-driven `d` attributes — a fill and stroke on a
+     generated <path> is not something a utility class can reach. */
   .trk-map-outline path {
-    fill: rgba(30, 41, 64, 0.35);
-    stroke: var(--ua-border);
+    fill: color-mix(in oklab, var(--muted) 55%, transparent);
+    stroke: var(--border);
     stroke-width: 1;
   }
-  .trk-marker {
-    cursor: pointer;
-  }
-  .trk-marker-hit {
-    fill: transparent;
-  }
+
+  /* Hover/focus halo on the marker. The shape carries no stroke of its own for dots and
+     diamonds, so this is an addition, not an override — and it has to select a CHILD of the
+     focused <g>, which is the one thing the utility syntax cannot express on an SVG group. */
   .trk-marker:hover .trk-marker-shape,
   .trk-marker:focus-visible .trk-marker-shape {
-    stroke: var(--ua-accent);
+    stroke: var(--primary);
     stroke-width: 2;
-  }
-  .trk-marker:focus-visible {
-    outline: none;
-  }
-  .trk-marker-label {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 600;
-    fill: var(--ua-muted);
-    letter-spacing: 0.5px;
-  }
-  .trk-map-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 16px;
-    margin-top: 10px;
-  }
-  .trk-legend-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--ua-muted);
-  }
-  .trk-legend-glyph {
-    width: 14px;
-    height: 14px;
-  }
-  .trk-map-card {
-    margin-top: 10px;
-    background: var(--ua-panel);
-    border: 1px solid var(--ua-border);
-    border-radius: 6px;
-    padding: 10px 14px;
-    min-height: 58px;
-  }
-  .trk-map-card-hint {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--ua-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding-top: 10px;
-  }
-  .trk-map-card-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .trk-map-card-title {
-    font-family: var(--font-display);
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--ua-text);
-  }
-  .trk-map-card-line {
-    font-size: 12px;
-    line-height: 1.6;
-    color: var(--ua-muted);
-    margin-top: 4px;
-  }
-  .trk-map-card-line2 {
-    color: var(--ua-dim);
-    font-size: 11px;
-  }
-  .trk-map-offmap {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 14px;
-    margin-top: 10px;
-  }
-  .trk-map-offmap-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--ua-dim);
-  }
-  .trk-map-offmap-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .trk-map-offmap-name {
-    font-size: 11px;
-    color: var(--ua-muted);
-  }
-  @media (max-width: 600px) {
-    .trk-marker-label {
-      font-size: 11px;
-    }
   }
 </style>

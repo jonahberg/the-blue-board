@@ -1,27 +1,27 @@
 ---
 /**
- * Evidence and return actions at the point of the claim. The source list is real HTML at build
- * time; watch/share are progressive enhancements in public/js/trackers.js.
- *
- * @type {{
- *   sources: string[],
- *   verified: string,
- *   entryId: string,
- *   entryLabel: string,
- *   shareHref: string,
- *   compact?: boolean,
- * }}
+ * Evidence and return actions at the point of the claim. The source list is real HTML at
+ * build time; watch and share are progressive enhancements in `src/scripts/trackers.ts`.
  */
+interface Props {
+  sources: string[];
+  verified: string;
+  entryId: string;
+  entryLabel: string;
+  shareHref: string;
+  compact?: boolean;
+}
+
 const { sources, verified, entryId, entryLabel, shareHref, compact = false } = Astro.props;
 
-const fmt = (iso) =>
+const fmt = (iso: string) =>
   new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   });
 
-const PUBLISHERS = {
+const PUBLISHERS: Record<string, string> = {
   'aerotime.aero': 'AeroTime',
   'aol.com': 'AOL News',
   'aopa.org': 'AOPA',
@@ -47,131 +47,69 @@ const PUBLISHERS = {
   'viewfromthewing.com': 'View from the Wing',
 };
 
-const sourceLabel = (source) => {
+const sourceLabel = (source: string) => {
   const host = new URL(source).hostname.replace(/^www\./, '');
   return PUBLISHERS[host] ?? host;
 };
+
+// 44 px tall per the touch-target rule, so the label is centred and set a size up from the
+// old 8 px chip — at 8 px it read as an empty box rather than a button.
+const actionClass =
+  'inline-flex min-h-11 flex-1 items-center justify-center rounded-sm border border-border px-2.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted-foreground hover:border-primary hover:text-primary aria-pressed:border-emerald-400/55 aria-pressed:text-emerald-400';
 ---
 
-<div class:list={['trk-evidence', { 'trk-evidence-compact': compact }]}>
-  <details class="trk-sources">
-    <summary>
+<div
+  class:list={[
+    'flex gap-2',
+    compact
+      ? 'min-w-42 flex-col'
+      : 'mt-2.5 flex-col items-start justify-between border-t border-border pt-2 sm:flex-row',
+  ]}
+>
+  <details class="min-w-0">
+    <summary
+      class="flex cursor-pointer items-center gap-1.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-primary marker:text-muted-foreground"
+    >
       <span>Sources ({sources.length})</span>
-      <span class="trk-verified">verified {fmt(verified)}</span>
+      <span class="font-medium text-muted-foreground">verified {fmt(verified)}</span>
     </summary>
-    <ol>
-      {sources.map((source) => (
-        <li>
-          <a href={source} target="_blank" rel="noopener noreferrer">{sourceLabel(source)}</a>
-        </li>
-      ))}
+    <ol class="mt-1.5 ml-4 list-decimal">
+      {
+        sources.map((source) => (
+          <li class="text-[10px] leading-relaxed text-muted-foreground">
+            <a
+              href={source}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+            >
+              {sourceLabel(source)}
+            </a>
+          </li>
+        ))
+      }
     </ol>
   </details>
-  <div class="trk-entry-actions" aria-label={`Actions for ${entryLabel}`}>
+  <div class="flex shrink-0 gap-1" aria-label={`Actions for ${entryLabel}`}>
     <button
       type="button"
+      class={actionClass}
       data-trk-watch
       data-trk-watch-id={entryId}
       data-trk-watch-label={entryLabel}
       aria-pressed="false"
       aria-label={`Watch ${entryLabel} for changes on this device`}
-      title="Highlight changes when you return"
-    >Watch</button>
-    <button type="button" data-trk-share data-trk-share-href={shareHref} data-trk-share-label={entryLabel} aria-label={`Share ${entryLabel}`}>
+      title="Highlight changes when you return">Watch</button
+    >
+    <button
+      type="button"
+      class={actionClass}
+      data-trk-share
+      data-trk-share-href={shareHref}
+      data-trk-share-label={entryLabel}
+      aria-label={`Share ${entryLabel}`}
+    >
       Share
     </button>
   </div>
 </div>
-
-<style>
-  .trk-evidence {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px solid var(--ua-border-subtle, var(--ua-border));
-  }
-  .trk-sources {
-    min-width: 0;
-  }
-  .trk-sources summary {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    color: var(--ua-accent);
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.35px;
-    text-transform: uppercase;
-  }
-  .trk-sources summary::marker {
-    color: var(--ua-dim);
-  }
-  .trk-verified {
-    color: var(--ua-dim);
-    font-weight: 500;
-  }
-  .trk-sources ol {
-    margin: 7px 0 0 16px;
-    padding: 0;
-  }
-  .trk-sources li {
-    color: var(--ua-dim);
-    font-family: var(--font-ui);
-    font-size: 10px;
-    line-height: 1.55;
-  }
-  .trk-sources a {
-    color: var(--ua-muted);
-    text-decoration: underline;
-    text-decoration-color: rgba(107, 170, 237, 0.35);
-    text-underline-offset: 2px;
-  }
-  .trk-entry-actions {
-    display: flex;
-    flex: 0 0 auto;
-    gap: 4px;
-  }
-  .trk-entry-actions button {
-    border: 1px solid var(--ua-border);
-    border-radius: 3px;
-    background: transparent;
-    color: var(--ua-muted);
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 8px;
-    font-weight: 600;
-    letter-spacing: 0.35px;
-    padding: 3px 6px;
-    text-transform: uppercase;
-  }
-  .trk-entry-actions button:hover,
-  .trk-entry-actions button:focus-visible {
-    border-color: var(--ua-blue);
-    color: var(--ua-accent);
-  }
-  .trk-entry-actions button:focus-visible {
-    outline: 2px solid var(--ua-accent);
-    outline-offset: 2px;
-  }
-  .trk-entry-actions button[aria-pressed='true'] {
-    border-color: rgba(34, 197, 94, 0.55);
-    color: var(--ua-green);
-  }
-  .trk-evidence-compact {
-    min-width: 168px;
-    margin-top: 0;
-    padding-top: 0;
-    border-top: none;
-    flex-direction: column;
-  }
-  @media (max-width: 600px) {
-    .trk-evidence {
-      flex-direction: column;
-    }
-  }
-</style>

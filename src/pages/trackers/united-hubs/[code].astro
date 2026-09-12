@@ -4,6 +4,7 @@ import { getAtcAirport, getHubProjects, unitedHubDetailCodes, formatCompactNumbe
 import TrackerDetailLayout from '../../../components/trackers/TrackerDetailLayout.astro';
 import StatusBadge from '../../../components/trackers/StatusBadge.astro';
 import SourceDisclosure from '../../../components/trackers/SourceDisclosure.astro';
+import { CARD, CARD_BADGES, CARD_HEAD, CARD_META, CARD_P, NOTE, SECTION, SECTION_H2, SECTION_H3, SECTION_P, STAT, STAT_LABEL, STAT_VALUE, SUMMARY_GRID } from '../../../components/trackers/detail';
 
 export function getStaticPaths() {
   return unitedHubDetailCodes.map((code) => ({ params: { code: code.toLowerCase() }, props: { code } }));
@@ -119,7 +120,6 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
   description={description}
   canonical={canonical}
   ogImage="https://theblueboard.co/og/og-tracker-united-hubs.jpg"
-  ogImageAlt={`United projects at ${code}`}
   parentHref="/trackers/united-hubs"
   parentLabel="United Hub Tracker"
   breadcrumbLabel={code}
@@ -135,29 +135,29 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
   peerLabel="Explore another United hub"
   peerLinks={peerLinks}
 >
-  <section class="trk-detail-section" aria-label={`${code} project summary`}>
-    <div class="trk-detail-summary">
-      <div class="trk-detail-stat"><strong>{projects.length}</strong><span>Tracked projects</span></div>
-      <div class="trk-detail-stat"><strong>{activeCount}</strong><span>Building or announced</span></div>
-      <div class="trk-detail-stat"><strong>{openCount}</strong><span>Already open</span></div>
-      <div class="trk-detail-stat"><strong>{totalGates || '—'}</strong><span>Tracked new gates</span></div>
+  <section class={SECTION} aria-label={`${code} project summary`}>
+    <div class={SUMMARY_GRID}>
+      <div class={STAT}><strong class={STAT_VALUE}>{projects.length}</strong><span class={STAT_LABEL}>Tracked projects</span></div>
+      <div class={STAT}><strong class={STAT_VALUE}>{activeCount}</strong><span class={STAT_LABEL}>Building or announced</span></div>
+      <div class={STAT}><strong class={STAT_VALUE}>{openCount}</strong><span class={STAT_LABEL}>Already open</span></div>
+      <div class={STAT}><strong class={STAT_VALUE}>{totalGates || '—'}</strong><span class={STAT_LABEL}>Tracked new gates</span></div>
     </div>
   </section>
 
-  <section class="trk-detail-section" aria-labelledby="hub-projects-heading">
-    <h2 id="hub-projects-heading">United projects at {code}</h2>
+  <section class={SECTION} aria-labelledby="hub-projects-heading">
+    <h2 id="hub-projects-heading" class={SECTION_H2}>United projects at {code}</h2>
     {projects.map((project) => {
       const status = STATUS[project.status];
       return (
-        <article class="trk-detail-card" id={project.id}>
-          <div class="trk-detail-card-head">
-            <h3>{project.name}</h3>
-            <div class="trk-detail-card-badges">
+        <article class={CARD} id={project.id}>
+          <div class={CARD_HEAD}>
+            <h3 class={SECTION_H3}>{project.name}</h3>
+            <div class={CARD_BADGES}>
               <StatusBadge label={status.label} tone={status.tone} glyph={status.glyph} />
               <StatusBadge label={TYPE_LABEL[project.projectType]} tone="neutral" />
             </div>
           </div>
-          <div class="trk-detail-meta">
+          <div class={CARD_META}>
             <span>{BUILDER_LABEL[project.builder]}</span>
             {project.targetDate && <span>Target {formatTrackerDate(project.targetDate)}</span>}
             {project.openedDate && <span>Opened {formatTrackerDate(project.openedDate)}</span>}
@@ -165,7 +165,7 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
             {project.costUsd && <span>${formatCompactNumber(project.costUsd)}</span>}
             {project.gates && <span>{countLabel(project.gates, 'gate')}</span>}
           </div>
-          <p>{project.details}</p>
+          <p class={CARD_P}>{project.details}</p>
           <SourceDisclosure
             sources={project.sources}
             verified={unitedHubsMeta.lastVerified}
@@ -178,32 +178,38 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
     })}
   </section>
 
-  <section class="trk-detail-section" aria-labelledby="hub-read-heading">
-    <h2 id="hub-read-heading">The read on {code}</h2>
-    <p>
+  <section class={SECTION} aria-labelledby="hub-read-heading">
+    <h2 id="hub-read-heading" class={SECTION_H2}>The read on {code}</h2>
+    <p class={SECTION_P}>
       {leadProject.name} is the clearest headline at {code}: {leadProject.details}
       {` Across the full list, ${unitedLedCount} of ${projects.length} projects are led or jointly built by United; the rest belong to the airport authority and affect United's operation without being United capital projects.`}
     </p>
-    {hub.quietNote && <p class="trk-detail-note">{hub.quietNote}</p>}
+    {hub.quietNote && <p class={NOTE}>{hub.quietNote}</p>}
   </section>
 
   {atcAirport && (
-    <section class="trk-detail-section" aria-labelledby="hub-tower-heading">
-      <h2 id="hub-tower-heading">Is the {code} tower still on paper?</h2>
-      <p>
-        The FAA tracker currently labels {code} <strong>{atcAirport.status === 'live' ? 'live on electronic flight strips' : atcAirport.status === 'planned' ? 'scheduled for TFDM' : atcAirport.status.replace('-', ' ')}</strong>.
+    <section class={SECTION} aria-labelledby="hub-tower-heading">
+      <h2 id="hub-tower-heading" class={SECTION_H2}>Is the {code} tower still on paper?</h2>
+      <p class={SECTION_P}>
+        The FAA tracker currently labels {code} <strong class="font-semibold text-foreground">{atcAirport.status === 'live' ? 'live on electronic flight strips' : atcAirport.status === 'planned' ? 'scheduled for TFDM' : atcAirport.status.replace('-', ' ')}</strong>.
         {' '}The tower rollout is tracked separately from United's terminal and club construction.
       </p>
-      <p><a href={`/trackers/atc/${code.toLowerCase()}`}>Open the sourced {code} electronic flight strips status &rarr;</a></p>
+      <p class={SECTION_P}>
+        <a
+          class="inline-flex min-h-11 items-center text-primary underline underline-offset-2"
+          href={`/trackers/atc/${code.toLowerCase()}`}
+          >Open the sourced {code} electronic flight strips status &rarr;</a
+        >
+      </p>
     </section>
   )}
 
-  <section class="trk-detail-section trk-detail-faq" aria-labelledby="hub-faq-heading">
-    <h2 id="hub-faq-heading">Quick answers</h2>
+  <section class={SECTION} aria-labelledby="hub-faq-heading">
+    <h2 id="hub-faq-heading" class={SECTION_H2}>Quick answers</h2>
     {faq.map((item) => (
-      <div>
-        <h3>{item.question}</h3>
-        <p>{item.answer}</p>
+      <div class="mt-3.5">
+        <h3 class={SECTION_H3}>{item.question}</h3>
+        <p class={CARD_P}>{item.answer}</p>
       </div>
     ))}
   </section>
