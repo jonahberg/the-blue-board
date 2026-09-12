@@ -1,68 +1,72 @@
 ---
+/**
+ * The 404 page.
+ *
+ * `tests/agent-readiness.test.js` reads THIS SOURCE FILE and asserts the
+ * literal `href="…"` strings below: the four machine-readable indexes
+ * (/sitemap.xml, /llms.txt, /llms-full.txt, /feed.xml) and the four section
+ * indexes (/fleet, /hubs, /trackers, /news). Keep them written out.
+ */
 import { hubOrder, hubNavLabels } from '../data/hubs/index.js';
-import VercelAnalytics from '../components/VercelAnalytics.astro';
+import BaseLayout from '../components/site/BaseLayout.astro';
+
+const linkClass =
+  'inline-flex min-h-11 items-center rounded-md border border-border bg-card px-3 text-[11px] text-muted-foreground hover:border-primary hover:text-foreground';
+const labelClass =
+  'mt-7 mb-2.5 font-mono text-[10px] font-semibold tracking-widest text-muted-foreground uppercase';
 ---
-<!DOCTYPE html>
-<html lang="en" style="color-scheme:dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0B1018">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E">
-<title>Page Not Found — The Blue Board</title>
-<meta name="robots" content="noindex">
-<link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
-<style is:inline>
-@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-*{margin:0;padding:0;box-sizing:border-box}
-:root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-border:#1E2940;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-accent:#6BAAED;--ua-green:#22C55E;--ua-amber:#C4A35A;--font-mono:'JetBrains Mono',monospace}
-body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-mono);min-height:100vh;display:flex;flex-direction:column}
-main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 20px 56px;text-align:center}
-a{color:var(--ua-accent);text-decoration:none}
-a:hover{text-decoration:underline}
-.code{font-size:120px;font-weight:700;color:var(--ua-accent);line-height:1;margin-bottom:8px;letter-spacing:-4px}
-.title{font-size:18px;font-weight:600;margin-bottom:8px}
-.subtitle{font-size:12px;color:var(--ua-muted);margin-bottom:32px;max-width:400px;line-height:1.6}
-.cta{display:inline-block;background:var(--ua-blue);color:#fff;padding:10px 24px;border-radius:6px;font-size:12px;font-weight:600;font-family:var(--font-mono);text-decoration:none;margin-bottom:32px;transition:opacity .2s}
-.cta:hover{opacity:.85;text-decoration:none}
-.hubs{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:500px}
-.hub-link{font-size:10px;color:var(--ua-muted);padding:4px 10px;border:1px solid var(--ua-border);border-radius:4px;transition:color .2s,border-color .2s}
-.hub-link:hover{color:var(--ua-accent);border-color:var(--ua-accent);text-decoration:none}
-.section-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber);margin:28px 0 10px}
-.agent-links{font-size:10px;color:var(--ua-muted);margin-top:24px;max-width:500px;line-height:2}
-.footer{position:fixed;bottom:16px;font-size:9px;color:var(--ua-muted)}
-</style>
-</head>
-<body>
-<main>
-  <div class="code">404</div>
-  <div class="title">Flight not found.</div>
-  <div class="subtitle">This page doesn't exist — but every United flight does. Head back to the dashboard or check a hub below.</div>
-  <a href="/" class="cta">← Back to The Blue Board</a>
-  <div class="section-label">Hub status</div>
-  <div class="hubs">
-    {hubOrder.map(hub => (
-      <a href={`/hubs/${hub}`} class="hub-link">{hubNavLabels[hub]}</a>
-    ))}
+
+<BaseLayout
+  title="Page Not Found — The Blue Board"
+  description="That page doesn't exist. Jump back to the live United Airlines dashboard, a hub status page, the fleet database, the trackers or the news hub."
+  canonical="/404"
+  noindex
+>
+  <div class="mx-auto flex max-w-2xl flex-col items-center px-4 py-14 text-center">
+    <p class="font-mono text-7xl leading-none font-bold tracking-tighter text-primary sm:text-8xl">
+      404
+    </p>
+    <h1 class="mt-3 text-lg font-semibold text-foreground">Flight not found.</h1>
+    <p class="mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground">
+      This page doesn't exist — but every United flight does. Head back to the dashboard or check a
+      hub below.
+    </p>
+
+    <a
+      href="/"
+      class="mt-7 inline-flex min-h-11 items-center rounded-md bg-primary px-6 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+    >
+      ← Back to The Blue Board
+    </a>
+
+    <p class={labelClass}>Hub status</p>
+    <nav aria-label="United hubs" class="flex max-w-lg flex-wrap justify-center gap-2">
+      {hubOrder.map((hub) => <a href={`/hubs/${hub}`} class={linkClass}>{hubNavLabels[hub]}</a>)}
+    </nav>
+
+    <p class={labelClass}>Or jump to a section</p>
+    <nav aria-label="Site sections" class="flex max-w-lg flex-wrap justify-center gap-2">
+      <a href="/fleet" class={linkClass}>Fleet database</a>
+      <a href="/hubs" class={linkClass}>All hubs</a>
+      <a href="/trackers" class={linkClass}>Trackers</a>
+      <a href="/news" class={linkClass}>News</a>
+      <a href="/newark" class={linkClass}>Newark ops</a>
+    </nav>
+
+    <p class="mt-8 max-w-lg text-[11px] leading-loose text-muted-foreground">
+      Crawlers and agents:
+      <a href="/sitemap.xml" class="underline underline-offset-2 hover:text-foreground"
+        >/sitemap.xml</a
+      > &middot;
+      <a href="/llms.txt" class="underline underline-offset-2 hover:text-foreground">/llms.txt</a> &middot;
+      <a href="/llms-full.txt" class="underline underline-offset-2 hover:text-foreground"
+        >/llms-full.txt</a
+      > &middot;
+      <a href="/feed.xml" class="underline underline-offset-2 hover:text-foreground">/feed.xml</a>
+      <br />
+      Send <code class="rounded-sm bg-muted px-1 py-0.5 font-mono text-[10px] text-foreground"
+        >Accept: text/markdown</code
+      > for a Markdown 404 with the same links.
+    </p>
   </div>
-  <div class="section-label">Or jump to a section</div>
-  <div class="hubs">
-    <a href="/fleet" class="hub-link">Fleet database</a>
-    <a href="/hubs" class="hub-link">All hubs</a>
-    <a href="/trackers" class="hub-link">Trackers</a>
-    <a href="/news" class="hub-link">News</a>
-    <a href="/tsa" class="hub-link">TSA checkpoints</a>
-    <a href="/newark" class="hub-link">Newark ops</a>
-  </div>
-  <div class="agent-links">
-    Crawlers and agents: <a href="/sitemap.xml">/sitemap.xml</a> &middot;
-    <a href="/llms.txt">/llms.txt</a> &middot;
-    <a href="/llms-full.txt">/llms-full.txt</a> &middot;
-    <a href="/feed.xml">/feed.xml</a><br>
-    Send <code>Accept: text/markdown</code> for a Markdown 404 with the same links.
-  </div>
-</main>
-  <div class="footer">The Blue Board · Independent · Not affiliated with United Airlines, Inc.</div>
-<VercelAnalytics />
-</body>
-</html>
+</BaseLayout>

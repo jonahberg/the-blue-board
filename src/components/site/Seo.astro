@@ -4,6 +4,10 @@
  * minus the dashboard-only resource hints and font preloads).
  *
  * Rendered only from BaseLayout — pages set these through BaseLayout's props.
+ *
+ * The OG/Twitter strings default to the page title and description; hub, fleet
+ * and news pages override them because their share cards carry different copy
+ * from the `<title>` (inventory §1.7, §1.9, §2.1–§2.3).
  */
 
 const SITE_URL = 'https://theblueboard.co';
@@ -18,6 +22,11 @@ interface Props {
   ogImage?: string;
   ogType?: string;
   noindex?: boolean;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImageAlt?: string;
+  twitterTitle?: string;
+  twitterDescription?: string;
 }
 
 const {
@@ -27,6 +36,11 @@ const {
   ogImage = DEFAULT_OG_IMAGE,
   ogType = 'website',
   noindex = false,
+  ogTitle,
+  ogDescription,
+  ogImageAlt,
+  twitterTitle,
+  twitterDescription,
 } = Astro.props;
 
 /** Accepts either an absolute URL or a site-root path. */
@@ -36,7 +50,11 @@ function absolute(value: string): string {
 
 const canonicalUrl = absolute(canonical);
 const imageUrl = absolute(ogImage);
-const imageAlt = imageUrl === DEFAULT_OG_IMAGE ? DEFAULT_OG_IMAGE_ALT : title;
+const shareTitle = ogTitle ?? title;
+const shareDescription = ogDescription ?? description;
+const imageAlt = ogImageAlt ?? (imageUrl === DEFAULT_OG_IMAGE ? DEFAULT_OG_IMAGE_ALT : shareTitle);
+const cardTitle = twitterTitle ?? shareTitle;
+const cardDescription = twitterDescription ?? shareDescription;
 ---
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -60,8 +78,8 @@ const imageAlt = imageUrl === DEFAULT_OG_IMAGE ? DEFAULT_OG_IMAGE_ALT : title;
 
 <meta property="og:type" content={ogType} />
 <meta property="og:locale" content="en_US" />
-<meta property="og:title" content={title} />
-<meta property="og:description" content={description} />
+<meta property="og:title" content={shareTitle} />
+<meta property="og:description" content={shareDescription} />
 <meta property="og:url" content={canonicalUrl} />
 <meta property="og:site_name" content="The Blue Board" />
 <meta property="og:image" content={imageUrl} />
@@ -71,8 +89,8 @@ const imageAlt = imageUrl === DEFAULT_OG_IMAGE ? DEFAULT_OG_IMAGE_ALT : title;
 <meta property="og:image:alt" content={imageAlt} />
 
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content={title} />
-<meta name="twitter:description" content={description} />
+<meta name="twitter:title" content={cardTitle} />
+<meta name="twitter:description" content={cardDescription} />
 <meta name="twitter:image" content={imageUrl} />
 <meta name="twitter:url" content={canonicalUrl} />
 <meta name="twitter:site" content="@theblueboard" />

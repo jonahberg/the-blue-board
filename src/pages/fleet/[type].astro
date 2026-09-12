@@ -8,5 +8,6 @@ export function getStaticPaths() {
 
 const { type } = Astro.params;
 const data = fleetTypes[type];
+if (!data) return Astro.redirect('/404');
 ---
 <FleetTypeLayout data={data} />

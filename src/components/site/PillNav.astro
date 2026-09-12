@@ -1,0 +1,32 @@
+---
+/**
+ * The "every hub" / "every fleet type" sibling navigation at the foot of a hub
+ * or fleet-type page. The current page's pill is marked with `aria-current`, so
+ * the active state is never colour-alone.
+ */
+
+interface Props {
+  items: ReadonlyArray<{ href: string; label: string; current?: boolean }>;
+  label: string;
+}
+
+const { items, label } = Astro.props;
+
+const base =
+  'inline-flex min-h-11 items-center rounded-md border px-3.5 font-mono text-[11px] font-semibold';
+const idle = 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground';
+const active = 'border-primary bg-primary/15 text-foreground';
+---
+<nav aria-label={label} class="my-6 flex flex-wrap gap-2">
+  {
+    items.map((item) => (
+      <a
+        href={item.href}
+        aria-current={item.current ? 'page' : undefined}
+        class:list={[base, item.current ? active : idle]}
+      >
+        {item.label}
+      </a>
+    ))
+  }
+</nav>

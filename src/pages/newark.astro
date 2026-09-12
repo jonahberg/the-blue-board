@@ -1,6 +1,10 @@
 ---
-import Footer from '../components/Footer.astro';
-import VercelAnalytics from '../components/VercelAnalytics.astro';
+import BaseLayout from '../components/site/BaseLayout.astro';
+import Breadcrumbs from '../components/site/Breadcrumbs.astro';
+import ContentSection from '../components/site/ContentSection.astro';
+import HighlightBox from '../components/site/HighlightBox.astro';
+import JumpNav from '../components/site/JumpNav.astro';
+import StatTile from '../components/site/StatTile.astro';
 
 const faqEntries = [
   {
@@ -74,220 +78,187 @@ const timeline = [
     detail: 'The FAA extends the 72-operations-per-hour cap through October 30, 2027, citing continued Philadelphia TRACON Area C staffing shortfalls (roughly 48% of target staffing) and the need for a durable planning horizon for airlines and passengers.',
   },
 ];
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqEntries.map((e) => ({
+    '@type': 'Question',
+    name: e.question,
+    acceptedAnswer: { '@type': 'Answer', text: e.answer },
+  })),
+};
+
+const jumpNav = [
+  { href: '#the-cap', label: 'The Cap, Explained' },
+  { href: '#your-flight', label: 'Your Flight' },
+  { href: '#faq', label: 'FAQ' },
+];
+
+const ctaClass =
+  'inline-flex min-h-11 items-center rounded-md bg-primary px-5 text-xs font-semibold text-primary-foreground hover:bg-primary/90';
 ---
-<!DOCTYPE html>
-<html lang="en" style="color-scheme:dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0B1018">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E">
-<title>Newark Operations Center — EWR Flight Caps Explained Through 2027 | The Blue Board</title>
-<meta name="description" content="United's Newark Liberty (EWR) hub is FAA-capped at 72 operations per hour (36 arrivals + 36 departures) through October 30, 2027. Live United flight status, the full ATC crisis timeline, and what the cap means for your flight.">
-<meta name="author" content="The Blue Board">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://theblueboard.co/newark">
-<meta property="og:type" content="website">
-<meta property="og:locale" content="en_US">
-<meta property="og:title" content="Newark Operations Center — The FAA Cap, Explained">
-<meta property="og:description" content="EWR is FAA-capped at 72 ops/hour through October 30, 2027. Live United flight status, the full crisis timeline, and what it means for your flight.">
-<meta property="og:url" content="https://theblueboard.co/newark">
-<meta property="og:site_name" content="The Blue Board">
-<meta property="og:image" content={ogImage}>
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Blue Board — Newark Operations Center">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:creator" content="@theblueboard">
-<meta name="twitter:title" content="Newark Operations Center — The FAA Cap, Explained">
-<meta name="twitter:description" content="EWR is FAA-capped at 72 ops/hour through October 30, 2027. Live United flight status and the full crisis timeline.">
-<meta name="twitter:image" content={ogImage}>
-<meta name="twitter:site" content="@theblueboard">
 
-<!-- Schema: BreadcrumbList -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    {"@type": "ListItem", "position": 1, "name": "The Blue Board", "item": "https://theblueboard.co"},
-    {"@type": "ListItem", "position": 2, "name": "Newark Operations Center", "item": "https://theblueboard.co/newark"}
-  ]
-}
-</script>
+<BaseLayout
+  title="Newark Operations Center — EWR Flight Caps Explained Through 2027 | The Blue Board"
+  description="United's Newark Liberty (EWR) hub is FAA-capped at 72 operations per hour (36 arrivals + 36 departures) through October 30, 2027. Live United flight status, the full ATC crisis timeline, and what the cap means for your flight."
+  canonical="/newark"
+  ogImage={ogImage}
+  ogTitle="Newark Operations Center — The FAA Cap, Explained"
+  ogDescription="EWR is FAA-capped at 72 ops/hour through October 30, 2027. Live United flight status, the full crisis timeline, and what it means for your flight."
+  ogImageAlt="The Blue Board — Newark Operations Center"
+  twitterDescription="EWR is FAA-capped at 72 ops/hour through October 30, 2027. Live United flight status and the full crisis timeline."
+  jsonLd={[faqSchema]}
+>
+  <div class="mx-auto max-w-4xl px-4 py-8">
+    <Breadcrumbs items={[{ label: 'Newark Operations Center' }]} />
 
-<!-- Schema: FAQPage -->
-<script type="application/ld+json" set:html={JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": faqEntries.map((e) => ({
-    "@type": "Question",
-    "name": e.question,
-    "acceptedAnswer": { "@type": "Answer", "text": e.answer }
-  }))
-})} />
+    <header class="mt-6">
+      <h1 class="text-2xl font-bold tracking-tight text-balance text-foreground">
+        Newark Operations Center
+      </h1>
+      <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
+        United's Newark Liberty (EWR) hub is operating under an FAA flight cap of <strong
+          class="font-semibold text-foreground">72 total operations per hour</strong
+        > (36 arrivals + 36 departures), extended through <strong
+          class="font-semibold text-foreground">October 30, 2027</strong
+        > by Federal Register order 2026-12589 (issued June 23, 2026). The cap exists because the
+        Philadelphia TRACON facility that controls EWR arrivals — its Area C team specifically — has
+        been running at roughly <strong class="font-semibold text-foreground"
+          >48% of target staffing</strong
+        >, a shortfall exposed by a series of 2025 telecommunications and radar outages. Some
+        construction weekends have seen even lower rates. This page is the bookmarkable reference
+        for what's happening at Newark and why.
+      </p>
+    </header>
 
-<link rel="stylesheet" href="/css/style.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<style>
-  .nwk-page { max-width: 900px; margin: 0 auto; padding: 20px 16px 0; }
-  .nwk-breadcrumb { font-family: var(--font-ui); font-size: 11px; font-weight: 500; color: var(--ua-muted); margin-bottom: 20px; }
-  .nwk-breadcrumb a { color: var(--ua-accent); text-decoration: none; }
-  .nwk-breadcrumb a:hover { text-decoration: underline; }
-
-  .nwk-hero { margin-bottom: 28px; }
-  .nwk-hero h1 { font-family: var(--font-ui); font-size: 24px; font-weight: 700; letter-spacing: -0.5px; color: var(--ua-text); margin: 0 0 10px; }
-  .nwk-hero p { font-family: var(--font-ui); font-size: 13px; color: var(--ua-muted); line-height: 1.7; margin: 0; }
-
-  .nwk-jump-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 32px; }
-  .nwk-jump-pill { font-family: var(--font-mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ua-muted); background: var(--ua-panel); border: 1px solid var(--ua-border); border-radius: 20px; padding: 6px 14px; text-decoration: none; transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 150ms ease; }
-  .nwk-jump-pill:hover { color: #fff; border-color: var(--ua-blue); background: var(--ua-blue); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,93,170,.3); }
-
-  .nwk-section { margin-bottom: 40px; padding-top: 24px; border-top: 1px solid var(--ua-border); }
-  .nwk-section:first-of-type { border-top: none; padding-top: 0; }
-  .nwk-section h2 { font-family: var(--font-ui); font-size: 16px; font-weight: 700; color: var(--ua-text); margin: 0 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--ua-border); }
-  .nwk-section h3 { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--ua-accent); margin: 16px 0 8px; }
-  .nwk-section p { font-family: var(--font-ui); font-size: 13px; color: var(--ua-text); line-height: 1.7; margin: 0 0 12px; }
-  .nwk-section ul { padding-left: 20px; margin: 0 0 12px; }
-  .nwk-section li { font-family: var(--font-ui); font-size: 13px; color: var(--ua-text); line-height: 1.7; margin-bottom: 4px; }
-
-  .nwk-live-panel { background: var(--ua-panel); border: 1px solid var(--ua-border); border-radius: 6px; padding: 20px; margin-bottom: 28px; }
-  .nwk-live-badge { display: inline-block; background: var(--ua-green); color: #000; font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 3px; letter-spacing: 1px; margin-bottom: 12px; animation: nwk-pulse 2s ease-in-out infinite; }
-  @keyframes nwk-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
-  @media (prefers-reduced-motion: reduce) { .nwk-live-badge { animation: none; } }
-  .nwk-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .nwk-stat-card { background: var(--ua-dark); border: 1px solid var(--ua-border); border-radius: 6px; padding: 12px; text-align: center; }
-  .nwk-stat-card .label { font-family: var(--font-mono); font-size: 9px; color: var(--ua-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-  .nwk-stat-card .value { font-family: var(--font-mono); font-size: 24px; font-weight: 700; color: var(--ua-green); }
-  .nwk-program-status { font-family: var(--font-ui); font-size: 12px; color: var(--ua-text); background: var(--ua-panel-elevated, #152032); border: 1px solid var(--ua-border); border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; }
-  .nwk-updated { font-family: var(--font-mono); font-size: 9px; color: var(--ua-dim); text-align: right; margin-bottom: 12px; }
-  .nwk-cta { display: inline-block; background: var(--ua-blue); color: #fff; padding: 8px 20px; border-radius: 4px; font-family: var(--font-ui); font-size: 11px; font-weight: 600; text-decoration: none; letter-spacing: 0.5px; margin-right: 8px; }
-  .nwk-cta:hover { background: #0070cc; text-decoration: none; }
-
-  .nwk-highlight { background: var(--ua-panel); border-left: 3px solid var(--ua-amber); padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; font-size: 12px; color: var(--ua-text); }
-  .nwk-highlight.red { border-left-color: var(--ua-red); }
-  .nwk-highlight.yellow { border-left-color: var(--ua-yellow); }
-
-  .nwk-timeline { list-style: none; margin: 0; padding: 0; }
-  .nwk-timeline li { display: flex; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--ua-border-subtle, var(--ua-border)); }
-  .nwk-timeline li:last-child { border-bottom: none; }
-  .nwk-timeline .nwk-t-date { flex: 0 0 130px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ua-amber); }
-  .nwk-timeline .nwk-t-body { flex: 1; }
-  .nwk-timeline .nwk-t-label { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--ua-text); margin-bottom: 4px; }
-  .nwk-timeline .nwk-t-detail { font-family: var(--font-ui); font-size: 12px; color: var(--ua-muted); line-height: 1.6; }
-
-  .nwk-faq-item { margin-bottom: 16px; }
-  .nwk-faq-q { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--ua-text); margin: 0 0 4px; }
-  .nwk-faq-a { font-family: var(--font-ui); font-size: 12px; color: var(--ua-muted); line-height: 1.7; margin: 0; }
-
-  .nwk-crosslinks a { color: var(--ua-accent); text-decoration: none; }
-  .nwk-crosslinks a:hover { text-decoration: underline; }
-
-  @media (max-width: 600px) {
-    .nwk-hero h1 { font-size: 19px; }
-    .nwk-timeline li { flex-direction: column; gap: 4px; }
-    .nwk-timeline .nwk-t-date { flex: none; }
-  }
-</style>
-</head>
-<body>
-<main class="nwk-page">
-
-  <!-- Breadcrumb -->
-  <nav class="nwk-breadcrumb" aria-label="Breadcrumb">
-    <a href="/">&larr; The Blue Board</a> / Newark Operations Center
-  </nav>
-
-  <!-- Hero -->
-  <div class="nwk-hero">
-    <h1>Newark Operations Center</h1>
-    <p>United's Newark Liberty (EWR) hub is operating under an FAA flight cap of <strong>72 total operations per hour</strong> (36 arrivals + 36 departures), extended through <strong>October 30, 2027</strong> by Federal Register order 2026-12589 (issued June 23, 2026). The cap exists because the Philadelphia TRACON facility that controls EWR arrivals — its Area C team specifically — has been running at roughly <strong>48% of target staffing</strong>, a shortfall exposed by a series of 2025 telecommunications and radar outages. Some construction weekends have seen even lower rates. This page is the bookmarkable reference for what's happening at Newark and why.</p>
-  </div>
-
-  <!-- Live Status Panel -->
-  <div class="nwk-live-panel">
-    <div class="nwk-live-badge">● LIVE</div>
-    <div class="nwk-stats-grid">
-      <div class="nwk-stat-card">
-        <div class="label">Active United Flights (EWR)</div>
-        <div class="value" id="newark-active">—</div>
+    <section aria-label="Live EWR status" class="mt-6 rounded-lg border border-border bg-card p-4">
+      <p
+        class="inline-flex items-center gap-1.5 rounded-sm bg-primary px-2 py-0.5 font-mono text-[10px] font-bold tracking-widest text-primary-foreground uppercase"
+      >
+        <span aria-hidden="true">●</span> Live
+      </p>
+      <StatTile
+        label="Active United Flights (EWR)"
+        value="—"
+        id="newark-active"
+        class="mt-3 sm:max-w-xs"
+      />
+      <p
+        id="newark-program-status"
+        class="mt-3 rounded-md border border-border bg-background px-3.5 py-2.5 text-xs leading-relaxed text-foreground"
+      >
+        Checking FAA program status for EWR…
+      </p>
+      <p id="newark-updated-time" class="mt-3 text-right font-mono text-[10px] text-muted-foreground">
+        Connecting to live data...
+      </p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <a class={ctaClass} href="/?hub=ewr">Open EWR on The Blue Board →</a>
+        <a class={ctaClass} href="/?tab=schedule&hub=ewr">View EWR Schedule →</a>
       </div>
-    </div>
-    <div class="nwk-program-status" id="newark-program-status">Checking FAA program status for EWR…</div>
-    <div class="nwk-updated" id="newark-updated-time">Connecting to live data...</div>
-    <a class="nwk-cta" href="/?hub=ewr">Open EWR on The Blue Board →</a>
-    <a class="nwk-cta" href="/?tab=schedule&hub=ewr">View EWR Schedule →</a>
-  </div>
+    </section>
 
-  <!-- Jump nav -->
-  <nav class="nwk-jump-nav" aria-label="Section navigation">
-    <a class="nwk-jump-pill" href="#the-cap">The Cap, Explained</a>
-    <a class="nwk-jump-pill" href="#your-flight">Your Flight</a>
-    <a class="nwk-jump-pill" href="#faq">FAQ</a>
-  </nav>
+    <JumpNav items={jumpNav} />
 
-  <!-- The Cap, Explained -->
-  <section class="nwk-section" id="the-cap">
-    <h2>The Cap, Explained</h2>
-    <p>Newark's flight caps are the result of an air traffic control staffing crisis, not a construction project or a weather event — though both compounded the disruption in 2025. Here's the full timeline:</p>
+    <ContentSection id="the-cap" heading="The Cap, Explained" first>
+      <p>
+        Newark's flight caps are the result of an air traffic control staffing crisis, not a
+        construction project or a weather event — though both compounded the disruption in 2025.
+        Here's the full timeline:
+      </p>
 
-    <div class="nwk-highlight red">
-      <strong>🚨 Bottom line:</strong> The FAA caps EWR at 72 total operations per hour (36 arrivals + 36 departures) through <strong>October 30, 2027</strong>. This is a deliberate, planned reduction to match the number of controllers the Philadelphia TRACON can actually staff — not an emergency measure that could lift on short notice.
-    </div>
+      <HighlightBox tone="alert">
+        <strong>🚨 Bottom line:</strong> The FAA caps EWR at 72 total operations per hour (36
+        arrivals + 36 departures) through <strong>October 30, 2027</strong>. This is a deliberate,
+        planned reduction to match the number of controllers the Philadelphia TRACON can actually
+        staff — not an emergency measure that could lift on short notice.
+      </HighlightBox>
 
-    <ol class="nwk-timeline" style="margin-top:20px">
-      {timeline.map((t) => (
+      <ol class="mt-5 list-none space-y-0 pl-0">
+        {
+          timeline.map((t) => (
+            <li class="flex flex-col gap-1 border-b border-border py-3 last:border-b-0 sm:flex-row sm:gap-4">
+              <span class="shrink-0 font-mono text-[11px] font-semibold text-[var(--bb-warn)] sm:w-32">
+                {t.date}
+              </span>
+              <span class="flex-1">
+                <span class="block text-sm font-semibold text-foreground" set:html={t.label} />
+                <span
+                  class="mt-1 block text-xs leading-relaxed text-muted-foreground"
+                  set:html={t.detail}
+                />
+              </span>
+            </li>
+          ))
+        }
+      </ol>
+    </ContentSection>
+
+    <ContentSection id="your-flight" heading="What It Means For Your Flight">
+      <p>
+        The Newark cap means the schedule is <strong>deliberately thinned, not chaotic</strong> —
+        United and other carriers plan their EWR schedules around the 72-operations-per-hour
+        ceiling, so a normal day at EWR should run close to on-time. The risk comes from what
+        happens on top of an already-tight schedule:
+      </p>
+      <ul>
         <li>
-          <div class="nwk-t-date">{t.date}</div>
-          <div class="nwk-t-body">
-            <div class="nwk-t-label" set:html={t.label} />
-            <div class="nwk-t-detail" set:html={t.detail} />
-          </div>
+          <strong>Evening banks are the most fragile.</strong> Delays compound throughout the day,
+          and by the evening push a single weather cell or ATC hiccup has nowhere to absorb the
+          slack.
         </li>
-      ))}
-    </ol>
-  </section>
+        <li>
+          <strong>Weather days hit hard.</strong> Thunderstorms, snow, fog, or wind shifts trigger
+          ground delay programs on top of the reduced schedule — there's less cushion than at an
+          uncapped airport.
+        </li>
+        <li>
+          <strong>Morning departures are the most reliable.</strong> Flights before 9 AM
+          consistently post the best on-time performance at EWR, before delays have a chance to
+          cascade.
+        </li>
+        <li>
+          <strong>Some weekends run even tighter.</strong> Construction and maintenance windows have
+          occasionally dropped the rate below the standard 72/hour cap — check the live board before
+          you head to the airport.
+        </li>
+      </ul>
+      <p>
+        Before you leave for the airport, check the live board: <a href="/?tab=schedule&hub=ewr"
+          >EWR Schedule on The Blue Board →</a
+        > or read the full <a href="/hubs/ewr">EWR Hub Guide</a> for terminal maps, lounges, and
+        Starlink WiFi coverage.
+      </p>
+    </ContentSection>
 
-  <!-- What It Means For Your Flight -->
-  <section class="nwk-section" id="your-flight">
-    <h2>What It Means For Your Flight</h2>
-    <p>The Newark cap means the schedule is <strong>deliberately thinned, not chaotic</strong> — United and other carriers plan their EWR schedules around the 72-operations-per-hour ceiling, so a normal day at EWR should run close to on-time. The risk comes from what happens on top of an already-tight schedule:</p>
-    <ul>
-      <li><strong>Evening banks are the most fragile.</strong> Delays compound throughout the day, and by the evening push a single weather cell or ATC hiccup has nowhere to absorb the slack.</li>
-      <li><strong>Weather days hit hard.</strong> Thunderstorms, snow, fog, or wind shifts trigger ground delay programs on top of the reduced schedule — there's less cushion than at an uncapped airport.</li>
-      <li><strong>Morning departures are the most reliable.</strong> Flights before 9 AM consistently post the best on-time performance at EWR, before delays have a chance to cascade.</li>
-      <li><strong>Some weekends run even tighter.</strong> Construction and maintenance windows have occasionally dropped the rate below the standard 72/hour cap — check the live board before you head to the airport.</li>
-    </ul>
-    <p>Before you leave for the airport, check the live board: <a href="/?tab=schedule&hub=ewr">EWR Schedule on The Blue Board →</a> or read the full <a href="/hubs/ewr">EWR Hub Guide</a> for terminal maps, lounges, and Starlink WiFi coverage.</p>
-  </section>
+    <ContentSection id="faq" heading="Frequently Asked Questions">
+      {
+        faqEntries.map((entry) => (
+          <div class="mb-4">
+            <h3>{entry.question}</h3>
+            <p>{entry.answer}</p>
+          </div>
+        ))
+      }
+    </ContentSection>
 
-  <!-- FAQ -->
-  <section class="nwk-section" id="faq">
-    <h2>Frequently Asked Questions</h2>
-    {faqEntries.map((entry) => (
-      <div class="nwk-faq-item">
-        <h3 class="nwk-faq-q">{entry.question}</h3>
-        <p class="nwk-faq-a">{entry.answer}</p>
-      </div>
-    ))}
-  </section>
+    <ContentSection id="more" heading="More on Newark &amp; United">
+      <ul>
+        <li>
+          <a href="/hubs/ewr">EWR Hub Guide</a> — terminals, lounges, Starlink WiFi, and delay
+          patterns.
+        </li>
+        <li>
+          <a href="/?tab=schedule&hub=ewr">Live EWR Schedule</a> — every United departure and
+          arrival, updated every 30 seconds.
+        </li>
+        <li>
+          <a href="/hubs">All United Hubs</a> — status across ORD, DEN, IAH, EWR, SFO, IAD, LAX,
+          NRT, and GUM.
+        </li>
+      </ul>
+    </ContentSection>
+  </div>
 
-  <!-- Cross-links -->
-  <section class="nwk-section nwk-crosslinks" id="more">
-    <h2>More on Newark &amp; United</h2>
-    <ul>
-      <li><a href="/hubs/ewr">EWR Hub Guide</a> — terminals, lounges, Starlink WiFi, and delay patterns.</li>
-      <li><a href="/?tab=schedule&hub=ewr">Live EWR Schedule</a> — every United departure and arrival, updated every 30 seconds.</li>
-      <li><a href="/tsa#ewr">EWR TSA Checkpoints</a> — security lane guide for Terminal A and Terminal C.</li>
-      <li><a href="/hubs">All United Hubs</a> — status across ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM.</li>
-    </ul>
-  </section>
-
-</main>
-
-<Footer />
-
-<VercelAnalytics />
-<script defer src="/js/newark-live.js"></script>
-</body>
-</html>
+  <script src="../scripts/newark-live.ts"></script>
+</BaseLayout>

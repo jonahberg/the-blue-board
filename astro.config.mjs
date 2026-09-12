@@ -29,6 +29,14 @@ export default defineConfig({
     // watermark — a silent, build-green failure. Renaming the variable instead would orphan the
     // value already set on the Vercel project.
     envPrefix: ['PUBLIC_', 'VITE_'],
+    build: {
+      // CSP is `script-src 'self'` with no nonce and no hashes. Astro inlines a
+      // hoisted `<script src>` whose bundled chunk falls under this limit
+      // (core/build/plugins/plugin-scripts.js), which would ship an inline
+      // `<script type="module">` the browser then refuses to run. 0 keeps every
+      // page script an external `_astro/` file.
+      assetsInlineLimit: 0,
+    },
     server: {
       proxy: apiProxy,
     },
