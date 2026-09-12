@@ -78,8 +78,12 @@ These are the only places headline numbers are hardcoded. When live counts / clu
    ```
    (Fonts: the script needs a real TTF and now fails loudly if it can't find one — on macOS it
    uses Menlo; the old silent bitmap-font fallback produced illegible cards.)
-2. `src/pages/trackers/united-hubs.astro` — `stats` array + the og:description ("3 flagship
-   clubs and 36 new gates"). The ATC page's og:description derives from data automatically.
+2. `src/pages/trackers/united-hubs.astro` — the `stats` array + the `ogDescription` prop passed
+   to `<BaseLayout>` ("3 flagship clubs and 36 new gates"). Since the shadcn rebuild the share
+   copy is a prop, not a `<meta>` tag: `BaseLayout` forwards `ogTitle` / `ogDescription` /
+   `ogImageAlt` / `twitterTitle` / `twitterDescription` to `src/components/site/Seo.astro`,
+   which emits the tags. The shorter `twitterDescription` on the same page repeats the two
+   figures, so edit both. The ATC page's `ogDescription` derives from data automatically.
 3. `unitedHubsMeta.stats` — the ~119k sq ft / 36 gates / 54k figures and their notes.
 
 ## Annual / occasional

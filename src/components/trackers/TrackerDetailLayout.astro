@@ -6,6 +6,12 @@
  * blocks come from one place. `Breadcrumbs` renders the visible trail AND its BreadcrumbList
  * structured data — four levels here (site → Trackers → the parent tracker → this entity), so
  * the layout never emits a second one.
+ *
+ * The share card deliberately diverges from the document title: `ogTitle` is the `heading`
+ * ("Does ORD Still Use Paper Flight Strips?"), because a shared link should lead with the
+ * question the page answers, while `<title>` stays the SERP-tuned string from
+ * `atcAirportSeo()` / `unitedHubSeo()`. `twitterTitle` and `twitterDescription` are left
+ * unset: `Seo.astro` falls them back to the OG pair, which is what the pre-rebuild pages did.
  */
 import BaseLayout from '../site/BaseLayout.astro';
 import Breadcrumbs from '../site/Breadcrumbs.astro';
@@ -18,6 +24,7 @@ interface Props {
   description: string;
   canonical: string;
   ogImage: string;
+  ogImageAlt: string;
   parentHref: string;
   parentLabel: string;
   breadcrumbLabel: string;
@@ -39,6 +46,7 @@ const {
   description,
   canonical,
   ogImage,
+  ogImageAlt,
   parentHref,
   parentLabel,
   breadcrumbLabel,
@@ -64,7 +72,9 @@ const peerLinkClass =
   description={description}
   canonical={canonical}
   ogImage={ogImage}
+  ogImageAlt={ogImageAlt}
   ogType="article"
+  ogTitle={heading}
   jsonLd={schemas}
   dataAttrs={{ 'data-trk-page': dataSlug }}
 >
