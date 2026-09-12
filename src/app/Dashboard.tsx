@@ -88,26 +88,22 @@ function DashboardShell() {
     setScheduleHub: useCallback((hub: string) => setCurrent({ hub }), [setCurrent]),
   });
 
-  // ⌘K / Ctrl-K from anywhere. Registered once at the root rather than on an input, so it
-  // works with focus on the map, a table row or nothing at all.
-  const onKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
+  // ⌘K / Ctrl-K from anywhere. This has to be a window listener, not a React onKeyDown on
+  // the root element: on a fresh load focus sits on <body>, which is OUTSIDE the React tree,
+  // so a bubbling handler never sees the keystroke and the advertised shortcut does nothing.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setSearchOpen(true);
       }
-    },
-    [setSearchOpen],
-  );
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [setSearchOpen]);
 
   return (
-    <div
-      className="flex h-[100svh] flex-col bg-background text-foreground"
-      onKeyDown={onKeyDown}
-      // A container-level key handler needs the container in the focus path for keystrokes
-      // that land on the background rather than on a control.
-      tabIndex={-1}
-    >
+    <div className="flex h-[100svh] flex-col bg-background text-foreground">
       <OfflineBanner />
       <NewsBanner />
       <Header

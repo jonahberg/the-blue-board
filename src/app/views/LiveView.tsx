@@ -154,9 +154,11 @@ export default function LiveView() {
             homeAirport={homeAirport}
           />
 
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] flex flex-wrap items-start justify-between gap-2 p-2">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] flex items-start justify-between gap-2 p-2">
             <MapControls
-              className="pointer-events-auto flex flex-wrap items-center gap-1.5"
+              // One scrollable row rather than a wrapping block: at 400 px a second row of
+              // controls costs ~45 px of map, and the map is the point of this tab.
+              className="pointer-events-auto flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]"
               active={layers}
               onChange={setLayers}
               starlinkAvailable={starlinkAvailable}

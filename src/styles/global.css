@@ -225,40 +225,11 @@
   background: transparent;
 }
 
-.leaflet-container .leaflet-popup-content-wrapper {
-  background: var(--popover);
-  color: var(--popover-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 0.6);
-}
-.leaflet-container .leaflet-popup-tip {
-  background: var(--popover);
-}
-.leaflet-container .leaflet-popup-content {
-  margin: 0;
-  font-size: 11px;
-  min-width: 280px;
-}
-/* 44x44 touch target (WCAG 2.5.5). Leaflet's own rule is
-   `.leaflet-container a.leaflet-popup-close-button` at 24x24, so this needs the
-   extra `.leaflet-popup` level (the close button is its direct child) to win. */
-.leaflet-container .leaflet-popup a.leaflet-popup-close-button {
-  top: 4px;
-  right: 4px;
-  width: 44px;
-  height: 44px;
-  font-size: 18px;
-  color: var(--muted-foreground);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-.leaflet-container .leaflet-popup a.leaflet-popup-close-button:hover,
-.leaflet-container .leaflet-popup a.leaflet-popup-close-button:focus {
-  color: var(--foreground);
-}
+/* Leaflet's popup is unused: the flight detail panel is a shadcn Sheet
+   (src/app/features/FlightSheet.tsx), which gives it a focus trap, Escape handling, an
+   accessible name and freedom from the map viewport's clipping. The popup overrides that
+   used to live here — the dark restyle and the 44x44 close button — went with it. If a map
+   ever binds a popup again, restyle it then rather than carrying dead rules. */
 
 .leaflet-container .leaflet-bar a {
   background: var(--card);

@@ -15,7 +15,7 @@
  *    the first two are unavailable in exactly the mobile contexts that share most.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -189,10 +189,15 @@ export function FlightSheet() {
     loading: boolean;
   }>({ data: null, error: null, loading: false });
 
-  // `?flight=` mirrors the open panel both ways.
+  // `?flight=` mirrors the open panel — but only ever CLEARS the param on a real close.
+  // Clearing it on mount would wipe the incoming deep link before the feed has answered and
+  // `useDeepLinks` has had a chance to resolve it, so `/?flight=UA188` would silently do
+  // nothing on a cold load.
+  const wasOpen = useRef(false);
   useEffect(() => {
     if (open && ident) setFlightParam(ident);
-    if (!open) setFlightParam(null);
+    else if (wasOpen.current) setFlightParam(null);
+    wasOpen.current = open;
   }, [open, ident]);
 
   useEffect(() => {

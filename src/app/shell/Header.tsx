@@ -38,7 +38,9 @@ export function Header({
   const watch = useWatch();
   const now = useNow(1000);
 
-  const airborne = feed.flights.filter((f) => !f.onGround).length;
+  // The chip counts EVERY row in the feed, the way the shipped header did — the stat bar
+  // below the map is where "airborne" (which excludes aircraft on the ground) is reported.
+  const tracked = feed.flights.length;
   const state: 'live' | 'stale' | 'none' =
     feed.flights.length === 0 ? 'none' : feed.freshness === 'live' ? 'live' : 'stale';
 
@@ -69,7 +71,7 @@ export function Header({
           {state === 'live' ? 'LIVE' : state === 'stale' ? 'STALE' : 'NO DATA'}
           {feed.flights.length > 0 ? (
             <span className="hidden text-muted-foreground sm:inline">
-              · {airborne.toLocaleString()} flights{state === 'stale' ? ' (stale)' : ''}
+              · {tracked.toLocaleString()} flights{state === 'stale' ? ' (stale)' : ''}
             </span>
           ) : null}
         </Badge>
