@@ -7,6 +7,7 @@
  *   ?tab=…            including the `irops` alias → Weather, scrolled to the IROPS section
  *   ?flight= / ?q=    open the flight sheet, or offer a schedule lookup when not airborne
  *   ?hub=             with ?tab=schedule, selects that board
+ *   ?view=starlink    the Starlink tab (its airborne/special siblings are Fleet-tab filters)
  *   ?aircraft=        opens the aircraft dialog
  *   ?waitlist=1       opens the waitlist dialog
  *
@@ -66,6 +67,11 @@ export function useDeepLinks(deps: DeepLinkDeps) {
       depsRef.current.setScheduleHub(hub.toUpperCase());
       if (resolved === 'schedule') depsRef.current.setTab('schedule');
     }
+
+    // ?view=starlink is tab routing and belongs here. ?view=airborne|special and
+    // ?type=/?filter= select rows INSIDE the Fleet tab, so they are read by the fleet store
+    // when Task 5 ports that view — the URL is still there for it to read.
+    if (params.get('view')?.toLowerCase() === 'starlink') depsRef.current.setTab('starlink');
 
     const aircraft = params.get('aircraft');
     if (aircraft) depsRef.current.openAircraft(aircraft.toUpperCase());
