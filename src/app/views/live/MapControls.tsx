@@ -16,6 +16,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 export type LayerKey = 'hubs' | 'longhaul' | 'starlink' | 'wx' | 'pacific';
 
+/**
+ * 44 px touch targets (WCAG 2.5.5) up to `md`, then back to the compact desktop toolbar.
+ *
+ * On every item rather than a `*:` variant on the group: the Starlink toggle is wrapped in a
+ * span so its tooltip survives being disabled, which puts it out of reach of a direct-child
+ * selector — measured at 28 px on a 400 px viewport while its five siblings were 44.
+ */
+const TOUCH_TARGET = 'min-h-11 md:min-h-8';
+
 export function MapControls({
   active,
   onChange,
@@ -42,10 +51,10 @@ export function MapControls({
         aria-label="Map layers"
         className="bg-background/90 backdrop-blur"
       >
-        <ToggleGroupItem value="hubs" className="gap-1.5 text-xs">
+        <ToggleGroupItem value="hubs" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
           <span aria-hidden="true">🏢</span> Hubs
         </ToggleGroupItem>
-        <ToggleGroupItem value="longhaul" className="gap-1.5 text-xs">
+        <ToggleGroupItem value="longhaul" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
           <span aria-hidden="true">🌍</span> Long-haul
         </ToggleGroupItem>
         <Tooltip>
@@ -54,7 +63,7 @@ export function MapControls({
             <span>
               <ToggleGroupItem
                 value="starlink"
-                className="gap-1.5 text-xs"
+                className={`gap-1.5 text-xs ${TOUCH_TARGET}`}
                 disabled={!starlinkAvailable}
               >
                 <span aria-hidden="true">⚡</span> Starlink
@@ -65,17 +74,17 @@ export function MapControls({
             <TooltipContent side="bottom">Starlink data unavailable right now</TooltipContent>
           ) : null}
         </Tooltip>
-        <ToggleGroupItem value="wx" className="gap-1.5 text-xs">
+        <ToggleGroupItem value="wx" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
           <span aria-hidden="true">🌧</span> Radar
         </ToggleGroupItem>
-        <ToggleGroupItem value="pacific" className="gap-1.5 text-xs">
+        <ToggleGroupItem value="pacific" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
           <span aria-hidden="true">🌏</span> Pacific
         </ToggleGroupItem>
       </ToggleGroup>
       <Button
         size="sm"
         variant="outline"
-        className="h-8 bg-background/90 text-xs backdrop-blur"
+        className="min-h-11 bg-background/90 text-xs backdrop-blur md:h-8 md:min-h-0"
         onClick={onRefresh}
         disabled={refreshing}
       >

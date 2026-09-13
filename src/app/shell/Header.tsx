@@ -57,6 +57,8 @@ export function Header({
         </span>
       </a>
 
+      {/* Touch targets: `min-h-11` (44 px, WCAG 2.5.5) up to the md breakpoint, then back to
+          desktop density where the pointer is precise. */}
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
         <Badge
           variant="outline"
@@ -88,7 +90,9 @@ export function Header({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-2 text-muted-foreground"
+          // min-w too: below `sm` the label and the ⌘K hint are hidden and the button
+          // collapses to the magnifier alone, which measured 38 px wide on a 400 px viewport.
+          className="min-h-11 min-w-11 gap-2 text-muted-foreground md:h-8 md:min-h-0 md:min-w-0"
           onClick={() => setSearchOpen(true)}
         >
           <span aria-hidden="true">🔍</span>
@@ -101,7 +105,7 @@ export function Header({
         <Button
           variant="outline"
           size="sm"
-          className="relative h-8"
+          className="relative min-h-11 min-w-11 md:h-8 md:min-h-0 md:min-w-0"
           onClick={onOpenWatch}
           aria-expanded={watchOpen}
           aria-controls="watch-panel"
@@ -135,7 +139,7 @@ export function Header({
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 w-8 p-0"
+          className="min-h-11 min-w-11 p-0 md:h-8 md:w-8 md:min-h-0 md:min-w-0"
           onClick={onOpenHelp}
           aria-label="What is this dashboard?"
         >
