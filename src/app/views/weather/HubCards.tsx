@@ -62,7 +62,15 @@ export function HubCards({
         <p className="mt-0.5 text-[11px] text-muted-foreground">
           Could not load METAR observations
         </p>
-        <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
+        {/* 44 px below `md:`, desktop density above it — the shell's touch-target idiom
+            (`Header.tsx`, `MapControls.tsx`). This button is the only way out of the
+            failure state, so it is the last one that should be hard to hit on a phone. */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-3 min-h-11 md:h-8 md:min-h-0"
+          onClick={onRetry}
+        >
           ↻ Retry
         </Button>
       </div>
