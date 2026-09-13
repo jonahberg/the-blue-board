@@ -7,7 +7,7 @@
  * clearing the hub REMOVES `bb_home_airport` rather than storing an empty string.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import {
@@ -41,13 +41,14 @@ const NULL_STORAGE = {
 };
 
 export function PrefsProvider({ children }: { children: ReactNode }) {
-  const [homeAirport, setHome] = useState('');
-
-  // Read after mount: the island is client:only, but a storage read still belongs in an
-  // effect so a private-mode throw can never happen during render.
-  useEffect(() => {
-    setHome(readHomeAirport(safeLocalStorage() ?? NULL_STORAGE) as string);
-  }, []);
+  // Read SYNCHRONOUSLY, in the initializer. Reading in an effect meant the first render
+  // always had homeAirport='', and anything that captures the value once — the schedule
+  // store's default board, the map's initial centre — captured the empty string and never
+  // saw the real hub. `safeLocalStorage()` already swallows a private-mode throw, and the
+  // island is client:only, so there is no server render to mismatch.
+  const [homeAirport, setHome] = useState(
+    () => readHomeAirport(safeLocalStorage() ?? NULL_STORAGE) as string,
+  );
 
   const setHomeAirport = useCallback((code: string) => {
     writeHomeAirport(safeLocalStorage() ?? NULL_STORAGE, code);

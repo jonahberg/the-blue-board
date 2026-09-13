@@ -135,7 +135,13 @@ export default function LiveView() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex min-h-0 flex-1">
         {/* isolate: keeps Leaflet's z-400 panes out of the page's stacking order. */}
-        <div className="relative isolate z-0 min-h-0 flex-1">
+        <div
+          className="relative isolate z-0 min-h-0 flex-1"
+          // The flight panel is a non-modal sheet pinned to the right: it overlaps the map's
+          // bottom-right corner, which is where Leaflet puts the zoom control. global.css
+          // slides that control stack clear while the panel is open.
+          data-flight-panel={selection ? 'open' : undefined}
+        >
           <LiveMap
             className="absolute inset-0 bg-background"
             flights={feed.flights}
@@ -169,7 +175,7 @@ export default function LiveView() {
               <Button
                 size="sm"
                 variant="outline"
-                className="pointer-events-auto h-8 bg-background/90 text-xs backdrop-blur"
+                className="pointer-events-auto min-h-11 bg-background/90 text-xs backdrop-blur"
                 onClick={() => setSidebarOpen(true)}
               >
                 🔍 Filters

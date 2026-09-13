@@ -28,6 +28,7 @@ import {
   matchLiveFlights,
   normalizeQuery,
 } from '@/lib/global-search.js';
+import { FR24_LOOKUP_AVAILABLE } from './Fr24LookupDialog';
 import { useFeed } from '../state/feed';
 import { useUi } from '../state/ui';
 
@@ -55,13 +56,37 @@ export function SearchPalette() {
     return flights.filter((f) => matchLiveFlights([f], qNorm).length > 0).slice(0, MAX_RESULTS);
   }, [flights, qNorm]);
 
-  /** A bare number means a UA flight number — "1234" and "UA1234" are the same query. */
-  const lookupIdent = FR24_LOOKUP_RE.test(qNorm)
-    ? qNorm.startsWith('UA')
-      ? qNorm
-      : `UA${qNorm}`
-    : null;
+  /**
+   * A bare number means a UA flight number — "1234" and "UA1234" are the same query.
+   * Null while the lookup cannot answer (see `FR24_LOOKUP_AVAILABLE`): the palette must not
+   * offer a row that opens nothing.
+   */
+  const lookupIdent =
+    FR24_LOOKUP_AVAILABLE && FR24_LOOKUP_RE.test(qNorm)
+      ? qNorm.startsWith('UA')
+        ? qNorm
+        : `UA${qNorm}`
+      : null;
   const empty = classifyEmptyState(qNorm) as { kind: string; display: string };
+
+  /**
+   * The contextual empty state (inventory §4). It is rendered in two places on purpose:
+   * `CommandEmpty` only mounts while cmdk counts ZERO items, and the "Not airborne" group
+   * below always offers at least the Schedule row — so relying on `CommandEmpty` alone
+   * would silently swallow this sentence for every no-match query.
+   */
+  const emptyMessage =
+    qNorm.length < 2
+      ? 'Type a flight number, tail number, or route.'
+      : empty.kind === 'flight'
+        ? `${empty.display} is not airborne right now — ${
+            FR24_LOOKUP_AVAILABLE
+              ? 'try the schedule lookup below, or the Schedule tab.'
+              : 'check the Schedule tab for its board.'
+          }`
+        : empty.kind === 'tail'
+          ? `${empty.display} is not in the live feed right now.`
+          : 'Nothing airborne matches that.';
 
   return (
     <CommandDialog
@@ -77,15 +102,7 @@ export function SearchPalette() {
           onValueChange={setQuery}
         />
         <CommandList>
-          <CommandEmpty>
-            {qNorm.length < 2
-              ? 'Type a flight number, tail number, or route.'
-              : empty.kind === 'flight'
-                ? `${empty.display} is not airborne right now — try the schedule lookup below, or the Schedule tab.`
-                : empty.kind === 'tail'
-                  ? `${empty.display} is not in the live feed right now.`
-                  : 'Nothing airborne matches that.'}
-          </CommandEmpty>
+          <CommandEmpty>{emptyMessage}</CommandEmpty>
 
           {matches.length > 0 ? (
             <CommandGroup heading="Airborne now">
@@ -113,30 +130,35 @@ export function SearchPalette() {
             </CommandGroup>
           ) : null}
 
-          {lookupIdent && !matches.some((f) => f.flightIATA === lookupIdent) ? (
-            <CommandGroup heading="Not airborne">
-              <CommandItem
-                value={`lookup-${lookupIdent}`}
-                onSelect={() => {
-                  openFr24(lookupIdent);
-                  setSearchOpen(false);
-                }}
-              >
-                <span aria-hidden="true">🔎</span>
-                Look up <span className="font-mono font-medium">{lookupIdent}</span> times and
-                gates
-              </CommandItem>
-              <CommandItem
-                value="goto-schedule"
-                onSelect={() => {
-                  setTab('schedule');
-                  setSearchOpen(false);
-                }}
-              >
-                <span aria-hidden="true">📅</span>
-                Open the Schedule tab
-              </CommandItem>
-            </CommandGroup>
+          {qNorm.length >= 2 && matches.length === 0 ? (
+            <>
+              <p className="px-3 pt-3 pb-1 text-xs text-muted-foreground">{emptyMessage}</p>
+              <CommandGroup heading="Not airborne">
+                {lookupIdent ? (
+                  <CommandItem
+                    value={`lookup-${lookupIdent}`}
+                    onSelect={() => {
+                      openFr24(lookupIdent);
+                      setSearchOpen(false);
+                    }}
+                  >
+                    <span aria-hidden="true">🔎</span>
+                    Look up <span className="font-mono font-medium">{lookupIdent}</span> times and
+                    gates
+                  </CommandItem>
+                ) : null}
+                <CommandItem
+                  value="goto-schedule"
+                  onSelect={() => {
+                    setTab('schedule');
+                    setSearchOpen(false);
+                  }}
+                >
+                  <span aria-hidden="true">📅</span>
+                  Open the Schedule tab
+                </CommandItem>
+              </CommandGroup>
+            </>
           ) : null}
         </CommandList>
       </Command>

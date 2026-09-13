@@ -50,14 +50,21 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  showOverlay = true,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
+  /**
+   * Render the dimming overlay. Set false for a NON-MODAL sheet (`<Sheet modal={false}>`)
+   * that sits beside live content the viewer must keep using — the flight panel next to the
+   * map, where the overlay would otherwise swallow every pan, zoom and marker click.
+   */
+  showOverlay?: boolean
 }) {
   return (
     <SheetPortal>
-      <SheetOverlay />
+      {showOverlay && <SheetOverlay />}
       <SheetPrimitive.Content
         data-slot="sheet-content"
         data-side={side}

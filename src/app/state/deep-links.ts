@@ -19,6 +19,7 @@
 
 import { useEffect, useRef } from 'react';
 
+import { FR24_LOOKUP_AVAILABLE } from '../features/Fr24LookupDialog';
 import { resolveTabParam } from '../tabs';
 import type { Flight } from '../data/types';
 
@@ -30,6 +31,7 @@ type DeepLinkDeps = {
   openFr24: (query: string) => void;
   setWaitlistOpen: (open: boolean) => void;
   setScheduleHub: (hub: string) => void;
+  announce: (text: string) => void;
 };
 
 /** 'UAL123' / 'ua 123' / '123' → 'UA123'. */
@@ -40,7 +42,8 @@ function normalizeIdent(raw: string): string {
 }
 
 export function useDeepLinks(deps: DeepLinkDeps) {
-  const { flights, setTab, select, openAircraft, openFr24, setWaitlistOpen, setScheduleHub } = deps;
+  const { flights, setTab, select, openAircraft, openFr24, setWaitlistOpen, setScheduleHub, announce } =
+    deps;
   const depsRef = useRef(deps);
   depsRef.current = deps;
   const flightLatched = useRef(false);
@@ -113,6 +116,8 @@ export function useDeepLinks(deps: DeepLinkDeps) {
       );
     });
     if (match) depsRef.current.select({ kind: 'flight', flight: match });
-    else depsRef.current.openFr24(ident);
+    // Not airborne. Say so rather than opening a lookup that cannot answer yet.
+    else if (FR24_LOOKUP_AVAILABLE) depsRef.current.openFr24(ident);
+    else depsRef.current.announce(`${ident} is not in the live feed right now. Flight lookup is not available yet.`);
   }, [flights]);
 }

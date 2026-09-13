@@ -64,8 +64,17 @@ function ViewSkeleton() {
 }
 
 function DashboardShell() {
-  const { tab, setTab, select, openAircraft, openFr24, setWaitlistOpen, setOnboardingOpen, setSearchOpen } =
-    useUi();
+  const {
+    tab,
+    setTab,
+    select,
+    openAircraft,
+    openFr24,
+    setWaitlistOpen,
+    setOnboardingOpen,
+    setSearchOpen,
+    announce,
+  } = useUi();
   const { flights } = useFeed();
   const { setCurrent } = useSchedule();
   const [watchOpen, setWatchOpen] = useState(false);
@@ -86,6 +95,7 @@ function DashboardShell() {
     openFr24,
     setWaitlistOpen,
     setScheduleHub: useCallback((hub: string) => setCurrent({ hub }), [setCurrent]),
+    announce,
   });
 
   // ⌘K / Ctrl-K from anywhere. This has to be a window listener, not a React onKeyDown on

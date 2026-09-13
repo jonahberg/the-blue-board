@@ -29,10 +29,11 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cityFor } from '@/lib/airports.js';
+import { normalizeWifi } from '@/lib/fleet-utils.js';
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
 import { matchAircraft } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
-import { estimateRoute } from '@/lib/route-estimate.js';
+import { resolveFlightRoute } from '../data/route';
 import { formatTimeWithTz } from '@/lib/time-format.js';
 import { ApiError, fetchFlightTimes } from '../data/api';
 import type { Flight, FlightTimes, TimeTriple } from '../data/types';
@@ -100,7 +101,8 @@ function resolveTime(triple: TimeTriple | undefined, tz: string | null | undefin
     if (Number.isFinite(diffMin)) {
       if (Math.abs(diffMin) <= 5) delta = { label: 'On time', tone: 'ok' };
       else if (diffMin > 0) delta = { label: `+${diffMin}m`, tone: 'late' };
-      else delta = { label: `${diffMin}m early`, tone: 'early' };
+      // `${diffMin}m` already carries the minus sign; "-7m early" read as a double negative.
+      else delta = { label: `${diffMin}m`, tone: 'early' };
       if (Math.abs(diffMin) > 5) {
         scheduledText = formatTimeWithTz(triple.scheduled, tz ?? undefined) as string | null;
       }
@@ -158,7 +160,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 export function FlightSheet() {
   const { selection, select, focusOn, openAircraft, announce } = useUi();
   const { flights } = useFeed();
-  const { fleetByReg, starlink, special } = useFleet();
+  const { fleetByReg, starlink, special, loading: fleetLoading } = useFleet();
   const watch = useWatch();
 
   const open = selection !== null;
@@ -231,25 +233,9 @@ export function FlightSheet() {
     return () => controller.abort();
   }, [open, ident]);
 
-  const route = useMemo(() => {
-    if (!flight) return { origin: '', dest: '', estimated: false };
-    if (flight.origin && flight.dest) {
-      return { origin: flight.origin, dest: flight.dest, estimated: false };
-    }
-    const guess = estimateRoute(
-      flight.lat,
-      flight.lon,
-      flight.hdg,
-      flight.alt ? flight.alt * 3.28084 : null,
-      flight.vr,
-      flight.flightIATA || flight.callsign,
-    ) as { origin: { iata: string } | null; dest: { iata: string } | null };
-    return {
-      origin: flight.origin || guess.origin?.iata || '',
-      dest: flight.dest || guess.dest?.iata || '',
-      estimated: true,
-    };
-  }, [flight]);
+  // Resolved once in src/app/data/route.ts so the map draws exactly the route this panel
+  // names — including an estimated one.
+  const route = useMemo(() => resolveFlightRoute(flight), [flight]);
 
   const aircraft = useMemo(
     () => (flight ? (matchAircraft(flight, fleetByReg) as Record<string, unknown> | null) : null),
@@ -275,6 +261,10 @@ export function FlightSheet() {
     ? (getFlightPopupMetrics(flight) as { altFt: number | null; altPct: number; speedText: string })
     : null;
   const reg = (aircraft?.r as string | undefined) ?? flight?.reg ?? '';
+  /** Per-cabin blocks, in the database's own order (NJ / NPP / NE+ / NY etc). */
+  const seats = Object.entries(
+    (aircraft?.seats as Record<string, number> | undefined) ?? {},
+  ).filter(([, count]) => Number(count) > 0);
   const isStarlink = Boolean(reg) && starlink.tails.has(reg);
   const specialEntry = reg ? special.get(reg) : undefined;
   const watched = ident ? watch.isWatched(ident) : false;
@@ -282,11 +272,24 @@ export function FlightSheet() {
   return (
     <Sheet
       open={open}
+      modal={false}
       onOpenChange={(next) => {
         if (!next) select(null);
       }}
     >
-      <SheetContent className="w-full overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md">
+      {/*
+        Non-modal, with no overlay and no close-on-outside-interaction. This panel sits
+        BESIDE the live map rather than over it: a modal Radix dialog dims the map, makes it
+        inert to pan, zoom and marker clicks, and closes itself on the first map click — so
+        "Centre map" would fly a map the viewer could not see or touch. Escape and the ✕ still
+        close it, and clicking another aircraft swaps the panel's subject instead.
+      */}
+      <SheetContent
+        showOverlay={false}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+        className="w-full overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md"
+      >
         <SheetHeader>
           <div className="flex flex-wrap items-center gap-2">
             <SheetTitle className="font-mono text-xl">{ident ?? 'Flight'}</SheetTitle>
@@ -301,14 +304,17 @@ export function FlightSheet() {
             {times.data?.diverted ? <Badge variant="destructive">Diverted</Badge> : null}
           </div>
           <SheetDescription>
-            {route.origin || route.dest
-              ? `${cityFor(route.origin) || route.origin || '?'} → ${cityFor(route.dest) || route.dest || '?'}`
+            {route.originIata || route.destIata
+              ? `${cityFor(route.originIata) || route.originIata || '?'} → ${cityFor(route.destIata) || route.destIata || '?'}`
               : 'Flight details'}
           </SheetDescription>
         </SheetHeader>
 
         <div className="space-y-5 px-4 pb-8">
-          {squawk ? (
+          {/* Only the three emergency codes get the red banner. decodeSquawk() also decodes
+              1200 (VFR) with an empty class, which is routine — the Ticker filters on the
+              same `squawk-alert` class for the same reason. */}
+          {squawk && squawk.cls === 'squawk-alert' ? (
             <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300">
               {squawk.text}
             </p>
@@ -316,11 +322,11 @@ export function FlightSheet() {
 
           <div className="rounded-lg border bg-card p-4">
             <div className="flex items-center justify-between">
-              <div className="font-mono text-3xl font-semibold">{route.origin || '—'}</div>
+              <div className="font-mono text-3xl font-semibold">{route.originIata || '—'}</div>
               <span aria-hidden="true" className="text-muted-foreground">
                 →
               </span>
-              <div className="font-mono text-3xl font-semibold">{route.dest || '—'}</div>
+              <div className="font-mono text-3xl font-semibold">{route.destIata || '—'}</div>
             </div>
             {route.estimated ? (
               <p className="mt-2 text-[11px] text-muted-foreground">
@@ -338,7 +344,7 @@ export function FlightSheet() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 text-xs"
+                  className="min-h-11 text-xs md:h-7 md:min-h-0"
                   onClick={() => focusOn(flight.lat, flight.lon)}
                 >
                   Centre map
@@ -395,16 +401,41 @@ export function FlightSheet() {
                   {specialEntry ? <Badge variant="outline">⭐ {specialEntry.name}</Badge> : null}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {[aircraft.c, aircraft.w, aircraft.i].filter(Boolean).join(' · ') || '—'}
+                  {/* normalizeWifi turns the database's raw codes ("Satl Ku") into the
+                      names the rest of the site shows ("Satellite Ku"). */}
+                  {[aircraft.c, normalizeWifi(aircraft.w), aircraft.i].filter(Boolean).join(' · ') ||
+                    '—'}
                 </p>
-                {aircraft.tot ? (
+                {seats.length > 0 ? (
+                  <p className="flex flex-wrap items-center gap-1 text-xs">
+                    {seats.map(([cabin, count]) => (
+                      <span
+                        key={cabin}
+                        className="rounded border px-1.5 py-0.5 font-mono tabular-nums"
+                      >
+                        {count}
+                        {cabin}
+                      </span>
+                    ))}
+                    {aircraft.tot ? (
+                      <span className="text-muted-foreground">({String(aircraft.tot)} total)</span>
+                    ) : null}
+                  </p>
+                ) : aircraft.tot ? (
                   <p className="text-xs text-muted-foreground">{String(aircraft.tot)} seats</p>
                 ) : null}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
+                {/* "Loading" and "not in the database" are different facts. Asserting the
+                    second while the fleet is still downloading tells a mainline passenger
+                    their aircraft is a United Express jet. */}
                 {flight
-                  ? `${flight.acType || 'Unknown type'}${flight.reg ? ` · ${flight.reg}` : ''} — not in the mainline fleet database; likely United Express.`
+                  ? `${flight.acType || 'Unknown type'}${flight.reg ? ` · ${flight.reg}` : ''} (${
+                      fleetLoading
+                        ? 'Loading aircraft data…'
+                        : 'not in mainline fleet DB — likely United Express'
+                    })`
                   : 'No aircraft reported.'}
               </p>
             )}
@@ -461,12 +492,13 @@ export function FlightSheet() {
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
+              className="min-h-11 md:min-h-9"
               variant={watched ? 'default' : 'outline'}
               onClick={() => {
                 if (!ident) return;
                 const nowWatched = watch.toggle(
                   ident,
-                  `${route.origin}→${route.dest}`,
+                  `${route.originIata}→${route.destIata}`,
                   phase?.phase ?? '',
                 );
                 announce(nowWatched ? `Watching ${ident}` : `Stopped watching ${ident}`);
@@ -475,7 +507,7 @@ export function FlightSheet() {
             >
               {watched ? '👁️ Watching' : '👁️ Watch'}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => void onShare()}>
+            <Button size="sm" variant="outline" className="min-h-11 md:min-h-9" onClick={() => void onShare()}>
               Share
             </Button>
           </div>
@@ -484,7 +516,9 @@ export function FlightSheet() {
             {ident ? (
               <a
                 className="text-primary underline-offset-2 hover:underline"
-                href={`https://flightaware.com/live/flight/UAL${ident.replace(/^UA/i, '')}`}
+                // `ident` can be an IATA number (UA123) or a callsign (UAL123); strip either
+                // prefix before re-adding UAL, or a callsign becomes UALL123.
+                href={`https://flightaware.com/live/flight/UAL${ident.replace(/^UAL?/i, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >

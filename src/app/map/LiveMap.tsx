@@ -20,6 +20,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { AIRPORTS, AIRPORT_COORDS, IATA_CITIES } from '@/lib/airports.js';
+import { resolveFlightRoute } from '../data/route';
 import { getPhase } from '@/lib/flight-phase.js';
 import { greatCirclePoints, isLonghaul, normalizeLonContinuity } from '@/lib/geo.js';
 import { planeIconSpec } from '@/lib/plane-icon.js';
@@ -106,6 +107,10 @@ export function LiveMap({
   const markersRef = useRef(new Map<string, L.Marker>());
   const flightsRef = useRef(flights);
   flightsRef.current = flights;
+  // The init effect runs once; reading through a ref assigned during render means it can
+  // never centre on a home hub that had not resolved yet.
+  const homeAirportRef = useRef(homeAirport);
+  homeAirportRef.current = homeAirport;
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -113,8 +118,8 @@ export function LiveMap({
   useEffect(() => {
     if (!hostRef.current || mapRef.current) return undefined;
 
-    const home = homeAirport
-      ? (AIRPORTS as Airport[]).find((a) => a.iata === homeAirport)
+    const home = homeAirportRef.current
+      ? (AIRPORTS as Airport[]).find((a) => a.iata === homeAirportRef.current)
       : undefined;
     const map = L.map(hostRef.current, {
       center: home ? [home.lat, home.lon] : US_VIEW.center,
@@ -262,10 +267,10 @@ export function LiveMap({
       routeRef.current = null;
     }
     const flight = selectedId ? flights.find((f) => f.fr24id === selectedId) : null;
-    if (!flight || !flight.origin || !flight.dest) return undefined;
-    const origin = (AIRPORTS as Airport[]).find((a) => a.iata === flight.origin);
-    const dest = (AIRPORTS as Airport[]).find((a) => a.iata === flight.dest);
-    if (!origin || !dest) return undefined;
+    // Estimated routes draw too — the panel already names them, and a flight whose feed
+    // origin/dest are blank is exactly the one a viewer most wants a line for.
+    const { origin, dest } = resolveFlightRoute(flight ?? null);
+    if (!flight || !origin || !dest) return undefined;
 
     const traveled = normalizeLonContinuity(
       greatCirclePoints(origin.lat, origin.lon, flight.lat, flight.lon, 60),

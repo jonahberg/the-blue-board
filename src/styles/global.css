@@ -262,6 +262,33 @@
   border-top-color: var(--border);
 }
 
+/* The flight detail panel is a NON-MODAL sheet pinned to the VIEWPORT's right edge, so the
+   map stays interactive beneath it — but where it overlaps the map it covers the bottom-right
+   corner, and that is where Leaflet stacks the zoom control and the ODbL attribution credit.
+   Slide that stack clear by the width of the overlap while the panel is open.
+
+   The overlap is the panel's width minus whatever already sits between the map's right edge
+   and the viewport's right edge:
+
+     ≥1024px   panel 28rem − the Live sidebar 20rem  = 8rem
+               (`FlightSheet` `data-[side=right]:sm:max-w-md`, `LiveView` `<aside class="w-80
+                … lg:block">`, which mounts at the same 1024px as its `useMediaQuery`)
+     ≥640px    panel 28rem, no sidebar yet           = 28rem
+     <640px    the panel is `w-full`: it covers the map completely, so there is no control
+               left to keep reachable and no shift to make.
+
+   Keep these two numbers in step with those two classes. */
+@media (min-width: 640px) {
+  [data-flight-panel='open'] .leaflet-bottom.leaflet-right {
+    transform: translateX(-28rem);
+  }
+}
+@media (min-width: 1024px) {
+  [data-flight-panel='open'] .leaflet-bottom.leaflet-right {
+    transform: translateX(-8rem);
+  }
+}
+
 /* Keyless basemap fallback: darken OSM tiles in CSS. */
 .bb-osm-dark {
   filter: invert(1) hue-rotate(180deg) brightness(0.65) contrast(1.15) saturate(0.35);

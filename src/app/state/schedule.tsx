@@ -13,7 +13,7 @@
  * lives next to the board store rather than in the strip component.
  */
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { HUB_ORDER, mergeHubHealth, serverOtpFromMetrics } from '@/lib/hub-health.js';
@@ -81,6 +81,14 @@ export function ScheduleProvider({
     dir: 'departures',
     day: 0,
   });
+  // A `useState` initializer runs once, so a home hub that resolves later (or a viewer who
+  // changes it from the canopy) would never reach the board. Follow `defaultHub` until the
+  // viewer has chosen a board themselves, then stop — their choice outranks the preference.
+  const hubChosenByViewer = useRef(false);
+  useEffect(() => {
+    if (hubChosenByViewer.current) return;
+    setCurrentState((prev) => (prev.hub === defaultHub ? prev : { ...prev, hub: defaultHub }));
+  }, [defaultHub]);
 
   // Task 3 replaces these two with the real loader; the signatures are what the shell, the
   // search palette and the hub-health arbitration already call.
@@ -88,6 +96,7 @@ export function ScheduleProvider({
   const preload = useCallback(() => {}, []);
 
   const setCurrent = useCallback((next: Partial<ScheduleCurrent>) => {
+    if (next.hub !== undefined) hubChosenByViewer.current = true;
     setCurrentState((prev) => ({ ...prev, ...next }));
   }, []);
 
