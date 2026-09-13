@@ -19,6 +19,32 @@ export function iropsScore({ cancellations = 0, delayed60 = 0, delayed30 = 0, di
   return ((cancellations * 3 + delayed60 * 2 + delayed30to60 + diversions * 2) / total * 100).toFixed(1);
 }
 
+// F007/F015 applied: turn /api/irops `hubMetrics` into the per-hub descriptor the
+// delay-risk engine reads (`originIrops`/`destinationIrops`). Extracted verbatim from
+// src/dashboard/main.js renderIropsFromAPI's hubMetrics loop.
+//
+// Counts are ALWAYS published (a consumer can still say "1 of 4 cancelled"); the two
+// RATES are null below the floor, so every rate threshold downstream degrades to
+// "signal omitted" rather than to a zero or a small-sample spike.
+//
+// @param {Record<string, {total?: number, cancellations?: number, delayed60?: number}>} hubMetrics
+// @returns {Record<string, {cancellations: number, total: number, cancellationRate: number|null, delayed60Rate: number|null}>}
+export function iropsHubRates(hubMetrics) {
+  const byHub = {};
+  for (const [hub, m] of Object.entries(hubMetrics || {})) {
+    if (!m || !(m.total > 0)) continue;
+    const cancellations = m.cancellations || 0;
+    const hasRateFloor = iropsRateFloor(m.total, cancellations);
+    byHub[hub] = {
+      cancellations,
+      total: m.total,
+      cancellationRate: hasRateFloor ? Math.round((cancellations / m.total) * 100) : null,
+      delayed60Rate: hasRateFloor ? Math.round(((m.delayed60 || 0) / m.total) * 100) : null,
+    };
+  }
+  return byHub;
+}
+
 export function iropsScoreCls(score) {
   return score < 5 ? 'low' : score < 15 ? 'med' : 'high';
 }

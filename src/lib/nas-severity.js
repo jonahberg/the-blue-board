@@ -75,8 +75,57 @@ export function sevBadgeClass(sevType) {
  * @returns {{critical: NasItem[], active: NasItem[], monitoring: NasItem[]}}
  */
 export function tierNasEvents(nas, hubCodes) {
+  const tiers = tierNasEventsRaw(nas, hubCodes);
+  const escapeItem = (item) => ({
+    tier: item.tier,
+    sevType: item.sevType,
+    title: escapeHtml(item.title),
+    detail: item.detailParts
+      .map((part) =>
+        part.kind === 'delay'
+          ? 'avg <span class="nas-delay-val">' + escapeHtml(part.text) + '</span>'
+          : escapeHtml(part.text),
+      )
+      .join(' · '),
+    hubs: item.hubs,
+  });
+  return {
+    critical: tiers.critical.map(escapeItem),
+    active: tiers.active.map(escapeItem),
+    monitoring: tiers.monitoring.map(escapeItem),
+  };
+}
+
+/**
+ * @typedef {Object} NasDetailPart
+ * @property {'text'|'delay'} kind  `delay` is the avg-delay figure the panel emphasises.
+ * @property {string} text  RAW — never escaped.
+ */
+
+/**
+ * @typedef {Object} NasItemRaw
+ * @property {'critical'|'active'|'monitoring'} tier
+ * @property {string} sevType
+ * @property {string} title  RAW
+ * @property {NasDetailPart[]} detailParts  RAW, in render order (joined with " · ")
+ * @property {string[]} hubs
+ */
+
+/**
+ * The same classification and tiering as `tierNasEvents`, with the text left RAW.
+ *
+ * `tierNasEvents` exists for the innerHTML caller in `src/dashboard/main.js` and escapes
+ * this output at the edge; a React renderer takes the raw items, because passing
+ * pre-escaped HTML through JSX would double-escape (`&amp;amp;`) and force the panel to
+ * reach for `dangerouslySetInnerHTML` for no reason. One classifier, two presentations.
+ *
+ * @param {{active?: Array<Object>, planned?: Array<Object>}|null|undefined} nas
+ * @param {Iterable<string>|Set<string>} hubCodes
+ * @returns {{critical: NasItemRaw[], active: NasItemRaw[], monitoring: NasItemRaw[]}}
+ */
+export function tierNasEventsRaw(nas, hubCodes) {
   const hubSet = hubCodes instanceof Set ? hubCodes : new Set(hubCodes || []);
-  /** @type {NasItem[]} */
+  /** @type {NasItemRaw[]} */
   const items = [];
   if (!nas) return { critical: [], active: [], monitoring: [] };
 
@@ -90,18 +139,18 @@ export function tierNasEvents(nas, hubCodes) {
     const hubs = [...new Set((prog.affectedFacilities || []).filter(a => hubSet.has(a)))];
 
     const detailParts = [];
-    if (prog.reason) detailParts.push(escapeHtml(prog.reason));
-    if (prog.avgDelay) detailParts.push('avg <span class="nas-delay-val">' + escapeHtml(String(prog.avgDelay)) + 'm</span>');
+    if (prog.reason) detailParts.push({ kind: 'text', text: prog.reason });
+    if (prog.avgDelay) detailParts.push({ kind: 'delay', text: String(prog.avgDelay) + 'm' });
     if (prog.endTime) {
       const endZ = prog.endTime.includes('T') ? prog.endTime.split('T')[1].slice(0, 5) + 'Z' : prog.endTime;
-      detailParts.push('ends ' + escapeHtml(endZ));
+      detailParts.push({ kind: 'text', text: 'ends ' + endZ });
     }
 
     items.push({
       tier: sevType === 'GS' ? 'critical' : 'active',
       sevType,
-      title: facility ? escapeHtml(facility) + ' ' + escapeHtml(typeName) : escapeHtml(prog.name),
-      detail: detailParts.join(' · '),
+      title: facility ? facility + ' ' + typeName : prog.name,
+      detailParts,
       hubs,
     });
   }
@@ -119,8 +168,8 @@ export function tierNasEvents(nas, hubCodes) {
     items.push({
       tier,
       sevType,
-      title: escapeHtml(tmi.decoded || tmi.event),
-      detail: tmi.time ? escapeHtml(tmi.time) : '',
+      title: tmi.decoded || tmi.event,
+      detailParts: tmi.time ? [{ kind: 'text', text: tmi.time }] : [],
       hubs,
     });
   }
@@ -130,4 +179,32 @@ export function tierNasEvents(nas, hubCodes) {
     active: items.filter(i => i.tier === 'active'),
     monitoring: items.filter(i => i.tier === 'monitoring'),
   };
+}
+
+/**
+ * The panel's header count line: "2 active · 1 planned · 3 hubs".
+ *
+ * Extracted from `renderNasPanel` (`main.js:3690-3699`) so the React panel and any future
+ * caller agree on pluralisation and on which counts are omitted when zero.
+ *
+ * @param {{active?: Array<Object>, planned?: Array<Object>}|null|undefined} nas
+ * @param {{critical: Array<{hubs: string[]}>, active: Array<{hubs: string[]}>, monitoring: Array<{hubs: string[]}>}} tiers
+ * @returns {string} '' when every count is zero.
+ */
+export function nasCountLine(nas, tiers) {
+  const activeCount = (nas?.active || []).length;
+  const plannedCount = (nas?.planned || []).length;
+  const hubCount = new Set(
+    [...tiers.critical, ...tiers.active, ...tiers.monitoring].flatMap((i) => i.hubs),
+  ).size;
+  const parts = [];
+  if (activeCount) parts.push(activeCount + ' active');
+  if (plannedCount) parts.push(plannedCount + ' planned');
+  if (hubCount) parts.push(hubCount + ' hub' + (hubCount !== 1 ? 's' : ''));
+  return parts.join(' · ');
+}
+
+/** True when the NAS panel has nothing to show and must stay hidden (`main.js:3096-3100`). */
+export function nasPanelEmpty(nas) {
+  return !nas || ((!nas.active || !nas.active.length) && (!nas.planned || !nas.planned.length));
 }

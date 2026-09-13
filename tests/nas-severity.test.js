@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { SEV_LABELS, detectSevType, sevBadgeClass, tierNasEvents } from '../src/lib/nas-severity.js';
+import {
+  SEV_LABELS,
+  detectSevType,
+  sevBadgeClass,
+  tierNasEvents,
+  tierNasEventsRaw,
+  nasCountLine,
+  nasPanelEmpty,
+} from '../src/lib/nas-severity.js';
 
 const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
 
@@ -162,5 +170,87 @@ describe('tierNasEvents', () => {
   it('renders a bare endTime verbatim when it carries no date part (edge case)', () => {
     const { active } = tierNasEvents({ active: [{ name: 'GDP-DEN', endTime: '2145Z', affectedFacilities: ['DEN'] }] }, HUBS);
     expect(active[0].detail).toBe('ends 2145Z');
+  });
+});
+
+describe('tierNasEventsRaw (the React panel’s input)', () => {
+  const NAS = {
+    active: [
+      { name: 'GS-EWR', reason: 'THUNDERSTORMS & WIND', avgDelay: 45, endTime: '2026-09-13T21:45:00Z', affectedFacilities: ['EWR', 'JFK'] },
+      { name: 'GDP-ORD', reason: 'VOLUME', affectedFacilities: ['ORD'] },
+    ],
+    planned: [{ event: 'MIT-ZOB', decoded: 'Miles-in-trail "20" & climbing', time: '18Z-22Z', affectedAirports: ['ORD', 'LGA'] }],
+  };
+
+  it('tiers exactly the way the escaping variant does', () => {
+    const raw = tierNasEventsRaw(NAS, HUBS);
+    const escaped = tierNasEvents(NAS, HUBS);
+    for (const tier of ['critical', 'active', 'monitoring']) {
+      expect(raw[tier].map((i) => i.sevType)).toEqual(escaped[tier].map((i) => i.sevType));
+      expect(raw[tier].map((i) => i.hubs)).toEqual(escaped[tier].map((i) => i.hubs));
+    }
+  });
+
+  it('leaves the title and every detail part UNESCAPED', () => {
+    const { critical, monitoring } = tierNasEventsRaw(NAS, HUBS);
+    expect(critical[0].title).toBe('EWR Ground Stop');
+    expect(critical[0].detailParts).toEqual([
+      { kind: 'text', text: 'THUNDERSTORMS & WIND' },
+      { kind: 'delay', text: '45m' },
+      { kind: 'text', text: 'ends 21:45Z' },
+    ]);
+    // The escaping wrapper is the ONLY place ampersands and quotes become entities.
+    expect(monitoring[0].title).toBe('Miles-in-trail "20" & climbing');
+    expect(tierNasEvents(NAS, HUBS).monitoring[0].title).toBe('Miles-in-trail &quot;20&quot; &amp; climbing');
+  });
+
+  it('marks the average-delay figure so the panel can emphasise only that part', () => {
+    const { critical } = tierNasEventsRaw(NAS, HUBS);
+    expect(critical[0].detailParts.filter((p) => p.kind === 'delay')).toEqual([{ kind: 'delay', text: '45m' }]);
+    // …and the innerHTML caller still gets the span it always got.
+    expect(tierNasEvents(NAS, HUBS).critical[0].detail).toContain('avg <span class="nas-delay-val">45m</span>');
+  });
+
+  it('gives a planned TMI with no time an empty part list, not an empty string part', () => {
+    const { monitoring } = tierNasEventsRaw({ planned: [{ event: 'MIT', affectedAirports: [] }] }, HUBS);
+    expect(monitoring[0].detailParts).toEqual([]);
+    expect(tierNasEvents({ planned: [{ event: 'MIT', affectedAirports: [] }] }, HUBS).monitoring[0].detail).toBe('');
+  });
+
+  it('returns three empty tiers for missing NAS data (edge case)', () => {
+    expect(tierNasEventsRaw(null, HUBS)).toEqual({ critical: [], active: [], monitoring: [] });
+  });
+});
+
+describe('nasCountLine', () => {
+  it('counts active programs, planned TMIs and the distinct hubs touched', () => {
+    const nas = {
+      active: [{ name: 'GS-EWR', affectedFacilities: ['EWR'] }, { name: 'GDP-ORD', affectedFacilities: ['ORD'] }],
+      planned: [{ event: 'MIT-ZOB', affectedAirports: ['ORD'] }],
+    };
+    expect(nasCountLine(nas, tierNasEventsRaw(nas, HUBS))).toBe('2 active · 1 planned · 2 hubs');
+  });
+
+  it('singularises one hub and omits every zero count', () => {
+    const nas = { planned: [{ event: 'MIT-ZOB', affectedAirports: ['DEN'] }] };
+    expect(nasCountLine(nas, tierNasEventsRaw(nas, HUBS))).toBe('1 planned · 1 hub');
+  });
+
+  it('is empty when there is nothing to count (edge case)', () => {
+    expect(nasCountLine(null, { critical: [], active: [], monitoring: [] })).toBe('');
+  });
+});
+
+describe('nasPanelEmpty (the panel hides itself rather than showing a header alone)', () => {
+  it('is empty for missing data and for a payload with two empty arrays', () => {
+    expect(nasPanelEmpty(null)).toBe(true);
+    expect(nasPanelEmpty(undefined)).toBe(true);
+    expect(nasPanelEmpty({ active: [], planned: [] })).toBe(true);
+    expect(nasPanelEmpty({})).toBe(true);
+  });
+
+  it('is not empty as soon as either list has one entry', () => {
+    expect(nasPanelEmpty({ active: [{ name: 'GDP-ORD' }], planned: [] })).toBe(false);
+    expect(nasPanelEmpty({ active: [], planned: [{ event: 'MIT' }] })).toBe(false);
   });
 });
