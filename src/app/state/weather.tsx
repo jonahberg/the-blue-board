@@ -17,6 +17,7 @@ import type { ReactNode } from 'react';
 
 import { getMetarStationForIata } from '@/lib/airport-metadata.js';
 import { buildFaaIndex } from '@/lib/faa-context.js';
+import { hasRenderableMetarData } from '@/lib/metar-explain.js';
 import { collectMetarStations, indexMetarByKey, resolveWeather } from '@/lib/weather-cards.js';
 import { fetchFaa, fetchMetarBatch, fetchNas } from '../data/api';
 import type { FaaIndex, MetarRecord, NasData } from '../data/types';
@@ -52,7 +53,11 @@ export type WeatherValue = {
   weatherOpsByHub: Record<string, WeatherOps>;
   updatedAt: number | null;
   loading: boolean;
-  /** No cycle has ever produced an observation — the tab shows its retry state. */
+  /**
+   * No hub has a RENDERABLE observation — the tab shows its retry state instead of nine
+   * cards of dashes. Not the same as "the request failed": a 200 carrying rows with no
+   * usable fields is just as unreadable, and the shipped tab counted it the same way.
+   */
   metarFailed: boolean;
   refresh: () => void;
 };
@@ -145,7 +150,7 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
             weatherOpsByHub,
             updatedAt: Date.now(),
             loading: false,
-            metarFailed: Object.keys(keptMetar).length === 0,
+            metarFailed: !Object.values(keptMetar).some((record) => hasRenderableMetarData(record)),
           };
         });
       },

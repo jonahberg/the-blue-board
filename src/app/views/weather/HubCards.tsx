@@ -49,7 +49,10 @@ export function HubCards({
   highlighted: string | null;
   onRetry: () => void;
 }) {
-  if (failed && !models.length) {
+  // The failure state REPLACES the cards, even when /api/faa answered: nine cards of
+  // "--" with a working status line underneath read as a weather panel that is merely
+  // quiet, when in fact the observations are gone and the only useful control is Retry.
+  if (failed) {
     return (
       <div className="rounded-lg border border-dashed p-6 text-center">
         <p aria-hidden="true" className="text-2xl">
