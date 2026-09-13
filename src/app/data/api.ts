@@ -11,6 +11,7 @@
  */
 
 import { parseFr24Feed, parseStaleHeader } from '@/lib/feed-health.js';
+import { chunkMetarStationIds, normalizeMetarPayload } from '@/lib/metar.js';
 import type {
   FaaAirport,
   FleetAircraft,
@@ -134,6 +135,30 @@ export function fetchStarlinkMismatches(): Promise<StarlinkMismatches> {
 /** `ids` is a comma-separated ICAO station list; the endpoint normalises the AWC payload. */
 export function fetchMetar(ids: string[]): Promise<MetarRecord[]> {
   return getJson<MetarRecord[]>(`/api/metar?ids=${encodeURIComponent(ids.join(','))}`);
+}
+
+/**
+ * Every station the Weather tab wants, in as few requests as the query length allows.
+ *
+ * `chunkMetarStationIds()` caps each `ids=` at 180 characters, and the ids it emits are
+ * `[A-Z0-9]` only, so the commas go on the wire raw exactly as the shipped dashboard sent
+ * them (inventory §28 — the `/api/metar?ids=` contract is byte-for-byte).
+ *
+ * `allSettled`, not `all`: the caller puts the nine hub stations FIRST, so a later chunk
+ * (the non-hub airports pulled off watched routes and loaded boards) failing must cost
+ * those extras and nothing else. `Promise.all` would throw away the hub observations too.
+ */
+export async function fetchMetarBatch(stations: string[]): Promise<MetarRecord[]> {
+  const chunks = chunkMetarStationIds(stations) as string[];
+  if (!chunks.length) return [];
+  const settled = await Promise.allSettled(
+    chunks.map(async (ids) => {
+      const res = await fetch(`/api/metar?ids=${ids}`, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new ApiError(res.status, `/api/metar → HTTP ${res.status}`);
+      return normalizeMetarPayload(await res.json()) as MetarRecord[];
+    }),
+  );
+  return settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
 }
 
 export function fetchFaa(): Promise<FaaAirport[]> {

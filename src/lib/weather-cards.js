@@ -329,3 +329,24 @@ export function faaAlertLines(faaIndex) {
   }
   return lines;
 }
+
+/**
+ * The radar panel's heading: `🌧 NEXRAD Radar — HH:MM:SSZ`, refreshed each cycle.
+ *
+ * UTC, and SAID to be UTC by the trailing Z: aviation weather is quoted in Zulu everywhere
+ * else on the page, and a radar frame stamped in the viewer's local time is unusable next
+ * to a METAR. Extracted from src/dashboard/main.js (:3812, 4079-4081), where it was
+ * `new Date().toUTCString().slice(17,25)` — the same nine characters, without the reliance
+ * on a fixed-width date string.
+ *
+ * @param {number|Date|null|undefined} at  epoch ms, or a Date. Falsy → the bare title.
+ * @returns {string}
+ */
+export function radarTitle(at) {
+  if (!at && at !== 0) return '🌧 NEXRAD Radar';
+  const date = at instanceof Date ? at : new Date(at);
+  if (Number.isNaN(date.getTime())) return '🌧 NEXRAD Radar';
+  const pad = (n) => String(n).padStart(2, '0');
+  const hms = `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
+  return `🌧 NEXRAD Radar — ${hms}Z`;
+}

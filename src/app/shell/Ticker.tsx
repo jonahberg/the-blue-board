@@ -55,7 +55,8 @@ export function Ticker() {
       hubOtps: byHub,
       faaIndex: weather.faaIndex,
       hubCodes: HUB_ORDER as string[],
-      iropsScore: irops.data?.score ?? null,
+      // The client fallback fills this when /api/irops is dark — see `state/irops.tsx`.
+      iropsScore: irops.score,
     }) as { level: string; text: string };
 
     return buildTickerItems({
@@ -66,7 +67,7 @@ export function Ticker() {
       starlinkCount: starlink.tails.size,
       squawks,
     }) as TickerItem[];
-  }, [feed.flights, fleetDb.length, starlink.tails, byHub, weather.faaIndex, irops.data]);
+  }, [feed.flights, fleetDb.length, starlink.tails, byHub, weather.faaIndex, irops.score]);
 
   const [index, setIndex] = useState(0);
   const [fading, setFading] = useState(false);
