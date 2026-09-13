@@ -33,6 +33,15 @@ export type WatchValue = {
   /** Adds or removes; returns true when the flight is now watched. */
   toggle: (flight: string, route?: string, status?: string) => boolean;
   clearAll: () => void;
+  /**
+   * Restamp a watched flight's last-seen status, without touching the list order.
+   *
+   * The Schedule tab's watched-flight diff (inventory §6) compares each board load against
+   * the STORED status, so the baseline has to move forward after every comparison — leaving
+   * it behind re-announces the same transition on every refresh until the page is closed.
+   * A no-op for a flight that is not watched, and for a status that has not changed.
+   */
+  updateStatus: (flight: string, status: string) => void;
   isWatched: (flight: string) => boolean;
   /** Set after the FIRST add, so the push prompt can appear 500 ms later exactly once. */
   justAddedFirst: boolean;
@@ -153,6 +162,21 @@ export function WatchProvider({ children }: { children: ReactNode }) {
     void syncSubscription([]);
   }, [persist, syncSubscription]);
 
+  const updateStatus = useCallback(
+    (flight: string, status: string) => {
+      const current = watchedRef.current;
+      const index = current.findIndex((entry) => entry.flight === flight);
+      if (index < 0 || current[index].status === status) return;
+      const next = current.map((entry, i) =>
+        i === index ? { ...entry, status, ts: Date.now() } : entry,
+      );
+      // No `syncSubscription` here: the server subscription is keyed on WHICH flights are
+      // watched, and that has not changed.
+      persist(next);
+    },
+    [persist],
+  );
+
   const isWatched = useCallback(
     (flight: string) => watchedRef.current.some((entry) => entry.flight === flight),
     [],
@@ -177,6 +201,7 @@ export function WatchProvider({ children }: { children: ReactNode }) {
       watched,
       toggle,
       clearAll,
+      updateStatus,
       isWatched,
       justAddedFirst,
       push: { configured, permission, prompted, enable, dismissPrompt: markPrompted },
@@ -185,6 +210,7 @@ export function WatchProvider({ children }: { children: ReactNode }) {
       watched,
       toggle,
       clearAll,
+      updateStatus,
       isWatched,
       justAddedFirst,
       configured,
