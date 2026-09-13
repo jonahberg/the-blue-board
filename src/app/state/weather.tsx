@@ -133,9 +133,11 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
         const byKey = indexMetarByKey(records, stationToKey) as Record<string, MetarRecord>;
 
         setState((prev) => {
-          // A cycle that returned nothing keeps the last good observations rather than
-          // blanking nine cards — exactly what the shipped refresh loop did.
-          const keptMetar = Object.keys(byKey).length ? byKey : prev.metarByHub;
+          // MERGED, not replaced: a hub whose observation was late this cycle keeps its
+          // last good one rather than dropping to "unavailable" for five minutes. The
+          // shipped refresh loop never re-rendered a card it had no fresh data for, which
+          // is the same promise stated as a data rule instead of a rendering accident.
+          const keptMetar = { ...prev.metarByHub, ...byKey };
           const weatherOpsByHub: Record<string, WeatherOps> = {};
           for (const [key, record] of Object.entries(keptMetar)) {
             weatherOpsByHub[key] = resolveWeather(record).weatherOps as WeatherOps;

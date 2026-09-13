@@ -13,13 +13,11 @@
  * anyone but the model that produces it. The index still exists — the ticker gates on it —
  * and the `?` tooltip states the exact weights, so the word is auditable rather than opaque.
  *
- * The announcer speaks only when the severity CLASS changes, never on a five-minute refresh
- * that moved the score by a point, and never on first paint: `#irops-status-announcer` is
- * the page's single polite region (§17) and a screen-reader user should hear from it when
- * the network state actually changed, not on a timer.
+ * The level-change announcement is deliberately NOT here: `shell/IropsAnnouncer` owns it,
+ * because it is mounted on every tab and this section is not (§17, §30).
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
@@ -30,7 +28,6 @@ import { cn } from '@/lib/utils';
 import { JargonTerm } from '../../features/JargonTerm';
 import { useIrops } from '../../state/irops';
 import { useSchedule } from '../../state/schedule';
-import { useUi } from '../../state/ui';
 import { useWeather } from '../../state/weather';
 
 const SCORE_TONE: Record<string, string> = {
@@ -75,7 +72,6 @@ export function IropsSection() {
   const irops = useIrops();
   const { boards } = useSchedule();
   const { faaIndex } = useWeather();
-  const { announce } = useUi();
   const { reportClientScore } = irops;
 
   // `boards` is `Record<key, Board>`; the counter wants the rows themselves. `serverNowMs`
@@ -130,16 +126,8 @@ export function IropsSection() {
     reportClientScore(hasFallbackRows ? Number(score) : null);
   }, [usingServer, hasFallbackRows, score, reportClientScore]);
 
-  // `announceIropsLevelChange`: skip the first label the way the shipped writer did — the
-  // very first reading is not a CHANGE, and announcing it would speak over a page load.
-  const lastLabel = useRef<string | null>(null);
-  useEffect(() => {
-    if (!scoreLabel) return;
-    if (lastLabel.current !== null && lastLabel.current !== scoreLabel) {
-      announce(`Operations status changed: ${scoreLabel.toLowerCase()}`);
-    }
-    lastLabel.current = scoreLabel;
-  }, [scoreLabel, announce]);
+  // The level-change announcement is NOT made here: it belongs to `shell/IropsAnnouncer`,
+  // which is mounted on every tab. See that file for why.
 
   const faaLines = useMemo(() => faaAlertLines(faaIndex) as string[], [faaIndex]);
 
