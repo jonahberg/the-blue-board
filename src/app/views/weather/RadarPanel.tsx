@@ -22,14 +22,19 @@ export function RadarPanel({
 }) {
   const legend = WX_LEGEND as { cat: string; color: string }[];
   return (
-    <div className="flex min-h-0 flex-col gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-2">
       <h2 id="radar-title" className="shrink-0 font-mono text-xs text-muted-foreground">
         {title}
       </h2>
       {/* `isolate z-0`: Leaflet's panes sit at z-index 400+ and would otherwise paint over
-          any Sheet or Dialog the shell opens at z-50. */}
-      <div className="isolate z-0 min-h-[240px] flex-1 overflow-hidden rounded-lg border">
-        <RadarMap hubs={hubs} onSelectHub={onSelectHub} className="size-full" />
+          any Sheet or Dialog the shell opens at z-50.
+
+          The map host is absolutely positioned rather than `h-full`: a percentage height
+          resolves against a parent's HEIGHT, and this box gets its size from `min-height`
+          plus `flex-1`, so `h-full` collapsed the Leaflet container to 0 px and drew an
+          empty black rectangle. `inset-0` needs no resolvable parent height at all. */}
+      <div className="relative isolate z-0 min-h-[240px] flex-1 overflow-hidden rounded-lg border">
+        <RadarMap hubs={hubs} onSelectHub={onSelectHub} className="absolute inset-0" />
       </div>
       <ul className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
         {legend.map((entry) => (
