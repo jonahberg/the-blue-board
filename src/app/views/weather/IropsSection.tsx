@@ -163,12 +163,20 @@ export function IropsSection() {
                 ) : null}
                 <Tooltip>
                   <TooltipTrigger asChild>
+                    {/* The GLYPH stays 16 px — it sits inside a dense metric bar — while
+                        the TAP AREA is 44 px below `md:`. Padding the hit box rather than
+                        growing the circle keeps both promises at once. */}
                     <button
                       type="button"
                       aria-label="What does this mean?"
-                      className="flex size-4 items-center justify-center rounded-full border text-[9px] text-muted-foreground"
+                      className="flex min-h-11 min-w-11 items-center justify-center md:min-h-0 md:min-w-0"
                     >
-                      ?
+                      <span
+                        aria-hidden="true"
+                        className="flex size-4 items-center justify-center rounded-full border text-[9px] text-muted-foreground"
+                      >
+                        ?
+                      </span>
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-[min(320px,80vw)]">

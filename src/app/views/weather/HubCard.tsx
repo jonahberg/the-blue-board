@@ -143,9 +143,12 @@ export function HubCard({ model, highlighted }: { model: HubCardModel; highlight
           className="mt-2 border-t pt-2"
           onToggle={(event) => setOpen((event.currentTarget as HTMLDetailsElement).open)}
         >
+          {/* `flex` both removes the disclosure marker (the element stops being a
+              list-item, so `list-none` is belt and braces) and lets the row carry a 44 px
+              tap height below `md:` without the 10 px label growing. */}
           <summary
             aria-expanded={open}
-            className="cursor-pointer list-none text-center font-mono text-[10px] text-muted-foreground hover:text-foreground"
+            className="flex min-h-11 cursor-pointer list-none items-center justify-center font-mono text-[10px] text-muted-foreground hover:text-foreground md:min-h-0 md:py-1"
           >
             <span aria-hidden="true">{open ? '▴' : '▾'}</span> Details
           </summary>
