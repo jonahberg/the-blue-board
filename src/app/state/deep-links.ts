@@ -34,6 +34,32 @@ type DeepLinkDeps = {
   announce: (text: string) => void;
 };
 
+/** The Fleet tab's slice of the query string. */
+export type FleetDeepLinks = {
+  /** `?type=` or `?filter=` — a status shortcut or an aircraft type, resolved by the view. */
+  filter: string | null;
+  /** `?view=airborne|special` — a Fleet sub-view. `?view=starlink` is tab routing, above. */
+  view: 'airborne' | 'special' | null;
+};
+
+/**
+ * Read the Fleet tab's deep links straight off the URL.
+ *
+ * These three parameters name rows INSIDE the Fleet tab, and only the Fleet view knows
+ * which filter values its controls actually offer and when the fleet database has arrived
+ * — so the view reads them itself rather than being pushed a value it cannot yet apply.
+ * Safe to call on any render: it is a pure read of `window.location.search`.
+ */
+export function readFleetDeepLinks(): FleetDeepLinks {
+  if (typeof window === 'undefined') return { filter: null, view: null };
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('view')?.toLowerCase();
+  return {
+    filter: params.get('type') ?? params.get('filter'),
+    view: view === 'airborne' || view === 'special' ? view : null,
+  };
+}
+
 /** 'UAL123' / 'ua 123' / '123' → 'UA123'. */
 function normalizeIdent(raw: string): string {
   const value = raw.trim().toUpperCase().replace(/\s+/g, '');
@@ -72,8 +98,8 @@ export function useDeepLinks(deps: DeepLinkDeps) {
     }
 
     // ?view=starlink is tab routing and belongs here. ?view=airborne|special and
-    // ?type=/?filter= select rows INSIDE the Fleet tab, so they are read by the fleet store
-    // when Task 5 ports that view — the URL is still there for it to read.
+    // ?type=/?filter= select rows INSIDE the Fleet tab: the Fleet view reads those itself
+    // through `readFleetDeepLinks()`, once its database has actually loaded.
     if (params.get('view')?.toLowerCase() === 'starlink') depsRef.current.setTab('starlink');
 
     const aircraft = params.get('aircraft');

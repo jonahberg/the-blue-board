@@ -36,6 +36,7 @@ import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
 import { resolveFlightRoute } from '../data/route';
 import { formatTimeWithTz } from '@/lib/time-format.js';
 import { ApiError, fetchFlightTimes } from '../data/api';
+import { shareUrl } from '../data/share';
 import type { Flight, FlightTimes, TimeTriple } from '../data/types';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
@@ -51,33 +52,8 @@ function setFlightParam(ident: string | null) {
   window.history.replaceState(null, '', url);
 }
 
-/** Clipboard with the two fallbacks mobile browsers still need. */
-async function shareUrl(url: string): Promise<'copied' | 'prompted'> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url);
-      return 'copied';
-    }
-  } catch {
-    /* fall through */
-  }
-  try {
-    const input = document.createElement('textarea');
-    input.value = url;
-    input.setAttribute('readonly', '');
-    input.style.position = 'fixed';
-    input.style.opacity = '0';
-    document.body.appendChild(input);
-    input.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(input);
-    if (ok) return 'copied';
-  } catch {
-    /* fall through */
-  }
-  window.prompt('Copy this link', url);
-  return 'prompted';
-}
+// The clipboard-with-fallbacks helper moved to `../data/share` when the aircraft dialog
+// needed the same behaviour.
 
 /** actual → estimated → scheduled, with the delta against scheduled when it is material. */
 function resolveTime(triple: TimeTriple | undefined, tz: string | null | undefined) {
