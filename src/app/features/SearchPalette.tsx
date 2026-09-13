@@ -132,7 +132,11 @@ export function SearchPalette() {
 
           {qNorm.length >= 2 && matches.length === 0 ? (
             <>
-              <p className="px-3 pt-3 pb-1 text-xs text-muted-foreground">{emptyMessage}</p>
+              {/* role=presentation for the same reason cmdk gives its own CommandEmpty one:
+                  this sits inside the list's role="listbox" and is not an option. */}
+              <p role="presentation" className="px-3 pt-3 pb-1 text-xs text-muted-foreground">
+                {emptyMessage}
+              </p>
               <CommandGroup heading="Not airborne">
                 {lookupIdent ? (
                   <CommandItem

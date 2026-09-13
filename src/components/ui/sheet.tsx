@@ -79,7 +79,9 @@ function SheetContent({
           <SheetPrimitive.Close data-slot="sheet-close" asChild>
             <Button
               variant="ghost"
-              className="absolute top-3 right-3"
+              // 44px on touch (WCAG 2.5.5; the dashboard's flight panel inherits the
+              // legacy popup's explicit 44x44 close pin), desktop density from `md:`.
+              className="absolute top-3 right-3 min-h-11 min-w-11 md:min-h-8 md:min-w-8"
               size="icon-sm"
             >
               <XIcon
