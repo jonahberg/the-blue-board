@@ -264,7 +264,15 @@ export type Fr24FlightLookup = {
   source?: string;
   cached?: boolean;
   error?: string;
+  /**
+   * F048's leg metadata. The live endpoint puts `liveLeg`/`legDate` at the TOP LEVEL and
+   * the shipped modal read them off the whole response object, so both spellings are
+   * declared and callers read `response.meta ?? response`. Reading only `meta` silently
+   * dropped the leg-date label on every live answer.
+   */
   meta?: { liveLeg?: boolean; legDate?: string };
+  liveLeg?: boolean;
+  legDate?: string;
 };
 
 export function fetchFr24Flight(flight: string): Promise<Fr24FlightLookup> {

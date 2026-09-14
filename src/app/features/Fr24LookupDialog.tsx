@@ -122,7 +122,9 @@ export default function Fr24LookupDialog() {
           flight: data.flight as Fr24Flight,
           source: data.source,
           cached: data.cached,
-          meta: data.meta,
+          // The live endpoint carries `liveLeg`/`legDate` at the top level, which is
+          // what the shipped modal read (it was handed the whole response as its meta).
+          meta: data.meta ?? { liveLeg: data.liveLeg, legDate: data.legDate },
         });
       },
       () => fail(`Lookup failed for ${normalised} — try again in a moment.`),
@@ -240,7 +242,7 @@ export default function Fr24LookupDialog() {
                       {' • '}
                       <button
                         type="button"
-                        className="font-mono underline decoration-dotted underline-offset-2 hover:text-primary"
+                        className="inline-flex min-h-11 items-center font-mono underline decoration-dotted underline-offset-2 hover:text-primary md:min-h-0"
                         onClick={() => {
                           openFr24(null);
                           openAircraft(flight.aircraft?.reg ?? null);

@@ -198,9 +198,12 @@ export function FlightCard({
           <dl className="grid grid-cols-2 gap-3">
             <Cell label="Aircraft">
               {aircraft.t}{' '}
+              {/* `inline-flex min-h-11` below `md:`: an inline 14 px link is a real
+                  target on a phone, not decoration, even though the full-size
+                  "Aircraft Details" button below does the same thing. */}
               <button
                 type="button"
-                className="text-[10px] underline decoration-dotted underline-offset-2 hover:text-primary"
+                className="inline-flex min-h-11 items-center text-[10px] underline decoration-dotted underline-offset-2 hover:text-primary md:min-h-0"
                 onClick={() => onAircraftDetail(reg)}
               >
                 {reg}
