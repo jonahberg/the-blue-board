@@ -349,3 +349,72 @@ not reproduce on a clean load. Dev-only HMR remount artifacts.
    surface cannot be seen working right now.
 4. **The FR24 dialog's own failure line** is a new UI element rather than a slot that already
    existed. If Task 8 gives the shell a general error/toast region, this should move there.
+
+---
+
+## Fix round 1 (review response)
+
+**Commit:** `fix(my-flights): 44px risk badge target; restore #myflight-empty`
+
+### The Important finding, and why my own check missed it
+
+The risk badge was a real `<button>` carrying only `rounded-md border px-1.5 py-0.5 text-[9px]`
+— about 18 px tall, and the single most tapped control on the card.
+
+My "zero sub-44 px targets" claim was not a mis-measurement but an **over-broad conclusion from a
+measurement that could not see the element**. The query ran against the live DOM at 400 px, and in
+that state no card rendered a risk badge at all: no schedule board had been loaded, so
+`findBoardRiskForFlight` returned null (`riskNA`), and both watched flights were EN ROUTE, which
+suppresses the badge by `showRisk`. An empty result from a DOM query is evidence about what was
+rendered, not about what the component can render — I reported it as the latter. The lesson for
+the remaining rounds: a negative UI assertion is only as wide as the states actually put on screen,
+and the state matrix has to be driven deliberately.
+
+### Changes
+
+| File | Change |
+|---|---|
+| `views/myflight/FlightCard.tsx:146-166` | Risk badge button now `inline-flex min-h-11 min-w-11 items-center justify-center md:min-h-0 md:min-w-0`, with the 9 px coloured chip moved into an inner `<span>` so the target grows without the badge becoming a slab. |
+| `views/myflight/QuickAdd.tsx:81` | `id="myflight-empty"` restored on the empty-state container (§19's published id). |
+| `shell/WatchPanel.tsx:82` | Flight-select button `flex min-h-11 items-center … md:min-h-0`. |
+| `shell/WatchPanel.tsx:104` | `Remove` was `h-8` (32 px) → `min-h-11 md:h-8 md:min-h-0`. |
+| `shell/WatchPanel.tsx:119` | `Clear all` → `min-h-11 md:min-h-0`. |
+
+The three `WatchPanel` ones came out of the requested sweep. They are not My Flights files, but I
+rewrote that file in `f4637cb`, so they are mine; two of the three predate this task.
+
+**Sweep performed** over every `<button>`, `<Button>`, `<Input>` and `role="button"` in
+`views/myflight/*.tsx`, `views/MyFlightsView.tsx`, `features/{Fr24LookupDialog,DelayExplainDialog}.tsx`
+and `shell/WatchPanel.tsx`. Everything not listed above already carried the floor.
+
+### Verification
+
+Driven deliberately into the state the first pass never reached: Schedule tab loaded first (so
+`findBoardRiskForFlight` has a board), then `UA4587` — a SCHEDULED ORD departure — watched at
+400 px, which renders the badge.
+
+```
+$ bun run typecheck        # clean
+$ bun run test             # 131 files, 2360 tests passed
+$ bun run build            # 67 pages; verify-csp-hashes: 2 inline script(s) all allowed
+                           # src/data/starlink-live.json reverted after
+```
+
+Measured in the live DOM at 400 px:
+
+```
+{ "riskBadge": "57x44", "small": [], "overflow": false }
+```
+
+`small` is every interactive element in the tab panel under 44 px in either axis — now empty, this
+time with the badge actually on screen.
+
+**Screenshot:**
+`/private/tmp/claude-501/-Users-jonahberg-ganzarain/94862a98-7b27-4bcb-a075-eb91554860f3/scratchpad/mf-400-badge.png`
+— UA4587 ORD→MDT at 400 px showing the `LOW RISK` badge beside the `SCHEDULED` chip. The same shot
+incidentally gives first live confirmation of two §19 items the earlier pass could not exercise,
+both of which need a schedule-sourced flight: the **"via schedule snapshot" provenance chip** and
+the **"Expected to depart"** countdown state.
+
+Deferred per instruction, untouched: inline UI timing constants in `WatchPanel` and
+`useAircraftJourney`.

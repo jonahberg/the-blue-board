@@ -81,7 +81,7 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                     <li key={entry.flight} className="flex items-center gap-2 px-3 py-2 text-sm">
                       <button
                         type="button"
-                        className="text-left"
+                        className="flex min-h-11 items-center text-left md:min-h-0"
                         onClick={() => {
                           select({ kind: 'ident', ident: entry.flight });
                           onOpenChange(false);
@@ -102,7 +102,7 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                       <Button
                         size="sm"
                         variant="ghost"
-                        className={entry.status ? 'h-8' : 'ml-auto h-8'}
+                        className={`min-h-11 md:h-8 md:min-h-0 ${entry.status ? '' : 'ml-auto'}`}
                         onClick={() => {
                           watch.toggle(entry.flight);
                           announce(`Stopped watching ${entry.flight}`);
@@ -117,6 +117,7 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                 <Button
                   size="sm"
                   variant="outline"
+                  className="min-h-11 md:min-h-0"
                   onClick={() => {
                     watch.clearAll();
                     announce('Watch list cleared');

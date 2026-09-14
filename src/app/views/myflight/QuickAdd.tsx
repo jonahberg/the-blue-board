@@ -83,7 +83,10 @@ export function QuickAdd({
   }
 
   return (
-    <div className="px-4 py-12 text-center md:py-16">
+    // `#myflight-empty` is the shipped id (inventory §19). Nothing in the rebuild
+    // addresses it, but it is a published hook — a bookmarklet, a test, or the next port
+    // may look for it, and it costs nothing to keep the name.
+    <div id="myflight-empty" className="px-4 py-12 text-center md:py-16">
       <div className="mb-4 text-5xl" aria-hidden="true">
         🎫
       </div>

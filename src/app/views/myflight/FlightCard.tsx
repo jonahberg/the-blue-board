@@ -144,18 +144,25 @@ export function FlightCard({
               {chip.text}
             </Badge>
             {showRisk && risk && explainContext ? (
+              // The chip stays 9 px, but the TARGET does not: the button itself carries
+              // the 44 px floor below `md:` and the coloured chip sits in an inner span,
+              // so a thumb gets a real target without the badge growing into a slab.
               <button
                 type="button"
                 onClick={() => onExplain(explainContext)}
                 title="Click for AI analysis"
-                className="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold"
-                style={{
-                  backgroundColor: `${risk.color}20`,
-                  color: risk.color,
-                  borderColor: `${risk.color}66`,
-                }}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center md:min-h-0 md:min-w-0"
               >
-                {risk.label} RISK
+                <span
+                  className="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold"
+                  style={{
+                    backgroundColor: `${risk.color}20`,
+                    color: risk.color,
+                    borderColor: `${risk.color}66`,
+                  }}
+                >
+                  {risk.label} RISK
+                </span>
               </button>
             ) : null}
             {showRisk && riskNA ? (
