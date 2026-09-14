@@ -13,6 +13,7 @@ import {
   hubTzAbbrev,
   retryDelayMs,
   serverClockOffsetSec,
+  shouldAutoScroll,
   shouldRetryPartial,
   swapStorageKey,
   swapSummary,
@@ -314,5 +315,31 @@ describe('equipment-swap summary', () => {
   it('counts a downgrade even when the same swap also upgrades something', () => {
     const out = swapSummary([{ id: 'a' }], () => [...impacts.down, ...impacts.up]);
     expect(out).toMatchObject({ downgrades: 1, upgrades: 0 });
+  });
+});
+
+describe('board-scoped NOW autoscroll', () => {
+  it('fires for the board the signal names', () => {
+    expect(shouldAutoScroll({ key: 'ORD-departures-0', n: 1 }, 'ORD-departures-0', 0)).toBe(true);
+  });
+
+  it('does NOT fire for a different board', () => {
+    // A load the viewer navigated away from still completes and still raises a signal.
+    // Without the key on it, that straggler would yank whatever board they ARE reading
+    // down to its NOW line — the page fighting the viewer.
+    expect(shouldAutoScroll({ key: 'DEN-departures-0', n: 1 }, 'ORD-departures-0', 0)).toBe(false);
+    expect(shouldAutoScroll({ key: 'ORD-arrivals-0', n: 1 }, 'ORD-departures-0', 0)).toBe(false);
+    expect(shouldAutoScroll({ key: 'ORD-departures--1', n: 1 }, 'ORD-departures-0', 0)).toBe(false);
+  });
+
+  it('fires once per signal', () => {
+    expect(shouldAutoScroll({ key: 'ORD-departures-0', n: 3 }, 'ORD-departures-0', 3)).toBe(false);
+    expect(shouldAutoScroll({ key: 'ORD-departures-0', n: 4 }, 'ORD-departures-0', 3)).toBe(true);
+  });
+
+  it('is inert with no signal yet', () => {
+    expect(shouldAutoScroll(null, 'ORD-departures-0', 0)).toBe(false);
+    expect(shouldAutoScroll({ key: '', n: 1 }, 'ORD-departures-0', 0)).toBe(false);
+    expect(shouldAutoScroll({ key: 'ORD-departures-0', n: 0 }, 'ORD-departures-0', 0)).toBe(false);
   });
 });

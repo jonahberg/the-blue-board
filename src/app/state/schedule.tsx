@@ -97,6 +97,16 @@ export type ScheduleGoto = { flight: string; key: number } | null;
 /** A watched flight that changed status while the page was visible (inventory §6). */
 export type WatchAlert = { message: string; key: number } | null;
 
+/**
+ * "Board `key` landed; anchor it at NOW."
+ *
+ * The key is the whole point. Loads are not cancelled when the viewer changes hub or
+ * direction mid-flight, so a straggler for a board they navigated away from still completes
+ * and still raises this. A bare counter would make that straggler scroll-jump whatever board
+ * they ARE reading; naming the board means only that board responds.
+ */
+export type AutoScrollSignal = { key: BoardKey; n: number } | null;
+
 export type ScheduleValue = {
   boards: Record<BoardKey, Board>;
   /** Per-key loading flags, so one board reloading never blanks another. */
@@ -114,8 +124,8 @@ export type ScheduleValue = {
   goto: (target: { hub?: string; dir?: BoardDirection; day?: number; flight: string }) => void;
   pendingGoto: ScheduleGoto;
   clearGoto: () => void;
-  /** Bumped when a FRESH today board lands, so the table anchors itself at NOW exactly once. */
-  autoScrollKey: number;
+  /** Raised when a FRESH today board lands, naming the board, so only it anchors at NOW. */
+  autoScroll: AutoScrollSignal;
   /** Board-time "now" in seconds, anchored to the schedule server rather than the device. */
   nowSec: () => number;
   watchAlert: WatchAlert;
@@ -153,7 +163,7 @@ export function ScheduleProvider({
   const [loading, setLoading] = useState<Record<BoardKey, boolean>>({});
   const [errors, setErrors] = useState<Record<BoardKey, string>>({});
   const [pendingGoto, setPendingGoto] = useState<ScheduleGoto>(null);
-  const [autoScrollKey, setAutoScrollKey] = useState(0);
+  const [autoScroll, setAutoScroll] = useState<AutoScrollSignal>(null);
   const [watchAlert, setWatchAlert] = useState<WatchAlert>(null);
   // A hub's "today" board is empty until its first departures roll, so before the local
   // rollover hour the completed day is the useful one. Derived in the initialiser rather
@@ -416,8 +426,10 @@ export function ScheduleProvider({
         const result = await fetchWithRetries(hub, dir, timestamp);
         commitBoard(hub, dir, day, result, { detectSwaps: !wasCached });
         // Today's board is the only one where "now" is inside the list, so it is the only
-        // one worth anchoring. Tomorrow and yesterday open at the top, as they should.
-        if (day === 0) setAutoScrollKey((n) => n + 1);
+        // one worth anchoring. Tomorrow and yesterday open at the top, as they should. The
+        // signal names THIS board: by the time a slow load lands the viewer may be reading a
+        // different one, and that board must not be yanked to a NOW line it never asked for.
+        if (day === 0) setAutoScroll((prev) => ({ key, n: (prev?.n ?? 0) + 1 }));
         diffWatched((result.flights || []) as Record<string, unknown>[], dir, result.meta ?? null);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Schedule load failed';
@@ -599,7 +611,7 @@ export function ScheduleProvider({
       goto,
       pendingGoto,
       clearGoto,
-      autoScrollKey,
+      autoScroll,
       nowSec,
       watchAlert,
       clearWatchAlert,
@@ -618,7 +630,7 @@ export function ScheduleProvider({
       goto,
       pendingGoto,
       clearGoto,
-      autoScrollKey,
+      autoScroll,
       nowSec,
       watchAlert,
       clearWatchAlert,
