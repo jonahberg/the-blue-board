@@ -61,6 +61,13 @@ const COLUMNS: { key: SortColumn | null; label: string; className?: string; srLa
 
 const HIGHLIGHT_MS = 2000;
 
+/**
+ * 44 px of hit area below `md:` for the buttons that sit INSIDE a row — the tail links and
+ * the risk badge. Rows already wrap to two lines on a phone, so the taller target costs no
+ * density there and none at all on a desktop, where it collapses back to the text height.
+ */
+const TAP_TARGET = 'inline-flex min-h-11 items-center md:min-h-0';
+
 function SortableHead({
   column,
   label,
@@ -296,7 +303,7 @@ export const ScheduleTable = forwardRef<
                           {row.swap.reg ? (
                             <button
                               type="button"
-                              className="underline"
+                              className={cn('underline', TAP_TARGET)}
                               onClick={() => onOpenAircraft(row.swap!.reg)}
                             >
                               {row.swap.reg}
@@ -329,7 +336,7 @@ export const ScheduleTable = forwardRef<
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              className="underline decoration-dotted underline-offset-2"
+                              className={cn('underline decoration-dotted underline-offset-2', TAP_TARGET)}
                               onClick={() => onOpenAircraft(row.reg)}
                             >
                               {row.reg}
@@ -340,7 +347,11 @@ export const ScheduleTable = forwardRef<
                           </TooltipContent>
                         </Tooltip>
                       ) : (
-                        <button type="button" className="underline" onClick={() => onOpenAircraft(row.reg)}>
+                        <button
+                          type="button"
+                          className={cn('underline', TAP_TARGET)}
+                          onClick={() => onOpenAircraft(row.reg)}
+                        >
                           {row.reg}
                         </button>
                       )
@@ -401,6 +412,7 @@ export const ScheduleTable = forwardRef<
                         onClick={() => onExplainDelay((row.delay as { context: Record<string, unknown> }).context)}
                         className={cn(
                           'rounded-sm border px-1 py-0.5 text-[9px]',
+                          TAP_TARGET,
                           riskToneClass(row.delay.risk.label),
                         )}
                         title="Click for AI analysis"

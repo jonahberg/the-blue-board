@@ -74,9 +74,10 @@ export function SearchPalette() {
    * are searched too and each hit navigates to its row rather than just to the tab.
    */
   const scheduleMatches = useMemo(() => {
-    if (qNorm.length < 2) return [] as { key: string; label: string; hub: string; flight: string }[];
+    if (qNorm.length < 2)
+      return [] as { key: string; label: string; hub: string; day: number; flight: string }[];
     const seen = new Set<string>();
-    const found: { key: string; label: string; hub: string; flight: string }[] = [];
+    const found: { key: string; label: string; hub: string; day: number; flight: string }[] = [];
     for (const board of Object.values(boards)) {
       if (board.dir !== 'departures') continue;
       for (const match of matchScheduleFlights(board.rows, qNorm) as ScheduleMatch[]) {
@@ -87,6 +88,9 @@ export function SearchPalette() {
           key: `${board.hub}-${ident}`,
           label: match.label,
           hub: match.flight.airport?.origin?.code?.iata || board.hub,
+          // The board the match was found ON, not the viewer's current day: before a hub's
+          // local rollover their day is -1, where this row does not exist.
+          day: board.day,
           flight: ident,
         });
         if (found.length >= MAX_RESULTS) return found;
@@ -187,7 +191,7 @@ export function SearchPalette() {
                   key={match.key}
                   value={match.key}
                   onSelect={() => {
-                    goto({ hub: match.hub, dir: 'departures', flight: match.flight });
+                    goto({ hub: match.hub, dir: 'departures', day: match.day, flight: match.flight });
                     setTab('schedule');
                     setSearchOpen(false);
                   }}

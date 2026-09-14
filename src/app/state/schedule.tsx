@@ -111,7 +111,7 @@ export type ScheduleValue = {
   current: ScheduleCurrent;
   setCurrent: (next: Partial<ScheduleCurrent>) => void;
   /** Select a board and reveal one flight on it (the palette's `goto-schedule-result`). */
-  goto: (target: { hub?: string; dir?: BoardDirection; flight: string }) => void;
+  goto: (target: { hub?: string; dir?: BoardDirection; day?: number; flight: string }) => void;
   pendingGoto: ScheduleGoto;
   clearGoto: () => void;
   /** Bumped when a FRESH today board lands, so the table anchors itself at NOW exactly once. */
@@ -165,7 +165,7 @@ export function ScheduleProvider({
     day: defaultSchedDayOffset(defaultHub) as number,
   }));
 
-  const { announce } = useUi();
+  const { announce, select } = useUi();
   const watch = useWatch();
   // The watch list is read at diff time, never as an effect dependency — a board landing
   // must not be able to re-run because someone starred a flight.
@@ -315,12 +315,18 @@ export function ScheduleProvider({
             // someone who has tabbed away from a flight they are waiting on.
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
               try {
-                new Notification('The Blue Board', {
+                const notification = new Notification('The Blue Board', {
                   body: `${ident}: ${next} (was: ${previous})`,
                   icon: '/icons/icon-192.png',
                   tag: `bb-watch-${ident}`,
                   data: { flight: ident },
                 });
+                // Clicking the notification has to land on the flight, not just the tab —
+                // the whole point is that the viewer was away when it changed.
+                notification.onclick = () => {
+                  window.focus();
+                  select({ kind: 'ident', ident });
+                };
               } catch {
                 /* a notification that cannot be shown must never break a board load */
               }
@@ -335,7 +341,7 @@ export function ScheduleProvider({
         store.updateStatus(ident, next);
       }
     },
-    [announce, nowSec],
+    [announce, select, nowSec],
   );
 
   /** Store one landed board and run the post-load fan-out. */
@@ -530,6 +536,9 @@ export function ScheduleProvider({
     if (next.hub !== undefined) hubChosenByViewer.current = true;
     setCurrentState((prev) => {
       const merged = { ...prev, ...next };
+      // `?hub=` is viewer-supplied. An unknown code would fetch a board that cannot exist and
+      // show an error where "All Hubs" is the honest answer.
+      if (merged.hub && !HUBS.has(merged.hub)) merged.hub = '';
       // Changing hub re-derives the day ONLY while the viewer has not picked one, so a
       // deep link landing on a hub before its rollover hour still opens the useful board.
       if (next.hub !== undefined && next.day === undefined && merged.hub && HUBS.has(merged.hub)) {
@@ -546,13 +555,19 @@ export function ScheduleProvider({
    * only it knows which rows survived the filters.
    */
   const goto = useCallback(
-    (target: { hub?: string; dir?: BoardDirection; flight: string }) => {
+    (target: { hub?: string; dir?: BoardDirection; day?: number; flight: string }) => {
       const hub = target.hub && HUBS.has(target.hub) ? target.hub : current.hub;
       const dir = target.dir ?? 'departures';
+      // The caller names the board its match came from. Without that, a palette hit found on
+      // a day-0 board would load the viewer's own day — which before the hub-local rollover
+      // is yesterday, where the row does not exist and the highlight silently gives up.
+      const day = target.day ?? current.day;
       hubChosenByViewer.current = true;
-      setCurrentState((prev) => (prev.hub === hub && prev.dir === dir ? prev : { ...prev, hub, dir }));
+      setCurrentState((prev) =>
+        prev.hub === hub && prev.dir === dir && prev.day === day ? prev : { ...prev, hub, dir, day },
+      );
       setPendingGoto({ flight: target.flight, key: Date.now() });
-      void load(hub, dir, current.day);
+      void load(hub, dir, day);
     },
     [current.hub, current.day, load],
   );

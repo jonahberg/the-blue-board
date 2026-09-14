@@ -220,7 +220,16 @@ export function ScheduleControls({
         </div>
       ) : (
         <Sheet open={drawerOpen} onOpenChange={onDrawerOpen}>
-          <SheetContent side="bottom" className="data-[side=bottom]:h-[80vh]">
+          <SheetContent
+            side="bottom"
+            className="data-[side=bottom]:h-[80vh]"
+            // The sheet is opened by the toolbar button rather than a `SheetTrigger`, so
+            // Radix has no remembered element to hand focus back to on close.
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              toggleRef.current?.focus();
+            }}
+          >
             <SheetHeader>
               <SheetTitle>Filters</SheetTitle>
             </SheetHeader>
