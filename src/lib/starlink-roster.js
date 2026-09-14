@@ -155,7 +155,7 @@ export function formatVerifyDate(iso) {
  * partial strip would rank carriers against each other on data we only have for some of them,
  * which is the one thing a comparison bar chart must never do.
  *
- * @param {Array<{code?:string,name?:string,installed?:number,total?:number,percentage?:number|string}>} airlines
+ * @param {Array<{code?:string,name?:string,installed?:number,total?:number,percentage?:number|string}>|null|undefined} airlines
  */
 export function buildIndustryRows(airlines) {
   if (!Array.isArray(airlines) || airlines.length === 0) return null;
