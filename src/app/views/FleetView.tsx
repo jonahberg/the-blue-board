@@ -253,11 +253,35 @@ export default function FleetView() {
   }, [fleetDb.length, loadFailed, counts]);
 
   // ── Load failure ────────────────────────────────────────────────────────────────────
+  // Only the panels that READ the fleet database go away. The airborne count, the
+  // mainline/regional split and the timestamp come from the live feed, which is a different
+  // endpoint with a different failure mode — blanking them too would report a fleet-file
+  // outage as "the whole tab is broken", and would throw away the one number on this tab
+  // that is still true. The shipped `renderFleetLoadError()` kept the pulse running for the
+  // same reason; what it could not do, and this does, is say plainly which half is missing.
+  //
+  // `fleetFailed` suppresses the mainline/regional split: with an empty database nothing
+  // matches, and reporting every airborne aircraft as "regional/partner" would be the same
+  // false claim as "0 aircraft". The per-type bars and the utilisation line are
+  // fleetDb-dependent and suppress themselves.
   if (loadFailed && !fleetDb.length) {
     return (
-      <div className="p-3 md:p-4">
-        <Card className="max-w-xl p-4">
-          <FleetLoadError onRetry={retry} />
+      <div className="space-y-4 p-3 md:p-4">
+        <Card className="gap-0 p-4">
+          <h3 className="mb-3 text-sm font-semibold">Live Fleet Status</h3>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <FleetPulse
+              airborne={airborneFlights.length}
+              matched={matched}
+              unmatched={unmatched}
+              fleetTotal={0}
+              utilisation={[]}
+              updatedAt={updatedAt}
+              loading={false}
+              fleetFailed
+            />
+            <FleetLoadError onRetry={retry} />
+          </div>
         </Card>
       </div>
     );

@@ -24,6 +24,7 @@ export function FleetPulse({
   utilisation,
   updatedAt,
   loading,
+  fleetFailed = false,
 }: {
   airborne: number;
   matched: number;
@@ -33,6 +34,8 @@ export function FleetPulse({
   /** `HH:MM:SS` in UTC, or null before the first poll. */
   updatedAt: string | null;
   loading: boolean;
+  /** True when `/data/fleet.json` failed: the airborne count still stands, the split cannot. */
+  fleetFailed?: boolean;
 }) {
   const flying = utilisation.filter((row) => row.total > 0 && row.flying > 0);
   const utilPct = fleetTotal > 0 ? Math.round((matched / fleetTotal) * 100) : 0;
@@ -51,10 +54,15 @@ export function FleetPulse({
         </span>
       </div>
 
+      {/* Without the fleet database every flight is UNMATCHED, not regional — calling 348
+          aircraft "regional/partner" because we cannot look them up is the same class of
+          false claim as reporting "0 aircraft" for a file that failed to load. */}
       <p className="mt-1 text-xs text-muted-foreground">
-        {airborne
-          ? `${matched} mainline matched · ${unmatched} regional/partner`
-          : 'Loading live flight data…'}
+        {!airborne
+          ? 'Loading live flight data…'
+          : fleetFailed
+            ? 'Mainline / regional split unavailable — the fleet database did not load'
+            : `${matched} mainline matched · ${unmatched} regional/partner`}
       </p>
 
       {fleetTotal > 0 && airborne > 0 ? (
