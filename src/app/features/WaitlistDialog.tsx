@@ -136,8 +136,15 @@ export default function WaitlistDialog() {
     }
   }, [email, feature]);
 
-  // The submitted flag outranks the open flag, T4 included.
-  const open = waitlistOpen && !engagement.submitted;
+  // The submitted flag outranks the open flag, T4 included — someone who has already given
+  // an email is never asked again, however they arrive.
+  //
+  // `done` is the exception, and it has to be: submitting sets BOTH the store's `submitted`
+  // and this local flag, and React batches them into one render. Without `done` in the
+  // condition that render closes the dialog, so the "You're on the list" card never paints —
+  // the modal would simply vanish the instant someone signed up, which reads as a failure.
+  // `done` is local state, so it dies with the dialog and cannot reopen it later.
+  const open = waitlistOpen && (done || !engagement.submitted);
 
   return (
     <Dialog

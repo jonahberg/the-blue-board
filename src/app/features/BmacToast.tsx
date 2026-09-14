@@ -34,13 +34,13 @@ export default function BmacToast() {
   return (
     <div
       role="status"
-      className="fixed bottom-24 left-3 z-[70] max-w-[300px] rounded-lg border bg-card p-3.5 pr-9 shadow-lg md:bottom-4 md:left-4"
+      className="fixed bottom-24 left-3 z-[70] max-w-[300px] rounded-lg border bg-card p-3.5 pr-12 shadow-lg md:bottom-4 md:left-4 md:pr-9"
     >
       <Button
         variant="ghost"
         size="sm"
         aria-label="Dismiss"
-        className="absolute right-1 top-1 h-7 w-7 p-0 text-muted-foreground"
+        className="absolute right-0.5 top-0.5 h-11 w-11 p-0 text-muted-foreground md:right-1 md:top-1 md:h-7 md:w-7"
         onClick={dismiss}
       >
         ✕
