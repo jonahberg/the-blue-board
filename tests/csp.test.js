@@ -73,9 +73,15 @@ describe('Content-Security-Policy configuration', () => {
     expect(styleSrc).toContain("'unsafe-inline'");
   });
 
-  it('allows the trusted leaflet CDN for stylesheets and scripts', () => {
-    expect(directive('script-src')).toContain('https://unpkg.com');
-    expect(directive('style-src')).toContain('https://unpkg.com');
+  it('allows no CDN at all — Leaflet is bundled from npm (v1.8.0)', () => {
+    // Leaflet used to load from unpkg.com, which had to be allowed in both script-src
+    // and style-src. The rebuild imports `leaflet` and `leaflet/dist/leaflet.css` into
+    // the React island, so Vite emits both under `_astro/` and 'self' covers them.
+    // Re-adding a CDN host here would re-introduce a third-party script origin on
+    // every page for no benefit, so this is a regression guard, not a bookkeeping test.
+    expect(directive('script-src')).not.toContain('https://unpkg.com');
+    expect(directive('style-src')).not.toContain('https://unpkg.com');
+    expect(csp).not.toContain('unpkg.com');
   });
 
   it('allows Vercel analytics script endpoints', () => {
@@ -107,7 +113,7 @@ describe('Content-Security-Policy configuration', () => {
 });
 
 describe('authored markup carries no inline script', () => {
-  // public/index.html is retired (kept for reference under legacy/, not served). The
+  // public/index.html is gone (the `legacy/` copy was deleted in v1.8.0). The
   // homepage is now src/pages/index.astro plus the React island it mounts. Astro's own
   // island runtime is hash-allowed above; what must never come back is an inline
   // <script> or an on*= handler we write ourselves, because either would force

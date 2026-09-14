@@ -33,7 +33,7 @@ const REQUIRED_ABSOLUTE = [
 
 describe('Leaflet required styles are not overridden', () => {
   // The dashboard's stylesheet is src/styles/global.css now; public/css/style.css is
-  // retired (kept for reference under legacy/, not served or built).
+  // retired (deleted in v1.8.0 along with the `legacy/` reference copy).
   const css = readFileSync(
     resolve(__dirname, '..', 'src', 'styles', 'global.css'),
     'utf8'
