@@ -17,21 +17,6 @@
  *     src/data/news/index.js | sed -E 's/^class=\\?"//' | tr ' ' '\n' | sort -u
  */
 
-@layer base {
-  /*
-   * Two status hues the shadcn palette does not carry. Amber reads as
-   * "caution" and green as "clear" in the hub and fleet content. Every use
-   * ships with an icon or a text label next to it, so colour is never the only
-   * signal (design spec §2.4). Tuned for the dark palette, which is the product
-   * default; these belong in `global.css`'s `@theme` once the dashboard lands
-   * its own status palette.
-   */
-  :root {
-    --bb-warn: oklch(0.76 0.12 85);
-    --bb-ok: oklch(0.74 0.16 150);
-  }
-}
-
 @layer components {
   /* ── Element defaults ─────────────────────────────────────────────────── */
 
@@ -140,11 +125,11 @@
   }
 
   .bb-content .highlight-warn {
-    border-left-color: var(--bb-warn);
+    border-left-color: var(--color-bb-warn);
   }
 
   .bb-content .highlight-ok {
-    border-left-color: var(--bb-ok);
+    border-left-color: var(--color-bb-ok);
   }
 
   .bb-content .highlight-alert {
@@ -182,7 +167,7 @@
   /* Paired with the literal text "LIVE", so the dot is never the only signal. */
   .bb-content .live-dot {
     @apply size-2 shrink-0 rounded-full;
-    background-color: var(--bb-ok);
+    background-color: var(--color-bb-ok);
   }
 
   .bb-content .live-count {
@@ -229,17 +214,17 @@
   }
 
   .bb-content .cabin-pp {
-    background-color: color-mix(in oklab, var(--bb-warn) 22%, transparent);
+    background-color: color-mix(in oklab, var(--color-bb-warn) 22%, transparent);
   }
 
   .bb-content .cabin-ep {
-    background-color: color-mix(in oklab, var(--bb-ok) 22%, transparent);
+    background-color: color-mix(in oklab, var(--color-bb-ok) 22%, transparent);
   }
 
   /* `cabin-first` and `cabin-y` never appear in a `contentHtml` string — they
      reach the page through `seatConfig.cabins[].cssClass` on the fleet index. */
   .bb-content .cabin-first {
-    background-color: color-mix(in oklab, var(--bb-warn) 18%, transparent);
+    background-color: color-mix(in oklab, var(--color-bb-warn) 18%, transparent);
   }
 
   .bb-content .cabin-y {
@@ -253,6 +238,6 @@
   /* Paired with the word "Starlink", so colour is never the only signal. */
   .bb-content .starlink-on {
     @apply font-semibold;
-    color: var(--bb-ok);
+    color: var(--color-bb-ok);
   }
 }

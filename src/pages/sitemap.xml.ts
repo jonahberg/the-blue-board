@@ -18,8 +18,7 @@ import {
 } from '../lib/buildMetadata.js';
 import { trackerOrder } from '../data/trackers/index.js';
 import { atcHubDetailCodes, unitedHubDetailCodes } from '../lib/tracker-detail.js';
-
-const BASE_URL = 'https://theblueboard.co';
+import { SITE_URL as BASE_URL } from '../lib/site.js';
 
 function renderUrl(path: string, lastmod: string, changefreq: string, priority: string) {
   return [

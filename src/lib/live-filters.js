@@ -10,9 +10,18 @@ import { getPhase, getPhaseGroup } from './flight-phase.js';
 import { haversineNm } from './geo.js';
 
 /**
- * A hub filter matches a flight ~50 nm out, not just at the gate. Aircraft still on the
- * ground at a hub often report no origin/dest yet, and 93 km covers the ramp, the taxiways
- * and the immediate approach without pulling in the next airport over.
+ * A hub filter matches a flight out to 93 NAUTICAL MILES (~172 km), not just at the gate:
+ * aircraft still on the ground at a hub often report no origin/dest yet, so proximity is
+ * the only thing left to match them on.
+ *
+ * The unit matters and this comment used to get it wrong — it read "~50 nm out … 93 km",
+ * which is a single distance stated twice, but the constant is compared against
+ * `haversineNm()`, so the radius the code actually applies is 93 nm. Widening the prose to
+ * match the code rather than narrowing the code to match the prose is deliberate: the value
+ * has shipped since the Live tab existed and `tests/live-filters.test.js` pins it at 93, so
+ * changing it is a product decision about which parked aircraft belong to a hub, not a typo
+ * fix. Note that the proximity branch only ever fires for `onGround` traffic, which is why
+ * a radius this generous has not visibly pulled in a neighbouring airport's flights.
  */
 export const HUB_PROXIMITY_NM = 93;
 

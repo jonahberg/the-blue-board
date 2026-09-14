@@ -10,7 +10,8 @@
  * from the `<title>` (inventory §1.7, §1.9, §2.1–§2.3).
  */
 
-const SITE_URL = 'https://theblueboard.co';
+import { SITE_URL, absoluteUrl } from '../../lib/site.js';
+
 const DEFAULT_OG_IMAGE = `${SITE_URL}/og-image.png`;
 const DEFAULT_OG_IMAGE_ALT =
   'The Blue Board — live United Airlines flight tracker showing 600+ flights on a dark operations map of the United States with hub delay status';
@@ -43,13 +44,8 @@ const {
   twitterDescription,
 } = Astro.props;
 
-/** Accepts either an absolute URL or a site-root path. */
-function absolute(value: string): string {
-  return /^https?:\/\//.test(value) ? value : `${SITE_URL}${value.startsWith('/') ? '' : '/'}${value}`;
-}
-
-const canonicalUrl = absolute(canonical);
-const imageUrl = absolute(ogImage);
+const canonicalUrl = absoluteUrl(canonical);
+const imageUrl = absoluteUrl(ogImage);
 const shareTitle = ogTitle ?? title;
 const shareDescription = ogDescription ?? description;
 const imageAlt = ogImageAlt ?? (imageUrl === DEFAULT_OG_IMAGE ? DEFAULT_OG_IMAGE_ALT : shareTitle);

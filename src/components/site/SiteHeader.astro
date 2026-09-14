@@ -76,7 +76,7 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
 
     <details class="group relative ml-auto md:hidden">
       <summary
-        class="flex size-8 cursor-pointer list-none items-center justify-center rounded-md border border-border text-muted-foreground [&::-webkit-details-marker]:hidden"
+        class="flex size-11 cursor-pointer list-none items-center justify-center rounded-md border border-border text-muted-foreground [&::-webkit-details-marker]:hidden"
       >
         <span class="sr-only">Menu</span>
         <svg
@@ -97,14 +97,14 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
       </summary>
       <nav
         aria-label="Primary mobile"
-        class="absolute right-0 top-10 z-50 w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+        class="absolute right-0 top-12 z-50 w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
       >
         {
           LINKS.map((link) => (
             <a
               href={link.href}
               aria-current={current === link.key ? 'page' : undefined}
-              class={`block rounded-sm px-3 py-2 text-sm ${
+              class={`flex min-h-11 items-center rounded-sm px-3 text-sm ${
                 current === link.key ? 'font-medium text-foreground bg-accent' : 'text-muted-foreground'
               }`}
             >

@@ -25,8 +25,7 @@
 import { FLEET_DB_COUNT, HUB_LINE_LONG } from '../data/facts.js';
 import { fleetOrder, fleetTypes } from '../data/fleet/index.js';
 import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../data/starlink-facts.js';
-
-const SITE_URL = 'https://theblueboard.co';
+import { SITE_URL } from './site.js';
 
 /** "1,078" — the same rendering the Markdown twins and the agent-readiness pins use. */
 const FLEET_COUNT_TEXT = FLEET_DB_COUNT.toLocaleString('en-US');

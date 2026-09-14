@@ -7,6 +7,18 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Two status hues the shadcn palette does not carry: amber reads as "caution" and green
+   as "clear" across the hub cards, fleet content and tracker badges. Declared in a real
+   (non-`inline`) `@theme` so Tailwind both emits `--color-bb-*` as custom properties —
+   `content.css` styles raw `set:html` strings and can only reach them through `var()` —
+   and generates `bg-bb-ok` / `text-bb-warn` / `border-bb-*` utilities for authored markup.
+   Tuned for the dark palette, which is the product default. Every use ships with an icon
+   or a text label beside it: colour is never the only signal (design spec §2.4). */
+@theme {
+    --color-bb-warn: oklch(0.76 0.12 85);
+    --color-bb-ok: oklch(0.74 0.16 150);
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;

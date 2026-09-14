@@ -6,8 +6,7 @@
  * below it. The last item is the current page and is not a link.
  */
 import JsonLd from './JsonLd.astro';
-
-const SITE_URL = 'https://theblueboard.co';
+import { SITE_URL } from '../../lib/site.js';
 
 export interface Crumb {
   label: string;
