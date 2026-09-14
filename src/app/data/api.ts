@@ -205,12 +205,18 @@ export function fetchIrops(): Promise<IropsData> {
 
 export type AircraftHistory = {
   success: boolean;
+  /**
+   * `delayMin` is `number | null` rather than optional on purpose: `journeyDelayClass()`
+   * tests `=== null` exactly, and an ABSENT field falls through to "major". Typing it as
+   * always-present keeps that quirk visible at every call site instead of letting an
+   * optional field quietly render an unknown delay as a bad one.
+   */
   segments?: {
     flightNumber: string;
     origin: string;
     destination: string;
-    delayMin?: number | null;
-    status?: string;
+    delayMin: number | null;
+    status: string;
   }[];
 };
 

@@ -73,7 +73,7 @@ export function computeScheduleRowRisk(row, hub, dir, nowSec, deps) {
  * Find a flight number on any loaded board and return that board's risk for it.
  *
  * @param {string} flightNum
- * @param {Record<string, {rows?: Object[], hub?: string, dir?: string, meta?: Object}>} boards
+ * @param {Record<string, {rows?: Object[], hub?: string, dir?: string, meta?: Object|null}>|null|undefined} boards
  *   keyed `<hub>-<dir>-<day>`, as the schedule store holds them.
  * @param {number} nowSec
  * @param {Object} deps  as `computeScheduleRowRisk`.
