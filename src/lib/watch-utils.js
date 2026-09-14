@@ -54,6 +54,35 @@ export function isSignificantStatusChange(oldStatus, newStatus) {
 }
 
 /**
+ * The one honest sentence about where a watch alert will actually reach the viewer.
+ *
+ * FOUR tiers, not three: "we have not asked the server yet" is a different claim from
+ * "this deployment cannot do it", and on a cold panel the first is true for a few
+ * hundred milliseconds. Every tier is a PROMISE — a panel that says "even when this tab
+ * is closed" with no subscription behind it is the most misleading thing this feature
+ * can say — so the top tier requires the whole chain: server keys, browser APIs, and
+ * granted permission.
+ *
+ * Extracted from src/dashboard/main.js (:5328-5352 renderWatchAlertsFootnote).
+ *
+ * @param {{backgroundActive?: boolean, bootstrapped?: boolean, configured?: boolean}} push
+ * @returns {string}
+ */
+export function watchAlertsFootnote(push) {
+  const state = push || {};
+  if (state.backgroundActive) {
+    return 'Background alerts on — you’ll be notified even when this tab is closed.';
+  }
+  if (state.bootstrapped && state.configured) {
+    return 'Alerts work while this tab is open. Enable notifications for background alerts.';
+  }
+  if (state.bootstrapped && !state.configured) {
+    return 'Alerts work while this tab is open. Background alerts: not yet enabled on this deployment.';
+  }
+  return 'Alerts work while this tab is open.';
+}
+
+/**
  * Deterministic per-flight jitter (0–20 s) so watched flights do not all re-poll on
  * the same tick.
  * @param {string|null|undefined} flightNumber

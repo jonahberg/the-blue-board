@@ -21,10 +21,31 @@ import { STORAGE_KEYS, readString, safeLocalStorage, writeString } from './stora
 export type PushState = {
   /** The server has VAPID keys configured. */
   configured: boolean;
+  /**
+   * `GET /api/push-subscribe` has answered, either way.
+   *
+   * The watch panel's footnote has FOUR tiers, and "we have not asked the server yet"
+   * is a different sentence from "the server says no" (inventory §6). Without this flag
+   * a cold panel would claim background alerts are unavailable on this deployment a
+   * few hundred milliseconds before learning that they are.
+   */
+  bootstrapped: boolean;
   permission: NotificationPermission | 'unsupported';
+  /**
+   * Alerts really will arrive with the tab closed: the server has keys, this browser
+   * has the APIs, and the viewer has granted permission.
+   */
+  backgroundActive: boolean;
   /** True once the viewer has been asked, so the prompt is shown at most once. */
   prompted: boolean;
-  enable: () => Promise<void>;
+  /**
+   * Ask the browser for permission, and mirror the list to the server if it is granted.
+   *
+   * Returns what the browser decided, so the caller can confirm out loud. Reading
+   * `permission` off the store straight after would race the state update, and a prompt
+   * that silently does nothing on "Allow" is the worst outcome of the whole flow.
+   */
+  enable: () => Promise<NotificationPermission | 'unsupported'>;
   dismissPrompt: () => void;
 };
 
@@ -42,6 +63,15 @@ export type WatchValue = {
    * A no-op for a flight that is not watched, and for a status that has not changed.
    */
   updateStatus: (flight: string, status: string) => void;
+  /**
+   * Fill in a watch entry's route once it is known.
+   *
+   * A flight watched from the quick-add box or a deep link has no route at all, and a
+   * card learns it from the first `/api/flight-times` answer. The shipped dashboard
+   * wrote the entry during render; here the card calls this from an effect instead,
+   * because persisting inside a render is how a re-render loop starts.
+   */
+  updateRoute: (flight: string, route: string) => void;
   isWatched: (flight: string) => boolean;
   /** Set after the FIRST add, so the push prompt can appear 500 ms later exactly once. */
   justAddedFirst: boolean;
@@ -71,6 +101,7 @@ function vapidKeyToBytes(base64: string): Uint8Array {
 export function WatchProvider({ children }: { children: ReactNode }) {
   const [watched, setWatched] = useState<WatchedFlight[]>([]);
   const [configured, setConfigured] = useState(false);
+  const [bootstrapped, setBootstrapped] = useState(false);
   const [vapidKey, setVapidKey] = useState<string | null>(null);
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(
     'unsupported',
@@ -84,9 +115,12 @@ export function WatchProvider({ children }: { children: ReactNode }) {
     setWatched(readWatched(safeLocalStorage() ?? NULL_STORAGE) as WatchedFlight[]);
     setPrompted(readString(STORAGE_KEYS.pushPrompted) === '1');
     if (typeof Notification !== 'undefined') setPermission(Notification.permission);
+    // `fetchPushConfig()` never rejects — a deployment without VAPID keys reports
+    // `{configured:false}` rather than failing, so `bootstrapped` can be set flatly here.
     void fetchPushConfig().then((config) => {
       setConfigured(Boolean(config.configured));
       setVapidKey(config.vapidPublicKey ?? null);
+      setBootstrapped(true);
     });
   }, []);
 
@@ -177,6 +211,18 @@ export function WatchProvider({ children }: { children: ReactNode }) {
     [persist],
   );
 
+  const updateRoute = useCallback(
+    (flight: string, route: string) => {
+      const current = watchedRef.current;
+      const index = current.findIndex((entry) => entry.flight === flight);
+      if (index < 0 || !route || current[index].route === route) return;
+      // No `ts` bump and no `syncSubscription`: WHICH flights are watched has not
+      // changed, and neither has when the viewer last saw a status.
+      persist(current.map((entry, i) => (i === index ? { ...entry, route } : entry)));
+    },
+    [persist],
+  );
+
   const isWatched = useCallback(
     (flight: string) => watchedRef.current.some((entry) => entry.flight === flight),
     [],
@@ -188,13 +234,29 @@ export function WatchProvider({ children }: { children: ReactNode }) {
     setJustAddedFirst(false);
   }, []);
 
-  const enable = useCallback(async () => {
+  const enable = useCallback(async (): Promise<NotificationPermission | 'unsupported'> => {
+    // Recorded BEFORE the browser prompt: a viewer who dismisses the native dialog has
+    // still been asked, and must not be asked again on the next add.
     markPrompted();
-    if (typeof Notification === 'undefined') return;
+    if (typeof Notification === 'undefined') return 'unsupported';
     const result = await Notification.requestPermission();
     setPermission(result);
     if (result === 'granted') await syncSubscription(watchedRef.current);
+    return result;
   }, [markPrompted, syncSubscription]);
+
+  /**
+   * Background push is only REAL when every link in the chain holds: the deployment has
+   * keys, the browser has a service worker and a PushManager, and the viewer has said
+   * yes. The watch panel promises alerts-with-the-tab-closed off this and nothing else.
+   */
+  const backgroundActive =
+    configured &&
+    permission === 'granted' &&
+    typeof navigator !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    typeof window !== 'undefined' &&
+    'PushManager' in window;
 
   const value = useMemo<WatchValue>(
     () => ({
@@ -202,19 +264,31 @@ export function WatchProvider({ children }: { children: ReactNode }) {
       toggle,
       clearAll,
       updateStatus,
+      updateRoute,
       isWatched,
       justAddedFirst,
-      push: { configured, permission, prompted, enable, dismissPrompt: markPrompted },
+      push: {
+        configured,
+        bootstrapped,
+        permission,
+        backgroundActive,
+        prompted,
+        enable,
+        dismissPrompt: markPrompted,
+      },
     }),
     [
       watched,
       toggle,
       clearAll,
       updateStatus,
+      updateRoute,
       isWatched,
       justAddedFirst,
       configured,
+      bootstrapped,
       permission,
+      backgroundActive,
       prompted,
       enable,
       markPrompted,

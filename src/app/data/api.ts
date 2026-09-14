@@ -205,12 +205,18 @@ export function fetchIrops(): Promise<IropsData> {
 
 export type AircraftHistory = {
   success: boolean;
+  /**
+   * `delayMin` is `number | null` rather than optional on purpose: `journeyDelayClass()`
+   * tests `=== null` exactly, and an ABSENT field falls through to "major". Typing it as
+   * always-present keeps that quirk visible at every call site instead of letting an
+   * optional field quietly render an unknown delay as a bad one.
+   */
   segments?: {
     flightNumber: string;
     origin: string;
     destination: string;
-    delayMin?: number | null;
-    status?: string;
+    delayMin: number | null;
+    status: string;
   }[];
 };
 
@@ -258,7 +264,15 @@ export type Fr24FlightLookup = {
   source?: string;
   cached?: boolean;
   error?: string;
+  /**
+   * F048's leg metadata. The live endpoint puts `liveLeg`/`legDate` at the TOP LEVEL and
+   * the shipped modal read them off the whole response object, so both spellings are
+   * declared and callers read `response.meta ?? response`. Reading only `meta` silently
+   * dropped the leg-date label on every live answer.
+   */
   meta?: { liveLeg?: boolean; legDate?: string };
+  liveLeg?: boolean;
+  legDate?: string;
 };
 
 export function fetchFr24Flight(flight: string): Promise<Fr24FlightLookup> {
