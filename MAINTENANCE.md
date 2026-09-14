@@ -92,8 +92,39 @@ These are the only places headline numbers are hardcoded. When live counts / clu
   `tests/tracker-data.test.js` — that test failing is the system working.
 - `plannedIoc` dates that pass without a go-live need no edit (the page already frames them as
   the FAA's stale 2023 sequencing), but a `note` on conspicuous ones (the BOS pattern) is good.
-- New tracker? Copy the shape: data file + validate rules in `index.js` + page under
-  `src/pages/trackers/` composing `src/components/trackers/*` + entries in: sitemap.xml.ts,
-  buildMetadata.js (own lastmod paths incl. the data file!), vercel.json cache rule already
-  covers `/trackers/*`, speed-insights test, ui-audit PAGES, llms.txt + llms-full.txt,
-  generate-og.py, public/index.html navs, feed.xml. Budget a day, most of it data research.
+### New route checklist
+
+New tracker? Copy the shape: data file + validate rules in `index.js` + page under
+`src/pages/trackers/` composing `src/components/trackers/*`. A new route of any kind needs
+the list below — most of it is invisible until something is missing.
+
+1. **Page** — wrap it in `<BaseLayout>` (`src/components/site/BaseLayout.astro`). It owns the
+   `<head>`, `<SiteHeader>`, `<SiteFooter>`, the skip link and the analytics tag, so a page
+   never writes head tags itself. Share copy is passed as `ogTitle` / `ogDescription` /
+   `ogImageAlt` / `twitterTitle` / `twitterDescription` props, not as `<meta>` tags.
+2. **`src/lib/site-routes.js`** — add the section to `HTML_ROUTE_PREFIXES` (or the path to
+   `HTML_ROUTE_PATHS`). A route outside both is classified "definitely a 404" by
+   `middleware.ts`, and a Markdown client gets a 404 for a live page.
+   `tests/agent-readiness.test.js` pins the sitemap against this list, so it fails loudly.
+3. **`src/pages/sitemap.xml.ts`** — add the URL.
+4. **`src/lib/buildMetadata.js`** — its own lastmod path list, *including the data file*.
+   Sharing another page's list makes both report an identical lastmod.
+5. **`vercel.json`** — a cache rule for the section. `/trackers/*`, `/hubs/*`, `/fleet/*` and
+   `/news/*` are already covered; a new top-level section is not.
+6. **Navigation** — `src/components/site/SiteHeader.astro` (`LINKS`, and the `NavKey` union)
+   and `src/components/site/SiteFooter.astro` if it belongs there. There is no
+   `public/index.html` any more; the homepage's crawlable nav is generated from
+   `src/lib/home-seo.js`.
+7. **`public/llms.txt` + `public/llms-full.txt`** — the URL table and, if the route answers a
+   distinct question, the "When To Use This Site" list.
+8. **`scripts/ui-audit.mjs`** — add it to `PAGES` so the axe + screenshot pass covers it.
+9. **`scripts/generate-og.py`** — an OG card, then revert every og file the script re-rendered
+   that you did not mean to change (the recipe under "Stats that live outside the data files").
+10. **`src/pages/feed.xml.ts`** — only if the route publishes dated entries.
+
+Analytics needs nothing: `tests/web-analytics-integration.test.js` walks the `.astro` import
+graph and asserts every page either renders the analytics component or renders something that
+does, so a page on `BaseLayout` is instrumented by construction — and a page that bypasses
+BaseLayout fails the test rather than silently going unmeasured.
+
+Budget a day for a new tracker, most of it data research.
