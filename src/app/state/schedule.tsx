@@ -175,7 +175,7 @@ export function ScheduleProvider({
     day: defaultSchedDayOffset(defaultHub) as number,
   }));
 
-  const { announce, select } = useUi();
+  const { announce, select, showBmacToast } = useUi();
   const watch = useWatch();
   // The watch list is read at diff time, never as an effect dependency — a board landing
   // must not be able to re-run because someone starred a flight.
@@ -345,13 +345,19 @@ export function ScheduleProvider({
             setWatchAlert({ message, key: Date.now() });
             announce(message);
           }
+          // Inventory §12: a watched flight LANDING is the one moment this dashboard has
+          // demonstrably done its job, so it is the one moment the donation ask is made.
+          // Inside the significant-change branch on purpose — an inferred or repeated
+          // "Landed" is not an arrival, and `showBmacToast` caps the rest (14-day cooldown,
+          // once per load, 3-second delay).
+          if (next.toLowerCase().includes('landed')) showBmacToast(ident);
         }
         // Always restamp, changed or not: the stored status is the baseline the NEXT load
         // compares against, and leaving it behind re-fires the same alert every refresh.
         store.updateStatus(ident, next);
       }
     },
-    [announce, select, nowSec],
+    [announce, select, nowSec, showBmacToast],
   );
 
   /** Store one landed board and run the post-load fan-out. */

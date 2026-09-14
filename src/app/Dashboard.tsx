@@ -39,6 +39,7 @@ import { IropsAnnouncer } from './shell/IropsAnnouncer';
 import { MobileNav } from './shell/MobileNav';
 import { OfflineBanner } from './shell/OfflineBanner';
 import { TabBar } from './shell/TabBar';
+import { WatchBanner } from './shell/WatchBanner';
 import { Ticker } from './shell/Ticker';
 import { WatchPanel } from './shell/WatchPanel';
 import { useDeepLinks } from './state/deep-links';
@@ -76,7 +77,7 @@ function DashboardShell() {
     announce,
   } = useUi();
   const { flights } = useFeed();
-  const { setCurrent } = useSchedule();
+  const { setCurrent, watchAlert, clearWatchAlert } = useSchedule();
   const [watchOpen, setWatchOpen] = useState(false);
   // Views stay mounted once visited. Radix unmounts inactive TabsContent by default, which
   // would tear the Leaflet map down and rebuild it on every tab switch — losing the pan,
@@ -123,6 +124,9 @@ function DashboardShell() {
       />
       <Ticker />
       <HubHealthStrip />
+      {/* Relocated from inside ScheduleView: a watched flight can change status while the
+          viewer is on any tab, and the banner has to be where they are. */}
+      <WatchBanner alert={watchAlert} onDismiss={clearWatchAlert} />
       <TipStrip />
 
       <Tabs

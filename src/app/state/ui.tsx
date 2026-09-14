@@ -11,10 +11,12 @@
  * each other is worse for a screen-reader user than one that speaks in turn.
  */
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { bmacEligible } from '@/lib/engagement.js';
 import { DEFAULT_TAB, TAB_HASHES } from '../tabs';
+import { safeLocalStorage } from './storage';
 import type { TabId } from '../tabs';
 import type { Flight } from '../data/types';
 
@@ -61,14 +63,30 @@ export type UiValue = {
   openFr24: (query: string | null) => void;
   waitlistOpen: boolean;
   setWaitlistOpen: (open: boolean) => void;
-  /** The canopy's "?" reopens onboarding; Task 8 renders it. */
+  /** The canopy's "?" reopens onboarding; `features/Onboarding.tsx` renders it. */
   onboardingOpen: boolean;
   setOnboardingOpen: (open: boolean) => void;
+  /** The About / legal modal, opened from the legal popover's About and Disclaimer links. */
+  disclaimerOpen: boolean;
+  setDisclaimerOpen: (open: boolean) => void;
+
+  /**
+   * The "glad you landed" toast (inventory §12). The ident of the flight that landed, or
+   * null. `showBmacToast()` owns the whole ask: the 14-day cooldown, the "already showing"
+   * guard and the 3-second delay that keeps the thank-you from stepping on the status
+   * change that earned it. Callers just say a flight landed.
+   */
+  bmacToast: string | null;
+  showBmacToast: (ident: string) => void;
+  dismissBmacToast: () => void;
 
   /** The current text of the single polite live region. */
   announcement: string;
   announce: (text: string) => void;
 };
+
+/** Inventory §30: the landing toast appears three seconds after the flight lands. */
+const BMAC_DELAY_MS = 3000;
 
 const UiContext = createContext<UiValue | null>(null);
 
@@ -98,6 +116,10 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [fr24Query, setFr24Query] = useState<string | null>(null);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [disclaimerOpen, setDisclaimerOpen] = useState(false);
+  const [bmacToast, setBmacToast] = useState<string | null>(null);
+  const bmacTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bmacAsked = useRef(false);
   const [announcement, setAnnouncement] = useState('');
   const lastAnnouncement = useRef('');
 
@@ -127,6 +149,41 @@ export function UiProvider({ children }: { children: ReactNode }) {
     setAnnouncement(text);
   }, []);
 
+  /**
+   * A watched flight landed. Ask for a coffee — once, three seconds later, and not more
+   * than once a fortnight.
+   *
+   * The delay is the point: this fires the instant the board says "Landed", which is the
+   * instant the viewer is reading the row they were waiting on. Landing the ask on top of
+   * that moment reads as an interruption; three seconds later it reads as a thank-you.
+   */
+  const showBmacToast = useCallback((ident: string) => {
+    // Once per page load, then the stored 14-day cooldown takes over. A visitor tracking
+    // three connections should be thanked once, not three times in twenty minutes.
+    if (bmacTimer.current || bmacAsked.current) return;
+    if (!bmacEligible(safeLocalStorage() ?? { getItem: () => null })) return;
+    bmacAsked.current = true;
+    bmacTimer.current = setTimeout(() => {
+      bmacTimer.current = null;
+      setBmacToast(ident);
+    }, BMAC_DELAY_MS);
+  }, []);
+
+  const dismissBmacToast = useCallback(() => {
+    if (bmacTimer.current) {
+      clearTimeout(bmacTimer.current);
+      bmacTimer.current = null;
+    }
+    setBmacToast(null);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (bmacTimer.current) clearTimeout(bmacTimer.current);
+    },
+    [],
+  );
+
   const value = useMemo<UiValue>(
     () => ({
       tab,
@@ -151,6 +208,11 @@ export function UiProvider({ children }: { children: ReactNode }) {
       setWaitlistOpen,
       onboardingOpen,
       setOnboardingOpen,
+      disclaimerOpen,
+      setDisclaimerOpen,
+      bmacToast,
+      showBmacToast,
+      dismissBmacToast,
       announcement,
       announce,
     }),
@@ -169,6 +231,10 @@ export function UiProvider({ children }: { children: ReactNode }) {
       fr24Query,
       waitlistOpen,
       onboardingOpen,
+      disclaimerOpen,
+      bmacToast,
+      showBmacToast,
+      dismissBmacToast,
       announcement,
       announce,
     ],
