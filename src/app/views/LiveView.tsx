@@ -47,9 +47,11 @@ export default function LiveView() {
   const feed = useFeed();
   const { fleetDb, fleetByReg, starlink } = useFleet();
   const { homeAirport } = usePrefs();
-  const { selection, select, focus, focusOn, setTab } = useUi();
+  const { selection, select, focus, focusOn, setTab, starlinkFilter, setStarlinkFilter } = useUi();
   const watch = useWatch();
 
+  // Every layer except Starlink is local. Starlink's toggle is shared state because the
+  // Starlink tab's "● N AIRBORNE NOW" chip switches to this tab with the filter already on.
   const [layers, setLayers] = useState<LayerKey[]>(['hubs']);
   const [hubFilter, setHubFilter] = useState('');
   const [phaseFilter, setPhaseFilter] = useState('');
@@ -63,7 +65,22 @@ export default function LiveView() {
   );
 
   // A Starlink filter that survives the roster going away would hide the entire fleet.
-  const starlinkOnly = layers.includes('starlink') && starlinkAvailable;
+  const starlinkOnly = starlinkFilter && starlinkAvailable;
+
+  // The toggle reads pressed only when the filter is actually in force: a pressed-but-disabled
+  // control (roster empty or degraded) would say the map is filtered when it is not.
+  const activeLayers = useMemo<LayerKey[]>(
+    () => (starlinkOnly ? [...layers, 'starlink'] : layers),
+    [layers, starlinkOnly],
+  );
+
+  const onLayersChange = useCallback(
+    (next: LayerKey[]) => {
+      setStarlinkFilter(next.includes('starlink'));
+      setLayers(next.filter((key) => key !== 'starlink'));
+    },
+    [setStarlinkFilter],
+  );
 
   // The lib modules are JSDoc'd against `Object` (they predate this TSX layer and stay
   // framework-free), so the callbacks are widened here rather than loosening the modules.
@@ -112,8 +129,8 @@ export default function LiveView() {
   const clearFilters = useCallback(() => {
     setHubFilter('');
     setPhaseFilter('');
-    setLayers((current) => current.filter((key) => key !== 'starlink'));
-  }, []);
+    setStarlinkFilter(false);
+  }, [setStarlinkFilter]);
 
   const sidebar = (
     <LiveSidebar
@@ -165,8 +182,8 @@ export default function LiveView() {
               // One scrollable row rather than a wrapping block: at 400 px a second row of
               // controls costs ~45 px of map, and the map is the point of this tab.
               className="pointer-events-auto flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]"
-              active={layers}
-              onChange={setLayers}
+              active={activeLayers}
+              onChange={onLayersChange}
               starlinkAvailable={starlinkAvailable}
               refreshing={feed.refreshing}
               onRefresh={feed.refresh}

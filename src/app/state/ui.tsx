@@ -40,6 +40,15 @@ export type UiValue = {
   focus: MapFocus;
   focusOn: (lat: number, lon: number) => void;
 
+  /**
+   * The Live map's Starlink-only filter. It lives here rather than in `LiveView` local state
+   * because the Starlink tab's "● N AIRBORNE NOW" chip is a click-through that has to arrive
+   * on Live with the filter already on (inventory §16/§22). Every other map layer stays local
+   * to the view — this is the only one another tab drives.
+   */
+  starlinkFilter: boolean;
+  setStarlinkFilter: (on: boolean) => void;
+
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
 
@@ -82,6 +91,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [pendingScroll, setPendingScroll] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
   const [focus, setFocus] = useState<MapFocus>(null);
+  const [starlinkFilter, setStarlinkFilter] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [aircraftReg, setAircraftReg] = useState<string | null>(null);
   const [delayExplain, setDelayExplain] = useState<Record<string, unknown> | null>(null);
@@ -127,6 +137,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
       select: setSelection,
       focus,
       focusOn,
+      starlinkFilter,
+      setStarlinkFilter,
       searchOpen,
       setSearchOpen,
       aircraftReg,
@@ -150,6 +162,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
       selection,
       focus,
       focusOn,
+      starlinkFilter,
       searchOpen,
       aircraftReg,
       delayExplain,
