@@ -47,7 +47,6 @@ import type { ScheduleTableHandle } from './schedule/ScheduleTable';
 import { StalenessBanner } from './schedule/StalenessBanner';
 import type { BoardCondition } from './schedule/StalenessBanner';
 import { SwapSummary } from './schedule/SwapSummary';
-import { WatchBanner } from './schedule/WatchBanner';
 import { EMPTY_FILTERS, aircraftOptions, useBoardModel } from './schedule/useBoardModel';
 import type { BoardFilters, RowModel, SortColumn } from './schedule/useBoardModel';
 
@@ -256,7 +255,6 @@ export default function ScheduleView() {
         onJumpToNow={() => tableRef.current?.scrollToNow(true)}
       />
 
-      <WatchBanner alert={schedule.watchAlert} onDismiss={schedule.clearWatchAlert} />
 
       {!hub ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
