@@ -60,7 +60,7 @@ function astroFilesIn(dir) {
 }
 
 // Sep 2026: Vercel Web Analytics showed requestPath "/" and nothing else for a month — every
-// Astro-rendered page (fleet, hubs, trackers, tsa, news, 404, privacy, newark) only carried Speed
+// Astro-rendered page (fleet, hubs, trackers, news, 404, privacy, newark) only carried Speed
 // Insights, which had been canceled on the project since Jul 14 2026. This pins the replacement:
 // one shared wrapper that loads /_vercel/insights/script.js, mounted from every static document
 // entrypoint, and no Speed Insights residue anywhere (its script would 404 against a canceled

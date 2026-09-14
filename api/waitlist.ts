@@ -17,9 +17,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // break); the DB is the backstop for writers that bypass the API (anon-key
 // direct inserts).
 //
-// Existing callers: 'popup' (main.js waitlist modal), 'tsa-page' (tsa.astro
-// gate). If you add a new callsite that passes a different source, add it
-// here AND in sql/006_waitlist_checks.sql — both must allow it.
+// Existing callers: 'popup' (main.js waitlist modal). If you add a new
+// callsite that passes a different source, add it here AND in
+// sql/006_waitlist_checks.sql — both must allow it.
 const VALID_SOURCES = new Set([
   'popup',
   'hero',
@@ -28,7 +28,6 @@ const VALID_SOURCES = new Set([
   'hub',
   'fleet',
   'dashboard',
-  'tsa-page',
 ]);
 
 // Window for classifying a signup as "new" rather than a re-submission. After

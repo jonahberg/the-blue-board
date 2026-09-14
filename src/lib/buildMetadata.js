@@ -93,11 +93,6 @@ export const privacyLastmodPaths = [
   'src/components/site/BaseLayout.astro',
 ];
 
-export const tsaLastmodPaths = [
-  'src/pages/tsa.astro',
-  'src/data/tsa/united-terminals.js',
-];
-
 export const trackersIndexLastmodPaths = [
   'src/pages/trackers/index.astro',
   'src/data/trackers/index.js',

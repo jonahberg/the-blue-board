@@ -45,13 +45,3 @@ describe('static asset caching (vercel.json)', () => {
     expect(Number(cc.match(/max-age=(\d+)/)[1])).toBeGreaterThanOrEqual(31536000);
   });
 });
-
-describe('TSA cron cadence (vercel.json)', () => {
-  it('refresh-tsa no longer runs every 5 minutes against the dead MyTSA upstream', () => {
-    const cron = (config.crons || []).find((c) => c.path === '/api/cron/refresh-tsa');
-    expect(cron, 'refresh-tsa cron missing').toBeTruthy();
-    expect(cron.schedule).not.toBe('*/5 * * * *');
-    // Hourly or less frequent until a live wait-times source replaces MyTSA.
-    expect(cron.schedule).toMatch(/^0 (\*|\*\/\d+|\d+) \* \* \*$/);
-  });
-});

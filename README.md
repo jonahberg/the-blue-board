@@ -103,7 +103,6 @@ Living, data-driven pages that follow aviation's long-running stories — each w
     │  Cron jobs (vercel.json):                │
     │  /api/cron/warm-schedules  — hourly      │
     │  /api/cron/sync-starlink   — every 4hrs  │
-    │  /api/cron/refresh-tsa     — hourly      │
     │  /api/cron/refresh-metar   — every 5min  │
     │  /api/cron/watch-alerts    — every 5min  │
     └──────────┬──────────────────────────────┘
@@ -230,7 +229,6 @@ Living, data-driven pages that follow aviation's long-running stories — each w
 │   ├── fr24-usage.ts             # FR24 credit usage monitor
 │   ├── cron/warm-schedules.ts    # Schedule cache warming (hourly, quota-budgeted)
 │   ├── cron/sync-starlink.ts     # Starlink data sync (every 4hrs)
-│   ├── cron/refresh-tsa.ts       # TSA wait-time cache refresh (hourly)
 │   ├── cron/refresh-metar.ts     # METAR weather cache refresh (every 5min)
 │   └── cron/watch-alerts.ts      # Background flight-watch push alerts (every 5min)
 ├── sql/                          # Supabase migration files
