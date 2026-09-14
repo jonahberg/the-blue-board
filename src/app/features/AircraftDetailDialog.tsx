@@ -68,7 +68,7 @@ function Fact({ label, value, tone }: { label: string; value: string; tone?: str
 
 export default function AircraftDetailDialog() {
   const { aircraftReg, openAircraft, select, focusOn, setTab, onboardingOpen, announce } = useUi();
-  const { fleetByReg, starlink, special, loading } = useFleet();
+  const { fleetByReg, starlink, special, loading, loadFailed, retry } = useFleet();
   const { flights } = useFeed();
   const watch = useWatch();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -150,6 +150,8 @@ export default function AircraftDetailDialog() {
           </DialogTitle>
           {loading && !aircraft ? (
             <DialogDescription>Loading the fleet database…</DialogDescription>
+          ) : loadFailed && !aircraft ? (
+            <DialogDescription>Fleet database unavailable</DialogDescription>
           ) : aircraft ? (
             <>
               <DialogDescription className="flex flex-wrap items-center gap-2 text-sm">
@@ -186,6 +188,31 @@ export default function AircraftDetailDialog() {
             </div>
             <Skeleton className="h-20 w-full" />
           </div>
+        ) : loadFailed && !aircraft ? (
+          // F035 again, at dialog scale: when the database did not load, "not in the fleet"
+          // is a claim about THIS aircraft that nothing supports. Say which of the two
+          // happened, and offer the retry rather than a dead end.
+          <>
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              <p>
+                The fleet database could not be loaded, so there is nothing to look{' '}
+                {reg} up in.
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                This is a load error — not an unknown aircraft.
+              </p>
+            </div>
+            <DialogFooter className="mx-0 mb-0 flex-row flex-wrap justify-center gap-2 sm:justify-center">
+              <Button size="lg" className="min-h-11 md:min-h-0" onClick={retry}>
+                ↻ Retry
+              </Button>
+              <Button variant="outline" size="lg" className="min-h-11 md:min-h-0" asChild>
+                <a href={planespottersUrl(reg)} target="_blank" rel="noopener noreferrer">
+                  Planespotters ↗
+                </a>
+              </Button>
+            </DialogFooter>
+          </>
         ) : !aircraft ? (
           <>
             <div className="p-6 text-center text-sm text-muted-foreground">
@@ -262,6 +289,9 @@ export default function AircraftDetailDialog() {
                   <button
                     type="button"
                     onClick={onViewOnMap}
+                    // Without this the accessible name is the whole card concatenated —
+                    // "Airborne UA360 View on map Denver Seattle 33,950 ft 413 kts …".
+                    aria-label={`View ${liveFlight.flightIATA || liveFlight.callsign || reg} on the map`}
                     className="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     <div className="flex items-center justify-between gap-2">

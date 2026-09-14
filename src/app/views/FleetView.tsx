@@ -342,6 +342,11 @@ export default function FleetView() {
 
         <Tabs
           value={subView}
+          // Manual activation, because one of these "tabs" navigates away. Radix's default
+          // activates whatever an arrow key focuses, so arrowing past 🛰️ Starlink would
+          // switch to the Starlink TAB mid-keystroke and drop focus into a panel that no
+          // longer exists. Arrows move, Enter/Space/click commit.
+          activationMode="manual"
           onValueChange={(value) => {
             // Starlink is a top-level tab of its own now; the sub-tab is a signpost to it
             // and must not become a fourth panel here.
