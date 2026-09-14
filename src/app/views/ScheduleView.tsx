@@ -226,7 +226,10 @@ export default function ScheduleView() {
   const showJumpToNow = day === 0 && model.firstFutureIndex >= 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 p-2 md:p-3">
+    // No `h-full`: at phone width the controls and the stat strip are tall enough that a
+    // height-locked column squeezes the table down to a row and a half. The tab area already
+    // scrolls, so the page grows and the table keeps its own scroll height.
+    <div className="flex min-h-0 flex-col gap-2 p-2 md:p-3">
       <ScheduleControls
         hub={hub}
         dir={dir}

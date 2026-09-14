@@ -174,10 +174,20 @@ export const ScheduleTable = forwardRef<
       ref={scrollRef}
       tabIndex={0}
       aria-label="Schedule table, scrollable region"
-      className="relative max-h-[calc(100dvh-22.5rem)] overflow-auto rounded-md border md:max-h-[calc(100dvh-20rem)]"
+      // `Table` wraps itself in an `overflow-x-auto` div. Left alone that div is a second
+      // scrollport INSIDE this one, which is where the sticky header would stick (to a
+      // container that never scrolls) and what `offsetTop` would be measured against.
+      // Flattening it leaves exactly one scroll container for both axes.
+      className={cn(
+        'relative max-h-[65dvh] overflow-auto rounded-md border md:max-h-[calc(100dvh-20rem)]',
+        '[&>[data-slot=table-container]]:overflow-visible',
+      )}
     >
       <Table className="text-[11px]">
-        <TableHeader className="sticky top-0 z-10 bg-card">
+        {/* The sticky offset goes on the cells, not the `<thead>`: a background painted on
+            a sticky `<thead>` does not cover the rows scrolling beneath it in every engine,
+            and a half-visible row bleeding through the header reads as a rendering fault. */}
+        <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
           <TableRow>
             {COLUMNS.map((column) =>
               column.key ? (
@@ -312,7 +322,7 @@ export const ScheduleTable = forwardRef<
                     ) : null}
                   </TableCell>
 
-                  <TableCell className="font-mono text-[10px]">
+                  <TableCell className="max-w-40 font-mono text-[10px]">
                     {row.reg ? (
                       row.regFromLive ? (
                         <Tooltip>
@@ -343,7 +353,12 @@ export const ScheduleTable = forwardRef<
                       </Badge>
                     ) : null}
                     {row.fleet?.enrich ? (
-                      <span className="block text-[9px] text-muted-foreground">{row.fleet.enrich}</span>
+                      <span
+                        className="block truncate text-[9px] text-muted-foreground"
+                        title={row.fleet.enrich}
+                      >
+                        {row.fleet.enrich}
+                      </span>
                     ) : null}
                   </TableCell>
 
@@ -397,9 +412,9 @@ export const ScheduleTable = forwardRef<
                     )}
                   </TableCell>
 
-                  <TableCell className="whitespace-nowrap">
+                  <TableCell className="max-w-28">
                     {row.fleet ? (
-                      <span className="text-[10px]">
+                      <span className="block truncate text-[10px]" title={row.fleet.badge}>
                         <span aria-hidden="true">{row.fleet.starlink ? '⚡' : '✓'}</span>{' '}
                         {row.fleet.badge}
                       </span>
@@ -433,11 +448,13 @@ export const ScheduleTable = forwardRef<
                     aria-label="Current time marker"
                     className="bg-primary/10 hover:bg-primary/10"
                   >
-                    <TableCell
-                      colSpan={10}
-                      className="py-1 text-center font-mono text-[10px] tracking-wide text-primary"
-                    >
-                      ── NOW · {dividerLabel} ──
+                    <TableCell colSpan={10} className="p-0">
+                      {/* Pinned to the left edge of the scrollport: centred across a table
+                          that is ~1400 px wide, the label sits off-screen on a phone and the
+                          divider reads as an unexplained empty band. */}
+                      <span className="sticky left-0 block px-2 py-1 font-mono text-[10px] tracking-wide text-primary">
+                        ── NOW · {dividerLabel} ──
+                      </span>
                     </TableCell>
                   </TableRow>,
                 );

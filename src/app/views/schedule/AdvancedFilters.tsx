@@ -123,7 +123,10 @@ export function AdvancedFilters({
   idPrefix?: string;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-8">
+    // Two rows of four rather than one row of eight: at eight across, every trigger
+    // truncates ("All Fleet Famili…") and a filter you cannot read is a filter you do not
+    // use. The drawer has the vertical room; the toolbar did not.
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
       <FilterSelect
         id={`${idPrefix}-status`}
         label="Status"
