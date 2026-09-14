@@ -26,17 +26,29 @@ import {
   FR24_LOOKUP_RE,
   classifyEmptyState,
   matchLiveFlights,
+  matchScheduleFlights,
   normalizeQuery,
 } from '@/lib/global-search.js';
 import { FR24_LOOKUP_AVAILABLE } from './Fr24LookupDialog';
 import { useFeed } from '../state/feed';
+import { useSchedule } from '../state/schedule';
 import { useUi } from '../state/ui';
 
 const MAX_RESULTS = 20;
 
+/** One schedule row a query matched, as `matchScheduleFlights()` shapes it. */
+type ScheduleMatch = {
+  label: string;
+  flight: {
+    identification?: { number?: { default?: string } };
+    airport?: { origin?: { code?: { iata?: string } } };
+  };
+};
+
 export function SearchPalette() {
   const { searchOpen, setSearchOpen, select, openFr24, setTab } = useUi();
   const { flights } = useFeed();
+  const { boards, goto, preload } = useSchedule();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
 
@@ -55,6 +67,44 @@ export function SearchPalette() {
     if (qNorm.length < 2) return [];
     return flights.filter((f) => matchLiveFlights([f], qNorm).length > 0).slice(0, MAX_RESULTS);
   }, [flights, qNorm]);
+
+  /**
+   * Scheduled-but-not-airborne matches (inventory §4). A flight that has not taken off yet
+   * is the single most common reason a search comes back empty, so the boards already loaded
+   * are searched too and each hit navigates to its row rather than just to the tab.
+   */
+  const scheduleMatches = useMemo(() => {
+    if (qNorm.length < 2) return [] as { key: string; label: string; hub: string; flight: string }[];
+    const seen = new Set<string>();
+    const found: { key: string; label: string; hub: string; flight: string }[] = [];
+    for (const board of Object.values(boards)) {
+      if (board.dir !== 'departures') continue;
+      for (const match of matchScheduleFlights(board.rows, qNorm) as ScheduleMatch[]) {
+        const ident = match.flight.identification?.number?.default || '';
+        if (!ident || seen.has(ident)) continue;
+        seen.add(ident);
+        found.push({
+          key: `${board.hub}-${ident}`,
+          label: match.label,
+          hub: match.flight.airport?.origin?.code?.iata || board.hub,
+          flight: ident,
+        });
+        if (found.length >= MAX_RESULTS) return found;
+      }
+    }
+    return found;
+  }, [boards, qNorm]);
+
+  /**
+   * F043: the boards only populate once someone opens the Schedule tab or the idle warm-up
+   * runs. A query that finds nothing anywhere kicks the preload so the same search a moment
+   * later can answer — `preload()` is itself TTL-guarded, so this cannot stampede.
+   */
+  useEffect(() => {
+    if (qNorm.length < 2) return;
+    if (matches.length || scheduleMatches.length) return;
+    preload();
+  }, [qNorm, matches.length, scheduleMatches.length, preload]);
 
   /**
    * A bare number means a UA flight number — "1234" and "UA1234" are the same query.
@@ -130,7 +180,25 @@ export function SearchPalette() {
             </CommandGroup>
           ) : null}
 
-          {qNorm.length >= 2 && matches.length === 0 ? (
+          {scheduleMatches.length > 0 ? (
+            <CommandGroup heading="On a loaded board">
+              {scheduleMatches.map((match) => (
+                <CommandItem
+                  key={match.key}
+                  value={match.key}
+                  onSelect={() => {
+                    goto({ hub: match.hub, dir: 'departures', flight: match.flight });
+                    setTab('schedule');
+                    setSearchOpen(false);
+                  }}
+                >
+                  <span className="font-mono text-muted-foreground">{match.label}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ) : null}
+
+          {qNorm.length >= 2 && matches.length === 0 && scheduleMatches.length === 0 ? (
             <>
               {/* role=presentation for the same reason cmdk gives its own CommandEmpty one:
                   this sits inside the list's role="listbox" and is not an option. */}
