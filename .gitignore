@@ -5,7 +5,6 @@ node_modules
 *.bak
 dist
 .astro
-public/js/dashboard.js
 
 .env
 .env*.local

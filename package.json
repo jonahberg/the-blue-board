@@ -14,7 +14,6 @@
   "scripts": {
     "dev": "astro dev",
     "build": "bun scripts/refresh-starlink-facts.mjs && astro build && bun scripts/stamp-seo-build-date.mjs && bun scripts/build-agent-markdown.mjs && bun scripts/verify-csp-hashes.mjs",
-    "build:dashboard": "vite build --config vite.dashboard.config.js",
     "preview": "astro preview",
     "seed:schedules": "bun scripts/seed-schedules.mjs",
     "test": "bunx vitest run",
