@@ -104,9 +104,24 @@ describe('buildDeliveryTimeline', () => {
     expect(chart.years.find((y) => y.year === 2002).showCount).toBe(true);
     expect(chart.years.find((y) => y.year === 2006).showCount).toBe(false);
     expect(chart.years.find((y) => y.year === 2002).showYear).toBe(true); // first
-    expect(chart.years.find((y) => y.year === 2005).showYear).toBe(true); // % 5
     expect(chart.years.find((y) => y.year === 2006).showYear).toBe(true); // last
     expect(chart.years.find((y) => y.year === 2003).showYear).toBe(false);
+    // 2005 is a multiple of five but sits one slot from the last year; two four-digit
+    // labels that close together render as "20052006".
+    expect(chart.years.find((y) => y.year === 2005).showYear).toBe(false);
+  });
+
+  it('keeps an every-five label that is clear of both ends', () => {
+    const chart = buildDeliveryTimeline([
+      { t: 'A319', d: '1998' },
+      { t: 'A319', d: '2005' },
+      { t: 'A319', d: '2012' },
+    ]);
+    expect(chart.years.find((y) => y.year === 2000).showYear).toBe(true);
+    expect(chart.years.find((y) => y.year === 2005).showYear).toBe(true);
+    expect(chart.years.find((y) => y.year === 2010).showYear).toBe(true);
+    expect(chart.years.find((y) => y.year === 1998).showYear).toBe(true); // first
+    expect(chart.years.find((y) => y.year === 2012).showYear).toBe(true); // last
   });
 
   it('builds the legend from the families actually present, first-seen first', () => {

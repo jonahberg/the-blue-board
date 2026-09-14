@@ -350,19 +350,23 @@ export default function FleetView() {
           }}
           className="gap-3"
         >
-          <TabsList aria-label="Aircraft lookup views" className="h-auto flex-wrap">
-            <TabsTrigger value="all" className="min-h-11 md:min-h-0">
+          {/* `h-auto!` and `h-full!` are deliberate: TabsList's own variant sets a fixed
+              32 px height and TabsTrigger sets `h-[calc(100%-1px)]`, both of which assume a
+              single row. Four labels carrying counts wrap below ~500 px, and without these
+              the wrapped row overflows the list and lands on top of the search box. */}
+          <TabsList aria-label="Aircraft lookup views" className="h-auto! flex-wrap gap-1">
+            <TabsTrigger value="all" className="h-full! min-h-11 grow-0 md:min-h-0">
               All Aircraft <span className="text-muted-foreground">({subTabCounts.all})</span>
             </TabsTrigger>
-            <TabsTrigger value="airborne" className="min-h-11 md:min-h-0">
+            <TabsTrigger value="airborne" className="h-full! min-h-11 grow-0 md:min-h-0">
               Airborne Now{' '}
               <span className="text-muted-foreground">({subTabCounts.airborne})</span>
             </TabsTrigger>
-            <TabsTrigger value="starlink" className="min-h-11 md:min-h-0">
+            <TabsTrigger value="starlink" className="h-full! min-h-11 grow-0 md:min-h-0">
               🛰️ Starlink{' '}
               <span className="text-muted-foreground">({subTabCounts.starlink})</span>
             </TabsTrigger>
-            <TabsTrigger value="special" className="min-h-11 md:min-h-0">
+            <TabsTrigger value="special" className="h-full! min-h-11 grow-0 md:min-h-0">
               Special <span className="text-muted-foreground">({subTabCounts.special})</span>
             </TabsTrigger>
           </TabsList>

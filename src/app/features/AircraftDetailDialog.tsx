@@ -20,7 +20,7 @@
  * whatever opened it — the row in the table you were reading, not the top of the page.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -71,6 +71,7 @@ export default function AircraftDetailDialog() {
   const { fleetByReg, starlink, special, loading } = useFleet();
   const { flights } = useFeed();
   const watch = useWatch();
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const reg = normalizeReg(aircraftReg);
   // The onboarding overlay is the one thing allowed in front of this: a first-time visitor
@@ -131,8 +132,17 @@ export default function AircraftDetailDialog() {
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
       <DialogContent
+        ref={contentRef}
         aria-label="Aircraft detail"
         className="max-h-[85svh] gap-0 overflow-y-auto p-0 sm:max-w-lg"
+        // Radix would otherwise focus the first focusable child, which is the jargon
+        // trigger inside the title — opening the dialog with a tooltip already covering
+        // its own header. Focus the panel instead: the trap still starts here, Escape
+        // still closes, and the first Tab reaches the same controls.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          contentRef.current?.focus();
+        }}
       >
         <DialogHeader className="gap-1 border-b p-4 pr-12">
           <DialogTitle className="font-mono text-2xl tracking-tight">

@@ -77,6 +77,9 @@ export function FleetControls({
     timer.current = window.setTimeout(() => onSearchChange(value), SEARCH_DEBOUNCE_MS);
   }
 
+  // `h-11!` on the three triggers is deliberate: SelectTrigger sets its height through
+  // `data-[size=default]:h-8`, which outranks a plain `h-11` and would leave the dropdowns
+  // at 32 px on touch. The `sm:h-8!` half hands the compact height back on a pointer.
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Input
@@ -90,7 +93,7 @@ export function FleetControls({
       />
 
       <Select value={type || ALL} onValueChange={(value) => onTypeChange(value === ALL ? '' : value)}>
-        <SelectTrigger aria-label="Fleet type filter" className="h-11 min-w-36 sm:h-8">
+        <SelectTrigger aria-label="Fleet type filter" className="h-11! min-w-36 sm:h-8!">
           <SelectValue placeholder="All Types" />
         </SelectTrigger>
         <SelectContent>
@@ -104,7 +107,7 @@ export function FleetControls({
       </Select>
 
       <Select value={wifi || ALL} onValueChange={(value) => onWifiChange(value === ALL ? '' : value)}>
-        <SelectTrigger aria-label="Fleet WiFi filter" className="h-11 min-w-32 sm:h-8">
+        <SelectTrigger aria-label="Fleet WiFi filter" className="h-11! min-w-32 sm:h-8!">
           <SelectValue placeholder="All WiFi" />
         </SelectTrigger>
         <SelectContent>
@@ -121,7 +124,7 @@ export function FleetControls({
         value={status || ALL}
         onValueChange={(value) => onStatusChange(value === ALL ? '' : value)}
       >
-        <SelectTrigger aria-label="Fleet status filter" className="h-11 min-w-32 sm:h-8">
+        <SelectTrigger aria-label="Fleet status filter" className="h-11! min-w-32 sm:h-8!">
           <SelectValue placeholder="All Status" />
         </SelectTrigger>
         <SelectContent>

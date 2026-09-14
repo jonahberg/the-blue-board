@@ -104,8 +104,13 @@ export function buildDeliveryTimeline(fleetDb, { barHeight = 140 } = {}) {
 
   const years = [];
   for (let y = minYear; y <= maxYear; y++) {
-    // Year labels: every fifth year, plus both ends, so the axis reads at any width.
-    const showYear = y === minYear || y === maxYear || y % 5 === 0;
+    // Year labels: every fifth year, plus both ends, so the axis reads at any width. A
+    // multiple of five immediately beside an end loses — two four-digit labels one slot
+    // apart run together into "20252026", and the end of the range is the more useful of
+    // the two to keep.
+    const isEnd = y === minYear || y === maxYear;
+    const crowdsAnEnd = Math.abs(y - minYear) < 2 || Math.abs(y - maxYear) < 2;
+    const showYear = isEnd || (y % 5 === 0 && !crowdsAnEnd);
     const d = yearData[y];
     if (!d) {
       years.push({ year: y, total: 0, segments: [], height: 0, showCount: false, showYear });
