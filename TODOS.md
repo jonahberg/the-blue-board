@@ -25,7 +25,6 @@
 ### Quality
 
 - [ ] [perf] Content-hash dashboard.js/style.css + immutable cache headers (the gold-standard asset caching). v1.5.20 shipped a moderate max-age=3600 + SWR as a safe quick-win; immutable requires versioning every /js+/css reference across all Astro pages (a build-pipeline change). Deferred from the v1.5.20 quick-wins batch.
-- [ ] [tsa] Surface the new `feedDown` flag in the TSA frontend (tsa.astro / its client script) so users see "wait times unavailable" instead of all-null cells. Backend flag shipped v1.5.20; frontend display deferred.
 - [ ] [ops] Default SCHEDULE_SOURCE_PRIORITY to 'provider' (schedule.ts) so env loss fails closed to the working provider instead of the Cloudflare-dead scrape path. Audit ops-reliability item, not in the v1.5.20 batch.
 
 - [ ] [#14] `api/irops.ts:193` — `results.indexOf(result)` O(n²) → index-based loop. Non-user-facing; 8 hubs so real impact minimal.

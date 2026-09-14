@@ -154,7 +154,7 @@ describe('2. agent-friendly 404s', () => {
   });
 
   it('does not 404 a real page just because it has no Markdown twin', () => {
-    for (const path of ['/hubs/ord', '/fleet/737-800', '/news/anything', '/trackers/atc/iah', '/tsa']) {
+    for (const path of ['/hubs/ord', '/fleet/737-800', '/news/anything', '/trackers/atc/iah']) {
       expect(resolveAgentResponse({ pathname: path, accept: 'text/markdown' }), path)
         .toEqual({ kind: 'html' });
     }
@@ -200,7 +200,7 @@ describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
     for (const route of Object.keys(agentMarkdown)) {
       expect(agentMarkdownAssetPath(route), route).toMatch(/^\/_agent\/[a-z-]+\.md$/);
     }
-    for (const route of ['/tsa', '/hubs/ord', '/nope', '/_agent/home.md']) {
+    for (const route of ['/hubs/ord', '/nope', '/_agent/home.md']) {
       expect(agentMarkdownAssetPath(route), route).toBe(null);
     }
   });

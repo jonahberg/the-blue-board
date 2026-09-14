@@ -14,7 +14,6 @@ import {
   newsIndexLastmodPaths,
   privacyLastmodPaths,
   trackersIndexLastmodPaths,
-  tsaLastmodPaths,
   xmlEscape,
 } from '../lib/buildMetadata.js';
 import { trackerOrder } from '../data/trackers/index.js';
@@ -51,7 +50,6 @@ export function GET() {
       renderUrl(`/hubs/${key}`, getLastModified(getHubRouteLastmodPaths(key)), 'weekly', '0.8')
     ),
     renderUrl('/newark', getLastModified(newarkLastmodPaths), 'weekly', '0.8'),
-    renderUrl('/tsa', getLastModified(tsaLastmodPaths), 'weekly', '0.8'),
     renderUrl('/privacy', getLastModified(privacyLastmodPaths), 'yearly', '0.3'),
     renderUrl('/trackers', getLastModified(trackersIndexLastmodPaths), 'weekly', '0.9'),
     ...trackerOrder.map((slug: string) =>

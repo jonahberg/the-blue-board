@@ -64,7 +64,6 @@ Everything below is a plain HTTPS GET. There is no API key and no authentication
 | Hub status page | \`https://theblueboard.co/hubs/{ord\\|den\\|iah\\|ewr\\|sfo\\|iad\\|lax\\|nrt\\|gum}\` |
 | Newark operations center | \`https://theblueboard.co/newark\` |
 | Fleet index / one fleet type | \`https://theblueboard.co/fleet\` · \`https://theblueboard.co/fleet/{slug}\` |
-| TSA checkpoint guide (lanes, hours) | \`https://theblueboard.co/tsa\` |
 | United news · RSS | \`https://theblueboard.co/news\` · \`https://theblueboard.co/feed.xml\` |
 | Trackers index | \`https://theblueboard.co/trackers\` |
 | Tracker open data | \`/trackers/atc.json\` · \`/trackers/atc.csv\` · \`/trackers/united-hubs.json\` · \`/trackers/united-hubs.csv\` |
@@ -98,7 +97,6 @@ are not a public API, so please read the pages rather than scraping \`/api/\`.
 | METAR weather observations | every 5 minutes |
 | Starlink equipment | every 4 hours |
 | Fleet database | curated; updated as aircraft enter and leave the fleet |
-| TSA checkpoint guide | static reference; no live wait-time feed exists |
 
 ## Sources
 

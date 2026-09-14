@@ -11,7 +11,7 @@
 // section can't silently fall outside.
 
 /** Exact top-level HTML routes (Astro pages + the dashboard shell at /). */
-export const HTML_ROUTE_PATHS = ['/', '/404', '/newark', '/privacy', '/tsa'];
+export const HTML_ROUTE_PATHS = ['/', '/404', '/newark', '/privacy'];
 
 /** Route sections — both the index (/fleet) and everything under it (/fleet/737-800). */
 export const HTML_ROUTE_PREFIXES = ['/fleet', '/hubs', '/news', '/trackers'];
