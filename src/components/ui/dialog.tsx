@@ -69,7 +69,9 @@ function DialogContent({
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button
               variant="ghost"
-              className="absolute top-2 right-2"
+              // 44px on touch (WCAG 2.5.5), matching the sheet's close pin; desktop
+              // density returns from `md:`.
+              className="absolute top-2 right-2 min-h-11 min-w-11 md:min-h-8 md:min-w-8"
               size="icon-sm"
             >
               <XIcon
