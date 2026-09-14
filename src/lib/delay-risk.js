@@ -22,7 +22,10 @@ export const HUB_COORDINATES = {
   GUM: { lat: 13.484, lon: 144.797 },
 };
 
-const RISK_BANDS = [
+// Exported because the AI delay-explanation dialog colours its header badge by LABEL
+// (it is handed a context, not a score) and must agree with the badge the visitor
+// clicked. One table, two readers — never two tables.
+export const RISK_BANDS = [
   { min: 75, label: 'V.HIGH', color: '#dc2626' },
   { min: 50, label: 'HIGH', color: '#ef4444' },
   { min: 25, label: 'MOD', color: '#eab308' },
