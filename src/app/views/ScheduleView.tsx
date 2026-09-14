@@ -24,7 +24,12 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getTypicalFleetStats } from '@/lib/equipment-swaps.js';
 import { getHubDayLabel, getStartOfHubDay } from '@/lib/hubTz.js';
-import { boardAsOfMs, describeBoardCondition, formatBoardAsOf } from '@/lib/schedule-load.js';
+import {
+  boardAsOfMs,
+  describeBoardCondition,
+  formatBoardAsOf,
+  shouldAutoScroll,
+} from '@/lib/schedule-load.js';
 import { analyzeSwapImpact } from '@/lib/swap-impact.js';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
@@ -170,15 +175,17 @@ export default function ScheduleView() {
   );
 
   // One-shot: anchor a freshly loaded TODAY board at NOW, never on a filter re-render and
-  // never while the viewer is on another tab.
+  // never while the viewer is on another tab. `shouldAutoScroll` also checks that the signal
+  // was raised BY the board on screen — a slow load for a board the viewer has since
+  // navigated away from still completes, and must not drag this one to a NOW line.
   const lastAnchored = useRef(0);
   useEffect(() => {
-    if (!schedule.autoScrollKey || schedule.autoScrollKey === lastAnchored.current) return;
     if (ui.tab !== 'schedule') return;
     if (model.firstFutureIndex < 0) return;
-    lastAnchored.current = schedule.autoScrollKey;
+    if (!shouldAutoScroll(schedule.autoScroll, key, lastAnchored.current)) return;
+    lastAnchored.current = schedule.autoScroll!.n;
     tableRef.current?.scrollToNow(false);
-  }, [schedule.autoScrollKey, ui.tab, model.firstFutureIndex]);
+  }, [schedule.autoScroll, key, ui.tab, model.firstFutureIndex]);
 
   // The search palette asked for a row. The board may still be loading, so this retries on
   // each render until the row exists (or the viewer navigates away and clears it).

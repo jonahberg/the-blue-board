@@ -276,3 +276,27 @@ export function swapSummary(swaps, impactsFor) {
     text: `${list.length} equipment swap${list.length > 1 ? 's' : ''} detected`,
   };
 }
+
+/**
+ * Should the board the viewer is LOOKING AT scroll itself to the NOW divider?
+ *
+ * The autoscroll signal is raised by whichever board load finished, and loads are not
+ * cancelled when the viewer changes hub or direction mid-flight — a straggler for a board
+ * they navigated away from still completes and still raises a signal. A signal that only
+ * said "a today board landed" would therefore yank the board they ARE reading to its NOW
+ * line, which reads as the page fighting them.
+ *
+ * So the signal carries the board key it was produced for, and only the board it names
+ * responds, once.
+ *
+ * @param {{key: string, n: number}|null} signal  the latest autoscroll signal.
+ * @param {string} currentKey  the board key on screen.
+ * @param {number} lastHandledN  the `n` of the last signal this consumer acted on.
+ * @returns {boolean}
+ */
+export function shouldAutoScroll(signal, currentKey, lastHandledN) {
+  if (!signal || !signal.key) return false;
+  if (!Number.isFinite(signal.n) || signal.n <= 0) return false;
+  if (signal.n === lastHandledN) return false;
+  return signal.key === currentKey;
+}

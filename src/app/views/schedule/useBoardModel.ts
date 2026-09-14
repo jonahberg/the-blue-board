@@ -22,25 +22,25 @@ import { useMemo } from 'react';
 import { INTL_AIRPORTS } from '@/lib/airport-metadata.js';
 import { computeScheduleStatCounts } from '@/lib/board-stats.js';
 import { effectiveRowTime, firstFutureIndex, nowDividerIndex } from '@/lib/board-now.js';
-import { formatDelayMinutes } from '@/lib/delay-format.js';
 import { getScheduleRiskContext } from '@/lib/delay-explain-context.js';
 import { HUB_COORDINATES, HUB_RISK_PROFILES, computeDelayRiskModel } from '@/lib/delay-risk.js';
-import { ICAO_TO_FLEET_TYPE, getTypicalFleetStats } from '@/lib/equipment-swaps.js';
+import { getTypicalFleetStats } from '@/lib/equipment-swaps.js';
 import { getFAADelayContext } from '@/lib/faa-context.js';
-import { normalizeWifi } from '@/lib/fleet-utils.js';
-import { getUnitedTerminal } from '@/lib/hub-terminals.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
 import { applySightingsToBoard } from '@/lib/reg-overlay.js';
 import { normalizeFlightNum } from '@/lib/reg-ledger.js';
 import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
 import { getScheduleFleetFamily } from '@/lib/schedule-filters.js';
+import { buildScheduleRow } from '@/lib/schedule-row-model.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
-import { displayScheduleStatus } from '@/lib/status-display.js';
 import { analyzeSwapImpact } from '@/lib/swap-impact.js';
+import { formatSchedTime } from '@/lib/schedule-row-model.js';
 import type { EquipmentSwap } from '../../state/schedule';
 import type { FaaIndex, FleetAircraft, Flight, NasData } from '../../data/types';
 import type { WeatherOps } from '../../state/weather';
 import type { IropsHubRate } from '../../state/irops';
+
+export { formatSchedTime };
 
 export type ScheduleRow = Record<string, unknown>;
 
@@ -178,20 +178,6 @@ export type BoardModelInput = {
   iropsHubRates: Record<string, IropsHubRate>;
 };
 
-/** Hub-local `HH:MM`, 24-hour — the board's one time format. */
-export function formatSchedTime(seconds: number | undefined | null, timeZone: string): string {
-  if (!seconds) return '—';
-  try {
-    return new Date(seconds * 1000).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone,
-    });
-  } catch {
-    return '—';
-  }
-}
 
 type FlightShape = {
   identification?: { number?: { default?: string }; callsign?: string };
@@ -212,10 +198,6 @@ type FlightShape = {
   _source?: { scheduleTimeDerivedFromActual?: { departure?: unknown; arrival?: unknown } };
 };
 
-function shortAirportName(airport: { name?: string } | undefined): string {
-  if (!airport?.name) return '';
-  return airport.name.replace(/ Airport| International/g, '').substring(0, 30);
-}
 
 export function useBoardModel(input: BoardModelInput): BoardModel {
   const {
@@ -279,6 +261,9 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
         boardRows = out.flights;
       }
     }
+
+    /** The raw classifier's own class, used to decide whether a row wants an FAA line. */
+    const displayCls = (status: StatusModel & { cls?: string }) => status.cls;
 
     const statusCache = new Map<ScheduleRow, StatusModel>();
     const classify = (row: ScheduleRow): StatusModel => {
@@ -421,223 +406,65 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     };
 
     const models: RowModel[] = sorted.map((row, index) => {
-      const flight = row as FlightShape;
-      const ident = flight.identification?.number?.default || '—';
-      const schedTime = isDep ? flight.time?.scheduled?.departure : flight.time?.scheduled?.arrival;
-      const actualTime = isDep
-        ? flight.time?.real?.departure || flight.time?.estimated?.departure
-        : flight.time?.real?.arrival || flight.time?.estimated?.arrival;
-      const derivedActual = Boolean(
-        isDep
-          ? flight._source?.scheduleTimeDerivedFromActual?.departure
-          : flight._source?.scheduleTimeDerivedFromActual?.arrival,
-      );
-
-      let dateChip: string | null = null;
-      if (schedTime && dayStartSec && schedTime < dayStartSec) {
-        try {
-          dateChip = new Date(schedTime * 1000).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            timeZone: hubTz,
-          });
-        } catch {
-          dateChip = null;
-        }
-      }
-
-      let actualLine: RowModel['actualLine'] = null;
-      if (!derivedActual && actualTime && schedTime && actualTime !== schedTime) {
-        const diff = Math.round((actualTime - schedTime) / 60);
-        if (diff > 5) {
-          actualLine = { text: `→ ${formatSchedTime(actualTime, hubTz)} (+${diff}m)`, early: false };
-        } else if (diff < -5) {
-          actualLine = { text: `→ ${formatSchedTime(actualTime, hubTz)} (${diff}m)`, early: true };
-        }
-      }
-
-      const origin = flight.airport?.origin;
-      const destination = flight.airport?.destination;
-      // Some provider rows carry a city name but no IATA code, which rendered as a bare
-      // "ORD → ?" with the city stranded underneath. Promote the name rather than show a
-      // question mark.
-      const endpoint = isDep ? destination : origin;
-      const code = endpoint?.code?.iata;
-      const name = shortAirportName(endpoint);
-      const primary = code || name || '—';
-      const routeLine = isDep ? `${hub} → ${primary}` : `${primary} → ${hub}`;
-      const routeSub = code && name ? name : null;
-
-      const acCode = flight.aircraft?.model?.code || '—';
-      const acText = flight.aircraft?.model?.text || '';
-      const acShort = acText ? acText.replace(/Boeing |Airbus |Embraer /g, '').substring(0, 20) : '';
-
+      const status = classify(row);
       const reg = regFor(row);
-      // A server-merged tail arrives IN `aircraft.registration` tagged `regSource:'live_feed'`;
-      // a client-ledger fill leaves that field empty. Both earn the honesty tooltip.
-      const regFromLive = Boolean(
-        reg && (!flight.aircraft?.registration || flight.aircraft?.regSource === 'live_feed'),
-      );
-
-      const oIata = origin?.code?.iata || '';
-      const dIata = destination?.code?.iata || '';
-      const endpointInfo = isDep ? origin : destination;
-      const terminal =
-        endpointInfo?.info?.terminal ||
-        (getUnitedTerminal(isDep ? oIata : dIata, oIata, dIata) as string | undefined);
-      const gateValue = endpointInfo?.info?.gate;
-      const gate =
-        terminal && gateValue
-          ? `T${terminal} · ${gateValue}`
-          : terminal
-            ? `T${terminal}`
-            : gateValue
-              ? `Gate ${gateValue}`
-              : '—';
-
-      const rawStatus = classify(row);
-      const status = displayScheduleStatus(rawStatus) as StatusModel;
-      status.key = rawStatus.key;
-
-      let fleet: RowModel['fleet'] = null;
-      if (reg) {
-        const regClean = reg.replace('-', '');
-        const match = fleetByReg[regClean] || fleetByReg[reg];
-        if (match) {
-          const isStarlink = starlinkTails.has(regClean) || starlinkTails.has(reg);
-          const parts: string[] = [];
-          if (match.seats && typeof match.seats === 'object') {
-            parts.push(
-              Object.entries(match.seats)
-                .map(([cabin, count]) => `${count}${cabin}`)
-                .join('/'),
-            );
-          }
-          if (match.w) parts.push(normalizeWifi(match.w) as string);
-          if (isStarlink) parts.push('⚡ Starlink');
-          if (match.i) parts.push(match.i);
-          if (match.d) parts.push(`Del ${match.d}`);
-          fleet = {
-            badge: String(match.c || match.t),
-            starlink: isStarlink,
-            enrich: parts.join(' · '),
-          };
-        }
-      }
-
-      let swap: SwapModel | null = null;
-      const change = swapByFlight.get(ident);
-      if (change) {
-        const impacts = analyzeSwapImpact(change.oldAc, change.newAc, reg, impactDeps) as {
-          text: string;
-          cls: string;
-        }[];
-        swap = {
-          oldType: (ICAO_TO_FLEET_TYPE as Record<string, string>)[change.oldAc] || change.oldAc,
-          newType: (ICAO_TO_FLEET_TYPE as Record<string, string>)[change.newAc] || change.newAc,
-          reg,
-          impacts,
-          tone: impacts.some((i) => i.cls === 'downgrade')
-            ? 'downgrade'
-            : impacts.some((i) => i.cls === 'upgrade')
-              ? 'upgrade'
-              : 'lateral',
-        };
-      }
-
-      const specialEntry = reg ? (special.get(reg.replace('-', '')) ?? special.get(reg)) : undefined;
-
-      let faaContext: string | null = null;
-      if (status.cls === 'delayed') {
-        faaContext =
-        (getFAADelayContext(faaIndex as Record<string, object>, oIata, dIata) as string) || null;
-      }
-
-      // DELAY / RISK — facts beat predictions. A row with a known delta shows the REAL
-      // delay; only a future row without one shows a prediction, worded "RISK: …" so it can
-      // never read as a fact. (A flight with a known +140m delay once displayed "V.HIGH".)
-      const isTerminal =
-        status.key === 'canceled' || status.key === 'canceled_uncertain' || status.key === 'diverted';
-      const hasOperated =
-        status.key === 'departed' || status.key === 'enroute' || status.key === 'landed';
-      const deltaMin =
-        actualTime && schedTime ? Math.round((actualTime - schedTime) / 60) : null;
-      let delay: DelayCell = { kind: 'none' };
-      if (isTerminal) {
-        delay = { kind: 'none' };
-      } else if (deltaMin !== null && ((hasOperated && !status.presumed) || deltaMin > 5)) {
-        const source =
-          flight.time?.real?.departure || flight.time?.real?.arrival ? 'Actual' : 'Estimated';
-        delay = {
-          kind: 'delta',
-          minutes: deltaMin,
-          text: formatDelayMinutes(deltaMin) as string,
-          title: `${source} vs scheduled ${isDep ? 'departure' : 'arrival'}`,
-        };
-      } else {
-        const risk = computeRisk(row);
-        if (risk) {
-          const { origCode, destCode, depHub, arrHub } = getScheduleRiskContext(row, hub, dir) as {
-            origCode: string;
-            destCode: string;
-            depHub: string;
-            arrHub: string;
-          };
-          delay = {
-            kind: 'risk',
-            risk,
-            // Mirrors the shipped `data-*` payload the delay-explain dialog reads.
-            context: {
-              flight: ident,
-              route: `${origCode}→${destCode}`,
-              status: status.text,
-              riskLabel: risk.label,
-              riskScore: risk.score,
-              riskFactors: risk.factors,
-              hub: depHub,
-              otp: hubOtp[depHub],
-              weather: weatherOpsByHub[depHub],
-              destWeather: weatherOpsByHub[arrHub],
-              irops: iropsHubRates[depHub],
-            },
-          };
-        }
-      }
-
-      const { origCode, destCode } = getScheduleRiskContext(row, hub, dir) as {
+      // The delay cell only reaches for a prediction when there is no fact to show, so the
+      // risk model is only asked for on rows that could actually use one.
+      const risk = computeRisk(row);
+      const riskContext = getScheduleRiskContext(row, hub, dir) as {
         origCode: string;
         destCode: string;
+        depHub: string;
+        arrHub: string;
       };
+      const change = swapByFlight.get(
+        (row as FlightShape).identification?.number?.default || '',
+      );
+      const faaContext =
+        displayCls(status) === 'delayed'
+          ? ((getFAADelayContext(
+              faaIndex as Record<string, object>,
+              (row as FlightShape).airport?.origin?.code?.iata || '',
+              (row as FlightShape).airport?.destination?.code?.iata || '',
+            ) as string) || null)
+          : null;
 
-      return {
-        ident,
-        key: `${ident}-${schedTime ?? index}`,
-        raw: row,
-        timeText: formatSchedTime(schedTime, hubTz),
-        dateChip,
-        actualLine,
-        derivedActual,
-        routeLine,
-        routeSub,
-        acCode,
-        acText,
-        acShort,
+      return buildScheduleRow(row, {
+        hub,
+        dir,
+        dayStartSec,
+        timeZone: hubTz,
+        index,
         reg,
-        regFromLive,
-        gate,
         status,
-        fleet,
-        swap,
-        special: specialEntry?.name ?? null,
+        risk,
+        riskContext,
+        swapChange: change ?? null,
+        swapImpacts: change
+          ? (analyzeSwapImpact(change.oldAc, change.newAc, reg, impactDeps) as {
+              text: string;
+              cls: string;
+            }[])
+          : [],
+        fleetByReg,
+        starlinkTails,
+        special,
         faaContext,
-        delay,
-        watchRoute: `${origCode}→${destCode}`,
+        hubOtp,
+        weatherOpsByHub,
+        iropsHubRates,
         effectiveTime: effectiveRowTime({
-          scheduled: isDep ? flight.time?.scheduled?.departure : flight.time?.scheduled?.arrival,
-          real: isDep ? flight.time?.real?.departure : flight.time?.real?.arrival,
-          estimated: isDep ? flight.time?.estimated?.departure : flight.time?.estimated?.arrival,
+          scheduled: isDep
+            ? (row as FlightShape).time?.scheduled?.departure
+            : (row as FlightShape).time?.scheduled?.arrival,
+          real: isDep
+            ? (row as FlightShape).time?.real?.departure
+            : (row as FlightShape).time?.real?.arrival,
+          estimated: isDep
+            ? (row as FlightShape).time?.estimated?.departure
+            : (row as FlightShape).time?.estimated?.arrival,
         }) as number,
-      };
+      }) as RowModel;
     });
 
     // The NOW divider belongs on today's board under the default time-ascending sort only —

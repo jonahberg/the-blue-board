@@ -11,6 +11,9 @@
  * a colour-blind viewer or in a greyscale screenshot.
  */
 
+import { OTP_SEVERITY_LABEL, otpSeverity } from '@/lib/schedule-row-model.js';
+import { SEV_TEXT } from '../../shell/Status';
+
 /** `delayColorVar()` output → text class. Its 15 / 60-minute thresholds stay in the lib. */
 export function delayToneClass(colorVar: string): string {
   if (colorVar.includes('red')) return 'text-red-400';
@@ -55,10 +58,12 @@ export const SWAP_TONE: Record<string, string> = {
   lateral: 'border-border bg-muted/60 text-muted-foreground',
 };
 
-/** The on-time percentage card. `≥70` green, `≥50` amber, below that red. */
+/**
+ * The on-time percentage card. The ≥70 / ≥50 thresholds and the words live in
+ * `schedule-row-model.js` with a test; this only maps the severity name onto the palette.
+ */
 export function otpTone(pct: number | null): { className: string; label: string } {
-  if (pct === null) return { className: 'text-muted-foreground', label: 'no reading' };
-  if (pct >= 70) return { className: 'text-emerald-400', label: 'smooth' };
-  if (pct >= 50) return { className: 'text-amber-400', label: 'some delays' };
-  return { className: 'text-red-400', label: 'rough' };
+  const severity = otpSeverity(pct) as 'green' | 'amber' | 'red' | null;
+  if (!severity) return { className: 'text-muted-foreground', label: 'no reading' };
+  return { className: SEV_TEXT[severity], label: OTP_SEVERITY_LABEL[severity] };
 }
