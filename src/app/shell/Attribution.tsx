@@ -1,11 +1,18 @@
 /**
- * The data-credit micro-text.
+ * The data-credit micro-text, and the ⓘ menu that sits at the end of it.
  *
  * Two of these lines are licence obligations rather than politeness: schedules are credited
  * to AeroDataBox (crediting Flightradar24 for schedule data would violate FR24's terms —
  * FR24 is credited for live positions only), and the basemap credit names CARTO and
  * OpenStreetMap, whose data is ODbL. `tests/compliance.test.js` pins both.
+ *
+ * The About/legal/donate menu is rendered here rather than floating over the map: the
+ * shipped `#legal-details` was pinned into the map's bottom-right corner and covered
+ * Leaflet's zoom-out button (see `features/LegalPopover.tsx`). This strip is hidden below
+ * `md:` exactly as `#legal-details` was, so the menu's visibility is unchanged.
  */
+
+import { LegalMenu } from '../features/LegalPopover';
 
 export function Attribution() {
   return (
@@ -81,6 +88,9 @@ export function Attribution() {
       </span>
       <span aria-hidden="true">·</span>
       <span>Not affiliated with United Airlines, Inc.</span>
+      <span className="ml-auto flex items-center">
+        <LegalMenu />
+      </span>
     </footer>
   );
 }

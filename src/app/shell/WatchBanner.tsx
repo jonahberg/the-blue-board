@@ -10,8 +10,9 @@
  * The store also routes the same sentence through the shell's single polite live region, so
  * a screen-reader user hears it once, from one writer.
  *
- * Mounted inside the Schedule view for now. It belongs in the shell alongside the other
- * global banners, which is Task 8's territory — noted in the Task 3 report.
+ * Mounted in the shell, not in the Schedule view: a status change arrives from whichever
+ * board last loaded, and the viewer may well be on Live or My Flights when it does. A
+ * banner that only exists on one tab is a notification that fires into an empty room.
  */
 
 import { useEffect } from 'react';
