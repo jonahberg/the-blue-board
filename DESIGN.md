@@ -85,6 +85,7 @@ produces them, are unit-tested, and are the only sanctioned hex literals in the 
 | `fleet-view.js` | `FLEET_FAMILY_COLORS`, `FLEET_FAMILY_FALLBACK_COLOR` | aircraft family in the delivery histogram |
 | `special-aircraft.js` | `SEAT_BAR_COLORS`, `CABIN_COLORS` | seat-map bars vs cabin classes (**distinct palettes — never conflate**) |
 | `starlink-chart.js` | `STARLINK_CHART_COLORS` | express / mainline / cumulative series |
+| `stats-chart.js` | `UTIL_BAR_COLOR`, `AGE_BAR_COLOR`, `PHASE_COLORS`, `PHASE_ICONS` | utilisation bars, fleet-age bands, flight-phase donut |
 | `connection-risk.js` | `CONN_COLORS` | connection risk bands |
 | `weather-cards.js` | `NEUTRAL_MARKER_COLOR`, `UNKNOWN_CAT_COLOR` | no-data map markers |
 
@@ -95,6 +96,11 @@ Owner-approved: Starlink aircraft render **violet** `#A78BFA` on the map (Jul 4 
 **Colour is never the only signal.** Every status colour ships with an icon, a glyph or a
 text label in the same element — green/amber/red is unreadable to ~8% of men and invisible
 in a screenshot pasted into a thread. This rule is older than the rebuild and survives it.
+
+The phase donut is the worked example: the legacy ramp shipped three blues for Cruise, Climb
+and En Route — slices a full-colour reader could not separate, let alone anyone else. The
+re-stepped `PHASE_COLORS` keeps adjacent slices apart in hue *and* lightness, and every slice
+carries a `PHASE_ICONS` glyph in the legend. A new series goes through both.
 
 ## Spacing, Radius, Elevation
 
@@ -139,6 +145,9 @@ wrapped. Icons are **lucide-react**.
 | Filter drawers, watch list, mobile "More" | `Sheet` | `views/LiveView`, `views/schedule/ScheduleControls`, `shell/WatchPanel`, `shell/MobileNav` |
 | Aircraft detail, delay explain, FR24 lookup, disclaimer, onboarding | `Dialog` (modal) | `features/*Dialog.tsx`, `features/Onboarding.tsx` |
 | Global search (⌘K) | `Command` | `features/SearchPalette.tsx` |
+| Waitlist signup | `Dialog` + `Input`/`Textarea`/`Label` | `features/WaitlistDialog.tsx` |
+| Legal / attribution disclosure | `Popover` | `features/LegalPopover.tsx` |
+| Jargon definitions | `Tooltip` | `features/JargonTerm.tsx` |
 | Tab navigation | `Tabs` | `shell/TabBar.tsx` |
 | Segmented filters | `ToggleGroup` / `Toggle` | `views/schedule/ScheduleControls.tsx` |
 | Dropdown filters | `Select` | schedule / fleet / starlink controls |
@@ -150,6 +159,12 @@ wrapped. Icons are **lucide-react**.
 **Rule of thumb:** modal → `Dialog`; a panel that must leave the map usable → non-modal
 `Sheet`; a small anchored disclosure → `Popover`. Never hand-roll an overlay: the primitives
 bring the focus trap, the Escape handler and the accessible name for free.
+
+**Engagement surfaces stay quiet.** The news banner, tip strip, support meter and BMAC toast
+(`features/NewsBanner`, `TipStrip`, `SupportMeter`, `BmacToast`) are dismissible inline
+elements, never modals, and their show/hide rules live in `src/lib/engagement.js`,
+`tips.js`, `support-meter.js` and `waitlist-gate.js` — not in the components. Nothing that
+asks the visitor for something may interrupt the data they came for.
 
 Astro-side building blocks live in `src/components/site/` (`StatTile`, `HighlightBox`,
 `JumpNav`, `PillNav`, `Breadcrumbs`, `ContentSection`, `Seo`, `JsonLd`) and

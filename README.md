@@ -56,7 +56,7 @@ Look up any UA flight number from the header search bar. Returns live position, 
 Dedicated SEO-rich pages for the 9 airports The Blue Board tracks — United's 8 hubs plus the Tokyo-Narita gateway ([ORD](https://theblueboard.co/hubs/ord) · [DEN](https://theblueboard.co/hubs/den) · [IAH](https://theblueboard.co/hubs/iah) · [EWR](https://theblueboard.co/hubs/ewr) · [SFO](https://theblueboard.co/hubs/sfo) · [IAD](https://theblueboard.co/hubs/iad) · [LAX](https://theblueboard.co/hubs/lax) · [NRT](https://theblueboard.co/hubs/nrt) · [GUM](https://theblueboard.co/hubs/gum)). Each page includes live flight counts, hub overview with terminal/concourse details, United Club and Polaris lounge locations, delay pattern analysis by season, Starlink WiFi info, construction alerts with links to official project pages, structured FAQ, and FAQPage + Airport schema markup for search engines. Jump navigation and scroll hints guide visitors through the content.
 
 ### 📰 [News](https://theblueboard.co/news)
-Curated United Airlines news hub with individual article pages, source links, and cross-links to related hub and fleet pages via tags. Google News sitemap and dynamic RSS feed for indexing. "Latest News" banner on the dashboard links to the newest article. Optional email digest via Resend Broadcasts notifies waitlist subscribers of new articles.
+Curated United Airlines news hub with individual article pages, source links, and cross-links to related hub and fleet pages via tags. Google News sitemap and dynamic RSS feed for indexing. "Latest News" banner on the dashboard links to the newest article (dismissible, and it stays dismissed). Optional email digest via Resend Broadcasts notifies waitlist subscribers of new articles.
 
 ### 📍 [Trackers](https://theblueboard.co/trackers)
 Living, data-driven pages that follow aviation's long-running stories — each with a dependency-free SVG US map, headline stats, a searchable/sortable table, and a changelog. [Modern Skies Tracker](https://theblueboard.co/trackers/atc) covers the FAA's paper-to-digital flight strip rollout at all 89 program airports; [United Hub Tracker](https://theblueboard.co/trackers/united-hubs) covers every United club, terminal, and gate project across the 8 hubs with honest open/under-construction/announced/rumored labels. High-interest United hubs have focused, source-backed detail pages for construction and tower modernization, and both datasets are downloadable as CSV or JSON. Every entry cites a source; data lives in versioned files under `src/data/trackers/` with import-time validation (see `MAINTENANCE.md`).
@@ -72,6 +72,8 @@ Living, data-driven pages that follow aviation's long-running stories — each w
 - **📱 Mobile-first design** — Map-maximized layout with bottom tab bar navigation, collapsible filters
 - **PWA support** — Installable as a home screen app on iOS/Android with offline caching
 - **Sources tab** — Every upstream feed the dashboard uses, with its freshness and its licence credit, in one place
+- **Stats charts** — Utilization bars, a flight-phase donut, the hub-to-hub matrix and top routes, each colour-coded *and* labelled
+- **Jargon tooltips** — Hover any aviation term (IROPS, GDP, METAR, MVFR) for a plain-English definition
 - **Global search (⌘K)** — Jump to a flight, hub, fleet type or page from anywhere
 
 ---

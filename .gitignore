@@ -2,6 +2,7 @@
 node_modules
 .DS_Store
 .context/
+.superpowers/
 *.bak
 dist
 .astro

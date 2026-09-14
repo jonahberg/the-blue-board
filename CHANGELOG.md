@@ -4,6 +4,32 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-09-14
+
+### Changed
+- **The site is rebuilt on Astro + one React island + Tailwind v4 + shadcn/ui.** The product had been two design systems wearing the same colours: a 9,000-line `public/index.html` / `src/dashboard/main.js` dashboard bundled by its own Vite config, and a set of Astro content pages with a parallel copy of the tokens. Every shared idea — a stat tile, a status badge, a focus ring, a breakpoint — existed twice and drifted, and anything with real accessibility requirements (a modal's focus trap, an `aria-sort` header, an Escape handler) was hand-maintained in both. There is now one token set (shadcn `radix-nova`, United blue `oklch(0.66 0.17 255)` as `--primary` over neutral zinc surfaces), one component library, and one build.
+
+  The dashboard is a single `client:only="react"` island under `src/app/`: `Dashboard.tsx` composes the shell, `tabs.ts` registers eight lazy-loaded views, and overlays are shadcn primitives — the flight detail panel is a non-modal `Sheet` (the old Leaflet popup could not be focus-trapped, escaped, or kept from being clipped by the map viewport), aircraft/delay-explain/FR24/disclaimer/onboarding are `Dialog`s, and global search is `Command`. Every tab ported with its behaviour intact, including the deep links (`#live`, `#myflight`, `#schedule`, `#fleet`, `#starlink`, `#weather`, `#stats`, `#sources`, `?flight=UA1234`, and the `?tab=irops` alias the hub pages still emit). Starlink and My Flights are now their own tabs rather than sections of Fleet.
+
+  Content pages, fleet/hub/news detail pages and the trackers all render through one `BaseLayout.astro`, which owns the `<head>`, header, footer, skip link and analytics tag — a page can no longer ship without them. Logic came out of the bundle into tested `src/lib` modules along the way: the suite is 133 files / 2,380 tests, up from a dashboard that was mostly untestable.
+
+  Platform contracts were held, not re-derived: the Markdown content negotiation and `_agent/` twins, `llms.txt`/`llms-full.txt`, the sitemaps, the RSS feed, the PWA, and the API surface are unchanged. (`src/app/**`, `src/components/**`, `src/layouts/**`, `src/lib/**`, `src/pages/**`, `src/styles/**`)
+
+- **Leaflet and the fonts are bundled; the CSP has no CDN left.** Leaflet used to load from unpkg.com, which had to be allowed in both `script-src` and `style-src`, and the three woff2 faces (Satoshi, DM Sans, JetBrains Mono) were served from `public/fonts/`. Leaflet and its stylesheet are now npm imports, and Geist Sans + Geist Mono come from `@fontsource-variable` — Vite emits all of it under `_astro/`, which `'self'` and `font-src 'self'` already covered. Astro's two inline island scripts are allowed by `'sha256-…'` hash and `scripts/verify-csp-hashes.mjs` fails the build if a hash in `dist/` is missing from the header; the third, stale hash token has been removed. (`vercel.json`, `src/styles/global.css`, `scripts/verify-csp-hashes.mjs`, `tests/csp.test.js`)
+
+- **The service worker serves hashed `_astro/` assets cache-first, and precaches nothing but the navigation shell.** A filename like `_astro/app-B2kQ9f.js` names its own contents, so the bytes behind it can never change: cache-first with no revalidation is not a staleness risk but the only correct strategy, and a new deploy simply requests different filenames. That replaces the network-first `/js/*` + `/css/style.css` branch, which existed only because those files were *not* hashed — a deploy reused the same URLs, so the worker had to re-check them on every load or shipped fixes never reached returning users. The matching `max-age=3600` + stale-while-revalidate cache rules in `vercel.json` are gone with it. `/fleet/*` gained the rule it never had, and `/icons/*` and `/og/*` cache for a day. (`public/sw.js`, `vercel.json`, `tests/asset-cache.test.js`)
+
+### Removed
+- **The TSA checkpoint guide.** `/tsa` 301s to `/hubs`. The MyTSA upstream was decommissioned and `/api/tsa` had returned all-null for every hub since; v1.7.20 rewrote the page's claims around the static checkpoint guide it had been rebuilt on, but a page whose live data source no longer exists is a maintenance liability, not a feature. News posts that mention TSA are content and stay. (`api/tsa.ts`, `api/cron/refresh-tsa.ts`, `src/pages/tsa.astro`, `src/data/tsa/*`, `vercel.json`)
+- **The pre-rebuild tree.** `src/dashboard/main.js`, `vite.dashboard.config.js` and the `build:dashboard` script (the island is built by Astro); `legacy/` (the pre-Astro homepage, kept for reference through the port); `public/js/` and `public/fonts/`; and `tests/main-js-imports.test.js`, the strangler guard that pinned what `main.js` was allowed to import — the only test this release deletes.
+
+### Fixed
+- `https://theblueboard.co` had been declared in four modules that all emit absolute URLs a crawler dedupes against each other (canonical tags, JSON-LD `@id`s, sitemap `<loc>`s). A drifted copy fails no build and no test; it splits the site's identity in a search index. One `src/lib/site.js` now owns it. (`src/lib/site.js`, `src/components/site/Seo.astro`, `src/components/site/Breadcrumbs.astro`, `src/pages/sitemap.xml.ts`, `src/lib/home-seo.js`)
+- The mobile menu button, its links, and the footer's donate button were 32–36px tall below `md` — under the 44px minimum, on the widths where they are the only way to navigate. (`src/components/site/SiteHeader.astro`, `src/components/site/SiteFooter.astro`)
+
+### Documentation
+- `DESIGN.md` is rewritten for the shadcn system: tokens and where each lives, the Geist pair, the nine `src/lib` modules that own status/phase/category colours, the component map, the `aria-live` inventory, breakpoints, the motion budget, the never-colour-alone rule, and the anti-patterns. `README.md`, `CLAUDE.md` and `MAINTENANCE.md`'s new-route checklist follow the current tree; `llms-full.txt`'s tab list was wrong in both directions and now lists all eight.
+
 ## [1.7.24] - 2026-09-10
 
 ### Fixed
