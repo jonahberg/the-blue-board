@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { onboardingHubSeed } from '@/lib/engagement.js';
 import { STORAGE_KEYS, writeString } from '../state/storage';
 import { initEngagement, useEngagement } from '../state/engagement';
 import { usePrefs } from '../state/prefs';
@@ -89,7 +90,18 @@ export default function Onboarding() {
   const { onboardingOpen, setOnboardingOpen } = useUi();
   const { homeAirport, setHomeAirport } = usePrefs();
   const engagement = useEngagement();
-  const [hub, setHub] = useState<string>(homeAirport || NO_PREFERENCE);
+  const [hub, setHub] = useState<string>(() => onboardingHubSeed(homeAirport, NO_PREFERENCE));
+
+  // The overlay is mounted for the life of the page and only toggles `open`, so the picker
+  // has to be re-seeded every time it opens. Without this it keeps the hub as it was at
+  // MOUNT: reopening via the header's "?" after setting a different hub there shows the old
+  // one, and `dismiss()` writes that stale value straight back over the visitor's choice.
+  //
+  // Re-seeding is safe precisely because it writes the CURRENT preference — legacy never
+  // pre-populated this select at all, so nothing here is a behaviour the port has to match.
+  useEffect(() => {
+    if (onboardingOpen) setHub(onboardingHubSeed(homeAirport, NO_PREFERENCE));
+  }, [onboardingOpen, homeAirport]);
 
   useEffect(() => {
     initEngagement();
