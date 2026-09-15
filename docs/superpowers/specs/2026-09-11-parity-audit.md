@@ -1065,3 +1065,21 @@ rename. Two inventory entries are themselves wrong and should not be read as gap
 `haversine()` used `R = 3440.065`, so the port is byte-for-byte faithful), and §3's
 "Load schedule data for hub health" empty state was replaced by skeletons plus a
 "No on-time reading yet" tooltip under a Task 4 ruling (spot-check **S11**).
+
+---
+
+## Resolution (Sep 14 2026, after the audit)
+
+All seven gaps were closed on `feat/shadcn-rebuild` before the PR was opened:
+
+| # | Fix | Commit |
+|---|---|---|
+| G1 | `watchedFlights` read as a fallback in the weather preload, exactly as legacy (`legacyWatchedRoutes()` in `src/lib/weather-cards.js`; key recorded as `STORAGE_KEYS.legacyWatchedFlights`, read-only) | b652f75 |
+| G2 | `src/components/Footer.astro` deleted | b07bdce |
+| G3 | "⚡ Served from cache · N UA flights" restored (`boardLoadMessage()` in `src/lib/schedule-load.js`, `Board.fromCache`) | 99ae4df |
+| G4 | `TODOS.md` entries naming deleted files removed or retargeted | 8bb7020 |
+| G5 | `VercelAnalytics.astro` comment | 9b6eb5c |
+| G6 | `DESIGN.md` unpkg prose | 6beb69f |
+| G7 | `middleware.ts` / `src/lib/site-routes.js` / `tests/agent-readiness.test.js` stale `/css/ /js/ /fonts/` prefixes | 177286d |
+
+The whole-branch review's one Important finding (focus dropped to `<body>` when the seven trigger-less overlays closed) was fixed once in the shared `ui/dialog.tsx` + `ui/sheet.tsx` wrappers with a pure rule in `src/lib/focus-return.js` (8f1bd70).
