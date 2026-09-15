@@ -19,7 +19,7 @@
 
 - Run tests ONLY with `bun run test` (vitest). Never bare `bun test`. `bun run typecheck` and `bun run build` must be green before each WP's commit. `node` on this Mac is a Bun wrapper.
 - Never delete a test; update it. TSA tests are the only deletions (WP11).
-- Public copy: the author is "Jonah Berg" only. Never write "Berg-Ganzarain" anywhere.
+- Public copy: the author is "Jonah Berg" only. Never write the author's full legal surname anywhere.
 - Never commit `VITE_CARTO_BASEMAP_KEY`; keep reading it through `src/lib/basemap.js` (`cartoBasemapUrl(import.meta.env.VITE_CARTO_BASEMAP_KEY)`).
 - CSP stays `script-src 'self' https://va.vercel-scripts.com`, `style-src 'self' 'unsafe-inline'`, `font-src 'self'`. No inline `<script>`, no `on*=` attributes, no CDN scripts. Bundle Leaflet from npm.
 - Status is never colour-alone: every red/amber/green carries an icon or text label.

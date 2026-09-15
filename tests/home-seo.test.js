@@ -221,7 +221,8 @@ describe('JSON-LD', () => {
   it('credits Jonah Berg only — never the legal surname (public-copy rule)', () => {
     const everything = `${crawlableText()} ${JSON.stringify(jsonLd)}`;
     expect(everything).toContain('Jonah Berg');
-    expect(everything).not.toContain('Berg-Ganzarain');
+    // Public name only — the author's full legal surname must never appear (positive check).
+    expect(everything).not.toMatch(/Berg-[A-Z][a-z]+/);
   });
 });
 

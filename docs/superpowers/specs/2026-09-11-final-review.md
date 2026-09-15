@@ -1,5 +1,10 @@
 # Whole-branch review — feat/shadcn-rebuild (v1.8.0)
 
+> **Status (Sep 14 2026):** the Important finding (focus dropped to `<body>` when trigger-less
+> overlays closed) was fixed at 8f1bd70 (`src/lib/focus-return.js` + the shared `ui/dialog.tsx` /
+> `ui/sheet.tsx` wrappers) and re-reviewed clean; the two Minors were fixed at 37f9980. The
+> verdict below is the reviewer's at the time of review and is kept verbatim.
+
 Reviewed HEAD `0f31331` ("docs: PR screenshots for the v1.8.0 rebuild"), base `main` = `06b77a7`
 (v1.7.24). `bun run typecheck` → 0 errors. `bun run test` → 133 files / 2380 tests passing at this
 HEAD (matches the ledger's T12 numbers — no drift since).
@@ -202,8 +207,8 @@ uses), or add one shared wrapper around the app's `Dialog`/`Sheet` usage that do
    undercounts to 1 because the whole document is 3 lines). `noscript` + sr-only `<h1>` brief
    present (`index.astro:62-63,90-117`). `SITE_URL` sourced from one place, `src/lib/site.js`,
    consumed by `Breadcrumbs.astro`, `Seo.astro`, `home-seo.js`, `sitemap.xml.ts`.
-   `grep -rn "Ganzarain" . --exclude-dir={node_modules,.git,dist}` — only a test assertion and a
-   plan doc, no leak. BMC link is `https://buymeacoffee.com/notjbg` everywhere it appears
+   A grep for the author's full legal surname finds only the test that asserts its absence and
+   the plan line that states the rule, no leak. BMC link is `https://buymeacoffee.com/notjbg` everywhere it appears
    (`DisclaimerDialog.tsx`, `BmacToast.tsx`, `LegalPopover.tsx`, `SiteFooter.astro`,
    `NewsLayout.astro`). `grep -rn "VITE_CARTO_BASEMAP_KEY" ... | grep -v "import.meta.env"` —
    only docs/config/comments, no literal key value anywhere.
