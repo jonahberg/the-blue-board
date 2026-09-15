@@ -7,6 +7,7 @@ import {
   UNKNOWN_CAT_COLOR,
   WX_LEGEND,
   routeAirports,
+  legacyWatchedRoutes,
   collectMetarStations,
   indexMetarByKey,
   weatherOpsEntry,
@@ -97,6 +98,46 @@ describe('collectMetarStations', () => {
   it('tolerates missing routes, rows and malformed entries', () => {
     const { stations } = collectMetarStations({ rows: [null, {}, { airport: {} }], getStation });
     expect(stations).toHaveLength(9);
+  });
+});
+
+describe('legacyWatchedRoutes (pre-bb_watched_flights key, inventory §29)', () => {
+  it('returns the route string of every entry that has one', () => {
+    const raw = JSON.stringify([
+      { flight: 'UA1', route: 'ORD\u2192MSY' },
+      { flight: 'UA2', route: 'MSY\u2192AUS' },
+    ]);
+    expect(legacyWatchedRoutes(raw)).toEqual(['ORD\u2192MSY', 'MSY\u2192AUS']);
+  });
+
+  it('drops entries with no usable route and keeps the rest', () => {
+    const raw = JSON.stringify([
+      { flight: 'UA1' },
+      null,
+      'UA2',
+      { flight: 'UA3', route: '' },
+      { flight: 'UA4', route: 'DEN\u2192BOS' },
+    ]);
+    expect(legacyWatchedRoutes(raw)).toEqual(['DEN\u2192BOS']);
+  });
+
+  it('yields nothing for an absent, malformed or non-array value', () => {
+    expect(legacyWatchedRoutes(null)).toEqual([]);
+    expect(legacyWatchedRoutes(undefined)).toEqual([]);
+    expect(legacyWatchedRoutes('')).toEqual([]);
+    expect(legacyWatchedRoutes('{not json')).toEqual([]);
+    expect(legacyWatchedRoutes('{"flight":"UA1"}')).toEqual([]);
+    expect(legacyWatchedRoutes('null')).toEqual([]);
+  });
+
+  it('feeds collectMetarStations, so a legacy-only route still gets its station', () => {
+    const raw = JSON.stringify([{ flight: 'UA1', route: 'ORD\u2192MSY' }]);
+    const { stations, stationToKey } = collectMetarStations({
+      routes: legacyWatchedRoutes(raw),
+      getStation: (iata) => getMetarStationForIata(iata),
+    });
+    expect(stations.slice(9)).toEqual(['KMSY']);
+    expect(stationToKey.KMSY).toBe('MSY');
   });
 });
 

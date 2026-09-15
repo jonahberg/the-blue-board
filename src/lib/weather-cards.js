@@ -79,6 +79,34 @@ export function routeAirports(route) {
 }
 
 /**
+ * Route strings off the PRE-`bb_watched_flights` watch list (the bare `watchedFlights` key).
+ *
+ * The shipped dashboard fell back to that key in exactly ONE place — this station
+ * collection (`main.js:5869`) — so a visitor who last starred a flight before the rename
+ * still got their origin and destination airports onto the METAR batch. The watch list
+ * itself never read it, and nothing in this codebase writes it; it is a read-only
+ * migration path (inventory §29).
+ *
+ * The legacy read sat inside a single `try {} catch {}`, so anything unparseable simply
+ * produced no extra airports rather than costing the tab its weather. Same tolerance here,
+ * per entry: a non-array, a non-object entry or an entry with no `route` is skipped.
+ * Splitting is left to `routeAirports()` — one splitter for both keys.
+ *
+ * @param {string|null|undefined} raw  the raw localStorage value.
+ * @returns {string[]} the stored `route` strings, in order; `[]` for anything malformed.
+ */
+export function legacyWatchedRoutes(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((entry) => String(entry?.route || '')).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Every ICAO station the METAR batch should ask for: the nine hubs first, then the
  * non-hub airports reachable from the watch list and the loaded schedule boards.
  *

@@ -18,11 +18,17 @@ import type { ReactNode } from 'react';
 import { getMetarStationForIata } from '@/lib/airport-metadata.js';
 import { buildFaaIndex } from '@/lib/faa-context.js';
 import { hasRenderableMetarData } from '@/lib/metar-explain.js';
-import { collectMetarStations, indexMetarByKey, resolveWeather } from '@/lib/weather-cards.js';
+import {
+  collectMetarStations,
+  indexMetarByKey,
+  legacyWatchedRoutes,
+  resolveWeather,
+} from '@/lib/weather-cards.js';
 import { fetchFaa, fetchMetarBatch, fetchNas } from '../data/api';
 import type { FaaIndex, MetarRecord, NasData } from '../data/types';
 import { useLatest } from './hooks';
 import { useSchedule } from './schedule';
+import { STORAGE_KEYS, readString } from './storage';
 import { useWatch } from './watch';
 
 /** The Weather tab's own refresh cadence (inventory §30). */
@@ -120,8 +126,17 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
 
     const rows: Record<string, unknown>[] = [];
     for (const board of Object.values(boardsRef.current)) rows.push(...board.rows);
+    // The shipped station collection — and nothing else in the dashboard — fell back to the
+    // pre-rename `watchedFlights` key, so a visitor who has not re-starred anything since
+    // still gets their origin/destination airports onto this batch (legacy main.js:5869).
+    // Gated on the RAW modern value exactly as that `||` was, not on `watched.length`: a
+    // stored `[]` is a viewer who cleared their list, and resurrecting the old key for them
+    // would be a new behaviour, not parity.
+    const legacyRoutes = readString(STORAGE_KEYS.watchedFlights)
+      ? []
+      : legacyWatchedRoutes(readString(STORAGE_KEYS.legacyWatchedFlights));
     const { stations, stationToKey } = collectMetarStations({
-      routes: watchedRef.current.map((entry) => entry.route || ''),
+      routes: [...watchedRef.current.map((entry) => entry.route || ''), ...legacyRoutes],
       rows,
       getStation: getMetarStationForIata,
     }) as { stations: string[]; stationToKey: Record<string, string> };
