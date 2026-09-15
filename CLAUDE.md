@@ -31,7 +31,7 @@ no second build and no `legacy/` tree.
   link — a page should never hand-write head tags.
 - **`api/`** — Vercel functions. Never import `src/data/facts.js` or any bare `.json` from
   here (Node ESM throws on a bare JSON import; `tests/api-esm-json-imports.test.js` guards it).
-- **CSP** is `script-src 'self'` plus sha256 hashes for Astro's two inline island scripts.
+- **CSP** is `script-src 'self' https://va.vercel-scripts.com` (the Vercel Analytics beacon is the one third-party script) plus sha256 hashes for Astro's two inline island scripts.
   `scripts/verify-csp-hashes.mjs` runs in `bun run build` and fails it when a hash in `dist/`
   is missing from `vercel.json` — that failure is the system working. No CDN, no inline
   `<script>`, no `on*=` attributes.
