@@ -49,13 +49,21 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /**
+   * Classes for the overlay this content renders alongside itself. It exists for
+   * stacking: a dialog that must sit above another one has to lift BOTH halves, and
+   * the overlay is otherwise unreachable from the caller. Undefined by default, so
+   * every other caller is unchanged.
+   */
+  overlayClassName?: string
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

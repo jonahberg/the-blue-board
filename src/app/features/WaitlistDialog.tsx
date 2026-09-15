@@ -153,7 +153,13 @@ export default function WaitlistDialog() {
         if (!next) close();
       }}
     >
-      <DialogContent className="sm:max-w-[480px]">
+      {/* z-[60] on BOTH halves: the onboarding overlay is the one other root dialog that
+          can be up at the same time, and it sits at the shared z-50. Someone who followed
+          `?waitlist=1` asked for THIS modal, so it has to outrank the welcome overlay the
+          way legacy did with z 10001 > 10000. `DialogContent` renders its own overlay, so
+          the lift has to be passed through — content alone would leave the waitlist card
+          floating above onboarding's backdrop but below its own. */}
+      <DialogContent className="z-[60] sm:max-w-[480px]" overlayClassName="z-[60]">
         <DialogHeader>
           <DialogTitle className="text-xl">✈ Stay in the loop</DialogTitle>
           <DialogDescription>
