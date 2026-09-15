@@ -4,9 +4,16 @@
 // starts — lives here so it is testable without a DOM and so no `#rrggbb` has to be typed
 // into a TSX file.
 //
-// Thresholds are ported verbatim from src/dashboard/main.js (:4112-4266). The colour
-// VALUES are not: the legacy sheet's `--ua-*` custom properties do not exist on the
-// Tailwind v4 palette, and the phase ramp was re-stepped (see PHASE_COLORS).
+// Thresholds and geometry are ported verbatim from src/dashboard/main.js (:4112-4266) and
+// stay byte-for-byte legacy. The colour VALUES are not: the phase donut ramp AND the
+// utilisation/age bar fills were re-stepped onto the v1.8.0 palette by controller ruling —
+// inventory §25 pins the geometry and the thresholds, not the hues.
+//
+// The legacy fills, for the record. They were literal hex in main.js, NOT the `--ua-*`
+// custom properties an earlier version of this header claimed:
+//   UTIL_BAR_COLOR  main.js:3494  high #22c55e  mid #005DAA  low #f59e0b  idle #334155
+//   AGE_BAR_COLOR   main.js:3592  oldest #ef4444  older #f59e0b  mid #005DAA  young #22c55e
+// The donut ramp's re-stepping has its own rationale at PHASE_COLORS.
 
 /** The bar chart's colour band for a utilisation percentage — main.js :4114. */
 export function utilBand(pct) {
