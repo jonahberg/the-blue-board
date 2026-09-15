@@ -191,8 +191,10 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
   timer would otherwise interrupt a screen reader every few seconds.
 - **Live regions, by design:** `OfflineBanner` (`assertive` — connectivity is urgent);
   `IropsAnnouncer`, `HubHealthStrip`, `live/StatsBar`, `weather/IropsSection`,
-  `weather/TrackerBriefing`, and the tracker Astro widgets (`polite`). Adding a new one means
-  checking it does not compete with these.
+  `weather/TrackerBriefing`, and the tracker Astro widgets (`polite`); `BmacToast` (`status`,
+  single mount); `WaitlistDialog`'s inline error and `starlink/VerificationLedger` (`alert`,
+  raised once). `NewsBanner` rotates on a timer and is `aria-live="off"` like the Ticker.
+  Adding a new one means checking it does not compete with these.
 - **Sortable headers are `<button>`s inside `<th>` with `aria-sort`** on the header cell.
   A sortable column that is only click-handled is a bug.
 - **Focus is always visible.** `global.css` gives `:focus-visible` a 2px `--ring` outline at

@@ -95,6 +95,9 @@ export default function NewsBanner() {
   return (
     <div
       role="status"
+      // Rotates every 6 s: announcing each headline would interrupt a screen reader, so the
+      // region is present for structure but silent (same rule as the Ticker — DESIGN.md).
+      aria-live="off"
       className="flex shrink-0 items-center gap-2 border-b bg-primary/10 px-3 py-1 text-[11px]"
       onMouseEnter={() => {
         paused.current = true;

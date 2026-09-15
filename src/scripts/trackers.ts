@@ -1,3 +1,4 @@
+import { STORAGE_KEYS } from '../app/state/storage';
 /**
  * Tracker pages (`/trackers/*`) — search filter, table sort, map inspector card,
  * watch list and share.
@@ -38,7 +39,7 @@ interface TrackerWatch {
   addedAt?: string;
 }
 
-const WATCH_KEY = 'bb_tracker_watches';
+const WATCH_KEY = STORAGE_KEYS.trackerWatches;
 
 /** `Element.closest` from an event target that may be a text node or null. */
 function closestFrom(target: EventTarget | null, selector: string): HTMLElement | null {
@@ -293,7 +294,7 @@ function run(): void {
             '.';
       }
 
-      const home = (localStorage.getItem('bb_home_airport') || '').toUpperCase();
+      const home = (localStorage.getItem(STORAGE_KEYS.homeAirport) || '').toUpperCase();
       const entity = config.entities ? config.entities[home] : undefined;
       const personal = document.querySelector<HTMLElement>('[data-trk-personal]');
       const personalEmpty = document.querySelector<HTMLElement>('[data-trk-personal-empty]');
