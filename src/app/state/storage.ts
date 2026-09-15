@@ -24,6 +24,12 @@ export const STORAGE_KEYS = {
   bmacDismissed: 'bb-bmac-dismissed',
   newsDismissedSlug: 'news_dismissed_slug',
   schedPreloadTs: 'bb_sched_preload_ts',
+  /**
+   * The PRE-`bb_watched_flights` watch list. Read-only migration key, inventory §29: the
+   * shipped dashboard read it in exactly one place (the weather preload's airport
+   * collection, `main.js:5869`) and nothing has ever written it from this codebase.
+   */
+  legacyWatchedFlights: 'watchedFlights',
 } as const;
 
 /** `localStorage`, or null when it is unavailable (private mode, disabled cookies, SSR). */

@@ -61,6 +61,26 @@ export function retryDelayMs(attempt) {
 }
 
 /**
+ * The board's cache indicator — the shipped `main.js:4763` string, verbatim.
+ *
+ * It exists to explain an instant board: a load that never touched AeroDataBox lands with
+ * no perceptible delay, and without this line the only available reading is "the refresh
+ * did nothing". The count is the RAW flight total the cached response carried, before any
+ * filter — the same `allUAFlights.length` the shipped line used, so a filtered view can
+ * never make the cached board look smaller than it is.
+ *
+ * Empty string for a board that was really fetched, so the caller renders nothing at all
+ * rather than an empty element.
+ *
+ * @param {{fromCache?: boolean, count?: number}} [board]
+ * @returns {string}
+ */
+export function boardLoadMessage({ fromCache, count } = {}) {
+  if (!fromCache) return '';
+  return `⚡ Served from cache · ${Number(count) || 0} UA flights`;
+}
+
+/**
  * Should a PARTIAL board be thrown away and refetched?
  *
  * Yes for a board that lost some pages — another attempt usually completes it. No when the

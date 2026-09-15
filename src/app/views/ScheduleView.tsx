@@ -26,6 +26,7 @@ import { getTypicalFleetStats } from '@/lib/equipment-swaps.js';
 import { getHubDayLabel, getStartOfHubDay } from '@/lib/hubTz.js';
 import {
   boardAsOfMs,
+  boardLoadMessage,
   describeBoardCondition,
   formatBoardAsOf,
   shouldAutoScroll,
@@ -155,6 +156,17 @@ export default function ScheduleView() {
           ) as string)
         : '',
     [board, model.hubTz],
+  );
+
+  // The count is the board's RAW row total, not `model.rows.length`: the shipped line
+  // reported what the cached response carried, and a filtered view must not make the
+  // cached board look smaller than it is.
+  const cacheNote = useMemo(
+    () =>
+      board
+        ? (boardLoadMessage({ fromCache: board.fromCache, count: board.rows.length }) as string)
+        : '',
+    [board],
   );
 
   const condition = useMemo<BoardCondition>(
@@ -298,6 +310,11 @@ export default function ScheduleView() {
             }
           />
           <StalenessBanner condition={condition} onRetry={refresh} />
+          {cacheNote ? (
+            <p className="px-1 text-[10px] text-muted-foreground" data-testid="sched-cache-note">
+              {cacheNote}
+            </p>
+          ) : null}
           <ScheduleTable
             ref={tableRef}
             rows={model.rows}

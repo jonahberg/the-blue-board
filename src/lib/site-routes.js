@@ -16,16 +16,23 @@ export const HTML_ROUTE_PATHS = ['/', '/404', '/newark', '/privacy'];
 /** Route sections — both the index (/fleet) and everything under it (/fleet/737-800). */
 export const HTML_ROUTE_PREFIXES = ['/fleet', '/hubs', '/news', '/trackers'];
 
-/** Directories served verbatim out of dist/ (public/ assets + Astro's build output). */
+/**
+ * Directories served verbatim out of dist/ (public/ assets + Astro's build output).
+ *
+ * This is the list a build really emits, and it has to stay that way: a prefix kept after
+ * its directory is deleted makes every path under it "possibly real", which costs those
+ * dead paths their Markdown 404. `/css/`, `/js/` and `/fonts/` went with the hand-written
+ * dashboard bundle in v1.8.0 — hashed CSS, JS and the Geist woff2 files all land in
+ * `/_astro/` now. `middleware.ts`'s matcher excludes exactly these, and must be edited
+ * with them.
+ */
 export const ASSET_PREFIXES = [
+  '/_agent/',
   '/_astro/',
   '/_vercel/',
   '/api/',
-  '/css/',
   '/data/',
-  '/fonts/',
   '/icons/',
-  '/js/',
   '/og/',
 ];
 
