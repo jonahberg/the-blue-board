@@ -13,7 +13,7 @@
  * that must not be broken is documented in `state/engagement.tsx`.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { onboardingHubSeed } from '@/lib/engagement.js';
+import { onboardingMayOpen } from '@/lib/waitlist-gate.js';
 import { STORAGE_KEYS, writeString } from '../state/storage';
 import { initEngagement, useEngagement } from '../state/engagement';
 import { usePrefs } from '../state/prefs';
@@ -87,7 +88,7 @@ const HUBS: { code: string; name: string }[] = [
 const NO_PREFERENCE = '__none__';
 
 export default function Onboarding() {
-  const { onboardingOpen, setOnboardingOpen } = useUi();
+  const { onboardingOpen, setOnboardingOpen, waitlistOpen } = useUi();
   const { homeAirport, setHomeAirport } = usePrefs();
   const engagement = useEngagement();
   const [hub, setHub] = useState<string>(() => onboardingHubSeed(homeAirport, NO_PREFERENCE));
@@ -109,10 +110,33 @@ export default function Onboarding() {
 
   // Opening is driven through `useUi` rather than local state so that Task 5's `?aircraft=`
   // deep link can see the overlay is up and hold its own dialog back (inventory §10).
+  //
+  // It also YIELDS to the waitlist. `?waitlist=1` is allowed to bypass the "not while
+  // onboarding is up" guard in `shouldShowWaitlist()`, so without this both overlays land on
+  // screen at once — and Radix orders its modal layer stack by mount, not by z-index, so the
+  // dialog the visitor followed a link to reach ends up inert and `aria-hidden` underneath
+  // onboarding's focus trap. `waitlistOpen` is in the deps rather than read once, so closing
+  // the waitlist is what brings the welcome up: the ask first, then the introduction.
+  //
+  // `showOnboardingInitially` is computed once by `initEngagement()` and never recomputed,
+  // so waiting costs nothing — the decision is still true when the waitlist closes.
+  //
+  // AUTO-OPEN ONCE. Before the waitlist was in the deps this effect could only fire when
+  // `opened` flipped, which happened exactly once per load. Now that it also re-runs every
+  // time the waitlist closes, and `showOnboardingInitially` is never recomputed, an
+  // unguarded effect would RESURRECT an overlay the visitor had already dismissed: welcome
+  // shown and dismissed → 20 clicks trip the waitlist → they close it → the welcome is back,
+  // with `bb-onboarded` already written. The ref keeps the automatic open to one per load
+  // without touching storage or what `shouldShowOnboarding()` decided. The header's "?"
+  // button drives `setOnboardingOpen` directly and is unaffected.
   const opened = engagement.ready && engagement.showOnboardingInitially;
+  const autoOpened = useRef(false);
   useEffect(() => {
-    if (opened) setOnboardingOpen(true);
-  }, [opened, setOnboardingOpen]);
+    if (autoOpened.current) return;
+    if (!onboardingMayOpen(opened, waitlistOpen)) return;
+    autoOpened.current = true;
+    setOnboardingOpen(true);
+  }, [opened, waitlistOpen, setOnboardingOpen]);
 
   /**
    * One dismiss for every route out.
