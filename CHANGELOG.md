@@ -28,7 +28,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 - The mobile menu button, its links, and the footer's donate button were 32–36px tall below `md` — under the 44px minimum, on the widths where they are the only way to navigate. (`src/components/site/SiteHeader.astro`, `src/components/site/SiteFooter.astro`)
 
 ### Documentation
-- `DESIGN.md` is rewritten for the shadcn system: tokens and where each lives, the Geist pair, the nine `src/lib` modules that own status/phase/category colours, the component map, the `aria-live` inventory, breakpoints, the motion budget, the never-colour-alone rule, and the anti-patterns. `README.md`, `CLAUDE.md` and `MAINTENANCE.md`'s new-route checklist follow the current tree; `llms-full.txt`'s tab list was wrong in both directions and now lists all eight.
+- `DESIGN.md` is rewritten for the shadcn system: tokens and where each lives, the Geist pair, the ten `src/lib` modules that own status/phase/category colours, the component map, the `aria-live` inventory, breakpoints, the motion budget, the never-colour-alone rule, and the anti-patterns. `README.md`, `CLAUDE.md` and `MAINTENANCE.md`'s new-route checklist follow the current tree; `llms-full.txt`'s tab list was wrong in both directions and now lists all eight.
 
 ## [1.7.24] - 2026-09-10
 

@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   shouldShowOnboarding,
   waitlistState,
   bmacEligible,
+  onboardingHubSeed,
   DISMISS_TTL_MS,
   BMAC_LANDED_COOLDOWN_MS,
   TRIGGER_TIME_MS,
@@ -160,5 +163,48 @@ describe('bmacEligible', () => {
 
   it('is eligible when storage throws (edge case)', () => {
     expect(bmacEligible({ getItem() { throw new Error('SecurityError'); } }, NOW)).toBe(true);
+  });
+});
+
+describe('onboardingHubSeed', () => {
+  const SENTINEL = '__none__';
+
+  it('seeds the picker with the hub the visitor currently has set', () => {
+    expect(onboardingHubSeed('ORD', SENTINEL)).toBe('ORD');
+    expect(onboardingHubSeed('DEN', SENTINEL)).toBe('DEN');
+  });
+
+  it('falls back to the sentinel when no hub is set', () => {
+    // Radix's Select cannot hold "" — every no-preference shape has to become the sentinel.
+    expect(onboardingHubSeed('', SENTINEL)).toBe(SENTINEL);
+    expect(onboardingHubSeed(null, SENTINEL)).toBe(SENTINEL);
+    expect(onboardingHubSeed(undefined, SENTINEL)).toBe(SENTINEL);
+  });
+
+  it('never returns an empty string, whatever it is handed', () => {
+    for (const value of ['', null, undefined, 0, false]) {
+      expect(onboardingHubSeed(value, SENTINEL)).not.toBe('');
+    }
+  });
+
+  // The helper is only worth anything if the overlay actually re-applies it on open. The
+  // overlay is mounted for the life of the page, so a seed computed once at mount goes stale
+  // the moment the hub is changed from the header — and `dismiss()` writes the picker's value
+  // back, so a stale picker silently reverts that change. There is no @testing-library/react
+  // in this project (and none may be added), so the wiring is pinned by a source scan.
+  it('is re-applied by Onboarding whenever the overlay opens', () => {
+    const source = readFileSync(
+      resolve(__dirname, '..', 'src', 'app', 'features', 'Onboarding.tsx'),
+      'utf8'
+    ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+    expect(source.length, 'Onboarding.tsx not found where this scan expects it').toBeGreaterThan(500);
+    expect(source, 'Onboarding must use the shared seeding rule').toMatch(/onboardingHubSeed\(/);
+
+    // An effect that re-seeds on open, keyed on BOTH the open flag and the live preference.
+    const effect = (source.match(/useEffect\(\(\) => \{\s*if \(onboardingOpen\) setHub\([^)]*\)[^}]*\}, \[([^\]]*)\]\)/) || [])[1];
+    expect(effect, 'no `if (onboardingOpen) setHub(...)` effect found in Onboarding.tsx').toBeDefined();
+    expect(effect).toMatch(/onboardingOpen/);
+    expect(effect).toMatch(/homeAirport/);
   });
 });

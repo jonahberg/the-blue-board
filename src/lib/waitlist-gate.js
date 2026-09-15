@@ -43,6 +43,35 @@ export function shouldShowWaitlist(storage, opts = {}) {
 }
 
 /**
+ * May the onboarding overlay open right now?
+ *
+ * The other half of the ordering rule above, and the reason both halves live in one module:
+ * `shouldShowWaitlist()` holds the waitlist back while onboarding is up, but `?waitlist=1`
+ * is explicitly allowed to bypass that (`forced`). Without a matching rule on this side the
+ * two overlays end up on screen together, and Radix's modal layer stack — which is ordered
+ * by mount, not by z-index — hands focus and pointer events to whichever mounted LAST,
+ * leaving the dialog the visitor actually followed a link to reach inert and `aria-hidden`.
+ * Lifting the waitlist's z-index fixes what is painted on top; only this fixes what the
+ * visitor can actually type into.
+ *
+ * So onboarding YIELDS: it waits while the waitlist is open and comes up once it closes.
+ * The visitor deals with the ask they asked for, then gets the welcome — which is the order
+ * legacy produced anyway, since main.js's overlay was built at a point the deep link had
+ * already claimed the screen.
+ *
+ * This deliberately does NOT touch what `shouldShowOnboarding()` computes, nor when
+ * `bb-visited` / `bb-onboarded` are written. It gates the OPENING of the overlay only, so
+ * the storage side-effect order documented in `state/engagement.tsx` is untouched.
+ *
+ * @param {boolean} showOnboardingInitially  the storage-derived decision, already made.
+ * @param {boolean} waitlistOpen  is the waitlist dialog on screen right now?
+ * @returns {boolean}
+ */
+export function onboardingMayOpen(showOnboardingInitially, waitlistOpen) {
+  return Boolean(showOnboardingInitially) && !waitlistOpen;
+}
+
+/**
  * Has the click counter just crossed this visitor's threshold?
  *
  * Equality, not `>=`, on purpose: the document-level click handler fires on EVERY click,

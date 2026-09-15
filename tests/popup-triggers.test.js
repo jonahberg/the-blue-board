@@ -7,7 +7,13 @@ import {
   shouldShowOnboarding,
   waitlistState,
 } from '../src/lib/engagement.js';
-import { clicksReachedThreshold, shouldShowWaitlist } from '../src/lib/waitlist-gate.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  clicksReachedThreshold,
+  onboardingMayOpen,
+  shouldShowWaitlist,
+} from '../src/lib/waitlist-gate.js';
 
 /**
  * Trigger and suppression contracts for the waitlist modal and the onboarding overlay.
@@ -319,5 +325,92 @@ describe('cache-clear scenario (integration)', () => {
     expect(shouldShowWaitlist(storage, { shownThisSession: false, submitted: false })).toBe(true);
 
     vi.useRealTimers();
+  });
+});
+
+describe('which overlay may open first', () => {
+  // The two halves of one ordering rule. `shouldShowWaitlist()` holds the waitlist back
+  // while onboarding is up — EXCEPT for `?waitlist=1`, which is explicitly allowed through.
+  // That exception is what puts both overlays on screen at once, and Radix orders its modal
+  // layer stack by mount rather than by z-index, so the dialog the visitor deliberately
+  // followed a link to reach ends up inert and aria-hidden under onboarding's focus trap.
+  // Onboarding therefore yields and comes up when the waitlist closes.
+
+  it('holds onboarding back while the waitlist is open', () => {
+    expect(onboardingMayOpen(true, true)).toBe(false);
+  });
+
+  it('opens onboarding once the waitlist closes', () => {
+    expect(onboardingMayOpen(true, false)).toBe(true);
+  });
+
+  it('never opens onboarding that storage already ruled out', () => {
+    // Yielding must not become a way IN: a returning visitor who has been onboarded gets
+    // nothing when the waitlist closes.
+    expect(onboardingMayOpen(false, true)).toBe(false);
+    expect(onboardingMayOpen(false, false)).toBe(false);
+  });
+
+  it('coerces a not-yet-ready store to a boolean', () => {
+    expect(onboardingMayOpen(undefined, false)).toBe(false);
+    expect(onboardingMayOpen(null, false)).toBe(false);
+  });
+
+  it('is exactly the complement of the ?waitlist=1 bypass', () => {
+    // The forced waitlist is allowed up even though onboarding wants the screen...
+    const storage = { getItem: () => null };
+    expect(shouldShowWaitlist(storage, { forced: true, onboardingVisible: true })).toBe(true);
+    // ...so onboarding must be the one that waits. Without this pairing the two rules both
+    // say "yes" and the overlays collide.
+    expect(onboardingMayOpen(true, true)).toBe(false);
+  });
+
+  // The helper only matters if the overlay actually consults it, with `waitlistOpen` in the
+  // effect's deps — read once, the overlay would never come up after the waitlist closed.
+  // There is no @testing-library/react in this project and none may be added, so the wiring
+  // is pinned by a source scan.
+  it('is applied by Onboarding with waitlistOpen in the effect deps', () => {
+    const source = readFileSync(
+      resolve(__dirname, '..', 'src', 'app', 'features', 'Onboarding.tsx'),
+      'utf8'
+    ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+    expect(source.length, 'Onboarding.tsx not found where this scan expects it').toBeGreaterThan(500);
+    expect(source, 'Onboarding must read waitlistOpen from the existing ui store').toMatch(
+      /useUi\(\)/
+    );
+    expect(source).toMatch(/waitlistOpen/);
+
+    const effect = (source.match(
+      /useEffect\(\(\) => \{([\s\S]*?onboardingMayOpen[\s\S]*?setOnboardingOpen\(true\);[\s\S]*?)\}, \[([^\]]*)\]\)/
+    ) || []);
+    expect(effect[1], 'no onboardingMayOpen -> setOnboardingOpen(true) effect found').toBeDefined();
+    expect(effect[2], 'waitlistOpen must be in the deps or the overlay never comes up after the waitlist closes')
+      .toMatch(/waitlistOpen/);
+  });
+
+  // Adding `waitlistOpen` to those deps is what makes the effect re-run on every waitlist
+  // close. `showOnboardingInitially` is computed once and never recomputed, so without a
+  // once-per-load guard the effect resurrects an overlay the visitor already dismissed:
+  // welcome dismissed -> 20 clicks trip the waitlist -> closing it brings the welcome back,
+  // with `bb-onboarded` already written. The guard is a ref, so it is pinned by source.
+  it('auto-opens at most once per load, so a dismissed overlay cannot come back', () => {
+    const source = readFileSync(
+      resolve(__dirname, '..', 'src', 'app', 'features', 'Onboarding.tsx'),
+      'utf8'
+    ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+    const effect = (source.match(
+      /useEffect\(\(\) => \{([\s\S]*?onboardingMayOpen[\s\S]*?setOnboardingOpen\(true\);[\s\S]*?)\}, \[/
+    ) || [])[1];
+    expect(effect, 'no auto-open effect found').toBeDefined();
+
+    // A latch that is read before opening and set when it does.
+    const latch = (effect.match(/([A-Za-z_$][\w$]*)\.current/) || [])[1];
+    expect(latch, 'the auto-open effect has no ref latch — it will re-fire on every waitlist close')
+      .toBeDefined();
+    expect(effect).toMatch(new RegExp(`if \\(${latch}\\.current\\) return;`));
+    expect(effect).toMatch(new RegExp(`${latch}\\.current = true;`));
+    expect(source).toMatch(new RegExp(`const ${latch} = useRef\\(false\\)`));
   });
 });

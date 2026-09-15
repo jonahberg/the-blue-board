@@ -64,6 +64,26 @@ export function shouldShowOnboarding(storage, now = Date.now()) {
 }
 
 /**
+ * What the onboarding overlay's home-hub picker should show each time it OPENS.
+ *
+ * NOT a main.js port — legacy rebuilt the overlay from scratch on every show, so the select
+ * was always freshly seeded and could not go stale. The rebuilt overlay is mounted once for
+ * the life of the page and only toggles `open`, so the seed has to be re-applied deliberately
+ * or the picker keeps whatever the hub was at mount. That matters because the overlay's
+ * dismiss writes the picker's value back: reopening it via "?" after changing the hub in the
+ * header would otherwise silently revert the header's choice.
+ *
+ * Radix's Select cannot hold "" as a value, hence the sentinel rather than an empty string.
+ *
+ * @param {string|null|undefined} homeAirport  the current preference, "" when unset.
+ * @param {string} sentinel  the picker's "No preference" option value.
+ * @returns {string}
+ */
+export function onboardingHubSeed(homeAirport, sentinel) {
+  return homeAirport || sentinel;
+}
+
+/**
  * Storage-derived state for the waitlist modal.
  *
  * `suppressed` is exactly main.js's third gate, `!force && isDismissedRecently(...)`.
