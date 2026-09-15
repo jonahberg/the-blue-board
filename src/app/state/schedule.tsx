@@ -85,6 +85,12 @@ export type Board = {
   stale: boolean;
   partial: boolean;
   error: string | null;
+  /**
+   * This board came back without an AeroDataBox call — the in-memory aggregation cache, or
+   * the API's own cache hit. Drives the shipped "⚡ Served from cache" line: an instant
+   * board is otherwise indistinguishable from a refresh that did nothing.
+   */
+  fromCache: boolean;
   /** Equipment changes seen when THIS board landed (inventory §20 "Equipment swap detection"). */
   swaps: EquipmentSwap[];
 };
@@ -367,7 +373,7 @@ export function ScheduleProvider({
       dir: BoardDirection,
       day: number,
       result: ScheduleResponse,
-      { detectSwaps }: { detectSwaps: boolean },
+      { detectSwaps, fromCache }: { detectSwaps: boolean; fromCache: boolean },
     ) => {
       const key = boardKey(hub, dir, day);
       const rows = (result.flights || []) as Record<string, unknown>[];
@@ -407,6 +413,7 @@ export function ScheduleProvider({
         stale: Boolean(result.stale),
         partial: Boolean(result.partial),
         error: null,
+        fromCache,
         swaps,
       };
       setBoards((prev) => ({ ...prev, [key]: board }));
@@ -430,7 +437,12 @@ export function ScheduleProvider({
         const cacheKey = aggCacheKey(hub, dir, timestamp);
         const wasCached = aggCache.current.has(cacheKey);
         const result = await fetchWithRetries(hub, dir, timestamp);
-        commitBoard(hub, dir, day, result, { detectSwaps: !wasCached });
+        // Both halves of the shipped `result.cached || result.fromLocalCache` test: the
+        // API's own cache hit, and this session's in-memory aggregation cache.
+        commitBoard(hub, dir, day, result, {
+          detectSwaps: !wasCached,
+          fromCache: wasCached || Boolean(result.cached),
+        });
         // Today's board is the only one where "now" is inside the list, so it is the only
         // one worth anchoring. Tomorrow and yesterday open at the top, as they should. The
         // signal names THIS board: by the time a slow load lands the viewer may be reading a
@@ -518,7 +530,10 @@ export function ScheduleProvider({
           const timestamp = getStartOfHubDay(hub, 0) as number;
           const result = await fetchBoard(hub, 'departures', timestamp);
           if ((result.flights || []).length) {
-            commitBoard(hub, 'departures', 0, result, { detectSwaps: false });
+            commitBoard(hub, 'departures', 0, result, {
+              detectSwaps: false,
+              fromCache: Boolean(result.cached),
+            });
             loaded += 1;
           }
         } catch {

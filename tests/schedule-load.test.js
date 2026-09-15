@@ -7,6 +7,7 @@ import {
   advFilterLabel,
   aggCacheKey,
   boardAsOfMs,
+  boardLoadMessage,
   completenessSuffix,
   describeBoardCondition,
   formatBoardAsOf,
@@ -252,6 +253,25 @@ describe('staleness / degradation ladder', () => {
       expect(out.icon).not.toBe('');
       expect(out.message.length).toBeGreaterThan(10);
     }
+  });
+});
+
+describe('cache indicator (legacy main.js:4763)', () => {
+  it('names the cache and the raw UA flight count, verbatim', () => {
+    expect(boardLoadMessage({ fromCache: true, count: 412 }))
+      .toBe('\u26a1 Served from cache \u00b7 412 UA flights');
+  });
+
+  it('says nothing for a board that was actually fetched', () => {
+    expect(boardLoadMessage({ fromCache: false, count: 412 })).toBe('');
+    expect(boardLoadMessage({})).toBe('');
+  });
+
+  it('still reports an empty cached board rather than a blank count', () => {
+    expect(boardLoadMessage({ fromCache: true, count: 0 }))
+      .toBe('\u26a1 Served from cache \u00b7 0 UA flights');
+    expect(boardLoadMessage({ fromCache: true }))
+      .toBe('\u26a1 Served from cache \u00b7 0 UA flights');
   });
 });
 
