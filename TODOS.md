@@ -7,7 +7,6 @@
 **Class-of-bug prevention — the high-leverage work both CEO voices flagged:**
 
 - [ ] Integration-test harness: real Supabase local instance, hit API routes with service-role + anon-key both, RLS enforcement tests, template-escaping snapshot tests.
-- [ ] CI lint: ban inline `<script>` in public/index.html, ban raw `innerHTML` with template-literal interpolation, ban inline event handlers (`on*=` attributes).
 - [ ] Tighten CSP: drop `style-src 'unsafe-inline'` after inline-style audit.
 - [ ] Cost alerting: Anthropic + FR24 spend anomaly detection via Vercel log drain.
 - [ ] Circuit breakers / graceful degradation for FR24, Anthropic, Resend, Supabase. (partial: 60s negative cache + 4s timeout shipped for `api/predict-flight.ts` and `api/check-flight.ts` in v1.5.8; FR24 live-feed last-known-good stale-serve + delay-explain gateway-403 circuit shipped in v1.7.14)
@@ -24,18 +23,15 @@
 
 ### Quality
 
-- [ ] [perf] Content-hash dashboard.js/style.css + immutable cache headers (the gold-standard asset caching). v1.5.20 shipped a moderate max-age=3600 + SWR as a safe quick-win; immutable requires versioning every /js+/css reference across all Astro pages (a build-pipeline change). Deferred from the v1.5.20 quick-wins batch.
 - [ ] [ops] Default SCHEDULE_SOURCE_PRIORITY to 'provider' (schedule.ts) so env loss fails closed to the working provider instead of the Cloudflare-dead scrape path. Audit ops-reliability item, not in the v1.5.20 batch.
 
 - [ ] [#14] `api/irops.ts:193` — `results.indexOf(result)` O(n²) → index-based loop. Non-user-facing; 8 hubs so real impact minimal.
 - [ ] [#21] `public/sw.js:84-85` — offline fallback serves `/index.html` for all unmatched routes. Route-aware fallback or proper offline screen.
-- [ ] [#22] `src/dashboard/main.js` — cap `schedCache` size; scope `.starlink-predict` selector to current popup container.
+- [ ] [#22] `src/app/state/schedule.tsx:206` — cap the `aggCache` Map (the rebuild's `schedCache`). Nothing evicts it; only Refresh deletes a key, so a long session accumulates one full board response per hub × direction × day.
 - [ ] [#25] Drop `idx_waitlist_email` (redundant with UNIQUE constraint). Bundle with next SQL migration.
-- [ ] [#28] `scripts/run-astro-dev.mjs` — stamp a copy under `.dev-scratch/` instead of tracked `public/index.html` to avoid SIGKILL leaving dirty tree.
 
 ### LOW / noted cleanups (batch with any adjacent work)
 
-- [ ] `public/index.html:18-23` — doc-drift comments reference `api/irops.js` (actually `.ts`) and `public/hubs/` (actually `src/pages/hubs/`).
 - [ ] `src/pages/hubs/[hub].astro:10`, `src/pages/fleet/[type].astro:10` — defensive null guard + `/404` redirect (matches `news/[slug].astro`).
 - [ ] `api/_schedule-snapshots.ts:80-87` — reset `supabaseClientPromise` to null on import failure inside `.catch()`.
 - [ ] `src/lib/buildMetadata.js:1` — migrate `node:child_process` to `Bun.$` / `Bun.spawnSync` per CLAUDE.md.
