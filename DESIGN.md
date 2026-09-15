@@ -210,8 +210,12 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 - **No `--ua-*` tokens.** The old palette is gone. Use the shadcn variables.
 - **No hex literals in `.tsx` / `.astro` / component CSS.** Colour is a token or, if it
   encodes domain state, an export from `src/lib` (table above).
-- **No CDN.** No unpkg, no Google Fonts, no external stylesheet or script. CSP is
-  `script-src 'self'` + hashed Astro island scripts; a CDN reference fails silently in prod.
+- **No CDN.** Library code ships from `node_modules` through the Astro build — Leaflet and its
+  stylesheet from the `leaflet` package, the Geist faces from `@fontsource-variable/*`. No
+  external stylesheet or font host at all, and the only third-party script is Vercel's own
+  analytics beacon, which is why `https://va.vercel-scripts.com` is the single non-`'self'`
+  entry in `script-src`. Everything else is `'self'` + hashed Astro island scripts; a CDN
+  reference fails silently in prod, and `tests/csp.test.js` pins the header.
 - **No inline `<script>` or `on*=` attributes** in `.astro` files — either forces
   `'unsafe-inline'` back into the CSP. `scripts/verify-csp-hashes.mjs` fails the build.
 - **No nested cards.** A card inside a card means the hierarchy is wrong.
