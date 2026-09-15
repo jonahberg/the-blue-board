@@ -178,6 +178,20 @@ describe('2b. the route surface stays in step with the sitemap', () => {
     }
   });
 
+  it('calls the retired v1.7 asset directories a 404 too', () => {
+    // /css/, /js/ and /fonts/ were the hand-written dashboard's bundle. Keeping them in
+    // ASSET_PREFIXES after the rebuild deleted them would classify every dead path under
+    // them as "possibly real" forever.
+    for (const path of ['/js/dashboard.js', '/css/style.css', '/fonts/satoshi-latin.woff2']) {
+      expect(isKnownRoutePath(path), path).toBe(false);
+    }
+    // ...while the directories a build really emits stay live.
+    for (const path of ['/_astro/index.BcD3f.js', '/icons/icon-192.png', '/og/og-news.jpg',
+      '/data/fleet.json']) {
+      expect(isKnownRoutePath(path), path).toBe(true);
+    }
+  });
+
   it('treats a trailing slash as the same page (cleanUrls is on)', () => {
     expect(normalizePathname('/fleet/')).toBe('/fleet');
     expect(normalizePathname('/')).toBe('/');
@@ -271,14 +285,17 @@ describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
     expect(matcher).toBeDefined();
     // The matcher is a plain JS regex in this form; assert what it does, not how it reads.
     const re = new RegExp(`^${matcher.replace(/\\\\/g, '\\')}$`);
-    for (const skipped of ['/api/irops', '/js/dashboard.js', '/css/style.css', '/data/fleet.json',
-      '/fonts/satoshi-latin.woff2', '/icons/icon-192.png', '/og/og-news.jpg', '/sw.js',
-      '/manifest.json', '/robots.txt', '/favicon.svg', '/og-image.png', '/_astro/x.js',
-      '/_agent/home.md']) {
+    // Every exclusion names a directory or file a build really emits into dist/.
+    for (const skipped of ['/api/irops', '/data/fleet.json', '/icons/icon-192.png',
+      '/og/og-news.jpg', '/sw.js', '/manifest.json', '/robots.txt', '/favicon.svg',
+      '/og-image.png', '/_astro/x.js', '/_astro/index.BcD3f.css', '/_agent/home.md']) {
       expect(re.test(skipped), `should skip ${skipped}`).toBe(false);
     }
+    // The v1.7 bundle directories are gone, so their paths are ordinary dead URLs now and
+    // must reach the middleware to be answered as the 404s they are.
     for (const matched of ['/', '/hubs/ord', '/fleet', '/llms.txt', '/sitemap.xml',
-      '/some-path-that-does-not-exist']) {
+      '/some-path-that-does-not-exist', '/js/dashboard.js', '/css/style.css',
+      '/fonts/satoshi-latin.woff2']) {
       expect(re.test(matched), `should match ${matched}`).toBe(true);
     }
   });
