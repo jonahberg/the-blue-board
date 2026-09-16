@@ -127,35 +127,44 @@ export default function StarlinkView() {
 
   // ── The verification ledger: one lazy, non-blocking fetch when the tab first opens ──────
   // The ledger changes on the hour, not on the poll, so it is fetched once. A failure or an
-  // unrecognised shape RESETS the guard rather than latching an empty panel: the next tab
-  // open tries again, which is how the shipped dashboard recovered from a cold upstream.
-  const ledgerFetched = useRef(false);
+  // unrecognised shape leaves the guard CLEAR rather than latching an empty panel: the next
+  // tab open tries again, which is how the shipped dashboard recovered from a cold upstream.
+  //
+  // Two refs, not one, and the difference is the whole point. `ledgerDone` means "we have the
+  // data" and is set ONLY on success; `ledgerPending` means "a request is in flight" and is
+  // what stops a second one while the visitor flicks between tabs. Setting a single
+  // fetched-once flag before the request and bailing out of the handlers when the tab had
+  // changed left the flag `true` with nothing behind it — the ledger was then never fetched
+  // again for the life of the page, and it is the one panel on this tab that audits all the
+  // others.
+  //
+  // A result that lands while the tab is off screen is ACCEPTED rather than discarded: views
+  // stay mounted after their first visit (`Dashboard.tsx` renders every visited tab with
+  // `forceMount`), so there is nothing to throw it away for — the panel is simply ready when
+  // the visitor comes back.
+  const ledgerDone = useRef(false);
+  const ledgerPending = useRef(false);
   useEffect(() => {
-    if (!active || ledgerFetched.current) return;
-    ledgerFetched.current = true;
-    let cancelled = false;
-    fetchStarlinkMismatches().then(
+    if (!active || ledgerDone.current || ledgerPending.current) return;
+    ledgerPending.current = true;
+    void fetchStarlinkMismatches().then(
       (data) => {
-        if (cancelled) return;
+        ledgerPending.current = false;
         if (data && Array.isArray(data.disputed)) {
+          ledgerDone.current = true;
           setMismatches({
             disputed: data.disputed as DisputedClaim[],
             summary: (data.summary as VerifySummary) ?? null,
           });
         } else {
           setMismatches({ disputed: [], summary: null });
-          ledgerFetched.current = false;
         }
       },
       () => {
-        if (cancelled) return;
+        ledgerPending.current = false;
         setMismatches({ disputed: [], summary: null });
-        ledgerFetched.current = false;
       },
     );
-    return () => {
-      cancelled = true;
-    };
   }, [active]);
 
   // ── Live picture ───────────────────────────────────────────────────────────────────────
