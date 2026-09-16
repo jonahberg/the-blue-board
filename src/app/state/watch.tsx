@@ -5,6 +5,12 @@
  * 20 entries, exactly as `src/lib/watch-utils.js` reads and writes it. A returning visitor
  * must find the same list after this rebuild, so the shape is never "modernised" here.
  *
+ * The key is also SHARED WITH EVERY OTHER OPEN TAB, which is why no mutation here derives
+ * from React state. The shipped dashboard re-read storage at the top of `toggleWatchFlight()`
+ * and `checkWatchedFlightChanges()`; a provider that writes back a mount-time snapshot would
+ * delete whatever another tab added in between. So every mutation is a read-modify-write
+ * against the latest stored value, and a `storage` event from another tab re-reads the list.
+ *
  * Push is best-effort by design and never throws: `/api/push-subscribe` reports whether the
  * server has VAPID keys at all, and a browser without a service worker, PushManager or
  * granted permission simply keeps the in-page banner instead.
@@ -124,9 +130,40 @@ export function WatchProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const persist = useCallback((list: WatchedFlight[]) => {
-    writeWatched(safeLocalStorage() ?? NULL_STORAGE, list);
-    setWatched(list);
+  /**
+   * Another tab wrote the list. Re-read it rather than trusting this tab's copy.
+   *
+   * `event.key === null` is the spec's "this origin's storage was cleared", which has to
+   * reconcile too. Same-window writes never fire this event, so it only ever carries news.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    function onStorage(event: StorageEvent) {
+      if (event.key !== null && event.key !== STORAGE_KEYS.watchedFlights) return;
+      setWatched(readWatched(safeLocalStorage() ?? NULL_STORAGE) as WatchedFlight[]);
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  /**
+   * The list every mutation starts from: whatever is in storage RIGHT NOW, not what this
+   * tab last rendered. Falls back to the in-memory list only when storage is unavailable
+   * (Safari private mode), where there is no second tab to race and the session copy is
+   * the only list there is.
+   */
+  const readLatest = useCallback(
+    (storage: Storage | null): WatchedFlight[] =>
+      storage ? (readWatched(storage) as WatchedFlight[]) : watchedRef.current,
+    [],
+  );
+
+  /** Write the list, then publish exactly what was written. */
+  const commit = useCallback((storage: Storage | null, list: WatchedFlight[]) => {
+    const written = list.slice(0, MAX_WATCHED);
+    writeWatched(storage ?? NULL_STORAGE, written);
+    setWatched(written);
+    return written;
   }, []);
 
   /**
@@ -172,7 +209,8 @@ export function WatchProvider({ children }: { children: ReactNode }) {
 
   const toggle = useCallback(
     (flight: string, route = '', status = '') => {
-      const current = watchedRef.current;
+      const storage = safeLocalStorage();
+      const current = readLatest(storage);
       const existing = current.findIndex((entry) => entry.flight === flight);
       let next: WatchedFlight[];
       let nowWatched: boolean;
@@ -180,47 +218,53 @@ export function WatchProvider({ children }: { children: ReactNode }) {
         next = current.filter((_, i) => i !== existing);
         nowWatched = false;
       } else {
-        next = [{ flight, route, status, ts: Date.now() }, ...current].slice(0, MAX_WATCHED);
+        next = [{ flight, route, status, ts: Date.now() }, ...current];
         nowWatched = true;
         if (current.length === 0) setJustAddedFirst(true);
       }
-      persist(next);
-      void syncSubscription(next);
+      void syncSubscription(commit(storage, next));
       return nowWatched;
     },
-    [persist, syncSubscription],
+    [commit, readLatest, syncSubscription],
   );
 
   const clearAll = useCallback(() => {
-    persist([]);
+    // The one mutation that does NOT read first: "clear" means clear, whatever another tab
+    // has added since.
+    commit(safeLocalStorage(), []);
     void syncSubscription([]);
-  }, [persist, syncSubscription]);
+  }, [commit, syncSubscription]);
 
   const updateStatus = useCallback(
     (flight: string, status: string) => {
-      const current = watchedRef.current;
+      const storage = safeLocalStorage();
+      const current = readLatest(storage);
       const index = current.findIndex((entry) => entry.flight === flight);
       if (index < 0 || current[index].status === status) return;
-      const next = current.map((entry, i) =>
-        i === index ? { ...entry, status, ts: Date.now() } : entry,
-      );
       // No `syncSubscription` here: the server subscription is keyed on WHICH flights are
       // watched, and that has not changed.
-      persist(next);
+      commit(
+        storage,
+        current.map((entry, i) => (i === index ? { ...entry, status, ts: Date.now() } : entry)),
+      );
     },
-    [persist],
+    [commit, readLatest],
   );
 
   const updateRoute = useCallback(
     (flight: string, route: string) => {
-      const current = watchedRef.current;
+      const storage = safeLocalStorage();
+      const current = readLatest(storage);
       const index = current.findIndex((entry) => entry.flight === flight);
       if (index < 0 || !route || current[index].route === route) return;
       // No `ts` bump and no `syncSubscription`: WHICH flights are watched has not
       // changed, and neither has when the viewer last saw a status.
-      persist(current.map((entry, i) => (i === index ? { ...entry, route } : entry)));
+      commit(
+        storage,
+        current.map((entry, i) => (i === index ? { ...entry, route } : entry)),
+      );
     },
-    [persist],
+    [commit, readLatest],
   );
 
   const isWatched = useCallback(
