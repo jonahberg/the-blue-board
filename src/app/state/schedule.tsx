@@ -53,6 +53,7 @@ import { useIrops } from './irops';
 import { STORAGE_KEYS, safeLocalStorage, safeSessionStorage } from './storage';
 import { useUi } from './ui';
 import { useWatch } from './watch';
+import type { WatchChange } from './watch';
 
 export type BoardDirection = 'departures' | 'arrivals';
 
@@ -304,6 +305,11 @@ export function ScheduleProvider({
       if (!store.watched.length) return;
       const opts = classifyOptsFor(meta);
       const now = nowSec();
+      // One board is ONE event, so the restamps it produces are one save. Collected here and
+      // applied in a single read-modify-write below: a per-flight save derives every write
+      // from the same pre-board list, so on a board where three watched flights moved only
+      // the last one survives — and the other two re-announce themselves on the next load.
+      const changes: WatchChange[] = [];
       for (const row of rows) {
         const flight = row as {
           identification?: { number?: { default?: string } };
@@ -360,8 +366,10 @@ export function ScheduleProvider({
         }
         // Always restamp, changed or not: the stored status is the baseline the NEXT load
         // compares against, and leaving it behind re-fires the same alert every refresh.
-        store.updateStatus(ident, next);
+        changes.push({ flight: ident, status: next });
       }
+      // A board on which nothing moved reduces to the same list and writes nothing at all.
+      store.applyStatusChanges(changes);
     },
     [announce, select, nowSec, showBmacToast],
   );
