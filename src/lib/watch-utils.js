@@ -32,6 +32,45 @@ export function writeWatched(storage, list) {
 }
 
 /**
+ * Apply a whole board's worth of changes to the watch list in ONE pass.
+ *
+ * A landed schedule board can move several watched flights at once. main.js:7191-7204
+ * accumulated those into one array and saved once; applying them one at a time against a
+ * snapshot that only advances on render is how earlier transitions get dropped — and a
+ * dropped transition is not just a lost save, it is an alert that fires again on the next
+ * load because the stored baseline never moved.
+ *
+ * Per change: a non-empty `status` that differs restamps `ts` (it is a new sighting); a
+ * non-empty `route` that differs is filled in WITHOUT a `ts` bump (learning the route is
+ * not a status sighting). A flight that is not watched is ignored. Order is preserved.
+ *
+ * @param {Array<{flight: string, route: string, status: string, ts: number}>} list
+ * @param {Array<{flight: string, status?: string, route?: string}>} changes
+ * @param {number} [now]  epoch ms; injectable for tests.
+ * @returns {Array<Object>} the SAME array reference when nothing moved — callers use that
+ *   to skip the write and the re-render, so a board of unchanged rows costs nothing.
+ */
+export function applyWatchChanges(list, changes, now = Date.now()) {
+  if (!Array.isArray(list) || !Array.isArray(changes) || changes.length === 0) return list;
+  let next = null;
+  for (const change of changes) {
+    if (!change || !change.flight) continue;
+    const source = next || list;
+    const index = source.findIndex((entry) => entry && entry.flight === change.flight);
+    if (index < 0) continue;
+    const entry = source[index];
+    const status = change.status && change.status !== entry.status ? change.status : null;
+    const route = change.route && change.route !== entry.route ? change.route : null;
+    if (!status && !route) continue;
+    const updated = { ...entry };
+    if (status) { updated.status = status; updated.ts = now; }
+    if (route) updated.route = route;
+    next = source.map((e, i) => (i === index ? updated : e));
+  }
+  return next || list;
+}
+
+/**
  * Is this status transition worth waking the passenger for?
  *
  * @param {string|null|undefined} oldStatus

@@ -19,7 +19,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { MAX_WATCHED, readWatched, writeWatched } from '@/lib/watch-utils.js';
+import { MAX_WATCHED, applyWatchChanges, readWatched, writeWatched } from '@/lib/watch-utils.js';
 import { fetchPushConfig, postPushSubscribe } from '../data/api';
 import type { WatchedFlight } from '../data/types';
 import { STORAGE_KEYS, readString, safeLocalStorage, writeString } from './storage';
@@ -55,6 +55,9 @@ export type PushState = {
   dismissPrompt: () => void;
 };
 
+/** One entry of a batched update: the flight, plus whichever fields have moved. */
+export type WatchChange = { flight: string; status?: string; route?: string };
+
 export type WatchValue = {
   watched: WatchedFlight[];
   /** Adds or removes; returns true when the flight is now watched. */
@@ -69,6 +72,15 @@ export type WatchValue = {
    * A no-op for a flight that is not watched, and for a status that has not changed.
    */
   updateStatus: (flight: string, status: string) => void;
+  /**
+   * Restamp a WHOLE BOARD's worth of watched flights at once.
+   *
+   * One read, one reduce, one write, one re-render — which is what a board load is: a
+   * single event that happens to have moved several flights. Applying the changes one at
+   * a time makes each one a separate save, and the losing ones come back as repeat alerts
+   * on the next load. A batch in which nothing actually moved writes nothing at all.
+   */
+  applyStatusChanges: (changes: WatchChange[]) => void;
   /**
    * Fill in a watch entry's route once it is known.
    *
@@ -235,36 +247,31 @@ export function WatchProvider({ children }: { children: ReactNode }) {
     void syncSubscription([]);
   }, [commit, syncSubscription]);
 
-  const updateStatus = useCallback(
-    (flight: string, status: string) => {
+  const applyStatusChanges = useCallback(
+    (changes: WatchChange[]) => {
+      if (!changes.length) return;
       const storage = safeLocalStorage();
       const current = readLatest(storage);
-      const index = current.findIndex((entry) => entry.flight === flight);
-      if (index < 0 || current[index].status === status) return;
-      // No `syncSubscription` here: the server subscription is keyed on WHICH flights are
-      // watched, and that has not changed.
-      commit(
-        storage,
-        current.map((entry, i) => (i === index ? { ...entry, status, ts: Date.now() } : entry)),
-      );
+      const next = applyWatchChanges(current, changes) as WatchedFlight[];
+      // `applyWatchChanges` hands back the SAME array when nothing moved, and most board
+      // loads move nothing: no write, no `setWatched`, no re-render of every consumer, and
+      // no `storage` event fired at the other tabs.
+      if (next === current) return;
+      // No `syncSubscription` in this path: the server subscription is keyed on WHICH
+      // flights are watched, and that has not changed.
+      commit(storage, next);
     },
     [commit, readLatest],
   );
 
+  const updateStatus = useCallback(
+    (flight: string, status: string) => applyStatusChanges([{ flight, status }]),
+    [applyStatusChanges],
+  );
+
   const updateRoute = useCallback(
-    (flight: string, route: string) => {
-      const storage = safeLocalStorage();
-      const current = readLatest(storage);
-      const index = current.findIndex((entry) => entry.flight === flight);
-      if (index < 0 || !route || current[index].route === route) return;
-      // No `ts` bump and no `syncSubscription`: WHICH flights are watched has not
-      // changed, and neither has when the viewer last saw a status.
-      commit(
-        storage,
-        current.map((entry, i) => (i === index ? { ...entry, route } : entry)),
-      );
-    },
-    [commit, readLatest],
+    (flight: string, route: string) => applyStatusChanges([{ flight, route }]),
+    [applyStatusChanges],
   );
 
   const isWatched = useCallback(
@@ -308,6 +315,7 @@ export function WatchProvider({ children }: { children: ReactNode }) {
       toggle,
       clearAll,
       updateStatus,
+      applyStatusChanges,
       updateRoute,
       isWatched,
       justAddedFirst,
@@ -326,6 +334,7 @@ export function WatchProvider({ children }: { children: ReactNode }) {
       toggle,
       clearAll,
       updateStatus,
+      applyStatusChanges,
       updateRoute,
       isWatched,
       justAddedFirst,
