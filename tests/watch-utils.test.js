@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_WATCHED, readWatched, writeWatched, isSignificantStatusChange, flightTimesCacheTtl } from '../src/lib/watch-utils.js';
+import { MAX_WATCHED, readWatched, writeWatched, isSignificantStatusChange, flightTimesCacheTtl, applyWatchChanges } from '../src/lib/watch-utils.js';
 
 function fakeStorage(initial = {}) {
   const map = new Map(Object.entries(initial));
@@ -141,5 +141,87 @@ describe('flightTimesCacheTtl', () => {
     expect(Math.abs(a - b)).toBeLessThan(20000);
     expect(flightTimesCacheTtl({ success: false }, '', NOW)).toBe(30000);
     expect(flightTimesCacheTtl({ success: false }, null, NOW)).toBe(30000);
+  });
+});
+
+// ── applyWatchChanges — the batch a board load applies in one go ─────────────────────────
+// A landed board changes several watched flights at once. Applying them one at a time is how
+// earlier transitions get lost; this reducer is the whole batch, and returning the SAME array
+// when nothing moved is what keeps a board of unchanged rows from rewriting storage and
+// re-rendering every consumer once per poll.
+
+describe('applyWatchChanges', () => {
+  const list = () => [
+    { flight: 'UA1', route: 'ORD→DEN', status: 'Scheduled', ts: 1 },
+    { flight: 'UA2', route: 'ORD→SFO', status: 'Scheduled', ts: 2 },
+    { flight: 'UA3', route: '', status: 'Scheduled', ts: 3 },
+  ];
+
+  it('applies every status in one pass, in list order', () => {
+    const next = applyWatchChanges(list(), [
+      { flight: 'UA1', status: 'Departed' },
+      { flight: 'UA3', status: 'Landed' },
+    ], 999);
+    expect(next.map(e => [e.flight, e.status])).toEqual([
+      ['UA1', 'Departed'], ['UA2', 'Scheduled'], ['UA3', 'Landed'],
+    ]);
+  });
+
+  it('restamps ts on a status change and leaves the untouched entries alone', () => {
+    const next = applyWatchChanges(list(), [{ flight: 'UA2', status: 'Landed' }], 999);
+    expect(next[1].ts).toBe(999);
+    expect(next[0].ts).toBe(1);
+    expect(next[2].ts).toBe(3);
+  });
+
+  it('fills in a route without bumping ts', () => {
+    const next = applyWatchChanges(list(), [{ flight: 'UA3', route: 'DEN→IAH' }], 999);
+    expect(next[2].route).toBe('DEN→IAH');
+    expect(next[2].ts).toBe(3);
+  });
+
+  it('takes a status and a route from the same change', () => {
+    const next = applyWatchChanges(list(), [{ flight: 'UA3', status: 'Landed', route: 'DEN→IAH' }], 999);
+    expect(next[2]).toEqual({ flight: 'UA3', route: 'DEN→IAH', status: 'Landed', ts: 999 });
+  });
+
+  it('returns the SAME array when nothing actually moved', () => {
+    const before = list();
+    expect(applyWatchChanges(before, [{ flight: 'UA1', status: 'Scheduled' }], 999)).toBe(before);
+    expect(applyWatchChanges(before, [{ flight: 'UA2', route: 'ORD→SFO' }], 999)).toBe(before);
+    expect(applyWatchChanges(before, [], 999)).toBe(before);
+  });
+
+  it('ignores a flight that is not watched', () => {
+    const before = list();
+    expect(applyWatchChanges(before, [{ flight: 'UA99', status: 'Landed' }], 999)).toBe(before);
+  });
+
+  it('ignores an empty route and an empty status (edge case)', () => {
+    const before = list();
+    expect(applyWatchChanges(before, [{ flight: 'UA3', route: '' }], 999)).toBe(before);
+    expect(applyWatchChanges(before, [{ flight: 'UA1', status: '' }], 999)).toBe(before);
+  });
+
+  it('lets a later change in the same batch build on an earlier one (edge case)', () => {
+    const next = applyWatchChanges(list(), [
+      { flight: 'UA1', status: 'Departed' },
+      { flight: 'UA1', status: 'Landed' },
+    ], 999);
+    expect(next[0].status).toBe('Landed');
+    expect(next.filter(e => e.flight === 'UA1')).toHaveLength(1);
+  });
+
+  it('never mutates the list it was given', () => {
+    const before = list();
+    applyWatchChanges(before, [{ flight: 'UA1', status: 'Landed' }], 999);
+    expect(before[0].status).toBe('Scheduled');
+    expect(before[0].ts).toBe(1);
+  });
+
+  it('survives a malformed change list (edge case)', () => {
+    const before = list();
+    expect(applyWatchChanges(before, null, 999)).toBe(before);
+    expect(applyWatchChanges(before, [null, undefined, {}], 999)).toBe(before);
   });
 });
