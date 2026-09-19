@@ -45,3 +45,10 @@
 - [ ] Vercel log retention + PII exposure check.
 - [ ] Anthropic prompt-injection defense on user-supplied flight data in `delay-explain.ts`.
 - [ ] CORS audit on Anthropic-backed endpoints.
+
+## From the independent review of PR #254 (Sep 2026)
+
+- [ ] [correctness] Stale FAA programs: after a failed `/api/faa` refresh the last programs are shown as current forever. Track last-successful fetch time per source, render a stale/unavailable state, and stop an expired program from implying a confirmed live disruption (`src/app/state/weather.tsx`). Legacy had the same retention.
+- [ ] [correctness] Hub proximity rule: `HUB_PROXIMITY_NM = 93` admits any grounded aircraft within the radius regardless of its route, and no single radius fixes it (SFO–SJC 26.5 NM, IAD–DCA 20.4 NM). Match on the route's hub first; for missing routes use an airport-location assignment or a deliberately tight radius. Test known other-airport flights and missing-route flights separately.
+- [ ] [a11y] Focus return when the opener unmounts (⌘K palette → flight sheet → close lands on `<body>`): fall back to the stable "Find a flight" trigger. Also drop or reword the unreachable `insideClosingContent` clause in `src/lib/focus-return.js`.
+- [ ] [test] Lifecycle coverage for `src/app/state/engagement.tsx` (initialisation order, subscription, dismissal sequencing) using the jsdom + testing-library setup added for the watch provider.
