@@ -66,6 +66,18 @@ export function normalizeWifi(raw) {
   return WIFI_DISPLAY[raw] || raw;
 }
 
+// The base fleet registry changes more slowly than the live Starlink feed. Reconcile the WiFi
+// label from the stronger live signal so confirmed retrofits do not simultaneously show
+// "ViaSat Ka" in the fleet table/modal and "Starlink: Yes" beside it.
+export function applyStarlinkWifiOverlay(fleetDb, starlinkTails) {
+  if (!Array.isArray(fleetDb) || !starlinkTails) return fleetDb;
+  return fleetDb.map((aircraft) => (
+    starlinkTails.has(aircraft.r) && aircraft.w !== 'Starlink'
+      ? { ...aircraft, w: 'Starlink' }
+      : aircraft
+  ));
+}
+
 // ─── Fleet Sort ───
 // Numeric column keys that should be compared as integers
 const NUMERIC_SORT_COLS = new Set(['tot', 'd', 'a']);

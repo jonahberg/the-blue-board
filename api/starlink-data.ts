@@ -11,7 +11,15 @@
 import { createRequire } from 'node:module';
 import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
-import { normalizeStarlinkPayload, normalizeOperator, normalizeType, validateStarlinkPayload, type StarlinkPayload } from './_starlink-normalize.js';
+import {
+  applyVerifiedStarlinkOverrides,
+  applyVerifiedStarlinkPayloadOverrides,
+  normalizeStarlinkPayload,
+  normalizeOperator,
+  normalizeType,
+  validateStarlinkPayload,
+  type StarlinkPayload,
+} from './_starlink-normalize.js';
 import { loadStarlinkSnapshot, type PersistedStarlinkSnapshot } from './_starlink-snapshot.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/data';
@@ -49,14 +57,14 @@ function loadStaticAircraft(): Array<{ tail: string; fleet: string; type: string
 function staticPayload(): StarlinkPayload | null {
   const raw = loadStaticAircraft();
   if (raw.length === 0) return null;
-  const aircraft = raw.map((a) => ({
+  const aircraft = applyVerifiedStarlinkOverrides(raw.map((a) => ({
     tail: a.tail,
     fleet: a.fleet,
     type: normalizeType(a.type),
     operator: normalizeOperator(a.operator),
     dateFound: '',
     wifi: 'Starlink',
-  }));
+  })));
   return {
     aircraft,
     totalCount: aircraft.length,
@@ -96,13 +104,13 @@ async function fetchUpstream(previousTotal?: number): Promise<StarlinkPayload> {
 function serveFresh(res: VercelResponse, payload: StarlinkPayload, source: string) {
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
   res.setHeader('X-Starlink-Source', source);
-  return res.status(200).json(payload);
+  return res.status(200).json(applyVerifiedStarlinkPayloadOverrides(payload));
 }
 
 function serveDegraded(res: VercelResponse, payload: StarlinkPayload, source: string) {
   res.setHeader('Cache-Control', 'public, s-maxage=300');
   res.setHeader('X-Starlink-Source', source);
-  return res.status(200).json(payload);
+  return res.status(200).json(applyVerifiedStarlinkPayloadOverrides(payload));
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

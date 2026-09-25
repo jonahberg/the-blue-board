@@ -33,7 +33,7 @@ function mockUpstreamResponse() {
   while (starlinkPlanes.length < 513) {
     const i = starlinkPlanes.length;
     starlinkPlanes.push({
-      TailNumber: `N${20000 + i}`,
+      TailNumber: i === 2 ? 'N76265' : `N${20000 + i}`,
       fleet: i < 170 ? 'mainline' : 'express',
       Aircraft: 'Boeing 737-824',
       OperatedBy: 'United Airlines',
@@ -213,7 +213,8 @@ describe('starlink-data API — Supabase snapshot + rate-limit branches', () => 
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['X-Starlink-Source']).toBe('supabase');
-    expect(res.body.aircraft).toHaveLength(1);
+    expect(res.body.aircraft).toHaveLength(2);
+    expect(res.body.aircraft.some((a) => a.tail === 'N76265')).toBe(true);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -244,7 +245,8 @@ describe('starlink-data API — Supabase snapshot + rate-limit branches', () => 
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['X-Starlink-Source']).toBe('supabase-stale');
-    expect(res.body.aircraft).toHaveLength(1);
+    expect(res.body.aircraft).toHaveLength(2);
+    expect(res.body.aircraft.some((a) => a.tail === 'N76265')).toBe(true);
     errSpy.mockRestore();
     warnSpy.mockRestore();
   });

@@ -2,8 +2,9 @@ import { computeDelayRiskModel, HUB_COORDINATES, HUB_RISK_PROFILES } from '../li
 import { formatDelayExplainFAAStatus, getScheduleRiskContext, describeFaaProgram } from '../lib/delay-explain-context.js';
 import { getMetarStationForIata, INTL_AIRPORTS } from '../lib/airport-metadata.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '../lib/metar.js';
-import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, sortFleetData, filterFleetData } from '../lib/fleet-utils.js';
+import { applyStarlinkWifiOverlay, categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, FLEET_FAMILIES, normalizeWifi, sortFleetData, filterFleetData } from '../lib/fleet-utils.js';
 import { bucketInstallsByMonth, computeInstallPace, buildDeparturesBoard } from '../lib/starlink-utils.js';
+import { applyVerifiedStarlinkOverrides } from '../lib/starlink-overrides.js';
 import { getFlightPopupMetrics } from '../lib/flight-popup.js';
 import { getScheduleFleetFamily } from '../lib/schedule-filters.js';
 import { classifySchedStatus } from '../lib/schedule-status.js';
@@ -174,7 +175,9 @@ async function loadFleetData() {
     fleetLoadFailed = true;
   }
 
+  STARLINK_DB = applyVerifiedStarlinkOverrides(STARLINK_DB);
   STARLINK_TAILS = new Set(STARLINK_DB.map(s => s.tail));
+  FLEET_DB = applyStarlinkWifiOverlay(FLEET_DB, STARLINK_TAILS);
   Object.keys(FLEET_BY_REG).forEach(key => delete FLEET_BY_REG[key]);
   FLEET_DB.forEach(a => { FLEET_BY_REG[a.r] = a; });
   buildSpecialAircraftIndex();
