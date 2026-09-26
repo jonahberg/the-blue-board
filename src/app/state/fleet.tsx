@@ -10,12 +10,20 @@
  *    roster and mark the tier `degraded`: in that state the Starlink filter and the
  *    "confirmed" badge must not claim more than the fallback can support.
  *  - `loadFailed` — the fleet panels show a retry state rather than an empty table.
+ *
+ * Starlink reconciliation (#249, ported from the legacy `loadFleetData()`): the roster gets the
+ * evidence-backed tails the upstream tracker is missing (`applyVerifiedStarlinkOverrides`), and
+ * the exposed `fleetDb` relabels `w` to 'Starlink' for every tail in that roster
+ * (`applyStarlinkWifiOverlay`) — `/data/fleet.json` is a build artefact that lags retrofits, and
+ * without this the WiFi column shows "ViaSat Ka" beside a Starlink badge.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { applyStarlinkWifiOverlay } from '@/lib/fleet-utils.js';
 import { indexSpecialAircraft } from '@/lib/special-aircraft.js';
+import { applyVerifiedStarlinkOverrides } from '@/lib/starlink-overrides.js';
 import {
   fetchFleetDb,
   fetchFleetSummary,
@@ -76,7 +84,7 @@ export function useFleet(): FleetValue {
 }
 
 export function FleetProvider({ children }: { children: ReactNode }) {
-  const [fleetDb, setFleetDb] = useState<FleetAircraft[]>([]);
+  const [rawFleetDb, setFleetDb] = useState<FleetAircraft[]>([]);
   const [starlink, setStarlink] = useState<StarlinkState>(EMPTY_STARLINK);
   const [fleetSummary, setFleetSummary] = useState<FleetSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,7 +115,9 @@ export function FleetProvider({ children }: { children: ReactNode }) {
 
       if (starlinkResult.status === 'fulfilled') {
         const data = starlinkResult.value;
-        const aircraft = Array.isArray(data.aircraft) ? data.aircraft : [];
+        const aircraft = applyVerifiedStarlinkOverrides(
+          Array.isArray(data.aircraft) ? data.aircraft : [],
+        ) as StarlinkAircraft[];
         setStarlink({
           tails: new Set(aircraft.map((a) => a.tail).filter(Boolean)),
           flightsByTail: data.flightsByTail ?? {},
@@ -119,7 +129,9 @@ export function FleetProvider({ children }: { children: ReactNode }) {
         });
       } else {
         try {
-          const fallback = await fetchStarlinkFallback();
+          const fallback = applyVerifiedStarlinkOverrides(
+            await fetchStarlinkFallback(),
+          ) as StarlinkAircraft[];
           if (cancelled) return;
           setStarlink({
             ...EMPTY_STARLINK,
@@ -139,6 +151,11 @@ export function FleetProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [attempt]);
+
+  const fleetDb = useMemo(
+    () => applyStarlinkWifiOverlay(rawFleetDb, starlink.tails) as FleetAircraft[],
+    [rawFleetDb, starlink.tails],
+  );
 
   const fleetByReg = useMemo(() => {
     const index: Record<string, FleetAircraft> = {};
