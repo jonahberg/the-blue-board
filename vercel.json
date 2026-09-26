@@ -22,7 +22,8 @@
         { "source": "/apple-touch-icon-precomposed.png", "destination": "/icons/icon-192.png", "permanent": false },
         { "source": "/apple-touch-icon-:size(\\d+x\\d+).png", "destination": "/icons/icon-192.png", "permanent": false },
         { "source": "/apple-touch-icon-:size(\\d+x\\d+)-precomposed.png", "destination": "/icons/icon-192.png", "permanent": false },
-        { "source": "/tsa", "destination": "/hubs", "permanent": true }
+        { "source": "/tsa", "destination": "/hubs", "permanent": true },
+        { "source": "/tsa/(.*)", "destination": "/hubs", "permanent": true }
     ],
     "functions": {
         "api/irops.ts": { "maxDuration": 90 },

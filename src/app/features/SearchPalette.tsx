@@ -46,7 +46,7 @@ type ScheduleMatch = {
 };
 
 export function SearchPalette() {
-  const { searchOpen, setSearchOpen, select, openFr24, setTab } = useUi();
+  const { searchOpen, setSearchOpen, select, openFr24, setTab, focusOn } = useUi();
   const { flights } = useFeed();
   const { boards, goto, preload } = useSchedule();
   const [query, setQuery] = useState('');
@@ -166,6 +166,10 @@ export function SearchPalette() {
                   value={flight.fr24id}
                   onSelect={() => {
                     select({ kind: 'flight', flight });
+                    // An airborne result goes to the map, centred on the flight (legacy parity).
+                    if (Number.isFinite(flight.lat) && Number.isFinite(flight.lon)) {
+                      focusOn(flight.lat, flight.lon);
+                    }
                     setSearchOpen(false);
                   }}
                 >
