@@ -18,6 +18,9 @@
 //      client can pick the next UPCOMING flight and format the time.
 //   5. enrichment: we now carry DateFound (powers the "NEW" badge / weekly-adds) and WiFi.
 
+import { applyVerifiedStarlinkOverrides } from '../src/lib/starlink-overrides.js';
+export { applyVerifiedStarlinkOverrides } from '../src/lib/starlink-overrides.js';
+
 export interface StarlinkAircraft {
   tail: string;
   fleet: string;        // "Mainline" | "Express"
@@ -55,6 +58,28 @@ export interface StarlinkPayload {
   flightsByTail: Record<string, StarlinkFlight[]>;
   lastUpdated: string;
   syncedAt: string;
+}
+
+export function applyVerifiedStarlinkPayloadOverrides(payload: StarlinkPayload): StarlinkPayload {
+  // Preserve an empty payload so validation and degraded-path selection still see the outage.
+  if (payload.aircraft.length === 0) return payload;
+
+  const aircraft = applyVerifiedStarlinkOverrides(payload.aircraft) as StarlinkAircraft[];
+  const additions = aircraft.slice(payload.aircraft.length);
+  if (additions.length === 0) return payload;
+
+  const mainlineAdditions = additions.filter((a) => a.fleet === 'Mainline').length;
+  const expressAdditions = additions.filter((a) => a.fleet === 'Express').length;
+  const fleetStats = payload.fleetStats ? {
+    ...payload.fleetStats,
+    mainline: payload.fleetStats.mainline + mainlineAdditions,
+    express: payload.fleetStats.express + expressAdditions,
+    total: payload.fleetStats.total + additions.length,
+    mainlinePct: pct(payload.fleetStats.mainline + mainlineAdditions, payload.fleetStats.mainlineTotal),
+    expressPct: pct(payload.fleetStats.express + expressAdditions, payload.fleetStats.expressTotal),
+  } : null;
+
+  return { ...payload, aircraft, totalCount: aircraft.length, fleetStats };
 }
 
 // Canonical carrier spellings. Any case-insensitive occurrence of the token is rewritten so future
@@ -128,7 +153,7 @@ function pct(part: number, whole: number): number {
 export function normalizeStarlinkPayload(upstream: any, syncedAt: string = new Date().toISOString()): StarlinkPayload {
   const planes: any[] = Array.isArray(upstream?.starlinkPlanes) ? upstream.starlinkPlanes : [];
 
-  const aircraft: StarlinkAircraft[] = planes.map((p) => ({
+  const upstreamAircraft: StarlinkAircraft[] = planes.map((p) => ({
     tail: String(p?.TailNumber ?? '').trim(),
     fleet: capitalizeFleet(p?.fleet),
     type: normalizeType(p?.Aircraft),
@@ -136,7 +161,6 @@ export function normalizeStarlinkPayload(upstream: any, syncedAt: string = new D
     dateFound: String(p?.DateFound ?? '').trim(),
     wifi: normalizeWifi(p?.WiFi),
   }));
-
   const fs = upstream?.fleetStats;
   const mainline = Number(fs?.mainline?.starlink ?? 0) || 0;
   const express = Number(fs?.express?.starlink ?? 0) || 0;
@@ -144,7 +168,7 @@ export function normalizeStarlinkPayload(upstream: any, syncedAt: string = new D
   const expressTotal = Number(fs?.express?.total ?? 0) || 0;
   // total = real Starlink count. Prefer upstream.combined when present, else mainline+express, else
   // the array length. Never upstream.totalCount (that is the whole tracked fleet).
-  const total = Number(fs?.combined?.starlink ?? (mainline + express || aircraft.length)) || aircraft.length;
+  const total = Number(fs?.combined?.starlink ?? (mainline + express || upstreamAircraft.length)) || upstreamAircraft.length;
   const fleetStats: StarlinkFleetStats | null = fs ? {
     mainline,
     express,
@@ -180,14 +204,17 @@ export function normalizeStarlinkPayload(upstream: any, syncedAt: string = new D
     flightsByTail[tail] = mapped;
   }
 
-  return {
-    aircraft,
-    totalCount: aircraft.length,
+  const payload: StarlinkPayload = {
+    aircraft: upstreamAircraft,
+    totalCount: upstreamAircraft.length,
     fleetStats,
     flightsByTail,
     lastUpdated: typeof upstream?.lastUpdated === 'string' && upstream.lastUpdated ? upstream.lastUpdated : syncedAt,
     syncedAt,
   };
+  // Do not turn an empty/malformed upstream response into a seemingly healthy payload. The
+  // validator must still see zero records and reject it. A non-empty feed can be augmented.
+  return applyVerifiedStarlinkPayloadOverrides(payload);
 }
 
 // §05 validators (research audit 2026-08-11): the length===0 guard the cron

@@ -3,6 +3,7 @@ import {
   normalizeOperator,
   normalizeType,
   normalizeStarlinkPayload,
+  applyVerifiedStarlinkOverrides,
   validateStarlinkPayload,
 } from '../api/_starlink-normalize.js';
 
@@ -67,7 +68,7 @@ describe('normalizeStarlinkPayload', () => {
 
   it('reports the real Starlink count, NOT upstream.totalCount (the whole fleet)', () => {
     const out = normalizeStarlinkPayload(upstream, '2026-05-31T23:40:00.000Z');
-    expect(out.totalCount).toBe(2);
+    expect(out.totalCount).toBe(3);
     expect(out.totalCount).not.toBe(1781);
   });
 
@@ -80,7 +81,7 @@ describe('normalizeStarlinkPayload', () => {
   it('derives fleetStats incl. rollout percentages when upstream omits `combined`', () => {
     const out = normalizeStarlinkPayload(upstream, '2026-05-31T23:40:00.000Z');
     expect(out.fleetStats).toMatchObject({
-      mainline: 51, express: 320, total: 371,
+      mainline: 52, express: 320, total: 372,
       mainlineTotal: 1122, expressTotal: 659, fleetTotal: 1781,
       mainlinePct: 5, expressPct: 49,
     });
@@ -102,6 +103,26 @@ describe('normalizeStarlinkPayload', () => {
     expect(normalizeStarlinkPayload({}).totalCount).toBe(0);
     expect(normalizeStarlinkPayload(null).aircraft).toEqual([]);
     expect(normalizeStarlinkPayload({ starlinkPlanes: [] }).fleetStats).toBeNull();
+  });
+
+  it('adds the evidence-backed N76265 override while upstream is missing it', () => {
+    const out = normalizeStarlinkPayload(upstream, '2026-08-29T23:40:00.000Z');
+    expect(out.aircraft).toContainEqual({
+      tail: 'N76265',
+      fleet: 'Mainline',
+      type: '737-800',
+      operator: 'United Airlines',
+      dateFound: '2026-08-29',
+      wifi: 'Starlink',
+    });
+  });
+
+  it('does not duplicate N76265 after upstream catches up', () => {
+    const existing = applyVerifiedStarlinkOverrides([
+      { tail: 'N76265', fleet: 'Mainline', type: '737-800', operator: 'United Airlines', dateFound: '2026-08-30', wifi: 'Starlink' },
+    ]);
+    expect(existing).toHaveLength(1);
+    expect(existing[0].dateFound).toBe('2026-08-30');
   });
 
   // Upstream occasionally ships departure_time as millisecond epochs or ISO strings instead of

@@ -38,7 +38,7 @@ function makeReq(overrides = {}) {
 function mockUpstream(planes = 513, { tailKey = 'TailNumber' } = {}) {
   return {
     starlinkPlanes: Array.from({ length: planes }, (_, i) => ({
-      [tailKey]: `N${10000 + i}`,
+      [tailKey]: i === planes - 1 ? 'N76265' : `N${10000 + i}`,
       fleet: i % 2 === 0 ? 'mainline' : 'express',
       Aircraft: 'Boeing 737-824',
       OperatedBy: 'Skywest dba UAX',

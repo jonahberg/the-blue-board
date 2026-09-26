@@ -3,6 +3,7 @@ import {
   categorizeFleetStatus,
   FLEET_FAMILIES,
   normalizeWifi,
+  applyStarlinkWifiOverlay,
   sortFleetData,
   filterFleetData,
 } from '../src/lib/fleet-utils.js';
@@ -359,5 +360,25 @@ describe('normalizeWifi', () => {
   it('returns the raw value if not in the lookup table', () => {
     expect(normalizeWifi('Unknown Wifi')).toBe('Unknown Wifi');
     expect(normalizeWifi('')).toBe('');
+  });
+});
+
+describe('applyStarlinkWifiOverlay', () => {
+  it('replaces stale ViaSat metadata for a Starlink-confirmed tail', () => {
+    const fleet = [
+      { r: 'N76265', w: 'ViaSatKA' },
+      { r: 'N12345', w: 'ViaSatKA' },
+    ];
+    const out = applyStarlinkWifiOverlay(fleet, new Set(['N76265']));
+
+    expect(out[0].w).toBe('Starlink');
+    expect(out[1].w).toBe('ViaSatKA');
+    expect(fleet[0].w).toBe('ViaSatKA');
+  });
+
+  it('preserves rows that already agree with the live feed', () => {
+    const aircraft = { r: 'N76265', w: 'Starlink' };
+    const out = applyStarlinkWifiOverlay([aircraft], new Set(['N76265']));
+    expect(out[0]).toBe(aircraft);
   });
 });
