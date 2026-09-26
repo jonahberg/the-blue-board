@@ -1,7 +1,7 @@
 ---
-import Footer from '../../components/Footer.astro';
-import VercelAnalytics from '../../components/VercelAnalytics.astro';
 import { articles } from '../../data/news/index.js';
+import BaseLayout from '../../components/site/BaseLayout.astro';
+import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 
 const featured = articles[0]; // newest
 const rest = articles.slice(1);
@@ -13,155 +13,112 @@ function formatDate(dateStr: string) {
     day: 'numeric',
   });
 }
+
+const title = "What's New at United | Fleet, Routes & Ops Updates | The Blue Board";
+const description =
+  'Everything a United frequent flyer should know right now. Fleet moves, new routes, lounge changes, and the ops updates that actually matter. Curated by The Blue Board.';
+const shareTitle = "What's New at United | Fleet, Routes & Ops Updates";
+const shareDescription =
+  'Everything a United frequent flyer should know right now. Fleet moves, new routes, lounge changes, and the ops updates that actually matter.';
+
+const metaClass =
+  'font-mono text-[10px] tracking-wider text-muted-foreground uppercase';
+const readMoreClass =
+  'mt-auto inline-flex min-h-11 w-fit items-center text-xs font-semibold text-foreground underline underline-offset-2';
 ---
-<!DOCTYPE html>
-<html lang="en" style="color-scheme:dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0B1018">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E">
-<title>What's New at United | Fleet, Routes & Ops Updates | The Blue Board</title>
-<meta name="description" content="Everything a United frequent flyer should know right now. Fleet moves, new routes, lounge changes, and the ops updates that actually matter. Curated by The Blue Board.">
-<meta name="author" content="The Blue Board">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://theblueboard.co/news">
-<meta property="og:type" content="website">
-<meta property="og:locale" content="en_US">
-<meta property="og:title" content="What's New at United | Fleet, Routes & Ops Updates">
-<meta property="og:description" content="Everything a United frequent flyer should know right now. Fleet moves, new routes, lounge changes, and the ops updates that actually matter.">
-<meta property="og:url" content="https://theblueboard.co/news">
-<meta property="og:site_name" content="The Blue Board">
-<meta property="og:image" content="https://theblueboard.co/og/og-news.jpg">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:creator" content="@theblueboard">
-<meta name="twitter:title" content="What's New at United | Fleet, Routes & Ops Updates">
-<meta name="twitter:description" content="Everything a United frequent flyer should know right now. Fleet moves, new routes, lounge changes, and the ops updates that actually matter.">
-<meta name="twitter:image" content="https://theblueboard.co/og/og-news.jpg">
-<meta name="twitter:site" content="@theblueboard">
 
-<!-- Schema: BreadcrumbList -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    {"@type": "ListItem", "position": 1, "name": "The Blue Board", "item": "https://theblueboard.co"},
-    {"@type": "ListItem", "position": 2, "name": "News", "item": "https://theblueboard.co/news"}
-  ]
-}
-</script>
+<BaseLayout
+  title={title}
+  description={description}
+  canonical="/news"
+  ogImage="https://theblueboard.co/og/og-news.jpg"
+  ogTitle={shareTitle}
+  ogDescription={shareDescription}
+  ogImageAlt="The Blue Board — What's New at United"
+>
+  <div class="mx-auto max-w-4xl px-4 py-8">
+    <Breadcrumbs items={[{ label: 'News' }]} />
 
-<link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <header class="mt-6 border-b border-border pb-5">
+      <h1 class="text-2xl font-bold tracking-tight text-balance text-foreground">
+        What's New at United
+      </h1>
+      <p class="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+        Everything a frequent flyer should know right now. Fleet moves, new routes, lounge changes,
+        and the ops updates that actually matter.
+      </p>
+    </header>
 
-<style is:inline>
-@font-face{font-family:'Satoshi';font-style:normal;font-weight:300 900;font-display:swap;src:url(/fonts/satoshi-latin.woff2) format('woff2')}
-@font-face{font-family:'DM Sans';font-style:normal;font-weight:100 900;font-display:swap;src:url(/fonts/dm-sans-latin.woff2) format('woff2')}
-@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-*{margin:0;padding:0;box-sizing:border-box}
-:root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#64748B;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
-body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);font-size:13px;line-height:1.7;min-height:100vh}
-h1,h2,h3,h4,h5,h6{font-family:var(--font-display)}
-a{color:var(--ua-accent);text-decoration:none}
-a:hover{text-decoration:underline}
-.container{max-width:900px;margin:0 auto;padding:20px 16px}
-
-/* Page Header */
-.page-header{border-bottom:1px solid var(--ua-border);padding:20px 0 16px;margin-bottom:24px}
-.page-header .nav{font-family:var(--font-display);font-size:11px;font-weight:500;color:var(--ua-muted);margin-bottom:12px}
-.page-header .nav a{color:var(--ua-accent);font-size:11px}
-.page-header h1{font-size:22px;font-weight:700;color:var(--ua-text);letter-spacing:-.5px;margin-bottom:4px;text-wrap:balance}
-.page-header .subtitle{font-size:12px;color:var(--ua-muted)}
-
-/* Featured Card */
-.featured{background:var(--ua-panel);border:1px solid var(--ua-border);border-left:3px solid var(--ua-amber);border-radius:6px;padding:20px;margin-bottom:28px;transition:border-color .2s}
-.featured:hover{border-color:var(--ua-amber)}
-.featured .meta{font-family:var(--font-mono);font-size:10px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.featured .meta .category{color:var(--ua-accent);font-weight:600}
-.featured h2{font-size:18px;font-weight:700;color:var(--ua-text);margin-bottom:8px;text-wrap:balance}
-.featured h2 a{color:var(--ua-text);text-decoration:none}
-.featured h2 a:hover{color:var(--ua-accent);text-decoration:none}
-.featured .summary{font-size:13px;color:var(--ua-muted);margin-bottom:10px;line-height:1.6}
-.featured .read-more{font-size:12px;font-weight:600}
-
-/* Article Grid */
-.news-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:28px}
-.news-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:16px;transition:border-color .2s}
-.news-card:hover{border-color:var(--ua-accent)}
-.news-card .meta{font-family:var(--font-mono);font-size:10px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.news-card .meta .category{color:var(--ua-accent);font-weight:600}
-.news-card h3{font-size:14px;font-weight:600;color:var(--ua-text);margin-bottom:6px;text-wrap:balance;line-height:1.4}
-.news-card h3 a{color:var(--ua-text);text-decoration:none}
-.news-card h3 a:hover{color:var(--ua-accent);text-decoration:none}
-.news-card .summary{font-size:12px;color:var(--ua-muted);margin-bottom:8px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.news-card .read-more{font-size:11px;font-weight:600}
-
-/* Empty State */
-.empty-state{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:40px 20px;text-align:center;margin-bottom:28px}
-.empty-state p{color:var(--ua-muted);margin-bottom:8px}
-.empty-state a{font-weight:600}
-
-@media(max-width:600px){
-  .page-header h1{font-size:18px}
-  .news-grid{grid-template-columns:1fr}
-  .featured h2{font-size:16px}
-}
-</style>
-</head>
-<body>
-
-<main class="container">
-
-  <!-- Header -->
-  <div class="page-header">
-    <div class="nav"><a href="/">&larr; The Blue Board</a> / News</div>
-    <h1>What's New at United</h1>
-    <div class="subtitle">Everything a frequent flyer should know right now. Fleet moves, new routes, lounge changes, and the ops updates that actually matter.</div>
-  </div>
-
-  {articles.length === 0 ? (
-    <div class="empty-state">
-      <p>No news published yet. Check back soon.</p>
-      <p>Follow <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer">@theblueboard</a> for updates.</p>
-      <p style="margin-top:12px"><a href="/">&larr; Back to dashboard</a></p>
-    </div>
-  ) : (
-    <>
-      {/* Featured (latest) article */}
-      {featured && (
-        <div class="featured">
-          <div class="meta"><span class="category">{featured.category}</span> &middot; {formatDate(featured.date)}</div>
-          <h2><a href={`/news/${featured.slug}`}>{featured.title}</a></h2>
-          <div class="summary">{featured.summary}</div>
-          <a class="read-more" href={`/news/${featured.slug}`}>Read more &rarr;</a>
+    {
+      articles.length === 0 ? (
+        <div class="mt-7 rounded-lg border border-border bg-card p-10 text-center">
+          <p class="text-sm text-muted-foreground">No news published yet. Check back soon.</p>
+          <p class="mt-2 text-sm text-muted-foreground">
+            Follow{' '}
+            <a
+              href="https://x.com/theblueboard"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="font-semibold text-foreground underline underline-offset-2"
+            >
+              @theblueboard
+            </a>{' '}
+            for updates.
+          </p>
+          <p class="mt-3">
+            <a
+              href="/"
+              class="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-2"
+            >
+              &larr; Back to dashboard
+            </a>
+          </p>
         </div>
-      )}
+      ) : (
+        <>
+          {featured && (
+            <article class="mt-7 rounded-lg border border-border border-l-2 border-l-[var(--bb-warn)] bg-card p-5">
+              <p class={metaClass}>
+                <span class="font-semibold text-primary">{featured.category}</span> &middot;{' '}
+                {formatDate(featured.date)}
+              </p>
+              <h2 class="mt-1.5 text-lg font-bold tracking-tight text-balance text-foreground">
+                <a href={`/news/${featured.slug}`} class="hover:underline hover:underline-offset-4">
+                  {featured.title}
+                </a>
+              </h2>
+              <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{featured.summary}</p>
+              <a class={readMoreClass} href={`/news/${featured.slug}`}>
+                Read more &rarr;
+              </a>
+            </article>
+          )}
 
-      {/* Older articles grid */}
-      {rest.length > 0 && (
-        <div class="news-grid">
-          {rest.map((a) => (
-            <div class="news-card">
-              <div class="meta"><span class="category">{a.category}</span> &middot; {formatDate(a.date)}</div>
-              <h3><a href={`/news/${a.slug}`}>{a.title}</a></h3>
-              <div class="summary">{a.summary}</div>
-              <a class="read-more" href={`/news/${a.slug}`}>Read &rarr;</a>
+          {rest.length > 0 && (
+            <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {rest.map((a) => (
+                <article class="flex flex-col rounded-lg border border-border bg-card p-4 hover:border-primary">
+                  <p class={metaClass}>
+                    <span class="font-semibold text-primary">{a.category}</span> &middot;{' '}
+                    {formatDate(a.date)}
+                  </p>
+                  <h3 class="mt-1.5 text-sm leading-snug font-semibold text-balance text-foreground">
+                    <a href={`/news/${a.slug}`} class="hover:underline hover:underline-offset-4">
+                      {a.title}
+                    </a>
+                  </h3>
+                  <p class="mt-1.5 mb-3 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+                    {a.summary}
+                  </p>
+                  <a class={readMoreClass} href={`/news/${a.slug}`}>
+                    Read &rarr;
+                  </a>
+                </article>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-    </>
-  )}
-
-</main>
-
-<Footer />
-
-<VercelAnalytics />
-
-</body>
-</html>
+          )}
+        </>
+      )
+    }
+  </div>
+</BaseLayout>

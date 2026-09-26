@@ -1,0 +1,127 @@
+---
+/**
+ * The homepage: a crawlable document that mounts the dashboard.
+ *
+ * The dashboard is a `client:only` React island, so NOTHING it renders reaches a crawler, an
+ * AI extractor, a no-JS visitor or the Markdown twin. Everything those readers need is
+ * rendered here at build time from `src/lib/home-seo.js`, in the order that matters:
+ *
+ *   1. the `sr-only` brief carrying the page `<h1>` — BEFORE any `<header>`, because
+ *      readability-style extractors drop header/nav regions as boilerplate (that is why the
+ *      Aug 2026 audit reported "no H1" while the canopy's brand heading was right there);
+ *   2. the `sr-only` site nav, always present regardless of which tab the island has open;
+ *   3. the `<noscript>` fallback;
+ *   4. the `sr-only` fleet summary;
+ *   5. the island itself;
+ *   6. the six JSON-LD blocks, at the end of `<body>` so they never block resource discovery.
+ *
+ * The island's `slot="fallback"` deliberately contains no `<header>` element, so rule 1 holds
+ * in the static HTML as well as in the source.
+ *
+ * `homeJsonLd()` takes the git-derived lastmod directly, which retires the `__HOME_LASTMOD__`
+ * placeholder `scripts/stamp-seo-build-date.mjs` used to rewrite in `dist/index.html`, and
+ * the Starlink figures come from `src/data/starlink-live.json` rather than from a literal
+ * that the same script had to patch.
+ */
+import Dashboard from '../app/Dashboard';
+import BaseLayout from '../components/site/BaseLayout.astro';
+import { getLastModified, homeLastmodPaths } from '../lib/buildMetadata.js';
+import {
+  FLEET_SUMMARY,
+  HOME_BRIEF,
+  HOME_DESCRIPTION,
+  HOME_NAV_LINKS,
+  HOME_TITLE,
+  NOSCRIPT_LINKS,
+  homeJsonLd,
+} from '../lib/home-seo.js';
+
+const jsonLd = homeJsonLd({ lastmod: getLastModified(homeLastmodPaths) });
+---
+
+<BaseLayout
+  title={HOME_TITLE}
+  description={HOME_DESCRIPTION}
+  canonical="/"
+  jsonLd={jsonLd}
+  hideSiteHeader
+  hideSiteFooter
+  bodyClass="overflow-hidden"
+>
+  <Fragment slot="head">
+    {/* The basemap and radar tile hosts are contacted within a second of first paint. */}
+    <link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossorigin />
+    <link rel="preconnect" href="https://b.basemaps.cartocdn.com" crossorigin />
+    <link rel="dns-prefetch" href="https://c.basemaps.cartocdn.com" />
+    <link rel="dns-prefetch" href="https://d.basemaps.cartocdn.com" />
+    <link rel="dns-prefetch" href="https://mesonet.agron.iastate.edu" />
+    {/* Bundled by Astro into _astro/, so CSP stays script-src 'self' with no inline script. */}
+    <script src="../scripts/sw-register.ts"></script>
+  </Fragment>
+
+  <section class="sr-only" aria-labelledby="page-brief-title">
+    <h1 id="page-brief-title">{HOME_BRIEF.h1}</h1>
+    <p>{HOME_BRIEF.intro}</p>
+    <h2>{HOME_BRIEF.checksHeading}</h2>
+    <ul>
+      {
+        HOME_BRIEF.checks.map((check) => (
+          <li>
+            <strong>{check.term}</strong> {check.text}
+          </li>
+        ))
+      }
+    </ul>
+    <h2>{HOME_BRIEF.howToUseHeading}</h2>
+    <p set:html={HOME_BRIEF.howToUseHtml} />
+  </section>
+
+  <nav class="sr-only" aria-label="United Airlines hub and site navigation">
+    {HOME_NAV_LINKS.map((link) => <a href={link.href}>{link.label}</a>)}
+  </nav>
+
+  <section class="sr-only" aria-label={FLEET_SUMMARY.label}>
+    <h2>{FLEET_SUMMARY.heading}</h2>
+    <p>
+      {FLEET_SUMMARY.body} <a href={FLEET_SUMMARY.linkHref}>{FLEET_SUMMARY.linkLabel}</a>.
+    </p>
+  </section>
+
+  <noscript>
+    <div class="mx-auto max-w-3xl px-4 py-10">
+      <h2 class="text-xl font-semibold">{NOSCRIPT_LINKS.heading}</h2>
+      <p class="mt-3 text-sm leading-relaxed text-muted-foreground">{NOSCRIPT_LINKS.intro}</p>
+
+      <h3 class="mt-6 text-base font-semibold">{NOSCRIPT_LINKS.hubsHeading}</h3>
+      <nav class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+        {NOSCRIPT_LINKS.hubs.map((link) => <a class="text-primary" href={link.href}>{link.label}</a>)}
+      </nav>
+
+      <h3 class="mt-6 text-base font-semibold">{NOSCRIPT_LINKS.resourcesHeading}</h3>
+      <nav class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+        {
+          NOSCRIPT_LINKS.resources.map((link) => (
+            <a class="text-primary" href={link.href}>
+              {link.label}
+            </a>
+          ))
+        }
+      </nav>
+
+      <p class="mt-6 text-xs text-muted-foreground">
+        {NOSCRIPT_LINKS.bylineBefore}<a class="text-primary" href={NOSCRIPT_LINKS.bylineLink.href}
+          >{NOSCRIPT_LINKS.bylineLink.label}</a
+        >{NOSCRIPT_LINKS.bylineAfter}
+      </p>
+    </div>
+  </noscript>
+
+  <Dashboard client:only="react">
+    <div slot="fallback" class="flex h-[100svh] flex-col gap-px bg-border" aria-hidden="true">
+      <div class="h-12 bg-background"></div>
+      <div class="h-7 bg-background"></div>
+      <div class="h-8 bg-background"></div>
+      <div class="flex-1 bg-background"></div>
+    </div>
+  </Dashboard>
+</BaseLayout>

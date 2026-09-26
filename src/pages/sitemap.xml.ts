@@ -12,14 +12,13 @@ import {
   hubIndexLastmodPaths,
   newarkLastmodPaths,
   newsIndexLastmodPaths,
+  privacyLastmodPaths,
   trackersIndexLastmodPaths,
-  tsaLastmodPaths,
   xmlEscape,
 } from '../lib/buildMetadata.js';
 import { trackerOrder } from '../data/trackers/index.js';
 import { atcHubDetailCodes, unitedHubDetailCodes } from '../lib/tracker-detail.js';
-
-const BASE_URL = 'https://theblueboard.co';
+import { SITE_URL as BASE_URL } from '../lib/site.js';
 
 function renderUrl(path: string, lastmod: string, changefreq: string, priority: string) {
   return [
@@ -50,7 +49,7 @@ export function GET() {
       renderUrl(`/hubs/${key}`, getLastModified(getHubRouteLastmodPaths(key)), 'weekly', '0.8')
     ),
     renderUrl('/newark', getLastModified(newarkLastmodPaths), 'weekly', '0.8'),
-    renderUrl('/tsa', getLastModified(tsaLastmodPaths), 'weekly', '0.8'),
+    renderUrl('/privacy', getLastModified(privacyLastmodPaths), 'yearly', '0.3'),
     renderUrl('/trackers', getLastModified(trackersIndexLastmodPaths), 'weekly', '0.9'),
     ...trackerOrder.map((slug: string) =>
       renderUrl(`/trackers/${slug}`, getLastModified(getTrackerRouteLastmodPaths(slug)), 'weekly', '0.8')

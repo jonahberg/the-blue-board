@@ -9,6 +9,13 @@ import {
   notAcceptableText,
   notFoundMarkdown,
 } from '../src/lib/agent-markdown.js';
+import {
+  FLEET_SUMMARY,
+  HOME_BRIEF,
+  HOME_NAV_LINKS,
+  NOSCRIPT_LINKS,
+  homeJsonLd,
+} from '../src/lib/home-seo.js';
 import { isKnownRoutePath, normalizePathname } from '../src/lib/site-routes.js';
 import { GET as getSitemap } from '../src/pages/sitemap.xml.ts';
 
@@ -20,7 +27,10 @@ import { GET as getSitemap } from '../src/pages/sitemap.xml.ts';
 //   4. llms.txt states when to use the site and how to call it
 //   5. Organization JSON-LD carries contactPoint + address
 
-const indexHtml = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+// The homepage is an Astro page that mounts a client:only React island, so every string a
+// crawler reads is rendered from src/lib/home-seo.js. These pins therefore read the module
+// (the content) and the page source (the ORDER it is rendered in), not a static HTML file.
+const indexAstro = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 const llmsTxt = readFileSync(new URL('../public/llms.txt', import.meta.url), 'utf8');
 const llmsFullTxt = readFileSync(new URL('../public/llms-full.txt', import.meta.url), 'utf8');
 const notFoundPage = readFileSync(new URL('../src/pages/404.astro', import.meta.url), 'utf8');
@@ -40,48 +50,71 @@ function textContent(html) {
     .trim();
 }
 
-function jsonLdBlocks(html) {
-  const blocks = [];
-  const re = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
-  let match;
-  while ((match = re.exec(html)) !== null) blocks.push(JSON.parse(match[1]));
-  return blocks;
+/** The homepage's structured data, as the page renders it through <JsonLd />. */
+function jsonLdBlocks() {
+  return homeJsonLd({ lastmod: '2026-01-01' });
+}
+
+/** Everything the page renders as visible/crawlable text, joined the way an extractor sees it. */
+function homeText() {
+  return [
+    HOME_BRIEF.h1,
+    HOME_BRIEF.intro,
+    HOME_BRIEF.checksHeading,
+    ...HOME_BRIEF.checks.map((c) => `${c.term} ${c.text}`),
+    HOME_BRIEF.howToUseHeading,
+    HOME_BRIEF.howToUseHtml,
+    NOSCRIPT_LINKS.heading,
+    NOSCRIPT_LINKS.intro,
+    ...NOSCRIPT_LINKS.hubs.map((l) => l.label),
+    ...NOSCRIPT_LINKS.resources.map((l) => l.label),
+    FLEET_SUMMARY.heading,
+    FLEET_SUMMARY.body,
+    ...HOME_NAV_LINKS.map((l) => l.label),
+  ].join(' ');
 }
 
 describe('1. homepage content without JavaScript', () => {
-  it('carries an H1 in the main document flow, not only inside <header>', () => {
-    const headerStart = indexHtml.indexOf('<header id="header"');
-    expect(headerStart).toBeGreaterThan(-1);
-
-    const h1Positions = [...indexHtml.matchAll(/<h1[\s>]/g)].map((m) => m.index);
-    expect(h1Positions.length).toBeGreaterThan(0);
-    // At least one H1 must sit before the canopy — readability-style extractors drop
-    // <header>/<nav> as boilerplate, which is why the audit reported "no H1 tag" while
-    // the brand H1 was right there in the markup.
-    expect(h1Positions.some((at) => at < headerStart)).toBe(true);
+  it('renders the page H1 before anything a boilerplate extractor would strip', () => {
+    // Readability-style extractors (the ones AI crawlers run) drop <header>/<nav> regions,
+    // which is why the audit reported "no H1 tag" while the canopy's brand heading was right
+    // there in the markup. The brief's h1 is emitted before the island — and the island is
+    // client:only, so it contributes no server-rendered <header> at all.
+    const h1At = indexAstro.indexOf('<h1 id="page-brief-title">');
+    const islandAt = indexAstro.indexOf('<Dashboard');
+    expect(h1At).toBeGreaterThan(-1);
+    expect(islandAt).toBeGreaterThan(-1);
+    expect(h1At).toBeLessThan(islandAt);
+    // The pre-hydration fallback must not introduce a <header> either.
+    const fallback = indexAstro.slice(islandAt);
+    expect(fallback).not.toContain('<header');
   });
 
   it('names the product and the job in that H1', () => {
-    const h1 = indexHtml.match(/<h1 id="page-brief-title">([^<]+)<\/h1>/);
-    expect(h1).not.toBeNull();
-    expect(h1[1]).toContain('The Blue Board');
-    expect(h1[1]).toContain('United Airlines');
+    expect(HOME_BRIEF.h1).toContain('The Blue Board');
+    expect(HOME_BRIEF.h1).toContain('United Airlines');
   });
 
   it('ships well past 500 characters of raw text', () => {
-    expect(textContent(indexHtml).length).toBeGreaterThan(3000);
+    expect(homeText().length).toBeGreaterThan(3000);
   });
 
   it('keeps the crawlable brief visually hidden so the dashboard looks unchanged', () => {
-    expect(indexHtml).toContain('<section class="sr-only" aria-labelledby="page-brief-title">');
+    expect(indexAstro).toContain('<section class="sr-only" aria-labelledby="page-brief-title">');
+  });
+
+  it('renders the crawlable site nav and the noscript fallback', () => {
+    expect(indexAstro).toContain('<nav class="sr-only"');
+    expect(indexAstro).toContain('<noscript>');
+    expect(HOME_NAV_LINKS).toHaveLength(15);
+    expect(NOSCRIPT_LINKS.hubs).toHaveLength(9);
+    expect(NOSCRIPT_LINKS.resources).toHaveLength(4);
   });
 
   it('states the fleet count that facts.js is the source of truth for', () => {
-    const brief = indexHtml.slice(
-      indexHtml.indexOf('<section class="sr-only" aria-labelledby="page-brief-title">'),
-      indexHtml.indexOf('<!-- Crawlable site navigation'),
-    );
-    expect(brief).toContain(FLEET_DB_COUNT.toLocaleString('en-US'));
+    const expected = FLEET_DB_COUNT.toLocaleString('en-US');
+    const brief = HOME_BRIEF.checks.map((c) => c.text).join(' ');
+    expect(brief).toContain(expected);
   });
 });
 
@@ -121,7 +154,7 @@ describe('2. agent-friendly 404s', () => {
   });
 
   it('does not 404 a real page just because it has no Markdown twin', () => {
-    for (const path of ['/hubs/ord', '/fleet/737-800', '/news/anything', '/trackers/atc/iah', '/tsa']) {
+    for (const path of ['/hubs/ord', '/fleet/737-800', '/news/anything', '/trackers/atc/iah']) {
       expect(resolveAgentResponse({ pathname: path, accept: 'text/markdown' }), path)
         .toEqual({ kind: 'html' });
     }
@@ -142,6 +175,20 @@ describe('2b. the route surface stays in step with the sitemap', () => {
   it('still calls obvious junk a 404', () => {
     for (const path of ['/some-path-that-does-not-exist', '/wp-admin', '/fleetx', '/hub', '/.env']) {
       expect(isKnownRoutePath(path), path).toBe(false);
+    }
+  });
+
+  it('calls the retired v1.7 asset directories a 404 too', () => {
+    // /css/, /js/ and /fonts/ were the hand-written dashboard's bundle. Keeping them in
+    // ASSET_PREFIXES after the rebuild deleted them would classify every dead path under
+    // them as "possibly real" forever.
+    for (const path of ['/js/dashboard.js', '/css/style.css', '/fonts/satoshi-latin.woff2']) {
+      expect(isKnownRoutePath(path), path).toBe(false);
+    }
+    // ...while the directories a build really emits stay live.
+    for (const path of ['/_astro/index.BcD3f.js', '/icons/icon-192.png', '/og/og-news.jpg',
+      '/data/fleet.json']) {
+      expect(isKnownRoutePath(path), path).toBe(true);
     }
   });
 
@@ -167,7 +214,7 @@ describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
     for (const route of Object.keys(agentMarkdown)) {
       expect(agentMarkdownAssetPath(route), route).toMatch(/^\/_agent\/[a-z-]+\.md$/);
     }
-    for (const route of ['/tsa', '/hubs/ord', '/nope', '/_agent/home.md']) {
+    for (const route of ['/hubs/ord', '/nope', '/_agent/home.md']) {
       expect(agentMarkdownAssetPath(route), route).toBe(null);
     }
   });
@@ -238,14 +285,17 @@ describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
     expect(matcher).toBeDefined();
     // The matcher is a plain JS regex in this form; assert what it does, not how it reads.
     const re = new RegExp(`^${matcher.replace(/\\\\/g, '\\')}$`);
-    for (const skipped of ['/api/irops', '/js/dashboard.js', '/css/style.css', '/data/fleet.json',
-      '/fonts/satoshi-latin.woff2', '/icons/icon-192.png', '/og/og-news.jpg', '/sw.js',
-      '/manifest.json', '/robots.txt', '/favicon.svg', '/og-image.png', '/_astro/x.js',
-      '/_agent/home.md']) {
+    // Every exclusion names a directory or file a build really emits into dist/.
+    for (const skipped of ['/api/irops', '/data/fleet.json', '/icons/icon-192.png',
+      '/og/og-news.jpg', '/sw.js', '/manifest.json', '/robots.txt', '/favicon.svg',
+      '/og-image.png', '/_astro/x.js', '/_astro/index.BcD3f.css', '/_agent/home.md']) {
       expect(re.test(skipped), `should skip ${skipped}`).toBe(false);
     }
+    // The v1.7 bundle directories are gone, so their paths are ordinary dead URLs now and
+    // must reach the middleware to be answered as the 404s they are.
     for (const matched of ['/', '/hubs/ord', '/fleet', '/llms.txt', '/sitemap.xml',
-      '/some-path-that-does-not-exist']) {
+      '/some-path-that-does-not-exist', '/js/dashboard.js', '/css/style.css',
+      '/fonts/satoshi-latin.woff2']) {
       expect(re.test(matched), `should match ${matched}`).toBe(true);
     }
   });
@@ -278,7 +328,7 @@ describe('4. agent instruction / when-to-use', () => {
 });
 
 describe('5. Organization schema completeness', () => {
-  const organization = jsonLdBlocks(indexHtml).find((node) => node['@type'] === 'Organization');
+  const organization = jsonLdBlocks().find((node) => node['@type'] === 'Organization');
 
   it('exists with a stable @id', () => {
     expect(organization).toBeDefined();
@@ -307,7 +357,10 @@ describe('5. Organization schema completeness', () => {
   });
 
   it('leaves every other JSON-LD block parseable', () => {
-    expect(jsonLdBlocks(indexHtml).length).toBeGreaterThanOrEqual(6);
+    expect(jsonLdBlocks().length).toBeGreaterThanOrEqual(6);
+    for (const node of jsonLdBlocks()) {
+      expect(() => JSON.parse(JSON.stringify(node)), String(node['@type'])).not.toThrow();
+    }
   });
 });
 

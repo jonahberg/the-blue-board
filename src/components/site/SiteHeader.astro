@@ -1,0 +1,118 @@
+---
+/**
+ * The shared site header: brand, primary nav, and a `<details>` menu under `md`.
+ *
+ * `current` highlights a nav entry; when it is omitted the entry is derived
+ * from the request path, so pages rendered through BaseLayout need not pass it.
+ */
+
+export type NavKey = 'dashboard' | 'hubs' | 'fleet' | 'news' | 'trackers';
+
+interface Props {
+  current?: NavKey;
+}
+
+const LINKS: ReadonlyArray<{ key: NavKey; label: string; href: string }> = [
+  { key: 'dashboard', label: 'Dashboard', href: '/' },
+  { key: 'hubs', label: 'Hubs', href: '/hubs' },
+  { key: 'fleet', label: 'Fleet', href: '/fleet' },
+  { key: 'news', label: 'News', href: '/news' },
+  { key: 'trackers', label: 'Trackers', href: '/trackers' },
+];
+
+function navKeyForPath(pathname: string): NavKey | undefined {
+  if (pathname === '/') return 'dashboard';
+  return LINKS.find((link) => link.href !== '/' && pathname.startsWith(link.href))?.key;
+}
+
+const { current = navKeyForPath(Astro.url.pathname) } = Astro.props;
+
+const linkClass = 'rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground';
+const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground bg-accent';
+---
+<header class="sticky top-0 z-50 border-b border-border bg-background">
+  <div class="mx-auto flex h-12 max-w-5xl items-center gap-3 px-4">
+    <a href="/" class="flex items-center gap-2 rounded-md">
+      <span
+        class="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="size-4"
+          aria-hidden="true"
+        >
+          <path
+            d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"
+          ></path>
+        </svg>
+      </span>
+      <span class="leading-tight">
+        <span class="block text-sm font-semibold text-foreground">The Blue Board</span>
+        <span class="hidden text-[10px] text-muted-foreground sm:block">
+          Unofficial United Airlines ops dashboard
+        </span>
+      </span>
+    </a>
+
+    <nav aria-label="Primary" class="ml-auto hidden items-center gap-1 md:flex">
+      {
+        LINKS.map((link) => (
+          <a
+            href={link.href}
+            aria-current={current === link.key ? 'page' : undefined}
+            class={current === link.key ? activeLinkClass : linkClass}
+          >
+            {link.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <details class="group relative ml-auto md:hidden">
+      <summary
+        class="flex size-11 cursor-pointer list-none items-center justify-center rounded-md border border-border text-muted-foreground [&::-webkit-details-marker]:hidden"
+      >
+        <span class="sr-only">Menu</span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="size-4"
+          aria-hidden="true"
+        >
+          <path d="M4 6h16"></path>
+          <path d="M4 12h16"></path>
+          <path d="M4 18h16"></path>
+        </svg>
+      </summary>
+      <nav
+        aria-label="Primary mobile"
+        class="absolute right-0 top-12 z-50 w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+      >
+        {
+          LINKS.map((link) => (
+            <a
+              href={link.href}
+              aria-current={current === link.key ? 'page' : undefined}
+              class={`flex min-h-11 items-center rounded-sm px-3 text-sm ${
+                current === link.key ? 'font-medium text-foreground bg-accent' : 'text-muted-foreground'
+              }`}
+            >
+              {link.label}
+            </a>
+          ))
+        }
+      </nav>
+    </details>
+  </div>
+</header>

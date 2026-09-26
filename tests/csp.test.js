@@ -1,11 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Regression guard: once 'unsafe-inline' was dropped from script-src (bug #4),
-// CI should block any future change that re-adds it. This test also asserts
-// that the inline script blocks in public/index.html have all been extracted
-// to external files, since CSP will block them otherwise.
+// CI should block any future change that re-adds it.
+//
+// Astro emits a small number of inline scripts for a client:only React island (the
+// `astro:only` shim, the `astro-island` runtime, and the bundled service-worker
+// registration). Those are allowed by 'sha256-…' hash, never by re-opening
+// 'unsafe-inline' — and scripts/verify-csp-hashes.mjs fails the build if a hash in
+// dist/ is missing from the header, so an Astro upgrade that changes one byte is
+// caught at build time rather than by a blank dashboard in production.
+
+const packageJson = JSON.parse(
+  readFileSync(resolve(__dirname, '..', 'package.json'), 'utf8')
+);
 
 describe('Content-Security-Policy configuration', () => {
   const vercelJson = JSON.parse(
@@ -33,6 +42,24 @@ describe('Content-Security-Policy configuration', () => {
     expect(scriptSrc).not.toContain("'unsafe-inline'");
   });
 
+  it("allows the island's inline scripts by sha256 hash instead", () => {
+    const scriptSrc = directive('script-src');
+    const hashes = scriptSrc.match(/'sha256-[A-Za-z0-9+/=]+'/g) || [];
+    expect(hashes.length, 'expected sha256 tokens for the Astro island scripts').toBeGreaterThan(0);
+    // Base64 of a SHA-256 digest is always 44 characters, the last one '='.
+    for (const hash of hashes) {
+      expect(hash, hash).toMatch(/^'sha256-[A-Za-z0-9+/]{43}='$/);
+    }
+  });
+
+  it('fails the build when a dist/ inline script is not in the header', () => {
+    // Without this step in `bun run build`, a changed Astro runtime silently stops
+    // matching its hash and the production page ships a skeleton with no dashboard —
+    // green build, correct HTML, broken only under the real CSP header.
+    expect(packageJson.scripts.build).toContain('bun scripts/verify-csp-hashes.mjs');
+    expect(existsSync(resolve(__dirname, '..', 'scripts', 'verify-csp-hashes.mjs'))).toBe(true);
+  });
+
   it('does NOT include unsafe-eval in script-src', () => {
     const scriptSrc = directive('script-src');
     expect(scriptSrc).not.toContain("'unsafe-eval'");
@@ -46,9 +73,15 @@ describe('Content-Security-Policy configuration', () => {
     expect(styleSrc).toContain("'unsafe-inline'");
   });
 
-  it('allows the trusted leaflet CDN for stylesheets and scripts', () => {
-    expect(directive('script-src')).toContain('https://unpkg.com');
-    expect(directive('style-src')).toContain('https://unpkg.com');
+  it('allows no CDN at all — Leaflet is bundled from npm (v1.8.0)', () => {
+    // Leaflet used to load from unpkg.com, which had to be allowed in both script-src
+    // and style-src. The rebuild imports `leaflet` and `leaflet/dist/leaflet.css` into
+    // the React island, so Vite emits both under `_astro/` and 'self' covers them.
+    // Re-adding a CDN host here would re-introduce a third-party script origin on
+    // every page for no benefit, so this is a regression guard, not a bookkeeping test.
+    expect(directive('script-src')).not.toContain('https://unpkg.com');
+    expect(directive('style-src')).not.toContain('https://unpkg.com');
+    expect(csp).not.toContain('unpkg.com');
   });
 
   it('allows Vercel analytics script endpoints', () => {
@@ -79,26 +112,54 @@ describe('Content-Security-Policy configuration', () => {
   });
 });
 
-describe('public/index.html inline script audit', () => {
-  const indexHtml = readFileSync(
-    resolve(__dirname, '..', 'public', 'index.html'),
+describe('authored markup carries no inline script', () => {
+  // public/index.html is gone (the `legacy/` copy was deleted in v1.8.0). The
+  // homepage is now src/pages/index.astro plus the React island it mounts. Astro's own
+  // island runtime is hash-allowed above; what must never come back is an inline
+  // <script> or an on*= handler we write ourselves, because either would force
+  // 'unsafe-inline' back into script-src.
+  //
+  // Only .astro files are scanned for handlers: `onClick={...}` in JSX is a React prop,
+  // not an HTML attribute, and never reaches the document.
+
+  function astroFilesIn(dir) {
+    const found = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = resolve(dir, entry.name);
+      if (entry.isDirectory()) found.push(...astroFilesIn(path));
+      else if (entry.name.endsWith('.astro')) found.push(path);
+    }
+    return found;
+  }
+
+  const pageSource = readFileSync(
+    resolve(__dirname, '..', 'src', 'pages', 'index.astro'),
     'utf8'
   );
 
-  it('contains no inline executable <script> blocks', () => {
-    // JSON-LD structured data (<script type="application/ld+json">) is not
-    // executable and is not blocked by CSP; those are allowed. The assertion
-    // excludes those and any <script> with a src= attribute.
-    const scriptBlocks = indexHtml.match(/<script(?![^>]*\b(type="application\/ld\+json"|src=))[^>]*>[\s\S]*?<\/script>/g) || [];
-    expect(scriptBlocks).toHaveLength(0);
+  it('index.astro has no inline executable <script> block', () => {
+    // A <script src="..."> is bundled by Astro and served from 'self'; JSON-LD is data.
+    const inline =
+      pageSource.match(
+        /<script(?![^>]*\b(type="application\/ld\+json"|src=))[^>]*>[\s\S]*?<\/script>/g
+      ) || [];
+    expect(inline).toHaveLength(0);
   });
 
-  it('contains no inline event handlers (onclick/onload/onerror/etc.)', () => {
-    // Any on*="..." attribute would require 'unsafe-inline' in script-src.
-    // This regex intentionally matches only the common inline-handler names.
-    const inlineHandlers = indexHtml.match(
-      /\bon(click|load|error|focus|blur|mouseover|mouseout|submit|change|keydown|keyup|keypress)\s*=/gi
-    ) || [];
-    expect(inlineHandlers).toHaveLength(0);
+  it('no .astro file carries an inline event handler', () => {
+    const offenders = [];
+    for (const file of astroFilesIn(resolve(__dirname, '..', 'src'))) {
+      const source = readFileSync(file, 'utf8');
+      const handlers =
+        source.match(
+          /\bon(click|load|error|focus|blur|mouseover|mouseout|submit|change|keydown|keyup|keypress)\s*=\s*["']/gi
+        ) || [];
+      if (handlers.length) offenders.push(file);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('the dashboard island is client:only, so Astro emits no hydration payload to inline', () => {
+    expect(pageSource).toContain('client:only="react"');
   });
 });

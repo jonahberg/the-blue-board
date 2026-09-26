@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v10'; // bumped for Variant J canopy chrome redesign (floating header/footer)
+const CACHE_VERSION = 'v11'; // bumped for the Astro/React rebuild: assets moved to hashed /_astro/*
 const PAGE_CACHE = `blueboard-pages-${CACHE_VERSION}`;
 const DATA_CACHE = `blueboard-data-${CACHE_VERSION}`;
 const STATIC_CACHE = `blueboard-static-${CACHE_VERSION}`;
@@ -8,10 +8,14 @@ const PAGE_MAX = 20;
 const DATA_MAX = 80;
 const STATIC_MAX = 120;
 
-// Only the navigation shell is precached. The app's own code (dashboard.js / style.css) is served
-// network-first in the fetch handler so a new deploy reaches returning users immediately, instead
-// of being pinned here until CACHE_VERSION is manually bumped. (Audit critic #1.)
-const APP_SHELL = ['/', '/index.html'];
+// Only the navigation shell is precached, and only '/' — the site builds with
+// `format: 'file'`, so '/index.html' is a second URL for the same document and a single
+// non-2xx from either one fails the whole `addAll()` and leaves the SW uninstalled.
+//
+// Nothing else belongs here. Every asset the app loads now lives under /_astro/ with a
+// content hash in its filename, so a new deploy ships new URLs and the old ones simply
+// stop being requested — there is no version to pin and nothing to invalidate.
+const APP_SHELL = ['/'];
 
 async function trimCache(cacheName, maxEntries) {
   const cache = await caches.open(cacheName);
@@ -84,7 +88,10 @@ self.addEventListener('fetch', (event) => {
       } catch (_err) {
         const cached = await caches.match(request);
         if (cached) return cached;
-        const fallback = await caches.match('/index.html');
+        // Any navigation offline falls back to the precached shell: the dashboard is a
+        // client-side island, so '/' can render the tab the deep link asked for once it
+        // boots. Better a working app than a browser error page.
+        const fallback = await caches.match('/');
         if (fallback) return fallback;
         return new Response('Offline', { status: 503, headers: { 'content-type': 'text/plain' } });
       }
@@ -117,18 +124,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // The app's own first-party code (every /js/ script + the stylesheet) is NOT content-hashed, so
-  // serve it network-first: always fetch the latest when online so shipped fixes reach returning
-  // users, falling back to cache only when offline. Other static assets (fonts, images) stay
-  // stale-while-revalidate below. (Audit critic #1: immutable + non-hashed + SW precache pinning
-  // meant deploys never reached users. Originally only dashboard.js/style.css were network-first,
-  // so a fix to a sibling widget — support-meter/news-banner/hub-live-data/etc. — reached returning
-  // users one navigation late; the whole /js/ tree gets the same treatment now.)
-  const isAppCode = url.pathname.startsWith('/js/') || url.pathname === '/css/style.css';
-  if (isAppCode) {
+  // Hashed build output is immutable BY CONSTRUCTION: /_astro/app-B2kQ9f.js names its own
+  // contents, so the bytes behind that URL can never change. Cache-first with no
+  // revalidation is therefore not a staleness risk — it is the only correct strategy, and
+  // it is what makes a warm load instant. A new deploy requests different filenames.
+  //
+  // This replaces the network-first /js/* + /css/style.css branch, which existed only
+  // because those files were NOT hashed: a deploy reused the same URLs, so the SW had to
+  // re-check them every load or shipped fixes never reached returning users. Nothing is
+  // served from /js/ or /css/ any more.
+  if (url.pathname.startsWith('/_astro/')) {
     event.respondWith((async () => {
+      const cached = await caches.match(request);
+      if (cached) return cached;
       try {
-        const networkResponse = await fetch(new Request(request, { cache: 'no-cache' }));
+        const networkResponse = await fetch(request);
         if (isCacheable(networkResponse)) {
           event.waitUntil((async () => {
             const cache = await caches.open(STATIC_CACHE);
@@ -138,8 +148,6 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       } catch (_err) {
-        const cached = await caches.match(request);
-        if (cached) return cached;
         return new Response('Offline', { status: 503, headers: { 'content-type': 'text/plain' } });
       }
     })());

@@ -6,8 +6,15 @@ import { cartoBasemapUrl, CARTO_DARK_TILE_TEMPLATE } from '../src/lib/basemap.js
 // request every tile is served with a diagonal "API KEY REQUIRED" watermark. These pins make sure
 // both Leaflet maps go through the one keyed template and that the key is wired in at build time.
 
-const mainJs = readFileSync(new URL('../src/dashboard/main.js', import.meta.url), 'utf8');
+const basemapModule = readFileSync(new URL('../src/app/map/basemap.ts', import.meta.url), 'utf8');
+const liveMap = readFileSync(new URL('../src/app/map/LiveMap.tsx', import.meta.url), 'utf8');
+const astroConfig = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8');
 const envExample = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
+
+/** Comments describe the rules; only code counts as a call site. */
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
+}
 
 describe('cartoBasemapUrl', () => {
   it('appends the key as a query parameter', () => {
@@ -37,19 +44,44 @@ describe('cartoBasemapUrl', () => {
   });
 });
 
-describe('dashboard wires the key into every CARTO tile layer', () => {
+describe('the dashboard builds every CARTO tile layer in one place', () => {
+  const basemapCode = stripComments(basemapModule);
+
   it('no L.tileLayer call carries a bare basemaps.cartocdn.com literal', () => {
-    const bare = mainJs.match(/L\.tileLayer\(\s*['"`]https?:\/\/[^'"`]*basemaps\.cartocdn\.com[^)]*/g) || [];
-    expect(bare).toEqual([]);
+    // A hand-built layer would skip the key and render "API KEY REQUIRED" across the map.
+    for (const [name, source] of [
+      ['basemap.ts', basemapCode],
+      ['LiveMap.tsx', stripComments(liveMap)],
+    ]) {
+      const bare = source.match(/L\.tileLayer\(\s*['"`]https?:\/\/[^'"`]*basemaps\.cartocdn\.com[^)]*/g) || [];
+      expect(bare, name).toEqual([]);
+    }
   });
 
-  it('both maps (Live Ops + NEXRAD radar) use the keyed template', () => {
-    const uses = mainJs.match(/L\.tileLayer\(CARTO_DARK_TILES,/g) || [];
-    expect(uses).toHaveLength(2);
+  it('exactly one module constructs the keyed CARTO layer', () => {
+    // Both Leaflet maps — Live Ops and the Weather tab's radar map — call
+    // makeBasemapLayer(); centralising the construction is what makes the key impossible
+    // to forget on a second map.
+    const constructions = basemapCode.match(/L\.tileLayer\(CARTO_DARK_TILES/g) || [];
+    expect(constructions).toHaveLength(1);
+    expect(basemapCode).toMatch(/export function makeBasemapLayer\(\)/);
+  });
+
+  it('the live map gets its basemap from that factory rather than building its own', () => {
+    expect(stripComments(liveMap)).toContain('makeBasemapLayer()');
   });
 
   it('the key is read from VITE_CARTO_BASEMAP_KEY at build time', () => {
-    expect(mainJs).toContain('cartoBasemapUrl(import.meta.env.VITE_CARTO_BASEMAP_KEY)');
+    expect(basemapCode).toContain('cartoBasemapUrl(import.meta.env.VITE_CARTO_BASEMAP_KEY)');
+  });
+
+  it('Astro exposes the VITE_ prefix to client code, or that expression inlines as undefined', () => {
+    // Astro defaults Vite's envPrefix to PUBLIC_ only. Without VITE_ in the list the key is
+    // silently dropped at build: green build, watermarked map, and no source-level test
+    // above would notice.
+    const envPrefix = astroConfig.match(/envPrefix:\s*\[([^\]]*)\]/);
+    expect(envPrefix, 'astro.config.mjs must declare envPrefix').toBeTruthy();
+    expect(envPrefix[1]).toContain("'VITE_'");
   });
 
   it('.env.example documents VITE_CARTO_BASEMAP_KEY', () => {

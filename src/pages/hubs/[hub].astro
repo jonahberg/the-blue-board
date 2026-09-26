@@ -8,5 +8,6 @@ export function getStaticPaths() {
 
 const { hub } = Astro.params;
 const data = hubs[hub];
+if (!data) return Astro.redirect('/404');
 ---
 <HubLayout data={data} />

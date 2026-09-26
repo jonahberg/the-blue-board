@@ -1,0 +1,38 @@
+---
+/**
+ * A rule-separated content block with an anchorable `<h2>`. The Astro-side twin
+ * of `.bb-content .section` in `content.css`, so a section written in a page
+ * reads the same as one that arrives inside a raw `contentHtml` string.
+ *
+ * The slot is wrapped in `.bb-content` so prose written here picks up the same
+ * element defaults as the data-driven prose above and below it.
+ */
+
+interface Props {
+  /** Anchor target — the jump nav and the hub/fleet cross-links point at it. */
+  id?: string;
+  heading: string;
+  /** Drops the top rule when the section opens a page. */
+  first?: boolean;
+  class?: string;
+}
+
+const { id, heading, first = false, class: className = '' } = Astro.props;
+---
+<section
+  class:list={[
+    'overflow-x-auto',
+    first ? '' : 'mt-8 border-t border-border pt-6',
+    className,
+  ]}
+>
+  <h2
+    id={id}
+    class="mb-3 border-b border-border pb-1.5 text-base font-bold tracking-tight text-balance text-foreground"
+  >
+    {heading}
+  </h2>
+  <div class="bb-content">
+    <slot />
+  </div>
+</section>

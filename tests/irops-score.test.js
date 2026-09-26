@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { iropsScore, iropsScoreCls, iropsScoreLabel, iropsRateFloor } from '../src/lib/irops-score.js';
+import { iropsScore, iropsScoreCls, iropsScoreLabel, iropsRateFloor, iropsHubRates } from '../src/lib/irops-score.js';
 
 describe('iropsScore (F017 weighting)', () => {
   it('returns 0 with no flights (never divides by zero)', () => {
@@ -62,5 +62,43 @@ describe('iropsRateFloor (small-sample guard)', () => {
   it('publishes once total >= 10 OR cancellations >= 3', () => {
     expect(iropsRateFloor(10, 0)).toBe(true);
     expect(iropsRateFloor(4, 3)).toBe(true);
+  });
+});
+
+describe('iropsHubRates (the §24 rate-floor application)', () => {
+  it('publishes counts AND rates once the hub clears the floor', () => {
+    expect(iropsHubRates({ ORD: { total: 100, cancellations: 7, delayed60: 12 } })).toEqual({
+      ORD: { cancellations: 7, total: 100, cancellationRate: 7, delayed60Rate: 12 },
+    });
+  });
+
+  it('withholds only the RATES below the floor — the raw counts still ship', () => {
+    // The incident-#3 case: 1 cancelled GUM flight on a 4-flight board is not "25%".
+    expect(iropsHubRates({ GUM: { total: 4, cancellations: 1, delayed60: 1 } })).toEqual({
+      GUM: { cancellations: 1, total: 4, cancellationRate: null, delayed60Rate: null },
+    });
+  });
+
+  it('clears the floor on cancellations alone, even on a tiny board', () => {
+    const rates = iropsHubRates({ GUM: { total: 4, cancellations: 3, delayed60: 0 } });
+    expect(rates.GUM.cancellationRate).toBe(75);
+    expect(rates.GUM.delayed60Rate).toBe(0);
+  });
+
+  it('skips a hub with no flights rather than dividing by zero', () => {
+    expect(iropsHubRates({ NRT: { total: 0, cancellations: 0 } })).toEqual({});
+    expect(iropsHubRates({ NRT: null })).toEqual({});
+  });
+
+  it('defaults missing counters to 0 and rounds each rate', () => {
+    // 1/3 of 30 = 33.3…% → 33; delayed60 absent → 0.
+    expect(iropsHubRates({ DEN: { total: 30, cancellations: 10 } })).toEqual({
+      DEN: { cancellations: 10, total: 30, cancellationRate: 33, delayed60Rate: 0 },
+    });
+  });
+
+  it('never throws on a missing or non-object payload', () => {
+    expect(iropsHubRates(undefined)).toEqual({});
+    expect(iropsHubRates(null)).toEqual({});
   });
 });

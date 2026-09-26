@@ -2,10 +2,10 @@
 node_modules
 .DS_Store
 .context/
+.superpowers/
 *.bak
 dist
 .astro
-public/js/dashboard.js
 
 .env
 .env*.local

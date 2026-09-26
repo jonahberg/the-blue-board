@@ -274,28 +274,65 @@ describe('sw.js — notificationclick handler', () => {
 });
 
 describe('sw.js — fetch routing strategy', () => {
-  it('serves first-party /js/* network-first: returns the fresh network copy even when a stale one is cached (C57)', async () => {
+  it('serves hashed /_astro/* cache-first and does not touch the network on a hit', async () => {
+    // The filename names the contents, so a cached copy can never be the wrong bytes.
+    // Re-validating it would be a round trip that cannot change the answer.
     const { handlers, caches, fetchMock } = makeEnv();
     const staticCache = await caches.open(STATIC_CACHE);
-    await staticCache.put(`${ORIGIN}/js/support-meter.js`, netResponse('STALE'));
+    await staticCache.put(`${ORIGIN}/_astro/x-abc123.js`, netResponse('CACHED'));
+    fetchMock.mockResolvedValue(netResponse('NETWORK'));
+
+    const res = await runFetch(handlers, new Request(`${ORIGIN}/_astro/x-abc123.js`));
+
+    expect(res.body).toBe('CACHED');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fetches and caches a /_astro/* asset it has never seen', async () => {
+    const { handlers, caches, fetchMock } = makeEnv();
     fetchMock.mockResolvedValue(netResponse('FRESH'));
 
-    const res = await runFetch(handlers, new Request(`${ORIGIN}/js/support-meter.js`));
+    const res = await runFetch(handlers, new Request(`${ORIGIN}/_astro/y-def456.css`));
+
+    expect(res.body).toBe('FRESH');
+    const staticCache = await caches.open(STATIC_CACHE);
+    expect(await staticCache.match(`${ORIGIN}/_astro/y-def456.css`)).toBeDefined();
+  });
+
+  it('serves navigations network-first: a fresh document beats the cached one', async () => {
+    // A stale HTML shell would pin visitors to an old build's asset URLs, which no longer
+    // exist after a deploy — the exact failure the hashed-asset move is meant to end.
+    const { handlers, caches, fetchMock } = makeEnv();
+    const pageCache = await caches.open(`blueboard-pages-${CACHE_VERSION}`);
+    await pageCache.put(`${ORIGIN}/`, netResponse('STALE', { contentType: 'text/html' }));
+    fetchMock.mockResolvedValue(netResponse('FRESH', { contentType: 'text/html' }));
+
+    const res = await runFetch(handlers, new Request(`${ORIGIN}/`));
 
     expect(fetchMock).toHaveBeenCalled();
     expect(res.body).toBe('FRESH');
   });
 
-  it('serves the stylesheet network-first as well', async () => {
-    const { handlers, caches, fetchMock } = makeEnv();
-    const staticCache = await caches.open(STATIC_CACHE);
-    await staticCache.put(`${ORIGIN}/css/style.css`, netResponse('STALE', { contentType: 'text/css' }));
-    fetchMock.mockResolvedValue(netResponse('FRESH', { contentType: 'text/css' }));
+  it('falls back to the precached shell when a navigation fails offline', async () => {
+    // Seeded by install(), which is the only thing that ever writes the '/' key.
+    const { handlers, fetchMock } = makeEnv();
+    let installed;
+    handlers.install({ waitUntil: (p) => (installed = p) });
+    await installed;
+    fetchMock.mockRejectedValue(new Error('offline'));
 
-    const res = await runFetch(handlers, new Request(`${ORIGIN}/css/style.css`));
+    const res = await runFetch(handlers, new Request(`${ORIGIN}/hubs/ord.html`));
 
-    expect(fetchMock).toHaveBeenCalled();
-    expect(res.body).toBe('FRESH');
+    expect(res.body).toBe('shell');
+  });
+
+  it('precaches the shell as a single URL — a second alias would fail the whole addAll', async () => {
+    const { handlers, caches } = makeEnv();
+    let done;
+    handlers.install({ waitUntil: (p) => (done = p) });
+    await done;
+    const pageCache = await caches.open(`blueboard-pages-${CACHE_VERSION}`);
+    expect(await pageCache.keys()).toEqual(['/']);
   });
 
   it('keeps non-code static assets (icons/fonts) stale-while-revalidate: returns the cached copy synchronously', async () => {
@@ -309,10 +346,10 @@ describe('sw.js — fetch routing strategy', () => {
     expect(res.body).toBe('CACHED');
   });
 
-  it('ignores cross-origin requests (lets the browser handle CDNs/tiles directly)', async () => {
+  it('ignores cross-origin requests (lets the browser handle basemap tiles directly)', async () => {
     const { handlers, fetchMock } = makeEnv();
     const event = {
-      request: new Request('https://unpkg.com/leaflet/leaflet.js'),
+      request: new Request('https://basemaps.cartocdn.com/dark_all/4/3/6.png'),
       respondWith: vi.fn(),
       waitUntil: vi.fn(),
     };

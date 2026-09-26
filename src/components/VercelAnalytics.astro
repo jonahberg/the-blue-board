@@ -1,8 +1,10 @@
 ---
-// Vercel Web Analytics for the Astro-rendered pages (fleet, hubs, trackers, tsa, news, 404, …).
-// The dashboard (public/index.html) loads the same script inline. Until Sep 2026 these pages only
-// carried Speed Insights — which was canceled on the project in Jul 2026 — so every non-dashboard
-// page was invisible in Web Analytics (requestPath breakdown showed "/" alone).
+// Vercel Web Analytics, on every page of the site. Since v1.8.0 that includes the dashboard
+// at `/`, which is an Astro page like any other and picks this up through BaseLayout.astro
+// rather than carrying its own copy of the script.
+// Until Sep 2026 the content pages only carried Speed Insights — which was canceled on the
+// project in Jul 2026 — so every page but the dashboard was invisible in Web Analytics
+// (the requestPath breakdown showed "/" alone).
 // `is:inline` keeps Astro from bundling it; the script is served by Vercel per deployment.
 // CSP: script-src allows https://va.vercel-scripts.com (vercel.json).
 ---

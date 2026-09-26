@@ -2,7 +2,7 @@
 //
 // Every marketing/notification email must carry: (1) a working unsubscribe
 // mechanism, (2) a physical postal address, and (3) a link to the privacy
-// policy. tsa.astro promises "No spam. Unsubscribe anytime." — this footer is
+// policy. Every signup surface promises no-spam handling — this footer is
 // what makes that promise true.
 //
 // Two unsubscribe mechanisms, chosen by send path:

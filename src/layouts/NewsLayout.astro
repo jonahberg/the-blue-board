@@ -1,15 +1,18 @@
 ---
-import Footer from '../components/Footer.astro';
-import VercelAnalytics from '../components/VercelAnalytics.astro';
+/**
+ * The thirteen news articles (`/news/{slug}`), driven by
+ * `src/data/news/index.js`. Tags resolve to hub and fleet cross-links.
+ */
+import BaseLayout from '../components/site/BaseLayout.astro';
+import Breadcrumbs from '../components/site/Breadcrumbs.astro';
+import HighlightBox from '../components/site/HighlightBox.astro';
 import { resolveTag } from '../data/news/index.js';
 
 const { article } = Astro.props;
-const slug = article.slug;
+const slug: string = article.slug;
 
 // Resolve tags to cross-links
-const crossLinks = (article.tags || [])
-  .map((t: string) => resolveTag(t))
-  .filter(Boolean);
+const crossLinks = (article.tags || []).map((t: string) => resolveTag(t)).filter(Boolean);
 
 // Format date for display
 const displayDate = new Date(article.date + 'T12:00:00Z').toLocaleDateString('en-US', {
@@ -18,189 +21,137 @@ const displayDate = new Date(article.date + 'T12:00:00Z').toLocaleDateString('en
   day: 'numeric',
 });
 
+const ogImage = article.ogImage || 'https://theblueboard.co/og/og-news.jpg';
+
 // NewsArticle JSON-LD
 const newsArticleSchema = {
-  "@context": "https://schema.org",
-  "@type": "NewsArticle",
-  "headline": article.title,
-  "datePublished": article.date,
-  "dateModified": article.date,
-  "author": { "@type": "Person", "name": "Jonah Berg", "url": "https://jonahberg.com" },
-  "publisher": {
-    "@type": "Organization",
+  '@context': 'https://schema.org',
+  '@type': 'NewsArticle',
+  headline: article.title,
+  datePublished: article.date,
+  dateModified: article.date,
+  author: { '@type': 'Person', name: 'Jonah Berg', url: 'https://jonahberg.com' },
+  publisher: {
+    '@type': 'Organization',
     // Same node as the homepage Organization (which carries contactPoint + address) so
     // crawlers consolidate the two instead of seeing a second, thinner publisher entity.
-    "@id": "https://theblueboard.co/#organization",
-    "name": "The Blue Board",
-    "url": "https://theblueboard.co",
+    '@id': 'https://theblueboard.co/#organization',
+    name: 'The Blue Board',
+    url: 'https://theblueboard.co',
   },
-  "description": article.summary,
-  "mainEntityOfPage": `https://theblueboard.co/news/${slug}`,
-  "image": article.ogImage || "https://theblueboard.co/og/og-news.jpg",
+  description: article.summary,
+  mainEntityOfPage: `https://theblueboard.co/news/${slug}`,
+  image: ogImage,
 };
 ---
-<!DOCTYPE html>
-<html lang="en" style="color-scheme:dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0B1018">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E">
-<title>{article.title} | United Airlines News | The Blue Board</title>
-<meta name="description" content={article.summary}>
-<meta name="author" content="The Blue Board">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href={`https://theblueboard.co/news/${slug}`}>
-<meta property="og:type" content="article">
-<meta property="og:locale" content="en_US">
-<meta property="og:title" content={article.title}>
-<meta property="og:description" content={article.summary}>
-<meta property="og:url" content={`https://theblueboard.co/news/${slug}`}>
-<meta property="og:site_name" content="The Blue Board">
-<meta property="og:image" content={article.ogImage || "https://theblueboard.co/og/og-news.jpg"}>
-<meta property="og:image:alt" content={article.title}>
-<meta property="article:published_time" content={article.date}>
-<meta property="article:section" content={article.category}>
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:creator" content="@theblueboard">
-<meta name="twitter:title" content={article.title}>
-<meta name="twitter:description" content={article.summary}>
-<meta name="twitter:image" content={article.ogImage || "https://theblueboard.co/og/og-news.jpg"}>
-<meta name="twitter:site" content="@theblueboard">
 
-<!-- Schema: BreadcrumbList -->
-<script type="application/ld+json" set:html={JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    {"@type": "ListItem", "position": 1, "name": "The Blue Board", "item": "https://theblueboard.co"},
-    {"@type": "ListItem", "position": 2, "name": "News", "item": "https://theblueboard.co/news"},
-    {"@type": "ListItem", "position": 3, "name": article.title, "item": `https://theblueboard.co/news/${slug}`}
-  ]
-})} />
-<!-- Schema: NewsArticle -->
-<script type="application/ld+json" set:html={JSON.stringify(newsArticleSchema)} />
+<BaseLayout
+  title={`${article.title} | United Airlines News | The Blue Board`}
+  description={article.summary}
+  canonical={`/news/${slug}`}
+  ogType="article"
+  ogImage={ogImage}
+  ogTitle={article.title}
+  ogImageAlt={article.title}
+  jsonLd={[newsArticleSchema]}
+>
+  <Fragment slot="head">
+    <meta property="article:published_time" content={article.date} />
+    <meta property="article:section" content={article.category} />
+  </Fragment>
 
-<link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <div class="mx-auto max-w-3xl px-4 py-8">
+    <Breadcrumbs items={[{ label: 'News', href: '/news' }, { label: article.title }]} />
 
-<style is:inline>
-@font-face{font-family:'Satoshi';font-style:normal;font-weight:300 900;font-display:swap;src:url(/fonts/satoshi-latin.woff2) format('woff2')}
-@font-face{font-family:'DM Sans';font-style:normal;font-weight:100 900;font-display:swap;src:url(/fonts/dm-sans-latin.woff2) format('woff2')}
-@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-*{margin:0;padding:0;box-sizing:border-box}
-:root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#64748B;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
-body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);font-size:13px;line-height:1.7;min-height:100vh}
-h1,h2,h3,h4,h5,h6{font-family:var(--font-display)}
-a{color:var(--ua-accent);text-decoration:none}
-a:hover{text-decoration:underline}
-.container{max-width:900px;margin:0 auto;padding:20px 16px}
+    <article>
+      <header class="mt-6 border-b border-border pb-5">
+        <p class="font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
+          <span class="font-semibold text-primary">{article.category}</span> &middot; {displayDate}
+        </p>
+        <h1
+          class="mt-2 text-2xl leading-tight font-bold tracking-tight text-balance text-foreground"
+        >
+          {article.title}
+        </h1>
+      </header>
 
-/* Article Header */
-.article-header{border-bottom:1px solid var(--ua-border);padding:20px 0 16px;margin-bottom:24px}
-.article-header .nav{font-family:var(--font-display);font-size:11px;font-weight:500;color:var(--ua-muted);margin-bottom:12px}
-.article-header .nav a{color:var(--ua-accent);font-size:11px}
-.article-meta{font-family:var(--font-mono);font-size:11px;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.article-meta .category{color:var(--ua-accent);font-weight:600}
-.article-header h1{font-size:22px;font-weight:700;color:var(--ua-text);letter-spacing:-.5px;text-wrap:balance;line-height:1.3}
-
-/* Article Body */
-.article-body{max-width:680px;margin-bottom:32px}
-.article-body p{color:var(--ua-text);margin-bottom:16px;line-height:1.7}
-.article-body p a{text-decoration:underline;text-decoration-color:rgba(107,170,237,.4);text-underline-offset:2px}
-.article-body p a:hover{text-decoration-color:var(--ua-accent)}
-
-/* Sources */
-.sources{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:14px 16px;margin-bottom:28px}
-.sources h2{font-size:12px;font-weight:600;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.sources a{font-size:12px;margin-right:16px;white-space:nowrap}
-.sources a::before{content:'\2197 ';font-size:10px}
-
-/* Related */
-.related{margin-bottom:28px}
-.related h2{font-size:12px;font-weight:600;color:var(--ua-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
-.related-pills{display:flex;flex-wrap:wrap;gap:8px}
-.related-pills a{background:var(--ua-panel);border:1px solid var(--ua-border);padding:6px 14px;border-radius:20px;font-size:11px;font-weight:600;color:var(--ua-text);text-decoration:none;transition:border-color .2s,color .2s,background .2s}
-.related-pills a:hover{border-color:var(--ua-blue);color:#fff;background:var(--ua-blue);text-decoration:none}
-.related-pills a:active{transform:scale(.97)}
-
-/* CTAs */
-.cta-box{background:var(--ua-panel);border-left:3px solid var(--ua-amber);padding:14px 16px;margin-bottom:16px;border-radius:0 6px 6px 0;font-size:12px}
-.cta-box p{margin:0;color:var(--ua-muted);line-height:1.6}
-.cta-box a{font-weight:600}
-.pro-teaser{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:14px 16px;margin-bottom:28px;font-size:12px}
-.pro-teaser p{margin:0;color:var(--ua-muted);line-height:1.6}
-.pro-teaser strong{color:var(--ua-text)}
-
-/* Back link */
-.back-link{margin-bottom:24px;font-size:12px}
-
-@media(max-width:600px){
-  .article-header h1{font-size:18px}
-}
-</style>
-</head>
-<body>
-
-<main class="container">
-
-  <!-- Header -->
-  <article>
-    <div class="article-header">
-      <div class="nav"><a href="/">&larr; The Blue Board</a> / <a href="/news">News</a></div>
-      <div class="article-meta"><span class="category">{article.category}</span> &middot; {displayDate}</div>
-      <h1>{article.title}</h1>
-    </div>
-
-    <!-- Body -->
-    <div class="article-body">
-      <Fragment set:html={article.body} />
-    </div>
-
-    <!-- Sources -->
-    {article.sources && article.sources.length > 0 && (
-      <div class="sources">
-        <h2>Sources</h2>
-        <div>
-          {article.sources.map((s: { name: string; url: string }) => (
-            <a href={s.url} target="_blank" rel="noopener noreferrer">{s.name}</a>
-          ))}
-        </div>
+      <div class="bb-content mt-6 max-w-2xl">
+        <Fragment set:html={article.body} />
       </div>
-    )}
 
-    <!-- Related -->
-    {crossLinks.length > 0 && (
-      <div class="related">
-        <h2>Related on The Blue Board</h2>
-        <div class="related-pills">
-          {crossLinks.map((link: { label: string; url: string }) => (
-            <a href={link.url}>{link.label} &rarr;</a>
-          ))}
-        </div>
+      {
+        article.sources && article.sources.length > 0 && (
+          <section class="mt-8 rounded-lg border border-border bg-card p-4">
+            <h2 class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              Sources
+            </h2>
+            <ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              {article.sources.map((s: { name: string; url: string }) => (
+                <li>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex min-h-11 items-center text-xs text-foreground underline underline-offset-2"
+                  >
+                    <span aria-hidden="true" class="mr-1">
+                      ↗
+                    </span>
+                    {s.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+
+      {
+        crossLinks.length > 0 && (
+          <section class="mt-8">
+            <h2 class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              Related on The Blue Board
+            </h2>
+            <nav aria-label="Related pages" class="mt-2.5 flex flex-wrap gap-2">
+              {crossLinks.map((link: { label: string; url: string }) => (
+                <a
+                  href={link.url}
+                  class="inline-flex min-h-11 items-center rounded-full border border-border bg-card px-4 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                >
+                  {link.label} &rarr;
+                </a>
+              ))}
+            </nav>
+          </section>
+        )
+      }
+
+      <div class="mt-8">
+        <HighlightBox tone="warn">
+          The Blue Board is free, ad-free, and independent. If you find this useful, consider <a
+            href="https://buymeacoffee.com/notjbg"
+            target="_blank"
+            rel="noopener noreferrer">supporting the project</a
+          >.
+        </HighlightBox>
       </div>
-    )}
 
-    <!-- Donation CTA -->
-    <div class="cta-box">
-      <p>The Blue Board is free, ad-free, and independent. If you find this useful, consider <a href="https://buymeacoffee.com/notjbg" target="_blank" rel="noopener noreferrer">supporting the project</a>.</p>
-    </div>
+      <div class="bb-content mt-4 rounded-lg border border-border bg-card px-4 py-3 text-xs">
+        <p class="mb-0">
+          <strong>Coming Soon: Blue Board Pro</strong> &mdash; Personalized delay predictions for
+          your flights, push notifications when risk spikes, and more. <a href="/?waitlist=1"
+            >Join the waitlist &rarr;</a
+          >
+        </p>
+      </div>
+    </article>
 
-    <!-- Pro Teaser -->
-    <div class="pro-teaser">
-      <p><strong>Coming Soon: Blue Board Pro</strong> &mdash; Personalized delay predictions for your flights, push notifications when risk spikes, and more. <a href="/?waitlist=1">Join the waitlist &rarr;</a></p>
-    </div>
-  </article>
-
-  <!-- Back to index -->
-  <div class="back-link"><a href="/news">&larr; All News</a></div>
-
-</main>
-
-<Footer />
-
-<VercelAnalytics />
-
-</body>
-</html>
+    <p class="mt-8">
+      <a
+        href="/news"
+        class="inline-flex min-h-11 items-center text-xs font-medium text-foreground underline underline-offset-2"
+        >&larr; All News</a
+      >
+    </p>
+  </div>
+</BaseLayout>

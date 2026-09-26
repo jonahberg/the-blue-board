@@ -27,8 +27,11 @@ export const config = {
   // never pays for a middleware invocation — this project already watches denial-of-wallet
   // on the API surface, and none of these paths has a Markdown representation anyway.
   // `_agent/` is excluded too: it is the rewrite target, and re-entering would loop.
+  // The list is the directories a build actually emits into dist/ — `css/`, `js/` and
+  // `fonts/` went with the hand-written dashboard bundle in v1.8.0, and an exclusion for a
+  // directory that no longer exists only hides a dead path from its 404.
   matcher: [
-    '/((?!_agent/|_astro/|_vercel/|api/|css/|data/|fonts/|icons/|js/|og/|favicon\\.svg|favicon\\.ico|manifest\\.json|og-image\\.png|robots\\.txt|sw\\.js).*)',
+    '/((?!_agent/|_astro/|_vercel/|api/|data/|icons/|og/|favicon\\.svg|favicon\\.ico|manifest\\.json|og-image\\.png|robots\\.txt|sw\\.js).*)',
   ],
 };
 

@@ -1,0 +1,62 @@
+---
+/**
+ * The one site footer. Replaces `Footer.astro` plus the divergent inline
+ * footers in `404.astro`, `hubs/index.astro` and `fleet/index.astro`.
+ *
+ * The unaffiliated-with-United disclaimer and the FR24 / AWC / FAA data credits
+ * are a licensing and trust requirement — never drop them.
+ */
+const linkClass = 'underline underline-offset-2 hover:text-foreground';
+---
+<footer class="mt-10 border-t border-border bg-background">
+  <div
+    class="mx-auto flex max-w-5xl flex-col items-center gap-2 px-4 py-5 text-center text-xs text-muted-foreground"
+  >
+    <p>
+      <a href="/" class={linkClass}>The Blue Board</a> · Unofficial · Not affiliated with United
+      Airlines, Inc. · Data may be delayed · <a href="/privacy" class={linkClass}>Privacy</a> ·
+      <a href="/" class={linkClass}>Open Dashboard &rarr;</a>
+    </p>
+    <p class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+      <span>
+        Data: <a
+          href="https://www.flightradar24.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          class={linkClass}>FR24</a
+        > · <a
+          href="https://aviationweather.gov"
+          target="_blank"
+          rel="noopener noreferrer"
+          class={linkClass}>AWC</a
+        > · <a
+          href="https://nasstatus.faa.gov"
+          target="_blank"
+          rel="noopener noreferrer"
+          class={linkClass}>FAA</a
+        >
+      </span>
+      <a
+        href="https://buymeacoffee.com/notjbg"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex min-h-11 items-center rounded-md bg-primary px-3 font-medium text-primary-foreground md:min-h-0 md:px-2.5 md:py-1"
+      >
+        &#9749; Support Server Costs
+      </a>
+      <span class="whitespace-nowrap">
+        Built by <a
+          href="https://jonahberg.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          class={linkClass}>Jonah Berg</a
+        > · <a
+          href="https://x.com/theblueboard"
+          target="_blank"
+          rel="noopener noreferrer"
+          class={linkClass}>Follow @theblueboard</a
+        >
+      </span>
+    </p>
+  </div>
+</footer>

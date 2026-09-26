@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Regression guard for the v2.0 map outage (PR #220): a marker hit-slop rule
@@ -32,8 +32,10 @@ const REQUIRED_ABSOLUTE = [
 ];
 
 describe('Leaflet required styles are not overridden', () => {
+  // The dashboard's stylesheet is src/styles/global.css now; public/css/style.css is
+  // retired (deleted in v1.8.0 along with the `legacy/` reference copy).
   const css = readFileSync(
-    resolve(__dirname, '..', 'public', 'css', 'style.css'),
+    resolve(__dirname, '..', 'src', 'styles', 'global.css'),
     'utf8'
   );
 
@@ -67,25 +69,29 @@ describe('Leaflet required styles are not overridden', () => {
   }
 
   // The live map mounts Leaflet's zoom control at 'bottomright'. leaflet.css gives it a 10px
-  // margin and a 30px-wide button stack, so it owns roughly the first 42px in from the viewport's
-  // right edge and the first 89px up from the bottom. #legal-details shipped at right:16px and
+  // margin and a 30px-wide button stack, so it owns roughly the first 42px in from the map's
+  // right edge and the first 89px up from its bottom. #legal-details shipped at right:16px and
   // covered the zoom-OUT button outright — document.elementFromPoint at the button's centre
   // returned #legal-btn, so clicking "−" opened the About popover instead of zooming.
+  //
+  // The rebuild has no fixed full-bleed map, so nothing should be pinned into that corner at
+  // all. This asserts the absence rather than a specific rule's offset: any position:fixed
+  // rule that plants itself in the bottom-right corner is the same bug.
   const LEAFLET_ZOOM_RIGHT_RESERVED_PX = 52;
 
-  it('keeps fixed bottom-right overlays clear of the Leaflet zoom control', () => {
-    const rule = stripped.match(/#legal-details\s*\{([^}]*)\}/);
-    expect(rule, '#legal-details rule not found').toBeTruthy();
+  it('leaves the map\'s bottom-right corner clear of fixed overlays', () => {
+    const offenders = rules.filter(([, body]) => {
+      if (!/position\s*:\s*fixed/.test(body)) return false;
+      if (!/(^|[;\s])bottom\s*:/.test(body)) return false;
+      const right = Number((body.match(/(?:^|[;\s])right\s*:\s*(\d+)px/) || [])[1]);
+      return Number.isFinite(right) && right < LEAFLET_ZOOM_RIGHT_RESERVED_PX;
+    });
 
-    const body = rule[1];
-    expect(body, 'expected #legal-details to be position:fixed').toMatch(/position\s*:\s*fixed/);
-
-    const right = Number((body.match(/(?:^|;)\s*right\s*:\s*(\d+)px/) || [])[1]);
     expect(
-      right,
-      `#legal-details must sit at least ${LEAFLET_ZOOM_RIGHT_RESERVED_PX}px from the right edge ` +
-        "so it does not swallow the map's zoom-out button"
-    ).toBeGreaterThanOrEqual(LEAFLET_ZOOM_RIGHT_RESERVED_PX);
+      offenders.map(([selector]) => selector),
+      `a fixed bottom-right overlay within ${LEAFLET_ZOOM_RIGHT_RESERVED_PX}px of the edge ` +
+        "swallows the map's zoom-out button"
+    ).toEqual([]);
   });
 
   // Prove the guard would actually catch the PR #220 failure mode written the sneaky
@@ -108,6 +114,93 @@ describe('Leaflet required styles are not overridden', () => {
       return targetsElementItself && setsPosition;
     });
     expect(legalOffenders).toEqual([]);
+  });
+
+  // The CSS scan above can only see global.css. The rebuild positions its overlays with
+  // Tailwind utility classes inside TSX, where a `fixed bottom-4 right-4` panel would
+  // reproduce the #legal-details bug and no stylesheet rule would exist to catch it.
+  //
+  // Tailwind's spacing scale is 0.25rem per step, so right-0..right-12 is everything inside
+  // the ~52px the Leaflet zoom control reserves in the map's bottom-right corner (right-13
+  // == 52px is the first step that clears it).
+  const RIGHT_INSIDE_RESERVED =
+    /\bright-(?:0|px|0\.5|1|1\.5|2|2\.5|3|3\.5|4|5|6|7|8|9|10|11|12)\b/;
+
+  /** True when one class list pins an element over the map's zoom control. */
+  function pinsFixedBottomRight(classes) {
+    return (
+      /(^|\s)fixed(\s|$)/.test(classes) &&
+      /\bbottom-/.test(classes) &&
+      RIGHT_INSIDE_RESERVED.test(classes)
+    );
+  }
+
+  /**
+   * Every string literal in the file, not just `className="…"`. Class lists reach the DOM
+   * through `cn(...)`, `cva()` variants and plain constants too, and a scan that only saw
+   * the `className=` attribute would pass vacuously over all of them.
+   */
+  function stringLiteralsIn(source) {
+    const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    return [...withoutComments.matchAll(/"([^"\n]*)"|'([^'\n]*)'|`([^`]*)`/g)].map(
+      (m) => m[1] ?? m[2] ?? m[3] ?? ''
+    );
+  }
+
+  it("no component pins a fixed overlay into the map's bottom-right corner", () => {
+    const APP_DIR = resolve(__dirname, '..', 'src', 'app');
+
+    function filesUnder(dir) {
+      const found = [];
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = resolve(dir, entry.name);
+        if (entry.isDirectory()) found.push(...filesUnder(path));
+        else if (/\.tsx?$/.test(entry.name)) found.push(path);
+      }
+      return found;
+    }
+
+    const files = filesUnder(APP_DIR);
+    // Without this the whole assertion passes on an empty list — a moved directory or a
+    // typo'd resolve() would silently retire the guard, which is exactly how the rule this
+    // replaces stopped being worth anything.
+    expect(files.length, 'found no .ts/.tsx under src/app — the scan is looking in the wrong place').
+      toBeGreaterThan(20);
+
+    const offenders = [];
+    for (const file of files) {
+      for (const literal of stringLiteralsIn(readFileSync(file, 'utf8'))) {
+        if (pinsFixedBottomRight(literal)) {
+          offenders.push(`${file.split('/src/').pop()} → ${literal.trim().slice(0, 80)}`);
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      "a fixed bottom-right overlay swallows the map's zoom-out button (see #legal-details)"
+    ).toEqual([]);
+  });
+
+  // Guards the scan itself: the same predicate the scan uses must flag the shape it hunts,
+  // including one hidden inside a cn() call, and must not flag a cleared or non-fixed one.
+  it('flags a synthetic fixed bottom-right overlay', () => {
+    expect(pinsFixedBottomRight('fixed bottom-4 right-4 z-50 rounded-md border')).toBe(true);
+    expect(pinsFixedBottomRight('fixed right-0 bottom-0 h-40')).toBe(true);
+    // ...and must NOT flag one that clears the control, or one that is not fixed at all.
+    expect(pinsFixedBottomRight('fixed bottom-4 right-16')).toBe(false);
+    expect(pinsFixedBottomRight('absolute bottom-4 right-4')).toBe(false);
+    expect(pinsFixedBottomRight('fixed inset-y-0 right-0 w-3/4')).toBe(false);
+
+    // The literal scan must reach class lists that never touch a `className=` attribute.
+    const viaCn = 'const x = cn("fixed bottom-4 right-4", open && "opacity-100");';
+    expect(stringLiteralsIn(viaCn).some(pinsFixedBottomRight)).toBe(true);
+    // Comments are stripped, so prose describing the bug does not trip the guard.
+    expect(
+      stringLiteralsIn('// never write "fixed bottom-4 right-4" here\nconst y = 1;').some(
+        pinsFixedBottomRight
+      )
+    ).toBe(false);
   });
 
   it('keeps the marker hit-slop pseudo-element', () => {

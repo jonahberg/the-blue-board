@@ -1,9 +1,12 @@
 ---
-import { hubOrder, hubNavLabels, hubs } from '../../data/hubs/index.js';
-import VercelAnalytics from '../../components/VercelAnalytics.astro';
+import { hubOrder, hubs } from '../../data/hubs/index.js';
 import { HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../../data/facts.js';
+import BaseLayout from '../../components/site/BaseLayout.astro';
+import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
+import ContentSection from '../../components/site/ContentSection.astro';
 
-const hubSummaries: Record<string, { name: string; city: string; subtitle: string; iata: string }> = {};
+const hubSummaries: Record<string, { name: string; city: string; subtitle: string; iata: string }> =
+  {};
 for (const key of hubOrder) {
   const h = hubs[key];
   hubSummaries[key] = {
@@ -13,244 +16,245 @@ for (const key of hubOrder) {
     iata: h.iata,
   };
 }
+
+const title = `United Airlines Hubs — ${HUB_LINE_SHORT}, Delays & Status | The Blue Board`;
+const description = `Live status across ${HUB_LINE_LONG}. Check delays, cancellations, on-time performance, and Starlink WiFi at ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM. Real-time operations dashboard for United frequent flyers.`;
+const shareTitle = `United Airlines Hubs — ${HUB_LINE_SHORT} & Live Status`;
+
+const faqs = [
+  {
+    question: "What are United Airlines' hub airports?",
+    answer:
+      "United Airlines operates 8 official hub airports — Chicago O'Hare (ORD), Denver (DEN), Houston Intercontinental (IAH), Newark Liberty (EWR), San Francisco (SFO), Washington Dulles (IAD), Los Angeles (LAX), and Guam (GUM) — plus the Tokyo-Narita (NRT) gateway that The Blue Board also tracks. ORD is the largest with approximately 750 daily departures.",
+  },
+  {
+    question: 'Which United Airlines hub has the most flights?',
+    answer:
+      "Chicago O'Hare (ORD) is United Airlines' largest hub with up to approximately 750 daily departures at summer peak. Denver (DEN) is the second-largest hub with about 540 daily departures. Houston Intercontinental (IAH) has around 480 daily departures. Newark Liberty (EWR) handles roughly 350-400, operating under FAA flight caps (72 operations per hour) extended through October 2027.",
+  },
+  {
+    question: 'How can I check delays at United Airlines hubs?',
+    answer:
+      'The Blue Board monitors delays, cancellations, and ground stops at all 8 United hubs plus the Tokyo-Narita gateway in real time. Visit theblueboard.co to see the hub health bar with on-time performance, or visit individual hub pages for detailed delay patterns, seasonal trends, and live flight counts.',
+  },
+  {
+    question: 'Which United hubs have international flights?',
+    answer:
+      "United's 8 hubs and the Tokyo-Narita gateway all have some level of international service. The primary international gateways are: Newark (EWR) for transatlantic flights, San Francisco (SFO) for transpacific routes, and Houston (IAH) for Latin America. Tokyo Narita (NRT) is United's Asia-Pacific gateway, though most mainland-US Tokyo service now uses Tokyo Haneda (HND). Chicago O'Hare (ORD) and Washington Dulles (IAD) also serve major international routes.",
+  },
+];
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.question,
+    acceptedAnswer: { '@type': 'Answer', text: f.answer },
+  })),
+};
+
+const HUB_LIST_NAMES: Record<string, string> = {
+  ord: "United Airlines at Chicago O'Hare (ORD)",
+  den: 'United Airlines at Denver (DEN)',
+  iah: 'United Airlines at Houston (IAH)',
+  ewr: 'United Airlines at Newark (EWR)',
+  sfo: 'United Airlines at San Francisco (SFO)',
+  iad: 'United Airlines at Washington Dulles (IAD)',
+  lax: 'United Airlines at Los Angeles (LAX)',
+  nrt: 'United Airlines at Tokyo Narita (NRT)',
+  gum: 'United Airlines at Guam (GUM)',
+};
+
+const itemListSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: 'Airports The Blue Board Tracks',
+  description:
+    "The 9 airports The Blue Board tracks: United's 8 hubs plus the Tokyo-Narita gateway, with live status, delays, and operations data",
+  numberOfItems: hubOrder.length,
+  itemListElement: hubOrder.map((key, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: HUB_LIST_NAMES[key],
+    url: `https://theblueboard.co/hubs/${key}`,
+  })),
+};
 ---
-<!DOCTYPE html>
-<html lang="en" style="color-scheme:dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0B1018">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E">
-<title>United Airlines Hubs — {HUB_LINE_SHORT}, Delays & Status | The Blue Board</title>
-<meta name="description" content={`Live status across ${HUB_LINE_LONG}. Check delays, cancellations, on-time performance, and Starlink WiFi at ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM. Real-time operations dashboard for United frequent flyers.`}>
-<meta name="author" content="The Blue Board">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://theblueboard.co/hubs">
-<meta property="og:type" content="website">
-<meta property="og:locale" content="en_US">
-<meta property="og:title" content={`United Airlines Hubs — ${HUB_LINE_SHORT} & Live Status`}>
-<meta property="og:description" content={`Live status across ${HUB_LINE_LONG}. Delays, cancellations, on-time performance, and Starlink WiFi. Updated every 30 seconds.`}>
-<meta property="og:url" content="https://theblueboard.co/hubs">
-<meta property="og:site_name" content="The Blue Board">
-<meta property="og:image" content="https://theblueboard.co/og/og-hubs.jpg">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Blue Board — United Airlines Hub Status Dashboard">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:creator" content="@theblueboard">
-<meta name="twitter:title" content={`United Airlines Hubs — ${HUB_LINE_SHORT} & Live Status`}>
-<meta name="twitter:description" content={`Live status across ${HUB_LINE_LONG}. Delays, cancellations, on-time performance. Updated every 30 seconds.`}>
-<meta name="twitter:image" content="https://theblueboard.co/og/og-hubs.jpg">
-<meta name="twitter:site" content="@theblueboard">
 
-<!-- Schema: BreadcrumbList -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    {"@type": "ListItem", "position": 1, "name": "The Blue Board", "item": "https://theblueboard.co"},
-    {"@type": "ListItem", "position": 2, "name": "Hubs", "item": "https://theblueboard.co/hubs"}
-  ]
-}
-</script>
-<!-- Schema: FAQPage -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [
-    {
-      "@type": "Question",
-      "name": "What are United Airlines' hub airports?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "United Airlines operates 8 official hub airports — Chicago O'Hare (ORD), Denver (DEN), Houston Intercontinental (IAH), Newark Liberty (EWR), San Francisco (SFO), Washington Dulles (IAD), Los Angeles (LAX), and Guam (GUM) — plus the Tokyo-Narita (NRT) gateway that The Blue Board also tracks. ORD is the largest with approximately 750 daily departures."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Which United Airlines hub has the most flights?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Chicago O'Hare (ORD) is United Airlines' largest hub with up to approximately 750 daily departures at summer peak. Denver (DEN) is the second-largest hub with about 540 daily departures. Houston Intercontinental (IAH) has around 480 daily departures. Newark Liberty (EWR) handles roughly 350-400, operating under FAA flight caps (72 operations per hour) extended through October 2027."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "How can I check delays at United Airlines hubs?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "The Blue Board monitors delays, cancellations, and ground stops at all 8 United hubs plus the Tokyo-Narita gateway in real time. Visit theblueboard.co to see the hub health bar with on-time performance, or visit individual hub pages for detailed delay patterns, seasonal trends, and live flight counts."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Which United hubs have international flights?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "United's 8 hubs and the Tokyo-Narita gateway all have some level of international service. The primary international gateways are: Newark (EWR) for transatlantic flights, San Francisco (SFO) for transpacific routes, and Houston (IAH) for Latin America. Tokyo Narita (NRT) is United's Asia-Pacific gateway, though most mainland-US Tokyo service now uses Tokyo Haneda (HND). Chicago O'Hare (ORD) and Washington Dulles (IAD) also serve major international routes."
-      }
-    }
-  ]
-}
-</script>
-<!-- Schema: ItemList -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "ItemList",
-  "name": "Airports The Blue Board Tracks",
-  "description": "The 9 airports The Blue Board tracks: United's 8 hubs plus the Tokyo-Narita gateway, with live status, delays, and operations data",
-  "numberOfItems": 9,
-  "itemListElement": [
-    {"@type": "ListItem", "position": 1, "name": "United Airlines at Chicago O'Hare (ORD)", "url": "https://theblueboard.co/hubs/ord"},
-    {"@type": "ListItem", "position": 2, "name": "United Airlines at Denver (DEN)", "url": "https://theblueboard.co/hubs/den"},
-    {"@type": "ListItem", "position": 3, "name": "United Airlines at Houston (IAH)", "url": "https://theblueboard.co/hubs/iah"},
-    {"@type": "ListItem", "position": 4, "name": "United Airlines at Newark (EWR)", "url": "https://theblueboard.co/hubs/ewr"},
-    {"@type": "ListItem", "position": 5, "name": "United Airlines at San Francisco (SFO)", "url": "https://theblueboard.co/hubs/sfo"},
-    {"@type": "ListItem", "position": 6, "name": "United Airlines at Washington Dulles (IAD)", "url": "https://theblueboard.co/hubs/iad"},
-    {"@type": "ListItem", "position": 7, "name": "United Airlines at Los Angeles (LAX)", "url": "https://theblueboard.co/hubs/lax"},
-    {"@type": "ListItem", "position": 8, "name": "United Airlines at Tokyo Narita (NRT)", "url": "https://theblueboard.co/hubs/nrt"},
-    {"@type": "ListItem", "position": 9, "name": "United Airlines at Guam (GUM)", "url": "https://theblueboard.co/hubs/gum"}
-  ]
-}
-</script>
+<BaseLayout
+  title={title}
+  description={description}
+  canonical="/hubs"
+  ogImage="https://theblueboard.co/og/og-hubs.jpg"
+  ogTitle={shareTitle}
+  ogDescription={`Live status across ${HUB_LINE_LONG}. Delays, cancellations, on-time performance, and Starlink WiFi. Updated every 30 seconds.`}
+  ogImageAlt="The Blue Board — United Airlines Hub Status Dashboard"
+  twitterDescription={`Live status across ${HUB_LINE_LONG}. Delays, cancellations, on-time performance. Updated every 30 seconds.`}
+  jsonLd={[faqSchema, itemListSchema]}
+>
+  <div class="mx-auto max-w-4xl px-4 py-8">
+    <Breadcrumbs items={[{ label: 'Hubs' }]} />
 
-<link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
-<style is:inline>
-@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-*{margin:0;padding:0;box-sizing:border-box}
-:root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-border:#1E2940;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-accent:#6BAAED;--ua-green:#22C55E;--ua-amber:#C4A35A;--font-mono:'JetBrains Mono',monospace}
-body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-mono);font-size:13px;line-height:1.7;min-height:100vh}
-a{color:var(--ua-accent);text-decoration:none}
-a:hover{text-decoration:underline}
-.section p a,.section li a{text-decoration:underline;text-decoration-color:rgba(107,170,237,.4);text-underline-offset:2px}
-.section p a:hover,.section li a:hover{text-decoration-color:var(--ua-accent)}
-.container{max-width:900px;margin:0 auto;padding:20px 16px}
-h1{font-size:22px;font-weight:700;color:var(--ua-text);letter-spacing:-.5px;margin-bottom:4px;text-wrap:balance}
-h1 .iata{color:var(--ua-accent)}
-h2{font-size:16px;font-weight:700;color:var(--ua-text);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--ua-border)}
-p{margin-bottom:12px}
-.header{border-bottom:1px solid var(--ua-border);padding:20px 0 16px;margin-bottom:24px}
-.header .nav{font-size:11px;color:var(--ua-muted);margin-bottom:12px}
-.header .nav a{color:var(--ua-accent);font-size:11px}
-.subtitle{font-size:12px;color:var(--ua-muted)}
-.hub-grid{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:32px}
-.hub-card{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:20px;transition:border-color .2s}
-.hub-card:hover{border-color:var(--ua-blue)}
-.hub-card .hub-code{font-size:28px;font-weight:700;color:var(--ua-accent);letter-spacing:1px}
-.hub-card .hub-name{font-size:14px;font-weight:600;margin:4px 0 2px}
-.hub-card .hub-info{font-size:11px;color:var(--ua-muted);margin-bottom:10px}
-.hub-card .hub-link{display:inline-block;background:var(--ua-blue);color:#fff;padding:6px 16px;border-radius:4px;font-size:11px;font-weight:600;text-decoration:none;letter-spacing:.5px}
-.hub-card .hub-link:hover{background:#0070cc;text-decoration:none}
-.cta-block{background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:6px;padding:20px;text-align:center;margin-bottom:32px}
-.cta-block .cta{display:inline-block;background:var(--ua-blue);color:#fff;padding:10px 24px;border-radius:4px;font-size:12px;font-weight:600;text-decoration:none;margin-top:8px}
-.cta-block .cta:hover{background:#0070cc;text-decoration:none}
-.section{margin-bottom:32px}
-.section p{color:var(--ua-text)}
-.section ul{padding-left:20px;margin-bottom:12px}
-.section li{margin-bottom:6px}
-.footer{background:var(--ua-panel);border-top:1px solid var(--ua-border);padding:8px 16px;font-size:9px;color:var(--ua-muted);text-align:center;line-height:1.8;margin-top:40px}
-@media(max-width:600px){
-  h1{font-size:18px}
-  .hub-card .hub-code{font-size:22px}
-}
-</style>
-</head>
-<body>
+    <header class="mt-6 border-b border-border pb-5">
+      <h1 class="text-2xl font-bold tracking-tight text-balance text-foreground">
+        United Airlines <span class="text-primary">Hub Airports</span> — Live Status &amp;
+        Delays
+      </h1>
+      <p class="mt-1.5 text-xs text-muted-foreground">
+        Real-time operations across all 8 United hubs plus the Tokyo-Narita gateway · Delays,
+        cancellations, on-time performance
+      </p>
+    </header>
 
-<main class="container">
+    <div class="mt-6 rounded-lg border border-border bg-card p-5 text-center">
+      <p class="text-sm text-muted-foreground">
+        See all hubs on the live dashboard with real-time delay counts and flight positions.
+      </p>
+      <a
+        class="mt-3 inline-flex min-h-11 items-center rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        href="/">Open The Blue Board Dashboard &#8594;</a
+      >
+    </div>
 
-  <!-- Header -->
-  <div class="header">
-    <div class="nav"><a href="/">&#8592; The Blue Board</a> / Hubs</div>
-    <h1>United Airlines <span class="iata">Hub Airports</span> — Live Status & Delays</h1>
-    <div class="subtitle">Real-time operations across all 8 United hubs plus the Tokyo-Narita gateway · Delays, cancellations, on-time performance</div>
+    <section class="mt-8">
+      <h2
+        class="mb-3 border-b border-border pb-1.5 text-base font-bold tracking-tight text-foreground"
+      >
+        Airports The Blue Board Tracks — 8 Hubs + NRT Gateway
+      </h2>
+      <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {
+          hubOrder.map((key) => {
+            const hub = hubSummaries[key];
+            return (
+              <li class="flex flex-col rounded-lg border border-border bg-card p-4 hover:border-primary">
+                <p class="font-mono text-2xl font-bold tracking-wide text-primary">{hub.iata}</p>
+                <p class="mt-1 text-sm font-semibold text-foreground">{hub.name}</p>
+                <p class="mt-0.5 mb-3 text-[11px] leading-relaxed text-muted-foreground">
+                  {hub.subtitle}
+                </p>
+                <a
+                  class="mt-auto inline-flex min-h-11 w-fit items-center rounded-md bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+                  href={`/hubs/${key}`}
+                >
+                  View {hub.iata} Hub Status &#8594;
+                </a>
+                {key === 'ewr' && (
+                  <a
+                    href="/newark"
+                    class="mt-2 inline-flex min-h-11 w-fit items-center text-[11px] text-foreground underline underline-offset-2"
+                  >
+                    FAA cap explained →
+                  </a>
+                )}
+              </li>
+            );
+          })
+        }
+      </ul>
+    </section>
+
+    <ContentSection heading="United Airlines Hub Network">
+      <p>
+        United Airlines operates a network of <strong>8 hub airports</strong> spanning the United
+        States and the Pacific, plus the <strong>Tokyo-Narita gateway</strong> — all {
+          TRACKED_BOARDS
+        } of which The Blue Board tracks. Together, these airports handle thousands of daily
+        departures connecting over 350 destinations worldwide. The Blue Board tracks every United
+        flight at every one of these airports in real time — updated every 30 seconds.
+      </p>
+      <p>
+        Select a hub above to see live delay counts, on-time performance, Starlink WiFi fleet
+        information, seasonal delay patterns, terminal details, and more.
+      </p>
+      <p>United's hub-and-spoke network is built around three tiers of hubs:</p>
+      <ul>
+        <li>
+          <strong>Major domestic hubs:</strong> <a href="/hubs/ord">Chicago O'Hare (ORD)</a> and <a
+            href="/hubs/den">Denver (DEN)</a
+          > are the two largest, handling over 1,200 daily departures combined. ORD is United's global
+          headquarters and largest operation.
+        </li>
+        <li>
+          <strong>Gateway hubs:</strong> <a href="/hubs/ewr">Newark (EWR)</a> serves as the East Coast
+          transatlantic gateway, operating under FAA flight caps (72 operations per hour) extended through
+          October 2027; <a href="/hubs/sfo">San Francisco (SFO)</a> and <a href="/hubs/lax"
+            >Los Angeles (LAX)</a
+          > are Pacific gateways, and <a href="/hubs/iah">Houston (IAH)</a> is the primary Latin America
+          gateway.
+        </li>
+        <li>
+          <strong>International hubs:</strong> <a href="/hubs/nrt">Tokyo Narita (NRT)</a> is United's
+          Asia-Pacific connecting hub (though most mainland-US Tokyo service now uses Tokyo Haneda), and
+          <a href="/hubs/gum">Guam (GUM)</a> connects Pacific island routes. <a href="/hubs/iad"
+            >Washington Dulles (IAD)</a
+          > serves both domestic and transatlantic routes.
+        </li>
+      </ul>
+    </ContentSection>
+
+    <ContentSection heading="What The Blue Board Tracks at Each Hub">
+      <ul>
+        <li>
+          <strong>Live flight counts</strong> — active United flights at each hub, updated every 30
+          seconds
+        </li>
+        <li>
+          <strong>Delay monitoring</strong> — real-time delay counts, cancellations, and on-time
+          percentage
+        </li>
+        <li><strong>Ground stops &amp; FAA alerts</strong> — NAS status affecting hub operations</li>
+        <li>
+          <strong>Departure &amp; arrival schedules</strong> — with on-time stats and equipment swap
+          detection
+        </li>
+        <li>
+          <strong>Starlink WiFi fleet</strong> — which aircraft at each hub have Starlink satellite
+          internet
+        </li>
+        <li><strong>Weather conditions</strong> — METAR observations and NEXRAD radar overlay</li>
+        <li>
+          <strong>Seasonal delay patterns</strong> — historical context for weather-driven
+          disruptions
+        </li>
+      </ul>
+    </ContentSection>
+
+    <ContentSection id="faq" heading="Frequently Asked Questions">
+      <h3>What are United Airlines' hub airports?</h3>
+      <p>
+        United Airlines operates 8 official hub airports: Chicago O'Hare (ORD), Denver (DEN),
+        Houston Intercontinental (IAH), Newark Liberty (EWR), San Francisco (SFO), Washington Dulles
+        (IAD), Los Angeles (LAX), and Guam (GUM) — plus the Tokyo-Narita (NRT) gateway that The Blue
+        Board also tracks. ORD is the largest with approximately 750 daily departures.
+      </p>
+
+      <h3>Which United Airlines hub has the most flights?</h3>
+      <p>
+        Chicago O'Hare (ORD) is United's largest hub with up to approximately 750 daily departures
+        at summer peak. Denver (DEN) is the second-largest with about 540. Houston (IAH) handles
+        around 480, while Newark (EWR) handles roughly 350-400 under FAA flight caps (extended
+        through October 2027).
+      </p>
+
+      <h3>How can I check delays at United Airlines hubs?</h3>
+      <p>
+        The Blue Board monitors delays, cancellations, and ground stops at all 8 United hubs plus
+        the Tokyo-Narita gateway in real time. Visit <a href="/">theblueboard.co</a> to see the hub health
+        bar with on-time performance, or visit individual hub pages for detailed delay patterns, seasonal
+        trends, and live flight counts.
+      </p>
+
+      <h3>Which United hubs have international flights?</h3>
+      <p>
+        United's 8 hubs and the Tokyo-Narita gateway all have some level of international service.
+        The primary international gateways are: <a href="/hubs/ewr">Newark (EWR)</a> for transatlantic
+        flights, <a href="/hubs/sfo">San Francisco (SFO)</a> for transpacific routes, and <a
+          href="/hubs/iah">Houston (IAH)</a
+        > for Latin America. <a href="/hubs/nrt">Tokyo Narita (NRT)</a> is United's Asia-Pacific gateway,
+        though most mainland-US Tokyo service now uses Tokyo Haneda (HND).
+      </p>
+    </ContentSection>
   </div>
-
-  <!-- CTA -->
-  <div class="cta-block">
-    <p style="margin:0">See all hubs on the live dashboard with real-time delay counts and flight positions.</p>
-    <a class="cta" href="/">Open The Blue Board Dashboard &#8594;</a>
-  </div>
-
-  <!-- Hub Grid -->
-  <h2>Airports The Blue Board Tracks — 8 Hubs + NRT Gateway</h2>
-  <div class="hub-grid">
-    {hubOrder.map((key) => {
-      const hub = hubSummaries[key];
-      return (
-        <div class="hub-card">
-          <div class="hub-code">{hub.iata}</div>
-          <div class="hub-name">{hub.name}</div>
-          <div class="hub-info">{hub.subtitle}</div>
-          <a class="hub-link" href={`/hubs/${key}`}>View {hub.iata} Hub Status &#8594;</a>
-          {key === 'ewr' && (
-            <div style="margin-top:8px"><a href="/newark" style="font-size:10px;color:var(--ua-accent)">FAA cap explained →</a></div>
-          )}
-        </div>
-      );
-    })}
-  </div>
-
-  <!-- Intro -->
-  <div class="section">
-    <p>United Airlines operates a network of <strong>8 hub airports</strong> spanning the United States and the Pacific, plus the <strong>Tokyo-Narita gateway</strong> — all {TRACKED_BOARDS} of which The Blue Board tracks. Together, these airports handle thousands of daily departures connecting over 350 destinations worldwide. The Blue Board tracks every United flight at every one of these airports in real time — updated every 30 seconds.</p>
-    <p>Select a hub above to see live delay counts, on-time performance, Starlink WiFi fleet information, seasonal delay patterns, terminal details, and more.</p>
-  </div>
-
-  <!-- Content Sections -->
-  <div class="section">
-    <h2>United Airlines Hub Network</h2>
-    <p>United's hub-and-spoke network is built around three tiers of hubs:</p>
-    <ul>
-      <li><strong>Major domestic hubs:</strong> <a href="/hubs/ord">Chicago O'Hare (ORD)</a> and <a href="/hubs/den">Denver (DEN)</a> are the two largest, handling over 1,200 daily departures combined. ORD is United's global headquarters and largest operation.</li>
-      <li><strong>Gateway hubs:</strong> <a href="/hubs/ewr">Newark (EWR)</a> serves as the East Coast transatlantic gateway, operating under FAA flight caps (72 operations per hour) extended through October 2027; <a href="/hubs/sfo">San Francisco (SFO)</a> and <a href="/hubs/lax">Los Angeles (LAX)</a> are Pacific gateways, and <a href="/hubs/iah">Houston (IAH)</a> is the primary Latin America gateway.</li>
-      <li><strong>International hubs:</strong> <a href="/hubs/nrt">Tokyo Narita (NRT)</a> is United's Asia-Pacific connecting hub (though most mainland-US Tokyo service now uses Tokyo Haneda), and <a href="/hubs/gum">Guam (GUM)</a> connects Pacific island routes. <a href="/hubs/iad">Washington Dulles (IAD)</a> serves both domestic and transatlantic routes.</li>
-    </ul>
-  </div>
-
-  <div class="section">
-    <h2>What The Blue Board Tracks at Each Hub</h2>
-    <ul>
-      <li><strong>Live flight counts</strong> — active United flights at each hub, updated every 30 seconds</li>
-      <li><strong>Delay monitoring</strong> — real-time delay counts, cancellations, and on-time percentage</li>
-      <li><strong>Ground stops & FAA alerts</strong> — NAS status affecting hub operations</li>
-      <li><strong>Departure & arrival schedules</strong> — with on-time stats and equipment swap detection</li>
-      <li><strong>Starlink WiFi fleet</strong> — which aircraft at each hub have Starlink satellite internet</li>
-      <li><strong>Weather conditions</strong> — METAR observations and NEXRAD radar overlay</li>
-      <li><strong>Seasonal delay patterns</strong> — historical context for weather-driven disruptions</li>
-    </ul>
-  </div>
-
-  <div class="section">
-    <h2 id="faq">Frequently Asked Questions</h2>
-    <h3>What are United Airlines' hub airports?</h3>
-    <p>United Airlines operates 8 official hub airports: Chicago O'Hare (ORD), Denver (DEN), Houston Intercontinental (IAH), Newark Liberty (EWR), San Francisco (SFO), Washington Dulles (IAD), Los Angeles (LAX), and Guam (GUM) — plus the Tokyo-Narita (NRT) gateway that The Blue Board also tracks. ORD is the largest with approximately 750 daily departures.</p>
-
-    <h3>Which United Airlines hub has the most flights?</h3>
-    <p>Chicago O'Hare (ORD) is United's largest hub with up to approximately 750 daily departures at summer peak. Denver (DEN) is the second-largest with about 540. Houston (IAH) handles around 480, while Newark (EWR) handles roughly 350-400 under FAA flight caps (extended through October 2027).</p>
-
-    <h3>How can I check delays at United Airlines hubs?</h3>
-    <p>The Blue Board monitors delays, cancellations, and ground stops at all 8 United hubs plus the Tokyo-Narita gateway in real time. Visit <a href="/">theblueboard.co</a> to see the hub health bar with on-time performance, or visit individual hub pages for detailed delay patterns, seasonal trends, and live flight counts.</p>
-
-    <h3>Which United hubs have international flights?</h3>
-    <p>United's 8 hubs and the Tokyo-Narita gateway all have some level of international service. The primary international gateways are: <a href="/hubs/ewr">Newark (EWR)</a> for transatlantic flights, <a href="/hubs/sfo">San Francisco (SFO)</a> for transpacific routes, and <a href="/hubs/iah">Houston (IAH)</a> for Latin America. <a href="/hubs/nrt">Tokyo Narita (NRT)</a> is United's Asia-Pacific gateway, though most mainland-US Tokyo service now uses Tokyo Haneda (HND).</p>
-  </div>
-
-</main>
-
-<!-- Footer -->
-<div class="footer">
-  <div><a href="/" style="color:var(--ua-accent);text-decoration:none">The Blue Board</a> · Unofficial · Not affiliated with United Airlines, Inc. · Data may be delayed · <a href="/" style="color:var(--ua-accent);text-decoration:none">Open Dashboard &#8594;</a></div>
-  <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 12px;margin-top:4px">
-    <span>Data: <a href="https://www.flightradar24.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-muted);text-decoration:none">FR24</a> · <a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer" style="color:var(--ua-muted);text-decoration:none">AWC</a> · <a href="https://nasstatus.faa.gov" target="_blank" rel="noopener noreferrer" style="color:var(--ua-muted);text-decoration:none">FAA</a></span>
-    <span style="white-space:nowrap">Built by <a href="https://jonahberg.com" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Jonah Berg</a> · <a href="https://x.com/theblueboard" target="_blank" rel="noopener noreferrer" style="color:var(--ua-accent);text-decoration:none">Follow @theblueboard</a></span>
-  </div>
-</div>
-
-<VercelAnalytics />
-
-</body>
-</html>
+</BaseLayout>

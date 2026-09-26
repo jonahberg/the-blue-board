@@ -13,8 +13,9 @@ import LastUpdated from '../../components/trackers/LastUpdated.astro';
 import CrossLink from '../../components/trackers/CrossLink.astro';
 import TrackerPulse from '../../components/trackers/TrackerPulse.astro';
 import TrackerDataActions from '../../components/trackers/TrackerDataActions.astro';
-import Footer from '../../components/Footer.astro';
-import VercelAnalytics from '../../components/VercelAnalytics.astro';
+import BaseLayout from '../../components/site/BaseLayout.astro';
+import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
+import { SECTION, SECTION_H2 } from '../../components/trackers/detail';
 
 const paths = outlinePaths(outline);
 
@@ -202,336 +203,285 @@ const faq = [
 
 const canonical = 'https://theblueboard.co/trackers/atc';
 const ogImage = 'https://theblueboard.co/og/og-tracker-atc.jpg';
+
+// `Breadcrumbs` emits the BreadcrumbList; this page adds the FAQPage and the Dataset.
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faq.map((f) => ({
+    '@type': 'Question',
+    name: f.question,
+    acceptedAnswer: { '@type': 'Answer', text: f.answer },
+  })),
+};
+
+const datasetSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  name: 'FAA TFDM electronic flight strips rollout — airport-by-airport status',
+  description:
+    'Status of all 89 airports in the FAA’s Terminal Flight Data Manager (electronic flight strips) program: live, scheduled, or still on paper, with sourced go-live dates.',
+  url: canonical,
+  dateModified: atcMeta.lastVerified,
+  creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
+  spatialCoverage: 'United States',
+  keywords: ['FAA TFDM', 'electronic flight strips', 'paper flight strips', 'airport modernization'],
+  distribution: [
+    {
+      '@type': 'DataDownload',
+      encodingFormat: 'text/csv',
+      contentUrl: 'https://theblueboard.co/trackers/atc.csv',
+    },
+    {
+      '@type': 'DataDownload',
+      encodingFormat: 'application/json',
+      contentUrl: 'https://theblueboard.co/trackers/atc.json',
+    },
+  ],
+};
+
+const jumpLinkClass =
+  'inline-flex min-h-11 items-center rounded-full border border-border bg-card px-3.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground';
+const proseClass =
+  'mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground last:mb-0 [&_a]:text-primary [&_a]:underline [&_a]:decoration-primary/40 [&_a]:underline-offset-2 [&_a:hover]:decoration-primary';
+const subheadClass = 'mt-4.5 mb-2 text-sm font-semibold text-primary';
+const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-foreground';
 ---
 
-<!doctype html>
-<html lang="en" style="color-scheme:dark">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0B1018" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2712%27%20fill%3D%27%230a0e14%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20font-size%3D%2736%27%20text-anchor%3D%27middle%27%20fill%3D%27%23005DAA%27%20font-family%3D%27Arial%2C%20sans-serif%27%3EB%3C/text%3E%3C/svg%3E" />
-    <title>{trackerParentSeo.atc.title}</title>
-    <meta
-      name="description"
-      content={trackerParentSeo.atc.description}
-    />
-    <meta name="author" content="The Blue Board" />
-    <meta name="robots" content="index, follow" />
-    <link rel="canonical" href={canonical} />
-    <meta property="og:type" content="website" />
-    <meta property="og:locale" content="en_US" />
-    <meta property="og:title" content="Is Your Airport Off Paper Yet? — Modern Skies Tracker" />
-    <meta
-      property="og:description"
-      content={`${liveCount} airport towers are off paper flight strips, ${stillOnPaper} to go. The airport-by-airport FAA modernization tracker.`}
-    />
-    <meta property="og:url" content={canonical} />
-    <meta property="og:site_name" content="The Blue Board" />
-    <meta property="og:image" content={ogImage} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Modern Skies Tracker — airports live on digital flight strips vs still on paper" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:creator" content="@theblueboard" />
-    <meta name="twitter:title" content="Is Your Airport Off Paper Yet? — Modern Skies Tracker" />
-    <meta
-      name="twitter:description"
-      content={`${liveCount} airport towers off paper, ${stillOnPaper} to go. Check your airport.`}
-    />
-    <meta name="twitter:image" content={ogImage} />
-    <meta name="twitter:site" content="@theblueboard" />
+<BaseLayout
+  title={trackerParentSeo.atc.title}
+  description={trackerParentSeo.atc.description}
+  canonical={canonical}
+  ogImage={ogImage}
+  ogTitle="Is Your Airport Off Paper Yet? — Modern Skies Tracker"
+  ogDescription={`${liveCount} airport towers are off paper flight strips, ${stillOnPaper} to go. The airport-by-airport FAA modernization tracker.`}
+  ogImageAlt="Modern Skies Tracker — airports live on digital flight strips vs still on paper"
+  twitterDescription={`${liveCount} airport towers off paper, ${stillOnPaper} to go. Check your airport.`}
+  jsonLd={[faqSchema, datasetSchema]}
+  dataAttrs={{ 'data-trk-page': 'atc' }}
+>
+  <div class="mx-auto max-w-4xl px-4 py-8">
+    <Breadcrumbs items={[{ label: 'Trackers', href: '/trackers' }, { label: 'Modern Skies' }]} />
 
-    <!-- Schema: BreadcrumbList -->
-    <script type="application/ld+json" set:html={JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
-      itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'The Blue Board', item: 'https://theblueboard.co' },
-        { '@type': 'ListItem', position: 2, name: 'Trackers', item: 'https://theblueboard.co/trackers' },
-        { '@type': 'ListItem', position: 3, name: 'Modern Skies Tracker', item: canonical },
-      ],
-    })} />
-    <!-- Schema: FAQPage -->
-    <script type="application/ld+json" set:html={JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: faq.map((f) => ({
-        '@type': 'Question',
-        name: f.question,
-        acceptedAnswer: { '@type': 'Answer', text: f.answer },
-      })),
-    })} />
-    <!-- Schema: Dataset -->
-    <script type="application/ld+json" set:html={JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'Dataset',
-      name: 'FAA TFDM electronic flight strips rollout — airport-by-airport status',
-      description:
-        'Status of all 89 airports in the FAA’s Terminal Flight Data Manager (electronic flight strips) program: live, scheduled, or still on paper, with sourced go-live dates.',
-      url: canonical,
-      dateModified: atcMeta.lastVerified,
-      creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
-      spatialCoverage: 'United States',
-      keywords: ['FAA TFDM', 'electronic flight strips', 'paper flight strips', 'airport modernization'],
-      distribution: [
-        {
-          '@type': 'DataDownload',
-          encodingFormat: 'text/csv',
-          contentUrl: 'https://theblueboard.co/trackers/atc.csv',
-        },
-        {
-          '@type': 'DataDownload',
-          encodingFormat: 'application/json',
-          contentUrl: 'https://theblueboard.co/trackers/atc.json',
-        },
-      ],
-    })} />
-
-    <link rel="preload" href="/fonts/satoshi-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin fetchpriority="low" />
-
-    <style is:inline>
-      @font-face{font-family:'Satoshi';font-style:normal;font-weight:300 900;font-display:swap;src:url(/fonts/satoshi-latin.woff2) format('woff2')}
-      @font-face{font-family:'DM Sans';font-style:normal;font-weight:100 900;font-display:swap;src:url(/fonts/dm-sans-latin.woff2) format('woff2')}
-      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url(/fonts/jetbrains-mono-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-      *{margin:0;padding:0;box-sizing:border-box}
-      :root{--ua-blue:#005DAA;--ua-dark:#0B1018;--ua-panel:#111A27;--ua-panel-elevated:#152032;--ua-border:#1E2940;--ua-border-subtle:#172236;--ua-text:#E2E8F0;--ua-muted:#94A3B8;--ua-dim:#7C8DA6;--ua-accent:#6BAAED;--ua-amber:#C4A35A;--ua-amber-soft:rgba(196,163,90,.12);--ua-blue-soft:rgba(0,93,170,.12);--ua-green:#22C55E;--ua-yellow:#EAB308;--ua-red:#EF4444;--font-display:'Satoshi',system-ui,-apple-system,sans-serif;--font-ui:'DM Sans',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',monospace}
-      body{background:var(--ua-dark);color:var(--ua-text);font-family:var(--font-ui);font-size:13px;line-height:1.7;min-height:100vh}
-      h1,h2,h3,h4,h5,h6{font-family:var(--font-display)}
-      a{color:var(--ua-accent);text-decoration:none}
-      a:hover{text-decoration:underline}
-      .trk-section p a,.trk-section li a{text-decoration:underline;text-decoration-color:rgba(107,170,237,.4);text-underline-offset:2px}
-      .trk-section p a:hover,.trk-section li a:hover{text-decoration-color:var(--ua-accent)}
-      .container{max-width:900px;margin:0 auto;padding:20px 16px}
-      .trk-nav{font-family:var(--font-display);font-size:11px;font-weight:500;color:var(--ua-muted);margin-bottom:16px}
-      .trk-header h1{font-size:22px;font-weight:700;letter-spacing:-.5px;text-wrap:balance;margin:2px 0 6px}
-      .trk-kicker{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber)}
-      .trk-subtitle{font-size:13px;color:var(--ua-muted);max-width:680px;margin-bottom:10px}
-      .trk-jump{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 6px}
-      .trk-jump a{font-family:var(--font-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--ua-muted);background:var(--ua-panel);border:1px solid var(--ua-border);border-radius:20px;padding:6px 14px;transition:all .15s ease}
-      .trk-jump a:hover{color:#fff;border-color:var(--ua-blue);background:var(--ua-blue);text-decoration:none;transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,93,170,.3)}
-      .trk-section{margin-bottom:40px;padding-top:24px;border-top:1px solid var(--ua-border)}
-      .trk-section:first-of-type{border-top:none;padding-top:0}
-      .trk-section h2{font-size:16px;font-weight:700;padding-bottom:6px;border-bottom:1px solid var(--ua-border);margin-bottom:14px}
-      .trk-section h3{font-size:13px;font-weight:600;color:var(--ua-accent);margin:18px 0 8px}
-      .trk-section p{max-width:680px;margin-bottom:12px}
-      .trk-section p:last-child{margin-bottom:0}
-      .trk-aside{background:linear-gradient(180deg,var(--ua-panel) 0%,rgba(17,26,39,.6) 100%);border:1px solid var(--ua-border);border-left:3px solid var(--ua-amber);border-radius:0 6px 6px 0;padding:18px 20px;margin-bottom:40px}
-      .trk-aside h2{font-size:16px;font-weight:700;margin-bottom:12px;border:none;padding:0}
-      .trk-aside p{font-size:13px;max-width:680px;margin-bottom:12px}
-      .trk-aside p:last-child{margin-bottom:0}
-      .trk-aside-kicker{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--ua-amber);margin-bottom:4px}
-      .trk-faq-q{font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--ua-text);margin:14px 0 4px}
-      .trk-faq-a{font-size:12px;color:var(--ua-muted);max-width:680px;line-height:1.7}
-      .trk-method{font-size:11px;color:var(--ua-dim);max-width:680px;line-height:1.7;margin-top:14px}
-      .trk-updated-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-      @media (max-width:600px){.trk-header h1{font-size:18px}}
-      @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
-    </style>
-  </head>
-  <body data-trk-page="atc">
-    <main class="container">
-      <div class="trk-nav">
-        <a href="/">&larr; The Blue Board</a> / <a href="/trackers">Trackers</a> / Modern Skies
+    <header class="mt-6">
+      <div class="font-mono text-[10px] font-semibold uppercase tracking-widest text-amber-400">
+        Tracker &middot; FAA Modernization
       </div>
+      <h1 class="mt-0.5 mb-1.5 text-lg font-bold tracking-tight text-balance text-foreground sm:text-2xl">
+        Is Your Airport Off Paper Yet?
+      </h1>
+      <p class="mb-2.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        Most US airport towers still track your flight on strips of paper, passed by hand. The FAA
+        is finally replacing them at 89 airports — this page tracks every one: who's gone digital,
+        who's scheduled, and who's still waiting for a date.
+      </p>
+      <div class="flex flex-wrap items-center gap-4">
+        <LastUpdated iso={atcMeta.lastUpdated} />
+        <LastUpdated iso={atcMeta.lastVerified} prefix="Verified" />
+      </div>
+      <nav class="mt-4.5 mb-1.5 flex flex-wrap gap-2" aria-label="Section navigation">
+        <a href="#map" class={jumpLinkClass}>The map</a>
+        <a href="#check" class={jumpLinkClass}>Check your airport</a>
+        <a href="#all" class={jumpLinkClass}>All 89 airports</a>
+        <a href="#whats-changing" class={jumpLinkClass}>What's changing</a>
+        <a href="#paper-strips" class={jumpLinkClass}>Why paper?</a>
+        <a href="#faq" class={jumpLinkClass}>Quick answers</a>
+        <a href="#changelog" class={jumpLinkClass}>Changelog</a>
+      </nav>
+    </header>
 
-      <header class="trk-header trk-section">
-        <div class="trk-kicker">Tracker &middot; FAA Modernization</div>
-        <h1>Is Your Airport Off Paper Yet?</h1>
-        <p class="trk-subtitle">
-          Most US airport towers still track your flight on strips of paper, passed by hand. The FAA
-          is finally replacing them at 89 airports — this page tracks every one: who's gone digital,
-          who's scheduled, and who's still waiting for a date.
-        </p>
-        <div class="trk-updated-row">
-          <LastUpdated iso={atcMeta.lastUpdated} />
-          <LastUpdated iso={atcMeta.lastVerified} prefix="Verified" />
-        </div>
-        <nav class="trk-jump" aria-label="Section navigation">
-          <a href="#map">The map</a>
-          <a href="#check">Check your airport</a>
-          <a href="#all">All 89 airports</a>
-          <a href="#whats-changing">What's changing</a>
-          <a href="#paper-strips">Why paper?</a>
-          <a href="#changelog">Changelog</a>
-        </nav>
-      </header>
+    <TrackerPulse
+      slug="atc"
+      kind="airport"
+      lastUpdated={atcMeta.lastUpdated}
+      lastVerified={atcMeta.lastVerified}
+      changes={atcMeta.changelog}
+      entities={atcPulseEntities}
+    />
 
-      <TrackerPulse
-        slug="atc"
-        kind="airport"
-        lastUpdated={atcMeta.lastUpdated}
-        lastVerified={atcMeta.lastVerified}
-        changes={atcMeta.changelog}
-        entities={atcPulseEntities}
+    <section class="mb-10" aria-label="Headline numbers">
+      <StatStrip stats={stats} />
+    </section>
+
+    <section class={SECTION} id="map">
+      <h2 class={SECTION_H2}>The map: paper vs. pixels</h2>
+      <TrackerMap
+        paths={paths}
+        points={mapPoints}
+        legend={legend}
+        offMap={offMap}
+        ariaLabel={`US map of the FAA electronic flight strips rollout: ${liveCount} airports live, ${plannedCount} scheduled, ${paperNoDateCount} with no date. Full details in the table below.`}
+        hint="Hover or tap a dot for details — full list in the table below"
       />
+    </section>
 
-      <section class="trk-section" aria-label="Headline numbers">
-        <StatStrip stats={stats} />
-      </section>
+    <section class={SECTION} id="check">
+      <h2 class={SECTION_H2}>Check your airport</h2>
+      <TrackerSearch
+        label="Search the program"
+        noun="airports"
+        placeholder="Airport code or city — try AUS, O'Hare, Boise&hellip;"
+        emptyTitle="Not in the program"
+        emptyBody="No match in the FAA's 89-airport electronic-strips program. Smaller towers keep their current systems for now — the program covers the country's busiest airports first, and the FAA hasn't published a plan beyond these 89."
+      />
+    </section>
 
-      <section class="trk-section" id="map">
-        <h2>The map: paper vs. pixels</h2>
-        <TrackerMap
-          paths={paths}
-          points={mapPoints}
-          legend={legend}
-          offMap={offMap}
-          ariaLabel={`US map of the FAA electronic flight strips rollout: ${liveCount} airports live, ${plannedCount} scheduled, ${paperNoDateCount} with no date. Full details in the table below.`}
-          hint="Hover or tap a dot for details — full list in the table below"
-        />
-      </section>
+    <section class={SECTION} id="all">
+      <h2
+        class={SECTION_H2}
+        data-trk-result-heading
+        data-trk-heading-all="All 89 airports"
+        data-trk-heading-noun="airport"
+      >
+        All 89 airports
+      </h2>
+      <TrackerTable
+        caption="FAA TFDM rollout status for all 89 program airports"
+        columns={columns}
+        rows={tableRows}
+      />
+      <p class={methodClass}>
+        Dates marked <em>2023 plan</em> are the airport's slot in the FAA's last published
+        schedule (August 2023, via the DOT Inspector General) — sequencing, not commitments.
+        Washington National jumped its slot by two and a half years; Boston's has come and gone.
+        Where a live airport shows no date, the FAA never published one: it announces go-lives
+        selectively, so this column is built from its audit trail and press coverage.
+      </p>
+    </section>
 
-      <section class="trk-section" id="check">
-        <h2>Check your airport</h2>
-        <TrackerSearch
-          label="Search the program"
-          noun="airports"
-          placeholder="Airport code or city — try AUS, O'Hare, Boise&hellip;"
-          emptyTitle="Not in the program"
-          emptyBody="No match in the FAA's 89-airport electronic-strips program. Smaller towers keep their current systems for now — the program covers the country's busiest airports first, and the FAA hasn't published a plan beyond these 89."
-        />
-      </section>
+    <section class={SECTION} id="whats-changing">
+      <h2 class={SECTION_H2}>What's actually changing</h2>
+      <p class={proseClass}>
+        In July 2025, Congress handed the FAA
+        <a href="https://www.aopa.org/news-and-media/all-news/2025/july/10/where-is-the-12-5-billion-for-atc-modernization-going">$12.5 billion</a>
+        to modernize air traffic control — new fiber to replace 1970s copper phone lines, new
+        radios, new radar, and the end of paper flight strips. Everyone involved calls it a down
+        payment: the industry's Modern Skies Coalition — 66 aviation groups —
+        <a href="https://ttd.org/policy/letters-to-congress/modern-skies-coalition-urges-congress-to-close-funding-gap-for-brand-new-air-traffic-control-system-bnatcs/">asked Congress for another $20 billion</a>
+        in July 2026. That part hasn't been appropriated.
+      </p>
+      <p class={proseClass}>
+        The build is split among a handful of companies.
+        <a href="https://www.peraton.com/news/faa-awards-peraton-a-modernization-contract-to-build-the-brand-new-air-traffic-control-system">Peraton</a>
+        is the integrator running the overall program — its own contract is
+        <a href="https://www.highergov.com/contract/693KA726C00001/">capped at $1.5 billion</a>,
+        not the "$12.5 billion" some headlines claimed. L3Harris is rebuilding the network and
+        <a href="https://www.l3harris.com/newsroom/editorial/2026/05/l3harris-reaches-over-50-faa-telecommunications-modernization">passed the halfway mark</a>
+        in May 2026. RTX and Indra are replacing
+        <a href="https://www.flyingmag.com/contractors-replace-1980s-atc-radar/">up to 612 radars</a>
+        by June 2028. And Leidos builds the piece this page tracks: TFDM, the system that
+        replaces paper strips.
+      </p>
+      <h3 class={subheadClass}>What a tower actually gets</h3>
+      <p class={proseClass}>
+        Today, a controller works your flight on a printed strip, marks it in pencil, and walks it
+        to the next position. TFDM replaces that with electronic strips on touchscreens — shared
+        instantly between controllers, traffic managers, and airline ops. At the biggest airports
+        it adds surface metering: instead of everyone pushing back and idling in a taxi queue, the
+        system holds you at the gate and releases you into a moving line. Less burned fuel, more
+        honest departure times.
+      </p>
+      <h3 class={subheadClass}>The pace, honestly</h3>
+      <p class={proseClass}>
+        Eighteen towers went digital in the first 44 months — about five per year. The current
+        promise is a different order of magnitude:
+        <a href="https://fedscoop.com/faa-digital-flight-strip-system-atc-modernization/">Leidos says another dozen airports by the end of 2026</a>,
+        and the FAA says all 89 by 2028 — roughly a six-fold acceleration that started showing up
+        in 2026, with Washington National jumping a 2028 slot to go live in February. Worth
+        holding next to that: the DOT Inspector General's
+        <a href="https://www.oig.dot.gov/library-item/46321">2024 audit</a> found the program's
+        first decade cut its scope from 89 towers to 49 while costs rose, and estimated
+        completion in <em>2030</em> — for the smaller plan. The 2025 money put all 89 back on the
+        board. This tracker exists to show which trajectory is real, one airport at a time.
+      </p>
+      <h3 class={subheadClass}>The skeptics' case</h3>
+      <p class={proseClass}>
+        Congress has seen this movie: NextGen ran two decades,
+        <a href="https://www.gao.gov/products/gao-24-105254">$14 billion through 2022</a>, and
+        delivered about 16% of its promised benefits by the government's own accounting. At the
+        December 2025 oversight hearings, Sen. Tammy Duckworth called the three-year timeline
+        "setting the integrator up to fail," and Rep. Troy Nehls asked what guardrails would keep
+        this from becoming "another NextGen boondoggle." Even the sunny numbers deserve
+        attribution: the claim that DCA deployed "45% faster than the typical cycle" traces to a
+        single Leidos press release, and the FAA's own transparency site generates its
+        per-airport answers with AI and was still calling Austin "planned" two weeks after the
+        ribbon was cut. We use it as a pointer, and verify against the audit trail and press.
+      </p>
+    </section>
 
-      <section class="trk-section" id="all">
-        <h2 data-trk-result-heading data-trk-heading-all="All 89 airports" data-trk-heading-noun="airport">All 89 airports</h2>
-        <TrackerTable
-          caption="FAA TFDM rollout status for all 89 program airports"
-          columns={columns}
-          rows={tableRows}
-        />
-        <p class="trk-method">
-          Dates marked <em>2023 plan</em> are the airport's slot in the FAA's last published
-          schedule (August 2023, via the DOT Inspector General) — sequencing, not commitments.
-          Washington National jumped its slot by two and a half years; Boston's has come and gone.
-          Where a live airport shows no date, the FAA never published one: it announces go-lives
-          selectively, so this column is built from its audit trail and press coverage.
-        </p>
-      </section>
+    <section
+      class="mb-10 rounded-r-md border border-border border-l-[3px] border-l-amber-400 bg-card px-5 py-4.5"
+      id="paper-strips"
+      aria-label="Why paper strips existed"
+    >
+      <div class="mb-1 font-mono text-[10px] font-semibold uppercase tracking-widest text-amber-400">
+        Sidebar
+      </div>
+      <h2 class="mb-3 text-base font-bold tracking-tight text-foreground">
+        Why paper strips existed — and why they almost outlived you
+      </h2>
+      <p class={proseClass}>
+        A flight progress strip is a piece of paper about the size of a ruler: one flight, printed
+        minutes before it needs attention, slotted into a plastic holder in a rack called a bay.
+        As your flight taxis, the controller marks it in a pencil shorthand older than the FAA
+        itself — runway assignments, altitudes, handoffs — and when responsibility for your
+        aircraft moves to the next position, the strip physically moves with it. That little slide
+        of plastic across a console <em>is</em> the handoff.
+      </p>
+      <p class={proseClass}>
+        The reason paper survived the jet age, GPS, and the iPhone is that it's genuinely good.
+        A strip never crashes, never lags, and never needs a login. It's readable in a glance from
+        three feet away in a sunlit tower cab. And the act of writing is the point: controllers
+        will tell you that marking a strip is how the picture of the airspace gets into your head.
+        When the FAA first tried to kill paper strips, the working name for the replacement dated
+        to the <em>1980s</em> — this is at least the third attempt.
+      </p>
+      <p class={proseClass}>
+        For the record, the first US tower to actually drop paper was not Phoenix, whatever the
+        internet tells you — it was Cleveland, on October 24, 2022, two years behind schedule.
+        And somewhere in St. Louis there's a printer currently scheduled to produce America's
+        last paper flight strip: STL holds the final slot in the FAA's published sequence, 2029
+        in the plan, 2028 in the promise. This page will tell you which one wins.
+      </p>
+    </section>
 
-      <section class="trk-section" id="whats-changing">
-        <h2>What's actually changing</h2>
-        <p>
-          In July 2025, Congress handed the FAA
-          <a href="https://www.aopa.org/news-and-media/all-news/2025/july/10/where-is-the-12-5-billion-for-atc-modernization-going">$12.5 billion</a>
-          to modernize air traffic control — new fiber to replace 1970s copper phone lines, new
-          radios, new radar, and the end of paper flight strips. Everyone involved calls it a down
-          payment: the industry's Modern Skies Coalition — 66 aviation groups —
-          <a href="https://ttd.org/policy/letters-to-congress/modern-skies-coalition-urges-congress-to-close-funding-gap-for-brand-new-air-traffic-control-system-bnatcs/">asked Congress for another $20 billion</a>
-          in July 2026. That part hasn't been appropriated.
-        </p>
-        <p>
-          The build is split among a handful of companies.
-          <a href="https://www.peraton.com/news/faa-awards-peraton-a-modernization-contract-to-build-the-brand-new-air-traffic-control-system">Peraton</a>
-          is the integrator running the overall program — its own contract is
-          <a href="https://www.highergov.com/contract/693KA726C00001/">capped at $1.5 billion</a>,
-          not the "$12.5 billion" some headlines claimed. L3Harris is rebuilding the network and
-          <a href="https://www.l3harris.com/newsroom/editorial/2026/05/l3harris-reaches-over-50-faa-telecommunications-modernization">passed the halfway mark</a>
-          in May 2026. RTX and Indra are replacing
-          <a href="https://www.flyingmag.com/contractors-replace-1980s-atc-radar/">up to 612 radars</a>
-          by June 2028. And Leidos builds the piece this page tracks: TFDM, the system that
-          replaces paper strips.
-        </p>
-        <h3>What a tower actually gets</h3>
-        <p>
-          Today, a controller works your flight on a printed strip, marks it in pencil, and walks it
-          to the next position. TFDM replaces that with electronic strips on touchscreens — shared
-          instantly between controllers, traffic managers, and airline ops. At the biggest airports
-          it adds surface metering: instead of everyone pushing back and idling in a taxi queue, the
-          system holds you at the gate and releases you into a moving line. Less burned fuel, more
-          honest departure times.
-        </p>
-        <h3>The pace, honestly</h3>
-        <p>
-          Eighteen towers went digital in the first 44 months — about five per year. The current
-          promise is a different order of magnitude:
-          <a href="https://fedscoop.com/faa-digital-flight-strip-system-atc-modernization/">Leidos says another dozen airports by the end of 2026</a>,
-          and the FAA says all 89 by 2028 — roughly a six-fold acceleration that started showing up
-          in 2026, with Washington National jumping a 2028 slot to go live in February. Worth
-          holding next to that: the DOT Inspector General's
-          <a href="https://www.oig.dot.gov/library-item/46321">2024 audit</a> found the program's
-          first decade cut its scope from 89 towers to 49 while costs rose, and estimated
-          completion in <em>2030</em> — for the smaller plan. The 2025 money put all 89 back on the
-          board. This tracker exists to show which trajectory is real, one airport at a time.
-        </p>
-        <h3>The skeptics' case</h3>
-        <p>
-          Congress has seen this movie: NextGen ran two decades,
-          <a href="https://www.gao.gov/products/gao-24-105254">$14 billion through 2022</a>, and
-          delivered about 16% of its promised benefits by the government's own accounting. At the
-          December 2025 oversight hearings, Sen. Tammy Duckworth called the three-year timeline
-          "setting the integrator up to fail," and Rep. Troy Nehls asked what guardrails would keep
-          this from becoming "another NextGen boondoggle." Even the sunny numbers deserve
-          attribution: the claim that DCA deployed "45% faster than the typical cycle" traces to a
-          single Leidos press release, and the FAA's own transparency site generates its
-          per-airport answers with AI and was still calling Austin "planned" two weeks after the
-          ribbon was cut. We use it as a pointer, and verify against the audit trail and press.
-        </p>
-      </section>
+    <section class={SECTION}>
+      <CrossLink
+        title="Flying United?"
+        body="Seven of United's eight hubs are in this rollout — and United is in the middle of its biggest ground buildout ever: new terminals, new gates, and the largest clubs it has ever opened."
+        href="/trackers/united-hubs"
+        linkText="United Hub Tracker"
+      />
+    </section>
 
-      <section class="trk-aside" id="paper-strips" aria-label="Why paper strips existed">
-        <div class="trk-aside-kicker">Sidebar</div>
-        <h2>Why paper strips existed — and why they almost outlived you</h2>
-        <p>
-          A flight progress strip is a piece of paper about the size of a ruler: one flight, printed
-          minutes before it needs attention, slotted into a plastic holder in a rack called a bay.
-          As your flight taxis, the controller marks it in a pencil shorthand older than the FAA
-          itself — runway assignments, altitudes, handoffs — and when responsibility for your
-          aircraft moves to the next position, the strip physically moves with it. That little slide
-          of plastic across a console <em>is</em> the handoff.
-        </p>
-        <p>
-          The reason paper survived the jet age, GPS, and the iPhone is that it's genuinely good.
-          A strip never crashes, never lags, and never needs a login. It's readable in a glance from
-          three feet away in a sunlit tower cab. And the act of writing is the point: controllers
-          will tell you that marking a strip is how the picture of the airspace gets into your head.
-          When the FAA first tried to kill paper strips, the working name for the replacement dated
-          to the <em>1980s</em> — this is at least the third attempt.
-        </p>
-        <p>
-          For the record, the first US tower to actually drop paper was not Phoenix, whatever the
-          internet tells you — it was Cleveland, on October 24, 2022, two years behind schedule.
-          And somewhere in St. Louis there's a printer currently scheduled to produce America's
-          last paper flight strip: STL holds the final slot in the FAA's published sequence, 2029
-          in the plan, 2028 in the promise. This page will tell you which one wins.
-        </p>
-      </section>
-
-      <section class="trk-section">
-        <CrossLink
-          title="Flying United?"
-          body="Seven of United's eight hubs are in this rollout — and United is in the middle of its biggest ground buildout ever: new terminals, new gates, and the largest clubs it has ever opened."
-          href="/trackers/united-hubs"
-          linkText="United Hub Tracker"
-        />
-      </section>
-
-      <section class="trk-section" id="faq">
-        <h2>Quick answers</h2>
-        {faq.map((f) => (
-          <div>
-            <div class="trk-faq-q">{f.question}</div>
-            <p class="trk-faq-a">{f.answer}</p>
+    <section class={SECTION} id="faq">
+      <h2 class={SECTION_H2}>Quick answers</h2>
+      {
+        faq.map((f) => (
+          <div class="mt-3.5">
+            <div class="mb-1 text-sm font-semibold text-foreground">{f.question}</div>
+            <p class="max-w-2xl text-xs leading-relaxed text-muted-foreground">{f.answer}</p>
           </div>
-        ))}
-      </section>
+        ))
+      }
+    </section>
 
-      <section class="trk-section" id="changelog">
-        <h2>Changelog</h2>
-        <Changelog entries={atcMeta.changelog} />
-        <p class="trk-method">
-          How this page is maintained: airport statuses are verified against the FAA's Modern Skies
-          dashboard, the DOT Inspector General's TFDM audit, and press coverage of each go-live.
-          Every airport in the underlying dataset cites at least one source, and dates appear only
-          where a source supports them. Updated monthly, or when an airport goes live.
-        </p>
-        <TrackerDataActions slug="atc" pageLabel="FAA electronic flight strips tracker" pagePath="/trackers/atc" />
-      </section>
-    </main>
-    <Footer />
-    <VercelAnalytics />
-    <script defer src="/js/trackers.js"></script>
-  </body>
-</html>
+    <section class={SECTION} id="changelog">
+      <h2 class={SECTION_H2}>Changelog</h2>
+      <Changelog entries={atcMeta.changelog} />
+      <p class={methodClass}>
+        How this page is maintained: airport statuses are verified against the FAA's Modern Skies
+        dashboard, the DOT Inspector General's TFDM audit, and press coverage of each go-live.
+        Every airport in the underlying dataset cites at least one source, and dates appear only
+        where a source supports them. Updated monthly, or when an airport goes live.
+      </p>
+      <TrackerDataActions
+        slug="atc"
+        pageLabel="FAA electronic flight strips tracker"
+        pagePath="/trackers/atc"
+      />
+    </section>
+  </div>
+
+  <script src="../../scripts/trackers.ts"></script>
+</BaseLayout>

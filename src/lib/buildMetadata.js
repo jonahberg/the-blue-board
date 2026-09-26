@@ -4,14 +4,11 @@ const FALLBACK_DATE = new Date().toISOString().slice(0, 10);
 const lastModifiedCache = new Map();
 
 export const homeLastmodPaths = [
-  'public/index.html',
-  'public/css/style.css',
+  'src/pages/index.astro',
+  'src/app',
+  'src/lib/home-seo.js',
   'public/data/fleet.json',
   'public/data/starlink.json',
-  'src/pages/hubs/index.astro',
-  'src/pages/fleet/index.astro',
-  'src/layouts/HubLayout.astro',
-  'src/layouts/FleetTypeLayout.astro',
 ];
 
 export const fleetIndexLastmodPaths = [
@@ -87,13 +84,13 @@ export function getNewsRouteLastmodPaths(slug) {
 
 export const newarkLastmodPaths = [
   'src/pages/newark.astro',
-  'public/js/newark-live.js',
+  'src/scripts/newark-live.ts',
   'src/data/hubs/ewr.js',
 ];
 
-export const tsaLastmodPaths = [
-  'src/pages/tsa.astro',
-  'src/data/tsa/united-terminals.js',
+export const privacyLastmodPaths = [
+  'src/pages/privacy.astro',
+  'src/components/site/BaseLayout.astro',
 ];
 
 export const trackersIndexLastmodPaths = [

@@ -6,10 +6,12 @@
 
 ![The Blue Board — Live Operations Map](public/og-image.png)
 
-<!-- This is a static Markdown file and cannot import src/data/facts.js.
-     Hub-count language, Starlink counts, and the fleet database count below
-     must be kept in sync BY HAND with src/data/facts.js — the single source
-     of truth for these figures. -->
+<!-- This is a static Markdown file and cannot import the data modules.
+     Hub-count language and the fleet database count below must be kept in sync
+     BY HAND with src/data/facts.js; Starlink figures live in
+     src/data/starlink-facts.js (refreshed into src/data/starlink-live.json at
+     build time), so quote them loosely here and let the site stamp the exact
+     number. -->
 
 ---
 
@@ -33,7 +35,13 @@ Server-side disruption scoring across all 8 United hubs plus the Tokyo-Narita ga
 Departure and arrival boards for all 9 UA hubs (ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, GUM). Filter by status or aircraft type. Equipment swap detection flags when a plane type changes. On-time performance stats. All times in airport-local timezone.
 
 ### ✈️ [Fleet](https://theblueboard.co#fleet)
-Complete database of 1,078+ mainline aircraft — searchable and sortable by type, registration, seat config, WiFi, and IFE. Starlink tracker for 425+ equipped aircraft with sortable columns and filters by fleet, type, and operator. Live fleet status correlates airborne flights with the database. **19 dedicated fleet type pages** ([737 MAX 9](https://theblueboard.co/fleet/737-max-9), [A321neo](https://theblueboard.co/fleet/a321neo), [787-9](https://theblueboard.co/fleet/787-9-dreamliner), etc.) with full aircraft registries, structured data, and cross-type navigation.
+Complete database of 1,078+ mainline aircraft — searchable and sortable by type, registration, seat config, WiFi, and IFE. Live fleet status correlates airborne flights with the database, and a delivery timeline charts the fleet by family. **19 dedicated fleet type pages** ([737 MAX 9](https://theblueboard.co/fleet/737-max-9), [A321neo](https://theblueboard.co/fleet/a321neo), [787-9](https://theblueboard.co/fleet/787-9-dreamliner), etc.) with full aircraft registries, structured data, and cross-type navigation.
+
+### 🛰️ [Starlink](https://theblueboard.co#starlink)
+Its own tab since the rebuild. The full roster of Starlink-equipped aircraft (500+ and climbing toward United's ~1,000 target) with sortable columns and filters by fleet, type, and operator, a retrofit-pace chart with a completion projection, and a mismatch report that flags aircraft the upstream tracker and the fleet database disagree about.
+
+### 🎫 [My Flights](https://theblueboard.co#myflight)
+Save the flights you actually care about. Add one by number, see its live position, route, aircraft and times, and pin it to the watch list for browser push notifications on status changes — including background alerts that fire with the tab closed ([setup](docs/setup-push-alerts.md)). Stored on your device; nothing is sent to a server you didn't ask for.
 
 ### 🌦 [Delays · Weather · Hubs](https://theblueboard.co#weather)
 FAA NAS delay and ground stop alerts, METAR observations with plain-English explainers, NEXRAD radar overlay, and hub health indicators. Each hub gets a unified card with conditions, visibility, wind, ceiling, and current delay status. **Ops Impact Assessment** goes beyond standard flight categories to flag real operational risks — snow, gusts, freezing precipitation, thunderstorms — even when conditions are technically VFR. Radar map renders instantly; weather data loads in parallel via batched API calls.
@@ -48,7 +56,7 @@ Look up any UA flight number from the header search bar. Returns live position, 
 Dedicated SEO-rich pages for the 9 airports The Blue Board tracks — United's 8 hubs plus the Tokyo-Narita gateway ([ORD](https://theblueboard.co/hubs/ord) · [DEN](https://theblueboard.co/hubs/den) · [IAH](https://theblueboard.co/hubs/iah) · [EWR](https://theblueboard.co/hubs/ewr) · [SFO](https://theblueboard.co/hubs/sfo) · [IAD](https://theblueboard.co/hubs/iad) · [LAX](https://theblueboard.co/hubs/lax) · [NRT](https://theblueboard.co/hubs/nrt) · [GUM](https://theblueboard.co/hubs/gum)). Each page includes live flight counts, hub overview with terminal/concourse details, United Club and Polaris lounge locations, delay pattern analysis by season, Starlink WiFi info, construction alerts with links to official project pages, structured FAQ, and FAQPage + Airport schema markup for search engines. Jump navigation and scroll hints guide visitors through the content.
 
 ### 📰 [News](https://theblueboard.co/news)
-Curated United Airlines news hub with individual article pages, source links, and cross-links to related hub and fleet pages via tags. Google News sitemap and dynamic RSS feed for indexing. "Latest News" banner on the dashboard links to the newest article. Optional email digest via Resend Broadcasts notifies waitlist subscribers of new articles.
+Curated United Airlines news hub with individual article pages, source links, and cross-links to related hub and fleet pages via tags. Google News sitemap and dynamic RSS feed for indexing. "Latest News" banner on the dashboard links to the newest article (dismissible, and it stays dismissed). Optional email digest via Resend Broadcasts notifies waitlist subscribers of new articles.
 
 ### 📍 [Trackers](https://theblueboard.co/trackers)
 Living, data-driven pages that follow aviation's long-running stories — each with a dependency-free SVG US map, headline stats, a searchable/sortable table, and a changelog. [Modern Skies Tracker](https://theblueboard.co/trackers/atc) covers the FAA's paper-to-digital flight strip rollout at all 89 program airports; [United Hub Tracker](https://theblueboard.co/trackers/united-hubs) covers every United club, terminal, and gate project across the 8 hubs with honest open/under-construction/announced/rumored labels. High-interest United hubs have focused, source-backed detail pages for construction and tower modernization, and both datasets are downloadable as CSV or JSON. Every entry cites a source; data lives in versioned files under `src/data/trackers/` with import-time validation (see `MAINTENANCE.md`).
@@ -57,53 +65,64 @@ Living, data-driven pages that follow aviation's long-running stories — each w
 - **AI delay risk scoring** — 8-signal algorithm considers weather, FAA programs, hub OTP, inbound aircraft, time-of-day cascade risk, and hub-specific profiles
 - **AI delay explanations** — Click any risk badge for a natural language briefing powered by Claude AI
 - **Inbound aircraft tracking** — "Where's My Plane?" shows your aircraft's current position operating its previous flight
-- **Deep-link hashes** — Share direct links to any tab (`#live`, `#schedule`, `#fleet`, `#weather`, `#stats`)
+- **Deep-link hashes** — Share direct links to any tab (`#live`, `#myflight`, `#schedule`, `#fleet`, `#starlink`, `#weather`, `#stats`, `#sources`), or link straight to a flight with `/?flight=UA1234`
 - **Flight watch** — Pin a flight and get browser push notifications on status changes, including background alerts that fire even when the tab is closed once the owner enables Web Push ([setup](docs/setup-push-alerts.md))
 - **Hub health bar** — At-a-glance on-time performance across all 8 United hubs plus the Tokyo-Narita gateway, with cancellation rate detection (shows `100% CX` when a hub is shut down)
 - **Equipment swap alerts** — Badges when scheduled aircraft type changes
 - **📱 Mobile-first design** — Map-maximized layout with bottom tab bar navigation, collapsible filters
 - **PWA support** — Installable as a home screen app on iOS/Android with offline caching
-- **Click the title** — "THE BLUE BOARD" header always takes you back to Live Ops
+- **Sources tab** — Every upstream feed the dashboard uses, with its freshness and its licence credit, in one place
+- **Stats charts** — Utilization bars, a flight-phase donut, the hub-to-hub matrix and top routes, each colour-coded *and* labelled
+- **Jargon tooltips** — Hover any aviation term (IROPS, GDP, METAR, MVFR) for a plain-English definition
+- **Global search (⌘K)** — Jump to a flight, hub, fleet type or page from anywhere
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Browser (SPA)                     │
-│                                                      │
-│  public/index.html — single-file dark NOC dashboard  │
-│  ├── Leaflet map + CartoDB dark tiles                │
-│  ├── NEXRAD radar tile overlay                       │
-│  ├── Event delegation (data-action attributes)       │
-│  ├── Fleet/Starlink data loaded async from /data/    │
-│  └── All API calls go through server-side proxies    │
-└──────────────┬──────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                      Browser                          │
+│                                                       │
+│  Astro static shell (src/pages/*.astro)               │
+│  ├── /  → one React island, client:only="react"       │
+│  │        src/app/Dashboard.tsx — 8 lazy-loaded tabs  │
+│  │        Leaflet map (bundled) + CARTO dark tiles    │
+│  │        NEXRAD radar tile overlay                   │
+│  ├── /hubs /fleet /news /trackers /newark /privacy    │
+│  │        prerendered HTML on BaseLayout              │
+│  ├── shadcn/ui primitives, Tailwind v4 tokens         │
+│  ├── Logic + colour encodings in src/lib (unit-tested)│
+│  └── All upstream calls go through /api proxies       │
+└──────────────┬───────────────────────────────────────┘
                │
     ┌──────────▼──────────────────────────────┐
     │        Vercel Serverless Functions       │
     │                                          │
-    │  /api/schedule      — FR24 schedule proxy│
-    │                       (cached, rate-     │
-    │                        limited, filtered)│
-    │  /api/irops         — Precomputed IROPS  │
-    │                       metrics (5min cache)│
-    │  /api/fr24-feed     — Live flight feed   │
-    │  /api/fr24-flight   — Flight lookup      │
-    │  /api/delay-explain — AI delay briefings │
-    │                       (Claude, cached)   │
-    │  /api/metar         — AWC weather proxy  │
-    │  /api/faa           — FAA NAS status     │
-    │  /api/fleet         — Fleet data proxy   │
-    │  /api/waitlist      — Waitlist signup     │
-    │  /api/news-notify   — Email digest       │
-    │  /api/fr24-usage    — FR24 credit monitor│
+    │  /api/schedule        — hub boards (FR24 │
+    │                         + AeroDataBox)   │
+    │  /api/irops           — IROPS metrics    │
+    │  /api/fr24-feed       — live flight feed │
+    │  /api/fr24-flight     — flight lookup    │
+    │  /api/flight-times    — per-flight times │
+    │  /api/aircraft-history— tail history     │
+    │  /api/check-flight    — watch-list poll  │
+    │  /api/predict-flight  — delay prediction │
+    │  /api/delay-explain   — AI briefings     │
+    │  /api/metar           — AWC weather      │
+    │  /api/faa  /api/nas   — FAA NAS status   │
+    │  /api/fleet /api/fleet-summary           │
+    │  /api/starlink-data                      │
+    │  /api/starlink-mismatches                │
+    │  /api/push-subscribe  — Web Push signup  │
+    │  /api/waitlist        — waitlist signup  │
+    │  /api/news-notify     — email digest     │
+    │  /api/support-stats   — donation meter   │
+    │  /api/fr24-usage      — credit monitor   │
     │                                          │
     │  Cron jobs (vercel.json):                │
     │  /api/cron/warm-schedules  — hourly      │
     │  /api/cron/sync-starlink   — every 4hrs  │
-    │  /api/cron/refresh-tsa     — hourly      │
     │  /api/cron/refresh-metar   — every 5min  │
     │  /api/cron/watch-alerts    — every 5min  │
     └──────────┬──────────────────────────────┘
@@ -111,9 +130,15 @@ Living, data-driven pages that follow aviation's long-running stories — each w
     ┌──────────▼──────────────────────────────┐
     │           Supabase (Postgres)            │
     │  waitlist · schedule_snapshots           │
-    │  news_notifications · RLS policies       │
+    │  news_notifications · push_subscriptions │
+    │  RLS policies on every table             │
     └─────────────────────────────────────────┘
 ```
+
+Routing middleware (`middleware.ts`) sits in front of every page and answers
+`Accept: text/markdown` with a prerendered Markdown twin under `/_agent/`, so AI clients get
+clean text and browsers get the page. It runs before the cache and skips `/api` and every
+asset prefix.
 
 ### Why Server-Side Proxies?
 
@@ -144,27 +169,29 @@ Living, data-driven pages that follow aviation's long-running stories — each w
 
 ## Tech Stack
 
-- **Frontend:** Vanilla HTML/CSS/JS — single-file dashboard, Astro-templated content pages
-- **Map:** [Leaflet](https://leafletjs.com) + CARTO dark tiles (needs a free [CARTO basemaps key](https://carto.com/basemaps/apikey) in `VITE_CARTO_BASEMAP_KEY` — see `.env.example`)
+- **Framework:** [Astro](https://astro.build) 6, `output: 'static'` — every page prerendered
+- **Dashboard:** one [React](https://react.dev) 19 island (`client:only`), tabs lazy-loaded per view
+- **Styling:** [Tailwind CSS](https://tailwindcss.com) v4 + [shadcn/ui](https://ui.shadcn.com) (`radix-nova`), CSS-variable tokens — see [DESIGN.md](DESIGN.md)
+- **Icons:** [lucide-react](https://lucide.dev)
+- **Map:** [Leaflet](https://leafletjs.com) bundled from npm + CARTO dark tiles (needs a free [CARTO basemaps key](https://carto.com/basemaps/apikey) in `VITE_CARTO_BASEMAP_KEY` — see `.env.example`)
 - **Radar:** Iowa State NEXRAD WMS tiles
-- **Fonts:** Satoshi (headings) + DM Sans (body) + [JetBrains Mono](https://www.jetbrains.com/lp/mono/) (data) — self-hosted WOFF2 (see [DESIGN.md](DESIGN.md))
-- **Build:** [Astro](https://astro.build) (static pages) + [Vite](https://vite.dev) (dashboard bundle)
-- **Hosting:** [Vercel](https://vercel.com) (serverless functions + edge CDN)
-- **Database:** [Supabase](https://supabase.com) (waitlist, schedule snapshots, news notifications)
+- **Fonts:** [Geist Sans + Geist Mono](https://vercel.com/font) via `@fontsource-variable`, bundled into `_astro/` — no font CDN
+- **Hosting:** [Vercel](https://vercel.com) (serverless functions + edge CDN + routing middleware)
+- **Database:** [Supabase](https://supabase.com) (waitlist, schedule snapshots, news notifications, push subscriptions)
 - **Email:** [Resend](https://resend.com) (waitlist welcome emails, news digest broadcasts)
-- **AI:** [Anthropic Claude](https://anthropic.com) (delay risk explanations)
+- **AI:** [Anthropic Claude](https://anthropic.com) via the Vercel AI Gateway (delay explanations)
 - **Runtime:** [Bun](https://bun.sh) (package manager + script runner)
-- **Testing:** [Vitest](https://vitest.dev) + [Playwright](https://playwright.dev)
-- **Analytics:** Vercel Web Analytics + Speed Insights
-- **Design:** Dark NOC theme, inspired by Bloomberg terminals and airline ops centers ([design system](DESIGN.md))
+- **Testing:** [Vitest](https://vitest.dev) + [Playwright](https://playwright.dev) (`bun run test`, never bare `bun test`)
+- **Analytics:** Vercel Web Analytics
 
 ---
 
 ## Security
 
-- **Content Security Policy** — Strict CSP via Vercel headers with `default-src 'self'`, `frame-ancestors 'none'`, and scoped source directives
+- **Content Security Policy** — Strict CSP via Vercel headers: `default-src 'self'`, `frame-ancestors 'none'`, and no `'unsafe-inline'` or `'unsafe-eval'` in `script-src`. Astro's two inline island scripts are allowed by `'sha256-…'` hash, and `scripts/verify-csp-hashes.mjs` fails `bun run build` if any inline script in `dist/` is missing from the header — the failure mode it guards (an Astro upgrade changes one byte, the browser refuses the island, the page ships a skeleton) is invisible to every other check.
+- **No third-party origins** — Leaflet, the fonts and every stylesheet are bundled from npm and served from `'self'`. There is no CDN in the CSP.
 - **Security headers** — `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (HSTS with preload)
-- **XSS protection** — All dynamic API data is HTML-escaped before DOM insertion (including single quotes). Zero inline event handlers — all interaction via delegated `data-action` attributes.
+- **XSS protection** — React escapes by default; the few raw-HTML strings are authored content from `src/data/`, never user or API input.
 - **CORS** — API endpoints locked to `theblueboard.co` origin
 - **Input validation** — All API parameters validated and sanitized server-side
 - **Row-level security** — Supabase RLS policies on all user-facing tables
@@ -177,66 +204,37 @@ Living, data-driven pages that follow aviation's long-running stories — each w
 
 ```
 ├── src/
+│   ├── app/                      # The dashboard — one React island
+│   │   ├── Dashboard.tsx         #   shell composition + tab switching
+│   │   ├── tabs.ts               #   tab registry (lazy view per tab, deep-link hashes)
+│   │   ├── shell/                #   header, ticker, hub health, tab bar, mobile nav
+│   │   ├── views/                #   one directory per tab
+│   │   ├── features/             #   flight sheet, dialogs, search palette, onboarding
+│   │   ├── map/                  #   Leaflet integration
+│   │   ├── state/                #   context providers + hooks
+│   │   └── data/                 #   client-side fetchers
 │   ├── components/
-│   │   └── Footer.astro          # Shared footer (disclaimer, sources, donation CTA)
-│   ├── dashboard/
-│   │   └── main.js               # Dashboard SPA entry point (Vite-bundled)
-│   ├── layouts/
-│   │   ├── HubLayout.astro       # Shared hub page template
-│   │   ├── FleetTypeLayout.astro # Fleet type page template
-│   │   └── NewsLayout.astro      # News article page template
-│   ├── lib/
-│   │   ├── delay-risk.js         # 8-signal delay risk scoring engine
-│   │   ├── metar.js              # METAR parsing and weather classification
-│   │   └── buildMetadata.js      # SEO metadata helpers (lastmod, sitemap)
-│   ├── pages/
-│   │   ├── 404.astro             # Branded "Flight not found" 404 page
-│   │   ├── sitemap.xml.ts        # Dynamic sitemap (all pages)
-│   │   ├── feed.xml.ts           # Dynamic RSS feed (news + updates)
-│   │   ├── news-sitemap.xml.ts   # Google News sitemap
-│   │   ├── hubs/
-│   │   │   └── [hub].astro       # Dynamic route → 9 tracked-board pages (8 hubs + NRT gateway)
-│   │   ├── fleet/
-│   │   │   ├── index.astro       # Fleet overview (all 19 types)
-│   │   │   └── [type].astro      # Dynamic route → 19 fleet type pages
-│   │   └── news/
-│   │       ├── index.astro       # News hub index
-│   │       └── [slug].astro      # Dynamic route → individual articles
-│   └── data/
-│       ├── hubs.js               # Hub metadata (8 hubs + NRT gateway, 9 boards)
-│       ├── fleet/                 # Fleet type data (19 aircraft types)
-│       └── news/                  # News article data
-├── public/
-│   ├── index.html                # The entire dashboard (single file)
-│   ├── css/style.css             # Extracted dashboard styles
-│   ├── fonts/                    # Self-hosted Satoshi + DM Sans + JetBrains Mono (WOFF2)
-│   ├── data/                     # Fleet + Starlink JSON databases
-│   ├── og-image.png              # Social media preview image (1200×630)
-│   ├── manifest.json             # PWA manifest
-│   ├── sw.js                     # Service worker (split caches, offline support)
-│   ├── icons/                    # PWA app icons (192px, 512px)
-│   └── robots.txt                # Search engine directives
-├── api/
-│   ├── schedule.ts               # Hub schedule boards (FR24 + AeroDataBox, cached, rate-limited, quota-guarded)
-│   ├── irops.ts                  # Server-side IROPS aggregation (5min cache)
-│   ├── fr24-feed.ts              # Live flight feed proxy
-│   ├── fr24-flight.ts            # FR24 official API flight lookup
-│   ├── delay-explain.ts          # AI delay explanations (Claude)
-│   ├── metar.ts                  # AWC METAR weather proxy (batched)
-│   ├── faa.ts                    # FAA NAS status proxy (XML → JSON)
-│   ├── fleet.ts                  # Fleet data proxy
-│   ├── waitlist.ts               # Waitlist signup + welcome email
-│   ├── news-notify.ts            # News digest email broadcasts
-│   ├── fr24-usage.ts             # FR24 credit usage monitor
-│   ├── cron/warm-schedules.ts    # Schedule cache warming (hourly, quota-budgeted)
-│   ├── cron/sync-starlink.ts     # Starlink data sync (every 4hrs)
-│   ├── cron/refresh-tsa.ts       # TSA wait-time cache refresh (hourly)
-│   ├── cron/refresh-metar.ts     # METAR weather cache refresh (every 5min)
-│   └── cron/watch-alerts.ts      # Background flight-watch push alerts (every 5min)
+│   │   ├── ui/                   # shadcn primitives (edited in place)
+│   │   ├── site/                 # BaseLayout, Seo, header/footer, breadcrumbs, sections
+│   │   └── trackers/             # tracker map, table, search, changelog, detail layout
+│   ├── layouts/                  # HubLayout, FleetTypeLayout, NewsLayout
+│   ├── lib/                      # all testable logic + colour encodings
+│   │   ├── delay-risk.js         #   8-signal delay risk scoring
+│   │   ├── metar.js              #   METAR parsing + weather classification
+│   │   ├── site.js               #   canonical origin
+│   │   └── buildMetadata.js      #   SEO metadata (lastmod, sitemap)
+│   ├── data/                     # hubs, fleet types, news, trackers, facts
+│   ├── pages/                    # Astro routes + sitemap.xml.ts, feed.xml.ts, news-sitemap.xml.ts
+│   ├── scripts/                  # page-level scripts bundled by Astro (sw-register, newark-live)
+│   └── styles/                   # global.css (tokens, Leaflet overrides) + content.css
+├── public/                       # data JSON, icons, og images, sw.js, manifest, llms*.txt
+├── api/                          # Vercel serverless functions (+ api/cron/*)
 ├── sql/                          # Supabase migration files
-├── scripts/                      # Build + seed scripts
-├── tests/                        # Vitest test suite
+├── scripts/                      # build + audit scripts (verify-csp-hashes, generate-og, ui-audit)
+├── tests/                        # Vitest suite
+├── middleware.ts                 # Markdown content negotiation
 ├── DESIGN.md                     # Design system documentation
+├── MAINTENANCE.md                # Tracker data maintenance runbook
 ├── CHANGELOG.md                  # Release history
 └── vercel.json                   # Vercel config + headers + CSP + crons
 ```
@@ -259,7 +257,7 @@ Every donation helps cover server costs and keeps the dashboard free for everyon
 
 Got an idea? Found a bug? **[Open an issue →](https://github.com/jonahberg/the-blue-board/issues)**
 
-The community drives this project. Some of the best features came from user suggestions on Reddit and FlyerTalk. PRs welcome too — the dashboard is a single HTML file, and content pages are Astro templates, so the barrier to entry is low.
+The community drives this project. Some of the best features came from user suggestions on Reddit and FlyerTalk. PRs welcome too — `bun install && bun run dev` is the whole setup, and most changes are one view under `src/app/views/` or one data file under `src/data/`. Run `bun run test`, `bun run typecheck` and `bun run build` before opening one.
 
 **Follow [@theblueboard](https://x.com/theblueboard) on X** for updates, new features, and release notes.
 
