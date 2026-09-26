@@ -138,9 +138,16 @@ export function UiProvider({ children }: { children: ReactNode }) {
 
   const clearPendingScroll = useCallback(() => setPendingScroll(null), []);
 
-  const focusOn = useCallback((lat: number, lon: number) => {
-    setFocus({ lat, lon, key: Date.now() });
-  }, []);
+  // Centring the map means showing it: every caller (My Flights, Starlink "Track", the aircraft
+  // dialog, the flight sheet, ⌘K) expects to land on Live, as the legacy focusFlight() did.
+  // LiveMap holds the move until the panel has a size again.
+  const focusOn = useCallback(
+    (lat: number, lon: number) => {
+      setTab('live');
+      setFocus({ lat, lon, key: Date.now() });
+    },
+    [setTab],
+  );
 
   /** Repeating the same sentence is a no-op: screen readers announce a changed value. */
   const announce = useCallback((text: string) => {

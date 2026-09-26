@@ -4,6 +4,15 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-09-26
+
+### Fixed
+- **"View on map", Starlink "Track", the aircraft dialog's "View on map" and the flight sheet's "Centre map" no longer blank the whole dashboard.** Each switches to Live Ops and asks the map to centre in the same render, while the Live panel is still hidden and Leaflet's cached size is 0×0; animating against a zero-size map projects to NaN and threw `Invalid LatLng object: (NaN, NaN)` inside a React effect, which unmounted the entire island. The map now measures first and holds the move until the panel has a size again (the same path covers the US/Pacific view toggle). (`src/app/map/LiveMap.tsx`, `tests/live-map-hidden-focus.test.tsx`)
+- **An error in one view can no longer take down the page.** Each tab and the dashboard as a whole sit inside an error boundary that shows a contained "hit an error" panel with Try again / Reload instead of a black screen. (`src/app/shell/ErrorBoundary.tsx`, `src/app/Dashboard.tsx`, `tests/error-boundary.test.tsx`)
+- **Centring the map takes you to the map again.** `focusOn` switches to Live Ops (as the pre-1.8 `focusFlight()` did), and a ⌘K "Airborne now" result centres the map on the flight instead of opening its sheet over whichever tab you were on. (`src/app/state/ui.tsx`, `src/app/features/SearchPalette.tsx`, `tests/ui-focus-switches-to-live.test.tsx`)
+- **The Stats and Starlink tabs no longer make the page itself scrollable.** Screen-reader-only table captions/cells were positioned against the page rather than the tab's scroller, adding ~300px of document height; find-in-page or a screen reader could scroll the header off-screen with no way back. Tab panels are now `relative`. (`src/app/Dashboard.tsx`)
+- **`/tsa/` and any `/tsa/*` path redirect to `/hubs`** like `/tsa` already did (it 404'd with a trailing slash). (`vercel.json`)
+
 ## [1.8.0] - 2026-09-14
 
 ### Changed

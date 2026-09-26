@@ -33,6 +33,7 @@ import { SearchPalette } from './features/SearchPalette';
 import TipStrip from './features/TipStrip';
 import WaitlistDialog from './features/WaitlistDialog';
 import { Attribution } from './shell/Attribution';
+import { ErrorBoundary } from './shell/ErrorBoundary';
 import { Header } from './shell/Header';
 import { HubHealthStrip } from './shell/HubHealthStrip';
 import { IropsAnnouncer } from './shell/IropsAnnouncer';
@@ -142,11 +143,16 @@ function DashboardShell() {
             key={id}
             value={id}
             forceMount
-            className="min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
+            // `relative` makes the panel the containing block for absolutely positioned
+            // descendants (Tailwind `sr-only` captions/cells in the Stats and Starlink tables);
+            // without it they escaped the scroller and made the whole page scrollable.
+            className="relative min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
           >
-            <Suspense fallback={<ViewSkeleton />}>
-              <View />
-            </Suspense>
+            <ErrorBoundary scope="This tab">
+              <Suspense fallback={<ViewSkeleton />}>
+                <View />
+              </Suspense>
+            </ErrorBoundary>
           </TabsContent>
         ))}
       </Tabs>
@@ -185,19 +191,21 @@ function ShellWithPrefs() {
 export default function Dashboard() {
   return (
     <TooltipProvider delayDuration={200}>
-      <UiProvider>
-        <PrefsProvider>
-          <FeedProvider>
-            <FleetProvider>
-              <WatchProvider>
-                <IropsProvider>
-                  <ShellWithPrefs />
-                </IropsProvider>
-              </WatchProvider>
-            </FleetProvider>
-          </FeedProvider>
-        </PrefsProvider>
-      </UiProvider>
+      <ErrorBoundary scope="The dashboard">
+        <UiProvider>
+          <PrefsProvider>
+            <FeedProvider>
+              <FleetProvider>
+                <WatchProvider>
+                  <IropsProvider>
+                    <ShellWithPrefs />
+                  </IropsProvider>
+                </WatchProvider>
+              </FleetProvider>
+            </FeedProvider>
+          </PrefsProvider>
+        </UiProvider>
+      </ErrorBoundary>
     </TooltipProvider>
   );
 }

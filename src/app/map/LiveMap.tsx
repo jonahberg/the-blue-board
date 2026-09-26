@@ -100,6 +100,41 @@ export function LiveMap({
 }: LiveMapProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  /** A move requested while the map had no size; applied on the next non-zero resize. */
+  const pendingMoveRef = useRef<((map: L.Map) => void) | null>(null);
+
+  function hasSize(map: L.Map): boolean {
+    const size = map.getSize();
+    return size.x > 0 && size.y > 0;
+  }
+
+  function runMove(map: L.Map, move: (map: L.Map) => void): void {
+    try {
+      move(map);
+    } catch {
+      // A projection failure must never take the dashboard down with it.
+    }
+  }
+
+  function requestMove(move: (map: L.Map) => void): void {
+    const map = mapRef.current;
+    if (!map) return;
+    map.invalidateSize();
+    if (hasSize(map)) {
+      pendingMoveRef.current = null;
+      runMove(map, move);
+    } else {
+      pendingMoveRef.current = move;
+    }
+  }
+
+  function flushPendingMove(): void {
+    const map = mapRef.current;
+    const move = pendingMoveRef.current;
+    if (!map || !move || !hasSize(map)) return;
+    pendingMoveRef.current = null;
+    runMove(map, move);
+  }
   const planeLayerRef = useRef<L.LayerGroup>(L.layerGroup());
   const hubLayerRef = useRef<L.LayerGroup>(L.layerGroup());
   const radarRef = useRef<L.TileLayer | null>(null);
@@ -139,7 +174,12 @@ export function LiveMap({
 
     // The map shares its box with a sidebar that collapses at breakpoints and with a Sheet
     // on mobile; without this Leaflet keeps its stale pixel size and tiles stop halfway.
-    const observer = new ResizeObserver(() => map.invalidateSize());
+    // It is also how a move requested while the Live panel was hidden gets applied: the
+    // panel re-showing is a resize from 0×0.
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+      flushPendingMove();
+    });
     observer.observe(hostRef.current);
 
     return () => {
@@ -311,12 +351,17 @@ export function LiveMap({
   }, [selectedId, flights]);
 
   // ── Focus + US/Pacific view ───────────────────────────────────────────────
+  // Every view-on-map action outside Live Ops (My Flights, Starlink "Track", the aircraft
+  // dialog, the flight sheet, ⌘K) switches to Live and requests a move in the same commit —
+  // while the Live panel is still `display:none` and Leaflet's cached size is 0×0. Animating
+  // against a zero-size map projects to NaN and throws "Invalid LatLng object: (NaN, NaN)",
+  // which used to unmount the whole dashboard. So: measure first, and if the map has no size
+  // yet, hold the move until the ResizeObserver sees the panel again.
   useEffect(() => {
-    if (focus && mapRef.current) {
-      mapRef.current.flyTo([focus.lat, focus.lon], Math.max(mapRef.current.getZoom(), 6), {
-        duration: 0.8,
-      });
+    if (focus) {
+      requestMove((map) => map.flyTo([focus.lat, focus.lon], Math.max(map.getZoom(), 6), { duration: 0.8 }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
 
   const firstViewRender = useRef(true);
@@ -328,7 +373,8 @@ export function LiveMap({
       return;
     }
     const target = view === 'pacific' ? PACIFIC_VIEW : US_VIEW;
-    map.flyTo(target.center, target.zoom, { duration: 1.2 });
+    requestMove((m) => m.flyTo(target.center, target.zoom, { duration: 1.2 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
   return (
