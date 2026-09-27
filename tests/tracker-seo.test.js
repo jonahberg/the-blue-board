@@ -75,11 +75,13 @@ describe('tracker detail route scope', () => {
 });
 
 describe('tracker downloads', () => {
-  it('exports all ATC records as CSV and JSON with cacheable typed responses', async () => {
+  it('exports all ATC records as CSV and JSON with typed responses', async () => {
+    // Only the body is asserted beyond content-type: with output:'static' these endpoints are
+    // prerendered to files, so their own Cache-Control/Content-Disposition never reach users —
+    // production headers come from vercel.json's /trackers/(.*) rule (tests/asset-cache.test.js).
     const csvResponse = getAtcCsv();
     const csv = await csvResponse.text();
     expect(csvResponse.headers.get('content-type')).toContain('text/csv');
-    expect(csvResponse.headers.get('cache-control')).toContain('s-maxage=86400');
     expect(csv.split('\n')).toHaveLength(atcAirports.length + 2);
     expect(csv).toContain('"last_verified"');
 
