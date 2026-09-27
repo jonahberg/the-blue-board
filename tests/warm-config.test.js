@@ -18,6 +18,11 @@ describe('vercel.json warm-schedules cron config', () => {
     // Without this, changing SLOT_MS back to 60 min while vercel.json stays at */30 would pass the
     // test above and silently half-stride the warm ring in production.
     const src = readFileSync(new URL('../api/cron/warm-schedules.ts', import.meta.url), 'utf8');
-    expect(src).toMatch(/const SLOT_MS = 30 \* 60 \* 1000/);
+    // Evaluate the literal numerically, so `1_800_000` or `30 * 60_000` are as good as
+    // `30 * 60 * 1000` (SLOT_MS is module-private; exporting it would touch the cron file).
+    const expr = src.match(/const SLOT_MS\s*=\s*([\d_*\s]+);/)?.[1];
+    expect(expr, 'const SLOT_MS = <numeric literal expression>; not found').toBeTruthy();
+    const slotMs = expr.split('*').reduce((acc, n) => acc * Number(n.trim().replace(/_/g, '')), 1);
+    expect(slotMs).toBe(30 * 60 * 1000);
   });
 });

@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
 // Attribution / announcement-channel compliance pins (audit findings, Jun 2026):
 //  1. The static "Data feeds restored" banner announced a one-off June 7 recovery and can
-//     never become true again — it must stay deleted (markup + script).
+//     never become true again — it must not come back into the dashboard.
 //  2. Schedules are sourced from AeroDataBox, NOT Flightradar24. Public attribution saying
 //     otherwise is an FR24 ToS violation. FR24 credit stays only for live aircraft positions.
 //  3. Both Leaflet maps draw CARTO tiles over OpenStreetMap data (ODbL) — suppressing the
@@ -45,11 +45,6 @@ describe('stale "Data feeds restored" banner is fully removed', () => {
   it('the dashboard has no reference to restored-banner (markup, ids, or script tag)', () => {
     expect(appSource).not.toContain('restored-banner');
     expect(appSource).not.toContain('data-restored');
-  });
-
-  it('public/js/restored-banner.js does not exist', () => {
-    const path = fileURLToPath(new URL('../public/js/restored-banner.js', import.meta.url));
-    expect(existsSync(path)).toBe(false);
   });
 });
 

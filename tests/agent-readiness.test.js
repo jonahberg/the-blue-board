@@ -18,6 +18,7 @@ import {
 } from '../src/lib/home-seo.js';
 import { isKnownRoutePath, normalizePathname } from '../src/lib/site-routes.js';
 import { GET as getSitemap } from '../src/pages/sitemap.xml.ts';
+import { hubs } from '../src/data/hubs/index.js';
 
 // Agent-readiness pins (Ora "Is Agentic" audit, Aug 2026). Each block below guards one
 // audited behaviour that lives in a static surface no other test covers:
@@ -95,7 +96,7 @@ describe('1. homepage content without JavaScript', () => {
     expect(HOME_BRIEF.h1).toContain('United Airlines');
   });
 
-  it('ships well past 500 characters of raw text', () => {
+  it('ships well past 3000 characters of raw text', () => {
     expect(homeText().length).toBeGreaterThan(3000);
   });
 
@@ -106,9 +107,14 @@ describe('1. homepage content without JavaScript', () => {
   it('renders the crawlable site nav and the noscript fallback', () => {
     expect(indexAstro).toContain('<nav class="sr-only"');
     expect(indexAstro).toContain('<noscript>');
-    expect(HOME_NAV_LINKS).toHaveLength(15);
-    expect(NOSCRIPT_LINKS.hubs).toHaveLength(9);
-    expect(NOSCRIPT_LINKS.resources).toHaveLength(4);
+    // Structural, not counted: every hub page is linked, and every link resolves to a real route.
+    const hubHrefs = Object.keys(hubs).map((hub) => `/hubs/${hub}`).sort();
+    expect(NOSCRIPT_LINKS.hubs.map((l) => l.href).sort()).toEqual(hubHrefs);
+    expect(HOME_NAV_LINKS.map((l) => l.href)).toEqual(expect.arrayContaining(hubHrefs));
+    expect(NOSCRIPT_LINKS.resources.length).toBeGreaterThan(0);
+    const all = [...HOME_NAV_LINKS, ...NOSCRIPT_LINKS.resources];
+    for (const { href } of all) expect(isKnownRoutePath(href), href).toBe(true);
+    expect(new Set(HOME_NAV_LINKS.map((l) => l.href)).size).toBe(HOME_NAV_LINKS.length);
   });
 
   it('states the fleet count that facts.js is the source of truth for', () => {
