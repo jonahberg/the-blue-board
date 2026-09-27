@@ -4,6 +4,14 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.3] - 2026-09-27
+
+### Fixed
+- **The service worker's runtime caches finally store anything (v12).** Every runtime-cache branch cloned the network response inside `event.waitUntil` *after* `await caches.open(...)`; by then the browser was already reading the body it had been handed through `respondWith`, so `clone()` threw "Response body is already used", `waitUntil` swallowed the rejection, and nothing was ever cached. Verified on production: after many navigations the data and static caches were empty and only the install-time `/` shell existed. The bug predates the 1.8 rebuild (v10 had the same pattern). The response is now cloned synchronously before it is returned. Result: visited pages open offline, `/_astro` assets load from cache on repeat visits as intended, and icons revalidate in the background. (`public/sw.js`, `tests/sw.test.js`)
+
+### Changed
+- **Offline data is limited to responses that are safe to replay.** Only `/data/*.json`, `/api/schedule` (boards carry their own "data as of"), `/api/starlink-data`, `/api/fleet-summary` and `/api/fleet` are kept for offline use. Live and near-real-time endpoints (the FR24 position feed, METAR, FAA/NAS status, IROPS, per-flight lookups) stay network-only, so a flaky connection gets an honest failure instead of hours-old positions under the LIVE badge. That is what those endpoints effectively did before, since the cache never worked. (`public/sw.js`)
+
 ## [1.8.2] - 2026-09-27
 
 ### Fixed

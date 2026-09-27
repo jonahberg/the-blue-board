@@ -358,3 +358,132 @@ describe('sw.js — fetch routing strategy', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+// ── Runtime caching actually stores responses (v12) ─────────────────────────────────────────
+// Every runtime-cache branch used to call networkResponse.clone() inside event.waitUntil AFTER
+// `await caches.open(...)` — by then the browser had consumed the body it was handed through
+// respondWith, clone() threw "Response body is already used", the rejection was swallowed by
+// waitUntil, and nothing was ever cached (verified on production, Sep 26 2026: the data and
+// static caches stayed empty across many navigations). The fake responses above clone forever,
+// which is why the suite never noticed. These use a strict response + a caches.open that settles
+// on a later tick, matching real browser timing.
+
+function strictResponse(body, { contentType = 'application/json' } = {}) {
+  return {
+    ok: true,
+    type: 'basic',
+    body,
+    bodyUsed: false,
+    headers: new Headers({ 'content-type': contentType }),
+    clone() {
+      if (this.bodyUsed) throw new TypeError('Response body is already used');
+      return { ...this, clone: this.clone, bodyUsed: false };
+    },
+  };
+}
+
+function makeStrictEnv() {
+  const env = makeEnv();
+  const realOpen = env.caches.open.bind(env.caches);
+  env.caches.open = async (name) => {
+    await new Promise((r) => setTimeout(r, 0));
+    return realOpen(name);
+  };
+  return env;
+}
+
+// Like runFetch, but marks the committed response's body as consumed the moment respondWith
+// settles — which is what the browser does — before the waitUntil work gets to run.
+async function runFetchStrict(handlers, request) {
+  const waits = [];
+  const event = {
+    request,
+    respondWith(p) { this._resp = p; },
+    waitUntil(p) { waits.push(p); },
+  };
+  handlers.fetch(event);
+  const response = event._resp ? await event._resp : undefined;
+  // Real Response objects (the SW's own 503s) have a read-only bodyUsed; only the fakes need marking.
+  if (response && typeof response === 'object' && !(response instanceof Response)) response.bodyUsed = true;
+  const settled = await Promise.allSettled(waits);
+  return { response, rejected: settled.filter((s) => s.status === 'rejected') };
+}
+
+describe('sw.js — runtime caches really fill (strict body semantics)', () => {
+  it('bumps CACHE_VERSION so the fixed worker replaces v11', () => {
+    expect(CACHE_VERSION).toBe('v12');
+  });
+
+  it('caches a navigation for offline use', async () => {
+    const { handlers, caches, fetchMock } = makeStrictEnv();
+    fetchMock.mockResolvedValue(strictResponse('HUB PAGE', { contentType: 'text/html' }));
+    const { rejected } = await runFetchStrict(handlers, new Request(`${ORIGIN}/hubs/ord`, { mode: 'navigate' }));
+    expect(rejected).toEqual([]);
+    const pages = await caches.open(`blueboard-pages-${CACHE_VERSION}`);
+    expect(await pages.match(`${ORIGIN}/hubs/ord`)).toBeDefined();
+  });
+
+  it('caches a hashed /_astro asset', async () => {
+    const { handlers, caches, fetchMock } = makeStrictEnv();
+    fetchMock.mockResolvedValue(strictResponse('JS', { contentType: 'application/javascript' }));
+    const { rejected } = await runFetchStrict(handlers, new Request(`${ORIGIN}/_astro/app-Zz9.js`));
+    expect(rejected).toEqual([]);
+    const statics = await caches.open(STATIC_CACHE);
+    expect(await statics.match(`${ORIGIN}/_astro/app-Zz9.js`)).toBeDefined();
+  });
+
+  it('caches a stale-while-revalidate static asset on first fetch', async () => {
+    const { handlers, caches, fetchMock } = makeStrictEnv();
+    fetchMock.mockResolvedValue(strictResponse('PNG', { contentType: 'image/png' }));
+    const { rejected } = await runFetchStrict(handlers, new Request(`${ORIGIN}/icons/icon-512.png`));
+    expect(rejected).toEqual([]);
+    const statics = await caches.open(STATIC_CACHE);
+    expect(await statics.match(`${ORIGIN}/icons/icon-512.png`)).toBeDefined();
+  });
+
+  it('caches offline-safe data (schedule boards carry their own "data as of"), and serves it offline', async () => {
+    const { handlers, fetchMock } = makeStrictEnv();
+    const url = `${ORIGIN}/api/schedule?hub=ORD&dir=departures&timestamp=1790395200`;
+    fetchMock.mockResolvedValueOnce(strictResponse('{"total":637}'));
+    const first = await runFetchStrict(handlers, new Request(url));
+    expect(first.rejected).toEqual([]);
+
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    const offline = await runFetchStrict(handlers, new Request(url));
+    expect(offline.response.body).toBe('{"total":637}');
+  });
+
+  it('caches the static /data files', async () => {
+    const { handlers, caches, fetchMock } = makeStrictEnv();
+    fetchMock.mockResolvedValue(strictResponse('[]'));
+    await runFetchStrict(handlers, new Request(`${ORIGIN}/data/fleet.json`));
+    const data = await caches.open(`blueboard-data-${CACHE_VERSION}`);
+    expect(await data.match(`${ORIGIN}/data/fleet.json`)).toBeDefined();
+  });
+
+  it('never caches the LIVE feed: offline it must fail, not replay old positions as "LIVE"', async () => {
+    // Flaky airline Wi-Fi is this site's core audience. A cached fr24-feed would come back as a
+    // 200 with hours-old aircraft positions under the LIVE badge whenever a request fails —
+    // worse than an honest failure the dashboard already handles.
+    const { handlers, caches, fetchMock } = makeStrictEnv();
+    const url = `${ORIGIN}/api/fr24-feed`;
+    fetchMock.mockResolvedValueOnce(strictResponse('{"live":true}'));
+    await runFetchStrict(handlers, new Request(url));
+    const data = await caches.open(`blueboard-data-${CACHE_VERSION}`);
+    expect(await data.match(url)).toBeUndefined();
+
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    const offline = await runFetchStrict(handlers, new Request(url));
+    expect(offline.response.status).toBe(503);
+  });
+
+  for (const path of ['/api/metar', '/api/faa', '/api/nas', '/api/irops', '/api/fr24-flight?flight=UA1', '/api/flight-times?flight=UA1', '/api/predict-flight?flight=UA1', '/api/aircraft-history?reg=N1']) {
+    it(`does not cache time-sensitive ${path}`, async () => {
+      const { handlers, caches, fetchMock } = makeStrictEnv();
+      fetchMock.mockResolvedValueOnce(strictResponse('{}'));
+      await runFetchStrict(handlers, new Request(`${ORIGIN}${path}`));
+      const data = await caches.open(`blueboard-data-${CACHE_VERSION}`);
+      expect(await data.keys()).toEqual([]);
+    });
+  }
+});

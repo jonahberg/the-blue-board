@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v11'; // bumped for the Astro/React rebuild: assets moved to hashed /_astro/*
+const CACHE_VERSION = 'v12'; // bumped: runtime caches now actually store responses (clone-before-return fix)
 const PAGE_CACHE = `blueboard-pages-${CACHE_VERSION}`;
 const DATA_CACHE = `blueboard-data-${CACHE_VERSION}`;
 const STATIC_CACHE = `blueboard-static-${CACHE_VERSION}`;
@@ -24,6 +24,32 @@ async function trimCache(cacheName, maxEntries) {
     await cache.delete(keys[0]);
     keys = await cache.keys();
   }
+}
+
+// Store a response in a runtime cache from inside event.waitUntil. The caller MUST hand over a
+// clone taken synchronously, before the original is returned to respondWith: once the browser
+// starts reading the original body, clone() throws "Response body is already used". Every branch
+// below used to clone after `await caches.open(...)`, so every write silently failed and the
+// runtime caches stayed empty for the SW's whole life (found on production, Sep 26 2026).
+async function putAndTrim(cacheName, request, responseCopy, maxEntries) {
+  const cache = await caches.open(cacheName);
+  await cache.put(request, responseCopy);
+  await trimCache(cacheName, maxEntries);
+}
+
+// Data kept for offline use. Only responses that are safe to replay later: schedule boards carry
+// their own "data as of" / generatedAt, Starlink and fleet data change slowly, /data/*.json is
+// static. Live and near-real-time endpoints (the FR24 position feed, weather, FAA/NAS status,
+// IROPS, per-flight lookups) are deliberately NOT cached — on flaky airline Wi-Fi a cached
+// /api/fr24-feed would come back as a 200 full of hours-old positions under the LIVE badge.
+function isOfflineSafeData(pathname) {
+  return (
+    pathname.startsWith('/data/') ||
+    pathname === '/api/schedule' ||
+    pathname === '/api/starlink-data' ||
+    pathname === '/api/fleet-summary' ||
+    pathname === '/api/fleet'
+  );
 }
 
 function isCacheable(response) {
@@ -78,11 +104,7 @@ self.addEventListener('fetch', (event) => {
         const networkRequest = new Request(request, { cache: 'reload' });
         const networkResponse = await fetch(networkRequest);
         if (isHtmlResponse(networkResponse)) {
-          event.waitUntil((async () => {
-            const cache = await caches.open(PAGE_CACHE);
-            await cache.put(request, networkResponse.clone());
-            await trimCache(PAGE_CACHE, PAGE_MAX);
-          })());
+          event.waitUntil(putAndTrim(PAGE_CACHE, request, networkResponse.clone(), PAGE_MAX));
         }
         return networkResponse;
       } catch (_err) {
@@ -100,20 +122,17 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isDataRequest) {
+    const offlineSafe = isOfflineSafeData(url.pathname);
     event.respondWith((async () => {
       try {
         const networkRequest = new Request(request, { cache: 'no-store' });
         const networkResponse = await fetch(networkRequest);
-        if (isCacheable(networkResponse)) {
-          event.waitUntil((async () => {
-            const cache = await caches.open(DATA_CACHE);
-            await cache.put(request, networkResponse.clone());
-            await trimCache(DATA_CACHE, DATA_MAX);
-          })());
+        if (offlineSafe && isCacheable(networkResponse)) {
+          event.waitUntil(putAndTrim(DATA_CACHE, request, networkResponse.clone(), DATA_MAX));
         }
         return networkResponse;
       } catch (_err) {
-        const cached = await caches.match(request);
+        const cached = offlineSafe ? await caches.match(request) : undefined;
         if (cached) return cached;
         return new Response(JSON.stringify({ error: 'offline' }), {
           status: 503,
@@ -140,11 +159,7 @@ self.addEventListener('fetch', (event) => {
       try {
         const networkResponse = await fetch(request);
         if (isCacheable(networkResponse)) {
-          event.waitUntil((async () => {
-            const cache = await caches.open(STATIC_CACHE);
-            await cache.put(request, networkResponse.clone());
-            await trimCache(STATIC_CACHE, STATIC_MAX);
-          })());
+          event.waitUntil(putAndTrim(STATIC_CACHE, request, networkResponse.clone(), STATIC_MAX));
         }
         return networkResponse;
       } catch (_err) {
@@ -160,11 +175,7 @@ self.addEventListener('fetch', (event) => {
     const networkPromise = fetch(request)
       .then((networkResponse) => {
         if (isCacheable(networkResponse)) {
-          event.waitUntil((async () => {
-            const cache = await caches.open(STATIC_CACHE);
-            await cache.put(request, networkResponse.clone());
-            await trimCache(STATIC_CACHE, STATIC_MAX);
-          })());
+          event.waitUntil(putAndTrim(STATIC_CACHE, request, networkResponse.clone(), STATIC_MAX));
         }
         return networkResponse;
       })
