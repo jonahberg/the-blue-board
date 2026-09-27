@@ -113,7 +113,7 @@ export function Header({
         >
           <span aria-hidden="true">👁️</span>
           {watch.watched.length > 0 ? (
-            <span className="ml-1 rounded-full bg-primary px-1.5 font-mono text-[10px] text-primary-foreground">
+            <span className="ml-1 rounded-full bg-primary-fill px-1.5 font-mono text-[10px] text-primary-foreground">
               {watch.watched.length}
             </span>
           ) : null}

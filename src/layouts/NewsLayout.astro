@@ -116,7 +116,7 @@ const newsArticleSchema = {
               {crossLinks.map((link: { label: string; url: string }) => (
                 <a
                   href={link.url}
-                  class="inline-flex min-h-11 items-center rounded-full border border-border bg-card px-4 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                  class="inline-flex min-h-11 items-center rounded-full border border-border bg-card px-4 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:bg-primary-fill hover:text-primary-foreground"
                 >
                   {link.label} &rarr;
                 </a>
