@@ -3,14 +3,14 @@
 // traffic-management initiatives as free text. This classifies them, tags the United
 // hubs each touches, and sorts them into the panel's three-tier priority stack.
 //
-// Extracted verbatim from src/dashboard/main.js (:3629-3785, classifiers + item
-// building). Panel creation, insertion and innerHTML stay in main.js.
+// Extracted from src/dashboard/main.js (:3629-3785, classifiers + item building).
+// Everything comes back RAW; NasPanel.tsx renders it as JSX text, so React does the escaping.
 //
-// `title` and `detail` come back pre-escaped: every value that originates upstream
-// passes through escapeHtml here, so the caller can concatenate them into innerHTML
-// exactly as renderNasPanel always has.
-
-import { escapeHtml } from './escape.js';
+// Tiering (Sep 2026): "critical" is reserved for a ground stop that is IN EFFECT (an
+// `active` program). A planned TMI is at most "active", and an outlook worded
+// POSSIBLE/PROBABLE is "monitoring" — the ATCSCC operations plan lists a dozen such
+// outlooks on a normal afternoon, and tiering them as critical put eight red GS badges
+// on screen while /api/nas reported nothing active.
 
 /** Traffic-management initiative codes, spelled out. */
 /** @type {Record<string, string>} */
@@ -54,49 +54,6 @@ export function sevBadgeClass(sevType) {
 }
 
 /**
- * @typedef {Object} NasItem
- * @property {'critical'|'active'|'monitoring'} tier
- * @property {string} sevType
- * @property {string} title  pre-escaped
- * @property {string} detail  pre-escaped (may contain a `nas-delay-val` span)
- * @property {string[]} hubs  United hub codes this item affects
- */
-
-/**
- * Classify and tier the NAS payload.
- *
- * Active en-route programs are critical when they are a ground stop and active
- * otherwise. Planned TMIs are critical for a ground stop, active for GDP/AFP, and
- * monitoring for everything else. Items keep their source order within a tier
- * (active programs first, then planned).
- *
- * @param {{active?: Array<Object>, planned?: Array<Object>}|null|undefined} nas
- * @param {Iterable<string>|Set<string>} hubCodes  the United hubs worth tagging.
- * @returns {{critical: NasItem[], active: NasItem[], monitoring: NasItem[]}}
- */
-export function tierNasEvents(nas, hubCodes) {
-  const tiers = tierNasEventsRaw(nas, hubCodes);
-  const escapeItem = (item) => ({
-    tier: item.tier,
-    sevType: item.sevType,
-    title: escapeHtml(item.title),
-    detail: item.detailParts
-      .map((part) =>
-        part.kind === 'delay'
-          ? 'avg <span class="nas-delay-val">' + escapeHtml(part.text) + '</span>'
-          : escapeHtml(part.text),
-      )
-      .join(' · '),
-    hubs: item.hubs,
-  });
-  return {
-    critical: tiers.critical.map(escapeItem),
-    active: tiers.active.map(escapeItem),
-    monitoring: tiers.monitoring.map(escapeItem),
-  };
-}
-
-/**
  * @typedef {Object} NasDetailPart
  * @property {'text'|'delay'} kind  `delay` is the avg-delay figure the panel emphasises.
  * @property {string} text  RAW — never escaped.
@@ -112,15 +69,17 @@ export function tierNasEvents(nas, hubCodes) {
  */
 
 /**
- * The same classification and tiering as `tierNasEvents`, with the text left RAW.
+ * Classify and tier the NAS payload, text left RAW for the React panel.
  *
- * `tierNasEvents` exists for the innerHTML caller in `src/dashboard/main.js` and escapes
- * this output at the edge; a React renderer takes the raw items, because passing
- * pre-escaped HTML through JSX would double-escape (`&amp;amp;`) and force the panel to
- * reach for `dangerouslySetInnerHTML` for no reason. One classifier, two presentations.
+ * Active en-route programs are critical when they are a ground stop and active otherwise.
+ * Planned TMIs are never critical: an outlook worded POSSIBLE/PROBABLE is monitoring, and
+ * otherwise a planned GS/GDP/AFP is active and everything else monitoring. A planned item's
+ * detail starts with a "planned" tag, then its window — the `time` field, or the leading
+ * "AFTER HHMM" the operations plan puts in the event text (moved out of the title).
+ * Items keep their source order within a tier (active programs first, then planned).
  *
  * @param {{active?: Array<Object>, planned?: Array<Object>}|null|undefined} nas
- * @param {Iterable<string>|Set<string>} hubCodes
+ * @param {Iterable<string>|Set<string>} hubCodes  the United hubs worth tagging.
  * @returns {{critical: NasItemRaw[], active: NasItemRaw[], monitoring: NasItemRaw[]}}
  */
 export function tierNasEventsRaw(nas, hubCodes) {
@@ -160,16 +119,25 @@ export function tierNasEventsRaw(nas, hubCodes) {
     const sevType = detectSevType(tmi.event);
     const hubs = (tmi.affectedAirports || []).filter(a => hubSet.has(a));
 
+    const text = String(tmi.decoded || tmi.event || '');
+    const tentative = /\b(POSSIBLE|PROBABLE)\b/i.test(text);
     let tier;
-    if (sevType === 'GS') tier = 'critical';
-    else if (sevType === 'GDP' || sevType === 'AFP') tier = 'active';
+    if (tentative) tier = 'monitoring';
+    else if (sevType === 'GS' || sevType === 'GDP' || sevType === 'AFP') tier = 'active';
     else tier = 'monitoring';
+
+    // "AFTER 1500\t-EWR GROUND STOP…" → title "EWR GROUND STOP…", window "after 1500Z".
+    const after = text.match(/^\s*AFTER\s+(\d{4})Z?\s*-?\s*/i);
+    /** @type {NasDetailPart[]} */
+    const detailParts = [{ kind: 'text', text: 'planned' }];
+    if (tmi.time) detailParts.push({ kind: 'text', text: tmi.time });
+    else if (after) detailParts.push({ kind: 'text', text: `after ${after[1]}Z` });
 
     items.push({
       tier,
       sevType,
-      title: tmi.decoded || tmi.event,
-      detailParts: tmi.time ? [{ kind: 'text', text: tmi.time }] : [],
+      title: after ? text.slice(after[0].length) : text,
+      detailParts,
       hubs,
     });
   }
