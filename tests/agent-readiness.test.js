@@ -99,6 +99,20 @@ describe('1. homepage content without JavaScript', () => {
     expect(homeText().length).toBeGreaterThan(3000);
   });
 
+  it('puts nothing focusable between the skip link and the island', () => {
+    // The sr-only nav, the brief's llms.txt/sitemap links and the fleet-summary link used to
+    // precede the island: 19 invisible Tab stops before the header (audit F12). They follow
+    // it now. <noscript> content is inert whenever the island can run, so it is excluded.
+    const beforeIsland = indexAstro
+      .slice(indexAstro.indexOf('---', 3) + 3, indexAstro.indexOf('<Dashboard'))
+      .replace(/<noscript>[\s\S]*?<\/noscript>/g, '');
+    expect(beforeIsland).not.toMatch(/<a\b|set:html=\{HOME_BRIEF\.howToUseHtml\}|HOME_NAV_LINKS|FLEET_SUMMARY\.linkHref/);
+    const afterIsland = indexAstro.slice(indexAstro.indexOf('<Dashboard'));
+    expect(afterIsland).toContain('set:html={HOME_BRIEF.howToUseHtml}');
+    expect(afterIsland).toContain('HOME_NAV_LINKS.map');
+    expect(afterIsland).toContain('FLEET_SUMMARY.linkHref');
+  });
+
   it('keeps the crawlable brief visually hidden so the dashboard looks unchanged', () => {
     expect(indexAstro).toContain('<section class="sr-only" aria-labelledby="page-brief-title">');
   });

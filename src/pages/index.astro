@@ -9,11 +9,18 @@
  *   1. the `sr-only` brief carrying the page `<h1>` — BEFORE any `<header>`, because
  *      readability-style extractors drop header/nav regions as boilerplate (that is why the
  *      Aug 2026 audit reported "no H1" while the canopy's brand heading was right there);
- *   2. the `sr-only` site nav, always present regardless of which tab the island has open;
- *   3. the `<noscript>` fallback;
- *   4. the `sr-only` fleet summary;
- *   5. the island itself;
- *   6. the six JSON-LD blocks, at the end of `<body>` so they never block resource discovery.
+ *   2. the `<noscript>` fallback;
+ *   3. the island itself;
+ *   4. the brief's "how to use" paragraph (it carries the llms.txt / sitemap links), the
+ *      `sr-only` site nav and the `sr-only` fleet summary — all always present regardless of
+ *      which tab the island has open;
+ *   5. the six JSON-LD blocks, at the end of `<body>` so they never block resource discovery.
+ *
+ * Nothing focusable sits between the skip link and the island. The sr-only blocks with links
+ * used to come first, so a sighted keyboard user pressed Tab nineteen times through
+ * invisible, off-screen links before reaching the header (a focus-revealed style cannot fix
+ * that: `.sr-only`'s clip on the container clips even a `position:fixed` child). Crawlers and
+ * extractors read the whole document, so the links lose nothing by following the island.
  *
  * The island's `slot="fallback"` deliberately contains no `<header>` element, so rule 1 holds
  * in the static HTML as well as in the source.
@@ -72,19 +79,6 @@ const jsonLd = homeJsonLd({ lastmod: getLastModified(homeLastmodPaths) });
         ))
       }
     </ul>
-    <h2>{HOME_BRIEF.howToUseHeading}</h2>
-    <p set:html={HOME_BRIEF.howToUseHtml} />
-  </section>
-
-  <nav class="sr-only" aria-label="United Airlines hub and site navigation">
-    {HOME_NAV_LINKS.map((link) => <a href={link.href}>{link.label}</a>)}
-  </nav>
-
-  <section class="sr-only" aria-label={FLEET_SUMMARY.label}>
-    <h2>{FLEET_SUMMARY.heading}</h2>
-    <p>
-      {FLEET_SUMMARY.body} <a href={FLEET_SUMMARY.linkHref}>{FLEET_SUMMARY.linkLabel}</a>.
-    </p>
   </section>
 
   <noscript>
@@ -124,4 +118,20 @@ const jsonLd = homeJsonLd({ lastmod: getLastModified(homeLastmodPaths) });
       <div class="flex-1 bg-background"></div>
     </div>
   </Dashboard>
+
+  <section class="sr-only" aria-labelledby="page-brief-how-to-use">
+    <h2 id="page-brief-how-to-use">{HOME_BRIEF.howToUseHeading}</h2>
+    <p set:html={HOME_BRIEF.howToUseHtml} />
+  </section>
+
+  <nav class="sr-only" aria-label="United Airlines hub and site navigation">
+    {HOME_NAV_LINKS.map((link) => <a href={link.href}>{link.label}</a>)}
+  </nav>
+
+  <section class="sr-only" aria-label={FLEET_SUMMARY.label}>
+    <h2>{FLEET_SUMMARY.heading}</h2>
+    <p>
+      {FLEET_SUMMARY.body} <a href={FLEET_SUMMARY.linkHref}>{FLEET_SUMMARY.linkLabel}</a>.
+    </p>
+  </section>
 </BaseLayout>
