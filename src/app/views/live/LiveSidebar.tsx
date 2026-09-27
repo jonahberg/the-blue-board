@@ -81,7 +81,9 @@ export function LiveSidebar({
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="space-y-2">
         <Input
-          className="h-8 text-sm"
+          // No text-size override: the Input's own `text-base md:text-sm` keeps phones at 16 px,
+          // below which iOS Safari zooms the page on focus.
+          className="h-8"
           placeholder="Search flight, tail or route"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
