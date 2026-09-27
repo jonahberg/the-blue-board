@@ -6,6 +6,7 @@ import type { VercelRequest, VercelResponse } from './types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
 import { getStartOfHubDay, defaultSchedDayOffset } from '../src/lib/hubTz.js';
+import { HUB_READING_STALE_MS, ON_TIME_GRACE_SECONDS, boardAsOfMs } from '../src/lib/hub-health.js';
 
 const isRateLimited = createRateLimiter('irops', 60);
 
@@ -14,7 +15,20 @@ export const HUB_TZ: Record<string, string> = {ORD:'America/Chicago',DEN:'Americ
 const iropsCache = new CacheStore('irops', { maxSize: 1, defaultTTL: 15 * 60 * 1000 });
 let fetching: Promise<any> | null = null;
 // Persistent per-hub cache — survives full refresh failures
-let hubCache: Record<string, { flights: any[]; fetchedAt: number }> = {};
+let hubCache: Record<string, { flights: any[]; fetchedAt: number; generatedAt: number | null }> = {};
+
+/** Test helper: drop the response cache, the per-hub cache and any in-flight build. */
+export function __resetIropsForTests(): void {
+  iropsCache.clear();
+  hubCache = {};
+  fetching = null;
+}
+
+/** One hub's departures board plus when /api/schedule built it (Unix seconds, null if unknown). */
+interface HubBoard {
+  flights: any[];
+  generatedAt: number | null;
+}
 
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
@@ -22,7 +36,11 @@ const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'https://theblueboard.co';
 
-async function fetchHubFromScheduleAPI(hub: string, timestamp: number): Promise<any[]> {
+// F91 (Sep 2026): /api/schedule can serve a board hours old (per-instance memory tiers, 1h
+// CDN s-maxage, lastComplete fallbacks) — an IAH board 593 min old read 93% / 3 cancelled
+// while the live board said 90% / 24. The board's meta.generatedAt is kept so every hub's
+// metrics carry their age and the client can prefer a fresher board it has loaded itself.
+async function fetchHubFromScheduleAPI(hub: string, timestamp: number): Promise<HubBoard> {
   // IROPS only needs aggregate departure counts and tolerates empty per-hub results, so it must
   // NOT trigger the paid FR24/AeroDataBox/ScrapingBee fallbacks. Disabling them also makes this
   // request's query string byte-identical to the warm cron's buildScheduleWarmUrl(), so IROPS
@@ -46,13 +64,14 @@ async function fetchHubFromScheduleAPI(hub: string, timestamp: number): Promise<
       headers: { 'User-Agent': 'BlueBoard-IROPS/1.0' }
     });
     clearTimeout(timeout);
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return (data as any).flights || [];
+    if (!resp.ok) return { flights: [], generatedAt: null };
+    const data = (await resp.json()) as any;
+    const asOf = boardAsOfMs(data?.meta?.generatedAt);
+    return { flights: data?.flights || [], generatedAt: asOf === null ? null : Math.floor(asOf / 1000) };
   } catch (e: any) {
     clearTimeout(timeout);
     console.error(`IROPS: Failed to fetch schedule for ${hub}:`, e.message);
-    return [];
+    return { flights: [], generatedAt: null };
   }
 }
 
@@ -64,6 +83,10 @@ interface HubMetric {
   diversions: number;
   operated: number;
   onTime: number;
+  /** When /api/schedule built this hub's board (Unix seconds); null when it did not say. */
+  generatedAt: number | null;
+  /** Age of that board when these metrics were computed, in seconds; null when unknown. */
+  dataAgeSec: number | null;
 }
 
 interface WorstDelay {
@@ -137,13 +160,21 @@ function overdueDelayMinutes(fl: any, status: string, nowSec: number): number {
   return overdue > OVERDUE_MAX_MIN ? 0 : overdue;
 }
 
-export function computeMetrics(flightsByHub: Record<string, any[]>, nowSec: number = Math.floor(Date.now() / 1000)) {
+export function computeMetrics(
+  flightsByHub: Record<string, any[]>,
+  nowSec: number = Math.floor(Date.now() / 1000),
+  generatedAtByHub: Record<string, number | null> = {},
+) {
   let allFlights: any[] = [];
   const hubMetrics: Record<string, HubMetric> = {};
+  let oldestHubAgeSec: number | null = null;
 
   for (const [hub, flights] of Object.entries(flightsByHub)) {
     allFlights = allFlights.concat(flights);
-    hubMetrics[hub] = { total: flights.length, cancellations: 0, delayed30: 0, delayed60: 0, diversions: 0, operated: 0, onTime: 0 };
+    const generatedAt = generatedAtByHub[hub] ?? null;
+    const dataAgeSec = generatedAt === null ? null : Math.max(0, nowSec - generatedAt);
+    if (dataAgeSec !== null && (oldestHubAgeSec === null || dataAgeSec > oldestHubAgeSec)) oldestHubAgeSec = dataAgeSec;
+    hubMetrics[hub] = { total: flights.length, cancellations: 0, delayed30: 0, delayed60: 0, diversions: 0, operated: 0, onTime: 0, generatedAt, dataAgeSec };
 
     for (const fl of flights) {
       const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
@@ -172,7 +203,7 @@ export function computeMetrics(flightsByHub: Record<string, any[]>, nowSec: numb
       if (fl._source?.scheduleTimeDerivedFromActual?.departure || fl._source?.scheduleTimeDerivedFromActual?.arrival) continue;
 
       hubMetrics[hub].operated++;
-      if (realDep <= schedT + 1800) {
+      if (realDep <= schedT + ON_TIME_GRACE_SECONDS) {
         hubMetrics[hub].onTime++;
       } else {
         const delayMin = Math.round((realDep - schedT) / 60);
@@ -250,6 +281,8 @@ export function computeMetrics(flightsByHub: Record<string, any[]>, nowSec: numb
     diversions,
     worstDelays: worstDelays.slice(0, 8),
     hubMetrics,
+    /** The oldest hub board behind these numbers, in seconds; null when no board said. */
+    oldestHubAgeSec,
     generatedAt: new Date().toISOString()
   };
 }
@@ -267,24 +300,34 @@ export function getStartOfDayForHub(hub: string): number {
 
 async function buildIropsData() {
   const flightsByHub: Record<string, any[]> = {};
+  const generatedAtByHub: Record<string, number | null> = {};
 
   // Fetch all hubs in parallel via the internal schedule API (cached by cron)
   const results = await Promise.allSettled(
     HUBS.map(async (hub) => {
-      const flights = await fetchHubFromScheduleAPI(hub, getStartOfDayForHub(hub));
-      return { hub, flights };
+      const board = await fetchHubFromScheduleAPI(hub, getStartOfDayForHub(hub));
+      return { hub, ...board };
     })
   );
 
+  const useHubCache = (hub: string) => {
+    flightsByHub[hub] = hubCache[hub].flights;
+    generatedAtByHub[hub] = hubCache[hub].generatedAt;
+  };
+
   for (const result of results) {
     if (result.status === 'fulfilled') {
-      const { hub, flights } = result.value;
+      const { hub, flights, generatedAt } = result.value;
       if (flights && flights.length > 0) {
         flightsByHub[hub] = flights;
-        hubCache[hub] = { flights, fetchedAt: Date.now() };
+        generatedAtByHub[hub] = generatedAt;
+        hubCache[hub] = { flights, fetchedAt: Date.now(), generatedAt };
+        if (generatedAt !== null && Date.now() - generatedAt * 1000 > HUB_READING_STALE_MS) {
+          console.warn(`IROPS: ${hub} board is ${Math.round((Date.now() - generatedAt * 1000) / 60000)}m old`);
+        }
       } else if (hubCache[hub] && (Date.now() - hubCache[hub].fetchedAt) < 60 * 60 * 1000) {
         console.log(`IROPS: Using cached data for ${hub} (age: ${Math.round((Date.now() - hubCache[hub].fetchedAt) / 60000)}m)`);
-        flightsByHub[hub] = hubCache[hub].flights;
+        useHubCache(hub);
       } else {
         flightsByHub[hub] = [];
       }
@@ -292,14 +335,14 @@ async function buildIropsData() {
       const hub = HUBS[results.indexOf(result)];
       console.error(`IROPS: Error fetching ${hub}:`, result.reason?.message);
       if (hubCache[hub] && (Date.now() - hubCache[hub].fetchedAt) < 60 * 60 * 1000) {
-        flightsByHub[hub] = hubCache[hub].flights;
+        useHubCache(hub);
       } else {
         flightsByHub[hub] = [];
       }
     }
   }
 
-  return computeMetrics(flightsByHub);
+  return computeMetrics(flightsByHub, Math.floor(Date.now() / 1000), generatedAtByHub);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

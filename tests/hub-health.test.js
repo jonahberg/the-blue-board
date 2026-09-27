@@ -6,6 +6,11 @@ import {
   serverOtpFromMetrics,
   hubHealthSeverity,
   networkLabel,
+  arbitrateHubHealth,
+  boardAsOfMs,
+  hubOtpDescription,
+  hubReadingAge,
+  ON_TIME_GRACE_MIN,
 } from '../src/lib/hub-health.js';
 
 const SCHED = 1_800_000_000;
@@ -216,5 +221,82 @@ describe('networkLabel', () => {
   it('returns null when no hub has a reading (edge case)', () => {
     expect(networkLabel([])).toBeNull();
     expect(networkLabel(null)).toBeNull();
+  });
+});
+
+describe('hubOtpDescription', () => {
+  it('states the 30-minute on-time rule the number is scored on', () => {
+    expect(ON_TIME_GRACE_MIN).toBe(30);
+    expect(hubOtpDescription(85)).toBe('85% of operated departures within 30 min of schedule');
+    expect(hubOtpDescription(null)).toBe('No on-time reading yet');
+  });
+});
+
+describe('boardAsOfMs', () => {
+  it('reads /api/schedule Unix seconds, epoch ms and ISO strings', () => {
+    expect(boardAsOfMs(1_790_000_000)).toBe(1_790_000_000_000);
+    expect(boardAsOfMs(1_790_000_000_000)).toBe(1_790_000_000_000);
+    expect(boardAsOfMs('1790000000')).toBe(1_790_000_000_000);
+    expect(boardAsOfMs('2026-09-26T18:00:56Z')).toBe(Date.parse('2026-09-26T18:00:56Z'));
+  });
+
+  it('is null for anything unusable (edge case)', () => {
+    expect(boardAsOfMs(null)).toBeNull();
+    expect(boardAsOfMs(undefined)).toBeNull();
+    expect(boardAsOfMs('')).toBeNull();
+    expect(boardAsOfMs('garbage')).toBeNull();
+    expect(boardAsOfMs(0)).toBeNull();
+  });
+});
+
+describe('hubReadingAge', () => {
+  const now = Date.parse('2026-09-27T03:57:00Z');
+
+  it('labels the reading in UTC and flags it stale past 60 minutes (F91: IAH board 593 min old)', () => {
+    expect(hubReadingAge(Date.parse('2026-09-26T18:00:56Z') / 1000, now)).toEqual({
+      label: 'as of 18:00Z', stale: true, ageMin: 596,
+    });
+    expect(hubReadingAge('2026-09-27T03:30:00Z', now)).toEqual({ label: 'as of 03:30Z', stale: false, ageMin: 27 });
+  });
+
+  it('is null when the age is unknown', () => {
+    expect(hubReadingAge(null, now)).toBeNull();
+  });
+});
+
+describe('arbitrateHubHealth', () => {
+  const HOURS = 3600;
+  const t0 = 1_790_000_000; // Unix seconds
+
+  it('prefers a client board built hours after the server copy (F91: IAH 93% stale vs 90% live)', () => {
+    const out = arbitrateHubHealth({
+      serverOtp: { IAH: 93 },
+      clientOtp: { IAH: 90 },
+      serverAsOf: { IAH: t0 },
+      clientAsOf: { IAH: t0 + 9 * HOURS },
+    });
+    expect(out.IAH).toEqual({ otp: 90, source: 'client', asOfMs: (t0 + 9 * HOURS) * 1000 });
+  });
+
+  it('keeps the server reading when the client board is not meaningfully newer', () => {
+    const out = arbitrateHubHealth({
+      serverOtp: { DEN: 68 },
+      clientOtp: { DEN: 100 },
+      serverAsOf: { DEN: t0 },
+      clientAsOf: { DEN: t0 + 10 * 60 },
+    });
+    expect(out.DEN.source).toBe('server');
+    expect(out.DEN.otp).toBe(68);
+  });
+
+  it('keeps the server reading when either age is unknown (old cached payloads)', () => {
+    expect(arbitrateHubHealth({ serverOtp: { ORD: 80 }, clientOtp: { ORD: 70 }, clientAsOf: { ORD: t0 } }).ORD.source).toBe('server');
+    expect(arbitrateHubHealth({ serverOtp: { ORD: 80 }, clientOtp: { ORD: 70 }, serverAsOf: { ORD: t0 } }).ORD.source).toBe('server');
+  });
+
+  it('fills hubs only one side has', () => {
+    const out = arbitrateHubHealth({ serverOtp: { ORD: 80 }, clientOtp: { GUM: 75 } });
+    expect(out.ORD.source).toBe('server');
+    expect(out.GUM).toEqual({ otp: 75, source: 'client', asOfMs: null });
   });
 });

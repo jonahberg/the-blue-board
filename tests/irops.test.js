@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import handler, { computeMetrics, getStartOfDayForHub, HUB_TZ } from '../api/irops.js';
+import handler, { __resetIropsForTests, computeMetrics, getStartOfDayForHub, HUB_TZ } from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 
 // Helper to build a flight object matching FR24's schedule structure
@@ -328,6 +328,16 @@ describe('computeMetrics', () => {
     expect(result.worstDelays).toEqual([]);
   });
 
+  it('stamps each hub with its board age and reports the oldest', () => {
+    const now = 1_790_000_000;
+    const result = computeMetrics({ IAH: [], ORD: [], GUM: [] }, now, { IAH: now - 35_580, ORD: now - 120 });
+    expect(result.hubMetrics.IAH).toMatchObject({ generatedAt: now - 35_580, dataAgeSec: 35_580 });
+    expect(result.hubMetrics.ORD.dataAgeSec).toBe(120);
+    expect(result.hubMetrics.GUM).toMatchObject({ generatedAt: null, dataAgeSec: null });
+    expect(result.oldestHubAgeSec).toBe(35_580);
+    expect(computeMetrics({ ORD: [] }).oldestHubAgeSec).toBeNull();
+  });
+
   it('includes generatedAt ISO timestamp', () => {
     const result = computeMetrics({});
     expect(result.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -512,8 +522,32 @@ describe('IROPS API handler', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     __resetRateLimitersForTests();
+    __resetIropsForTests();
   });
   afterEach(() => { vi.useRealTimers(); });
+
+  it('carries each hub board\'s age into hubMetrics (F91)', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const flight = {
+      status: { generic: { status: { text: 'departed' } } },
+      time: { scheduled: { departure: nowSec - 7200 }, real: { departure: nowSec - 7000 } },
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const hub = new URL(String(url)).searchParams.get('hub');
+      // IAH's board is ten hours old; every other hub's is two minutes old.
+      const generatedAt = hub === 'IAH' ? nowSec - 10 * 3600 : nowSec - 120;
+      return { ok: true, json: async () => ({ flights: [flight], meta: { generatedAt, dataAge: nowSec - generatedAt } }) };
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.hubMetrics.IAH.generatedAt).toBe(nowSec - 10 * 3600);
+    expect(res.body.hubMetrics.IAH.dataAgeSec).toBeGreaterThanOrEqual(10 * 3600);
+    expect(res.body.hubMetrics.ORD.dataAgeSec).toBeLessThan(600);
+    expect(res.body.oldestHubAgeSec).toBe(res.body.hubMetrics.IAH.dataAgeSec);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('IAH board is 600m old'));
+  });
 
   it('rejects non-GET requests with 405', async () => {
     const res = createRes();

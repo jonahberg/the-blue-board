@@ -16,8 +16,98 @@ export const HUB_ORDER = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM']
 /** A row counts as having operated only in these three classifier states. */
 const OPERATED_KEYS = new Set(['departed', 'enroute', 'landed']);
 
-/** On-time window: a departure within 30 minutes of schedule still counts. */
-const ON_TIME_GRACE_SECONDS = 1800;
+/**
+ * On-time window: a departure within 30 minutes of schedule still counts. The ONE constant
+ * behind every on-time figure (this module, api/irops.ts) and the copy that explains it.
+ * DOT's A14 convention is 15 minutes; moving to it is a product decision that must change
+ * the server and client paths together.
+ */
+export const ON_TIME_GRACE_MIN = 30;
+export const ON_TIME_GRACE_SECONDS = ON_TIME_GRACE_MIN * 60;
+
+/**
+ * The hub chip's tooltip line, with the on-time rule spelled out.
+ * @param {number|null|undefined} otp
+ * @returns {string}
+ */
+export function hubOtpDescription(otp) {
+  if (otp === null || otp === undefined) return 'No on-time reading yet';
+  return `${otp}% of operated departures within ${ON_TIME_GRACE_MIN} min of schedule`;
+}
+
+/** A hub reading built from a board older than this is stale (F91). */
+export const HUB_READING_STALE_MS = 60 * 60 * 1000;
+
+/**
+ * A client board must be at least this much newer than the server's before it replaces the
+ * server's reading — close in age, the server (full-day, authoritative) keeps winning, so
+ * the chip cannot flap between two near-identical numbers.
+ */
+export const HUB_READING_PREFER_MARGIN_MS = 30 * 60 * 1000;
+
+/**
+ * A board's `meta.generatedAt` as epoch ms. /api/schedule stamps Unix SECONDS; an ISO
+ * string or epoch ms is accepted too.
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+export function boardAsOfMs(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number' || /^\d+(\.\d+)?$/.test(String(value))) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n < 1e12 ? n * 1000 : n;
+  }
+  const ms = Date.parse(String(value));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * "as of 13:00Z" for a hub reading, and whether it is stale.
+ * @param {unknown} asOf  anything boardAsOfMs() accepts.
+ * @param {number} nowMs
+ * @returns {{label: string, stale: boolean, ageMin: number}|null} null when the age is unknown.
+ */
+export function hubReadingAge(asOf, nowMs) {
+  const ms = boardAsOfMs(asOf);
+  if (ms === null) return null;
+  const d = new Date(ms);
+  const pad = (n) => String(n).padStart(2, '0');
+  const ageMs = Math.max(0, nowMs - ms);
+  return {
+    label: `as of ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}Z`,
+    stale: ageMs > HUB_READING_STALE_MS,
+    ageMin: Math.round(ageMs / 60000),
+  };
+}
+
+/**
+ * Pick each hub's on-time reading: the server's /api/irops figure, unless the client has
+ * a board for that hub built at least HUB_READING_PREFER_MARGIN_MS more recently (the
+ * server's copy of a board can be hours old — F91). A hub only the client has keeps the
+ * client reading, exactly as mergeHubHealth() always allowed.
+ *
+ * @param {Object} input
+ * @param {Record<string, number>} input.serverOtp  serverOtpFromMetrics() per hub.
+ * @param {Record<string, number>} input.clientOtp  computeBoardOtp() output.
+ * @param {Record<string, unknown>} [input.serverAsOf]  hubMetrics[hub].generatedAt.
+ * @param {Record<string, unknown>} [input.clientAsOf]  newest loaded board's meta.generatedAt per hub.
+ * @returns {Record<string, {otp: number, source: 'server'|'client', asOfMs: number|null}>}
+ */
+export function arbitrateHubHealth({ serverOtp = {}, clientOtp = {}, serverAsOf = {}, clientAsOf = {} }) {
+  /** @type {Record<string, {otp: number, source: 'server'|'client', asOfMs: number|null}>} */
+  const out = {};
+  for (const hub of new Set([...Object.keys(serverOtp || {}), ...Object.keys(clientOtp || {})])) {
+    const hasServer = serverOtp && hub in serverOtp;
+    const hasClient = clientOtp && hub in clientOtp;
+    const sAt = boardAsOfMs(serverAsOf?.[hub]);
+    const cAt = boardAsOfMs(clientAsOf?.[hub]);
+    const clientFresher = hasClient && sAt !== null && cAt !== null && cAt - sAt >= HUB_READING_PREFER_MARGIN_MS;
+    if (hasServer && !clientFresher) out[hub] = { otp: serverOtp[hub], source: 'server', asOfMs: sAt };
+    else if (hasClient) out[hub] = { otp: clientOtp[hub], source: 'client', asOfMs: cAt };
+  }
+  return out;
+}
 
 /** Below this many operated flights the client sample is too thin to publish. */
 const MIN_OPERATED = 25;
