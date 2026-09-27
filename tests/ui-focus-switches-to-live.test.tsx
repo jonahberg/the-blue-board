@@ -4,6 +4,10 @@
  * focusFlight() always switched to Live and then centred; after the v1.8.0 rebuild the flight
  * sheet's "Centre map" and the ⌘K "Airborne now" result left the viewer on whatever tab they
  * were on, looking at nothing. `focusOn` owns the tab switch so no caller can forget it.
+ *
+ * Scope: this pins the UI-state half only (tab + focus point). That the map then actually moves
+ * once the Live panel is visible is tests/live-map-hidden-focus.test.tsx; whether the map is
+ * visible on a phone (the flight sheet is full-width below `sm`) is layout jsdom cannot see.
  */
 
 import { act, cleanup, render } from '@testing-library/react';
