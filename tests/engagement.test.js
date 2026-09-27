@@ -1,6 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   shouldShowOnboarding,
   waitlistState,
@@ -72,10 +70,11 @@ describe('shouldShowOnboarding', () => {
     expect(s.getItem('bb-visited')).toBe('1'); // still recorded
   });
 
-  it('lets a throwing store propagate, as main.js\'s bare read did (edge case)', () => {
-    // main.js :8243-8245 read bb-visited/bb-onboarded with no try/catch, so a throw
-    // aborted the whole onboarding block. Pinned here so nobody "fixes" it into
-    // fail-open without deciding to: that is a behaviour change, not a refactor.
+  it('lets a throwing store propagate from the bare read (edge case)', () => {
+    // The reads are bare (ported unchanged from the legacy main.js), so a throw reaches the
+    // caller. initEngagement() in src/app/state/engagement.tsx is where that is decided —
+    // it catches and fails CLOSED. Pinned here so nobody "fixes" the lib into fail-open
+    // without deciding to: that is a behaviour change, not a refactor.
     const throwing = { getItem() { throw new Error('SecurityError'); }, setItem() {} };
     expect(() => shouldShowOnboarding(throwing, NOW)).toThrow('SecurityError');
   });
@@ -95,9 +94,10 @@ describe('waitlistState', () => {
   });
 
   it('reports a completed submission but does NOT fold it into suppressed', () => {
-    // main.js's first gate is the in-memory `waitlistSubmitted` var (:7980), seeded
-    // from this field at init; `suppressed` is only its third gate, the dismissal TTL.
-    // Folding `submitted` in here would double-gate and diverge from main.js.
+    // The first gate is the engagement store's `submitted` (src/app/state/engagement.tsx),
+    // seeded from this field by initEngagement(); `suppressed` is only the dismissal-TTL
+    // gate that shouldShowWaitlist() composes after it. Folding `submitted` in here would
+    // double-gate (the split is ported from the legacy main.js).
     const s = fakeStorage({ bb_waitlist_submitted: 'true' });
     expect(waitlistState(s, NOW, {}).submitted).toBe(true);
     expect(waitlistState(s, NOW, {}).suppressed).toBe(false);
@@ -135,9 +135,9 @@ describe('waitlistState', () => {
   });
 
   it('propagates a throwing store from the bare bb-visited read (edge case)', () => {
-    // bb_waitlist_submitted is read inside a try/catch (main.js :7953) so it swallows,
-    // but bb-visited is bare (main.js :8173) and throws — matching the original, where
-    // a throwing store aborted the trigger-setup block before any modal could open.
+    // bb_waitlist_submitted is read inside a try/catch so it swallows, but bb-visited is
+    // bare and throws (both ported from the legacy main.js). initEngagement() catches it and
+    // fails closed, so no modal opens on a broken store.
     const throwing = { getItem() { throw new Error('SecurityError'); } };
     expect(() => waitlistState(throwing, NOW, {})).toThrow('SecurityError');
   });
@@ -187,24 +187,7 @@ describe('onboardingHubSeed', () => {
     }
   });
 
-  // The helper is only worth anything if the overlay actually re-applies it on open. The
-  // overlay is mounted for the life of the page, so a seed computed once at mount goes stale
-  // the moment the hub is changed from the header — and `dismiss()` writes the picker's value
-  // back, so a stale picker silently reverts that change. There is no @testing-library/react
-  // in this project (and none may be added), so the wiring is pinned by a source scan.
-  it('is re-applied by Onboarding whenever the overlay opens', () => {
-    const source = readFileSync(
-      resolve(__dirname, '..', 'src', 'app', 'features', 'Onboarding.tsx'),
-      'utf8'
-    ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-
-    expect(source.length, 'Onboarding.tsx not found where this scan expects it').toBeGreaterThan(500);
-    expect(source, 'Onboarding must use the shared seeding rule').toMatch(/onboardingHubSeed\(/);
-
-    // An effect that re-seeds on open, keyed on BOTH the open flag and the live preference.
-    const effect = (source.match(/useEffect\(\(\) => \{\s*if \(onboardingOpen\) setHub\([^)]*\)[^}]*\}, \[([^\]]*)\]\)/) || [])[1];
-    expect(effect, 'no `if (onboardingOpen) setHub(...)` effect found in Onboarding.tsx').toBeDefined();
-    expect(effect).toMatch(/onboardingOpen/);
-    expect(effect).toMatch(/homeAirport/);
-  });
+  // Whether Onboarding.tsx actually re-applies this on every open (so a hub changed from the
+  // header is shown, and not reverted by the dismiss) is a render test:
+  // tests/onboarding-wiring.test.tsx.
 });
