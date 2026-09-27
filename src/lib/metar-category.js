@@ -3,20 +3,53 @@
 // These are the sole producers of the weatherOpsByHub fields that feed the
 // delay-risk engine, so a silent regex break here degrades the risk score.
 
+/**
+ * Prevailing visibility from a raw METAR, in statute miles — the one visibility parser the
+ * category, the hub card and the explainer share.
+ *
+ * The group must start at a token boundary (string start or whitespace): an unanchored
+ * `\b(\d+)SM` matched the "2SM" inside "1/2SM" (the slash is a word boundary), so half-mile
+ * fog read as 2 SM and "M1/4SM" as 4 SM.
+ *
+ * @param {string|null|undefined} rawMetar
+ * @returns {{miles: number, text: string, qualifier: ''|'M'|'P'}|null} `text` is the figure
+ *   as reported ("1 1/2", "3/4", "10"); `qualifier` is M (less than) or P (more than).
+ *   null when there is no statute-mile group (a metric station, or no observation).
+ */
+export function parseVisibilitySM(rawMetar) {
+  const m = String(rawMetar || '').match(
+    /(?:^|\s)([MP])?(?:(\d{1,2}) (\d)\/(\d{1,2})|(\d{1,2})\/(\d{1,2})|(\d{1,3}))SM(?=\s|$)/,
+  );
+  if (!m) return null;
+  const qualifier = /** @type {''|'M'|'P'} */ (m[1] || '');
+  if (m[2]) {
+    return { miles: Number(m[2]) + Number(m[3]) / Number(m[4]), text: `${m[2]} ${m[3]}/${m[4]}`, qualifier };
+  }
+  if (m[5]) return { miles: Number(m[5]) / Number(m[6]), text: `${m[5]}/${m[6]}`, qualifier };
+  return { miles: Number(m[7]), text: m[7], qualifier };
+}
+
+/** Sky-cover codes that constitute a ceiling (AIM): broken, overcast, vertical visibility. */
+export const CEILING_COVERS = new Set(['BKN', 'OVC', 'VV', 'OVX']);
+
+/**
+ * The ceiling layer of a raw METAR: the lowest BKN/OVC/VV group. FEW and SCT are never a
+ * ceiling, however low.
+ * @param {string|null|undefined} rawMetar
+ * @returns {{cover: string, feet: number}|null}
+ */
+export function parseCeiling(rawMetar) {
+  const m = String(rawMetar || '').match(/\b(BKN|OVC|VV)(\d{3})/);
+  return m ? { cover: m[1], feet: parseInt(m[2], 10) * 100 } : null;
+}
+
 // Compute flight category from raw METAR — strict AIM standard (ceiling + vis only)
 export function computeFlightCategory(rawMetar) {
   if (!rawMetar) return null;
-  // Parse visibility (handle "1 1/2SM", "3SM", "1/2SM")
-  let visSM = 99;
-  const vmMixed = rawMetar.match(/\b(\d+)\s+(\d+)\/(\d+)SM\b/);
-  if (vmMixed) visSM = parseInt(vmMixed[1]) + parseInt(vmMixed[2]) / parseInt(vmMixed[3]);
-  else { const vm = rawMetar.match(/\b(\d+)\s*SM\b/); if (vm) visSM = parseInt(vm[1]); }
-  const vf = rawMetar.match(/\b(\d+)\/(\d+)SM\b/);
-  if (vf && !vmMixed) visSM = parseInt(vf[1]) / parseInt(vf[2]);
-  // Parse ceiling (lowest BKN or OVC)
-  let ceiling = 99999;
-  const cm = [...rawMetar.matchAll(/(BKN|OVC)(\d{3})/g)];
-  if (cm.length) ceiling = parseInt(cm[0][2]) * 100;
+  const vis = parseVisibilitySM(rawMetar);
+  const visSM = vis ? vis.miles : 99;
+  const ceil = parseCeiling(rawMetar);
+  const ceiling = ceil ? ceil.feet : 99999;
   // Standard AIM flight category rules
   if (visSM < 1 || ceiling < 500) return 'LIFR';
   if (visSM < 3 || ceiling < 1000) return 'IFR';

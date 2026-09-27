@@ -5,9 +5,21 @@
 // Extracted verbatim from src/dashboard/main.js (:3542-3612 quick parse + fallbacks,
 // :3875-3880 the worse-of-two category rule, :4331-4444 explainMETAR).
 //
-// The AIM category itself (computeFlightCategory) and the ops-severity parse
-// (computeOpsImpact) already live in ./metar-category.js — this module only decides
-// which of the API's category and the locally computed one to trust.
+// The AIM category itself (computeFlightCategory), the ops-severity parse
+// (computeOpsImpact) and the shared visibility/ceiling parsers live in
+// ./metar-category.js — this module decides which of the API's category and the locally
+// computed one to trust, and renders the rest.
+//
+// "Ceiling" means what it means in the AIM: the lowest BKN/OVC/VV layer. A FEW or SCT
+// layer is never a ceiling — the card reads "None" when those are the only clouds.
+
+import { CEILING_COVERS, parseCeiling, parseVisibilitySM } from './metar-category.js';
+
+/** Card names for sky-cover codes. AWC's structured payload spells a VV group "OVX". */
+const CLOUD_NAMES = {FEW:'Few',SCT:'Scattered',BKN:'Broken',OVC:'Overcast',VV:'Vertical vis',OVX:'Vertical vis'};
+
+/** Sky-clear codes: CLR/SKC (US), NSC/NCD (ICAO), CAVOK. */
+const CLEAR_RE = /\b(CLR|SKC|NSC|NCD|CAVOK)\b/;
 
 /** Flight-category colours for the legend, hub cards and radar markers. */
 /** @type {Record<string, string>} */
@@ -60,12 +72,12 @@ export function applyStructuredMetarFallback(parsed, metar) {
   }
 
   if (parsed.clouds === '--') {
-    const cloudLayer = Array.isArray(metar.clouds) && metar.clouds.length ? metar.clouds[0] : null;
-    const cloudCover = cloudLayer?.cover || metar.cover || '';
-    const cloudBase = Number.isFinite(cloudLayer?.base) ? cloudLayer.base : null;
-    const cloudNames = {FEW:'Few',SCT:'Scattered',BKN:'Broken',OVC:'Overcast'};
-    if (cloudCover && cloudBase !== null) parsed.clouds = `${cloudNames[cloudCover] || cloudCover} ${cloudBase}ft`;
-    else if (cloudCover === 'CLR' || cloudCover === 'SKC') parsed.clouds = 'Clear';
+    const layers = Array.isArray(metar.clouds) ? metar.clouds : [];
+    const ceiling = layers.find((l) => CEILING_COVERS.has(l?.cover) && Number.isFinite(l?.base));
+    const cover = String(metar.cover || '');
+    if (ceiling) parsed.clouds = `${CLOUD_NAMES[ceiling.cover]} ${ceiling.base}ft`;
+    else if (layers.some((l) => l?.cover === 'FEW' || l?.cover === 'SCT')) parsed.clouds = 'None';
+    else if (CLEAR_RE.test(cover)) parsed.clouds = 'Clear';
   }
 
   return parsed;
@@ -75,15 +87,20 @@ export function parseMetarQuick(metar) {
   const raw = typeof metar === 'string' ? metar : (metar?.rawOb || '');
   const r = {temp:'--',wind:'--',vis:'--',clouds:'--'};
   if (!raw) return typeof metar === 'object' ? applyStructuredMetarFallback(r, metar) : r;
+  // Calm first: "00000KT" also fits the generic direction+speed pattern.
+  const vrb = raw.match(/\bVRB(\d{2,3})(?:G(\d{2,3}))?KT\b/);
   const wm = raw.match(/\b(\d{3})(\d{2,3})(G(\d{2,3}))?KT\b/);
-  if (wm) { r.wind = `${wm[1]}° @ ${wm[2]}kt${wm[4]?' G'+wm[4]:''}`;} else if(raw.includes('00000KT')){r.wind='Calm';}
-  const vm = raw.match(/\b(\d+)\s*SM\b/) || raw.match(/\b(\d+\/\d+)SM\b/);
-  if (vm) r.vis = vm[0].replace('SM','').trim()+' SM';
+  if (/\b00000KT\b/.test(raw)) r.wind = 'Calm';
+  else if (vrb) r.wind = `Variable @ ${Number(vrb[1])}kt${vrb[2] ? ' G' + vrb[2] : ''}`;
+  else if (wm) r.wind = `${wm[1]}° @ ${wm[2]}kt${wm[4]?' G'+wm[4]:''}`;
+  const vis = parseVisibilitySM(raw);
+  if (vis) r.vis = `${vis.qualifier === 'M' ? '<' : ''}${vis.text}${vis.qualifier === 'P' ? '+' : ''} SM`;
   const tm = raw.match(/\b(M?\d{2})\/(M?\d{2})\b/);
   if (tm) { const c=parseInt(tm[1].replace('M','-')); r.temp=`${c}°C / ${Math.round(c*9/5+32)}°F`;}
-  const cm = [...raw.matchAll(/(FEW|SCT|BKN|OVC)(\d{3})/g)];
-  const cn = {FEW:'Few',SCT:'Scattered',BKN:'Broken',OVC:'Overcast'};
-  if (cm.length) { const l=cm[0]; r.clouds=`${cn[l[1]]||l[1]} ${parseInt(l[2])*100}ft`;} else if(raw.includes('CLR')||raw.includes('SKC')){r.clouds='Clear';}
+  const ceil = parseCeiling(raw);
+  if (ceil) r.clouds = `${CLOUD_NAMES[ceil.cover]} ${ceil.feet}ft`;
+  else if (/\b(FEW|SCT)\d{3}/.test(raw)) r.clouds = 'None';
+  else if (CLEAR_RE.test(raw)) r.clouds = 'Clear';
   return typeof metar === 'object' ? applyStructuredMetarFallback(r, metar) : r;
 }
 
@@ -110,25 +127,29 @@ export function explainMETAR(rawMetar, hub, cat) {
 
   // Wind
   const windMatch = rawMetar.match(/\b(\d{3})(\d{2,3})(G(\d{2,3}))?KT\b/);
-  if (windMatch) {
+  const vrbMatch = rawMetar.match(/\bVRB(\d{2,3})(?:G(\d{2,3}))?KT\b/);
+  if (/\b00000KT\b/.test(rawMetar)) {
+    parts.push('Winds are calm');
+  } else if (vrbMatch) {
+    parts.push(`Winds variable at ${parseInt(vrbMatch[1])} knots${vrbMatch[2] ? ' gusting to ' + parseInt(vrbMatch[2]) : ''}`);
+  } else if (windMatch) {
     const dir = parseInt(windMatch[1]), spd = parseInt(windMatch[2]), gust = windMatch[4] ? parseInt(windMatch[4]) : null;
     const dirs = ['north','north-northeast','northeast','east-northeast','east','east-southeast','southeast','south-southeast','south','south-southwest','southwest','west-southwest','west','west-northwest','northwest','north-northwest'];
     const dirName = dirs[Math.round(dir / 22.5) % 16];
     parts.push(`Winds from the ${dirName} at ${spd} knots${gust ? ' gusting to ' + gust : ''}`);
-  } else if (rawMetar.includes('00000KT')) {
-    parts.push('Winds are calm');
   }
 
   // Visibility
-  const visMatch = rawMetar.match(/\b(\d+)\s*SM\b/) || rawMetar.match(/\b(\d+)\/(\d+)SM\b/) || rawMetar.match(/\bM?(\d+\/\d+)SM\b/);
-  if (visMatch) {
-    const vis = visMatch[0].replace('SM', '').trim();
-    parts.push(`Visibility is ${vis} statute miles`);
+  const vis = parseVisibilitySM(rawMetar);
+  if (vis) {
+    const prefix = vis.qualifier === 'M' ? 'less than ' : vis.qualifier === 'P' ? 'more than ' : '';
+    const unit = vis.miles > 1 || vis.qualifier === 'P' ? 'statute miles' : 'statute mile';
+    parts.push(`Visibility is ${prefix}${vis.text} ${unit}`);
   }
 
-  // Ceiling / clouds
-  const cloudMatches = [...rawMetar.matchAll(/(FEW|SCT|BKN|OVC)(\d{3})/g)];
-  const cloudNames = {FEW:'few clouds',SCT:'scattered',BKN:'broken ceiling',OVC:'overcast ceiling'};
+  // Clouds — the lowest layer, whatever its cover (the card's "Ceiling" is the BKN/OVC/VV one)
+  const cloudMatches = [...rawMetar.matchAll(/\b(FEW|SCT|BKN|OVC|VV)(\d{3})/g)];
+  const cloudNames = {FEW:'few clouds',SCT:'scattered',BKN:'broken ceiling',OVC:'overcast ceiling',VV:'sky obscured, vertical visibility'};
   if (cloudMatches.length) {
     const lowest = cloudMatches[0];
     const altHun = parseInt(lowest[2]) * 100;
@@ -190,9 +211,9 @@ export function explainMETAR(rawMetar, hub, cat) {
     else if (gust >= 20) assessParts.push('gusty conditions');
   }
   // Check ceiling
-  const ceil = [...rawMetar.matchAll(/(BKN|OVC)(\d{3})/g)];
-  if (ceil.length) {
-    const ceilFt = parseInt(ceil[0][2]) * 100;
+  const ceil = parseCeiling(rawMetar);
+  if (ceil) {
+    const ceilFt = ceil.feet;
     if (ceilFt < 500) assessParts.push('very low ceilings');
     else if (ceilFt < 1000) assessParts.push('low ceilings');
     else if (ceilFt <= 3000) assessParts.push('low overcast');

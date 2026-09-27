@@ -288,11 +288,22 @@ describe('buildHubCardModel presentation data', () => {
       .toBe('VFR');
   });
 
+  it('shows a half-mile LIFR card as 1/2 SM with its VV ceiling', () => {
+    const { cat, metrics } = buildHubCardModel({
+      hub: 'SFO',
+      metar: { fltCat: 'LIFR', rawOb: 'KSFO 270256Z 27012KT 1/2SM FG VV002 14/12 A2989' },
+    });
+    expect(cat).toBe('LIFR');
+    expect(metrics.vis).toBe('1/2 SM');
+    expect(metrics.clouds).toBe('Vertical vis 200ft');
+  });
+
   it('fills the four metrics from the raw observation', () => {
     const { metrics } = buildHubCardModel({ hub: 'DEN', metar: { fltCat: 'VFR', rawOb: VFR } });
     expect(metrics.wind).toBe('180° @ 08kt');
     expect(metrics.vis).toBe('10 SM');
-    expect(metrics.clouds).toBe('Few 20000ft');
+    // FEW200 alone is not a ceiling (the card labels this value "Ceiling").
+    expect(metrics.clouds).toBe('None');
     expect(metrics.temp).toContain('24°C');
   });
 });
