@@ -57,8 +57,8 @@ export function Header({
         </span>
       </a>
 
-      {/* Touch targets: `min-h-11` (44 px, WCAG 2.5.5) up to the md breakpoint, then back to
-          desktop density where the pointer is precise. */}
+      {/* Touch targets: `min-h-11` (44 px, WCAG 2.5.5) everywhere a finger is the pointer; the
+          desktop density comes back only at md AND a fine pointer, so an iPad keeps 44 px. */}
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
         <Badge
           variant="outline"
@@ -92,12 +92,20 @@ export function Header({
           size="sm"
           // min-w too: below `sm` the label and the ⌘K hint are hidden and the button
           // collapses to the magnifier alone, which measured 38 px wide on a 400 px viewport.
-          className="min-h-11 min-w-11 gap-2 text-muted-foreground md:h-8 md:min-h-0 md:min-w-0"
+          className="min-h-11 min-w-11 gap-2 text-muted-foreground md:h-8 pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
           onClick={() => setSearchOpen(true)}
+          // The visible label is `hidden` below `sm`, which also drops it from the accessibility
+          // tree — without this the only search entry point on a phone announced as "button".
+          aria-label="Find a flight"
+          aria-haspopup="dialog"
+          aria-keyshortcuts="Meta+K Control+K"
         >
           <span aria-hidden="true">🔍</span>
           <span className="hidden sm:inline">Find a flight</span>
-          <kbd className="pointer-events-none hidden rounded border bg-muted px-1 font-mono text-[10px] sm:inline">
+          <kbd
+            aria-hidden="true"
+            className="pointer-events-none hidden rounded border bg-muted px-1 font-mono text-[10px] sm:inline"
+          >
             ⌘K
           </kbd>
         </Button>
@@ -105,7 +113,7 @@ export function Header({
         <Button
           variant="outline"
           size="sm"
-          className="relative min-h-11 min-w-11 md:h-8 md:min-h-0 md:min-w-0"
+          className="relative min-h-11 min-w-11 md:h-8 pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
           onClick={onOpenWatch}
           aria-expanded={watchOpen}
           aria-controls="watch-panel"
@@ -139,7 +147,7 @@ export function Header({
         <Button
           variant="ghost"
           size="sm"
-          className="min-h-11 min-w-11 p-0 md:h-8 md:w-8 md:min-h-0 md:min-w-0"
+          className="min-h-11 min-w-11 p-0 md:h-8 md:w-8 pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
           onClick={onOpenHelp}
           aria-label="What is this dashboard?"
         >
