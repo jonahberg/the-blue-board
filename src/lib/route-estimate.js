@@ -128,18 +128,23 @@ export function estimateRoute(lat, lon, hdg, altFt, vr, flightNum) {
     }
   }
 
-  // For low altitude, nearest airport is likely origin or dest
+  // For low altitude, nearest airport is likely origin (climbing) or dest (otherwise).
+  let overridden = null;
   if (lowAlt) {
     const nearest = nearestAirport(lat, lon, 50);
     if (nearest) {
-      if (vr > 0) bestOrigin = nearest;
-      else bestDest = nearest;
+      if (vr > 0) { bestOrigin = nearest; overridden = 'origin'; }
+      else { bestDest = nearest; overridden = 'dest'; }
     }
   }
 
-  // Don't let origin = dest
+  // Don't let origin = dest. The low-altitude override is authoritative, so clear the OTHER
+  // side — comparing bestOrigDist/bestDestDist here would use the replaced candidate's stale
+  // distance and could clear the override instead (a climb-out from ORD reported as "→ ORD").
   if (bestOrigin && bestDest && bestOrigin.iata === bestDest.iata) {
-    if (bestOrigDist < bestDestDist) bestDest = null;
+    if (overridden === 'origin') bestDest = null;
+    else if (overridden === 'dest') bestOrigin = null;
+    else if (bestOrigDist < bestDestDist) bestDest = null;
     else bestOrigin = null;
   }
 
