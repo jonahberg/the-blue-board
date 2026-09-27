@@ -256,7 +256,7 @@ describe('staleness / degradation ladder', () => {
   });
 });
 
-describe('cache indicator (legacy main.js:4763)', () => {
+describe('cache indicator (shown by src/app/views/ScheduleView.tsx)', () => {
   it('names the cache and the raw UA flight count, verbatim', () => {
     expect(boardLoadMessage({ fromCache: true, count: 412 }))
       .toBe('\u26a1 Served from cache \u00b7 412 UA flights');

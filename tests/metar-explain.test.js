@@ -133,7 +133,7 @@ describe('parseMetarQuick', () => {
 
   it('misreads a fractional visibility as its denominator (edge case — quirk preserved)', () => {
     // "1/2SM" — the `\b(\d+)\s*SM\b` branch matches "2SM" first, so half-mile fog
-    // reads as "2 SM". Carried over from main.js unchanged.
+    // reads as "2 SM". Carried over unchanged from the legacy main.js.
     expect(parseMetarQuick(SFO_FOG).vis).toBe('2 SM');
   });
 });

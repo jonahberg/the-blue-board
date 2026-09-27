@@ -52,7 +52,8 @@ describe('journeyDelayClass', () => {
   });
 
   it('returns an empty class for a null delay, but NOT for undefined (edge case)', () => {
-    // main.js: `delay === null ? '' : delay <= 5 ? 'on-time' : delay <= 45 ? 'minor' : 'major'`.
+    // Rule carried over from the legacy main.js (now used by src/app/views/myflight/tone.ts):
+    // `delay === null ? '' : delay <= 5 ? 'on-time' : delay <= 45 ? 'minor' : 'major'`.
     // `undefined <= 5` and `undefined <= 45` are both false, so a missing delayMin has
     // always rendered as 'major'. Preserved deliberately — do not "fix" it here.
     expect(journeyDelayClass(null)).toBe('');

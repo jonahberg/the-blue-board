@@ -419,7 +419,8 @@ describe('modelTextToIcaoCode — free-text model → ICAO code', () => {
   });
 
   it('every derived mainline code is a key the client ICAO_TO_FLEET_TYPE map understands', () => {
-    // Guards the vocabulary contract: these are exactly the keys in src/dashboard/main.js.
+    // Guards the vocabulary contract: these are exactly the keys in ICAO_TO_FLEET_TYPE
+    // (src/lib/equipment-swaps.js; first defined in the deleted legacy main.js).
     const CLIENT_MAINLINE_KEYS = new Set([
       'A319', 'A320', 'A21N',
       'B737', 'B738', 'B739', 'B39M', 'B38M',

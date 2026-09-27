@@ -11,8 +11,8 @@ import { resolve } from 'node:path';
 //  3. Both Leaflet maps draw CARTO tiles over OpenStreetMap data (ODbL) — suppressing the
 //     attribution control (`attributionControl: false`) is a license violation.
 
-// The dashboard is the React island under src/app now; public/index.html and
-// src/dashboard/main.js no longer render anything a visitor sees.
+// The dashboard is the React island under src/app (the legacy public/index.html and
+// src/dashboard/main.js were deleted in v1.8.0).
 const APP_DIR = fileURLToPath(new URL('../src/app', import.meta.url));
 
 function filesUnder(dir) {
