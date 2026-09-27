@@ -81,9 +81,10 @@ describe('buildDeparturesBoard', () => {
     expect(out.buckets[0].rows[0].origin).toBe('EWR');
   });
 
-  it('joins fleet data and live-airborne status (icao24) by tail', () => {
-    const flightsByTail = { N100: [flight('EWR', 'ORD', 1 * H)] };
-    const airborneByTail = { N100: { icao24: 'a1b2c3' } };
+  it('joins fleet data and live-airborne status (icao24) onto the leg being flown', () => {
+    // Departed 20 minutes ago and the tail is in the air: this row IS the live leg.
+    const flightsByTail = { N100: [flight('EWR', 'ORD', -20 * 60)] };
+    const airborneByTail = { N100: { icao24: 'a1b2c3', flightIATA: 'UA4501' } };
     const out = buildDeparturesBoard(flightsByTail, aircraftByTail, airborneByTail, HUBS, { now: NOW });
     const row = out.buckets[0].rows[0];
     expect(row).toMatchObject({
@@ -93,14 +94,66 @@ describe('buildDeparturesBoard', () => {
       operator: 'SkyWest dba UAX',
       airborne: true,
       icao24: 'a1b2c3',
+      inbound: null,
     });
   });
 
   it('accepts a Map for the airborne lookup (as getStarlinkAirborneMap-like callers may pass)', () => {
-    const flightsByTail = { N100: [flight('EWR', 'ORD', 1 * H)] };
+    const flightsByTail = { N100: [flight('EWR', 'ORD', -10 * 60)] };
     const airborneMap = new Map([['N100', { icao24: 'deadbe' }]]);
     const out = buildDeparturesBoard(flightsByTail, aircraftByTail, airborneMap, HUBS, { now: NOW });
     expect(out.buckets[0].rows[0]).toMatchObject({ airborne: true, icao24: 'deadbe' });
+  });
+
+  describe('airborne belongs to the leg in the air, not to every leg of the tail (F3/F98)', () => {
+    it('does NOT mark a future departure airborne because the tail is flying an earlier leg', () => {
+      // Live: N200 flying DEN→SFO. Its SFO→ORD departs in 1h38m.
+      const flightsByTail = { N200: [flight('SFO', 'ORD', 98 * 60, 'UAL2278')] };
+      const air = { N200: { icao24: 'abc123', origin: 'DEN', dest: 'SFO', flightIATA: 'UA1389' } };
+      const row = buildDeparturesBoard(flightsByTail, aircraftByTail, air, HUBS, { now: NOW }).buckets[0].rows[0];
+      expect(row.airborne).toBe(false);
+      expect(row.icao24).toBe('');
+      expect(row.inbound).toEqual({ flight: 'UA1389', icao24: 'abc123' });
+    });
+
+    it('marks only the departed row when the tail has a past and a +6h departure', () => {
+      const flightsByTail = {
+        N200: [flight('EWR', 'DEN', -30 * 60, 'UAL670'), flight('DEN', 'EWR', 6 * H, 'UAL2616')],
+      };
+      const air = { N200: { icao24: 'abc123', origin: 'EWR', dest: 'DEN', flightIATA: 'UA670' } };
+      const rows = buildDeparturesBoard(flightsByTail, aircraftByTail, air, HUBS, { now: NOW, windowSec: 12 * H })
+        .buckets.flatMap((b) => b.rows);
+      const byNum = Object.fromEntries(rows.map((r) => [r.flight_number, r]));
+      expect(byNum.UAL670).toMatchObject({ airborne: true, icao24: 'abc123', inbound: null });
+      expect(byNum.UAL2616).toMatchObject({ airborne: false, icao24: '' });
+      expect(byNum.UAL2616.inbound).toEqual({ flight: 'UA670', icao24: 'abc123' });
+    });
+
+    it('gives a tail with two future rows no airborne row at all', () => {
+      const flightsByTail = { N300: [flight('ORD', 'LAX', 2 * H), flight('LAX', 'ORD', 7 * H)] };
+      const air = { N300: { icao24: 'fff000' } }; // no route on the live record
+      const rows = buildDeparturesBoard(flightsByTail, aircraftByTail, air, HUBS, { now: NOW })
+        .buckets.flatMap((b) => b.rows);
+      expect(rows).toHaveLength(2);
+      expect(rows.filter((r) => r.airborne)).toHaveLength(0);
+    });
+
+    it('marks at most one row per tail even with several departed legs', () => {
+      const flightsByTail = {
+        N200: [flight('ORD', 'DEN', -25 * 60, 'A'), flight('ORD', 'DEN', -5 * 60, 'B')],
+      };
+      const air = { N200: { icao24: 'x', origin: 'ORD', dest: 'DEN' } };
+      const rows = buildDeparturesBoard(flightsByTail, aircraftByTail, air, HUBS, { now: NOW })
+        .buckets.flatMap((b) => b.rows);
+      expect(rows.filter((r) => r.airborne).map((r) => r.flight_number)).toEqual(['B']);
+    });
+
+    it('tolerates a board lagging the feed by a few minutes', () => {
+      const flightsByTail = { N100: [flight('EWR', 'ORD', 10 * 60)] }; // "departs" in 10 min
+      const air = { N100: { icao24: 'a', origin: 'EWR', dest: 'ORD' } };
+      const row = buildDeparturesBoard(flightsByTail, aircraftByTail, air, HUBS, { now: NOW }).buckets[0].rows[0];
+      expect(row.airborne).toBe(true);
+    });
   });
 
   it('groups departures under the correct time-bucket section labels', () => {

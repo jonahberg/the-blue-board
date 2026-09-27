@@ -9,7 +9,9 @@
  *
  * The counting lives in `src/lib/analytics.js` (shared with the Fleet tab, so the two can
  * never disagree about utilisation) and the drawing rules in `src/lib/stats-chart.js`.
- * This file owns layout and the metric headline row.
+ * "Airborne" is `isAirborne()` and "Fleet Utilization" is `fleetUtilization()` — the same
+ * two definitions the Live stat bar and the Fleet pulse use, so all three tabs quote one
+ * number (F8/F92). This file owns layout and the metric headline row.
  */
 
 import { useMemo } from 'react';
@@ -24,6 +26,8 @@ import {
   typeUtilization,
 } from '@/lib/analytics.js';
 import { matchAircraft } from '@/lib/fleet-match.js';
+import { fleetUtilization } from '@/lib/fleet-utils.js';
+import { isAirborne } from '@/lib/live-stats.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
 import type { Flight } from '../data/types';
 import { useFeed } from '../state/feed';
@@ -71,7 +75,7 @@ export default function StatsView() {
   const { flights } = useFeed();
   const { fleetDb, fleetByReg, starlink } = useFleet();
 
-  const airborne = useMemo(() => flights.filter((f) => !f.onGround), [flights]);
+  const airborne = useMemo(() => flights.filter(isAirborne), [flights]);
 
   const utilisation = useMemo(
     () =>
@@ -81,7 +85,9 @@ export default function StatsView() {
     [airborne, fleetDb, fleetByReg],
   );
 
-  const phase = useMemo(() => phaseBreakdown(flights) as PhaseModel, [flights]);
+  // The airborne set, not every flight: the panel is titled "Airborne by Flight Phase" and its
+  // centre total has to equal the "Flights Airborne" card above it (F67).
+  const phase = useMemo(() => phaseBreakdown(airborne) as PhaseModel, [airborne]);
 
   const matrix = useMemo(() => hubMatrix(airborne, HUBS) as MatrixModel, [airborne]);
 
@@ -99,10 +105,16 @@ export default function StatsView() {
     const isStarlink = makeIsStarlinkFlight(starlink.tails, fleetByReg);
     const starlinkAirborne = airborne.filter(isStarlink).length;
     const starlinkPct = airborne.length ? Math.round((starlinkAirborne / airborne.length) * 100) : 0;
-    const utilPct = fleetDb.length ? Math.round((airborne.length / fleetDb.length) * 100) : 0;
+    const util = fleetUtilization(airborne, fleetDb.length, (f: Flight) =>
+      matchAircraft(f, fleetByReg),
+    ) as { matched: number; total: number; pct: number | null };
     return [
       { label: 'Flights Airborne', value: String(airborne.length) },
-      { label: 'Fleet Utilization', value: `${utilPct}%` },
+      {
+        label: 'Fleet Utilization',
+        value: util.pct == null ? '—' : `${util.pct}%`,
+        sub: util.pct == null ? undefined : `${util.matched} of ${util.total} mainline aircraft`,
+      },
       { label: 'Avg Fleet Age', value: `${ages.fleetAvg}y` },
       {
         label: 'Starlink Coverage',

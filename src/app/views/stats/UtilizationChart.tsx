@@ -7,9 +7,10 @@
  * gone quiet is part of that answer. (The Fleet tab's pulse strip drops the zeroes,
  * because there the question is "what is up".)
  *
- * The bar is one measure on one scale — no second axis, no stacked segment. Every row
- * carries its own "N/M P%" figure, so the colour band is a second reading of a number
- * already on screen rather than the only way to read it.
+ * The bar is one measure on one scale — no second axis, no stacked segment — in one colour:
+ * utilisation is a measure, not a status, so it is drawn in the accent exactly as the Fleet
+ * tab draws it (F69). Only idle types (nothing flying) recede. Every row carries its own
+ * "N/M P%" figure.
  */
 
 import { UTIL_BAR_COLOR, UTIL_TEXT_CLASS, utilBand } from '@/lib/stats-chart.js';

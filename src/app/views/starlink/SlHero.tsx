@@ -2,10 +2,11 @@
  * The rollout hero: one big number, the two fleet-rollout bars, and two chips
  * (inventory §22, `renderSlHero()`).
  *
- * The number is the served equipped count and nothing else. The verification figures
- * ("397 verified · 3 disputed") sit under it as a muted sub-line whose "disputed" half scrolls
- * to the ledger — they are a different denominator from the hero count, and putting them in
- * the headline would invite the reader to subtract one from the other.
+ * The number is the served equipped count and nothing else. The verification figures sit
+ * under it as a muted sub-line whose "disputed" half scrolls to the ledger. They come from a
+ * DIFFERENT snapshot (the upstream verifier's roster, e.g. 606 planes against a 598 headline),
+ * so the sub-line names its own denominator — "594 of 606 checked verified" — rather than
+ * inviting the reader to read 594 as a share of the number above it (F99).
  *
  * The rollout bars are hidden whole in the degraded tier: the static fallback roster carries
  * no fleet denominators, so a percentage there would be a guess wearing a ruler.
@@ -27,6 +28,7 @@ export const SlHero = memo(function SlHero({
   airborneCount,
   canFilterMap,
   verified,
+  checked = null,
   disputed,
   onJumpToLedger,
   onShowOnMap,
@@ -38,6 +40,8 @@ export const SlHero = memo(function SlHero({
   /** False in the degraded tier — the Live map's Starlink toggle is disabled there. */
   canFilterMap: boolean;
   verified: number | null;
+  /** The verifier's own roster size (`summary.totalPlanes`) — the sub-line's denominator. */
+  checked?: number | null;
   disputed: number | null;
   onJumpToLedger: () => void;
   onShowOnMap: () => void;
@@ -56,7 +60,7 @@ export const SlHero = memo(function SlHero({
           <p className="mt-1 text-xs text-muted-foreground">Aircraft Equipped</p>
           {verified != null ? (
             <p className="mt-1 text-[11px] text-muted-foreground" id="sl-hero-verify-sub">
-              {verified} verified ·{' '}
+              {checked != null ? `${verified} of ${checked} checked verified` : `${verified} verified`} ·{' '}
               <button
                 type="button"
                 data-action="sl-jump-verify"

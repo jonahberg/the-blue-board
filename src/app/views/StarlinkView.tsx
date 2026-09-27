@@ -13,7 +13,8 @@
  *
  * ── What this file owns ──────────────────────────────────────────────────────────────────
  * State and derivation only. Every number comes from a tested module in `src/lib`:
- * `bucketInstallsByMonth` / `computeInstallPace` / `buildDeparturesBoard` (starlink-utils),
+ * `bucketInstallsByMonth` / `computeInstallPace` / `computeExpressEta` / `buildDeparturesBoard`
+ * (starlink-utils),
  * `isRecentlyFound` / `getServedConflictTails` / `airborneByTail` / `boardCapPolicy` /
  * `formatFlightTime` (starlink-view), `buildVelocityChart` (starlink-chart) and the roster,
  * board-label and ledger helpers (starlink-roster).
@@ -29,6 +30,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Card } from '@/components/ui/card';
+import { matchAircraft } from '@/lib/fleet-match.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
 import { buildVelocityChart } from '@/lib/starlink-chart.js';
@@ -41,7 +43,12 @@ import {
   rosterOptions,
   sortRoster,
 } from '@/lib/starlink-roster.js';
-import { bucketInstallsByMonth, buildDeparturesBoard, computeInstallPace } from '@/lib/starlink-utils.js';
+import {
+  bucketInstallsByMonth,
+  buildDeparturesBoard,
+  computeExpressEta,
+  computeInstallPace,
+} from '@/lib/starlink-utils.js';
 import {
   airborneByTail as buildAirborneByTail,
   boardCapPolicy,
@@ -58,6 +65,7 @@ import { usePrefs } from '../state/prefs';
 import { useUi } from '../state/ui';
 import { DeparturesBoard, BOARD_UNAVAILABLE_NOTE } from './starlink/DeparturesBoard';
 import type { WindowHours } from './starlink/DeparturesBoard';
+import { makeIsStarlinkFlight } from './live/starlink-match';
 import { IndustryStrip } from './starlink/IndustryStrip';
 import type { IndustryRow } from './starlink/IndustryStrip';
 import { RosterControls } from './starlink/RosterControls';
@@ -86,7 +94,7 @@ const TICK_MS = 30000;
 type MismatchState = { disputed: DisputedClaim[]; summary: VerifySummary | null };
 
 export default function StarlinkView() {
-  const { starlink, fleetSummary } = useFleet();
+  const { starlink, fleetSummary, fleetByReg } = useFleet();
   const feed = useFeed();
   const { homeAirport } = usePrefs();
   const { tab, setTab, select, focusOn, openAircraft, setStarlinkFilter } = useUi();
@@ -170,9 +178,16 @@ export default function StarlinkView() {
   // ── Live picture ───────────────────────────────────────────────────────────────────────
   // Keyed on the feed's array identity, which changes once per successful poll — NOT on the
   // per-second countdown that also re-renders this tree.
+  // The same Starlink predicate as the map and the stat bar (F101), keyed by the fleet-matched
+  // registration so a row with no reg but a known ICAO24 still counts.
   const airborneByTail = useMemo(
-    () => buildAirborneByTail(feed.flights, starlink.tails) as Record<string, Flight>,
-    [feed.flights, starlink.tails],
+    () =>
+      buildAirborneByTail(
+        feed.flights,
+        makeIsStarlinkFlight(starlink.tails, fleetByReg),
+        (f: Flight) => (matchAircraft(f, fleetByReg) as { r?: string } | null)?.r,
+      ) as Record<string, Flight>,
+    [feed.flights, starlink.tails, fleetByReg],
   );
   const airborneCount = Object.keys(airborneByTail).length;
   const hasLive = feed.flights.length > 0;
@@ -211,18 +226,16 @@ export default function StarlinkView() {
       stats && stats.expressTotal && stats.express != null
         ? Math.max(0, stats.expressTotal - stats.express)
         : null;
-    const model = computeInstallPace(
-      aircraft,
-      new Date(nowMs),
-      expressRemaining != null ? { remaining: expressRemaining } : {},
-    ) as {
-      pace: number;
-      paceWeeks: number;
-      dated: number;
-      etaDate: Date | null;
-    };
+    type Pace = { pace: number; paceWeeks: number; dated: number; etaDate: Date | null };
+    // The "~N/wk" tile is the whole fleet's pace. The ETA divides the EXPRESS backlog by the
+    // EXPRESS pace (F94): whole-fleet pace is mostly mainline, and 157 Express aircraft at
+    // ~13/wk said "Dec '26" when the Express rate (~1/wk) puts it years out.
+    const model = computeInstallPace(aircraft, new Date(nowMs)) as Pace;
     // The static fallback roster carries no dateFound at all — the same guard the chart uses.
     if (model.dated === 0) return null;
+    model.etaDate = (
+      computeExpressEta(aircraft, new Date(nowMs), expressRemaining) as { etaDate: Date | null }
+    ).etaDate;
     const paceStr =
       model.pace >= 10 ? String(Math.round(model.pace)) : String(Math.round(model.pace * 10) / 10);
     return {
@@ -379,7 +392,11 @@ export default function StarlinkView() {
     [feed.flights, select, focusOn, setTab],
   );
 
-  const onBoardTrack = useCallback((row: BoardRow) => trackByIcao(row.icao24), [trackByIcao]);
+  // A future departure whose aircraft is still flying its inbound leg tracks that inbound.
+  const onBoardTrack = useCallback(
+    (row: BoardRow) => trackByIcao(row.icao24 || row.inbound?.icao24 || ''),
+    [trackByIcao],
+  );
 
   const onShowOnMap = useCallback(() => {
     setStarlinkFilter(true);
@@ -406,6 +423,7 @@ export default function StarlinkView() {
         airborneCount={airborneCount}
         canFilterMap={canFilterMap}
         verified={showLedger ? (mismatches.summary?.verifiedStarlink ?? null) : null}
+        checked={mismatches.summary?.totalPlanes ?? null}
         disputed={
           mismatches.summary?.disputed != null
             ? mismatches.summary.disputed

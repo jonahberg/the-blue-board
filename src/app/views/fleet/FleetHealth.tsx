@@ -51,17 +51,20 @@ export function FleetLoadError({ onRetry }: { onRetry: () => void }) {
 
 export function FleetHealth({
   health,
-  starlinkInstalled,
+  starlinkShare,
   chips,
   loading,
 }: {
   health: HealthModel | null;
-  /** Mainline aircraft confirmed with Starlink, over the whole mainline fleet. */
-  starlinkInstalled: number;
+  /**
+   * `starlinkMainlineShare()` — numerator and denominator from ONE population, the same figure
+   * the "Mainline Fleet" chip shows (F93). Null until either source has loaded.
+   */
+  starlinkShare: { count: number; total: number; pct: number } | null;
   chips: StarlinkChip[];
   loading: boolean;
 }) {
-  const pct = health && health.total > 0 ? Math.round((starlinkInstalled / health.total) * 100) : 0;
+  const pct = starlinkShare?.pct ?? 0;
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -124,7 +127,7 @@ export function FleetHealth({
             aria-label="Starlink-equipped share of the mainline fleet"
           />
           <span className="shrink-0 font-mono text-xs tabular-nums">
-            {health ? `${pct}% (${starlinkInstalled}/${health.total})` : '—'}
+            {starlinkShare ? `${pct}% (${starlinkShare.count}/${starlinkShare.total})` : '—'}
           </span>
         </div>
         <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">

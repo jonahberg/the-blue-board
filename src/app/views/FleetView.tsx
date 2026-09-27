@@ -24,7 +24,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TYPE_ORDER, typeUtilization } from '@/lib/analytics.js';
-import { filterFleetData, sortFleetData } from '@/lib/fleet-utils.js';
+import {
+  FLEET_DB_AS_OF,
+  filterFleetData,
+  fleetUtilization,
+  formatFleetAsOf,
+  sortFleetData,
+  starlinkMainlineShare,
+} from '@/lib/fleet-utils.js';
 import { matchAircraft } from '@/lib/fleet-match.js';
 import {
   buildAirborneRows,
@@ -38,6 +45,7 @@ import {
   typeCounts as countByType,
   wifiFilterOptions,
 } from '@/lib/fleet-view.js';
+import { isAirborne } from '@/lib/live-stats.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { FleetAircraft } from '../data/types';
 import { readFleetDeepLinks } from '../state/deep-links';
@@ -106,14 +114,16 @@ export default function FleetView() {
   );
 
   // ── Zone 1: the live picture ────────────────────────────────────────────────────────
-  const airborneFlights = useMemo(() => flights.filter((f) => !f.onGround), [flights]);
-  const { matched, unmatched } = useMemo(() => {
-    let hit = 0;
-    airborneFlights.forEach((f) => {
-      if (matchAircraft(f, fleetByReg)) hit++;
-    });
-    return { matched: hit, unmatched: airborneFlights.length - hit };
-  }, [airborneFlights, fleetByReg]);
+  // `isAirborne` and `fleetUtilization` are the definitions the Live bar and the Stats card
+  // use too, so the three tabs quote one utilisation figure (F8/F92).
+  const airborneFlights = useMemo(() => flights.filter(isAirborne), [flights]);
+  const util = useMemo(
+    () =>
+      fleetUtilization(airborneFlights, fleetDb.length, (f: unknown) =>
+        matchAircraft(f, fleetByReg),
+      ) as { matched: number; notInDb: number; regional: number; pct: number | null },
+    [airborneFlights, fleetDb.length, fleetByReg],
+  );
 
   const utilisation = useMemo(
     () =>
@@ -123,23 +133,30 @@ export default function FleetView() {
     [airborneFlights, fleetDb, fleetByReg],
   );
 
-  // The shipped panel stamped wall-clock time here. The payload's own timestamp is the
-  // honest one: on a stale serve the two differ, and this line claims freshness.
+  // The shipped panel stamped wall-clock time here. `lastGoodTs` is closer: the time the last
+  // good poll arrived, backdated by the server's `X-BB-Feed-Stale` on a stale serve. It is
+  // NOT yet the payload's own generation time — CDN `Age` and the server's 15 s cache are not
+  // subtracted (F102, pending in `fetchFr24Feed`), so it can read up to ~45 s fresh.
   const updatedAt = useMemo(
     () => (lastGoodTs ? new Date(lastGoodTs).toISOString().slice(11, 19) : null),
     [lastGoodTs],
   );
 
-  const starlinkInstalled = starlink.stats
-    ? starlink.stats.mainline
-    : starlink.aircraft.filter((a) => a.fleet === 'Mainline').length;
+  // ONE Starlink % for the ring and the "Mainline Fleet" chip (F93): see starlinkMainlineShare.
+  const starlinkShare = useMemo(
+    () =>
+      starlinkMainlineShare(starlink.stats, fleetDb, starlink.tails) as {
+        count: number;
+        total: number;
+        pct: number;
+      } | null,
+    [starlink.stats, fleetDb, starlink.tails],
+  );
 
   const chips = useMemo<StarlinkChip[]>(() => {
     const stats = starlink.stats;
     if (!stats) return [];
-    const mainlinePct =
-      stats.mainlinePct ??
-      (stats.mainlineTotal ? Math.round((stats.mainline / stats.mainlineTotal) * 100) : null);
+    const mainlinePct = starlinkShare ? starlinkShare.pct : null;
     const expressPct =
       stats.expressPct ??
       (stats.expressTotal ? Math.round((stats.express / stats.expressTotal) * 100) : null);
@@ -157,7 +174,7 @@ export default function FleetView() {
     }
     if (newThisWeek > 0) rows.push({ label: 'New (7d)', value: `+${newThisWeek}`, tone: 'new' });
     return rows;
-  }, [starlink.stats, starlink.aircraft]);
+  }, [starlink.stats, starlink.aircraft, starlinkShare]);
 
   // ── Zone 3: the three panels ────────────────────────────────────────────────────────
   const filtersActive = Boolean(typeFilter || wifiFilter || statusFilter || search);
@@ -192,7 +209,7 @@ export default function FleetView() {
 
   const subTabCounts = {
     all: fleetDb.length,
-    airborne: airborneFlights.filter((f) => matchAircraft(f, fleetByReg)).length,
+    airborne: util.matched,
     starlink: starlink.aircraft.length,
     special: special.size,
   };
@@ -272,9 +289,11 @@ export default function FleetView() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <FleetPulse
               airborne={airborneFlights.length}
-              matched={matched}
-              unmatched={unmatched}
+              matched={util.matched}
+              notInDb={util.notInDb}
+              regional={util.regional}
               fleetTotal={0}
+              utilPct={null}
               utilisation={[]}
               updatedAt={updatedAt}
               loading={false}
@@ -295,16 +314,18 @@ export default function FleetView() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <FleetPulse
             airborne={airborneFlights.length}
-            matched={matched}
-            unmatched={unmatched}
+            matched={util.matched}
+            notInDb={util.notInDb}
+            regional={util.regional}
             fleetTotal={fleetDb.length}
+            utilPct={util.pct}
             utilisation={utilisation}
             updatedAt={updatedAt}
             loading={loading}
           />
           <FleetHealth
             health={health}
-            starlinkInstalled={starlinkInstalled}
+            starlinkShare={starlinkShare}
             chips={chips}
             loading={loading}
           />
@@ -360,7 +381,8 @@ export default function FleetView() {
             >
               United Fleet Site
             </a>
-            , updated daily
+            {/* A hand-maintained snapshot with no refresh job — say how old it is (F86). */}
+            , as of <time dateTime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>
           </p>
         </div>
 

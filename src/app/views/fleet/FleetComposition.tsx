@@ -11,7 +11,7 @@
  * because the card IS the type filter for the table three zones down.
  */
 
-import { FLEET_FAMILIES } from '@/lib/fleet-utils.js';
+import { FLEET_FAMILIES, familyTotal as sumFamily } from '@/lib/fleet-utils.js';
 
 type Subgroup = { label: string | null; types: string[] };
 type Family = {
@@ -39,10 +39,7 @@ export function FleetComposition({
       {(FLEET_FAMILIES as Family[]).map((family) => {
         const showDivider = Boolean(family.widebody) && !dividerShown;
         if (showDivider) dividerShown = true;
-        const familyTotal = family.subgroups.reduce(
-          (sum, sg) => sum + sg.types.reduce((n, t) => n + (counts[t] || 0), 0),
-          0,
-        );
+        const familyTotal = sumFamily(family, counts) as number;
 
         return (
           <div key={family.id}>

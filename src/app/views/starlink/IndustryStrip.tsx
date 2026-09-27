@@ -56,7 +56,8 @@ export const IndustryStrip = memo(function IndustryStrip({ rows }: { rows: Indus
       </div>
       <p className="mt-2 text-[10px] text-muted-foreground">
         Coverage is installed aircraft as a share of each carrier's tracked fleet upstream, not
-        of its full mainline.
+        of its full mainline. Counts are the industry tracker's own snapshot, so United's can
+        differ by a few from the equipped total above.
       </p>
     </Card>
   );
