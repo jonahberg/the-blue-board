@@ -1,7 +1,7 @@
 // Vercel Cron Job: rotates through the 2-day schedule window (today/tomorrow) so exact
 // hub/day/direction snapshots stay warm at the CDN + Supabase snapshot. Yesterday is served
 // on-demand (historical board, rarely viewed) to conserve the metered AeroDataBox quota.
-// Config in vercel.json: { "path": "/api/cron/warm-schedules", "schedule": "0 * * * *" }
+// Config in vercel.json: { "path": "/api/cron/warm-schedules", "schedule": "*/30 * * * *" }
 //
 // Warm requests send forceRefresh=1 + the cron secret so /api/schedule actually REFETCHES the
 // board. Without it the handler serves the existing complete snapshot back to the cron, reports
@@ -23,12 +23,13 @@ const HUBS = UNITED_HUBS;
 // Serialized with INTER_TASK_DELAY_MS between tasks. Budget math: each task worst-case is ~58s
 // (55s schedule fetch + 3s gap). maxDuration for this cron is 300s in vercel.json, so the clamp
 // ceiling of 4 tasks → 4 × 55s + 3 × 3s = 229s, plus the ~20s starlink ping and ~5s alerting
-// (≈254s), stays under the Lambda limit. Default is 4 on an HOURLY cron: 4 tasks × 24 fires = 96
-// warm slots/day = 1.33 passes over the 72-task ring, so each today board warms 4×/day (~every 6h
-// — the low-traffic intl hubs NRT/LAX/IAD no longer drift 8–10h stale) and each tomorrow board
-// ~1.33×/day. That is ≈ 96 fresh boards × 4 units = 384 AeroDataBox units/day. (Default was 3 →
-// 8h cadence / 288 units/day; the +96 units/day buys the fresher cadence and stays far under the
-// 3× organic-budget bypass ceiling.) Serial (not Promise.allSettled) respects the 1 req/s limit.
+// (≈254s), stays under the Lambda limit. Default is 4 on a HALF-HOURLY cron: 4 tasks × 48 fires =
+// 192 warm slots/day = 2.67 passes over the 72-task ring, so each today board warms ~8×/day
+// (~every 3h) and each tomorrow board ~2.67×/day. That is ≈ 192 fresh boards × 4 units = 768
+// AeroDataBox units/day, under the 1,400/day production budget and far under the 3× bypass
+// ceiling. (Hourly was 384 units/day for a ~6h cadence, which left today's boards 6h+ stale —
+// 11.5h when IROPS priority displaced them — with ~900 units/day of budget unused; Sep 26 2026.)
+// Serial (not Promise.allSettled) respects the provider's per-second limit.
 // Plus a ≤10s reg-sightings backstop fetch (Phase 2), keeping the worst case ≈264s.
 function envNumber(name: string, fallback: number): number {
   const value = Number(process.env[name]);
@@ -67,12 +68,11 @@ function windowTasks(dayOffset: 0 | 1, label: 'today' | 'tomorrow'): WarmTask[] 
 // The warm ring: TODAY_ROUNDS rounds of all 18 today windows, with the 18 tomorrow windows split
 // evenly across the rounds. Striding through it sequentially (SCHEDULE_WARM_TASKS_PER_RUN windows
 // per fire) warms each today board TODAY_ROUNDS times per ring and each tomorrow board once. At
-// the default stride of 4/fire the 72-slot ring completes ~1.33×/day, so each today board
-// refreshes ~every 6h (delays/cancellations stay current) and each tomorrow board ~1.33×/day
-// (schedule data is stable; it just needs to exist before midnight). TODAY_ROUNDS stays 3 so the
-// ring length (72) divides evenly by the stride (4) — that clean tiling is what gives an even 6h
-// spacing with no skipped windows; bumping TODAY_ROUNDS to 4+ would make the ring (90+) outrun a
-// single day's 96 slots and leave some tomorrow boards unwarmed.
+// the default stride of 4/fire on the 30-min cron the 72-slot ring completes ~2.67×/day, so each
+// today board refreshes ~every 3h (delays/cancellations stay current) and each tomorrow board
+// ~2.67×/day (schedule data is stable; it just needs to exist before midnight). TODAY_ROUNDS
+// stays 3 so the ring length (72) divides evenly by the stride (4) — that clean tiling is what
+// gives an even 3h spacing with no skipped windows.
 const TODAY_ROUNDS = 3;
 function buildWarmRing(): WarmTask[] {
   const today = windowTasks(0, 'today');
@@ -87,10 +87,10 @@ function buildWarmRing(): WarmTask[] {
 }
 
 // One slot per cron fire. SLOT_MS MUST match the cron interval in vercel.json (currently
-// hourly): a 15-min slot here while the cron fires hourly would stride 4× per fire and skip
-// most windows. Update both together. The same slot number seeds applyIropsPriority's
+// every 30 min): a mismatched slot would stride the ring more or less than once per fire and
+// skip (or re-warm) windows. Update both together. The same slot number seeds applyIropsPriority's
 // disrupted-hub rotation so priority fairness advances in lockstep with the ring.
-const SLOT_MS = 60 * 60 * 1000; // = vercel.json cron interval (0 * * * *)
+const SLOT_MS = 30 * 60 * 1000; // = vercel.json cron interval (*/30 * * * *)
 export function getWarmSlot(nowMs = Date.now()): number {
   return Math.floor(nowMs / SLOT_MS);
 }
@@ -112,15 +112,15 @@ export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
 
 // ── IROPS-aware priority (pure) ──
 // During an active FAA program (GDP/ground stop/closure) a hub's TODAY board changes minute to
-// minute, but the stride-4 ring only revisits it ~every 6h. While hubs are disrupted, their
+// minute, but the stride-4 ring only revisits it ~every 3h. While hubs are disrupted, their
 // today windows ROTATE FAIRLY into the front of each run's stride: priority injections are
 // capped at stride-1 slots per run (at least one base ring slot always survives, so the ring
 // never fully stalls behind a long disruption), and the disrupted-hub order is rotated by the
 // same clock-derived slot pointer buildWarmPlan strides with — across consecutive runs every
 // disrupted hub's boards cycle through the capped priority slots instead of the first two hubs
-// in HUBS order winning every run and starving the rest. Injections replace the lowest-priority
-// slots of the stride (tomorrow slots first, then today slots of undisrupted hubs, from the
-// back), so the run's task count — and therefore the 300s budget and unit spend — is unchanged.
+// in HUBS order winning every run and starving the rest. Injections replace TOMORROW slots of
+// the stride only (from the back) — never another hub's today board — so the run's task count —
+// and therefore the 300s budget and unit spend — is unchanged.
 // Priority tasks run first within the stride. Pure function; the handler feeds it the cached FAA
 // disruption map (api/faa.ts — one cached fetch per run, no per-task upstream call) plus the
 // current warm slot as the rotation seed.
@@ -165,15 +165,17 @@ export function applyIropsPriority(
   for (const task of candidates) {
     if (injected.length >= maxInjections) break;
     if (result.some((t) => keyOf(t) === keyOf(task))) continue; // stride already covers it
-    // Pick the lowest-priority victim: a tomorrow slot if any (scanning from the back), else
-    // the back-most today slot of an undisrupted hub. Never displace another priority task.
+    // Victims are TOMORROW slots only (scanning from the back). The ring is stateless, so a
+    // displaced today board is not deferred — it is skipped until its next pass. Displacing
+    // undisrupted today boards left DEN/IAH/LAX arrivals ~11.5h stale through US prime time
+    // during a long EWR program (Sep 26 2026). Tomorrow boards are stable schedule data and can
+    // wait; the disrupted hub's own today boards still arrive on the ring and refresh
+    // organically while people watch them.
     let victim = -1;
     for (let i = result.length - 1; i >= 0; i--) {
-      if (isPriority(result[i])) continue;
-      if (result[i].dayOffset === 1) { victim = i; break; }
-      if (victim === -1) victim = i;
+      if (!isPriority(result[i]) && result[i].dayOffset === 1) { victim = i; break; }
     }
-    if (victim === -1) break; // every slot is already a disrupted-hub today task
+    if (victim === -1) break; // no tomorrow slot left to give up
     displaced.push(`${result[victim].hub}-${result[victim].dir}-${result[victim].label}`);
     result[victim] = task;
     injected.push(`${task.hub}-${task.dir}-today`);
@@ -374,7 +376,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     { warmPlan, results }
   );
 
-  // Operational alerting (env-gated; no-op without ALERT_WEBHOOK_URL). The hourly warm cron is
+  // Operational alerting (env-gated; no-op without ALERT_WEBHOOK_URL). The half-hourly warm cron is
   // the natural heartbeat for the schedule pipeline: alert on the signatures that mean the live
   // site is degraded RIGHT NOW or money is about to run out, not on every transient blip.
   // (Audit P1: no-alerting-blind-pipeline; supersedes PR #168, whose `failed > warmed` condition

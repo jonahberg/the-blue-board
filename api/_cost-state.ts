@@ -137,7 +137,7 @@ export function isAdbBudgetExhausted(): boolean {
 //
 // The budget resets at UTC midnight, which is 7 PM CDT — the middle of the US evening. A flat
 // first-come-first-served gate therefore hands the whole day's pool to whoever asks first: US
-// evening traffic plus the overnight warm crons (~384 units/day, recorded against the organic pool
+// evening traffic plus the overnight warm crons (~768 units/day, recorded against the organic pool
 // even though the cron path bypasses this gate) drain it by ~18:00 UTC, leaving ZERO organic units
 // for 18:00–24:00 UTC — 1 PM to 7 PM CDT, the exact hours delay drama peaks. Observed Aug 4 2026:
 // 732/700 units spent by 21:00 UTC with boards frozen at warm-ring cadence since "1:02 PM CDT
@@ -177,16 +177,16 @@ export function isAdbBudgetPacingDisabled(): boolean {
   return setting === '0' || setting === 'off' || setting === 'false' || setting === 'no';
 }
 
-// The hourly warm cron BYPASSES the organic gate but still records its units against this same
-// counter (~384/day at the default stride: 96 boards x 4 units). So the pool the organic path is
+// The half-hourly warm cron BYPASSES the organic gate but still records its units against this same
+// counter (~768/day at the default stride: 192 boards x 4 units). So the pool the organic path is
 // paced against is really "budget minus whatever the cron already booked" — and at the code default
 // of 400 that leaves ~16 units for the entire day. The boards do not break; they just quietly stop
-// refreshing outside the cron's ~6h ring, which reads as "the data is old" rather than "the budget
-// is misconfigured". Prod runs 700 for exactly this reason. One warn per instance per UTC day: this
+// refreshing outside the cron's ~3h ring, which reads as "the data is old" rather than "the budget
+// is misconfigured". Prod runs 1400 for exactly this reason. One warn per instance per UTC day: this
 // is a config mistake that will not fix itself, and a per-call warn would drown the gate's own
 // (already hourly-throttled) log line.
-const ADB_CRON_UNITS_PER_DAY = 384;
-const ADB_MIN_WORKABLE_BUDGET = 450;
+const ADB_CRON_UNITS_PER_DAY = 768;
+const ADB_MIN_WORKABLE_BUDGET = 850;
 let warnedStarvedBudgetDay = '';
 function warnIfBudgetStarvesOrganic(budget: number): void {
   if (budget <= 0 || budget > ADB_MIN_WORKABLE_BUDGET) return;
@@ -195,8 +195,8 @@ function warnIfBudgetStarvesOrganic(budget: number): void {
   warnedStarvedBudgetDay = today;
   console.warn(
     `AERODATABOX_DAILY_UNIT_BUDGET=${budget} cannot fund the warm cron AND organic refreshes: the ` +
-    `hourly warm cron alone consumes ~${ADB_CRON_UNITS_PER_DAY} units/day of this shared budget, so ` +
-    `organic refreshes will be starved from the start of the day. Raise it (production runs 700).`
+    `half-hourly warm cron alone consumes ~${ADB_CRON_UNITS_PER_DAY} units/day of this shared budget, so ` +
+    `organic refreshes will be starved from the start of the day. Raise it (production runs 1400).`
   );
 }
 

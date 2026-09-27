@@ -46,7 +46,7 @@
         "api/cron/watch-alerts.ts": { "maxDuration": 120 }
     },
     "crons": [
-        { "path": "/api/cron/warm-schedules", "schedule": "0 * * * *" },
+        { "path": "/api/cron/warm-schedules", "schedule": "*/30 * * * *" },
         { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" },
         { "path": "/api/cron/refresh-metar", "schedule": "*/5 * * * *" },
         { "path": "/api/cron/watch-alerts", "schedule": "*/5 * * * *" }

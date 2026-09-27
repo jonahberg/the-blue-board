@@ -27,9 +27,11 @@ type ScheduleFetchOptions = {
   disableProviderFallback?: boolean;
   disableScraperFallback?: boolean;
   // Authorized cron warms only: their provider spend is already hard-bounded by the warm ring
-  // (~384 units/day), so the organic daily budget must not starve the one path that keeps boards
+  // (~768 units/day), so the organic daily budget must not starve the one path that keeps boards
   // from freezing. Never set from user input.
   providerBudgetExempt?: boolean;
+  // Set by triggerBackgroundRefresh only. Never set from user input.
+  backgroundRefresh?: boolean;
 };
 
 // In-memory LRU cache for FR24 schedule data
@@ -296,7 +298,12 @@ function hasForceRefreshParam(req: VercelRequest): boolean {
 // once per board per hour per instance. The cross-instance ceiling is the daily unit budget in
 // _cost-state.ts. 3h keeps a today board no staler than ~3h under user traffic alone, and the
 // hourly per-key cooldown bounds worst case to 24 provider refreshes per board per day.
-const PROVIDER_REFRESH_STALE_MS = 3 * 60 * 60 * 1000;
+// A viewed board older than this may trigger one paced provider refresh (per key, per instance,
+// per PROVIDER_REFRESH_KEY_COOLDOWN_MS). Was 3h; with the 6h hot/CDN TTL that left viewed boards
+// 3-6h+ stale while ~900 units/day went unused (Sep 26 2026). The paced organic gate
+// (_cost-state.ts) still bounds total spend to the daily budget, so this only moves WHEN units are
+// spent — on the boards people are actually looking at.
+const PROVIDER_REFRESH_STALE_MS = 60 * 60 * 1000;
 const PROVIDER_REFRESH_KEY_COOLDOWN_MS = 60 * 60 * 1000;
 const MAX_PROVIDER_REFRESH_KEYS = 512; // keyspace is ~270 (9 hubs x 2 dirs x ~15 days): eviction is a guard rail, currently unreachable
 const lastProviderRefreshAt = new Map<string, number>();
@@ -321,6 +328,17 @@ export function shouldEnableProviderForBackgroundRefresh(
   return true;
 }
 
+// A provider refresh that did not produce a complete AeroDataBox board (429 after retries,
+// timeout, a failed window) must not hold the key for the full cooldown: back-date its slot so the
+// next attempt is allowed PROVIDER_REFRESH_RETRY_AFTER_FAILURE_MS later. Not zero — a board held
+// back by the paced budget gate would otherwise retry (and run the fallback rescue) on every
+// request.
+const PROVIDER_REFRESH_RETRY_AFTER_FAILURE_MS = 5 * 60 * 1000;
+export function noteProviderRefreshFailed(aggKey: string, nowMs = Date.now()): void {
+  if (!lastProviderRefreshAt.has(aggKey)) return;
+  lastProviderRefreshAt.set(aggKey, nowMs - PROVIDER_REFRESH_KEY_COOLDOWN_MS + PROVIDER_REFRESH_RETRY_AFTER_FAILURE_MS);
+}
+
 // F036: the official (paid, per-call) FR24 API had NO equivalent gate — background refreshes could
 // reach it on every degraded serve as long as the 1h isFreshComplete threshold + the env kill switch
 // allowed it, with no per-key cooldown and no minimum data age beyond that 1h check. Mirror the
@@ -330,6 +348,9 @@ export function shouldEnableProviderForBackgroundRefresh(
 // a genuinely uncached board (fetchAllPages's allowTargetedOfficialRescue / srcPriority=='official'
 // paths) is untouched and keeps working on every request.
 const OFFICIAL_REFRESH_KEY_COOLDOWN_MS = PROVIDER_REFRESH_KEY_COOLDOWN_MS;
+// Deliberately NOT tied to PROVIDER_REFRESH_STALE_MS: the official API bills per call against a
+// credit allowance, so making the AeroDataBox refresh more eager must not make this one eager too.
+const OFFICIAL_REFRESH_STALE_MS = 3 * 60 * 60 * 1000;
 const lastOfficialRefreshAt = new Map<string, number>();
 
 export function shouldEnableOfficialForBackgroundRefresh(
@@ -341,7 +362,7 @@ export function shouldEnableOfficialForBackgroundRefresh(
   // Same ACQUIRE contract as shouldEnableProviderForBackgroundRefresh: only call when the refresh
   // will actually be dispatched (callers short-circuit on pendingAggs.has(aggKey) first).
   if (!allowOfficialFallback || !process.env.FR24_API_TOKEN) return false;
-  if (dataAgeMs <= PROVIDER_REFRESH_STALE_MS) return false;
+  if (dataAgeMs <= OFFICIAL_REFRESH_STALE_MS) return false;
   const last = lastOfficialRefreshAt.get(aggKey) || 0;
   if (nowMs - last < OFFICIAL_REFRESH_KEY_COOLDOWN_MS) return false;
   if (lastOfficialRefreshAt.size >= MAX_PROVIDER_REFRESH_KEYS) {
@@ -1245,7 +1266,11 @@ function triggerBackgroundRefresh(
 ): void {
   if (pendingAggs.has(aggKey)) return;
   const refreshHub = String(hub);
-  const promise = fetchAllPages(refreshHub, dir, ts, undefined, Date.now() + 55000, options).then(async result => {
+  const providerAttempted = options.disableProviderFallback === false;
+  const promise = fetchAllPages(refreshHub, dir, ts, undefined, Date.now() + 55000, { ...options, backgroundRefresh: true }).then(async result => {
+    if (providerAttempted && (result?.partial || result?.meta?.source !== 'aerodatabox')) {
+      noteProviderRefreshFailed(aggKey);
+    }
     // F037/F026: stamp the build-time generatedAt on every freshly-fetched board, at the source, so
     // every downstream serve path (hot cache, stale, degraded/fallback tiers) can report a real age
     // instead of carrying zero staleness signal.
@@ -1255,6 +1280,7 @@ function triggerBackgroundRefresh(
     await saveScheduleSnapshot({ cacheKey: aggKey, hub: refreshHub, dir, ts, data: result });
     return result;
   }).catch(e => {
+    if (providerAttempted) noteProviderRefreshFailed(aggKey);
     console.error(`Background refresh failed for ${refreshHub} [${aggKey}]:`, e.message);
   }).finally(() => {
     // Compare-and-delete: a forced warm may have overwritten this entry with its own fetch —
@@ -1458,6 +1484,19 @@ async function fetchAllPages(
       logHub, dir, ts, effectiveDeadline, false, !options.disableOfficialSource && !pacedOnlyGate, !!options.providerBudgetExempt
     );
     if (fallback) return fallback;
+
+    // Background refreshes and authorized cron warms stop here instead of falling
+    // through to the FR24 web scrape below: it is Cloudflare-challenged from Vercel, so all it could
+    // return is the same partial first_page_failed board, which cacheSetGuarded refuses to store
+    // over a complete one. That fall-through was ~200 error-level "FR24 Cloudflare challenge"
+    // lines/day of pure waste (Sep 2026). On-demand requests keep the legacy path unchanged
+    // (including ?scraperFallback=0, which only turns off the paid scraper PROXY, not the scrape).
+    if (options.backgroundRefresh || options.providerBudgetExempt) {
+      const providerUnavailable = { flights: [], total: 0, totalFetched: 0, pagesScanned: 0, totalPages: 1, cached: false, partial: true, hub: logHub, dir,
+        meta: { partialReason: 'provider_unavailable', pagesRequested: 0, pagesSucceeded: 0, pagesFailed: 0, missingPages: [], completeness: 0, elapsedMs: 0, source: 'scraping' as const, scrapeSkipped: true }
+      };
+      return await maybeAugmentWithLiveFeedFallback(providerUnavailable, logHub, dir, ts, effectiveDeadline);
+    }
   }
 
   if (srcPriority === 'official' && process.env.FR24_API_TOKEN) {
@@ -1780,14 +1819,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ≤15 day keys, closing the second cache-busting spend surface.
     const ts = getStartOfHubDay(hub, 0, new Date(tsParam * 1000));
     const isOld = (now - ts) > 86400;
-    // A given day's schedule is stable, so a clean (non-partial) today board can be reused for hours.
-    // Reuse it for 6h in-memory + at the edge so each metered AeroDataBox refresh (2 FIDS calls =
-    // 4 units) is amortized across the whole warm window instead of re-fetched every few minutes.
-    // This roughly halves the worst-case monthly provider spend vs the old 3h TTL. Partial boards
-    // are unaffected: setAggregateCacheHeader overrides cdnMaxAge to 120s/30s for partial responses.
-    // (Tradeoff: a clean board's per-flight status can lag up to 6h; lower to 10800 for fresher status.)
-    const ttl = isOld ? 600000 : 21600000;     // 6h for today's clean board (was 3h) — quota economy
-    const cdnMaxAge = isOld ? 3600 : 21600;    // 6h per-edge for today's clean board (was 3h)
+    // A clean (non-partial) today board is reused for 1h in-memory + at the edge. The flight LIST is
+    // stable but its statuses (delays, gates, cancellations) are what people open the board for, and
+    // the 6h reuse this replaced left viewed boards 3-6h+ stale (Sep 26 2026). Spend stays bounded:
+    // an expired board only refreshes through the paced organic gate (_cost-state.ts), which caps
+    // organic units at the daily budget pro-rated through the day, so a busy board costs at most
+    // ~4 units/hour and an unviewed board costs nothing beyond the warm cron. Partial boards are
+    // unaffected: setAggregateCacheHeader overrides cdnMaxAge to 120s/30s for partial responses.
+    const ttl = isOld ? 600000 : 3600000;      // 1h for today's clean board (was 6h)
+    const cdnMaxAge = isOld ? 3600 : 3600;     // 1h per-edge for today's clean board (was 6h)
     swr = 600;
     const allowOfficialFallback = !shouldDisableOfficialFallback(req);
     const allowProviderFallback = !shouldDisableProviderFallback(req);
