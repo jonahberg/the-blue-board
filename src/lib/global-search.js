@@ -48,6 +48,61 @@ export function matchLiveFlights(flights, qNorm) {
 }
 
 /**
+ * How well one live flight answers a query (F2). Lower is better; -1 is no match.
+ *
+ *   0  exact flight number, callsign or registration ("UA2" = "UAL2" = bare "2")
+ *   1  one of those STARTS with the query
+ *   2  the route, either direction
+ *   3  any other substring hit
+ *
+ * The palette used to slice unranked feed order to 20 rows, so "UA2" listed UA28, UA285 and
+ * UA2222 and dropped UA2 itself when it sat 21st in the feed.
+ *
+ * @param {Object} f  a live flight.
+ * @param {string} qNorm  from normalizeQuery().
+ * @returns {number}
+ */
+export function rankLiveFlight(f, qNorm) {
+  if (!qNorm) return -1;
+  const clean = (v) => (v || '').toUpperCase().replace(/[\s\-]+/g, '');
+  const cs = clean(f.callsign);
+  const flt = clean(f.flightIATA);
+  const reg = clean(f.reg);
+  // Every spelling of the query that names the same flight: UA2, UAL2 and a bare 2.
+  const num = /^\d+$/.test(qNorm) ? qNorm : (qNorm.match(/^UAL?(\d+)$/) || [])[1];
+  const variants = num ? [qNorm, `UA${num}`, `UAL${num}`] : [qNorm];
+  const idents = [flt, cs, reg].filter(Boolean);
+  if (idents.some((v) => variants.includes(v))) return 0;
+  if (idents.some((v) => variants.some((q) => v.startsWith(q)))) return 1;
+  const routeStr = ((f.origin || '') + (f.dest || '')).toUpperCase();
+  const routeRev = ((f.dest || '') + (f.origin || '')).toUpperCase();
+  if (routeStr === qNorm || routeRev === qNorm) return 2;
+  if (idents.some((v) => v.includes(qNorm)) || routeStr.includes(qNorm) || routeRev.includes(qNorm)) return 3;
+  return -1;
+}
+
+/**
+ * The live flights matching a query, best first — the order the palette slices from.
+ * Ties break on the shorter flight number, then alphabetically, so UA587 precedes UA5877.
+ * Returns the feed's own objects (not labels): the palette selects what it renders.
+ *
+ * @param {Array<Object>} flights
+ * @param {string} qNorm
+ * @returns {Array<Object>}
+ */
+export function rankLiveFlights(flights, qNorm) {
+  const ident = (f) => f.flightIATA || f.callsign || '';
+  return (flights || [])
+    .map((f) => ({ f, rank: rankLiveFlight(f, qNorm) }))
+    .filter((x) => x.rank >= 0)
+    .sort((a, b) =>
+      a.rank - b.rank ||
+      ident(a.f).length - ident(b.f).length ||
+      ident(a.f).localeCompare(ident(b.f)))
+    .map((x) => x.f);
+}
+
+/**
  * Schedule-board matches on ident, registration, origin or destination.
  *
  * Note the asymmetry with the live matcher: a schedule row is NOT matched on a
