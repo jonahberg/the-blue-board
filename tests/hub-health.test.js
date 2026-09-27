@@ -179,9 +179,9 @@ describe('hubHealthSeverity', () => {
 
 describe('networkLabel', () => {
   it('averages the readings and names the day', () => {
-    expect(networkLabel([90, 80, 85])).toEqual({ avg: 85, label: 'Smooth Ops', color: '#22c55e' });
-    expect(networkLabel([60, 55, 65])).toEqual({ avg: 60, label: 'Some Delays', color: '#f59e0b' });
-    expect(networkLabel([30, 40, 20])).toEqual({ avg: 30, label: 'Rough Day', color: '#ef4444' });
+    expect(networkLabel([90, 80, 85])).toMatchObject({ avg: 85, label: 'Smooth Ops', color: '#22c55e', severity: 'green', level: 'normal' });
+    expect(networkLabel([60, 55, 65])).toMatchObject({ avg: 60, label: 'Some Delays', color: '#f59e0b', severity: 'amber', level: 'minor' });
+    expect(networkLabel([30, 40, 20])).toMatchObject({ avg: 30, label: 'Disrupted', color: '#ef4444', severity: 'red', level: 'significant' });
   });
 
   it('rounds the average before banding it', () => {
@@ -192,7 +192,25 @@ describe('networkLabel', () => {
   it('uses the same >70 / >=50 boundaries as the per-hub chip (edge case)', () => {
     expect(networkLabel([70]).label).toBe('Some Delays');
     expect(networkLabel([50]).label).toBe('Some Delays');
-    expect(networkLabel([49]).label).toBe('Rough Day');
+    expect(networkLabel([49]).label).toBe('Disrupted');
+  });
+
+  it('is never Smooth Ops while the IROPS index says disruption (audit Sep 26: 85% vs IROPS 35.3)', () => {
+    const readings = [94, 85, 74, 83, 90, 76, 91];
+    expect(networkLabel(readings, { iropsScore: 35.3 })).toMatchObject({ avg: 85, label: 'Disrupted', severity: 'red' });
+    expect(networkLabel(readings, { iropsScore: 8 })).toMatchObject({ label: 'Some Delays', severity: 'amber' });
+    expect(networkLabel(readings, { iropsScore: 3 })).toMatchObject({ label: 'Smooth Ops', severity: 'green' });
+  });
+
+  it('is never Smooth Ops while a hub has an FAA program', () => {
+    const readings = [90, 88, 92];
+    const hubCodes = ['ORD', 'EWR', 'SFO'];
+    expect(networkLabel(readings, { faaIndex: { EWR: { groundStop: true } }, hubCodes }).label).toBe('Disrupted');
+    expect(networkLabel(readings, { faaIndex: { SFO: { delays: [{ type: 'ground_delay' }] } }, hubCodes }).label).toBe('Some Delays');
+  });
+
+  it('can only get worse from the extra signals, never better', () => {
+    expect(networkLabel([30, 40], { iropsScore: 0 }).label).toBe('Disrupted');
   });
 
   it('returns null when no hub has a reading (edge case)', () => {

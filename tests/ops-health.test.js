@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildFaaIndex } from '../src/lib/faa-context.js';
-import { deriveOpsHealth, extractHubPrograms, hubProgramMarker } from '../src/lib/ops-health.js';
+import { deriveOpsHealth, extractHubPrograms, hubProgramMarker, networkStatus } from '../src/lib/ops-health.js';
+import { iropsScoreCls, iropsScoreLabel } from '../src/lib/irops-score.js';
 import { serverFaaResponse } from './fixtures/faa-server-shape.js';
 
 const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
@@ -89,6 +90,25 @@ describe('deriveOpsHealth', () => {
     expect(h.text).toContain('ground stop');
   });
 
+  it('does not say "all systems normal" while the IROPS panel says MINOR DISRUPTION', () => {
+    const h = deriveOpsHealth({ hubOtps: { ORD: 88 }, faaIndex: {}, hubCodes: HUBS, iropsScore: 8.4 });
+    expect(h.level).toBe('advisory');
+    expect(h.text).toBe('Minor irregular ops — IROPS 8.4/100');
+  });
+
+  it('does not say "all systems normal" while the network chip says Some Delays', () => {
+    const h = deriveOpsHealth({ hubOtps: { ORD: 62, DEN: 66 }, faaIndex: {}, hubCodes: HUBS, iropsScore: 2 });
+    expect(h.level).toBe('advisory');
+    expect(h.text).toBe('Some delays — hub on-time averaging 64%');
+  });
+
+  it('names a closure or departure-delay program the strip chip is flagging', () => {
+    expect(deriveOpsHealth({ faaIndex: { SFO: { closure: true } }, hubCodes: HUBS, iropsScore: 30 }).text)
+      .toBe('Disrupted: Airport closure at SFO');
+    expect(deriveOpsHealth({ faaIndex: { EWR: { departureDelay: true } }, hubCodes: HUBS, iropsScore: 1 }).text)
+      .toBe('Departure delays at EWR');
+  });
+
   it('degrades gracefully with no inputs at all (old cached payloads)', () => {
     expect(deriveOpsHealth({}).level).toBe('normal');
     expect(deriveOpsHealth().level).toBe('normal');
@@ -135,5 +155,39 @@ describe('hubProgramMarker (F046/F076: chip severity blends FAA programs)', () =
 
   it('closure is red', () => {
     expect(hubProgramMarker({ SFO: { closure: true } }, 'SFO').severity).toBe('red');
+  });
+});
+
+describe('networkStatus — the one definition behind the strip chip, the ticker and the IROPS badge', () => {
+  it('is normal only when every signal is quiet', () => {
+    expect(networkStatus({ hubOtps: { ORD: 90, DEN: 85 }, hubCodes: HUBS, iropsScore: 2 }).level).toBe('normal');
+  });
+
+  it('tracks the IROPS panel band exactly: NORMAL / MINOR / SIGNIFICANT', () => {
+    for (const score of [0, 4.9, 5, 14.9, 15, 35.3]) {
+      const status = networkStatus({ hubOtps: { ORD: 95 }, hubCodes: HUBS, iropsScore: score });
+      const expected = { low: 'normal', med: 'minor', high: 'significant' }[iropsScoreCls(score)];
+      expect(status.level, `score ${score} (${iropsScoreLabel(score)})`).toBe(expected);
+    }
+  });
+
+  it('takes the worst of on-time, FAA programs and IROPS', () => {
+    const base = { hubCodes: HUBS, iropsScore: 2 };
+    expect(networkStatus({ ...base, hubOtps: { ORD: 90, DEN: 45 } }).level).toBe('significant');
+    expect(networkStatus({ ...base, hubOtps: { ORD: 90 }, faaIndex: { EWR: { groundStop: true } } }).level).toBe('significant');
+    expect(networkStatus({ ...base, hubOtps: { ORD: 90 }, faaIndex: { SFO: { closure: true } } }).level).toBe('significant');
+    expect(networkStatus({ ...base, hubOtps: { ORD: 90 }, faaIndex: { SFO: { groundDelay: true } } }).level).toBe('minor');
+    expect(networkStatus({ ...base, hubOtps: { ORD: 65, DEN: 72 } }).level).toBe('minor');
+  });
+
+  it('maps each level to one severity, colour and label', () => {
+    expect(networkStatus({ hubOtps: { ORD: 90 }, hubCodes: HUBS })).toMatchObject({ severity: 'green', label: 'Smooth Ops' });
+    expect(networkStatus({ hubOtps: { ORD: 90 }, hubCodes: HUBS, iropsScore: 9 })).toMatchObject({ severity: 'amber', label: 'Some Delays' });
+    expect(networkStatus({ hubOtps: { ORD: 90 }, hubCodes: HUBS, iropsScore: 20 })).toMatchObject({ severity: 'red', label: 'Disrupted' });
+  });
+
+  it('reports the network average when any hub has a reading, null otherwise', () => {
+    expect(networkStatus({ hubOtps: { ORD: 90, DEN: 81 }, hubCodes: HUBS }).avg).toBe(86);
+    expect(networkStatus({ hubCodes: HUBS }).avg).toBeNull();
   });
 });

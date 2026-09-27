@@ -8,6 +8,8 @@
 // :6077-6094 the server derivation, :5685-5734 the severity/label bands). The bar's
 // markup, the FAA-program blend and the 🏠 marker stay in renderHubHealthBar().
 
+import { networkStatus } from './ops-health.js';
+
 /** Fixed left-to-right order of the hub-health bar. */
 export const HUB_ORDER = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
 
@@ -127,16 +129,25 @@ export function hubHealthSeverity(pct) {
 }
 
 /**
- * The trailing network-wide chip: average of the hubs that have a reading.
- * @param {number[]} pcts
- * @returns {{avg: number, label: string, color: string}|null} null when no hub has a reading.
+ * The trailing network-wide chip. Its level comes from `networkStatus()` (ops-health.js),
+ * the one definition the ticker and the IROPS badge also follow — pass the IROPS score and
+ * the FAA index so the chip can never read "Smooth Ops" beside a disruption. Without them
+ * it bands the on-time readings alone.
+ *
+ * @param {number[]} pcts  per-hub on-time readings.
+ * @param {{iropsScore?: number|string|null, faaIndex?: object, hubCodes?: string[]}} [signals]
+ * @returns {{avg: number, label: string, color: string, severity: 'green'|'amber'|'red',
+ *   level: 'normal'|'minor'|'significant'}|null} null when no hub has a reading.
  */
-export function networkLabel(pcts) {
+export function networkLabel(pcts, { iropsScore = null, faaIndex = {}, hubCodes = HUB_ORDER } = {}) {
   if (!pcts || !pcts.length) return null;
-  const avg = Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length);
+  const hubOtps = Object.fromEntries(pcts.map((pct, i) => [String(i), pct]));
+  const status = networkStatus({ hubOtps, faaIndex, hubCodes, iropsScore });
   return {
-    avg,
-    label: avg > 70 ? 'Smooth Ops' : avg >= 50 ? 'Some Delays' : 'Rough Day',
-    color: avg > 70 ? '#22c55e' : avg >= 50 ? '#f59e0b' : '#ef4444',
+    avg: /** @type {number} */ (status.avg),
+    label: status.label,
+    color: status.color,
+    severity: status.severity,
+    level: status.level,
   };
 }
