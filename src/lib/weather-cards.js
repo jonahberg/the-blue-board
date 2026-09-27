@@ -13,7 +13,7 @@
 // palette, pinned by tests), not presentation choices a Tailwind token could express.
 
 import { describeFaaProgram } from './delay-explain-context.js';
-import { explainFAAStatus } from './faa-context.js';
+import { explainFAAStatus, faaTypeLabel } from './faa-context.js';
 import { computeFlightCategory, computeOpsImpact } from './metar-category.js';
 import {
   CAT_COLORS,
@@ -353,7 +353,7 @@ export function faaAlertLines(faaIndex) {
   const lines = [];
   for (const [code, data] of Object.entries(faaIndex || {})) {
     if (!data || !data.delays || !data.delays.length) continue;
-    for (const d of data.delays) lines.push(`${code}: ${d.type || d.reason || 'Delay'}`);
+    for (const d of data.delays) lines.push(`${code}: ${faaTypeLabel(d.type) || d.reason || 'Delay'}`);
   }
   return lines;
 }

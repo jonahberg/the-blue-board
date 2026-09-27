@@ -464,6 +464,16 @@ export async function getHubDisruptionMinutes(hub: string): Promise<number> {
 let jsonFailCount = 0;
 let lastJsonFailTime = 0;
 
+/**
+ * Test helper: clear the JSON-failure backoff. Without it, a test that makes the JSON source
+ * fail leaves the next test skipping JSON for XML it never mocked — the suite passed only in
+ * file order. Production never calls this.
+ */
+export function __resetFaaHandlerForTests(): void {
+  jsonFailCount = 0;
+  lastJsonFailTime = 0;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });

@@ -18,6 +18,8 @@ import {
   radarTitle,
 } from '../src/lib/weather-cards.js';
 import { CAT_COLORS } from '../src/lib/metar-explain.js';
+import { buildFaaIndex } from '../src/lib/faa-context.js';
+import { serverFaaResponse } from './fixtures/faa-server-shape.js';
 import { getMetarStationForIata } from '../src/lib/airport-metadata.js';
 
 const VFR = 'KDEN 121953Z 18008KT 10SM FEW200 24/M01 A2992 RMK AO2';
@@ -215,6 +217,8 @@ describe('buildHubCardModel status precedence (inventory §23)', () => {
     expect(model.status.tone).toBe('delay');
     expect(model.status.parts[0].label).toBe('Ground stop');
     expect(model.status.parts[0].extras).toEqual(['until 23:00Z', 'ext: 40%']);
+    // The explainer must name the ground stop too, not fall through to "delays".
+    expect(model.faaExplainer).toContain('a ground stop');
   });
 
   it('falls back to the raw delays[] when the airport reports no programs', () => {
@@ -346,14 +350,26 @@ describe('assignJargonFirsts gates each tooltip to one card (inventory §17)', (
 });
 
 describe('faaAlertLines', () => {
-  it('lists one line per delay, preferring the type over the reason', () => {
+  it('lists one line per delay, labelling the type rather than printing it raw', () => {
     expect(
       faaAlertLines({
-        ORD: { delays: [{ type: 'Ground Stop' }, { reason: 'VOLUME' }] },
+        ORD: { delays: [{ type: 'ground_stop' }, { reason: 'VOLUME' }] },
         DEN: { delays: [] },
         SFO: {},
       }),
     ).toEqual(['ORD: Ground Stop', 'ORD: VOLUME']);
+  });
+
+  it('labels every type in the real /api/faa response', async () => {
+    const index = buildFaaIndex(await serverFaaResponse());
+    expect(faaAlertLines(index)).toEqual([
+      'EWR: Ground Stop',
+      'LGA: Ground Delay Program',
+      'RSW: Departure Delay',
+      'SLC: Departure Delay',
+      'DCA: Closure',
+      'BOS: Arrival Delay',
+    ]);
   });
 
   it('returns nothing for an empty or missing index', () => {

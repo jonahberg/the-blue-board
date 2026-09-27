@@ -11,6 +11,8 @@
 //  - IROPS index red (≥ 15, "Significant IROPS") ⇒ never "normal", even when no
 //    single hub crosses a threshold.
 
+import { normalizeFaaType } from './faa-context.js';
+
 /**
  * Extract active FAA traffic-management programs at UA hubs from the /api/faa
  * index shape ({ [airportCode]: { groundStop, groundDelay, delays: [{type, avgDelay}] } }).
@@ -24,8 +26,8 @@ export function extractHubPrograms(faaIndex = {}, hubCodes = []) {
     const entry = faaIndex[hub];
     if (!entry || typeof entry !== 'object') continue;
     const delays = Array.isArray(entry.delays) ? entry.delays : [];
-    const typeOf = (d) => String(d?.type || d?.reason || '').toLowerCase();
-    const gsDelay = delays.find((d) => typeOf(d).includes('ground stop') || typeOf(d).includes('ground_stop'));
+    const typeOf = (d) => normalizeFaaType(d?.type || d?.reason);
+    const gsDelay = delays.find((d) => typeOf(d).includes('ground stop'));
     const gdpDelay = delays.find((d) => typeOf(d).includes('ground delay') || typeOf(d).includes('gdp'));
     if (entry.groundStop || gsDelay) {
       programs.push({ hub, kind: 'GS', avgDelay: numOrNull(gsDelay?.avgDelay) });
@@ -64,18 +66,18 @@ export function hubProgramMarker(faaIndex, hub) {
   if (!entry || typeof entry !== 'object') return null;
   const programs = Array.isArray(entry.programs) ? entry.programs : [];
   const delays = Array.isArray(entry.delays) ? entry.delays : [];
-  const typeOf = (d) => String(d?.type || d?.reason || '').toLowerCase();
+  const typeOf = (d) => normalizeFaaType(d?.type || d?.reason);
   const hasType = (needle) =>
     programs.some((p) => typeOf(p).includes(needle)) || delays.some((d) => typeOf(d).includes(needle));
 
   if (entry.closure || hasType('closure')) return { severity: 'red', marker: '⛔', label: 'Airport closure' };
-  if (entry.groundStop || hasType('ground stop') || hasType('ground_stop')) {
+  if (entry.groundStop || hasType('ground stop')) {
     return { severity: 'red', marker: '⛔', label: 'Ground stop' };
   }
-  if (entry.groundDelay || hasType('ground delay') || hasType('ground_delay') || hasType('gdp')) {
+  if (entry.groundDelay || hasType('ground delay') || hasType('gdp')) {
     return { severity: 'amber', marker: '⚠', label: 'Ground delay program' };
   }
-  if (entry.departureDelay || hasType('departure delay') || hasType('departure_delay')) {
+  if (entry.departureDelay || hasType('departure delay')) {
     return { severity: 'amber', marker: '⚠', label: 'Departure delays' };
   }
   return null;

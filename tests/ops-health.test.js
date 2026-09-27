@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { buildFaaIndex } from '../src/lib/faa-context.js';
 import { deriveOpsHealth, extractHubPrograms, hubProgramMarker } from '../src/lib/ops-health.js';
+import { serverFaaResponse } from './fixtures/faa-server-shape.js';
 
 const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
 
@@ -7,16 +9,25 @@ describe('extractHubPrograms', () => {
   it('detects ground stops via the boolean flag and via delays[].type', () => {
     const faa = {
       EWR: { groundStop: true },
-      ORD: { delays: [{ type: 'Ground Stop', avgDelay: 45 }] },
+      ORD: { delays: [{ type: 'ground_stop', avgDelay: 45 }] },
       DEN: { delays: [{ type: 'ground_stop' }] },
     };
     const programs = extractHubPrograms(faa, HUBS);
     expect(programs.map((p) => `${p.hub}:${p.kind}`).sort()).toEqual(['DEN:GS', 'EWR:GS', 'ORD:GS']);
   });
 
-  it('detects GDPs and carries avgDelay', () => {
-    const faa = { SFO: { delays: [{ type: 'Ground Delay Program', avgDelay: 72 }] } };
+  it('detects GDPs from delays[].type and carries avgDelay', () => {
+    // No groundDelay boolean here: the snake_case type alone must be enough.
+    const faa = { SFO: { delays: [{ type: 'ground_delay', avgDelay: 72 }] } };
     expect(extractHubPrograms(faa, HUBS)).toEqual([{ hub: 'SFO', kind: 'GDP', avgDelay: 72 }]);
+  });
+
+  it('reads the real /api/faa response (EWR ground stop, LGA GDP avg 18)', async () => {
+    const index = buildFaaIndex(await serverFaaResponse());
+    expect(extractHubPrograms(index, ['EWR', 'LGA', 'BOS'])).toEqual([
+      { hub: 'EWR', kind: 'GS', avgDelay: null },
+      { hub: 'LGA', kind: 'GDP', avgDelay: 18 },
+    ]);
   });
 
   it('ignores non-hub airports and malformed entries', () => {
@@ -52,7 +63,7 @@ describe('deriveOpsHealth', () => {
   it('a GDP at a UA hub disrupts with the avg delay fact', () => {
     const h = deriveOpsHealth({
       hubOtps: {},
-      faaIndex: { SFO: { delays: [{ type: 'Ground Delay Program', avgDelay: 72 }] } },
+      faaIndex: { SFO: { delays: [{ type: 'ground_delay', avgDelay: 72 }] } },
       hubCodes: HUBS,
       iropsScore: null,
     });
