@@ -28,8 +28,23 @@ import { useSyncExternalStore } from 'react';
 import { shouldShowOnboarding, waitlistState } from '@/lib/engagement.js';
 import { safeLocalStorage } from './storage';
 
+/**
+ * Clicks that are NAVIGATION, not engagement: switching tabs (desktop tab bar, mobile bottom
+ * nav), anything inside a dialog — the welcome overlay's own buttons included — and anything
+ * that opts out with `data-no-engagement`. Counting those made the T2 waitlist modal pop up
+ * mid tab-switch, over whatever the visitor was on their way to (audit F19/F26).
+ */
+export const NON_ENGAGEMENT_SELECTOR =
+  '[role="tab"], [role="tablist"], nav, [role="dialog"], [role="alertdialog"], [data-no-engagement]';
+
+/** Does this click count towards the T2 threshold? */
+export function countsAsEngagement(target: EventTarget | null): boolean {
+  const el = target instanceof Element ? target : null;
+  return !el?.closest(NON_ENGAGEMENT_SELECTOR);
+}
+
 export type EngagementState = {
-  /** Clicks anywhere in the document since load — the T2 waitlist trigger's counter. */
+  /** Engagement clicks since load (see `countsAsEngagement`) — the T2 waitlist trigger's counter. */
   clicks: number;
   /** 20 for a first-time visitor, 30 for a returning one. Read ONCE, before `bb-visited`. */
   triggerClicks: number;
@@ -109,7 +124,9 @@ export function initEngagement(): void {
   setState({ triggerClicks, submitted, showOnboardingInitially, ready: true });
 
   if (typeof document !== 'undefined') {
-    const onClick = () => setState({ clicks: state.clicks + 1 });
+    const onClick = (event: Event) => {
+      if (countsAsEngagement(event.target)) setState({ clicks: state.clicks + 1 });
+    };
     document.addEventListener('click', onClick);
     detachClicks = () => document.removeEventListener('click', onClick);
   }

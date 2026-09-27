@@ -38,7 +38,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/60 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -147,7 +147,7 @@ function DialogContent({
               variant="ghost"
               // 44px on touch (WCAG 2.5.5), matching the sheet's close pin; desktop
               // density returns from `md:`.
-              className="absolute top-2 right-2 min-h-11 min-w-11 md:min-h-8 md:min-w-8"
+              className="absolute top-2 right-2 min-h-11 min-w-11 pointer-fine:md:min-h-8 pointer-fine:md:min-w-8"
               size="icon-sm"
             >
               <XIcon
@@ -159,6 +159,18 @@ function DialogContent({
       </DialogPrimitive.Content>
     </DialogPortal>
   )
+}
+
+/**
+ * `onOpenAutoFocus` handler for a dialog or sheet whose first tabbable element is a text
+ * input the visitor did not ask to type into. Radix's default focuses that input, which on a
+ * phone raises the soft keyboard over the thing that just opened. This keeps focus inside
+ * the trap — on the content element itself (Radix gives it `tabIndex=-1`), so a screen
+ * reader announces the dialog by its title — without opening a keyboard.
+ */
+function focusContentOnOpen(event: Event) {
+  event.preventDefault()
+  ;(event.currentTarget as HTMLElement | null)?.focus()
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
@@ -231,6 +243,7 @@ function DialogDescription({
 }
 
 export {
+  focusContentOnOpen,
   Dialog,
   DialogClose,
   DialogContent,
