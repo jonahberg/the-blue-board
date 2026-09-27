@@ -12,7 +12,7 @@ const vercelFunctionMocks = vi.hoisted(() => ({
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => scheduleSnapshotMocks);
 vi.mock('@vercel/functions', () => vercelFunctionMocks);
 
-import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker, __resetScheduleCachesForTests, shouldEnableProviderForBackgroundRefresh } from '../api/schedule.js';
+import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker, __resetScheduleCachesForTests, shouldEnableProviderForBackgroundRefresh, shouldEnableOfficialForBackgroundRefresh, noteProviderRefreshFailed } from '../api/schedule.js';
 import { getStartOfDayForHub } from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 import { recordAdbUnits, isAdbOrganicRefreshGated, __resetAdbSpendForTests } from '../api/_cost-state.js';
@@ -2262,7 +2262,27 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
       data: { flights: [], total: 412, partial: false, meta: { completeness: 1 } },
       refreshedAt: Date.now() - 30 * 3600 * 1000,
     });
-    mockEmptyScrape();
+    // The production warm path: the provider (AeroDataBox) returns the real board. (This used to
+    // mock an FR24 web scrape that "succeeds" with an empty board, which never happens from Vercel;
+    // since 1.8.2 a cron warm no longer falls through to that scrape at all.)
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
+    const dayStart = getStartOfHubDay('ORD', 0);
+    const iso = (sec) => new Date(sec * 1000).toISOString().replace('.000Z', 'Z');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (/aerodatabox|aedbx/i.test(String(url))) {
+        return {
+          ok: true, status: 200, headers: { get: () => null },
+          json: async () => ({ departures: [{
+            number: 'UA 1', status: 'Expected', airline: { iata: 'UA' },
+            departure: { scheduledTime: { utc: iso(dayStart + 12 * 3600) }, airport: { iata: 'ORD' } },
+            arrival: { scheduledTime: { utc: iso(dayStart + 16 * 3600) }, airport: { iata: 'SFO' } },
+            aircraft: {},
+          }] }),
+        };
+      }
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ result: { response: { airport: { pluginData: {} } } } }) };
+    });
 
     const res = createRes();
     await handler({
@@ -2273,12 +2293,13 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
 
     expect(res.statusCode).toBe(200);
     // NOT the degraded snapshot: a snapshot serve is stale+degraded with meta.fallbackScope set
-    // and total 412; the forced refetch is a fresh (empty-scrape) board.
+    // and total 412; the forced refetch is a fresh provider board.
     expect(res.body.cached).toBe(false);
     expect(res.body.stale).toBeFalsy();
     expect(res.body.degraded).toBeFalsy();
     expect(res.body.meta.fallbackScope).toBeUndefined();
-    expect(res.body.total).toBe(0);
+    expect(res.body.meta.source).toBe('aerodatabox');
+    expect(res.body.total).toBe(1);
   });
 
   it("accepts the documented force value variants ('true', 'yes') like '1'", async () => {
@@ -2491,17 +2512,46 @@ describe('background provider refresh age gate', () => {
     delete process.env.AERODATABOX_API_KEY;
     expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:1', 30 * 3600 * 1000, true)).toBe(false);
     process.env.AERODATABOX_API_KEY = 'test-key';
-    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:1', 1 * 3600 * 1000, true)).toBe(false);
+    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:1', 30 * 60 * 1000, true)).toBe(false);
     expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:1', 30 * 3600 * 1000, false)).toBe(false);
   });
 
-  it('allows one provider refresh per agg key per hour once data is older than 3h', () => {
+  it('allows one provider refresh per agg key per hour once data is older than 1h', () => {
+    // Was 3h: combined with the 6h hot/CDN TTL a viewed board sat 3-6h+ stale while ~900
+    // units/day of budget went unused (Sep 26 2026). The paced organic gate still bounds spend.
     process.env.AERODATABOX_API_KEY = 'test-key';
-    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:2', 4 * 3600 * 1000, true)).toBe(true);
+    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:2', 50 * 60 * 1000, true)).toBe(false);
+    expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:2', 70 * 60 * 1000, true)).toBe(true);
     // Same key again immediately: cooldown holds (user traffic must not stampede the quota).
     expect(shouldEnableProviderForBackgroundRefresh('agg:ORD:departures:2', 4 * 3600 * 1000, true)).toBe(false);
     // A different board is independent.
     expect(shouldEnableProviderForBackgroundRefresh('agg:DEN:departures:2', 4 * 3600 * 1000, true)).toBe(true);
+  });
+
+  it('a FAILED provider refresh can retry after 5 min instead of burning the whole hour', () => {
+    // Prod, Sep 26 2026: a 429'd refresh consumed the key's 1h cooldown, so DEN/IAH/ORD/SFO
+    // arrivals could not retry for an hour while already 5-11h stale.
+    process.env.AERODATABOX_API_KEY = 'test-key';
+    const t0 = Date.parse('2026-09-26T20:00:00Z');
+    const age = 4 * 3600 * 1000;
+    expect(shouldEnableProviderForBackgroundRefresh('agg:IAH:arrivals:5', age, true, t0)).toBe(true);
+    noteProviderRefreshFailed('agg:IAH:arrivals:5', t0 + 10_000);
+    expect(shouldEnableProviderForBackgroundRefresh('agg:IAH:arrivals:5', age, true, t0 + 4 * 60_000)).toBe(false);
+    expect(shouldEnableProviderForBackgroundRefresh('agg:IAH:arrivals:5', age, true, t0 + 6 * 60_000)).toBe(true);
+    // A SUCCESSFUL refresh keeps the full hour.
+    expect(shouldEnableProviderForBackgroundRefresh('agg:IAH:arrivals:5', age, true, t0 + 30 * 60_000)).toBe(false);
+  });
+
+  it('keeps the PAID FR24 official background refresh at the 3h age gate', () => {
+    // The official API bills per call against a credit allowance; the AeroDataBox freshness
+    // change must not quietly make it 3x more eager.
+    process.env.FR24_API_TOKEN = 'test-token';
+    try {
+      expect(shouldEnableOfficialForBackgroundRefresh('agg:ORD:departures:9', 2 * 3600 * 1000, true)).toBe(false);
+      expect(shouldEnableOfficialForBackgroundRefresh('agg:ORD:departures:9', 4 * 3600 * 1000, true)).toBe(true);
+    } finally {
+      delete process.env.FR24_API_TOKEN;
+    }
   });
 
   it('enables the provider on background refresh of a 30h-old persistent snapshot', async () => {
@@ -2533,6 +2583,71 @@ describe('background provider refresh age gate', () => {
     await Promise.all(vercelFunctionMocks.waitUntil.mock.calls.map(c => c[0]));
     const aeroCalls = fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url)));
     expect(aeroCalls.length).toBeGreaterThan(0);
+  });
+
+  it('a background refresh never falls through to the Cloudflare-dead FR24 web scrape', async () => {
+    // Prod: ~200 "FR24 Cloudflare challenge" error lines/day (EWR/NRT/GUM) all came from background
+    // refreshes whose provider attempt failed or was gated. The scrape can only produce a partial
+    // board, which cacheSetGuarded then refuses to store over the complete one — pure waste.
+    process.env.AERODATABOX_API_KEY = 'test-key';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const u = String(url);
+      if (/aerodatabox|aedbx/i.test(u)) {
+        return { ok: false, status: 500, headers: { get: () => null }, text: async () => 'boom', json: async () => ({}) };
+      }
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ result: { response: { airport: { pluginData: {} } } } }) };
+    });
+    scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue({
+      data: { flights: [], total: 412, partial: false, meta: { completeness: 1 } },
+      refreshedAt: Date.now() - 2 * 3600 * 1000,
+    });
+
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'EWR', dir: 'departures', timestamp: String(getStartOfHubDay('EWR', 0)) },
+    }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.total).toBe(412); // the complete board is still what visitors get
+
+    await Promise.all(vercelFunctionMocks.waitUntil.mock.calls.map(c => c[0]));
+    const aeroCalls = fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url)));
+    expect(aeroCalls.length).toBeGreaterThan(0); // the provider WAS tried
+    const scrapeCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('api.flightradar24.com/common/v1/airport.json'));
+    expect(scrapeCalls).toEqual([]);
+  });
+
+  it('an authorized cron warm whose provider fails does not fall through to the FR24 web scrape', async () => {
+    process.env.AERODATABOX_API_KEY = 'test-key';
+    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
+    process.env.CRON_SECRET = 'test-cron-secret-1234';
+    try {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+        const u = String(url);
+        if (/aerodatabox|aedbx/i.test(u)) {
+          return { ok: false, status: 500, headers: { get: () => null }, text: async () => 'boom', json: async () => ({}) };
+        }
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ result: { response: { airport: { pluginData: {} } } } }) };
+      });
+      const res = createRes();
+      await handler({
+        method: 'GET',
+        headers: { authorization: 'Bearer test-cron-secret-1234' },
+        query: {
+          hub: 'NRT', dir: 'departures', timestamp: String(getStartOfHubDay('NRT', 0)),
+          officialFallback: '0', providerFallback: '1', scraperFallback: '0', forceRefresh: '1',
+        },
+      }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.partial).toBe(true);
+      expect(res.body.meta.partialReason).toBe('provider_unavailable');
+      const scrapeCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('api.flightradar24.com/common/v1/airport.json'));
+      expect(scrapeCalls).toEqual([]);
+    } finally {
+      delete process.env.CRON_SECRET;
+    }
   });
 
   it('keeps the provider off for a young+complete snapshot (no pointless refresh)', async () => {

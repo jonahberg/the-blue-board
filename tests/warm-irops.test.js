@@ -46,15 +46,26 @@ describe('applyIropsPriority (pure)', () => {
     expect(out.displaced.sort()).toEqual(['GUM-arrivals-tomorrow', 'IAH-departures-tomorrow'].sort());
   });
 
-  it('displaces undisrupted today slots only when no tomorrow slots remain', () => {
+  it('never displaces another hub\'s TODAY board — with no tomorrow slot in the stride it injects nothing', () => {
+    // Displacing an undisrupted hub's today board used to drop it from the stateless ring until
+    // its next pass, so during a long EWR program DEN/IAH/LAX arrivals went ~11.5h stale through
+    // US prime time (prod, Sep 26 2026). The disrupted hub's own boards still come round on the
+    // ring (~every 3h at the 30-min cadence) and refresh organically while people watch them.
     const plan = [t('DEN', 'departures', 0), t('IAH', 'arrivals', 0), t('SFO', 'departures', 0)];
     const out = applyIropsPriority(plan, ['ORD']);
-    const keys = out.plan.map(key);
-    expect(out.plan).toHaveLength(3);
-    expect(keys).toContain('ORD-departures-today');
-    expect(keys).toContain('ORD-arrivals-today');
-    // Displaced from the BACK of the stride.
-    expect(out.displaced).toEqual(['SFO-departures-today', 'IAH-arrivals-today']);
+    expect(out.plan.map(key).sort()).toEqual(plan.map(key).sort());
+    expect(out.injected).toEqual([]);
+    expect(out.displaced).toEqual([]);
+  });
+
+  it('injects only as many priority boards as there are tomorrow slots to displace', () => {
+    const plan = [t('DEN', 'departures', 0), t('GUM', 'arrivals', 1), t('SFO', 'departures', 0), t('IAH', 'arrivals', 0)];
+    const out = applyIropsPriority(plan, ['ORD']);
+    expect(out.injected).toEqual(['ORD-departures-today']);
+    expect(out.displaced).toEqual(['GUM-arrivals-tomorrow']);
+    expect(out.plan.map(key)).toEqual([
+      'ORD-departures-today', 'DEN-departures-today', 'SFO-departures-today', 'IAH-arrivals-today',
+    ]);
   });
 
   it('reorders (no displacement) when the stride already covers the disrupted hub today boards', () => {
@@ -168,7 +179,7 @@ describe('warm-schedules handler IROPS integration', () => {
     __resetAdbSpendForTests();
   });
 
-  it('warms the disrupted hub today boards every run while an FAA program is active', async () => {
+  function mockFetchWithOrdProgram() {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const u = String(url);
       if (u.includes('nasstatus.faa.gov/api/airport-events')) {
@@ -186,18 +197,62 @@ describe('warm-schedules handler IROPS integration', () => {
           : { ok: true }),
       };
     });
-    const res = createRes();
-    await handler({ method: 'GET', headers: { authorization: `Bearer ${SECRET}` } }, res);
+  }
 
-    expect(res.statusCode).toBe(200);
-    const scheduleKeys = Object.keys(res.body.results).filter((k) => k !== 'starlink-data' && k !== 'regSightings');
-    // Task budget unchanged (3), and both ORD today boards are in this run.
-    expect(scheduleKeys).toHaveLength(3);
-    expect(scheduleKeys).toContain('ORD-departures-today');
-    expect(scheduleKeys).toContain('ORD-arrivals-today');
-    // Priority boards run FIRST.
-    expect(res.body.warmPlan[0].hub).toBe('ORD');
-    expect(res.body.warmPlan[0].label).toBe('today');
+  // The ring is clock-driven: find a real cron slot whose base stride has the wanted shape
+  // (and does not already contain ORD's today boards), then pin Date to it.
+  function pinToSlot(predicate) {
+    const base = Date.UTC(2026, 8, 26, 0, 0, 0);
+    for (let i = 0; i < 200; i++) {
+      const at = base + i * 30 * 60 * 1000;
+      vi.setSystemTime(at);
+      const plan = buildWarmPlan(at);
+      const hasOrdToday = plan.some((t) => t.hub === 'ORD' && t.dayOffset === 0);
+      if (!hasOrdToday && predicate(plan)) return plan;
+    }
+    throw new Error('no slot matched');
+  }
+
+  it('warms the disrupted hub today boards first when the run has tomorrow slots to give up', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const basePlan = pinToSlot((plan) => plan.filter((t) => t.dayOffset === 1).length >= 2);
+      mockFetchWithOrdProgram();
+      const res = createRes();
+      await handler({ method: 'GET', headers: { authorization: `Bearer ${SECRET}` } }, res);
+
+      expect(res.statusCode).toBe(200);
+      const scheduleKeys = Object.keys(res.body.results).filter((k) => k !== 'starlink-data' && k !== 'regSightings');
+      // Task budget unchanged (3), and both ORD today boards are in this run.
+      expect(scheduleKeys).toHaveLength(3);
+      expect(scheduleKeys).toContain('ORD-departures-today');
+      expect(scheduleKeys).toContain('ORD-arrivals-today');
+      // Priority boards run FIRST.
+      expect(res.body.warmPlan[0].hub).toBe('ORD');
+      expect(res.body.warmPlan[0].label).toBe('today');
+      // Every today board of the base stride survived.
+      for (const t of basePlan.filter((task) => task.dayOffset === 0)) {
+        expect(scheduleKeys).toContain(`${t.hub}-${t.dir}-today`);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drops no today board when the run has no tomorrow slot — the base plan runs as-is', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const basePlan = pinToSlot((plan) => plan.every((t) => t.dayOffset === 0));
+      mockFetchWithOrdProgram();
+      const res = createRes();
+      await handler({ method: 'GET', headers: { authorization: `Bearer ${SECRET}` } }, res);
+
+      expect(res.statusCode).toBe(200);
+      const executed = res.body.warmPlan.map((task) => `${task.hub}-${task.dir}-${task.label}`).sort();
+      expect(executed).toEqual(basePlan.map((task) => `${task.hub}-${task.dir}-${task.label}`).sort());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('leaves the ring plan untouched when no hub has an active program', async () => {

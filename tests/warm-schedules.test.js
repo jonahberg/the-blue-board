@@ -24,9 +24,9 @@ describe('warm-schedules buildWarmPlan', () => {
 
   const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
   const UNIQUE_WINDOWS = 9 * 4;       // 9 hubs × (today+tomorrow) × 2 dirs; yesterday is on-demand
-  const TODAY_ROUNDS = 3;             // each today window is warmed 3×/day (~every 8h)
+  const TODAY_ROUNDS = 3;             // each today window is warmed 3× per ring pass
   const RING_SIZE = 9 * 2 * TODAY_ROUNDS + 9 * 2; // 54 today slots + 18 tomorrow slots = 72
-  const SLOT_MS = 60 * 60 * 1000;     // must match the cron interval / SLOT_MS in warm-schedules.ts (hourly)
+  const SLOT_MS = 30 * 60 * 1000;     // must match the cron interval / SLOT_MS in warm-schedules.ts (*/30)
 
   it('returns an array of warm tasks', () => {
     const plan = buildWarmPlan();
@@ -48,9 +48,9 @@ describe('warm-schedules buildWarmPlan', () => {
     }
   });
 
-  it('returns different tasks for different hourly slots', () => {
+  it('returns different tasks for consecutive 30-min slots', () => {
     const t1 = new Date('2026-04-03T00:00:00Z').getTime();
-    const t2 = new Date('2026-04-03T01:00:00Z').getTime();
+    const t2 = new Date('2026-04-03T00:30:00Z').getTime();
     const keys1 = buildWarmPlan(t1).map(t => `${t.hub}-${t.dir}-${t.label}`);
     const keys2 = buildWarmPlan(t2).map(t => `${t.hub}-${t.dir}-${t.label}`);
     expect(keys1).not.toEqual(keys2);
@@ -63,15 +63,15 @@ describe('warm-schedules buildWarmPlan', () => {
 
   it('limits plan size to WARM_TASKS_PER_RUN (pinned to 3 in this suite; prod default is 4)', () => {
     // This suite pins the env to 3 (see beforeEach) so the count assertions below tile the 72-slot
-    // ring cleanly over 24 hourly fires. The real production default is 4 (see the stride-4 describe
+    // ring cleanly over 24 consecutive fires. The real production default is 4 (see the stride-4 describe
     // for its own tiling proof); do not read this as the shipped default.
     expect(buildWarmPlan().length).toBe(3);
   });
 
-  it('covers every window over a day, warming today 3× and tomorrow 1×', () => {
+  it('covers every window over one ring pass, warming today 3× and tomorrow 1×', () => {
     const counts = new Map();
     const start = new Date('2026-04-03T00:00:00Z').getTime();
-    // 24 hourly fires × 3 tasks = 72 slots = exactly one full ring.
+    // 24 consecutive fires × 3 tasks = 72 slots = exactly one full ring.
     for (let i = 0; i < 24; i++) {
       for (const task of buildWarmPlan(start + i * SLOT_MS)) {
         const key = `${task.hub}-${task.dir}-${task.label}`;
@@ -93,7 +93,7 @@ describe('warm-schedules buildWarmPlan', () => {
       }
     }
     expect(fires.length).toBe(3);
-    // Consecutive warms of the same board should be roughly a round apart (≥4h), not back-to-back.
+    // Consecutive warms of the same board should be roughly a round apart (≥4 fires), not back-to-back.
     for (let i = 1; i < fires.length; i++) {
       expect(fires[i] - fires[i - 1]).toBeGreaterThanOrEqual(4);
     }
@@ -121,7 +121,7 @@ describe('warm-schedules buildWarmPlan — production default stride (4)', () =>
   beforeEach(() => { delete process.env.SCHEDULE_WARM_TASKS_PER_RUN; });
   afterEach(() => { delete process.env.SCHEDULE_WARM_TASKS_PER_RUN; });
 
-  const SLOT_MS = 60 * 60 * 1000;
+  const SLOT_MS = 30 * 60 * 1000;
   const UNIQUE_WINDOWS = 9 * 4;                    // 9 hubs × (today+tomorrow) × 2 dirs
   const TODAY_ROUNDS = 3;
   const RING_SIZE = 9 * 2 * TODAY_ROUNDS + 9 * 2;  // 54 today + 18 tomorrow = 72
@@ -130,7 +130,7 @@ describe('warm-schedules buildWarmPlan — production default stride (4)', () =>
     expect(buildWarmPlan().length).toBe(4);
   });
 
-  it('tiles the 72-slot ring exactly over 18 hourly fires at stride 4 — today 3× / tomorrow 1×, no skips', () => {
+  it('tiles the 72-slot ring exactly over 18 fires at stride 4 — today 3× / tomorrow 1×, no skips', () => {
     // 18 consecutive fires × 4 tasks = 72 slots = exactly one full ring pass (the divide-by-stride
     // tiling the code relies on, comment lines 72-74 of warm-schedules.ts). Every window must appear
     // — today boards TODAY_ROUNDS× per ring, tomorrow boards once — with nothing skipped.
@@ -145,6 +145,37 @@ describe('warm-schedules buildWarmPlan — production default stride (4)', () =>
     expect(counts.size).toBe(UNIQUE_WINDOWS);
     for (const [key, n] of counts) {
       expect(n, key).toBe(key.endsWith('today') ? TODAY_ROUNDS : 1);
+    }
+  });
+});
+
+describe('warm-schedules cadence — 30-min cron, stride 4', () => {
+  beforeEach(() => { delete process.env.SCHEDULE_WARM_TASKS_PER_RUN; });
+  afterEach(() => { delete process.env.SCHEDULE_WARM_TASKS_PER_RUN; });
+
+  it('refreshes every today board at least every 3h across a whole day (48 fires)', () => {
+    // Hourly firing left each today board ~6h between warms (and IROPS displacement stretched
+    // that to 11.5h in prod, Sep 26 2026). At */30 × stride 4 every today board must come round
+    // at least every 3h, all day, with every tomorrow board still warmed at least twice.
+    const SLOT_MS = 30 * 60 * 1000;
+    const start = new Date('2026-09-26T00:00:00Z').getTime();
+    const firesByKey = new Map();
+    for (let i = 0; i < 48 + 6; i++) {
+      for (const task of buildWarmPlan(start + i * SLOT_MS)) {
+        const key = `${task.hub}-${task.dir}-${task.label}`;
+        if (!firesByKey.has(key)) firesByKey.set(key, []);
+        firesByKey.get(key).push(i);
+      }
+    }
+    for (const [key, fires] of firesByKey) {
+      if (key.endsWith('today')) {
+        for (let j = 1; j < fires.length; j++) {
+          expect(fires[j] - fires[j - 1], key).toBeLessThanOrEqual(6); // 6 fires × 30 min = 3h
+        }
+        expect(fires.length, key).toBeGreaterThanOrEqual(8);
+      } else {
+        expect(fires.length, key).toBeGreaterThanOrEqual(2);
+      }
     }
   });
 });

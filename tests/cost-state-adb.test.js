@@ -267,8 +267,8 @@ describe('AeroDataBox paced organic allowance', () => {
   });
 
   it('warns ONCE per UTC day when the budget cannot fund the warm cron plus organic refreshes', async () => {
-    // The hourly warm cron bypasses the organic gate but records ~384 units/day against the SAME
-    // counter the paced line measures, so the code default of 400 leaves ~16 organic units for the
+    // The half-hourly warm cron bypasses the organic gate but records ~768 units/day against the SAME
+    // counter the paced line measures, so the code default of 400 leaves no organic units for the
     // whole day — the boards do not error, they just silently stop refreshing outside the cron ring.
     // That is a config mistake nobody would ever see without this warning.
     vi.useFakeTimers({ now: new Date('2026-08-04T09:00:00Z'), toFake: ['Date'] });
@@ -279,14 +279,14 @@ describe('AeroDataBox paced organic allowance', () => {
     isAdbOrganicRefreshGated(Date.now());
     isAdbOrganicRefreshGated(Date.now());
     expect(starveWarns()).toHaveLength(1);
-    expect(String(starveWarns()[0][0])).toMatch(/~384 units\/day/);
-    expect(String(starveWarns()[0][0])).toMatch(/production runs 700/);
+    expect(String(starveWarns()[0][0])).toMatch(/~768 units\/day/);
+    expect(String(starveWarns()[0][0])).toMatch(/production runs 1400/);
 
     // A budget with real headroom is silent — this must not become background noise for a healthy
     // deployment.
     __resetAdbSpendForTests();
     warnSpy.mockClear();
-    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '1400';
     isAdbOrganicRefreshGated(Date.now());
     expect(starveWarns()).toHaveLength(0);
 

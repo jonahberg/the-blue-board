@@ -4,6 +4,16 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.2] - 2026-09-27
+
+### Fixed
+- **Schedule boards stay fresh through the day.** Measured on production (Sep 26 2026 evening): of today's 18 hub boards, DEN and IAH arrivals were **11.5h** old, LAX arrivals 10.5h, IAH departures 7.5h and ORD arrivals 5.5h, while ~900 of the 1,400 daily AeroDataBox units went unused. Four compounding causes, all fixed:
+  - **IROPS warm priority no longer drops other hubs' boards.** The warm ring is stateless, so a today board displaced to make room for a disrupted hub was skipped until its next pass; during a long EWR program that is what left DEN/IAH/LAX arrivals 11.5h stale through US prime time. Priority boards now only displace *tomorrow* slots. (`api/cron/warm-schedules.ts`, `tests/warm-irops.test.js`)
+  - **The warm cron runs every 30 minutes** (was hourly), so every today board is re-fetched at least every 3h (was ~6h). ≈768 units/day, inside the 1,400/day budget. `SLOT_MS` moves in lockstep. (`vercel.json`, `api/cron/warm-schedules.ts`, `tests/warm-*.test.js`)
+  - **A viewed board refreshes after 1h** (was a 6h hot/CDN cache plus a 3h refresh threshold). Spend stays bounded by the existing paced organic gate. The paid FR24 official API keeps its own 3h gate. (`api/schedule.ts`, `tests/schedule.test.js`)
+  - **Refreshes no longer trip AeroDataBox's per-second limit on their own.** A burst of board loads fired every background refresh at once; RapidAPI returned "exceeded the rate limit per second for your plan, ULTRA", the billed retries 429'd again, and the failed attempt then held that board's 1h cooldown. Provider calls are now capped at 2 in flight per instance, and a failed refresh can retry after 5 minutes. (`api/_schedule-aerodatabox.ts`, `api/schedule.ts`, `tests/aerodatabox-concurrency.test.js`)
+- **Background refreshes and cron warms no longer fall through to the FR24 web scrape.** It is Cloudflare-challenged from Vercel and could only produce a partial board the cache refuses to store; it accounted for ~200 error-level "FR24 Cloudflare challenge" log lines a day. On-demand requests are unchanged. (`api/schedule.ts`)
+
 ## [1.8.1] - 2026-09-26
 
 ### Fixed

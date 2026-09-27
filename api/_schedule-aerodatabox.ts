@@ -506,6 +506,42 @@ export function dedupeBoardFlights(
   return { flights: result, dedupe };
 }
 
+// Per-instance cap on concurrent provider requests. RapidAPI's ULTRA plan limits requests PER
+// SECOND; a burst of board loads used to fire every background refresh at once (prod, Sep 26 2026:
+// ~26 simultaneous FIDS calls → "exceeded the rate limit per second", billed retries 429'd again,
+// four hub boards gave up and stayed 5-11h stale). Queue instead: sequential callers never wait,
+// concurrent ones take turns. A waiter that would miss its own deadline gives up rather than
+// blocking. Cross-instance traffic can still collide; the retry below handles that residue.
+const ADB_MAX_IN_FLIGHT = 2;
+let adbInFlight = 0;
+const adbWaiters: Array<() => void> = [];
+
+function acquireAdbSlot(deadlineMs: number): Promise<boolean> {
+  if (adbInFlight < ADB_MAX_IN_FLIGHT) {
+    adbInFlight++;
+    return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    const waiter = () => {
+      clearTimeout(timer);
+      adbInFlight++;
+      resolve(true);
+    };
+    const timer = setTimeout(() => {
+      const i = adbWaiters.indexOf(waiter);
+      if (i >= 0) adbWaiters.splice(i, 1);
+      resolve(false);
+    }, Math.max(0, deadlineMs - Date.now() - 800));
+    adbWaiters.push(waiter);
+  });
+}
+
+function releaseAdbSlot(): void {
+  adbInFlight = Math.max(0, adbInFlight - 1);
+  const next = adbWaiters.shift();
+  if (next) next();
+}
+
 async function fetchWindow(
   hub: string,
   dir: string,
@@ -553,14 +589,33 @@ async function fetchWindow(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const remaining = deadline - Date.now();
     if (remaining < 800) break;
+    if (!(await acquireAdbSlot(deadline))) {
+      console.warn(`AeroDataBox queue wait exceeded the deadline for ${hub} ${dir}; skipping this window`);
+      break;
+    }
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), Math.min(remaining, 15000));
+    const timer = setTimeout(() => controller.abort(), Math.min(Math.max(deadline - Date.now(), 800), 15000));
+    let resp: Response;
     try {
       // Count spend per request actually fired (retries bill too), before reading the outcome —
       // a 429 storm then exhausts the budget quickly, which is exactly the circuit we want.
       recordAdbUnitsDurable(ADB_UNITS_PER_REQUEST);
-      const resp = await fetch(url, { signal: controller.signal, headers });
+      resp = await fetch(url, { signal: controller.signal, headers });
       clearTimeout(timer);
+    } catch (e: any) {
+      clearTimeout(timer);
+      releaseAdbSlot();
+      if (e.name === 'AbortError') {
+        console.error(`AeroDataBox schedule timeout for ${hub} ${dir}`);
+        return { ok: false };
+      }
+      console.error(`AeroDataBox schedule error for ${hub} ${dir}:`, e.message);
+      return { ok: false };
+    }
+    // The slot covers the request only — never a retry backoff sleep, or one throttled board
+    // would hold the queue for seconds.
+    releaseAdbSlot();
+    try {
 
       if (resp.status === 204) return { ok: true, flights: [] };
       if (resp.status === 429 || resp.status === 503) {
@@ -594,11 +649,6 @@ async function fetchWindow(
       const flights = dir === 'departures' ? (data?.departures || []) : (data?.arrivals || []);
       return { ok: true, flights: Array.isArray(flights) ? flights : [] };
     } catch (e: any) {
-      clearTimeout(timer);
-      if (e.name === 'AbortError') {
-        console.error(`AeroDataBox schedule timeout for ${hub} ${dir}`);
-        return { ok: false };
-      }
       console.error(`AeroDataBox schedule error for ${hub} ${dir}:`, e.message);
       return { ok: false };
     }
