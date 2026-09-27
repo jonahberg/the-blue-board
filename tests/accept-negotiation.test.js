@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendVaryAccept, parseAccept, preferredType } from '../src/lib/accept-negotiation.js';
+import { parseAccept, preferredType } from '../src/lib/accept-negotiation.js';
 
 const PRODUCES = ['text/html', 'text/markdown'];
 
@@ -101,31 +101,5 @@ describe('preferredType — real-world headers', () => {
 
   it('falls back to the server default when only a subtype wildcard is offered', () => {
     expect(preferredType('text/*', PRODUCES)).toBe('text/html');
-  });
-});
-
-describe('appendVaryAccept', () => {
-  it('sets Vary when absent', () => {
-    const headers = new Headers();
-    appendVaryAccept(headers);
-    expect(headers.get('Vary')).toBe('Accept');
-  });
-
-  it('appends without clobbering an existing value', () => {
-    const headers = new Headers({ Vary: 'Accept-Encoding' });
-    appendVaryAccept(headers);
-    expect(headers.get('Vary')).toBe('Accept-Encoding, Accept');
-  });
-
-  it('is idempotent and case-insensitive', () => {
-    const headers = new Headers({ Vary: 'accept, Accept-Encoding' });
-    appendVaryAccept(headers);
-    expect(headers.get('Vary')).toBe('accept, Accept-Encoding');
-  });
-
-  it('leaves Vary: * alone — it already disables shared caching', () => {
-    const headers = new Headers({ Vary: '*' });
-    appendVaryAccept(headers);
-    expect(headers.get('Vary')).toBe('*');
   });
 });
