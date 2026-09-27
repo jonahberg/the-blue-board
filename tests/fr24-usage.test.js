@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import handler from '../api/fr24-usage.js';
+import handler, { __resetFr24UsageForTests } from '../api/fr24-usage.js';
+import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 
 function createRes() {
   return {
@@ -24,6 +25,9 @@ function authedHeaders(extra = {}) {
 describe('fr24-usage API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
+    __resetFr24UsageForTests();
+    __resetRateLimitersForTests();
     process.env.CRON_SECRET = CRON_SECRET;
   });
 
@@ -167,15 +171,35 @@ describe('fr24-usage API', () => {
 
     const req = { method: 'GET', headers: authedHeaders() };
 
-    // First call — fetches from API (may be cached from prior test due to module-level cache)
     const res1 = createRes();
     await handler(req, res1);
-    const firstCallFetches = fetchSpy.mock.calls.length;
+    expect(res1.body.cached).toBe(false);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-    // Second call — should be cached (no new fetch)
     const res2 = createRes();
     await handler(req, res2);
     expect(res2.body.cached).toBe(true);
-    expect(fetchSpy).toHaveBeenCalledTimes(firstCallFetches); // no additional fetch
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches once the 5-minute cache TTL has passed', async () => {
+    process.env.FR24_API_TOKEN = 'test-token-12345678';
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-01T12:00:00Z'));
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ endpoint: '/test', request_count: 1, credits: 5 }] }),
+    });
+    const req = { method: 'GET', headers: authedHeaders() };
+
+    await handler(req, createRes());
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(new Date('2026-09-01T12:05:01Z'));
+    const res = createRes();
+    await handler(req, res);
+    expect(res.body.cached).toBe(false);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });
