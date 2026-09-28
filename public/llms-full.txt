@@ -1,9 +1,5 @@
 # The Blue Board — Full Documentation
 
-<!-- This is a static text file and cannot import src/data/facts.js. Hub-count
-     language, Starlink counts, and the fleet database count must be kept in
-     sync BY HAND with src/data/facts.js — the single source of truth. -->
-
 > A free, independent real-time operations dashboard for United Airlines flights.
 > Built for United frequent flyers, 1K/Global Services members, MileagePlus members, and AvGeeks.
 > Not affiliated with United Airlines, Inc.

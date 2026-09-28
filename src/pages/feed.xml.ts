@@ -1,5 +1,16 @@
 import { articles } from '../data/news/index.js';
-import { HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../data/facts.js';
+import { FLEET_DB_COUNT, HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../data/facts.js';
+import {
+  fleetIndexLastmodPaths,
+  getLastModified,
+  getTrackerRouteLastmodPaths,
+  homeLastmodPaths,
+  hubIndexLastmodPaths,
+} from '../lib/buildMetadata.js';
+
+/** RSS pubDate for a page, from the same git-derived date its sitemap <lastmod> uses. */
+const pageDate = (paths: unknown) => new Date(`${getLastModified(paths)}T12:00:00Z`).toUTCString();
+const FLEET = FLEET_DB_COUNT.toLocaleString('en-US');
 
 const BASE_URL = 'https://theblueboard.co';
 
@@ -19,29 +30,33 @@ export function GET() {
     {
       title: 'United Airlines Live Flight Dashboard',
       link: `${BASE_URL}`,
+      pubDate: pageDate(homeLastmodPaths),
       description:
         'Track every United Airlines flight in real time. 600+ flights on a live map updated every 30 seconds. Hub delay alerts, IROPS monitoring, flight search, and weather radar.',
     },
     {
-      title: 'United Airlines Fleet Database — 1,078 Aircraft',
+      title: `United Airlines Fleet Database — ${FLEET} Aircraft`,
       link: `${BASE_URL}/fleet`,
-      description:
-        'Complete United Airlines fleet database. Search 1,078 mainline aircraft by type, registration, seat configuration, WiFi, and Starlink status.',
+      pubDate: pageDate(fleetIndexLastmodPaths),
+      description: `Complete United Airlines fleet database. Search ${FLEET} mainline aircraft by type, registration, seat configuration, WiFi, and Starlink status.`,
     },
     {
       title: `United Airlines Hub Airports — ${TRACKED_BOARDS} Tracked Boards (${HUB_LINE_SHORT})`,
       link: `${BASE_URL}/hubs`,
+      pubDate: pageDate(hubIndexLastmodPaths),
       description: `Live status across ${HUB_LINE_LONG}. Delays, cancellations, on-time performance at ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM.`,
     },
     {
       title: 'Modern Skies Tracker — Is Your Airport Off Paper Yet?',
       link: `${BASE_URL}/trackers/atc`,
+      pubDate: pageDate(getTrackerRouteLastmodPaths('atc')),
       description:
         "Airport-by-airport tracker of the FAA's paper-to-digital flight strip rollout: all 89 program airports, live status, sourced go-live dates, and a changelog. Updated monthly.",
     },
     {
       title: "United Hub Tracker — What's United Building at Your Hub?",
       link: `${BASE_URL}/trackers/united-hubs`,
+      pubDate: pageDate(getTrackerRouteLastmodPaths('united-hubs')),
       description:
         'Every United club, terminal, and gate project across all eight hubs, with honest status labels (open, under construction, announced, rumored). Updated monthly.',
     },
@@ -74,6 +89,7 @@ export function GET() {
       <link>${item.link}</link>
       <guid isPermaLink="true">${item.link}</guid>
       <description>${xmlEscape(item.description)}</description>
+      <pubDate>${item.pubDate}</pubDate>
     </item>`
     ),
   ];
