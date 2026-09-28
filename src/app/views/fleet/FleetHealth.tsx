@@ -14,6 +14,7 @@
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { starlinkShareCaption } from '@/lib/fleet-utils.js';
 
 export type HealthBar = { key: string; label: string; color: string; count: number; pct: string };
 export type HealthModel = {
@@ -60,7 +61,7 @@ export function FleetHealth({
    * `starlinkMainlineShare()` — numerator and denominator from ONE population, the same figure
    * the "Mainline Fleet" chip shows (F93). Null until either source has loaded.
    */
-  starlinkShare: { count: number; total: number; pct: number } | null;
+  starlinkShare: { count: number; total: number; pct: number; source?: string } | null;
   chips: StarlinkChip[];
   loading: boolean;
 }) {
@@ -127,12 +128,17 @@ export function FleetHealth({
             aria-label="Starlink-equipped share of the mainline fleet"
           />
           <span className="shrink-0 font-mono text-xs tabular-nums">
-            {starlinkShare ? `${pct}% (${starlinkShare.count}/${starlinkShare.total})` : '—'}
+            {starlinkShare ? `${pct}%` : '—'}
           </span>
         </div>
         <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
           Starlink Equipped
         </p>
+        {starlinkShare ? (
+          // D15: the denominator is named — the tracker's mainline count is a different census
+          // from the fleet-database total printed above.
+          <p className="text-[10px] text-muted-foreground">{starlinkShareCaption(starlinkShare)}</p>
+        ) : null}
 
         {chips.length > 0 ? (
           <ul className="mt-2 flex flex-wrap gap-1.5">

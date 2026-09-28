@@ -112,7 +112,8 @@ describe('FleetView', () => {
   it('shows ONE Starlink share on the ring and the Mainline Fleet chip (tracker stats)', () => {
     ctl.fleet = fleetValue({ total: 3, mainline: 247, mainlineTotal: 1156, express: 0, expressTotal: 0 });
     render(<FleetView />);
-    expect(screen.getByText('21% (247/1156)')).toBeTruthy();
+    // D15: the tracker's denominator is named, not a bare "(247/1156)" under the DB total.
+    expect(screen.getByText('247 of 1,156 mainline aircraft per the Starlink tracker')).toBeTruthy();
     const chip = screen.getByText('Mainline Fleet').parentElement as HTMLElement;
     expect(chip.textContent).toContain('21%');
   });
@@ -120,7 +121,7 @@ describe('FleetView', () => {
   it('falls back to the fleet database on both sides of the ratio without tracker stats', () => {
     render(<FleetView />);
     // 2 of the 8 database airframes are on the roster; N99999 is not in the database.
-    expect(screen.getByText('25% (2/8)')).toBeTruthy();
+    expect(screen.getByText('2 of 8 aircraft in our fleet database')).toBeTruthy();
   });
 
   it('states the database age instead of claiming daily updates (F86)', () => {
