@@ -265,6 +265,18 @@
   color: var(--muted-foreground);
 }
 
+/* Zoom +/− are 30x30 in leaflet.css (its `.leaflet-touch` size). Wherever the pointer is a
+   finger — phones AND tablets, whatever their width — they get the 44 px DESIGN.md asks for.
+   Leaflet's rule is `.leaflet-touch .leaflet-bar a` (0,2,1); three classes win on
+   specificity, since the Leaflet stylesheet may load after this one. */
+@media (pointer: coarse) {
+  .leaflet-container.leaflet-touch .leaflet-bar a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
+}
+
 /* Leaflet's base tooltip rule is `white-space:nowrap` with no max-width, so a
    long hub condition label clips off-screen on narrow viewports. */
 .leaflet-container .leaflet-tooltip {

@@ -38,7 +38,7 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 z-50 bg-black/60 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -147,7 +147,7 @@ function SheetContent({
               variant="ghost"
               // 44px on touch (WCAG 2.5.5; the dashboard's flight panel inherits the
               // legacy popup's explicit 44x44 close pin), desktop density from `md:`.
-              className="absolute top-3 right-3 min-h-11 min-w-11 md:min-h-8 md:min-w-8"
+              className="absolute top-3 right-3 min-h-11 min-w-11 pointer-fine:md:min-h-8 pointer-fine:md:min-w-8"
               size="icon-sm"
             >
               <XIcon

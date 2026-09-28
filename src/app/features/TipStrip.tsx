@@ -1,5 +1,5 @@
 /**
- * The rotating one-liner under the header (inventory §8).
+ * The rotating one-liner hint (inventory §8).
  *
  * Tips are per-tab, so the hint a visitor gets is about the thing in front of them; tabs
  * with no tips of their own fall back to the Live pool. The copy, the pick rule and the
@@ -15,6 +15,10 @@
  *
  * In flow rather than fixed: the legacy capsule was pinned at `top:80px` and every sibling
  * offset in the stylesheet had to be recomputed when it showed or hid (`style.css:913-918`).
+ * It lives in the engagement slot BELOW the tab panel (see `Dashboard.tsx`): appearing two
+ * seconds in above the panel pushed the map 53 px down on a phone (CLS ≈ 0.05). Below the
+ * panel, nothing the visitor is looking at moves. One 32 px line; the dismiss button's
+ * 44 px hit area comes from its `after:` box, not from the row's height.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -78,14 +82,14 @@ export default function TipStrip() {
   if (dismissed || !tip) return null;
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-1 text-[11px] text-muted-foreground">
+    <div className="flex h-8 shrink-0 items-center gap-2 border-t bg-muted/40 px-3 text-[11px] text-muted-foreground">
       <span aria-hidden="true">💡</span>
       <span className="min-w-0 flex-1 truncate">{tip}</span>
       <Button
         variant="ghost"
         size="sm"
         aria-label="Dismiss tips"
-        className="h-auto min-h-11 shrink-0 px-2 py-0 text-[11px] md:min-h-0"
+        className="relative h-8 shrink-0 px-2 py-0 text-[11px] after:absolute after:inset-x-0 after:-inset-y-1.5"
         onClick={dismiss}
       >
         Dismiss

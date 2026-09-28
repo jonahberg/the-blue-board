@@ -81,7 +81,7 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                     <li key={entry.flight} className="flex items-center gap-2 px-3 py-2 text-sm">
                       <button
                         type="button"
-                        className="flex min-h-11 items-center text-left md:min-h-0"
+                        className="flex min-h-11 items-center text-left pointer-fine:md:min-h-0"
                         onClick={() => {
                           select({ kind: 'ident', ident: entry.flight });
                           onOpenChange(false);
@@ -102,7 +102,7 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                       <Button
                         size="sm"
                         variant="ghost"
-                        className={`min-h-11 md:h-8 md:min-h-0 ${entry.status ? '' : 'ml-auto'}`}
+                        className={`min-h-11 md:h-8 pointer-fine:md:min-h-0 ${entry.status ? '' : 'ml-auto'}`}
                         onClick={() => {
                           watch.toggle(entry.flight);
                           announce(`Stopped watching ${entry.flight}`);
@@ -117,7 +117,7 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                 <Button
                   size="sm"
                   variant="outline"
-                  className="min-h-11 md:min-h-0"
+                  className="min-h-11 pointer-fine:md:min-h-0"
                   onClick={() => {
                     watch.clearAll();
                     announce('Watch list cleared');
@@ -135,19 +135,22 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
         </SheetContent>
       </Sheet>
 
-      {/* Outside the Sheet: the flight was almost certainly watched from somewhere else. */}
+      {/* Outside the Sheet: the flight was almost certainly watched from somewhere else.
+          The full-width positioning wrapper lets taps through (`pointer-events-none`); only
+          the card itself blocks them, so the My Flights card actions either side of it stay
+          reachable while the prompt is up. */}
       {showPushPrompt ? (
-        <div className="fixed inset-x-0 bottom-20 z-[60] flex justify-center px-4">
-          <div className="max-w-md rounded-md border bg-card p-3 text-sm shadow-lg">
+        <div className="pointer-events-none fixed inset-x-0 bottom-20 z-[60] flex justify-center px-4">
+          <div className="pointer-events-auto max-w-md rounded-md border bg-card p-3 text-sm shadow-lg">
             <p className="mb-2">Get a notification when a watched flight changes?</p>
             <div className="flex gap-2">
-              <Button size="sm" className="min-h-11 md:min-h-0" onClick={() => void onEnablePush()}>
+              <Button size="sm" className="min-h-11 pointer-fine:md:min-h-0" onClick={() => void onEnablePush()}>
                 Enable notifications
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                className="min-h-11 md:min-h-0"
+                className="min-h-11 pointer-fine:md:min-h-0"
                 onClick={() => {
                   watch.push.dismissPrompt();
                   setShowPushPrompt(false);

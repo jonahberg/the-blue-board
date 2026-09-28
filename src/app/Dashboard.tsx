@@ -117,7 +117,6 @@ function DashboardShell() {
   return (
     <div className="flex h-[100svh] flex-col bg-background text-foreground">
       <OfflineBanner />
-      <NewsBanner />
       <Header
         onOpenWatch={() => setWatchOpen(true)}
         watchOpen={watchOpen}
@@ -128,7 +127,6 @@ function DashboardShell() {
       {/* Relocated from inside ScheduleView: a watched flight can change status while the
           viewer is on any tab, and the banner has to be where they are. */}
       <WatchBanner alert={watchAlert} onDismiss={clearWatchAlert} />
-      <TipStrip />
 
       <Tabs
         value={tab}
@@ -157,6 +155,14 @@ function DashboardShell() {
         ))}
       </Tabs>
 
+      {/* The engagement slot. Both strips appear late — the news after an idle-time fetch,
+          the tip after two seconds — so they go BELOW the panel: an insertion here shrinks
+          the panel from its bottom edge and moves nothing the visitor is looking at, where
+          the old above-the-header placement shoved the whole dashboard down mid-load (CLS
+          0.11 on a phone). It also keeps the fixed chrome above the content to the header,
+          the ticker and the hub strip. */}
+      <NewsBanner />
+      <TipStrip />
       <Attribution />
       <MobileNav tab={tab} onSelect={(id) => setTab(id)} />
 
