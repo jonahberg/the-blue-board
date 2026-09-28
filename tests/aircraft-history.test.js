@@ -100,7 +100,8 @@ describe('aircraft-history API', () => {
       flightNumber: 'UA2278',
       origin: 'SFO',
       destination: 'ORD',
-      status: 'unknown',
+      // D8: the light body has no status field; datetime_landed/flight_ended say landed.
+      status: 'landed',
       departure: { scheduled: '', actual: '2026-09-26T06:02:02Z' },
       arrival: { scheduled: '', actual: '2026-09-26T09:38:04Z', estimated: '' },
       delayMin: null,

@@ -57,3 +57,22 @@ describe('normalizeSegments (live flat FR24 shape)', () => {
     expect(segs.map((s) => s.flightNumber)).toEqual(['UA302']);
   });
 });
+
+// D8 (live audit Sep 28 2026): My Flights' Aircraft Journey showed earlier legs as "unknown".
+// FR24's flight-summary/light body carries NO status field (tests/fixtures/fr24-summary-light.json),
+// so every segment fell through to 'unknown'. Derive it from the fields the body does carry.
+describe('normalizeSegments status (D8)', () => {
+  it('a leg with datetime_landed or flight_ended is landed', () => {
+    expect(normalizeSegments({ data: [flat()] })[0].status).toBe('landed');
+    expect(normalizeSegments({ data: [flat({ datetime_landed: null, flight_ended: true })] })[0].status).toBe('landed');
+  });
+
+  it('a leg that took off and has not ended is en-route', () => {
+    const [seg] = normalizeSegments({ data: [flat({ datetime_landed: null, flight_ended: false })] });
+    expect(seg.status).toBe('en-route');
+  });
+
+  it('a provider status word still wins', () => {
+    expect(normalizeSegments({ data: [flat({ status: 'Diverted' })] })[0].status).toBe('diverted');
+  });
+});

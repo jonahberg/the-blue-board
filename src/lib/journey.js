@@ -87,3 +87,54 @@ export function buildJourneyContextStr(reg, shaped) {
 
   return lines.join('\n');
 }
+
+/** A leg whose scheduled arrival is this far past counts as "well past" (D8). */
+const WELL_PAST_MS = 30 * 60000;
+
+const UNKNOWN_STATUS = new Set(['', 'unknown', 'scheduled', 'expected', 'estimated']);
+
+/**
+ * Fill in the status of journey legs the history endpoint could not name (live audit Sep 28
+ * 2026, D8: earlier legs today read "unknown").
+ *
+ * Per leg with no real status, in order:
+ *  1. an actual arrival → landed;
+ *  2. the hub board row for that leg (same flight number, origin and destination) says
+ *     landed/arrived → landed, departed/en-route → en-route;
+ *  3. the SAME tail has departed on a later leg, and this leg's scheduled arrival (from the
+ *     board, when known) is well past → landed. An airframe cannot start its next leg before
+ *     finishing this one.
+ * Otherwise the leg is left as it was — "unknown" is more honest than a guess.
+ *
+ * @param {Array<Object>|null|undefined} segments  newest-first, as /api/aircraft-history returns.
+ * @param {Array<Object>} boardRows  rows from every loaded hub board.
+ * @param {number} [nowMs]
+ * @returns {Array<Object>|null|undefined} new segment objects (the input is the shared cache).
+ */
+export function resolveJourneyStatuses(segments, boardRows, nowMs = Date.now()) {
+  if (!Array.isArray(segments)) return segments;
+  const rows = Array.isArray(boardRows) ? boardRows : [];
+  const rowFor = (seg) => rows.find((r) =>
+    String(r?.identification?.number?.default || '').toUpperCase() === String(seg.flightNumber || '').toUpperCase()
+    && (!seg.origin || r?.airport?.origin?.code?.iata === seg.origin)
+    && (!seg.destination || r?.airport?.destination?.code?.iata === seg.destination));
+  const departed = (seg) => Boolean(seg?.departure?.actual) || isAirborne(seg?.status) || isLanded(seg?.status);
+
+  return segments.map((seg, i) => {
+    const status = String(seg?.status || '').toLowerCase();
+    if (!UNKNOWN_STATUS.has(status)) return seg;
+    if (seg?.arrival?.actual) return { ...seg, status: 'landed' };
+    const row = rowFor(seg);
+    const boardText = String(row?.status?.generic?.status?.text || row?.status?.text || '').toLowerCase();
+    if (isLanded(boardText)) return { ...seg, status: 'landed' };
+    if (boardText === 'departed' || isAirborne(boardText)) return { ...seg, status: 'en-route' };
+    // Newest-first: every index before `i` is a LATER leg of this tail.
+    const laterDeparted = segments.slice(0, i).some(departed);
+    const schedArrMs = row?.time?.scheduled?.arrival
+      ? row.time.scheduled.arrival * 1000
+      : Date.parse(seg?.arrival?.scheduled || '');
+    const wellPast = !Number.isFinite(schedArrMs) || nowMs - schedArrMs > WELL_PAST_MS;
+    if (laterDeparted && wellPast) return { ...seg, status: 'landed' };
+    return seg;
+  });
+}

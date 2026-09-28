@@ -38,7 +38,7 @@ import { HUB_COORDINATES, HUB_RISK_PROFILES, computeDelayRiskModel } from '@/lib
 import { resolveFlightStatus } from '@/lib/flight-status-resolve.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
-import { buildJourneyContextStr, shapeJourney } from '@/lib/journey.js';
+import { buildJourneyContextStr, resolveJourneyStatuses, shapeJourney } from '@/lib/journey.js';
 import {
   buildInboundRiskContext,
   findInboundAircraft,
@@ -105,6 +105,13 @@ export default function MyFlightsView() {
   );
   const journeys = useAircraftJourney(regs);
 
+  // D8: every loaded hub board row, so a journey leg the history endpoint could not name gets
+  // its status from the board (or from the tail having departed again since).
+  const boardRows = useMemo(
+    () => Object.values(boards).flatMap((board) => (board.rows ?? []) as object[]),
+    [boards],
+  );
+
   // ── Connections among the watch list, and the index the AI context reads ──
   // While a leg is airborne its live-position ETA outranks a contradicting provider
   // estimate (D1), so the connection is scored against where the aircraft actually is.
@@ -137,7 +144,9 @@ export default function MyFlightsView() {
       const resolvedStatus = td ? (resolveFlightStatus(td, liveFlight) as string) : '';
       const reg = liveFlight?.reg?.replace('-', '') || (td?.registration || '').replace('-', '');
       const ownFlightAirborne = Boolean(liveFlight && !liveFlight.onGround);
-      const segments = reg ? (journeys[reg] ?? null) : null;
+      const segments = reg
+        ? (resolveJourneyStatuses(journeys[reg] ?? null, boardRows, Date.now()) as typeof journeys[string])
+        : null;
 
       // A journey summary is richer AI context than a bare "inbound is airborne" line,
       // so it wins when we have one.
@@ -263,6 +272,7 @@ export default function MyFlightsView() {
     hubRates,
     nas,
     boards,
+    boardRows,
     nowSec,
     connectionIndex,
   ]);
