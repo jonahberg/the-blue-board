@@ -11,7 +11,7 @@
  *     Starlink badge. `/data/fleet.json` is a build artefact that lags retrofits by months.
  */
 
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FleetProvider, useFleet } from '../src/app/state/fleet';
@@ -22,18 +22,36 @@ const ctl = vi.hoisted(() => ({
   starlink: null as unknown,
   starlinkFails: false,
   fallback: [] as unknown[],
+  flights: { N11111: [{ flight_number: 'UA1', origin: 'ORD', destination: 'DEN', departure_ts: 1 }] } as unknown,
+  flightsFails: false,
+  requests: [] as string[],
 }));
 
 vi.mock('../src/app/data/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/data/api')>()),
   fetchFleetDb: async () => ctl.fleetDb,
   fetchFleetSummary: async () => null,
-  fetchStarlinkData: async () => {
-    if (ctl.starlinkFails) throw new Error('starlink-data down');
-    return ctl.starlink;
-  },
   fetchStarlinkFallback: async () => ctl.fallback,
 }));
+
+// `/api/starlink-data?fields=…` goes through fetch() — modelled the way the endpoint answers:
+// the roster without schedules, and the schedules on their own.
+function stubFetch() {
+  vi.stubGlobal('fetch', async (url: string) => {
+    ctl.requests.push(url);
+    const json = (body: unknown, ok = true) => ({ ok, status: ok ? 200 : 502, json: async () => body });
+    if (url === '/api/starlink-data?fields=roster') {
+      if (ctl.starlinkFails) return json({ error: 'down' }, false);
+      const { flightsByTail: _omit, ...roster } = ctl.starlink as Record<string, unknown>;
+      return json(roster);
+    }
+    if (url === '/api/starlink-data?fields=flights') {
+      if (ctl.flightsFails) return json({ error: 'down' }, false);
+      return json({ flightsByTail: ctl.flights, lastUpdated: null, syncedAt: null });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+}
 
 let seen: FleetValue | null = null;
 function Probe() {
@@ -60,9 +78,15 @@ beforeEach(() => {
   ctl.starlink = { aircraft: [sl('N11111')], fleetStats: null, flightsByTail: {} };
   ctl.starlinkFails = false;
   ctl.fallback = [sl('N11111')];
+  ctl.flightsFails = false;
+  ctl.requests = [];
+  stubFetch();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('FleetProvider Starlink reconciliation (#249)', () => {
   it('relabels WiFi to Starlink for tails in the live Starlink set, in fleetDb and fleetByReg', async () => {
@@ -93,5 +117,45 @@ describe('FleetProvider Starlink reconciliation (#249)', () => {
     expect(fleet.starlink.tails.has('N76265')).toBe(true);
     expect(fleet.fleetByReg.N11111.w).toBe('Starlink');
     expect(fleet.fleetByReg.N76265.w).toBe('Starlink');
+  });
+});
+
+describe('FleetProvider Starlink schedules are lazy (F58)', () => {
+  it('boots on the roster alone and never downloads flightsByTail until asked', async () => {
+    const fleet = await mountStore();
+    expect(ctl.requests).toEqual(['/api/starlink-data?fields=roster']);
+    expect(fleet.starlink.flightsStatus).toBe('idle');
+    expect(fleet.starlink.flightsByTail).toEqual({});
+    expect(fleet.starlink.tails.has('N11111')).toBe(true);
+  });
+
+  it('loads the schedules once on demand', async () => {
+    const fleet = await mountStore();
+    await act(async () => {
+      fleet.loadStarlinkFlights();
+      fleet.loadStarlinkFlights();
+    });
+    await waitFor(() => expect(seen?.starlink.flightsStatus).toBe('ready'));
+    expect(Object.keys(seen!.starlink.flightsByTail)).toEqual(['N11111']);
+    expect(ctl.requests.filter((u) => u.endsWith('fields=flights'))).toHaveLength(1);
+    // The roster survives the schedules landing.
+    expect(seen!.starlink.tails.has('N11111')).toBe(true);
+  });
+
+  it('marks a failed schedules fetch and retries on the next request', async () => {
+    ctl.flightsFails = true;
+    const fleet = await mountStore();
+    await act(async () => fleet.loadStarlinkFlights());
+    await waitFor(() => expect(seen?.starlink.flightsStatus).toBe('failed'));
+    ctl.flightsFails = false;
+    await act(async () => seen!.loadStarlinkFlights());
+    await waitFor(() => expect(seen?.starlink.flightsStatus).toBe('ready'));
+  });
+
+  it('uses schedules an older server still inlines in the roster', async () => {
+    vi.stubGlobal('fetch', async () => ({ ok: true, status: 200, json: async () => ({ ...(ctl.starlink as object), flightsByTail: ctl.flights }) }));
+    const fleet = await mountStore();
+    expect(fleet.starlink.flightsStatus).toBe('ready');
+    expect(Object.keys(fleet.starlink.flightsByTail)).toEqual(['N11111']);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeQuery, matchLiveFlights, matchScheduleFlights, classifyEmptyState, FR24_LOOKUP_RE } from '../src/lib/global-search.js';
+import { normalizeQuery, matchLiveFlights, matchScheduleFlights, classifyEmptyState, FR24_LOOKUP_RE, rankLiveFlight, rankLiveFlights } from '../src/lib/global-search.js';
 
 const live = (over = {}) => ({ callsign: 'UAL373', flightIATA: 'UA373', reg: 'N37502', origin: 'ORD', dest: 'DEN', icao24: 'a1b2c3', ...over });
 const sched = (over = {}) => ({
@@ -147,5 +147,58 @@ describe('classifyEmptyState', () => {
 
   it('handles an empty query (edge case)', () => {
     expect(classifyEmptyState('')).toEqual({ kind: 'generic', display: '' });
+  });
+});
+
+describe('rankLiveFlights (F2: exact, then prefix, then contains)', () => {
+  const fl = (n, over = {}) => live({ callsign: `UAL${n}`, flightIATA: `UA${n}`, reg: `N${10000 + Number(n)}`, fr24id: `id${n}`, ...over });
+
+  it('puts an airborne exact match first even when 25 longer idents precede it in feed order', () => {
+    const feed = [];
+    for (let i = 200; i < 225; i++) feed.push(fl(i));
+    feed.push(fl(2));
+    const ranked = rankLiveFlights(feed, 'UA2');
+    expect(ranked).toHaveLength(26);
+    expect(ranked[0].flightIATA).toBe('UA2');
+    // The palette slices AFTER ranking, so the exact match survives the 20-row cap.
+    expect(ranked.slice(0, 20).map((f) => f.flightIATA)).toContain('UA2');
+  });
+
+  it('ranks UA587 above UA5877 and breaks prefix ties by shorter flight number', () => {
+    const ranked = rankLiveFlights([fl(5877), fl(58), fl(587)], 'UA587');
+    expect(ranked.map((f) => f.flightIATA)).toEqual(['UA587', 'UA5877']);
+    const prefix = rankLiveFlights([fl(5290), fl(542), fl(58), fl(5)], 'UA5');
+    expect(prefix.map((f) => f.flightIATA)).toEqual(['UA5', 'UA58', 'UA542', 'UA5290']);
+  });
+
+  it('treats a UAL callsign as the same ident as the UA number', () => {
+    const noIata = fl(2, { flightIATA: '' });
+    expect(rankLiveFlight(noIata, 'UA2')).toBe(0);
+    expect(rankLiveFlight(fl(2), 'UAL2')).toBe(0);
+    // A bare number is a UA flight number.
+    expect(rankLiveFlight(fl(22), '22')).toBe(0);
+  });
+
+  it('ranks an exact registration above a partial one', () => {
+    const ranked = rankLiveFlights([
+      fl(1, { reg: 'N249901' }),
+      fl(2, { reg: 'N24990' }),
+    ], 'N24990');
+    expect(ranked.map((f) => f.reg)).toEqual(['N24990', 'N249901']);
+  });
+
+  it('ranks a route match below ident matches and above a plain substring match', () => {
+    const route = fl(9, { origin: 'ORD', dest: 'DEN' });
+    expect(rankLiveFlight(route, 'ORDDEN')).toBe(2);
+    expect(rankLiveFlight(route, 'DENORD')).toBe(2);
+    expect(rankLiveFlight(fl(1234), '23')).toBe(3);
+    expect(rankLiveFlight(fl(1234), 'ZZZ')).toBe(-1);
+  });
+
+  it('drops non-matches and keeps feed identity (the palette selects the same object)', () => {
+    const a = fl(1);
+    const ranked = rankLiveFlights([fl(999), a], 'UA1');
+    expect(ranked).toEqual([a]);
+    expect(ranked[0]).toBe(a);
   });
 });

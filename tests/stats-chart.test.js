@@ -48,6 +48,19 @@ describe('utilBand — the >60 / >30 / >0 / 0 thresholds (views/stats/Utilizatio
       expect(cls).not.toMatch(/primary|blue/);
     }
   });
+
+  it('draws utilisation as one measure in one colour — no status hues, no unlabelled ramp (F69)', () => {
+    // The Fleet tab draws the same per-type measure in bg-primary; the two tabs must agree.
+    expect(new Set([UTIL_BAR_COLOR.low, UTIL_BAR_COLOR.mid, UTIL_BAR_COLOR.high])).toEqual(
+      new Set(['var(--primary)']),
+    );
+    // A 7 % figure and a 49 % figure used to share amber with no legend to tell them apart.
+    expect(UTIL_TEXT_CLASS.low).toBe(UTIL_TEXT_CLASS.high);
+    expect(UTIL_TEXT_CLASS.low).not.toMatch(/amber|orange|emerald|green/);
+    // Idle rows still recede.
+    expect(UTIL_BAR_COLOR.idle).not.toBe(UTIL_BAR_COLOR.low);
+    expect(UTIL_TEXT_CLASS.idle).toBe('text-muted-foreground');
+  });
 });
 
 describe('ageBand / ageBarPct — the >20 / >15 / >8 thresholds (views/stats/RouteBars.tsx)', () => {

@@ -6,7 +6,11 @@ import {
   applyStarlinkWifiOverlay,
   sortFleetData,
   filterFleetData,
+  familyTotal,
+  subgroupTotal,
 } from '../src/lib/fleet-utils.js';
+import { typeCounts } from '../src/lib/fleet-view.js';
+import { readFileSync } from 'node:fs';
 
 // ═══════════════════════════════════════════════
 // 1. categorizeFleetStatus
@@ -101,42 +105,34 @@ describe('FLEET_FAMILIES structure and count derivation', () => {
     { r: 'N401UA', t: '777-300ER', c: '366/J+PY+Y', w: 'Satl Ka', s: '' },
   ];
 
-  it('has 6 families covering all mainline fleet types', () => {
+  it('has 6 families covering every type in the real fleet database', () => {
     expect(FLEET_FAMILIES).toHaveLength(6);
-    const allTypes = FLEET_FAMILIES.flatMap(f => f.subgroups.flatMap(sg => sg.types));
-    // Every type in the mock fleet should exist in FLEET_FAMILIES
-    MOCK_FLEET.forEach(a => {
-      expect(allTypes).toContain(a.t);
-    });
+    const allTypes = new Set(FLEET_FAMILIES.flatMap(f => f.subgroups.flatMap(sg => sg.types)));
+    // Data guard: a new type in /data/fleet.json must not silently drop out of the family cards.
+    const fleet = JSON.parse(readFileSync(new URL('../public/data/fleet.json', import.meta.url), 'utf8'));
+    const missing = [...new Set(fleet.map(a => a.t))].filter(t => !allTypes.has(t));
+    expect(missing).toEqual([]);
   });
 
-  it('correctly derives family totals from a mock fleet', () => {
-    const typeCounts = {};
-    MOCK_FLEET.forEach(a => { typeCounts[a.t] = (typeCounts[a.t] || 0) + 1; });
-
-    const familyTotals = FLEET_FAMILIES.map(family => {
-      const total = family.subgroups.reduce((sum, sg) =>
-        sum + sg.types.reduce((s, t) => s + (typeCounts[t] || 0), 0), 0);
-      return { id: family.id, total };
-    });
-
-    expect(familyTotals.find(f => f.id === 'boeing-737').total).toBe(3);  // 2x 737-800 + 1x MAX 9
-    expect(familyTotals.find(f => f.id === 'airbus-a320').total).toBe(1); // 1x A321neo
-    expect(familyTotals.find(f => f.id === 'boeing-787').total).toBe(2);  // 1x 787-9 + 1x 787-10
-    expect(familyTotals.find(f => f.id === 'boeing-777').total).toBe(1);  // 1x 777-300ER
-    expect(familyTotals.find(f => f.id === 'boeing-757').total).toBe(0);  // none in mock
-    expect(familyTotals.find(f => f.id === 'boeing-767').total).toBe(0);  // none in mock
+  it('derives family totals with the production helper', () => {
+    const counts = typeCounts(MOCK_FLEET);
+    const total = (id) => familyTotal(FLEET_FAMILIES.find(f => f.id === id), counts);
+    expect(total('boeing-737')).toBe(3);  // 2x 737-800 + 1x MAX 9
+    expect(total('airbus-a320')).toBe(1); // 1x A321neo
+    expect(total('boeing-787')).toBe(2);  // 1x 787-9 + 1x 787-10
+    expect(total('boeing-777')).toBe(1);  // 1x 777-300ER
+    expect(total('boeing-757')).toBe(0);  // none in mock
+    expect(total('boeing-767')).toBe(0);  // none in mock
   });
 
-  it('correctly derives subgroup totals', () => {
-    const typeCounts = {};
-    MOCK_FLEET.forEach(a => { typeCounts[a.t] = (typeCounts[a.t] || 0) + 1; });
-
+  it('derives subgroup totals with the production helper', () => {
+    const counts = typeCounts(MOCK_FLEET);
     const boeing737 = FLEET_FAMILIES.find(f => f.id === 'boeing-737');
-    const ngCount = boeing737.subgroups.find(sg => sg.label === 'NG').types.reduce((s, t) => s + (typeCounts[t] || 0), 0);
-    const maxCount = boeing737.subgroups.find(sg => sg.label === 'MAX').types.reduce((s, t) => s + (typeCounts[t] || 0), 0);
-    expect(ngCount).toBe(2);  // 2x 737-800
-    expect(maxCount).toBe(1); // 1x MAX 9
+    expect(subgroupTotal(boeing737.subgroups.find(sg => sg.label === 'NG'), counts)).toBe(2);  // 2x 737-800
+    expect(subgroupTotal(boeing737.subgroups.find(sg => sg.label === 'MAX'), counts)).toBe(1); // 1x MAX 9
+    // Family = sum of its subgroups, and a missing counts map is zero, not a throw.
+    expect(familyTotal(boeing737, counts)).toBe(3);
+    expect(familyTotal(boeing737, {})).toBe(0);
   });
 
   it('marks widebody families correctly', () => {

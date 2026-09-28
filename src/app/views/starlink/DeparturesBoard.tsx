@@ -81,20 +81,29 @@ function Row({
             <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-400" />
             Airborne
           </span>
+        ) : row.inbound ? (
+          // The aircraft is in the air on its inbound leg — this departure has not happened.
+          <span className="text-[10px] text-muted-foreground">
+            SCHED · inbound{row.inbound.flight ? ` on ${row.inbound.flight}` : ''}
+          </span>
         ) : (
           <span className="text-[10px] text-muted-foreground">SCHED</span>
         )}
-        {row.airborne && row.icao24 ? (
+        {(row.airborne && row.icao24) || row.inbound?.icao24 ? (
           <button
             type="button"
             onClick={() => onTrack(row)}
             className="inline-flex min-h-11 items-center rounded-md border px-2 text-[10px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-7"
-            title={`Track ${row.tail} on the live map`}
+            title={
+              row.airborne
+                ? `Track ${row.tail} on the live map`
+                : `Track ${row.tail}'s inbound flight${row.inbound?.flight ? ` ${row.inbound.flight}` : ''} on the live map`
+            }
           >
             <span aria-hidden="true" className="mr-1">
               📡
             </span>
-            Track
+            {row.airborne ? 'Track' : 'Track inbound'}
           </button>
         ) : null}
       </span>

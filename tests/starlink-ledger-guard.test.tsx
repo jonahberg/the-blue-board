@@ -47,6 +47,7 @@ const FLEET = {
   starlink: {
     tails: new Set<string>(),
     flightsByTail: {},
+    flightsStatus: 'ready',
     stats: null,
     aircraft: [],
     lastUpdated: null,
@@ -58,6 +59,7 @@ const FLEET = {
   loading: false,
   loadFailed: false,
   retry: () => {},
+  loadStarlinkFlights: () => {},
 } as unknown as FleetValue;
 
 const FEED = { flights: [] } as unknown as FeedValue;

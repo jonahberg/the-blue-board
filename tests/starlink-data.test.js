@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import handler from '../api/starlink-data.js';
+import handler, { __resetForTests } from '../api/starlink-data.js';
+import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 
 function createRes() {
   return {
@@ -57,13 +58,15 @@ function mockUpstreamResponse() {
   };
 }
 
-// IMPORTANT: The handler uses a module-level inMemoryCache that persists across tests.
-// Tests are ordered so error/validation tests run FIRST (before any successful fetch
-// populates the cache), then success tests populate the cache for remaining tests.
+// The handler keeps module-level caches (in-memory payload, static file, rate limiter).
+// `__resetForTests()` clears them before every test, so each test states its own starting
+// point and the file passes in any order (--sequence.shuffle).
 describe('starlink-data API', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     delete (globalThis).__starlinkCache;
+    __resetForTests();
+    __resetRateLimitersForTests();
   });
 
   // --- Validation (no fetch needed) ---
@@ -74,7 +77,7 @@ describe('starlink-data API', () => {
     expect(res.statusCode).toBe(405);
   });
 
-  // --- Degraded paths (must run before any successful fetch populates inMemoryCache) ---
+  // --- Degraded paths (cold lambda: no in-memory cache) ---
   // With no in-memory or Supabase cache, the endpoint serves the committed static file rather
   // than erroring, so the board never goes blank when upstream is down.
 
@@ -119,7 +122,7 @@ describe('starlink-data API', () => {
     expect(res.headers['Cache-Control']).toMatch(/s-maxage=3600/);
   });
 
-  // --- Success paths (populate inMemoryCache for subsequent tests) ---
+  // --- Success paths ---
 
   it('fetches upstream and normalizes aircraft data', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
@@ -155,18 +158,67 @@ describe('starlink-data API', () => {
     expect(flights[0].departure_time).toBe(new Date(1780270800 * 1000).toISOString());
   });
 
-  // --- After inMemoryCache is populated, error falls back to stale cache ---
+  // --- A warm lambda whose cache has gone stale, then upstream fails ---
 
   it('serves stale cache when upstream fails', async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => mockUpstreamResponse() });
+    await handler(makeReq(), createRes()); // warms inMemoryCache
+
+    clock.mockReturnValue(now + 5 * 60 * 60 * 1000); // past the 4h in-memory TTL
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('upstream down again'));
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = createRes();
     await handler(makeReq(), res);
 
-    // Should serve stale cache (200) instead of 502
+    // The stale in-memory copy (513 aircraft), not the static file and not a 502.
     expect(res.statusCode).toBe(200);
-    expect(res.body.aircraft).toBeDefined();
+    expect(res.headers['X-Starlink-Source']).toBe('memory-stale');
+    expect(res.body.aircraft).toHaveLength(513);
+    spy.mockRestore();
+  });
+
+  // --- ?fields= split (F58) ---
+
+  it('?fields=roster omits flightsByTail and keeps everything the boot needs', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => mockUpstreamResponse() });
+    const res = createRes();
+    await handler(makeReq({ query: { fields: 'roster' } }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.flightsByTail).toBeUndefined();
+    expect(res.body.aircraft).toHaveLength(513);
+    expect(res.body.fleetStats.mainline).toBe(170);
+    expect(res.body.totalCount).toBe(513);
+    expect(res.body.syncedAt).toBeDefined();
+    expect(res.headers['Cache-Control']).toMatch(/s-maxage=3600/);
+  });
+
+  it('?fields=flights returns only the per-tail schedules and their timestamps', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => mockUpstreamResponse() });
+    const res = createRes();
+    await handler(makeReq({ query: { fields: 'flights' } }), res);
+    expect(Object.keys(res.body).sort()).toEqual(['flightsByTail', 'lastUpdated', 'syncedAt']);
+    expect(res.body.flightsByTail.N37559[0].origin).toBe('ORD');
+  });
+
+  it('an unknown ?fields= value serves the full payload', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => mockUpstreamResponse() });
+    const res = createRes();
+    await handler(makeReq({ query: { fields: 'everything' } }), res);
+    expect(res.body.flightsByTail).toBeDefined();
+    expect(res.body.aircraft).toHaveLength(513);
+  });
+
+  it('?fields=roster also shapes the degraded static fallback', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('upstream down'));
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = createRes();
+    await handler(makeReq({ query: { fields: 'roster' } }), res);
+    expect(res.headers['X-Starlink-Source']).toBe('static');
+    expect(res.body.flightsByTail).toBeUndefined();
+    expect(res.body.aircraft.length).toBeGreaterThan(0);
     spy.mockRestore();
   });
 });

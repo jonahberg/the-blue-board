@@ -18,7 +18,7 @@
  * month-by-month series follows as a visually-hidden table — the same data, linearised.
  */
 
-import { memo } from 'react';
+import { memo, useLayoutEffect, useRef } from 'react';
 
 import { Card } from '@/components/ui/card';
 import { STARLINK_CHART_COLORS } from '@/lib/starlink-chart.js';
@@ -71,6 +71,12 @@ export const VelocityChart = memo(function VelocityChart({
   pace: PaceModel;
 }) {
   const last = model.bars[model.bars.length - 1];
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // Keyed on the month count: a new month re-pins the view, a poll does not undo a manual scroll.
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (el) el.scrollLeft = el.scrollWidth - el.clientWidth;
+  }, [model.bars.length]);
   return (
     <Card className="gap-0 p-4" id="sl-chart-card">
       <h3 className="text-sm font-semibold">Installation Velocity</h3>
@@ -80,7 +86,9 @@ export const VelocityChart = memo(function VelocityChart({
 
       {/* The chart keeps a readable minimum width and scrolls on a phone rather than shrinking
           eighteen month labels into an unreadable smear. */}
-      <div className="mt-3 -mx-1 overflow-x-auto px-1">
+      {/* ...and it opens scrolled to the NEWEST months (F29): on a phone the left edge is
+          March 2025, and the months a reader came for were off-screen with no affordance. */}
+      <div ref={scrollerRef} className="mt-3 -mx-1 overflow-x-auto px-1" data-testid="sl-chart-scroller">
         <svg
           id="sl-chart"
           viewBox={`0 0 ${model.width} ${model.height}`}
@@ -140,19 +148,6 @@ export const VelocityChart = memo(function VelocityChart({
               {bar.zigzag ? (
                 <path d={bar.zigzag} className="stroke-muted-foreground" fill="none" strokeWidth={1.5} />
               ) : null}
-              {bar.countLabel ? (
-                <text
-                  x={bar.countLabel.x}
-                  y={bar.countLabel.y}
-                  fill={bar.capped ? STARLINK_CHART_COLORS.express : undefined}
-                  className={bar.capped ? undefined : 'fill-muted-foreground'}
-                  fontSize={bar.capped ? 10 : 9}
-                  fontWeight={bar.capped ? 700 : undefined}
-                  textAnchor="middle"
-                >
-                  {bar.countLabel.text}
-                </text>
-              ) : null}
               {bar.monthLabel ? (
                 <text
                   x={bar.monthLabel.x}
@@ -182,6 +177,26 @@ export const VelocityChart = memo(function VelocityChart({
               fill={STARLINK_CHART_COLORS.cumulative}
             />
           ))}
+          {/* Count labels are painted AFTER the cumulative line, with a card-coloured halo, so
+              the line and its dots never cut through a month's figure (F76). */}
+          {model.bars.map((bar) =>
+            bar.countLabel ? (
+              <text
+                key={`c${bar.ym}`}
+                x={bar.countLabel.x}
+                y={bar.countLabel.y}
+                fill={bar.capped ? STARLINK_CHART_COLORS.express : undefined}
+                className={bar.capped ? 'stroke-card' : 'fill-muted-foreground stroke-card'}
+                strokeWidth={3}
+                paintOrder="stroke"
+                fontSize={bar.capped ? 10 : 9}
+                fontWeight={bar.capped ? 700 : undefined}
+                textAnchor="middle"
+              >
+                {bar.countLabel.text}
+              </text>
+            ) : null,
+          )}
           {model.rightTicks.map((tick) => (
             <text
               key={`r${tick.value}-${tick.y}`}

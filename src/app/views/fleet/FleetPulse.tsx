@@ -1,11 +1,12 @@
 /**
  * Zone 1, left — "how much of the fleet is in the air right now?" (inventory §21).
  *
- * The subtitle's "N mainline matched · N regional/partner" is the honest footnote under the
- * airborne count: the feed carries every United-coded flight, but only mainline airframes are
- * in the fleet database, so roughly a third of what is flying can never appear in the bars
- * below. Saying that outright is what stops the utilisation figure from reading as a
- * discrepancy.
+ * The subtitle's "N mainline matched · N not in fleet DB · N regional/partner" is the honest
+ * footnote under the airborne count: the feed carries every United-coded flight, but only
+ * mainline airframes are in the fleet database, so what is flying splits three ways. A
+ * mainline type under a UAL callsign that the database cannot match is a delivery newer than
+ * the database — calling it "regional/partner" was a false claim (F86). The utilisation line
+ * is `fleetUtilization()`, the same figure the Live bar and the Stats card quote.
  *
  * Per-type bars are drawn only for types with at least one aircraft airborne — nineteen rows
  * of "0/76 0%" at 04:00 UTC is a table of zeroes, not a pulse.
@@ -19,17 +20,25 @@ export type TypeUtilisation = { type: string; flying: number; total: number; pct
 export function FleetPulse({
   airborne,
   matched,
-  unmatched,
+  notInDb,
+  regional,
   fleetTotal,
+  utilPct,
   utilisation,
   updatedAt,
   loading,
   fleetFailed = false,
 }: {
   airborne: number;
+  /** Airborne flights that resolve to an airframe in the fleet database. */
   matched: number;
-  unmatched: number;
+  /** Mainline types under a UAL callsign that the (stale) database does not list. */
+  notInDb: number;
+  /** Everything else unmatched: Express and partner flights. */
+  regional: number;
   fleetTotal: number;
+  /** `fleetUtilization().pct` — null until the fleet database loads. */
+  utilPct: number | null;
   utilisation: TypeUtilisation[];
   /** `HH:MM:SS` in UTC, or null before the first poll. */
   updatedAt: string | null;
@@ -38,7 +47,6 @@ export function FleetPulse({
   fleetFailed?: boolean;
 }) {
   const flying = utilisation.filter((row) => row.total > 0 && row.flying > 0);
-  const utilPct = fleetTotal > 0 ? Math.round((matched / fleetTotal) * 100) : 0;
 
   return (
     <div className="flex min-w-0 flex-col">
@@ -62,10 +70,10 @@ export function FleetPulse({
           ? 'Loading live flight data…'
           : fleetFailed
             ? 'Mainline / regional split unavailable — the fleet database did not load'
-            : `${matched} mainline matched · ${unmatched} regional/partner`}
+            : `${matched} mainline matched · ${notInDb ? `${notInDb} not in fleet DB · ` : ''}${regional} regional/partner`}
       </p>
 
-      {fleetTotal > 0 && airborne > 0 ? (
+      {fleetTotal > 0 && airborne > 0 && utilPct != null ? (
         <p className="mt-0.5 text-xs font-medium text-primary">
           {utilPct}% fleet utilization ({matched}/{fleetTotal})
         </p>

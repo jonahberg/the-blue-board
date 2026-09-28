@@ -1,6 +1,8 @@
 /**
  * "Does this live flight have Starlink?" — one definition, used by the map colours, the
- * Starlink-only filter and the stat bar so they can never disagree.
+ * Starlink-only filter, the Stats card and the Starlink tab's airborne index
+ * (`airborneByTail`). The Live stat bar applies the same rule inside `computeLiveStats`
+ * (pass it this predicate, or the roster Set, which it resolves the same way — F101).
  *
  * Matching goes through the fleet database first (`matchAircraft` resolves an ICAO24 to a
  * registration when the feed omits one) and only then falls back to the raw registration,

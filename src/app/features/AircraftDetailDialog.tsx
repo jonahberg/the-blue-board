@@ -56,12 +56,26 @@ function planespottersUrl(reg: string) {
   return `https://www.planespotters.net/search?q=${encodeURIComponent(reg)}`;
 }
 
-/** One cell of the biography grid. */
-function Fact({ label, value, tone }: { label: string; value: string; tone?: string }) {
+/**
+ * One cell of the biography grid. `min-w-0` + `overflow-wrap:anywhere` because a grid column
+ * is ~111 px in the 512 px dialog, and a value with no spaces ("50J/24PE/46E+/156Y") used to
+ * spill past it and get clipped at the dialog edge (F6/F62).
+ */
+function Fact({
+  label,
+  value,
+  tone,
+  className,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+  className?: string;
+}) {
   return (
-    <div>
+    <div className={`min-w-0 ${className ?? ''}`}>
       <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className={`mt-0.5 text-sm font-medium ${tone ?? ''}`}>{value}</dd>
+      <dd className={`mt-0.5 text-sm font-medium [overflow-wrap:anywhere] ${tone ?? ''}`}>{value}</dd>
     </div>
   );
 }
@@ -252,7 +266,11 @@ export default function AircraftDetailDialog() {
                     value={isStarlink ? 'Yes ⚡' : 'No'}
                     tone={isStarlink ? 'text-emerald-400' : 'text-muted-foreground'}
                   />
-                  {aircraft.c ? <Fact label="Config" value={aircraft.c} /> : null}
+                  {/* The cabin string is the longest value here: it gets two columns so it
+                      reads on one line at desktop width. */}
+                  {aircraft.c ? (
+                    <Fact label="Config" value={aircraft.c} className="col-span-2" />
+                  ) : null}
                 </dl>
               </section>
 
