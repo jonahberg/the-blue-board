@@ -11,6 +11,8 @@
  * one control that helps, which is clearing the filters.
  */
 
+import { Star } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -63,7 +65,7 @@ export function FleetTable({
     return (
       <div className="rounded-lg border border-dashed p-6 text-center">
         <p className="text-sm">No aircraft match your filters.</p>
-        <Button variant="outline" size="lg" className="mt-3 min-h-11 md:min-h-0" onClick={onClearFilters}>
+        <Button variant="outline" size="lg" className="mt-3 min-h-11 pointer-fine:md:min-h-0" onClick={onClearFilters}>
           Clear Filters
         </Button>
       </div>
@@ -102,13 +104,13 @@ export function FleetTable({
                   <button
                     type="button"
                     onClick={() => onOpenAircraft(aircraft.r)}
-                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
                   >
                     {aircraft.r}
                   </button>
                   {specialEntry ? (
-                    <span className="ml-1 rounded border px-1 py-0.5 text-[9px] text-amber-400">
-                      ⭐ {specialEntry.name}
+                    <span className="ml-1 inline-flex items-center gap-0.5 rounded border px-1 py-0.5 text-[9px] text-foreground">
+                      <Star aria-hidden="true" className="size-2.5" /> {specialEntry.name}
                     </span>
                   ) : null}
                 </TableCell>
@@ -122,7 +124,7 @@ export function FleetTable({
                 <TableCell className="text-xs text-muted-foreground">{status}</TableCell>
                 <TableCell>
                   {starlinkTails.has(aircraft.r) ? (
-                    <span className="rounded border border-violet-500/30 bg-violet-500/10 px-1 py-0.5 text-[9px] font-medium text-violet-300">
+                    <span className="rounded border border-bb-starlink/30 bg-bb-starlink/10 px-1 py-0.5 text-[9px] font-medium text-bb-starlink">
                       SL
                     </span>
                   ) : null}

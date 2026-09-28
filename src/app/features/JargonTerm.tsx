@@ -19,10 +19,10 @@ import type { ReactNode } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-/** Verbatim from `src/dashboard/main.js:41-49` — the wording is the shipped wording. */
+/** From `src/dashboard/main.js:41-49`; `otp` now names the same operated-departures rule as the hub strip. */
 export const JARGON_TERMS: Record<string, string> = {
   irops: 'Irregular operations — cancellations, major delays, diversions',
-  otp: '% of departures within 30 min of schedule',
+  otp: '% of operated departures within 30 min of schedule',
   metar: 'standard aviation weather report',
   gdp: 'Ground Delay Program — FAA slows arrivals to manage congestion',
   groundstop: 'FAA order halting departures to this airport',
@@ -44,7 +44,8 @@ export function JargonTerm({ term, children }: JargonTermProps) {
       <TooltipTrigger asChild>
         <button
           type="button"
-          className="cursor-help underline decoration-dotted decoration-from-font underline-offset-2"
+          // 44 px tall on touch (DESIGN.md touch floor; audit F70), the text height with a mouse.
+          className="inline-flex min-h-11 cursor-help items-center underline decoration-dotted decoration-from-font underline-offset-2 pointer-fine:md:min-h-0"
         >
           {children}
         </button>

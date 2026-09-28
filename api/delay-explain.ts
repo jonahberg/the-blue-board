@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
 
@@ -60,6 +60,8 @@ function openAiCircuit(reason: string): void {
 export function __resetDelayExplainForTests(): void {
   aiUnavailableUntil = 0;
   cache.clear();
+  // The SDK client is a lazy singleton; drop it so a test can observe how it is constructed.
+  client = null;
 }
 
 // Per-request input spend cap. Output is already bounded by max_tokens: 400; this bounds input so a

@@ -35,7 +35,7 @@ describe('estimateRoute — static table lookup', () => {
 
   it('does NOT match a UAL-prefixed callsign — the table lookup only strips "UA" (edge case)', () => {
     // `'UAL1'.replace(/^UA/i,'')` leaves "L1", which parseInt rejects, so a UAL
-    // callsign always falls through to bearing matching. Preserved from main.js.
+    // callsign always falls through to bearing matching. Preserved from the legacy main.js.
     expect(codes(estimateRoute(41, -95, 90, 35000, 0, 'UAL1'))).toEqual(['OMA', 'DSM']);
   });
 });
@@ -60,9 +60,10 @@ describe('estimateRoute — bearing matching', () => {
 
 describe('estimateRoute — low-altitude nearest-airport rule', () => {
   it('assigns the nearest airport as origin when climbing below 5000 ft', () => {
-    // Just off ORD, climbing: ORD becomes the origin, and the dedup rule then
-    // clears the (farther) bearing-matched origin rather than the destination.
-    expect(codes(estimateRoute(41.99, -87.92, 90, 2000, 5, 'UA9999'))).toEqual([null, 'ORD']);
+    // Just off ORD, climbing east: ORD is where it took off. The bearing search also put ORD
+    // ahead (90° cone at low altitude), so the destination — not the authoritative origin —
+    // is the side that gets cleared.
+    expect(codes(estimateRoute(41.99, -87.92, 90, 2000, 5, 'UA9999'))).toEqual(['ORD', null]);
   });
 
   it('assigns the nearest airport as destination when descending below 5000 ft', () => {
@@ -87,7 +88,7 @@ describe('estimateRoute — missing input guards', () => {
     expect(estimateRoute(41.3, -96, null, 35000, 0, 'UA9999')).toEqual({ origin: null, dest: null });
   });
 
-  it('treats a zero latitude as missing (edge case — falsy guard preserved from main.js)', () => {
+  it('treats a zero latitude as missing (edge case — falsy guard preserved from the legacy main.js)', () => {
     expect(estimateRoute(0, -96, 90, 35000, 0, 'UA9999')).toEqual({ origin: null, dest: null });
     expect(estimateRoute(41.3, 0, 90, 35000, 0, 'UA9999')).toEqual({ origin: null, dest: null });
   });

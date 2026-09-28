@@ -52,7 +52,7 @@ export const VerificationLedger = memo(function VerificationLedger({
           </p>
           <dl className="flex gap-5">
             <div className="text-center">
-              <dd className="font-mono text-lg font-semibold tabular-nums text-emerald-400">
+              <dd className="font-mono text-lg font-semibold tabular-nums text-bb-ok">
                 {summary?.verifiedStarlink ?? '—'}
               </dd>
               <dt className="text-[10px] text-muted-foreground">Verified Starlink</dt>
@@ -71,6 +71,15 @@ export const VerificationLedger = memo(function VerificationLedger({
             </div>
           </dl>
         </div>
+        {/* The verifier publishes its own tallies on its own schedule, so they need not add up
+            to the equipped count above, which comes from the roster (F18: 594 + 7 vs 598). */}
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          The verifier&rsquo;s own tallies
+          {summary?.generatedAt && formatVerifyDate(summary.generatedAt)
+            ? `, as of ${formatVerifyDate(summary.generatedAt) as string}`
+            : ''}
+          {' '}— they can differ from the equipped count by a few tails.
+        </p>
 
         {conflicts.size > 0 ? (
           <p
@@ -86,7 +95,7 @@ export const VerificationLedger = memo(function VerificationLedger({
         <details open className="mt-3">
           {/* Padding and min-height, never `display:flex`: a <summary> is `display:list-item`,
               and changing that is what silently deletes its disclosure triangle. */}
-          <summary className="min-h-11 cursor-pointer py-3 text-xs font-medium marker:text-muted-foreground md:min-h-0 md:py-0">
+          <summary className="min-h-11 cursor-pointer py-3 text-xs font-medium marker:text-muted-foreground pointer-fine:md:min-h-0 md:py-0">
             Disputed claims{' '}
             <span className="font-normal text-muted-foreground">
               — overruled by official verification

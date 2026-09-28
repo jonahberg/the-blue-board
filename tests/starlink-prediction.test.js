@@ -100,9 +100,9 @@ describe('starlinkPredictionBadge — hiding', () => {
 });
 
 describe('starlinkPredictionDate', () => {
-  it('is the LOCAL operational date, not UTC', () => {
-    const date = new Date('2026-09-13T23:30:00Z');
-    expect(starlinkPredictionDate(date)).toBe(date.toLocaleDateString('en-CA'));
-    expect(starlinkPredictionDate(date)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  // The local-vs-UTC behaviour is pinned in starlink-prediction-tz.test.js under a fixed
+  // non-UTC zone; this only checks the format.
+  it('is a YYYY-MM-DD date string', () => {
+    expect(starlinkPredictionDate(new Date('2026-09-13T12:00:00Z'))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

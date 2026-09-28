@@ -67,8 +67,10 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
  * hundreds airborne — so it is reported as a failure the same way a 5xx is, and the caller
  * keeps its last-good flights (inventory §18, `applyFeedResult`).
  *
- * `staleMs` comes from `X-BB-Feed-Stale` (seconds) and backdates the caller's last-good
- * timestamp so the LIVE/STALE chip stays honest about what it is showing.
+ * `staleMs` comes from `X-BB-Feed-Stale` (seconds) plus the CDN's `Age` (seconds), and
+ * backdates the caller's last-good timestamp so the LIVE/STALE chip and the Fleet tab's
+ * "Updated" stamp stay honest about what they are showing: a stale-serve that the edge then
+ * cached is older by both (F102).
  */
 export async function fetchFr24Feed(
   signal?: AbortSignal,
@@ -78,7 +80,8 @@ export async function fetchFr24Feed(
     signal,
   });
   if (!res.ok) throw new ApiError(res.status, `/api/fr24-feed → HTTP ${res.status}`);
-  const staleMs = parseStaleHeader(res.headers.get('X-BB-Feed-Stale'));
+  const staleMs =
+    parseStaleHeader(res.headers.get('X-BB-Feed-Stale')) + parseStaleHeader(res.headers.get('Age'));
   const flights = parseFr24Feed(await res.json()) as Flight[];
   if (flights.length === 0) throw new ApiError(res.status, 'Feed returned no aircraft');
   return { flights, staleMs };
@@ -108,8 +111,18 @@ export function fetchCheckFlight(flightNumber: string, date: string): Promise<Pr
   );
 }
 
-export function fetchStarlinkData(): Promise<StarlinkData> {
-  return getJson<StarlinkData>('/api/starlink-data');
+/**
+ * `/api/starlink-data?fields=roster` — everything but `flightsByTail`, which is ~95% of the
+ * payload and only the Starlink tab reads. That tab asks for `fields=flights` itself (F58).
+ */
+export function fetchStarlinkRoster(): Promise<
+  Omit<StarlinkData, 'flightsByTail'> & { flightsByTail?: StarlinkData['flightsByTail'] }
+> {
+  return getJson('/api/starlink-data?fields=roster');
+}
+
+export function fetchStarlinkFlights(): Promise<Pick<StarlinkData, 'flightsByTail'>> {
+  return getJson('/api/starlink-data?fields=flights');
 }
 
 export function fetchFleetSummary(): Promise<FleetSummary> {
@@ -273,6 +286,9 @@ export type Fr24FlightLookup = {
   meta?: { liveLeg?: boolean; legDate?: string };
   liveLeg?: boolean;
   legDate?: string;
+  /** No leg is flying or just landed: `flight` is the most recent leg that operated (often
+   *  yesterday's), to be shown as history, not as the flight (audit F0). */
+  previousLeg?: boolean;
 };
 
 export function fetchFr24Flight(flight: string): Promise<Fr24FlightLookup> {

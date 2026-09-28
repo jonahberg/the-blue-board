@@ -6,6 +6,12 @@
  *
  * Auth: requires CRON_SECRET header (same pattern as cron endpoints).
  *
+ * Trigger: NONE in this repo — no vercel.json cron, no workflow, no script calls it, and a
+ * Vercel project webhook can't send the CRON_SECRET bearer. As of Sep 2026 news_notifications
+ * still holds only the '__unseeded__' seed row, i.e. no digest has ever been sent. Kept (not
+ * deleted) pending an owner decision: wiring a trigger starts real email broadcasts to the
+ * Resend audience, and retiring it drops a README-advertised feature.
+ *
  * Idempotency: atomic claim-by-CAS. A single UPDATE ... WHERE slug != $new
  * RETURNING * serializes concurrent callers on the row lock. If the UPDATE
  * affects 1 row, we claimed it and proceed to send. If it affects 0 rows,
@@ -21,7 +27,7 @@
  *     has a cross-request race.
  */
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { getSupabase } from './_supabase.js';
 import { isAuthorizedCronRequest } from './_cron-auth.js';
 import { escapeHtml, sanitizeHeaderValue } from '../src/lib/escape.js';

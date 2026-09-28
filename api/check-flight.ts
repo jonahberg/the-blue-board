@@ -3,7 +3,7 @@
 // response shapes (see adapt() below) into a probability-bearing payload so the
 // existing dashboard render code keeps working.
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/check-flight';

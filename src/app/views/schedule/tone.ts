@@ -16,45 +16,45 @@ import { SEV_TEXT } from '../../shell/Status';
 
 /** `delayColorVar()` output → text class. Its 15 / 60-minute thresholds stay in the lib. */
 export function delayToneClass(colorVar: string): string {
-  if (colorVar.includes('red')) return 'text-red-400';
-  if (colorVar.includes('yellow')) return 'text-amber-400';
-  return 'text-emerald-400';
+  if (colorVar.includes('red')) return 'text-destructive';
+  if (colorVar.includes('yellow')) return 'text-bb-warn';
+  return 'text-bb-ok';
 }
 
 /** `RISK_BANDS` label → badge classes. */
 export function riskToneClass(label: string): string {
-  if (label === 'V.HIGH' || label === 'HIGH') return 'border-red-500/40 bg-red-500/15 text-red-400';
-  if (label === 'MOD') return 'border-amber-500/40 bg-amber-500/15 text-amber-400';
-  return 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400';
+  if (label === 'V.HIGH' || label === 'HIGH') return 'border-destructive/40 bg-destructive/15 text-destructive';
+  if (label === 'MOD') return 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn';
+  return 'border-bb-ok/40 bg-bb-ok/15 text-bb-ok';
 }
 
 /** `describeBoardCondition().tone` → alert classes. */
 export const BANNER_TONE: Record<string, string> = {
-  stale: 'border-red-500/40 bg-red-500/10 text-red-400',
-  aging: 'border-amber-500/40 bg-amber-500/10 text-amber-400',
-  degraded: 'border-teal-500/40 bg-teal-500/10 text-teal-300',
-  partial: 'border-amber-500/40 bg-amber-500/10 text-amber-400',
+  stale: 'border-destructive/40 bg-destructive/10 text-destructive',
+  aging: 'border-bb-warn/40 bg-bb-warn/10 text-bb-warn',
+  degraded: 'border-bb-info/40 bg-bb-info/10 text-bb-info',
+  partial: 'border-bb-warn/40 bg-bb-warn/10 text-bb-warn',
   muted: 'border-border bg-muted/40 text-muted-foreground',
 };
 
 /** `classifySchedStatus().cls` → text class for the status chip. */
 export const STATUS_TONE: Record<string, string> = {
   scheduled: 'text-muted-foreground',
-  estimated: 'text-sky-400',
-  delayed: 'text-amber-400',
-  departed: 'text-emerald-400',
-  enroute: 'text-emerald-400',
-  landed: 'text-emerald-400',
-  canceled: 'text-red-400',
-  warn: 'text-amber-400',
-  diverted: 'text-amber-400',
+  estimated: 'text-bb-info',
+  delayed: 'text-bb-warn',
+  departed: 'text-bb-ok',
+  enroute: 'text-bb-ok',
+  landed: 'text-bb-ok',
+  canceled: 'text-destructive',
+  warn: 'text-bb-warn',
+  diverted: 'text-bb-warn',
   unknown: 'text-muted-foreground',
 };
 
 /** Equipment-swap impact class → chip classes. */
 export const SWAP_TONE: Record<string, string> = {
-  downgrade: 'border-red-500/40 bg-red-500/15 text-red-400',
-  upgrade: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
+  downgrade: 'border-destructive/40 bg-destructive/15 text-destructive',
+  upgrade: 'border-bb-ok/40 bg-bb-ok/15 text-bb-ok',
   lateral: 'border-border bg-muted/60 text-muted-foreground',
 };
 

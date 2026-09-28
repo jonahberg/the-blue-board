@@ -1,20 +1,23 @@
 // ═══ TIP STRIP ═══
-// The rotating one-liner capsule under the header. Copy is per-tab; anything the
-// map doesn't cover falls back to the Live pool.
+// The rotating one-liner in the dashboard's engagement slot. Copy is per-tab; anything the
+// map doesn't cover falls back to the Live pool. The strip's DOM, dismissal storage and
+// timers live in src/app/features/TipStrip.tsx — only the copy, the pick rule and the two
+// timing constants live here.
 //
-// Extracted verbatim from src/dashboard/main.js (:7729-7791). The strip's DOM
-// wiring, dismissal storage and timers stay in main.js — only the copy, the pick
-// rule and the two timing constants live here.
+// The copy describes the v1.8 UI: the flight panel replaced map popups, the Live sidebar is
+// the Filters sheet on phones, and IROPS comes from the server rather than from boards the
+// visitor loaded. Tips are written with "Click"; `tipForPointer` turns that into "Tap" on a
+// touch screen.
 
 /** @type {Record<string, string[]>} */
 export const TIPS = {
   'tab-live': [
-    'Click any aircraft registration (N-number) in a popup to see full details, seat config & Starlink status',
-    'Click a hub name in the sidebar to filter the map to just that hub\'s flights',
-    'Toggle the weather radar overlay with the rain cloud button on the map'
+    'Click any plane for its flight details, then its registration (N-number) for seat config & Starlink status',
+    'Click a hub under "Hub traffic" (in Filters on a phone) to show only that hub\'s flights',
+    'Turn on the 🌧 Radar layer above the map for the NEXRAD weather overlay'
   ],
   'tab-schedule': [
-    'Use "Filter: Fleet, Aircraft, Starlink…" to narrow by family, equipment, or WiFi',
+    'Open the board\'s filters to narrow by fleet, aircraft type or Starlink WiFi',
     'Click any registration in the schedule table to see full aircraft details'
   ],
   'tab-myflight': [
@@ -22,12 +25,24 @@ export const TIPS = {
     'The "Where\'s My Plane?" section shows the inbound aircraft for your watched flight'
   ],
   'tab-weather': [
-    'Load schedule data in the Schedule tab to unlock the IROPS disruption monitor'
+    'The IROPS bar sums up how disrupted United\'s network is right now: cancellations, diversions and long delays'
   ],
   'tab-fleet': [
     'Click any fleet type chip to filter the aircraft database instantly'
   ]
 };
+
+/**
+ * Word the tip for the visitor's pointer: "Click" on a mouse, "Tap" on a touch screen.
+ *
+ * @param {string} tip
+ * @param {boolean} coarse  true when the primary pointer is a finger (`(pointer: coarse)`).
+ * @returns {string}
+ */
+export function tipForPointer(tip, coarse) {
+  if (!coarse) return tip;
+  return tip.replace(/\bClick\b/g, 'Tap').replace(/\bclick\b/g, 'tap');
+}
 
 /** How often the strip swaps tip. */
 export const TIP_ROTATE_MS = 45000;

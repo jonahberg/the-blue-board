@@ -6,6 +6,7 @@
  * that clears every filter at once.
  */
 
+import { Building2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -81,7 +82,9 @@ export function LiveSidebar({
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="space-y-2">
         <Input
-          className="h-8 text-sm"
+          // No text-size override: the Input's own `text-base md:text-sm` keeps phones at 16 px,
+          // below which iOS Safari zooms the page on focus.
+          className="h-8"
           placeholder="Search flight, tail or route"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -95,7 +98,7 @@ export function LiveSidebar({
                 className="flex w-full items-center gap-2 border-b px-2.5 py-2 text-left text-xs hover:bg-accent"
                 onClick={() => onHubFilter(search.hubMatch as string)}
               >
-                <span aria-hidden="true">🏢</span>
+                <Building2 aria-hidden="true" className="size-3.5 shrink-0" />
                 Filter map to {search.hubMatch}
                 <span className="ml-auto font-mono text-muted-foreground">
                   {
@@ -178,7 +181,7 @@ export function LiveSidebar({
                           </Badge>
                         ) : null}
                         {selected ? (
-                          <span className="text-[9px] text-emerald-400">✓ FILTERED</span>
+                          <span className="text-[9px] text-bb-ok">✓ FILTERED</span>
                         ) : null}
                         <span className="ml-auto font-mono text-muted-foreground">
                           ↗ {row.outbound} ↙ {row.inbound}

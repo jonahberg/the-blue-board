@@ -9,6 +9,7 @@ export const gum = {
   "ogImageAlt": "The Blue Board — United Airlines GUM Hub Status",
   "twitterTitle": "United Airlines GUM Hub — Live Guam Status",
   "twitterDescription": "AI delay predictions, cancellations, on-time performance at United's Western Pacific hub. Updated every 30 seconds.",
+  "subtitle": "Pacific hub · ~8–12 daily departures · Japan, Honolulu, Manila and the Island Hopper",
   "breadcrumbName": "GUM — Guam",
   "faqSchema": [
     {

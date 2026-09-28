@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 
-import { FLEET_DB_COUNT, TRACKED_BOARDS } from '../src/data/facts.js';
+import { FLEET_DB_COUNT, OFFICIAL_HUBS, TRACKED_BOARDS } from '../src/data/facts.js';
 import { PRODUCES, resolveAgentResponse } from '../src/lib/agent-negotiation.js';
 import {
   agentMarkdown,
@@ -18,6 +18,7 @@ import {
 } from '../src/lib/home-seo.js';
 import { isKnownRoutePath, normalizePathname } from '../src/lib/site-routes.js';
 import { GET as getSitemap } from '../src/pages/sitemap.xml.ts';
+import { hubs } from '../src/data/hubs/index.js';
 
 // Agent-readiness pins (Ora "Is Agentic" audit, Aug 2026). Each block below guards one
 // audited behaviour that lives in a static surface no other test covers:
@@ -95,8 +96,22 @@ describe('1. homepage content without JavaScript', () => {
     expect(HOME_BRIEF.h1).toContain('United Airlines');
   });
 
-  it('ships well past 500 characters of raw text', () => {
+  it('ships well past 3000 characters of raw text', () => {
     expect(homeText().length).toBeGreaterThan(3000);
+  });
+
+  it('puts nothing focusable between the skip link and the island', () => {
+    // The sr-only nav, the brief's llms.txt/sitemap links and the fleet-summary link used to
+    // precede the island: 19 invisible Tab stops before the header (audit F12). They follow
+    // it now. <noscript> content is inert whenever the island can run, so it is excluded.
+    const beforeIsland = indexAstro
+      .slice(indexAstro.indexOf('---', 3) + 3, indexAstro.indexOf('<Dashboard'))
+      .replace(/<noscript>[\s\S]*?<\/noscript>/g, '');
+    expect(beforeIsland).not.toMatch(/<a\b|set:html=\{HOME_BRIEF\.howToUseHtml\}|HOME_NAV_LINKS|FLEET_SUMMARY\.linkHref/);
+    const afterIsland = indexAstro.slice(indexAstro.indexOf('<Dashboard'));
+    expect(afterIsland).toContain('set:html={HOME_BRIEF.howToUseHtml}');
+    expect(afterIsland).toContain('HOME_NAV_LINKS.map');
+    expect(afterIsland).toContain('FLEET_SUMMARY.linkHref');
   });
 
   it('keeps the crawlable brief visually hidden so the dashboard looks unchanged', () => {
@@ -106,9 +121,14 @@ describe('1. homepage content without JavaScript', () => {
   it('renders the crawlable site nav and the noscript fallback', () => {
     expect(indexAstro).toContain('<nav class="sr-only"');
     expect(indexAstro).toContain('<noscript>');
-    expect(HOME_NAV_LINKS).toHaveLength(15);
-    expect(NOSCRIPT_LINKS.hubs).toHaveLength(9);
-    expect(NOSCRIPT_LINKS.resources).toHaveLength(4);
+    // Structural, not counted: every hub page is linked, and every link resolves to a real route.
+    const hubHrefs = Object.keys(hubs).map((hub) => `/hubs/${hub}`).sort();
+    expect(NOSCRIPT_LINKS.hubs.map((l) => l.href).sort()).toEqual(hubHrefs);
+    expect(HOME_NAV_LINKS.map((l) => l.href)).toEqual(expect.arrayContaining(hubHrefs));
+    expect(NOSCRIPT_LINKS.resources.length).toBeGreaterThan(0);
+    const all = [...HOME_NAV_LINKS, ...NOSCRIPT_LINKS.resources];
+    for (const { href } of all) expect(isKnownRoutePath(href), href).toBe(true);
+    expect(new Set(HOME_NAV_LINKS.map((l) => l.href)).size).toBe(HOME_NAV_LINKS.length);
   });
 
   it('states the fleet count that facts.js is the source of truth for', () => {
@@ -319,6 +339,30 @@ describe('4. agent instruction / when-to-use', () => {
       expect(source).toContain('Do **not** use The Blue Board');
     });
   }
+
+  // The llms files are static and cannot import src/data/facts.js; this is what keeps the
+  // hand-copied figures honest (the maintainer note that said so used to ship inside them).
+  it('keeps the hand-copied facts in llms.txt / llms-full.txt in step with facts.js', () => {
+    const fleet = FLEET_DB_COUNT.toLocaleString('en-US');
+    for (const source of [llmsTxt, llmsFullTxt]) {
+      expect(source).not.toMatch(/<!--/);
+      const fleetFigures = [...source.matchAll(/(\d{1,3}(?:,\d{3})+)\+? aircraft/g)].map((m) => m[1]);
+      expect(fleetFigures.length).toBeGreaterThan(0);
+      for (const figure of fleetFigures) expect(figure).toBe(fleet);
+      const hubFigures = [...source.matchAll(/\b(\d+) (?:United )?hubs\b/g)].map((m) => Number(m[1]));
+      expect(hubFigures.length).toBeGreaterThan(0);
+      for (const n of hubFigures) expect(n).toBe(OFFICIAL_HUBS.length);
+    }
+  });
+
+  it('robots.txt: the AI-crawler group repeats the site-wide disallows (RFC 9309)', () => {
+    const robots = readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
+    const aiGroup = robots.slice(robots.indexOf('User-agent: ChatGPT-User'));
+    for (const rule of ['Disallow: /api/', 'Disallow: /data/', 'Disallow: /_agent/']) {
+      expect(aiGroup).toContain(rule);
+    }
+    expect(robots).toContain('Sitemap: https://theblueboard.co/news-sitemap.xml');
+  });
 
   it('does not advertise a path robots.txt disallows', () => {
     for (const source of [llmsTxt, llmsFullTxt, agentMarkdown['/'], agentMarkdown['/news']]) {

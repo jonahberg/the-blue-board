@@ -16,8 +16,12 @@ import { LegalMenu } from '../features/LegalPopover';
 
 export function Attribution() {
   return (
+    // No `role="contentinfo"`: the island renders inside BaseLayout's <main>, and a
+    // contentinfo landmark nested in main is an axe violation (landmark-contentinfo-is-top-
+    // level). The page's real contentinfo is BaseLayout's site footer; inside <main> a plain
+    // <footer> is correctly a generic element, named here for anyone navigating by it.
     <footer
-      role="contentinfo"
+      aria-label="Data attribution"
       className="hidden shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-t px-4 py-1 text-[10px] text-muted-foreground md:flex"
     >
       <span>

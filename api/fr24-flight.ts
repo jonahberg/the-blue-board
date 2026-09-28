@@ -5,8 +5,8 @@
 //   Live positions: GET /api/live/flight-positions/full?flights={iata}
 //   Flight summary: GET /api/flight-summary/light?flights={iata}
 
-import type { VercelRequest, VercelResponse } from './types.js';
-import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime } from './_official-fr24.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
+import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime, pickFr24SummaryLeg } from './_official-fr24.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
 
 const FR24_BASE = 'https://fr24api.flightradar24.com';
@@ -35,6 +35,14 @@ function setCache(key: string, data: any): void {
 // Rate limiting: 10 req/min per IP, 60 req/min global
 const rateLimitByIp = new Map<string, number[]>();
 const globalLog: number[] = [];
+
+/** Test seam: the response cache and rate-limit logs are module state that otherwise leaks
+ *  between tests (a reused flight number is served from cache; the 11th call is rate-limited). */
+export function __resetFr24FlightForTests(): void {
+  cache.clear();
+  rateLimitByIp.clear();
+  globalLog.length = 0;
+}
 const MAX_PER_IP = 10;
 const MAX_GLOBAL = 60;
 let lastCleanup = Date.now();
@@ -124,16 +132,28 @@ async function fr24Fetch(
   }
 }
 
+// FR24's documented /live/flight-positions/full row (Sep 2026 audit F110): fr24_id, flight,
+// callsign, lat, lon, track, alt, gspeed, vspeed, squawk, timestamp, source, hex, type, reg,
+// painted_as, operating_as, orig_iata, orig_icao, dest_iata, dest_icao, eta. It has NO on_ground
+// flag and NO departure times — only `eta`. The older names (flight_iata, registration, icao24,
+// on_ground, scheduled_departure…) were assumed, never observed, and stay only as fallbacks.
 export function normalizeLiveResponse(data: any, flightNumber: string): any | null {
   // FR24 live positions return { data: [ { ... } ] }
   const flights = data?.data || [];
   if (!flights.length) return null;
 
   const f = flights[0];
+  const alt = f.alt ?? f.altitude ?? null;
+  const gspeed = f.gspeed ?? f.speed ?? null;
+  // No on_ground field in the real payload: an aircraft at 0 ft, or crawling below 500 ft, is on
+  // the ground (taxiing out or in). Without this every live row read "en-route".
+  const onGround = f.on_ground === true
+    || (typeof alt === 'number' && alt <= 0)
+    || (typeof gspeed === 'number' && gspeed < 40 && (typeof alt !== 'number' || alt < 500));
   return {
-    flightNumber: f.flight_iata || f.flight_icao || flightNumber,
+    flightNumber: f.flight || f.flight_iata || f.flight_icao || flightNumber,
     callsign: f.callsign || f.flight_icao || '',
-    status: f.on_ground ? 'on-ground' : 'en-route',
+    status: onGround ? 'on-ground' : 'en-route',
     origin: {
       iata: f.orig_iata || f.origin?.iata || '',
       icao: f.orig_icao || f.origin?.icao || '',
@@ -145,9 +165,9 @@ export function normalizeLiveResponse(data: any, flightNumber: string): any | nu
       name: f.destination?.name || '',
     },
     aircraft: {
-      type: f.aircraft_type || f.type || '',
-      reg: f.registration || f.reg || '',
-      icao24: f.icao24 || '',
+      type: f.type || f.aircraft_type || '',
+      reg: f.reg || f.registration || '',
+      icao24: f.hex || f.icao24 || '',
     },
     departure: {
       scheduled: f.scheduled_departure || f.dep_scheduled || '',
@@ -155,32 +175,36 @@ export function normalizeLiveResponse(data: any, flightNumber: string): any | nu
     },
     arrival: {
       scheduled: f.scheduled_arrival || f.arr_scheduled || '',
-      estimated: f.estimated_arrival || f.arr_estimated || '',
+      estimated: f.eta || f.estimated_arrival || f.arr_estimated || '',
+      actual: '',
     },
     position: {
       lat: f.lat ?? f.latitude ?? null,
       lon: f.lon ?? f.longitude ?? null,
-      alt: f.alt ?? f.altitude ?? null,
-      speed: f.gspeed ?? f.speed ?? null,
-      heading: f.heading ?? f.track ?? null,
+      alt,
+      speed: gspeed,
+      heading: f.track ?? f.heading ?? null,
     },
-    flightId: f.flight_id || f.fr24_id || '',
+    flightId: f.fr24_id || f.flight_id || '',
     _raw: f, // include raw for debugging
   };
 }
 
-export function normalizeSummaryResponse(data: any, flightNumber: string): any | null {
+export function normalizeSummaryResponse(data: any, flightNumber: string, nowMs: number = Date.now()): any | null {
   const flights = data?.data || [];
   if (!flights.length) return null;
 
-  // The live /api/flight-summary/light response is FLAT — flight / callsign / orig_iata /
-  // orig_icao / dest_iata / dest_icao / dest_icao_actual / datetime_scheduled_departure /
-  // datetime_takeoff / datetime_landed / reg / type / flight_ended / fr24_id — not the nested
-  // { origin: { iata }, departure: { scheduled } } shape this function originally assumed.
-  // schedule.ts normalizeSummaryFlight and aircraft-history.ts normalizeSegments read the flat
-  // fields; until Sep 10 2026 this one did not, so every summary-only lookup came back with
-  // empty origin/destination/aircraft/times and status "unknown". Nested keys stay as fallbacks.
-  const f = flights[0];
+  // The live /api/flight-summary/light response is FLAT — flight / callsign / orig_icao /
+  // dest_icao / dest_icao_actual / datetime_takeoff / datetime_landed / reg / type / flight_ended /
+  // first_seen / last_seen / fr24_id — not the nested { origin: { iata }, departure: { scheduled } }
+  // shape this function originally assumed. Nested keys stay as fallbacks.
+  //
+  // F0 (Sep 2026): it lists only legs that have OPERATED, so flights[0] was routinely yesterday's
+  // completed leg of a flight that has not departed today. Pick the live / just-ended leg; failing
+  // that, hand back the most recent one flagged `previousLeg` so the client labels it as history.
+  const picked = pickFr24SummaryLeg(flights, { nowMs, allowPrevious: true });
+  if (!picked) return null;
+  const f = picked.leg;
   const landed = !!(f.datetime_landed || f.arrival?.actual || f.flight_ended);
   const airborne = !landed && !!(f.datetime_takeoff || f.departure?.actual);
   const status = f.status || (landed ? 'landed' : airborne ? 'en-route' : 'scheduled');
@@ -210,10 +234,13 @@ export function normalizeSummaryResponse(data: any, flightNumber: string): any |
     },
     arrival: {
       scheduled: f.arrival?.scheduled || f.scheduled_arrival || f.datetime_scheduled_arrival || '',
-      estimated: f.arrival?.estimated || f.estimated_arrival || f.datetime_landed || '',
+      estimated: f.arrival?.estimated || f.estimated_arrival || '',
+      // A landing time is an ACTUAL; it used to be reported as the arrival estimate (F110).
+      actual: f.arrival?.actual || f.datetime_landed || '',
     },
     position: null,
     flightId: f.flight_id || f.fr24_id || '',
+    previousLeg: !picked.current,
     _raw: f,
   };
 }
@@ -286,7 +313,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (liveResp.status === 402) recordOfficialApi402(body || 'fr24-flight live 402');
     }
 
-    // 2. Also try flight summary for departure/arrival times (live endpoint often lacks them)
+    // 2. Also try flight summary for departure times. live-full carries only `eta`, never a
+    // departure time, so for a real live row this top-up always runs.
     const liveHasTimes = flightData && (flightData.departure?.scheduled || flightData.departure?.actual || flightData.arrival?.scheduled);
     if (!flightData || !liveHasTimes) {
       const now = new Date();
@@ -305,14 +333,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const summaryData = await summaryResp.json();
         console.log(`FR24 summary response for ${flight}: status=${summaryResp.status}, entries=${summaryData?.data?.length || 0}`);
         const summaryFlight = normalizeSummaryResponse(summaryData, flight);
-        if (flightData && summaryFlight) {
-          // Merge: keep live position data, fill in times from summary
+        if (flightData && summaryFlight && !summaryFlight.previousLeg) {
+          // Merge: keep live position data, fill in times from summary — but only from a CURRENT
+          // summary leg; an earlier day's takeoff is not this flight's departure.
           source = 'live+summary';
           if (!flightData.departure.scheduled && summaryFlight.departure.scheduled) flightData.departure.scheduled = summaryFlight.departure.scheduled;
           if (!flightData.departure.actual && summaryFlight.departure.actual) flightData.departure.actual = summaryFlight.departure.actual;
           if (!flightData.arrival.scheduled && summaryFlight.arrival.scheduled) flightData.arrival.scheduled = summaryFlight.arrival.scheduled;
           if (!flightData.arrival.estimated && summaryFlight.arrival.estimated) flightData.arrival.estimated = summaryFlight.arrival.estimated;
         } else if (!flightData && summaryFlight) {
+          // A previousLeg answer stays: the client labels it "last operated <date>" (F0).
           source = 'summary';
           flightData = summaryFlight;
         }
@@ -336,6 +366,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // can disclaim with, plus the leg's own date, so the modal isn't silently
     // authoritative. Label only — no ranking change.
     const liveLeg = source === 'live' || source === 'live+summary';
+    const previousLeg = Boolean(cleanFlight.previousLeg);
+    delete cleanFlight.previousLeg;
     const legDate = cleanFlight.departure?.scheduled || cleanFlight.departure?.actual
       || cleanFlight.arrival?.scheduled || cleanFlight.arrival?.estimated || '';
 
@@ -345,6 +377,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       source: `fr24-official-${source}`,
       liveLeg,
       legDate,
+      // No leg of this flight number is flying or has just landed: this is the most recent one
+      // that operated (often yesterday's), shown as history rather than as the flight (F0).
+      previousLeg,
       cached: false,
     };
 

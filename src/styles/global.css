@@ -7,16 +7,23 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Two status hues the shadcn palette does not carry: amber reads as "caution" and green
-   as "clear" across the hub cards, fleet content and tracker badges. Declared in a real
-   (non-`inline`) `@theme` so Tailwind both emits `--color-bb-*` as custom properties —
-   `content.css` styles raw `set:html` strings and can only reach them through `var()` —
-   and generates `bg-bb-ok` / `text-bb-warn` / `border-bb-*` utilities for authored markup.
-   Tuned for the dark palette, which is the product default. Every use ships with an icon
-   or a text label beside it: colour is never the only signal (design spec §2.4). */
+/* The hues the shadcn palette does not carry. Two are status: amber reads as "caution" and
+   green as "clear" across the dashboard, the hub cards, fleet content and tracker badges
+   (red is shadcn's own `--destructive`). `bb-info` is the neutral-informative blue of an
+   estimate or an advisory that is not a problem, and `bb-starlink` is the owner-approved
+   Starlink violet (#A78BFA, Jul 4 2026) — an encoding, the one colour that marks Starlink
+   metal on the map, in badges and in charts. Declared in a real (non-`inline`) `@theme` so
+   Tailwind both emits `--color-bb-*` as custom properties — `content.css` styles raw
+   `set:html` strings and can only reach them through `var()` — and generates `bg-bb-ok` /
+   `text-bb-warn` / `border-bb-*` utilities for authored markup. The dashboard uses these
+   utilities, never raw palette classes (`tests/design-guards.test.js`, audit F72). Tuned for
+   the dark palette, which is the product default. Every use ships with an icon or a text
+   label beside it: colour is never the only signal (design spec §2.4). */
 @theme {
     --color-bb-warn: oklch(0.76 0.12 85);
     --color-bb-ok: oklch(0.74 0.16 150);
+    --color-bb-info: oklch(0.75 0.13 230);
+    --color-bb-starlink: oklch(0.702 0.183 293.541);
 }
 
 @theme inline {
@@ -48,6 +55,7 @@
     --color-secondary: var(--secondary);
     --color-primary-foreground: var(--primary-foreground);
     --color-primary: var(--primary);
+    --color-primary-fill: var(--primary-fill);
     --color-popover-foreground: var(--popover-foreground);
     --color-popover: var(--popover);
     --color-card-foreground: var(--card-foreground);
@@ -74,6 +82,7 @@
     --popover-foreground: oklch(0.145 0 0);
     --primary: oklch(0.205 0 0);
     --primary-foreground: oklch(0.985 0 0);
+    --primary-fill: var(--primary);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
@@ -100,7 +109,11 @@
     --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* `--primary` is United blue. */
+/* `--primary` is United blue, tuned for its job as TEXT, rings, bars and chart ink on the dark
+   surfaces (6.3:1 on --background, 5.7:1 on --card). Behind white text it is only 3.0:1, so
+   every filled surface that carries --primary-foreground (buttons, CTAs, badges, the skip
+   link) paints --primary-fill instead: the same hue, darker, close to United's own #005DAA —
+   5.8:1 with white. tests/primary-contrast.test.js pins both pairs. */
 .dark {
     --background: oklch(0.145 0.005 260);
     --foreground: oklch(0.985 0 0);
@@ -110,6 +123,7 @@
     --popover-foreground: oklch(0.985 0 0);
     --primary: oklch(0.66 0.17 255);
     --primary-foreground: oklch(0.985 0 0);
+    --primary-fill: oklch(0.5 0.17 255);
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
@@ -258,6 +272,18 @@
   color: var(--muted-foreground);
 }
 
+/* Zoom +/− are 30x30 in leaflet.css (its `.leaflet-touch` size). Wherever the pointer is a
+   finger — phones AND tablets, whatever their width — they get the 44 px DESIGN.md asks for.
+   Leaflet's rule is `.leaflet-touch .leaflet-bar a` (0,2,1); three classes win on
+   specificity, since the Leaflet stylesheet may load after this one. */
+@media (pointer: coarse) {
+  .leaflet-container.leaflet-touch .leaflet-bar a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
+}
+
 /* Leaflet's base tooltip rule is `white-space:nowrap` with no max-width, so a
    long hub condition label clips off-screen on narrow viewports. */
 .leaflet-container .leaflet-tooltip {
@@ -274,36 +300,22 @@
   border-top-color: var(--border);
 }
 
-/* The flight detail panel is a NON-MODAL sheet pinned to the VIEWPORT's right edge, so the
-   map stays interactive beneath it — but where it overlaps the map it covers the bottom-right
-   corner, and that is where Leaflet stacks the zoom control and the ODbL attribution credit.
-   Slide that stack clear by the width of the overlap while the panel is open.
+/* The flight detail panel is a NON-MODAL sheet pinned to the VIEWPORT, so the map stays
+   interactive beneath it. At ≥1024px it sits on the right, where it covers the map's
+   bottom-right corner — which is where Leaflet stacks the zoom control and the ODbL
+   attribution credit. Slide that stack clear by the width of the overlap while it is open:
 
-   The overlap is the panel's width minus whatever already sits between the map's right edge
-   and the viewport's right edge:
+     panel 28rem − the Live sidebar 20rem = 8rem
+     (`FlightSheet` `data-[side=right]:sm:max-w-md`, `LiveView` `<aside class="w-80
+      … lg:block">`, which mounts at the same 1024px as its `useMediaQuery`)
 
-     ≥1024px   panel 28rem − the Live sidebar 20rem  = 8rem
-               (`FlightSheet` `data-[side=right]:sm:max-w-md`, `LiveView` `<aside class="w-80
-                … lg:block">`, which mounts at the same 1024px as its `useMediaQuery`)
-     ≥640px    panel 28rem, no sidebar yet           = 28rem
-     <640px    the panel is `w-full`: it covers the map completely, so there is no control
-               left to keep reachable and no shift to make.
-
-   Keep these two numbers in step with those two classes. */
-@media (min-width: 640px) {
-  [data-flight-panel='open'] .leaflet-bottom.leaflet-right {
-    transform: translateX(-28rem);
-  }
-}
+   Below 1024px the panel is a bottom sheet (F20), so there is no sideways shift to make.
+   `src/lib/flight-panel-occlusion.js` uses the same numbers to centre "view on map" moves in
+   the uncovered part of the map. Keep all three in step. */
 @media (min-width: 1024px) {
   [data-flight-panel='open'] .leaflet-bottom.leaflet-right {
     transform: translateX(-8rem);
   }
-}
-
-/* Keyless basemap fallback: darken OSM tiles in CSS. */
-.bb-osm-dark {
-  filter: invert(1) hue-rotate(180deg) brightness(0.65) contrast(1.15) saturate(0.35);
 }
 
 @import "./content.css";

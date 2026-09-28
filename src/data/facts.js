@@ -47,6 +47,13 @@ export const STARLINK_TARGET_2026 = '~1,000';
 /** Airframe count in The Blue Board's fleet database (Q1-2026 snapshot — NOT United's live fleet size). */
 export const FLEET_DB_COUNT = 1078;
 
+/**
+ * The day that fleet database (`/data/fleet.json`) last changed. It is a hand-maintained
+ * snapshot with no refresh job, so copy describing it says "as of" this — never "updated
+ * daily" (F86).
+ */
+export const FLEET_DB_AS_OF = '2026-02-12';
+
 /** Conservative, verified social-proof user count. Raise via this constant only when re-verified. */
 export const SOCIAL_PROOF_USERS = '22,000+';
 

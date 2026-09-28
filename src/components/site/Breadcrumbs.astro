@@ -37,7 +37,6 @@ const schema = {
     {
       trail.map((crumb, index) => (
         <li class="flex items-center gap-1.5">
-          {index > 0 && <span aria-hidden="true">/</span>}
           {crumb.href ? (
             <a href={crumb.href} class="underline underline-offset-2 hover:text-foreground">
               {crumb.label}
@@ -47,6 +46,8 @@ const schema = {
               {crumb.label}
             </span>
           )}
+          {/* The separator trails its crumb, so a wrapped line never starts with a bare "/". */}
+          {index < trail.length - 1 && <span aria-hidden="true">/</span>}
         </li>
       ))
     }

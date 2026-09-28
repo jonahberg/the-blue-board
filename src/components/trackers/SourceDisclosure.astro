@@ -55,7 +55,7 @@ const sourceLabel = (source: string) => {
 // 44 px tall per the touch-target rule, so the label is centred and set a size up from the
 // old 8 px chip — at 8 px it read as an empty box rather than a button.
 const actionClass =
-  'inline-flex min-h-11 flex-1 items-center justify-center rounded-sm border border-border px-2.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted-foreground hover:border-primary hover:text-primary aria-pressed:border-emerald-400/55 aria-pressed:text-emerald-400';
+  'inline-flex min-h-11 flex-1 items-center justify-center rounded-sm border border-border px-2.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:border-primary hover:text-primary aria-pressed:border-bb-ok/55 aria-pressed:text-bb-ok';
 ---
 
 <div
@@ -68,7 +68,7 @@ const actionClass =
 >
   <details class="min-w-0">
     <summary
-      class="flex cursor-pointer items-center gap-1.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-primary marker:text-muted-foreground"
+      class="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-primary marker:text-muted-foreground"
     >
       <span>Sources ({sources.length})</span>
       <span class="font-medium text-muted-foreground">verified {fmt(verified)}</span>
@@ -76,7 +76,7 @@ const actionClass =
     <ol class="mt-1.5 ml-4 list-decimal">
       {
         sources.map((source) => (
-          <li class="text-[10px] leading-relaxed text-muted-foreground">
+          <li class="text-[11px] leading-relaxed text-muted-foreground">
             <a
               href={source}
               target="_blank"

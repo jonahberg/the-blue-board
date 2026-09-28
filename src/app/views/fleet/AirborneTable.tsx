@@ -9,6 +9,8 @@
  * not a blank one — because this table's subject is the fleet, and a regional is not in it.
  */
 
+import { Star } from 'lucide-react';
+
 import {
   Table,
   TableBody,
@@ -86,7 +88,7 @@ export function AirborneTable({
                   <button
                     type="button"
                     onClick={() => onOpenAircraft(row.reg)}
-                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
                   >
                     {row.reg}
                   </button>
@@ -98,15 +100,15 @@ export function AirborneTable({
                 <TableCell className="text-xs">{row.phase}</TableCell>
                 <TableCell>
                   {row.starlink ? (
-                    <span className="rounded border border-violet-500/30 bg-violet-500/10 px-1 py-0.5 text-[9px] font-medium text-violet-300">
+                    <span className="rounded border border-bb-starlink/30 bg-bb-starlink/10 px-1 py-0.5 text-[9px] font-medium text-bb-starlink">
                       SL
                     </span>
                   ) : null}
                 </TableCell>
                 <TableCell>
                   {row.special ? (
-                    <span className="rounded border px-1 py-0.5 text-[9px] text-amber-400">
-                      ⭐ {row.special.name}
+                    <span className="inline-flex items-center gap-0.5 rounded border px-1 py-0.5 text-[9px] text-foreground">
+                      <Star aria-hidden="true" className="size-2.5" /> {row.special.name}
                     </span>
                   ) : null}
                 </TableCell>

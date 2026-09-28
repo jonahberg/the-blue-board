@@ -4,7 +4,7 @@
 // Uses FR24 Official API flight-summary endpoint with the `registrations` parameter
 // Returns the last 5 flight segments for the aircraft within a 36-hour window
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime } from './_official-fr24.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';

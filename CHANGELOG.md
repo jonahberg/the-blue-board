@@ -4,6 +4,28 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-09-28
+
+Fixes every finding from the Sep 27 2026 whole-site audit (141 agents; 128 of 130 findings independently reproduced) and cleans up the test suite.
+
+### Fixed — flight data
+- **My Flights, the FR24 lookup and the flight sheet no longer show yesterday's flight** as "Landed" on the wrong tail. `/api/flight-times` resolves the leg from the hub boards first (in the air > just landed > next departure) and uses FR24 only to overlay live facts; the paid FR24 call is skipped until the leg is within 1h of departure. Cache key includes `officialFallback`. (`api/flight-times.ts`, `api/_official-fr24.ts`, `api/fr24-flight.ts`)
+- **The connection checker gives real verdicts** (board gate times now reach it). **Delay risk** is fed the inbound aircraft again; the journey signal that could never fire is removed.
+- **Schedule boards:** earlier-day rows with +10–54h "delays" are repaired or dropped and no longer counted Late; boards are clipped to the hub day; partner-operated codeshares no longer count as United flights (board totals fall accordingly); the NOW divider sits after the last departed row; a tail from another aircraft family is not shown on a row; JST/ChST instead of GMT offsets; each hub's new today board is warmed right after its local midnight; AeroDataBox 429 retries are jittered.
+- **Weather:** fractional visibility (1/2SM was "2 SM"), VV ceilings, "Ceiling" is BKN/OVC/VV only, calm/variable wind. **FAA** snake_case delay types are read by every client helper. **One network-status definition** drives the hub strip, ticker and IROPS badge (no more "SMOOTH OPS" beside "SIGNIFICANT DISRUPTION"); planned NAS outlooks are never "critical"; hub readings show their age.
+- **Fleet/Starlink/Stats:** one definition each for fleet utilization and Starlink %; the Starlink board marks only the live leg Airborne; Express ETA uses the Express pace; fleet DB says "as of 12 Feb 2026" instead of "updated daily"; ⌘K ranks exact matches first and Enter works immediately; `/?hub=xxx` opens the Live map on that hub.
+
+### Fixed — design, accessibility, mobile, speed
+- Filled primary buttons use a new `--primary-fill` token: white-on-blue contrast 2.99:1 → 5.82:1 sitewide.
+- Phones: the flight panel is a bottom peek so "View on map" shows the map; the search button has an accessible name; no keyboard pop-up from Filters; 16px inputs; 44px touch targets on touch screens (`pointer-fine:md:` floor); the phone menu closes on Escape/outside tap; the news and tip strips moved below the content (phone chrome 228px → 122px).
+- Status colours use the DESIGN.md tokens (also fixes 6 content pages whose token colours resolved to nothing); chrome icons are lucide-react.
+- Speed: overlays lazy-loaded (Dashboard chunk 357 → 238 KB), Geist preloaded, one tile per cell on retina (~3x fewer CARTO tiles); CLS home 0.06 → 0.006, fleet pages 0.145 → 0; reduced-motion respected.
+- SEO: `og:image:type` matches the image; robots/llms/feed hygiene; uppercase hub URLs redirect.
+
+### Changed — tests and infrastructure
+- Tests: 143 files / 2,480 → 198 files / 2,935, order-independent (shuffle-clean on 3 seeds). Dead-path and copy-of-the-code tests replaced with behaviour tests on real production data shapes; new guards compile `vercel.json`, unit-test the CSP hash parser, catch every Node-ESM load-failure class in `api/`, run axe over every built page, and render every tab.
+- Post-deploy smoke fails when the Vercel production deploy fails. `api/types.ts` (deployed as a handler-less function) → `api/_types.ts`. Dead `/api/fleet`, `appendVaryAccept` and `tierNasEvents` removed; legacy `SCHEDULE_SOURCE_PRIORITY` modes and `?page=` retired.
+
 ## [1.8.3] - 2026-09-27
 
 ### Fixed

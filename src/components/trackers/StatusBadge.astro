@@ -17,7 +17,7 @@ const { label, tone = 'neutral', glyph = '' } = Astro.props;
 
 <span
   class:list={[
-    'inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider',
+    'inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wider',
     toneClass(TONE_BADGE, tone),
   ]}
->{glyph && <span class="text-[8px] leading-none" aria-hidden="true">{glyph}</span>}{label}</span>
+>{glyph && <span class="text-[11px] leading-none" aria-hidden="true">{glyph}</span>}{label}</span>

@@ -8,11 +8,15 @@
  * is worded "RISK: …" so it can never be read as a fact. The shipped board once displayed
  * "V.HIGH" next to a flight already running 140 minutes late.
  *
- * **The NOW divider anchors on the EFFECTIVE row time** — `max(scheduled, estimated)` when
- * there is no real time — so a flight held on the ground floats below the line instead of
- * masquerading as resolved above it. It only appears on today's board under the default
- * time-ascending sort, because a "now" line halfway down a list sorted by flight number
- * means nothing.
+ * **The NOW divider sits after the last resolved-past row**, placed on the EFFECTIVE row time
+ * (`max(scheduled, estimated)` when there is no real time) so a held flight is never counted
+ * as resolved, and one held row can no longer drag the line above hours of departed flights
+ * (board-now.js). It only appears on today's board under the default time-ascending sort,
+ * because a "now" line halfway down a list sorted by flight number means nothing.
+ *
+ * **Only a window of rows is painted** (schedule-window.js): a 640-row board laid out in full
+ * cost ~360 ms of style + layout every time the tab was shown again. The window opens around
+ * NOW, grows on request, and follows "jump to now" and the search palette to rows outside it.
  *
  * **A tail from live tracking says so.** The schedule feed omits registrations constantly; a
  * backfilled tail is real but it is not what the provider sent, and the tooltip says which.
@@ -21,7 +25,8 @@
  * "jump to now" and the palette's row highlight measure against.
  */
 
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { CalendarDays, Eye, SearchX, Star, TriangleAlert, Zap } from 'lucide-react';
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,6 +40,8 @@ import {
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { delayColorVar } from '@/lib/delay-format.js';
+import { scrollBehavior } from '@/lib/motion.js';
+import { clampWindow, expandWindow, initialWindow, windowIncluding } from '@/lib/schedule-window.js';
 import { cn } from '@/lib/utils';
 import type { RowModel, SortColumn } from './useBoardModel';
 import { STATUS_TONE, SWAP_TONE, delayToneClass, riskToneClass } from './tone';
@@ -53,10 +60,13 @@ const COLUMNS: { key: SortColumn | null; label: string; className?: string; srLa
   { key: 'aircraft', label: 'Aircraft' },
   { key: 'reg', label: 'Reg' },
   { key: null, label: 'Term / Gate' },
-  { key: 'status', label: 'Status', className: 'min-w-[8rem]' },
-  { key: null, label: 'Delay / Risk', className: 'min-w-[5.5rem]' },
+  // Capped: an uncapped presumed note set the whole column to ~313 px of mostly empty space
+  // while the Reg enrichment line beside it was truncated (F64).
+  { key: 'status', label: 'Status', className: 'w-[9rem] min-w-[8rem]' },
+  // Right-aligned like the values under it (tailwind-merge lets this beat the base text-left).
+  { key: null, label: 'Delay / Risk', className: 'min-w-[5.5rem] text-right' },
   { key: null, label: 'Fleet' },
-  { key: null, label: '👁️', srLabel: 'Watch' },
+  { key: null, label: 'watch', srLabel: 'Watch' },
 ];
 
 const HIGHLIGHT_MS = 2000;
@@ -66,7 +76,7 @@ const HIGHLIGHT_MS = 2000;
  * the risk badge. Rows already wrap to two lines on a phone, so the taller target costs no
  * density there and none at all on a desktop, where it collapses back to the text height.
  */
-const TAP_TARGET = 'inline-flex min-h-11 items-center md:min-h-0';
+const TAP_TARGET = 'inline-flex min-h-11 items-center pointer-fine:md:min-h-0';
 
 function SortableHead({
   column,
@@ -91,7 +101,7 @@ function SortableHead({
       <button
         type="button"
         onClick={() => onSort(column)}
-        className="flex min-h-11 w-full items-center gap-1 px-2 text-left text-[10px] uppercase tracking-wide md:min-h-8"
+        className="flex min-h-11 w-full items-center gap-1 px-2 text-left text-[10px] uppercase tracking-wide pointer-fine:md:min-h-8"
       >
         {label}
         <span aria-hidden="true" className={active ? 'text-primary' : 'text-muted-foreground'}>
@@ -101,6 +111,9 @@ function SortableHead({
     </TableHead>
   );
 }
+
+/** Why a board paints no rows — each says something different to the viewer (F14). */
+export type EmptyReason = 'filtered' | 'upstream' | 'none';
 
 export const ScheduleTable = forwardRef<
   ScheduleTableHandle,
@@ -116,6 +129,12 @@ export const ScheduleTable = forwardRef<
     onOpenAircraft: (reg: string) => void;
     onExplainDelay: (context: Record<string, unknown>) => void;
     boardAsOf: string;
+    /** Changes whenever the board, its filters or its sort change: the painted window resets. */
+    windowKey: string;
+    emptyReason: EmptyReason;
+    /** "Tomorrow's arrivals at EWR" — used by the empty states. */
+    emptySubject: string;
+    onClearFilters: () => void;
   }
 >(function ScheduleTable(
   {
@@ -130,50 +149,139 @@ export const ScheduleTable = forwardRef<
     onOpenAircraft,
     onExplainDelay,
     boardAsOf,
+    windowKey,
+    emptyReason,
+    emptySubject,
+    onClearFilters,
   },
   ref,
 ) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const dividerRef = useRef<HTMLTableRowElement>(null);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
+
+  // The painted window: reset around NOW whenever the board/filter/sort identity changes, and
+  // only clamped (never reset) when the same board just re-derives on a clock tick.
+  const anchor = dividerIndex >= 0 ? dividerIndex : firstFutureIndex;
+  const [windowState, setWindowState] = useState(() => ({ key: windowKey, ...initialWindow(rows.length, anchor) }));
+  let win = windowState;
+  if (windowState.key !== windowKey) {
+    win = { key: windowKey, ...initialWindow(rows.length, anchor) };
+    setWindowState(win);
+  }
+  const { start, end } = clampWindow(win, rows.length);
+  const setWin = (next: { start: number; end: number }) => setWindowState({ key: windowKey, ...next });
+
+  // A scroll/reveal that targets a row outside the window grows the window first and finishes
+  // after that render commits.
+  const pending = useRef<{ kind: 'now'; smooth: boolean } | { kind: 'flight'; ident: string } | null>(null);
+  // Growing the window upward pushes the rows the viewer is looking at down; keep them put.
+  const prependAnchor = useRef<number | null>(null);
+
+  const rowElement = (index: number) =>
+    bodyRef.current?.querySelector<HTMLElement>(`[data-row-index="${index}"]`) ?? null;
+
+  const scrollToElement = (target: HTMLElement, smooth: boolean) => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const top = Math.max(0, target.offsetTop - 60);
+    requestAnimationFrame(() => {
+      if (typeof container.scrollTo === 'function') {
+        container.scrollTo({ top, behavior: smooth ? scrollBehavior() : 'auto' });
+      } else {
+        container.scrollTop = top;
+      }
+    });
+  };
+
+  const highlight = (row: HTMLElement) => {
+    row.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
+    row.dataset.highlight = 'on';
+    setTimeout(() => {
+      delete row.dataset.highlight;
+    }, HIGHLIGHT_MS);
+  };
+
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (prependAnchor.current !== null && container) {
+      container.scrollTop += container.scrollHeight - prependAnchor.current;
+      prependAnchor.current = null;
+    }
+    const job = pending.current;
+    if (!job) return;
+    pending.current = null;
+    if (job.kind === 'now') {
+      const target = rowElement(anchor);
+      if (target) scrollToElement(target, job.smooth);
+    } else {
+      const row = bodyRef.current?.querySelector<HTMLElement>(`[data-flight-row="${CSS.escape(job.ident)}"]`);
+      if (row) highlight(row);
+    }
+  });
+
+  // Keep `pending` from surviving a board switch.
+  useEffect(() => {
+    pending.current = null;
+  }, [windowKey]);
 
   useImperativeHandle(
     ref,
     () => ({
       scrollToNow(smooth = true) {
-        const container = scrollRef.current;
-        if (!container) return;
-        const target =
-          dividerRef.current ??
-          (firstFutureIndex >= 0
-            ? (bodyRef.current?.querySelectorAll('tr')[firstFutureIndex] as HTMLElement | undefined)
-            : undefined);
-        if (!target) return;
-        const top = Math.max(0, target.offsetTop - 60);
-        requestAnimationFrame(() => {
-          if (typeof container.scrollTo === 'function') {
-            container.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' });
-          } else {
-            container.scrollTop = top;
-          }
-        });
+        if (anchor < 0) return;
+        const target = rowElement(anchor);
+        if (target) {
+          scrollToElement(target, smooth);
+          return;
+        }
+        pending.current = { kind: 'now', smooth };
+        setWin(windowIncluding({ start, end }, rows.length, anchor));
       },
       revealFlight(ident: string) {
-        const container = scrollRef.current;
-        if (!container || !ident) return false;
-        const row = container.querySelector<HTMLElement>(
+        if (!ident) return false;
+        const index = rows.findIndex((row) => row.ident === ident);
+        if (index < 0) return false;
+        const painted = bodyRef.current?.querySelector<HTMLElement>(
           `[data-flight-row="${CSS.escape(ident)}"]`,
         );
-        if (!row) return false;
-        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        row.dataset.highlight = 'on';
-        setTimeout(() => {
-          delete row.dataset.highlight;
-        }, HIGHLIGHT_MS);
+        if (painted) {
+          highlight(painted);
+          return true;
+        }
+        pending.current = { kind: 'flight', ident };
+        setWin(windowIncluding({ start, end }, rows.length, index));
         return true;
       },
     }),
-    [firstFutureIndex],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [anchor, rows, start, end, windowKey],
+  );
+
+  const showEarlier = () => {
+    prependAnchor.current = scrollRef.current?.scrollHeight ?? null;
+    setWin(expandWindow({ start, end }, rows.length, 'earlier'));
+  };
+  const showLater = () => setWin(expandWindow({ start, end }, rows.length, 'later'));
+  const showAll = () => {
+    prependAnchor.current = scrollRef.current?.scrollHeight ?? null;
+    setWin(expandWindow({ start, end }, rows.length, 'all'));
+  };
+
+  const moreRow = (key: string, count: number, label: string, onMore: () => void, withShowAll: boolean) => (
+    <TableRow key={key} className="hover:bg-transparent">
+      <TableCell colSpan={10} className="p-1">
+        <span className="sticky left-0 flex flex-wrap items-center gap-2 px-1">
+          <Button variant="outline" size="sm" className="min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onMore}>
+            {label} ({count})
+          </Button>
+          {withShowAll ? (
+            <Button variant="ghost" size="sm" className="min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={showAll}>
+              Show all {rows.length}
+            </Button>
+          ) : null}
+        </span>
+      </TableCell>
+    </TableRow>
   );
 
   return (
@@ -214,7 +322,7 @@ export const ScheduleTable = forwardRef<
                 >
                   {column.srLabel ? (
                     <>
-                      <span aria-hidden="true">{column.label}</span>
+                      <Eye aria-hidden="true" className="size-3.5" />
                       <span className="sr-only">{column.srLabel}</span>
                     </>
                   ) : (
@@ -229,20 +337,43 @@ export const ScheduleTable = forwardRef<
           {rows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
-                <span className="block text-2xl" aria-hidden="true">
-                  🔍
-                </span>
-                No flights match your filters
-                <span className="mt-1 block text-[10px]">
-                  Try adjusting hub, status, or search criteria
-                </span>
+                {emptyReason === 'filtered' ? (
+                  <>
+                    <SearchX aria-hidden="true" className="mx-auto mb-1 size-6" />
+                    No flights match your filters
+                    <span className="mt-1 block text-[10px]">
+                      Try adjusting status, search or the advanced filters
+                    </span>
+                    <Button variant="outline" size="sm" className="mt-2 min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onClearFilters}>
+                      Clear filters
+                    </Button>
+                  </>
+                ) : emptyReason === 'upstream' ? (
+                  <>
+                    <TriangleAlert aria-hidden="true" className="mx-auto mb-1 size-6" />
+                    Couldn't load {emptySubject} from the schedule provider
+                    <span className="mt-1 block text-[10px]">Try Retry in a moment</span>
+                  </>
+                ) : (
+                  <>
+                    <CalendarDays aria-hidden="true" className="mx-auto mb-1 size-6" />
+                    No United flights listed for {emptySubject} yet
+                    <span className="mt-1 block text-[10px]">
+                      The provider publishes a day's board as it approaches
+                    </span>
+                  </>
+                )}
               </TableCell>
             </TableRow>
           ) : (
-            rows.flatMap((row, index) => {
+            [
+              ...(start > 0 ? [moreRow('sched-more-earlier', start, 'Show earlier flights', showEarlier, end >= rows.length)] : []),
+              ...rows.slice(start, end).flatMap((row, offset) => {
+              const index = start + offset;
               const cells = [
                 <TableRow
                   key={row.key}
+                  data-row-index={index}
                   data-flight-row={row.ident}
                   className="align-top data-[highlight=on]:bg-primary/20"
                 >
@@ -260,7 +391,7 @@ export const ScheduleTable = forwardRef<
                       <span
                         className={cn(
                           'block text-[9px]',
-                          row.actualLine.early ? 'text-emerald-400' : 'text-muted-foreground',
+                          row.actualLine.early ? 'text-bb-ok' : 'text-muted-foreground',
                         )}
                       >
                         {row.actualLine.text}
@@ -329,7 +460,7 @@ export const ScheduleTable = forwardRef<
                     ) : null}
                   </TableCell>
 
-                  <TableCell className="max-w-40 font-mono text-[10px]">
+                  <TableCell className="max-w-48 font-mono text-[10px]">
                     {row.reg ? (
                       row.regFromLive ? (
                         <Tooltip>
@@ -360,7 +491,7 @@ export const ScheduleTable = forwardRef<
                     )}
                     {row.special ? (
                       <Badge variant="secondary" className="ml-1 px-1 py-0 text-[9px]">
-                        ⭐ {row.special}
+                        <Star aria-hidden="true" /> {row.special}
                       </Badge>
                     ) : null}
                     {row.fleet?.enrich ? (
@@ -375,7 +506,7 @@ export const ScheduleTable = forwardRef<
 
                   <TableCell className="font-mono whitespace-nowrap">{row.gate}</TableCell>
 
-                  <TableCell>
+                  <TableCell className="max-w-36">
                     <span className={cn('font-medium', STATUS_TONE[row.status.cls] ?? STATUS_TONE.unknown)}>
                       {row.status.text}
                       {row.status.presumed ? '*' : ''}
@@ -386,15 +517,18 @@ export const ScheduleTable = forwardRef<
                       </Badge>
                     ) : null}
                     {row.status.presumed ? (
-                      <span className="block text-[9px] text-muted-foreground">
-                        presumed — scheduled time passed without a live update
+                      <span
+                        className="block text-[9px] text-muted-foreground"
+                        title="Presumed — the scheduled time passed without a live update"
+                      >
+                        presumed (no live update)
                       </span>
                     ) : null}
                     {row.status.asOf ? (
                       <span className="block text-[9px] text-muted-foreground">as of {boardAsOf}</span>
                     ) : null}
                     {row.faaContext ? (
-                      <span className="block text-[9px] text-amber-400">{row.faaContext}</span>
+                      <span className="block text-[9px] text-bb-warn">{row.faaContext}</span>
                     ) : null}
                   </TableCell>
 
@@ -427,7 +561,11 @@ export const ScheduleTable = forwardRef<
                   <TableCell className="max-w-28">
                     {row.fleet ? (
                       <span className="block truncate text-[10px]" title={row.fleet.badge}>
-                        <span aria-hidden="true">{row.fleet.starlink ? '⚡' : '✓'}</span>{' '}
+                        {row.fleet.starlink ? (
+                          <Zap aria-hidden="true" className="inline size-3 align-[-2px]" />
+                        ) : (
+                          <span aria-hidden="true">✓</span>
+                        )}{' '}
                         {row.fleet.badge}
                       </span>
                     ) : row.reg ? (
@@ -437,15 +575,21 @@ export const ScheduleTable = forwardRef<
 
                   <TableCell>
                     {row.ident !== '—' ? (
+                      // A toggle: one name per flight, the state in aria-pressed (F18) — a
+                      // column of identical "Watch flight" buttons told a screen reader nothing.
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-11 md:size-7"
-                        aria-label={isWatched(row.ident) ? 'Unwatch flight' : 'Watch flight'}
-                        title={`${isWatched(row.ident) ? 'Unwatch' : 'Watch'} this flight`}
+                        className="size-11 pointer-fine:md:size-7"
+                        aria-label={`Watch ${row.ident}`}
+                        aria-pressed={isWatched(row.ident)}
+                        title={`${isWatched(row.ident) ? 'Stop watching' : 'Watch'} ${row.ident}`}
                         onClick={() => onToggleWatch(row)}
                       >
-                        <span aria-hidden="true">{isWatched(row.ident) ? '👁️' : '👁'}</span>
+                        <Eye
+                          aria-hidden="true"
+                          className={isWatched(row.ident) ? 'text-primary' : 'text-muted-foreground'}
+                        />
                       </Button>
                     ) : null}
                   </TableCell>
@@ -456,7 +600,6 @@ export const ScheduleTable = forwardRef<
                 cells.unshift(
                   <TableRow
                     key="sched-now-divider"
-                    ref={dividerRef}
                     aria-label="Current time marker"
                     className="bg-primary/10 hover:bg-primary/10"
                   >
@@ -472,7 +615,9 @@ export const ScheduleTable = forwardRef<
                 );
               }
               return cells;
-            })
+            }),
+              ...(end < rows.length ? [moreRow('sched-more-later', rows.length - end, 'Show later flights', showLater, true)] : []),
+            ]
           )}
         </TableBody>
       </Table>

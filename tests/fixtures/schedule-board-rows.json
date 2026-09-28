@@ -1,0 +1,176 @@
+{
+  "_comment": "Real /api/schedule board rows (read-only prod probes, 2026-09-27T04:33Z). capturedAt is the probe time in epoch seconds. UA2278: SFO departures board, tonight's leg (sched 05:35Z), not yet departed, tail not yet assigned. UA2106: ORD departures board, airborne ORD->SFO (real departure set, no real arrival).",
+  "capturedAt": 1790483619,
+  "UA2278_SFO_departures": {
+    "time": {
+      "real": {
+        "arrival": null,
+        "departure": null
+      },
+      "estimated": {
+        "arrival": 1790502480,
+        "departure": 1790487300
+      },
+      "scheduled": {
+        "arrival": 1790503440,
+        "departure": 1790487300
+      }
+    },
+    "status": {
+      "icon": "",
+      "live": false,
+      "text": "expected",
+      "generic": {
+        "type": "",
+        "status": {
+          "text": "scheduled",
+          "diverted": false
+        }
+      }
+    },
+    "_source": {
+      "quality": [
+        "Basic",
+        "Live",
+        "Basic",
+        "Live"
+      ],
+      "provider": "aerodatabox",
+      "timeSource": {
+        "hasGateArr": true,
+        "hasGateDep": true,
+        "hasRunwayArr": true,
+        "hasRunwayDep": true,
+        "gateDistinctArr": false,
+        "gateDistinctDep": false
+      }
+    },
+    "airline": {
+      "code": {
+        "iata": "UA"
+      },
+      "name": "United"
+    },
+    "airport": {
+      "origin": {
+        "code": {
+          "iata": "SFO"
+        },
+        "info": {
+          "gate": "D5",
+          "terminal": "2"
+        },
+        "name": "SFO"
+      },
+      "destination": {
+        "code": {
+          "iata": "ORD"
+        },
+        "info": {
+          "gate": "",
+          "terminal": "1"
+        },
+        "name": "Chicago"
+      }
+    },
+    "aircraft": {
+      "model": {
+        "code": "A21N",
+        "text": "Airbus A321 NEO"
+      },
+      "registration": ""
+    },
+    "identification": {
+      "number": {
+        "default": "UA2278"
+      },
+      "callsign": "UAL2278"
+    }
+  },
+  "UA2106_ORD_departures": {
+    "time": {
+      "real": {
+        "arrival": null,
+        "departure": 1790478300
+      },
+      "estimated": {
+        "arrival": 1790494140,
+        "departure": null
+      },
+      "scheduled": {
+        "arrival": 1790494200,
+        "departure": 1790476800
+      }
+    },
+    "status": {
+      "icon": "green",
+      "live": true,
+      "text": "departed",
+      "generic": {
+        "type": "",
+        "status": {
+          "text": "departed",
+          "diverted": false
+        }
+      }
+    },
+    "_source": {
+      "quality": [
+        "Basic",
+        "Live",
+        "Basic",
+        "Live"
+      ],
+      "provider": "aerodatabox",
+      "timeSource": {
+        "hasGateArr": true,
+        "hasGateDep": true,
+        "hasRunwayArr": true,
+        "hasRunwayDep": true,
+        "gateDistinctArr": false,
+        "gateDistinctDep": true
+      }
+    },
+    "airline": {
+      "code": {
+        "iata": "UA"
+      },
+      "name": "United"
+    },
+    "airport": {
+      "origin": {
+        "code": {
+          "iata": "ORD"
+        },
+        "info": {
+          "gate": "",
+          "terminal": "1"
+        },
+        "name": "ORD"
+      },
+      "destination": {
+        "code": {
+          "iata": "SFO"
+        },
+        "info": {
+          "gate": "E5",
+          "terminal": "3"
+        },
+        "name": "San Francisco"
+      }
+    },
+    "aircraft": {
+      "model": {
+        "code": "A21N",
+        "text": "Airbus A321 NEO"
+      },
+      "registration": "N14512"
+    },
+    "identification": {
+      "number": {
+        "default": "UA2106"
+      },
+      "callsign": "UAL2106"
+    }
+  }
+}

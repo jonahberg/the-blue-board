@@ -9,9 +9,17 @@
  * The hub code links to its hub guide, which is also why this strip is worth crawling.
  */
 
+import { House } from 'lucide-react';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { hubHealthSeverity, networkLabel } from '@/lib/hub-health.js';
+import {
+  HUB_ORDER,
+  hubHealthSeverity,
+  hubOtpDescription,
+  hubReadingAge,
+  networkLabel,
+} from '@/lib/hub-health.js';
 import { hubProgramMarker } from '@/lib/ops-health.js';
 import { cn } from '@/lib/utils';
 import { useIrops } from '../state/irops';
@@ -28,14 +36,21 @@ export function HubHealthStrip() {
   const irops = useIrops();
 
   const readings = hubs.map((entry) => entry.otp).filter((otp): otp is number => otp !== null);
-  const network = networkLabel(readings) as { avg: number; label: string } | null;
+  // The network chip follows the same networkStatus() rule as the ticker and the IROPS
+  // badge, so it cannot read "Smooth Ops" beside a ground stop (F5/F33/F68).
+  const network = networkLabel(readings, {
+    iropsScore: irops.score,
+    faaIndex,
+    hubCodes: HUB_ORDER,
+  }) as { avg: number; label: string; severity: Severity } | null;
   const loading = readings.length === 0 && irops.loading;
+  const nowMs = Date.now();
 
   return (
     <div
       aria-live="polite"
       aria-label="Hub on-time performance"
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-card/40 px-3 py-1.5 text-xs [scrollbar-width:none] md:px-4"
+      className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-card/40 px-3 py-1 text-xs [scrollbar-width:none] md:px-4"
     >
       <span className="mr-1 hidden shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground sm:inline">
         Hub on-time
@@ -43,7 +58,7 @@ export function HubHealthStrip() {
 
       {loading
         ? Array.from({ length: 9 }).map((_, i) => (
-            <Skeleton key={i} className="h-5 w-16 shrink-0" />
+            <Skeleton key={i} className="h-6 w-16 shrink-0" />
           ))
         : hubs.map((entry) => {
             const program = hubProgramMarker(faaIndex, entry.hub) as {
@@ -60,6 +75,11 @@ export function HubHealthStrip() {
                 ? program.severity
                 : otpSeverity;
             const isHome = homeAirport === entry.hub;
+            const age = hubReadingAge(entry.asOfMs, nowMs) as {
+              label: string;
+              stale: boolean;
+            } | null;
+            const stale = entry.otp !== null && Boolean(age?.stale);
 
             return (
               <Tooltip key={entry.hub}>
@@ -67,15 +87,15 @@ export function HubHealthStrip() {
                   <a
                     href={`/hubs/${entry.hub.toLowerCase()}`}
                     className={cn(
-                      'flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 no-underline hover:bg-accent',
+                      // 24 px tall (WCAG 2.5.8) inside a strip that stays ~33 px: a 44 px row
+                      // here would add a second strip's worth of fixed chrome on a phone.
+                      'flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent',
                       isHome && 'border border-primary/40',
+                      // An hours-old board still shows its number, but visibly receded (F91).
+                      stale && 'opacity-60',
                     )}
                   >
-                    {isHome ? (
-                      <span aria-hidden="true" className="text-[10px]">
-                        🏠
-                      </span>
-                    ) : null}
+                    {isHome ? <House aria-hidden="true" className="size-3" /> : null}
                     <SeverityGlyph severity={severity} program={program?.marker} />
                     <span className="font-medium">{entry.hub}</span>
                     <span
@@ -91,11 +111,15 @@ export function HubHealthStrip() {
                 <TooltipContent side="bottom">
                   <p className="font-medium">United at {entry.hub} — hub guide</p>
                   <p className="text-xs">
-                    {entry.otp === null
-                      ? 'No on-time reading yet'
-                      : `${entry.otp}% of operated departures on time`}
+                    {hubOtpDescription(entry.otp)}
                     {entry.source === 'client' ? ' (from the loaded board)' : ''}
                   </p>
+                  {entry.otp !== null && age ? (
+                    <p className="text-xs">
+                      {age.label}
+                      {age.stale ? ' — stale' : ''}
+                    </p>
+                  ) : null}
                   {program ? <p className="text-xs">{program.label}</p> : null}
                 </TooltipContent>
               </Tooltip>
@@ -104,10 +128,8 @@ export function HubHealthStrip() {
 
       {network ? (
         <span className="ml-auto shrink-0 pl-3 text-[11px] font-semibold uppercase tracking-wide">
-          <SeverityGlyph severity={hubHealthSeverity(network.avg) as Severity} />{' '}
-          <span className={SEV_TEXT[hubHealthSeverity(network.avg) as Severity]}>
-            {network.label}
-          </span>
+          <SeverityGlyph severity={network.severity} />{' '}
+          <span className={SEV_TEXT[network.severity]}>{network.label}</span>
         </span>
       ) : null}
     </div>

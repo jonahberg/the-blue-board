@@ -6,7 +6,9 @@
  *   #live #myflight #schedule #fleet #starlink #weather #stats #sources
  *   ?tab=…            including the `irops` alias → Weather, scrolled to the IROPS section
  *   ?flight= / ?q=    open the flight sheet, or offer a schedule lookup when not airborne
- *   ?hub=             with ?tab=schedule, selects that board
+ *   ?hub=             selects that schedule board; with no ?tab (or ?tab=live) it is ALSO the
+ *                     Live map's hub filter — `readLiveHubDeepLink()`, read by the Live view
+ *                     (the hub pages' "Live <HUB> Map" CTA, F13/F45)
  *   ?view=starlink    the Starlink tab (its airborne/special siblings are Fleet-tab filters)
  *   ?aircraft=        opens the aircraft dialog
  *   ?waitlist=1       opens the waitlist dialog
@@ -58,6 +60,34 @@ export function readFleetDeepLinks(): FleetDeepLinks {
     filter: params.get('type') ?? params.get('filter'),
     view: view === 'airborne' || view === 'special' ? view : null,
   };
+}
+
+/**
+ * The Live map's hub from `?hub=`, when the link is for the Live view (no `?tab`, or
+ * `?tab=live`). Validated against the hubs the map knows, so `?hub=xyz` is ignored rather than
+ * filtering the map to nothing. The Live view seeds its hub filter with this and centres on
+ * the hub — like `readFleetDeepLinks()`, a pure read the owning view does itself.
+ */
+export function readLiveHubDeepLink(knownHubs: readonly string[]): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const hub = params.get('hub')?.trim().toUpperCase();
+  if (!hub || !knownHubs.includes(hub)) return null;
+  const tab = resolveTabParam(params.get('tab'));
+  return !tab || tab === 'live' ? hub : null;
+}
+
+/** Query parameters that name a specific destination inside the dashboard. */
+const DEEP_LINK_PARAMS = ['tab', 'hub', 'flight', 'q', 'aircraft', 'view', 'filter', 'type', 'waitlist'];
+
+/**
+ * True when the visitor arrived on a deep link. The first-visit welcome overlay should not
+ * open on top of the view the link was sent for (F45) — the arrival already has a purpose.
+ */
+export function isDeepLinkArrival(): boolean {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  return DEEP_LINK_PARAMS.some((key) => params.has(key));
 }
 
 /** 'UAL123' / 'ua 123' / '123' → 'UA123'. */

@@ -18,6 +18,9 @@ import {
   shouldRetryPartial,
   swapStorageKey,
   swapSummary,
+  emptyBoardReason,
+  staleFollowUpDelayMs,
+  STALE_FOLLOW_UP_MS,
 } from '../src/lib/schedule-load.js';
 
 describe('cache + storage keys are the shipped strings', () => {
@@ -123,6 +126,13 @@ describe('hub-local formatting', () => {
   it('reads a timezone abbreviation', () => {
     expect(hubTzAbbrev('America/Chicago', new Date('2026-09-13T23:12:00Z'))).toBe('CDT');
     expect(hubTzAbbrev('Not/AZone')).toBe('');
+  });
+
+  it('names the Pacific hub zones instead of printing GMT offsets (F103)', () => {
+    // The NRT board read "── NOW · 12:56 GMT+9 ──".
+    expect(hubTzAbbrev('Asia/Tokyo', new Date('2026-09-13T23:12:00Z'))).toBe('JST');
+    expect(hubTzAbbrev('Pacific/Guam', new Date('2026-09-13T23:12:00Z'))).toBe('ChST');
+    expect(formatBoardAsOf(Date.parse('2026-09-13T23:12:00Z'), 'Asia/Tokyo')).toMatch(/^8:12\s?AM JST$/);
   });
 });
 
@@ -256,7 +266,7 @@ describe('staleness / degradation ladder', () => {
   });
 });
 
-describe('cache indicator (legacy main.js:4763)', () => {
+describe('cache indicator (shown by src/app/views/ScheduleView.tsx)', () => {
   it('names the cache and the raw UA flight count, verbatim', () => {
     expect(boardLoadMessage({ fromCache: true, count: 412 }))
       .toBe('\u26a1 Served from cache \u00b7 412 UA flights');
@@ -363,3 +373,26 @@ describe('board-scoped NOW autoscroll', () => {
     expect(shouldAutoScroll({ key: 'ORD-departures-0', n: 0 }, 'ORD-departures-0', 0)).toBe(false);
   });
 });
+
+describe('emptyBoardReason (F14)', () => {
+  it('tells filters, provider failure and an unpublished day apart', () => {
+    expect(emptyBoardReason({ rawCount: 640, partial: false })).toBe('filtered');
+    expect(emptyBoardReason({ rawCount: 0, partial: true })).toBe('upstream'); // first_page_failed
+    expect(emptyBoardReason({ rawCount: 0, partial: false })).toBe('none');
+  });
+});
+
+describe('staleFollowUpDelayMs (F16)', () => {
+  it('re-requests a stale or >1h-old TODAY board once, after the 60s stale CDN object expires', () => {
+    expect(staleFollowUpDelayMs({ day: 0, stale: true, dataAge: 3720 })).toBe(STALE_FOLLOW_UP_MS);
+    expect(staleFollowUpDelayMs({ day: 0, stale: false, dataAge: 62690 })).toBe(STALE_FOLLOW_UP_MS);
+    expect(STALE_FOLLOW_UP_MS).toBeGreaterThan(60_000);
+  });
+
+  it('leaves fresh boards, other days, and the follow-up itself alone', () => {
+    expect(staleFollowUpDelayMs({ day: 0, stale: false, dataAge: 600 })).toBeNull();
+    expect(staleFollowUpDelayMs({ day: 1, stale: true, dataAge: 40000 })).toBeNull();
+    expect(staleFollowUpDelayMs({ day: 0, stale: true, dataAge: 5000, followUp: true })).toBeNull();
+  });
+});
+

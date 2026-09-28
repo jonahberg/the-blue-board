@@ -142,23 +142,32 @@ export function boardAsOfMs(meta, fetchedAtMs, nowMs = Date.now()) {
 export function formatBoardAsOf(ms, timeZone) {
   const date = new Date(ms);
   try {
-    return date.toLocaleTimeString('en-US', {
+    const text = date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       timeZone,
       timeZoneName: 'short',
     });
+    const named = ZONE_NAMES[timeZone];
+    return named ? text.replace(/GMT[+-]\d+(:\d+)?$/, named) : text;
   } catch {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 }
 
 /**
- * Board time-zone abbreviation ("CDT") for the NOW divider and the footer.
+ * `en-US` has names for the US zones but prints the Pacific hubs as "GMT+9" / "GMT+10" (the NRT
+ * board read "── NOW · 12:56 GMT+9 ──"). Neither zone observes DST, so one name each is exact.
+ */
+const ZONE_NAMES = { 'Asia/Tokyo': 'JST', 'Pacific/Guam': 'ChST' };
+
+/**
+ * Board time-zone abbreviation ("CDT", "JST") for the NOW divider and the footer.
  */
 export function hubTzAbbrev(timeZone, now = new Date()) {
   try {
-    return now.toLocaleTimeString('en-US', { timeZone, timeZoneName: 'short' }).split(' ').pop();
+    const abbrev = now.toLocaleTimeString('en-US', { timeZone, timeZoneName: 'short' }).split(' ').pop() || '';
+    return /^GMT[+-]/.test(abbrev) && ZONE_NAMES[timeZone] ? ZONE_NAMES[timeZone] : abbrev;
   } catch {
     return '';
   }
@@ -319,4 +328,34 @@ export function shouldAutoScroll(signal, currentKey, lastHandledN) {
   if (!Number.isFinite(signal.n) || signal.n <= 0) return false;
   if (signal.n === lastHandledN) return false;
   return signal.key === currentKey;
+}
+
+/**
+ * Why a board paints no rows (F14): the viewer's filters hid them, the provider failed (a 200
+ * with no rows and partial:true — e.g. partialReason 'first_page_failed'), or the day simply has
+ * no published board yet. The table used to say "No flights match your filters" for all three.
+ *
+ * @param {{rawCount: number, partial?: boolean}} board  the board's RAW (unfiltered) row count.
+ * @returns {('filtered'|'upstream'|'none')}
+ */
+export function emptyBoardReason({ rawCount, partial }) {
+  if (Number(rawCount) > 0) return 'filtered';
+  return partial ? 'upstream' : 'none';
+}
+
+/**
+ * F16: the first viewer of a today board older than the 1h TTL is served that old board while
+ * the server refreshes it in the background — and, with no polling on the board, kept looking at
+ * it. Re-request such a board once, after the stale serve's 60s CDN object has expired, so the
+ * viewer picks up the refresh their own visit triggered.
+ *
+ * @param {{day: number, stale?: boolean, dataAge?: number, followUp?: boolean}} input
+ *   `followUp` marks a load that is itself the re-request (never chain them).
+ * @returns {number|null}  delay in ms, or null for no re-request.
+ */
+export const STALE_FOLLOW_UP_MS = 75_000;
+export function staleFollowUpDelayMs({ day, stale, dataAge, followUp = false }) {
+  if (followUp || day !== 0) return null;
+  const old = Number(dataAge) > 3600;
+  return stale || old ? STALE_FOLLOW_UP_MS : null;
 }

@@ -2,10 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { AIRPORTS, AIRPORT_COORDS, IATA_CITIES, cityFor, nearestAirport } from '../src/lib/airports.js';
 
 describe('AIRPORTS', () => {
-  it('carries the full table with one entry per IATA code', () => {
-    // 142 rows today — the `(150 airports)` comment in main.js was never trued up.
-    expect(AIRPORTS).toHaveLength(142);
+  it('carries one well-formed entry per IATA code', () => {
+    // Structural rather than a row count, so adding an airport doesn't fail this test.
+    expect(AIRPORTS.length).toBeGreaterThan(100);
     expect(new Set(AIRPORTS.map((a) => a.iata)).size).toBe(AIRPORTS.length);
+    for (const a of AIRPORTS) {
+      expect(a.iata, JSON.stringify(a)).toMatch(/^[A-Z]{3}$/);
+      expect(Math.abs(a.lat), a.iata).toBeLessThanOrEqual(90);
+      expect(Math.abs(a.lon), a.iata).toBeLessThanOrEqual(180);
+    }
   });
 
   it('flags exactly the nine United hubs', () => {

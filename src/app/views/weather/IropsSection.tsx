@@ -31,9 +31,9 @@ import { useSchedule } from '../../state/schedule';
 import { useWeather } from '../../state/weather';
 
 const SCORE_TONE: Record<string, string> = {
-  low: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
-  med: 'border-amber-500/40 bg-amber-500/15 text-amber-400',
-  high: 'border-red-500/40 bg-red-500/15 text-red-400',
+  low: 'border-bb-ok/40 bg-bb-ok/15 text-bb-ok',
+  med: 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
+  high: 'border-destructive/40 bg-destructive/15 text-destructive',
 };
 
 const SERVER_TOOLTIP =
@@ -50,10 +50,12 @@ type Counts = {
   total: number;
 };
 
-function Metric({ label, value, tone }: { label: string; value: number | string; tone: string }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
+  // Counts are facts, not verdicts: the score beside them carries the severity, so the
+  // numbers stay in body colour instead of five decorative hues (audit F72).
   return (
     <div className="flex flex-col items-center px-2">
-      <span className={cn('font-mono text-sm font-semibold tabular-nums', tone)}>{value}</span>
+      <span className="font-mono text-sm font-semibold tabular-nums text-foreground">{value}</span>
       <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{label}</span>
     </div>
   );
@@ -169,7 +171,7 @@ export function IropsSection() {
                     <button
                       type="button"
                       aria-label="What does this mean?"
-                      className="flex min-h-11 min-w-11 items-center justify-center md:min-h-0 md:min-w-0"
+                      className="flex min-h-11 min-w-11 items-center justify-center pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
                     >
                       <span
                         aria-hidden="true"
@@ -186,15 +188,11 @@ export function IropsSection() {
               </span>
 
               <div className="ml-auto flex flex-wrap items-center divide-x divide-border">
-                <Metric
-                  label="Cancellations"
-                  value={counts.cancellations ?? '—'}
-                  tone="text-red-400"
-                />
-                <Metric label=">30m" value={counts.delayed30} tone="text-amber-400" />
-                <Metric label=">60m" value={counts.delayed60} tone="text-red-400" />
-                <Metric label="Diversions" value={counts.diversions} tone="text-fuchsia-400" />
-                <Metric label="Total Flights" value={counts.total} tone="text-primary" />
+                <Metric label="Cancellations" value={counts.cancellations ?? '—'} />
+                <Metric label=">30m" value={counts.delayed30} />
+                <Metric label=">60m" value={counts.delayed60} />
+                <Metric label="Diversions" value={counts.diversions} />
+                <Metric label="Total Flights" value={counts.total} />
               </div>
             </div>
 

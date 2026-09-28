@@ -56,3 +56,20 @@ export function matchAircraft(f, fleetByReg) {
   }
   return null;
 }
+
+/**
+ * Types only United Express (regional partners) flies. Anything else missing from the fleet
+ * DB is a mainline aircraft the DB has not caught up with — a 787-9 is never "Express" (F10).
+ */
+export const REGIONAL_TYPE = /^(E1[3-9]\d|E17\d|E75[LS]?|E7[05]|E145|E45X|E135|CRJ\d|DH8[A-D]?)$/i;
+
+/**
+ * The flight panel's note for an aircraft the fleet DB cannot match.
+ * @param {string|undefined} acType  the live feed's ICAO type designator.
+ * @returns {string}
+ */
+export function unmatchedAircraftNote(acType) {
+  return acType && REGIONAL_TYPE.test(acType)
+    ? 'United Express (regional) — not in mainline fleet DB'
+    : 'not yet in fleet DB (recent delivery?)';
+}

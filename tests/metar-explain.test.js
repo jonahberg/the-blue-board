@@ -89,26 +89,46 @@ describe('formatStructuredVisibility', () => {
 });
 
 describe('parseMetarQuick', () => {
-  it('pulls wind, visibility, temperature and cloud base out of a raw METAR', () => {
+  it('pulls wind, visibility, temperature and ceiling out of a raw METAR', () => {
     expect(parseMetarQuick(ORD)).toEqual({
       temp: '-2°C / 28°F',
       wind: '270° @ 15kt G25',
       vis: '10 SM',
-      clouds: 'Few 25000ft',
+      // FEW250 is not a ceiling — only BKN/OVC/VV are.
+      clouds: 'None',
     });
   });
 
   it('reads calm winds and clear skies', () => {
     expect(parseMetarQuick(DEN_CLR)).toEqual({
       temp: '5°C / 41°F',
-      wind: '000° @ 00kt',
+      wind: 'Calm',
       vis: '10 SM',
       clouds: 'Clear',
     });
   });
 
-  it('reports the lowest cloud layer, not the highest', () => {
+  it('reads a variable wind', () => {
+    expect(parseMetarQuick('KSFO 111756Z VRB03KT 10SM CLR 12/11 A2998').wind).toBe('Variable @ 3kt');
+    expect(parseMetarQuick('KSFO 111756Z VRB12G22KT 10SM CLR 12/11 A2998').wind).toBe('Variable @ 12kt G22');
+  });
+
+  it('reports the lowest BKN/OVC layer as the ceiling', () => {
     expect(parseMetarQuick(EWR_SN).clouds).toBe('Broken 800ft');
+  });
+
+  it('skips FEW/SCT layers below the ceiling', () => {
+    // NRT, audit Sep 26 2026: the card read "Ceiling Few 1400ft" under an MVFR badge.
+    expect(parseMetarQuick('RJAA 270300Z 36005KT 9999 FEW014 BKN025 20/15 Q1013').clouds).toBe('Broken 2500ft');
+    expect(parseMetarQuick('KSFO 270256Z 27012KT 10SM FEW004 SCT180 BKN200 14/12 A2989').clouds).toBe('Broken 20000ft');
+  });
+
+  it('reports no ceiling when only FEW/SCT layers are present', () => {
+    expect(parseMetarQuick('KSFO 270256Z 27012KT 10SM FEW004 SCT180 14/12 A2989').clouds).toBe('None');
+  });
+
+  it('treats a vertical-visibility group as the ceiling', () => {
+    expect(parseMetarQuick('KSFO 270256Z 27012KT 1/2SM FG VV002 14/12 A2989').clouds).toBe('Vertical vis 200ft');
   });
 
   it('accepts a structured payload and reads its rawOb', () => {
@@ -131,10 +151,14 @@ describe('parseMetarQuick', () => {
     expect(parseMetarQuick({})).toEqual(blank);
   });
 
-  it('misreads a fractional visibility as its denominator (edge case — quirk preserved)', () => {
-    // "1/2SM" — the `\b(\d+)\s*SM\b` branch matches "2SM" first, so half-mile fog
-    // reads as "2 SM". Carried over from main.js unchanged.
-    expect(parseMetarQuick(SFO_FOG).vis).toBe('2 SM');
+  it('reads fractional, mixed, less-than and more-than visibilities', () => {
+    // "1/2SM" used to read as "2 SM" — the whole-number branch matched the denominator.
+    expect(parseMetarQuick(SFO_FOG).vis).toBe('1/2 SM');
+    expect(parseMetarQuick('KORD 111751Z 27015KT 1 1/2SM BR OVC004 M02/M11 A3012').vis).toBe('1 1/2 SM');
+    expect(parseMetarQuick('KEWR 111751Z 03018KT 3/4SM -SN OVC008 M01/M03 A2975').vis).toBe('3/4 SM');
+    expect(parseMetarQuick('KDEN 111753Z 00000KT M1/4SM FG VV001 05/M08 A3024').vis).toBe('<1/4 SM');
+    expect(parseMetarQuick('KLAX 111753Z 25005KT P6SM SKC 20/10 A2992').vis).toBe('6+ SM');
+    expect(parseMetarQuick(ORD).vis).toBe('10 SM');
   });
 });
 
@@ -160,6 +184,18 @@ describe('applyStructuredMetarFallback', () => {
   it('reads CLR/SKC cover as Clear and a layer as name + base', () => {
     expect(applyStructuredMetarFallback(blank(), { cover: 'SKC' }).clouds).toBe('Clear');
     expect(applyStructuredMetarFallback(blank(), { clouds: [{ cover: 'OVC', base: 400 }] }).clouds).toBe('Overcast 400ft');
+  });
+
+  it('takes the first BKN/OVC/OVX layer as the ceiling, not clouds[0]', () => {
+    const clouds = [{ cover: 'FEW', base: 1400 }, { cover: 'BKN', base: 2500 }];
+    expect(applyStructuredMetarFallback(blank(), { clouds }).clouds).toBe('Broken 2500ft');
+    // AWC reports a VV group as cover "OVX" — never show the raw code.
+    expect(applyStructuredMetarFallback(blank(), { clouds: [{ cover: 'OVX', base: 200 }] }).clouds).toBe('Vertical vis 200ft');
+  });
+
+  it('reports no ceiling when the structured layers are all FEW/SCT', () => {
+    const clouds = [{ cover: 'FEW', base: 400 }, { cover: 'SCT', base: 18000 }];
+    expect(applyStructuredMetarFallback(blank(), { clouds }).clouds).toBe('None');
   });
 
   it('returns the parse untouched when there is no structured payload (edge case)', () => {
@@ -201,13 +237,13 @@ describe('hasRenderableMetarData', () => {
 describe('explainMETAR', () => {
   it('narrates a clear VFR day at a named hub', () => {
     expect(explainMETAR(DEN_CLR, 'DEN', 'VFR')).toBe(
-      'Denver International is currently reporting VFR conditions. Winds from the north at 0 knots. Visibility is 10 statute miles. Clear skies. Temperature is 5°C (41°F). altimeter setting of 30.24 inHg. Clear skies, good visibility — no impact on operations.'
+      'Denver International is currently reporting VFR conditions. Winds are calm. Visibility is 10 statute miles. Clear skies. Temperature is 5°C (41°F). altimeter setting of 30.24 inHg. Clear skies, good visibility — no impact on operations.'
     );
   });
 
   it('escalates the assessment for LIFR', () => {
     expect(explainMETAR(SFO_FOG, 'SFO', 'LIFR')).toBe(
-      'San Francisco is currently reporting LIFR conditions. Winds from the west-southwest at 8 knots. Visibility is 2 statute miles. overcast ceiling at 200 feet. fog. Temperature is 12°C (54°F). altimeter setting of 29.98 inHg. Very low ceilings/visibility — major operational impact, expect ground stops and diversions.'
+      'San Francisco is currently reporting LIFR conditions. Winds from the west-southwest at 8 knots. Visibility is 1/2 statute mile. overcast ceiling at 200 feet. fog. Temperature is 12°C (54°F). altimeter setting of 29.98 inHg. Very low ceilings/visibility — major operational impact, expect ground stops and diversions.'
     );
   });
 
@@ -221,6 +257,20 @@ describe('explainMETAR', () => {
     expect(explainMETAR(ORD, 'ORD', 'VFR')).toBe(
       "O'Hare is currently reporting VFR conditions. Winds from the west at 15 knots gusting to 25. Visibility is 10 statute miles. few clouds at 25,000 feet. Temperature is -2°C (28°F). altimeter setting of 30.12 inHg. Gusty conditions — monitor for changes."
     );
+  });
+
+  it('narrates fractional, less-than and vertical-visibility observations', () => {
+    const den = explainMETAR('KDEN 111753Z 00000KT M1/4SM FG VV001 05/M08 A3024', 'DEN', 'LIFR');
+    expect(den).toContain('Visibility is less than 1/4 statute mile.');
+    expect(den).toContain('sky obscured, vertical visibility at 100 feet');
+    expect(explainMETAR('KORD 111751Z 27015KT 1 1/2SM BR OVC004 M02/M11 A3012', 'ORD', 'LIFR'))
+      .toContain('Visibility is 1 1/2 statute miles.');
+    expect(explainMETAR('KLAX 111753Z 25005KT P6SM SKC 20/10 A2992', 'LAX', 'VFR'))
+      .toContain('Visibility is more than 6 statute miles.');
+  });
+
+  it('narrates a variable wind', () => {
+    expect(explainMETAR('KSFO 111756Z VRB03KT 10SM CLR 12/11 A2998', 'SFO', 'VFR')).toContain('Winds variable at 3 knots.');
   });
 
   it('names an unknown hub and category verbatim (edge case)', () => {

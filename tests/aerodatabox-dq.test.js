@@ -12,6 +12,8 @@ import {
   __resetScheduleWarnsForTests,
 } from '../api/_schedule-aerodatabox.js';
 import { __resetAdbSpendForTests, recordAdbUnits, getAdbDailyUnitBudget } from '../api/_cost-state.js';
+import { ICAO_TO_FLEET_TYPE } from '../src/lib/equipment-swaps.js';
+import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
 function row({ ident, orig = 'ORD', dest = 'LHR', schedDep = null, realDep = null, estDep = null, schedArr = null, realArr = null }) {
   return {
@@ -220,7 +222,9 @@ describe('fetchViaAeroDataBox end-to-end board hygiene', () => {
   });
 
   it('applies dedupe + registration validation + status mapping to the normalized board', async () => {
-    const nowSec = Math.floor(Date.now() / 1000);
+    // Midday on a fixed ORD day: every fixture row sits inside the hub day the board is clipped
+    // to, whatever the wall clock says when the suite runs.
+    const nowSec = getStartOfHubDay('ORD', 0, new Date('2026-09-26T12:00:00Z')) + 12 * 3600;
     const iso = (offsetS) => new Date((nowSec + offsetS) * 1000).toISOString();
     const departures = [
       { // revision dupe pair — same real departure, two schedule revisions
@@ -419,15 +423,24 @@ describe('modelTextToIcaoCode — free-text model → ICAO code', () => {
   });
 
   it('every derived mainline code is a key the client ICAO_TO_FLEET_TYPE map understands', () => {
-    // Guards the vocabulary contract: these are exactly the keys in src/dashboard/main.js.
-    const CLIENT_MAINLINE_KEYS = new Set([
-      'A319', 'A320', 'A21N',
-      'B737', 'B738', 'B739', 'B39M', 'B38M',
-      'B752', 'B753', 'B763', 'B764',
-      'B772', 'B77E', 'B77W', 'B788', 'B789', 'B78X',
-    ]);
-    for (const text of ['Airbus A319', 'Airbus A321 NEO', 'Boeing 737 MAX 9', 'Boeing 777-200ER', 'Boeing 787-10']) {
-      expect(CLIENT_MAINLINE_KEYS.has(modelTextToIcaoCode(text))).toBe(true);
+    // Guards the vocabulary contract against the REAL client map (src/lib/equipment-swaps.js), so
+    // a key renamed there fails here instead of silently killing swap detection.
+    const mainline = [
+      'Airbus A319', 'Airbus A320', 'Airbus A321 NEO',
+      'Boeing 737-700', 'Boeing 737-800', 'Boeing 737-900', 'Boeing 737 MAX 8', 'Boeing 737 MAX 9',
+      'Boeing 757-200', 'Boeing 757-300', 'Boeing 767-300', 'Boeing 767-400',
+      'Boeing 777-200', 'Boeing 777-200ER', 'Boeing 777-300ER',
+      'Boeing 787-8', 'Boeing 787-9', 'Boeing 787-10',
+    ];
+    const produced = new Set();
+    for (const text of mainline) {
+      const code = modelTextToIcaoCode(text);
+      expect(Object.hasOwn(ICAO_TO_FLEET_TYPE, code), `${text} → ${code}`).toBe(true);
+      produced.add(code);
+    }
+    // And the other direction: a client key the server can never emit is a dead filter option.
+    for (const key of Object.keys(ICAO_TO_FLEET_TYPE)) {
+      expect(produced.has(key), `client key ${key} has no server mapping`).toBe(true);
     }
   });
 
@@ -641,7 +654,9 @@ describe('estimated ETD/ETA for not-yet-operated legs', () => {
 // object — distinct from a hard budget-breaker trip, which returns null so the caller can tell
 // 'provider degraded' from 'we deliberately did not call the provider'.
 describe('fetchViaAeroDataBox — provider partial board', () => {
-  const nowSec = 1_700_000_000;
+  // The board is fetched for a hub-local DAY START, as production always does (api/schedule.ts
+  // snaps the timestamp), so iso(46800) really is 13:00 in window 2.
+  const nowSec = getStartOfHubDay('ORD', 0, new Date(1_700_000_000 * 1000));
   const iso = (offsetS) => new Date((nowSec + offsetS) * 1000).toISOString();
 
   beforeEach(() => {

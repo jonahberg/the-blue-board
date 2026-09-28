@@ -18,6 +18,9 @@ import {
   radarTitle,
 } from '../src/lib/weather-cards.js';
 import { CAT_COLORS } from '../src/lib/metar-explain.js';
+import { RADAR_FIT_HUBS, radarLabelPlacement } from '../src/lib/weather-cards.js';
+import { buildFaaIndex } from '../src/lib/faa-context.js';
+import { serverFaaResponse } from './fixtures/faa-server-shape.js';
 import { getMetarStationForIata } from '../src/lib/airport-metadata.js';
 
 const VFR = 'KDEN 121953Z 18008KT 10SM FEW200 24/M01 A2992 RMK AO2';
@@ -215,6 +218,8 @@ describe('buildHubCardModel status precedence (inventory §23)', () => {
     expect(model.status.tone).toBe('delay');
     expect(model.status.parts[0].label).toBe('Ground stop');
     expect(model.status.parts[0].extras).toEqual(['until 23:00Z', 'ext: 40%']);
+    // The explainer must name the ground stop too, not fall through to "delays".
+    expect(model.faaExplainer).toContain('a ground stop');
   });
 
   it('falls back to the raw delays[] when the airport reports no programs', () => {
@@ -281,18 +286,37 @@ describe('buildHubCardModel presentation data', () => {
     expect(buildHubCardModel({ hub: 'GUM', metar: { rawOb: VFR } }).hasDetail).toBe(true);
   });
 
-  it('the marker label carries the category and the leading ops reason', () => {
-    expect(buildHubCardModel({ hub: 'ORD', metar: { fltCat: 'IFR', rawOb: IFR_TS } }).markerLabel)
-      .toMatch(/^IFR \(/);
-    expect(buildHubCardModel({ hub: 'IAD', metar: { fltCat: 'VFR', rawOb: VFR } }).markerLabel)
-      .toBe('VFR');
+  it('the marker label is the category alone; the ops reason is its hover detail', () => {
+    const ifr = buildHubCardModel({ hub: 'ORD', metar: { fltCat: 'IFR', rawOb: IFR_TS } });
+    expect(ifr.markerLabel).toBe('IFR');
+    expect(ifr.markerDetail).toBeTruthy();
+    const vfr = buildHubCardModel({ hub: 'IAD', metar: { fltCat: 'VFR', rawOb: VFR } });
+    expect(vfr.markerLabel).toBe('VFR');
+    expect(vfr.markerDetail).toBe('');
+  });
+
+  it('never puts the long reason back in the permanent label (the EWR/IAD overlap)', () => {
+    for (const rawOb of [IFR_TS, VFR, 'KEWR 1SM FG OVC002 10/10']) {
+      expect(buildHubCardModel({ hub: 'EWR', metar: { rawOb } }).markerLabel).not.toContain('(');
+    }
+  });
+
+  it('shows a half-mile LIFR card as 1/2 SM with its VV ceiling', () => {
+    const { cat, metrics } = buildHubCardModel({
+      hub: 'SFO',
+      metar: { fltCat: 'LIFR', rawOb: 'KSFO 270256Z 27012KT 1/2SM FG VV002 14/12 A2989' },
+    });
+    expect(cat).toBe('LIFR');
+    expect(metrics.vis).toBe('1/2 SM');
+    expect(metrics.clouds).toBe('Vertical vis 200ft');
   });
 
   it('fills the four metrics from the raw observation', () => {
     const { metrics } = buildHubCardModel({ hub: 'DEN', metar: { fltCat: 'VFR', rawOb: VFR } });
     expect(metrics.wind).toBe('180° @ 08kt');
     expect(metrics.vis).toBe('10 SM');
-    expect(metrics.clouds).toBe('Few 20000ft');
+    // FEW200 alone is not a ceiling (the card labels this value "Ceiling").
+    expect(metrics.clouds).toBe('None');
     expect(metrics.temp).toContain('24°C');
   });
 });
@@ -335,14 +359,26 @@ describe('assignJargonFirsts gates each tooltip to one card (inventory §17)', (
 });
 
 describe('faaAlertLines', () => {
-  it('lists one line per delay, preferring the type over the reason', () => {
+  it('lists one line per delay, labelling the type rather than printing it raw', () => {
     expect(
       faaAlertLines({
-        ORD: { delays: [{ type: 'Ground Stop' }, { reason: 'VOLUME' }] },
+        ORD: { delays: [{ type: 'ground_stop' }, { reason: 'VOLUME' }] },
         DEN: { delays: [] },
         SFO: {},
       }),
     ).toEqual(['ORD: Ground Stop', 'ORD: VOLUME']);
+  });
+
+  it('labels every type in the real /api/faa response', async () => {
+    const index = buildFaaIndex(await serverFaaResponse());
+    expect(faaAlertLines(index)).toEqual([
+      'EWR: Ground Stop',
+      'LGA: Ground Delay Program',
+      'RSW: Departure Delay',
+      'SLC: Departure Delay',
+      'DCA: Closure',
+      'BOS: Arrival Delay',
+    ]);
   });
 
   it('returns nothing for an empty or missing index', () => {
@@ -366,5 +402,17 @@ describe('radarTitle', () => {
 
   it('treats epoch 0 as a real timestamp rather than as "no data" (edge case)', () => {
     expect(radarTitle(0)).toBe('🌧 NEXRAD Radar — 00:00:00Z');
+  });
+});
+
+describe('radar framing', () => {
+  it('points the EWR and IAD labels away from each other, and SFO/LAX too', () => {
+    expect(radarLabelPlacement('EWR').direction).not.toBe(radarLabelPlacement('IAD').direction);
+    expect(radarLabelPlacement('SFO').direction).not.toBe(radarLabelPlacement('LAX').direction);
+    expect(radarLabelPlacement('ORD')).toEqual({ direction: 'top', offset: [0, -8] });
+  });
+
+  it('fits the seven mainland hubs, not NRT/GUM', () => {
+    expect(RADAR_FIT_HUBS).toEqual(['EWR', 'IAH', 'ORD', 'DEN', 'SFO', 'LAX', 'IAD']);
   });
 });

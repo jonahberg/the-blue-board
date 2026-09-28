@@ -28,13 +28,24 @@ type Tiers = { critical: NasItem[]; active: NasItem[]; monitoring: NasItem[] };
 
 /** The badge classes `sevBadgeClass()` returns, mapped onto the theme's tokens. */
 const BADGE_TONE: Record<string, string> = {
-  'sev-gs': 'border-red-500/40 bg-red-500/15 text-red-400',
-  'sev-gdp': 'border-amber-500/40 bg-amber-500/15 text-amber-400',
-  'sev-afp': 'border-amber-500/40 bg-amber-500/15 text-amber-400',
-  'sev-mit': 'border-sky-500/40 bg-sky-500/15 text-sky-400',
+  'sev-gs': 'border-destructive/40 bg-destructive/15 text-destructive',
+  'sev-gdp': 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
+  'sev-afp': 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
+  'sev-mit': 'border-bb-info/40 bg-bb-info/15 text-bb-info',
   'sev-cdr': 'border-border bg-muted text-muted-foreground',
   'sev-other': 'border-border bg-muted text-muted-foreground',
 };
+
+/**
+ * A monitoring-tier GS/GDP/AFP is an outlook ("… POSSIBLE"), not a program in effect: its
+ * badge stays muted so it never reads as a red ground stop.
+ */
+function badgeTone(item: NasItem): string {
+  const cls = sevBadgeClass(item.sevType) as string;
+  const alarming = cls === 'sev-gs' || cls === 'sev-gdp' || cls === 'sev-afp';
+  if (item.tier === 'monitoring' && alarming) return BADGE_TONE['sev-other'];
+  return BADGE_TONE[cls] ?? BADGE_TONE['sev-other'];
+}
 
 function Tier({ label, items }: { label: string; items: NasItem[] }) {
   if (!items.length) return null;
@@ -53,7 +64,7 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
               variant="outline"
               className={cn(
                 'mt-0.5 h-fit shrink-0 px-1.5 py-0 font-mono text-[9px]',
-                BADGE_TONE[sevBadgeClass(item.sevType) as string] ?? BADGE_TONE['sev-other'],
+                badgeTone(item),
               )}
             >
               {item.sevType}
@@ -77,7 +88,7 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
                       {index > 0 ? ' · ' : ''}
                       {part.kind === 'delay' ? (
                         <>
-                          avg <span className="font-mono text-amber-400">{part.text}</span>
+                          avg <span className="font-mono text-bb-warn">{part.text}</span>
                         </>
                       ) : (
                         part.text

@@ -153,8 +153,9 @@ export function ManualConnectionCheck() {
         <Input
           id="conn-inbound"
           aria-label="Inbound flight number"
-          placeholder="Inbound (UA 1234)"
-          className="min-h-11 flex-1 basis-32 font-mono text-[11px] md:min-h-9"
+          placeholder="Inbound UA#"
+          // 16px below md: iOS Safari zooms into any focused input smaller than that (F63).
+          className="min-h-11 flex-1 basis-32 font-mono text-base pointer-fine:md:min-h-9 md:text-[11px]"
           value={inbound}
           onChange={(event) => setInbound(event.target.value)}
           onKeyDown={onEnter}
@@ -162,14 +163,15 @@ export function ManualConnectionCheck() {
         <Input
           id="conn-outbound"
           aria-label="Outbound flight number"
-          placeholder="Outbound (UA 567)"
-          className="min-h-11 flex-1 basis-32 font-mono text-[11px] md:min-h-9"
+          placeholder="Outbound UA#"
+          // 16px below md: iOS Safari zooms into any focused input smaller than that (F63).
+          className="min-h-11 flex-1 basis-32 font-mono text-base pointer-fine:md:min-h-9 md:text-[11px]"
           value={outbound}
           onChange={(event) => setOutbound(event.target.value)}
           onKeyDown={onEnter}
         />
         <Button
-          className="min-h-11 whitespace-nowrap text-[11px] md:min-h-9"
+          className="min-h-11 whitespace-nowrap text-[11px] pointer-fine:md:min-h-9"
           onClick={() => void check()}
           disabled={state.phase === 'checking'}
         >
@@ -180,7 +182,7 @@ export function ManualConnectionCheck() {
       <div id="conn-manual-result" className="mt-2.5">
         {state.phase === 'message' ? (
           <p
-            className={`text-[11px] ${state.tone === 'error' ? 'text-red-400' : 'text-muted-foreground'}`}
+            className={`text-[11px] ${state.tone === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}
           >
             {state.text}
           </p>

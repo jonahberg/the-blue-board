@@ -6,7 +6,7 @@
 // telemetry, so it is gated behind CRON_SECRET (timing-safe, fails closed when
 // the secret is unset) — same credential the cron handlers use.
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { isAuthorizedCronRequest } from './_cron-auth.js';
 
@@ -15,6 +15,11 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const isRateLimited = createRateLimiter('fr24-usage', 10);
 
 let usageCache: { data: any; ts: number } | null = null;
+
+/** Test seam: clear the module-level usage cache so tests don't depend on run order. */
+export function __resetFr24UsageForTests(): void {
+  usageCache = null;
+}
 
 // MINIMAL EXPORT (added for api/support-stats.ts): the raw upstream fetch, with no auth/caching
 // of its own — support-stats.ts is a separate, publicly-cached endpoint that only ever derives a

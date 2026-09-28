@@ -50,13 +50,14 @@ export type HubCardModel = {
   unavailable: boolean;
   hasDetail: boolean;
   markerLabel: string;
+  markerDetail: string;
   jargon: { metar: boolean };
 };
 
 const STATUS_TONE: Record<HubCardModel['status']['tone'], string> = {
-  delay: 'text-red-400',
-  caution: 'text-amber-400',
-  normal: 'text-emerald-400',
+  delay: 'text-destructive',
+  caution: 'text-bb-warn',
+  normal: 'text-bb-ok',
 };
 
 function StatusPart({ part }: { part: HubCardStatusPart }) {
@@ -95,7 +96,7 @@ export function HubCard({ model, highlighted }: { model: HubCardModel; highlight
         {model.deice ? (
           <Badge
             variant="outline"
-            className="border-amber-500/40 px-1.5 py-0 font-mono text-[9px] uppercase tracking-wide text-amber-400"
+            className="border-bb-warn/40 px-1.5 py-0 font-mono text-[9px] uppercase tracking-wide text-bb-warn"
           >
             De-ice
           </Badge>
@@ -148,7 +149,7 @@ export function HubCard({ model, highlighted }: { model: HubCardModel; highlight
               tap height below `md:` without the 10 px label growing. */}
           <summary
             aria-expanded={open}
-            className="flex min-h-11 cursor-pointer list-none items-center justify-center font-mono text-[10px] text-muted-foreground hover:text-foreground md:min-h-0 md:py-1"
+            className="flex min-h-11 cursor-pointer list-none items-center justify-center font-mono text-[10px] text-muted-foreground hover:text-foreground pointer-fine:md:min-h-0 md:py-1"
           >
             <span aria-hidden="true">{open ? '▴' : '▾'}</span> Details
           </summary>
@@ -163,7 +164,7 @@ export function HubCard({ model, highlighted }: { model: HubCardModel; highlight
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-amber-400 underline"
+                    className="text-[10px] text-bb-warn underline"
                   >
                     Advisory
                   </a>

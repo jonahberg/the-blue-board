@@ -16,6 +16,7 @@
  * is ~180 rows, which buries the roster and the ledger below it. "Show all" lifts the cap.
  */
 
+import { Radio } from 'lucide-react';
 import { memo } from 'react';
 
 import { Card } from '@/components/ui/card';
@@ -54,7 +55,7 @@ function Row({
       <button
         type="button"
         onClick={() => onOpenAircraft(row.tail)}
-        className="min-h-11 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+        className="min-h-11 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
         title={`Aircraft details · ${row.tail}`}
       >
         <span className="block truncate font-mono text-xs font-semibold">
@@ -78,23 +79,30 @@ function Row({
       <span className="col-span-3 flex items-center justify-end gap-2 sm:col-span-1">
         {row.airborne ? (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold">
-            <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-400" />
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
             Airborne
+          </span>
+        ) : row.inbound ? (
+          // The aircraft is in the air on its inbound leg — this departure has not happened.
+          <span className="text-[10px] text-muted-foreground">
+            SCHED · inbound{row.inbound.flight ? ` on ${row.inbound.flight}` : ''}
           </span>
         ) : (
           <span className="text-[10px] text-muted-foreground">SCHED</span>
         )}
-        {row.airborne && row.icao24 ? (
+        {(row.airborne && row.icao24) || row.inbound?.icao24 ? (
           <button
             type="button"
             onClick={() => onTrack(row)}
             className="inline-flex min-h-11 items-center rounded-md border px-2 text-[10px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-7"
-            title={`Track ${row.tail} on the live map`}
+            title={
+              row.airborne
+                ? `Track ${row.tail} on the live map`
+                : `Track ${row.tail}'s inbound flight${row.inbound?.flight ? ` ${row.inbound.flight}` : ''} on the live map`
+            }
           >
-            <span aria-hidden="true" className="mr-1">
-              📡
-            </span>
-            Track
+            <Radio aria-hidden="true" className="mr-1 inline size-3 align-[-2px]" />
+            {row.airborne ? 'Track' : 'Track inbound'}
           </button>
         ) : null}
       </span>
@@ -145,7 +153,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
               type="button"
               aria-pressed={windowH === hours}
               onClick={() => onWindow(hours)}
-              className="min-h-11 rounded-md border px-3 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-8"
+              className="min-h-11 rounded-md border px-3 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-8"
             >
               {hours}H
             </button>
@@ -163,7 +171,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
           type="button"
           aria-pressed={!hub}
           onClick={() => onHub(null)}
-          className="min-h-11 rounded-md border px-2.5 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-8"
+          className="min-h-11 rounded-md border px-2.5 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-8"
         >
           ALL <span className="ml-1 font-mono tabular-nums opacity-70">{board.allCount}</span>
         </button>
@@ -177,7 +185,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
               onClick={() => onHub(code)}
               // A zero hub is still offered — Pacific hubs go quiet for hours and hiding them
               // would read as "GUM has no Starlink aircraft".
-              className={`min-h-11 rounded-md border px-2.5 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-8 ${count === 0 ? 'sl-board-pill-empty opacity-50' : ''}`}
+              className={`min-h-11 rounded-md border px-2.5 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-8 ${count === 0 ? 'sl-board-pill-empty opacity-50' : ''}`}
             >
               {code} <span className="ml-1 font-mono tabular-nums opacity-70">{count}</span>
             </button>

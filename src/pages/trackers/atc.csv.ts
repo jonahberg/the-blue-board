@@ -1,5 +1,5 @@
 import { atcAirports, atcMeta } from '../../data/trackers/atc.js';
-import { csvHeaders, toCsv } from '../../lib/tracker-downloads.js';
+import { CSV_HEADERS, toCsv } from '../../lib/tracker-downloads.js';
 
 const columns = [
   'code',
@@ -28,5 +28,5 @@ export function GET() {
     last_verified: atcMeta.lastVerified,
   }));
 
-  return new Response(toCsv(rows, columns), { headers: csvHeaders('blue-board-faa-tfdm-airports.csv') });
+  return new Response(toCsv(rows, columns), { headers: CSV_HEADERS });
 }

@@ -12,6 +12,7 @@
 // The legacy fills, for the record. They were literal hex in main.js, NOT the `--ua-*`
 // custom properties an earlier version of this header claimed:
 //   UTIL_BAR_COLOR  main.js:3494  high #22c55e  mid #005DAA  low #f59e0b  idle #334155
+//                   (retired Sep 2026: utilisation is a measure, drawn in the one accent — F69)
 //   AGE_BAR_COLOR   main.js:3592  oldest #ef4444  older #f59e0b  mid #005DAA  young #22c55e
 // The donut ramp's re-stepping has its own rationale at PHASE_COLORS.
 
@@ -25,27 +26,28 @@ export function utilBand(pct) {
 }
 
 /**
- * Band → bar fill. `mid` is the product blue, which is decorative here: the bar is
- * always read together with the "N/M  P%" figure beside it.
+ * Band → bar fill. Utilisation is a MEASURE, not a status (DESIGN.md: one accent; colour
+ * that is not a status signal is the primary), so every non-idle band is the same product
+ * blue — the Fleet tab draws the same per-type measure in `bg-primary`, and the two tabs must
+ * encode one quantity one way (F69). The old orange/blue/green ramp read 7 % as a warning and
+ * had no legend. The band lookup stays so `idle` (nothing flying) can recede.
  */
 export const UTIL_BAR_COLOR = {
-  high: '#12a06d',
+  high: 'var(--primary)',
   mid: 'var(--primary)',
-  low: '#c2710c',
+  low: 'var(--primary)',
   idle: 'var(--border)',
 };
 
 /**
- * Band → the class on the small figure next to the bar.
- *
- * `mid` deliberately does NOT use the blue. United blue on a panel background measures
- * 2.61:1, which fails text contrast — main.js already made this swap in a comment at
- * :4116 and the same rule applies to the rebuilt palette.
+ * Band → the class on the small figure next to the bar. Plain foreground for every band with
+ * aircraft flying — the number is read, not colour-coded (United blue as text measures
+ * 2.61:1, so the figure never takes the bar's blue) — and muted for idle rows.
  */
 export const UTIL_TEXT_CLASS = {
-  high: 'text-emerald-400',
-  mid: 'text-amber-400',
-  low: 'text-amber-400',
+  high: 'text-foreground',
+  mid: 'text-foreground',
+  low: 'text-foreground',
   idle: 'text-muted-foreground',
 };
 
@@ -97,12 +99,18 @@ export const PHASE_COLORS = {
   Ground: '#7a8699',
 };
 
-/** Decorative glyph per phase — main.js :4153. Always paired with the phase name. */
+/**
+ * Glyph per phase — main.js :4153. Always paired with the phase name. Unlike the map's
+ * flight-phase.js set, every glyph here is distinct: the legend is where a reader separates
+ * the donut's slices, and Cruise and En Route sharing ✈️ could not (audit F73). These stay
+ * text glyphs rather than lucide components — this module is DOM-free and the glyphs are
+ * data the legend and the sr-only table both print (DESIGN.md Decisions Log).
+ */
 export const PHASE_ICONS = {
   Takeoff: '🛫',
   Climb: '↗️',
   Cruise: '✈️',
-  'En Route': '✈️',
+  'En Route': '➡️',
   Descent: '↘️',
   Approach: '🛬',
   Ground: '🅿️',

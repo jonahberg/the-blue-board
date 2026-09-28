@@ -170,13 +170,15 @@ export function myFlightGateLabels(td) {
   const dIata = td.destination?.iata || '';
   const oTerm = td.origin?.terminal || getUnitedTerminal(oIata, oIata, dIata);
   const dTerm = td.destination?.terminal || getUnitedTerminal(dIata, oIata, dIata);
+  // 'T2' for a numbered terminal; a lettered one is spelled out — 'TG' read as a typo (F18).
+  const term = (t) => (/^\d+$/.test(String(t)) ? `T${t}` : `Terminal ${t}`);
+  const label = (t, gate) => {
+    if (gate) return t ? `${term(t)} Gate ${gate}` : `Gate ${gate}`;
+    return t ? term(t) : '—';
+  };
   return {
-    origin: td.origin?.gate ? `T${oTerm || '?'} Gate ${td.origin.gate}` : oTerm ? `T${oTerm}` : '—',
-    destination: td.destination?.gate
-      ? `T${dTerm || '?'} Gate ${td.destination.gate}`
-      : dTerm
-        ? `T${dTerm}`
-        : '—',
+    origin: label(oTerm, td.origin?.gate),
+    destination: label(dTerm, td.destination?.gate),
   };
 }
 
@@ -260,4 +262,40 @@ export function findInboundAircraft(flights, reg, flightNumber, origCode, ownFli
         !f.onGround,
     ) || null
   );
+}
+
+/**
+ * The delay-risk model's `inboundFlight` input: the aircraft this flight is waiting for,
+ * with where it is and the conditions where it came from (audit F134 — the React port
+ * stopped passing it, so the "inbound turnaround" signal never scored).
+ *
+ * Only while there is a schedule to measure the turn against and our own flight is not
+ * already airborne — once it is, the "inbound" in the feed is a later leg.
+ *
+ * @param {{flights?: Array<Object>, reg?: string, flightNumber: string, origCode: string,
+ *   ownFlightAirborne?: boolean, hasTimes?: boolean,
+ *   weatherOpsByHub?: Record<string, {level?: unknown}>,
+ *   faaIndex?: Record<string, {groundStop?: unknown, groundDelay?: unknown}>}} input
+ * @returns {Object|null}
+ */
+export function buildInboundRiskContext(input) {
+  const { flights, reg, flightNumber, origCode, ownFlightAirborne, hasTimes, weatherOpsByHub, faaIndex } =
+    input || {};
+  if (!hasTimes) return null;
+  const inbound = findInboundAircraft(flights, reg, flightNumber, origCode, Boolean(ownFlightAirborne));
+  if (!inbound) return null;
+  const weather = weatherOpsByHub?.[inbound.origin];
+  const faa = faaIndex?.[inbound.origin];
+  return {
+    origin: inbound.origin,
+    lat: inbound.lat,
+    lon: inbound.lon,
+    spd: inbound.spd,
+    alt: inbound.alt,
+    vr: inbound.vr,
+    acType: inbound.acType,
+    originWeatherLevel: weather?.level || '',
+    originFaaGroundStop: Boolean(faa?.groundStop),
+    originFaaGroundDelay: Boolean(faa?.groundDelay),
+  };
 }

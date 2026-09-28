@@ -56,7 +56,14 @@ export type FeedValue = {
   error: string | null;
   refresh: () => void;
   /** Tail seen on this flight number during its own operating window, else null. */
-  lookupReg: (flightNumber: string, schedDepSec?: number, schedArrSec?: number) => string | null;
+  /** `origin`/`dest` are the row's leg: a tail seen on another leg of the same number never fills it (F15). */
+  lookupReg: (
+    flightNumber: string,
+    schedDepSec?: number,
+    schedArrSec?: number,
+    origin?: string,
+    dest?: string,
+  ) => string | null;
 };
 
 const FeedContext = createContext<FeedValue | null>(null);
@@ -186,8 +193,10 @@ export function FeedProvider({ children }: { children: ReactNode }) {
     lastGoodTs === null ? 'stale' : (feedFreshness(nowTick - lastGoodTs) as FeedFreshness);
 
   const lookupReg = useCallback(
-    (flightNumber: string, schedDepSec?: number, schedArrSec?: number) =>
-      lookupLedgerReg(ledgerRef.current, flightNumber, schedDepSec, schedArrSec) as string | null,
+    (flightNumber: string, schedDepSec?: number, schedArrSec?: number, origin?: string, dest?: string) =>
+      lookupLedgerReg(ledgerRef.current, flightNumber, schedDepSec, schedArrSec, origin, dest) as
+        | string
+        | null,
     [],
   );
 

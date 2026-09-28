@@ -5,7 +5,7 @@
 // globalThis does NOT survive across serverless instances (the bug this replaces).
 // Config in vercel.json: { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" }
 
-import type { VercelRequest, VercelResponse } from '../types.js';
+import type { VercelRequest, VercelResponse } from '../_types.js';
 import { normalizeStarlinkPayload, validateStarlinkPayload } from '../_starlink-normalize.js';
 import { loadStarlinkSnapshot, saveStarlinkSnapshot } from '../_starlink-snapshot.js';
 import { isAuthorizedCronRequest } from '../_cron-auth.js';

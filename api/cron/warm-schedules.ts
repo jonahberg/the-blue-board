@@ -8,7 +8,7 @@
 // "ok", and a board fetched once (usually the evening before, as "tomorrow") is never refreshed
 // again all day — the frozen-board failure mode this cron exists to prevent.
 
-import type { VercelRequest, VercelResponse } from '../types.js';
+import type { VercelRequest, VercelResponse } from '../_types.js';
 import { UNITED_HUBS } from '../_hubs.js';
 import { isAuthorizedCronRequest } from '../_cron-auth.js';
 import { sendAlert } from '../_alert.js';
@@ -40,8 +40,9 @@ function envNumber(name: string, fallback: number): number {
 const getWarmTasksPerRun = () => Math.max(1, Math.min(4, Math.floor(envNumber('SCHEDULE_WARM_TASKS_PER_RUN', 4))));
 const getInterTaskDelayMs = () => Math.max(0, envNumber('SCHEDULE_WARM_DELAY_MS', 3000));
 // A warm that came back stale/degraded did not warm anything — the handler served a frozen
-// fallback instead of refetching. Anything older than the clean-board TTL (6h) counts as failed.
-const STALE_WARM_MAX_AGE_S = 21600;
+// fallback instead of refetching. Anything older than the clean today-board TTL (1h since v1.8.2)
+// counts as failed.
+const STALE_WARM_MAX_AGE_S = 3600;
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : process.env.VERCEL_URL
@@ -90,7 +91,7 @@ function buildWarmRing(): WarmTask[] {
 // every 30 min): a mismatched slot would stride the ring more or less than once per fire and
 // skip (or re-warm) windows. Update both together. The same slot number seeds applyIropsPriority's
 // disrupted-hub rotation so priority fairness advances in lockstep with the ring.
-const SLOT_MS = 30 * 60 * 1000; // = vercel.json cron interval (*/30 * * * *)
+export const SLOT_MS = 30 * 60 * 1000; // = vercel.json cron interval (*/30 * * * *)
 export function getWarmSlot(nowMs = Date.now()): number {
   return Math.floor(nowMs / SLOT_MS);
 }
@@ -108,6 +109,79 @@ export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
     plan.push(tasks[(start + i) % tasks.length]);
   }
   return plan;
+}
+
+// ── Local-midnight rollover priority (pure) ──
+// F81: the ring strides on UTC slots and ignores each hub's local midnight, so when a hub rolls
+// over, its new TODAY board is the snapshot the ring warmed as TOMORROW — often 8-17h earlier (IAD
+// arrivals was 1021 min old at 00:01 EDT) — until the pointer happens to reach it, up to ~3h later.
+// For the first ROLLOVER_WINDOW_MS of each hub's day, its two today boards are injected into the
+// run: same stride-1 cap as IROPS and the same slot-seeded rotation, so a same-zone pair (EWR+IAD,
+// ORD+IAH, SFO+LAX = 4 boards) is covered across the two fires of that hour. Victims are tomorrow
+// slots first; unlike IROPS (which can last all day and must never starve today boards) a rollover
+// is bounded to two fires per zone per day, so when the stride has no tomorrow slot left — 4 of
+// every 6 strides in this ring — it may displace another hub's today board for one pass. That
+// board is ~3h into its cadence; the one it yields to is ~9-17h old. The run's task count, and so
+// the 300s budget and the unit spend, is unchanged.
+const ROLLOVER_WINDOW_MS = 60 * 60 * 1000; // = two cron fires (*/30)
+
+export function rolloverHubs(nowMs = Date.now()): string[] {
+  const now = new Date(nowMs);
+  return HUBS.filter((hub) => {
+    const sinceMidnightMs = nowMs - getStartOfHubDay(hub, 0, now) * 1000;
+    return sinceMidnightMs >= 0 && sinceMidnightMs < ROLLOVER_WINDOW_MS;
+  });
+}
+
+export function applyRolloverPriority(
+  plan: WarmTask[],
+  nowMs = Date.now(),
+  rotationSeed = 0
+): { plan: WarmTask[]; injected: string[]; displaced: string[] } {
+  const hubs = rolloverHubs(nowMs);
+  if (hubs.length === 0 || plan.length === 0) return { plan, injected: [], displaced: [] };
+
+  const keyOf = (t: WarmTask) => `${t.hub}-${t.dir}-${t.dayOffset}`;
+  const ordered: WarmTask[] = [];
+  for (const hub of hubs) {
+    for (const dir of ['departures', 'arrivals'] as const) ordered.push({ hub, dir, dayOffset: 0, label: 'today' });
+  }
+  const offset = ((rotationSeed % ordered.length) + ordered.length) % ordered.length;
+  const candidates = ordered.map((_, i) => ordered[(i + offset) % ordered.length]);
+  const candidateKeys = new Set(candidates.map(keyOf));
+  const isRollover = (t: WarmTask) => candidateKeys.has(keyOf(t));
+
+  const result = [...plan];
+  const injected: string[] = [];
+  const displaced: string[] = [];
+  const maxInjections = Math.max(0, plan.length - 1);
+  // Victims never include a slot the ring already gives to the FIRST base task, so at least that
+  // ring slot always survives; tomorrow slots go first, scanning from the back.
+  const pickVictim = (): number => {
+    for (const wantTomorrow of [true, false]) {
+      for (let i = result.length - 1; i >= 1; i--) {
+        const t = result[i];
+        if (isRollover(t)) continue;
+        if (wantTomorrow ? t.dayOffset === 1 : t.dayOffset === 0) return i;
+      }
+    }
+    return -1;
+  };
+
+  for (const task of candidates) {
+    if (injected.length >= maxInjections) break;
+    if (result.some((t) => keyOf(t) === keyOf(task))) continue; // stride already covers it
+    const victim = pickVictim();
+    if (victim === -1) break;
+    displaced.push(`${result[victim].hub}-${result[victim].dir}-${result[victim].label}`);
+    result[victim] = task;
+    injected.push(`${task.hub}-${task.dir}-today`);
+  }
+
+  const rank = new Map(candidates.map((t, i) => [keyOf(t), i]));
+  const priority = result.filter(isRollover).sort((a, b) => (rank.get(keyOf(a)) ?? 0) - (rank.get(keyOf(b)) ?? 0));
+  const rest = result.filter((t) => !isRollover(t));
+  return { plan: [...priority, ...rest], injected, displaced };
 }
 
 // ── IROPS-aware priority (pure) ──
@@ -282,6 +356,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let warmPlan = buildWarmPlan();
 
+  // Rollover first (F81), then IROPS: a hub that just passed local midnight gets its new today
+  // boards warmed in this run instead of whenever the UTC ring pointer reaches them.
+  const rollover = applyRolloverPriority(warmPlan, Date.now(), getWarmSlot());
+  if (rollover.injected.length) {
+    console.log(`Rollover warm priority: injected [${rollover.injected.join(', ')}] displacing [${rollover.displaced.join(', ')}]`);
+  }
+  warmPlan = rollover.plan;
+
   // IROPS priority: while hubs have active FAA programs, their today boards rotate fairly into
   // the front of each run's stride (capped at stride-1 injections; same task count — lowest-
   // priority ring slots are displaced, so the 300s budget holds). The warm slot seeds the
@@ -349,17 +431,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     results.regSightings = { ok: false, error: String(e?.message || e) };
   }
 
-  // Phase 1.5: warm Starlink data cache (single fast request)
+  // Phase 1.5: warm the Starlink edge cache. The CDN keys on the query string, so the two
+  // URLs the dashboard actually requests (?fields=roster at boot, ?fields=flights when the
+  // Starlink tab opens — F58) are the ones warmed; the bare URL no client asks for is not.
+  // One shared 20s budget: the first request fills the function's memory cache, so the
+  // second is served from it. Both roll up into the single 'starlink-data' result.
   try {
     const slController = new AbortController();
     const slTimeout = setTimeout(() => slController.abort(), 20000);
-    const slResp = await fetch(`${BASE_URL}/api/starlink-data`, {
-      signal: slController.signal,
-      headers: { 'User-Agent': 'BlueBoard-CronWarmer/1.0' },
-    });
-    clearTimeout(slTimeout);
-    results['starlink-data'] = { status: slResp.ok ? 'ok' : `http_${slResp.status}` };
-    if (slResp.ok) warmed++; else failed++;
+    let status = 'ok';
+    try {
+      for (const fields of ['roster', 'flights']) {
+        const slResp = await fetch(`${BASE_URL}/api/starlink-data?fields=${fields}`, {
+          signal: slController.signal,
+          headers: { 'User-Agent': 'BlueBoard-CronWarmer/1.0' },
+        });
+        if (!slResp.ok && status === 'ok') status = `http_${slResp.status}`;
+      }
+    } finally {
+      clearTimeout(slTimeout);
+    }
+    results['starlink-data'] = { status };
+    if (status === 'ok') warmed++; else failed++;
   } catch (e: any) {
     results['starlink-data'] = { status: 'error', message: e.message };
     failed++;

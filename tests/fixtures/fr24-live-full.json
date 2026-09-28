@@ -1,0 +1,29 @@
+{
+  "_comment": "FR24 /api/live/flight-positions/full body, built from FR24's documented FlightPositionsFull schema (fr24_id, flight, callsign, lat, lon, track, alt, gspeed, vspeed, squawk, timestamp, source, hex, type, reg, painted_as, operating_as, orig_iata, orig_icao, dest_iata, dest_icao, eta) with the values of UA2106 ORD->SFO airborne on 2026-09-27 (tail N14512, takeoff 03:17:53Z per prod). NOT a captured payload: a capture costs a paid call. No on_ground flag and no departure times exist in this schema.",
+  "data": [
+    {
+      "fr24_id": "3c9a77d0",
+      "flight": "UA2106",
+      "callsign": "UAL2106",
+      "lat": 40.91,
+      "lon": -104.62,
+      "track": 262,
+      "alt": 37000,
+      "gspeed": 468,
+      "vspeed": 0,
+      "squawk": "2651",
+      "timestamp": "2026-09-27T04:33:30Z",
+      "source": "ADSB",
+      "hex": "A0B7C4",
+      "type": "A21N",
+      "reg": "N14512",
+      "painted_as": "UAL",
+      "operating_as": "UAL",
+      "orig_iata": "ORD",
+      "orig_icao": "KORD",
+      "dest_iata": "SFO",
+      "dest_icao": "KSFO",
+      "eta": "2026-09-27T07:22:00Z"
+    }
+  ]
+}

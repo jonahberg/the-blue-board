@@ -10,9 +10,11 @@
  * sidebar counts is exactly what the map draws.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { focusContentOnOpen } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { computeLiveStats } from '@/lib/live-stats.js';
 import { filterLiveFlights } from '@/lib/live-filters.js';
@@ -21,6 +23,7 @@ import { HUB_ORDER } from '@/lib/hub-health.js';
 import { AIRPORTS } from '@/lib/airports.js';
 import { LiveMap } from '../map/LiveMap';
 import type { Flight } from '../data/types';
+import { readLiveHubDeepLink } from '../state/deep-links';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
 import { useMediaQuery } from '../state/hooks';
@@ -53,7 +56,9 @@ export default function LiveView() {
   // Every layer except Starlink is local. Starlink's toggle is shared state because the
   // Starlink tab's "● N AIRBORNE NOW" chip switches to this tab with the filter already on.
   const [layers, setLayers] = useState<LayerKey[]>(['hubs']);
-  const [hubFilter, setHubFilter] = useState('');
+  // `?hub=den` (hub guides, the hub strip's share links) opens the map filtered to that hub.
+  const [deepLinkHub] = useState(() => readLiveHubDeepLink(HUB_CODES));
+  const [hubFilter, setHubFilter] = useState(deepLinkHub ?? '');
   const [phaseFilter, setPhaseFilter] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const desktop = useMediaQuery('(min-width: 1024px)');
@@ -96,11 +101,12 @@ export default function LiveView() {
 
   const stats = useMemo(
     () =>
-      computeLiveStats(feed.flights, filtered, fleetDb.length, starlink.tails, {
+      // The same predicate as the Starlink filter, so the stat and the filtered map agree.
+      computeLiveStats(feed.flights, filtered, fleetDb.length, isStarlinkFlight as LibPredicate, {
         matchAircraft: ((f: Flight) => matchAircraft(f, fleetByReg)) as LibMatcher,
         isFiltered: Boolean(hubFilter || phaseFilter || starlinkOnly),
       }) as LiveStats,
-    [feed.flights, filtered, fleetDb.length, starlink.tails, fleetByReg, hubFilter, phaseFilter, starlinkOnly],
+    [feed.flights, filtered, fleetDb.length, isStarlinkFlight, fleetByReg, hubFilter, phaseFilter, starlinkOnly],
   );
 
   const watchedIdents = useMemo(
@@ -125,6 +131,14 @@ export default function LiveView() {
     },
     [focusOn],
   );
+
+  // Centre on a deep-linked hub once, on mount.
+  useEffect(() => {
+    if (!deepLinkHub) return;
+    const airport = HUB_AIRPORTS.find((a) => a.iata === deepLinkHub);
+    if (airport) focusOn(airport.lat, airport.lon);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
+  }, []);
 
   const clearFilters = useCallback(() => {
     setHubFilter('');
@@ -192,16 +206,16 @@ export default function LiveView() {
               <Button
                 size="sm"
                 variant="outline"
-                className="pointer-events-auto min-h-11 bg-background/90 text-xs backdrop-blur"
+                className="pointer-events-auto min-h-11 bg-background text-xs"
                 onClick={() => setSidebarOpen(true)}
               >
-                🔍 Filters
+                <SlidersHorizontal aria-hidden="true" /> Filters
               </Button>
             ) : null}
           </div>
 
           {starlinkAvailable ? (
-            <p className="pointer-events-none absolute bottom-2 left-2 z-[500] hidden rounded-md border bg-background/90 px-2 py-1 text-[11px] backdrop-blur md:block">
+            <p className="pointer-events-none absolute bottom-2 left-2 z-[500] hidden rounded-md border bg-background px-2 py-1 text-[11px] md:block">
               <span
                 className="mr-1.5 inline-block size-2 rounded-full align-middle"
                 style={{ background: '#A78BFA' }}
@@ -214,7 +228,7 @@ export default function LiveView() {
           {/* The overlay appears only when the feed has NEVER produced flights: one failed
               poll against three-minute-old data must not blank a working map. */}
           {feed.failed ? (
-            <div className="absolute inset-0 z-[600] flex flex-col items-center justify-center gap-3 bg-background/85 p-6 text-center backdrop-blur">
+            <div className="absolute inset-0 z-[600] flex flex-col items-center justify-center gap-3 bg-background/95 p-6 text-center">
               <p className="text-sm font-medium">Live flight feed unavailable</p>
               <p className="text-xs text-muted-foreground">
                 Retrying automatically{feed.countdown !== null ? ` in ${feed.countdown}s` : ''}…
@@ -232,7 +246,15 @@ export default function LiveView() {
           </aside>
         ) : (
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetContent side="bottom" className="data-[side=bottom]:h-[80vh]">
+            <SheetContent
+              side="bottom"
+              className="data-[side=bottom]:h-[80vh]"
+              // Radix focuses the first tabbable element on open, which is the search input:
+              // on a phone that raises the soft keyboard over the sheet the visitor opened to
+              // tap filters. Focus the sheet itself instead — still inside the focus trap,
+              // announced by its title, no keyboard.
+              onOpenAutoFocus={focusContentOnOpen}
+            >
               <SheetHeader>
                 <SheetTitle>Filters</SheetTitle>
               </SheetHeader>

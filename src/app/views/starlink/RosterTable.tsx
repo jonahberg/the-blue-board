@@ -19,6 +19,7 @@
  * text selection and hands a screen reader one enormous, unlabelled control.
  */
 
+import { Radio } from 'lucide-react';
 import { Fragment, memo } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -142,19 +143,19 @@ function Expansion({
 
         <div className="mt-4 flex flex-wrap gap-2">
           {icao24 ? (
-            <Button size="sm" className="min-h-11 md:min-h-8" onClick={() => onTrack(icao24)}>
-              📡 Track on Live Map
+            <Button size="sm" className="min-h-11 pointer-fine:md:min-h-8" onClick={() => onTrack(icao24)}>
+              <Radio aria-hidden="true" /> Track on Live Map
             </Button>
           ) : null}
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 md:min-h-8"
+            className="min-h-11 pointer-fine:md:min-h-8"
             onClick={() => onOpenAircraft(aircraft.tail)}
           >
             Aircraft Details
           </Button>
-          <Button asChild size="sm" variant="outline" className="min-h-11 md:min-h-8">
+          <Button asChild size="sm" variant="outline" className="min-h-11 pointer-fine:md:min-h-8">
             <a
               href={`https://www.planespotters.net/search?q=${encodeURIComponent(aircraft.tail)}`}
               target="_blank"
@@ -256,7 +257,7 @@ export const RosterTable = memo(function RosterTable({
                       type="button"
                       onClick={() => onToggleExpand(aircraft.tail)}
                       aria-expanded={isOpen}
-                      className="inline-flex min-h-11 items-center gap-1 text-left underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+                      className="inline-flex min-h-11 items-center gap-1 text-left underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
                     >
                       <span aria-hidden="true" className="text-[9px] opacity-60">
                         {isOpen ? '▾' : '▸'}
@@ -265,7 +266,7 @@ export const RosterTable = memo(function RosterTable({
                     </button>
                     {newTails.has(aircraft.tail) ? (
                       <span
-                        className="ml-1 rounded border px-1 py-0.5 text-[9px] font-semibold text-amber-400"
+                        className="ml-1 rounded border px-1 py-0.5 text-[9px] font-semibold text-bb-warn"
                         title={`Starlink equipment first seen ${aircraft.dateFound ?? 'recently'}`}
                       >
                         NEW
@@ -292,7 +293,7 @@ export const RosterTable = memo(function RosterTable({
                     <TableCell>
                       {live ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold">
-                          <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-400" />
+                          <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
                           Airborne
                         </span>
                       ) : (

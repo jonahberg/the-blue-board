@@ -83,7 +83,7 @@ describe('nextHomeAirport', () => {
     expect(nextHomeAirport('GUM')).toBe('');
   });
 
-  it('falls back to ORD for a code that is not in the cycle (edge case)', () => {
+  it('falls back to no preference for a code not in the cycle (edge case)', () => {
     // indexOf → -1, so (-1 + 1) % 10 === 0 → '' … then the caller cycles on.
     expect(nextHomeAirport('ATL')).toBe('');
     expect(nextHomeAirport(undefined)).toBe('');

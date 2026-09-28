@@ -98,7 +98,7 @@ const itemListSchema = {
 
     <header class="mt-6 border-b border-border pb-5">
       <h1 class="text-2xl font-bold tracking-tight text-balance text-foreground">
-        United Airlines <span class="text-primary">Hub Airports</span> — Live Status &amp;
+        United Airlines <span class="text-primary">Hub Airports</span>&nbsp;— Live Status &amp;
         Delays
       </h1>
       <p class="mt-1.5 text-xs text-muted-foreground">
@@ -112,7 +112,7 @@ const itemListSchema = {
         See all hubs on the live dashboard with real-time delay counts and flight positions.
       </p>
       <a
-        class="mt-3 inline-flex min-h-11 items-center rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        class="mt-3 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-6 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
         href="/">Open The Blue Board Dashboard &#8594;</a
       >
     </div>
@@ -134,20 +134,25 @@ const itemListSchema = {
                 <p class="mt-0.5 mb-3 text-[11px] leading-relaxed text-muted-foreground">
                   {hub.subtitle}
                 </p>
-                <a
-                  class="mt-auto inline-flex min-h-11 w-fit items-center rounded-md bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-                  href={`/hubs/${key}`}
-                >
-                  View {hub.iata} Hub Status &#8594;
-                </a>
-                {key === 'ewr' && (
+                {/* One bottom-anchored ROW, so every card's primary CTA sits on the same
+                    baseline — EWR's second link goes beside it, not under it (stacked, it
+                    lifted EWR's button 36 px above IAH's in the same grid row). */}
+                <div class="mt-auto flex flex-wrap items-center gap-x-3">
                   <a
-                    href="/newark"
-                    class="mt-2 inline-flex min-h-11 w-fit items-center text-[11px] text-foreground underline underline-offset-2"
+                    class="inline-flex min-h-11 w-fit items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90"
+                    href={`/hubs/${key}`}
                   >
-                    FAA cap explained →
+                    View {hub.iata} Hub Status &#8594;
                   </a>
-                )}
+                  {key === 'ewr' && (
+                    <a
+                      href="/newark"
+                      class="inline-flex min-h-11 w-fit items-center text-[11px] text-foreground underline underline-offset-2"
+                    >
+                      FAA cap explained →
+                    </a>
+                  )}
+                </div>
               </li>
             );
           })

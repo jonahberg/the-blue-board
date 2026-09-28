@@ -7,9 +7,16 @@
 //   4. direct upstream fetch       — rate-limited; refreshes the in-memory cache
 // On error, degrade rather than fail: stale in-memory -> stale Supabase snapshot -> committed
 // static file. The X-Starlink-Source header reports which path served the response.
+//
+// `?fields=` splits the ~1 MB payload (F58). ~93% of it is `flightsByTail`, which only the
+// Starlink tab reads, yet the dashboard fetched it on every boot:
+//   ?fields=roster   everything EXCEPT flightsByTail (~75 KB) — the boot fetch
+//   ?fields=flights  flightsByTail + lastUpdated/syncedAt — fetched when the Starlink tab opens
+//   (none)           the full payload, unchanged (cron warmers, older clients)
+// Same path, so the service worker's offline allowlist (`/api/starlink-data`) still matches.
 
 import { createRequire } from 'node:module';
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import {
   applyVerifiedStarlinkOverrides,
@@ -101,16 +108,43 @@ async function fetchUpstream(previousTotal?: number): Promise<StarlinkPayload> {
   return payload;
 }
 
-function serveFresh(res: VercelResponse, payload: StarlinkPayload, source: string) {
-  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
-  res.setHeader('X-Starlink-Source', source);
-  return res.status(200).json(applyVerifiedStarlinkPayloadOverrides(payload));
+type Fields = 'roster' | 'flights' | null;
+
+function readFields(req: VercelRequest): Fields {
+  const raw = req.query?.fields;
+  const value = String(Array.isArray(raw) ? raw[0] : raw ?? '').toLowerCase();
+  return value === 'roster' || value === 'flights' ? value : null;
 }
 
-function serveDegraded(res: VercelResponse, payload: StarlinkPayload, source: string) {
+function shape(payload: StarlinkPayload, fields: Fields) {
+  const full = applyVerifiedStarlinkPayloadOverrides(payload);
+  if (fields === 'roster') {
+    const { flightsByTail: _omit, ...roster } = full;
+    return roster;
+  }
+  if (fields === 'flights') {
+    return { flightsByTail: full.flightsByTail, lastUpdated: full.lastUpdated, syncedAt: full.syncedAt };
+  }
+  return full;
+}
+
+function serveFresh(res: VercelResponse, payload: StarlinkPayload, source: string, fields: Fields = null) {
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
+  res.setHeader('X-Starlink-Source', source);
+  return res.status(200).json(shape(payload, fields));
+}
+
+function serveDegraded(res: VercelResponse, payload: StarlinkPayload, source: string, fields: Fields = null) {
   res.setHeader('Cache-Control', 'public, s-maxage=300');
   res.setHeader('X-Starlink-Source', source);
-  return res.status(200).json(applyVerifiedStarlinkPayloadOverrides(payload));
+  return res.status(200).json(shape(payload, fields));
+}
+
+/** Test seam: forget this lambda's caches so each test starts cold, in any order. */
+export function __resetForTests() {
+  inMemoryCache = null;
+  lastFetch = 0;
+  staticAircraftCache = null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -118,17 +152,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const fields = readFields(req);
   // Cached from earlier in the request lifecycle so the catch block can reuse it without a second read.
   let snapshot: PersistedStarlinkSnapshot | null = null;
 
   try {
     // 1. Same-instance cron result.
     const cronCache = (globalThis as any).__starlinkCache as StarlinkPayload | undefined;
-    if (cronCache) return serveFresh(res, cronCache, 'cron');
+    if (cronCache) return serveFresh(res, cronCache, 'cron', fields);
 
     // 2. Fresh in-memory cache.
     if (inMemoryCache && Date.now() - lastFetch < CACHE_TTL) {
-      return serveFresh(res, inMemoryCache, 'memory');
+      return serveFresh(res, inMemoryCache, 'memory', fields);
     }
 
     // 3. Durable Supabase snapshot (written by the cron). Serve directly if fresh; this lets a cold
@@ -137,27 +172,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (snapshot && Date.now() - snapshot.refreshedAt < SNAPSHOT_FRESH_MS) {
       inMemoryCache = snapshot.data;
       lastFetch = snapshot.refreshedAt;
-      return serveFresh(res, snapshot.data, 'supabase');
+      return serveFresh(res, snapshot.data, 'supabase', fields);
     }
 
     // 4. Fetch fresh from upstream. If rate-limited, degrade instead of erroring.
     if (isRateLimited(req)) {
-      if (snapshot?.data) return serveDegraded(res, snapshot.data, 'supabase-stale');
+      if (snapshot?.data) return serveDegraded(res, snapshot.data, 'supabase-stale', fields);
       const limited = staticPayload();
-      if (limited) return serveDegraded(res, limited, 'static');
+      if (limited) return serveDegraded(res, limited, 'static', fields);
       return res.status(429).json({ error: 'Too many requests' });
     }
 
     inMemoryCache = await fetchUpstream(snapshot?.data.aircraft.length);
     lastFetch = Date.now();
-    return serveFresh(res, inMemoryCache, 'upstream');
+    return serveFresh(res, inMemoryCache, 'upstream', fields);
   } catch (err: any) {
     // Degrade rather than 502: stale in-memory -> stale snapshot -> committed static file.
-    if (inMemoryCache) return serveDegraded(res, inMemoryCache, 'memory-stale');
-    if (snapshot?.data) return serveDegraded(res, snapshot.data, 'supabase-stale');
+    if (inMemoryCache) return serveDegraded(res, inMemoryCache, 'memory-stale', fields);
+    if (snapshot?.data) return serveDegraded(res, snapshot.data, 'supabase-stale', fields);
     console.error('Starlink data error:', err?.message || err);
     const fallback = staticPayload();
-    if (fallback) return serveDegraded(res, fallback, 'static');
+    if (fallback) return serveDegraded(res, fallback, 'static', fields);
     return res.status(502).json({ error: 'Failed to fetch Starlink data' });
   }
 }

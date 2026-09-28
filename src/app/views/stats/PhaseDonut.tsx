@@ -1,5 +1,5 @@
 /**
- * "Airborne by Flight Phase" — the donut and its legend (inventory §25,
+ * "Flights by Phase" — the donut and its legend (inventory §25,
  * `main.js:4141-4181`).
  *
  * The donut is `aria-hidden`: an SVG of seven arcs is not readable, and the legend beside

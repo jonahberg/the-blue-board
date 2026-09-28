@@ -11,7 +11,7 @@
 // Mirrors the api/check-flight.ts skeleton: GET-only, origin-locked, IP rate
 // limited, ~4s AbortController, negative cache on connection failure.
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { normalizeType, normalizeOperator } from './_starlink-normalize.js';
 

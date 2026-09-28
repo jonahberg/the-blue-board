@@ -28,7 +28,7 @@ export function OfflineBanner() {
     <div
       role="alert"
       aria-live="assertive"
-      className="shrink-0 bg-amber-500/15 px-3 py-1.5 text-center text-xs text-amber-300 md:px-4"
+      className="shrink-0 bg-bb-warn/15 px-3 py-1.5 text-center text-xs text-bb-warn md:px-4"
     >
       <span aria-hidden="true">⚠</span> You are offline — data may be outdated. Reconnect to see
       live updates.

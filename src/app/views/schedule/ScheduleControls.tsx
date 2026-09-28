@@ -13,6 +13,7 @@
  * contract every dialog on the site honours.
  */
 
+import { CalendarDays } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { getHubDayLabel } from '@/lib/hubTz.js';
 import { activeAdvFilterCount, advFilterLabel } from '@/lib/schedule-load.js';
@@ -116,8 +116,8 @@ export function ScheduleControls({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.15em] text-primary">
-          📅 Flight Schedule
+        <h2 className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-primary">
+          <CalendarDays aria-hidden="true" className="size-3.5" /> Flight Schedule
         </h2>
 
         <ToggleGroup
@@ -133,7 +133,7 @@ export function ScheduleControls({
             <ToggleGroupItem
               key={offset}
               value={String(offset)}
-              className="min-h-11 px-2 text-[10px] md:min-h-0"
+              className="min-h-11 px-2 text-[10px] pointer-fine:md:min-h-0"
             >
               {DAY_NAMES[offset]}
               <span className="ml-1 hidden text-muted-foreground sm:inline">
@@ -151,7 +151,7 @@ export function ScheduleControls({
             <SelectTrigger
               size="sm"
               aria-label="Schedule hub"
-              className="min-h-11 w-[9.5rem] font-mono text-[11px] md:min-h-0"
+              className="min-h-11 w-auto min-w-[9.5rem] font-mono text-[11px] pointer-fine:md:min-h-0"
             >
               <SelectValue placeholder="All Hubs" />
             </SelectTrigger>
@@ -165,30 +165,39 @@ export function ScheduleControls({
             </SelectContent>
           </Select>
 
-          <Tabs value={dir} onValueChange={(value) => onDir(value as BoardDirection)}>
-            <TabsList className="h-auto">
-              <TabsTrigger value="departures" className="min-h-11 px-2.5 text-[10px] md:min-h-0">
-                Departures
-              </TabsTrigger>
-              <TabsTrigger value="arrivals" className="min-h-11 px-2.5 text-[10px] md:min-h-0">
-                Arrivals
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {/* A segmented control, not Tabs: the board is one table below, so there is no
+              tab panel for a TabsTrigger's aria-controls to point at (F39). The `value &&`
+              guard stops a click on the selected item from emptying the selection. */}
+          <ToggleGroup
+            type="single"
+            value={dir}
+            onValueChange={(value) => {
+              if (value) onDir(value as BoardDirection);
+            }}
+            size="sm"
+            aria-label="Board direction"
+          >
+            <ToggleGroupItem value="departures" className="min-h-11 px-2.5 text-[10px] pointer-fine:md:min-h-0">
+              Departures
+            </ToggleGroupItem>
+            <ToggleGroupItem value="arrivals" className="min-h-11 px-2.5 text-[10px] pointer-fine:md:min-h-0">
+              Arrivals
+            </ToggleGroupItem>
+          </ToggleGroup>
 
           <Input
             aria-label="Find in board"
             placeholder="Find in board…"
             value={filters.search}
             onChange={(event) => onFilters({ search: event.target.value })}
-            className="min-h-11 w-[8.5rem] font-mono text-[11px] md:min-h-0"
+            className="min-h-11 w-[8.5rem] font-mono text-base pointer-fine:md:min-h-0 md:text-[11px]"
           />
 
           {showJumpToNow ? (
             <Button
               variant="outline"
               size="sm"
-              className="min-h-11 text-[10px] md:min-h-0"
+              className="min-h-11 text-[10px] pointer-fine:md:min-h-0"
               onClick={onJumpToNow}
               title="Scroll to the current time"
             >
@@ -196,7 +205,7 @@ export function ScheduleControls({
             </Button>
           ) : null}
 
-          <Button size="sm" className="min-h-11 text-[10px] md:min-h-0" onClick={onRefresh} disabled={loading}>
+          <Button size="sm" className="min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onRefresh} disabled={loading}>
             {loading ? '⏳ Loading…' : '↻ Refresh'}
           </Button>
 
@@ -206,7 +215,7 @@ export function ScheduleControls({
             size="sm"
             aria-expanded={drawerOpen}
             aria-controls="sched-adv-filters"
-            className={cn('min-h-11 text-[10px] md:min-h-0', activeCount > 0 && 'text-primary')}
+            className={cn('min-h-11 text-[10px] pointer-fine:md:min-h-0', activeCount > 0 && 'text-primary')}
             onClick={() => onDrawerOpen(!drawerOpen)}
           >
             {advFilterLabel(activeCount, drawerOpen) as string}

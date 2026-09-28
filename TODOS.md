@@ -23,8 +23,6 @@
 
 ### Quality
 
-- [ ] [ops] Default SCHEDULE_SOURCE_PRIORITY to 'provider' (schedule.ts) so env loss fails closed to the working provider instead of the Cloudflare-dead scrape path. Audit ops-reliability item, not in the v1.5.20 batch.
-
 - [ ] [#14] `api/irops.ts:193` — `results.indexOf(result)` O(n²) → index-based loop. Non-user-facing; 8 hubs so real impact minimal.
 - [ ] [#21] `public/sw.js:84-85` — offline fallback serves `/index.html` for all unmatched routes. Route-aware fallback or proper offline screen.
 - [ ] [#22] `src/app/state/schedule.tsx:206` — cap the `aggCache` Map (the rebuild's `schedCache`). Nothing evicts it; only Refresh deletes a key, so a long session accumulates one full board response per hub × direction × day.

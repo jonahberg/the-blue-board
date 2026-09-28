@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { articles, newsOrder, newsMap, resolveTag } from '../src/data/news/index.js';
+import { fleetNavLabels, fleetOrder } from '../src/data/fleet/index.js';
 
 describe('news data validation', () => {
   it('exports articles as a non-empty array', () => {
@@ -68,7 +69,19 @@ describe('resolveTag', () => {
     // Dreamliner suffix) has broken silently before with only the url asserted.
     expect(resolveTag('737-max-8').label).toBe('Boeing 737 MAX 8');
     expect(resolveTag('a321neo').label).toBe('A321neo');
-    expect(resolveTag('787-9-dreamliner').label).toBe('Boeing 787 9 Dreamliner');
+    expect(resolveTag('787-9-dreamliner').label).toBe('Boeing 787-9 Dreamliner');
+    expect(resolveTag('757-200').label).toBe('Boeing 757-200');
+    expect(resolveTag('767-300er').label).toBe('Boeing 767-300ER');
+  });
+
+  it('labels every fleet type the way the fleet guide names it (audit F142)', () => {
+    // fleetNavLabels is the fleet section's own display name ("787-9 (48)", "MAX 8 (123)"):
+    // every news label must carry the same variant spelling.
+    for (const tag of fleetOrder) {
+      const nav = fleetNavLabels[tag].replace(/\s*\(\d+\)$/, '');
+      expect(resolveTag(tag).label, tag).toContain(nav);
+      expect(resolveTag(tag).label, tag).not.toMatch(/\d \d/);
+    }
   });
 
   it('returns null for unknown tags', () => {

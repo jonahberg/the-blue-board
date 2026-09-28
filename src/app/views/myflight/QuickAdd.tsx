@@ -10,6 +10,7 @@
  * what the shipped box did to the very input its own placeholder advertises.
  */
 
+import { Eye, TicketsPlane } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
@@ -87,13 +88,14 @@ export function QuickAdd({
     // addresses it, but it is a published hook — a bookmarklet, a test, or the next port
     // may look for it, and it costs nothing to keep the name.
     <div id="myflight-empty" className="px-4 py-12 text-center md:py-16">
-      <div className="mb-4 text-5xl" aria-hidden="true">
-        🎫
-      </div>
+      {/* A boarding pass, not 🎫 — Apple renders that emoji as a concert ticket (F78). */}
+      <TicketsPlane aria-hidden="true" className="mx-auto mb-4 size-12 text-muted-foreground" />
       <h2 className="mb-2 text-sm font-medium">No Flights Tracked Yet</h2>
       <p className="mx-auto mb-4 max-w-sm text-[11px] leading-relaxed text-muted-foreground">
-        Search for a flight and tap 👁️ to watch it. You&rsquo;ll see countdown timers, gate
-        info, equipment details, delay risk, and inbound aircraft tracking — all in one place.
+        Search for a flight and tap{' '}
+        <Eye aria-hidden="true" className="inline size-3.5 align-[-2px]" /> Watch. You&rsquo;ll
+        see countdown timers, gate info, equipment details, delay risk, and inbound aircraft
+        tracking — all in one place.
       </p>
       <div className="mx-auto max-w-xs">{field}</div>
       <div className="mx-auto mt-5 flex max-w-sm items-center gap-3">

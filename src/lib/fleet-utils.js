@@ -1,6 +1,8 @@
 // ═══ FLEET UTILITIES ═══
 // Pure data functions extracted from src/dashboard/main.js for testability.
 
+import { FLEET_DB_AS_OF } from '../data/facts.js';
+
 // ─── Fleet Health Categorization ───
 export const FLEET_HEALTH_CATEGORIES = [
   { key: 'active',          label: 'Active',           color: '#22c55e' },
@@ -115,4 +117,106 @@ export function filterFleetData(fleetDb, { type, wifi, status, search, starlinkT
     }
     return true;
   });
+}
+
+/** Aircraft of one family subgroup, from a type → count map. */
+export function subgroupTotal(subgroup, counts) {
+  return (subgroup?.types || []).reduce((n, t) => n + ((counts && counts[t]) || 0), 0);
+}
+
+/** Aircraft of one `FLEET_FAMILIES` family, from a type → count map (F112). */
+export function familyTotal(family, counts) {
+  return (family?.subgroups || []).reduce((sum, sg) => sum + subgroupTotal(sg, counts), 0);
+}
+
+// ─── The fleet database's age ───
+// `FLEET_DB_AS_OF` (git: a10369d) lives in src/data/facts.js beside FLEET_DB_COUNT; it is
+// re-exported here for the dashboard. Every label that describes the database says "as of"
+// it — never "updated daily" (F86).
+export { FLEET_DB_AS_OF };
+
+/** '2026-02-12' → '12 Feb 2026' (UTC, so the label never shifts a day in a western zone). */
+export function formatFleetAsOf(iso = FLEET_DB_AS_OF) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+// ─── Fleet utilization — THE definition ───
+/**
+ * Mainline ICAO type designators as the live feed reports them. An airborne United-callsign
+ * flight of one of these types that the fleet database cannot match is a mainline airframe
+ * missing from the (stale) database — not a regional/partner flight.
+ */
+export const MAINLINE_ICAO_TYPES = new Set([
+  'A319', 'A320', 'A321', 'A21N',
+  'B737', 'B738', 'B739', 'B38M', 'B39M',
+  'B752', 'B753', 'B763', 'B764',
+  'B772', 'B77L', 'B77W', 'B778', 'B779',
+  'B788', 'B789', 'B78X',
+]);
+
+/**
+ * Fleet utilization, the ONE definition every tab uses (Live stat bar, Stats card, Fleet
+ * pulse — F8/F67/F92):
+ *
+ *   utilization = airborne flights that resolve to an airframe in the fleet database
+ *                 ÷ airframes in the fleet database
+ *
+ * Numerator and denominator are the same population (mainline airframes we can name).
+ * United Express/partner flights are excluded from the numerator because they are not in
+ * the denominator; counting them was how Live/Stats said 25% while Fleet said 20%.
+ *
+ * The unmatched remainder is split so the UI can say what it is: `notInDb` are mainline types
+ * under a UAL callsign (new deliveries the database has not caught up with), `regional` is
+ * everything else.
+ *
+ * @param {Array<Object>} airborne  flights already known to be off the ground.
+ * @param {number} fleetSize  fleet database length; 0 until it loads.
+ * @param {(f: any) => Object|null} matchAircraft  flight → fleet row, or null.
+ * @returns {{matched: number, notInDb: number, regional: number, total: number, pct: number|null}}
+ *   pct is null while the fleet database is empty.
+ */
+export function fleetUtilization(airborne, fleetSize, matchAircraft) {
+  let matched = 0, notInDb = 0, regional = 0;
+  for (const f of airborne || []) {
+    if (matchAircraft(f)) matched++;
+    else if (isMainlineNotInDb(f)) notInDb++;
+    else regional++;
+  }
+  const total = fleetSize || 0;
+  return { matched, notInDb, regional, total, pct: total > 0 ? Math.round((matched / total) * 100) : null };
+}
+
+function isMainlineNotInDb(f) {
+  const cs = String(f?.callsign || '').toUpperCase();
+  return /^UAL\d/.test(cs) && MAINLINE_ICAO_TYPES.has(String(f?.acType || '').toUpperCase());
+}
+
+// ─── Starlink % — THE definition ───
+/**
+ * Starlink share of the mainline fleet, the ONE definition the Fleet ring and its "Mainline
+ * Fleet" chip both render (F93):
+ *
+ *   mainline Starlink aircraft ÷ mainline fleet, both from the SAME population.
+ *
+ * With the tracker's fleet stats that is `mainline / mainlineTotal` (the Starlink tab's own
+ * figure). Without them it falls back to the fleet database: airframes in it that are on the
+ * Starlink roster ÷ airframes in it. It never mixes the two — the tracker's 247 over the
+ * database's 1078 was a numerator counting 16 tails the denominator did not contain.
+ *
+ * @param {{mainline?: number, mainlineTotal?: number}|null|undefined} stats
+ * @param {Array<{r?: string}>} fleetDb
+ * @param {{has: (tail: string) => boolean}} tails
+ * @returns {{count: number, total: number, pct: number}|null}
+ */
+export function starlinkMainlineShare(stats, fleetDb, tails) {
+  if (stats && Number(stats.mainlineTotal) > 0 && Number.isFinite(Number(stats.mainline))) {
+    const count = Number(stats.mainline), total = Number(stats.mainlineTotal);
+    return { count, total, pct: Math.round((count / total) * 100) };
+  }
+  const db = fleetDb || [];
+  if (!db.length) return null;
+  const count = db.filter((a) => a && a.r && tails && tails.has(a.r)).length;
+  return { count, total: db.length, pct: Math.round((count / db.length) * 100) };
 }

@@ -9,9 +9,13 @@
  *
  * The counting lives in `src/lib/analytics.js` (shared with the Fleet tab, so the two can
  * never disagree about utilisation) and the drawing rules in `src/lib/stats-chart.js`.
- * This file owns layout and the metric headline row.
+ * "Airborne" is `isAirborne()` and "Fleet Utilization" is `fleetUtilization()` — the same
+ * two definitions the Live stat bar and the Fleet pulse use, so all three tabs quote one
+ * number (F8/F92). This file owns layout and the metric headline row.
  */
 
+import { CalendarDays, Network, Plane, PlaneTakeoff, TrendingUp } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +28,8 @@ import {
   typeUtilization,
 } from '@/lib/analytics.js';
 import { matchAircraft } from '@/lib/fleet-match.js';
+import { fleetUtilization } from '@/lib/fleet-utils.js';
+import { isAirborne } from '@/lib/live-stats.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
 import type { Flight } from '../data/types';
 import { useFeed } from '../state/feed';
@@ -49,17 +55,23 @@ const REFRESH_NOTE = 'updates every 30s';
 /** A panel: a titled card with a one-line subtitle saying what it measures. */
 function Panel({
   title,
+  icon: Icon,
   subtitle,
   children,
 }: {
   title: string;
+  /** Decorative, beside the title (DESIGN.md: icons are lucide-react). */
+  icon: LucideIcon;
   subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
     <Card className="min-w-0">
       <CardHeader className="gap-0.5">
-        <CardTitle className="text-sm">{title}</CardTitle>
+        <CardTitle className="flex items-center gap-1.5 text-sm">
+          <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
+          {title}
+        </CardTitle>
         {subtitle ? <p className="text-[10px] text-muted-foreground">{subtitle}</p> : null}
       </CardHeader>
       <CardContent className="min-w-0">{children}</CardContent>
@@ -71,7 +83,7 @@ export default function StatsView() {
   const { flights } = useFeed();
   const { fleetDb, fleetByReg, starlink } = useFleet();
 
-  const airborne = useMemo(() => flights.filter((f) => !f.onGround), [flights]);
+  const airborne = useMemo(() => flights.filter(isAirborne), [flights]);
 
   const utilisation = useMemo(
     () =>
@@ -81,7 +93,9 @@ export default function StatsView() {
     [airborne, fleetDb, fleetByReg],
   );
 
-  const phase = useMemo(() => phaseBreakdown(flights) as PhaseModel, [flights]);
+  // The airborne set, not every flight: the donut's centre total has to equal the "Flights
+  // Airborne" card above it (F67).
+  const phase = useMemo(() => phaseBreakdown(airborne) as PhaseModel, [airborne]);
 
   const matrix = useMemo(() => hubMatrix(airborne, HUBS) as MatrixModel, [airborne]);
 
@@ -99,10 +113,16 @@ export default function StatsView() {
     const isStarlink = makeIsStarlinkFlight(starlink.tails, fleetByReg);
     const starlinkAirborne = airborne.filter(isStarlink).length;
     const starlinkPct = airborne.length ? Math.round((starlinkAirborne / airborne.length) * 100) : 0;
-    const utilPct = fleetDb.length ? Math.round((airborne.length / fleetDb.length) * 100) : 0;
+    const util = fleetUtilization(airborne, fleetDb.length, (f: Flight) =>
+      matchAircraft(f, fleetByReg),
+    ) as { matched: number; total: number; pct: number | null };
     return [
       { label: 'Flights Airborne', value: String(airborne.length) },
-      { label: 'Fleet Utilization', value: `${utilPct}%` },
+      {
+        label: 'Fleet Utilization',
+        value: util.pct == null ? '—' : `${util.pct}%`,
+        sub: util.pct == null ? undefined : `${util.matched} of ${util.total} mainline aircraft`,
+      },
       { label: 'Avg Fleet Age', value: `${ages.fleetAvg}y` },
       {
         label: 'Starlink Coverage',
@@ -120,14 +140,16 @@ export default function StatsView() {
 
       <div className="grid gap-3 lg:grid-cols-2">
         <Panel
-          title="✈️ Live Fleet Utilization"
+          title="Live Fleet Utilization"
+          icon={Plane}
           subtitle={`Airborne now vs. total fleet · ${REFRESH_NOTE}`}
         >
           <UtilizationChart rows={utilisation} />
         </Panel>
 
         <Panel
-          title="🛫 Airborne by Flight Phase"
+          title="Flights by Phase"
+          icon={PlaneTakeoff}
           subtitle={`Current phase distribution · ${REFRESH_NOTE}`}
         >
           <PhaseDonut model={phase} />
@@ -135,19 +157,21 @@ export default function StatsView() {
       </div>
 
       <Panel
-        title="🔥 Hub-to-Hub Flow Matrix"
+        title="Hub-to-Hub Flow Matrix"
+        icon={Network}
         subtitle="Active flights between UA hubs · darker = more traffic"
       >
         <HubMatrix hubs={HUBS} model={matrix} />
       </Panel>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="📈 Top Routes Right Now" subtitle={`Busiest city pairs in the air · ${REFRESH_NOTE}`}>
+        <Panel title="Top Routes Right Now" icon={TrendingUp} subtitle={`Busiest city pairs in the air · ${REFRESH_NOTE}`}>
           <RouteBars rows={routes} />
         </Panel>
 
         <Panel
-          title="📅 Average Fleet Age by Type"
+          title="Average Fleet Age by Type"
+          icon={CalendarDays}
           subtitle={`Mean years since delivery across ${TYPE_ORDER.length} mainline types`}
         >
           <AgeBars rows={ages.rows} />

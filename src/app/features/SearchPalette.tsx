@@ -2,15 +2,22 @@
  * ⌘K — find a flight.
  *
  * `shouldFilter={false}` on the inner `Command`: cmdk's own fuzzy filter would re-rank
- * results that `src/lib/global-search.js` has already matched and ordered, and its scoring
- * does not understand flight numbers or route pairs ("ORD DEN", "ORDDEN", "ORD to DEN" all
- * have to behave the same).
+ * results that `rankLiveFlights()` in `src/lib/global-search.js` has already matched and
+ * ranked (exact ident, then prefix, then route, then substring — F2), and its scoring does not
+ * understand flight numbers or route pairs ("ORD DEN", "ORDDEN", "ORD to DEN" all have to
+ * behave the same). The 20-row cap is applied AFTER ranking, so an airborne exact match can
+ * never be sliced off.
+ *
+ * The highlighted row is controlled here (F7). Results land 150 ms after the keystroke, and
+ * cmdk picks its "first item" against the rows still on screen from the previous query, then
+ * never re-picks when those unmount — which left Enter bound to a row that no longer existed.
  *
  * When nothing airborne matches a query that LOOKS like a flight number, the palette offers
  * a schedule lookup rather than a dead end — a flight that has not taken off yet is the
  * single most common reason for an empty result.
  */
 
+import { CalendarDays, Plane, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -25,9 +32,9 @@ import {
 import {
   FR24_LOOKUP_RE,
   classifyEmptyState,
-  matchLiveFlights,
   matchScheduleFlights,
   normalizeQuery,
+  rankLiveFlights,
 } from '@/lib/global-search.js';
 import { FR24_LOOKUP_AVAILABLE } from './Fr24LookupDialog';
 import { useFeed } from '../state/feed';
@@ -65,7 +72,7 @@ export function SearchPalette() {
 
   const matches = useMemo(() => {
     if (qNorm.length < 2) return [];
-    return flights.filter((f) => matchLiveFlights([f], qNorm).length > 0).slice(0, MAX_RESULTS);
+    return (rankLiveFlights(flights, qNorm) as typeof flights).slice(0, MAX_RESULTS);
   }, [flights, qNorm]);
 
   /**
@@ -123,6 +130,16 @@ export function SearchPalette() {
       : null;
   const empty = classifyEmptyState(qNorm) as { kind: string; display: string };
 
+  // The row Enter acts on: always the first result of the CURRENT result set (F7).
+  const firstValue =
+    matches[0]?.fr24id ??
+    scheduleMatches[0]?.key ??
+    (qNorm.length >= 2 ? (lookupIdent ? `lookup-${lookupIdent}` : 'goto-schedule') : '');
+  const [selected, setSelected] = useState('');
+  useEffect(() => {
+    setSelected(firstValue);
+  }, [firstValue, qNorm]);
+
   /**
    * The contextual empty state (inventory §4). It is rendered in two places on purpose:
    * `CommandEmpty` only mounts while cmdk counts ZERO items, and the "Not airborne" group
@@ -149,7 +166,12 @@ export function SearchPalette() {
       title="Find a flight"
       description="Search by flight number, tail number, or route"
     >
-      <Command shouldFilter={false}>
+      <Command
+        shouldFilter={false}
+        value={selected}
+        onValueChange={setSelected}
+        label="Find a flight"
+      >
         <CommandInput
           placeholder="UA1234, N12345, or ORD-DEN…"
           value={query}
@@ -161,9 +183,13 @@ export function SearchPalette() {
           {matches.length > 0 ? (
             <CommandGroup heading="Airborne now">
               {matches.map((flight) => (
+                // The shadcn item appends a hidden check icon with its own `ml-auto`; two auto
+                // margins split the free space and the aircraft column drifted with the ident
+                // length (F66). These rows never show a check, so the icon is hidden.
                 <CommandItem
                   key={flight.fr24id}
                   value={flight.fr24id}
+                  className="[&>svg:last-child]:hidden"
                   onSelect={() => {
                     select({ kind: 'flight', flight });
                     // An airborne result goes to the map, centred on the flight (legacy parity).
@@ -173,14 +199,16 @@ export function SearchPalette() {
                     setSearchOpen(false);
                   }}
                 >
-                  <span aria-hidden="true">✈️</span>
-                  <span className="font-mono font-medium">
+                  <Plane aria-hidden="true" />
+                  {/* Fixed-width ident so the route column starts in the same place for
+                      UA19 and UA1844 (7ch also fits a UAL callsign fallback). */}
+                  <span className="w-[7ch] shrink-0 font-mono font-medium">
                     {flight.flightIATA || flight.callsign}
                   </span>
-                  <span className="font-mono text-muted-foreground">
+                  <span className="shrink-0 font-mono text-muted-foreground">
                     {flight.origin || '?'} → {flight.dest || '?'}
                   </span>
-                  <span className="ml-auto font-mono text-xs text-muted-foreground">
+                  <span className="ml-auto text-right font-mono text-xs text-muted-foreground tabular-nums">
                     {flight.acType} {flight.reg}
                   </span>
                 </CommandItem>
@@ -222,7 +250,7 @@ export function SearchPalette() {
                       setSearchOpen(false);
                     }}
                   >
-                    <span aria-hidden="true">🔎</span>
+                    <Search aria-hidden="true" />
                     Look up <span className="font-mono font-medium">{lookupIdent}</span> times and
                     gates
                   </CommandItem>
@@ -234,7 +262,7 @@ export function SearchPalette() {
                     setSearchOpen(false);
                   }}
                 >
-                  <span aria-hidden="true">📅</span>
+                  <CalendarDays aria-hidden="true" />
                   Open the Schedule tab
                 </CommandItem>
               </CommandGroup>

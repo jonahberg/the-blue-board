@@ -113,7 +113,7 @@ export default function DisclaimerDialog() {
 
         <div className="space-y-3 text-[11px] leading-relaxed">
           <p>
-            <strong className="text-amber-400">
+            <strong className="text-bb-warn">
               The Blue Board is an independent, fan-built project and is not affiliated with,
               endorsed by, or connected to United Airlines, Inc.
             </strong>{' '}
@@ -137,7 +137,7 @@ export default function DisclaimerDialog() {
           <p>
             <strong>Data Accuracy:</strong> All flight data is provided for informational purposes
             only and may be delayed, incomplete, or inaccurate.{' '}
-            <strong className="text-red-400">
+            <strong className="text-destructive">
               Do not use this dashboard for operational or safety-critical decisions.
             </strong>{' '}
             Always verify flight status directly with <Ext href="https://www.united.com">united.com</Ext>{' '}
@@ -159,7 +159,7 @@ export default function DisclaimerDialog() {
           </p>
 
           <div className="rounded-md border border-primary/15 bg-primary/5 p-3.5">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-amber-400">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-bb-warn">
               Supporters
             </p>
             <ul className="mt-2.5 flex flex-wrap gap-1.5">

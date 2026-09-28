@@ -47,7 +47,7 @@ export function SeatConfigGallery({
               key={quick}
               type="button"
               onClick={() => onSelectType(quick)}
-              className="min-h-11 rounded-md border px-3 text-xs transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-8"
+              className="min-h-11 rounded-md border px-3 text-xs transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-8"
             >
               {quick}
             </button>

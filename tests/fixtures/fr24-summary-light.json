@@ -1,0 +1,23 @@
+{
+  "_comment": "FR24 /api/flight-summary/light body for UA2278 as prod resolved it on 2026-09-27T04:33Z. type/reg/orig_icao/dest_icao/datetime_takeoff/datetime_landed/flight_ended are the values /api/flight-times?flight=UA2278 returned; fr24_id/hex/first_seen/last_seen are illustrative (a real capture would cost a paid call). The endpoint is FLAT and carries NO scheduled times. This is YESTERDAY's completed leg: FR24 only returns legs that have operated, so tonight's not-yet-departed leg is absent.",
+  "data": [
+    {
+      "fr24_id": "3c9a1f2e",
+      "flight": "UA2278",
+      "callsign": "UAL2278",
+      "operating_as": "UAL",
+      "painted_as": "UAL",
+      "type": "A21N",
+      "reg": "N24542",
+      "orig_icao": "KSFO",
+      "datetime_takeoff": "2026-09-26T06:02:02Z",
+      "dest_icao": "KORD",
+      "dest_icao_actual": "KORD",
+      "datetime_landed": "2026-09-26T09:38:04Z",
+      "hex": "A2F3C1",
+      "first_seen": "2026-09-26T05:41:10Z",
+      "last_seen": "2026-09-26T09:47:30Z",
+      "flight_ended": true
+    }
+  ]
+}

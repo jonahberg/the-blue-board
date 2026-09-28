@@ -34,8 +34,12 @@ export type BoardRow = {
   type: string;
   fleet: string;
   operator: string;
+  /** True only on the leg the aircraft is flying right now — one row per tail at most. */
   airborne: boolean;
+  /** The live flight's ICAO24 on the airborne row; '' on every other row. */
   icao24: string;
+  /** Set when the tail is airborne on a DIFFERENT leg (its inbound): what it is flying now. */
+  inbound: { flight: string; icao24: string } | null;
   deltaSec: number;
 };
 

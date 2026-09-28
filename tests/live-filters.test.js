@@ -28,7 +28,7 @@ describe('filterLiveFlights', () => {
     expect(kept).toEqual(['1', '2']);
   });
 
-  it('adds aircraft on the ground within ~50 nm of the hub, which often report no route', () => {
+  it('adds aircraft on the ground within 93 nm (HUB_PROXIMITY_NM) of the hub, which often report no route', () => {
     const parked = { ...cruising({ fr24id: '4', origin: '', dest: '' }), onGround: true, alt: 0, spd: 0, lat: 41.98, lon: -87.9 };
     const kept = filterLiveFlights([...flights, parked], { hub: 'ORD' }, { hubs: HUBS });
     expect(kept.map((f) => f.fr24id)).toContain('4');

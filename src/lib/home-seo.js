@@ -22,7 +22,7 @@
  *  3. Keep the Markdown twin in `src/lib/agent-markdown.js` in step with any copy edit.
  */
 
-import { FLEET_DB_COUNT, HUB_LINE_LONG } from '../data/facts.js';
+import { FLEET_DB_AS_OF, FLEET_DB_COUNT, HUB_LINE_LONG } from '../data/facts.js';
 import { fleetOrder, fleetTypes } from '../data/fleet/index.js';
 import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../data/starlink-facts.js';
 import { SITE_URL } from './site.js';
@@ -203,7 +203,7 @@ export const FLEET_SUMMARY = {
   body:
     `Complete searchable database of all ${FLEET_COUNT_TEXT} United Airlines mainline aircraft `
     + `across ${fleetOrder.length} types: ${fleetTypeBreakdown()}. Includes registration, seat `
-    + 'configuration, WiFi type, IFE system, delivery date, and operational status. '
+    + `configuration, WiFi type, IFE system, delivery date, and operational status, as of ${FLEET_DB_AS_OF}. `
     + `${STARLINK_EQUIPPED_LABEL} aircraft now equipped with free SpaceX Starlink satellite WiFi `
     + `(as of ${STARLINK_AS_OF}). Live fleet utilization updated every 30 seconds.`,
   linkHref: '/fleet',

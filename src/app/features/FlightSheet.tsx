@@ -15,6 +15,7 @@
  *    the first two are unavailable in exactly the mobile contexts that share most.
  */
 
+import { Eye, Star, Zap } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -31,15 +32,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cityFor } from '@/lib/airports.js';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
-import { matchAircraft } from '@/lib/fleet-match.js';
+import { matchAircraft, unmatchedAircraftNote } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
 import { resolveFlightRoute } from '../data/route';
-import { formatTimeWithTz } from '@/lib/time-format.js';
+import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
 import { ApiError, fetchFlightTimes } from '../data/api';
 import { shareUrl } from '../data/share';
 import type { Flight, FlightTimes, TimeTriple } from '../data/types';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
+import { useMediaQuery } from '../state/hooks';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 
@@ -108,10 +110,10 @@ function TimeRow({
           variant="outline"
           className={
             resolved.delta.tone === 'late'
-              ? 'border-amber-500/30 text-amber-400'
+              ? 'border-bb-warn/30 text-bb-warn'
               : resolved.delta.tone === 'early'
-                ? 'border-sky-500/30 text-sky-400'
-                : 'border-emerald-500/30 text-emerald-400'
+                ? 'border-bb-info/30 text-bb-info'
+                : 'border-bb-ok/30 text-bb-ok'
           }
         >
           {resolved.delta.label}
@@ -123,6 +125,14 @@ function TimeRow({
     </div>
   );
 }
+
+/** What the source field means, in words (the raw tier ids are internal). */
+const TIMES_SOURCE_LABEL: Record<string, string> = {
+  flightaware: 'FlightAware',
+  'schedule-cache': 'hub schedule board',
+  'schedule-cache+fr24': 'hub schedule board + Flightradar24 live',
+  fr24: 'Flightradar24 live tracking (no schedule times)',
+};
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
@@ -140,6 +150,17 @@ export function FlightSheet() {
   const watch = useWatch();
 
   const open = selection !== null;
+
+  // F20: a right-hand panel covers the map centre below ~1024px (and the whole screen on a
+  // phone), so every "View on map" landed on a sheet hiding the plane it had just centred.
+  // Below lg the panel is a bottom sheet that PEEKS at 40dvh — the map's centre stays in view —
+  // and expands on request. It drops back to the peek whenever it gets a new subject or the
+  // viewer asks to see the map.
+  const wide = useMediaQuery('(min-width: 1024px)');
+  const [expanded, setExpanded] = useState(false);
+  const selectionKey =
+    selection?.kind === 'flight' ? `f:${selection.flight.fr24id}` : selection ? `i:${selection.ident}` : '';
+  useEffect(() => setExpanded(false), [selectionKey]);
 
   /** The freshest row for the selected aircraft, so the panel tracks the poll. */
   const flight: Flight | null = useMemo(() => {
@@ -244,6 +265,11 @@ export function FlightSheet() {
   const isStarlink = Boolean(reg) && starlink.tails.has(reg);
   const specialEntry = reg ? special.get(reg) : undefined;
   const watched = ident ? watch.isWatched(ident) : false;
+  // F11: label times in the AIRPORT's clock. Most tiers send no zone; the airport table knows it.
+  const originTz =
+    times.data?.origin?.tz || airportTz(times.data?.origin?.iata || route.originIata) || undefined;
+  const destTz =
+    times.data?.destination?.tz || airportTz(times.data?.destination?.iata || route.destIata) || undefined;
 
   return (
     <Sheet
@@ -257,17 +283,24 @@ export function FlightSheet() {
         Non-modal, with no overlay and no close-on-outside-interaction. This panel sits
         BESIDE the live map rather than over it: a modal Radix dialog dims the map, makes it
         inert to pan, zoom and marker clicks, and closes itself on the first map click — so
-        "Centre map" would fly a map the viewer could not see or touch. Escape and the ✕ still
+        "Center map" would fly a map the viewer could not see or touch. Escape and the ✕ still
         close it, and clicking another aircraft swaps the panel's subject instead.
       */}
       <SheetContent
+        side={wide ? 'right' : 'bottom'}
+        data-peek={!wide && !expanded ? 'true' : undefined}
         showOverlay={false}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
-        className="w-full overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md"
+        className={
+          wide
+            ? 'w-full overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md'
+            : `gap-0 overflow-y-auto rounded-t-xl ${expanded ? 'max-h-[85dvh]' : 'max-h-[40dvh]'}`
+        }
       >
         <SheetHeader>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* pr-12 keeps the row clear of the sheet's absolutely-placed close button. */}
+          <div className="flex flex-wrap items-center gap-2 pr-12">
             <SheetTitle className="font-mono text-xl">{ident ?? 'Flight'}</SheetTitle>
             {phase ? (
               <Badge variant="secondary">
@@ -278,6 +311,17 @@ export function FlightSheet() {
             )}
             {times.data?.cancelled ? <Badge variant="destructive">Cancelled</Badge> : null}
             {times.data?.diverted ? <Badge variant="destructive">Diverted</Badge> : null}
+            {!wide ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="min-h-11 text-xs"
+                aria-expanded={expanded}
+                onClick={() => setExpanded((value) => !value)}
+              >
+                {expanded ? 'Show map' : 'More details'}
+              </Button>
+            ) : null}
           </div>
           <SheetDescription>
             {route.originIata || route.destIata
@@ -291,7 +335,7 @@ export function FlightSheet() {
               1200 (VFR) with an empty class, which is routine — the Ticker filters on the
               same `squawk-alert` class for the same reason. */}
           {squawk && squawk.cls === 'squawk-alert' ? (
-            <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300">
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
               {squawk.text}
             </p>
           ) : null}
@@ -320,10 +364,13 @@ export function FlightSheet() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="min-h-11 text-xs md:h-7 md:min-h-0"
-                  onClick={() => focusOn(flight.lat, flight.lon)}
+                  className="min-h-11 text-xs md:h-7 pointer-fine:md:min-h-0"
+                  onClick={() => {
+                    setExpanded(false);
+                    focusOn(flight.lat, flight.lon);
+                  }}
                 >
-                  Centre map
+                  Center map
                 </Button>
               </div>
               <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
@@ -370,11 +417,15 @@ export function FlightSheet() {
                     {reg}
                   </Button>
                   {isStarlink ? (
-                    <Badge className="border-violet-500/30 bg-violet-500/10 text-violet-300">
-                      ⚡ Starlink confirmed
+                    <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
+                      <Zap aria-hidden="true" /> Starlink confirmed
                     </Badge>
                   ) : null}
-                  {specialEntry ? <Badge variant="outline">⭐ {specialEntry.name}</Badge> : null}
+                  {specialEntry ? (
+                    <Badge variant="outline">
+                      <Star aria-hidden="true" /> {specialEntry.name}
+                    </Badge>
+                  ) : null}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {/* normalizeWifi turns the database's raw codes ("Satl Ku") into the
@@ -410,7 +461,7 @@ export function FlightSheet() {
                   ? `${flight.acType || 'Unknown type'}${flight.reg ? ` · ${flight.reg}` : ''} (${
                       fleetLoading
                         ? 'Loading aircraft data…'
-                        : 'not in mainline fleet DB — likely United Express'
+                        : unmatchedAircraftNote(flight.acType)
                     })`
                   : 'No aircraft reported.'}
               </p>
@@ -434,26 +485,27 @@ export function FlightSheet() {
                 <TimeRow
                   label="Gate departure"
                   triple={times.data.departure?.gate}
-                  tz={times.data.origin?.tz}
+                  tz={originTz}
                 />
                 <TimeRow
                   label="Takeoff"
                   triple={times.data.departure?.takeoff}
-                  tz={times.data.origin?.tz}
+                  tz={originTz}
                 />
                 <TimeRow
                   label="Landing"
                   triple={times.data.arrival?.landing}
-                  tz={times.data.destination?.tz}
+                  tz={destTz}
                 />
                 <TimeRow
                   label="Gate arrival"
                   triple={times.data.arrival?.gate}
-                  tz={times.data.destination?.tz}
+                  tz={destTz}
                 />
                 <p className="pt-1 text-[11px] text-muted-foreground">
-                  Source: {times.data.source ?? 'AeroDataBox'}. united.com and the airport display
-                  remain the systems of record.
+                  Times from{' '}
+                  {TIMES_SOURCE_LABEL[times.data.source ?? ''] ?? times.data.source ?? 'AeroDataBox'} —
+                  check united.com or the airport display before you travel.
                 </p>
               </div>
             ) : (
@@ -468,7 +520,7 @@ export function FlightSheet() {
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
-              className="min-h-11 md:min-h-9"
+              className="min-h-11 pointer-fine:md:min-h-9"
               variant={watched ? 'default' : 'outline'}
               onClick={() => {
                 if (!ident) return;
@@ -481,9 +533,9 @@ export function FlightSheet() {
               }}
               aria-pressed={watched}
             >
-              {watched ? '👁️ Watching' : '👁️ Watch'}
+              <Eye aria-hidden="true" /> {watched ? 'Watching' : 'Watch'}
             </Button>
-            <Button size="sm" variant="outline" className="min-h-11 md:min-h-9" onClick={() => void onShare()}>
+            <Button size="sm" variant="outline" className="min-h-11 pointer-fine:md:min-h-9" onClick={() => void onShare()}>
               Share
             </Button>
           </div>

@@ -39,7 +39,7 @@ const itemListSchema = {
     <Breadcrumbs items={[{ label: 'Trackers' }]} />
 
     <header class="mt-6">
-      <div class="font-mono text-[10px] font-semibold uppercase tracking-widest text-amber-400">
+      <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
         Living Pages
       </div>
       <h1 class="mt-0.5 mb-1.5 text-lg font-bold tracking-tight text-balance text-foreground sm:text-2xl">
@@ -58,10 +58,10 @@ const itemListSchema = {
           const t = trackers[slug];
           return (
             <a
-              class="block rounded-r-md border border-border border-l-[3px] border-l-amber-400 bg-card px-5 py-4.5 text-foreground transition-colors hover:border-primary hover:border-l-amber-400"
+              class="block rounded-r-md border border-border border-l-[3px] border-l-primary bg-card px-5 py-4.5 text-foreground transition-colors hover:border-primary hover:border-l-primary"
               href={t.href}
             >
-              <div class="mb-2 font-mono text-[9px] font-semibold uppercase tracking-widest text-amber-400">
+              <div class="mb-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
                 {t.name}
               </div>
               <div class="mb-1.5 text-[15px] font-bold text-foreground">{t.question}</div>
@@ -82,24 +82,26 @@ const itemListSchema = {
                   ))}
                 </div>
                 <div
-                  class="col-start-2 flex flex-wrap gap-2 font-mono text-[8px] uppercase text-muted-foreground"
+                  class="col-start-2 flex flex-wrap gap-2 font-mono text-[11px] uppercase text-muted-foreground"
                   aria-hidden="true"
                 >
                   {t.segments.map((segment) => (
-                    <span>
+                    <span class="inline-flex items-center gap-1">
+                      {/* The swatch keys each count to its bar segment above. */}
+                      <span class:list={['size-2 rounded-xs', toneClass(TONE_BAR, segment.tone)]} />
                       {segment.count} {segment.label}
                     </span>
                   ))}
                 </div>
               </div>
-              <div class="mb-3 text-[10px] leading-normal text-muted-foreground">
-                <strong class="font-mono text-[8px] font-semibold uppercase tracking-wide text-amber-400">
+              <div class="mb-3 text-[11px] leading-normal text-muted-foreground">
+                <strong class="font-mono text-[11px] font-semibold uppercase tracking-wide text-primary">
                   Latest · {fmtShort(t.latestChange.date)}
                 </strong>
                 <br />
                 {t.latestChange.entry}
               </div>
-              <div class="flex flex-wrap items-center justify-between gap-2.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div class="flex flex-wrap items-center justify-between gap-2.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>
                   {t.entryCount} {t.entryNoun} ·{' '}
                   <LastUpdated iso={t.lastVerified} prefix="verified" />

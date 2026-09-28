@@ -14,7 +14,7 @@ const snapshotMocks = vi.hoisted(() => ({
 
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => snapshotMocks);
 
-import handler, { applyIropsPriority, buildWarmPlan } from '../api/cron/warm-schedules.js';
+import handler, { applyIropsPriority, buildWarmPlan, rolloverHubs } from '../api/cron/warm-schedules.js';
 import { __resetFaaDisruptionCacheForTests } from '../api/faa.js';
 import { __resetAlertThrottleForTests } from '../api/_alert.js';
 import { __resetAdbSpendForTests } from '../api/_cost-state.js';
@@ -208,7 +208,8 @@ describe('warm-schedules handler IROPS integration', () => {
       vi.setSystemTime(at);
       const plan = buildWarmPlan(at);
       const hasOrdToday = plan.some((t) => t.hub === 'ORD' && t.dayOffset === 0);
-      if (!hasOrdToday && predicate(plan)) return plan;
+      // Skip a hub's first hour after local midnight: rollover priority (F81) reshapes that plan.
+      if (!hasOrdToday && rolloverHubs(at).length === 0 && predicate(plan)) return plan;
     }
     throw new Error('no slot matched');
   }
@@ -256,6 +257,8 @@ describe('warm-schedules handler IROPS integration', () => {
   });
 
   it('leaves the ring plan untouched when no hub has an active program', async () => {
+    // 13:00 CDT: no hub is in its post-midnight rollover hour, so only IROPS could reshape it.
+    vi.setSystemTime(Date.UTC(2026, 8, 26, 18, 0, 0));
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const u = String(url);
       if (u.includes('nasstatus.faa.gov/api/airport-events')) {

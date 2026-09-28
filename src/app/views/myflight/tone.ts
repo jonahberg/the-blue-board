@@ -12,12 +12,12 @@
 
 /** `myFlightStatusChip().tone` / `myFlightPendingChip().tone` → chip classes. */
 export const MY_FLIGHT_STATUS_TONE: Record<string, string> = {
-  cancelled: 'border-red-500/40 bg-red-500/15 text-red-400',
-  diverted: 'border-orange-500/40 bg-orange-500/15 text-orange-400',
-  landed: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
+  cancelled: 'border-destructive/40 bg-destructive/15 text-destructive',
+  diverted: 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
+  landed: 'border-bb-ok/40 bg-bb-ok/15 text-bb-ok',
   enroute: 'border-primary/40 bg-primary/15 text-primary',
-  departed: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
-  delayed: 'border-amber-500/40 bg-amber-500/15 text-amber-400',
+  departed: 'border-bb-ok/40 bg-bb-ok/15 text-bb-ok',
+  delayed: 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
   scheduled: 'border-primary/30 bg-primary/10 text-primary',
   unavailable: 'border-border bg-muted/60 text-muted-foreground',
 };
@@ -25,21 +25,21 @@ export const MY_FLIGHT_STATUS_TONE: Record<string, string> = {
 /** `myFlightCountdown().tone` → text class for the countdown line. */
 export const COUNTDOWN_TONE: Record<string, string> = {
   '': 'text-foreground',
-  departed: 'text-emerald-400',
+  departed: 'text-bb-ok',
   landed: 'text-muted-foreground',
 };
 
 /** `journeyDelayClass()` → text class for a prior segment's delay figure. */
 export const JOURNEY_DELAY_TONE: Record<string, string> = {
   '': 'text-muted-foreground',
-  'on-time': 'text-emerald-400',
-  minor: 'text-amber-400',
-  major: 'text-red-400',
+  'on-time': 'text-bb-ok',
+  minor: 'text-bb-warn',
+  major: 'text-destructive',
 };
 
 /** `starlinkPredictionBadge().tone` → badge classes. */
 export const PREDICTION_TONE: Record<string, string> = {
-  good: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
-  warn: 'border-amber-500/40 bg-amber-500/15 text-amber-400',
+  good: 'border-bb-ok/40 bg-bb-ok/15 text-bb-ok',
+  warn: 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
   muted: 'border-border bg-muted/60 text-muted-foreground',
 };

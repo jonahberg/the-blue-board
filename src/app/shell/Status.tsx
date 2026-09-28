@@ -14,9 +14,9 @@ import { cn } from '@/lib/utils';
 export type Severity = 'green' | 'amber' | 'red';
 
 export const SEV_TEXT: Record<Severity, string> = {
-  green: 'text-emerald-400',
-  amber: 'text-amber-400',
-  red: 'text-red-400',
+  green: 'text-bb-ok',
+  amber: 'text-bb-warn',
+  red: 'text-destructive',
 };
 
 const SEV_GLYPH: Record<Severity, string> = { green: '●', amber: '▲', red: '■' };

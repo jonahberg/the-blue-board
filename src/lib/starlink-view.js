@@ -85,16 +85,25 @@ export function formatFlightTime(ts, airportIata, tzAbbrev) {
  * Map of tail → live airborne flight from the LIVE OPS feed. One pass over the feed;
  * cheap enough to rebuild per render.
  *
+ * Pass the shared `makeIsStarlinkFlight` predicate and a fleet-match resolver so this index
+ * agrees with the map and the stat bar (F101): a row with no registration but a matched
+ * ICAO24 is found, and a hyphenated reg is keyed the way the roster stores it. A roster Set
+ * still works (reg-only matching) for callers that have no fleet index.
+ *
  * @param {Array<Object>} flights
- * @param {{has: (reg: string) => boolean}} starlinkTails
+ * @param {((f: any) => boolean)|{has: (reg: string) => boolean}} starlink
+ * @param {(f: any) => (string|null|undefined)} [resolveTail]  flight → fleet registration.
  * @returns {Record<string, Object>} keyed by normalised (hyphen-free, upper-case) tail.
  */
-export function airborneByTail(flights, starlinkTails) {
+export function airborneByTail(flights, starlink, resolveTail) {
   const live = {};
+  const norm = (reg) => String(reg || '').replace(/-/g, '').toUpperCase();
   for (const f of (flights || [])) {
-    if (f.onGround) continue;
-    const reg = (f.reg || '').replace(/-/g, '').toUpperCase();
-    if (reg && starlinkTails.has(reg)) live[reg] = f;
+    if (!f || f.onGround) continue;
+    const tail = norm((resolveTail && resolveTail(f)) || f.reg);
+    if (!tail) continue;
+    const isStarlink = typeof starlink === 'function' ? starlink(f) : starlink.has(tail);
+    if (isStarlink) live[tail] = f;
   }
   return live;
 }

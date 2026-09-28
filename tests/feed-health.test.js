@@ -39,7 +39,7 @@ describe('parseFr24Feed', () => {
   });
 
   // F016: parser used to hardcode squawk:null, so emergency squawks (7500/7600/7700) could
-  // never reach decodeSquawk() in main.js. Verify both the alert codes and the empty case.
+  // never reach decodeSquawk() (now in src/app/shell/Ticker.tsx and features/FlightSheet.tsx). Verify both the alert codes and the empty case.
   it('parses squawk from index 6, including emergency codes, and nulls it when absent', () => {
     const emergencyEntry = [...HEALTHY_ENTRY];
     emergencyEntry[6] = '7700';

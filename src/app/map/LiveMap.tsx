@@ -21,8 +21,10 @@ import 'leaflet/dist/leaflet.css';
 
 import { AIRPORTS, AIRPORT_COORDS, IATA_CITIES } from '@/lib/airports.js';
 import { resolveFlightRoute } from '../data/route';
+import { centreForOcclusion, flightPanelOcclusion } from '@/lib/flight-panel-occlusion.js';
 import { getPhase } from '@/lib/flight-phase.js';
 import { greatCirclePoints, isLonghaul, normalizeLonContinuity } from '@/lib/geo.js';
+import { prefersReducedMotion } from '@/lib/motion.js';
 import { planeIconSpec } from '@/lib/plane-icon.js';
 import type { Flight } from '../data/types';
 import { makeBasemapLayer, makeRadarLayer } from './basemap';
@@ -32,9 +34,58 @@ export type MapView = 'us' | 'pacific';
 export const US_VIEW = { center: [39, -98] as [number, number], zoom: 4 };
 export const PACIFIC_VIEW = { center: [25, 145] as [number, number], zoom: 4 };
 
+/**
+ * A preset view's zoom for a map this wide. Zoom 4 spans the lower 48 in ~660px, so on a
+ * phone it cropped SFO and LAX off the left edge (F78); one step out fits them.
+ */
+export function viewZoom(zoom: number, widthPx: number): number {
+  return widthPx > 0 && widthPx < 640 ? zoom - 1 : zoom;
+}
+
 type Airport = { iata: string; lat: number; lon: number; hub?: boolean };
 
 const HUBS: Airport[] = (AIRPORTS as Airport[]).filter((a) => a.hub);
+
+export { prefersReducedMotion };
+
+/**
+ * Move the map, animated unless the visitor asked for reduced motion. The global CSS
+ * reduced-motion rule cannot reach Leaflet's `flyTo`, which animates in JavaScript — a
+ * 0.8–1.2 s zoom-and-pan sweep is exactly the vestibular trigger that setting exists for.
+ */
+export function flyOrJump(
+  map: Pick<L.Map, 'flyTo' | 'setView'>,
+  center: L.LatLngExpression,
+  zoom: number,
+  duration: number,
+  reduce: boolean = prefersReducedMotion(),
+): void {
+  if (reduce) map.setView(center, zoom, { animate: false });
+  else map.flyTo(center, zoom, { duration });
+}
+
+/**
+ * The centre that puts `target` in the middle of the part of the map the flight panel leaves
+ * visible (F20). The panel is open when an ancestor carries `data-flight-panel="open"` —
+ * the same hook global.css uses to slide Leaflet's controls clear of it.
+ */
+export function panelAwareCentre(
+  map: Pick<L.Map, 'getContainer' | 'project' | 'unproject'>,
+  target: L.LatLngExpression,
+  zoom: number,
+): L.LatLngExpression {
+  if (typeof window === 'undefined') return target;
+  const container = map.getContainer();
+  if (!container.closest('[data-flight-panel="open"]')) return target;
+  const occlusion = flightPanelOcclusion(
+    container.getBoundingClientRect(),
+    { width: window.innerWidth, height: window.innerHeight },
+    window.matchMedia?.('(min-width: 1024px)').matches ?? true,
+  ) as { x: number; y: number };
+  if (!occlusion.x && !occlusion.y) return target;
+  const centre = centreForOcclusion(map.project(target, zoom), occlusion) as { x: number; y: number };
+  return map.unproject(L.point(centre.x, centre.y), zoom);
+}
 
 export type LiveMapProps = {
   /** Every flight in the feed — the click handler resolves against the freshest row. */
@@ -158,7 +209,7 @@ export function LiveMap({
       : undefined;
     const map = L.map(hostRef.current, {
       center: home ? [home.lat, home.lon] : US_VIEW.center,
-      zoom: home ? 5 : US_VIEW.zoom,
+      zoom: home ? 5 : viewZoom(US_VIEW.zoom, hostRef.current.clientWidth),
       zoomControl: false,
       // A flight crossing the antimeridian has to stay reachable by panning either way.
       worldCopyJump: true,
@@ -359,7 +410,10 @@ export function LiveMap({
   // yet, hold the move until the ResizeObserver sees the panel again.
   useEffect(() => {
     if (focus) {
-      requestMove((map) => map.flyTo([focus.lat, focus.lon], Math.max(map.getZoom(), 6), { duration: 0.8 }));
+      requestMove((map) => {
+        const zoom = Math.max(map.getZoom(), 6);
+        flyOrJump(map, panelAwareCentre(map, [focus.lat, focus.lon], zoom), zoom, 0.8);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
@@ -373,7 +427,7 @@ export function LiveMap({
       return;
     }
     const target = view === 'pacific' ? PACIFIC_VIEW : US_VIEW;
-    requestMove((m) => m.flyTo(target.center, target.zoom, { duration: 1.2 }));
+    requestMove((m) => flyOrJump(m, target.center, viewZoom(target.zoom, m.getSize().x), 1.2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 

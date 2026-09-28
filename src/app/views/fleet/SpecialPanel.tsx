@@ -67,7 +67,7 @@ export function SpecialPanel({
                 <button
                   type="button"
                   onClick={() => onOpenAircraft(row.reg)}
-                  className="min-h-11 font-mono text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+                  className="min-h-11 font-mono text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
                 >
                   {row.reg}
                 </button>{' '}
@@ -79,10 +79,10 @@ export function SpecialPanel({
             <div className="shrink-0 text-right">
               {row.airborne ? (
                 <>
-                  <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-400">
+                  <span className="inline-flex items-center gap-1 rounded border border-bb-ok/30 bg-bb-ok/10 px-1.5 py-0.5 text-[9px] font-medium text-bb-ok">
                     <span
                       aria-hidden="true"
-                      className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400"
+                      className="inline-block size-1.5 animate-pulse rounded-full bg-bb-ok"
                     />
                     AIRBORNE
                   </span>
@@ -91,7 +91,7 @@ export function SpecialPanel({
                   </p>
                 </>
               ) : (
-                <span className="rounded border px-1.5 py-0.5 text-[9px] font-medium text-amber-400">
+                <span className="rounded border px-1.5 py-0.5 text-[9px] font-medium text-foreground">
                   {row.kind === 'named' ? 'NAMED' : 'LIVERY'}
                 </span>
               )}

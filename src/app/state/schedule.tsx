@@ -23,16 +23,22 @@
  *    Eastern timestamp reused for three hubs fetched YESTERDAY's Denver board round the clock).
  *
  * `useHubHealth()` is the arbitration the hub-health strip renders (inventory §3): a SERVER
- * reading from `/api/irops` `hubMetrics` always wins, and a client reading computed from
- * loaded boards only fills hubs the server has not spoken for. That ordering is why it lives
- * next to the board store rather than in the strip component.
+ * reading from `/api/irops` `hubMetrics` wins unless a loaded board for that hub is clearly
+ * newer, and client readings fill hubs the server has not spoken for. That ordering is why
+ * it lives next to the board store rather than in the strip component.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { detectEquipmentSwaps } from '@/lib/equipment-swaps.js';
-import { HUB_ORDER, computeBoardOtp, mergeHubHealth, serverOtpFromMetrics } from '@/lib/hub-health.js';
+import {
+  HUB_ORDER,
+  arbitrateHubHealth,
+  boardAsOfMs,
+  computeBoardOtp,
+  serverOtpFromMetrics,
+} from '@/lib/hub-health.js';
 import { HUB_TZ, defaultSchedDayOffset, getStartOfHubDay } from '@/lib/hubTz.js';
 import {
   MAX_SCHEDULE_RETRIES,
@@ -43,6 +49,7 @@ import {
   retryDelayMs,
   serverClockOffsetSec,
   shouldRetryPartial,
+  staleFollowUpDelayMs,
   swapStorageKey,
 } from '@/lib/schedule-load.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
@@ -436,8 +443,18 @@ export function ScheduleProvider({
     [],
   );
 
+  // One pending stale follow-up per board (F16); see staleFollowUpDelayMs.
+  const followUps = useRef(new Map<BoardKey, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = followUps.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
   const runLoad = useCallback(
-    async (hub: string, dir: BoardDirection, day: number) => {
+    async (hub: string, dir: BoardDirection, day: number, followUp = false) => {
       const key = boardKey(hub, dir, day);
       setLoading((prev) => ({ ...prev, [key]: true }));
       try {
@@ -455,8 +472,24 @@ export function ScheduleProvider({
         // one worth anchoring. Tomorrow and yesterday open at the top, as they should. The
         // signal names THIS board: by the time a slow load lands the viewer may be reading a
         // different one, and that board must not be yanked to a NOW line it never asked for.
-        if (day === 0) setAutoScroll((prev) => ({ key, n: (prev?.n ?? 0) + 1 }));
+        if (day === 0 && !followUp) setAutoScroll((prev) => ({ key, n: (prev?.n ?? 0) + 1 }));
         diffWatched((result.flights || []) as Record<string, unknown>[], dir, result.meta ?? null);
+        const delay = staleFollowUpDelayMs({
+          day,
+          stale: Boolean(result.stale),
+          dataAge: Number(result.meta?.dataAge),
+          followUp,
+        }) as number | null;
+        if (delay !== null && !followUps.current.has(key)) {
+          followUps.current.set(
+            key,
+            setTimeout(() => {
+              followUps.current.delete(key);
+              aggCache.current.delete(cacheKey);
+              void runLoad(hub, dir, day, true);
+            }, delay),
+          );
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Schedule load failed';
         setErrors((prev) => ({ ...prev, [key]: message }));
@@ -676,26 +709,32 @@ export type HubHealthEntry = {
   otp: number | null;
   /** Which source the number came from — the strip labels a client reading differently. */
   source: 'server' | 'client' | null;
+  /** When the board behind the reading was built (epoch ms), or null when unknown (F91). */
+  asOfMs: number | null;
 };
 
 /**
  * The merged per-hub on-time reading, in the dashboard's fixed hub order.
  *
- * Server metrics from `/api/irops` take precedence; boards only fill the gaps. A five-flight
- * client sample overwriting the server's much larger one made DEN flap 68 → 100 in a single
- * refresh (audit Jul 3 2026), which is why `mergeHubHealth` drops any client reading for a
- * hub the server has already spoken for.
+ * Server metrics from `/api/irops` win by default: a five-flight client sample overwriting
+ * the server's much larger one made DEN flap 68 → 100 in a single refresh (audit Jul 3
+ * 2026). But the server's copy of a board can be hours old, so `arbitrateHubHealth` lets a
+ * loaded board replace it once that board is clearly newer (F91).
  */
 export function useHubHealth(): { hubs: HubHealthEntry[]; byHub: Record<string, number> } {
   const irops = useIrops();
   const { boards } = useSchedule();
 
   return useMemo(() => {
-    const serverHubs: Record<string, number> = {};
+    const serverOtp: Record<string, number> = {};
+    const serverAsOf: Record<string, number | null | undefined> = {};
     const metrics = irops.data?.hubMetrics ?? {};
     for (const [hub, entry] of Object.entries(metrics)) {
       const otp = serverOtpFromMetrics(entry) as number | null;
-      if (otp !== null) serverHubs[hub] = otp;
+      if (otp !== null) {
+        serverOtp[hub] = otp;
+        serverAsOf[hub] = entry.generatedAt;
+      }
     }
 
     // `computeBoardOtp` reads the DIRECTION out of each key, so it wants the boards keyed
@@ -704,27 +743,33 @@ export function useHubHealth(): { hubs: HubHealthEntry[]; byHub: Record<string, 
     const rowsByKey: Record<string, Record<string, unknown>[]> = {};
     const optsByKey: Record<string, { hubDisruptionMinutes: number }> = {};
     const nowByKey: Record<string, number> = {};
+    const clientAsOf: Record<string, number> = {};
     for (const [key, board] of Object.entries(boards)) {
       rowsByKey[key] = board.rows;
       optsByKey[key] = classifyOptsFor(board.meta);
       nowByKey[key] = Math.floor((board.serverNowMs ?? Date.now()) / 1000);
+      // The newest loaded board for a hub dates that hub's client reading.
+      const at = boardAsOfMs(board.meta?.generatedAt) as number | null;
+      if (at !== null && at > (clientAsOf[board.hub] ?? 0)) clientAsOf[board.hub] = at;
     }
     const clientOtp = computeBoardOtp(rowsByKey, {
       classify: (flight: object, boardDir: string, key: string) =>
         classifySchedStatus(flight, boardDir as BoardDirection, nowByKey[key], optsByKey[key]),
     }) as Record<string, number>;
 
-    const clientOnly = mergeHubHealth(clientOtp, new Set(Object.keys(serverHubs))) as Record<
+    const picked = arbitrateHubHealth({ serverOtp, clientOtp, serverAsOf, clientAsOf }) as Record<
       string,
-      number
+      { otp: number; source: 'server' | 'client'; asOfMs: number | null }
     >;
-    const merged = { ...clientOnly, ...serverHubs };
+    const byHub: Record<string, number> = {};
+    for (const [hub, entry] of Object.entries(picked)) byHub[hub] = entry.otp;
     const hubs: HubHealthEntry[] = (HUB_ORDER as string[]).map((hub) => ({
       hub,
-      otp: hub in merged ? merged[hub] : null,
-      source: hub in serverHubs ? 'server' : hub in clientOnly ? 'client' : null,
+      otp: picked[hub]?.otp ?? null,
+      source: picked[hub]?.source ?? null,
+      asOfMs: picked[hub]?.asOfMs ?? null,
     }));
-    return { hubs, byHub: merged };
+    return { hubs, byHub };
   }, [irops.data, boards]);
 }
 

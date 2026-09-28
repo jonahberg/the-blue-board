@@ -7,8 +7,8 @@
  *  1. The `@/*` alias, so a `.tsx` under `src/app/` can be imported by a test exactly as the
  *     app imports it (`tsconfig.json` owns the same mapping for `tsc`).
  *  2. An explicit `environment: 'node'`, which is the DEFAULT and must stay that way — the
- *     2418 pre-existing tests are node tests and spinning jsdom up for all of them would cost
- *     seconds per file for nothing. The handful of React tests opt in per file with a
+ *     great majority of the suite is node tests and spinning jsdom up for all of them would
+ *     cost seconds per file for nothing. The React tests opt in per file with a
  *     `// @vitest-environment jsdom` docblock instead.
  *
  * `include` / `exclude` are deliberately left at Vitest's defaults, which is what the suite

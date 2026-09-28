@@ -20,6 +20,7 @@
  * whatever opened it — the row in the table you were reading, not the top of the page.
  */
 
+import { Eye, Share2, Star, Zap } from 'lucide-react';
 import { useCallback, useMemo, useRef } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -56,12 +57,26 @@ function planespottersUrl(reg: string) {
   return `https://www.planespotters.net/search?q=${encodeURIComponent(reg)}`;
 }
 
-/** One cell of the biography grid. */
-function Fact({ label, value, tone }: { label: string; value: string; tone?: string }) {
+/**
+ * One cell of the biography grid. `min-w-0` + `overflow-wrap:anywhere` because a grid column
+ * is ~111 px in the 512 px dialog, and a value with no spaces ("50J/24PE/46E+/156Y") used to
+ * spill past it and get clipped at the dialog edge (F6/F62).
+ */
+function Fact({
+  label,
+  value,
+  tone,
+  className,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+  className?: string;
+}) {
   return (
-    <div>
+    <div className={`min-w-0 ${className ?? ''}`}>
       <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className={`mt-0.5 text-sm font-medium ${tone ?? ''}`}>{value}</dd>
+      <dd className={`mt-0.5 text-sm font-medium [overflow-wrap:anywhere] ${tone ?? ''}`}>{value}</dd>
     </div>
   );
 }
@@ -164,10 +179,14 @@ export default function AircraftDetailDialog() {
               </DialogDescription>
               {specialEntry || isStarlink ? (
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  {specialEntry ? <Badge variant="outline">⭐ {specialEntry.name}</Badge> : null}
+                  {specialEntry ? (
+                    <Badge variant="outline">
+                      <Star aria-hidden="true" /> {specialEntry.name}
+                    </Badge>
+                  ) : null}
                   {isStarlink ? (
-                    <Badge className="border-violet-500/30 bg-violet-500/10 text-violet-300">
-                      ⚡ STARLINK
+                    <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
+                      <Zap aria-hidden="true" /> STARLINK
                     </Badge>
                   ) : null}
                 </div>
@@ -203,10 +222,10 @@ export default function AircraftDetailDialog() {
               </p>
             </div>
             <DialogFooter className="mx-0 mb-0 flex-row flex-wrap justify-center gap-2 sm:justify-center">
-              <Button size="lg" className="min-h-11 md:min-h-0" onClick={retry}>
+              <Button size="lg" className="min-h-11 pointer-fine:md:min-h-0" onClick={retry}>
                 ↻ Retry
               </Button>
-              <Button variant="outline" size="lg" className="min-h-11 md:min-h-0" asChild>
+              <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a href={planespottersUrl(reg)} target="_blank" rel="noopener noreferrer">
                   Planespotters ↗
                 </a>
@@ -220,7 +239,7 @@ export default function AircraftDetailDialog() {
               <p className="mt-1">It may be a United Express (regional) aircraft.</p>
             </div>
             <DialogFooter className="mx-0 mb-0 justify-center">
-              <Button variant="outline" size="lg" className="min-h-11 md:min-h-0" asChild>
+              <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a href={planespottersUrl(reg)} target="_blank" rel="noopener noreferrer">
                   Planespotters ↗
                 </a>
@@ -250,9 +269,13 @@ export default function AircraftDetailDialog() {
                   <Fact
                     label="Starlink"
                     value={isStarlink ? 'Yes ⚡' : 'No'}
-                    tone={isStarlink ? 'text-emerald-400' : 'text-muted-foreground'}
+                    tone={isStarlink ? 'text-bb-ok' : 'text-muted-foreground'}
                   />
-                  {aircraft.c ? <Fact label="Config" value={aircraft.c} /> : null}
+                  {/* The cabin string is the longest value here: it gets two columns so it
+                      reads on one line at desktop width. */}
+                  {aircraft.c ? (
+                    <Fact label="Config" value={aircraft.c} className="col-span-2" />
+                  ) : null}
                 </dl>
               </section>
 
@@ -295,7 +318,7 @@ export default function AircraftDetailDialog() {
                     className="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-emerald-400">
+                      <span className="text-sm font-semibold text-bb-ok">
                         {phase.icon} Airborne — {liveFlight.flightIATA || liveFlight.callsign || '?'}
                       </span>
                       <span className="text-[10px] text-muted-foreground">View on map →</span>
@@ -382,7 +405,7 @@ export default function AircraftDetailDialog() {
                 <Button
                   variant={watched ? 'secondary' : 'outline'}
                   size="lg"
-                  className="min-h-11 md:min-h-0"
+                  className="min-h-11 pointer-fine:md:min-h-0"
                   onClick={() => {
                     const nowWatched = watch.toggle(
                       watchIdent,
@@ -394,15 +417,15 @@ export default function AircraftDetailDialog() {
                     );
                   }}
                 >
-                  {watched ? '👁 Watching' : '👁 Watch'}
+                  <Eye aria-hidden="true" /> {watched ? 'Watching' : 'Watch'}
                 </Button>
               ) : null}
-              <Button variant="outline" size="lg" className="min-h-11 md:min-h-0" asChild>
+              <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a href={planespottersUrl(reg)} target="_blank" rel="noopener noreferrer">
                   Planespotters ↗
                 </a>
               </Button>
-              <Button variant="outline" size="lg" className="min-h-11 md:min-h-0" asChild>
+              <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a
                   href={`https://flightaware.com/resources/registration/${encodeURIComponent(reg)}`}
                   target="_blank"
@@ -414,10 +437,10 @@ export default function AircraftDetailDialog() {
               <Button
                 variant="outline"
                 size="lg"
-                className="min-h-11 md:min-h-0"
+                className="min-h-11 pointer-fine:md:min-h-0"
                 onClick={onShare}
               >
-                🔗 Share
+                <Share2 aria-hidden="true" /> Share
               </Button>
             </DialogFooter>
           </>

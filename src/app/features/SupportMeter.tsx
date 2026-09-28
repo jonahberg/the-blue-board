@@ -44,14 +44,14 @@ export function SupportMeter({ active }: { active: boolean }) {
             <span>{row.label}</span>
             {/* The figure, not the bar, is the reading — an amber bar past 85 % is a
                 second signal on a number that is already on screen. */}
-            <span className={row.warn ? 'text-amber-400' : undefined}>
+            <span className={row.warn ? 'text-bb-warn' : undefined}>
               {row.valueLabel}
               {row.warn ? ' · tight' : ''}
             </span>
           </div>
           <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
             <div
-              className={`h-full rounded-full ${row.warn ? 'bg-amber-400' : 'bg-primary'}`}
+              className={`h-full rounded-full ${row.warn ? 'bg-bb-warn' : 'bg-primary'}`}
               style={{ width: `${row.pct}%` }}
             />
           </div>

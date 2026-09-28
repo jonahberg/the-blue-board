@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import handler from '../api/faa.js';
+import handler, { __resetFaaHandlerForTests } from '../api/faa.js';
+import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 
 // Captured upstream shapes (nasstatus.faa.gov) — these fixtures model the rich JSON and the XML
-// degradation payloads the inline mocks above omit, so an upstream field rename (incident #5 class)
+// degradation payloads the inline mocks in the tests below omit, so an upstream field rename (incident #5 class)
 // that silently zeroes a signal fails a test instead of shipping green.
 function loadFixture(name) {
   return JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
@@ -54,6 +55,10 @@ function mockXmlResponse(xml = '<AIRPORT_STATUS_INFORMATION></AIRPORT_STATUS_INF
 describe('FAA handler', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // Module state (JSON backoff, rate-limit buckets) must not leak between tests — each
+    // test stands alone in any order (bunx vitest run --sequence.shuffle).
+    __resetFaaHandlerForTests();
+    __resetRateLimitersForTests();
   });
 
   it('rejects non-GET methods', async () => {

@@ -439,7 +439,7 @@ describe('fetchViaAeroDataBox budget enforcement', () => {
     vi.useRealTimers();
   });
 
-  it('bypassDailyBudget (authorized cron warms, ring-bounded at ~288/day) skips the gate but still records spend', async () => {
+  it('bypassDailyBudget (authorized cron warms, ring-bounded at ~768/day) skips the gate but still records spend', async () => {
     await recordAdbUnits(400);
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,

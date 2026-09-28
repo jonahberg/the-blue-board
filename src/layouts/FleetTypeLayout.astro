@@ -12,6 +12,7 @@ import JumpNav from '../components/site/JumpNav.astro';
 import PillNav from '../components/site/PillNav.astro';
 import StatTile from '../components/site/StatTile.astro';
 import fleetDb from '../../public/data/fleet.json';
+import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
 
 const { data } = Astro.props;
 const slug: string = data.slug;
@@ -85,7 +86,7 @@ function statusClass(status: string | undefined): string {
   const value = (status || '').toLowerCase();
   if (value.includes('stored')) return 'text-destructive';
   if (value.includes('maint') || value.includes('paint') || value.includes('mod')) {
-    return 'text-[var(--bb-warn)]';
+    return 'text-bb-warn';
   }
   return 'text-muted-foreground';
 }
@@ -108,7 +109,7 @@ function statusClass(status: string | undefined): string {
 
     <header class="mt-6 border-b border-border pb-5">
       <h1 class="bb-content text-2xl font-bold tracking-tight text-balance text-foreground">
-        <Fragment set:html={data.headerTitle} />
+        <Fragment set:html={data.headerTitle.replace(/ — /g, "&nbsp;— ")} />
       </h1>
       <p class="mt-1.5 text-xs text-muted-foreground">{data.subtitle}</p>
     </header>
@@ -122,7 +123,7 @@ function statusClass(status: string | undefined): string {
 
     <div class="mt-6 text-center">
       <a
-        class="inline-flex min-h-11 items-center rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-6 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
         href={`/?tab=fleet&type=${encodeURIComponent(typeCode)}`}
       >
         Explore {data.displayName} in Interactive Database &rarr;
@@ -165,8 +166,8 @@ function statusClass(status: string | undefined): string {
     >
       <p>
         Complete list of every United Airlines {data.displayName} with registration, delivery year,
-        seat configuration, WiFi, IFE, and current status. Data updated daily from public aviation
-        records.
+        seat configuration, WiFi, IFE, and current status, from public aviation records — as of
+        <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>.
       </p>
       <table class="tabular-nums">
         <thead>
@@ -190,7 +191,9 @@ function statusClass(status: string | undefined): string {
                   <td class="font-mono font-bold text-foreground">{ac.r}</td>
                   <td>{ac.a || '—'}</td>
                   <td>{ac.c || '—'}</td>
-                  <td>{isStarlink ? <span class="starlink-on">{ac.w}</span> : ac.w || '—'}</td>
+                  {/* The database's raw codes are inconsistent ('Satl Ku' / 'Satl KU'); the
+                      dashboard's display names are not (F78). */}
+                  <td>{isStarlink ? <span class="starlink-on">{ac.w}</span> : ac.w ? normalizeWifi(ac.w) : '—'}</td>
                   <td>{ac.i || '—'}</td>
                   <td>{ac.p || '—'}</td>
                   <td>{ac.d || '—'}</td>

@@ -73,11 +73,11 @@ export function ScheduleStats({
             </>
           }
         />
-        <Metric value={stats.onTime} valueClass="text-emerald-400" label="On Time" />
-        <Metric value={stats.late} valueClass="text-amber-400" label="Late" />
+        <Metric value={stats.onTime} valueClass="text-bb-ok" label="On Time" />
+        <Metric value={stats.late} valueClass="text-bb-warn" label="Late" />
         <Metric
           value={stats.canceled}
-          valueClass="text-red-400"
+          valueClass="text-destructive"
           label="Canceled"
           title={
             stats.canceledUncertain > 0
@@ -107,7 +107,7 @@ export function ScheduleStats({
             </span>
           ) : null}
           {showDisruption ? (
-            <span className="text-amber-400">
+            <span className="text-bb-warn">
               ⚠ {hub} under FAA delay program (avg {Math.round(hubDisruptionMinutes as number)}min) —
               statuses may lag.
             </span>

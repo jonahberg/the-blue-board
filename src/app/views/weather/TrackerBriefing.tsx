@@ -57,10 +57,16 @@ export function TrackerBriefing() {
       </h3>
       <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{briefing.summary}</p>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
-        <a href={briefing.hubLink.href} className="text-primary underline">
+        <a
+          href={briefing.hubLink.href}
+          className="inline-flex min-h-11 items-center text-primary underline pointer-fine:md:min-h-0"
+        >
           {briefing.hubLink.text}
         </a>
-        <a href={briefing.atcLink.href} className="text-primary underline">
+        <a
+          href={briefing.atcLink.href}
+          className="inline-flex min-h-11 items-center text-primary underline pointer-fine:md:min-h-0"
+        >
           {briefing.atcLink.text}
         </a>
         <span

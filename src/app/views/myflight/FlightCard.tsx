@@ -14,6 +14,8 @@
  *    "LOADING…" forever, and points at united.com (F008).
  */
 
+import { Zap } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -151,7 +153,7 @@ export function FlightCard({
                 type="button"
                 onClick={() => onExplain(explainContext)}
                 title="Click for AI analysis"
-                className="inline-flex min-h-11 min-w-11 items-center justify-center md:min-h-0 md:min-w-0"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
               >
                 <span
                   className="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold"
@@ -210,7 +212,7 @@ export function FlightCard({
                   "Aircraft Details" button below does the same thing. */}
               <button
                 type="button"
-                className="inline-flex min-h-11 items-center text-[10px] underline decoration-dotted underline-offset-2 hover:text-primary md:min-h-0"
+                className="inline-flex min-h-11 items-center text-[10px] underline decoration-dotted underline-offset-2 hover:text-primary pointer-fine:md:min-h-0"
                 onClick={() => onAircraftDetail(reg)}
               >
                 {reg}
@@ -221,9 +223,9 @@ export function FlightCard({
               {isStarlink ? (
                 <Badge
                   variant="outline"
-                  className="ml-1 border-emerald-500/40 bg-emerald-500/15 text-[9px] font-normal text-emerald-400"
+                  className="ml-1 border-bb-ok/40 bg-bb-ok/15 text-[9px] font-normal text-bb-ok"
                 >
-                  ⚡ Starlink Confirmed
+                  <Zap aria-hidden="true" /> Starlink Confirmed
                 </Badge>
               ) : (
                 <StarlinkBadge flight={entry.flight} forecast={false} />
@@ -244,10 +246,17 @@ export function FlightCard({
           </div>
         ) : null}
 
-        {hasPayload && td?.source === 'schedule-cache' ? (
+        {hasPayload && td?.source?.startsWith('schedule-cache') ? (
           // The three-tier fallback behind /api/flight-times is otherwise invisible: a
           // snapshot-sourced card would look exactly as authoritative as a live one.
-          <p className="text-[10px] text-muted-foreground">via schedule snapshot</p>
+          <p className="text-[10px] text-muted-foreground">
+            {td.source === 'schedule-cache+fr24'
+              ? 'via schedule snapshot + Flightradar24 live'
+              : 'via schedule snapshot'}
+          </p>
+        ) : hasPayload && td?.timesUnavailable ? (
+          // FR24-only answer: a live leg with no published times, not a flight without a schedule.
+          <p className="text-[10px] text-muted-foreground">Live tracking only — no schedule times yet</p>
         ) : null}
 
         {reg ? (
@@ -285,7 +294,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 md:min-h-0"
+            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onViewOnMap(liveFlight)}
           >
             View on Map
@@ -295,7 +304,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 md:min-h-0"
+            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onAircraftDetail(reg)}
           >
             Aircraft Details
@@ -305,7 +314,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 md:min-h-0"
+            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onExplain(explainContext)}
           >
             Explain Delay Risk
@@ -314,7 +323,7 @@ export function FlightCard({
         <Button
           size="sm"
           variant="ghost"
-          className="ml-auto min-h-11 text-xs md:h-8 md:min-h-0"
+          className="ml-auto min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
           onClick={() => onUnwatch(entry.flight)}
         >
           Unwatch

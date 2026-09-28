@@ -89,7 +89,7 @@ describe('planeIconSpec — SVG payload', () => {
   });
 
   it('contains no rotation — the caller applies the heading transform (edge case)', () => {
-    // main.js wraps this in L.divIcon with transform:rotate(Ndeg); the SVG itself
+    // src/app/map/LiveMap.tsx wraps this in L.divIcon with transform:rotate(Ndeg); the SVG itself
     // always points north so the cache can be keyed independently of that wrapper.
     const spec = planeIconSpec(135, {});
     expect(spec.svg).not.toContain('rotate');

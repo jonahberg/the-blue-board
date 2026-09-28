@@ -242,12 +242,14 @@ describe('warm-schedules handler', () => {
     for (let h = 0; h < 24; h += 3) {
       vi.useFakeTimers({ now: new Date(Date.UTC(2026, 5, 10, h, 30)), toFake: ['Date'] });
       const fetchSpy = mockFetchOk({ cached: false, stale: false, partial: false, total: 100, meta: {} });
-      await handler(createReq(), createRes());
+      const res = createRes();
+      await handler(createReq(), res);
       const scheduleCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('/api/schedule'));
       expect(scheduleCalls.length).toBeGreaterThan(0);
       // Exact per-task assertion (not "either day"): a bug that swaps the today/tomorrow
-      // dayOffset mapping must fail here, not just the yesterday-rollback regression.
-      const plan = buildWarmPlan(Date.now());
+      // dayOffset mapping must fail here, not just the yesterday-rollback regression. The plan
+      // is the one the handler actually ran (ring + rollover/IROPS priority).
+      const plan = res.body.warmPlan;
       for (const [url] of scheduleCalls) {
         const u = new URL(String(url));
         const hub = u.searchParams.get('hub');
@@ -283,6 +285,18 @@ describe('warm-schedules handler', () => {
     mockFetchOk({ cached: false, stale: false, partial: false, total: 312, meta: { completeness: 1 } });
     await handler(createReq(), createRes());
     expect(snapshotMocks.cleanupExpiredSnapshots).toHaveBeenCalledTimes(1);
+  });
+
+  it('warms the two Starlink URLs the dashboard requests, not the bare one (F58)', async () => {
+    const fetchSpy = mockFetchOk({ cached: false, stale: false, partial: false, total: 312, meta: { completeness: 1 } });
+    const res = createRes();
+    await handler(createReq(), res);
+    const starlinkUrls = fetchSpy.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.includes('/api/starlink-data'))
+      .map((url) => new URL(url).search);
+    expect(starlinkUrls).toEqual(['?fields=roster', '?fields=flights']);
+    expect(res.body.results['starlink-data']).toEqual({ status: 'ok' });
   });
 
   it('counts a fresh complete board as warmed', async () => {

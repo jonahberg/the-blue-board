@@ -4,6 +4,8 @@ import {
   getHubDayLabel,
   getHubLocalDate,
   defaultSchedDayOffset,
+  getHubLocalHour,
+  BOARD_ROLLOVER_HOUR,
   HUB_TZ,
 } from '../src/lib/hubTz.js';
 import { UNITED_HUBS } from '../api/_hubs.js';
@@ -199,14 +201,13 @@ describe('defaultSchedDayOffset', () => {
     expect(defaultSchedDayOffset('ORD', new Date('2026-07-09T05:00:00Z'))).toBe(-1);
   });
 
-  it('agrees with the server rule in api/irops.ts (hour < 6)', () => {
+  it('rolls over at BOARD_ROLLOVER_HOUR of the hub-local hour, every hour of the day (api/irops.ts uses the same fn)', () => {
+    expect(BOARD_ROLLOVER_HOUR).toBe(6);
     for (let h = 0; h < 24; h++) {
       const now = new Date(Date.UTC(2026, 6, 9, (h + 5) % 24, 30));
-      const hubHour = Number(
-        new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: '2-digit', hour12: false })
-          .format(now)
-      ) % 24;
-      expect(defaultSchedDayOffset('ORD', now)).toBe(hubHour < 6 ? -1 : 0);
+      const hubHour = getHubLocalHour('ORD', now);
+      expect(hubHour).toBe(h); // 05:30Z + h hours = h:30 CDT
+      expect(defaultSchedDayOffset('ORD', now)).toBe(hubHour < BOARD_ROLLOVER_HOUR ? -1 : 0);
     }
   });
 });

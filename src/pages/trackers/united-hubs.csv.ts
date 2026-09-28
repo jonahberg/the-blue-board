@@ -1,5 +1,5 @@
 import { unitedHubsMeta, unitedHubs, unitedProjects } from '../../data/trackers/united-hubs.js';
-import { csvHeaders, toCsv } from '../../lib/tracker-downloads.js';
+import { CSV_HEADERS, toCsv } from '../../lib/tracker-downloads.js';
 
 const columns = [
   'hub',
@@ -45,5 +45,5 @@ export function GET() {
     };
   });
 
-  return new Response(toCsv(rows, columns), { headers: csvHeaders('blue-board-united-hub-projects.csv') });
+  return new Response(toCsv(rows, columns), { headers: CSV_HEADERS });
 }

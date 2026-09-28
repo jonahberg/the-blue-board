@@ -4,7 +4,9 @@
  *
  * Four triggers, only one of which is a user action:
  *   T1  five minutes of active use
- *   T2  the click threshold — 20 for a first-time visitor, 30 for a returning one
+ *   T2  the click threshold — 20 for a first-time visitor, 30 for a returning one — counting
+ *       engagement clicks only (not tab switches or dialog buttons), and opening only once
+ *       the clicking has paused for T2_SETTLE_MS
  *   T4  `?waitlist=1`, which is someone arriving on the link deliberately
  * (T3, the flight-landing trigger, is deliberately NOT here any more: forcing this modal
  * open at the moment a flight lands muddied the one moment the app had clearly delivered
@@ -25,6 +27,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  focusContentOnOpen,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,6 +49,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const NULL_STORAGE = { getItem: () => null };
 
+/**
+ * T2 waits for the clicking to stop. Opening on the threshold click itself put the modal over
+ * whatever that click was doing; a quiet spell of this long means the visitor has paused.
+ * Another click restarts the wait.
+ */
+export const T2_SETTLE_MS = 2000;
+
 export default function WaitlistDialog() {
   const { waitlistOpen, setWaitlistOpen, onboardingOpen } = useUi();
   const engagement = useEngagement();
@@ -66,6 +76,11 @@ export default function WaitlistDialog() {
   const gate = useRef({ engagement, onboardingOpen });
   gate.current = { engagement, onboardingOpen };
 
+  // Why the dialog is open. A PASSIVE open (T1/T2) is something the visitor did not ask for,
+  // so it must not focus the email field — on a phone that raises the soft keyboard over the
+  // page. `?waitlist=1` (T4) is someone who came for the form, and keeps Radix's autofocus.
+  const passiveOpen = useRef(false);
+
   const tryOpen = useCallback(() => {
     const { engagement: eng, onboardingOpen: obOpen } = gate.current;
     if (!eng.ready) return;
@@ -75,6 +90,7 @@ export default function WaitlistDialog() {
       onboardingVisible: obOpen,
     });
     if (!allowed) return;
+    passiveOpen.current = true;
     markWaitlistShown();
     setWaitlistOpen(true);
   }, [setWaitlistOpen]);
@@ -86,11 +102,27 @@ export default function WaitlistDialog() {
   }, [tryOpen]);
 
   // T2 — the click threshold. `engagement.clicks` is incremented by one document-level
-  // listener in the store, and the comparison is equality so this fires once rather than
-  // re-running the gate on every click from the 30th onwards.
+  // listener in the store (navigation clicks excluded), and the comparison is equality so the
+  // trigger ARMS once rather than re-running the gate on every click from the 30th onwards.
+  // Once armed it waits for T2_SETTLE_MS without a click before opening.
+  const t2Armed = useRef(false);
+  const t2Timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (clicksReachedThreshold(engagement.clicks, engagement.triggerClicks)) tryOpen();
+    if (clicksReachedThreshold(engagement.clicks, engagement.triggerClicks)) t2Armed.current = true;
+    if (!t2Armed.current) return;
+    if (t2Timer.current) clearTimeout(t2Timer.current);
+    t2Timer.current = setTimeout(() => {
+      t2Armed.current = false;
+      t2Timer.current = null;
+      tryOpen();
+    }, T2_SETTLE_MS);
   }, [engagement.clicks, engagement.triggerClicks, tryOpen]);
+  useEffect(
+    () => () => {
+      if (t2Timer.current) clearTimeout(t2Timer.current);
+    },
+    [],
+  );
 
   // T4 — `?waitlist=1` (`state/deep-links.ts` already flips `waitlistOpen`). Nothing to do
   // beyond recording that the modal has now been seen this session.
@@ -100,6 +132,7 @@ export default function WaitlistDialog() {
 
   /** Every close path — ✕, Escape, backdrop — writes the 7-day dismissal. */
   const close = useCallback(() => {
+    passiveOpen.current = false;
     setWaitlistOpen(false);
     markWaitlistShown();
     writeString(STORAGE_KEYS.waitlistDismissed, String(Date.now()));
@@ -159,7 +192,13 @@ export default function WaitlistDialog() {
           way legacy did with z 10001 > 10000. `DialogContent` renders its own overlay, so
           the lift has to be passed through — content alone would leave the waitlist card
           floating above onboarding's backdrop but below its own. */}
-      <DialogContent className="z-[60] sm:max-w-[480px]" overlayClassName="z-[60]">
+      <DialogContent
+        className="z-[60] sm:max-w-[480px]"
+        overlayClassName="z-[60]"
+        onOpenAutoFocus={(event) => {
+          if (passiveOpen.current) focusContentOnOpen(event);
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-xl">✈ Stay in the loop</DialogTitle>
           <DialogDescription>
@@ -172,7 +211,7 @@ export default function WaitlistDialog() {
             <div aria-hidden="true" className="text-3xl">
               ✈️
             </div>
-            <p className="mt-2 text-base font-semibold text-emerald-400">You&rsquo;re on the list! ✈</p>
+            <p className="mt-2 text-base font-semibold text-bb-ok">You&rsquo;re on the list! ✈</p>
             <p className="mt-2 text-xs text-muted-foreground">
               We&rsquo;ll keep you posted on launch updates.
             </p>
@@ -212,7 +251,7 @@ export default function WaitlistDialog() {
             </div>
 
             {error ? (
-              <p id="waitlist-error" role="alert" className="text-xs text-red-400">
+              <p id="waitlist-error" role="alert" className="text-xs text-destructive">
                 {error}
               </p>
             ) : null}

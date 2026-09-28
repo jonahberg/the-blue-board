@@ -13,7 +13,7 @@
 // palette, pinned by tests), not presentation choices a Tailwind token could express.
 
 import { describeFaaProgram } from './delay-explain-context.js';
-import { explainFAAStatus } from './faa-context.js';
+import { explainFAAStatus, faaTypeLabel } from './faa-context.js';
 import { computeFlightCategory, computeOpsImpact } from './metar-category.js';
 import {
   CAT_COLORS,
@@ -313,11 +313,46 @@ export function buildHubCardModel({ hub, metar = null, faa = null }) {
     /** No renderable observation at all — the card says so instead of showing "--" four times. */
     unavailable: !hasRenderableMetarData(metar),
     hasDetail: Boolean(explainer || faaExplainer || raw || advisoryUrls.length || notam),
-    /** The radar tooltip: "<b>ORD</b> IFR (thunderstorms)". */
-    markerLabel: `${cat}${ops.level !== 'normal' ? ` (${ops.reasons[0] || ops.level})` : ''}`,
+    /**
+     * The radar's permanent label after the bold hub code: the category alone ("IFR"). The
+     * full ops reason used to ride in it too ("MVFR (marginal ceilings/visibility)"), and a
+     * label that wide centred over EWR covered IAD's (audit Sep 2026). The reason is the
+     * label's hover title (`markerDetail`) and the hub card's status line.
+     */
+    markerLabel: cat,
+    markerDetail: ops.level !== 'normal' ? String(ops.reasons[0] || ops.level) : '',
     jargon: { metar: false },
   };
 }
+
+/**
+ * Where each hub's permanent radar label sits relative to its marker. Leaflet does no
+ * collision detection, and EWR and IAD are ~35 px apart at zoom 4, as are SFO and LAX at
+ * phone zooms: those pairs point away from each other. Everything else sits on top.
+ * @type {Record<string, {direction: 'top'|'bottom'|'right'|'left', offset: [number, number]}>}
+ */
+export const RADAR_LABEL_PLACEMENT = {
+  EWR: { direction: 'right', offset: [8, 0] },
+  IAD: { direction: 'bottom', offset: [0, 8] },
+  LAX: { direction: 'bottom', offset: [0, 8] },
+};
+
+/** @param {string} hub */
+export function radarLabelPlacement(hub) {
+  return RADAR_LABEL_PLACEMENT[hub] || { direction: 'top', offset: [0, -8] };
+}
+
+/**
+ * The hubs the radar frames on load: the mainland seven. NRT and GUM are off the NEXRAD
+ * mosaic entirely, so fitting them would zoom the map out to the Pacific.
+ */
+export const RADAR_FIT_HUBS = WX_HUBS.filter((hub) => hub !== 'NRT' && hub !== 'GUM');
+
+/**
+ * Padding for fitBounds, in px: room above each marker for its label, and at the sides for
+ * the widest label ("EWR MVFR") so a coastal hub's label is never cut off.
+ */
+export const RADAR_FIT_PADDING = { topLeft: [48, 40], bottomRight: [72, 28] };
 
 /**
  * Gate each jargon tooltip to its FIRST occurrence across the panel (inventory §17).
@@ -353,7 +388,7 @@ export function faaAlertLines(faaIndex) {
   const lines = [];
   for (const [code, data] of Object.entries(faaIndex || {})) {
     if (!data || !data.delays || !data.delays.length) continue;
-    for (const d of data.delays) lines.push(`${code}: ${d.type || d.reason || 'Delay'}`);
+    for (const d of data.delays) lines.push(`${code}: ${faaTypeLabel(d.type) || d.reason || 'Delay'}`);
   }
   return lines;
 }

@@ -410,17 +410,21 @@ async function runFetchStrict(handlers, request) {
 }
 
 describe('sw.js — runtime caches really fill (strict body semantics)', () => {
-  it('bumps CACHE_VERSION so the fixed worker replaces v11', () => {
-    expect(CACHE_VERSION).toBe('v12');
+  it('CACHE_VERSION is past v11, so the clone-before-return fix replaced the broken worker', () => {
+    // Asserted as "newer than v11" rather than a literal, so an intended bump doesn't fail here.
+    expect(CACHE_VERSION).toMatch(/^v\d+$/);
+    expect(Number(CACHE_VERSION.slice(1))).toBeGreaterThan(11);
   });
 
   it('caches a navigation for offline use', async () => {
     const { handlers, caches, fetchMock } = makeStrictEnv();
     fetchMock.mockResolvedValue(strictResponse('HUB PAGE', { contentType: 'text/html' }));
-    const { rejected } = await runFetchStrict(handlers, new Request(`${ORIGIN}/hubs/ord`, { mode: 'navigate' }));
+    // Real Node's Request rejects mode: 'navigate' (only browsers create those); a .html path is
+    // routed through the same navigation branch in sw.js.
+    const { rejected } = await runFetchStrict(handlers, new Request(`${ORIGIN}/hubs/ord.html`));
     expect(rejected).toEqual([]);
     const pages = await caches.open(`blueboard-pages-${CACHE_VERSION}`);
-    expect(await pages.match(`${ORIGIN}/hubs/ord`)).toBeDefined();
+    expect(await pages.match(`${ORIGIN}/hubs/ord.html`)).toBeDefined();
   });
 
   it('caches a hashed /_astro asset', async () => {
@@ -451,6 +455,28 @@ describe('sw.js — runtime caches really fill (strict body semantics)', () => {
     fetchMock.mockRejectedValueOnce(new Error('offline'));
     const offline = await runFetchStrict(handlers, new Request(url));
     expect(offline.response.body).toBe('{"total":637}');
+  });
+
+  it('always asks the network for data, but lets the browser revalidate with its ETag (no-cache, not no-store)', async () => {
+    const { handlers, fetchMock } = makeStrictEnv();
+    fetchMock.mockResolvedValue(strictResponse('{"ok":true}'));
+    await runFetchStrict(handlers, new Request(`${ORIGIN}/api/starlink-data?fields=roster`));
+    const sent = fetchMock.mock.calls[0][0];
+    expect(sent.cache).toBe('no-cache');
+  });
+
+  it.each([
+    '/api/schedule?hub=ORD&dir=departures&timestamp=1790395200',
+    '/api/starlink-data',
+    '/api/fleet-summary',
+    '/data/fleet.json',
+  ])('caches offline-safe %s in the data cache', async (path) => {
+    const { handlers, caches, fetchMock } = makeStrictEnv();
+    fetchMock.mockResolvedValue(strictResponse('{"ok":true}'));
+    const { rejected } = await runFetchStrict(handlers, new Request(`${ORIGIN}${path}`));
+    expect(rejected).toEqual([]);
+    const data = await caches.open(`blueboard-data-${CACHE_VERSION}`);
+    expect(await data.match(`${ORIGIN}${path}`)).toBeDefined();
   });
 
   it('caches the static /data files', async () => {

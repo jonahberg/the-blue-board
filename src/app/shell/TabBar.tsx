@@ -19,7 +19,7 @@ export function TabBar() {
       >
         {TABS.map((tab) => (
           <TabsTrigger key={tab.id} value={tab.id} className="gap-1.5 px-2.5 text-xs">
-            <span aria-hidden="true">{tab.icon}</span>
+            <tab.icon aria-hidden="true" className="size-3.5" />
             {tab.label}
           </TabsTrigger>
         ))}

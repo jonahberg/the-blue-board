@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { scrollBehavior } from '@/lib/motion.js';
 import { assignJargonFirsts, buildHubCardModel, radarTitle, WX_HUBS } from '@/lib/weather-cards.js';
 import { useUi } from '../state/ui';
 import { useWeather } from '../state/weather';
@@ -48,14 +49,19 @@ export default function WeatherView() {
   }, [metarByHub, faaIndex]);
 
   const radarHubs = useMemo<RadarHub[]>(
-    () => models.map((m) => ({ hub: m.hub, color: m.borderColor, label: m.markerLabel })),
+    () => models.map((m) => ({
+      hub: m.hub,
+      color: m.borderColor,
+      label: m.markerLabel,
+      detail: m.markerDetail,
+    })),
     [models],
   );
 
   const selectHub = useCallback((hub: string) => {
     document
       .getElementById(`hub-card-${hub}`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      ?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     setHighlighted(hub);
     window.clearTimeout(highlightTimer.current);
     highlightTimer.current = window.setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
@@ -70,7 +76,7 @@ export default function WeatherView() {
     const target = document.getElementById('irops-section');
     if (target) {
       // The panel has just been mounted by the tab switch; let it lay out before scrolling.
-      requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      requestAnimationFrame(() => target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }));
     }
     clearPendingScroll();
   }, [pendingScroll, clearPendingScroll]);

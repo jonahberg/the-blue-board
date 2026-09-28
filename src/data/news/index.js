@@ -69,12 +69,16 @@ export function resolveTag(tag) {
     return { label: tag.toUpperCase() + ' Hub', url: `/hubs/${tag}` };
   }
   if (knownFleet.has(tag)) {
-    // Format fleet label: "737-max-8" → "737 MAX 8"
+    // Format fleet label from the slug, keeping the variant hyphen:
+    //   "737-max-8" → "Boeing 737 MAX 8", "787-9-dreamliner" → "Boeing 787-9 Dreamliner",
+    //   "767-300er" → "Boeing 767-300ER", "a321neo" → "A321neo".
+    // (A blanket hyphen→space rendered "Boeing 787 9 Dreamliner" on live pages, and `\ber\b`
+    // never matched the "er" glued to "300".)
     const label = tag
       .replace(/-dreamliner$/, ' Dreamliner')
       .replace(/^a(\d)/, 'A$1')
-      .replace(/-/g, ' ')
-      .replace(/\b(max|er)\b/gi, (m) => m.toUpperCase())
+      .replace(/^(\d{3})-max-(\d+)$/, '$1 MAX $2')
+      .replace(/(\d)er\b/, '$1ER')
       .replace(/^(\d)/, 'Boeing $1');
     return { label, url: `/fleet/${tag}` };
   }
@@ -205,8 +209,7 @@ export const articles = [
     sources: [
       { name: 'View from the Wing', url: 'https://viewfromthewing.com/united-airlines-confirms-it-will-block-middle-seats-on-new-a321xlrs-to-fly-with-fewer-flight-attendants/' },
       { name: 'Paddle Your Own Kanoo', url: 'https://www.paddleyourownkanoo.com/2026/06/10/united-airlines-is-reportedly-working-on-a-new-economy-product-with-a-blocked-middle-seat-to-reduce-flight-attendant-requirements/' },
-      { name: 'Simple Flying', url: 'https://simpleflying.com/united-a321xlr-blocked-middle-seats-flight-attendants/' },
-    ],
+          ],
     summary: 'United is blocking two middle seats on its new A321XLR to hold the cabin at 150 seats — a quiet move that keeps the jet under an FAA flight-attendant threshold. The airline calls it customer investment; the labor math tells a more interesting story.',
     body: `<p>Amid all the excitement over United's first A321XLR, eagle-eyed observers caught a strange detail in the cabin: two seats — 32B and 32E — blocked off by a fixed tray table, unusable. Why would an airline deliberately disable seats on a brand-new airplane it just spent a fortune to buy? The answer, reported in mid-June, is one of the more quietly clever pieces of airline math you'll see this year.</p>
 

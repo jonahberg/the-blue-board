@@ -18,6 +18,7 @@
  *    live aircraft positions only.
  */
 
+import { CalendarDays, Plane, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ import {
   boardAsOfMs,
   boardLoadMessage,
   describeBoardCondition,
+  emptyBoardReason,
   formatBoardAsOf,
   shouldAutoScroll,
 } from '@/lib/schedule-load.js';
@@ -44,7 +46,7 @@ import { useWeather } from '../state/weather';
 import { ScheduleControls } from './schedule/ScheduleControls';
 import { ScheduleStats } from './schedule/ScheduleStats';
 import { ScheduleTable } from './schedule/ScheduleTable';
-import type { ScheduleTableHandle } from './schedule/ScheduleTable';
+import type { EmptyReason, ScheduleTableHandle } from './schedule/ScheduleTable';
 import { StalenessBanner } from './schedule/StalenessBanner';
 import type { BoardCondition } from './schedule/StalenessBanner';
 import { SwapSummary } from './schedule/SwapSummary';
@@ -243,6 +245,18 @@ export default function ScheduleView() {
   const dayLabel = (getHubDayLabel(hub || 'ORD', day) as string) ?? '';
   const showJumpToNow = day === 0 && model.firstFutureIndex >= 0;
 
+  // F14: an empty table is not always "your filters". A 200 with no rows and partial:true is
+  // the provider failing (the banner above already says so); with no filters and a clean
+  // response, the day simply has no published board yet.
+  const emptyReason = emptyBoardReason({ rawCount: rows.length, partial: board?.partial }) as EmptyReason;
+  const dayWord = ['Yesterday', 'Today', 'Tomorrow'][day + 1] ?? dayLabel;
+  const emptySubject = `${dayWord.toLowerCase()}'s ${hub} ${dir} (${dayLabel})`;
+  const windowKey = `${key}|${JSON.stringify(debouncedFilters)}|${sort.column}:${sort.asc}`;
+  const onClearFilters = useCallback(() => {
+    setFilters(EMPTY_FILTERS);
+    setDebouncedFilters(EMPTY_FILTERS);
+  }, []);
+
   return (
     // No `h-full`: at phone width the controls and the stat strip are tall enough that a
     // height-locked column squeezes the table down to a row and a half. The tab area already
@@ -270,16 +284,12 @@ export default function ScheduleView() {
 
       {!hub ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-          <span className="text-2xl" aria-hidden="true">
-            📅
-          </span>
+          <CalendarDays aria-hidden="true" className="size-6" />
           <p className="text-xs">Select a hub to load schedule data</p>
         </div>
       ) : error ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-          <span className="text-2xl" aria-hidden="true">
-            ⚠️
-          </span>
+          <TriangleAlert aria-hidden="true" className="size-6" />
           <p className="text-xs">Error loading schedule: {error}</p>
           <p className="text-[10px] text-muted-foreground">Try again in a moment</p>
           <Button size="sm" onClick={refresh}>
@@ -289,9 +299,7 @@ export default function ScheduleView() {
       ) : isLoading && !board ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            <span className="mr-1" aria-hidden="true">
-              ✈️
-            </span>
+            <Plane aria-hidden="true" className="mr-1 inline size-3.5 align-[-2px]" />
             Loading {hub} {dir} for {dayLabel}…
           </p>
           <Skeleton className="h-14 w-full" />
@@ -328,6 +336,10 @@ export default function ScheduleView() {
             onOpenAircraft={ui.openAircraft}
             onExplainDelay={ui.openDelayExplain}
             boardAsOf={asOf}
+            windowKey={windowKey}
+            emptyReason={emptyReason}
+            emptySubject={emptySubject}
+            onClearFilters={onClearFilters}
           />
           <p className="text-center text-[9px] text-muted-foreground">
             Schedule data via{' '}
@@ -335,7 +347,7 @@ export default function ScheduleView() {
               href="https://aerodatabox.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-emerald-400 underline"
+              className="text-bb-ok underline"
             >
               AeroDataBox
             </a>{' '}

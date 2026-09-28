@@ -3,7 +3,6 @@ import {
   SEV_LABELS,
   detectSevType,
   sevBadgeClass,
-  tierNasEvents,
   tierNasEventsRaw,
   nasCountLine,
   nasPanelEmpty,
@@ -97,9 +96,9 @@ describe('sevBadgeClass', () => {
   });
 });
 
-describe('tierNasEvents', () => {
+describe('tierNasEventsRaw', () => {
   it('puts an active ground stop in the critical tier with a facility-prefixed title', () => {
-    const { critical, active, monitoring } = tierNasEvents({
+    const { critical, active, monitoring } = tierNasEventsRaw({
       active: [{ name: 'GS-EWR', reason: 'thunderstorms', avgDelay: 45, endTime: '2026-09-11T21:30:00Z', affectedFacilities: ['EWR', 'JFK'] }],
     }, HUBS);
     expect(active).toEqual([]);
@@ -108,117 +107,113 @@ describe('tierNasEvents', () => {
       tier: 'critical',
       sevType: 'GS',
       title: 'EWR Ground Stop',
-      detail: 'thunderstorms · avg <span class="nas-delay-val">45m</span> · ends 21:30Z',
+      detailParts: [
+        { kind: 'text', text: 'thunderstorms' },
+        { kind: 'delay', text: '45m' },
+        { kind: 'text', text: 'ends 21:30Z' },
+      ],
       hubs: ['EWR'],
     }]);
   });
 
   it('puts other active programs in the active tier', () => {
-    const { active } = tierNasEvents({
+    const { active } = tierNasEventsRaw({
       active: [{ name: 'GDP-ORD', reason: 'wind', affectedFacilities: ['ORD'] }],
     }, HUBS);
-    expect(active[0]).toMatchObject({ tier: 'active', sevType: 'GDP', title: 'ORD Ground Delay Program', detail: 'wind', hubs: ['ORD'] });
+    expect(active[0]).toMatchObject({
+      tier: 'active', sevType: 'GDP', title: 'ORD Ground Delay Program',
+      detailParts: [{ kind: 'text', text: 'wind' }], hubs: ['ORD'],
+    });
   });
 
-  it('tiers planned TMIs: GS critical, GDP/AFP active, everything else monitoring', () => {
-    const out = tierNasEvents({
+  it('never puts a PLANNED item in the critical tier — only an active ground stop is critical', () => {
+    const out = tierNasEventsRaw({
       planned: [
         { event: 'GS-SFO', decoded: 'Ground stop at SFO', time: '18:00Z', affectedAirports: ['SFO'] },
         { event: 'AFP-ZOB', decoded: 'Airspace flow program', affectedAirports: ['ORD'] },
         { event: 'MIT-ZID', decoded: 'Miles in trail', affectedAirports: ['IAH'] },
       ],
     }, HUBS);
-    expect(out.critical.map((i) => i.sevType)).toEqual(['GS']);
-    expect(out.active.map((i) => i.sevType)).toEqual(['AFP']);
+    expect(out.critical).toEqual([]);
+    expect(out.active.map((i) => i.sevType)).toEqual(['GS', 'AFP']);
     expect(out.monitoring.map((i) => i.sevType)).toEqual(['MIT']);
-    expect(out.monitoring[0]).toMatchObject({ title: 'Miles in trail', detail: '', hubs: ['IAH'] });
+    expect(out.monitoring[0]).toMatchObject({ title: 'Miles in trail', hubs: ['IAH'] });
+  });
+
+  it('keeps a POSSIBLE/PROBABLE outlook in monitoring and an EXPECTED one in active, with its window', () => {
+    // The live /api/nas shape (Sep 27 2026): active [], every planned item a
+    // "GROUND STOP/DELAY PROGRAM POSSIBLE" outlook with an empty time field. These used to
+    // fill the critical tier with eight GS badges while nothing was in effect.
+    const nas = {
+      active: [],
+      planned: [
+        { time: '', event: 'AFTER 1500\t-EWR GROUND STOP/DELAY PROGRAM POSSIBLE', decoded: 'AFTER 1500\t-EWR GROUND STOP/DELAY PROGRAM POSSIBLE', affectedAirports: ['EWR'], type: 'terminal' },
+        { time: '', event: 'AFTER 1500\t-BOS GROUND STOP/DELAY PROGRAM EXPECTED', decoded: 'AFTER 1500\t-BOS GROUND STOP/DELAY PROGRAM EXPECTED', affectedAirports: ['BOS'], type: 'terminal' },
+        { time: '', event: 'AFTER 1100\t-BOS CDRS/SWAP/ESCAPE ROUTES PROBABLE', decoded: 'AFTER 1100\t-BOS Coded Departure Routes/Severe Weather Avoidance/ESCAPE ROUTES PROBABLE', affectedAirports: ['BOS'], type: 'enroute' },
+      ],
+    };
+    const out = tierNasEventsRaw(nas, HUBS);
+    expect(out.critical).toEqual([]);
+    expect(out.active).toEqual([{
+      tier: 'active', sevType: 'GS', title: 'BOS GROUND STOP/DELAY PROGRAM EXPECTED',
+      detailParts: [{ kind: 'text', text: 'planned' }, { kind: 'text', text: 'after 1500Z' }], hubs: [],
+    }]);
+    expect(out.monitoring.map((i) => [i.sevType, i.title])).toEqual([
+      ['GS', 'EWR GROUND STOP/DELAY PROGRAM POSSIBLE'],
+      ['CDR', 'BOS Coded Departure Routes/Severe Weather Avoidance/ESCAPE ROUTES PROBABLE'],
+    ]);
+    expect(out.monitoring[0].hubs).toEqual(['EWR']);
+    expect(out.monitoring[0].detailParts).toEqual([{ kind: 'text', text: 'planned' }, { kind: 'text', text: 'after 1500Z' }]);
   });
 
   it('keeps only United hubs in each item\'s hub tags, and de-dupes active facilities', () => {
-    const { critical } = tierNasEvents({
+    const { critical } = tierNasEventsRaw({
       active: [{ name: 'GS-ORD', affectedFacilities: ['ORD', 'ORD', 'ATL', 'DEN'] }],
     }, HUBS);
     expect(critical[0].hubs).toEqual(['ORD', 'DEN']);
   });
 
-  it('escapes untrusted upstream text before it reaches innerHTML', () => {
-    const { monitoring } = tierNasEvents({
-      planned: [{ event: 'MIT', decoded: '<img src=x onerror=alert(1)>', time: 'a "b" & c', affectedAirports: [] }],
+  it('leaves upstream text RAW — escaping is React\'s job, not this module\'s', () => {
+    const { monitoring } = tierNasEventsRaw({
+      planned: [{ event: 'MIT', decoded: 'Miles-in-trail "20" & <climbing>', time: '18Z-22Z', affectedAirports: [] }],
     }, HUBS);
-    expect(monitoring[0].title).toBe('&lt;img src=x onerror=alert(1)&gt;');
-    expect(monitoring[0].detail).toBe('a &quot;b&quot; &amp; c');
+    expect(monitoring[0].title).toBe('Miles-in-trail "20" & <climbing>');
+    expect(monitoring[0].detailParts).toEqual([{ kind: 'text', text: 'planned' }, { kind: 'text', text: '18Z-22Z' }]);
   });
 
   it('accepts the hub list as a Set as well as an array', () => {
-    const asSet = tierNasEvents({ active: [{ name: 'GS-ORD', affectedFacilities: ['ORD'] }] }, new Set(HUBS));
+    const asSet = tierNasEventsRaw({ active: [{ name: 'GS-ORD', affectedFacilities: ['ORD'] }] }, new Set(HUBS));
     expect(asSet.critical[0].hubs).toEqual(['ORD']);
   });
 
   it('returns three empty tiers for missing or empty NAS data (edge case)', () => {
     const empty = { critical: [], active: [], monitoring: [] };
-    expect(tierNasEvents(null, HUBS)).toEqual(empty);
-    expect(tierNasEvents({}, HUBS)).toEqual(empty);
-    expect(tierNasEvents({ active: [], planned: [] }, HUBS)).toEqual(empty);
+    expect(tierNasEventsRaw(null, HUBS)).toEqual(empty);
+    expect(tierNasEventsRaw({}, HUBS)).toEqual(empty);
+    expect(tierNasEventsRaw({ active: [], planned: [] }, HUBS)).toEqual(empty);
   });
 
   it('falls back to the raw program name when there is no 3-letter facility (edge case)', () => {
-    const { active } = tierNasEvents({ active: [{ name: 'GDP', affectedFacilities: [] }] }, HUBS);
+    const { active } = tierNasEventsRaw({ active: [{ name: 'GDP', affectedFacilities: [] }] }, HUBS);
     expect(active[0].title).toBe('GDP');
     expect(active[0].hubs).toEqual([]);
   });
 
   it('renders a bare endTime verbatim when it carries no date part (edge case)', () => {
-    const { active } = tierNasEvents({ active: [{ name: 'GDP-DEN', endTime: '2145Z', affectedFacilities: ['DEN'] }] }, HUBS);
-    expect(active[0].detail).toBe('ends 2145Z');
-  });
-});
-
-describe('tierNasEventsRaw (the React panel’s input)', () => {
-  const NAS = {
-    active: [
-      { name: 'GS-EWR', reason: 'THUNDERSTORMS & WIND', avgDelay: 45, endTime: '2026-09-13T21:45:00Z', affectedFacilities: ['EWR', 'JFK'] },
-      { name: 'GDP-ORD', reason: 'VOLUME', affectedFacilities: ['ORD'] },
-    ],
-    planned: [{ event: 'MIT-ZOB', decoded: 'Miles-in-trail "20" & climbing', time: '18Z-22Z', affectedAirports: ['ORD', 'LGA'] }],
-  };
-
-  it('tiers exactly the way the escaping variant does', () => {
-    const raw = tierNasEventsRaw(NAS, HUBS);
-    const escaped = tierNasEvents(NAS, HUBS);
-    for (const tier of ['critical', 'active', 'monitoring']) {
-      expect(raw[tier].map((i) => i.sevType)).toEqual(escaped[tier].map((i) => i.sevType));
-      expect(raw[tier].map((i) => i.hubs)).toEqual(escaped[tier].map((i) => i.hubs));
-    }
+    const { active } = tierNasEventsRaw({ active: [{ name: 'GDP-DEN', endTime: '2145Z', affectedFacilities: ['DEN'] }] }, HUBS);
+    expect(active[0].detailParts).toEqual([{ kind: 'text', text: 'ends 2145Z' }]);
   });
 
-  it('leaves the title and every detail part UNESCAPED', () => {
-    const { critical, monitoring } = tierNasEventsRaw(NAS, HUBS);
-    expect(critical[0].title).toBe('EWR Ground Stop');
-    expect(critical[0].detailParts).toEqual([
-      { kind: 'text', text: 'THUNDERSTORMS & WIND' },
-      { kind: 'delay', text: '45m' },
-      { kind: 'text', text: 'ends 21:45Z' },
-    ]);
-    // The escaping wrapper is the ONLY place ampersands and quotes become entities.
-    expect(monitoring[0].title).toBe('Miles-in-trail "20" & climbing');
-    expect(tierNasEvents(NAS, HUBS).monitoring[0].title).toBe('Miles-in-trail &quot;20&quot; &amp; climbing');
-  });
-
-  it('marks the average-delay figure so the panel can emphasise only that part', () => {
-    const { critical } = tierNasEventsRaw(NAS, HUBS);
+  it('marks only the average-delay figure as a delay part', () => {
+    const { critical } = tierNasEventsRaw({
+      active: [{ name: 'GS-EWR', reason: 'WIND', avgDelay: 45, affectedFacilities: ['EWR'] }],
+    }, HUBS);
     expect(critical[0].detailParts.filter((p) => p.kind === 'delay')).toEqual([{ kind: 'delay', text: '45m' }]);
-    // …and the innerHTML caller still gets the span it always got.
-    expect(tierNasEvents(NAS, HUBS).critical[0].detail).toContain('avg <span class="nas-delay-val">45m</span>');
   });
 
-  it('gives a planned TMI with no time an empty part list, not an empty string part', () => {
+  it('tags a planned TMI with no time as planned only', () => {
     const { monitoring } = tierNasEventsRaw({ planned: [{ event: 'MIT', affectedAirports: [] }] }, HUBS);
-    expect(monitoring[0].detailParts).toEqual([]);
-    expect(tierNasEvents({ planned: [{ event: 'MIT', affectedAirports: [] }] }, HUBS).monitoring[0].detail).toBe('');
-  });
-
-  it('returns three empty tiers for missing NAS data (edge case)', () => {
-    expect(tierNasEventsRaw(null, HUBS)).toEqual({ critical: [], active: [], monitoring: [] });
+    expect(monitoring[0].detailParts).toEqual([{ kind: 'text', text: 'planned' }]);
   });
 });
 

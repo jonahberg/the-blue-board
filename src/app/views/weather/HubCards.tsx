@@ -10,6 +10,8 @@
  * quiet is a broken feed, and the only useful control then is Retry.
  */
 
+import { CloudSun } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -55,9 +57,7 @@ export function HubCards({
   if (failed) {
     return (
       <div className="rounded-lg border border-dashed p-6 text-center">
-        <p aria-hidden="true" className="text-2xl">
-          🌦
-        </p>
+        <CloudSun aria-hidden="true" className="mx-auto size-6 text-muted-foreground" />
         <p className="mt-1 text-sm">Weather data unavailable</p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
           Could not load METAR observations
@@ -68,7 +68,7 @@ export function HubCards({
         <Button
           variant="outline"
           size="sm"
-          className="mt-3 min-h-11 md:h-8 md:min-h-0"
+          className="mt-3 min-h-11 md:h-8 pointer-fine:md:min-h-0"
           onClick={onRetry}
         >
           ↻ Retry

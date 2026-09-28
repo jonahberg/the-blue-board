@@ -14,6 +14,40 @@
 /** @typedef {{airportCode?: string, delays?: Array<Object>}} FaaAirport */
 
 /**
+ * Normalise a delay type for matching. /api/faa sends snake_case
+ * ('ground_stop' | 'ground_delay' | 'departure_delay' | 'arrival_delay' | 'closure');
+ * older cached payloads and hand-typed strings use spaces ('Ground Stop'). Both become
+ * lower-case, space-separated words, so one set of `includes()` checks covers either.
+ *
+ * @param {unknown} type
+ * @returns {string}
+ */
+export function normalizeFaaType(type) {
+  return String(type || '').toLowerCase().replace(/[_-]+/g, ' ');
+}
+
+/** Display labels for the server's delay types. */
+const FAA_TYPE_LABELS = {
+  ground_stop: 'Ground Stop',
+  ground_delay: 'Ground Delay Program',
+  departure_delay: 'Departure Delay',
+  arrival_delay: 'Arrival Delay',
+  closure: 'Closure',
+};
+
+/**
+ * Human label for a /api/faa delay type ("ground_stop" → "Ground Stop"). An unknown type is
+ * returned as-is rather than guessed at.
+ *
+ * @param {unknown} type
+ * @returns {string}
+ */
+export function faaTypeLabel(type) {
+  const key = normalizeFaaType(type).replace(/ /g, '_');
+  return FAA_TYPE_LABELS[key] || String(type || '');
+}
+
+/**
  * Build the FAA delay index from the /api/faa response (per-airport shape with programs[]).
  *
  * @param {FaaAirport[]|unknown} faaResponse
@@ -51,7 +85,7 @@ export function explainFAAStatus(airportCode, delays, rawData) {
 
   const explanations = delays.map(d => {
     let text = `${airportCode} is currently experiencing `;
-    const dtype = (d.type || '').toLowerCase();
+    const dtype = normalizeFaaType(d.type);
     const reason = d.reason || 'unknown causes';
 
     if (dtype.includes('departure')) text += `departure delays`;
@@ -97,7 +131,7 @@ export function getFAADelayContext(faaIndex, originIata, destIata) {
     const faa = faaIndex[apt];
     if (!faa || !faa.delays || !faa.delays.length) return;
     faa.delays.forEach(d => {
-      const dtype = (d.type || '').toLowerCase();
+      const dtype = normalizeFaaType(d.type);
       let label = 'Delay';
       if (dtype.includes('ground stop')) label = 'Ground Stop';
       else if (dtype.includes('ground delay') || dtype.includes('gdp')) label = 'GDP';

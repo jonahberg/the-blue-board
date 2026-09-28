@@ -34,7 +34,7 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
   <div class="mx-auto flex h-12 max-w-5xl items-center gap-3 px-4">
     <a href="/" class="flex items-center gap-2 rounded-md">
       <span
-        class="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
+        class="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary-fill text-primary-foreground"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -54,7 +54,7 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
       </span>
       <span class="leading-tight">
         <span class="block text-sm font-semibold text-foreground">The Blue Board</span>
-        <span class="hidden text-[10px] text-muted-foreground sm:block">
+        <span class="hidden text-[11px] text-muted-foreground sm:block">
           Unofficial United Airlines ops dashboard
         </span>
       </span>
@@ -74,7 +74,7 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
       }
     </nav>
 
-    <details class="group relative ml-auto md:hidden">
+    <details class="group relative ml-auto md:hidden" data-site-menu>
       <summary
         class="flex size-11 cursor-pointer list-none items-center justify-center rounded-md border border-border text-muted-foreground [&::-webkit-details-marker]:hidden"
       >
@@ -116,3 +116,11 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
     </details>
   </div>
 </header>
+
+<script>
+  import { wireSiteMenu } from './site-menu';
+
+  for (const menu of document.querySelectorAll<HTMLDetailsElement>('details[data-site-menu]')) {
+    wireSiteMenu(menu);
+  }
+</script>

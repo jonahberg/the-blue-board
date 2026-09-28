@@ -20,6 +20,7 @@
  * a model that returns markup renders as the characters it sent, never as HTML.
  */
 
+import { TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -139,8 +140,8 @@ export default function DelayExplainDialog() {
           ) : null}
 
           {state.phase === 'error' ? (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-400">
-              <span aria-hidden="true">⚠️ </span>
+            <p className="rounded-md border border-bb-warn/40 bg-bb-warn/10 px-2.5 py-2 text-xs text-bb-warn">
+              <TriangleAlert aria-hidden="true" className="mr-1 inline size-3.5 align-[-2px]" />
               {state.message}
             </p>
           ) : null}

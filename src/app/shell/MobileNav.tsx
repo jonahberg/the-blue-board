@@ -7,6 +7,7 @@
  * lighting up two buttons at once and none for Fleet or Starlink.
  */
 
+import { Ellipsis } from 'lucide-react';
 import { useState } from 'react';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -42,9 +43,7 @@ export function MobileNav({
             tab === entry.id ? 'text-primary' : 'text-muted-foreground',
           )}
         >
-          <span aria-hidden="true" className="text-base leading-none">
-            {entry.icon}
-          </span>
+          <entry.icon aria-hidden="true" className="size-5" />
           {entry.shortLabel}
         </button>
       ))}
@@ -56,9 +55,7 @@ export function MobileNav({
             overflowActive ? 'text-primary' : 'text-muted-foreground',
           )}
         >
-          <span aria-hidden="true" className="text-base leading-none">
-            ▾
-          </span>
+          <Ellipsis aria-hidden="true" className="size-5" />
           More
         </SheetTrigger>
         <SheetContent side="bottom" className="data-[side=bottom]:h-auto">
@@ -79,7 +76,7 @@ export function MobileNav({
                     setMoreOpen(false);
                   }}
                 >
-                  <span aria-hidden="true">{entry.icon}</span>
+                  <entry.icon aria-hidden="true" className="size-4" />
                   {entry.label}
                 </button>
               </li>

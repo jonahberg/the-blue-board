@@ -9,6 +9,7 @@ export const nrt = {
   "ogImageAlt": "The Blue Board — United Airlines NRT Hub Status",
   "twitterTitle": "United Airlines NRT Hub — Live Tokyo Narita Status",
   "twitterDescription": "AI delay predictions, cancellations, on-time performance at United's Asia-Pacific connecting point. Most US-Tokyo flights now use Haneda (HND). Updated every 30 seconds.",
+  "subtitle": "Tokyo gateway · Terminal 1 · SFO–NRT 787 plus a 737 MAX 8 operation to Guam and Asia-Pacific points",
   "breadcrumbName": "NRT — Tokyo Narita",
   "faqSchema": [
     {

@@ -172,7 +172,55 @@ export function computeInstallPace(aircraft, nowDate = new Date(), opts = {}) {
   return { weeks, peak, thisWeek: rawCounts[weeksWindow - 1], pace, paceWeeks, dated, remaining, etaWeeks, etaDate };
 }
 
+/**
+ * When the Express fleet finishes at the EXPRESS install pace (F94).
+ *
+ * The whole-fleet pace is mostly mainline; dividing the Express backlog by it said "Dec '26"
+ * for a fleet equipping about one aircraft a week. The backlog and the pace must describe the
+ * same population, so this runs `computeInstallPace` over the Express aircraft alone.
+ *
+ * @param {Array<{fleet?: string, dateFound?: string}>} aircraft  the whole served roster.
+ * @param {Date} nowDate
+ * @param {number|null|undefined} remaining  Express aircraft still to equip.
+ * @returns {{pace: number, etaWeeks: (number|null), etaDate: (Date|null)}}
+ */
+export function computeExpressEta(aircraft, nowDate, remaining) {
+  const express = (aircraft || []).filter((a) => a && a.fleet === 'Express');
+  const model = computeInstallPace(express, nowDate, typeof remaining === 'number' ? { remaining } : {});
+  return { pace: model.pace, etaWeeks: model.etaWeeks, etaDate: model.etaDate };
+}
+
 // ═══ HUB DEPARTURES BOARD ═══
+/** How far a scheduled departure may lie in the future and still be the leg in the air. */
+const LIVE_LEG_SLACK_SEC = 15 * 60;
+
+/**
+ * Which of a tail's scheduled legs the live flight IS, or -1.
+ *
+ * A leg can only be flying if it was due to depart by now (plus slack for a board that lags
+ * the feed). When the live flight carries a route, the leg must also fly that route — a
+ * DEN→SFO inbound never matches the SFO→ORD departure, even though it is the latest past
+ * one. Without a route, the latest departed leg is the best evidence there is.
+ *
+ * @param {Array<{origin?:string, destination?:string, departure_ts?:number}>} legs
+ * @param {{origin?:string, dest?:string}} live
+ * @param {number} now  unix seconds.
+ * @returns {number}
+ */
+export function liveLegIndex(legs, live, now) {
+  const origin = String(live?.origin || '').toUpperCase();
+  const dest = String(live?.dest || '').toUpperCase();
+  let best = -1, bestTs = -Infinity;
+  (legs || []).forEach((leg, i) => {
+    const ts = Number(leg && leg.departure_ts) || 0;
+    if (!ts || ts > now + LIVE_LEG_SLACK_SEC) return;
+    if (origin && String(leg.origin || '').toUpperCase() !== origin) return;
+    if (dest && String(leg.destination || '').toUpperCase() !== dest) return;
+    if (ts > bestTs) { best = i; bestTs = ts; }
+  });
+  return best;
+}
+
 // Time-bucket section labels, in render order. A departure's bucket is chosen by how far in the
 // future it departs (negative deltas — the now-1800 grace window — fall into "WITHIN 1 HOUR").
 export const DEPARTURE_BUCKETS = [
@@ -196,9 +244,16 @@ export function departureBucketLabel(deltaSec) {
  * within the [now - graceSec, now + windowSec] window, sorted ascending and grouped into time
  * buckets for rendering.
  *
+ * "Airborne" belongs to ONE row per tail — the leg the aircraft is flying now (`liveLegIndex`),
+ * never every departure of a tail that happens to be in the air (F3/F98): an aircraft flying
+ * its inbound DEN→SFO leg is not airborne on its SFO→ORD departure 90 minutes from now. Its
+ * other rows get `inbound: {flight, icao24}` so the board can say "inbound on UA1389" and still
+ * offer to track the airframe.
+ *
  * @param {Record<string, Array<{flight_number?:string, origin?:string, destination?:string, departure_ts?:number, departure_time?:string, arrival_time?:string}>>} flightsByTail
  * @param {Record<string, {type?:string, fleet?:string, operator?:string}>} aircraftByTail - tail → fleet DB entry
- * @param {Record<string, {icao24?:string}>|Map<string,{icao24?:string}>} airborneByTail - tail → live flight (has icao24)
+ * @param {Record<string, Object>|Map<string, Object>} airborneByTail - tail → live flight
+ *   (`{icao24, origin?, dest?, flightIATA?, callsign?}` — the feed's Flight shape)
  * @param {string[]} hubCodes - hub IATA codes to include as origins
  * @param {{now?:number, windowSec?:number, graceSec?:number, hub?:(string|null), capPerHub?:number}} [opts]
  * @returns {{ hubCounts: Record<string,number>, allCount: number, totalInWindow: number, buckets: Array<{label:string, rows:object[]}>, shownCount: number, hiddenCount: number }}
@@ -229,7 +284,12 @@ export function buildDeparturesBoard(flightsByTail, aircraftByTail, airborneByTa
     const ac = (aircraftByTail && aircraftByTail[tail]) || null;
     const air = lookupAir(tail) || null;
     const flights = flightsByTail[tail] || [];
-    for (const f of flights) {
+    const liveIdx = air ? liveLegIndex(flights, air, now) : -1;
+    const inbound = air
+      ? { flight: String(air.flightIATA || air.callsign || ''), icao24: String(air.icao24 || '') }
+      : null;
+    for (let i = 0; i < flights.length; i++) {
+      const f = flights[i];
       const ts = Number(f && f.departure_ts) || 0;
       if (!ts || ts < lo || ts > hi) continue;
       const origin = String((f && f.origin) || '').toUpperCase();
@@ -247,8 +307,10 @@ export function buildDeparturesBoard(flightsByTail, aircraftByTail, airborneByTa
         type: ac ? String(ac.type || '') : '',
         fleet: ac ? String(ac.fleet || '') : '',
         operator: ac ? String(ac.operator || '') : '',
-        airborne: !!air,
-        icao24: air ? String(air.icao24 || '') : '',
+        airborne: i === liveIdx,
+        icao24: i === liveIdx ? String(air.icao24 || '') : '',
+        // The tail is flying a DIFFERENT leg right now (its inbound, usually).
+        inbound: air && i !== liveIdx ? inbound : null,
         deltaSec: ts - now,
       });
     }

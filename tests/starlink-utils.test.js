@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bucketInstallsByMonth, computeInstallPace } from '../src/lib/starlink-utils.js';
+import { bucketInstallsByMonth, computeExpressEta, computeInstallPace } from '../src/lib/starlink-utils.js';
 
 // Helper to build aircraft entries the way /api/starlink-data shapes them
 const ac = (dateFound, fleet = 'Express') => ({ tail: 'N1', fleet, type: 'ERJ-175', operator: 'SkyWest dba UAX', dateFound, wifi: 'Starlink' });
@@ -152,5 +152,30 @@ describe('computeInstallPace', () => {
   it('returns the empty shape for empty/invalid input', () => {
     expect(computeInstallPace([], NOW).dated).toBe(0);
     expect(computeInstallPace(null, NOW).weeks).toEqual([]);
+  });
+});
+
+describe('computeExpressEta (F94: the Express backlog at the Express pace)', () => {
+  const NOW = new Date('2026-05-27T12:00:00Z'); // Wed of the week starting Mon 2026-05-25
+  // 8 complete weeks before the current one, starting Mondays.
+  const weekStarts = Array.from({ length: 8 }, (_, i) => new Date(Date.UTC(2026, 4, 25) - (i + 1) * 7 * 86400000).toISOString().slice(0, 10));
+  const mixed = weekStarts.flatMap((d) => [
+    ...Array.from({ length: 10 }, () => ({ tail: 'M', fleet: 'Mainline', dateFound: d })),
+    { tail: 'E', fleet: 'Express', dateFound: d },
+  ]);
+
+  it('divides 50 remaining Express aircraft by 1/wk, not by the 11/wk whole-fleet pace', () => {
+    const eta = computeExpressEta(mixed, NOW, 50);
+    expect(eta.pace).toBe(1);
+    expect(eta.etaWeeks).toBe(50);
+    // The bug: the whole-fleet pace against the same backlog.
+    expect(computeInstallPace(mixed, NOW, { remaining: 50 }).etaWeeks).toBe(5);
+  });
+
+  it('has no ETA when no Express aircraft are dated or nothing remains', () => {
+    const mainlineOnly = mixed.filter((a) => a.fleet === 'Mainline');
+    expect(computeExpressEta(mainlineOnly, NOW, 50).etaDate).toBeNull();
+    expect(computeExpressEta(mixed, NOW, 0).etaDate).toBeNull();
+    expect(computeExpressEta(mixed, NOW, null).etaDate).toBeNull();
   });
 });
