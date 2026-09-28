@@ -69,3 +69,12 @@ describe('phone inputs are 16px (iOS zooms below that; audit F23)', () => {
     expect(src).toMatch(/CommandPrimitive\.Input[\s\S]*?"w-full text-base [^"]*md:text-sm/);
   });
 });
+
+describe('links in running text are not colour-only (audit F43, WCAG 1.4.1)', () => {
+  it("TrackerPulse's in-sentence 'The Blue Board' link is underlined at rest", () => {
+    const src = readFileSync(resolve(ROOT, 'src/components/trackers/TrackerPulse.astro'), 'utf8');
+    const tag = src.match(/<a\s+href="\/"\s+class="([^"]*)">The Blue Board<\/a/);
+    expect(tag).not.toBeNull();
+    expect(tag[1].split(/\s+/)).toContain('underline');
+  });
+});
