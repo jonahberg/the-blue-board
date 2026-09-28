@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { TIP_DISMISS_DAYS, TIP_ROTATE_MS, pickTip } from '@/lib/tips.js';
+import { TIP_DISMISS_DAYS, TIP_ROTATE_MS, pickTip, tipForPointer } from '@/lib/tips.js';
 import { STORAGE_KEYS, readString, writeString } from '../state/storage';
 import { useUi } from '../state/ui';
 
@@ -54,7 +54,11 @@ export default function TipStrip() {
   }, []);
 
   const rotate = useCallback(() => {
-    setTip(pickTip(`tab-${tab}`) as string);
+    const coarse =
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(pointer: coarse)').matches
+        : false;
+    setTip(tipForPointer(pickTip(`tab-${tab}`) as string, coarse) as string);
   }, [tab]);
 
   useEffect(() => {
