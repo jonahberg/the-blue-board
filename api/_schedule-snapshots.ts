@@ -96,7 +96,12 @@ export function isCompleteSnapshotAcceptable(candidate: any, existing: any): boo
   if (existing?.partial) return true;
   const existingTotal = Number(existing?.total || 0);
   if (!(existingTotal > 0)) return true;
-  const candidateTotal = Number(candidate?.total || 0);
+  // Rows the provider pipeline dropped on purpose (partner codeshares, other-day rows; v1.9.0
+  // meta.filtered) are not missing rows: without this, the first filtered board after the change
+  // was rejected as "truncated" and the stale pre-filter board stayed pinned (NRT, Sep 28 2026).
+  const filtered = candidate?.meta?.filtered || {};
+  const deliberatelyDropped = (Number(filtered.partnerCodeshares) || 0) + (Number(filtered.offDay) || 0);
+  const candidateTotal = Number(candidate?.total || 0) + deliberatelyDropped;
   return candidateTotal >= existingTotal * COMPLETE_SNAPSHOT_MIN_RETAIN;
 }
 
