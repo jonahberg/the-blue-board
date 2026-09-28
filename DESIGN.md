@@ -44,6 +44,9 @@ density and the data, not in the chrome: this is a tool people leave open for ho
 - **Sizes are the Tailwind scale** (`text-xs` … `text-2xl`), not hand-written pixel values.
   Arbitrary sizes (`text-[10px]`, `text-[11px]`) are reserved for micro-labels in dense
   dashboard chrome where the scale has no rung.
+- **Content pages have an 11px floor.** Nothing under `src/pages`, `src/layouts`,
+  `src/components/site|trackers` or `content.css` goes below `text-[11px]` — the 8–10px
+  micro-labels belong to the dashboard only (`tests/design-guards.test.js`).
 - **Mono is semantic, not stylistic.** Use `font-mono` for anything a reader compares
   character by character: flight numbers, tail numbers, IATA/ICAO codes, times, counts,
   percentages. Numeric columns also take `tabular-nums` so digits line up.
@@ -59,6 +62,16 @@ The shadcn variable set is the whole palette: `--background`, `--foreground`, `-
 `--popover`, `--primary`, `--secondary`, `--muted`, `--accent`, `--destructive`, `--border`,
 `--input`, `--ring`, `--chart-1…5`, `--sidebar-*`. Dark values live under `.dark`; the
 `@theme inline` block maps each to a Tailwind colour utility (`bg-card`, `text-muted-foreground`, …).
+
+One token is ours, not shadcn's:
+
+| Token | Dark value | Use |
+|---|---|---|
+| `--primary-fill` (`bg-primary-fill`) | `oklch(0.5 0.17 255)` | every **filled** surface that carries `--primary-foreground` — buttons, CTAs, badges, the skip link |
+
+`--primary` is tuned as *ink* (text, rings, bars: 6.3:1 on `--background`); behind white
+text it is only 3.0:1. `--primary-fill` is the same hue, darker (5.8:1 with white).
+`tests/primary-contrast.test.js` pins both pairs. Text and outlines stay `--primary`.
 
 Two status hues shadcn does not carry are declared in a real `@theme` block:
 
@@ -116,8 +129,11 @@ carries a `PHASE_ICONS` glyph in the legend. A new series goes through both.
 ## Layout
 
 **Dashboard** (`src/app/Dashboard.tsx`) — a full-height column:
-`Header` → `Ticker` → `HubHealthStrip` → `TabBar` (desktop) → active view → `Attribution`
-→ `MobileNav` (mobile). Only the view scrolls; the chrome is `shrink-0`.
+`OfflineBanner` → `Header` → `Ticker` → `HubHealthStrip` → `WatchBanner` → `TabBar`
+(desktop) → active view → `NewsBanner` → `TipStrip` → `Attribution` → `MobileNav`
+(mobile). Only the view scrolls; the chrome is `shrink-0`. The late-arriving strips (news,
+tips) mount **below** the panel, never above it, so their arrival never shoves the data the
+visitor is reading (`tests/shell-strips.test.tsx`).
 
 **Content pages** — everything goes through `BaseLayout.astro`: skip link → `SiteHeader`
 → `<main id="main">` → `SiteFooter`. Chrome (header, footer) is `max-w-5xl`; page content is
@@ -141,7 +157,7 @@ wrapped. Icons are **lucide-react**.
 
 | Need | Primitive | Where |
 |---|---|---|
-| Flight detail panel | `Sheet` (non-modal, right) | `features/FlightSheet.tsx` |
+| Flight detail panel | `Sheet` (non-modal): right panel ≥`lg`, bottom sheet peeking at 40dvh below it | `features/FlightSheet.tsx` |
 | Filter drawers, watch list, mobile "More" | `Sheet` | `views/LiveView`, `views/schedule/ScheduleControls`, `shell/WatchPanel`, `shell/MobileNav` |
 | Aircraft detail, delay explain, FR24 lookup, disclaimer, onboarding | `Dialog` (modal) | `features/*Dialog.tsx`, `features/Onboarding.tsx` |
 | Global search (⌘K) | `Command` | `features/SearchPalette.tsx` |
@@ -179,8 +195,16 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
   the matching `(min-width: 1024px)` media query — keep the class and the query in step.
 - **Content pages switch at `md`.** `SiteHeader`'s inline nav is `hidden md:flex`; below that
   it is a `<details>` menu.
-- **Touch targets are ≥44px below the breakpoint that hides the pointer UI** — `min-h-11` /
-  `size-11`, relaxed at `md:` where a mouse is likely.
+- **Touch targets are ≥44px unless the pointer is fine** — `min-h-11` / `size-11`, relaxed
+  only with `pointer-fine:md:` (a mouse at ≥768px). Width is not input type: an iPad at
+  768/1024px is a touch device, so a bare `md:min-h-0` is a bug (`tests/design-guards.test.js`
+  scans `src/app` and `src/components`).
+- **Phone inputs are 16px** (`text-base md:text-[11px]`): iOS zooms the page on focus below
+  that.
+- **The flight panel covers part of the map.** "View on map" moves centre their target in the
+  uncovered part (`src/lib/flight-panel-occlusion.js`), and at ≥`lg` the Leaflet control stack
+  slides clear of the right panel (`global.css`). Keep the panel's 28rem / 40dvh in step with
+  both.
 - The page body never scrolls horizontally. Tables, the map and code blocks get their own
   `overflow-x-auto` container.
 
@@ -237,3 +261,6 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-09 | One accent: United blue as `--primary`; amber retired | The amber secondary was doing two jobs — personality and "caution". Caution is now `--color-bb-warn`, and the accent is unambiguous. |
 | 2026-09 | Status/phase/category colours stay in `src/lib` | They are encodings shared by map, chart and table, and they are unit-tested. A CSS token cannot be asserted in a test. |
 | 2026-09 | Dashboard nav breaks at `lg`, content pages at `md` | The dashboard needs the full tab bar's width; a content page does not. |
+| 2026-09 | `--primary-fill` for filled primary surfaces | White on `--primary` measured 2.99:1 (axe, audit F37). Darkening `--primary` itself would have cost its contrast as text on the dark surfaces, so fills got their own token. |
+| 2026-09 | Touch floor relaxes on `pointer-fine:md:`, not `md:` | Tablets are touch devices at `md` widths (audit F24). |
+| 2026-09 | Flight panel is a bottom sheet below `lg` | A right-hand sheet covered the whole phone map it was meant to sit beside (audit F20). |
