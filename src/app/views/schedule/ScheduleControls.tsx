@@ -190,7 +190,8 @@ export function ScheduleControls({
             placeholder="Find in board…"
             value={filters.search}
             onChange={(event) => onFilters({ search: event.target.value })}
-            className="min-h-11 w-[8.5rem] font-mono text-base pointer-fine:md:min-h-0 md:text-[11px]"
+            // 16px monospace below md needs the wider box, or the placeholder is cut off (D13).
+            className="min-h-11 w-44 font-mono text-base pointer-fine:md:min-h-0 md:w-[8.5rem] md:text-[11px]"
           />
 
           {showJumpToNow ? (

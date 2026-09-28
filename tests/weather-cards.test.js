@@ -257,6 +257,14 @@ describe('buildHubCardModel presentation data', () => {
     });
     expect(withRate.runway).toBe('RWY: 10C/10L/22L · 96/hr');
 
+    // D12 (live audit Sep 28 2026): FAA's parenthesised numeric annotation leaked into the card
+    // as "28L/28R (.308)".
+    const annotated = buildHubCardModel({
+      hub: 'SFO',
+      faa: { runwayConfig: { arrivalRunways: '28L/28R (.308)', departureRunways: '1L/1R (.308)', arrivalRate: 36 } },
+    });
+    expect(annotated.runway).toBe('RWY: 28L/28R/1L/1R · 36/hr');
+
     const noRate = buildHubCardModel({ hub: 'ORD', faa: { runwayConfig: { arrivalRate: 0 } } });
     expect(noRate.runway).toBe('');
     expect(buildHubCardModel({ hub: 'ORD' }).runway).toBe('');
@@ -316,7 +324,7 @@ describe('buildHubCardModel presentation data', () => {
     expect(metrics.wind).toBe('180° @ 08kt');
     expect(metrics.vis).toBe('10 SM');
     // FEW200 alone is not a ceiling (the card labels this value "Ceiling").
-    expect(metrics.clouds).toBe('None');
+    expect(metrics.clouds).toBe('None (FEW/SCT)');
     expect(metrics.temp).toContain('24°C');
   });
 });

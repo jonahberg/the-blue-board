@@ -95,7 +95,7 @@ describe('parseMetarQuick', () => {
       wind: '270° @ 15kt G25',
       vis: '10 SM',
       // FEW250 is not a ceiling — only BKN/OVC/VV are.
-      clouds: 'None',
+      clouds: 'None (FEW/SCT)',
     });
   });
 
@@ -104,7 +104,7 @@ describe('parseMetarQuick', () => {
       temp: '5°C / 41°F',
       wind: 'Calm',
       vis: '10 SM',
-      clouds: 'Clear',
+      clouds: 'None (clear)',
     });
   });
 
@@ -124,7 +124,7 @@ describe('parseMetarQuick', () => {
   });
 
   it('reports no ceiling when only FEW/SCT layers are present', () => {
-    expect(parseMetarQuick('KSFO 270256Z 27012KT 10SM FEW004 SCT180 14/12 A2989').clouds).toBe('None');
+    expect(parseMetarQuick('KSFO 270256Z 27012KT 10SM FEW004 SCT180 14/12 A2989').clouds).toBe('None (FEW/SCT)');
   });
 
   it('treats a vertical-visibility group as the ceiling', () => {
@@ -181,8 +181,8 @@ describe('applyStructuredMetarFallback', () => {
     expect(applyStructuredMetarFallback(blank(), { wspd: 14 }).wind).toBe('14kt');
   });
 
-  it('reads CLR/SKC cover as Clear and a layer as name + base', () => {
-    expect(applyStructuredMetarFallback(blank(), { cover: 'SKC' }).clouds).toBe('Clear');
+  it('reads CLR/SKC cover as None (clear) (D13: one no-ceiling term) and a layer as name + base', () => {
+    expect(applyStructuredMetarFallback(blank(), { cover: 'SKC' }).clouds).toBe('None (clear)');
     expect(applyStructuredMetarFallback(blank(), { clouds: [{ cover: 'OVC', base: 400 }] }).clouds).toBe('Overcast 400ft');
   });
 
@@ -195,7 +195,7 @@ describe('applyStructuredMetarFallback', () => {
 
   it('reports no ceiling when the structured layers are all FEW/SCT', () => {
     const clouds = [{ cover: 'FEW', base: 400 }, { cover: 'SCT', base: 18000 }];
-    expect(applyStructuredMetarFallback(blank(), { clouds }).clouds).toBe('None');
+    expect(applyStructuredMetarFallback(blank(), { clouds }).clouds).toBe('None (FEW/SCT)');
   });
 
   it('returns the parse untouched when there is no structured payload (edge case)', () => {
