@@ -91,7 +91,7 @@ const hubNavItems = hubOrder.map((h) => ({
         <>
           <header class="mt-6 border-b border-border pb-5">
             <h1 class="bb-content text-2xl font-bold tracking-tight text-balance text-foreground">
-              <Fragment set:html={data.headerTitle} />
+              <Fragment set:html={data.headerTitle.replace(/ — /g, "&nbsp;— ")} />
             </h1>
             <p class="mt-1.5 text-xs text-muted-foreground">{data.subtitle}</p>
           </header>

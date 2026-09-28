@@ -71,7 +71,8 @@ const newsArticleSchema = {
         <h1
           class="mt-2 text-2xl leading-tight font-bold tracking-tight text-balance text-foreground"
         >
-          {article.title}
+          {/* A no-break space before each dash keeps a wrapped line from opening on "—". */}
+          {article.title.replace(/ — /g, '\u00a0— ')}
         </h1>
       </header>
 
