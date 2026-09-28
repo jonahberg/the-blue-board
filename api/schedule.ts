@@ -54,9 +54,18 @@ const MAX_FR24_RETRY_AFTER_MS = 3000;
 const MAX_RATE_LIMITED_PAGES_PER_SCRAPE = 6;
 const MAX_CONSECUTIVE_RATE_LIMIT_BATCHES = 2;
 const MIN_REMAINING_MS_TO_KEEP_PAGING = 8000;
-const MIN_REMAINING_MS_FOR_OFFICIAL_RESCUE = 6000;
 
 // Terminal assignments live in api/_hubs.ts (shared with _schedule-aerodatabox.ts).
+
+// Every retry / backoff / batch wait in this file goes through here. SCHEDULE_RETRY_DELAY_SCALE
+// (default 1) exists for the test suite, which sets it to 0 so the upstream-failure paths run in
+// milliseconds instead of ~35s of real sleeps — same pattern as AERODATABOX_INTER_WINDOW_DELAY_MS.
+function scheduleSleep(ms: number): Promise<void> {
+  const configured = Number(process.env.SCHEDULE_RETRY_DELAY_SCALE);
+  const scale = Number.isFinite(configured) && configured >= 0 ? configured : 1;
+  const wait = Math.max(0, Math.round(ms * scale));
+  return wait === 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, wait));
+}
 
 // Global concurrency limiter for FR24 outbound requests
 const MAX_CONCURRENT_FR24 = 6;
@@ -239,8 +248,8 @@ function cacheSetGuarded(key: string, data: any, ttlMs: number): void {
 
 function setAggregateCacheHeader(res: VercelResponse, data: any, cdnMaxAge: number, swr: number, noStore = false): void {
   // Any forceRefresh-flavored URL must never pin a CDN object — the warm URL is predictable
-  // from the public repo, and a 6h object stored on it by an UNAUTHENTICATED probe would be
-  // served back to the next hourly cron warm as a frozen-but-green board.
+  // from the public repo, and a 1h object stored on it by an UNAUTHENTICATED probe would be
+  // served back to the next half-hourly cron warm as a frozen-but-green board.
   if (noStore) {
     res.setHeader('Cache-Control', 'no-store');
     return;
@@ -294,15 +303,15 @@ function hasForceRefreshParam(req: VercelRequest): boolean {
 // ── Background provider refresh gate ──
 // The degraded serve paths trigger a background refresh, but letting every user request fan that
 // refresh out to the metered provider would let traffic stampede the quota. Gate it: the provider
-// joins a background refresh only when the data being served is genuinely old (> 3h), and at most
-// once per board per hour per instance. The cross-instance ceiling is the daily unit budget in
-// _cost-state.ts. 3h keeps a today board no staler than ~3h under user traffic alone, and the
-// hourly per-key cooldown bounds worst case to 24 provider refreshes per board per day.
-// A viewed board older than this may trigger one paced provider refresh (per key, per instance,
-// per PROVIDER_REFRESH_KEY_COOLDOWN_MS). Was 3h; with the 6h hot/CDN TTL that left viewed boards
-// 3-6h+ stale while ~900 units/day went unused (Sep 26 2026). The paced organic gate
-// (_cost-state.ts) still bounds total spend to the daily budget, so this only moves WHEN units are
-// spent — on the boards people are actually looking at.
+// joins a background refresh only when the board being served is older than 1h, and at most once
+// per board per hour per instance (so ≤24 provider refreshes per board per day per instance). The
+// threshold was 3h until v1.8.2; with the then-6h hot/CDN TTL that left viewed boards 3-6h+ stale
+// while ~900 units/day went unused (Sep 26 2026).
+// The cross-instance ceiling is the PACED organic allowance in _cost-state.ts, and at scale it —
+// not this 1h threshold — sets freshness: if every today board were viewed hourly, demand
+// (~1.7k units/day) would exceed the budget left after the warm cron, and viewed boards fall back
+// toward the cron's ~3h cadence. Raise AERODATABOX_DAILY_UNIT_BUDGET only if daily spend actually
+// approaches the paced ceiling.
 const PROVIDER_REFRESH_STALE_MS = 60 * 60 * 1000;
 const PROVIDER_REFRESH_KEY_COOLDOWN_MS = 60 * 60 * 1000;
 const MAX_PROVIDER_REFRESH_KEYS = 512; // keyspace is ~270 (9 hubs x 2 dirs x ~15 days): eviction is a guard rail, currently unreachable
@@ -345,8 +354,7 @@ export function noteProviderRefreshFailed(aggKey: string, nowMs = Date.now()): v
 // provider gate's thresholds/shape exactly (>3h age + 1h per-key cooldown) so a credit-exhausted
 // account cannot be hammered by background traffic. This gate applies ONLY to background refreshes
 // (the triggerBackgroundRefresh call sites in the handler below); the user-facing on-demand fetch of
-// a genuinely uncached board (fetchAllPages's allowTargetedOfficialRescue / srcPriority=='official'
-// paths) is untouched and keeps working on every request.
+// a genuinely uncached board (fetchAllPages's provider-first rescue) is untouched and keeps working on every request.
 const OFFICIAL_REFRESH_KEY_COOLDOWN_MS = PROVIDER_REFRESH_KEY_COOLDOWN_MS;
 // Deliberately NOT tied to PROVIDER_REFRESH_STALE_MS: the official API bills per call against a
 // credit allowance, so making the AeroDataBox refresh more eager must not make this one eager too.
@@ -466,7 +474,7 @@ async function fetchOnePage(
           }
           releaseFR24Slot();
           slotReleased = true;
-          await new Promise(r => setTimeout(r, retryDelayMs));
+          await scheduleSleep(retryDelayMs);
           continue;
         }
         // fall through to retry with default backoff
@@ -487,7 +495,7 @@ async function fetchOnePage(
     }
     const baseDelay = 1000 * Math.pow(2, attempt);
     const jitter = Math.floor(Math.random() * 500);
-    await new Promise(r => setTimeout(r, baseDelay + jitter));
+    await scheduleSleep(baseDelay + jitter);
   }
   return null;
 }
@@ -1068,7 +1076,7 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
         if ([429, 503].includes(resp.status) && Date.now() < deadline - 2500) {
           const retryAfterMs = parseRetryAfterMs(resp.headers.get('retry-after'));
           const waitMs = Math.max(1200, Math.min(retryAfterMs || 4000, 8000));
-          await new Promise(r => setTimeout(r, waitMs));
+          await scheduleSleep(waitMs);
         }
 
         if (page === 1) {
@@ -1076,7 +1084,7 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
           if (Date.now() < deadline - 5000 && !retried1) {
             retried1 = true;
             console.log(`Official FR24 API: retrying page 1 for ${logHub} after ${resp.status}`);
-            await new Promise(r => setTimeout(r, 1500));
+            await scheduleSleep(1500);
             continue;
           }
           return null;
@@ -1107,7 +1115,7 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
       page++;
 
       if (page <= MAX_OFFICIAL_PAGES && Date.now() < deadline - 1000) {
-        await new Promise(r => setTimeout(r, 50));
+        await scheduleSleep(50);
       }
     } catch (e: any) {
       clearTimeout(timeout);
@@ -1120,7 +1128,7 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
         if (Date.now() < deadline - 5000 && !retried1) {
           retried1 = true;
           console.log(`Official FR24 API: retrying page 1 for ${logHub} after error`);
-          await new Promise(r => setTimeout(r, 1500));
+          await scheduleSleep(1500);
           continue;
         }
         return null;
@@ -1420,27 +1428,14 @@ async function fetchAllPages(
   const allowProviderFallback = !options.disableProviderFallback;
   const allowScraperFallback = !options.disableScraperFallback;
 
-  // ── Source routing decision tree ──
-  // 'provider' = AeroDataBox-first (the only source that still returns the FULL forward board —
-  // scheduled + active + completed incl. upcoming — from Vercel datacenter IPs, since FR24's web
-  // schedule is Cloudflare-challenge-dead and the FR24 official API has no schedule endpoint).
-  // Legacy 'scrape'/'official'/'scrape-only' are kept for the test suite and as a re-enable path
-  // if FR24 ever drops the challenge. NOTE: officialFallback=0 (cron / disableOfficialSource) used
-  // to force 'scrape-only'; we no longer let it override 'provider', so background warming can use
-  // the working provider without burning FR24 credits.
-  // FAIL-CLOSED DEFAULT: when SCHEDULE_SOURCE_PRIORITY is unset (e.g. an env wipe), default to
-  // 'provider' — the working paid AeroDataBox feed — not the Cloudflare-dead 'scrape', so a missing
-  // env degrades to a source that returns a real board instead of an empty/blocked one.
-  const envPriority = (process.env.SCHEDULE_SOURCE_PRIORITY || 'provider').toLowerCase();
-  const srcPriority = (options.disableOfficialSource && envPriority !== 'provider')
-    ? 'scrape-only'
-    : envPriority;
-
-  if (!['scrape', 'official', 'scrape-only', 'provider'].includes(srcPriority)) {
-    console.warn(`Unrecognized SCHEDULE_SOURCE_PRIORITY: '${srcPriority}', using scrape-only`);
-  }
-
-  if (srcPriority === 'provider') {
+  // ── Source routing ──
+  // AeroDataBox first: the only source that still returns the FULL forward board — scheduled +
+  // active + completed incl. upcoming — from Vercel datacenter IPs. FR24's web schedule is
+  // Cloudflare-challenge-dead from Vercel and the FR24 official API has no schedule endpoint (it is
+  // a same-day actuals rescue only). The legacy SCHEDULE_SOURCE_PRIORITY modes ('scrape' /
+  // 'official' / 'scrape-only') that put those first were removed in v1.9.0 — production ran
+  // 'provider' and only the test suite exercised them — so the env var is now ignored.
+  {
     // SPEND GUARD, SNAPSHOT BEFORE THE PROVIDER CALL: fetchViaAeroDataBox returns null for the PACED
     // organic gate too — spend is ahead of the day's pro-rated line while the absolute budget is
     // untouched (_cost-state.ts). That state covers many more hours/day than the old flat gate ever
@@ -1499,33 +1494,9 @@ async function fetchAllPages(
     }
   }
 
-  if (srcPriority === 'official' && process.env.FR24_API_TOKEN) {
-    try {
-      const officialTimeout = Math.min(Math.floor((effectiveDeadline - Date.now()) * 0.7), 45000);
-      const officialResult = await fetchViaOfficialAPI(logHub, dir, ts, officialTimeout);
-      if (officialResult) {
-        // An empty official board (total:0) returns non-partial, which the hot cache + CDN treat as a
-        // clean, 6h-pinnable board — a single transient empty official response for a United hub
-        // (never legitimately empty same-day) would then freeze a 0-flight board on that edge for 6h.
-        // Flag it partial so the empty-board guards in cacheSetGuarded / saveComplete /
-        // setAggregateCacheHeader apply (60s hot TTL, 30s CDN, no durable snapshot) and the live-feed
-        // rescue can run, mirroring the scrape path's empty_200_suspected_block handling below.
-        if (!officialResult.partial && Number(officialResult.total || 0) === 0) {
-          officialResult.partial = true;
-          officialResult.meta = {
-            ...(officialResult.meta || {}),
-            partialReason: officialResult.meta?.partialReason || 'official_empty',
-            completeness: 0,
-          };
-        }
-        return await maybeAugmentWithLiveFeedFallback(officialResult, logHub, dir, ts, effectiveDeadline);
-      }
-    } catch (e: any) {
-      console.error(`Official FR24 API failed for ${logHub}, falling back to scraping:`, e.message);
-    }
-  }
-
-  // Primary path: scrape unauthenticated FR24 endpoint (paginated)
+  // Last resort for ON-DEMAND requests only (background/cron stopped above): the unauthenticated
+  // FR24 web scrape (paginated). Cloudflare-challenged from Vercel today, so it mostly yields a
+  // partial first_page_failed board that the live-feed overlay below fills in.
   const deadline = effectiveDeadline;
   const dayEnd = ts + 86400;
   const allUAFlights: any[] = [];
@@ -1536,7 +1507,6 @@ async function fetchAllPages(
   const failedPages: number[] = [];
   const rateLimitedPages: number[] = [];
   let consecutiveRateLimitedBatches = 0;
-  let stoppedForHeavyRateLimit = false;
   const BATCH_SIZE = 3;
   const MAX_PAGES = 50;
   const scraperTransports = new Set<string>();
@@ -1567,11 +1537,6 @@ async function fetchAllPages(
     disableScraperFallback: !allowScraperFallback,
   });
   if (!firstPage || firstPage._rateLimited) {
-    if (srcPriority === 'scrape' && (allowProviderFallback || allowTargetedOfficialRescue)) {
-      console.log(`Scraping failed on first page for ${logHub} ${dir}, trying schedule fallback`);
-      const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue, !!options.providerBudgetExempt);
-      if (fallback) return fallback;
-    }
     const failedResult = { flights: [], total: 0, totalFetched: 0, pagesScanned: 0, totalPages: 1, cached: false, partial: true, hub: logHub, dir,
       meta: { partialReason: 'first_page_failed', pagesRequested: 1, pagesSucceeded: 0, pagesFailed: 1, missingPages: [1], completeness: 0, elapsedMs: Date.now() - startTime, source: 'scraping' as const }
     };
@@ -1625,12 +1590,11 @@ async function fetchAllPages(
           consecutiveRateLimitedBatches >= MAX_CONSECUTIVE_RATE_LIMIT_BATCHES ||
           remainingMs < MIN_REMAINING_MS_TO_KEEP_PAGING;
         if (shouldStopForHeavyRateLimit) {
-          stoppedForHeavyRateLimit = true;
           partial = true;
           break;
         }
         // Allow a single rate-limited batch to settle before continuing.
-        await new Promise(r => setTimeout(r, 2000));
+        await scheduleSleep(2000);
       } else {
         consecutiveRateLimitedBatches = 0;
       }
@@ -1639,7 +1603,7 @@ async function fetchAllPages(
       pageNum = batchEnd + 1;
 
       if (pageNum <= pagesToFetch && Date.now() < deadline - 2000) {
-        await new Promise(r => setTimeout(r, BATCH_DELAY));
+        await scheduleSleep(BATCH_DELAY);
       }
     }
   }
@@ -1650,7 +1614,7 @@ async function fetchAllPages(
 
   if (failedPages.length > 0 && rateLimitedPages.length === 0 && Date.now() < deadline - 5000) {
     const cooldown = Math.min(1500, failedPages.length * 150);
-    await new Promise(r => setTimeout(r, cooldown));
+    await scheduleSleep(cooldown);
   }
 
   if (failedPages.length > 0 && rateLimitedPages.length === 0 && Date.now() < deadline - 3000) {
@@ -1681,7 +1645,7 @@ async function fetchAllPages(
       }
 
       if (i + RETRY_BATCH < failedPages.length && Date.now() < deadline - 2000) {
-        await new Promise(r => setTimeout(r, RETRY_DELAY));
+        await scheduleSleep(RETRY_DELAY);
       }
     }
 
@@ -1730,13 +1694,10 @@ async function fetchAllPages(
   // An empty-but-200 scrape for a same-day TARGETED United hub is never legitimate: United always
   // has a full day of flights, so a clean HTTP 200 with 0 rows (no 403/429/cf-mitigated) almost
   // always means FR24/Cloudflare returned a soft-blocked empty schedule page to our datacenter IP.
-  // The official-rescue gate just below requires `partial`, but a clean empty page leaves
-  // partial=false, so official was never attempted and the board fell through to a stale live-feed
-  // snapshot. Mark it partial so it enters the rescue and fetches the FULL day from the paid FR24
-  // official API. Scoped to allowTargetedOfficialRescue (the 9 hubs, FR24 token present, current
-  // day, and USER requests only — the warm cron passes officialFallback=0 so allowTargetedOfficial-
-  // Rescue is false there), keeping background credit spend untouched and the breaker/402 cap in
-  // force. (Audit: empty-200 scrape treated as authoritative-empty, bypassing official rescue.)
+  // Left partial=false it would be cached as a clean, authoritative empty board (1h hot + CDN,
+  // durable snapshot). Mark it partial so the empty-board guards apply (60s hot, 30s CDN, never
+  // snapshotted) and the live-feed overlay below can fill it. Scoped to allowTargetedOfficialRescue
+  // (the 9 hubs, FR24 token present, current day, USER requests only).
   if (scrapeResult.total === 0 && !scrapeResult.partial && allowTargetedOfficialRescue) {
     scrapeResult.partial = true;
     scrapeResult.meta = {
@@ -1744,26 +1705,6 @@ async function fetchAllPages(
       partialReason: 'empty_200_suspected_block',
       completeness: 0,
     };
-  }
-
-  let attemptedOfficialRescue = false;
-  if (
-    srcPriority === 'scrape' &&
-    allowTargetedOfficialRescue &&
-    stoppedForHeavyRateLimit &&
-    Date.now() < deadline - MIN_REMAINING_MS_FOR_OFFICIAL_RESCUE
-  ) {
-    attemptedOfficialRescue = true;
-    console.log(`Scraping hit repeated FR24 rate limits for ${logHub} ${dir}, trying schedule fallback`);
-    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue, !!options.providerBudgetExempt);
-    if (fallback) return fallback;
-  }
-
-  // Scrape-first fallback: if scraping failed completely, try official API (with circuit breaker)
-  if (!attemptedOfficialRescue && srcPriority === 'scrape' && (allowProviderFallback || allowTargetedOfficialRescue) && scrapeResult.total === 0 && scrapeResult.partial) {
-    console.log(`Scraping returned 0 flights for ${logHub} ${dir}, trying schedule fallback`);
-    const fallback = await tryScheduleRescue(logHub, dir, ts, effectiveDeadline, allowProviderFallback, allowTargetedOfficialRescue, !!options.providerBudgetExempt);
-    if (fallback) return fallback;
   }
 
   return await maybeAugmentWithLiveFeedFallback(scrapeResult, logHub, dir, ts, effectiveDeadline);
@@ -1793,7 +1734,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // paid official API. (Audit P1: per-lambda cost guards do not bound global spend.)
     await hydrateQuotaBlock();
 
-    const { hub: hubParam, dir = 'departures', timestamp, page } = req.query as Record<string, string>;
+    const { hub: hubParam, dir = 'departures', timestamp } = req.query as Record<string, string>;
     if (!hubParam || !timestamp) {
       return res.status(400).json({ error: 'Missing required params: hub, timestamp' });
     }
@@ -1833,36 +1774,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const allowProviderFallback = !shouldDisableProviderFallback(req);
     const allowScraperFallback = !shouldDisableScraperFallback(req);
 
-    // Single page mode (backward compat)
-    if (page !== undefined) {
-      const pageNum = parseInt(page, 10) || 1;
-      if (pageNum < 1 || pageNum > 100) {
-        return res.status(400).json({ error: 'Invalid page number' });
-      }
-      const cacheKey = `sched:${hub}:${dir}:${ts}:${pageNum}`;
-      const cached = cacheGet(cacheKey);
-      if (cached) {
-        res.setHeader('Cache-Control', `s-maxage=${cdnMaxAge}, stale-while-revalidate=${swr}`);
-        return res.status(200).json({ ...cached.data, cached: true });
-      }
-      const sched = await fetchOnePage(hub, dir, ts, pageNum, functionDeadline, {
-        disableScraperFallback: !allowScraperFallback,
-      });
-      // A truthy _rateLimited sentinel (fetchOnePage returns { _rateLimited: true } on an FR24 block
-      // with no scraper recovery) carries no flight data; caching it and serving it 200 would pin a
-      // zero-row board for hours. Treat it as an upstream failure, same as a null result — the
-      // aggregation path guards this sentinel too, but this legacy single-page path used to skip it.
-      if (!sched || sched._rateLimited) {
-        return res.status(502).json({ error: 'Upstream service unavailable' });
-      }
-      const scrapeTransport = sched._scrapeTransport || 'direct';
-      delete sched._scrapeTransport;
-      cacheSet(cacheKey, sched, ttl);
-      res.setHeader('Cache-Control', `s-maxage=${cdnMaxAge}, stale-while-revalidate=${swr}`);
-      return res.status(200).json({ ...sched, cached: false, meta: { ...(sched.meta || {}), source: 'scraping', scrapeTransport } });
-    }
-
-    // Aggregation mode
+    // (The legacy single-page `?page=` mode was removed in v1.9.0: no client, cron or script ever
+    // sent it, and it was an uncached-per-page scrape surface. A `page` param is now ignored.)
     const currentAggKey = `agg:${hub}:${dir}:${ts}`;
     aggKey = currentAggKey;
 
@@ -1992,7 +1905,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // frozen-board recovery path is preserved. (Audit: board flapping.)
         if (!isFreshComplete(persistentFallback)) {
           // F036: same age+cooldown gate as above, computed once so it also governs the targeted
-          // rescue flag below (srcPriority='scrape' path) — no path may bypass it.
+          // rescue flag below — no path may bypass it.
           const officialBackgroundRefreshAllowed = !pendingAggs.has(currentAggKey) && shouldEnableOfficialForBackgroundRefresh(
             currentAggKey, Date.now() - persistentFallback.time, allowOfficialFallback
           );
