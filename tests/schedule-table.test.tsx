@@ -99,7 +99,9 @@ describe('ScheduleTable row window (F56)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show all 640' }));
     expect(paintedFlights()).toBe(640);
     expect(screen.queryByRole('button', { name: /Show (earlier|later) flights/ })).toBeNull();
-  });
+    // Paints all 640 rows in jsdom (~0.6s alone); with the whole suite sharing the CPU under
+    // --sequence.shuffle it measured 6-7s, past the 5s default.
+  }, 20_000);
 
   it('reveals a searched-for flight outside the window', () => {
     const ref = renderTable();
