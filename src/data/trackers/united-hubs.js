@@ -25,7 +25,7 @@
  *  - After every source pass: bump unitedHubsMeta.lastVerified. If facts changed, also bump
  *    unitedHubsMeta.lastUpdated and add a changelog entry. Then run `bun run test`.
  *
- * Last verified: 2026-08-11
+ * Last verified: 2026-09-28
  */
 
 /** @typedef {'club'|'polaris'|'club-fly'|'terminal'|'gates'|'other'} UnitedProjectType */
@@ -153,12 +153,13 @@ export const unitedProjects = [
     projectType: "terminal",
     status: "under-construction",
     builder: "airport-authority",
-    targetDate: "fall 2026",
+    targetDate: "October 2026",
     sizeSqFt: 435_000,
     gates: 14,
     details:
-      "A 435,000 sq ft midfield concourse built by MWAA and occupied entirely by United: 14 gates sized for both narrowbody and widebody aircraft, 46,000 sq ft of concessions, and a direct AeroTrain connection. MWAA floated September as a possible opening month in mid-July but has set no date. The published cost has drifted — United's 2024 announcement said 'more than $500 million'; 2026 grant coverage puts phase 1 near $900M — so we don't print a single number.",
+      "A 435,000 sq ft midfield concourse built by MWAA and occupied entirely by United: 14 gates sized for both narrowbody and widebody aircraft, 46,000 sq ft of concessions, and a direct AeroTrain connection. MWAA floated September in mid-July; on September 16 its board heard the opening now slips into October, after operational testing turned up issues to fix — still no exact day. The published cost keeps drifting — United's 2024 announcement said 'more than $500 million', 2026 grant coverage put phase 1 near $900M, and September coverage says $700M — so we don't print a single number.",
     sources: [
+      "https://www.ffxnow.com/2026/09/18/mwaa-now-expecting-october-opening-for-dulles-airports-concourse-e/",
       "https://www.flydulles.com/Next",
       "https://www.prnewswire.com/news-releases/more-than-half-a-billion-dollar-expansion--modernization-coming-to-uniteds-washington-dulles-hub-302320375.html",
       "https://www.ffxnow.com/2026/05/20/dulles-airport-lands-41m-federal-grant-for-concourse-e-construction/",
@@ -171,12 +172,13 @@ export const unitedProjects = [
     projectType: "club",
     status: "under-construction",
     builder: "joint",
-    targetDate: "fall 2026",
+    targetDate: "October 2026",
     sizeSqFt: 40_000,
     details:
-      "United's new flagship Dulles club: ~40,000 sq ft above the AeroTrain escalators, seating around 650 — a ~70% jump in United Club space at IAD. The design riffs on L'Enfant's DC street grid ('there's no cul-de-sacs, there's no dead ends,' per United's club chief). Buffet and bar, no showers. Opens with the concourse.",
+      "United's new flagship Dulles club: ~40,000 sq ft above the AeroTrain escalators, seating around 650 — a ~70% jump in United Club space at IAD. The design riffs on L'Enfant's DC street grid ('there's no cul-de-sacs, there's no dead ends,' per United's club chief). Buffet and bar, no showers. Opens with the concourse — now expected in October 2026.",
     sources: [
       "https://thepointsguy.com/news/united-club-washington-dulles-makeover-new-space/",
+      "https://www.ffxnow.com/2026/09/18/mwaa-now-expecting-october-opening-for-dulles-airports-concourse-e/",
       "https://thepointsguy.com/news/united-airlines-lounge-plans-2026/",
       "https://www.prnewswire.com/news-releases/more-than-half-a-billion-dollar-expansion--modernization-coming-to-uniteds-washington-dulles-hub-302320375.html",
     ],
@@ -376,7 +378,7 @@ export const unitedProjects = [
   {
     id: "ord-satellite-1",
     hub: "ORD",
-    name: "Satellite Concourse 1 (19 gates)",
+    name: "New Concourse D (Satellite 1, 19 gates)",
     projectType: "gates",
     status: "under-construction",
     builder: "joint",
@@ -385,8 +387,9 @@ export const unitedProjects = [
     costUsd: 1_300_000_000,
     gates: 19,
     details:
-      "The first big piece of the $8.5B O'Hare expansion actually being built: a 580,000 sq ft satellite south of Concourse C, 19 gates convertible between 18 narrowbody and 9 widebody positions. Ground broke August 2025; foundations were ~35% done by June 2026. The City builds it; United and American fund much of it through their rates — and how the gates split between them hasn't been published.",
+      "The first big piece of the $8.8B ORDNext program actually being built: a 580,000 sq ft satellite south of Concourse C, 19 gates convertible between 18 narrowbody and 9 widebody positions. Ground broke August 2025; by August 2026 the City said its steel frame was rising and it remains on schedule for late 2028, with a guaranteed maximum price locked in June at least $21M under budget. The City builds it; United and American fund much of it through their rates — and how the gates split between them hasn't been published.",
     sources: [
+      "https://www.chicago.gov/city/en/depts/mayor/press_room/press_releases/2026/august/concourse-e-ohare.html",
       "https://news.constructconnect.com/chicago-ohares-1.3b-concourse-d-construction-shifts-to-vertical-build",
       "https://www.chicago.gov/city/en/depts/mayor/press_room/press_releases/2025/august/Concourse-D-Groundbreaking.html",
     ],
@@ -394,14 +397,17 @@ export const unitedProjects = [
   {
     id: "ord-satellite-2",
     hub: "ORD",
-    name: "Satellite Concourse 2",
+    name: "New Concourse E (Satellite 2)",
     projectType: "gates",
     status: "announced",
     builder: "joint",
-    targetDate: "unsettled — 2029 at best, 2034 in some reporting",
+    targetDate: "14 gates in 2030, 24 by 2034",
+    gates: 24,
     details:
-      "The second satellite (~460,000 sq ft, roughly 24 gates by unofficial counts) is genuinely up in the air: Chicago's aviation chief says it proceeds only 'if enough funding remains after other work,' while one City proposal would pull it forward to 2029. Gate count and date are both soft.",
+      "Pulled forward in August 2026: the City now breaks ground 'later this year' on a first phase of 14 gates opening in 2030, freeing room to build the Global Terminal; the last 10 gates follow in 2034, for ~460,000 sq ft west of Concourse D serving regional, narrowbody and preclearance flights. Sequencing was worked out with United and American. Until the shovels are actually in, it stays 'announced' — this is the same concourse whose funding was in doubt as recently as February.",
     sources: [
+      "https://www.chicago.gov/city/en/depts/mayor/press_room/press_releases/2026/august/concourse-e-ohare.html",
+      "https://chicagoyimby.com/2026/09/new-timeline-and-details-revealed-for-ordnext.html",
       "https://chicago.suntimes.com/city-hall/2026/02/05/chicago-aviation-chief-michael-mcmurray-ohare-expansion-video",
       "https://www.dailyherald.com/20251203/transportation/ohare-conundrum-could-upend-when-global-terminal-new-concourses-are-built/",
     ],
@@ -413,10 +419,11 @@ export const unitedProjects = [
     projectType: "terminal",
     status: "announced",
     builder: "joint",
-    targetDate: "unsettled — 2032 on the books, later in the city's reshuffle",
+    targetDate: "built 2029–2033",
     details:
-      "The Studio Gang-designed replacement for Terminal 2 that would finally let United connect domestic and international under one roof. Announced in 2018 with a 2026 target; construction hasn't started, 2032 is the completion date on the books, and Chicago was still renegotiating sequencing with United and American as of late 2025, with scenarios running past 2033. The definitive case study in why this page distinguishes 'announced' from 'under construction.'",
+      "The Studio Gang-designed replacement for Terminal 2 that would finally let United connect domestic and international under one roof. Announced in 2018 with a 2026 target; after a year of renegotiation with United and American, the City's August 2026 resequencing builds it in a single phase from 2029 to 2033 — a year later than the 2032 date previously on the books. Construction hasn't started. The definitive case study in why this page distinguishes 'announced' from 'under construction.'",
     sources: [
+      "https://www.chicago.gov/city/en/depts/mayor/press_room/press_releases/2026/august/concourse-e-ohare.html",
       "https://ord21.com/projects/Pages/O'Hare-Global-Terminal.aspx",
       "https://www.dailyherald.com/20251203/transportation/ohare-conundrum-could-upend-when-global-terminal-new-concourses-are-built/",
     ],
@@ -477,10 +484,11 @@ export const unitedProjects = [
     projectType: "other",
     status: "under-construction",
     builder: "airport-authority",
-    targetDate: "October 2026 at the earliest",
+    targetDate: "early January 2027",
     details:
-      "LAWA's 2.25-mile train to the rental-car center and Metro, with its east station serving United's Terminals 7/8. A monument to slipped dates: originally due March 2023, projected finished January 2026 by its lenders' analysts — now ~95% complete with an October 2026 posted date that was already wobbling toward November within days, while LAWA and its contractor fight over money. Not United's project, but it's the thing that will actually change how you get to a United flight at LAX.",
+      "LAWA's 2.25-mile train to the rental-car center and Metro, with its east station serving United's Terminals 7/8. A monument to slipped dates: originally due March 2023, projected finished January 2026 by its lenders' analysts, then posted for October 2026 — and in September the contractor pushed completion to December 8, putting passenger service in early January 2027 after 30 days of testing and approvals, a date it says isn't guaranteed. It's ~99% complete, amid a July lawsuit from the contractor blaming LAWA for the delays and a grand jury report faulting the contractor. Not United's project, but it's the thing that will actually change how you get to a United flight at LAX.",
     sources: [
+      "https://mynewsla.com/traffic/2026/09/24/lax-officials-say-automated-people-mover-to-open-in-january/",
       "https://crankyflier.com/2026/07/23/lets-dig-in-to-the-lax-people-mover-saga/",
       "https://www.lawa.org/transforminglax/projects/terminals-7-and-8",
     ],
@@ -508,8 +516,8 @@ export const unitedProjects = [
 export const unitedHubsMeta = {
   slug: "united-hubs",
   name: "United Hub Tracker",
-  lastUpdated: "2026-07-29",
-  lastVerified: "2026-08-11",
+  lastUpdated: "2026-09-28",
+  lastVerified: "2026-09-28",
   // Headline stats that can't be derived from the entries above. Counts of projects/clubs ARE
   // derived at build time — never hardcode them here (tests pin that).
   stats: {
@@ -533,6 +541,9 @@ export const unitedHubsMeta = {
     },
   },
   changelog: [
+    { date: "2026-09-24", entry: "LAX's people mover slips again: contractor completion now December 8, passenger service early January 2027 — not October." },
+    { date: "2026-09-16", entry: "Dulles Concourse E and its ~40,000 sq ft United Club slip from late September into October after operational testing turns up fixes." },
+    { date: "2026-08-20", entry: "Chicago resequences ORDNext ($8.8B): O'Hare's new Concourse E breaks ground this fall (14 gates in 2030, 24 by 2034); the Global Terminal is built 2029–2033; Concourse D stays on track for late 2028." },
     { date: "2026-07-29", entry: "The $20B+ Dulles master plan goes official — a decade-long rebuild including 'plans for one of the largest United Polaris lounges in the world.' The rumored second Dulles lounge graduates to announced (and turns out to be a Polaris)." },
     { date: "2026-07-27", entry: "Tracker first published — 8 hubs, 26 projects." },
     { date: "2026-07-26", entry: "United pulls 11 planned O'Hare routes after the FAA extends its ORD schedule cap through October 2027." },

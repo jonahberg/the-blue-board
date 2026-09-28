@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shapeJourney, journeyDelayClass, buildJourneyContextStr } from '../src/lib/journey.js';
+import { shapeJourney, journeyDelayClass, buildJourneyContextStr, resolveJourneyStatuses } from '../src/lib/journey.js';
 
 const seg = (flightNumber, origin, destination, delayMin = 0, status = 'Landed') =>
   ({ flightNumber, origin, destination, delayMin, status });
@@ -102,5 +102,51 @@ describe('buildJourneyContextStr', () => {
   it('returns an empty string when there are no prior segments (edge case)', () => {
     const shaped = shapeJourney([], 'UA373', 'ORD', 'DEN');
     expect(buildJourneyContextStr('N37502', shaped)).toBe('');
+  });
+});
+
+// D8 (live audit Sep 28 2026): earlier legs in the Aircraft Journey read "unknown". Resolve them
+// from the hub boards (production row shape) and from the tail's own later legs.
+describe('resolveJourneyStatuses (D8)', () => {
+  const NOW = Date.parse('2026-09-28T18:00:00Z');
+  const s = (flightNumber, origin, destination, over = {}) => ({
+    flightNumber, origin, destination, status: 'unknown', delayMin: null,
+    departure: { scheduled: '', actual: '' }, arrival: { scheduled: '', actual: '', estimated: '' }, ...over,
+  });
+  const boardRow = (flight, from, to, text, schedArrIso) => ({
+    identification: { number: { default: flight } },
+    airport: { origin: { code: { iata: from } }, destination: { code: { iata: to } } },
+    status: { text, generic: { status: { text } } },
+    time: { scheduled: { arrival: schedArrIso ? Date.parse(schedArrIso) / 1000 : null } },
+  });
+
+  it('takes landed/arrived from the hub board row for that leg', () => {
+    const out = resolveJourneyStatuses([s('UA1532', 'DEN', 'ORD')], [boardRow('UA1532', 'DEN', 'ORD', 'landed')], NOW);
+    expect(out[0].status).toBe('landed');
+  });
+
+  it('a leg whose scheduled arrival is well past and whose tail has since departed again is landed', () => {
+    const segments = [
+      s('UA2106', 'ORD', 'SFO', { departure: { scheduled: '', actual: '2026-09-28T16:40:00Z' }, status: 'en-route' }),
+      s('UA1532', 'DEN', 'ORD'),
+    ];
+    const rows = [boardRow('UA1532', 'DEN', 'ORD', 'expected', '2026-09-28T15:10:00Z')];
+    const out = resolveJourneyStatuses(segments, rows, NOW);
+    expect(out[1].status).toBe('landed');
+    expect(out[0].status).toBe('en-route');
+  });
+
+  it('an actual arrival is landed', () => {
+    const out = resolveJourneyStatuses([s('UA1', 'SFO', 'ORD', { arrival: { scheduled: '', actual: '2026-09-28T12:00:00Z', estimated: '' } })], [], NOW);
+    expect(out[0].status).toBe('landed');
+  });
+
+  it('leaves a genuinely unknown leg alone rather than guessing', () => {
+    const out = resolveJourneyStatuses([s('UA7', 'SFO', 'ORD')], [], NOW);
+    expect(out[0].status).toBe('unknown');
+  });
+
+  it('passes null through (history not loaded yet)', () => {
+    expect(resolveJourneyStatuses(null, [], NOW)).toBeNull();
   });
 });

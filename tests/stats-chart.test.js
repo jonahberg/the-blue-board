@@ -142,7 +142,11 @@ describe('the phase ramp carries identity beyond colour', () => {
     expect(new Set(glyphs).size).toBe(glyphs.length);
   });
 
-  it('assigns seven distinct hues — the legacy ramp shipped three near-identical blues', () => {
+  it('the legend is the Live tab\'s five buckets (D16)', () => {
+    expect([...PHASE_LEGEND_ORDER].sort()).toEqual(['Approach', 'Climb', 'Cruise', 'Descent', 'Ground']);
+  });
+
+  it('assigns distinct hues — the legacy ramp shipped three near-identical blues', () => {
     const hues = PHASE_LEGEND_ORDER.map((phase) => PHASE_COLORS[phase]);
     expect(new Set(hues).size).toBe(hues.length);
     // The exact regression: #005DAA / #3b82f6 / #6366f1 sat next to each other.

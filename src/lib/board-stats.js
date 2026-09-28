@@ -7,7 +7,8 @@
 //   total = onTime + late + upcoming + canceled + presumed + uncategorized
 //
 // Buckets:
-//   onTime/late     operated rows with a trustworthy schedule baseline (30-min rule)
+//   onTime/late     OPERATED rows per hub-health.js operatedOutcome() — the same definition
+//                   /api/irops and the hub strip use (D9) — split by the 30-min rule
 //   upcoming        scheduled / estimated / delayed / unknown (unknown renders as
 //                   "Scheduled (as of …)" so it counts here, not as noise)
 //   canceled        canceled + canceled_uncertain ("Likely Canceled" groups here)
@@ -17,9 +18,8 @@
 //                   rows whose delta no real flight could have (F4: "+54h" cross-
 //                   instance pairs and stale 10h estimates were counted Late)
 
-import { ON_TIME_GRACE_SECONDS } from './hub-health.js';
+import { operatedOutcome } from './hub-health.js';
 import { classifySchedStatus } from './schedule-status.js';
-import { isPlausibleDelta } from './schedule-plausibility.js';
 
 /**
  * @param {Array<object>} flights  normalized schedule flights (api/schedule shape).
@@ -49,36 +49,26 @@ export function computeScheduleStatCounts(flights, { dir = 'departures', nowSec 
       continue;
     }
 
-    // F021: on arrivals boards, "departed"/"enroute" only prove the flight LEFT the
-    // origin, not that it arrived — an en-route flight must not count as operated for
-    // arrivals OTP purposes (no arrival evidence yet). Departures boards are unaffected:
-    // departed/enroute/landed all prove departure evidence exists.
+    // D9 (live audit Sep 28 2026): ONE "operated" definition, shared with /api/irops and the
+    // hub strip — `operatedOutcome()` in hub-health.js (a real out/in time, never an estimate;
+    // diversions included; synthetic and implausible rows excluded). The header used to accept
+    // an estimate on a departed row and read "170 operated" beside the strip's 146.
+    // F021: on arrivals boards, "departed"/"enroute" only prove the flight LEFT the origin
+    // (and carry no real ARRIVAL, which operatedOutcome requires anyway).
     const hasOperated = isArr ? key === 'landed' : (key === 'departed' || key === 'enroute' || key === 'landed');
-    if (!hasOperated) {
-      if (key === 'scheduled' || key === 'estimated' || key === 'delayed' || key === 'unknown') upcoming++;
-      // anything else (diverted, novel keys) falls into the uncategorized remainder
-      continue;
-    }
 
     // Time-inferred rows have no trustworthy actual-out time: they are neither
     // on-time nor late — they are "presumed departed" and get their own count.
-    if (status.presumed || status.inferred) { presumed++; continue; }
+    if (hasOperated && (status.presumed || status.inferred)) { presumed++; continue; }
 
-    // OTP scoring — mirrors the long-standing rules (excludes synthetic baselines).
-    if (fl._source?.liveFeedFallback) continue;
-    const schedT = isArr ? fl.time?.scheduled?.arrival : fl.time?.scheduled?.departure;
-    const derived = isArr
-      ? fl._source?.scheduleTimeDerivedFromActual?.arrival
-      : fl._source?.scheduleTimeDerivedFromActual?.departure;
-    // F021: direction-aware, mirroring schedT above — an arrivals board must score
-    // against the real ARRIVAL time, not a real departure (a 90-min-late arrival was
-    // scoring as on-time because it compared scheduled-arrival to real-departure).
-    const realT = isArr ? fl.time?.real?.arrival : fl.time?.real?.departure;
-    const actT = realT || (isArr ? fl.time?.estimated?.arrival : fl.time?.estimated?.departure);
-    if (!schedT || !actT || derived) continue;
-    if (!isPlausibleDelta(actT, schedT, { estimate: !realT })) continue;
-    if (actT > schedT + ON_TIME_GRACE_SECONDS) late++;
-    else onTime++;
+    const outcome = hasOperated || key === 'diverted' ? operatedOutcome(fl, dir, key) : null;
+    if (outcome === 'onTime') { onTime++; continue; }
+    if (outcome === 'late') { late++; continue; }
+
+    if (!hasOperated && (key === 'scheduled' || key === 'estimated' || key === 'delayed' || key === 'unknown')) upcoming++;
+    // Everything else — diverted without a real time, novel keys, and operated rows the shared
+    // definition cannot score (estimate-only, synthetic, implausible delta) — is the
+    // uncategorized remainder.
   }
 
   const total = list.length;

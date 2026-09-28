@@ -29,7 +29,7 @@
  *  - After every source pass: bump atcMeta.lastVerified. If facts changed, also bump
  *    atcMeta.lastUpdated and add a changelog entry. Then run `bun run test`.
  *
- * Last verified: 2026-08-11
+ * Last verified: 2026-09-28
  */
 
 /** @typedef {'live'|'in-progress'|'planned'|'paper'} AtcStatus */
@@ -53,16 +53,16 @@
 export const atcMeta = {
   slug: "atc",
   name: "Modern Skies Tracker",
-  lastUpdated: "2026-07-27",
-  lastVerified: "2026-08-11",
+  lastUpdated: "2026-09-28",
+  lastVerified: "2026-09-28",
   // Headline stats that can't be derived from the entries below. Live/paper counts ARE derived —
   // never hardcode them here (tests pin that).
   stats: {
     fiber: {
       label: "of the FAA's copper-to-fiber network rebuild complete",
-      value: "50%+",
-      asOf: "2026-05-11",
-      source: "https://www.l3harris.com/newsroom/editorial/2026/05/l3harris-reaches-over-50-faa-telecommunications-modernization",
+      value: "65%",
+      asOf: "2026-09-16",
+      source: "https://www.faa.gov/newsroom/BNATCS_State_Fact_Sheet_as_of_09162026.pdf",
     },
     target: {
       label: "FAA target for all 89 airports off paper",
@@ -72,6 +72,8 @@ export const atcMeta = {
     },
   },
   changelog: [
+    { date: "2026-09-22", entry: "Transportation Secretary Duffy asks Congress for another $30B — $10B each for software and telecom, airports, and towers. Like the coalition's $20B ask, not yet appropriated." },
+    { date: "2026-09-16", entry: "The FAA's own progress sheet now counts 22 of 89 towers on electronic strips — four more than the 18 we can name, so four cutovers haven't been publicly announced yet. Copper-to-fiber conversion reaches 65%." },
     { date: "2026-07-27", entry: "Tracker first published — 18 airports live, 71 still on paper." },
     { date: "2026-07-15", entry: "The Modern Skies Coalition — 66 aviation groups — asks Congress for another $20B. Not yet appropriated." },
     { date: "2026-07-14", entry: "Austin (AUS) becomes the 18th airport to drop paper strips." },

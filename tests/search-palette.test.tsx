@@ -22,6 +22,7 @@ const ctl = vi.hoisted(() => ({
   flights: [] as unknown[],
   select: vi.fn(),
   setSearchOpen: vi.fn(),
+  openAircraft: vi.fn(),
 }));
 
 vi.mock('../src/app/state/ui', async (importOriginal) => ({
@@ -32,6 +33,7 @@ vi.mock('../src/app/state/ui', async (importOriginal) => ({
       setSearchOpen: ctl.setSearchOpen,
       select: ctl.select,
       openFr24: () => {},
+      openAircraft: ctl.openAircraft,
       setTab: () => {},
       focusOn: () => {},
     }) as unknown as UiValue,
@@ -82,6 +84,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   ctl.select.mockReset();
   ctl.setSearchOpen.mockReset();
+  ctl.openAircraft.mockReset();
   ctl.flights = [];
 });
 
@@ -136,5 +139,20 @@ describe('SearchPalette', () => {
     const labelId = input.getAttribute('aria-labelledby');
     const label = labelId ? document.getElementById(labelId) : null;
     expect(label?.textContent).toBe('Find a flight');
+  });
+
+  it('offers the aircraft dialog first for a registration that is not airborne (D5)', async () => {
+    // Live audit Sep 28 2026: ⌘K "N14534" (on the ground) offered only "Open the Schedule tab";
+    // ?aircraft=N14534 opens the aircraft dialog, and the palette now does too.
+    render(<SearchPalette />);
+    await type('n14534');
+    const options = screen.getAllByRole('option');
+    expect(options[0].textContent).toContain('Open aircraft details');
+    expect(options[0].textContent).toContain('N14534');
+    const scheduleIndex = options.findIndex((o) => o.textContent?.includes('Open the Schedule tab'));
+    expect(scheduleIndex).toBeGreaterThan(0);
+    // Enter acts on it without an ArrowDown (F7).
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+    expect(ctl.openAircraft).toHaveBeenCalledWith('N14534');
   });
 });

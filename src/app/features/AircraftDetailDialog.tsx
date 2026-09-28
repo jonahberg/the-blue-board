@@ -37,7 +37,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cityFor } from '@/lib/airports.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from '@/lib/fleet-utils.js';
-import { buildSeatBar } from '@/lib/fleet-view.js';
+import { buildSeatBar, nonMainlineAircraftSummary } from '@/lib/fleet-view.js';
 import { getPhase } from '@/lib/flight-phase.js';
 import { ENGINE_BY_TYPE } from '@/lib/special-aircraft.js';
 import { shareUrl } from '../data/share';
@@ -122,6 +122,20 @@ export default function AircraftDetailDialog() {
   }, [liveFlight, select, focusOn, setTab, openAircraft]);
 
   const isStarlink = Boolean(reg) && starlink.tails.has(reg);
+  // D6: what the roster and the feed know about a tail the mainline database does not.
+  const fallback = useMemo(
+    () =>
+      aircraft
+        ? null
+        : (nonMainlineAircraftSummary(reg, starlink.aircraft, liveFlight) as {
+            starlink: boolean;
+            type: string;
+            operator: string;
+            fleet: string;
+            flight: { ident: string; origin: string; dest: string } | null;
+          } | null),
+    [aircraft, reg, starlink.aircraft, liveFlight],
+  );
   const specialEntry = reg ? special.get(reg) : undefined;
 
   const age = aircraft?.d ? new Date().getFullYear() - parseInt(String(aircraft.d), 10) : null;
@@ -192,6 +206,22 @@ export default function AircraftDetailDialog() {
                 </div>
               ) : null}
             </>
+          ) : fallback ? (
+            <>
+              <DialogDescription className="flex flex-wrap items-center gap-2 text-sm">
+                {fallback.type ? <span>{fallback.type}</span> : null}
+                {fallback.operator ? (
+                  <span className="text-xs text-muted-foreground">{fallback.operator}</span>
+                ) : null}
+              </DialogDescription>
+              {fallback.starlink ? (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
+                    <Zap aria-hidden="true" /> STARLINK
+                  </Badge>
+                </div>
+              ) : null}
+            </>
           ) : (
             <DialogDescription>Not in mainline fleet database</DialogDescription>
           )}
@@ -234,10 +264,50 @@ export default function AircraftDetailDialog() {
           </>
         ) : !aircraft ? (
           <>
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              <p>This aircraft is not in the United mainline fleet database.</p>
-              <p className="mt-1">It may be a United Express (regional) aircraft.</p>
-            </div>
+            {fallback ? (
+              <div className="space-y-4 p-4">
+                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Fact label="Type" value={fallback.type || '—'} />
+                  <Fact label="Operator" value={fallback.operator || '—'} className="col-span-2" />
+                  <Fact
+                    label="Starlink"
+                    value={fallback.starlink ? 'Yes ⚡' : 'Not on the roster'}
+                    tone={fallback.starlink ? 'text-bb-ok' : 'text-muted-foreground'}
+                  />
+                </dl>
+                {fallback.flight ? (
+                  <button
+                    type="button"
+                    onClick={onViewOnMap}
+                    aria-label={`View ${fallback.flight.ident} on the map`}
+                    className="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-bb-ok">
+                        Airborne — {fallback.flight.ident}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">View on map →</span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      {fallback.flight.origin || '?'} → {fallback.flight.dest || '?'}
+                    </div>
+                  </button>
+                ) : (
+                  <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                    On ground / Not currently tracked
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Not in the United mainline fleet database
+                  {fallback.fleet === 'Express' ? ' — a United Express (regional) aircraft.' : '.'}
+                </p>
+              </div>
+            ) : (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                <p>This aircraft is not in the United mainline fleet database.</p>
+                <p className="mt-1">It may be a United Express (regional) aircraft.</p>
+              </div>
+            )}
             <DialogFooter className="mx-0 mb-0 justify-center">
               <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a href={planespottersUrl(reg)} target="_blank" rel="noopener noreferrer">

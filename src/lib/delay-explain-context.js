@@ -1,3 +1,5 @@
+import { cleanRunwayConfig } from './faa-context.js';
+
 function normalizeAirportCode(iata) {
   return String(iata || '').trim().toUpperCase();
 }
@@ -75,7 +77,7 @@ export function formatDelayExplainFAAStatus(originIata, destIata, faaDelayIndex)
     // Runway config context (new)
     if (faa.runwayConfig && faa.runwayConfig.arrivalRate > 0) {
       const rc = faa.runwayConfig;
-      const ctx = `${airport} config: ${rc.arrivalRunways}/${rc.departureRunways}, rate ${rc.arrivalRate}/hr`;
+      const ctx = `${airport} config: ${cleanRunwayConfig(rc.arrivalRunways)}/${cleanRunwayConfig(rc.departureRunways)}, rate ${rc.arrivalRate}/hr`;
       if (!seen.has(ctx)) { seen.add(ctx); contexts.push(ctx); }
     }
 

@@ -59,4 +59,16 @@ describe('ScheduleControls a11y', () => {
     fireEvent.click(departures); // already selected: Radix would emit '' — must be ignored
     expect(onDir).not.toHaveBeenCalled();
   });
+
+  it("'Find in board…' fits its phone-width box (D13)", () => {
+    // Live audit Sep 28 2026: at 16px monospace below md the 14-character placeholder was cut
+    // off in the 136px box. Monospace glyphs are ~0.6em; the input has ~24px of padding.
+    renderControls();
+    const input = screen.getByLabelText('Find in board') as HTMLInputElement;
+    const classes = input.className.split(/\s+/);
+    const phoneWidth = classes.find((c) => /^w-/.test(c))!;
+    const rem = phoneWidth === 'w-44' ? 11 : Number((phoneWidth.match(/^w-\[(\d+(?:\.\d+)?)rem\]$/) || [])[1]);
+    expect(Number.isFinite(rem)).toBe(true);
+    expect(input.placeholder.length * 16 * 0.6 + 24).toBeLessThanOrEqual(rem * 16);
+  });
 });

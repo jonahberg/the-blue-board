@@ -13,7 +13,7 @@
 // palette, pinned by tests), not presentation choices a Tailwind token could express.
 
 import { describeFaaProgram } from './delay-explain-context.js';
-import { explainFAAStatus, faaTypeLabel } from './faa-context.js';
+import { cleanRunwayConfig, explainFAAStatus, faaTypeLabel } from './faa-context.js';
 import { computeFlightCategory, computeOpsImpact } from './metar-category.js';
 import {
   CAT_COLORS,
@@ -283,7 +283,7 @@ export function buildHubCardModel({ hub, metar = null, faa = null }) {
   const rc = faa && faa.runwayConfig;
   const runway =
     rc && rc.arrivalRate > 0
-      ? `RWY: ${rc.arrivalRunways}/${rc.departureRunways} · ${rc.arrivalRate}/hr`
+      ? `RWY: ${cleanRunwayConfig(rc.arrivalRunways)}/${cleanRunwayConfig(rc.departureRunways)} · ${rc.arrivalRate}/hr`
       : '';
 
   const explainer = raw ? explainMETAR(raw, hub, cat) : '';

@@ -151,6 +151,7 @@ export default function FleetView() {
         count: number;
         total: number;
         pct: number;
+        source?: string;
       } | null,
     [starlink.stats, fleetDb, starlink.tails],
   );

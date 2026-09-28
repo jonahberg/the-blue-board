@@ -213,10 +213,27 @@ function isMainlineNotInDb(f) {
 export function starlinkMainlineShare(stats, fleetDb, tails) {
   if (stats && Number(stats.mainlineTotal) > 0 && Number.isFinite(Number(stats.mainline))) {
     const count = Number(stats.mainline), total = Number(stats.mainlineTotal);
-    return { count, total, pct: Math.round((count / total) * 100) };
+    return { count, total, pct: Math.round((count / total) * 100), source: 'tracker' };
   }
   const db = fleetDb || [];
   if (!db.length) return null;
   const count = db.filter((a) => a && a.r && tails && tails.has(a.r)).length;
-  return { count, total: db.length, pct: Math.round((count / db.length) * 100) };
+  return { count, total: db.length, pct: Math.round((count / db.length) * 100), source: 'fleet-db' };
+}
+
+/**
+ * The words under the Starlink bar: whose denominator it is (live audit Sep 28 2026, D15 — the
+ * card printed "22% (250/1157)" right under "1078 total", two populations, neither named).
+ * The tracker counts United's mainline fleet its own way; our fleet database is a separate
+ * census, so the two totals legitimately differ and the caption says which one this is.
+ *
+ * @param {{count: number, total: number, source?: string}|null|undefined} share
+ * @returns {string}
+ */
+export function starlinkShareCaption(share) {
+  if (!share) return '';
+  const n = (v) => Number(v).toLocaleString('en-US');
+  return share.source === 'tracker'
+    ? `${n(share.count)} of ${n(share.total)} mainline aircraft per the Starlink tracker`
+    : `${n(share.count)} of ${n(share.total)} aircraft in our fleet database`;
 }

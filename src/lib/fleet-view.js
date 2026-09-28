@@ -388,3 +388,35 @@ export function buildSpecialRows(special, fleetByReg, flights) {
   });
   return rows;
 }
+
+/**
+ * What the aircraft dialog can still say about a tail that is not in the mainline fleet
+ * database (live audit Sep 28 2026, D6: United Express Starlink tails such as N642SY read only
+ * "Not in mainline fleet database"). The Starlink roster knows the type, operator and that it
+ * carries Starlink; the live feed knows what it is flying right now.
+ *
+ * @param {string} reg  normalised registration.
+ * @param {Array<{tail: string, fleet?: string, type?: string, operator?: string}>} roster
+ *   the Starlink roster (`useFleet().starlink.aircraft`).
+ * @param {{reg?: string, acType?: string, flightIATA?: string, callsign?: string,
+ *   origin?: string, dest?: string}|null|undefined} liveFlight  the airborne feed row, if any.
+ * @returns {{starlink: boolean, type: string, operator: string, fleet: string,
+ *   flight: {ident: string, origin: string, dest: string}|null}|null} null when neither
+ *   source knows the tail.
+ */
+export function nonMainlineAircraftSummary(reg, roster, liveFlight) {
+  const key = String(reg || '').replace(/-/g, '').toUpperCase();
+  if (!key) return null;
+  const entry = (roster || []).find((a) => String(a?.tail || '').replace(/-/g, '').toUpperCase() === key);
+  if (!entry && !liveFlight) return null;
+  const ident = liveFlight ? liveFlight.flightIATA || liveFlight.callsign || '' : '';
+  return {
+    starlink: Boolean(entry),
+    type: entry?.type || liveFlight?.acType || '',
+    operator: entry?.operator || '',
+    fleet: entry?.fleet || '',
+    flight: liveFlight && ident
+      ? { ident, origin: liveFlight.origin || '', dest: liveFlight.dest || '' }
+      : null,
+  };
+}

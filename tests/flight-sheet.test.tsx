@@ -149,4 +149,17 @@ describe('FlightSheet times (F11)', () => {
     expect(await screen.findByText('10:17 PM CDT')).toBeTruthy();
     expect(screen.getByText(/Flightradar24 live tracking/)).toBeTruthy();
   });
+
+  it('labels the altitude bar as altitude, not route progress (D10)', async () => {
+    // Live audit Sep 28 2026: an unlabelled filling bar under the metrics read as "how far along
+    // the route". It is altitude against a 41,000 ft scale — it now says so.
+    viewport(1280);
+    await open(flight({ alt: 11278 }));
+    const meter = dialog().querySelector('[role="meter"]') as HTMLElement;
+    expect(meter).not.toBeNull();
+    expect(meter.getAttribute('aria-label')).toMatch(/^Altitude/);
+    expect(meter.getAttribute('aria-valuenow')).toBe('37001');
+    expect(meter.getAttribute('aria-valuemax')).toBe('41000');
+    expect(dialog().textContent).toContain('Altitude scale');
+  });
 });

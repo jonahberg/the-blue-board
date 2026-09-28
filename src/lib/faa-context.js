@@ -143,3 +143,16 @@ export function getFAADelayContext(faaIndex, originIata, destIata) {
   });
   return contexts.join(' · ');
 }
+
+/**
+ * FAA NAS-status runway configs carry parenthesised numeric annotations — "28L/28R (.308)" —
+ * that mean nothing to a reader (live audit Sep 28 2026, D12). Strip them; keep the runways.
+ * @param {unknown} config
+ * @returns {string}
+ */
+export function cleanRunwayConfig(config) {
+  return String(config ?? '')
+    .replace(/\s*\(\s*[\d.,\s]*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}

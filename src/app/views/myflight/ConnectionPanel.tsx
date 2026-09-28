@@ -25,8 +25,11 @@ import {
   connectionDetailLine,
   manualConnectionOutcome,
   normalizeConnectionFlight,
+  outboundNeedsOriginHint,
 } from '@/lib/connection-pairing.js';
+import { findLiveFlight, reconcileLiveArrival } from '@/lib/my-flights.js';
 import { ApiError, fetchFlightTimes } from '../../data/api';
+import type { Flight, FlightTimes } from '../../data/types';
 
 export type ConnectionRisk = {
   state: 'scored' | 'insufficient' | 'disrupted';
@@ -90,7 +93,8 @@ type ManualState =
   | { phase: 'message'; tone: 'muted' | 'error'; text: string }
   | { phase: 'result'; conn: ConnectionPair; risk: ConnectionRisk };
 
-export function ManualConnectionCheck() {
+/** `flights` is the live feed, so an airborne inbound is scored on its live ETA (D1). */
+export function ManualConnectionCheck({ flights = [] }: { flights?: Flight[] }) {
   const [inbound, setInbound] = useState('');
   const [outbound, setOutbound] = useState('');
   const [state, setState] = useState<ManualState>({ phase: 'idle' });
@@ -102,9 +106,9 @@ export function ManualConnectionCheck() {
     setState({ phase: 'checking' });
 
     /** null means the REQUEST failed — a feed outage, not a bad flight number. */
-    const lookup = async (flight: string) => {
+    const lookup = async (flight: string, from?: string): Promise<FlightTimes | null> => {
       try {
-        return await fetchFlightTimes(flight);
+        return await fetchFlightTimes(flight, undefined, from);
       } catch (error) {
         if (error instanceof ApiError || error instanceof Error) return null;
         return null;
@@ -112,7 +116,17 @@ export function ManualConnectionCheck() {
     };
 
     try {
-      const [r1, r2] = await Promise.all([lookup(inFlight), lookup(outFlight)]);
+      const [inboundTd, first] = await Promise.all([lookup(inFlight), lookup(outFlight)]);
+      // D2: a multi-leg flight number answers with whichever leg is flying. Before saying the
+      // flights don't connect, ask for the leg departing where the inbound lands.
+      let r2 = first;
+      const hint = outboundNeedsOriginHint(inboundTd, first) as string;
+      if (hint) {
+        const pinned = await lookup(outFlight, hint);
+        if (pinned && pinned.success !== false) r2 = pinned;
+      }
+      // D1: an airborne inbound is scored against its live-position ETA.
+      const r1 = reconcileLiveArrival(inboundTd, findLiveFlight(flights, inFlight), Date.now()) as FlightTimes | null;
       const outcome = manualConnectionOutcome(r1, r2, inFlight, outFlight) as {
         kind: string;
         message?: string;

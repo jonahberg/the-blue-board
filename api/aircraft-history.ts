@@ -69,8 +69,13 @@ export function normalizeSegments(data: any): NormalizedSegment[] {
       }
     }
 
-    // Determine status
-    let status = f.status || 'unknown';
+    // Determine status. FR24's flight-summary/light body has NO status field, so every segment
+    // used to read 'unknown' in My Flights' Aircraft Journey (live audit Sep 28 2026, D8): derive
+    // it from what the body does carry — a landing time / flight_ended, or a take-off.
+    let status = f.status
+      || (f.datetime_landed || arrActual || f.flight_ended === true ? 'landed'
+        : depActual ? 'en-route'
+          : 'unknown');
     if (typeof status === 'string') status = status.toLowerCase();
 
     return {

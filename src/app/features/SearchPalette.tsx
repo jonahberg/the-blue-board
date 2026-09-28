@@ -17,7 +17,7 @@
  * single most common reason for an empty result.
  */
 
-import { CalendarDays, Plane, Search } from 'lucide-react';
+import { CalendarDays, Info, Plane, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -53,7 +53,7 @@ type ScheduleMatch = {
 };
 
 export function SearchPalette() {
-  const { searchOpen, setSearchOpen, select, openFr24, setTab, focusOn } = useUi();
+  const { searchOpen, setSearchOpen, select, openFr24, openAircraft, setTab, focusOn } = useUi();
   const { flights } = useFeed();
   const { boards, goto, preload } = useSchedule();
   const [query, setQuery] = useState('');
@@ -129,12 +129,23 @@ export function SearchPalette() {
         : `UA${qNorm}`
       : null;
   const empty = classifyEmptyState(qNorm) as { kind: string; display: string };
+  /**
+   * D5 (live audit Sep 28 2026): a registration that is not airborne (N14534 at the gate)
+   * gets the aircraft dialog — what `?aircraft=` opens — before the Schedule tab.
+   */
+  const tailReg = empty.kind === 'tail' ? empty.display.toUpperCase() : null;
 
   // The row Enter acts on: always the first result of the CURRENT result set (F7).
   const firstValue =
     matches[0]?.fr24id ??
     scheduleMatches[0]?.key ??
-    (qNorm.length >= 2 ? (lookupIdent ? `lookup-${lookupIdent}` : 'goto-schedule') : '');
+    (qNorm.length >= 2
+      ? tailReg
+        ? `aircraft-${tailReg}`
+        : lookupIdent
+          ? `lookup-${lookupIdent}`
+          : 'goto-schedule'
+      : '');
   const [selected, setSelected] = useState('');
   useEffect(() => {
     setSelected(firstValue);
@@ -242,6 +253,19 @@ export function SearchPalette() {
                 {emptyMessage}
               </p>
               <CommandGroup heading="Not airborne">
+                {tailReg ? (
+                  <CommandItem
+                    value={`aircraft-${tailReg}`}
+                    onSelect={() => {
+                      openAircraft(tailReg);
+                      setSearchOpen(false);
+                    }}
+                  >
+                    <Info aria-hidden="true" />
+                    Open aircraft details for{' '}
+                    <span className="font-mono font-medium">{tailReg}</span>
+                  </CommandItem>
+                ) : null}
                 {lookupIdent ? (
                   <CommandItem
                     value={`lookup-${lookupIdent}`}

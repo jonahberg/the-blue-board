@@ -174,6 +174,28 @@ export function normalizeConnectionFlight(raw) {
 }
 
 /**
+ * The airport to pin the outbound lookup to, or '' when the first answer is fine.
+ *
+ * A flight number can fly several legs a day (UA786: ICT→ORD, then ORD→LGA), and an
+ * unpinned /api/flight-times answers with whichever leg is in the air — so the checker
+ * said "UA786 departs from ICT" to someone connecting at O'Hare (live audit Sep 28 2026,
+ * D2). When both lookups succeeded and the outbound does not leave from where the inbound
+ * lands, the caller re-asks with `?from=<inbound arrival airport>` before concluding the
+ * flights do not connect.
+ *
+ * @param {Object|null} r1  inbound payload.
+ * @param {Object|null} r2  outbound payload.
+ * @returns {string}
+ */
+export function outboundNeedsOriginHint(r1, r2) {
+  if (!r1 || !r2 || r1.success === false) return '';
+  const arrHub = r1.destination?.iata || '';
+  if (!arrHub) return '';
+  if (r2.success !== false && r2.origin?.iata === arrHub) return '';
+  return arrHub;
+}
+
+/**
  * What the manual checker should say.
  *
  * Three distinct failures, because they are three distinct fixes. A null response is

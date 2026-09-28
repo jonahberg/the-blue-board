@@ -117,12 +117,16 @@ export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
 // arrivals was 1021 min old at 00:01 EDT) — until the pointer happens to reach it, up to ~3h later.
 // For the first ROLLOVER_WINDOW_MS of each hub's day, its two today boards are injected into the
 // run: same stride-1 cap as IROPS and the same slot-seeded rotation, so a same-zone pair (EWR+IAD,
-// ORD+IAH, SFO+LAX = 4 boards) is covered across the two fires of that hour. Victims are tomorrow
-// slots first; unlike IROPS (which can last all day and must never starve today boards) a rollover
-// is bounded to two fires per zone per day, so when the stride has no tomorrow slot left — 4 of
-// every 6 strides in this ring — it may displace another hub's today board for one pass. That
-// board is ~3h into its cadence; the one it yields to is ~9-17h old. The run's task count, and so
-// the 300s budget and the unit spend, is unchanged.
+// ORD+IAH, SFO+LAX = 4 boards) is covered across the two fires of that hour. Victims are TOMORROW
+// slots only — the IROPS rule since v1.8.2. Displacing another hub's today board (the old
+// fallback) pushed that board a full ring pass further out: "injected [NRT-arrivals-today]
+// displacing [LAX-departures-today]" left LAX departures 183 min old (live audit Sep 28 2026, D3).
+// When the stride has no tomorrow slot the injection is DEFERRED: the window is two fires, and a
+// today board somebody is looking at refreshes organically on its 1h TTL. The run's task count,
+// and so the 300s budget and the unit spend, is unchanged.
+//
+// Every hub whose local midnight falls in the window qualifies — GUM (UTC+10, 14:00Z), NRT
+// (UTC+9, 15:00Z) and the four US zones alike; rolloverHubs() walks the whole UNITED_HUBS list.
 const ROLLOVER_WINDOW_MS = 60 * 60 * 1000; // = two cron fires (*/30)
 
 export function rolloverHubs(nowMs = Date.now()): string[] {
@@ -155,15 +159,12 @@ export function applyRolloverPriority(
   const injected: string[] = [];
   const displaced: string[] = [];
   const maxInjections = Math.max(0, plan.length - 1);
-  // Victims never include a slot the ring already gives to the FIRST base task, so at least that
-  // ring slot always survives; tomorrow slots go first, scanning from the back.
+  // Victims are TOMORROW slots only, scanning from the back; the first base task is never one, so
+  // at least that ring slot always survives.
   const pickVictim = (): number => {
-    for (const wantTomorrow of [true, false]) {
-      for (let i = result.length - 1; i >= 1; i--) {
-        const t = result[i];
-        if (isRollover(t)) continue;
-        if (wantTomorrow ? t.dayOffset === 1 : t.dayOffset === 0) return i;
-      }
+    for (let i = result.length - 1; i >= 1; i--) {
+      const t = result[i];
+      if (!isRollover(t) && t.dayOffset === 1) return i;
     }
     return -1;
   };
@@ -172,7 +173,7 @@ export function applyRolloverPriority(
     if (injected.length >= maxInjections) break;
     if (result.some((t) => keyOf(t) === keyOf(task))) continue; // stride already covers it
     const victim = pickVictim();
-    if (victim === -1) break;
+    if (victim === -1) break; // no tomorrow slot left: defer to the next fire / organic refresh
     displaced.push(`${result[victim].hub}-${result[victim].dir}-${result[victim].label}`);
     result[victim] = task;
     injected.push(`${task.hub}-${task.dir}-today`);

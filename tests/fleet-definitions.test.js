@@ -15,6 +15,7 @@ import {
   fleetUtilization,
   formatFleetAsOf,
   starlinkMainlineShare,
+  starlinkShareCaption,
 } from '../src/lib/fleet-utils.js';
 import { computeLiveStats, isAirborne } from '../src/lib/live-stats.js';
 import { airborneByTail } from '../src/lib/starlink-view.js';
@@ -89,12 +90,12 @@ describe('starlinkMainlineShare — the one Starlink %', () => {
   it("uses the tracker's own mainline population when it has one", () => {
     expect(
       starlinkMainlineShare({ mainline: 247, mainlineTotal: 1156 }, FLEET_DB, new Set()),
-    ).toEqual({ count: 247, total: 1156, pct: 21 });
+    ).toEqual({ count: 247, total: 1156, pct: 21, source: 'tracker' });
   });
 
   it('otherwise counts roster tails INSIDE the fleet database, never the whole roster', () => {
     const tails = new Set(['N100UA', 'N101UA', 'N99999']); // N99999 is not in the database
-    expect(starlinkMainlineShare(null, FLEET_DB, tails)).toEqual({ count: 2, total: 10, pct: 20 });
+    expect(starlinkMainlineShare(null, FLEET_DB, tails)).toEqual({ count: 2, total: 10, pct: 20, source: 'fleet-db' });
   });
 
   it('is null before either source has loaded', () => {
@@ -107,5 +108,25 @@ describe('fleet database age (F86)', () => {
   it('is a real date and renders as a day-month-year label in every timezone', () => {
     expect(FLEET_DB_AS_OF).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(formatFleetAsOf('2026-02-12')).toBe('12 Feb 2026');
+  });
+});
+
+// D15 (live audit Sep 28 2026): the Fleet card printed "22% (250/1157)" directly under
+// "1078 total" — two different denominators, neither labelled.
+describe('starlinkShareCaption — the denominator says whose it is', () => {
+  it('names the Starlink tracker when its mainline total is the denominator', () => {
+    const share = starlinkMainlineShare({ mainline: 250, mainlineTotal: 1157 }, FLEET_DB, new Set());
+    expect(share.source).toBe('tracker');
+    expect(starlinkShareCaption(share)).toBe('250 of 1,157 mainline aircraft per the Starlink tracker');
+  });
+
+  it('names our fleet database when that is the denominator', () => {
+    const share = starlinkMainlineShare(null, FLEET_DB, new Set(['N100UA', 'N101UA']));
+    expect(share.source).toBe('fleet-db');
+    expect(starlinkShareCaption(share)).toBe('2 of 10 aircraft in our fleet database');
+  });
+
+  it('is empty without a share', () => {
+    expect(starlinkShareCaption(null)).toBe('');
   });
 });

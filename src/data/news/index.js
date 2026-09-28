@@ -90,6 +90,73 @@ export function resolveTag(tag) {
 
 export const articles = [
   {
+    slug: 'united-dish-live-football-starlink-seatback',
+    title: 'Live Football at 35,000 Feet: Starlink Turns United\'s Seatbacks Into Live TV',
+    date: '2026-09-17',
+    category: 'Fleet',
+    sources: [
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-09-17-United-Teams-Up-with-DISH-to-Broadcast-Professional-and-College-Football-Games-Live-on-Starlink-Enabled-Seatback-Screens' },
+      { name: 'Runway Girl Network', url: 'https://runwaygirlnetwork.com/2026/09/united-pipes-football-games-via-dish-to-starlink-enabled-seatback-ife/' },
+    ],
+    summary: 'A new deal with DISH puts live pro and college football on United\'s Starlink-equipped seatback screens (ABC, CBS, NBC, FOX, ESPN, NFL Network and more) on domestic flights through February. It\'s the clearest sign yet that Starlink is changing the product itself, not just making the Wi-Fi faster.',
+    body: `<p>For years, the rule for football fans was simple: don't book a flight during your team's game. United wants to kill that rule. On September 17 the airline announced an agreement with DISH to stream live professional and college football to seatback screens on its Starlink-equipped aircraft, starting that week and running through the big game in February. The channel lineup is the whole Sunday-and-Saturday package: ABC, CBS, NBC, FOX, FS1, ESPN, ESPN2, NFL Network and Thursday Night Football on Prime Video.</p>
+
+<p>The plumbing matters here. The broadcasts ride on DISH's OnStream platform and come down over the Starlink connection, so it reaches any aircraft that has both Starlink and a seatback screen. United puts that at more than 200 airplanes and about 700 flights a day, in every class of service, and it's domestic flights only for now. As with the Wi-Fi itself, it's free for MileagePlus members.</p>
+
+<p>The release also gave a fresh read on the Starlink counter we keep checking. Starlink is now active on more than 560 United mainline and United Express aircraft, and United says those airplanes have carried more than 31 million passengers across more than 464,000 flights and connected 14.2 million devices. The gap between 560 Starlink aircraft and roughly 200 live-TV aircraft comes down to screens: live TV needs a seatback display, and a lot of the fleet doesn't have one yet. United says it's closing that gap too, with seatback screens on up to 1,000 aircraft before the end of 2027. It expects Starlink on nearly 700 airplanes by February and fleetwide installations complete before the end of 2027.</p>
+
+<p>This is the part of the Starlink story we flagged back in June, when UA14 became the first connected widebody: once the pipe is fast and cheap enough, the pipe stops being the product and becomes the platform. Live soccer streaming on domestic flights this summer came first. Last month there was an ESPN fantasy draft broadcast live from the air. Now there's a full season of football. CCO Andrew Nocella pitched it as the end of scheduling flights around game day, with fans watching on the seatback while they "make changes to their fantasy roster, text or live chat with friends, or even stream different games on their phone."</p>
+
+<p>The honest caveats are small but real. The offer covers domestic flights on screen-equipped, Starlink-equipped aircraft, so whether your flight has it still depends on the tail number. We'd also like to see the aircraft counts line up (the release cites both "more than 200" and "more than 220" in different places). But the direction is plain. A year ago United's pitch was free, fast Wi-Fi. Now it's live TV, and that's a hard product edge to match without a connection like Starlink.</p>`,
+    tags: [],
+    ogImage: null,
+  },
+  {
+    slug: 'united-app-standby-earlier-flights-irops',
+    title: 'Keep Your Seat, Chase an Earlier One: United\'s App Now Works the Standby List for You',
+    date: '2026-09-01',
+    category: 'Operations',
+    sources: [
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-09-01-Another-First-for-United-Mobile-App-Lets-Customers-Join-Standby-for-Earlier-Flights-and-Automatically-Finds-Open-Seats-During-Disruptions' },
+      { name: 'AirlineGeeks', url: 'https://airlinegeeks.com/2026/09/02/united-adds-standby-feature-to-mobile-app/' },
+      { name: 'Aviation A2Z', url: 'https://aviationa2z.com/index.php/2026/09/02/united-airlines-new-standby-feature-could-make-non-rev-travel-even-harder/' },
+    ],
+    summary: 'If a disruption rebooks you onto a later flight, United\'s app now lets you stand by for up to three earlier flights to the same destination without giving up your confirmed seat, and texts you when one opens. It\'s a small feature aimed squarely at the worst hours of an IROPS day.',
+    body: `<p>Anyone who lived through United's July 18 SHARES outage knows the move. You get rebooked onto a flight six hours later, then spend the afternoon refreshing the app hoping a seat opens on something earlier. On September 1, just ahead of Labor Day, United automated that ritual. Customers who've been rebooked to a later flight after a disruption can now add themselves to the standby list on up to three earlier flights. United monitors those flights and sends a text when a seat opens.</p>
+
+<p>The important detail is what you don't give up. You keep your confirmed reservation until you decide to switch. Standing by for an earlier flight no longer means betting your guaranteed seat on the chance of a better one. United calls the feature industry-first. The fine print limits it to "eligible earlier United flights to the same destination," and the release doesn't say which flights or fares qualify.</p>
+
+<p>The timing wasn't subtle. United expected more than 3.4 million customers between September 3 and 8, about 300,000 more than last Labor Day, and says more than 85% of its customers use the app on the day they travel. That second number is the real story. The app is where rebooking actually happens now. United lists the other self-service recovery tools that live there: automatic rebooking, meal and hotel vouchers when eligible, and bag tracking during disruptions. The pitch is that none of it requires waiting in line for an agent.</p>
+
+<p>The same announcement rounded up a few recent app updates that will interest anyone who reads this site. The "Where is my plane coming from?" feature now shows your inbound aircraft right on the flight status page. The app also offers TSA wait-time estimates at U.S. hubs (United's footnote warns they may not match actual lines), turn-by-turn directions to connecting gates with walk times, and ConnectionSaver alerts when United can hold a departing flight for a tight connection. Travelers who carry AirTags can now share their bag's location with United through Apple's Share Item Location.</p>
+
+<p>Two honest caveats. First, a standby list can't create seats. On a real meltdown day the earlier flights are usually full of people rebooked before you, so this helps most on medium-sized disruptions, not the worst ones. Second, as Aviation A2Z pointed out, the open seats that disrupted customers now claim automatically are the same last-minute seats employees on non-rev travel have been counting on. How much that matters will depend on United's standby priorities, which the airline hasn't detailed. Still, a feature that keeps your seat while it hunts for a better one is exactly the kind of thing that makes a bad travel day a bit less bad.</p>`,
+    tags: ['ewr', 'ord', 'den', 'iah'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-2027-international-expansion-10-cities',
+    title: 'Ten New Cities, Five on the XLR: United Unveils Its Biggest International Expansion Yet',
+    date: '2026-08-25',
+    category: 'Routes',
+    sources: [
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-08-25-United-Adds-10-International-Cities-for-2027-Largest-Expansion-in-Airlines-History' },
+      { name: 'Live and Let\'s Fly', url: 'https://liveandletsfly.com/united-airlines-2027-international-expansion/' },
+    ],
+    summary: 'For summer 2027, United is adding Okinawa, Luxembourg, Toulouse, Marseille, Ibiza, Valencia, Terceira, Ljubljana, Olbia and Catania, eight of which no other U.S. airline serves, plus LAX–Osaka, Dulles–Milan, Denver–Paris and a San Francisco–Tel Aviv restart. The A321XLR flies five of the new routes, and it goes international December 1.',
+    body: `<p>United calls this the largest international expansion in its history, and it's hard to argue. At an event at Newark on August 25, the airline announced 10 new international cities for 2027, three new routes to cities it already serves, and a restart. It also formally debuted the "Born to Explore" A321XLR as the airplane that will fly half of the new cities. By United's count it has added 58 international destinations since 2017 and now flies to more than 160.</p>
+
+<p>The new map in launch order: San Francisco–Okinawa on March 27 (3x weekly, 777-200ER). Newark–Luxembourg April 2 (daily, A321XLR). Dulles–Toulouse April 26 (daily, A321XLR). Newark–Ljubljana May 12 (4x weekly, 767-400ER). Newark–Olbia, Sardinia May 27 (3x weekly, 767-300ER). Newark–Catania, Sicily May 28 (4x weekly, 767-300ER). Newark–Ibiza May 31 (4x weekly, A321XLR). Newark–Valencia June 2 (3x weekly, A321XLR). Newark–Marseille June 4 (daily, A321XLR). And Newark–Terceira in the Azores on June 9 (3x weekly, 737 MAX 8). United says it will be the only U.S. airline flying nonstop to eight of the ten. As always, the routes are subject to government approval.</p>
+
+<p>Beyond the new cities, United is adding daily LAX–Osaka on March 27, which makes it the only airline serving Osaka from two continental U.S. cities. It's also adding Dulles–Milan three times a week from May 28, the only nonstop between the capital and Milan, and daily Denver–Paris from May 27. San Francisco–Tel Aviv returns on March 28 at three times weekly. That route was still suspended when United reported Q2 in July. And this summer's secondary-city class (Split, Bari, Glasgow and Santiago de Compostela) all come back for 2027.</p>
+
+<p>The fleet angle is what makes this a Blue Board story. Five of the ten new cities are XLR routes, and that's the airplane's whole pitch: long, thin routes to places that don't need a widebody. Luxembourg, Toulouse, Marseille, Ibiza and Valencia fit that description exactly. Each XLR carries 32 premium seats (20 Polaris suites with doors and 12 Premium Plus), 16 more than the 757-200s it replaces. It also has the Economy Plus row with the open middle seat and shared table that United turned into a product in July. The XLR starts on select domestic routes in September and goes international on December 1 with Dulles–Amsterdam and Dulles–Dublin. Tickets for those first international flights went on sale August 27.</p>
+
+<p>The strategy is the same one we described in May, only bigger: fly where the competition doesn't, and let every route feed the hubs. Newark gets eight of the ten new cities, and Scott Kirby used the event to call it "the best Atlantic gateway in the country." The open question is how the seasonal leisure routes perform (Ibiza, Olbia and Terceira are summer markets). But United has spent years proving that secondary Europe works for it, and now it has an airplane built for exactly that kind of flying.</p>`,
+    tags: ['ewr', 'iad', 'sfo', 'lax', 'den', 'a321neo', '777-200er', '767-300er', '767-400er', '737-max-8'],
+    ogImage: null,
+  },
+  {
     slug: 'united-shares-outage-summer-saturday',
     title: '75 Minutes of Downtime, a Full Day of Chaos: Anatomy of United\'s July 18 Meltdown',
     date: '2026-07-18',
@@ -363,6 +430,7 @@ export const articles = [
     category: 'Fleet',
     sources: [
       { name: 'United Airlines Newsroom', url: 'https://www.united.com/en/us/newsroom' },
+      { name: 'AeroTime', url: 'https://www.aerotime.aero/articles/united-airlines-boeing-737-800-guam-max-aircraft' },
     ],
     summary: 'United Airlines has stationed its first Boeing 737 MAX aircraft at Guam, expanding its Pacific island hub with modern, fuel-efficient narrowbodies.',
     body: `<p>United Airlines has delivered its first Boeing 737 MAX to its Guam hub, marking a significant fleet modernization for the airline's Pacific island operations. The 737 MAX replaces older 737-800s on key island-hopping routes across Micronesia.</p>

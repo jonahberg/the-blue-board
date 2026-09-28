@@ -11,9 +11,15 @@
 // computed one to trust, and renders the rest.
 //
 // "Ceiling" means what it means in the AIM: the lowest BKN/OVC/VV layer. A FEW or SCT
-// layer is never a ceiling — the card reads "None" when those are the only clouds.
+// layer is never a ceiling. No ceiling reads with ONE term (live audit Sep 28 2026, D13):
+// "None (FEW/SCT)" when there are clouds but none is a ceiling, "None (clear)" for CLR/SKC.
 
 import { CEILING_COVERS, parseCeiling, parseVisibilitySM } from './metar-category.js';
+
+/** The Ceiling cell when FEW/SCT layers exist but none is a ceiling (D13). */
+export const NO_CEILING_CLOUDS = 'None (FEW/SCT)';
+/** The Ceiling cell for a CLR/SKC sky (D13). */
+export const NO_CEILING_CLEAR = 'None (clear)';
 
 /** Card names for sky-cover codes. AWC's structured payload spells a VV group "OVX". */
 const CLOUD_NAMES = {FEW:'Few',SCT:'Scattered',BKN:'Broken',OVC:'Overcast',VV:'Vertical vis',OVX:'Vertical vis'};
@@ -76,8 +82,8 @@ export function applyStructuredMetarFallback(parsed, metar) {
     const ceiling = layers.find((l) => CEILING_COVERS.has(l?.cover) && Number.isFinite(l?.base));
     const cover = String(metar.cover || '');
     if (ceiling) parsed.clouds = `${CLOUD_NAMES[ceiling.cover]} ${ceiling.base}ft`;
-    else if (layers.some((l) => l?.cover === 'FEW' || l?.cover === 'SCT')) parsed.clouds = 'None';
-    else if (CLEAR_RE.test(cover)) parsed.clouds = 'Clear';
+    else if (layers.some((l) => l?.cover === 'FEW' || l?.cover === 'SCT')) parsed.clouds = NO_CEILING_CLOUDS;
+    else if (CLEAR_RE.test(cover)) parsed.clouds = NO_CEILING_CLEAR;
   }
 
   return parsed;
@@ -99,8 +105,8 @@ export function parseMetarQuick(metar) {
   if (tm) { const c=parseInt(tm[1].replace('M','-')); r.temp=`${c}°C / ${Math.round(c*9/5+32)}°F`;}
   const ceil = parseCeiling(raw);
   if (ceil) r.clouds = `${CLOUD_NAMES[ceil.cover]} ${ceil.feet}ft`;
-  else if (/\b(FEW|SCT)\d{3}/.test(raw)) r.clouds = 'None';
-  else if (CLEAR_RE.test(raw)) r.clouds = 'Clear';
+  else if (/\b(FEW|SCT)\d{3}/.test(raw)) r.clouds = NO_CEILING_CLOUDS;
+  else if (CLEAR_RE.test(raw)) r.clouds = NO_CEILING_CLEAR;
   return typeof metar === 'object' ? applyStructuredMetarFallback(r, metar) : r;
 }
 
