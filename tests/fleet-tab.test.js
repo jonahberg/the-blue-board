@@ -348,6 +348,19 @@ describe('normalizeWifi', () => {
     expect(normalizeWifi('ViaSatKA')).toBe('ViaSat Ka');
   });
 
+  it('maps the Sep 2026 fleet-sheet codes to the provider United reports for those tails', () => {
+    expect(normalizeWifi('Thales')).toBe('Thales Ka (US)');
+    expect(normalizeWifi('ViaSatPrtl')).toBe('Thales Ka (US)');
+    expect(normalizeWifi('ViaSatKA?')).toBe('ViaSat Ka');
+    expect(normalizeWifi('Panasnc')).toBe('Satellite Ku');
+  });
+
+  it('leaves no raw sheet code un-normalised in the shipped fleet database', async () => {
+    const { default: fleetDb } = await import('../public/data/fleet.json');
+    const unmapped = [...new Set(fleetDb.map((a) => a.w))].filter((w) => w && normalizeWifi(w) === w && w !== 'Starlink' && w !== 'NO');
+    expect(unmapped).toEqual([]);
+  });
+
   it('passes through already-normalized values', () => {
     expect(normalizeWifi('Starlink')).toBe('Starlink');
     expect(normalizeWifi('NO')).toBe('NO');
