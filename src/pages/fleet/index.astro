@@ -304,7 +304,7 @@ const hubLinkClass =
               {fam.count}
             </span>
             <h2 class="text-base font-bold tracking-tight text-foreground">{fam.name}</h2>
-            <span class="ml-auto text-[10px] tracking-wider text-muted-foreground uppercase">
+            <span class="ml-auto text-[11px] tracking-wider text-muted-foreground uppercase">
               {fam.role}
             </span>
           </div>
@@ -317,7 +317,7 @@ const hubLinkClass =
                     {t.count}
                   </p>
                   <p class="mt-1 text-sm font-semibold text-foreground">{t.displayName}</p>
-                  <p class="mt-1 mb-3 text-[10px] leading-relaxed text-muted-foreground">
+                  <p class="mt-1 mb-3 text-[11px] leading-relaxed text-muted-foreground">
                     <span
                       class:list={[
                         'mr-1 inline-block rounded-sm px-1.5 py-0.5 font-semibold text-foreground',
@@ -369,7 +369,7 @@ const hubLinkClass =
                     {t.seatConfig.cabins.map((cab: { name: string; seats: string; cssClass: string }) => (
                       <span class:list={['cabin-tag', cab.cssClass]}>
                         {cabinShortLabel[cab.name] || cab.name}
-                        <span class="ml-0.5 font-mono text-[10px] font-semibold"> {cab.seats}</span>
+                        <span class="ml-0.5 font-mono text-[11px] font-semibold"> {cab.seats}</span>
                       </span>
                     ))}
                   </td>

@@ -28,7 +28,7 @@ export const SUMMARY_GRID = 'grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-
 export const STAT = 'rounded-md border border-border bg-card px-4 py-3.5';
 export const STAT_VALUE = 'block font-mono text-lg font-bold leading-tight text-amber-400';
 export const STAT_LABEL =
-  'font-mono text-[9px] font-semibold uppercase tracking-wider text-muted-foreground';
+  'font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
 
 /** An entry card (an airport, a construction project). */
 export const CARD = 'mb-3 rounded-md border border-border bg-card px-4 py-3.5 last:mb-0';
@@ -38,7 +38,7 @@ export const CARD_BADGES = 'flex flex-wrap gap-1.5';
 
 /** The mono metadata strip under a card heading. */
 export const CARD_META =
-  'mb-1.5 flex flex-wrap gap-x-3.5 gap-y-1.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground';
+  'mb-1.5 flex flex-wrap gap-x-3.5 gap-y-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground';
 
 /** Card body copy. */
 export const CARD_P = 'text-xs leading-relaxed text-muted-foreground';

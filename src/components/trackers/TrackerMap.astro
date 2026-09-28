@@ -100,7 +100,7 @@ const { paths, points, legend, offMap = [], ariaLabel, hint } = Astro.props;
             )}
             {p.label && (
               <text
-                class="fill-muted-foreground font-mono text-[9px] font-semibold tracking-wide"
+                class="fill-muted-foreground font-mono text-[11px] font-semibold tracking-wide"
                 x={p.x}
                 y={p.y - 9}
                 text-anchor="middle"
@@ -118,7 +118,7 @@ const { paths, points, legend, offMap = [], ariaLabel, hint } = Astro.props;
     {
       legend.map((l) => (
         <span
-          class="inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          class="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
           role="listitem"
         >
           <svg
@@ -153,7 +153,7 @@ const { paths, points, legend, offMap = [], ariaLabel, hint } = Astro.props;
     aria-live="polite"
   >
     <div
-      class="pt-2.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+      class="pt-2.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground"
       data-trk-card-hint
     >
       {hint}
@@ -183,7 +183,7 @@ const { paths, points, legend, offMap = [], ariaLabel, hint } = Astro.props;
   {
     offMap.length > 0 && (
       <div class="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-2">
-        <span class="font-mono text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span class="font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           Beyond the map:
         </span>
         {offMap.map((o) => (

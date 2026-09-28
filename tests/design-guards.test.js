@@ -78,3 +78,16 @@ describe('links in running text are not colour-only (audit F43, WCAG 1.4.1)', ()
     expect(tag[1].split(/\s+/)).toContain('underline');
   });
 });
+
+describe('content pages keep an 11px type floor (audit F75)', () => {
+  // DESIGN.md reserves arbitrary micro sizes for dense DASHBOARD chrome; the prerendered
+  // content pages had carried the legacy tracker CSS's 8–10px labels over.
+  const CONTENT = ['src/pages', 'src/components/trackers', 'src/components/site', 'src/layouts', 'src/styles/content.css'].flatMap((p) => {
+    const abs = resolve(ROOT, p);
+    return statSync(abs).isDirectory() ? [...walk(abs)] : [abs];
+  });
+
+  it('uses no text-[8px]/[9px]/[10px] or font-size under 11px', () => {
+    expect(hits(CONTENT, /text-\[(?:[0-9]|10)px\]|font-size:\s*(?:[0-9]|10)px/)).toEqual([]);
+  });
+});

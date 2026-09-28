@@ -19,7 +19,7 @@ const { stats } = Astro.props;
           s.tone === 'amber' && 'border-l-[3px] border-l-amber-400',
         ]}
       >
-        <div class="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <div class="mb-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
           {s.label}
         </div>
         <div
@@ -31,7 +31,7 @@ const { stats } = Astro.props;
           {s.value}
         </div>
         {s.sub && (
-          <div class="mt-1.5 font-mono text-[9px] tracking-wide text-muted-foreground">{s.sub}</div>
+          <div class="mt-1.5 font-mono text-[11px] tracking-wide text-muted-foreground">{s.sub}</div>
         )}
       </div>
     ))

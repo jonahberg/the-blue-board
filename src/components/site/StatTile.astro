@@ -18,7 +18,7 @@ interface Props {
 const { label, value, id, class: className = '' } = Astro.props;
 ---
 <div class:list={['rounded-lg border border-border bg-card p-3 text-center', className]}>
-  <div class="font-mono text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+  <div class="font-mono text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
     {label}
   </div>
   <div id={id} class="mt-1 font-mono text-2xl font-bold tabular-nums text-foreground">{value}</div>
