@@ -15,23 +15,15 @@
  * ticker reads fleet + weather + hub health, and the deep-link handler reads the feed.
  */
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import AircraftDetailDialog from './features/AircraftDetailDialog';
 import BmacToast from './features/BmacToast';
-import DelayExplainDialog from './features/DelayExplainDialog';
-import DisclaimerDialog from './features/DisclaimerDialog';
-import { FlightSheet } from './features/FlightSheet';
-import Fr24LookupDialog from './features/Fr24LookupDialog';
 import LegalPopover from './features/LegalPopover';
 import NewsBanner from './features/NewsBanner';
-import Onboarding from './features/Onboarding';
-import { SearchPalette } from './features/SearchPalette';
 import TipStrip from './features/TipStrip';
-import WaitlistDialog from './features/WaitlistDialog';
 import { Attribution } from './shell/Attribution';
 import { ErrorBoundary } from './shell/ErrorBoundary';
 import { Header } from './shell/Header';
@@ -54,6 +46,23 @@ import { WatchProvider } from './state/watch';
 import { WeatherProvider } from './state/weather';
 import { TABS } from './tabs';
 import type { TabId } from './tabs';
+
+// Overlays nobody sees at first paint are split out of the Dashboard chunk that gates the
+// map: the ⌘K palette (and cmdk with it), the flight sheet, and the root dialogs. Each mounts
+// as soon as its chunk arrives — well before anyone can click a plane or press ⌘K — and the
+// waitlist/onboarding triggers run from their own mount as before.
+const AircraftDetailDialog = lazy(() => import('./features/AircraftDetailDialog'));
+const DelayExplainDialog = lazy(() => import('./features/DelayExplainDialog'));
+const DisclaimerDialog = lazy(() => import('./features/DisclaimerDialog'));
+const Fr24LookupDialog = lazy(() => import('./features/Fr24LookupDialog'));
+const Onboarding = lazy(() => import('./features/Onboarding'));
+const WaitlistDialog = lazy(() => import('./features/WaitlistDialog'));
+const FlightSheet = lazy(() =>
+  import('./features/FlightSheet').then((m) => ({ default: m.FlightSheet })),
+);
+const SearchPalette = lazy(() =>
+  import('./features/SearchPalette').then((m) => ({ default: m.SearchPalette })),
+);
 
 /** What the tab area shows while a lazily-loaded view's chunk is in flight. */
 function ViewSkeleton() {
@@ -166,15 +175,19 @@ function DashboardShell() {
       <Attribution />
       <MobileNav tab={tab} onSelect={(id) => setTab(id)} />
 
-      <FlightSheet />
-      <SearchPalette />
+      <Suspense fallback={null}>
+        <FlightSheet />
+        <SearchPalette />
+      </Suspense>
       <WatchPanel open={watchOpen} onOpenChange={setWatchOpen} />
-      <AircraftDetailDialog />
-      <DelayExplainDialog />
-      <Fr24LookupDialog />
-      <Onboarding />
-      <WaitlistDialog />
-      <DisclaimerDialog />
+      <Suspense fallback={null}>
+        <AircraftDetailDialog />
+        <DelayExplainDialog />
+        <Fr24LookupDialog />
+        <Onboarding />
+        <WaitlistDialog />
+        <DisclaimerDialog />
+      </Suspense>
       <LegalPopover />
       <BmacToast />
       <IropsAnnouncer />
