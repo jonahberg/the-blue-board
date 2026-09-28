@@ -42,7 +42,7 @@ export function WatchBanner({
       <Button
         variant="ghost"
         size="sm"
-        className="h-auto min-h-11 px-2 py-0 text-[11px] md:min-h-0"
+        className="h-auto min-h-11 px-2 py-0 text-[11px] pointer-fine:md:min-h-0"
         onClick={onDismiss}
       >
         Dismiss

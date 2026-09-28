@@ -62,9 +62,12 @@ describe('buildTickerItems', () => {
     expect(items).toHaveLength(2); // normal line + disclaimer
   });
 
-  it('escapes squawk callsigns before they reach the ticker (edge case)', () => {
+  // The ticker text is rendered as a React text child (src/app/shell/Ticker.tsx), and React is
+  // the escaping layer. HTML-escaping here as well — the legacy innerHTML contract — would show
+  // a literal "&lt;" on screen.
+  it('passes squawk callsigns through as plain text (React escapes on render) (edge case)', () => {
     const items = buildTickerItems({ ...base, airborne: 1, total: 1, squawks: [{ text: '⚠️ EMERGENCY', callsign: 'UAL<script>', squawk: '7700' }] });
-    expect(items.find((i) => i.cls === 'critical').text).toBe('⚠️ EMERGENCY: UAL&lt;script&gt; (7700)');
+    expect(items.find((i) => i.cls === 'critical').text).toBe('⚠️ EMERGENCY: UAL<script> (7700)');
   });
 
   it('keeps the priority order: advisory, counts, squawks, disclaimer', () => {

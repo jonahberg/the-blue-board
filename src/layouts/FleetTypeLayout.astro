@@ -108,7 +108,7 @@ function statusClass(status: string | undefined): string {
 
     <header class="mt-6 border-b border-border pb-5">
       <h1 class="bb-content text-2xl font-bold tracking-tight text-balance text-foreground">
-        <Fragment set:html={data.headerTitle} />
+        <Fragment set:html={data.headerTitle.replace(/ — /g, "&nbsp;— ")} />
       </h1>
       <p class="mt-1.5 text-xs text-muted-foreground">{data.subtitle}</p>
     </header>
@@ -122,7 +122,7 @@ function statusClass(status: string | undefined): string {
 
     <div class="mt-6 text-center">
       <a
-        class="inline-flex min-h-11 items-center rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-6 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
         href={`/?tab=fleet&type=${encodeURIComponent(typeCode)}`}
       >
         Explore {data.displayName} in Interactive Database &rarr;

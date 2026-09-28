@@ -4,6 +4,7 @@ Disallow: /api/
 Disallow: /data/
 Disallow: /_agent/
 Sitemap: https://theblueboard.co/sitemap.xml
+Sitemap: https://theblueboard.co/news-sitemap.xml
 
 # AI/LLM context
 # See https://llmstxt.org
@@ -26,3 +27,9 @@ User-agent: Timpibot
 User-agent: YouBot
 Allow: /llms.txt
 Allow: /llms-full.txt
+# A crawler that matches this group ignores the * group entirely (RFC 9309 §2.2.1), so the
+# site-wide rules are repeated here.
+Allow: /
+Disallow: /api/
+Disallow: /data/
+Disallow: /_agent/

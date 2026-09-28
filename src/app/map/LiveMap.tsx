@@ -36,6 +36,29 @@ type Airport = { iata: string; lat: number; lon: number; hub?: boolean };
 
 const HUBS: Airport[] = (AIRPORTS as Airport[]).filter((a) => a.hub);
 
+/** Does the visitor ask for reduced motion? False wherever matchMedia is unavailable. */
+export function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false;
+}
+
+/**
+ * Move the map, animated unless the visitor asked for reduced motion. The global CSS
+ * reduced-motion rule cannot reach Leaflet's `flyTo`, which animates in JavaScript — a
+ * 0.8–1.2 s zoom-and-pan sweep is exactly the vestibular trigger that setting exists for.
+ */
+export function flyOrJump(
+  map: Pick<L.Map, 'flyTo' | 'setView'>,
+  center: L.LatLngExpression,
+  zoom: number,
+  duration: number,
+  reduce: boolean = prefersReducedMotion(),
+): void {
+  if (reduce) map.setView(center, zoom, { animate: false });
+  else map.flyTo(center, zoom, { duration });
+}
+
 export type LiveMapProps = {
   /** Every flight in the feed — the click handler resolves against the freshest row. */
   flights: Flight[];
@@ -359,7 +382,7 @@ export function LiveMap({
   // yet, hold the move until the ResizeObserver sees the panel again.
   useEffect(() => {
     if (focus) {
-      requestMove((map) => map.flyTo([focus.lat, focus.lon], Math.max(map.getZoom(), 6), { duration: 0.8 }));
+      requestMove((map) => flyOrJump(map, [focus.lat, focus.lon], Math.max(map.getZoom(), 6), 0.8));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
@@ -373,7 +396,7 @@ export function LiveMap({
       return;
     }
     const target = view === 'pacific' ? PACIFIC_VIEW : US_VIEW;
-    requestMove((m) => m.flyTo(target.center, target.zoom, { duration: 1.2 }));
+    requestMove((m) => flyOrJump(m, target.center, target.zoom, 1.2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 

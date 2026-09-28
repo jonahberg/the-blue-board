@@ -3,10 +3,9 @@
 // never sit below "all systems normal", and the green line is suppressed entirely
 // whenever anything above it is an advisory or a critical squawk.
 //
-// Extracted verbatim from src/dashboard/main.js (:2024-2073). The two duplicate
-// .ticker-cycle blocks, the marquee/fade animation and the DOM write stay there.
-
-import { escapeHtml } from './escape.js';
+// Originally extracted from the legacy src/dashboard/main.js. The rotation and the DOM write
+// now live in src/app/shell/Ticker.tsx, which renders `text` as a React text child — React
+// does the escaping, so these strings are plain text and must NOT be HTML-escaped here.
 
 /** @typedef {{text: string, cls: 'advisory'|'info'|'critical'|'disclaimer'}} TickerItem */
 
@@ -44,7 +43,7 @@ export function buildTickerItems({ opsHealth, airborne, total, fleetCount, starl
 
   // Check for emergency squawks
   for (const sq of (squawks || [])) {
-    items.push({ text: `${sq.text}: ${escapeHtml(sq.callsign)} (${escapeHtml(sq.squawk)})`, cls: 'critical' });
+    items.push({ text: `${sq.text}: ${sq.callsign} (${sq.squawk})`, cls: 'critical' });
   }
 
   // Default message only when nothing above is an advisory/critical item — an

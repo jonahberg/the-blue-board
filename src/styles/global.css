@@ -48,6 +48,7 @@
     --color-secondary: var(--secondary);
     --color-primary-foreground: var(--primary-foreground);
     --color-primary: var(--primary);
+    --color-primary-fill: var(--primary-fill);
     --color-popover-foreground: var(--popover-foreground);
     --color-popover: var(--popover);
     --color-card-foreground: var(--card-foreground);
@@ -74,6 +75,7 @@
     --popover-foreground: oklch(0.145 0 0);
     --primary: oklch(0.205 0 0);
     --primary-foreground: oklch(0.985 0 0);
+    --primary-fill: var(--primary);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
@@ -100,7 +102,11 @@
     --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* `--primary` is United blue. */
+/* `--primary` is United blue, tuned for its job as TEXT, rings, bars and chart ink on the dark
+   surfaces (6.3:1 on --background, 5.7:1 on --card). Behind white text it is only 3.0:1, so
+   every filled surface that carries --primary-foreground (buttons, CTAs, badges, the skip
+   link) paints --primary-fill instead: the same hue, darker, close to United's own #005DAA —
+   5.8:1 with white. tests/primary-contrast.test.js pins both pairs. */
 .dark {
     --background: oklch(0.145 0.005 260);
     --foreground: oklch(0.985 0 0);
@@ -110,6 +116,7 @@
     --popover-foreground: oklch(0.985 0 0);
     --primary: oklch(0.66 0.17 255);
     --primary-foreground: oklch(0.985 0 0);
+    --primary-fill: oklch(0.5 0.17 255);
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
@@ -256,6 +263,18 @@
 .leaflet-container .leaflet-bar a.leaflet-disabled {
   background: var(--muted);
   color: var(--muted-foreground);
+}
+
+/* Zoom +/− are 30x30 in leaflet.css (its `.leaflet-touch` size). Wherever the pointer is a
+   finger — phones AND tablets, whatever their width — they get the 44 px DESIGN.md asks for.
+   Leaflet's rule is `.leaflet-touch .leaflet-bar a` (0,2,1); three classes win on
+   specificity, since the Leaflet stylesheet may load after this one. */
+@media (pointer: coarse) {
+  .leaflet-container.leaflet-touch .leaflet-bar a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
 }
 
 /* Leaflet's base tooltip rule is `white-space:nowrap` with no max-width, so a

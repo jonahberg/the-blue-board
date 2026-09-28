@@ -35,7 +35,7 @@ const { caption, columns, rows } = Astro.props;
             c.sortable ? (
               <th
                 scope="col"
-                class="sticky top-0 z-1 whitespace-nowrap border-b-2 border-primary bg-card p-0 text-left font-mono text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
+                class="sticky top-0 z-1 whitespace-nowrap border-b-2 border-primary bg-card p-0 text-left font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                 aria-sort="none"
                 data-trk-sort={c.key}
               >
@@ -50,7 +50,7 @@ const { caption, columns, rows } = Astro.props;
             ) : (
               <th
                 scope="col"
-                class="sticky top-0 z-1 whitespace-nowrap border-b-2 border-primary bg-card p-2 text-left font-mono text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
+                class="sticky top-0 z-1 whitespace-nowrap border-b-2 border-primary bg-card p-2 text-left font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
               >
                 {c.label}
               </th>
@@ -92,13 +92,13 @@ const { caption, columns, rows } = Astro.props;
                     </span>
                   ) : null}
                   {cell.secondary ? (
-                    <span class="mt-px block text-[10px] leading-normal text-muted-foreground sm:text-[11px]">
+                    <span class="mt-px block text-[11px] leading-normal text-muted-foreground sm:text-[11px]">
                       {cell.secondary}
                     </span>
                   ) : null}
                   {cell.link ? (
                     <a
-                      class="mt-0.5 inline-flex min-h-11 items-center whitespace-nowrap font-mono text-[10px] font-semibold text-primary underline-offset-2 hover:underline"
+                      class="mt-0.5 inline-flex min-h-11 items-center whitespace-nowrap font-mono text-[11px] font-semibold text-primary underline-offset-2 hover:underline"
                       href={cell.link.href}
                     >
                       {cell.link.text}
@@ -136,7 +136,7 @@ const { caption, columns, rows } = Astro.props;
      `content`. */
   .trk-th-arrow::after {
     content: '↕';
-    font-size: 8px;
+    font-size: 11px;
     opacity: 0.45;
   }
   .trk-table th[aria-sort='ascending'] .trk-th-arrow::after {

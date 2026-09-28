@@ -71,7 +71,8 @@ const newsArticleSchema = {
         <h1
           class="mt-2 text-2xl leading-tight font-bold tracking-tight text-balance text-foreground"
         >
-          {article.title}
+          {/* A no-break space before each dash keeps a wrapped line from opening on "—". */}
+          {article.title.replace(/ — /g, '\u00a0— ')}
         </h1>
       </header>
 
@@ -116,7 +117,7 @@ const newsArticleSchema = {
               {crossLinks.map((link: { label: string; url: string }) => (
                 <a
                   href={link.url}
-                  class="inline-flex min-h-11 items-center rounded-full border border-border bg-card px-4 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                  class="inline-flex min-h-11 items-center rounded-full border border-border bg-card px-4 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:bg-primary-fill hover:text-primary-foreground"
                 >
                   {link.label} &rarr;
                 </a>

@@ -13,6 +13,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { focusContentOnOpen } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { computeLiveStats } from '@/lib/live-stats.js';
 import { filterLiveFlights } from '@/lib/live-filters.js';
@@ -192,7 +193,7 @@ export default function LiveView() {
               <Button
                 size="sm"
                 variant="outline"
-                className="pointer-events-auto min-h-11 bg-background/90 text-xs backdrop-blur"
+                className="pointer-events-auto min-h-11 bg-background text-xs"
                 onClick={() => setSidebarOpen(true)}
               >
                 🔍 Filters
@@ -201,7 +202,7 @@ export default function LiveView() {
           </div>
 
           {starlinkAvailable ? (
-            <p className="pointer-events-none absolute bottom-2 left-2 z-[500] hidden rounded-md border bg-background/90 px-2 py-1 text-[11px] backdrop-blur md:block">
+            <p className="pointer-events-none absolute bottom-2 left-2 z-[500] hidden rounded-md border bg-background px-2 py-1 text-[11px] md:block">
               <span
                 className="mr-1.5 inline-block size-2 rounded-full align-middle"
                 style={{ background: '#A78BFA' }}
@@ -214,7 +215,7 @@ export default function LiveView() {
           {/* The overlay appears only when the feed has NEVER produced flights: one failed
               poll against three-minute-old data must not blank a working map. */}
           {feed.failed ? (
-            <div className="absolute inset-0 z-[600] flex flex-col items-center justify-center gap-3 bg-background/85 p-6 text-center backdrop-blur">
+            <div className="absolute inset-0 z-[600] flex flex-col items-center justify-center gap-3 bg-background/95 p-6 text-center">
               <p className="text-sm font-medium">Live flight feed unavailable</p>
               <p className="text-xs text-muted-foreground">
                 Retrying automatically{feed.countdown !== null ? ` in ${feed.countdown}s` : ''}…
@@ -232,7 +233,15 @@ export default function LiveView() {
           </aside>
         ) : (
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetContent side="bottom" className="data-[side=bottom]:h-[80vh]">
+            <SheetContent
+              side="bottom"
+              className="data-[side=bottom]:h-[80vh]"
+              // Radix focuses the first tabbable element on open, which is the search input:
+              // on a phone that raises the soft keyboard over the sheet the visitor opened to
+              // tap filters. Focus the sheet itself instead — still inside the focus trap,
+              // announced by its title, no keyboard.
+              onOpenAutoFocus={focusContentOnOpen}
+            >
               <SheetHeader>
                 <SheetTitle>Filters</SheetTitle>
               </SheetHeader>

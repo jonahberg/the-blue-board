@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TIPS, pickTip, TIP_ROTATE_MS, TIP_DISMISS_DAYS } from '../src/lib/tips.js';
+import { TIPS, pickTip, tipForPointer, TIP_ROTATE_MS, TIP_DISMISS_DAYS } from '../src/lib/tips.js';
 
 describe('TIPS', () => {
   it('covers the five tabs that have tips', () => {
@@ -14,11 +14,13 @@ describe('TIPS', () => {
     expect(TIPS['tab-fleet']).toHaveLength(1);
   });
 
-  it('keeps the copy byte-for-byte, apostrophes and all', () => {
-    expect(TIPS['tab-live'][1]).toBe("Click a hub name in the sidebar to filter the map to just that hub's flights");
-    expect(TIPS['tab-schedule'][0]).toBe('Use "Filter: Fleet, Aircraft, Starlink…" to narrow by family, equipment, or WiFi');
+  it('describes the v1.8 UI, not the legacy one (audit F17)', () => {
+    const all = Object.values(TIPS).flat();
+    // Map popups were replaced by the flight panel; IROPS no longer needs a loaded board.
+    expect(all.some((t) => /popup/i.test(t))).toBe(false);
+    expect(all.some((t) => /Load schedule data/.test(t))).toBe(false);
+    expect(TIPS['tab-live'][1]).toBe('Click a hub under "Hub traffic" (in Filters on a phone) to show only that hub\'s flights');
     expect(TIPS['tab-myflight'][1]).toBe('The "Where\'s My Plane?" section shows the inbound aircraft for your watched flight');
-    expect(TIPS['tab-weather'][0]).toBe('Load schedule data in the Schedule tab to unlock the IROPS disruption monitor');
   });
 
   it('has no tips for tabs the strip does not cover (edge case — pickTip falls back)', () => {
@@ -72,5 +74,14 @@ describe('timing constants', () => {
 
   it('is 7 days in ms when multiplied out (edge case — the caller does × 86400000)', () => {
     expect(TIP_DISMISS_DAYS * 86400000).toBe(604800000);
+  });
+});
+
+describe('tipForPointer (audit F36)', () => {
+  it('says Tap on a touch screen and leaves mouse copy alone', () => {
+    const tip = TIPS['tab-schedule'][1];
+    expect(tipForPointer(tip, false)).toBe(tip);
+    expect(tipForPointer(tip, true)).toBe('Tap any registration in the schedule table to see full aircraft details');
+    expect(tipForPointer('Double-click to click', true)).toBe('Double-tap to tap');
   });
 });

@@ -12,6 +12,11 @@ import Seo from './Seo.astro';
 import SiteFooter from './SiteFooter.astro';
 import SiteHeader from './SiteHeader.astro';
 import '../../styles/global.css';
+// The one face every page paints its text in. Preloaded so it is usually in hand before first
+// paint: with `font-display: swap` and no preload, the fallback-to-Geist swap re-wrapped fleet
+// page headings and shifted the body (CLS 0.145 on /fleet/737-800, audit F54). `?url` resolves
+// to the same hashed `_astro/` file the @font-face in global.css points at.
+import geistLatin from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url';
 
 interface Props {
   title: string;
@@ -71,12 +76,13 @@ const {
       twitterTitle={twitterTitle}
       twitterDescription={twitterDescription}
     />
+    <link rel="preload" href={geistLatin} as="font" type="font/woff2" crossorigin />
     <slot name="head" />
   </head>
   <body class={bodyClass} {...dataAttrs}>
     <a
       href="#main"
-      class="absolute left-4 top-4 z-100 -translate-y-20 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground focus:translate-y-0"
+      class="absolute left-4 top-4 z-100 -translate-y-20 rounded-md bg-primary-fill px-3 py-2 text-sm font-medium text-primary-foreground focus:translate-y-0"
     >
       Skip to main content
     </a>

@@ -40,7 +40,7 @@ export default function BmacToast() {
         variant="ghost"
         size="sm"
         aria-label="Dismiss"
-        className="absolute right-0.5 top-0.5 h-11 w-11 p-0 text-muted-foreground md:right-1 md:top-1 md:h-7 md:w-7"
+        className="absolute right-0.5 top-0.5 h-11 w-11 p-0 text-muted-foreground md:right-1 md:top-1 pointer-fine:md:h-7 pointer-fine:md:w-7"
         onClick={dismiss}
       >
         ✕
@@ -52,7 +52,7 @@ export default function BmacToast() {
         href={BMAC_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-2.5 inline-flex min-h-11 items-center rounded-md bg-primary px-4 text-xs font-semibold text-primary-foreground md:min-h-9"
+        className="mt-2.5 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground pointer-fine:md:min-h-9"
       >
         ☕ Buy Me a Coffee
       </a>

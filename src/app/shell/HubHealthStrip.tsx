@@ -35,7 +35,7 @@ export function HubHealthStrip() {
     <div
       aria-live="polite"
       aria-label="Hub on-time performance"
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-card/40 px-3 py-1.5 text-xs [scrollbar-width:none] md:px-4"
+      className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-card/40 px-3 py-1 text-xs [scrollbar-width:none] md:px-4"
     >
       <span className="mr-1 hidden shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground sm:inline">
         Hub on-time
@@ -43,7 +43,7 @@ export function HubHealthStrip() {
 
       {loading
         ? Array.from({ length: 9 }).map((_, i) => (
-            <Skeleton key={i} className="h-5 w-16 shrink-0" />
+            <Skeleton key={i} className="h-6 w-16 shrink-0" />
           ))
         : hubs.map((entry) => {
             const program = hubProgramMarker(faaIndex, entry.hub) as {
@@ -67,7 +67,9 @@ export function HubHealthStrip() {
                   <a
                     href={`/hubs/${entry.hub.toLowerCase()}`}
                     className={cn(
-                      'flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 no-underline hover:bg-accent',
+                      // 24 px tall (WCAG 2.5.8) inside a strip that stays ~33 px: a 44 px row
+                      // here would add a second strip's worth of fixed chrome on a phone.
+                      'flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent',
                       isHome && 'border border-primary/40',
                     )}
                   >

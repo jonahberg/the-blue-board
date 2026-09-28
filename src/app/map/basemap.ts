@@ -30,18 +30,28 @@ export const OSM_CARTO_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>'
   + ' contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>';
 
-/** Phones fetch from two subdomains and skip retina tiles — bandwidth over sharpness. */
-function smallScreenViewport(): boolean {
-  return typeof window !== 'undefined' && window.innerWidth <= 768;
-}
+/**
+ * Tile options, identical on every viewport.
+ *
+ * `detectRetina` stays OFF. The template's `{r}` already asks CARTO for its 512 px `@2x` tile
+ * whenever the display is retina (Leaflet fills `{r}` from `L.Browser.retina`, whatever
+ * `detectRetina` says), and a 512 px image in a 256 CSS-px cell is exactly the right
+ * density. Turning `detectRetina` on as well halves the cell AND bumps the zoom, so every
+ * 128 CSS px got a 512 px image: 63 tiles / 479 KB for the first US view instead of ~20, and
+ * three times the CARTO quota (audit F55). Phones always got the correct density this way;
+ * the old "phones skip retina tiles" comment was wrong about that (F59).
+ *
+ * Two subdomains everywhere: over HTTP/2 more hosts only mean more connection setups, and
+ * `src/pages/index.astro` preconnects to exactly these two.
+ */
+export const BASEMAP_SUBDOMAINS = 'ab';
 
 export function basemapTileOptions(): L.TileLayerOptions {
-  const small = smallScreenViewport();
   return {
     maxZoom: 18,
-    subdomains: small ? 'ab' : 'abcd',
+    subdomains: BASEMAP_SUBDOMAINS,
     tileSize: 256,
-    detectRetina: !small && typeof window !== 'undefined' && window.devicePixelRatio > 1,
+    detectRetina: false,
     attribution: OSM_CARTO_ATTRIBUTION,
   };
 }

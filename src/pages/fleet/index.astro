@@ -216,7 +216,7 @@ const hubLinkClass =
         1,078 mainline aircraft · 19 types · seat configs · WiFi · Starlink · updated daily
       </p>
       <a
-        class="mt-5 inline-flex min-h-11 items-center rounded-md bg-primary px-7 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+        class="mt-5 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-7 text-sm font-bold text-primary-foreground hover:bg-primary-fill/90"
         href="/?tab=fleet">Explore Interactive Fleet Database &rarr;</a
       >
       <p class="mx-auto mt-4 max-w-lg text-[11px] leading-relaxed text-muted-foreground">
@@ -304,7 +304,7 @@ const hubLinkClass =
               {fam.count}
             </span>
             <h2 class="text-base font-bold tracking-tight text-foreground">{fam.name}</h2>
-            <span class="ml-auto text-[10px] tracking-wider text-muted-foreground uppercase">
+            <span class="ml-auto text-[11px] tracking-wider text-muted-foreground uppercase">
               {fam.role}
             </span>
           </div>
@@ -317,7 +317,7 @@ const hubLinkClass =
                     {t.count}
                   </p>
                   <p class="mt-1 text-sm font-semibold text-foreground">{t.displayName}</p>
-                  <p class="mt-1 mb-3 text-[10px] leading-relaxed text-muted-foreground">
+                  <p class="mt-1 mb-3 text-[11px] leading-relaxed text-muted-foreground">
                     <span
                       class:list={[
                         'mr-1 inline-block rounded-sm px-1.5 py-0.5 font-semibold text-foreground',
@@ -331,7 +331,7 @@ const hubLinkClass =
                     {t.seatTotal} seats · {t.role}
                   </p>
                   <a
-                    class="mt-auto inline-flex min-h-11 w-fit items-center rounded-md bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+                    class="mt-auto inline-flex min-h-11 w-fit items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90"
                     href={`/fleet/${t.slug}`}
                   >
                     View {t.displayName} &rarr;
@@ -369,7 +369,7 @@ const hubLinkClass =
                     {t.seatConfig.cabins.map((cab: { name: string; seats: string; cssClass: string }) => (
                       <span class:list={['cabin-tag', cab.cssClass]}>
                         {cabinShortLabel[cab.name] || cab.name}
-                        <span class="ml-0.5 font-mono text-[10px] font-semibold"> {cab.seats}</span>
+                        <span class="ml-0.5 font-mono text-[11px] font-semibold"> {cab.seats}</span>
                       </span>
                     ))}
                   </td>

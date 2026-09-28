@@ -36,7 +36,7 @@ const config = JSON.stringify({ slug, kind, lastUpdated, lastVerified, changes, 
 
   <div class="min-w-0">
     <div
-      class="font-mono text-[9px] font-bold uppercase tracking-widest text-amber-400"
+      class="font-mono text-[11px] font-bold uppercase tracking-widest text-amber-400"
       id="trk-pulse-title"
     >
       Your tracker briefing
@@ -53,15 +53,15 @@ const config = JSON.stringify({ slug, kind, lastUpdated, lastVerified, changes, 
       <span class="font-mono font-bold text-foreground" data-trk-personal-code></span>
       <span data-trk-personal-summary></span>
       <a
-        class="font-mono text-[9px] font-semibold uppercase text-primary underline-offset-2 hover:underline"
+        class="font-mono text-[11px] font-semibold uppercase text-primary underline-offset-2 hover:underline"
         data-trk-personal-link
         href="#">Open entry &rarr;</a
       >
     </div>
-    <div class="mt-1.5 text-[10px] text-muted-foreground" data-trk-personal-empty>
+    <div class="mt-1.5 text-[11px] text-muted-foreground" data-trk-personal-empty>
       Set your home airport on <a
         href="/"
-        class="text-primary underline-offset-2 hover:underline">The Blue Board</a
+        class="text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary">The Blue Board</a
       > to put its status here.
     </div>
   </div>
@@ -69,14 +69,14 @@ const config = JSON.stringify({ slug, kind, lastUpdated, lastVerified, changes, 
   <div class="col-start-2 flex flex-col items-start gap-1 sm:col-start-3 sm:items-end">
     <button
       type="button"
-      class="inline-flex min-h-11 items-center whitespace-nowrap rounded-md border border-primary bg-primary/20 px-2.5 font-mono text-[9px] font-bold uppercase tracking-wide text-primary hover:bg-primary hover:text-primary-foreground aria-pressed:border-emerald-400/55 aria-pressed:bg-emerald-400/10 aria-pressed:text-emerald-400"
+      class="inline-flex min-h-11 items-center whitespace-nowrap rounded-md border border-primary bg-primary-fill/20 px-2.5 font-mono text-[11px] font-bold uppercase tracking-wide text-primary hover:bg-primary-fill hover:text-primary-foreground aria-pressed:border-emerald-400/55 aria-pressed:bg-emerald-400/10 aria-pressed:text-emerald-400"
       data-trk-pulse-watch
       hidden
       aria-pressed="false"
       title="Highlight changes when you return">Watch this {kind}</button
     >
     <span
-      class="min-h-3.5 font-mono text-[8px] uppercase text-muted-foreground"
+      class="min-h-3.5 font-mono text-[11px] uppercase text-muted-foreground"
       data-trk-watch-status
       aria-live="polite"></span>
   </div>
