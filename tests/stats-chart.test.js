@@ -17,7 +17,7 @@ import {
   utilBand,
 } from '../src/lib/stats-chart.js';
 
-describe('utilBand — the >60 / >30 / >0 / 0 thresholds (main.js :4114)', () => {
+describe('utilBand — the >60 / >30 / >0 / 0 thresholds (views/stats/UtilizationChart.tsx)', () => {
   it('bands on strict greater-than, so 60 is mid and 30 is low', () => {
     expect(utilBand(100)).toBe('high');
     expect(utilBand(61)).toBe('high');
@@ -42,7 +42,7 @@ describe('utilBand — the >60 / >30 / >0 / 0 thresholds (main.js :4114)', () =>
   });
 
   it('never puts the product blue on the small figure — it fails text contrast', () => {
-    // main.js :4116 made exactly this swap. The bar may be blue; the number may not.
+    // The legacy dashboard made exactly this swap. The bar may be blue; the number may not.
     expect(UTIL_BAR_COLOR.mid).toBe('var(--primary)');
     for (const cls of Object.values(UTIL_TEXT_CLASS)) {
       expect(cls).not.toMatch(/primary|blue/);
@@ -50,7 +50,7 @@ describe('utilBand — the >60 / >30 / >0 / 0 thresholds (main.js :4114)', () =>
   });
 });
 
-describe('ageBand / ageBarPct — the >20 / >15 / >8 thresholds (main.js :4262)', () => {
+describe('ageBand / ageBarPct — the >20 / >15 / >8 thresholds (views/stats/RouteBars.tsx)', () => {
   it('bands on strict greater-than', () => {
     expect(ageBand(21)).toBe('oldest');
     expect(ageBand(20)).toBe('older');
@@ -82,7 +82,7 @@ describe('ageBand / ageBarPct — the >20 / >15 / >8 thresholds (main.js :4262)'
   });
 });
 
-describe('donutSegments — arc geometry (main.js :4147-4152)', () => {
+describe('donutSegments — arc geometry (views/stats/PhaseDonut.tsx)', () => {
   it('keeps the shipped geometry: r 36, stroke 12, 226 circumference, 2.26 per point', () => {
     expect(DONUT).toMatchObject({ r: 36, strokeWidth: 12, circumference: 226, perPercent: 2.26 });
   });
@@ -132,7 +132,7 @@ describe('the phase ramp carries identity beyond colour', () => {
   });
 });
 
-describe('matrixAlpha — hub-matrix cell heat (main.js :4212)', () => {
+describe('matrixAlpha — hub-matrix cell heat (views/stats/HubMatrix.tsx)', () => {
   it('is 0 for an empty cell so the cell stays transparent', () => {
     expect(matrixAlpha(0, 40)).toBe(0);
     expect(matrixAlpha(undefined, 40)).toBe(0);
@@ -154,7 +154,7 @@ describe('matrixAlpha — hub-matrix cell heat (main.js :4212)', () => {
   });
 });
 
-describe('routeBarPct — top-routes bar width (main.js :4237)', () => {
+describe('routeBarPct — top-routes bar width (views/stats/RouteBars.tsx)', () => {
   it('scales against the busiest route', () => {
     expect(routeBarPct(10, 20)).toBe(50);
     expect(routeBarPct(20, 20)).toBe(100);

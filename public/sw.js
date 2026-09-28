@@ -47,8 +47,7 @@ function isOfflineSafeData(pathname) {
     pathname.startsWith('/data/') ||
     pathname === '/api/schedule' ||
     pathname === '/api/starlink-data' ||
-    pathname === '/api/fleet-summary' ||
-    pathname === '/api/fleet'
+    pathname === '/api/fleet-summary'
   );
 }
 

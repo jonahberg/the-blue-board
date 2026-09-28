@@ -18,5 +18,7 @@ jobs:
           bun-version: '1.3.14'
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - run: bun run test
+      # Build BEFORE test: tests/dist-a11y.test.js runs axe over the built dist/ pages and
+      # hard-fails in CI when dist/ is missing.
       - run: bun run build
+      - run: bun run test

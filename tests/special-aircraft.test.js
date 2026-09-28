@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { indexSpecialAircraft, ENGINE_BY_TYPE, SEAT_BAR_COLORS, CABIN_COLORS } from '../src/lib/special-aircraft.js';
 
 // Rows shaped like /data/fleet.json: r = registration, t = type, s = the free-text
@@ -64,8 +65,13 @@ describe('ENGINE_BY_TYPE', () => {
     expect(ENGINE_BY_TYPE['A321neo']).toBe('CFM LEAP-1A');
   });
 
-  it('covers all 19 mainline types', () => {
-    expect(Object.keys(ENGINE_BY_TYPE)).toHaveLength(19);
+  it('covers every mainline type in the published fleet data', () => {
+    // Derived from public/data/fleet.json (the same file the dashboard loads), so a new type
+    // fails as "missing engine for <type>" rather than as a count mismatch.
+    const fleet = JSON.parse(readFileSync(new URL('../public/data/fleet.json', import.meta.url), 'utf8'));
+    const types = [...new Set(fleet.map((row) => row.t))];
+    expect(types.length).toBeGreaterThan(0);
+    expect(types.filter((t) => !ENGINE_BY_TYPE[t])).toEqual([]);
   });
 
   it('is undefined for regional/partner types the aircraft modal falls back on (edge case)', () => {

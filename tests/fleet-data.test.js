@@ -31,7 +31,7 @@ describe('fleet.json data integrity', () => {
 
 // Build the same FLEET_BY_REG index the dashboard builds, so we exercise the
 // REAL matchAircraft (imported from src/lib/fleet-match.js) — the same lookup
-// path the dashboard uses — not a copy. Mirrors src/dashboard/main.js:176.
+// path the dashboard uses — not a copy. Mirrors the index src/app/state/fleet.tsx builds.
 function buildIndex(db) {
   const idx = {};
   db.forEach(a => { idx[a.r] = a; });

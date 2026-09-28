@@ -103,22 +103,3 @@ export function preferredType(header, produces) {
 
   return best;
 }
-
-/**
- * Add `Accept` to a Vary header without clobbering what is already there.
- * Without Vary: Accept a CDN will hand the cached Markdown variant to a browser (or the
- * HTML variant to an agent) depending only on who warmed the cache first.
- *
- * @param {Headers} headers response headers, mutated in place
- */
-export function appendVaryAccept(headers) {
-  const existing = headers.get('Vary');
-  if (!existing) {
-    headers.set('Vary', 'Accept');
-    return;
-  }
-  const tokens = existing.split(',').map((s) => s.trim().toLowerCase());
-  if (!tokens.includes('accept') && !tokens.includes('*')) {
-    headers.set('Vary', `${existing}, Accept`);
-  }
-}

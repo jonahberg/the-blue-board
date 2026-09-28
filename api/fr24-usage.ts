@@ -16,6 +16,11 @@ const isRateLimited = createRateLimiter('fr24-usage', 10);
 
 let usageCache: { data: any; ts: number } | null = null;
 
+/** Test seam: clear the module-level usage cache so tests don't depend on run order. */
+export function __resetFr24UsageForTests(): void {
+  usageCache = null;
+}
+
 // MINIMAL EXPORT (added for api/support-stats.ts): the raw upstream fetch, with no auth/caching
 // of its own — support-stats.ts is a separate, publicly-cached endpoint that only ever derives a
 // coarse rounded percentage from the result and never re-exposes this raw shape. This function

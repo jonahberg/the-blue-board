@@ -7,8 +7,6 @@ import {
   shouldShowOnboarding,
   waitlistState,
 } from '../src/lib/engagement.js';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   clicksReachedThreshold,
   onboardingMayOpen,
@@ -18,7 +16,7 @@ import {
 /**
  * Trigger and suppression contracts for the waitlist modal and the onboarding overlay.
  *
- * These assertions used to re-implement main.js's IIFE guards inline, which meant they
+ * These assertions used to re-implement the legacy dashboard's (deleted main.js) IIFE guards inline, which meant they
  * verified a COPY of the logic rather than the logic. The rules now live in two pure
  * modules — `src/lib/engagement.js` (the storage half) and `src/lib/waitlist-gate.js`
  * (the composed decision) — and the React surfaces in `src/app/features/` import them,
@@ -47,7 +45,7 @@ function returningStorage(initial = {}) {
   return createMockStorage({ 'bb-visited': '1', ...initial });
 }
 
-/** `waitlistState().dismissedRecently` is the exported form of main.js's TTL check. */
+/** `waitlistState().dismissedRecently` is the exported form of the TTL check (ported from the legacy main.js). */
 function isDismissedRecently(storage, key) {
   if (key === 'bb_waitlist_dismissed') return waitlistState(storage).dismissedRecently;
   // The onboarding key runs through the same private helper; `shouldShowOnboarding`
@@ -227,14 +225,15 @@ describe('waitlist modal trigger logic', () => {
     });
   });
 
-  describe('closeWaitlistModal persists dismissal', () => {
-    it('a timestamp written on close suppresses the next passive trigger', () => {
-      const now = Date.now();
-      storage.setItem('bb_waitlist_dismissed', String(now));
+  // The close paths that WRITE this timestamp (✕, Escape, backdrop in WaitlistDialog.tsx)
+  // are render-tested in tests/waitlist-dialog-dismiss.test.tsx; this pins the read side.
+  describe('a fresh dismissal timestamp suppresses passive triggers', () => {
+    it('suppresses the next passive trigger but not the ?waitlist=1 deep link', () => {
+      storage.setItem('bb_waitlist_dismissed', String(Date.now()));
 
-      expect(parseInt(storage.getItem('bb_waitlist_dismissed'), 10)).toBe(now);
       expect(isDismissedRecently(storage, 'bb_waitlist_dismissed')).toBe(true);
       expect(shouldShowWaitlist(storage, { shownThisSession: false })).toBe(false);
+      expect(shouldShowWaitlist(storage, { shownThisSession: false, forced: true })).toBe(true);
     });
   });
 });
@@ -283,7 +282,8 @@ describe('onboarding overlay suppression', () => {
   });
 
   it('records the visit BEFORE the waitlist threshold is read, which is why order matters', () => {
-    // main.js reads the click threshold first on purpose: a first-timer must get 20, and
+    // initEngagement() in src/app/state/engagement.tsx reads the click threshold first on
+    // purpose (as the legacy main.js did): a first-timer must get 20, and
     // `shouldShowOnboarding` is what writes the flag that would otherwise make it 30.
     const fresh = createMockStorage();
     const threshold = waitlistState(fresh).triggerClicks;
@@ -365,52 +365,7 @@ describe('which overlay may open first', () => {
     expect(onboardingMayOpen(true, true)).toBe(false);
   });
 
-  // The helper only matters if the overlay actually consults it, with `waitlistOpen` in the
-  // effect's deps — read once, the overlay would never come up after the waitlist closed.
-  // There is no @testing-library/react in this project and none may be added, so the wiring
-  // is pinned by a source scan.
-  it('is applied by Onboarding with waitlistOpen in the effect deps', () => {
-    const source = readFileSync(
-      resolve(__dirname, '..', 'src', 'app', 'features', 'Onboarding.tsx'),
-      'utf8'
-    ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-
-    expect(source.length, 'Onboarding.tsx not found where this scan expects it').toBeGreaterThan(500);
-    expect(source, 'Onboarding must read waitlistOpen from the existing ui store').toMatch(
-      /useUi\(\)/
-    );
-    expect(source).toMatch(/waitlistOpen/);
-
-    const effect = (source.match(
-      /useEffect\(\(\) => \{([\s\S]*?onboardingMayOpen[\s\S]*?setOnboardingOpen\(true\);[\s\S]*?)\}, \[([^\]]*)\]\)/
-    ) || []);
-    expect(effect[1], 'no onboardingMayOpen -> setOnboardingOpen(true) effect found').toBeDefined();
-    expect(effect[2], 'waitlistOpen must be in the deps or the overlay never comes up after the waitlist closes')
-      .toMatch(/waitlistOpen/);
-  });
-
-  // Adding `waitlistOpen` to those deps is what makes the effect re-run on every waitlist
-  // close. `showOnboardingInitially` is computed once and never recomputed, so without a
-  // once-per-load guard the effect resurrects an overlay the visitor already dismissed:
-  // welcome dismissed -> 20 clicks trip the waitlist -> closing it brings the welcome back,
-  // with `bb-onboarded` already written. The guard is a ref, so it is pinned by source.
-  it('auto-opens at most once per load, so a dismissed overlay cannot come back', () => {
-    const source = readFileSync(
-      resolve(__dirname, '..', 'src', 'app', 'features', 'Onboarding.tsx'),
-      'utf8'
-    ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-
-    const effect = (source.match(
-      /useEffect\(\(\) => \{([\s\S]*?onboardingMayOpen[\s\S]*?setOnboardingOpen\(true\);[\s\S]*?)\}, \[/
-    ) || [])[1];
-    expect(effect, 'no auto-open effect found').toBeDefined();
-
-    // A latch that is read before opening and set when it does.
-    const latch = (effect.match(/([A-Za-z_$][\w$]*)\.current/) || [])[1];
-    expect(latch, 'the auto-open effect has no ref latch — it will re-fire on every waitlist close')
-      .toBeDefined();
-    expect(effect).toMatch(new RegExp(`if \\(${latch}\\.current\\) return;`));
-    expect(effect).toMatch(new RegExp(`${latch}\\.current = true;`));
-    expect(source).toMatch(new RegExp(`const ${latch} = useRef\\(false\\)`));
-  });
+  // Whether Onboarding.tsx actually applies this rule — waits for the waitlist, auto-opens
+  // once per load, and still reopens from the header "?" — is a render test:
+  // tests/onboarding-wiring.test.tsx.
 });

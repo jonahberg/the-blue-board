@@ -15,7 +15,7 @@ describe('_watch-diff meaningful-change engine', () => {
     });
   });
 
-  describe('isSignificantStatusChange (ported from main.js)', () => {
+  describe('isSignificantStatusChange (used by api/_watch-diff.ts and src/app/state/schedule.tsx)', () => {
     it('notifies Scheduled → Departed', () => {
       expect(isSignificantStatusChange('Scheduled', 'Departed')).toBe(true);
     });

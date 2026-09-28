@@ -1,18 +1,60 @@
 # Post-deploy smoke check: merge to main = instant Vercel production deploy (no preview deploys),
 # so this is the only automated signal that a deploy broke the site (the b280fd7 ESM-crash class).
-# Waits for Vercel to build, then curls the three load-bearing URLs with retries.
+#
+# A 200 from theblueboard.co is NOT proof that this commit shipped: when the Vercel build fails
+# (bad vercel.json source, CSP hash drift, type error) the previous deploy keeps serving 200s and
+# a sleep-then-curl check reports OK — the 2026-07-09 silent-deploy outage. So the job first
+# waits for the GitHub Deployment that Vercel records for THIS sha in the Production environment
+# and fails if it reports failure/error or never reaches success; only then does it curl.
 name: Post-deploy smoke
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+# A newer push supersedes the older check (Vercel may cancel the older build, too).
+concurrency:
+  group: post-deploy-smoke
+  cancel-in-progress: true
+
+permissions:
+  deployments: read
+  contents: read
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for Vercel production deploy
-        run: sleep 150
+      - name: Wait for this commit's Vercel production deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          # ~15 minutes: 30 polls, 30s apart. vercel[bot] records a GitHub Deployment for the build
+          # and gives it a final status (success / failure / error). A failed
+          # API call (`|| true`) just counts as "not yet" rather than aborting the step.
+          for attempt in $(seq 1 30); do
+            id=$(gh api "repos/$REPO/deployments?sha=$SHA&environment=Production&per_page=1" --jq '.[0].id // empty' || true)
+            if [ -n "$id" ]; then
+              state=$(gh api "repos/$REPO/deployments/$id/statuses?per_page=1" --jq '.[0].state // "pending"' || echo pending)
+              echo "attempt $attempt: deployment $id is $state"
+              case "$state" in
+                success) echo "production deploy for $SHA is live"; exit 0 ;;
+                # GitHub flips a Production deployment to inactive only after it succeeded and
+                # a newer one replaced it — this commit did ship.
+                inactive) echo "deploy for $SHA succeeded and was superseded"; exit 0 ;;
+                failure|error)
+                  echo "::error::Vercel production deploy for $SHA reported '$state' — prod is still serving the PREVIOUS build"
+                  exit 1 ;;
+              esac
+            else
+              echo "attempt $attempt: no production deployment recorded for $SHA yet"
+            fi
+            sleep 30
+          done
+          echo "::error::production deploy for $SHA never went live (no success status after ~15 min)"
+          exit 1
       - name: Smoke-check production
         run: |
           check () {

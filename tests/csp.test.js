@@ -65,10 +65,10 @@ describe('Content-Security-Policy configuration', () => {
     expect(scriptSrc).not.toContain("'unsafe-eval'");
   });
 
-  it('retains unsafe-inline in style-src (documented gap, migration in v1.5.6)', () => {
-    // Inline styles are pervasive throughout the onboarding overlay, hub cards,
-    // ticker — migrating them all to classes is a v1.5.6 task. Tightening
-    // script-src alone is the 90% security win.
+  it('retains unsafe-inline in style-src (React style props + Leaflet inline positioning)', () => {
+    // The React island sets computed styles through `style={...}` props (chart bars, sheet
+    // offsets) and Leaflet positions every tile, marker and popup with inline styles, so
+    // style-src needs 'unsafe-inline'. Tightening script-src is the security win that matters.
     const styleSrc = directive('style-src');
     expect(styleSrc).toContain("'unsafe-inline'");
   });
@@ -98,8 +98,14 @@ describe('Content-Security-Policy configuration', () => {
     // the same visible outcome as the guarded Leaflet-CSS incident.
     const imgSrc = directive('img-src');
     expect(imgSrc).toContain('https://*.basemaps.cartocdn.com');
-    expect(imgSrc).toContain('https://*.tile.openstreetmap.org');
     expect(imgSrc).toContain('https://mesonet.agron.iastate.edu');
+  });
+
+  it('does not allow OpenStreetMap tile servers (tiles come only from CARTO and IEM — see basemap.ts)', () => {
+    // OSM is credited in the attribution links (plain <a href>, not gated by CSP) because
+    // CARTO's basemap is built on OSM data, but no layer loads tiles from openstreetmap.org.
+    // Keep that host from creeping back in as dead allowlist weight.
+    expect(directive('img-src')).not.toContain('openstreetmap.org');
   });
 
   it('allows self and the Web Analytics beacon host in connect-src (dropping self breaks /api fetches)', () => {

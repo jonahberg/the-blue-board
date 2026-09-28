@@ -6,6 +6,8 @@ import { join } from 'node:path';
 
 const BASE_URL = process.env.AUDIT_URL || 'https://theblueboard.co';
 
+// One page of every type the site ships (hubs + trackers + fleet + news + static pages).
+// Slugs are real routes from the build; update them if a slug is retired.
 const PAGES = [
   { name: 'index',    path: '/' },
   { name: 'hubs',     path: '/hubs/' },
@@ -23,16 +25,71 @@ const PAGES = [
   { name: 'tracker-united',  path: '/trackers/united-hubs' },
   { name: 'tracker-atc-iah', path: '/trackers/atc/iah' },
   { name: 'tracker-united-iah', path: '/trackers/united-hubs/iah' },
+  { name: 'fleet',      path: '/fleet' },
+  { name: 'fleet-type', path: '/fleet/787-9-dreamliner' },
+  { name: 'news',       path: '/news' },
+  { name: 'news-article', path: '/news/united-first-transatlantic-starlink-777' },
+  { name: 'newark',     path: '/newark' },
+  { name: 'privacy',    path: '/privacy' },
   { name: '404',      path: '/this-page-does-not-exist' },
+];
+
+// Dashboard tabs, by their accessible tab name (src/app/tabs.ts labels).
+const DASHBOARD_TABS = [
+  'My Flights', 'Live Ops', 'Schedule', 'Fleet', 'Starlink', 'Delays · Weather · Hubs', 'Stats', 'Sources',
 ];
 
 const VIEWPORTS = [
   { name: 'desktop-1440', width: 1440, height: 900,  mobile: false },
   { name: 'desktop-1024', width: 1024, height: 768,  mobile: false },
+  { name: 'tablet-768',   width: 768,  height: 1024, mobile: true },
   { name: 'mobile-390',   width: 390,  height: 844,  mobile: true },
 ];
 
 const OUT_DIR = 'audit-output';
+
+/**
+ * Dismiss the welcome dialog, then select every dashboard tab and run axe on each. A tab that
+ * cannot be selected, or an island that renders nothing, is recorded as an error.
+ */
+async function auditDashboardTabs(page, dir, viewportName) {
+  const results = [];
+  // Welcome dialog: its primary button text uses a curly apostrophe, so match loosely.
+  const welcome = page.getByRole('dialog');
+  if (await welcome.isVisible().catch(() => false)) {
+    await welcome.getByRole('button').first().click().catch(() => {});
+    await page.keyboard.press('Escape').catch(() => {});
+  }
+  for (const name of DASHBOARD_TABS) {
+    const entry = { tab: name };
+    try {
+      const tab = page.getByRole('tab', { name, exact: true });
+      if (!(await tab.isVisible().catch(() => false))) {
+        // Phones: overflow tabs live behind the bottom nav's "More".
+        await page.getByRole('button', { name: /more/i }).first().click({ timeout: 2000 }).catch(() => {});
+      }
+      await tab.click({ timeout: 5000 });
+      await page.waitForFunction(
+        (label) => [...document.querySelectorAll('[role=tab]')]
+          .some((t) => t.textContent?.trim() === label && t.getAttribute('aria-selected') === 'true'),
+        name,
+        { timeout: 5000 },
+      );
+      await page.waitForTimeout(1500);
+      const islandChildren = await page.evaluate(() => document.querySelector('astro-island')?.childElementCount ?? 0);
+      if (islandChildren === 0) throw new Error('astro-island is empty (the app crashed)');
+      const slug = name.toLowerCase().replace(/[^a-z]+/g, '-');
+      await page.screenshot({ path: join(dir, `index-tab-${slug}.png`) });
+      const axeResults = await new AxeBuilder({ page }).analyze();
+      entry.violations = axeResults.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }));
+    } catch (err) {
+      entry.error = err.message;
+      console.log(`    ⚠ ${viewportName} tab "${name}": ${err.message}`);
+    }
+    results.push(entry);
+  }
+  return results;
+}
 
 async function run() {
   console.log(`\nUI Audit — ${BASE_URL}\n${'─'.repeat(40)}`);
@@ -67,6 +124,8 @@ async function run() {
 
     for (const pg of PAGES) {
       const page = await context.newPage();
+      const pageErrors = [];
+      page.on('pageerror', (err) => pageErrors.push(err.message));
       const url = `${BASE_URL}${pg.path}`;
       const screenshotPath = join(dir, `${pg.name}.png`);
 
@@ -103,13 +162,20 @@ async function run() {
           pageEntry = { name: pg.name, path: pg.path, viewports: [] };
           report.pages.push(pageEntry);
         }
+        const tabs = pg.name === 'index' ? await auditDashboardTabs(page, dir, vp.name) : [];
+        if (pageErrors.length) {
+          console.log(`    ⚠ uncaught page errors: ${pageErrors.join(' | ')}`);
+          report.summary.pageErrors = (report.summary.pageErrors || 0) + pageErrors.length;
+        }
         pageEntry.viewports.push({
           viewport: vp.name,
           screenshotPath,
+          pageErrors,
           accessibility: {
             violationCount: violations.length,
             violations,
           },
+          tabs,
         });
       } catch (err) {
         console.log(`    ⚠ Error: ${err.message}`);

@@ -15,37 +15,13 @@
 // blocks and the trackers' `type="application/json" data-trk-config` payload. Tags with a
 // `src=` attribute are external and already covered by 'self'.
 
-import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
+import { inlineScripts, sha256 } from './lib/csp-hashes.mjs';
+
 const DIST = resolve('dist');
 const VERCEL_JSON = resolve('vercel.json');
-
-/** Every inline, executable <script> body in an HTML document. */
-function inlineScripts(html) {
-  const bodies = [];
-  // Comments first: a source comment that says the words "<script>" is not a script, and
-  // matching one swallows everything up to the next real closing tag.
-  const source = html.replace(/<!--[\s\S]*?-->/g, '');
-  const re = /<script([^>]*)>([\s\S]*?)<\/script>/gi;
-  let match;
-  while ((match = re.exec(source)) !== null) {
-    const attrs = match[1] ?? '';
-    if (/\bsrc\s*=/i.test(attrs)) continue;
-    const type = attrs.match(/type\s*=\s*["']([^"']+)["']/i)?.[1]?.trim().toLowerCase();
-    const executable = !type || type === 'module' || /(java|ecma)script/.test(type);
-    if (!executable) continue;
-    if (match[2].trim() === '') continue;
-    bodies.push(match[2]);
-  }
-  return bodies;
-}
-
-/** CSP hashes the bytes BETWEEN the tags, exactly — no trimming. */
-function sha256(body) {
-  return `sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}`;
-}
 
 async function htmlFiles(dir) {
   const found = [];
