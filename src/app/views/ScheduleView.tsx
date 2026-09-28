@@ -28,6 +28,7 @@ import {
   boardAsOfMs,
   boardLoadMessage,
   describeBoardCondition,
+  emptyBoardReason,
   formatBoardAsOf,
   shouldAutoScroll,
 } from '@/lib/schedule-load.js';
@@ -44,7 +45,7 @@ import { useWeather } from '../state/weather';
 import { ScheduleControls } from './schedule/ScheduleControls';
 import { ScheduleStats } from './schedule/ScheduleStats';
 import { ScheduleTable } from './schedule/ScheduleTable';
-import type { ScheduleTableHandle } from './schedule/ScheduleTable';
+import type { EmptyReason, ScheduleTableHandle } from './schedule/ScheduleTable';
 import { StalenessBanner } from './schedule/StalenessBanner';
 import type { BoardCondition } from './schedule/StalenessBanner';
 import { SwapSummary } from './schedule/SwapSummary';
@@ -243,6 +244,18 @@ export default function ScheduleView() {
   const dayLabel = (getHubDayLabel(hub || 'ORD', day) as string) ?? '';
   const showJumpToNow = day === 0 && model.firstFutureIndex >= 0;
 
+  // F14: an empty table is not always "your filters". A 200 with no rows and partial:true is
+  // the provider failing (the banner above already says so); with no filters and a clean
+  // response, the day simply has no published board yet.
+  const emptyReason = emptyBoardReason({ rawCount: rows.length, partial: board?.partial }) as EmptyReason;
+  const dayWord = ['Yesterday', 'Today', 'Tomorrow'][day + 1] ?? dayLabel;
+  const emptySubject = `${hub} ${dir} for ${dayWord.toLowerCase()} (${dayLabel})`;
+  const windowKey = `${key}|${JSON.stringify(debouncedFilters)}|${sort.column}:${sort.asc}`;
+  const onClearFilters = useCallback(() => {
+    setFilters(EMPTY_FILTERS);
+    setDebouncedFilters(EMPTY_FILTERS);
+  }, []);
+
   return (
     // No `h-full`: at phone width the controls and the stat strip are tall enough that a
     // height-locked column squeezes the table down to a row and a half. The tab area already
@@ -328,6 +341,10 @@ export default function ScheduleView() {
             onOpenAircraft={ui.openAircraft}
             onExplainDelay={ui.openDelayExplain}
             boardAsOf={asOf}
+            windowKey={windowKey}
+            emptyReason={emptyReason}
+            emptySubject={emptySubject}
+            onClearFilters={onClearFilters}
           />
           <p className="text-center text-[9px] text-muted-foreground">
             Schedule data via{' '}

@@ -329,3 +329,16 @@ export function shouldAutoScroll(signal, currentKey, lastHandledN) {
   if (signal.n === lastHandledN) return false;
   return signal.key === currentKey;
 }
+
+/**
+ * Why a board paints no rows (F14): the viewer's filters hid them, the provider failed (a 200
+ * with no rows and partial:true — e.g. partialReason 'first_page_failed'), or the day simply has
+ * no published board yet. The table used to say "No flights match your filters" for all three.
+ *
+ * @param {{rawCount: number, partial?: boolean}} board  the board's RAW (unfiltered) row count.
+ * @returns {('filtered'|'upstream'|'none')}
+ */
+export function emptyBoardReason({ rawCount, partial }) {
+  if (Number(rawCount) > 0) return 'filtered';
+  return partial ? 'upstream' : 'none';
+}

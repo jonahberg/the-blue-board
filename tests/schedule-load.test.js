@@ -18,6 +18,7 @@ import {
   shouldRetryPartial,
   swapStorageKey,
   swapSummary,
+  emptyBoardReason,
 } from '../src/lib/schedule-load.js';
 
 describe('cache + storage keys are the shipped strings', () => {
@@ -368,5 +369,13 @@ describe('board-scoped NOW autoscroll', () => {
     expect(shouldAutoScroll(null, 'ORD-departures-0', 0)).toBe(false);
     expect(shouldAutoScroll({ key: '', n: 1 }, 'ORD-departures-0', 0)).toBe(false);
     expect(shouldAutoScroll({ key: 'ORD-departures-0', n: 0 }, 'ORD-departures-0', 0)).toBe(false);
+  });
+});
+
+describe('emptyBoardReason (F14)', () => {
+  it('tells filters, provider failure and an unpublished day apart', () => {
+    expect(emptyBoardReason({ rawCount: 640, partial: false })).toBe('filtered');
+    expect(emptyBoardReason({ rawCount: 0, partial: true })).toBe('upstream'); // first_page_failed
+    expect(emptyBoardReason({ rawCount: 0, partial: false })).toBe('none');
   });
 });
