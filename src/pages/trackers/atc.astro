@@ -168,7 +168,7 @@ const columns = [
 const stats = [
   { label: 'towers live on digital strips', value: String(liveCount), tone: 'green', sub: 'of 89 in the program' },
   { label: 'still on paper today', value: String(stillOnPaper), tone: 'amber', sub: `${plannedCount} scheduled · ${paperNoDateCount} no date` },
-  { label: 'copper→fiber rebuild done', value: atcMeta.stats.fiber.value, sub: 'as of May 2026' },
+  { label: 'copper→fiber rebuild done', value: atcMeta.stats.fiber.value, sub: `as of ${new Date(`${atcMeta.stats.fiber.asOf}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}` },
   { label: 'FAA target for all 89', value: atcMeta.stats.target.value, sub: 'IG estimated 2030 — for fewer' },
 ];
 

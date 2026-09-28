@@ -363,6 +363,7 @@ export const articles = [
     category: 'Fleet',
     sources: [
       { name: 'United Airlines Newsroom', url: 'https://www.united.com/en/us/newsroom' },
+      { name: 'AeroTime', url: 'https://www.aerotime.aero/articles/united-airlines-boeing-737-800-guam-max-aircraft' },
     ],
     summary: 'United Airlines has stationed its first Boeing 737 MAX aircraft at Guam, expanding its Pacific island hub with modern, fuel-efficient narrowbodies.',
     body: `<p>United Airlines has delivered its first Boeing 737 MAX to its Guam hub, marking a significant fleet modernization for the airline's Pacific island operations. The 737 MAX replaces older 737-800s on key island-hopping routes across Micronesia.</p>
