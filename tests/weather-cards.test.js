@@ -18,6 +18,7 @@ import {
   radarTitle,
 } from '../src/lib/weather-cards.js';
 import { CAT_COLORS } from '../src/lib/metar-explain.js';
+import { RADAR_FIT_HUBS, radarLabelPlacement } from '../src/lib/weather-cards.js';
 import { buildFaaIndex } from '../src/lib/faa-context.js';
 import { serverFaaResponse } from './fixtures/faa-server-shape.js';
 import { getMetarStationForIata } from '../src/lib/airport-metadata.js';
@@ -285,11 +286,19 @@ describe('buildHubCardModel presentation data', () => {
     expect(buildHubCardModel({ hub: 'GUM', metar: { rawOb: VFR } }).hasDetail).toBe(true);
   });
 
-  it('the marker label carries the category and the leading ops reason', () => {
-    expect(buildHubCardModel({ hub: 'ORD', metar: { fltCat: 'IFR', rawOb: IFR_TS } }).markerLabel)
-      .toMatch(/^IFR \(/);
-    expect(buildHubCardModel({ hub: 'IAD', metar: { fltCat: 'VFR', rawOb: VFR } }).markerLabel)
-      .toBe('VFR');
+  it('the marker label is the category alone; the ops reason is its hover detail', () => {
+    const ifr = buildHubCardModel({ hub: 'ORD', metar: { fltCat: 'IFR', rawOb: IFR_TS } });
+    expect(ifr.markerLabel).toBe('IFR');
+    expect(ifr.markerDetail).toBeTruthy();
+    const vfr = buildHubCardModel({ hub: 'IAD', metar: { fltCat: 'VFR', rawOb: VFR } });
+    expect(vfr.markerLabel).toBe('VFR');
+    expect(vfr.markerDetail).toBe('');
+  });
+
+  it('never puts the long reason back in the permanent label (the EWR/IAD overlap)', () => {
+    for (const rawOb of [IFR_TS, VFR, 'KEWR 1SM FG OVC002 10/10']) {
+      expect(buildHubCardModel({ hub: 'EWR', metar: { rawOb } }).markerLabel).not.toContain('(');
+    }
   });
 
   it('shows a half-mile LIFR card as 1/2 SM with its VV ceiling', () => {
@@ -393,5 +402,17 @@ describe('radarTitle', () => {
 
   it('treats epoch 0 as a real timestamp rather than as "no data" (edge case)', () => {
     expect(radarTitle(0)).toBe('🌧 NEXRAD Radar — 00:00:00Z');
+  });
+});
+
+describe('radar framing', () => {
+  it('points the EWR and IAD labels away from each other, and SFO/LAX too', () => {
+    expect(radarLabelPlacement('EWR').direction).not.toBe(radarLabelPlacement('IAD').direction);
+    expect(radarLabelPlacement('SFO').direction).not.toBe(radarLabelPlacement('LAX').direction);
+    expect(radarLabelPlacement('ORD')).toEqual({ direction: 'top', offset: [0, -8] });
+  });
+
+  it('fits the seven mainland hubs, not NRT/GUM', () => {
+    expect(RADAR_FIT_HUBS).toEqual(['EWR', 'IAH', 'ORD', 'DEN', 'SFO', 'LAX', 'IAD']);
   });
 });

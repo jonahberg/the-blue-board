@@ -25,10 +25,21 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { AIRPORTS } from '@/lib/airports.js';
-import { NEUTRAL_MARKER_COLOR, WX_HUBS } from '@/lib/weather-cards.js';
+import {
+  NEUTRAL_MARKER_COLOR,
+  RADAR_FIT_HUBS,
+  RADAR_FIT_PADDING,
+  WX_HUBS,
+  radarLabelPlacement,
+} from '@/lib/weather-cards.js';
+import { escapeHtml } from '@/lib/escape.js';
 import { makeBasemapLayer, NEXRAD_TILES } from './basemap';
 
-/** `[39,-97]` zoom 4 — the shipped framing: the CONUS radar mosaic, edge to edge. */
+/**
+ * `[39,-97]` zoom 4 — the initial view and the widest the map will frame itself. On load and
+ * on resize the map fits the seven mainland hubs instead (see `frameHubs`), so a phone-width
+ * panel shows SFO through EWR rather than DEN/ORD/IAH alone.
+ */
 export const RADAR_VIEW = { center: [39, -97] as [number, number], zoom: 4 };
 
 /**
@@ -40,8 +51,11 @@ export const RADAR_OPACITY = 0.6;
 
 type Airport = { iata: string; lat: number; lon: number };
 
-/** What one hub marker shows: its colour and the text after the bold code in the tooltip. */
-export type RadarHub = { hub: string; color: string; label: string };
+/**
+ * What one hub marker shows: its colour, the short text after the bold code in the
+ * permanent label, and the longer reason shown on hover (the label's `title`).
+ */
+export type RadarHub = { hub: string; color: string; label: string; detail?: string };
 
 export type RadarMapProps = {
   hubs: RadarHub[];
@@ -56,15 +70,27 @@ const HUB_COORDS = new Map(
     .map((a) => [a.iata, [a.lat, a.lon] as [number, number]]),
 );
 
-function bindHubTooltip(marker: L.CircleMarker, hub: string, label: string) {
+function bindHubTooltip(marker: L.CircleMarker, hub: string, label: string, detail = '') {
+  const { direction, offset } = radarLabelPlacement(hub) as {
+    direction: L.Direction;
+    offset: [number, number];
+  };
+  const text = label ? ` ${escapeHtml(label)}` : '';
+  const title = detail ? ` title="${escapeHtml(detail)}"` : '';
   marker.unbindTooltip();
-  marker.bindTooltip(`<b>${hub}</b>${label ? ` ${label}` : ''}`, {
+  marker.bindTooltip(`<span${title}><b>${hub}</b>${text}</span>`, {
     permanent: true,
-    direction: 'top',
+    direction,
     className: 'hub-tooltip',
-    offset: [0, -8],
+    offset,
   });
 }
+
+const FIT_BOUNDS = L.latLngBounds(
+  (RADAR_FIT_HUBS as string[])
+    .map((hub) => HUB_COORDS.get(hub))
+    .filter((c): c is [number, number] => Boolean(c)),
+);
 
 export function RadarMap({ hubs, onSelectHub, className }: RadarMapProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -81,6 +107,8 @@ export function RadarMap({ hubs, onSelectHub, className }: RadarMapProps) {
       center: RADAR_VIEW.center,
       zoom: RADAR_VIEW.zoom,
       zoomControl: false,
+      // Half-steps so a phone settles near 2.5–3 instead of jumping to a distant 2.
+      zoomSnap: 0.5,
     });
     // ODbL: the attribution control stays on. Only the "Leaflet" prefix is dropped — the
     // OpenStreetMap/CARTO credit comes from the tile layer's own `attribution`.
@@ -113,8 +141,32 @@ export function RadarMap({ hubs, onSelectHub, className }: RadarMapProps) {
     // The panel is display:none while another tab is showing and it shares its box with a
     // column that stacks at 1024 px; without both of these Leaflet keeps a stale pixel size
     // and the tiles stop halfway across.
-    const resize = window.setTimeout(() => map.invalidateSize(), 200);
-    const observer = new ResizeObserver(() => map.invalidateSize());
+    //
+    // Re-framing on resize stops once the viewer pans or zooms, so a resize never undoes it.
+    let userMoved = false;
+    let framing = false;
+    map.on('movestart zoomstart', () => {
+      if (!framing) userMoved = true;
+    });
+    const frameHubs = () => {
+      framing = true;
+      try {
+        map.invalidateSize();
+        const size = map.getSize();
+        // Hidden tab: display:none reports 0×0 — nothing to fit into yet.
+        if (userMoved || !FIT_BOUNDS.isValid() || !size.x || !size.y) return;
+        map.fitBounds(FIT_BOUNDS, {
+          paddingTopLeft: RADAR_FIT_PADDING.topLeft as [number, number],
+          paddingBottomRight: RADAR_FIT_PADDING.bottomRight as [number, number],
+          maxZoom: RADAR_VIEW.zoom,
+          animate: false,
+        });
+      } finally {
+        framing = false;
+      }
+    };
+    const resize = window.setTimeout(frameHubs, 200);
+    const observer = new ResizeObserver(frameHubs);
     observer.observe(hostRef.current);
 
     return () => {
@@ -128,11 +180,11 @@ export function RadarMap({ hubs, onSelectHub, className }: RadarMapProps) {
 
   // ── Recolour in place ─────────────────────────────────────────────────────
   useEffect(() => {
-    for (const { hub, color, label } of hubs) {
+    for (const { hub, color, label, detail } of hubs) {
       const marker = markersRef.current.get(hub);
       if (!marker) continue;
       marker.setStyle({ color, fillColor: color });
-      bindHubTooltip(marker, hub, label);
+      bindHubTooltip(marker, hub, label, detail);
     }
   }, [hubs]);
 
