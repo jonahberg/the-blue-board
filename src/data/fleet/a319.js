@@ -46,14 +46,14 @@ export const a319 = {
     "wingspan": "34.1 m (112 ft)",
     "length": "33.8 m (111 ft)"
   },
-  "title": "United Airlines Airbus A319 — 68 Aircraft, Seat Map & 2030 Retirement | The Blue Board",
-  "description": "United's 68 Airbus A319s: seat map, cabins, WiFi and IFE. The fleet's oldest, smallest Airbus — slated for retirement by ~2030 as the A321neo takes over.",
+  "title": "United A319: {count} Aircraft & Seat Map",
+  "description": "United's {count} Airbus A319s: seat map, cabins, WiFi and IFE. The fleet's oldest, smallest Airbus — slated for retirement by ~2030 as the A321neo takes over.",
   "keywords": "United Airlines A319, United A319 seat map, United A319 configuration, United A319 WiFi, United A319 retirement, UA A319",
-  "ogTitle": "United Airlines Airbus A319 — 68 Aircraft, Retiring by ~2030",
-  "ogDescription": "United's 68 Airbus A319s: seat maps, cabins, WiFi and IFE — the fleet's oldest Airbus, being replaced by the A321neo.",
+  "ogTitle": "United Airlines Airbus A319 — {count} Aircraft, Retiring by ~2030",
+  "ogDescription": "United's {count} Airbus A319s: seat maps, cabins, WiFi and IFE — the fleet's oldest Airbus, being replaced by the A321neo.",
   "ogImageAlt": "The Blue Board — United Airlines Airbus A319 Fleet",
-  "twitterTitle": "United Airlines Airbus A319 — 68 Aircraft, Retiring by ~2030",
-  "twitterDescription": "United's 68 Airbus A319s — seat maps, cabins, WiFi and IFE. The fleet's oldest Airbus, being replaced by the A321neo.",
+  "twitterTitle": "United Airlines Airbus A319 — {count} Aircraft, Retiring by ~2030",
+  "twitterDescription": "United's {count} Airbus A319s — seat maps, cabins, WiFi and IFE. The fleet's oldest Airbus, being replaced by the A321neo.",
   "breadcrumbName": "Airbus A319",
   "faqSchema": [
     {

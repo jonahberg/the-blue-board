@@ -7,9 +7,11 @@ import BaseLayout from '../components/site/BaseLayout.astro';
 import Breadcrumbs from '../components/site/Breadcrumbs.astro';
 import HighlightBox from '../components/site/HighlightBox.astro';
 import { resolveTag } from '../data/news/index.js';
+import { newsSeo } from '../lib/page-seo.js';
 
 const { article } = Astro.props;
 const slug: string = article.slug;
+const seo = newsSeo(article);
 
 // Resolve tags to cross-links
 const crossLinks = (article.tags || []).map((t: string) => resolveTag(t)).filter(Boolean);
@@ -46,12 +48,12 @@ const newsArticleSchema = {
 ---
 
 <BaseLayout
-  title={`${article.title} | United Airlines News | The Blue Board`}
-  description={article.summary}
+  title={seo.title}
+  description={seo.description}
   canonical={`/news/${slug}`}
   ogType="article"
   ogImage={ogImage}
-  ogTitle={article.title}
+  ogTitle={seo.ogTitle}
   ogImageAlt={article.title}
   jsonLd={[newsArticleSchema]}
 >

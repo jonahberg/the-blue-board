@@ -13,10 +13,12 @@ import PillNav from '../components/site/PillNav.astro';
 import StatTile from '../components/site/StatTile.astro';
 import fleetDb from '../../public/data/fleet.json';
 import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
+import { fleetSeo } from '../lib/page-seo.js';
 
 const { data } = Astro.props;
 const slug: string = data.slug;
 const typeCode: string = data.typeCode;
+const seo = fleetSeo(data);
 
 // Filter fleet.json for this aircraft type at build time
 const typeAircraft = (fleetDb as any[])
@@ -27,8 +29,8 @@ const typeAircraft = (fleetDb as any[])
 const aircraftGuideSchema = {
   '@context': 'https://schema.org',
   '@type': 'AboutPage',
-  name: data.title,
-  description: data.description,
+  name: seo.title,
+  description: seo.description,
   url: `https://theblueboard.co/fleet/${slug}`,
   isPartOf: {
     '@type': 'WebSite',
@@ -93,15 +95,15 @@ function statusClass(status: string | undefined): string {
 ---
 
 <BaseLayout
-  title={data.title}
-  description={data.description}
+  title={seo.title}
+  description={seo.description}
   canonical={`/fleet/${slug}`}
   ogImage="https://theblueboard.co/og/og-fleet.jpg"
-  ogTitle={data.ogTitle}
-  ogDescription={data.ogDescription}
+  ogTitle={seo.ogTitle}
+  ogDescription={seo.ogDescription}
   ogImageAlt={data.ogImageAlt}
-  twitterTitle={data.twitterTitle}
-  twitterDescription={data.twitterDescription}
+  twitterTitle={seo.twitterTitle}
+  twitterDescription={seo.twitterDescription}
   jsonLd={[faqSchemaObj, aircraftGuideSchema]}
 >
   <div class="mx-auto max-w-4xl px-4 py-8">

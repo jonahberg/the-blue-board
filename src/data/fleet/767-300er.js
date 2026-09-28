@@ -49,14 +49,14 @@ export const _767_300er = {
     "wingspan": "47.6 m (156 ft)",
     "length": "54.9 m (180 ft)"
   },
-  "title": "United Airlines Boeing 767-300ER — 37 Aircraft, Polaris Seat Map & 2030 Retirement | The Blue Board",
-  "description": "United's 37 Boeing 767-300ERs fly Newark & Chicago to London and Zurich in two Polaris + Premium Plus layouts — retiring by 2030 as the 787-9 takes over.",
+  "title": "United 767-300ER: {count} Aircraft & Seat Map",
+  "description": "United's {count} Boeing 767-300ERs fly Newark & Chicago to London and Zurich in two Polaris + Premium Plus layouts — retiring by 2030 as the 787-9 takes over.",
   "keywords": "United Airlines 767-300ER, United 767-300ER seat map, United Airlines 767-300ER configuration, United 767-300ER Polaris, United 767-300ER Premium Plus, United 767-300ER WiFi, United 767-300ER retirement, United 767-300ER 787 replacement, UA 767-300ER",
-  "ogTitle": "United Airlines Boeing 767-300ER — 37 Aircraft, Transatlantic Polaris Workhorse",
-  "ogDescription": "37 Boeing 767-300ERs with Polaris and Premium Plus in two layouts, flying Newark and Chicago to London Heathrow and Zurich — retiring by 2030 for the 787-9.",
+  "ogTitle": "United 767-300ER — {count} Aircraft, Transatlantic Polaris Workhorse",
+  "ogDescription": "{count} Boeing 767-300ERs with Polaris and Premium Plus in two layouts, flying Newark and Chicago to London Heathrow and Zurich — retiring by 2030 for the 787-9.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 767-300ER Fleet",
-  "twitterTitle": "United Airlines Boeing 767-300ER — Transatlantic Polaris Workhorse",
-  "twitterDescription": "United's 37 Boeing 767-300ERs: Polaris + Premium Plus in two layouts, transatlantic to London & Zurich, retiring by 2030 for the 787-9. Seat map, WiFi & registry.",
+  "twitterTitle": "United 767-300ER — {count} Aircraft, Transatlantic Polaris Workhorse",
+  "twitterDescription": "United's {count} Boeing 767-300ERs: Polaris + Premium Plus in two layouts, transatlantic to London & Zurich, retiring by 2030 for the 787-9. Seat map & registry.",
   "breadcrumbName": "Boeing 767-300ER",
   "faqSchema": [
     {

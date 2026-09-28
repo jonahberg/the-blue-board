@@ -44,14 +44,14 @@ export const _757_300 = {
     "wingspan": "38.1 m (125 ft)",
     "length": "54.4 m (178 ft)"
   },
-  "title": "United Airlines Boeing 757-300 — 21 Aircraft, Seat Map & Phase-Out Guide | The Blue Board",
-  "description": "United flies 21 Boeing 757-300s — the world's largest 757-300 fleet — on high-density transcon, Florida & Hawaii routes, now phasing out for the A321neo.",
+  "title": "United 757-300: {count} Aircraft & Seat Map",
+  "description": "United flies {count} Boeing 757-300s — the world's largest 757-300 fleet — on high-density transcon, Florida & Hawaii routes, now phasing out for the A321neo.",
   "keywords": "United Airlines 757-300, United 757-300 seat map, United Airlines 757-300 configuration, United 757-300 WiFi, United 757-300 retirement, largest 757-300 operator, United 757-300 A321neo, UA 757-300",
-  "ogTitle": "United Airlines Boeing 757-300 — 21 Aircraft, the World's Largest 757-300 Fleet",
-  "ogDescription": "United flies 21 Boeing 757-300s — the world's largest 757-300 fleet — on high-density transcon, Florida and Hawaii routes, now phasing out for the A321neo.",
+  "ogTitle": "United 757-300 — {count} Aircraft, the World's Largest 757-300 Fleet",
+  "ogDescription": "United flies {count} Boeing 757-300s — the world's largest 757-300 fleet — on high-density transcon, Florida and Hawaii routes, now phasing out for the A321neo.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 757-300 Fleet",
-  "twitterTitle": "United Airlines Boeing 757-300 — the World's Largest 757-300 Fleet",
-  "twitterDescription": "United's 21 Boeing 757-300s: the largest 757-300 fleet, 234 seats, high-density domestic & Hawaii, phasing out for the A321neo. Seat map, WiFi & registry.",
+  "twitterTitle": "United 757-300 — {count} Aircraft, the World's Largest 757-300 Fleet",
+  "twitterDescription": "United's {count} Boeing 757-300s: the largest 757-300 fleet, 234 seats, high-density domestic & Hawaii, phasing out for the A321neo. Seat map, WiFi & registry.",
   "breadcrumbName": "Boeing 757-300",
   "faqSchema": [
     {

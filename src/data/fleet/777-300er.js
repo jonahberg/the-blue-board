@@ -49,14 +49,14 @@ export const _777_300er = {
     "wingspan": "64.8 m (213 ft)",
     "length": "73.9 m (242 ft)"
   },
-  "title": "United Airlines Boeing 777-300ER — 22 Aircraft, Flagship Seat Map & Guide | The Blue Board",
-  "description": "United's 22 Boeing 777-300ERs are its largest, newest flagships — 350 seats, 60 Polaris lie-flats, GE90-115B power. Seat map, routes & Starlink status.",
+  "title": "United 777-300ER: {count} Aircraft & Seat Map",
+  "description": "United's {count} Boeing 777-300ERs are its largest, newest flagships — 350 seats, 60 Polaris lie-flats, GE90-115B power. Seat map, routes & Starlink status.",
   "keywords": "United Airlines 777-300ER, United 777-300ER seat map, largest United aircraft, United 777-300ER Polaris, United flagship widebody, UA 777-300ER",
-  "ogTitle": "United Airlines 777-300ER — 22 Aircraft, Flagship Widebody",
-  "ogDescription": "United's 22 Boeing 777-300ERs: the largest, newest jets in the fleet with 60 Polaris lie-flats and GE90-115B engines. Flagship long-haul from SFO and Newark.",
+  "ogTitle": "United Airlines 777-300ER — {count} Aircraft, Flagship Widebody",
+  "ogDescription": "United's {count} Boeing 777-300ERs: the largest, newest jets in the fleet with 60 Polaris lie-flats and GE90-115B engines. Flagship long-haul from SFO and Newark.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 777-300ER Fleet",
-  "twitterTitle": "United Airlines 777-300ER — 22 Aircraft, Flagship Widebody",
-  "twitterDescription": "United's 22 Boeing 777-300ERs. 350 seats · 60 Polaris · largest in the fleet · GE90-115B power. Flagship long-haul, seat map & Starlink status.",
+  "twitterTitle": "United Airlines 777-300ER — {count} Aircraft, Flagship Widebody",
+  "twitterDescription": "United's {count} Boeing 777-300ERs. 350 seats · 60 Polaris · largest in the fleet · GE90-115B power. Flagship long-haul, seat map & Starlink status.",
   "breadcrumbName": "Boeing 777-300ER",
   "faqSchema": [
     {

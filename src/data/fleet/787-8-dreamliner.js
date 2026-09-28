@@ -49,14 +49,14 @@ export const _787_8_dreamliner = {
     "wingspan": "60.1 m (197 ft)",
     "length": "56.7 m (186 ft)"
   },
-  "title": "United Airlines Boeing 787-8 Dreamliner — 12 Aircraft, Seat Map, WiFi & Cabins | The Blue Board",
-  "description": "United's 12 Boeing 787-8 Dreamliners, the fleet's smallest widebody. Seat maps, GEnx-1B engines, Polaris cabin, WiFi, and lower-demand long-haul routes.",
+  "title": "United 787-8 Dreamliner: {count} Aircraft & Seat Maps",
+  "description": "United's {count} Boeing 787-8 Dreamliners, the fleet's smallest widebody. Seat maps, GEnx-1B engines, Polaris cabin, WiFi, and lower-demand long-haul routes.",
   "keywords": "United Airlines 787-8, United 787-8 seat map, United 787-8 configuration, United 787-8 Polaris, United 787-8 WiFi, UA 787-8",
-  "ogTitle": "United Airlines Boeing 787-8 Dreamliner — 12-Aircraft Fleet Guide",
-  "ogDescription": "United's 12 Boeing 787-8s — the smallest widebody in the fleet. Seat maps, Polaris, GEnx-1B engines, Starlink-bound WiFi and routes.",
+  "ogTitle": "United Airlines Boeing 787-8 Dreamliner — {count}-Aircraft Fleet Guide",
+  "ogDescription": "United's {count} Boeing 787-8s — the smallest widebody in the fleet. Seat maps, Polaris, GEnx-1B engines, Starlink-bound WiFi and routes.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 787-8 Dreamliner Fleet",
-  "twitterTitle": "United Airlines Boeing 787-8 Dreamliner — 12-Aircraft Fleet Guide",
-  "twitterDescription": "12 United 787-8 Dreamliners — the smallest widebody, 243 seats, Polaris, GEnx-1B engines, Starlink-bound WiFi. Seat maps and routes.",
+  "twitterTitle": "United Airlines Boeing 787-8 Dreamliner — {count}-Aircraft Fleet Guide",
+  "twitterDescription": "{count} United 787-8 Dreamliners — the smallest widebody, 243 seats, Polaris, GEnx-1B engines, Starlink-bound WiFi. Seat maps and routes.",
   "breadcrumbName": "Boeing 787-8 Dreamliner",
   "faqSchema": [
     {

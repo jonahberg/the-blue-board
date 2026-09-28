@@ -49,14 +49,14 @@ export const _787_9_dreamliner = {
     "wingspan": "60.1 m (197 ft)",
     "length": "62.8 m (206 ft)"
   },
-  "title": "United Airlines Boeing 787-9 Dreamliner — 59 Aircraft, Polaris Studio & Seat Maps | The Blue Board",
-  "description": "United's 59 Boeing 787-9 Dreamliners now feature Polaris Studio suites and the premium-heavy Elevated layout, plus the standard 257-seat map, WiFi and routes.",
+  "title": "United 787-9 Dreamliner: {count} Aircraft & Seat Maps",
+  "description": "United's {count} Boeing 787-9 Dreamliners now feature Polaris Studio suites and the premium-heavy Elevated layout, plus the standard 257-seat map, WiFi and routes.",
   "keywords": "United Airlines 787-9, United 787-9 seat map, United Polaris Studio, United 787-9 Elevated, United 787-9 Polaris, United 787-9 WiFi, UA 787-9",
-  "ogTitle": "United Airlines Boeing 787-9 Dreamliner — Polaris Studio & 59-Aircraft Fleet Guide",
-  "ogDescription": "United's 59 Boeing 787-9 Dreamliners now feature Polaris Studio suites and the premium-heavy Elevated cabin. Seat maps, WiFi, engines and routes.",
+  "ogTitle": "United 787-9 Dreamliner — Polaris Studio & {count}-Aircraft Fleet Guide",
+  "ogDescription": "United's {count} Boeing 787-9 Dreamliners now feature Polaris Studio suites and the premium-heavy Elevated cabin. Seat maps, WiFi, engines and routes.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 787-9 Dreamliner Fleet",
-  "twitterTitle": "United Airlines Boeing 787-9 Dreamliner — Polaris Studio & 59-Aircraft Fleet Guide",
-  "twitterDescription": "59 United 787-9 Dreamliners — new Polaris Studio suites, the Elevated 222-seat layout, the standard 257-seat map, plus WiFi and routes.",
+  "twitterTitle": "United 787-9 Dreamliner — Polaris Studio & {count}-Aircraft Fleet Guide",
+  "twitterDescription": "{count} United 787-9 Dreamliners — new Polaris Studio suites, the Elevated 222-seat layout, the standard 257-seat map, plus WiFi and routes.",
   "breadcrumbName": "Boeing 787-9 Dreamliner",
   "faqSchema": [
     {

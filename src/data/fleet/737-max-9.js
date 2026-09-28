@@ -44,14 +44,14 @@ export const _737_max_9 = {
     "wingspan": "35.9 m (118 ft)",
     "length": "42.2 m (138 ft)"
   },
-  "title": "United Airlines Boeing 737 MAX 9 — 178 Aircraft, Largest MAX 9 Fleet | The Blue Board",
-  "description": "United Airlines' 178 Boeing 737 MAX 9s — the world's largest MAX 9 fleet, factory-fit Signature Interior. Seat maps, cabins, WiFi, specs and delivery dates.",
+  "title": "United 737 MAX 9: {count} Aircraft & Seat Maps",
+  "description": "United Airlines' {count} Boeing 737 MAX 9s — the world's largest MAX 9 fleet, factory-fit Signature Interior. Seat maps, cabins, WiFi, specs and delivery dates.",
   "keywords": "United Airlines 737 MAX 9, United 737 MAX 9 seat map, largest 737 MAX 9 operator, United 737 MAX 10, United 737 MAX 9 WiFi, UA 737 MAX 9",
-  "ogTitle": "United Airlines 737 MAX 9 — 178 Aircraft, World's Largest MAX 9 Fleet",
-  "ogDescription": "United's 178 Boeing 737 MAX 9s — the world's largest MAX 9 fleet with the Signature Interior at every seat. Seat maps, cabins, WiFi, specs and delivery dates.",
+  "ogTitle": "United Airlines 737 MAX 9 — {count} Aircraft, World's Largest MAX 9 Fleet",
+  "ogDescription": "United's {count} Boeing 737 MAX 9s — the world's largest MAX 9 fleet with the Signature Interior at every seat. Seat maps, cabins, WiFi, specs and delivery dates.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 737 MAX 9 Fleet",
-  "twitterTitle": "United Airlines 737 MAX 9 — 178 Aircraft, World's Largest MAX 9 Fleet",
-  "twitterDescription": "United's 178 Boeing 737 MAX 9s — world's largest MAX 9 fleet, factory-fit Signature Interior, Viasat WiFi with Starlink rolling out. Seat configs and specs.",
+  "twitterTitle": "United Airlines 737 MAX 9 — {count} Aircraft, World's Largest MAX 9 Fleet",
+  "twitterDescription": "United's {count} Boeing 737 MAX 9s — world's largest MAX 9 fleet, factory-fit Signature Interior, Viasat WiFi with Starlink rolling out. Seat configs and specs.",
   "breadcrumbName": "Boeing 737 MAX 9",
   "faqSchema": [
     {

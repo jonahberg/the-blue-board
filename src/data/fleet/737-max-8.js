@@ -44,14 +44,14 @@ export const _737_max_8 = {
     "wingspan": "35.9 m (118 ft)",
     "length": "39.5 m (130 ft)"
   },
-  "title": "United Airlines Boeing 737 MAX 8 — 123 Aircraft: Seats, WiFi & Specs | The Blue Board",
-  "description": "United Airlines' 123 Boeing 737 MAX 8s arrive factory-fit with the Signature Interior. Seat maps, cabins, WiFi, IFE and delivery dates, updated for 2026.",
+  "title": "United 737 MAX 8: {count} Aircraft & Seat Maps",
+  "description": "United Airlines' {count} Boeing 737 MAX 8s arrive factory-fit with the Signature Interior. Seat maps, cabins, WiFi, IFE and delivery dates, updated for 2026.",
   "keywords": "United Airlines 737 MAX 8, United 737 MAX 8 seat map, United 737 MAX 8 Signature Interior, United 737 MAX 8 WiFi, United MAX 8 Starlink, UA 737 MAX 8",
-  "ogTitle": "United Airlines 737 MAX 8 — 123 Aircraft, Factory-Fit Signature Interior",
-  "ogDescription": "United's 123 Boeing 737 MAX 8s — next-gen narrowbody with the Signature Interior at every seat. Seat maps, cabins, WiFi, specs and delivery dates.",
+  "ogTitle": "United 737 MAX 8 — {count} Aircraft, Factory-Fit Signature Interior",
+  "ogDescription": "United's {count} Boeing 737 MAX 8s — next-gen narrowbody with the Signature Interior at every seat. Seat maps, cabins, WiFi, specs and delivery dates.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 737 MAX 8 Fleet",
-  "twitterTitle": "United Airlines 737 MAX 8 — 123 Aircraft, Factory-Fit Signature Interior",
-  "twitterDescription": "United's 123 Boeing 737 MAX 8s — Signature Interior at every seat, Viasat WiFi today with Starlink rolling out. Seat configs, specs and delivery dates.",
+  "twitterTitle": "United 737 MAX 8 — {count} Aircraft, Factory-Fit Signature Interior",
+  "twitterDescription": "United's {count} Boeing 737 MAX 8s — Signature Interior at every seat, Viasat WiFi today with Starlink rolling out. Seat configs, specs and delivery dates.",
   "breadcrumbName": "Boeing 737 MAX 8",
   "faqSchema": [
     {

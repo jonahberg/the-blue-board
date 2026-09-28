@@ -46,14 +46,14 @@ export const a321neo = {
     "wingspan": "35.8 m (117 ft)",
     "length": "44.5 m (146 ft)"
   },
-  "title": "United Airlines Airbus A321neo — 76 Aircraft, Seat Map & the New A321XLR | The Blue Board",
-  "description": "United's 76 Airbus A321neos: seat map, cabins, WiFi and IFE. Its newest narrowbody — now including the long-range A321XLR with lie-flat Polaris suites.",
+  "title": "United A321neo: {count} Aircraft & Seat Map",
+  "description": "United's {count} Airbus A321neos: seat map, cabins, WiFi and IFE. Its newest narrowbody — now including the long-range A321XLR with lie-flat Polaris suites.",
   "keywords": "United Airlines A321neo, United A321neo seat map, United A321neo configuration, United A321XLR, United A321neo WiFi, UA A321neo",
-  "ogTitle": "United Airlines Airbus A321neo — 76 Aircraft + the New A321XLR",
-  "ogDescription": "United's 76 A321neos: seat maps, cabins, WiFi and IFE — plus the new long-range A321XLR with lie-flat United Polaris suites.",
+  "ogTitle": "United Airlines Airbus A321neo — {count} Aircraft + the New A321XLR",
+  "ogDescription": "United's {count} A321neos: seat maps, cabins, WiFi and IFE — plus the new long-range A321XLR with lie-flat United Polaris suites.",
   "ogImageAlt": "The Blue Board — United Airlines Airbus A321neo Fleet",
-  "twitterTitle": "United Airlines Airbus A321neo — 76 Aircraft + the New A321XLR",
-  "twitterDescription": "United's 76 A321neos — seat maps, cabins, WiFi and IFE. Plus the new long-range A321XLR with lie-flat Polaris suites.",
+  "twitterTitle": "United Airlines Airbus A321neo — {count} Aircraft + the New A321XLR",
+  "twitterDescription": "United's {count} A321neos — seat maps, cabins, WiFi and IFE. Plus the new long-range A321XLR with lie-flat Polaris suites.",
   "breadcrumbName": "Airbus A321neo",
   "faqSchema": [
     {
