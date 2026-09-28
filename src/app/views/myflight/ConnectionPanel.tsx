@@ -153,8 +153,9 @@ export function ManualConnectionCheck() {
         <Input
           id="conn-inbound"
           aria-label="Inbound flight number"
-          placeholder="Inbound (UA 1234)"
-          className="min-h-11 flex-1 basis-32 font-mono text-[11px] md:min-h-9"
+          placeholder="Inbound UA#"
+          // 16px below md: iOS Safari zooms into any focused input smaller than that (F63).
+          className="min-h-11 flex-1 basis-32 font-mono text-base md:min-h-9 md:text-[11px]"
           value={inbound}
           onChange={(event) => setInbound(event.target.value)}
           onKeyDown={onEnter}
@@ -162,8 +163,9 @@ export function ManualConnectionCheck() {
         <Input
           id="conn-outbound"
           aria-label="Outbound flight number"
-          placeholder="Outbound (UA 567)"
-          className="min-h-11 flex-1 basis-32 font-mono text-[11px] md:min-h-9"
+          placeholder="Outbound UA#"
+          // 16px below md: iOS Safari zooms into any focused input smaller than that (F63).
+          className="min-h-11 flex-1 basis-32 font-mono text-base md:min-h-9 md:text-[11px]"
           value={outbound}
           onChange={(event) => setOutbound(event.target.value)}
           onKeyDown={onEnter}
