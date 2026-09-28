@@ -37,7 +37,7 @@ export function SwapSummary({
       onClick={onOpenFilters}
       className={cn(
         'flex min-h-11 w-full items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10',
-        'px-2.5 py-1.5 text-left text-[11px] text-amber-400 md:min-h-0',
+        'px-2.5 py-1.5 text-left text-[11px] text-amber-400 pointer-fine:md:min-h-0',
       )}
     >
       <span aria-hidden="true">⚠️</span>

@@ -151,7 +151,7 @@ export function FlightCard({
                 type="button"
                 onClick={() => onExplain(explainContext)}
                 title="Click for AI analysis"
-                className="inline-flex min-h-11 min-w-11 items-center justify-center md:min-h-0 md:min-w-0"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
               >
                 <span
                   className="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold"
@@ -210,7 +210,7 @@ export function FlightCard({
                   "Aircraft Details" button below does the same thing. */}
               <button
                 type="button"
-                className="inline-flex min-h-11 items-center text-[10px] underline decoration-dotted underline-offset-2 hover:text-primary md:min-h-0"
+                className="inline-flex min-h-11 items-center text-[10px] underline decoration-dotted underline-offset-2 hover:text-primary pointer-fine:md:min-h-0"
                 onClick={() => onAircraftDetail(reg)}
               >
                 {reg}
@@ -292,7 +292,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 md:min-h-0"
+            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onViewOnMap(liveFlight)}
           >
             View on Map
@@ -302,7 +302,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 md:min-h-0"
+            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onAircraftDetail(reg)}
           >
             Aircraft Details
@@ -312,7 +312,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 md:min-h-0"
+            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onExplain(explainContext)}
           >
             Explain Delay Risk
@@ -321,7 +321,7 @@ export function FlightCard({
         <Button
           size="sm"
           variant="ghost"
-          className="ml-auto min-h-11 text-xs md:h-8 md:min-h-0"
+          className="ml-auto min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
           onClick={() => onUnwatch(entry.flight)}
         >
           Unwatch

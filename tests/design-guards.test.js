@@ -37,19 +37,8 @@ describe('no glassmorphism (DESIGN.md: "No glassmorphism … blur")', () => {
 
 describe('touch targets relax only for a fine pointer (audit F24)', () => {
   // Width is not input type: an iPad at 768/1024 px is a touch device. The 44 px floor may
-  // only come off at md AND pointer:fine. These are the surfaces this rule has been applied
-  // to so far; the view tables are tracked separately.
-  const SCOPE = [
-    'src/app/shell',
-    'src/app/views/live',
-    'src/components',
-    'src/app/features/NewsBanner.tsx',
-    'src/app/features/TipStrip.tsx',
-    'src/app/features/BmacToast.tsx',
-  ].flatMap((p) => {
-    const abs = resolve(ROOT, p);
-    return statSync(abs).isDirectory() ? [...walk(abs)] : [abs];
-  });
+  // only come off at md AND pointer:fine — across the whole dashboard and every component.
+  const SCOPE = ['src/app', 'src/components'].flatMap((p) => [...walk(resolve(ROOT, p))]);
 
   it('has no width-only md:min-h-0 / md:min-w-0 / md:min-h-8 / md:min-h-9 relaxations', () => {
     expect(hits(SCOPE, /(?<![\w:-])md:min-[hw]-(0|8|9)\b/)).toEqual([]);
@@ -64,6 +53,23 @@ describe('touch targets relax only for a fine pointer (audit F24)', () => {
 });
 
 describe('phone inputs are 16px (iOS zooms below that; audit F23)', () => {
+  it('every dashboard <Input> sizes below 16px only from md up', () => {
+    const offenders = [];
+    for (const path of walk(resolve(ROOT, 'src/app'))) {
+      const src = readFileSync(path, 'utf8');
+      // Up to the self-closing `/>`: an `onChange={(e) => …}` would end a `[^>]*` match early.
+      for (const [tag] of src.matchAll(/<Input\b[\s\S]*?\/>/g)) {
+        const cls = tag.match(/className="([^"]*)"/);
+        if (!cls) continue;
+        const small = cls[1]
+          .split(/\s+/)
+          .filter((c) => /^text-(xs|sm|\[\d+px\])$/.test(c));
+        if (small.length) offenders.push(`${relative(ROOT, path)}: ${small.join(' ')}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('CommandInput keeps text-base below md', () => {
     const src = readFileSync(resolve(ROOT, 'src/components/ui/command.tsx'), 'utf8');
     expect(src).toMatch(/CommandPrimitive\.Input[\s\S]*?"w-full text-base [^"]*md:text-sm/);

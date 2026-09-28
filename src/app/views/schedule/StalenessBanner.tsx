@@ -53,7 +53,7 @@ export function StalenessBanner({
       <Button
         variant="link"
         size="sm"
-        className="h-auto min-h-11 px-1 py-0 text-[11px] underline md:min-h-0"
+        className="h-auto min-h-11 px-1 py-0 text-[11px] underline pointer-fine:md:min-h-0"
         onClick={onRetry}
       >
         ↻ Retry

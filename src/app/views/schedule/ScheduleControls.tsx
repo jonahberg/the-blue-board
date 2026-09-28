@@ -132,7 +132,7 @@ export function ScheduleControls({
             <ToggleGroupItem
               key={offset}
               value={String(offset)}
-              className="min-h-11 px-2 text-[10px] md:min-h-0"
+              className="min-h-11 px-2 text-[10px] pointer-fine:md:min-h-0"
             >
               {DAY_NAMES[offset]}
               <span className="ml-1 hidden text-muted-foreground sm:inline">
@@ -150,7 +150,7 @@ export function ScheduleControls({
             <SelectTrigger
               size="sm"
               aria-label="Schedule hub"
-              className="min-h-11 w-[9.5rem] font-mono text-[11px] md:min-h-0"
+              className="min-h-11 w-[9.5rem] font-mono text-[11px] pointer-fine:md:min-h-0"
             >
               <SelectValue placeholder="All Hubs" />
             </SelectTrigger>
@@ -176,10 +176,10 @@ export function ScheduleControls({
             size="sm"
             aria-label="Board direction"
           >
-            <ToggleGroupItem value="departures" className="min-h-11 px-2.5 text-[10px] md:min-h-0">
+            <ToggleGroupItem value="departures" className="min-h-11 px-2.5 text-[10px] pointer-fine:md:min-h-0">
               Departures
             </ToggleGroupItem>
-            <ToggleGroupItem value="arrivals" className="min-h-11 px-2.5 text-[10px] md:min-h-0">
+            <ToggleGroupItem value="arrivals" className="min-h-11 px-2.5 text-[10px] pointer-fine:md:min-h-0">
               Arrivals
             </ToggleGroupItem>
           </ToggleGroup>
@@ -189,14 +189,14 @@ export function ScheduleControls({
             placeholder="Find in board…"
             value={filters.search}
             onChange={(event) => onFilters({ search: event.target.value })}
-            className="min-h-11 w-[8.5rem] font-mono text-[11px] md:min-h-0"
+            className="min-h-11 w-[8.5rem] font-mono text-base pointer-fine:md:min-h-0 md:text-[11px]"
           />
 
           {showJumpToNow ? (
             <Button
               variant="outline"
               size="sm"
-              className="min-h-11 text-[10px] md:min-h-0"
+              className="min-h-11 text-[10px] pointer-fine:md:min-h-0"
               onClick={onJumpToNow}
               title="Scroll to the current time"
             >
@@ -204,7 +204,7 @@ export function ScheduleControls({
             </Button>
           ) : null}
 
-          <Button size="sm" className="min-h-11 text-[10px] md:min-h-0" onClick={onRefresh} disabled={loading}>
+          <Button size="sm" className="min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onRefresh} disabled={loading}>
             {loading ? '⏳ Loading…' : '↻ Refresh'}
           </Button>
 
@@ -214,7 +214,7 @@ export function ScheduleControls({
             size="sm"
             aria-expanded={drawerOpen}
             aria-controls="sched-adv-filters"
-            className={cn('min-h-11 text-[10px] md:min-h-0', activeCount > 0 && 'text-primary')}
+            className={cn('min-h-11 text-[10px] pointer-fine:md:min-h-0', activeCount > 0 && 'text-primary')}
             onClick={() => onDrawerOpen(!drawerOpen)}
           >
             {advFilterLabel(activeCount, drawerOpen) as string}

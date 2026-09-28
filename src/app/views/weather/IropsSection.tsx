@@ -169,7 +169,7 @@ export function IropsSection() {
                     <button
                       type="button"
                       aria-label="What does this mean?"
-                      className="flex min-h-11 min-w-11 items-center justify-center md:min-h-0 md:min-w-0"
+                      className="flex min-h-11 min-w-11 items-center justify-center pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
                     >
                       <span
                         aria-hidden="true"

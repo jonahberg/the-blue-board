@@ -54,7 +54,7 @@ function Row({
       <button
         type="button"
         onClick={() => onOpenAircraft(row.tail)}
-        className="min-h-11 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+        className="min-h-11 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
         title={`Aircraft details · ${row.tail}`}
       >
         <span className="block truncate font-mono text-xs font-semibold">
@@ -154,7 +154,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
               type="button"
               aria-pressed={windowH === hours}
               onClick={() => onWindow(hours)}
-              className="min-h-11 rounded-md border px-3 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-8"
+              className="min-h-11 rounded-md border px-3 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-8"
             >
               {hours}H
             </button>
@@ -172,7 +172,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
           type="button"
           aria-pressed={!hub}
           onClick={() => onHub(null)}
-          className="min-h-11 rounded-md border px-2.5 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-8"
+          className="min-h-11 rounded-md border px-2.5 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-8"
         >
           ALL <span className="ml-1 font-mono tabular-nums opacity-70">{board.allCount}</span>
         </button>
@@ -186,7 +186,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
               onClick={() => onHub(code)}
               // A zero hub is still offered — Pacific hubs go quiet for hours and hiding them
               // would read as "GUM has no Starlink aircraft".
-              className={`min-h-11 rounded-md border px-2.5 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-8 ${count === 0 ? 'sl-board-pill-empty opacity-50' : ''}`}
+              className={`min-h-11 rounded-md border px-2.5 text-[11px] font-semibold aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-8 ${count === 0 ? 'sl-board-pill-empty opacity-50' : ''}`}
             >
               {code} <span className="ml-1 font-mono tabular-nums opacity-70">{count}</span>
             </button>

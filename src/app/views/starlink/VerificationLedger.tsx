@@ -86,7 +86,7 @@ export const VerificationLedger = memo(function VerificationLedger({
         <details open className="mt-3">
           {/* Padding and min-height, never `display:flex`: a <summary> is `display:list-item`,
               and changing that is what silently deletes its disclosure triangle. */}
-          <summary className="min-h-11 cursor-pointer py-3 text-xs font-medium marker:text-muted-foreground md:min-h-0 md:py-0">
+          <summary className="min-h-11 cursor-pointer py-3 text-xs font-medium marker:text-muted-foreground pointer-fine:md:min-h-0 md:py-0">
             Disputed claims{' '}
             <span className="font-normal text-muted-foreground">
               — overruled by official verification

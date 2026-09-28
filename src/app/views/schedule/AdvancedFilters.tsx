@@ -94,7 +94,7 @@ function FilterSelect({
         {label}
       </Label>
       <Select value={value || ALL} onValueChange={(next) => onChange(next === ALL ? '' : next)}>
-        <SelectTrigger id={id} size="sm" className="min-h-11 w-full font-mono text-[11px] md:min-h-0">
+        <SelectTrigger id={id} size="sm" className="min-h-11 w-full font-mono text-[11px] pointer-fine:md:min-h-0">
           <SelectValue placeholder={allLabel} />
         </SelectTrigger>
         <SelectContent>
@@ -192,7 +192,7 @@ export function AdvancedFilters({
           value={filters.search}
           onChange={(event) => onChange({ search: event.target.value })}
           placeholder="Flight, city, reg…"
-          className="min-h-11 font-mono text-[11px] md:min-h-0"
+          className="min-h-11 font-mono text-base pointer-fine:md:min-h-0 md:text-[11px]"
         />
       </div>
     </div>

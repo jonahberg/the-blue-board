@@ -342,7 +342,7 @@ export default function MyFlightsView() {
           <Button
             size="sm"
             variant="ghost"
-            className="min-h-11 text-xs md:min-h-0"
+            className="min-h-11 text-xs pointer-fine:md:min-h-0"
             onClick={() => {
               watch.clearAll();
               announce('Watch list cleared');

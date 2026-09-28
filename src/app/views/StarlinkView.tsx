@@ -33,6 +33,7 @@ import { Card } from '@/components/ui/card';
 import { matchAircraft } from '@/lib/fleet-match.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
+import { scrollBehavior } from '@/lib/motion.js';
 import { buildVelocityChart } from '@/lib/starlink-chart.js';
 import {
   buildIndustryRows,
@@ -411,7 +412,7 @@ export default function StarlinkView() {
   }, [setStarlinkFilter, setTab]);
 
   const jumpToLedger = useCallback(() => {
-    ledgerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    ledgerRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }, []);
 
   const sourceUpdated = useMemo(() => {

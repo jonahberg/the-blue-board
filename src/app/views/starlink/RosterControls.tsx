@@ -129,7 +129,7 @@ export const RosterControls = memo(function RosterControls({
         id="sl-filter-new"
         aria-pressed={newOnly}
         onClick={() => onNewOnly(!newOnly)}
-        className="min-h-11 rounded-md border px-3 text-xs font-medium aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-9"
+        className="min-h-11 rounded-md border px-3 text-xs font-medium aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-9"
       >
         ★ New this week
       </button>

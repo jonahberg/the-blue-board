@@ -23,6 +23,7 @@ import { AIRPORTS, AIRPORT_COORDS, IATA_CITIES } from '@/lib/airports.js';
 import { resolveFlightRoute } from '../data/route';
 import { getPhase } from '@/lib/flight-phase.js';
 import { greatCirclePoints, isLonghaul, normalizeLonContinuity } from '@/lib/geo.js';
+import { prefersReducedMotion } from '@/lib/motion.js';
 import { planeIconSpec } from '@/lib/plane-icon.js';
 import type { Flight } from '../data/types';
 import { makeBasemapLayer, makeRadarLayer } from './basemap';
@@ -36,12 +37,7 @@ type Airport = { iata: string; lat: number; lon: number; hub?: boolean };
 
 const HUBS: Airport[] = (AIRPORTS as Airport[]).filter((a) => a.hub);
 
-/** Does the visitor ask for reduced motion? False wherever matchMedia is unavailable. */
-export function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    : false;
-}
+export { prefersReducedMotion };
 
 /**
  * Move the map, animated unless the visitor asked for reduced motion. The global CSS

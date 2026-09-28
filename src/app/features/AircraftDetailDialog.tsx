@@ -217,10 +217,10 @@ export default function AircraftDetailDialog() {
               </p>
             </div>
             <DialogFooter className="mx-0 mb-0 flex-row flex-wrap justify-center gap-2 sm:justify-center">
-              <Button size="lg" className="min-h-11 md:min-h-0" onClick={retry}>
+              <Button size="lg" className="min-h-11 pointer-fine:md:min-h-0" onClick={retry}>
                 ↻ Retry
               </Button>
-              <Button variant="outline" size="lg" className="min-h-11 md:min-h-0" asChild>
+              <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a href={planespottersUrl(reg)} target="_blank" rel="noopener noreferrer">
                   Planespotters ↗
                 </a>
@@ -234,7 +234,7 @@ export default function AircraftDetailDialog() {
               <p className="mt-1">It may be a United Express (regional) aircraft.</p>
             </div>
             <DialogFooter className="mx-0 mb-0 justify-center">
-              <Button variant="outline" size="lg" className="min-h-11 md:min-h-0" asChild>
+              <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a href={planespottersUrl(reg)} target="_blank" rel="noopener noreferrer">
                   Planespotters ↗
                 </a>
@@ -400,7 +400,7 @@ export default function AircraftDetailDialog() {
                 <Button
                   variant={watched ? 'secondary' : 'outline'}
                   size="lg"
-                  className="min-h-11 md:min-h-0"
+                  className="min-h-11 pointer-fine:md:min-h-0"
                   onClick={() => {
                     const nowWatched = watch.toggle(
                       watchIdent,
@@ -415,12 +415,12 @@ export default function AircraftDetailDialog() {
                   {watched ? '👁 Watching' : '👁 Watch'}
                 </Button>
               ) : null}
-              <Button variant="outline" size="lg" className="min-h-11 md:min-h-0" asChild>
+              <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a href={planespottersUrl(reg)} target="_blank" rel="noopener noreferrer">
                   Planespotters ↗
                 </a>
               </Button>
-              <Button variant="outline" size="lg" className="min-h-11 md:min-h-0" asChild>
+              <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a
                   href={`https://flightaware.com/resources/registration/${encodeURIComponent(reg)}`}
                   target="_blank"
@@ -432,7 +432,7 @@ export default function AircraftDetailDialog() {
               <Button
                 variant="outline"
                 size="lg"
-                className="min-h-11 md:min-h-0"
+                className="min-h-11 pointer-fine:md:min-h-0"
                 onClick={onShare}
               >
                 🔗 Share

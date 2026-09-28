@@ -42,7 +42,7 @@ export function FleetLoadError({ onRetry }: { onRetry: () => void }) {
         The fleet database could not be loaded, so counts and per-type stats are unavailable
         right now. <strong className="font-medium text-foreground">This is a load error — not zero aircraft.</strong>
       </p>
-      <Button size="lg" className="mt-3 min-h-11 md:min-h-0" onClick={onRetry}>
+      <Button size="lg" className="mt-3 min-h-11 pointer-fine:md:min-h-0" onClick={onRetry}>
         ↻ Retry
       </Button>
     </div>

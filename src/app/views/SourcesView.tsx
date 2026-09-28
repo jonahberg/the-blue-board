@@ -152,7 +152,7 @@ function SourceCard({ source }: { source: Source }) {
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-11 items-center text-xs text-primary underline-offset-2 hover:underline md:min-h-0"
+                  className="inline-flex min-h-11 items-center text-xs text-primary underline-offset-2 hover:underline pointer-fine:md:min-h-0"
                 >
                   {link.label}
                 </a>

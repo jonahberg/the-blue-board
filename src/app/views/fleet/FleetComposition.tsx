@@ -90,7 +90,7 @@ export function FleetComposition({
                             type="button"
                             aria-pressed={active}
                             onClick={() => onSelectType(type)}
-                            className={`flex min-h-11 min-w-18 flex-col items-center justify-center rounded-md border px-2 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0 ${
+                            className={`flex min-h-11 min-w-18 flex-col items-center justify-center rounded-md border px-2 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0 ${
                               active
                                 ? 'border-primary bg-primary/10 text-primary'
                                 : 'hover:bg-muted/60'

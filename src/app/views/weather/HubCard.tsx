@@ -149,7 +149,7 @@ export function HubCard({ model, highlighted }: { model: HubCardModel; highlight
               tap height below `md:` without the 10 px label growing. */}
           <summary
             aria-expanded={open}
-            className="flex min-h-11 cursor-pointer list-none items-center justify-center font-mono text-[10px] text-muted-foreground hover:text-foreground md:min-h-0 md:py-1"
+            className="flex min-h-11 cursor-pointer list-none items-center justify-center font-mono text-[10px] text-muted-foreground hover:text-foreground pointer-fine:md:min-h-0 md:py-1"
           >
             <span aria-hidden="true">{open ? '▴' : '▾'}</span> Details
           </summary>

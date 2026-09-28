@@ -46,6 +46,7 @@ import {
   wifiFilterOptions,
 } from '@/lib/fleet-view.js';
 import { isAirborne } from '@/lib/live-stats.js';
+import { scrollBehavior } from '@/lib/motion.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { FleetAircraft } from '../data/types';
 import { readFleetDeepLinks } from '../state/deep-links';
@@ -222,7 +223,7 @@ export default function FleetView() {
       // a scroll on "I changed my mind" is disorienting.
       if (next) {
         requestAnimationFrame(() =>
-          lookupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+          lookupRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }),
         );
       }
       return next;
@@ -406,18 +407,18 @@ export default function FleetView() {
               single row. Four labels carrying counts wrap below ~500 px, and without these
               the wrapped row overflows the list and lands on top of the search box. */}
           <TabsList aria-label="Aircraft lookup views" className="h-auto! flex-wrap gap-1">
-            <TabsTrigger value="all" className="h-full! min-h-11 grow-0 md:min-h-0">
+            <TabsTrigger value="all" className="h-full! min-h-11 grow-0 pointer-fine:md:min-h-0">
               All Aircraft <span className="text-muted-foreground">({subTabCounts.all})</span>
             </TabsTrigger>
-            <TabsTrigger value="airborne" className="h-full! min-h-11 grow-0 md:min-h-0">
+            <TabsTrigger value="airborne" className="h-full! min-h-11 grow-0 pointer-fine:md:min-h-0">
               Airborne Now{' '}
               <span className="text-muted-foreground">({subTabCounts.airborne})</span>
             </TabsTrigger>
-            <TabsTrigger value="starlink" className="h-full! min-h-11 grow-0 md:min-h-0">
+            <TabsTrigger value="starlink" className="h-full! min-h-11 grow-0 pointer-fine:md:min-h-0">
               🛰️ Starlink{' '}
               <span className="text-muted-foreground">({subTabCounts.starlink})</span>
             </TabsTrigger>
-            <TabsTrigger value="special" className="h-full! min-h-11 grow-0 md:min-h-0">
+            <TabsTrigger value="special" className="h-full! min-h-11 grow-0 pointer-fine:md:min-h-0">
               Special <span className="text-muted-foreground">({subTabCounts.special})</span>
             </TabsTrigger>
           </TabsList>

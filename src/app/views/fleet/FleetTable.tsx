@@ -63,7 +63,7 @@ export function FleetTable({
     return (
       <div className="rounded-lg border border-dashed p-6 text-center">
         <p className="text-sm">No aircraft match your filters.</p>
-        <Button variant="outline" size="lg" className="mt-3 min-h-11 md:min-h-0" onClick={onClearFilters}>
+        <Button variant="outline" size="lg" className="mt-3 min-h-11 pointer-fine:md:min-h-0" onClick={onClearFilters}>
           Clear Filters
         </Button>
       </div>
@@ -102,7 +102,7 @@ export function FleetTable({
                   <button
                     type="button"
                     onClick={() => onOpenAircraft(aircraft.r)}
-                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
                   >
                     {aircraft.r}
                   </button>

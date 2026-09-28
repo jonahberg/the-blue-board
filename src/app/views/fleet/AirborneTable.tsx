@@ -86,7 +86,7 @@ export function AirborneTable({
                   <button
                     type="button"
                     onClick={() => onOpenAircraft(row.reg)}
-                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
                   >
                     {row.reg}
                   </button>

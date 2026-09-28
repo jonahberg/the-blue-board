@@ -142,19 +142,19 @@ function Expansion({
 
         <div className="mt-4 flex flex-wrap gap-2">
           {icao24 ? (
-            <Button size="sm" className="min-h-11 md:min-h-8" onClick={() => onTrack(icao24)}>
+            <Button size="sm" className="min-h-11 pointer-fine:md:min-h-8" onClick={() => onTrack(icao24)}>
               📡 Track on Live Map
             </Button>
           ) : null}
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 md:min-h-8"
+            className="min-h-11 pointer-fine:md:min-h-8"
             onClick={() => onOpenAircraft(aircraft.tail)}
           >
             Aircraft Details
           </Button>
-          <Button asChild size="sm" variant="outline" className="min-h-11 md:min-h-8">
+          <Button asChild size="sm" variant="outline" className="min-h-11 pointer-fine:md:min-h-8">
             <a
               href={`https://www.planespotters.net/search?q=${encodeURIComponent(aircraft.tail)}`}
               target="_blank"
@@ -256,7 +256,7 @@ export const RosterTable = memo(function RosterTable({
                       type="button"
                       onClick={() => onToggleExpand(aircraft.tail)}
                       aria-expanded={isOpen}
-                      className="inline-flex min-h-11 items-center gap-1 text-left underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+                      className="inline-flex min-h-11 items-center gap-1 text-left underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
                     >
                       <span aria-hidden="true" className="text-[9px] opacity-60">
                         {isOpen ? '▾' : '▸'}

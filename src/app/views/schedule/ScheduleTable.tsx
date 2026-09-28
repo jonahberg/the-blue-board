@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { delayColorVar } from '@/lib/delay-format.js';
+import { scrollBehavior } from '@/lib/motion.js';
 import { clampWindow, expandWindow, initialWindow, windowIncluding } from '@/lib/schedule-window.js';
 import { cn } from '@/lib/utils';
 import type { RowModel, SortColumn } from './useBoardModel';
@@ -74,7 +75,7 @@ const HIGHLIGHT_MS = 2000;
  * the risk badge. Rows already wrap to two lines on a phone, so the taller target costs no
  * density there and none at all on a desktop, where it collapses back to the text height.
  */
-const TAP_TARGET = 'inline-flex min-h-11 items-center md:min-h-0';
+const TAP_TARGET = 'inline-flex min-h-11 items-center pointer-fine:md:min-h-0';
 
 function SortableHead({
   column,
@@ -99,7 +100,7 @@ function SortableHead({
       <button
         type="button"
         onClick={() => onSort(column)}
-        className="flex min-h-11 w-full items-center gap-1 px-2 text-left text-[10px] uppercase tracking-wide md:min-h-8"
+        className="flex min-h-11 w-full items-center gap-1 px-2 text-left text-[10px] uppercase tracking-wide pointer-fine:md:min-h-8"
       >
         {label}
         <span aria-hidden="true" className={active ? 'text-primary' : 'text-muted-foreground'}>
@@ -184,7 +185,7 @@ export const ScheduleTable = forwardRef<
     const top = Math.max(0, target.offsetTop - 60);
     requestAnimationFrame(() => {
       if (typeof container.scrollTo === 'function') {
-        container.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' });
+        container.scrollTo({ top, behavior: smooth ? scrollBehavior() : 'auto' });
       } else {
         container.scrollTop = top;
       }
@@ -192,7 +193,7 @@ export const ScheduleTable = forwardRef<
   };
 
   const highlight = (row: HTMLElement) => {
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
     row.dataset.highlight = 'on';
     setTimeout(() => {
       delete row.dataset.highlight;
@@ -269,11 +270,11 @@ export const ScheduleTable = forwardRef<
     <TableRow key={key} className="hover:bg-transparent">
       <TableCell colSpan={10} className="p-1">
         <span className="sticky left-0 flex flex-wrap items-center gap-2 px-1">
-          <Button variant="outline" size="sm" className="min-h-11 text-[10px] md:min-h-0" onClick={onMore}>
+          <Button variant="outline" size="sm" className="min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onMore}>
             {label} ({count})
           </Button>
           {withShowAll ? (
-            <Button variant="ghost" size="sm" className="min-h-11 text-[10px] md:min-h-0" onClick={showAll}>
+            <Button variant="ghost" size="sm" className="min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={showAll}>
               Show all {rows.length}
             </Button>
           ) : null}
@@ -344,7 +345,7 @@ export const ScheduleTable = forwardRef<
                     <span className="mt-1 block text-[10px]">
                       Try adjusting status, search or the advanced filters
                     </span>
-                    <Button variant="outline" size="sm" className="mt-2 min-h-11 text-[10px] md:min-h-0" onClick={onClearFilters}>
+                    <Button variant="outline" size="sm" className="mt-2 min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onClearFilters}>
                       Clear filters
                     </Button>
                   </>

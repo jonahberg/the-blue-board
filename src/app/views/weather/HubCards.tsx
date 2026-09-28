@@ -68,7 +68,7 @@ export function HubCards({
         <Button
           variant="outline"
           size="sm"
-          className="mt-3 min-h-11 md:h-8 md:min-h-0"
+          className="mt-3 min-h-11 md:h-8 pointer-fine:md:min-h-0"
           onClick={onRetry}
         >
           ↻ Retry

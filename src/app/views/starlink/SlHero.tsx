@@ -110,7 +110,7 @@ export const SlHero = memo(function SlHero({
                 type="button"
                 data-action="view-starlink-on-map"
                 onClick={onShowOnMap}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
                 title="Show these on the live map"
                 aria-label={`Show ${airborneCount} airborne Starlink aircraft on the live map`}
               >

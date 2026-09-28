@@ -373,7 +373,7 @@ export function FlightSheet() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="min-h-11 text-xs md:h-7 md:min-h-0"
+                  className="min-h-11 text-xs md:h-7 pointer-fine:md:min-h-0"
                   onClick={() => {
                     setExpanded(false);
                     focusOn(flight.lat, flight.lon);
@@ -525,7 +525,7 @@ export function FlightSheet() {
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
-              className="min-h-11 md:min-h-9"
+              className="min-h-11 pointer-fine:md:min-h-9"
               variant={watched ? 'default' : 'outline'}
               onClick={() => {
                 if (!ident) return;
@@ -540,7 +540,7 @@ export function FlightSheet() {
             >
               {watched ? '👁️ Watching' : '👁️ Watch'}
             </Button>
-            <Button size="sm" variant="outline" className="min-h-11 md:min-h-9" onClick={() => void onShare()}>
+            <Button size="sm" variant="outline" className="min-h-11 pointer-fine:md:min-h-9" onClick={() => void onShare()}>
               Share
             </Button>
           </div>

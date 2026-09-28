@@ -275,7 +275,7 @@ export default function Fr24LookupDialog() {
                       {' • '}
                       <button
                         type="button"
-                        className="inline-flex min-h-11 items-center font-mono underline decoration-dotted underline-offset-2 hover:text-primary md:min-h-0"
+                        className="inline-flex min-h-11 items-center font-mono underline decoration-dotted underline-offset-2 hover:text-primary pointer-fine:md:min-h-0"
                         onClick={() => {
                           openFr24(null);
                           openAircraft(flight.aircraft?.reg ?? null);
@@ -327,7 +327,7 @@ export default function Fr24LookupDialog() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-auto min-h-11 px-2 py-0 text-[11px] md:min-h-0 md:py-1"
+                className="h-auto min-h-11 px-2 py-0 text-[11px] pointer-fine:md:min-h-0 md:py-1"
                 onClick={() => void onShare()}
                 aria-label={`Share a link to ${flight.flightNumber}`}
               >
@@ -346,7 +346,7 @@ export default function Fr24LookupDialog() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-auto min-h-11 shrink-0 px-2 py-0 text-[11px] md:min-h-0"
+              className="h-auto min-h-11 shrink-0 px-2 py-0 text-[11px] pointer-fine:md:min-h-0"
               onClick={() => setFailure(null)}
             >
               Dismiss
