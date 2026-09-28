@@ -104,10 +104,10 @@ const HUB_LINKS = [
 ];
 
 const title =
-  'United Airlines Fleet Database — 1,078 Aircraft, 19 Types, Seat Maps & Guides | The Blue Board';
+  'United Airlines Fleet Database — 1,152 Aircraft, 19 Types, Seat Maps & Guides | The Blue Board';
 const description =
-  'Complete United Airlines fleet database with 1,078 mainline aircraft across 19 types. Detailed guides for every aircraft type — Boeing 737, 757, 767, 777, 787 Dreamliner, and Airbus A319, A320, A321neo. Seat configurations, WiFi, Starlink status, and full aircraft registries.';
-const shareTitle = 'United Airlines Fleet — 1,078 Aircraft Database | The Blue Board';
+  'Complete United Airlines fleet database with 1,152 mainline aircraft across 19 types. Detailed guides for every aircraft type — Boeing 737, 757, 767, 777, 787 Dreamliner, and Airbus A319, A320, A321neo. Seat configurations, WiFi, Starlink status, and full aircraft registries.';
+const shareTitle = 'United Airlines Fleet — 1,152 Aircraft Database | The Blue Board';
 
 // JSON-LD. The Starlink figures come from the build-time facts, so these are
 // objects rather than the literal <script> text they used to be.
@@ -116,7 +116,7 @@ const datasetSchema = {
   '@type': 'Dataset',
   name: 'United Airlines Fleet Database',
   description:
-    'Complete database of United Airlines mainline fleet with 1,078 aircraft across 19 types. Includes aircraft type, registration, seat configuration, WiFi type, IFE system, delivery date, operational status, and Starlink satellite internet equipment status.',
+    'Complete database of United Airlines mainline fleet with 1,152 aircraft across 19 types. Includes aircraft type, registration, seat configuration, WiFi type, IFE system, delivery date, operational status, and Starlink satellite internet equipment status.',
   url: 'https://theblueboard.co/fleet',
   license: 'https://creativecommons.org/licenses/by-nc/4.0/',
   creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
@@ -124,7 +124,7 @@ const datasetSchema = {
   temporalCoverage: '2025/..',
   keywords: ['United Airlines', 'fleet database', 'aircraft', 'seat configuration', 'Starlink WiFi', 'Polaris'],
   variableMeasured: [
-    { '@type': 'PropertyValue', name: 'Aircraft Count', value: '1078' },
+    { '@type': 'PropertyValue', name: 'Aircraft Count', value: '1152' },
     { '@type': 'PropertyValue', name: 'Aircraft Types', value: '19' },
     { '@type': 'PropertyValue', name: 'Starlink Equipped', value: String(STARLINK_EQUIPPED) },
   ],
@@ -153,7 +153,7 @@ const faqSchema = {
       name: 'How many aircraft does United Airlines have?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: "United Airlines operates a mainline fleet of 1,078 aircraft as of mid-2026, spanning 19 aircraft types including the Boeing 737, 757, 767, 777, and 787 families, plus Airbus A319, A320, and A321neo. This mainline count excludes United's several-hundred-aircraft United Express regional fleet (Embraer E175, Bombardier CRJ550, and others) flown by partner carriers such as SkyWest and Republic.",
+        text: "United Airlines operates a mainline fleet of 1,152 aircraft as of September 2026, spanning 19 aircraft types including the Boeing 737, 757, 767, 777, and 787 families, plus Airbus A319, A320, and A321neo. This mainline count excludes United's several-hundred-aircraft United Express regional fleet (Embraer E175, Bombardier CRJ550, and others) flown by partner carriers such as SkyWest and Republic.",
       },
     },
     {
@@ -203,7 +203,7 @@ const hubLinkClass =
   ogTitle={shareTitle}
   ogDescription="Complete United Airlines fleet database. Every mainline aircraft — 737, 757, 767, 777, 787, A319, A320, A321neo — with seat configs, WiFi, and detailed type guides."
   ogImageAlt="The Blue Board — United Airlines Fleet Database"
-  twitterDescription={`Complete United Airlines fleet. 1,078 aircraft, 19 types. Seat maps, WiFi, Starlink status. Fleet data as of ${formatFleetAsOf()}.`}
+  twitterDescription={`Complete United Airlines fleet. 1,152 aircraft, 19 types. Seat maps, WiFi, Starlink status. Fleet data as of ${formatFleetAsOf()}.`}
   jsonLd={[datasetSchema, itemListSchema, faqSchema]}
 >
   <div class="mx-auto max-w-5xl px-4 py-8">
@@ -214,7 +214,7 @@ const hubLinkClass =
         United Airlines Fleet Database
       </h1>
       <p class="mt-2 text-sm text-muted-foreground">
-        1,078 mainline aircraft · 19 types · seat configs · WiFi · Starlink · as of
+        1,152 mainline aircraft · 19 types · seat configs · WiFi · Starlink · as of
         <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>
       </p>
       <a
@@ -236,7 +236,7 @@ const hubLinkClass =
 
     <ContentSection heading="Fleet Overview">
       <p>
-        United Airlines operates one of the world's largest and most diverse fleets, with 1,078
+        United Airlines operates one of the world's largest and most diverse fleets, with 1,152
         mainline aircraft spanning narrowbody and widebody types from Boeing and Airbus — and it is
         in the middle of its biggest fleet renewal in decades, taking 250+ new jets by 2028 while
         rolling out free Starlink WiFi and the new Polaris Studio suite.
@@ -387,7 +387,7 @@ const hubLinkClass =
     <ContentSection id="faq" heading="Frequently Asked Questions">
       <h3>How many aircraft does United Airlines have?</h3>
       <p>
-        United Airlines operates a mainline fleet of 1,078 aircraft as of mid-2026, spanning 19
+        United Airlines operates a mainline fleet of 1,152 aircraft as of September 2026, spanning 19
         aircraft types including the Boeing 737, 757, 767, 777, and 787 families, plus Airbus A319,
         A320, and A321neo. This mainline count excludes United's several-hundred-aircraft United
         Express regional fleet (Embraer E175, Bombardier CRJ550, and others) flown by partner

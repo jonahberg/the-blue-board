@@ -27,7 +27,7 @@ import { fleetOrder, fleetTypes } from '../data/fleet/index.js';
 import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../data/starlink-facts.js';
 import { SITE_URL } from './site.js';
 
-/** "1,078" — the same rendering the Markdown twins and the agent-readiness pins use. */
+/** "1,152" — the same rendering the Markdown twins and the agent-readiness pins use. */
 const FLEET_COUNT_TEXT = FLEET_DB_COUNT.toLocaleString('en-US');
 
 /** `<title>` / `og:title`. */
@@ -172,7 +172,7 @@ export const NOSCRIPT_LINKS = {
 };
 
 /**
- * "Boeing 737-800 (141), 737-900ER (136), … and Airbus A319 (76), A320 (68), A321neo (62)".
+ * "Boeing 737-800 (141), 737-900ER (136), … and Airbus A319 (76), A320 (68), A321neo (76)".
  *
  * Grouped by manufacturer so the name is written once per group, and within a group in
  * `fleetOrder` — the site's canonical display order — so the prose can never disagree with
