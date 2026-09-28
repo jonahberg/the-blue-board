@@ -419,10 +419,12 @@ describe('sw.js — runtime caches really fill (strict body semantics)', () => {
   it('caches a navigation for offline use', async () => {
     const { handlers, caches, fetchMock } = makeStrictEnv();
     fetchMock.mockResolvedValue(strictResponse('HUB PAGE', { contentType: 'text/html' }));
-    const { rejected } = await runFetchStrict(handlers, new Request(`${ORIGIN}/hubs/ord`, { mode: 'navigate' }));
+    // Real Node's Request rejects mode: 'navigate' (only browsers create those); a .html path is
+    // routed through the same navigation branch in sw.js.
+    const { rejected } = await runFetchStrict(handlers, new Request(`${ORIGIN}/hubs/ord.html`));
     expect(rejected).toEqual([]);
     const pages = await caches.open(`blueboard-pages-${CACHE_VERSION}`);
-    expect(await pages.match(`${ORIGIN}/hubs/ord`)).toBeDefined();
+    expect(await pages.match(`${ORIGIN}/hubs/ord.html`)).toBeDefined();
   });
 
   it('caches a hashed /_astro asset', async () => {

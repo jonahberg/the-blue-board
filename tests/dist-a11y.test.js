@@ -71,7 +71,7 @@ describe.skipIf(!hasDist)('built pages pass axe (structural rules)', () => {
     const rel = relative(DIST, page);
     it(`${rel} has no axe violations`, async () => {
       expect(await axeViolations(readFileSync(page, 'utf8'))).toEqual([]);
-    });
+    }, 30_000); // axe over the largest built pages (e.g. the 89-tower ATC table) can pass 5 s under CI load
   }
 });
 
