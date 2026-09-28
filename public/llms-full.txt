@@ -6,7 +6,7 @@
 
 ## Overview
 
-The Blue Board (https://theblueboard.co) is the only real-time flight tracker built exclusively for United Airlines operations. It tracks every United Airlines flight in the air on a live map updated every 30 seconds, monitors delays and cancellations at all 8 United hubs plus the Tokyo-Narita gateway, tracks which aircraft have Starlink satellite WiFi, provides a searchable fleet database of 1,078+ aircraft, and offers operational analytics including hub-to-hub traffic flow, fleet utilization, and route patterns.
+The Blue Board (https://theblueboard.co) is the only real-time flight tracker built exclusively for United Airlines operations. It tracks every United Airlines flight in the air on a live map updated every 30 seconds, monitors delays and cancellations at all 8 United hubs plus the Tokyo-Narita gateway, tracks which aircraft have Starlink satellite WiFi, provides a searchable fleet database of 1,152 aircraft, and offers operational analytics including hub-to-hub traffic flow, fleet utilization, and route patterns.
 
 The site is designed as a dark-themed operations dashboard, inspired by airline operations centers. It is free, community-built, and fully independent from United Airlines, Inc.
 
@@ -78,7 +78,7 @@ The primary interface with 8 tabs, each with its own URL hash (#myflight, #live,
 
 3. **Schedule**: Departure and arrival schedules at any United hub. Shows flight number, destination/origin, scheduled time, actual time, delay status, aircraft type, and equipment swap alerts. Filterable by hub.
 
-4. **Fleet**: Searchable database of all 1,078+ United mainline aircraft. Includes aircraft type, registration (tail number), seat configuration (first/business/economy plus/economy), WiFi type, IFE system, delivery date, and operational status.
+4. **Fleet**: Searchable database of all 1,152 United mainline aircraft in its database. Includes aircraft type, registration (tail number), seat configuration (first/business/economy plus/economy), WiFi type, IFE system, delivery date, and operational status.
 
 5. **Starlink**: The Starlink WiFi roster — 425+ equipped aircraft (as of mid-2026) — sortable and filterable by fleet, type and operator, with a retrofit-pace chart and a report of aircraft the upstream tracker and the fleet database disagree about.
 
@@ -89,20 +89,20 @@ The primary interface with 8 tabs, each with its own URL hash (#myflight, #live,
 8. **Sources**: Data source attribution and credits.
 
 ### Fleet Database (https://theblueboard.co/fleet)
-Dedicated page for the complete United Airlines fleet database. 1,078 mainline aircraft across 19 types. Overview of all aircraft types with links to individual type guides. Searchable interactive database with aircraft type, tail number, seat configuration, WiFi type, and Starlink status. Includes Dataset and ItemList schema markup.
+Dedicated page for the complete United Airlines fleet database. 1,152 mainline aircraft across 19 types. Overview of all aircraft types with links to individual type guides. Searchable interactive database with aircraft type, tail number, seat configuration, WiFi type, and Starlink status. Includes Dataset and ItemList schema markup.
 
 ### Individual Aircraft Type Pages (https://theblueboard.co/fleet/{type})
 Dedicated guides for each of United Airlines' 19 aircraft types:
 
 - **https://theblueboard.co/fleet/737-800** — Boeing 737-800: 141 aircraft, most numerous type. 166 seats (16F/54E+/96Y). Domestic workhorse.
 - **https://theblueboard.co/fleet/737-900er** — Boeing 737-900ER: 136 aircraft. 179 seats (20F/45E+/114Y). Largest NG narrowbody.
-- **https://theblueboard.co/fleet/737-max-9** — Boeing 737 MAX 9: 129 aircraft. 179 seats. Next-gen narrowbody, deliveries through 2026.
+- **https://theblueboard.co/fleet/737-max-9** — Boeing 737 MAX 9: 178 aircraft. 179 seats. Next-gen narrowbody, deliveries through 2026.
 - **https://theblueboard.co/fleet/737-max-8** — Boeing 737 MAX 8: 123 aircraft. 166 seats. Next-gen narrowbody.
 - **https://theblueboard.co/fleet/a319** — Airbus A319: 76 aircraft. 128 seats. Being gradually retired.
 - **https://theblueboard.co/fleet/a320** — Airbus A320: 68 aircraft. 150 seats. Domestic workhorse.
-- **https://theblueboard.co/fleet/a321neo** — Airbus A321neo: 62 aircraft. 200 seats. Newest narrowbody, deliveries through 2026; the related A321XLR (lie-flat Polaris suites, replacing the 757) entered service June 2026.
+- **https://theblueboard.co/fleet/a321neo** — Airbus A321neo: 76 aircraft (incl. the first 2 A321XLRs). 200 seats. Newest narrowbody, deliveries through 2026; the related A321XLR (lie-flat Polaris suites, replacing the 757) entered revenue service September 2026.
 - **https://theblueboard.co/fleet/777-200er** — Boeing 777-200ER: 55 aircraft. 276 seats. Polaris lie-flat. Workhorse widebody.
-- **https://theblueboard.co/fleet/787-9-dreamliner** — Boeing 787-9 Dreamliner: 48 aircraft. 257 seats (222 in the new "Elevated" layout). Polaris, Premium Plus, and the new Polaris Studio suite. Core long-haul flagship.
+- **https://theblueboard.co/fleet/787-9-dreamliner** — Boeing 787-9 Dreamliner: 59 aircraft. 257 seats (222 in the new "Elevated" layout). Polaris, Premium Plus, and the new Polaris Studio suite. Core long-haul flagship.
 - **https://theblueboard.co/fleet/737-700** — Boeing 737-700: 40 aircraft. 126 seats. Smallest mainline narrowbody.
 - **https://theblueboard.co/fleet/757-200** — Boeing 757-200: 40 aircraft. 176 seats. Lie-flat First on transcon routes.
 - **https://theblueboard.co/fleet/767-300er** — Boeing 767-300ER: 37 aircraft. Polaris. Transatlantic, being retired.
@@ -170,7 +170,7 @@ Living, data-driven pages that follow aviation's long-running stories with a map
 - This data is not available on any other flight tracker
 
 ### Fleet Database
-- 1,078+ mainline aircraft across 19 types
+- 1,152 mainline aircraft across 19 types
 - Aircraft families: Boeing 737 (MAX 8, MAX 9, -700, -800, -900), Boeing 757 (-200, -300), Boeing 767 (-300ER, -400ER), Boeing 777 (-200, -200ER, -300ER), Boeing 787 (-8, -9, -10), Airbus A319, A320, A321neo
 - Data per aircraft: registration, type, seat config (F/J/W/Y+/Y), WiFi type, IFE system, delivery date, status
 - Polaris business class on all widebody aircraft (777 and 787 families)

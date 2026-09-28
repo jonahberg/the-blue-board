@@ -26,7 +26,7 @@ const HOME = `# The Blue Board — United Airlines Flight Tracker & Live Operati
 
 The Blue Board tracks every airborne United Airlines flight on a live map refreshed every
 30 seconds, and monitors delays, cancellations, and ground stops across all 8 United hubs
-plus the Tokyo-Narita gateway. It also carries a searchable database of 1,078 United
+plus the Tokyo-Narita gateway. It also carries a searchable database of 1,152 United
 mainline airframes with seat configuration, WiFi type, and in-flight entertainment detail,
 hub departure and arrival boards with equipment-swap detection, NEXRAD radar and METAR
 weather, and long-running aviation trackers.
@@ -82,7 +82,7 @@ are not a public API, so please read the pages rather than scraping \`/api/\`.
   Intercontinental (IAH), Newark Liberty (EWR), San Francisco (SFO), Washington Dulles
   (IAD), Los Angeles (LAX), Guam (GUM) — plus the Tokyo Narita (NRT) gateway.
   9 tracked boards in total.
-- **Fleet:** 1,078 United mainline airframes across 19 types.
+- **Fleet:** 1,152 United mainline airframes across 19 types.
 - **Trackers:** all 89 airports in the FAA's TFDM electronic-flight-strip program, and
   every club, terminal, and gate project across United's hubs.
 
@@ -118,7 +118,7 @@ ${DISCLAIMER}
 
 const FLEET = `# United Airlines Fleet Database — The Blue Board
 
-Searchable detail for 1,078 United mainline airframes across 19 aircraft types: tail
+Searchable detail for 1,152 United mainline airframes across 19 aircraft types: tail
 number, seat configuration by cabin, WiFi type (including Starlink equipment status),
 in-flight entertainment, and delivery date.
 
