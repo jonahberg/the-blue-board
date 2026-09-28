@@ -22,6 +22,7 @@ vi.mock('@vercel/functions', () => vercelFunctionMocks);
 import handler, { resetFallbackBreaker, __resetScheduleCachesForTests } from '../api/schedule.js';
 import { __resetFaaDisruptionCacheForTests } from '../api/faa.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
+import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
 function createRes() {
   return {
@@ -35,8 +36,10 @@ function createRes() {
 }
 
 function mockUpstreams({ ordDisruptionAvg = null, adbBoard = true } = {}) {
-  const nowSec = Math.floor(Date.now() / 1000);
-  const iso = (offsetS) => new Date((nowSec + offsetS) * 1000).toISOString();
+  // Anchored inside today's ORD day (not "now + 2h"): the provider board is clipped to the hub
+  // day, so a now-relative fixture would vanish whenever the suite runs late in the evening.
+  const middaySec = getStartOfHubDay('ORD', 0) + 12 * 3600;
+  const iso = (offsetS) => new Date((middaySec + offsetS) * 1000).toISOString();
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
     const u = String(url);
     if (u.includes('nasstatus.faa.gov/api/airport-events')) {

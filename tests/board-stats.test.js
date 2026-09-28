@@ -120,6 +120,22 @@ describe('computeScheduleStatCounts', () => {
     expect(c.operated).toBe(1);
   });
 
+  it('keeps implausible deltas out of Late and reconciles them as uncategorized (F4)', () => {
+    // UA2113 "Arrived +54h20m" and UA1946 "+41h17m" were counted Late on the Sep 26 ORD board;
+    // a stale 10h estimate on a landed row is no better.
+    const flights = [
+      arrFlight('landed', { sched: NOW - 2 * 86400, real: NOW }),       // +48h real
+      arrFlight('landed', { sched: NOW - 10 * 3600, est: NOW + 60 }),  // stale estimate
+      arrFlight('landed', { sched: NOW - 5 * 3600, real: NOW }),        // genuine +5h
+      arrFlight('landed', { sched: NOW - 3600, real: NOW - 3500 }),     // on time
+    ];
+    const c = computeScheduleStatCounts(flights, { dir: 'arrivals', nowSec: NOW, classify });
+    expect(c.late).toBe(1);
+    expect(c.onTime).toBe(1);
+    expect(c.uncategorized).toBe(2);
+    expect(c.total).toBe(c.onTime + c.late + c.upcoming + c.canceled + c.presumed + c.uncategorized);
+  });
+
   it('returns otp null (not 0 or 100) when nothing has operated', () => {
     const c = computeScheduleStatCounts([flight('scheduled')], { nowSec: NOW, classify });
     expect(c.otp).toBeNull();

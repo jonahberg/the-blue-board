@@ -343,6 +343,90 @@ describe('delayCell — facts beat predictions', () => {
   });
 });
 
+// F4 (audit Sep 26 2026, ORD arrivals): cross-instance rows rendered "+10h47m … Landed*",
+// "Arrived +41h17m" and "+54h20m". The server now repairs/clips them; these guards stop an older
+// cached board (or a new upstream shape) from ever painting an impossible delay.
+describe('delayCell — implausible deltas are not facts (F4)', () => {
+  const base = { schedTimeSec: NOON_UTC, dir: 'arrivals', presumed: false, risk: null };
+
+  it('drops a 54h "delay" backed by a real time (UA2113)', () => {
+    const cell = delayCell({
+      ...base,
+      statusKey: 'landed',
+      hasRealTime: true,
+      actualTimeSec: NOON_UTC + (54 * 60 + 20) * 60,
+    });
+    expect(cell).toEqual({ kind: 'none' });
+  });
+
+  it('drops a stale 10h47m ESTIMATE on a presumed landing (UA1677)', () => {
+    const cell = delayCell({
+      ...base,
+      statusKey: 'landed',
+      presumed: true,
+      hasRealTime: false,
+      actualTimeSec: NOON_UTC + (10 * 60 + 47) * 60,
+    });
+    expect(cell).toEqual({ kind: 'none' });
+  });
+
+  it('still reports a long but plausible real delay', () => {
+    const cell = delayCell({ ...base, statusKey: 'landed', hasRealTime: true, actualTimeSec: NOON_UTC + 9 * 3600 });
+    expect(cell).toMatchObject({ kind: 'delta', minutes: 540 });
+  });
+
+  it('shows no delta when the scheduled time was derived from the actual', () => {
+    const cell = delayCell({
+      ...base,
+      statusKey: 'landed',
+      hasRealTime: true,
+      actualTimeSec: NOON_UTC,
+      derivedActual: true,
+    });
+    expect(cell).toEqual({ kind: 'none' });
+  });
+});
+
+describe('actualDeltaLine — implausible deltas (F4)', () => {
+  it('does not print a +3260m line for a two-day cross-instance pair', () => {
+    expect(
+      actualDeltaLine({ schedTimeSec: NOON_UTC, actualTimeSec: NOON_UTC + 54 * 3600, timeZone: CHI }),
+    ).toBeNull();
+  });
+
+  it('does not print a stale estimate more than 6h past schedule', () => {
+    expect(
+      actualDeltaLine({ schedTimeSec: NOON_UTC, actualTimeSec: NOON_UTC + 10 * 3600, estimate: true, timeZone: CHI }),
+    ).toBeNull();
+    expect(
+      actualDeltaLine({ schedTimeSec: NOON_UTC, actualTimeSec: NOON_UTC + 10 * 3600, timeZone: CHI }),
+    ).toMatchObject({ minutes: 600 });
+  });
+});
+
+describe('buildScheduleRow — direction-aware real time (F4)', () => {
+  it('titles an arrivals delta as an ESTIMATE when only the departure is real', () => {
+    const row = buildScheduleRow(
+      {
+        identification: { number: { default: 'UA254' } },
+        time: {
+          scheduled: { departure: NOON_UTC - 3 * 3600, arrival: NOON_UTC },
+          real: { departure: NOON_UTC - 3 * 3600 + 60, arrival: null },
+          estimated: { arrival: NOON_UTC + 40 * 60 },
+        },
+      },
+      {
+        hub: 'ORD',
+        dir: 'arrivals',
+        dayStartSec: NOON_UTC - 7 * 3600,
+        timeZone: CHI,
+        status: { key: 'enroute', text: 'En Route', cls: 'enroute' },
+      },
+    );
+    expect(row.delay).toMatchObject({ kind: 'delta', minutes: 40, title: 'Estimated vs scheduled arrival' });
+  });
+});
+
 describe('delayExplainContext', () => {
   it('assembles the payload the dialog reads', () => {
     const context = delayExplainContext({

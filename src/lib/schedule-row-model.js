@@ -22,6 +22,7 @@ import { formatDelayMinutes } from './delay-format.js';
 import { ICAO_TO_FLEET_TYPE } from './equipment-swaps.js';
 import { normalizeWifi } from './fleet-utils.js';
 import { getUnitedTerminal } from './hub-terminals.js';
+import { isPlausibleDelta } from './schedule-plausibility.js';
 import { displayScheduleStatus } from './status-display.js';
 
 /** A delta smaller than this is noise, not a delay worth a second line in the time cell. */
@@ -77,15 +78,19 @@ export function dateChipLabel(schedTimeSec, dayStartSec, timeZone) {
  * The "→ 22:29 (+54m)" second line under the scheduled time, or null.
  *
  * Suppressed when the scheduled time was DERIVED from the actual (there is no independent
- * baseline to compare against) and when the delta is within ±5 minutes.
+ * baseline to compare against), when the delta is within ±5 minutes, and when the delta is not
+ * one a real flight could have (schedule-plausibility.js — a cross-instance pair or a stale
+ * estimate, never a delay).
  *
- * @param {{schedTimeSec?: number, actualTimeSec?: number, derivedActual?: boolean, timeZone: string}} input
+ * @param {{schedTimeSec?: number, actualTimeSec?: number, derivedActual?: boolean, estimate?: boolean, timeZone: string}} input
+ *   `estimate` marks an actual that is only an estimate (no real time on the board side).
  * @returns {{text: string, early: boolean, minutes: number}|null} `early` marks a departure
  *   ahead of schedule, which the board colours differently from a late one.
  */
-export function actualDeltaLine({ schedTimeSec, actualTimeSec, derivedActual, timeZone }) {
+export function actualDeltaLine({ schedTimeSec, actualTimeSec, derivedActual, estimate = false, timeZone }) {
   if (derivedActual) return null;
   if (!actualTimeSec || !schedTimeSec || actualTimeSec === schedTimeSec) return null;
+  if (!isPlausibleDelta(actualTimeSec, schedTimeSec, { estimate })) return null;
   const minutes = Math.round((actualTimeSec - schedTimeSec) / 60);
   if (Math.abs(minutes) <= ACTUAL_LINE_THRESHOLD_MINUTES) return null;
   const stamp = formatSchedTime(actualTimeSec, timeZone);
@@ -254,7 +259,10 @@ export function swapCell(change, reg, impacts) {
  *   1. A terminal row (canceled / likely canceled / diverted) shows nothing. There is no
  *      delay to report and a risk score for a flight that will not operate is noise.
  *   2. A known delta shows the REAL delay — when the row has operated for real (not by
- *      time inference), or when the delta is big enough to be a fact on its own.
+ *      time inference), or when the delta is big enough to be a fact on its own. A delta that
+ *      no real flight could have (schedule-plausibility.js: a two-day cross-instance "+54h", a
+ *      stale 10h estimate) is not a fact, and neither is a scheduled time the board derived
+ *      from the actual.
  *   3. Otherwise a future row shows its predicted risk, worded so it cannot read as a fact.
  *   4. Otherwise nothing.
  *
@@ -264,19 +272,24 @@ export function swapCell(change, reg, impacts) {
  *   trustworthy actual time behind it.
  * @param {number|undefined} input.schedTimeSec
  * @param {number|undefined} input.actualTimeSec  real time, else estimated.
- * @param {boolean} input.hasRealTime  a provider-confirmed time exists (vs an estimate).
+ * @param {boolean} input.hasRealTime  a provider-confirmed time exists ON THE BOARD'S SIDE
+ *   (real departure on departures, real arrival on arrivals) — vs an estimate.
+ * @param {boolean} [input.derivedActual]  the scheduled time was derived from the actual.
  * @param {('departures'|'arrivals')} input.dir
  * @param {object|null} input.risk  the delay-risk model, or null.
  * @returns {{kind:'none'}|{kind:'delta',minutes:number,text:string,title:string}|{kind:'risk',risk:object}}
  */
-export function delayCell({ statusKey, presumed, schedTimeSec, actualTimeSec, hasRealTime, dir, risk }) {
+export function delayCell({ statusKey, presumed, schedTimeSec, actualTimeSec, hasRealTime, derivedActual = false, dir, risk }) {
   const isTerminal =
     statusKey === 'canceled' || statusKey === 'canceled_uncertain' || statusKey === 'diverted';
   if (isTerminal) return { kind: 'none' };
 
   const hasOperated = statusKey === 'departed' || statusKey === 'enroute' || statusKey === 'landed';
-  const minutes =
-    actualTimeSec && schedTimeSec ? Math.round((actualTimeSec - schedTimeSec) / 60) : null;
+  const measurable =
+    Boolean(actualTimeSec && schedTimeSec) &&
+    !derivedActual &&
+    isPlausibleDelta(actualTimeSec, schedTimeSec, { estimate: !hasRealTime });
+  const minutes = measurable ? Math.round((actualTimeSec - schedTimeSec) / 60) : null;
 
   if (minutes !== null && ((hasOperated && !presumed) || minutes > ACTUAL_LINE_THRESHOLD_MINUTES)) {
     return {
@@ -381,7 +394,9 @@ export function buildScheduleRow(flight, ctx) {
   const actualTimeSec = isDep
     ? time.real?.departure || time.estimated?.departure
     : time.real?.arrival || time.estimated?.arrival;
-  const hasRealTime = Boolean(time.real?.departure || time.real?.arrival);
+  // Direction-aware: on an arrivals board a real DEPARTURE says nothing about the arrival time
+  // being compared, so an estimated arrival must still be titled (and bounded) as an estimate.
+  const hasRealTime = Boolean(isDep ? time.real?.departure : time.real?.arrival);
   const derivedActual = Boolean(
     isDep
       ? flight?._source?.scheduleTimeDerivedFromActual?.departure
@@ -400,6 +415,7 @@ export function buildScheduleRow(flight, ctx) {
     schedTimeSec,
     actualTimeSec,
     hasRealTime,
+    derivedActual,
     dir,
     risk,
   });
@@ -410,7 +426,7 @@ export function buildScheduleRow(flight, ctx) {
     raw: flight,
     timeText: formatSchedTime(schedTimeSec, timeZone),
     dateChip: dateChipLabel(schedTimeSec, dayStartSec, timeZone),
-    actualLine: actualDeltaLine({ schedTimeSec, actualTimeSec, derivedActual, timeZone }),
+    actualLine: actualDeltaLine({ schedTimeSec, actualTimeSec, derivedActual, estimate: !hasRealTime, timeZone }),
     derivedActual,
     routeLine,
     routeSub,

@@ -13,9 +13,12 @@
 //   canceled        canceled + canceled_uncertain ("Likely Canceled" groups here)
 //   presumed        time-inferred departures/landings (no live confirmation)
 //   uncategorized   everything else: diverted, operated rows without usable
-//                   timestamps, live-feed rescue rows, derived-schedule rows
+//                   timestamps, live-feed rescue rows, derived-schedule rows, and
+//                   rows whose delta no real flight could have (F4: "+54h" cross-
+//                   instance pairs and stale 10h estimates were counted Late)
 
 import { classifySchedStatus } from './schedule-status.js';
+import { isPlausibleDelta } from './schedule-plausibility.js';
 
 /**
  * @param {Array<object>} flights  normalized schedule flights (api/schedule shape).
@@ -72,6 +75,7 @@ export function computeScheduleStatCounts(flights, { dir = 'departures', nowSec 
     const realT = isArr ? fl.time?.real?.arrival : fl.time?.real?.departure;
     const actT = realT || (isArr ? fl.time?.estimated?.arrival : fl.time?.estimated?.departure);
     if (!schedT || !actT || derived) continue;
+    if (!isPlausibleDelta(actT, schedT, { estimate: !realT })) continue;
     if (actT > schedT + 1800) late++;
     else onTime++;
   }
