@@ -74,7 +74,7 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
       }
     </nav>
 
-    <details class="group relative ml-auto md:hidden">
+    <details class="group relative ml-auto md:hidden" data-site-menu>
       <summary
         class="flex size-11 cursor-pointer list-none items-center justify-center rounded-md border border-border text-muted-foreground [&::-webkit-details-marker]:hidden"
       >
@@ -116,3 +116,11 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
     </details>
   </div>
 </header>
+
+<script>
+  import { wireSiteMenu } from './site-menu';
+
+  for (const menu of document.querySelectorAll<HTMLDetailsElement>('details[data-site-menu]')) {
+    wireSiteMenu(menu);
+  }
+</script>
