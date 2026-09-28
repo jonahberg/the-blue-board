@@ -63,30 +63,6 @@ describe('computeDelayRiskModel', () => {
     expect(result.factors).toContain('Multiple severe disruptions compounding');
   });
 
-  it('uses aircraft journey propagation as a real scored feature', () => {
-    const result = computeDelayRiskModel({
-      nowMs: Date.parse('2026-03-18T18:00:00Z'),
-      scheduledTime: '2026-03-18T20:30:00Z',
-      originHub: 'ORD',
-      destinationHub: 'MCI',
-      timeZone: 'America/Chicago',
-      originOtp: 52,
-      originIrops: { cancellationRate: 2, delayed60Rate: 23 },
-      aircraftJourney: {
-        segments: [
-          { flightNumber: 'UA101', delayMin: 62 },
-          { flightNumber: 'UA202', delayMin: 48 },
-          { flightNumber: 'UA303', delayMin: 0 },
-        ],
-      },
-      currentFlightNumber: 'UA303',
-    });
-
-    expect(result.label).toBe('MOD');
-    expect(result.factors).toContain('Aircraft running late all day (avg +55m across 2 segments)');
-    expect(result.components.some((component) => component.id === 'journey-propagation')).toBe(true);
-  });
-
   it('uses the scheduled hub-local hour for cascade scoring', () => {
     const result = computeDelayRiskModel({
       nowMs: Date.parse('2026-03-18T15:00:00Z'),

@@ -4,6 +4,7 @@ import {
   BOARDING_LEAD_MS,
   MY_FLIGHTS_FAIL_TERMINAL,
   MY_FLIGHTS_PLACEHOLDERS,
+  buildInboundRiskContext,
   findInboundAircraft,
   findLiveFlight,
   formatCountdown,
@@ -16,6 +17,7 @@ import {
   resolveMyFlightRoute,
   seatConfigString,
 } from '../src/lib/my-flights.js';
+import { computeDelayRiskModel } from '../src/lib/delay-risk.js';
 
 const NOW = Date.parse('2026-09-13T18:00:00Z');
 const iso = (minutesFromNow) => new Date(NOW + minutesFromNow * 60000).toISOString();
@@ -317,5 +319,51 @@ describe('findInboundAircraft', () => {
 
   it('is null without a registration', () => {
     expect(findInboundAircraft(flights, '', 'UA100', 'ORD', false)).toBeNull();
+  });
+});
+
+// F134: the React port stopped feeding the risk model the inbound aircraft, so the
+// "inbound turnaround" signal (tested in delay-risk.test.js) never scored for anyone.
+describe('buildInboundRiskContext', () => {
+  // Live-feed row shape (src/lib/feed-health.js): spd in m/s, alt as the feed reports it.
+  const inboundRow = {
+    flightIATA: 'UA1131', reg: 'N14512', origin: 'DEN', dest: 'ORD', onGround: false,
+    lat: 41.2, lon: -93.1, spd: 230, alt: 11000, vr: 0, acType: 'A21N',
+  };
+  const base = {
+    flights: [inboundRow], reg: 'N14512', flightNumber: 'UA2106', origCode: 'ORD',
+    ownFlightAirborne: false, hasTimes: true,
+    weatherOpsByHub: { DEN: { level: 'warning' } },
+    faaIndex: { DEN: { groundDelay: true } },
+  };
+
+  it('describes the airborne inbound aircraft and its origin conditions', () => {
+    expect(buildInboundRiskContext(base)).toEqual({
+      origin: 'DEN', lat: 41.2, lon: -93.1, spd: 230, alt: 11000, vr: 0, acType: 'A21N',
+      originWeatherLevel: 'warning', originFaaGroundStop: false, originFaaGroundDelay: true,
+    });
+  });
+
+  it('is null without a schedule, once our own flight is airborne, or with no inbound', () => {
+    expect(buildInboundRiskContext({ ...base, hasTimes: false })).toBeNull();
+    expect(buildInboundRiskContext({ ...base, ownFlightAirborne: true })).toBeNull();
+    expect(buildInboundRiskContext({ ...base, flights: [{ ...inboundRow, dest: 'SFO' }] })).toBeNull();
+    expect(buildInboundRiskContext({ ...base, reg: '' })).toBeNull();
+  });
+
+  it('feeds the risk model: an inbound ~690 km out cannot make a 30-minute turn', () => {
+    const nowMs = Date.parse('2026-09-27T00:00:00Z');
+    const risk = computeDelayRiskModel({
+      currentFlightNumber: 'UA2106',
+      nowMs,
+      scheduledTime: new Date(nowMs + 30 * 60000).toISOString(),
+      originHub: 'ORD',
+      destinationHub: 'SFO',
+      timeZone: 'America/Chicago',
+      inboundFlight: buildInboundRiskContext(base),
+    });
+    expect(risk.components.some((c) => c.id === 'inbound-turn')).toBe(true);
+    expect(risk.factors.join(' ')).toMatch(/cannot make turnaround/);
+    expect(risk.factors).toContain('Inbound from DEN (warning weather)');
   });
 });

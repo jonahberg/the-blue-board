@@ -261,8 +261,6 @@ function collectInboundSignals(state, input) {
     nowMs,
     inboundFlight,
     originCoordinates,
-    aircraftJourney,
-    currentFlightNumber,
   } = input;
 
   const scheduledMs = toMillis(scheduledDepartureTime);
@@ -327,15 +325,10 @@ function collectInboundSignals(state, input) {
     }
   }
 
-  if (aircraftJourney && Array.isArray(aircraftJourney.segments)) {
-    const priorSegments = aircraftJourney.segments.filter((segment) => segment.flightNumber !== currentFlightNumber);
-    const lateSegments = priorSegments.filter((segment) => segment.delayMin !== null && segment.delayMin > 15);
-    if (lateSegments.length >= 2) {
-      const avgDelay = Math.round(lateSegments.reduce((sum, segment) => sum + segment.delayMin, 0) / lateSegments.length);
-      const points = avgDelay >= 45 ? 8 : avgDelay >= 30 ? 6 : 4;
-      addPoints(state, 'journey-propagation', points, `Aircraft running late all day (avg +${avgDelay}m across ${lateSegments.length} segments)`);
-    }
-  }
+  // The "aircraft running late all day" (journey-propagation) signal was removed Sep 2026 (audit
+  // F134): it scored per-segment departure delay from /api/aircraft-history, but that endpoint is
+  // FR24 flight-summary/light, which carries no scheduled times — every production segment has
+  // delayMin: null, so the signal could never fire and its tests described behaviour nobody got.
 }
 
 function collectIropsSignals(state, airportCode, irops, role) {
@@ -424,8 +417,6 @@ export function computeDelayRiskModel(input) {
     nowMs,
     inboundFlight: input.inboundFlight,
     originCoordinates: input.originCoordinates,
-    aircraftJourney: input.aircraftJourney,
-    currentFlightNumber: input.currentFlightNumber,
   });
 
   const hubProfile = input.hubProfile || HUB_RISK_PROFILES[input.originHub];
