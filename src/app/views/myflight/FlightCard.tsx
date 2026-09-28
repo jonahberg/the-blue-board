@@ -138,6 +138,13 @@ export function FlightCard({
               {countdown.text}
             </div>
           ) : null}
+          {countdown.text && td?.arrival?.etaSource === 'live' ? (
+            // Say where the number came from: the provider's own estimate disagreed with the
+            // aircraft's position by more than half an hour, so this one is ours (D1).
+            <div className="text-[10px] text-muted-foreground">
+              ETA from live position
+            </div>
+          ) : null}
           <div className="mt-1 flex flex-wrap justify-end gap-1">
             <Badge
               variant="outline"

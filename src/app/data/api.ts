@@ -87,8 +87,10 @@ export async function fetchFr24Feed(
   return { flights, staleMs };
 }
 
-export function fetchFlightTimes(flight: string, signal?: AbortSignal): Promise<FlightTimes> {
-  return getJson<FlightTimes>(`/api/flight-times?flight=${encodeURIComponent(flight)}`, { signal });
+/** `from` pins the leg departing that airport (a multi-leg flight number, D2). */
+export function fetchFlightTimes(flight: string, signal?: AbortSignal, from?: string): Promise<FlightTimes> {
+  const hint = from ? `&from=${encodeURIComponent(from)}` : '';
+  return getJson<FlightTimes>(`/api/flight-times?flight=${encodeURIComponent(flight)}${hint}`, { signal });
 }
 
 export type PredictionResponse = {

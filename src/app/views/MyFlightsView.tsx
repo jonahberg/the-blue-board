@@ -43,6 +43,7 @@ import {
   buildInboundRiskContext,
   findInboundAircraft,
   findLiveFlight,
+  reconcileLiveArrival,
   resolveMyFlightRoute,
 } from '@/lib/my-flights.js';
 import type { Flight } from '../data/types';
@@ -105,8 +106,13 @@ export default function MyFlightsView() {
   const journeys = useAircraftJourney(regs);
 
   // ── Connections among the watch list, and the index the AI context reads ──
+  // While a leg is airborne its live-position ETA outranks a contradicting provider
+  // estimate (D1), so the connection is scored against where the aircraft actually is.
   const { connections, connRisks, connectionIndex } = useMemo(() => {
-    const tds = watched.map((entry) => times[entry.flight]?.data ?? null);
+    const nowMs = Date.now();
+    const tds = watched.map((entry) =>
+      reconcileLiveArrival(times[entry.flight]?.data ?? null, findLiveFlight(flights, entry.flight), nowMs),
+    );
     const found = findWatchedConnections(watched, tds, HUB_CODES) as unknown as ConnectionPair[];
     const risks = found.map((conn) => computeConnectionRisk(conn) as ConnectionRisk);
     return {
@@ -114,19 +120,20 @@ export default function MyFlightsView() {
       connRisks: risks,
       connectionIndex: buildConnectionIndex(found, risks) as Record<string, unknown>,
     };
-  }, [watched, times]);
+  }, [watched, times, flights]);
 
   // ── One model per card ──
   const cards = useMemo<MyFlightCardModel[]>(() => {
     return watched.map((entry) => {
       const record = times[entry.flight];
-      const td = record?.data ?? null;
+      const liveFlight = findLiveFlight(flights, entry.flight) as Flight | null;
+      // D1: live data wins while airborne — `arrival.etaSource === 'live'` marks the swap.
+      const td = reconcileLiveArrival(record?.data ?? null, liveFlight, Date.now());
       const failures = record?.failures ?? 0;
       const { origCode, destCode } = resolveMyFlightRoute(entry.route, td) as {
         origCode: string;
         destCode: string;
       };
-      const liveFlight = findLiveFlight(flights, entry.flight) as Flight | null;
       const resolvedStatus = td ? (resolveFlightStatus(td, liveFlight) as string) : '';
       const reg = liveFlight?.reg?.replace('-', '') || (td?.registration || '').replace('-', '');
       const ownFlightAirborne = Boolean(liveFlight && !liveFlight.onGround);
@@ -355,7 +362,7 @@ export default function MyFlightsView() {
 
       {/* Beside the centred empty state a full-width card read as a separate page (F77). */}
       <div className={watched.length === 0 ? 'mx-auto max-w-xl' : undefined}>
-        <ManualConnectionCheck />
+        <ManualConnectionCheck flights={flights} />
       </div>
     </div>
   );

@@ -14,7 +14,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const payloads = vi.hoisted(() => ({ byFlight: {} as Record<string, unknown> }));
 vi.mock('../src/app/data/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/data/api')>()),
-  fetchFlightTimes: async (flight: string) => payloads.byFlight[flight],
+  fetchFlightTimes: async (flight: string, _signal?: AbortSignal, from?: string) =>
+    payloads.byFlight[from ? `${flight}@${from}` : flight],
 }));
 
 import { ManualConnectionCheck } from '../src/app/views/myflight/ConnectionPanel';
@@ -74,5 +75,38 @@ describe('ManualConnectionCheck', () => {
       expect(classes).not.toContain('text-[11px]');
       expect(input.placeholder.length).toBeLessThanOrEqual(12);
     }
+  });
+
+  it('re-asks for the outbound leg departing the connection hub before saying "doesn\'t connect" (D2)', async () => {
+    // Live audit Sep 28 2026: UA1215 (ALB→ORD) + UA786 read "UA786 departs from ICT" — UA786
+    // flies ICT→ORD, then ORD→LGA from the O'Hare departures board.
+    payloads.byFlight = {
+      UA1215: payload({
+        flight: 'UA1215', from: 'ALB', to: 'ORD', fromTerminal: '', toTerminal: '1',
+        depSched: '2026-09-28T13:55:00.000Z', depEst: '',
+        arrSched: '2026-09-28T16:29:00.000Z', arrEst: '2026-09-28T16:25:00.000Z',
+        source: 'schedule-cache+fr24', status: 'en-route',
+      }),
+      UA786: payload({
+        flight: 'UA786', from: 'ICT', to: 'ORD', fromTerminal: '', toTerminal: '1',
+        depSched: '2026-09-28T14:30:00.000Z', depEst: '',
+        arrSched: '2026-09-28T16:20:00.000Z', arrEst: '',
+        source: 'schedule-cache', status: 'departed',
+      }),
+      'UA786@ORD': payload({
+        flight: 'UA786', from: 'ORD', to: 'LGA', fromTerminal: '1', toTerminal: 'B',
+        depSched: '2026-09-28T17:20:00.000Z', depEst: '',
+        arrSched: '2026-09-28T19:25:00.000Z', arrEst: '',
+        source: 'schedule-cache', status: 'scheduled',
+      }),
+    };
+    render(<ManualConnectionCheck />);
+    fireEvent.change(screen.getByLabelText('Inbound flight number'), { target: { value: 'UA1215' } });
+    fireEvent.change(screen.getByLabelText('Outbound flight number'), { target: { value: 'UA786' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(await screen.findByText(/Connection at ORD/)).toBeTruthy();
+    expect(screen.getByText(/LGA/)).toBeTruthy();
+    expect(screen.queryByText(/departs from ICT/)).toBeNull();
   });
 });

@@ -8,6 +8,8 @@
 // placeholder rotator). The classification of the flight itself stays in
 // ./flight-status-resolve.js; this module is what the card does with that answer.
 
+import { AIRPORT_COORDS } from './airports.js';
+import { haversineNm } from './geo.js';
 import { getUnitedTerminal } from './hub-terminals.js';
 
 /**
@@ -129,6 +131,95 @@ export function myFlightTimes(td) {
       td?.arrival?.landing?.estimated ||
       td?.arrival?.landing?.scheduled ||
       '',
+  };
+}
+
+/**
+ * Minutes added to the in-air time for the approach, landing roll and taxi to the gate.
+ * Straight-line distance ÷ current groundspeed is the airborne part only; the gate time
+ * the card counts to is later than that. (delay-risk.js's inbound model uses +15 for a
+ * turnaround estimate; a passenger countdown wants the tighter figure.)
+ */
+export const LIVE_ETA_ALLOWANCE_MIN = 10;
+
+/** An ADB/provider arrival estimate further than this from the live ETA is ignored. */
+export const LIVE_ETA_CONTRADICTION_MIN = 30;
+
+/** Below this groundspeed a "live" position is a taxi or a stale fix, not a flight. */
+const LIVE_ETA_MIN_KT = 80;
+
+/**
+ * The gate-arrival time the live feed implies: remaining great-circle distance to the
+ * destination ÷ current groundspeed, plus `LIVE_ETA_ALLOWANCE_MIN`.
+ *
+ * `Flight.spd` is metres/second (src/lib/feed-health.js converts FR24's knots on parse).
+ * Returns null whenever the answer would be a guess: on the ground, at taxi speed, or
+ * with no coordinates for the destination.
+ *
+ * @param {Object|null|undefined} liveFlight  a live-feed row.
+ * @param {string} destIata
+ * @param {number} [nowMs]
+ * @returns {{etaISO: string, remainingNm: number, groundspeedKt: number}|null}
+ */
+export function liveArrivalEstimate(liveFlight, destIata, nowMs = Date.now()) {
+  if (!liveFlight || liveFlight.onGround) return null;
+  const dest = AIRPORT_COORDS[String(destIata || '').toUpperCase()];
+  if (!dest) return null;
+  const groundspeedKt = (Number(liveFlight.spd) || 0) * 1.944;
+  if (!(groundspeedKt >= LIVE_ETA_MIN_KT)) return null;
+  const { lat, lon } = liveFlight;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const remainingNm = haversineNm(lat, lon, dest.lat, dest.lon);
+  const minutes = (remainingNm / groundspeedKt) * 60 + LIVE_ETA_ALLOWANCE_MIN;
+  return { etaISO: new Date(nowMs + minutes * 60000).toISOString(), remainingNm, groundspeedKt };
+}
+
+/**
+ * While the flight is airborne, live data wins (owner decision, live audit Sep 28 2026 D1).
+ *
+ * Returns a NEW payload whose `arrival.gate.estimated` is the live ETA — labelled
+ * `arrival.etaSource = 'live'` — when the provider's estimate (or, lacking one, the
+ * schedule) is more than `LIVE_ETA_CONTRADICTION_MIN` away from it. Within that margin the
+ * provider's gate estimate stands: it knows the gate, we only know the sky. The input is
+ * never mutated (it is the flight-times cache entry), and anything that is not an
+ * airborne, un-landed leg comes back as the same object.
+ *
+ * Both the countdown (`myFlightTimes`) and the connection checker
+ * (`computeConnectionRisk`) read `arrival.gate.estimated`, so reconciling here fixes both.
+ *
+ * @template T
+ * @param {T} td  an /api/flight-times payload (or null).
+ * @param {Object|null|undefined} liveFlight  the feed row `findLiveFlight()` returned.
+ * @param {number} [nowMs]
+ * @returns {T}
+ */
+export function reconcileLiveArrival(td, liveFlight, nowMs = Date.now()) {
+  /** @type {any} */
+  const t = td;
+  if (!t || t.success === false || t.cancelled) return td;
+  return /** @type {T} */ (reconcileImpl(t, liveFlight, nowMs));
+}
+
+/** @param {any} td @param {any} liveFlight @param {number} nowMs */
+function reconcileImpl(td, liveFlight, nowMs) {
+  if (!td || td.success === false || td.cancelled) return td;
+  if (td.arrival?.gate?.actual || td.arrival?.landing?.actual) return td;
+  const dest = td.destination?.iata || liveFlight?.dest || '';
+  const live = liveArrivalEstimate(liveFlight, dest, nowMs);
+  if (!live) return td;
+  const current = td.arrival?.gate?.estimated || td.arrival?.gate?.scheduled || '';
+  const currentMs = Date.parse(current);
+  if (Number.isFinite(currentMs) && Math.abs(currentMs - Date.parse(live.etaISO)) <= LIVE_ETA_CONTRADICTION_MIN * 60000) {
+    return td;
+  }
+  return {
+    ...td,
+    arrival: {
+      ...td.arrival,
+      gate: { scheduled: '', actual: '', ...(td.arrival?.gate || {}), estimated: live.etaISO },
+      etaSource: 'live',
+      providerEstimate: td.arrival?.gate?.estimated || '',
+    },
   };
 }
 

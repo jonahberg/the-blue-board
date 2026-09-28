@@ -114,7 +114,14 @@ export type FlightTimes = {
   /** Set when no schedule board lists the flight and only FR24 identity is known (F1). */
   timesUnavailable?: boolean;
   departure: { gate: TimeTriple; takeoff: TimeTriple };
-  arrival: { gate: TimeTriple; landing: TimeTriple };
+  arrival: {
+    gate: TimeTriple;
+    landing: TimeTriple;
+    /** Client-side only: 'live' when `reconcileLiveArrival()` replaced the gate estimate (D1). */
+    etaSource?: 'live';
+    /** The provider estimate the live ETA overrode. */
+    providerEstimate?: string;
+  };
   origin: FlightTimesEndpoint;
   destination: FlightTimesEndpoint;
 };
