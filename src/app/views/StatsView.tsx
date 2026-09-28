@@ -85,8 +85,8 @@ export default function StatsView() {
     [airborne, fleetDb, fleetByReg],
   );
 
-  // The airborne set, not every flight: the panel is titled "Airborne by Flight Phase" and its
-  // centre total has to equal the "Flights Airborne" card above it (F67).
+  // The airborne set, not every flight: the donut's centre total has to equal the "Flights
+  // Airborne" card above it (F67).
   const phase = useMemo(() => phaseBreakdown(airborne) as PhaseModel, [airborne]);
 
   const matrix = useMemo(() => hubMatrix(airborne, HUBS) as MatrixModel, [airborne]);
@@ -139,7 +139,7 @@ export default function StatsView() {
         </Panel>
 
         <Panel
-          title="🛫 Airborne by Flight Phase"
+          title="🛫 Flights by Phase"
           subtitle={`Current phase distribution · ${REFRESH_NOTE}`}
         >
           <PhaseDonut model={phase} />

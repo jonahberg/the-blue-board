@@ -95,3 +95,47 @@ describe('deserializeLedger', () => {
     expect(deserializeLedger(null)).toEqual({});
   });
 });
+
+describe('the ledger is keyed per leg (F15)', () => {
+  const H = 3600e3;
+  const T = 1_750_000_000; // seconds
+
+  it('records a routed sighting under flight + origin + dest, and a route-less one under the number', () => {
+    const ledger = {};
+    recordSightings(ledger, [
+      { flightIATA: 'UA123', reg: 'N76265', origin: 'san', dest: 'SFO' },
+      { flightIATA: 'UA456', reg: 'N1' },
+    ], 1000);
+    expect(ledger['UA123|SAN|SFO']).toEqual({ reg: 'N76265', seenAt: 1000, origin: 'SAN', dest: 'SFO' });
+    expect(ledger.UA456).toEqual({ reg: 'N1', seenAt: 1000 });
+  });
+
+  it('never pins the SAN→SFO tail onto the SFO→ORD leg flown an hour later under the same number', () => {
+    const ledger = {};
+    // Seen at T on SAN→SFO; the SFO→ORD leg departs at T+1h (inside the time window).
+    recordSightings(ledger, [{ flightIATA: 'UA123', reg: 'N76265', origin: 'SAN', dest: 'SFO' }], T * 1000);
+    expect(lookupReg(ledger, 'UA123', T + 3600, T + 5 * 3600, 'SFO', 'ORD')).toBeNull();
+    expect(lookupReg(ledger, 'UA123', T - 1800, T + 1800, 'SAN', 'SFO')).toBe('N76265');
+  });
+
+  it('keeps both legs of a multi-leg number instead of the later overwriting the earlier', () => {
+    const ledger = {};
+    recordSightings(ledger, [{ flightIATA: 'UA123', reg: 'N11111', origin: 'SAN', dest: 'SFO' }], T * 1000);
+    recordSightings(ledger, [{ flightIATA: 'UA123', reg: 'N22222', origin: 'SFO', dest: 'ORD' }], T * 1000 + H);
+    expect(lookupReg(ledger, 'UA123', T - 1800, T + 1800, 'SAN', 'SFO')).toBe('N11111');
+    expect(lookupReg(ledger, 'UA123', T + 3600, T + 5 * 3600, 'SFO', 'ORD')).toBe('N22222');
+  });
+
+  it('a route-less sighting still fills any leg, and a row with one unknown end checks the other', () => {
+    const ledger = { UA123: { reg: 'N33333', seenAt: T * 1000 } };
+    expect(lookupReg(ledger, 'UA123', T, T + 3600, 'SFO', 'ORD')).toBe('N33333');
+    const routed = { 'UA123|SAN|SFO': { reg: 'N44444', seenAt: T * 1000, origin: 'SAN', dest: 'SFO' } };
+    expect(lookupReg(routed, 'UA123', T, T + 3600, '', 'SFO')).toBe('N44444');
+    expect(lookupReg(routed, 'UA123', T, T + 3600, '', 'ORD')).toBeNull();
+  });
+
+  it('round-trips the leg through storage', () => {
+    const ledger = { 'UA1|SAN|SFO': { reg: 'N1', seenAt: 5, origin: 'SAN', dest: 'SFO' } };
+    expect(deserializeLedger(JSON.stringify(ledger))).toEqual(ledger);
+  });
+});

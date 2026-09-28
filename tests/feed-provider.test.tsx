@@ -102,11 +102,15 @@ describe('FeedProvider poll loop', () => {
     fetchMock.mockImplementation(async () => jsonResponse(FULL));
     const feed = await mount();
     const ledger = JSON.parse(localStorage.getItem('bb_reg_ledger_v1') || '{}');
-    expect(ledger.UA123?.reg).toBe('N37502');
-    // A sighting only backfills a row whose schedule window contains it.
+    // Keyed by leg (F15): the feed row flies ORD→SFO.
+    expect(ledger['UA123|ORD|SFO']?.reg).toBe('N37502');
+    // A sighting only backfills a row whose schedule window contains it…
     const dep = Math.floor(Date.now() / 1000) - 3600;
     expect(feed.current!.lookupReg('UA123', dep, dep + 4 * 3600)).toBe('N37502');
+    expect(feed.current!.lookupReg('UA123', dep, dep + 4 * 3600, 'ORD', 'SFO')).toBe('N37502');
     expect(feed.current!.lookupReg('UA123')).toBeNull();
+    // …and whose leg it is.
+    expect(feed.current!.lookupReg('UA123', dep, dep + 4 * 3600, 'SFO', 'EWR')).toBeNull();
   });
 
   it('treats a zero-aircraft 200 as a failed poll and keeps the last-good flights', async () => {

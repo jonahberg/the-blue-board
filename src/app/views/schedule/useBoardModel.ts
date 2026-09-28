@@ -168,7 +168,13 @@ export type BoardModelInput = {
   swaps: EquipmentSwap[];
   liveFlights: Flight[];
   liveFeedTs: number | null;
-  lookupReg: (flight: string, depSec?: number, arrSec?: number) => string | null;
+  lookupReg: (
+    flight: string,
+    depSec?: number,
+    arrSec?: number,
+    origin?: string,
+    dest?: string,
+  ) => string | null;
   fleetDb: FleetAircraft[];
   fleetByReg: Record<string, FleetAircraft>;
   starlinkTails: Set<string>;
@@ -283,8 +289,9 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       const flight = row as FlightShape;
       const modelCode = flight.aircraft?.model?.code || '';
       // F15: a tail backfilled from live tracking (server merge or this browser's ledger) is
-      // only kept when it can be the aircraft the row is scheduled on — the ledger is keyed on
-      // flight number alone and once pinned a SAN→SFO 737 onto the SFO→ORD A321neo.
+      // only kept when it can be the aircraft the row is scheduled on — a flight-number-only
+      // ledger once pinned a SAN→SFO 737 onto the SFO→ORD A321neo. The ledger is now keyed
+      // per leg too, and the row's leg is this board's hub plus the row's other airport.
       const fits = (reg: string) => regMatchesModel(reg, modelCode, fleetByReg) as boolean;
       const providerReg = flight.aircraft?.registration || '';
       const provider =
@@ -295,6 +302,8 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
             flight.identification?.number?.default || '',
             flight.time?.scheduled?.departure,
             flight.time?.scheduled?.arrival,
+            dir === 'departures' ? hub : flight.airport?.origin?.code?.iata || '',
+            dir === 'arrivals' ? hub : flight.airport?.destination?.code?.iata || '',
           ) || '';
       const value = provider || (ledger && fits(ledger) ? ledger : '');
       regCache.set(row, value);

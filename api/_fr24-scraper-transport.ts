@@ -19,7 +19,7 @@ function remainingTimeout(deadlineMs?: number): number {
 // ScrapingBee has been removed by owner directive. The only scraper transport is a generic
 // http-json proxy (POST {url,headers} -> JSON), gated by SCHEDULE_SCRAPER_URL. It is normally
 // unset — the FR24 web scrape is Cloudflare-challenge-dead, so the live board comes from the
-// provider (AeroDataBox); see SCHEDULE_SOURCE_PRIORITY=provider in api/schedule.ts.
+// provider (AeroDataBox); see the source routing note in api/schedule.ts.
 function scraperMode(): 'http-json' | 'off' {
   const explicit = String(process.env.SCHEDULE_SCRAPER_MODE || '').trim().toLowerCase();
   if (['0', 'false', 'off', 'none', 'disabled'].includes(explicit)) return 'off';
