@@ -8,13 +8,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 let mod: typeof import('../src/app/map/basemap');
-let L: typeof import('leaflet').default;
+let L: typeof import('leaflet');
 
 beforeAll(async () => {
   // Leaflet reads the DPR once, at import: make this a retina desktop first.
   Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 });
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
-  L = (await import('leaflet')).default;
+  L = ((await import('leaflet')) as unknown as { default: typeof import('leaflet') }).default;
   mod = await import('../src/app/map/basemap');
 });
 
