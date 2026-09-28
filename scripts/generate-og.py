@@ -127,7 +127,7 @@ if __name__ == "__main__":
     render(
         "THE BLUE BOARD · MODERN SKIES TRACKER",
         "Is Your Airport Off Paper Yet?",
-        "18 towers off paper flight strips, 71 to go — check yours",
+        "20 towers off paper flight strips, 69 to go — check yours",
         os.path.join(OUT_DIR, "og-tracker-atc.jpg"),
     )
     render(
