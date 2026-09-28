@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockCreate = vi.fn();
+const { mockCreate, MockAnthropic } = vi.hoisted(() => {
+  const mockCreate = vi.fn();
+  const MockAnthropic = vi.fn(function () {
+    return { messages: { create: mockCreate } };
+  });
+  return { mockCreate, MockAnthropic };
+});
 
-vi.mock('@anthropic-ai/sdk', () => ({
-  default: vi.fn(function () {
-    return {
-      messages: { create: mockCreate },
-    };
-  }),
-}));
+vi.mock('@anthropic-ai/sdk', () => ({ default: MockAnthropic }));
 
 import handler, { __resetDelayExplainForTests } from '../api/delay-explain.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
@@ -46,9 +46,35 @@ describe('delay-explain API', () => {
     // is why the circuit cases had to be declared last and re-import the module to be meaningful.
     __resetDelayExplainForTests();
     process.env.AI_GATEWAY_API_KEY = 'test-key';
+    delete process.env.AI_GATEWAY_BASE_URL;
+    MockAnthropic.mockClear();
     mockCreate.mockResolvedValue({
       content: [{ type: 'text', text: 'This flight is delayed due to weather.' }],
     });
+  });
+
+  // --- SDK configuration (F114) ---
+  // The SDK sends BOTH x-api-key and Authorization: Bearer unless apiKey is null; the gateway
+  // wants Bearer only. Until this test, only a code comment guarded that.
+
+  it('builds the SDK client for the AI Gateway: Bearer-only auth, gateway base URL', async () => {
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(MockAnthropic).toHaveBeenCalledTimes(1);
+    expect(MockAnthropic).toHaveBeenCalledWith(expect.objectContaining({
+      apiKey: null,
+      authToken: 'test-key',
+      baseURL: 'https://ai-gateway.vercel.sh',
+    }));
+  });
+
+  it('honours AI_GATEWAY_BASE_URL as the override host', async () => {
+    process.env.AI_GATEWAY_BASE_URL = 'https://example.test';
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(MockAnthropic).toHaveBeenCalledWith(expect.objectContaining({ baseURL: 'https://example.test', apiKey: null }));
+    delete process.env.AI_GATEWAY_BASE_URL;
   });
 
   // --- Validation ---

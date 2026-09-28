@@ -273,6 +273,9 @@ export type Fr24FlightLookup = {
   meta?: { liveLeg?: boolean; legDate?: string };
   liveLeg?: boolean;
   legDate?: string;
+  /** No leg is flying or just landed: `flight` is the most recent leg that operated (often
+   *  yesterday's), to be shown as history, not as the flight (audit F0). */
+  previousLeg?: boolean;
 };
 
 export function fetchFr24Flight(flight: string): Promise<Fr24FlightLookup> {

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import {
   normalizeFlightNumber,
@@ -5,6 +6,11 @@ import {
   normalizeSummaryResponse,
   getClientIp,
 } from '../api/fr24-flight.js';
+
+// Real-shape fixtures (F110): fr24-summary-light.json is UA2278's prod answer (yesterday's
+// completed leg); fr24-live-full.json follows FR24's documented live-full schema.
+const LIVE_FULL = JSON.parse(readFileSync(new URL('./fixtures/fr24-live-full.json', import.meta.url), 'utf8'));
+const SUMMARY_LIGHT = JSON.parse(readFileSync(new URL('./fixtures/fr24-summary-light.json', import.meta.url), 'utf8'));
 
 describe('normalizeFlightNumber (FR24)', () => {
   it('prepends UA to bare numbers', () => {
@@ -39,7 +45,30 @@ describe('normalizeFlightNumber (FR24)', () => {
 });
 
 describe('normalizeLiveResponse', () => {
-  it('maps FR24 live fields to standard schema', () => {
+  it('maps the documented live-full row (flight / reg / type / hex / gspeed / track / eta) — F110', () => {
+    const result = normalizeLiveResponse(LIVE_FULL, 'UA2106');
+
+    expect(result.flightNumber).toBe('UA2106');
+    expect(result.callsign).toBe('UAL2106');
+    expect(result.status).toBe('en-route');
+    expect(result.origin).toEqual({ iata: 'ORD', icao: 'KORD', name: '' });
+    expect(result.destination).toEqual({ iata: 'SFO', icao: 'KSFO', name: '' });
+    expect(result.aircraft).toEqual({ type: 'A21N', reg: 'N14512', icao24: 'A0B7C4' });
+    // live-full has no departure times at all; its one time is the ETA.
+    expect(result.departure).toEqual({ scheduled: '', actual: '' });
+    expect(result.arrival.estimated).toBe('2026-09-27T07:22:00Z');
+    expect(result.position).toEqual({ lat: 40.91, lon: -104.62, alt: 37000, speed: 468, heading: 262 });
+    expect(result.flightId).toBe('3c9a77d0');
+  });
+
+  it('reads on-ground from altitude/speed — the real payload has no on_ground flag', () => {
+    const row = LIVE_FULL.data[0];
+    expect(normalizeLiveResponse({ data: [{ ...row, alt: 0, gspeed: 0 }] }, 'UA2106').status).toBe('on-ground');
+    expect(normalizeLiveResponse({ data: [{ ...row, alt: 0, gspeed: 18 }] }, 'UA2106').status).toBe('on-ground');
+    expect(normalizeLiveResponse({ data: [{ ...row, alt: 2500, gspeed: 160 }] }, 'UA2106').status).toBe('en-route');
+  });
+
+  it('legacy fallback names (assumed, never observed) still map', () => {
     const data = {
       data: [{
         flight_iata: 'UA838',
@@ -51,8 +80,6 @@ describe('normalizeLiveResponse', () => {
         registration: 'N29975',
         icao24: 'ABC123',
         scheduled_departure: '2024-01-01T10:00:00Z',
-        actual_departure: '2024-01-01T10:05:00Z',
-        scheduled_arrival: '2024-01-01T18:00:00Z',
         estimated_arrival: '2024-01-01T17:50:00Z',
         lat: 37.6213,
         lon: -122.379,
@@ -62,30 +89,17 @@ describe('normalizeLiveResponse', () => {
         flight_id: 'abc123',
       }],
     };
-
     const result = normalizeLiveResponse(data, 'UA838');
-
     expect(result.flightNumber).toBe('UA838');
-    expect(result.callsign).toBe('UAL838');
     expect(result.status).toBe('en-route');
-    expect(result.origin.iata).toBe('SFO');
-    expect(result.destination.iata).toBe('EWR');
-    expect(result.aircraft.type).toBe('B789');
-    expect(result.aircraft.reg).toBe('N29975');
-    expect(result.aircraft.icao24).toBe('ABC123');
+    expect(result.aircraft).toEqual({ type: 'B789', reg: 'N29975', icao24: 'ABC123' });
     expect(result.departure.scheduled).toBe('2024-01-01T10:00:00Z');
-    expect(result.departure.actual).toBe('2024-01-01T10:05:00Z');
-    expect(result.arrival.scheduled).toBe('2024-01-01T18:00:00Z');
     expect(result.arrival.estimated).toBe('2024-01-01T17:50:00Z');
-    expect(result.position.lat).toBe(37.6213);
-    expect(result.position.lon).toBe(-122.379);
-    expect(result.position.alt).toBe(35000);
-    expect(result.position.speed).toBe(450);
     expect(result.position.heading).toBe(90);
     expect(result.flightId).toBe('abc123');
   });
 
-  it('returns "on-ground" status when on_ground is true', () => {
+  it('honours an explicit on_ground flag (legacy fallback)', () => {
     const data = { data: [{ on_ground: true }] };
     const result = normalizeLiveResponse(data, 'UA100');
     expect(result.status).toBe('on-ground');
@@ -175,7 +189,7 @@ describe('normalizeSummaryResponse', () => {
         datetime_landed: null,
         flight_ended: false,
       }],
-    }, 'UA803');
+    }, 'UA803', Date.parse('2026-09-11T02:00:00Z'));
 
     expect(result.flightNumber).toBe('UA803');
     expect(result.callsign).toBe('UAL803');
@@ -185,6 +199,7 @@ describe('normalizeSummaryResponse', () => {
     expect(result.aircraft).toEqual({ type: 'B78X', reg: 'N12010' });
     expect(result.departure).toEqual({ scheduled: '2026-09-11T00:20:00Z', actual: '2026-09-11T00:41:00Z' });
     expect(result.flightId).toBe('41993080');
+    expect(result.previousLeg).toBe(false);
   });
 
   it('derives landed status from datetime_landed / flight_ended and maps ICAO-only airports', () => {
@@ -194,7 +209,25 @@ describe('normalizeSummaryResponse', () => {
     expect(result.status).toBe('landed');
     expect(result.origin.iata).toBe('SFO');
     expect(result.destination.icao).toBe('RJTT'); // actual destination wins over filed
-    expect(result.arrival.estimated).toBe('2026-09-11T06:00:00Z');
+    // A landing is an ACTUAL, not an estimate (F110).
+    expect(result.arrival.actual).toBe('2026-09-11T06:00:00Z');
+    expect(result.arrival.estimated).toBe('');
+  });
+
+  it('never presents yesterday\'s completed leg as the flight — it comes back flagged previousLeg (F0)', () => {
+    // UA2278, 2026-09-27 04:33Z: tonight's leg has not departed, FR24 lists only yesterday's.
+    const result = normalizeSummaryResponse(SUMMARY_LIGHT, 'UA2278', Date.parse('2026-09-27T04:33:39Z'));
+    expect(result.previousLeg).toBe(true);
+    expect(result.status).toBe('landed');
+    expect(result.departure.actual).toBe('2026-09-26T06:02:02Z');
+  });
+
+  it('picks the live leg over an older one regardless of array order', () => {
+    const tonight = { ...SUMMARY_LIGHT.data[0], reg: 'N76265', datetime_takeoff: '2026-09-27T05:52:40Z', datetime_landed: null, flight_ended: false, last_seen: '2026-09-27T06:29:58Z' };
+    const result = normalizeSummaryResponse({ data: [SUMMARY_LIGHT.data[0], tonight] }, 'UA2278', Date.parse('2026-09-27T06:30:00Z'));
+    expect(result.previousLeg).toBe(false);
+    expect(result.aircraft.reg).toBe('N76265');
+    expect(result.status).toBe('en-route');
   });
 
   it('returns null for empty data', () => {
@@ -250,7 +283,7 @@ describe('getClientIp (FR24)', () => {
 // Jul 3 2026 audit: same kill-switch coverage as aircraft-history — this endpoint calls the
 // paid FR24 Official API and must refuse cleanly when SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false.
 import { vi, beforeEach, afterEach } from 'vitest';
-import handler from '../api/fr24-flight.js';
+import handler, { __resetFr24FlightForTests } from '../api/fr24-flight.js';
 import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
 
 function createRes() {
@@ -311,6 +344,7 @@ function fr24Resp(body, { ok = true, status = 200 } = {}) {
 describe('fr24-flight handler success orchestration (F048)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    __resetFr24FlightForTests();
     process.env.FR24_API_TOKEN = 'test-token';
     delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED; // kill switch defaults ON
     resetMirroredQuotaBlock();
@@ -321,28 +355,44 @@ describe('fr24-flight handler success orchestration (F048)', () => {
     delete process.env.FR24_API_TOKEN;
   });
 
-  it('merges summary times into a live position and labels the leg', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      const u = String(url);
-      if (u.includes('/api/live/flight-positions/full')) {
-        // Live: has a position but NO times — forces the summary top-up.
-        return fr24Resp({ data: [{ flight_iata: 'UA838', on_ground: false, orig_iata: 'SFO', dest_iata: 'EWR', registration: 'N29975', lat: 37.6, lon: -122.4, flight_id: 'live1' }] });
-      }
-      return fr24Resp({ data: [{ flight_iata: 'UA838', status: 'scheduled', origin: { iata: 'SFO' }, destination: { iata: 'EWR' }, departure: { scheduled: '2026-04-04T10:00:00Z', actual: '' }, arrival: { scheduled: '2026-04-04T18:00:00Z', estimated: '2026-04-04T17:50:00Z' }, flight_id: 'sum1' }] });
-    });
+  it('merges the live position with the current summary leg\'s takeoff and labels the leg', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.parse('2026-09-27T04:33:39Z') });
+    // UA2106 in the air: summary lists yesterday's leg AND tonight's airborne one.
+    const summary = { data: [
+      { ...SUMMARY_LIGHT.data[0], flight: 'UA2106', callsign: 'UAL2106', reg: 'N14512', orig_icao: 'KORD', dest_icao: 'KSFO', dest_icao_actual: 'KSFO', datetime_takeoff: '2026-09-26T03:20:11Z', datetime_landed: '2026-09-26T07:31:40Z' },
+      { ...SUMMARY_LIGHT.data[0], flight: 'UA2106', callsign: 'UAL2106', reg: 'N14512', orig_icao: 'KORD', dest_icao: 'KSFO', dest_icao_actual: 'KSFO', datetime_takeoff: '2026-09-27T03:17:53Z', datetime_landed: null, flight_ended: false, last_seen: '2026-09-27T04:33:30Z' },
+    ] };
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      fr24Resp(String(url).includes('/api/live/flight-positions/full') ? LIVE_FULL : summary));
 
     const res = createRes();
-    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { flight: 'UA838' } }, res);
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { flight: 'UA2106' } }, res);
+    vi.useRealTimers();
 
     expect(res.statusCode).toBe(200);
     expect(res.body.source).toBe('fr24-official-live+summary');
     expect(res.body.liveLeg).toBe(true);
-    expect(res.body.legDate).toBe('2026-04-04T10:00:00Z');
-    expect(res.body.flight.departure.scheduled).toBe('2026-04-04T10:00:00Z');
-    expect(res.body.flight.arrival.scheduled).toBe('2026-04-04T18:00:00Z');
-    expect(res.body.flight.arrival.estimated).toBe('2026-04-04T17:50:00Z');
-    expect(res.body.flight.position.lat).toBe(37.6); // live position preserved
+    expect(res.body.previousLeg).toBe(false);
+    expect(res.body.flight.departure.actual).toBe('2026-09-27T03:17:53Z'); // tonight's, not yesterday's
+    expect(res.body.legDate).toBe('2026-09-27T03:17:53Z');
+    expect(res.body.flight.arrival.estimated).toBe('2026-09-27T07:22:00Z'); // the live ETA survives
+    expect(res.body.flight.position.lat).toBe(40.91); // live position preserved
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('a flight that has not departed today answers with its last leg, flagged previousLeg (F0)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.parse('2026-09-27T04:33:39Z') });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      fr24Resp(String(url).includes('/api/live/flight-positions/full') ? { data: [] } : SUMMARY_LIGHT));
+    const res = createRes();
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { flight: 'UA2278' } }, res);
+    vi.useRealTimers();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.source).toBe('fr24-official-summary');
+    expect(res.body.previousLeg).toBe(true);
+    expect(res.body.legDate).toBe('2026-09-26T06:02:02Z');
+    expect(res.body.flight.previousLeg).toBeUndefined();
   });
 
   it('404s when neither the live nor the summary tier has data', async () => {
@@ -357,22 +407,17 @@ describe('fr24-flight handler success orchestration (F048)', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2); // live empty → summary top-up attempted
   });
 
-  it('serves a live-only leg (with times) without a summary call', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      const u = String(url);
-      if (u.includes('/api/live/flight-positions/full')) {
-        return fr24Resp({ data: [{ flight_iata: 'UA515', on_ground: false, orig_iata: 'DEN', dest_iata: 'IAH', scheduled_departure: '2026-04-05T14:00:00Z', lat: 40, lon: -105, flight_id: 'live2' }] });
-      }
-      throw new Error('summary should not be called when live already has times');
-    });
+  it('a real live-full row (ETA only, no departure time) still asks the summary for the departure', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      fr24Resp(String(url).includes('/api/live/flight-positions/full') ? LIVE_FULL : { data: [] }));
 
     const res = createRes();
-    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { flight: 'UA515' } }, res);
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { flight: 'UA2106' } }, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body.source).toBe('fr24-official-live');
     expect(res.body.liveLeg).toBe(true);
-    expect(res.body.legDate).toBe('2026-04-05T14:00:00Z');
-    expect(fetchSpy).toHaveBeenCalledTimes(1); // no summary top-up
+    expect(res.body.flight.arrival.estimated).toBe('2026-09-27T07:22:00Z');
+    expect(fetchSpy).toHaveBeenCalledTimes(2); // live-full never carries a departure time
   });
 });

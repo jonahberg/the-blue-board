@@ -64,13 +64,29 @@ type Fr24Flight = {
   destination?: { iata?: string; name?: string };
   aircraft?: { type?: string; reg?: string };
   departure?: { scheduled?: string | number; actual?: string | number };
-  arrival?: { scheduled?: string | number; estimated?: string | number };
+  arrival?: { scheduled?: string | number; estimated?: string | number; actual?: string | number };
   position?: { lat?: number; lon?: number; alt?: number; speed?: number; heading?: number };
 };
 
 type LookupState =
   | { phase: 'loading' }
-  | { phase: 'done'; flight: Fr24Flight; source?: string; cached?: boolean; meta?: { liveLeg?: boolean; legDate?: string } };
+  | {
+      phase: 'done';
+      flight: Fr24Flight;
+      source?: string;
+      cached?: boolean;
+      meta?: { liveLeg?: boolean; legDate?: string };
+      previousLeg?: boolean;
+      legDate?: string;
+    };
+
+/** "Sat, Sep 26" for a leg's ISO date, or '' when it has none. */
+function fr24PreviousLegDate(iso: string | undefined): string {
+  const date = iso ? new Date(iso) : null;
+  return date && !Number.isNaN(date.getTime())
+    ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    : '';
+}
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -125,6 +141,8 @@ export default function Fr24LookupDialog() {
           // The live endpoint carries `liveLeg`/`legDate` at the top level, which is
           // what the shipped modal read (it was handed the whole response as its meta).
           meta: data.meta ?? { liveLeg: data.liveLeg, legDate: data.legDate },
+          previousLeg: data.previousLeg,
+          legDate: data.legDate,
         });
       },
       () => fail(`Lookup failed for ${normalised} — try again in a moment.`),
@@ -139,6 +157,10 @@ export default function Fr24LookupDialog() {
   const statusLabel = fr24StatusLabel(flight?.status);
   const disclaimer =
     state.phase === 'done' ? fr24LegDisclaimer(state.source, state.meta) : { show: false, legDateLabel: '', text: '' };
+  // F0: the answer is an earlier leg (no leg is flying or just landed). Say so, with its date,
+  // instead of letting "LANDED" read as the flight the visitor is about to take.
+  const previousLegDate =
+    state.phase === 'done' && state.previousLeg ? fr24PreviousLegDate(state.legDate) : null;
   const fleetMatch = flight?.aircraft?.reg
     ? fleetDb.find((row) => row.r === flight.aircraft?.reg)
     : undefined;
@@ -219,6 +241,17 @@ export default function Fr24LookupDialog() {
                 </div>
               </div>
 
+              {previousLegDate !== null ? (
+                <p className="rounded-r border-l-[3px] border-amber-500 bg-amber-500/10 px-2.5 py-1.5 text-[9px] leading-relaxed text-muted-foreground">
+                  <span className="font-semibold text-amber-400">
+                    Last operated{previousLegDate ? ` ${previousLegDate}` : ''}
+                  </span>
+                  <br />
+                  No {flight?.flightNumber || query} is flying right now. This is its most recent
+                  completed leg — not today&rsquo;s flight, which has not departed yet.
+                </p>
+              ) : null}
+
               {disclaimer.show ? (
                 <p className="rounded-r border-l-[3px] border-amber-500 bg-amber-500/10 px-2.5 py-1.5 text-[9px] leading-relaxed text-muted-foreground">
                   {disclaimer.legDateLabel ? (
@@ -259,7 +292,11 @@ export default function Fr24LookupDialog() {
                 <Field label="Dep Sched" value={formatFr24Time(flight.departure?.scheduled)} />
                 <Field label="Dep Actual" value={formatFr24Time(flight.departure?.actual)} />
                 <Field label="Arr Sched" value={formatFr24Time(flight.arrival?.scheduled)} />
-                <Field label="Arr Est" value={formatFr24Time(flight.arrival?.estimated)} />
+                {flight.arrival?.actual ? (
+                  <Field label="Arr Actual" value={formatFr24Time(flight.arrival.actual)} />
+                ) : (
+                  <Field label="Arr Est" value={formatFr24Time(flight.arrival?.estimated)} />
+                )}
               </dl>
 
               {fleetMatch ? (

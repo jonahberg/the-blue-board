@@ -34,12 +34,13 @@ import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
 import { matchAircraft } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
 import { resolveFlightRoute } from '../data/route';
-import { formatTimeWithTz } from '@/lib/time-format.js';
+import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
 import { ApiError, fetchFlightTimes } from '../data/api';
 import { shareUrl } from '../data/share';
 import type { Flight, FlightTimes, TimeTriple } from '../data/types';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
+import { useMediaQuery } from '../state/hooks';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 
@@ -124,6 +125,24 @@ function TimeRow({
   );
 }
 
+/** Types only United Express (regional partners) flies. Anything else missing from the fleet
+ *  DB is a mainline aircraft the DB has not caught up with — a 787-9 is never "Express" (F10). */
+const REGIONAL_TYPE = /^(E1[3-9]\d|E17\d|E75[LS]?|E7[05]|E145|E45X|E135|CRJ\d|DH8[A-D]?)$/i;
+
+function unmatchedAircraftNote(acType: string | undefined): string {
+  return acType && REGIONAL_TYPE.test(acType)
+    ? 'United Express (regional) — not in mainline fleet DB'
+    : 'not yet in fleet DB (recent delivery?)';
+}
+
+/** What the source field means, in words (the raw tier ids are internal). */
+const TIMES_SOURCE_LABEL: Record<string, string> = {
+  flightaware: 'FlightAware',
+  'schedule-cache': 'hub schedule board',
+  'schedule-cache+fr24': 'hub schedule board + Flightradar24 live',
+  fr24: 'Flightradar24 live tracking (no schedule times)',
+};
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -140,6 +159,17 @@ export function FlightSheet() {
   const watch = useWatch();
 
   const open = selection !== null;
+
+  // F20: a right-hand panel covers the map centre below ~1024px (and the whole screen on a
+  // phone), so every "View on map" landed on a sheet hiding the plane it had just centred.
+  // Below lg the panel is a bottom sheet that PEEKS at 40dvh — the map's centre stays in view —
+  // and expands on request. It drops back to the peek whenever it gets a new subject or the
+  // viewer asks to see the map.
+  const wide = useMediaQuery('(min-width: 1024px)');
+  const [expanded, setExpanded] = useState(false);
+  const selectionKey =
+    selection?.kind === 'flight' ? `f:${selection.flight.fr24id}` : selection ? `i:${selection.ident}` : '';
+  useEffect(() => setExpanded(false), [selectionKey]);
 
   /** The freshest row for the selected aircraft, so the panel tracks the poll. */
   const flight: Flight | null = useMemo(() => {
@@ -244,6 +274,11 @@ export function FlightSheet() {
   const isStarlink = Boolean(reg) && starlink.tails.has(reg);
   const specialEntry = reg ? special.get(reg) : undefined;
   const watched = ident ? watch.isWatched(ident) : false;
+  // F11: label times in the AIRPORT's clock. Most tiers send no zone; the airport table knows it.
+  const originTz =
+    times.data?.origin?.tz || airportTz(times.data?.origin?.iata || route.originIata) || undefined;
+  const destTz =
+    times.data?.destination?.tz || airportTz(times.data?.destination?.iata || route.destIata) || undefined;
 
   return (
     <Sheet
@@ -261,13 +296,20 @@ export function FlightSheet() {
         close it, and clicking another aircraft swaps the panel's subject instead.
       */}
       <SheetContent
+        side={wide ? 'right' : 'bottom'}
+        data-peek={!wide && !expanded ? 'true' : undefined}
         showOverlay={false}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
-        className="w-full overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md"
+        className={
+          wide
+            ? 'w-full overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md'
+            : `gap-0 overflow-y-auto rounded-t-xl ${expanded ? 'max-h-[85dvh]' : 'max-h-[40dvh]'}`
+        }
       >
         <SheetHeader>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* pr-12 keeps the row clear of the sheet's absolutely-placed close button. */}
+          <div className="flex flex-wrap items-center gap-2 pr-12">
             <SheetTitle className="font-mono text-xl">{ident ?? 'Flight'}</SheetTitle>
             {phase ? (
               <Badge variant="secondary">
@@ -278,6 +320,17 @@ export function FlightSheet() {
             )}
             {times.data?.cancelled ? <Badge variant="destructive">Cancelled</Badge> : null}
             {times.data?.diverted ? <Badge variant="destructive">Diverted</Badge> : null}
+            {!wide ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="min-h-11 text-xs"
+                aria-expanded={expanded}
+                onClick={() => setExpanded((value) => !value)}
+              >
+                {expanded ? 'Show map' : 'More details'}
+              </Button>
+            ) : null}
           </div>
           <SheetDescription>
             {route.originIata || route.destIata
@@ -321,7 +374,10 @@ export function FlightSheet() {
                   size="sm"
                   variant="ghost"
                   className="min-h-11 text-xs md:h-7 md:min-h-0"
-                  onClick={() => focusOn(flight.lat, flight.lon)}
+                  onClick={() => {
+                    setExpanded(false);
+                    focusOn(flight.lat, flight.lon);
+                  }}
                 >
                   Centre map
                 </Button>
@@ -410,7 +466,7 @@ export function FlightSheet() {
                   ? `${flight.acType || 'Unknown type'}${flight.reg ? ` · ${flight.reg}` : ''} (${
                       fleetLoading
                         ? 'Loading aircraft data…'
-                        : 'not in mainline fleet DB — likely United Express'
+                        : unmatchedAircraftNote(flight.acType)
                     })`
                   : 'No aircraft reported.'}
               </p>
@@ -434,26 +490,27 @@ export function FlightSheet() {
                 <TimeRow
                   label="Gate departure"
                   triple={times.data.departure?.gate}
-                  tz={times.data.origin?.tz}
+                  tz={originTz}
                 />
                 <TimeRow
                   label="Takeoff"
                   triple={times.data.departure?.takeoff}
-                  tz={times.data.origin?.tz}
+                  tz={originTz}
                 />
                 <TimeRow
                   label="Landing"
                   triple={times.data.arrival?.landing}
-                  tz={times.data.destination?.tz}
+                  tz={destTz}
                 />
                 <TimeRow
                   label="Gate arrival"
                   triple={times.data.arrival?.gate}
-                  tz={times.data.destination?.tz}
+                  tz={destTz}
                 />
                 <p className="pt-1 text-[11px] text-muted-foreground">
-                  Source: {times.data.source ?? 'AeroDataBox'}. united.com and the airport display
-                  remain the systems of record.
+                  Source:{' '}
+                  {TIMES_SOURCE_LABEL[times.data.source ?? ''] ?? times.data.source ?? 'AeroDataBox'}.
+                  united.com and the airport display remain the systems of record.
                 </p>
               </div>
             ) : (

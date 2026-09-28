@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler, { normalizeSegments } from '../api/aircraft-history.js';
 import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
+import { readFileSync } from 'node:fs';
+
+const SUMMARY_LIGHT = JSON.parse(readFileSync(new URL('./fixtures/fr24-summary-light.json', import.meta.url), 'utf8'));
 
 function createRes() {
   return {
@@ -79,7 +82,37 @@ describe('aircraft-history API', () => {
 
   // --- Successful fetch ---
 
-  it('returns normalized segments on success', async () => {
+  it('returns normalized segments on success (real flat flight-summary/light rows)', async () => {
+    const reg = uniqueReg();
+    // The shape prod actually receives (F110): FLAT, no scheduled times — so delayMin is null.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => SUMMARY_LIGHT,
+    });
+
+    const res = createRes();
+    await handler(makeReq({ query: { reg } }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.reg).toBe(reg);
+    expect(res.body.segments).toEqual([{
+      flightNumber: 'UA2278',
+      origin: 'SFO',
+      destination: 'ORD',
+      status: 'unknown',
+      departure: { scheduled: '', actual: '2026-09-26T06:02:02Z' },
+      arrival: { scheduled: '', actual: '2026-09-26T09:38:04Z', estimated: '' },
+      delayMin: null,
+    }]);
+    // F116: FR24 filters by `registrations` — `regs` 400s with "None of the required fields
+    // were provided". Asserted on the request actually sent, not on the source text.
+    const url = new URL(String(fetchSpy.mock.calls[0][0]));
+    expect(url.searchParams.get('registrations')).toBe(reg);
+    expect(url.searchParams.has('regs')).toBe(false);
+  });
+
+  it('legacy nested summary rows (fallback coverage) still normalise', async () => {
     const reg = uniqueReg();
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
@@ -98,9 +131,6 @@ describe('aircraft-history API', () => {
     const res = createRes();
     await handler(makeReq({ query: { reg } }), res);
 
-    expect(res.statusCode).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.reg).toBe(reg);
     expect(res.body.segments).toHaveLength(1);
     expect(res.body.segments[0].flightNumber).toBe('UA123');
     expect(res.body.segments[0].delayMin).toBe(15);
@@ -386,14 +416,5 @@ describe('aircraft-history official-FR24 kill switch', () => {
     expect(res.body.error).toMatch(/temporarily unavailable/i);
     expect(res.headers['Cache-Control']).toBe('no-store');
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
-});
-
-describe('FR24 request parameters', () => {
-  it("filters by `registrations` — FR24's name; `regs` 400s with \"None of the required fields were provided\"", async () => {
-    const { readFileSync } = await import('node:fs');
-    const src = readFileSync(new URL('../api/aircraft-history.ts', import.meta.url), 'utf8');
-    expect(src).toContain("searchParams.set('registrations', reg)");
-    expect(src).not.toMatch(/searchParams\.set\('regs'/);
   });
 });

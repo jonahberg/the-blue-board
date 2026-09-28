@@ -1,8 +1,11 @@
 // Data-quality release (Jul 3 2026 audit) — #1 flight-times source chain:
 // FlightAware's bot-wall serves a PARSEABLE trackpollBootstrap with zero flights; that must be
-// treated as a source failure (→ FR24 → schedule-cache), never as "No active flight found".
-// The FR24 tier is a paid official-API call and must respect the isOfficialFr24Enabled() kill
-// switch (OFF in prod while credits are exhausted).
+// treated as a source failure (→ schedule-cache / FR24), never as "No active flight found".
+// The FR24 tier is a paid official-API call: ON by default, and it must respect the
+// isOfficialFr24Enabled() kill switch (SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false turns it off).
+// In prod FlightAware answers Vercel with a bot-wall or HTTP 402/403 (Sep 2026 audit F135); the
+// FlightAware-success test below covers the parser for the day it answers again.
+// Leg choice and the board+FR24 merge are in flight-times-leg.test.js.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const snapshotMocks = vi.hoisted(() => ({
@@ -13,7 +16,7 @@ const snapshotMocks = vi.hoisted(() => ({
 
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => snapshotMocks);
 
-import handler from '../api/flight-times.js';
+import handler, { __resetFlightTimesCache } from '../api/flight-times.js';
 import { getStartOfHubDay, getHubLocalDate } from '../src/lib/hubTz.js';
 import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
 
@@ -65,11 +68,15 @@ function populatedBootstrap(depEpoch) {
   };
 }
 
+// flight-summary/light's real FLAT shape, for a leg airborne right now (took off an hour ago,
+// last heard a minute ago). FR24 only ever lists legs that have operated.
+const isoAgo = (ms) => new Date(Date.now() - ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
 const FR24_SUMMARY = {
   data: [{
     fr24_id: 'x', flight: 'UA9002', callsign: 'UAL9002', type: 'B39M', reg: 'N37502',
     orig_icao: 'KORD', dest_icao: 'KSFO', dest_icao_actual: 'KSFO',
-    datetime_takeoff: '2026-07-03T02:10:00Z', datetime_landed: '', flight_ended: false,
+    datetime_takeoff: isoAgo(3_600_000), datetime_landed: null, flight_ended: false,
+    first_seen: isoAgo(4_200_000), last_seen: isoAgo(60_000),
   }],
 };
 
@@ -100,6 +107,9 @@ function scheduleSnapshotRow(flightNum, schedDep, estDep, realDep, schedArr) {
 describe('flight-times fallback chain (#1)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // F138: the handler's response cache, snapshot memo and rate-limit log are module state;
+    // without this reset a test that reused a flight number passed or failed by run order.
+    __resetFlightTimesCache();
     snapshotMocks.loadScheduleSnapshot.mockReset();
     snapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
     // F038: this endpoint now checks the shared cross-instance FR24 quota block before its FR24
@@ -112,7 +122,7 @@ describe('flight-times fallback chain (#1)', () => {
     delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
   });
 
-  it('still serves FlightAware when the bootstrap has flights (source: flightaware)', async () => {
+  it('serves FlightAware when its bootstrap has flights (source: flightaware — parser coverage; bot-walled in prod)', async () => {
     const dep = Math.floor(Date.now() / 1000) + 3600;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       if (String(url).includes('flightaware.com')) {
@@ -215,7 +225,7 @@ describe('flight-times fallback chain (#1)', () => {
     expect(res.body.reason).toMatch(/schedule-cache/);
   });
 
-  it('FlightAware HTTP failure also runs the chain (FR24 disabled → schedule-cache)', async () => {
+  it.each([402, 403])('FlightAware HTTP %i also runs the chain (FR24 disabled → schedule-cache)', async (faStatus) => {
     process.env.FR24_API_TOKEN = 'test-token';
     process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '0';
     const schedDep = 1_751_500_000;
@@ -227,7 +237,7 @@ describe('flight-times fallback chain (#1)', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       calls.push(String(url));
       if (String(url).includes('flightaware.com')) {
-        return { ok: false, status: 403, text: async () => 'blocked' };
+        return { ok: false, status: faStatus, text: async () => 'blocked' };
       }
       return { ok: true, status: 200, json: async () => FR24_SUMMARY };
     });
@@ -281,8 +291,10 @@ describe('flight-times fallback chain (#1)', () => {
   // ── F005/F013: optional date param drives WHICH day's board the schedule-cache
   // tier reads. Without it, today wins; with a tomorrow date, tomorrow's board wins. ──
   it('date param selects tomorrow\'s board over today\'s for the same flight number', async () => {
-    const todayDep = 1_751_500_000;
-    const tomorrowDep = todayDep + 200_000;
+    // Real-clock times: boards rank legs by where they are NOW, so a leg on today's board must
+    // be today's (a year-old epoch on today's board is a state production cannot produce).
+    const todayDep = Math.floor(Date.now() / 1000) + 2 * 3600;
+    const tomorrowDep = todayDep + 86_400;
     const todayKey = `agg:ORD:departures:${getStartOfHubDay('ORD', 0)}`;
     const tomorrowKey = `agg:ORD:departures:${getStartOfHubDay('ORD', 1)}`;
     snapshotMocks.loadScheduleSnapshot.mockImplementation(async (key) => {

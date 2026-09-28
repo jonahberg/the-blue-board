@@ -39,7 +39,12 @@ import { resolveFlightStatus } from '@/lib/flight-status-resolve.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
 import { buildJourneyContextStr, shapeJourney } from '@/lib/journey.js';
-import { findInboundAircraft, findLiveFlight, resolveMyFlightRoute } from '@/lib/my-flights.js';
+import {
+  buildInboundRiskContext,
+  findInboundAircraft,
+  findLiveFlight,
+  resolveMyFlightRoute,
+} from '@/lib/my-flights.js';
 import type { Flight } from '../data/types';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
@@ -172,6 +177,18 @@ export default function MyFlightsView() {
           originIrops: hubRates[origCode],
           destinationIrops: hubRates[destCode],
           plannedTmis: nas?.planned || null,
+          // F134: the aircraft this flight waits for, from the live feed. (The legacy
+          // aircraft-journey input is gone: its per-leg delays never exist in production.)
+          inboundFlight: buildInboundRiskContext({
+            flights,
+            reg,
+            flightNumber: entry.flight,
+            origCode,
+            ownFlightAirborne,
+            hasTimes: hasRiskInputs,
+            weatherOpsByHub,
+            faaIndex,
+          }),
         }) as unknown as RiskModel;
       } else {
         risk = findBoardRiskForFlight(entry.flight, boards, nowSec(), {
