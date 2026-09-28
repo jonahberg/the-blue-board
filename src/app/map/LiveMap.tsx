@@ -21,6 +21,7 @@ import 'leaflet/dist/leaflet.css';
 
 import { AIRPORTS, AIRPORT_COORDS, IATA_CITIES } from '@/lib/airports.js';
 import { resolveFlightRoute } from '../data/route';
+import { centreForOcclusion, flightPanelOcclusion } from '@/lib/flight-panel-occlusion.js';
 import { getPhase } from '@/lib/flight-phase.js';
 import { greatCirclePoints, isLonghaul, normalizeLonContinuity } from '@/lib/geo.js';
 import { prefersReducedMotion } from '@/lib/motion.js';
@@ -53,6 +54,29 @@ export function flyOrJump(
 ): void {
   if (reduce) map.setView(center, zoom, { animate: false });
   else map.flyTo(center, zoom, { duration });
+}
+
+/**
+ * The centre that puts `target` in the middle of the part of the map the flight panel leaves
+ * visible (F20). The panel is open when an ancestor carries `data-flight-panel="open"` —
+ * the same hook global.css uses to slide Leaflet's controls clear of it.
+ */
+export function panelAwareCentre(
+  map: Pick<L.Map, 'getContainer' | 'project' | 'unproject'>,
+  target: L.LatLngExpression,
+  zoom: number,
+): L.LatLngExpression {
+  if (typeof window === 'undefined') return target;
+  const container = map.getContainer();
+  if (!container.closest('[data-flight-panel="open"]')) return target;
+  const occlusion = flightPanelOcclusion(
+    container.getBoundingClientRect(),
+    { width: window.innerWidth, height: window.innerHeight },
+    window.matchMedia?.('(min-width: 1024px)').matches ?? true,
+  ) as { x: number; y: number };
+  if (!occlusion.x && !occlusion.y) return target;
+  const centre = centreForOcclusion(map.project(target, zoom), occlusion) as { x: number; y: number };
+  return map.unproject(L.point(centre.x, centre.y), zoom);
 }
 
 export type LiveMapProps = {
@@ -378,7 +402,10 @@ export function LiveMap({
   // yet, hold the move until the ResizeObserver sees the panel again.
   useEffect(() => {
     if (focus) {
-      requestMove((map) => flyOrJump(map, [focus.lat, focus.lon], Math.max(map.getZoom(), 6), 0.8));
+      requestMove((map) => {
+        const zoom = Math.max(map.getZoom(), 6);
+        flyOrJump(map, panelAwareCentre(map, [focus.lat, focus.lon], zoom), zoom, 0.8);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);

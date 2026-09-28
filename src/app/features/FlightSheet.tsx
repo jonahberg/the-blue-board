@@ -31,7 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cityFor } from '@/lib/airports.js';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
-import { matchAircraft } from '@/lib/fleet-match.js';
+import { matchAircraft, unmatchedAircraftNote } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
 import { resolveFlightRoute } from '../data/route';
 import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
@@ -123,16 +123,6 @@ function TimeRow({
       ) : null}
     </div>
   );
-}
-
-/** Types only United Express (regional partners) flies. Anything else missing from the fleet
- *  DB is a mainline aircraft the DB has not caught up with — a 787-9 is never "Express" (F10). */
-const REGIONAL_TYPE = /^(E1[3-9]\d|E17\d|E75[LS]?|E7[05]|E145|E45X|E135|CRJ\d|DH8[A-D]?)$/i;
-
-function unmatchedAircraftNote(acType: string | undefined): string {
-  return acType && REGIONAL_TYPE.test(acType)
-    ? 'United Express (regional) — not in mainline fleet DB'
-    : 'not yet in fleet DB (recent delivery?)';
 }
 
 /** What the source field means, in words (the raw tier ids are internal). */
