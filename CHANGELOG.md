@@ -4,6 +4,24 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-09-28
+
+Information audit: every fleet, Starlink, hub, route, project and news fact re-verified against current sources; three new news articles; fixes from the post-v1.9.1 live audit.
+
+### Added
+- **News:** "Live Football at 35,000 Feet" (DISH live TV on Starlink seatbacks, Sep 17), "Keep Your Seat, Chase an Earlier One" (app standby for earlier flights, Sep 1), "Ten New Cities, Five on the XLR" (2027 international expansion, Aug 25).
+
+### Changed — data accuracy
+- **Fleet database refreshed to 2026-09-28** from the fleet sheet, with every new tail confirmed in the FAA registry: 1,078 → 1,139 aircraft (+49 737 MAX 9, +14 A321neo incl. the first A321XLRs, +11 787-9; 13 A319/A320 retired — out of the sheet and no flights in 84 days). WiFi/status/IFE/config updated; 250 mainline Starlink tails; the 9 Guam MAX 8s carry their 14-First/164-seat layout. Starlink roster 428 → 601. Fleet guide pages, `/fleet`, and llms files match.
+- **Hubs:** Key Routes verified against five days of the site's own departure boards (partner codeshares excluded) and corroborated externally — routes United no longer flies removed, daily ones added, seasonal ones labelled; departures and destination counts dated to the late-September 2026 schedule; Narita's mainland service and LAX's Pacific role corrected; Guam Starlink claim corrected.
+- **Trackers and hubs:** Dulles Concourse E and club → October 2026; LAX people mover → early January 2027; O'Hare → ORDNext dates ($8.8B); Newark–Tel Aviv resumed Sept 8; ATC fiber 65% (FAA, Sept 16) and the $30B funding request.
+
+### Fixed
+- **My Flights:** while a flight is airborne, the ETA comes from its live position and speed when the provider's estimate contradicts it by more than 30 minutes, so a flight 10 minutes out no longer reads "2h 18m" and the connection checker no longer calls a real connection "missed". A leg that has taken off is never shown as expected. The checker resolves a multi-leg flight number to the leg departing the connecting hub (`/api/flight-times?from=`).
+- One "operated" definition for the Schedule header, `/api/irops` and the hub strip; Stats uses the Live tab's five phase buckets; the Fleet Starlink share names its denominator.
+- ⌘K opens aircraft details for a registration on the ground; United Express Starlink tails show their Starlink status and current flight; earlier legs in Aircraft Journey show landed instead of unknown; the altitude bar is labelled; FAA runway annotations are stripped; one no-ceiling wording.
+- Rollover warm priority displaces only tomorrow slots, never another hub's today board.
+
 ## [1.9.1] - 2026-09-28
 
 ### Fixed
