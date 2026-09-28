@@ -50,6 +50,7 @@ export type HubCardModel = {
   unavailable: boolean;
   hasDetail: boolean;
   markerLabel: string;
+  markerDetail: string;
   jargon: { metar: boolean };
 };
 

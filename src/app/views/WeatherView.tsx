@@ -48,7 +48,12 @@ export default function WeatherView() {
   }, [metarByHub, faaIndex]);
 
   const radarHubs = useMemo<RadarHub[]>(
-    () => models.map((m) => ({ hub: m.hub, color: m.borderColor, label: m.markerLabel })),
+    () => models.map((m) => ({
+      hub: m.hub,
+      color: m.borderColor,
+      label: m.markerLabel,
+      detail: m.markerDetail,
+    })),
     [models],
   );
 

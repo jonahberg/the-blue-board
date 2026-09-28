@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeFlightCategory, computeOpsImpact } from '../src/lib/metar-category.js';
+import { computeFlightCategory, computeOpsImpact, parseVisibilitySM } from '../src/lib/metar-category.js';
 
 describe('computeFlightCategory', () => {
   it('returns null with no raw METAR', () => {
@@ -27,6 +27,34 @@ describe('computeFlightCategory', () => {
     expect(computeFlightCategory('KORD 10SM BKN010')).toBe('MVFR'); // 1000 -> <=3000
     expect(computeFlightCategory('KORD 10SM BKN030')).toBe('MVFR'); // 3000 -> <=3000 edge
     expect(computeFlightCategory('KORD 10SM BKN031')).toBe('VFR');  // 3100 -> above 3000
+  });
+
+  it('reads "less than" and "more than" visibilities instead of their denominators', () => {
+    // M1/4SM is below a quarter mile — it used to read as 4 SM (the "4SM" after the slash).
+    expect(computeFlightCategory('KDEN 111753Z 00000KT M1/4SM FG 05/M08 A3024')).toBe('LIFR');
+    expect(computeFlightCategory('KDEN 111753Z 00000KT P6SM SKC 05/M08 A3024')).toBe('VFR');
+  });
+
+  it('treats a vertical-visibility (VV) group as a ceiling', () => {
+    expect(computeFlightCategory('KSFO 270256Z 27012KT 10SM VV002 14/12 A2989')).toBe('LIFR');
+    expect(computeFlightCategory('KSFO 270256Z 27012KT 10SM VV008 14/12 A2989')).toBe('IFR');
+  });
+});
+
+describe('parseVisibilitySM', () => {
+  it('reads whole, fractional, mixed, less-than and more-than visibilities', () => {
+    expect(parseVisibilitySM('KORD 111751Z 27015KT 10SM FEW250')).toEqual({ miles: 10, text: '10', qualifier: '' });
+    expect(parseVisibilitySM('KSFO 111756Z 25008KT 1/2SM FG OVC002')).toEqual({ miles: 0.5, text: '1/2', qualifier: '' });
+    expect(parseVisibilitySM('KORD 111751Z 27015KT 1 1/2SM BR OVC004')).toEqual({ miles: 1.5, text: '1 1/2', qualifier: '' });
+    expect(parseVisibilitySM('KEWR 111751Z 03018KT 3/4SM -SN OVC008')).toEqual({ miles: 0.75, text: '3/4', qualifier: '' });
+    expect(parseVisibilitySM('KDEN 111753Z 00000KT M1/4SM FG VV001')).toEqual({ miles: 0.25, text: '1/4', qualifier: 'M' });
+    expect(parseVisibilitySM('KLAX 111753Z 25005KT P6SM SKC')).toEqual({ miles: 6, text: '6', qualifier: 'P' });
+  });
+
+  it('returns null when the observation has no statute-mile group (metric station, empty input)', () => {
+    expect(parseVisibilitySM('RJAA 270300Z 36005KT 9999 FEW030 20/15 Q1013')).toBeNull();
+    expect(parseVisibilitySM('')).toBeNull();
+    expect(parseVisibilitySM(null)).toBeNull();
   });
 });
 
