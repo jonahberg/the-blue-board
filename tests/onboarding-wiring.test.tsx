@@ -180,3 +180,24 @@ describe('Onboarding re-seeds the hub picker from the live preference', () => {
     expect(localStorage.getItem('bb_home_airport')).toBe('SFO');
   });
 });
+
+describe('Onboarding stays down on a deep-link arrival (F45)', () => {
+  it('does not open over the view a ?hub= link was sent for, but still records the visit', async () => {
+    window.history.replaceState(null, '', '/?hub=den');
+    await act(async () => {
+      mount();
+    });
+    expect(dialogShown()).toBe(false);
+    expect(ui!.onboardingOpen).toBe(false);
+    // The visit is marked either way, so the waitlist threshold reads the same as before.
+    expect(localStorage.getItem('bb-visited')).toBe('1');
+  });
+
+  it('opens on the next bare visit, since the welcome was never dismissed', async () => {
+    localStorage.setItem('bb-visited', '1');
+    await act(async () => {
+      mount();
+    });
+    expect(dialogShown()).toBe(true);
+  });
+});

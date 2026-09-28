@@ -161,6 +161,20 @@ describe('FeedProvider poll loop', () => {
     expect(feed.current!.freshness).toBe('stale');
   });
 
+  it('adds the CDN Age to the stale-serve age: an edge-cached stale serve is older by both (F102)', async () => {
+    fetchMock.mockImplementation(async () =>
+      jsonResponse(FULL, 200, { 'X-BB-Feed-Stale': '600', Age: '30' }),
+    );
+    const feed = await mount();
+    expect(feed.current!.lastGoodTs).toBe(Date.now() - 630_000);
+  });
+
+  it('backdates last-good by the CDN Age alone on a fresh-but-cached response', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(FULL, 200, { Age: '30' }));
+    const feed = await mount();
+    expect(feed.current!.lastGoodTs).toBe(Date.now() - 30_000);
+  });
+
   it('stops polling while the tab is hidden and refreshes immediately when shown', async () => {
     fetchMock.mockImplementation(async () => jsonResponse(FULL));
     const feed = await mount();

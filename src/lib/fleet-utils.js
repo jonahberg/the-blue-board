@@ -1,6 +1,8 @@
 // ═══ FLEET UTILITIES ═══
 // Pure data functions extracted from src/dashboard/main.js for testability.
 
+import { FLEET_DB_AS_OF } from '../data/facts.js';
+
 // ─── Fleet Health Categorization ───
 export const FLEET_HEALTH_CATEGORIES = [
   { key: 'active',          label: 'Active',           color: '#22c55e' },
@@ -128,12 +130,10 @@ export function familyTotal(family, counts) {
 }
 
 // ─── The fleet database's age ───
-/**
- * The day `/data/fleet.json` last changed (git: a10369d). It is a hand-maintained snapshot of
- * the United Fleet Site sheet with no refresh job, so every label that describes it says
- * "as of" this date — never "updated daily" (F86).
- */
-export const FLEET_DB_AS_OF = '2026-02-12';
+// `FLEET_DB_AS_OF` (git: a10369d) lives in src/data/facts.js beside FLEET_DB_COUNT; it is
+// re-exported here for the dashboard. Every label that describes the database says "as of"
+// it — never "updated daily" (F86).
+export { FLEET_DB_AS_OF };
 
 /** '2026-02-12' → '12 Feb 2026' (UTC, so the label never shifts a day in a western zone). */
 export function formatFleetAsOf(iso = FLEET_DB_AS_OF) {

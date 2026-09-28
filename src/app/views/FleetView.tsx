@@ -135,9 +135,9 @@ export default function FleetView() {
   );
 
   // The shipped panel stamped wall-clock time here. `lastGoodTs` is closer: the time the last
-  // good poll arrived, backdated by the server's `X-BB-Feed-Stale` on a stale serve. It is
-  // NOT yet the payload's own generation time — CDN `Age` and the server's 15 s cache are not
-  // subtracted (F102, pending in `fetchFr24Feed`), so it can read up to ~45 s fresh.
+  // good poll arrived, backdated by the server's `X-BB-Feed-Stale` and the CDN's `Age`
+  // (`fetchFr24Feed`, F102). Only the server's own 15 s in-memory cache is not subtracted, so
+  // it can read up to ~15 s fresh.
   const updatedAt = useMemo(
     () => (lastGoodTs ? new Date(lastGoodTs).toISOString().slice(11, 19) : null),
     [lastGoodTs],

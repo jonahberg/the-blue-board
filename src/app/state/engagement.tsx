@@ -26,6 +26,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { shouldShowOnboarding, waitlistState } from '@/lib/engagement.js';
+import { isDeepLinkArrival } from './deep-links';
 import { safeLocalStorage } from './storage';
 
 /**
@@ -108,7 +109,10 @@ export function initEngagement(): void {
       const waitlist = waitlistState(storage);
       triggerClicks = waitlist.triggerClicks;
       submitted = waitlist.submitted;
-      showOnboardingInitially = shouldShowOnboarding(storage);
+      // Called unconditionally: it marks the visit, which the threshold above depends on. A
+      // deep-link arrival already has a destination, so the welcome stays down (F45).
+      const wantsOnboarding = shouldShowOnboarding(storage);
+      showOnboardingInitially = wantsOnboarding && !isDeepLinkArrival();
     } catch {
       // Fail closed: no overlay, no passive waitlist. See the header.
       triggerClicks = Number.POSITIVE_INFINITY;

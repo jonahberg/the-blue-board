@@ -10,7 +10,7 @@
  * sidebar counts is exactly what the map draws.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { focusContentOnOpen } from '@/components/ui/dialog';
@@ -22,6 +22,7 @@ import { HUB_ORDER } from '@/lib/hub-health.js';
 import { AIRPORTS } from '@/lib/airports.js';
 import { LiveMap } from '../map/LiveMap';
 import type { Flight } from '../data/types';
+import { readLiveHubDeepLink } from '../state/deep-links';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
 import { useMediaQuery } from '../state/hooks';
@@ -54,7 +55,9 @@ export default function LiveView() {
   // Every layer except Starlink is local. Starlink's toggle is shared state because the
   // Starlink tab's "● N AIRBORNE NOW" chip switches to this tab with the filter already on.
   const [layers, setLayers] = useState<LayerKey[]>(['hubs']);
-  const [hubFilter, setHubFilter] = useState('');
+  // `?hub=den` (hub guides, the hub strip's share links) opens the map filtered to that hub.
+  const [deepLinkHub] = useState(() => readLiveHubDeepLink(HUB_CODES));
+  const [hubFilter, setHubFilter] = useState(deepLinkHub ?? '');
   const [phaseFilter, setPhaseFilter] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const desktop = useMediaQuery('(min-width: 1024px)');
@@ -97,11 +100,12 @@ export default function LiveView() {
 
   const stats = useMemo(
     () =>
-      computeLiveStats(feed.flights, filtered, fleetDb.length, starlink.tails, {
+      // The same predicate as the Starlink filter, so the stat and the filtered map agree.
+      computeLiveStats(feed.flights, filtered, fleetDb.length, isStarlinkFlight as LibPredicate, {
         matchAircraft: ((f: Flight) => matchAircraft(f, fleetByReg)) as LibMatcher,
         isFiltered: Boolean(hubFilter || phaseFilter || starlinkOnly),
       }) as LiveStats,
-    [feed.flights, filtered, fleetDb.length, starlink.tails, fleetByReg, hubFilter, phaseFilter, starlinkOnly],
+    [feed.flights, filtered, fleetDb.length, isStarlinkFlight, fleetByReg, hubFilter, phaseFilter, starlinkOnly],
   );
 
   const watchedIdents = useMemo(
@@ -126,6 +130,14 @@ export default function LiveView() {
     },
     [focusOn],
   );
+
+  // Centre on a deep-linked hub once, on mount.
+  useEffect(() => {
+    if (!deepLinkHub) return;
+    const airport = HUB_AIRPORTS.find((a) => a.iata === deepLinkHub);
+    if (airport) focusOn(airport.lat, airport.lon);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
+  }, []);
 
   const clearFilters = useCallback(() => {
     setHubFilter('');

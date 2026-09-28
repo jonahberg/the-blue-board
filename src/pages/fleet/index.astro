@@ -5,6 +5,7 @@ import BaseLayout from '../../components/site/BaseLayout.astro';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
 import StatTile from '../../components/site/StatTile.astro';
+import { FLEET_DB_AS_OF, formatFleetAsOf } from '../../lib/fleet-utils.js';
 
 // Build type summaries for the grid
 const typeSummaries: Record<
@@ -202,7 +203,7 @@ const hubLinkClass =
   ogTitle={shareTitle}
   ogDescription="Complete United Airlines fleet database. Every mainline aircraft — 737, 757, 767, 777, 787, A319, A320, A321neo — with seat configs, WiFi, and detailed type guides."
   ogImageAlt="The Blue Board — United Airlines Fleet Database"
-  twitterDescription="Complete United Airlines fleet. 1,078 aircraft, 19 types. Seat maps, WiFi, Starlink status. Updated daily."
+  twitterDescription={`Complete United Airlines fleet. 1,078 aircraft, 19 types. Seat maps, WiFi, Starlink status. Fleet data as of ${formatFleetAsOf()}.`}
   jsonLd={[datasetSchema, itemListSchema, faqSchema]}
 >
   <div class="mx-auto max-w-5xl px-4 py-8">
@@ -213,7 +214,8 @@ const hubLinkClass =
         United Airlines Fleet Database
       </h1>
       <p class="mt-2 text-sm text-muted-foreground">
-        1,078 mainline aircraft · 19 types · seat configs · WiFi · Starlink · updated daily
+        1,078 mainline aircraft · 19 types · seat configs · WiFi · Starlink · as of
+        <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>
       </p>
       <a
         class="mt-5 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-7 text-sm font-bold text-primary-foreground hover:bg-primary-fill/90"
@@ -457,7 +459,7 @@ const hubLinkClass =
           href="https://unitedfleetsite.com/"
           target="_blank"
           rel="noopener noreferrer">United Fleet Site</a
-        > and updated daily. Starlink equipment data via <a
+        >, as of <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>. Starlink equipment data via <a
           href="https://unitedstarlinktracker.com"
           target="_blank"
           rel="noopener noreferrer">unitedstarlinktracker.com</a

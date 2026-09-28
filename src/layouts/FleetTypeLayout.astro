@@ -12,6 +12,7 @@ import JumpNav from '../components/site/JumpNav.astro';
 import PillNav from '../components/site/PillNav.astro';
 import StatTile from '../components/site/StatTile.astro';
 import fleetDb from '../../public/data/fleet.json';
+import { FLEET_DB_AS_OF, formatFleetAsOf } from '../lib/fleet-utils.js';
 
 const { data } = Astro.props;
 const slug: string = data.slug;
@@ -165,8 +166,8 @@ function statusClass(status: string | undefined): string {
     >
       <p>
         Complete list of every United Airlines {data.displayName} with registration, delivery year,
-        seat configuration, WiFi, IFE, and current status. Data updated daily from public aviation
-        records.
+        seat configuration, WiFi, IFE, and current status, from public aviation records — as of
+        <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>.
       </p>
       <table class="tabular-nums">
         <thead>

@@ -28,7 +28,13 @@ import type { ReactNode } from 'react';
 import { applyStarlinkWifiOverlay } from '@/lib/fleet-utils.js';
 import { indexSpecialAircraft } from '@/lib/special-aircraft.js';
 import { applyVerifiedStarlinkOverrides } from '@/lib/starlink-overrides.js';
-import { ApiError, fetchFleetDb, fetchFleetSummary, fetchStarlinkFallback } from '../data/api';
+import {
+  fetchFleetDb,
+  fetchFleetSummary,
+  fetchStarlinkFallback,
+  fetchStarlinkFlights,
+  fetchStarlinkRoster,
+} from '../data/api';
 import type {
   FleetAircraft,
   FleetSummary,
@@ -36,22 +42,6 @@ import type {
   StarlinkData,
   StarlinkFleetStats,
 } from '../data/types';
-
-/**
- * `/api/starlink-data?fields=…`. Local rather than in `data/api.ts` only because this
- * workstream does not own that file; it mirrors `getJson()` there exactly.
- */
-async function fetchStarlinkPart<T>(fields: 'roster' | 'flights'): Promise<T> {
-  const path = `/api/starlink-data?fields=${fields}`;
-  const res = await fetch(path, { headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new ApiError(res.status, `${path} → HTTP ${res.status}`);
-  return (await res.json()) as T;
-}
-
-export const fetchStarlinkRoster = () =>
-  fetchStarlinkPart<Omit<StarlinkData, 'flightsByTail'> & { flightsByTail?: StarlinkData['flightsByTail'] }>('roster');
-export const fetchStarlinkFlights = () =>
-  fetchStarlinkPart<Pick<StarlinkData, 'flightsByTail'>>('flights');
 
 /** Registration → the fleet site's special-aircraft entry. */
 export type SpecialIndex = Map<string, { name: string; type: 'named' | 'livery' }>;

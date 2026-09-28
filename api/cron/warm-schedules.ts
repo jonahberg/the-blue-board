@@ -91,7 +91,7 @@ function buildWarmRing(): WarmTask[] {
 // every 30 min): a mismatched slot would stride the ring more or less than once per fire and
 // skip (or re-warm) windows. Update both together. The same slot number seeds applyIropsPriority's
 // disrupted-hub rotation so priority fairness advances in lockstep with the ring.
-const SLOT_MS = 30 * 60 * 1000; // = vercel.json cron interval (*/30 * * * *)
+export const SLOT_MS = 30 * 60 * 1000; // = vercel.json cron interval (*/30 * * * *)
 export function getWarmSlot(nowMs = Date.now()): number {
   return Math.floor(nowMs / SLOT_MS);
 }
@@ -431,17 +431,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     results.regSightings = { ok: false, error: String(e?.message || e) };
   }
 
-  // Phase 1.5: warm Starlink data cache (single fast request)
+  // Phase 1.5: warm the Starlink edge cache. The CDN keys on the query string, so the two
+  // URLs the dashboard actually requests (?fields=roster at boot, ?fields=flights when the
+  // Starlink tab opens — F58) are the ones warmed; the bare URL no client asks for is not.
+  // One shared 20s budget: the first request fills the function's memory cache, so the
+  // second is served from it. Both roll up into the single 'starlink-data' result.
   try {
     const slController = new AbortController();
     const slTimeout = setTimeout(() => slController.abort(), 20000);
-    const slResp = await fetch(`${BASE_URL}/api/starlink-data`, {
-      signal: slController.signal,
-      headers: { 'User-Agent': 'BlueBoard-CronWarmer/1.0' },
-    });
-    clearTimeout(slTimeout);
-    results['starlink-data'] = { status: slResp.ok ? 'ok' : `http_${slResp.status}` };
-    if (slResp.ok) warmed++; else failed++;
+    let status = 'ok';
+    try {
+      for (const fields of ['roster', 'flights']) {
+        const slResp = await fetch(`${BASE_URL}/api/starlink-data?fields=${fields}`, {
+          signal: slController.signal,
+          headers: { 'User-Agent': 'BlueBoard-CronWarmer/1.0' },
+        });
+        if (!slResp.ok && status === 'ok') status = `http_${slResp.status}`;
+      }
+    } finally {
+      clearTimeout(slTimeout);
+    }
+    results['starlink-data'] = { status };
+    if (status === 'ok') warmed++; else failed++;
   } catch (e: any) {
     results['starlink-data'] = { status: 'error', message: e.message };
     failed++;

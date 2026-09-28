@@ -287,6 +287,18 @@ describe('warm-schedules handler', () => {
     expect(snapshotMocks.cleanupExpiredSnapshots).toHaveBeenCalledTimes(1);
   });
 
+  it('warms the two Starlink URLs the dashboard requests, not the bare one (F58)', async () => {
+    const fetchSpy = mockFetchOk({ cached: false, stale: false, partial: false, total: 312, meta: { completeness: 1 } });
+    const res = createRes();
+    await handler(createReq(), res);
+    const starlinkUrls = fetchSpy.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.includes('/api/starlink-data'))
+      .map((url) => new URL(url).search);
+    expect(starlinkUrls).toEqual(['?fields=roster', '?fields=flights']);
+    expect(res.body.results['starlink-data']).toEqual({ status: 'ok' });
+  });
+
   it('counts a fresh complete board as warmed', async () => {
     mockFetchOk({ cached: false, stale: false, partial: false, total: 312, meta: { completeness: 1 } });
     const res = createRes();
