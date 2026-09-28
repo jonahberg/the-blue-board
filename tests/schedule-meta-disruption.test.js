@@ -73,7 +73,6 @@ describe('schedule board meta.hubDisruptionMinutes', () => {
     __resetScheduleCachesForTests();
     __resetFaaDisruptionCacheForTests();
     process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     process.env.AERODATABOX_API_KEY = 'adb-test-key';
     scheduleSnapshotMocks.loadScheduleSnapshot.mockReset();
     scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
@@ -83,7 +82,6 @@ describe('schedule board meta.hubDisruptionMinutes', () => {
 
   afterEach(() => {
     delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
-    delete process.env.SCHEDULE_SOURCE_PRIORITY;
     delete process.env.AERODATABOX_API_KEY;
     __resetFaaDisruptionCacheForTests();
     resetFallbackBreaker();

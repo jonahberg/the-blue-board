@@ -352,11 +352,14 @@ function isUnitedOperatingCarrier(carrier: string): boolean {
   return carrier === 'UA' || UNITED_EXPRESS_CARRIERS.has(carrier);
 }
 
-/** True when a codeshare row is flown by a partner, not by United or United Express. */
+/** True when a UA-marketed row is flown by a partner, not by United or United Express. */
 function isPartnerCodeshare(flight: any, hub: string, dir: string, operators: Map<string, OperatorTwin[]>): boolean {
-  if (flight?.codeshareStatus !== 'IsCodeshared') return false;
+  // The callsign IS the operating carrier, whatever codeshareStatus says (the public board strips
+  // that flag, so it could not be verified for the SFO partner rows): ANA107 / CMP383 / ACA746 on a
+  // UA number is partner metal even if the provider labelled the row 'Unknown'.
   const callPrefix = /^([A-Z]{3})\d/.exec(normalizeFlightId(flight?.callSign))?.[1];
   if (callPrefix) return !UNITED_OPERATOR_CALLSIGNS.has(callPrefix);
+  if (flight?.codeshareStatus !== 'IsCodeshared') return false;
   const legInfo = rawLeg(flight, hub, dir);
   const twin = (operators.get(legInfo.route) || []).find((o) =>
     timesMatch(o.sched, legInfo.boardSched, OPERATOR_CLONE_TOLERANCE_S)

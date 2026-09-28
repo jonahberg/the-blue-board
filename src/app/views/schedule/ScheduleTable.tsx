@@ -265,16 +265,18 @@ export const ScheduleTable = forwardRef<
     setWin(expandWindow({ start, end }, rows.length, 'all'));
   };
 
-  const moreRow = (key: string, count: number, label: string, onMore: () => void) => (
+  const moreRow = (key: string, count: number, label: string, onMore: () => void, withShowAll: boolean) => (
     <TableRow key={key} className="hover:bg-transparent">
       <TableCell colSpan={10} className="p-1">
         <span className="sticky left-0 flex flex-wrap items-center gap-2 px-1">
           <Button variant="outline" size="sm" className="min-h-11 text-[10px] md:min-h-0" onClick={onMore}>
             {label} ({count})
           </Button>
-          <Button variant="ghost" size="sm" className="min-h-11 text-[10px] md:min-h-0" onClick={showAll}>
-            Show all {rows.length}
-          </Button>
+          {withShowAll ? (
+            <Button variant="ghost" size="sm" className="min-h-11 text-[10px] md:min-h-0" onClick={showAll}>
+              Show all {rows.length}
+            </Button>
+          ) : null}
         </span>
       </TableCell>
     </TableRow>
@@ -369,7 +371,7 @@ export const ScheduleTable = forwardRef<
             </TableRow>
           ) : (
             [
-              ...(start > 0 ? [moreRow('sched-more-earlier', start, 'Show earlier flights', showEarlier)] : []),
+              ...(start > 0 ? [moreRow('sched-more-earlier', start, 'Show earlier flights', showEarlier, end >= rows.length)] : []),
               ...rows.slice(start, end).flatMap((row, offset) => {
               const index = start + offset;
               const cells = [
@@ -608,7 +610,7 @@ export const ScheduleTable = forwardRef<
               }
               return cells;
             }),
-              ...(end < rows.length ? [moreRow('sched-more-later', rows.length - end, 'Show later flights', showLater)] : []),
+              ...(end < rows.length ? [moreRow('sched-more-later', rows.length - end, 'Show later flights', showLater, true)] : []),
             ]
           )}
         </TableBody>

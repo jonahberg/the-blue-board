@@ -71,7 +71,7 @@ function renderTable({
         boardAsOf="9:17 PM CDT"
         windowKey="ORD:departures:0"
         emptyReason={emptyReason}
-        emptySubject="EWR arrivals for tomorrow (Mon, Sep 28)"
+        emptySubject="tomorrow's EWR arrivals (Mon, Sep 28)"
         onClearFilters={onClearFilters}
       />
     </TooltipProvider>,
@@ -95,7 +95,8 @@ describe('ScheduleTable row window (F56)', () => {
     expect(paintedFlights()).toBe(300);
     fireEvent.click(screen.getByRole('button', { name: /Show later flights/ }));
     expect(paintedFlights()).toBe(450);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Show all 640' })[0]);
+    expect(screen.getAllByRole('button', { name: 'Show all 640' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 640' }));
     expect(paintedFlights()).toBe(640);
     expect(screen.queryByRole('button', { name: /Show (earlier|later) flights/ })).toBeNull();
   });
@@ -130,13 +131,13 @@ describe('ScheduleTable empty states (F14)', () => {
 
   it('the provider failed (partial, first_page_failed): blames the provider, not the filters', () => {
     renderTable({ rows: [], emptyReason: 'upstream' });
-    expect(screen.getByText(/Couldn't load EWR arrivals for tomorrow/)).toBeTruthy();
+    expect(screen.getByText(/Couldn't load tomorrow's EWR arrivals/)).toBeTruthy();
     expect(screen.queryByText('No flights match your filters')).toBeNull();
   });
 
   it('nothing published yet: says the board is not listed yet', () => {
     renderTable({ rows: [], emptyReason: 'none' });
-    expect(screen.getByText(/No United flights listed for EWR arrivals for tomorrow/)).toBeTruthy();
+    expect(screen.getByText(/No United flights listed for tomorrow's EWR arrivals/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
   });
 });

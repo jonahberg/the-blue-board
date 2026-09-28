@@ -236,6 +236,22 @@ describe('F90: partner-operated codeshares are not United flights', () => {
     expect(board.meta.filtered.partnerCodeshares).toBe(0);
   });
 
+  it('trusts a partner callsign even when the row is not flagged IsCodeshared', async () => {
+    const unflagged = raw({
+      number: 'UA 8828', callSign: 'DLH455', codeshareStatus: 'Unknown', reg: 'D-ABYS',
+      dep: leg('SFO', { sched: SFO_DAY + 15 * H }), arr: leg('FRA', { sched: SFO_DAY + 26 * H }),
+      model: 'Boeing 747-8',
+    });
+    const ual = raw({
+      number: 'UA 1', callSign: 'UAL1', codeshareStatus: 'Unknown',
+      dep: leg('SFO', { sched: SFO_DAY + 8 * H }), arr: leg('SIN', { sched: SFO_DAY + 25 * H }),
+    });
+    mockBoard('departures', [unflagged, ual]);
+    const board = await fetchViaAeroDataBox('SFO', 'departures', SFO_DAY, 8000);
+    expect(idents(board)).toEqual(['UA1']);
+    expect(board.meta.filtered.partnerCodeshares).toBe(1);
+  });
+
   it('does not filter on the UA7xxx/8xxx number range', async () => {
     const operatedHigh = raw({
       number: 'UA 6613', callSign: 'UAL6613', codeshareStatus: 'IsOperator',

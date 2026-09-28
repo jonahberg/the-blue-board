@@ -249,7 +249,7 @@ export default function ScheduleView() {
   // response, the day simply has no published board yet.
   const emptyReason = emptyBoardReason({ rawCount: rows.length, partial: board?.partial }) as EmptyReason;
   const dayWord = ['Yesterday', 'Today', 'Tomorrow'][day + 1] ?? dayLabel;
-  const emptySubject = `${hub} ${dir} for ${dayWord.toLowerCase()} (${dayLabel})`;
+  const emptySubject = `${dayWord.toLowerCase()}'s ${hub} ${dir} (${dayLabel})`;
   const windowKey = `${key}|${JSON.stringify(debouncedFilters)}|${sort.column}:${sort.asc}`;
   const onClearFilters = useCallback(() => {
     setFilters(EMPTY_FILTERS);
