@@ -30,6 +30,8 @@ import { HUB_TZ } from '@/lib/hubTz.js';
 import { applySightingsToBoard } from '@/lib/reg-overlay.js';
 import { normalizeFlightNum } from '@/lib/reg-ledger.js';
 import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
+import { hubTzAbbrev } from '@/lib/schedule-load.js';
+import { regMatchesModel } from '@/lib/schedule-reg-guard.js';
 import { getScheduleFleetFamily } from '@/lib/schedule-filters.js';
 import { buildScheduleRow } from '@/lib/schedule-row-model.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
@@ -279,15 +281,22 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       const hit = regCache.get(row);
       if (hit !== undefined) return hit;
       const flight = row as FlightShape;
-      const provider = flight.aircraft?.registration || '';
-      const value =
-        provider ||
-        lookupReg(
-          flight.identification?.number?.default || '',
-          flight.time?.scheduled?.departure,
-          flight.time?.scheduled?.arrival,
-        ) ||
-        '';
+      const modelCode = flight.aircraft?.model?.code || '';
+      // F15: a tail backfilled from live tracking (server merge or this browser's ledger) is
+      // only kept when it can be the aircraft the row is scheduled on — the ledger is keyed on
+      // flight number alone and once pinned a SAN→SFO 737 onto the SFO→ORD A321neo.
+      const fits = (reg: string) => regMatchesModel(reg, modelCode, fleetByReg) as boolean;
+      const providerReg = flight.aircraft?.registration || '';
+      const provider =
+        providerReg && flight.aircraft?.regSource === 'live_feed' && !fits(providerReg) ? '' : providerReg;
+      const ledger = provider
+        ? ''
+        : lookupReg(
+            flight.identification?.number?.default || '',
+            flight.time?.scheduled?.departure,
+            flight.time?.scheduled?.arrival,
+          ) || '';
+      const value = provider || (ledger && fits(ledger) ? ledger : '');
       regCache.set(row, value);
       return value;
     };
@@ -477,15 +486,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       futureIndex = firstFutureIndex(times, nowSec) as number;
       dividerIndex = nowDividerIndex(times, nowSec) as number;
       if (dividerIndex >= 0) {
-        let abbrev = '';
-        try {
-          abbrev =
-            new Date().toLocaleTimeString('en-US', { timeZone: hubTz, timeZoneName: 'short' }).split(' ').pop() ||
-            '';
-        } catch {
-          abbrev = '';
-        }
-        dividerLabel = `${formatSchedTime(nowSec, hubTz)} ${abbrev}`.trim();
+        dividerLabel = `${formatSchedTime(nowSec, hubTz)} ${hubTzAbbrev(hubTz) as string}`.trim();
       }
     }
 
@@ -495,13 +496,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       classify: (flight: object) => classify(flight as ScheduleRow),
     }) as BoardModel['stats'];
 
-    let tzAbbrev = '';
-    try {
-      tzAbbrev =
-        new Date().toLocaleTimeString('en-US', { timeZone: hubTz, timeZoneName: 'short' }).split(' ').pop() || '';
-    } catch {
-      tzAbbrev = '';
-    }
+    const tzAbbrev = hubTzAbbrev(hubTz) as string;
 
     return {
       rows: models,

@@ -40,8 +40,9 @@ function envNumber(name: string, fallback: number): number {
 const getWarmTasksPerRun = () => Math.max(1, Math.min(4, Math.floor(envNumber('SCHEDULE_WARM_TASKS_PER_RUN', 4))));
 const getInterTaskDelayMs = () => Math.max(0, envNumber('SCHEDULE_WARM_DELAY_MS', 3000));
 // A warm that came back stale/degraded did not warm anything — the handler served a frozen
-// fallback instead of refetching. Anything older than the clean-board TTL (6h) counts as failed.
-const STALE_WARM_MAX_AGE_S = 21600;
+// fallback instead of refetching. Anything older than the clean today-board TTL (1h since v1.8.2)
+// counts as failed.
+const STALE_WARM_MAX_AGE_S = 3600;
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : process.env.VERCEL_URL
@@ -108,6 +109,79 @@ export function buildWarmPlan(nowMs = Date.now()): WarmTask[] {
     plan.push(tasks[(start + i) % tasks.length]);
   }
   return plan;
+}
+
+// ── Local-midnight rollover priority (pure) ──
+// F81: the ring strides on UTC slots and ignores each hub's local midnight, so when a hub rolls
+// over, its new TODAY board is the snapshot the ring warmed as TOMORROW — often 8-17h earlier (IAD
+// arrivals was 1021 min old at 00:01 EDT) — until the pointer happens to reach it, up to ~3h later.
+// For the first ROLLOVER_WINDOW_MS of each hub's day, its two today boards are injected into the
+// run: same stride-1 cap as IROPS and the same slot-seeded rotation, so a same-zone pair (EWR+IAD,
+// ORD+IAH, SFO+LAX = 4 boards) is covered across the two fires of that hour. Victims are tomorrow
+// slots first; unlike IROPS (which can last all day and must never starve today boards) a rollover
+// is bounded to two fires per zone per day, so when the stride has no tomorrow slot left — 4 of
+// every 6 strides in this ring — it may displace another hub's today board for one pass. That
+// board is ~3h into its cadence; the one it yields to is ~9-17h old. The run's task count, and so
+// the 300s budget and the unit spend, is unchanged.
+const ROLLOVER_WINDOW_MS = 60 * 60 * 1000; // = two cron fires (*/30)
+
+export function rolloverHubs(nowMs = Date.now()): string[] {
+  const now = new Date(nowMs);
+  return HUBS.filter((hub) => {
+    const sinceMidnightMs = nowMs - getStartOfHubDay(hub, 0, now) * 1000;
+    return sinceMidnightMs >= 0 && sinceMidnightMs < ROLLOVER_WINDOW_MS;
+  });
+}
+
+export function applyRolloverPriority(
+  plan: WarmTask[],
+  nowMs = Date.now(),
+  rotationSeed = 0
+): { plan: WarmTask[]; injected: string[]; displaced: string[] } {
+  const hubs = rolloverHubs(nowMs);
+  if (hubs.length === 0 || plan.length === 0) return { plan, injected: [], displaced: [] };
+
+  const keyOf = (t: WarmTask) => `${t.hub}-${t.dir}-${t.dayOffset}`;
+  const ordered: WarmTask[] = [];
+  for (const hub of hubs) {
+    for (const dir of ['departures', 'arrivals'] as const) ordered.push({ hub, dir, dayOffset: 0, label: 'today' });
+  }
+  const offset = ((rotationSeed % ordered.length) + ordered.length) % ordered.length;
+  const candidates = ordered.map((_, i) => ordered[(i + offset) % ordered.length]);
+  const candidateKeys = new Set(candidates.map(keyOf));
+  const isRollover = (t: WarmTask) => candidateKeys.has(keyOf(t));
+
+  const result = [...plan];
+  const injected: string[] = [];
+  const displaced: string[] = [];
+  const maxInjections = Math.max(0, plan.length - 1);
+  // Victims never include a slot the ring already gives to the FIRST base task, so at least that
+  // ring slot always survives; tomorrow slots go first, scanning from the back.
+  const pickVictim = (): number => {
+    for (const wantTomorrow of [true, false]) {
+      for (let i = result.length - 1; i >= 1; i--) {
+        const t = result[i];
+        if (isRollover(t)) continue;
+        if (wantTomorrow ? t.dayOffset === 1 : t.dayOffset === 0) return i;
+      }
+    }
+    return -1;
+  };
+
+  for (const task of candidates) {
+    if (injected.length >= maxInjections) break;
+    if (result.some((t) => keyOf(t) === keyOf(task))) continue; // stride already covers it
+    const victim = pickVictim();
+    if (victim === -1) break;
+    displaced.push(`${result[victim].hub}-${result[victim].dir}-${result[victim].label}`);
+    result[victim] = task;
+    injected.push(`${task.hub}-${task.dir}-today`);
+  }
+
+  const rank = new Map(candidates.map((t, i) => [keyOf(t), i]));
+  const priority = result.filter(isRollover).sort((a, b) => (rank.get(keyOf(a)) ?? 0) - (rank.get(keyOf(b)) ?? 0));
+  const rest = result.filter((t) => !isRollover(t));
+  return { plan: [...priority, ...rest], injected, displaced };
 }
 
 // ── IROPS-aware priority (pure) ──
@@ -281,6 +355,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let failed = 0;
 
   let warmPlan = buildWarmPlan();
+
+  // Rollover first (F81), then IROPS: a hub that just passed local midnight gets its new today
+  // boards warmed in this run instead of whenever the UTC ring pointer reaches them.
+  const rollover = applyRolloverPriority(warmPlan, Date.now(), getWarmSlot());
+  if (rollover.injected.length) {
+    console.log(`Rollover warm priority: injected [${rollover.injected.join(', ')}] displacing [${rollover.displaced.join(', ')}]`);
+  }
+  warmPlan = rollover.plan;
 
   // IROPS priority: while hubs have active FAA programs, their today boards rotate fairly into
   // the front of each run's stride (capped at stride-1 injections; same task count — lowest-

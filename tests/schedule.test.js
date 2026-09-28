@@ -15,13 +15,32 @@ vi.mock('@vercel/functions', () => vercelFunctionMocks);
 import handler, { shouldAttemptOfficialFallback, recordFallback, resetFallbackBreaker, __resetScheduleCachesForTests, shouldEnableProviderForBackgroundRefresh, shouldEnableOfficialForBackgroundRefresh, noteProviderRefreshFailed } from '../api/schedule.js';
 import { getStartOfDayForHub } from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
-import { recordAdbUnits, isAdbOrganicRefreshGated, __resetAdbSpendForTests } from '../api/_cost-state.js';
+import { recordAdbUnits, isAdbOrganicRefreshGated, getAdbPacedAllowance, __resetAdbSpendForTests } from '../api/_cost-state.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { classifySchedStatus } from '../src/lib/schedule-status.js';
 
 function formatForFR24Test(date) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
+
+// Every upstream-failure path in api/schedule.ts and the AeroDataBox adapter waits (retry
+// backoff, rate-limit pauses, batch gaps). Those waits are env-scaled so the suite exercises the
+// same code in milliseconds instead of ~35s of real sleeps with Date frozen underneath them.
+function setFastRetries() {
+  process.env.SCHEDULE_RETRY_DELAY_SCALE = '0';
+  process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
+  process.env.AERODATABOX_RETRY_BASE_MS = '0';
+}
+
+function clearFastRetries() {
+  delete process.env.SCHEDULE_RETRY_DELAY_SCALE;
+  delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
+  delete process.env.AERODATABOX_RETRY_BASE_MS;
+}
+
+const OFFICIAL_HOST = 'fr24api.flightradar24.com';
+const SCRAPE_URL = 'api.flightradar24.com/common/v1/airport.json';
+const called = (spy, needle) => spy.mock.calls.some((c) => String(c[0]).includes(needle));
 
 function createRes() {
   return {
@@ -58,7 +77,7 @@ describe('schedule API', () => {
     vi.setSystemTime(new Date('2026-07-05T18:00:00Z'));
     __resetRateLimitersForTests();
     __resetScheduleCachesForTests();
-    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
+    setFastRetries();
     scheduleSnapshotMocks.loadScheduleSnapshot.mockReset();
     scheduleSnapshotMocks.saveScheduleSnapshot.mockReset();
     scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
@@ -78,8 +97,7 @@ describe('schedule API', () => {
     delete process.env.SCHEDULE_SCRAPER_COUNTRY;
     delete process.env.SCHEDULE_SCRAPER_URL;
     delete process.env.SCHEDULE_SCRAPER_TOKEN;
-    delete process.env.SCHEDULE_SOURCE_PRIORITY;
-    delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
+    clearFastRetries();
     delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
     delete process.env.SCHEDULE_LIVE_FEED_FALLBACK_ENABLED;
     resetFallbackBreaker();
@@ -116,43 +134,33 @@ describe('schedule API', () => {
     expect(res.body.meta.partialReason).toBe(null);
   });
 
-  it('does not serve an empty official board as a clean 6h-pinned board', async () => {
-    // An empty official response for a United hub — never legitimately empty same-day — used to come
-    // back non-partial (total:0), so the hot cache pinned it for 6h and the CDN pinned s-maxage=21600:
-    // one transient empty upstream froze a 0-flight board on that edge for 6h. The empty official
-    // board must instead be flagged degraded (partial) so the empty-board cache/CDN guards apply,
-    // mirroring the scrape path's empty_200_suspected_block handling.
+  it('an empty rescue never becomes a clean, CDN-pinned board', async () => {
+    // A United hub is never legitimately empty same-day. Here the official rescue comes back empty
+    // and the on-demand web scrape answers a clean HTTP 200 with no schedule block (a soft
+    // datacenter-IP block). Left non-partial, that 0-flight board would be cached like a clean
+    // today board (1h hot + s-maxage=3600 at the edge, and a durable snapshot). It must instead be
+    // flagged partial so the empty-board guards apply: a 30s CDN TTL.
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
-
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      headers: { get: () => null },
-      json: async () => ({ data: [] }), // official empty; the today live-feed URL also yields no rows
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes(OFFICIAL_HOST)) return { ok: true, headers: { get: () => null }, json: async () => ({ data: [] }) };
+      return { ok: true, headers: { get: () => null }, json: async () => ({ result: { response: { airport: { pluginData: {} } } } }) };
     });
 
-    // A TODAY board: cdnMaxAge would be 21600 (6h) for a clean board.
-    const ts = Math.floor(Date.now() / 1000) - 3600;
-    const req = {
-      method: 'GET',
-      headers: { origin: 'http://localhost:3000' },
-      query: { hub: 'DEN', dir: 'arrivals', timestamp: String(ts) }
-    };
+    const ts = getStartOfDayForHub('DEN');
     const res = createRes();
-
-    await handler(req, res);
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { hub: 'DEN', dir: 'arrivals', timestamp: String(ts) } }, res);
 
     expect(res.statusCode).toBe(200);
+    expect(called(fetchSpy, OFFICIAL_HOST)).toBe(true); // the rescue really ran and was empty
     expect(res.body.total).toBe(0);
-    expect(res.body.meta.source).toBe('official-api');
-    // The empty board is degraded, so it is NOT served/pinned as a clean 6h board.
     expect(res.body.partial).toBe(true);
-    expect(res.headers['Cache-Control']).not.toContain('s-maxage=21600');
+    expect(res.body.meta.partialReason).toBe('empty_200_suspected_block');
+    expect(res.headers['Cache-Control']).toBe('s-maxage=30, stale-while-revalidate=60');
+    expect(scheduleSnapshotMocks.saveScheduleSnapshot).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ partial: true }) }));
   });
 
   it('parses numeric-string timestamps from official API so schedule times are populated', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
@@ -190,7 +198,6 @@ describe('schedule API', () => {
 
   it('marks response partial when official API fails after first page', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
 
     const firstPageFlights = Array.from({ length: 10000 }, (_, i) => ({
       flight_icao: `UAL${2000 + i}`,
@@ -237,7 +244,6 @@ describe('schedule API', () => {
 
   it('rejects sparse official API data and falls back to scraping', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
 
     // Official API returns flights with no scheduled times (sparse)
     const sparseFlights = Array.from({ length: 10 }, (_, i) => ({
@@ -315,7 +321,6 @@ describe('schedule API', () => {
 
   it('filters individual sparse flights but keeps good ones from official API', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
 
     const mixedFlights = [
       // Good flights with scheduled times
@@ -360,17 +365,14 @@ describe('schedule API', () => {
     expect(res.body.meta.sparseFiltered).toBe(2);
   });
 
-  // ═══ NEW: Scrape-first routing tests ═══
+  // ═══ Provider-first routing: rescue order and the on-demand fallthrough ═══
 
-  it('scrape-first: scraping succeeds, official API never called', async () => {
-    process.env.FR24_API_TOKEN = 'test-token-12345678';
-    // The fail-closed default is now 'provider'; pin 'scrape' to exercise the legacy scrape path.
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape';
-
+  it('no provider key and no FR24 token: an on-demand request falls through to the web scrape and serves it', async () => {
+    // Provider first (no key) → official rescue (no token) → live feed (not today) → the web scrape.
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
       if (urlStr.includes('fr24api.flightradar24.com')) {
-        throw new Error('Official API should not be called');
+        return { ok: false, status: 500, text: async () => 'unexpected', headers: { get: () => null } };
       }
       return {
         ok: true,
@@ -415,44 +417,12 @@ describe('schedule API', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.meta.source).toBe('scraping');
-    // Verify no calls went to the official API
-    for (const call of fetchSpy.mock.calls) {
-      expect(String(call[0])).not.toContain('fr24api.flightradar24.com');
-    }
+    expect(res.body.total).toBe(1);
+    expect(called(fetchSpy, SCRAPE_URL)).toBe(true);
+    expect(called(fetchSpy, OFFICIAL_HOST)).toBe(false); // no token → no paid rescue
   });
 
-  it('scrape-first: historical failures do not trigger official API rescue', async () => {
-    process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape'; // pin legacy scrape path (default is now 'provider')
-
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
-        throw new Error('Official API should not be called for historical windows');
-      }
-      // Scraping returns 403
-      return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
-    });
-
-    const ts = getStartOfDayForHub('LAX') - 86400;
-    const req = {
-      method: 'GET',
-      headers: { origin: 'http://localhost:3000' },
-      query: { hub: 'LAX', dir: 'departures', timestamp: String(ts) }
-    };
-    const res = createRes();
-
-    await handler(req, res);
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body.partial).toBe(true);
-    expect(res.body.meta.source).toBe('scraping');
-    for (const call of fetchSpy.mock.calls) {
-      expect(String(call[0])).not.toContain('fr24api.flightradar24.com');
-    }
-  });
-
-  it('scrape-first: today uses official fallback by default for any hub when scraping fails', async () => {
+  it('provider mode, no ADB key: today is rescued by the official API over the hub-local day window', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
 
     let officialUrl = '';
@@ -495,16 +465,14 @@ describe('schedule API', () => {
     expect(officialUrl).toContain(`flight_datetime_to=${encodeURIComponent(formatForFR24Test(new Date((ts + 86400 - 1) * 1000)))}`);
   });
 
-  it('scrape-first: empty-200 scrape (suspected Cloudflare block) escalates to the official rescue', async () => {
-    // Regression for the live "0-flight board" bug: a direct FR24 scrape that returns a clean
-    // HTTP 200 with an empty schedule block (a soft datacenter-IP block, NOT a 403/429) used to be
-    // treated as an authoritative empty board (partial:false), so the official rescue was skipped
-    // and the user got a stale live-feed snapshot. For a same-day TARGETED hub with a token, the
-    // empty board must now be flagged partial and escalate to the official API for a full schedule.
+  it('provider mode, no ADB key: the official rescue answers BEFORE the web scrape is tried', async () => {
+    // The "0-flight board" regression: a clean empty-200 scrape used to pre-empt the official
+    // rescue. In provider mode the rescue runs first, so a same-day board with a token is the
+    // official board and the scrape is never reached.
     process.env.FR24_API_TOKEN = 'test-token-12345678';
 
     let officialCalled = false;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
       if (urlStr.includes('fr24api.flightradar24.com')) {
         officialCalled = true;
@@ -544,13 +512,12 @@ describe('schedule API', () => {
     expect(res.statusCode).toBe(200);
     expect(officialCalled).toBe(true);
     expect(res.body.meta.source).toBe('official-api');
-    expect(res.body.meta.fallbackFrom).toBe('scraping');
     expect(res.body.total).toBeGreaterThan(0);
+    expect(called(fetchSpy, SCRAPE_URL)).toBe(false);
   });
 
-  it('scrape-first: official fallback can still be disabled by env', async () => {
+  it('the official rescue can be disabled by env (SCHEDULE_OFFICIAL_FALLBACK_ENABLED=0)', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape'; // pin legacy scrape path (default is now 'provider')
     process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '0';
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -580,7 +547,7 @@ describe('schedule API', () => {
     }
   });
 
-  it('scrape-first: renders actual-only official summary rows as degraded same-day data', async () => {
+  it('provider mode, no ADB key: renders actual-only official summary rows as degraded same-day data', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
 
     const ts = getStartOfDayForHub('ORD');
@@ -645,7 +612,6 @@ describe('schedule API', () => {
 
   it('does not retry official API while FR24 credits are exhausted', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
 
     let officialCalls = 0;
     let scrapeCalls = 0;
@@ -711,10 +677,9 @@ describe('schedule API', () => {
     expect(res2.body.meta.source).toBe('scraping');
   });
 
-  it('honors officialFallback=0 when scraping fails', async () => {
+  it('honors officialFallback=0: no paid rescue, the request degrades to the scrape', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
     process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '1';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
@@ -743,12 +708,9 @@ describe('schedule API', () => {
     }
   });
 
-  it('uses AeroDataBox schedule fallback before FR24 official fallback when scraping fails', async () => {
+  it('provider mode: maps the AeroDataBox row (gate, terminal, tail, times) and never calls the official API', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
     process.env.AERODATABOX_API_KEY = 'adb-test-key';
-    // Pin the legacy scrape path (default is now 'provider'): this test asserts the scrape→provider
-    // rescue ordering (meta.fallbackFrom='scraping'), which only happens in scrape mode.
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape';
 
     const ts = getStartOfDayForHub('GUM') + 86400;
     const depTime = ts + 9 * 3600;
@@ -807,8 +769,8 @@ describe('schedule API', () => {
     expect(res.body.total).toBe(1);
     expect(res.body.partial).toBe(false);
     expect(res.body.meta.source).toBe('aerodatabox');
-    expect(res.body.meta.fallbackFrom).toBe('scraping');
     expect(aeroCalls).toBe(2);
+    expect(called(fetchSpy, SCRAPE_URL)).toBe(false);
     expect(fetchSpy.mock.calls.some(call => String(call[0]).includes('fr24api.flightradar24.com'))).toBe(false);
 
     const flight = res.body.flights[0];
@@ -822,15 +784,11 @@ describe('schedule API', () => {
     expect(flight.time.scheduled.arrival).toBe(arrTime);
   });
 
-  it('uses configured FR24 scraper transport (http-json proxy) before provider fallbacks when direct scraping is blocked', async () => {
-    // ScrapingBee was removed; the surviving generic transport is the http-json proxy (SCHEDULE_SCRAPER_URL).
+  it('on-demand scrape: a configured http-json scraper transport recovers a Cloudflare-blocked direct page', async () => {
+    // ScrapingBee was removed; the surviving generic transport is the http-json proxy
+    // (SCHEDULE_SCRAPER_URL). It only matters once the provider and the rescues had nothing.
     process.env.SCHEDULE_SCRAPER_URL = 'https://proxy.example.com/fetch';
     process.env.SCHEDULE_SCRAPER_TOKEN = 'proxy-secret';
-    process.env.AERODATABOX_API_KEY = 'adb-test-key';
-    process.env.FR24_API_TOKEN = 'test-token-12345678';
-    // Pin the legacy scrape path (default is now 'provider'): this asserts the scraper transport is
-    // tried before provider fallbacks when the DIRECT scrape is blocked — a scrape-mode ordering.
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape';
 
     const ts = getStartOfDayForHub('SFO') + 86400;
     const depTime = ts + 7 * 3600;
@@ -978,10 +936,8 @@ describe('schedule API', () => {
   });
 
   it('provider mode: serves the full AeroDataBox board (incl. upcoming) and skips the dead FR24 scrape + official API', async () => {
-    // The production fix: SCHEDULE_SOURCE_PRIORITY=provider routes straight to AeroDataBox, the only
-    // source that returns the full forward board from Vercel. The Cloudflare-dead FR24 scrape and the
+    // AeroDataBox is the only source that returns the full forward board from Vercel. The Cloudflare-dead FR24 scrape and the
     // (schedule-less) official API must NOT be touched when the provider returns a board.
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     process.env.AERODATABOX_API_KEY = 'adb-test-key';
     process.env.FR24_API_TOKEN = 'test-token-12345678';
 
@@ -1044,7 +1000,6 @@ describe('schedule API', () => {
   it('provider mode without a key: falls through to FR24 official + live feed, never touching the dead scrape', async () => {
     // Zero-key graceful degrade: with no AERODATABOX_API_KEY, provider mode skips the dead scrape and
     // serves the official (active+completed) board merged with the free live feed.
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     process.env.FR24_API_TOKEN = 'test-token-12345678';
 
     const ts = getStartOfDayForHub('IAH');
@@ -1163,7 +1118,7 @@ describe('schedule API', () => {
     expect(flight.time.estimated.arrival).toBe(flight.time.scheduled.arrival);
   });
 
-  it('scrape-first: merges official actual-only board with live-feed and ranks it above bare live-feed', async () => {
+  it('provider mode, no ADB key: merges the official actual-only board with the live feed and ranks it above bare live-feed', async () => {
     // Regression for the live degradation (boards stuck on stale live-feed despite the official API
     // being called): when the scrape is blocked, the official actual-only board is merged with
     // live-feed active flights into the richest board. mergeLiveFeedFallback must recompute
@@ -1232,89 +1187,6 @@ describe('schedule API', () => {
     // Reset and verify breaker is open again
     resetFallbackBreaker();
     expect(shouldAttemptOfficialFallback()).toBe(true);
-  });
-
-  it('scrape-first: empty schedule (not partial) does not trigger fallback', async () => {
-    process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape'; // pin legacy scrape path (default is now 'provider')
-
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
-        throw new Error('Official API should not be called');
-      }
-      // Scraping returns valid but empty schedule (no UA flights)
-      return {
-        ok: true,
-        json: async () => ({
-          result: {
-            response: {
-              airport: {
-                pluginData: {
-                  schedule: {
-                    departures: {
-                      page: { current: 1, total: 1 },
-                      data: []
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }),
-      };
-    });
-
-    // Two days back: a snapped "today" board would legitimately attempt the live-feed rescue for
-    // an empty result, which is out of scope for this test.
-    const ts = Math.floor(Date.now() / 1000) - 172800;
-    const req = {
-      method: 'GET',
-      headers: { origin: 'http://localhost:3000' },
-      query: { hub: 'DEN', dir: 'departures', timestamp: String(ts) }
-    };
-    const res = createRes();
-
-    await handler(req, res);
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body.total).toBe(0);
-    expect(res.body.partial).toBe(false);
-    // Official API should never have been called
-    for (const call of fetchSpy.mock.calls) {
-      expect(String(call[0])).not.toContain('fr24api.flightradar24.com');
-    }
-  });
-
-  it('scrape-only mode: official API never called even on failure', async () => {
-    process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape-only';
-
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
-        throw new Error('Official API should not be called in scrape-only mode');
-      }
-      // Scraping fails
-      return { ok: false, status: 500, text: async () => 'Error', headers: { get: () => null } };
-    });
-
-    const ts = Math.floor(Date.now() / 1000) - 32400;
-    const req = {
-      method: 'GET',
-      headers: { origin: 'http://localhost:3000' },
-      query: { hub: 'IAD', dir: 'departures', timestamp: String(ts) }
-    };
-    const res = createRes();
-
-    await handler(req, res);
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body.partial).toBe(true);
-    // Official API should never have been called
-    for (const call of fetchSpy.mock.calls) {
-      expect(String(call[0])).not.toContain('fr24api.flightradar24.com');
-    }
   });
 
   it('meta.source is scraping on default successful scrape', async () => {
@@ -1433,10 +1305,9 @@ describe('schedule API', () => {
   });
 
   it('returns persisted partial snapshot on cold start while refreshing in the background', async () => {
-    // A partial snapshot is NOT fresh+complete, so the background refresh still fires. Pin the legacy
-    // scrape path (default is now 'provider') so the refresh deterministically hits the scrape
-    // first-page (one fetch) rather than adding async provider/official hops before that fetch.
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape';
+    // A partial snapshot is NOT fresh+complete, so the background refresh still fires. With no
+    // provider key and no token it has nothing metered to call, and a background refresh never
+    // falls through to the web scrape.
     const ts = getStartOfDayForHub('ORD') + 86400;
     scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue({
       data: {
@@ -1490,8 +1361,9 @@ describe('schedule API', () => {
     expect(res.body.degraded).toBe(true);
     expect(res.body.meta.fallbackScope).toBe('persistent_partial');
     expect(res.body.meta.bestKnownPartial).toBe(true);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(vercelFunctionMocks.waitUntil).toHaveBeenCalledTimes(1);
+    await Promise.all(vercelFunctionMocks.waitUntil.mock.calls.map((c) => c[0]));
+    expect(called(fetchSpy, SCRAPE_URL)).toBe(false);
   });
 
   it('persists complete aggregated results after a successful fetch', async () => {
@@ -1551,7 +1423,7 @@ describe('schedule API', () => {
     }));
   });
 
-  it('persists partial aggregated results when they are the best available fallback', { timeout: 15000 }, async () => {
+  it('persists partial aggregated results when they are the best available fallback', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
       const pageMatch = urlStr.match(/page=(\d+)/);
@@ -1621,15 +1493,12 @@ describe('schedule API', () => {
     expect(res.headers['Cache-Control']).toContain('s-maxage=120');
   });
 
-  it('scrape-first: rate-limited mid-loop pauses and continues fetching', { timeout: 15000 }, async () => {
-    process.env.FR24_API_TOKEN = 'test-token-12345678';
-
+  it('on-demand scrape: a rate-limited middle page pauses and paging continues', async () => {
+    // (This used to guard "official not called" by throwing inside the mock — production catches
+    // that throw, so the guard could never fail. No token here, and the spy is asserted directly.)
     let pagesFetched = [];
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
-        throw new Error('Official API should not be called');
-      }
       const pageMatch = urlStr.match(/page=(\d+)/);
       const page = pageMatch ? parseInt(pageMatch[1]) : 1;
       pagesFetched.push(page);
@@ -1686,9 +1555,10 @@ describe('schedule API', () => {
     // Should have flights from pages 1 and 3 (page 2 was rate-limited)
     expect(res.body.total).toBeGreaterThanOrEqual(2);
     expect(res.body.meta.source).toBe('scraping');
+    expect(called(fetchSpy, OFFICIAL_HOST)).toBe(false);
   });
 
-  it('scrape-first: repeated later-page rate limits stop before scanning the tail', { timeout: 15000 }, async () => {
+  it('on-demand scrape: repeated later-page rate limits stop before scanning the tail', async () => {
     let pagesFetched = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
@@ -1749,91 +1619,7 @@ describe('schedule API', () => {
     expect(pagesFetched).not.toContain(8);
   });
 
-  it('scrape-first: heavy rate limiting uses official rescue on targeted windows when explicitly enabled', { timeout: 15000 }, async () => {
-    process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'scrape'; // pin legacy scrape path (default is now 'provider')
-    process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '1';
-
-    let pagesFetched = [];
-    let officialCalls = 0;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
-        officialCalls++;
-        return {
-          ok: true,
-          json: async () => ({
-            data: [{
-              flight_icao: 'UAL777',
-              flight_iata: 'UA777',
-              status: 'scheduled',
-              orig_iata: 'DEN',
-              dest_iata: 'SFO',
-              scheduled_departure: 1741653600,
-              scheduled_arrival: 1741660800,
-            }]
-          }),
-        };
-      }
-
-      const pageMatch = urlStr.match(/page=(\d+)/);
-      const page = pageMatch ? parseInt(pageMatch[1], 10) : 1;
-      pagesFetched.push(page);
-
-      if (page >= 2 && page <= 7) {
-        return { ok: false, status: 429, text: async () => 'Too Many Requests', headers: { get: () => '1' } };
-      }
-
-      return {
-        ok: true,
-        json: async () => ({
-          result: {
-            response: {
-              airport: {
-                pluginData: {
-                  schedule: {
-                    departures: {
-                      page: { current: page, total: 10 },
-                      data: [{
-                        flight: {
-                          airline: { code: { iata: 'UA' } },
-                          identification: { number: { default: `UA${page}60` } },
-                          time: { scheduled: { departure: 1741653600, arrival: 1741660800 } },
-                          airport: {
-                            origin: { code: { iata: 'DEN' } },
-                            destination: { code: { iata: 'SFO' } }
-                          }
-                        }
-                      }]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }),
-      };
-    });
-
-    const ts = getStartOfDayForHub('DEN');
-    const req = {
-      method: 'GET',
-      headers: { origin: 'http://localhost:3000' },
-      query: { hub: 'DEN', dir: 'departures', timestamp: String(ts) }
-    };
-    const res = createRes();
-
-    await handler(req, res);
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body.meta.source).toBe('official-api');
-    expect(res.body.meta.fallbackFrom).toBe('scraping');
-    expect(officialCalls).toBe(1);
-    expect(pagesFetched).toContain(7);
-    expect(pagesFetched).not.toContain(8);
-  });
-
-  it('scrape-first: breaker tripped at end of scrape returns partial without fallback', async () => {
+  it('a tripped official breaker keeps the paid rescue off; the request degrades to the scrape', async () => {
     process.env.FR24_API_TOKEN = 'test-token-12345678';
     // Trip the breaker
     for (let i = 0; i < 5; i++) recordFallback();
@@ -1841,7 +1627,7 @@ describe('schedule API', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
       if (urlStr.includes('fr24api.flightradar24.com')) {
-        throw new Error('Official API should not be called when breaker is tripped');
+        return { ok: false, status: 500, text: async () => 'unexpected', headers: { get: () => null } };
       }
       // Scraping returns valid response but no UA flights (partial scenario)
       return {
@@ -1900,7 +1686,6 @@ describe('schedule API', () => {
     // destination (EWR). Every other fixture sets the two ICAOs equal, so this derivation was never
     // exercised — a diversion would be mislabeled with no test to catch it.
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'official';
 
     const ts = getStartOfDayForHub('ORD');
     const takeoff = ts + 9 * 3600;
@@ -1991,104 +1776,19 @@ describe('schedule API', () => {
     expect(resNoOrigin.statusCode).toBe(200);
   });
 
-  it('single-page mode: rejects out-of-range page numbers with 400 before any fetch', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+  it('ignores a legacy ?page= param and serves the aggregate board', async () => {
+    // Single-page mode was removed in v1.9.0 (no client, cron or script sent it). A stray `page`
+    // must neither 400 nor open a per-page scrape surface: it gets the normal aggregate board.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true, headers: { get: () => null },
       json: async () => ({ result: { response: { airport: { pluginData: {} } } } }),
     });
-    const ts = getStartOfDayForHub('ORD');
-    for (const page of ['-1', '101']) {
-      const res = createRes();
-      await handler({
-        method: 'GET',
-        headers: { origin: 'http://localhost:3000' },
-        query: { hub: 'ORD', dir: 'departures', timestamp: String(ts), page },
-      }, res);
-      expect(res.statusCode, `page=${page}`).toBe(400);
-      expect(res.body.error, `page=${page}`).toBe('Invalid page number');
-    }
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('single-page mode: serves a scraped page and re-serves it from cache', async () => {
-    const depTime = getStartOfDayForHub('ORD') + 8 * 3600;
-    const arrTime = depTime + 3 * 3600;
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      headers: { get: () => null },
-      json: async () => ({
-        result: { response: { airport: { pluginData: { schedule: { departures: {
-          page: { current: 1, total: 1 },
-          data: [{
-            flight: {
-              airline: { code: { iata: 'UA' } },
-              identification: { number: { default: 'UA700' } },
-              time: { scheduled: { departure: depTime, arrival: arrTime } },
-              airport: { origin: { code: { iata: 'ORD' } }, destination: { code: { iata: 'LAX' } } },
-            },
-          }],
-        } } } } } },
-      }),
-    });
-
-    const ts = getStartOfDayForHub('ORD');
-    const query = { hub: 'ORD', dir: 'departures', timestamp: String(ts), page: '1' };
-
-    const res1 = createRes();
-    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query }, res1);
-    expect(res1.statusCode).toBe(200);
-    expect(res1.body.cached).toBe(false);
-    expect(res1.body.meta.source).toBe('scraping');
-    expect(res1.body.meta.scrapeTransport).toBe('direct');
-    expect(res1.body.data).toHaveLength(1);
-
-    const callsAfterFirst = fetchSpy.mock.calls.length;
-    // Second identical request is served from the single-page cache — no new fetch.
-    const res2 = createRes();
-    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query }, res2);
-    expect(res2.statusCode).toBe(200);
-    expect(res2.body.cached).toBe(true);
-    expect(fetchSpy.mock.calls.length).toBe(callsAfterFirst);
-  });
-
-  it('single-page mode: returns 502 when the upstream page fetch fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: false, status: 500, text: async () => 'error', headers: { get: () => null },
-    });
-    const ts = getStartOfDayForHub('ORD');
+    const ts = Math.floor(Date.now() / 1000) - 172800;
     const res = createRes();
-    await handler({
-      method: 'GET',
-      headers: { origin: 'http://localhost:3000' },
-      query: { hub: 'ORD', dir: 'departures', timestamp: String(ts), page: '1' },
-    }, res);
-    expect(res.statusCode).toBe(502);
-    expect(res.body.error).toBe('Upstream service unavailable');
-  });
-
-  it('single-page mode: treats the FR24 rate-limit sentinel as a 502, never a cacheable 200', async () => {
-    // fetchOnePage returns the truthy sentinel { _rateLimited: true } (no flight data) when FR24
-    // hard-blocks and no scraper transport recovers it. The legacy page path must not cache that
-    // sentinel and serve it 200 with zero rows pinned for hours.
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: false,
-      status: 403,
-      text: async () => 'blocked',
-      headers: { get: (name) => String(name).toLowerCase() === 'cf-mitigated' ? 'challenge' : null },
-    });
-    const ts = getStartOfDayForHub('ORD');
-    const query = { hub: 'ORD', dir: 'departures', timestamp: String(ts), page: '1' };
-
-    const res1 = createRes();
-    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query }, res1);
-    expect(res1.statusCode).toBe(502);
-    expect(res1.body._rateLimited).toBeUndefined();
-
-    // And it must not have poisoned the single-page cache: a second request re-attempts (still 502),
-    // never served a cached 200 carrying the sentinel.
-    const res2 = createRes();
-    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query }, res2);
-    expect(res2.statusCode).toBe(502);
+    await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: { hub: 'ORD', dir: 'departures', timestamp: String(ts), page: '3' } }, res);
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.body.flights)).toBe(true);
+    expect(res.body.data).toBeUndefined();
   });
 
   it('live-feed fallback: drops malformed short rows and out-of-window stale sightings', async () => {
@@ -2139,14 +1839,26 @@ describe('schedule API', () => {
   });
 });
 
-// Empty-but-valid FR24 scrape payload: the no-env default path completes with a total-0 complete
-// board, which is enough to populate the in-memory agg cache for cache-key assertions.
-function mockEmptyScrape() {
-  return vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-    ok: true,
-    status: 200,
-    headers: { get: () => null },
-    json: async () => ({ result: { response: { airport: { pluginData: {} } } } }),
+// The production path: the provider (AeroDataBox) returns a clean one-flight ORD board for the
+// current hub day. (These helpers used to mock an FR24 web scrape that "succeeds" with an empty
+// board — something that never happens from Vercel.)
+function mockProviderBoard() {
+  process.env.AERODATABOX_API_KEY = 'adb-test-key';
+  const dayStart = getStartOfHubDay('ORD', 0);
+  const iso = (sec) => new Date(sec * 1000).toISOString();
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    if (/aerodatabox|aedbx/i.test(String(url))) {
+      return {
+        ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({ departures: [{
+          number: 'UA 1', callSign: 'UAL1', status: 'Expected', airline: { iata: 'UA' },
+          departure: { scheduledTime: { utc: iso(dayStart + 12 * 3600) }, airport: { iata: 'ORD' } },
+          arrival: { scheduledTime: { utc: iso(dayStart + 16 * 3600) }, airport: { iata: 'SFO' } },
+          aircraft: {},
+        }] }),
+      };
+    }
+    return { ok: false, status: 403, text: async () => 'blocked', headers: { get: () => null }, json: async () => ({}) };
   });
 }
 
@@ -2154,7 +1866,8 @@ function resetScheduleTestState() {
   vi.restoreAllMocks();
   __resetRateLimitersForTests();
   __resetScheduleCachesForTests();
-  process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
+  __resetAdbSpendForTests();
+  setFastRetries();
   scheduleSnapshotMocks.loadScheduleSnapshot.mockReset();
   scheduleSnapshotMocks.saveScheduleSnapshot.mockReset();
   scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
@@ -2166,8 +1879,7 @@ function cleanupScheduleTestEnv() {
   delete process.env.FR24_API_TOKEN;
   delete process.env.AERODATABOX_API_KEY;
   delete process.env.AERODATABOX_BASE_URL;
-  delete process.env.AERODATABOX_INTER_WINDOW_DELAY_MS;
-  delete process.env.SCHEDULE_SOURCE_PRIORITY;
+  clearFastRetries();
   delete process.env.CRON_SECRET;
   resetFallbackBreaker();
 }
@@ -2195,7 +1907,7 @@ describe('hub allowlist + timestamp snapping (quota-burn surface)', () => {
   });
 
   it('serves lowercase hub + intra-day timestamp from the same cache entry as the canonical request', async () => {
-    mockEmptyScrape();
+    mockProviderBoard();
     const dayStart = getStartOfHubDay('ORD', 0);
 
     const res1 = createRes();
@@ -2234,7 +1946,7 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
   }
 
   async function prime() {
-    mockEmptyScrape();
+    mockProviderBoard();
     const res = createRes();
     await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: baseQuery() }, res);
     expect(res.body.cached).toBe(false);
@@ -2266,7 +1978,6 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
     // mock an FR24 web scrape that "succeeds" with an empty board, which never happens from Vercel;
     // since 1.8.2 a cron warm no longer falls through to that scrape at all.)
     process.env.AERODATABOX_API_KEY = 'adb-test-key';
-    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0';
     const dayStart = getStartOfHubDay('ORD', 0);
     const iso = (sec) => new Date(sec * 1000).toISOString().replace('.000Z', 'Z');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -2305,7 +2016,7 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
   it("accepts the documented force value variants ('true', 'yes') like '1'", async () => {
     await prime();
     for (const value of ['true', 'yes']) {
-      mockEmptyScrape();
+      mockProviderBoard();
       const res = createRes();
       await handler({
         method: 'GET',
@@ -2332,8 +2043,8 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
 
   it('responds no-store to ANY forceRefresh request, even unauthorized', async () => {
     // The warm URL is fully predictable from the public repo. If an unauthenticated GET of it
-    // produced a normal cacheable response, the CDN would pin a 6h object on the cron's own URL
-    // key and the next hourly warm could be served that frozen object as a green "ok" —
+    // produced a normal cacheable response, the CDN would pin a 1h object on the cron's own URL
+    // key and the next half-hourly warm could be served that frozen object as a green "ok" —
     // unauthenticated re-freezing of the exact boards the force path exists to refresh.
     await prime();
     const res = createRes();
@@ -2360,7 +2071,6 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
 
   it('keeps the provider available to authorized force warms after the organic budget is exhausted', async () => {
     process.env.AERODATABOX_API_KEY = 'test-key';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     await recordAdbUnits(400);
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
@@ -2373,7 +2083,7 @@ describe('forceRefresh (cron-authorized cache bypass)', () => {
     await handler({ method: 'GET', headers: { origin: 'http://localhost:3000' }, query: baseQuery() }, createRes());
     expect(fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url))).length).toBe(0);
 
-    // The cron's authorized force warm is ring-bounded (~288 units/day) upstream — the organic
+    // The cron's authorized force warm is ring-bounded (~768 units/day) upstream — the organic
     // cap must not starve the very refresh path that keeps boards from freezing.
     fetchSpy.mockClear();
     await handler({
@@ -2396,10 +2106,9 @@ describe('paced provider gate must not spill onto the paid official API', () => 
     resetFallbackBreaker(); // also clears the ADB counters via __resetAdbSpendForTests
     __resetAdbSpendForTests();
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     process.env.AERODATABOX_API_KEY = 'adb-test-key';
     process.env.FR24_API_TOKEN = 'test-token-12345678';
-    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '700';
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '1400'; // the production budget
     // 00:30 UTC = 7:30 PM CDT: half an hour into the day, so the paced line is tiny while the
     // absolute budget is nearly untouched — precisely the state that only pacing can be gating.
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -2454,7 +2163,7 @@ describe('paced provider gate must not spill onto the paid official API', () => 
   }
 
   it('keeps the paid official API OFF while only pacing is holding the provider back', async () => {
-    await recordAdbUnits(300); // way past the 00:30 paced line (43), way under the 700 budget
+    await recordAdbUnits(300); // way past the 00:30 paced line, way under the 1400 budget
 
     const { res, calledHost } = await loadGatedBoard();
 
@@ -2468,7 +2177,7 @@ describe('paced provider gate must not spill onto the paid official API', () => 
   });
 
   it('still allows the official API once the budget is TRULY exhausted (legacy behaviour preserved)', async () => {
-    await recordAdbUnits(700); // the absolute daily budget, not merely the paced line
+    await recordAdbUnits(1400); // the absolute daily budget, not merely the paced line
 
     const { res, calledHost } = await loadGatedBoard();
 
@@ -2483,11 +2192,10 @@ describe('paced provider gate must not spill onto the paid official API', () => 
     // The gate has to be read BEFORE the provider attempt, because the attempt moves the very inputs
     // it is read from: fetchViaAeroDataBox bills its units before each HTTP call, so a call that then
     // fails can push spend past the paced line and make the post-hoc check say "pacing is gating us"
-    // — suppressing the healthy paid rescue for a failure pacing had nothing to do with. 40 units at
-    // the 00:30 line of 43 is exactly that knife edge: open on entry, closed by the failed attempt's
-    // own 4 units.
-    process.env.AERODATABOX_INTER_WINDOW_DELAY_MS = '0'; // both windows fail; don't burn 1.5s waiting
-    await recordAdbUnits(40);
+    // — suppressing the healthy paid rescue for a failure pacing had nothing to do with. Two units
+    // under the 00:30 paced line is exactly that knife edge: open on entry, closed by the failed
+    // attempt's own 4 units (two 403'd windows, no retries).
+    await recordAdbUnits(getAdbPacedAllowance(Date.now()) - 2);
     expect(isAdbOrganicRefreshGated(Date.now())).toBe(false); // setup sanity: the gate is OPEN
 
     // loadGatedBoard's catch-all answers the AeroDataBox host with a 403, so the provider is really
@@ -2500,7 +2208,6 @@ describe('paced provider gate must not spill onto the paid official API', () => 
     // this. Legacy behaviour (provider down => official rescue) is preserved.
     expect(isAdbOrganicRefreshGated(Date.now())).toBe(true);
     expect(calledHost('fr24api.flightradar24.com')).toBe(true);
-    // (cleanupScheduleTestEnv in afterEach clears AERODATABOX_INTER_WINDOW_DELAY_MS)
   });
 });
 
@@ -2556,7 +2263,6 @@ describe('background provider refresh age gate', () => {
 
   it('enables the provider on background refresh of a 30h-old persistent snapshot', async () => {
     process.env.AERODATABOX_API_KEY = 'test-key';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       status: 200,
@@ -2590,7 +2296,6 @@ describe('background provider refresh age gate', () => {
     // refreshes whose provider attempt failed or was gated. The scrape can only produce a partial
     // board, which cacheSetGuarded then refuses to store over the complete one — pure waste.
     process.env.AERODATABOX_API_KEY = 'test-key';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const u = String(url);
       if (/aerodatabox|aedbx/i.test(u)) {
@@ -2621,7 +2326,6 @@ describe('background provider refresh age gate', () => {
 
   it('an authorized cron warm whose provider fails does not fall through to the FR24 web scrape', async () => {
     process.env.AERODATABOX_API_KEY = 'test-key';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     process.env.CRON_SECRET = 'test-cron-secret-1234';
     try {
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -2652,7 +2356,6 @@ describe('background provider refresh age gate', () => {
 
   it('keeps the provider off for a young+complete snapshot (no pointless refresh)', async () => {
     process.env.AERODATABOX_API_KEY = 'test-key';
-    process.env.SCHEDULE_SOURCE_PRIORITY = 'provider';
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       status: 200,

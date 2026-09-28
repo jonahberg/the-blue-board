@@ -12,22 +12,24 @@ describe('supportMeterModel — the About popover cost meter (inventory §13)', 
     expect(supportMeterModel([])).toBeNull();
   });
 
-  it('builds the board-refresh bar from used/budget', () => {
-    const model = supportMeterModel({ boards: { used: 42, budget: 700 } });
+  it('builds the schedule-units bar from used/budget', () => {
+    // boards.used is AeroDataBox UNITS (4 per board refresh) against the 1,400/day production
+    // budget — the old "board refreshes" label made 812/1400 read as 812 boards (F132).
+    const model = supportMeterModel({ boards: { used: 42, budget: 1400 } });
     expect(model.rows).toHaveLength(1);
     expect(model.rows[0]).toMatchObject({
       key: 'boards',
-      label: "Today's board refreshes",
-      valueLabel: '42/700',
+      label: 'Schedule API units today',
+      valueLabel: '42/1400',
       warn: false,
     });
-    expect(model.rows[0].pct).toBeCloseTo(6, 6);
+    expect(model.rows[0].pct).toBeCloseTo(3, 6);
   });
 
   it('skips the board bar when the budget is zero, missing or not a number', () => {
     expect(supportMeterModel({ boards: { used: 5, budget: 0 } })).toBeNull();
     expect(supportMeterModel({ boards: { used: 5 } })).toBeNull();
-    expect(supportMeterModel({ boards: { used: '5', budget: '700' } })).toBeNull();
+    expect(supportMeterModel({ boards: { used: '5', budget: '1400' } })).toBeNull();
   });
 
   it('adds the live-feed bar only when the feed reports itself configured', () => {

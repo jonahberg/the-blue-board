@@ -10,16 +10,32 @@
 export const NOW_GRACE_SECONDS = 1800; // 30 minutes
 
 /**
- * Index of the first row whose timestamp is at or after (now - grace).
- * @param {Array<number|null|undefined>} timesSec  sorted-ascending unix seconds (0/null = unknown).
+ * Index of the first still-relevant row: the first known-time row AFTER the last row whose
+ * timestamp is before (now - grace).
+ *
+ * F96: the list is sorted by SCHEDULED time but placed by EFFECTIVE time (effectiveRowTime), so
+ * the times are not monotonic — one held flight (scheduled 14:05, estimate 21:15) used to be
+ * "the first future row" and dragged the NOW divider above hours of already-departed rows.
+ * Anchoring after the last resolved-past row keeps every departed row above the line; a held
+ * row that sorts early stays above it too, where its Delayed status and estimate say what it is.
+ *
+ * @param {Array<number|null|undefined>} timesSec  unix seconds in board order (0/null = unknown).
  * @param {number} nowSec  current unix time in seconds.
  * @returns {number} index, or -1 when there are no future rows (skip all NOW anchoring).
  */
 export function firstFutureIndex(timesSec, nowSec, graceSec = NOW_GRACE_SECONDS) {
   if (!Array.isArray(timesSec) || !Number.isFinite(Number(nowSec))) return -1;
-  for (let i = 0; i < timesSec.length; i++) {
+  const known = (i) => {
     const t = Number(timesSec[i]);
-    if (Number.isFinite(t) && t > 0 && t >= nowSec - graceSec) return i;
+    return Number.isFinite(t) && t > 0 ? t : 0;
+  };
+  let lastPast = -1;
+  for (let i = 0; i < timesSec.length; i++) {
+    const t = known(i);
+    if (t && t < nowSec - graceSec) lastPast = i;
+  }
+  for (let i = lastPast + 1; i < timesSec.length; i++) {
+    if (known(i)) return i;
   }
   return -1;
 }
@@ -31,8 +47,9 @@ export function firstFutureIndex(timesSec, nowSec, graceSec = NOW_GRACE_SECONDS)
  * a GDP/ground stop — hours past its scheduled push, but not yet departed — sat ABOVE
  * "── NOW ──" as if it had already resolved, precisely when it matters most. The fix:
  * when the flight has NO real (out/off) time yet, anchor it to max(scheduled, estimated),
- * so a delayed-but-not-departed flight floats down to its expected time and lands below
- * the divider. A row that HAS a real time keeps the existing behavior (scheduled anchor)
+ * so a delayed-but-not-departed flight is never counted as resolved-past. (It lands below the
+ * divider when no departed row sorts after it; see firstFutureIndex for why a held row that
+ * sorts among departed ones stays above.) A row that HAS a real time keeps the existing behavior (scheduled anchor)
  * so already-departed rows stay put. The TIME-column sort order is unchanged; this only
  * affects where the divider falls.
  *

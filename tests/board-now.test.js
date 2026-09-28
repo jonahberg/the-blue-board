@@ -99,3 +99,20 @@ describe('effectiveRowTime (F075: held-flight divider placement)', () => {
     expect(nowDividerIndex(times, NOW)).toBe(1);
   });
 });
+
+describe('F96: one held row cannot pull the divider above hours of departed flights', () => {
+  it('places the divider after the LAST resolved-past row', () => {
+    // SFO at 20:52: UA2634 (sched 14:05, held, est 21:15) sorted among departed 14:0x rows.
+    const rows = [
+      { scheduled: NOW - 7 * 3600, real: NOW - 7 * 3600 + 120 },  // departed
+      { scheduled: NOW - 6.8 * 3600, estimated: NOW + 1380 },     // HELD, est future
+      { scheduled: NOW - 6.7 * 3600, real: NOW - 6.6 * 3600 },    // departed
+      { scheduled: NOW - 6.5 * 3600, real: NOW - 6.4 * 3600 },    // departed
+      { scheduled: NOW + 3600 },                                   // future
+    ];
+    const times = rows.map(effectiveRowTime);
+    expect(nowDividerIndex(times, NOW)).toBe(4);
+    expect(firstFutureIndex(times, NOW)).toBe(4); // "Jump to now" lands on the same row
+  });
+});
+

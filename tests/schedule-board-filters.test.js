@@ -93,3 +93,89 @@ describe('matchesScheduleFilters', () => {
     expect(matchesScheduleFilters({}, fv, ctx)).toBe(true);
   });
 });
+
+// F127: the branches the original pins never reached — all live options in AdvancedFilters.tsx.
+describe('matchesScheduleFilters — the remaining filter branches', () => {
+  const ac = (code, text = '') => ({ aircraft: { model: { code, text } } });
+
+  it('aircraft filter matches the exact model code', () => {
+    const fv = { ...NONE, aircraftFilter: '789' };
+    expect(matchesScheduleFilters(ac('789'), fv, makeCtx())).toBe(true);
+    expect(matchesScheduleFilters(ac('738'), fv, makeCtx())).toBe(false);
+  });
+
+  it('fleet family filter asks ctx.fleetFamily with the code and text', () => {
+    const fv = { ...NONE, fleetFamilyFilter: '787' };
+    const seen = [];
+    const ctx787 = makeCtx({ fleetFamily: (code, text) => { seen.push([code, text]); return '787'; } });
+    expect(matchesScheduleFilters(ac('B789', 'Boeing 787-9'), fv, ctx787)).toBe(true);
+    expect(seen).toEqual([['B789', 'Boeing 787-9']]);
+    expect(matchesScheduleFilters(ac('B738'), fv, makeCtx({ fleetFamily: () => '737' }))).toBe(false);
+  });
+
+  it('starlink filter follows the (possibly backfilled) tail', () => {
+    const sl = makeCtx({ regFor: () => 'N127SY' });
+    const plain = makeCtx({ regFor: () => 'N12345' });
+    const noTail = makeCtx({ regFor: () => '' });
+    const on = { ...NONE, starlinkFilter: 'starlink' };
+    const off = { ...NONE, starlinkFilter: 'no-starlink' };
+    expect(matchesScheduleFilters({}, on, sl)).toBe(true);
+    expect(matchesScheduleFilters({}, off, sl)).toBe(false);
+    expect(matchesScheduleFilters({}, on, plain)).toBe(false);
+    expect(matchesScheduleFilters({}, off, plain)).toBe(true);
+    expect(matchesScheduleFilters({}, on, noTail)).toBe(false);
+    expect(matchesScheduleFilters({}, off, noTail)).toBe(true);
+  });
+
+  it('afternoon is [12,17) and evening is [17,22)', () => {
+    const ctx = makeCtx();
+    const pm = { ...NONE, timeRangeFilter: 'afternoon' };
+    const eve = { ...NONE, timeRangeFilter: 'evening' };
+    expect(matchesScheduleFilters(depAt(12), pm, ctx)).toBe(true);
+    expect(matchesScheduleFilters(depAt(16), pm, ctx)).toBe(true);
+    expect(matchesScheduleFilters(depAt(17), pm, ctx)).toBe(false);
+    expect(matchesScheduleFilters(depAt(17), eve, ctx)).toBe(true);
+    expect(matchesScheduleFilters(depAt(21), eve, ctx)).toBe(true);
+    expect(matchesScheduleFilters(depAt(22), eve, ctx)).toBe(false);
+  });
+
+  it('arrivals boards bucket on the scheduled ARRIVAL and classify route type by origin', () => {
+    const ctx = makeCtx({ dir: 'arrivals' });
+    const fl = { time: { scheduled: { departure: 3 * 3600, arrival: 13 * 3600 } }, airport: { origin: { code: { iata: 'LHR' } }, destination: { code: { iata: 'ORD' } } } };
+    expect(matchesScheduleFilters(fl, { ...NONE, timeRangeFilter: 'afternoon' }, ctx)).toBe(true);
+    expect(matchesScheduleFilters(fl, { ...NONE, timeRangeFilter: 'redeye' }, ctx)).toBe(false);
+    expect(matchesScheduleFilters(fl, { ...NONE, routeTypeFilter: 'international' }, ctx)).toBe(true);
+  });
+
+  it("risk 'moderate' and 'low' bands", () => {
+    const risk = (label) => makeCtx({ computeRisk: () => (label ? { label } : null) });
+    const mod = { ...NONE, riskFilter: 'moderate' };
+    const low = { ...NONE, riskFilter: 'low' };
+    expect(matchesScheduleFilters({}, mod, risk('MOD'))).toBe(true);
+    expect(matchesScheduleFilters({}, mod, risk('LOW'))).toBe(false);
+    expect(matchesScheduleFilters({}, low, risk('LOW'))).toBe(true);
+    expect(matchesScheduleFilters({}, low, risk(null))).toBe(true); // no model → LOW
+    expect(matchesScheduleFilters({}, low, risk('HIGH'))).toBe(false);
+    const departed = makeCtx({ classify: () => ({ key: 'departed' }) });
+    expect(matchesScheduleFilters({}, mod, departed)).toBe(false);
+    const landed = makeCtx({ classify: () => ({ key: 'landed' }) });
+    expect(matchesScheduleFilters({}, low, landed)).toBe(true); // operated rows fall through 'low'
+  });
+
+  it('search matches every haystack field (caller lowercases the query)', () => {
+    const fl = {
+      identification: { number: { default: 'UA912' }, callsign: 'UAL912' },
+      airport: {
+        origin: { code: { iata: 'ORD' }, name: "Chicago O'Hare" },
+        destination: { code: { iata: 'KEF' }, name: 'Keflavik' },
+      },
+      aircraft: { model: { code: 'B752' } },
+    };
+    const ctx = makeCtx({ regFor: () => 'N17105' });
+    for (const q of ['ua912', 'ual912', 'n17105', 'keflavik', 'kef', 'ord', 'b752']) {
+      expect(matchesScheduleFilters(fl, { ...NONE, searchFilter: q }, ctx), q).toBe(true);
+    }
+    expect(matchesScheduleFilters(fl, { ...NONE, searchFilter: 'lhr' }, ctx)).toBe(false);
+  });
+});
+

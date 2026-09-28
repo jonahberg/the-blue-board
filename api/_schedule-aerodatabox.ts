@@ -3,6 +3,8 @@ import { HUB_TZ } from './irops.js';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
 import { getHubTerminal } from './_hubs.js';
 import { hydrateAdbSpend, isAdbOrganicRefreshGated, isAdbBudgetPacingDisabled, getAdbPacedAllowance, recordAdbUnits, getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
+import { getStartOfHubDay } from '../src/lib/hubTz.js';
+import { isPlausibleDelta } from '../src/lib/schedule-plausibility.js';
 
 const AERODATABOX_BASE_URL = 'https://prod.api.market/api/v1/aedbx/aerodatabox';
 // Each FIDS window request is billed at 2 units by the provider (1 board = 2 windows = 4 units).
@@ -74,6 +76,12 @@ function normalizeFlightId(value: any): string {
 function normalizeUnitedFlightNumber(number: any, callSign?: any): string {
   const primary = normalizeFlightId(number);
   const fallback = normalizeFlightId(callSign);
+  // F100: the provider sometimes codes a mainline flight under an Express prefix ("G7 60") while
+  // its callsign says UAL60 — yesterday's UA60 787-9 to Melbourne rendered as a GoJet "G760".
+  // Real Express flying uses the operator's own callsign (SKW/RPA/GJS/ASH/…), so a UAL callsign
+  // on a non-UA number is the authoritative ident.
+  const ualCallsign = /^UAL(\d+[A-Z]?)$/.exec(fallback);
+  if (ualCallsign && !/^UA\d/.test(primary)) return `UA${ualCallsign[1]}`;
   const value = primary || fallback;
   if (!value) return '';
   const ual = /^UAL(\d+[A-Z]?)$/.exec(value);
@@ -189,9 +197,10 @@ function isUnitedFlight(flight: any): boolean {
  * AeroDataBox ships only a human-readable model name ("Airbus A321 NEO", "Boeing 737 MAX 9")
  * and NEVER a code — 0 of 647 rows on the live board carried one, 610 carried text. The
  * dashboard keys three features off `aircraft.model.code`: the equipment-swap detector
- * (detectEquipmentSwaps), the Aircraft column, and the aircraft-type filter
- * (populateAircraftFilter). With the code hardcoded to '' all three were structurally dead.
- * This maps the text into the client's ICAO_TO_FLEET_TYPE vocabulary (src/dashboard/main.js):
+ * (detectEquipmentSwaps), the Aircraft column, and the aircraft-type filter (aircraftOptions in
+ * src/app/views/schedule/useBoardModel.ts). With the code hardcoded to '' all three were
+ * structurally dead. This maps the text into the client's ICAO_TO_FLEET_TYPE vocabulary
+ * (src/lib/equipment-swaps.js):
  * A319/A320/A21N, B737/B738/B739, B38M/B39M, B752/B753, B763/B764, B772/B77E/B77W,
  * B788/B789/B78X, plus the United Express regional designators the boards also carry
  * (E170/E175, CRJ2/CRJ7/CRJ9).
@@ -268,9 +277,8 @@ export function modelTextToIcaoCode(text: string): string {
   return '';
 }
 
-function normalizeFlight(flight: any, hub: string, dir: string) {
-  if (!isUnitedFlight(flight)) return null;
-
+/** The two legs of a raw FIDS item, whichever shape (withLeg or movement-only) it arrived in. */
+function rawLeg(flight: any, hub: string, dir: string) {
   const hubUpper = hub.toUpperCase();
   const isDeparture = dir === 'departures';
   const departure = flight?.departure;
@@ -298,11 +306,86 @@ function normalizeFlight(flight: any, hub: string, dir: string) {
 
   const origIata = normalizeAirportCode(originAirport);
   const destIata = normalizeAirportCode(destinationAirport);
+  const boardMovement = isDeparture ? departureMovement : arrivalMovement;
+  return {
+    originAirport,
+    destinationAirport,
+    departureMovement,
+    arrivalMovement,
+    origIata,
+    destIata,
+    route: `${origIata}>${destIata}`,
+    boardSched: toUnixDateTime(boardMovement?.scheduledTime),
+  };
+}
+
+// ── F90: partner-operated codeshares ──
+// The window fetch asks for codeshare rows (withCodeshared=true) so that United-marketed Express
+// flying is on the board, but the same flag also returns every partner flight United sells a seat
+// on: 18 of 29 "UA" departures on the NRT board were ANA/Singapore metal (UA8010 on an A380), and
+// the SFO board carried Air Canada, Lufthansa, Swiss, Asiana and Copa (HP-9929) rows. They inflated
+// the board totals, board OTP and IROPS totalFlights. A codeshare row is kept only when something
+// says United (or United Express) flies it; the number range is NOT evidence (some UA6xxx are real
+// Express). Callsigns seen on real Express rows: SkyWest, Republic, GoJet, Mesa, CommutAir, Air
+// Wisconsin (plus the ExpressJet / Trans States prefixes the carrier set still carries).
+const UNITED_OPERATOR_CALLSIGNS = new Set(['UAL', 'SKW', 'RPA', 'GJS', 'ASH', 'UCA', 'AWI', 'ASQ', 'LOF']);
+
+type OperatorTwin = { sched: number; carrier: string };
+
+/** Operating (non-codeshare) rows by route, so a codeshare can be matched to the carrier flying it. */
+function buildOperatorIndex(rawFlights: any[], hub: string, dir: string): Map<string, OperatorTwin[]> {
+  const index = new Map<string, OperatorTwin[]>();
+  for (const f of rawFlights) {
+    if (f?.codeshareStatus === 'IsCodeshared') continue;
+    const legInfo = rawLeg(f, hub, dir);
+    if (!legInfo.boardSched) continue;
+    const carrier =
+      normalizeFlightId(f?.airline?.iata) || (/^([A-Z][A-Z0-9])\d/.exec(normalizeFlightId(f?.number))?.[1] ?? '');
+    const list = index.get(legInfo.route) || [];
+    list.push({ sched: legInfo.boardSched, carrier });
+    index.set(legInfo.route, list);
+  }
+  return index;
+}
+
+function isUnitedOperatingCarrier(carrier: string): boolean {
+  return carrier === 'UA' || UNITED_EXPRESS_CARRIERS.has(carrier);
+}
+
+/** True when a UA-marketed row is flown by a partner, not by United or United Express. */
+function isPartnerCodeshare(flight: any, hub: string, dir: string, operators: Map<string, OperatorTwin[]>): boolean {
+  // The callsign IS the operating carrier, whatever codeshareStatus says (the public board strips
+  // that flag, so it could not be verified for the SFO partner rows): ANA107 / CMP383 / ACA746 on a
+  // UA number is partner metal even if the provider labelled the row 'Unknown'.
+  const callPrefix = /^([A-Z]{3})\d/.exec(normalizeFlightId(flight?.callSign))?.[1];
+  if (callPrefix) return !UNITED_OPERATOR_CALLSIGNS.has(callPrefix);
+  if (flight?.codeshareStatus !== 'IsCodeshared') return false;
+  const legInfo = rawLeg(flight, hub, dir);
+  const twin = (operators.get(legInfo.route) || []).find((o) =>
+    timesMatch(o.sched, legInfo.boardSched, OPERATOR_CLONE_TOLERANCE_S)
+  );
+  // No callsign and no operator twin: nothing says partner, so keep it (the empty-callsign
+  // UA4xxx/5xxx rows on the ORD board are real United Express).
+  return !!twin && !!twin.carrier && !isUnitedOperatingCarrier(twin.carrier);
+}
+
+function normalizeFlight(flight: any, hub: string, dir: string) {
+  if (!isUnitedFlight(flight)) return null;
+
+  const hubUpper = hub.toUpperCase();
+  const isDeparture = dir === 'departures';
+  const movement = flight?.movement;
+  const { originAirport, destinationAirport, departureMovement, arrivalMovement, origIata, destIata } =
+    rawLeg(flight, hub, dir);
   if (isDeparture && origIata !== hubUpper) return null;
   if (!isDeparture && destIata !== hubUpper) return null;
 
   const flightNum = normalizeUnitedFlightNumber(flight?.number, flight?.callSign);
   if (!flightNum) return null;
+  const rawNumber = normalizeFlightId(flight?.number);
+  // F100: the ident came from a UAL callsign over an Express-coded number. Flag it so dedupe still
+  // treats it as a possible operator clone of a real UA row.
+  const identFromCallsign = !!rawNumber && /^UA\d/.test(flightNum) && !/^(UA|UAL)\d/.test(rawNumber);
 
   const schedDep = toUnixDateTime(departureMovement?.scheduledTime);
   const schedArr = toUnixDateTime(arrivalMovement?.scheduledTime);
@@ -352,7 +435,7 @@ function normalizeFlight(flight: any, hub: string, dir: string) {
 
   return {
     identification: { number: { default: flightNum }, callsign: normalizeFlightId(flight?.callSign) },
-    airline: { code: { iata: 'UA' }, name: flight?.airline?.name || 'United Airlines' },
+    airline: { code: { iata: 'UA' }, name: identFromCallsign ? 'United Airlines' : flight?.airline?.name || 'United Airlines' },
     status: mapAeroStatus(status),
     time: {
       scheduled: { departure: schedDep, arrival: schedArr },
@@ -377,6 +460,7 @@ function normalizeFlight(flight: any, hub: string, dir: string) {
     },
     _source: {
       provider: 'aerodatabox',
+      ...(identFromCallsign ? { identFromCallsign: true } : {}),
       quality: [
         ...(departureMovement?.quality || []),
         ...(arrivalMovement?.quality || []),
@@ -479,10 +563,14 @@ export function dedupeBoardFlights(
   // real flight; only a non-UA row with NO real times may match on schedule (±5 min). A
   // non-matching row survives only if its carrier is a known United Express operator; anything
   // else (NK/DL/AA/…) is a foreign leak and is dropped.
-  const uaRows = afterRevisions.filter((f) => boardCarrierCode(f) === 'UA');
+  // A row whose UA ident was rebuilt from its UAL callsign (F100) is still an Express-coded row:
+  // it may be an operator clone of a genuine UA row, so it is matched like one and kept (as UA)
+  // only when it has no twin.
+  const fromCallsign = (f: any) => f?._source?.identFromCallsign === true;
+  const uaRows = afterRevisions.filter((f) => boardCarrierCode(f) === 'UA' && !fromCallsign(f));
   const result = afterRevisions.filter((f) => {
     const carrier = boardCarrierCode(f);
-    if (carrier === 'UA' || carrier === '') return true; // '' = unparseable ident, already UA-vetted upstream
+    if ((carrier === 'UA' && !fromCallsign(f)) || carrier === '') return true; // '' = unparseable ident, already UA-vetted upstream
     const route = boardRoute(f);
     const realT = isDep ? f?.time?.real?.departure : f?.time?.real?.arrival;
     const schedT = isDep ? f?.time?.scheduled?.departure : f?.time?.scheduled?.arrival;
@@ -498,12 +586,71 @@ export function dedupeBoardFlights(
       dedupe.operatorClones++;
       return false;
     }
-    if (UNITED_EXPRESS_CARRIERS.has(carrier)) return true;
+    if (fromCallsign(f) || UNITED_EXPRESS_CARRIERS.has(carrier)) return true;
     dedupe.foreign++;
     return false;
   });
 
   return { flights: result, dedupe };
+}
+
+// ── F4/F103: one hub day, one flight instance per row ──
+// AeroDataBox's window fetch returns every flight with ANY movement in the window, and some rows
+// splice two instances together. Observed on the Sep 26 ORD arrivals board (32 of 670 rows):
+//   - stale-estimate ghosts: yesterday's UA1677 never updated, its estimate parked at 00:02, shown
+//     as "+10h47m Landed* presumed" at the top of today's board;
+//   - cross-instance pairs: UA2113 departed on time two days ago and "arrived" today (+54h20m);
+//     UA5375's scheduled arrival (yesterday 20:30) is EARLIER than its scheduled departure;
+//   - yesterday's late-night flights (SFO UA2080 scheduled 23:59, off at 00:01) counted in today.
+// A scheduled time whose real counterpart is implausibly far from it belongs to another instance:
+// it is dropped, and a board-side scheduled time that is left empty is DERIVED from the real time
+// (flagged scheduleTimeDerivedFromActual, as the official-API path already does), so the row shows
+// what happened today with no fabricated delta and stays out of on-time/late and IROPS OTP. Then
+// the board keeps only rows whose board-side time falls inside the requested hub-local day.
+type ScheduleSide = 'departure' | 'arrival';
+
+export function repairScheduleInstance(flight: any, dir: string): { repaired: boolean } {
+  const sched = flight.time.scheduled;
+  const real = flight.time.real;
+  let repaired = false;
+  for (const side of ['departure', 'arrival'] as ScheduleSide[]) {
+    if (sched[side] && real[side] && !isPlausibleDelta(real[side], sched[side])) {
+      sched[side] = null;
+      repaired = true;
+    }
+  }
+  if (sched.departure && sched.arrival && sched.arrival < sched.departure) {
+    // Keep the side its own real time corroborates best; with no real times keep the board side.
+    const off = (side: ScheduleSide) => (real[side] ? Math.abs(real[side] - sched[side]) : null);
+    const dep = off('departure');
+    const arr = off('arrival');
+    const boardSide: ScheduleSide = dir === 'departures' ? 'departure' : 'arrival';
+    const drop: ScheduleSide =
+      dep == null && arr == null
+        ? (boardSide === 'departure' ? 'arrival' : 'departure')
+        : arr == null || (dep != null && dep <= arr) ? 'arrival' : 'departure';
+    sched[drop] = null;
+    repaired = true;
+  }
+  if (repaired) {
+    const derived = { departure: false, arrival: false };
+    for (const side of ['departure', 'arrival'] as ScheduleSide[]) {
+      if (!sched[side] && real[side]) {
+        sched[side] = real[side];
+        derived[side] = true;
+      }
+    }
+    if (derived.departure || derived.arrival) flight._source.scheduleTimeDerivedFromActual = derived;
+  }
+  return { repaired };
+}
+
+/** Is the row's board-side time inside [dayStart, dayEnd)? A row with no board-side time is kept. */
+export function isInHubDay(flight: any, dir: string, dayStart: number, dayEnd: number): boolean {
+  const side: ScheduleSide = dir === 'departures' ? 'departure' : 'arrival';
+  const t = flight.time.scheduled[side] || flight.time.real[side] || flight.time.estimated[side];
+  if (!t) return true;
+  return t >= dayStart && t < dayEnd;
 }
 
 // Per-instance cap on concurrent provider requests. RapidAPI's ULTRA plan limits requests PER
@@ -540,6 +687,28 @@ function releaseAdbSlot(): void {
   adbInFlight = Math.max(0, adbInFlight - 1);
   const next = adbWaiters.shift();
   if (next) next();
+}
+
+// F79: the in-flight cap above is per instance, and RapidAPI's per-second limit is account-wide.
+// A burst across N instances still collides (Sep 27 03:52Z: DEN and GUM arrivals gave up after 3
+// attempts), and a FIXED 1.5s/3s backoff made every instance that collided retry in the same
+// second and collide again. Jitter the backoff (0.5x-1.5x) so the retries spread out, treat
+// Retry-After as a floor (capped: one header must not stall a board), and allow a fourth attempt;
+// the caller's deadline bounds the total wait. AERODATABOX_RETRY_BASE_MS exists so tests can run
+// the retry path without sleeping.
+const ADB_MAX_ATTEMPTS = 4;
+const ADB_RETRY_AFTER_CAP_MS = 5000;
+
+export function adbRetryDelayMs(attempt: number, retryAfterHeader: string | null, rand: () => number = Math.random): number {
+  const configured = Number(process.env.AERODATABOX_RETRY_BASE_MS);
+  const base = Number.isFinite(configured) && configured >= 0 ? configured : 1500;
+  const retryAfterS = Number(retryAfterHeader);
+  const retryAfterMs =
+    retryAfterHeader != null && Number.isFinite(retryAfterS) && retryAfterS > 0
+      ? Math.min(retryAfterS * 1000, ADB_RETRY_AFTER_CAP_MS)
+      : 0;
+  if (retryAfterMs > 0) return retryAfterMs + Math.round(base * attempt * rand());
+  return Math.round(base * attempt * (0.5 + rand()));
 }
 
 async function fetchWindow(
@@ -582,10 +751,10 @@ async function fetchWindow(
 
   // Free RapidAPI plans throttle by requests-per-second, so a busy hub's window can get a 429 even
   // with the inter-window gap (concurrent cron/user traffic competes for the same per-second budget).
-  // Retry 429/503 a couple of times, honoring Retry-After, so a transient throttle doesn't leave the
-  // board permanently half-empty.
+  // Retry 429/503, honoring Retry-After, so a transient throttle doesn't leave the board
+  // permanently half-empty. The deadline still bounds every wait.
   const deadline = Date.now() + timeoutMs;
-  const maxAttempts = 3;
+  const maxAttempts = ADB_MAX_ATTEMPTS;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const remaining = deadline - Date.now();
     if (remaining < 800) break;
@@ -620,8 +789,7 @@ async function fetchWindow(
       if (resp.status === 204) return { ok: true, flights: [] };
       if (resp.status === 429 || resp.status === 503) {
         const body = await resp.text().catch(() => '');
-        const retryAfter = Number(resp.headers.get('retry-after'));
-        const backoff = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1500 * attempt;
+        const backoff = adbRetryDelayMs(attempt, resp.headers.get('retry-after'));
         if (attempt < maxAttempts && deadline - Date.now() > backoff + 800) {
           console.warn(`AeroDataBox ${resp.status} for ${hub} ${dir} (attempt ${attempt}); retrying in ${backoff}ms`);
           await new Promise((r) => setTimeout(r, backoff));
@@ -668,7 +836,7 @@ export async function fetchViaAeroDataBox(
   // Cross-instance daily spend stop: behave exactly as if the provider were unconfigured so
   // callers fall through to their existing degraded paths instead of burning more quota.
   // Authorized cron warms bypass the organic gate — their spend is hard-bounded by the warm ring
-  // itself (~384 units/day) and they are the one path that keeps boards from freezing, so organic
+  // itself (~768 units/day) and they are the one path that keeps boards from freezing, so organic
   // traffic must never starve them. Their units are still recorded against the organic budget,
   // and they keep a 3x absolute ceiling so a leaked cron secret cannot spend unboundedly. Both
   // gates hydrate first: an unhydrated ceiling reads a cold instance's 0 and is per-instance
@@ -735,26 +903,44 @@ export async function fetchViaAeroDataBox(
     }
   }
 
+  // The requested hub-local day. Callers pass its start, but snap anyway so an intra-day ts cannot
+  // shift the window (and so DST days are 23h/25h, not a fixed 86400).
+  const dayStart = getStartOfHubDay(hub.toUpperCase(), 0, new Date(ts * 1000));
+  const dayEnd = getStartOfHubDay(hub.toUpperCase(), 1, new Date(ts * 1000));
+  const operators = buildOperatorIndex(rawFlights, hub, dir);
+  const filtered = { partnerCodeshares: 0, offDay: 0, repaired: 0 };
+
   const seen = new Set<string>();
   const exactDeduped: any[] = [];
   for (const raw of rawFlights) {
     const normalized = normalizeFlight(raw, hub, dir);
     if (!normalized) continue;
+    // Both FIDS windows can return the same flight: collapse the repeat first so the filter
+    // counters below count flights, not window hits.
     const scheduleKey = dir === 'departures'
       ? normalized.time?.scheduled?.departure
       : normalized.time?.scheduled?.arrival;
     const key = `${normalized.identification?.number?.default || ''}:${scheduleKey || ''}:${normalized.airport?.origin?.code?.iata || ''}:${normalized.airport?.destination?.code?.iata || ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    if (isPartnerCodeshare(raw, hub, dir, operators)) {
+      filtered.partnerCodeshares++;
+      continue;
+    }
+    if (repairScheduleInstance(normalized, dir).repaired) filtered.repaired++;
+    if (!isInHubDay(normalized, dir, dayStart, dayEnd)) {
+      filtered.offDay++;
+      continue;
+    }
     exactDeduped.push(normalized);
   }
 
   // The exact key above intentionally includes the scheduled time, so schedule revisions,
   // operator-code clones and foreign codeshare leaks survive it — collapse those here.
   const { flights, dedupe } = dedupeBoardFlights(exactDeduped, dir);
-  if (dedupe.revisions > 0 || dedupe.operatorClones > 0 || dedupe.foreign > 0) {
+  if (dedupe.revisions > 0 || dedupe.operatorClones > 0 || dedupe.foreign > 0 || filtered.partnerCodeshares > 0 || filtered.offDay > 0) {
     console.log(
-      `AeroDataBox dedupe for ${hub} ${dir}: collapsed ${dedupe.revisions} schedule-revision dupes, ${dedupe.operatorClones} operator-code clones; dropped ${dedupe.foreign} foreign rows`
+      `AeroDataBox dedupe for ${hub} ${dir}: collapsed ${dedupe.revisions} schedule-revision dupes, ${dedupe.operatorClones} operator-code clones; dropped ${dedupe.foreign} foreign rows, ${filtered.partnerCodeshares} partner codeshares, ${filtered.offDay} off-day rows; repaired ${filtered.repaired} cross-instance schedules`
     );
   }
 
@@ -783,6 +969,7 @@ export async function fetchViaAeroDataBox(
       elapsedMs: Date.now() - startTime,
       source: 'aerodatabox',
       dedupe,
+      filtered,
     },
   };
 }
