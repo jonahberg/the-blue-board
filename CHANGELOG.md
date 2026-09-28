@@ -4,6 +4,19 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-09-28
+
+### Changed
+- **Shorter titles and descriptions site-wide.** All 69 pages: titles ≤60 characters (were up to 127), search phrase first, " | The Blue Board" only where it fits; descriptions ≤160 (were up to 338). Counts in fleet titles are computed from data. News articles keep their full headline in the h1, JSON-LD and RSS; `<title>` uses a short `seoTitle`. A build-output test fails any page over the limits. (`src/lib/page-seo.js`, layouts, `tests/seo-lengths.test.js`)
+- **Per-type Starlink counts on the fleet guides are computed at build time** from the live roster joined to the fleet database (was hand-typed). (`scripts/refresh-starlink-facts.mjs`, `src/data/starlink-facts.js`)
+- **Numbers United hasn't published are gone:** the 787-9 Studio upsell price and Elevated projections (now United's own "33 by 2028"), 757 retirement windows; MAX 10 and A321XLR delivery expectations now come from United's Q2 2026 10-Q.
+
+### Fixed
+- **ATC tracker:** Dayton (20th) and Louisville (21st) are live on electronic strips per the FAA — 20 of the FAA's 22 now named; FLL and IAD noted as active on the FAA dashboard pending an announcement.
+- **O'Hare:** the unsupported "~9,000 departures (~7.6%)" (a departures count paired with a seats percentage) replaced with the FAA's 2,708-operations/day cap (through Oct 30, 2027) and United's ~650 daily departures vs 780 planned.
+- **Fleet Wi-Fi:** the sheet's Thales, ViaSatPrtl, ViaSatKA? and Panasnc codes now display correctly ("Thales Ka (US)" is a new Wi-Fi filter option), matching United's per-tail provider data. N777UA is parked at Victorville, not retired.
+- Bot-walled united.com sources swapped for the matching United newsroom releases; the Guam MAX article says "unveiled", as United's release does.
+
 ## [1.10.0] - 2026-09-28
 
 Information audit: every fleet, Starlink, hub, route, project and news fact re-verified against current sources; three new news articles; fixes from the post-v1.9.1 live audit.

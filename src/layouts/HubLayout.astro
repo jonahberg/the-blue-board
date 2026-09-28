@@ -10,6 +10,7 @@
  * `<body data-hub-iata>` is the contract with `src/scripts/hub-live.ts`.
  */
 import { hubOrder, hubNavLabels } from '../data/hubs/index.js';
+import { hubSeo } from '../lib/page-seo.js';
 import BaseLayout from '../components/site/BaseLayout.astro';
 import Breadcrumbs from '../components/site/Breadcrumbs.astro';
 import HighlightBox from '../components/site/HighlightBox.astro';
@@ -19,6 +20,7 @@ import StatTile from '../components/site/StatTile.astro';
 
 const { data } = Astro.props;
 const iata: string = data.iata;
+const seo = hubSeo(data);
 const iataLower = iata.toLowerCase();
 const variant: string = data.variant;
 const airport = data.airportSchema;
@@ -71,15 +73,15 @@ const hubNavItems = hubOrder.map((h) => ({
 ---
 
 <BaseLayout
-  title={data.title}
-  description={data.description}
+  title={seo.title}
+  description={seo.description}
   canonical={`/hubs/${iataLower}`}
   ogImage={ogImage}
-  ogTitle={data.ogTitle}
-  ogDescription={data.ogDescription}
+  ogTitle={seo.ogTitle}
+  ogDescription={seo.ogDescription}
   ogImageAlt={data.ogImageAlt}
-  twitterTitle={data.twitterTitle}
-  twitterDescription={data.twitterDescription}
+  twitterTitle={seo.twitterTitle}
+  twitterDescription={seo.twitterDescription}
   jsonLd={[faqSchemaObj, airportSchemaObj]}
   dataAttrs={{ 'data-hub-iata': iata }}
 >

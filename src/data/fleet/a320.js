@@ -46,14 +46,14 @@ export const a320 = {
     "wingspan": "34.1 m (112 ft)",
     "length": "37.6 m (123 ft)"
   },
-  "title": "United Airlines Airbus A320 — 63 Aircraft, Seat Map & 2030 Retirement | The Blue Board",
-  "description": "United's 63 Airbus A320s: seat map, cabins, WiFi and IFE. A domestic workhorse now slated for retirement by ~2030 as the A321neo takes over its routes.",
+  "title": "United A320: {count} Aircraft & Seat Map",
+  "description": "United's {count} Airbus A320s: seat map, cabins, WiFi and IFE. A domestic workhorse now slated for retirement by ~2030 as the A321neo takes over its routes.",
   "keywords": "United Airlines A320, United A320 seat map, United A320 configuration, United A320 WiFi, United A320 retirement, UA A320",
-  "ogTitle": "United Airlines Airbus A320 — 63 Aircraft, Retiring by ~2030",
-  "ogDescription": "United's 63 Airbus A320s: seat maps, cabins, WiFi and IFE — a domestic workhorse being replaced by the A321neo.",
+  "ogTitle": "United Airlines Airbus A320 — {count} Aircraft, Retiring by ~2030",
+  "ogDescription": "United's {count} Airbus A320s: seat maps, cabins, WiFi and IFE — a domestic workhorse being replaced by the A321neo.",
   "ogImageAlt": "The Blue Board — United Airlines Airbus A320 Fleet",
-  "twitterTitle": "United Airlines Airbus A320 — 63 Aircraft, Retiring by ~2030",
-  "twitterDescription": "United's 63 Airbus A320s — seat maps, cabins, WiFi and IFE. A domestic workhorse being replaced by the A321neo.",
+  "twitterTitle": "United Airlines Airbus A320 — {count} Aircraft, Retiring by ~2030",
+  "twitterDescription": "United's {count} Airbus A320s — seat maps, cabins, WiFi and IFE. A domestic workhorse being replaced by the A321neo.",
   "breadcrumbName": "Airbus A320",
   "faqSchema": [
     {

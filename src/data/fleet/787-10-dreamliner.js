@@ -49,14 +49,14 @@ export const _787_10_dreamliner = {
     "wingspan": "60.1 m (197 ft)",
     "length": "68.3 m (224 ft)"
   },
-  "title": "United Airlines Boeing 787-10 Dreamliner — 21 Aircraft, Seat Map, WiFi & Cabins | The Blue Board",
-  "description": "United's 21 Boeing 787-10 Dreamliners, the longest and highest-capacity 787 at 318 seats. Seat maps, Polaris, GEnx-1B engines, WiFi and dense long-haul routes.",
+  "title": "United 787-10 Dreamliner: {count} Aircraft & Seat Maps",
+  "description": "United's {count} Boeing 787-10 Dreamliners, the longest and highest-capacity 787 at 318 seats. Seat maps, Polaris, GEnx-1B engines, WiFi and dense long-haul routes.",
   "keywords": "United Airlines 787-10, United 787-10 seat map, United 787-10 configuration, United 787-10 Polaris, United 787-10 WiFi, UA 787-10",
-  "ogTitle": "United Airlines Boeing 787-10 Dreamliner — 21-Aircraft Fleet Guide",
-  "ogDescription": "United's 21 Boeing 787-10s — the longest, highest-capacity Dreamliner at 318 seats. Seat maps, Polaris, GEnx-1B engines, WiFi and routes.",
+  "ogTitle": "United Airlines Boeing 787-10 Dreamliner — {count}-Aircraft Fleet Guide",
+  "ogDescription": "United's {count} Boeing 787-10s — the longest, highest-capacity Dreamliner at 318 seats. Seat maps, Polaris, GEnx-1B engines, WiFi and routes.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 787-10 Dreamliner Fleet",
-  "twitterTitle": "United Airlines Boeing 787-10 Dreamliner — 21-Aircraft Fleet Guide",
-  "twitterDescription": "21 United 787-10 Dreamliners — the longest 787, 318 seats, 44 Polaris, GEnx-1B engines, Starlink-bound WiFi. Seat maps and dense long-haul routes.",
+  "twitterTitle": "United Airlines Boeing 787-10 Dreamliner — {count}-Aircraft Fleet Guide",
+  "twitterDescription": "{count} United 787-10 Dreamliners — the longest 787, 318 seats, 44 Polaris, GEnx-1B engines, Starlink-bound WiFi. Seat maps and dense long-haul routes.",
   "breadcrumbName": "Boeing 787-10 Dreamliner",
   "faqSchema": [
     {

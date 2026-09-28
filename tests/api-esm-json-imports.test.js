@@ -152,7 +152,12 @@ describe('api/** never reaches an import that native Node ESM rejects (Vercel)',
     // Synthetic check: the walker must flag a bare JSON import two hops away from an api entry.
     const fixtureEntry = join(ROOT, 'src', 'data', 'starlink-facts.js');
     const offenders = findBareJsonImports(fixtureEntry);
-    expect(offenders).toEqual(['src/data/starlink-facts.js → ./starlink-live.json']);
+    // starlink-facts.js also reads fleet.json (the per-type Starlink join) — both bare imports
+    // must be flagged; it stays safe only because nothing under api/** imports it.
+    expect(offenders).toEqual([
+      'src/data/starlink-facts.js → ./starlink-live.json',
+      'src/data/starlink-facts.js → ../../public/data/fleet.json',
+    ]);
   });
 
   it('the walker flags each other load-failure class and exempts type-only imports', () => {

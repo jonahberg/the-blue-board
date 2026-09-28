@@ -2,6 +2,7 @@
 import { hubOrder, hubs } from '../../data/hubs/index.js';
 import { HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../../data/facts.js';
 import BaseLayout from '../../components/site/BaseLayout.astro';
+import { withBrand } from '../../lib/page-seo.js';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
 
@@ -17,8 +18,8 @@ for (const key of hubOrder) {
   };
 }
 
-const title = `United Airlines Hubs — ${HUB_LINE_SHORT}, Delays & Status | The Blue Board`;
-const description = `Live status across ${HUB_LINE_LONG}. Check delays, cancellations, on-time performance, and Starlink WiFi at ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, and GUM. Real-time operations dashboard for United frequent flyers.`;
+const title = withBrand('United Airlines Hubs: Live Delays & On-Time');
+const description = `Live delays, cancellations and on-time performance across ${HUB_LINE_LONG}: ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT and GUM.`;
 const shareTitle = `United Airlines Hubs — ${HUB_LINE_SHORT} & Live Status`;
 
 const faqs = [

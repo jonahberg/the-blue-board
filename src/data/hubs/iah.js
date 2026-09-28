@@ -3,13 +3,13 @@ import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../starlink-facts.js';
 export const iah = {
   "iata": "IAH",
   "variant": "full",
-  "title": "United Airlines IAH Hub Status — Houston Intercontinental Delays, On-Time Performance & Flight Tracker",
-  "description": "Live United Airlines status at George Bush Intercontinental Houston (IAH). AI-powered delay risk predictions, real-time delays, cancellations, on-time performance, Starlink WiFi aircraft, and departure schedules. United's Latin America gateway — updated every 30 seconds.",
+  "title": "United Houston Hub Delays & On-Time",
+  "description": "Live United delays, cancellations and on-time performance at Houston Intercontinental (IAH), United's Latin America gateway, with AI delay-risk predictions.",
   "keywords": "United Airlines IAH delays, United Houston hub status, United Airlines IAH on-time, United IAH cancellations today, United Airlines Houston delays, IAH flight status, United hub Houston, United Airlines Houston departures",
-  "ogTitle": "United Airlines IAH Hub — Live Houston Intercontinental Status",
+  "ogTitle": "United Houston (IAH) Hub — Live Delays & On-Time",
   "ogDescription": "Real-time United Airlines operations at Houston Intercontinental. AI delay predictions, cancellations, on-time %, Starlink WiFi fleet, and schedules.",
   "ogImageAlt": "The Blue Board — United Airlines IAH Hub Status",
-  "twitterTitle": "United Airlines IAH Hub — Live Houston Intercontinental Status",
+  "twitterTitle": "United Houston (IAH) Hub — Live Delays & On-Time",
   "twitterDescription": "AI delay predictions, cancellations, on-time performance at United's Latin America gateway. Updated every 30 seconds.",
   "breadcrumbName": "IAH — Houston",
   "faqSchema": [

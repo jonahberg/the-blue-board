@@ -3,13 +3,13 @@ import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../starlink-facts.js';
 export const lax = {
   "iata": "LAX",
   "variant": "full",
-  "title": "United Airlines LAX Status — Los Angeles Delays, On-Time Performance & Flight Tracker",
-  "description": "Live United Airlines status at Los Angeles International (LAX). AI-powered delay risk predictions, real-time delays, cancellations, on-time performance, Starlink WiFi aircraft, and departure schedules. United's Pacific gateway hub — updated every 30 seconds.",
+  "title": "United LAX Hub Delays & On-Time",
+  "description": "Live United delays, cancellations and on-time performance at Los Angeles (LAX), United's Pacific gateway hub, with AI delay-risk predictions.",
   "keywords": "United Airlines LAX delays, United Los Angeles status, United Airlines LAX on-time, United LAX cancellations today, United Airlines Los Angeles delays, LAX flight status, United LAX, United Airlines LAX departures",
-  "ogTitle": "United Airlines LAX — Live Los Angeles International Status",
+  "ogTitle": "United Los Angeles (LAX) Hub — Live Delays & On-Time",
   "ogDescription": "Real-time United Airlines operations at Los Angeles International. AI delay predictions, cancellations, on-time %, Starlink WiFi fleet, and schedules.",
   "ogImageAlt": "The Blue Board — United Airlines LAX Hub Status",
-  "twitterTitle": "United Airlines LAX — Live Los Angeles International Status",
+  "twitterTitle": "United Los Angeles (LAX) Hub — Live Delays & On-Time",
   "twitterDescription": "AI delay predictions, cancellations, on-time performance at United's Pacific gateway. Updated every 30 seconds.",
   "breadcrumbName": "LAX — Los Angeles",
   "faqSchema": [

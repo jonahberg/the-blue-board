@@ -7,11 +7,14 @@
  *
  * DATA MODEL:
  *   slug        — URL-safe identifier (a-z, 0-9, hyphens only)
- *   title       — Article headline
+ *   title       — Article headline (h1, JSON-LD, RSS; og:title when ≤70 chars)
+ *   seoTitle    — Optional short search headline for <title> (brand appended when it fits;
+ *                 derived from the text before the first ": " / " — " when absent)
  *   date        — ISO date string (YYYY-MM-DD)
  *   category    — Fleet | Routes | Lounges | Policy | Operations
  *   sources     — Array of { name, url } external references
- *   summary     — One-line description for index page + OG meta
+ *   summary     — One-line description for the index page and RSS
+ *   seoDescription — Optional ≤160-char meta description (falls back to summary)
  *   body        — Multi-paragraph HTML commentary (your analysis)
  *   tags        — Array of hub/fleet slugs for cross-linking
  *   ogImage     — Optional custom OG image URL (falls back to site default)
@@ -99,6 +102,7 @@ export const articles = [
       { name: 'Runway Girl Network', url: 'https://runwaygirlnetwork.com/2026/09/united-pipes-football-games-via-dish-to-starlink-enabled-seatback-ife/' },
     ],
     summary: 'A new deal with DISH puts live pro and college football on United\'s Starlink-equipped seatback screens (ABC, CBS, NBC, FOX, ESPN, NFL Network and more) on domestic flights through February. It\'s the clearest sign yet that Starlink is changing the product itself, not just making the Wi-Fi faster.',
+    seoDescription: 'United and DISH put live pro and college football on Starlink-equipped seatback screens on domestic flights through February, from ABC and CBS to ESPN.',
     body: `<p>For years, the rule for football fans was simple: don't book a flight during your team's game. United wants to kill that rule. On September 17 the airline announced an agreement with DISH to stream live professional and college football to seatback screens on its Starlink-equipped aircraft, starting that week and running through the big game in February. The channel lineup is the whole Sunday-and-Saturday package: ABC, CBS, NBC, FOX, FS1, ESPN, ESPN2, NFL Network and Thursday Night Football on Prime Video.</p>
 
 <p>The plumbing matters here. The broadcasts ride on DISH's OnStream platform and come down over the Starlink connection, so it reaches any aircraft that has both Starlink and a seatback screen. United puts that at more than 200 airplanes and about 700 flights a day, in every class of service, and it's domestic flights only for now. As with the Wi-Fi itself, it's free for MileagePlus members.</p>
@@ -114,6 +118,7 @@ export const articles = [
   {
     slug: 'united-app-standby-earlier-flights-irops',
     title: 'Keep Your Seat, Chase an Earlier One: United\'s App Now Works the Standby List for You',
+    seoTitle: 'United App: Standby for Earlier Flights',
     date: '2026-09-01',
     category: 'Operations',
     sources: [
@@ -122,6 +127,7 @@ export const articles = [
       { name: 'Aviation A2Z', url: 'https://aviationa2z.com/index.php/2026/09/02/united-airlines-new-standby-feature-could-make-non-rev-travel-even-harder/' },
     ],
     summary: 'If a disruption rebooks you onto a later flight, United\'s app now lets you stand by for up to three earlier flights to the same destination without giving up your confirmed seat, and texts you when one opens. It\'s a small feature aimed squarely at the worst hours of an IROPS day.',
+    seoDescription: 'Rebooked onto a later flight? United\'s app now lets you stand by for up to three earlier flights without giving up your confirmed seat, and texts you.',
     body: `<p>Anyone who lived through United's July 18 SHARES outage knows the move. You get rebooked onto a flight six hours later, then spend the afternoon refreshing the app hoping a seat opens on something earlier. On September 1, just ahead of Labor Day, United automated that ritual. Customers who've been rebooked to a later flight after a disruption can now add themselves to the standby list on up to three earlier flights. United monitors those flights and sends a text when a seat opens.</p>
 
 <p>The important detail is what you don't give up. You keep your confirmed reservation until you decide to switch. Standing by for an earlier flight no longer means betting your guaranteed seat on the chance of a better one. United calls the feature industry-first. The fine print limits it to "eligible earlier United flights to the same destination," and the release doesn't say which flights or fares qualify.</p>
@@ -137,6 +143,7 @@ export const articles = [
   {
     slug: 'united-2027-international-expansion-10-cities',
     title: 'Ten New Cities, Five on the XLR: United Unveils Its Biggest International Expansion Yet',
+    seoTitle: 'United Adds 10 New Cities for Summer 2027',
     date: '2026-08-25',
     category: 'Routes',
     sources: [
@@ -144,6 +151,7 @@ export const articles = [
       { name: 'Live and Let\'s Fly', url: 'https://liveandletsfly.com/united-airlines-2027-international-expansion/' },
     ],
     summary: 'For summer 2027, United is adding Okinawa, Luxembourg, Toulouse, Marseille, Ibiza, Valencia, Terceira, Ljubljana, Olbia and Catania, eight of which no other U.S. airline serves, plus LAX–Osaka, Dulles–Milan, Denver–Paris and a San Francisco–Tel Aviv restart. The A321XLR flies five of the new routes, and it goes international December 1.',
+    seoDescription: 'United adds 10 new international cities for summer 2027, eight unserved by any other U.S. airline, plus LAX–Osaka and Denver–Paris. The A321XLR flies five.',
     body: `<p>United calls this the largest international expansion in its history, and it's hard to argue. At an event at Newark on August 25, the airline announced 10 new international cities for 2027, three new routes to cities it already serves, and a restart. It also formally debuted the "Born to Explore" A321XLR as the airplane that will fly half of the new cities. By United's count it has added 58 international destinations since 2017 and now flies to more than 160.</p>
 
 <p>The new map in launch order: San Francisco–Okinawa on March 27 (3x weekly, 777-200ER). Newark–Luxembourg April 2 (daily, A321XLR). Dulles–Toulouse April 26 (daily, A321XLR). Newark–Ljubljana May 12 (4x weekly, 767-400ER). Newark–Olbia, Sardinia May 27 (3x weekly, 767-300ER). Newark–Catania, Sicily May 28 (4x weekly, 767-300ER). Newark–Ibiza May 31 (4x weekly, A321XLR). Newark–Valencia June 2 (3x weekly, A321XLR). Newark–Marseille June 4 (daily, A321XLR). And Newark–Terceira in the Azores on June 9 (3x weekly, 737 MAX 8). United says it will be the only U.S. airline flying nonstop to eight of the ten. As always, the routes are subject to government approval.</p>
@@ -159,6 +167,7 @@ export const articles = [
   {
     slug: 'united-shares-outage-summer-saturday',
     title: '75 Minutes of Downtime, a Full Day of Chaos: Anatomy of United\'s July 18 Meltdown',
+    seoTitle: 'United\'s July 18 SHARES Outage',
     date: '2026-07-18',
     category: 'Operations',
     sources: [
@@ -167,6 +176,7 @@ export const articles = [
       { name: 'AeroXplorer', url: 'https://aeroxplorer.com/articles/united-airlines-technology-outage-disrupts-thousands-of-passengers-across-the-us' },
     ],
     summary: 'United\'s SHARES reservation system went down for about 75 minutes on the morning of July 18 — and that was enough, on a peak-summer Saturday with East Coast storms already brewing, to cancel roughly 268 United flights and delay nearly four in ten. A case study in why airline IT failures never stay small.',
+    seoDescription: 'United\'s SHARES reservation system went down for about 75 minutes on July 18, enough on a peak Saturday to cancel ~268 flights and delay nearly four in ten.',
     body: `<p>If you were watching this board on Saturday, July 18, you saw it happen in real time: the delay bars going orange, then red, the cancellation count climbing, Dulles and Newark seizing up. Here's what was behind it. At about 6:00 a.m. Central, SHARES — the passenger service system that underpins United's check-in, boarding, and reservations — went down. It was restored by roughly 7:15 a.m. Seventy-five minutes of downtime. The disruption it caused lasted the rest of the weekend.</p>
 
 <p>The mechanics of why are worth understanding, because they're the same every time. When the reservation system is down, airplanes are fine and crews are fine — but nobody can be checked in, bags can't be tagged, and boarding stops. Every departure in that window leaves late or not at all. Late aircraft miss their next turn, crews time out, and the schedule starts eating itself. Do that at 6 a.m. — the morning bank, when the whole day's schedule is stacked up and ready to launch — on a summer Saturday, and you've poisoned the entire operation before breakfast.</p>
@@ -182,6 +192,7 @@ export const articles = [
   {
     slug: 'united-q2-2026-earnings-guidance-raise',
     title: 'The $175-Oil Bet Pays Out: United Beats Q2, Raises Guidance, Restores the Schedule',
+    seoTitle: 'United Q2 2026 Earnings: Beat and Raise',
     date: '2026-07-15',
     category: 'Operations',
     sources: [
@@ -190,6 +201,7 @@ export const articles = [
       { name: 'Aviation A2Z', url: 'https://aviationa2z.com/index.php/2026/07/17/united-airlines-to-retire-80-old-aircraft-in-2027/' },
     ],
     summary: 'United posted $1.99 in adjusted EPS against a $1.88 consensus and raised full-year guidance — while absorbing a fuel bill that\'s up 84% and nearly $6 billion higher than planned. The earnings call had the real news: the full schedule comes back this fall, 80-plus old jets retire in 2027, and Kirby says 20%-higher fares are here to stay.',
+    seoDescription: 'United beat Q2 2026 estimates ($1.99 adjusted EPS vs $1.88) and raised guidance despite an 84% higher fuel bill; the full schedule returns this fall.',
     body: `<p>Back in March, when jet fuel doubled in three weeks and Scott Kirby told employees United would plan for $175 oil by investing more instead of retrenching, we called it the boldest bet in the industry and said the proof would come in the numbers. The numbers are in. For the second quarter, United reported adjusted earnings of $1.99 per share against a Wall Street consensus of $1.88, on $17.67 billion in revenue, up 16% year over year. And rather than merely surviving the fuel shock, United raised its full-year adjusted EPS guidance to $9.00–$11.00 — while telling investors that fuel will cost it nearly $6 billion more this year than it planned. The quarter's fuel bill alone was $5.1 billion, up 84% from a year ago.</p>
 
 <p>Look inside the revenue and you see exactly the airline United has spent five years building. Premium revenue up 16%. Loyalty up 11%. Cargo up 23%. Even basic economy up 11%. The premium-heavy mix — all those Polaris suites and Premium Plus cabins we keep writing about — is precisely what's cushioning the fuel blow, because the customers up front don't disappear when fares rise. Margins did compress: 6.2% operating margin versus 8.7% a year ago, and United flagged that fuel volatility since early July will cost about $1.12 per share in the third quarter. The oil is real. The point is that United is absorbing it and still out-earning the estimates.</p>
@@ -205,6 +217,7 @@ export const articles = [
   {
     slug: 'united-a321xlr-elbow-room-economy-plus',
     title: 'Called It: United Will Now Sell You the A321XLR\'s Blocked Middle Seat',
+    seoTitle: 'United A321XLR Elbow Room Economy Plus',
     date: '2026-07-14',
     category: 'Policy',
     sources: [
@@ -213,6 +226,7 @@ export const articles = [
       { name: 'Live and Let\'s Fly', url: 'https://liveandletsfly.com/united-airlines-blocked-middle-seats-airbus-jets/' },
     ],
     summary: 'The blocked middle seats we covered in June are now an official product: United will sell an "extra elbow room" Economy Plus row on all 50 A321XLRs, with a custom table where the middle seat used to be and three extra inches of legroom. The staffing math we flagged hasn\'t gone anywhere — United just found a way to get paid for it.',
+    seoDescription: 'United will sell an "extra elbow room" Economy Plus row on all 50 A321XLRs: a table where the blocked middle seat was, plus three extra inches of legroom.',
     body: `<p>A month ago we wrote about the strangest detail on United's brand-new A321XLR: two middle seats, 32B and 32E, deliberately blocked off with fixed tray tables, and the quiet flight-attendant staffing math that explained why. We ended that piece with "file it under: confirmed on the XLR, fascinating everywhere else." Consider the file updated. On July 14, United made it official — and turned it into a product with a price tag.</p>
 
 <p>Here's the announcement: all 50 of United's A321XLRs will feature a special Economy Plus row where the middle seat is replaced by a custom table spanning armrest to armrest, plus three additional inches of legroom over standard Economy Plus. United is pitching it as "extra elbow room" — an economy seat with guaranteed space next to you, no middle-seat roulette, somewhere to put your laptop and your drink at the same time. It becomes bookable later this year; pricing hasn't been announced. Domestic XLR flying starts this fall, with international service into early 2027.</p>
@@ -228,6 +242,7 @@ export const articles = [
   {
     slug: 'united-787-9-elevated-n61101-grounded-again',
     title: 'The Flagship Is a Hangar Queen: N61101 Grounded Again, Days After Boeing "Fixed" It',
+    seoTitle: 'United 787-9 N61101 Grounded Again',
     date: '2026-07-04',
     category: 'Fleet',
     sources: [
@@ -236,6 +251,7 @@ export const articles = [
       { name: 'View from the Wing', url: 'https://viewfromthewing.com/uniteds-brand-new-boeing-787-with-fancy-polaris-suites-is-going-back-to-boeing-because-it-keeps-breaking/' },
     ],
     summary: 'N61101 — the first 787-9 with United\'s Elevated interior and the Polaris Studio suites — spent ten days back at Boeing for recurring collision-avoidance system failures, returned "fixed" on June 30, flew one clean domestic leg, and was grounded again on July 3. The most important airplane in United\'s fleet story keeps refusing to fly.',
+    seoDescription: 'N61101, United\'s first 787-9 with the Elevated interior and Polaris Studio suites, returned from Boeing "fixed" June 30 and was grounded again on July 3.',
     body: `<p>In March we wrote about United opening ticket sales for its first Boeing 787-9 with the new Elevated interior — the eight Polaris Studio suites, the next-generation pods with doors, the 99 premium seats that make it the showcase for everything United Next promises. That airplane is N61101. It is four months old. And it has now been grounded twice in two weeks, including once immediately after Boeing supposedly fixed it.</p>
 
 <p>The timeline reads like a bad relationship. Delivered from Boeing's Charleston line in late February, N61101 was trouble almost immediately — most visibly on April 24, when it turned around minutes after departing Singapore over an electrical burning smell. The recurring gremlin, though, is the TCAS — the traffic alert and collision avoidance system, the electronic last line of defense against midair collisions. An airliner cannot legally be dispatched with TCAS inoperative, so every failure strands the jet wherever it happens to be sitting. After repeated failures disrupted Singapore, London, and domestic rotations, United gave up on line maintenance and, on June 20, ferried the jet to Boeing's Moses Lake facility — the manufacturer taking its own four-month-old airplane back to figure out why it keeps breaking.</p>
@@ -251,6 +267,7 @@ export const articles = [
   {
     slug: 'united-first-transatlantic-starlink-777',
     title: 'Starlink Crosses the Atlantic: UA14 Becomes United\'s First Connected Widebody Flight',
+    seoTitle: 'United\'s First Starlink Widebody Flight',
     date: '2026-06-22',
     category: 'Fleet',
     sources: [
@@ -258,6 +275,7 @@ export const articles = [
       { name: 'AirlineGeeks', url: 'https://airlinegeeks.com/2026/06/22/united-reaches-new-milestone-in-starlink-rollout/' },
     ],
     summary: 'On June 22, a Boeing 777 operating UA14 from Newark to London Heathrow became United\'s first Starlink-equipped mainline widebody flight — free, fast internet finally arriving on the flights where it matters most, with roughly 400 aircraft equipped and the entire widebody fleet targeted by summer 2027.',
+    seoDescription: 'On June 22, a 777 on UA14 from Newark to London Heathrow became United\'s first Starlink widebody flight; the full widebody fleet is targeted by summer 2027.',
     body: `<p>The Starlink rollout we've been tracking since March just cleared its most meaningful milestone yet. On June 22, United flight UA14 from Newark to London Heathrow — flown by a Boeing 777 — became the airline's first mainline widebody service with Starlink aboard, and with it, United's first transatlantic flight offering the home-speed, free-for-MileagePlus-members internet it has been promising. The rollout that started on regional jets and worked through the 737s has finally reached the airplanes that cross oceans.</p>
 
 <p>This is the milestone that actually matters, and it's worth being clear about why. On a 90-minute hop, Wi-Fi is a nice-to-have. On a seven-hour crossing, connectivity is the difference between a workday and a write-off — and long-haul is precisely where legacy satellite systems have been at their worst: overloaded, oversubscribed, and priced like it's 2012. Low-earth-orbit service doesn't degrade mid-ocean the way the old geostationary systems do. The passengers with the most hours in the air, paying the highest fares, have had the worst internet. That inversion is what ended on June 22.</p>
@@ -271,6 +289,7 @@ export const articles = [
   {
     slug: 'united-a321xlr-blocked-middle-seat',
     title: 'The Blocked Middle Seat: Inside United\'s Plan to Fly the A321XLR With a Leaner Crew',
+    seoTitle: 'United A321XLR Blocked Middle Seat',
     date: '2026-06-12',
     category: 'Operations',
     sources: [
@@ -278,6 +297,7 @@ export const articles = [
       { name: 'Paddle Your Own Kanoo', url: 'https://www.paddleyourownkanoo.com/2026/06/10/united-airlines-is-reportedly-working-on-a-new-economy-product-with-a-blocked-middle-seat-to-reduce-flight-attendant-requirements/' },
           ],
     summary: 'United is blocking two middle seats on its new A321XLR to hold the cabin at 150 seats — a quiet move that keeps the jet under an FAA flight-attendant threshold. The airline calls it customer investment; the labor math tells a more interesting story.',
+    seoDescription: 'United is blocking two middle seats on its new A321XLR to hold the cabin at 150 seats, which keeps the jet under an FAA flight-attendant threshold.',
     body: `<p>Amid all the excitement over United's first A321XLR, eagle-eyed observers caught a strange detail in the cabin: two seats — 32B and 32E — blocked off by a fixed tray table, unusable. Why would an airline deliberately disable seats on a brand-new airplane it just spent a fortune to buy? The answer, reported in mid-June, is one of the more quietly clever pieces of airline math you'll see this year.</p>
 
 <p>It comes down to flight attendants. Under FAA rules (14 CFR §121.391), an airline needs one flight attendant for every 50 seats onboard — and those thresholds turn into real money over the life of a fleet. The wrinkle on the XLR is that its premium cabin, with enclosed Polaris suites, already pushes the staffing requirement up a notch. By blocking two seats and holding the cabin at exactly 150, United keeps the jet from crossing into the next bracket — which, as View from the Wing lays out, is the difference between four flight attendants and five on every single flight. One fewer crew position, across 50 airplanes, for decades.</p>
@@ -293,6 +313,7 @@ export const articles = [
   {
     slug: 'united-first-a321xlr-757-replacement',
     title: 'The 757 Replacement Arrives: United Takes Delivery of Its First A321XLR',
+    seoTitle: 'United Takes Delivery of Its First A321XLR',
     date: '2026-06-03',
     category: 'Fleet',
     sources: [
@@ -301,6 +322,7 @@ export const articles = [
       { name: 'Aerospace Global News', url: 'https://aerospaceglobalnews.com/news/united-airlines-first-airbus-a321xlr-delivered/' },
     ],
     summary: 'United took delivery of its first Airbus A321XLR on June 3 — the long-range narrowbody that finally retires the 757 on transatlantic flying, with 20 lie-flat Polaris suites, free Starlink Wi-Fi, and a 4,700-nautical-mile reach that opens "long and thin" city pairs no widebody could justify.',
+    seoDescription: 'United took delivery of its first Airbus A321XLR on June 3: the 757\'s transatlantic replacement, with 20 lie-flat Polaris suites and free Starlink Wi-Fi.',
     body: `<p>The airplane United spent all spring teasing is now sitting on the ground in Florida. On June 3, the airline took delivery of its first Airbus A321XLR — registration N64321 — ferried straight from the Airbus line in Hamburg to Tampa, where it goes in for Starlink installation before it ever carries a paying passenger. It's the first of 50 on order, and it enters revenue service this summer. After years of "what finally replaces the 757," United has its answer, and it has a tail number.</p>
 
 <p>Here's why this particular airplane matters more than the average fleet addition. The Boeing 757 was the industry's great irreplaceable workhorse: a narrowbody with the legs to cross the Atlantic, perfect for routes too thin to fill a widebody but too long for an ordinary single-aisle. Nothing built since could quite do the job — until the XLR. With roughly 4,700 nautical miles of range (about 8,700 km), it opens exactly the "long and thin" city pairs United has been circling for years: think Newark to Bogotá, Newark to Edinburgh, and a long list of secondary European and South American cities that could never justify a 767.</p>
@@ -316,6 +338,7 @@ export const articles = [
   {
     slug: 'united-summer-2026-transatlantic-routes',
     title: 'Split, Bari, Glasgow, Santiago — and Reykjavik: United\'s New European Map Goes Live',
+    seoTitle: 'United Summer 2026 Transatlantic Routes',
     date: '2026-05-27',
     category: 'Routes',
     sources: [
@@ -323,6 +346,7 @@ export const articles = [
       { name: 'Live and Let\'s Fly', url: 'https://liveandletsfly.com/united-airlines-2026-new-routes/' },
     ],
     summary: 'United\'s summer 2026 transatlantic push is now in the air: four new or returning Newark nonstops to secondary European cities, the airline\'s first-ever Washington-Dulles–Reykjavik route, and a year-round Newark–Seoul launch this fall — part of a network no other U.S. carrier comes close to matching.',
+    seoDescription: 'United\'s summer 2026 transatlantic routes: new or returning Newark nonstops to Split, Bari, Glasgow and Santiago, plus its first Dulles–Reykjavik flight.',
     body: `<p>The summer map United sketched out over the winter is now, finally, in the air. Over five weeks this spring the airline lit up a run of new and returning transatlantic routes out of its East Coast hubs — and the through-line is unmistakable: United is going after the secondary cities nobody else flies nonstop.</p>
 
 <p>Start with Newark. Split, Croatia kicked things off on April 30 (three times a week), followed by Bari, Italy on May 1 (four times a week) — both on a "high-J" Boeing 767-300 stuffed with premium seats: 46 Polaris business-class seats and 22 Premium Plus on the Split configuration alone. Then the narrowbodies took over: daily Newark–Glasgow returned on May 8, and Newark–Santiago de Compostela, the end of the Camino in northwest Spain, launched May 22 — both flown by the Boeing 737 MAX 8. A single-aisle MAX crossing the Atlantic to a Spanish pilgrimage town is its own quiet milestone, and a preview of exactly the thin-route economics the incoming A321XLR is built to exploit.</p>
@@ -341,9 +365,10 @@ export const articles = [
     date: '2026-03-24',
     category: 'Fleet',
     sources: [
-      { name: 'United Airlines Elevated', url: 'https://www.united.com/en/us/newsroom/elevated.html' },
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-03-24-United-to-Add-250-Planes-in-Next-Two-Years-Most-by-Any-Airline-Includes-New,-Premium-Customer-Experiences,-Aircraft-Variants,-Subfleet,-Seats-and-Amenities' },
     ],
     summary: 'United announces the most aircraft deliveries of any airline in a two-year period — 250+ new planes by April 2028, headlined by the Coastliner A321neo for transcon, the A321XLR for international, and a reimagined CRJ450 regional jet.',
+    seoDescription: 'United plans 250+ new aircraft by April 2028, led by the Coastliner A321neo for transcon, the A321XLR for international and a reimagined CRJ450.',
     body: `<p>United went big today. In a dual-city event out of Chicago and Los Angeles, the airline dropped the next phase of its United Next strategy: more than 250 new aircraft deliveries by April 2028 — the most by any airline in a two-year span — plus three entirely new aircraft variants. This is the kind of fleet announcement that changes the competitive landscape.</p>
 
 <p>Start with the one everyone's going to be talking about: the "Coastliner." It's a custom A321neo subfleet built from the ground up for transcontinental service between SFO, LAX, and Newark. That's it. Those routes, those hubs. And it makes sense — more than 10,000 passengers fly those corridors every day, connecting into United's global networks on both coasts: 17 Pacific destinations from the west coast, 42 Atlantic destinations from Newark. The Coastliner puts a widebody experience on a narrowbody frame: 20 all-aisle-access lie-flat Polaris seats, 12 Premium Plus seats (a first on any domestic narrowbody), 129 Economy seats, and a snack bar in the back of the cabin. United actually removed three seats to make room for it.</p>
@@ -365,12 +390,15 @@ export const articles = [
   {
     slug: 'united-elevated-relax-row-starlink-chefs-table',
     title: 'Relax Row, Free Starlink, Chef\'s Table: Inside United\'s Onboard Overhaul',
+    seoTitle: 'United Relax Row, Starlink & Chef\'s Table',
     date: '2026-03-24',
     category: 'Fleet',
     sources: [
-      { name: 'United Airlines Elevated', url: 'https://www.united.com/en/us/newsroom/elevated.html' },
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-03-24-United-to-Add-250-Planes-in-Next-Two-Years-Most-by-Any-Airline-Includes-New,-Premium-Customer-Experiences,-Aircraft-Variants,-Subfleet,-Seats-and-Amenities' },
+      { name: 'United Airlines Newsroom (Relax Row)', url: 'https://united.mediaroom.com/2026-03-24-Introducing-the-United-Relax-Row-Economy-Seats-that-Transform-into-a-Couch-for-More-Comfortable-International-Travel' },
     ],
     summary: 'Alongside 250+ new aircraft, United rolls out a full onboard experience overhaul — Relax Row for Economy long-haul, free Starlink for all MileagePlus members, a Chef\'s Table dining partnership, and seatback screens at every seat across 1,200+ planes.',
+    seoDescription: 'United\'s onboard overhaul: Relax Row for long-haul Economy, free Starlink for MileagePlus members, a Chef\'s Table partnership and seatback screens.',
     body: `<p>The fleet news grabbed the headlines today, but there's an equally important story buried in the details: United is overhauling what it actually feels like to sit on its airplanes, in every cabin, on every type of flight. This isn't a press release about one new seat or one new route — it's a top-to-bottom rethinking of the onboard product.</p>
 
 <p>The one that jumped off the page is the United Relax Row℠. It's a new Economy cabin product for long-haul international flights that transforms a row of standard economy seats into something closer to a couch. Full details are still coming, but the pitch is aimed squarely at the biggest gap in the airline pricing ladder: the traveler who can't stomach $8,000 for a transatlantic business class ticket but also doesn't want to spend 10 hours folded into a 31-inch seat. That's most people. Air New Zealand has had its Skycouch for years, and it has a cultishly devoted fanbase — if United's version lands well, it could become a quiet revenue monster on those SFO–Singapore and EWR–London legs where Economy passengers are willing to pay a bit more but not three times more.</p>
@@ -393,9 +421,10 @@ export const articles = [
     date: '2026-03-20',
     category: 'Operations',
     sources: [
-      { name: 'United Airlines Newsroom', url: 'https://www.united.com/en/us/newsroom/announcements/cision-125448' },
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/news-releases?item=125448' },
     ],
     summary: 'CEO Scott Kirby tells employees United is prepared for jet fuel prices that have more than doubled — planning for $175/barrel oil through 2027 while trimming ~5 points of near-term capacity and accelerating investments in new clubs, hub infrastructure, and all 120+ aircraft deliveries for 2026.',
+    seoDescription: 'Scott Kirby tells employees United is planning for $175/barrel oil through 2027, trimming ~5 points of capacity while still investing in clubs and hubs.',
     body: `<p>In a memo to employees, United CEO Scott Kirby laid out the airline's response to jet fuel prices that have more than doubled in three weeks following the war in Iran. Rather than the industry's typical playbook of cost cuts, furloughs, and deferred aircraft orders, Kirby says United will do the opposite: invest more.</p>
 
 <p>The math is sobering — at current prices, United faces an extra $11 billion in annual fuel expense, more than double the airline's best-ever annual profit. But Kirby points to three pillars of preparation: roughly triple the cash reserves United had entering COVID, industry-leading profit margins (United and Delta represented ~100% of total U.S. industry profitability in 2025), and the highest credit rating in 30+ years.</p>
@@ -409,12 +438,14 @@ export const articles = [
   {
     slug: 'united-opens-tickets-for-787-9-elevated-interior',
     title: 'United\'s First 787-9 with Polaris Studio Suites Enters Fleet April 22',
+    seoTitle: 'United 787-9 Polaris Studio Debuts April 22',
     date: '2026-03-19',
     category: 'Fleet',
     sources: [
       { name: 'PR Newswire (United Airlines)', url: 'https://www.prnewswire.com/news-releases/tickets-on-sale-today-for-uniteds-first-boeing-787-9-dreamliner-with-elevated-interior-flights-302718311.html' },
     ],
     summary: 'United begins selling tickets for its redesigned 787-9 Dreamliner featuring new Polaris Studio suites, 4K OLED screens at every seat, and Bluetooth connectivity throughout — inaugural SFO–Singapore flight departs April 22.',
+    seoDescription: 'United opens sales for its new 787-9 with Polaris Studio suites, 4K OLED screens and Bluetooth at every seat; the first SFO–Singapore flight is April 22.',
     body: `<p>United's long-teased "Elevated" interior is finally bookable. Starting today, travelers can purchase seats on the airline's redesigned 787-9 Dreamliner — the most premium-dense international aircraft in United's fleet, with 99 of 222 seats in premium cabins.</p>
 
 <p>The headliner is the new United Polaris Studio℠ suite: eight lie-flat, all-aisle-access seats that are 25% larger than standard Polaris seats, with privacy doors, a companion ottoman, wireless charging, and a massive 27-inch 4K OLED screen — the largest seatback display among U.S. carriers. Even Economy gets a meaningful upgrade: 13-inch 4K OLED screens with Bluetooth at every seat and larger overhead bins.</p>
@@ -429,11 +460,11 @@ export const articles = [
     date: '2026-03-19',
     category: 'Fleet',
     sources: [
-      { name: 'United Airlines Newsroom', url: 'https://www.united.com/en/us/newsroom' },
+      { name: 'United Airlines (via Stars and Stripes Guam)', url: 'https://guam.stripes.com/travel/united-airlines-boeing-737-max-8.html' },
       { name: 'AeroTime', url: 'https://www.aerotime.aero/articles/united-airlines-boeing-737-800-guam-max-aircraft' },
     ],
     summary: 'United Airlines has stationed its first Boeing 737 MAX aircraft at Guam, expanding its Pacific island hub with modern, fuel-efficient narrowbodies.',
-    body: `<p>United Airlines has delivered its first Boeing 737 MAX to its Guam hub, marking a significant fleet modernization for the airline's Pacific island operations. The 737 MAX replaces older 737-800s on key island-hopping routes across Micronesia.</p>
+    body: `<p>United Airlines has unveiled the first Boeing 737 MAX 8s based at its Guam hub, marking a significant fleet modernization for the airline's Pacific island operations. The 737 MAX replaces older 737-800s on key island-hopping routes across Micronesia.</p>
 
 <p>The MAX's improved range and fuel efficiency make it well-suited for Guam's unique route network, which connects far-flung island communities across thousands of miles of open ocean. United is the only major U.S. carrier serving Guam as a hub, and the fleet upgrade signals continued investment in the Pacific.</p>
 

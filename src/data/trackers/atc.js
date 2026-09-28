@@ -9,7 +9,7 @@
  *            "planned"     = in the FAA's Aug-2023 deployment waterfall with a published planned IOC date
  *            "paper"       = cut in the FAA's 2022 descope, restored to scope in 2025 — no published date
  *  - goLiveDate: ONLY where defensible — DOT OIG confirmed-actuals (sites 1–7) or event-dated press
- *    (DCA, MDW, AUS). Eight live airports have no published cutover date; they carry no goLiveDate.
+ *    (DCA, MDW, AUS, DAY, SDF). Eight live airports have no published cutover date; they carry no goLiveDate.
  *    Precision varies (YYYY-MM-DD vs YYYY-MM) to match what the source supports. Do not backfill
  *    from the waterfall — planned IOC dates are not go-live dates.
  *  - plannedIoc: the airport's slot in the FAA's Aug-2023 waterfall (DOT OIG report AV2024031,
@@ -73,7 +73,9 @@ export const atcMeta = {
   },
   changelog: [
     { date: "2026-09-22", entry: "Transportation Secretary Duffy asks Congress for another $30B — $10B each for software and telecom, airports, and towers. Like the coalition's $20B ask, not yet appropriated." },
-    { date: "2026-09-16", entry: "The FAA's own progress sheet now counts 22 of 89 towers on electronic strips — four more than the 18 we can name, so four cutovers haven't been publicly announced yet. Copper-to-fiber conversion reaches 65%." },
+    { date: "2026-09-16", entry: "The FAA's own progress sheet now counts 22 of 89 towers on electronic strips — two more than the 20 we can name, so two cutovers haven't been publicly announced yet. Copper-to-fiber conversion reaches 65%." },
+    { date: "2026-08-27", entry: "Louisville (SDF) becomes the 21st airport to drop paper strips, per the FAA." },
+    { date: "2026-08-19", entry: "Dayton (DAY) becomes the 20th — a tower cut from the program in 2022 and restored in 2025." },
     { date: "2026-07-27", entry: "Tracker first published — 18 airports live, 71 still on paper." },
     { date: "2026-07-15", entry: "The Modern Skies Coalition — 66 aviation groups — asks Congress for another $20B. Not yet appropriated." },
     { date: "2026-07-14", entry: "Austin (AUS) becomes the 18th airport to drop paper strips." },
@@ -254,6 +256,40 @@ export const atcAirports = [
       "sources": [
           "https://fedscoop.com/faa-digital-flight-strip-system-atc-modernization/",
           "https://www.yahoo.com/news/us/articles/austin-airport-begins-transition-electronic-133238558.html"
+      ]
+  },
+  {
+      "id": "day",
+      "code": "DAY",
+      "name": "James M. Cox Dayton International",
+      "city": "Dayton",
+      "state": "OH",
+      "lat": 39.9024,
+      "lng": -84.2194,
+      "status": "live",
+      "goLiveDate": "2026-08",
+      "note": "20th tower off paper, per the FAA — one of the towers cut from the program in 2022 and restored in 2025.",
+      "sources": [
+          "https://x.com/FAANews/status/2090161429454155913",
+          "https://modernskies.faa.gov/",
+          "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
+      ]
+  },
+  {
+      "id": "sdf",
+      "code": "SDF",
+      "name": "Louisville Muhammad Ali International",
+      "city": "Louisville",
+      "state": "KY",
+      "lat": 38.1706,
+      "lng": -85.7351,
+      "status": "live",
+      "goLiveDate": "2026-08",
+      "note": "21st tower off paper, per the FAA — about eight months ahead of its April 2027 slot in the 2023 schedule.",
+      "sources": [
+          "https://www.yahoo.com/news/us/articles/louisville-airport-gets-groundbreaking-upgrade-164434485.html",
+          "https://modernskies.faa.gov/",
+          "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
       ]
   },
   {
@@ -539,21 +575,6 @@ export const atcAirports = [
       ]
   },
   {
-      "id": "sdf",
-      "code": "SDF",
-      "name": "Louisville Muhammad Ali International",
-      "city": "Louisville",
-      "state": "KY",
-      "lat": 38.1706,
-      "lng": -85.7351,
-      "status": "planned",
-      "plannedIoc": "2027-04-27",
-      "sources": [
-          "https://modernskies.faa.gov/",
-          "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
-      ]
-  },
-  {
       "id": "ord",
       "code": "ORD",
       "name": "Chicago O'Hare International",
@@ -594,6 +615,7 @@ export const atcAirports = [
       "lng": -77.4558,
       "status": "planned",
       "plannedIoc": "2027-08-03",
+      "note": "Shows as active on the FAA’s Modern Skies dashboard as of Sept. 28, 2026, but we haven’t found an announcement — still listed as planned until one appears.",
       "sources": [
           "https://modernskies.faa.gov/",
           "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
@@ -624,6 +646,7 @@ export const atcAirports = [
       "lng": -80.1527,
       "status": "planned",
       "plannedIoc": "2027-09-28",
+      "note": "Shows as active on the FAA’s Modern Skies dashboard as of Sept. 28, 2026, but we haven’t found an announcement — still listed as planned until one appears.",
       "sources": [
           "https://modernskies.faa.gov/",
           "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
@@ -975,20 +998,6 @@ export const atcAirports = [
       "state": "SC",
       "lat": 32.8962,
       "lng": -80.0382,
-      "status": "paper",
-      "sources": [
-          "https://modernskies.faa.gov/",
-          "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
-      ]
-  },
-  {
-      "id": "day",
-      "code": "DAY",
-      "name": "James M. Cox Dayton International",
-      "city": "Dayton",
-      "state": "OH",
-      "lat": 39.9024,
-      "lng": -84.2194,
       "status": "paper",
       "sources": [
           "https://modernskies.faa.gov/",

@@ -44,14 +44,14 @@ export const _737_900 = {
     "wingspan": "34.3 m (113 ft)",
     "length": "42.1 m (138 ft)"
   },
-  "title": "United Airlines Boeing 737-900 — 12 Aircraft: Seat Map, WiFi & Specs | The Blue Board",
-  "description": "United Airlines' 12 Boeing 737-900s — a small, older high-density 737 subfleet. Seat map, cabins, WiFi, IFE and delivery dates, refreshed for mid-2026.",
+  "title": "United 737-900: {count} Aircraft & Seat Map",
+  "description": "United Airlines' {count} Boeing 737-900s — a small, older high-density 737 subfleet. Seat map, cabins, WiFi, IFE and delivery dates, refreshed for mid-2026.",
   "keywords": "United Airlines 737-900, United 737-900 seat map, United 737-900 vs 737-900ER, United 737-900 WiFi, UA 737-900",
-  "ogTitle": "United Airlines Boeing 737-900 — 12 Aircraft, Seat Map & WiFi",
-  "ogDescription": "United's 12 Boeing 737-900s — the small, older non-ER subfleet. Seat map, cabins, WiFi, IFE, specs and delivery dates.",
+  "ogTitle": "United Airlines Boeing 737-900 — {count} Aircraft, Seat Map & WiFi",
+  "ogDescription": "United's {count} Boeing 737-900s — the small, older non-ER subfleet. Seat map, cabins, WiFi, IFE, specs and delivery dates.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 737-900 Fleet",
-  "twitterTitle": "United Airlines Boeing 737-900 — 12 Aircraft, Seat Map & WiFi",
-  "twitterDescription": "United's 12 Boeing 737-900s — small, older high-density subfleet. Seat configs, WiFi, specs and delivery dates.",
+  "twitterTitle": "United Airlines Boeing 737-900 — {count} Aircraft, Seat Map & WiFi",
+  "twitterDescription": "United's {count} Boeing 737-900s — small, older high-density subfleet. Seat configs, WiFi, specs and delivery dates.",
   "breadcrumbName": "Boeing 737-900",
   "faqSchema": [
     {

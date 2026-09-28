@@ -1,3 +1,8 @@
+import { STARLINK_ROSTER_AS_OF, starlinkForType } from '../starlink-facts.js';
+
+/** Build-time Starlink join (roster × fleet DB) for this type — see src/data/starlink-facts.js. */
+const SL = starlinkForType('737-800');
+
 export const _737_800 = {
   "slug": "737-800",
   "typeCode": "737-800",
@@ -44,14 +49,14 @@ export const _737_800 = {
     "wingspan": "34.3 m (113 ft)",
     "length": "39.5 m (130 ft)"
   },
-  "title": "United Airlines Boeing 737-800 — 141 Aircraft & First Starlink Jet | The Blue Board",
-  "description": "United Airlines' 141 Boeing 737-800s — the first mainline jet to fly free Starlink WiFi (Oct 2025). Seat maps, cabins, Signature Interior, IFE and more.",
+  "title": "United 737-800: {count} Aircraft & Seat Maps",
+  "description": "United Airlines' {count} Boeing 737-800s — the first mainline jet to fly free Starlink WiFi (Oct 2025). Seat maps, cabins, Signature Interior, IFE and more.",
   "keywords": "United Airlines 737-800, United 737-800 seat map, United 737-800 Starlink, first mainline Starlink flight, UA2940, United 737-800 WiFi",
-  "ogTitle": "United Airlines 737-800 — 141 Aircraft, First Mainline Starlink Jet",
-  "ogDescription": "United's 141 Boeing 737-800s — the first mainline aircraft to fly Starlink WiFi (Oct 15 2025, UA2940 EWR–IAH). Seat maps, cabins, Signature Interior and IFE.",
+  "ogTitle": "United Airlines 737-800 — {count} Aircraft, First Mainline Starlink Jet",
+  "ogDescription": "United's {count} Boeing 737-800s — the first mainline aircraft to fly Starlink WiFi (Oct 15 2025, UA2940 EWR–IAH). Seat maps, cabins, Signature Interior and IFE.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 737-800 Fleet",
-  "twitterTitle": "United Airlines 737-800 — 141 Aircraft, First Mainline Starlink Jet",
-  "twitterDescription": "United's 141 Boeing 737-800s — first mainline jet with Starlink WiFi. Seat configs, Signature Interior, WiFi and delivery dates.",
+  "twitterTitle": "United Airlines 737-800 — {count} Aircraft, First Mainline Starlink Jet",
+  "twitterDescription": "United's {count} Boeing 737-800s — first mainline jet with Starlink WiFi. Seat configs, Signature Interior, WiFi and delivery dates.",
   "breadcrumbName": "Boeing 737-800",
   "faqSchema": [
     {
@@ -64,7 +69,7 @@ export const _737_800 = {
     },
     {
       "question": "Does the United 737-800 have Starlink WiFi?",
-      "answer": "Yes. A United 737-800 was the first mainline aircraft to fly with Starlink, on October 15, 2025. Starlink is free for MileagePlus members and had reached 94 of the 141 -800s as of 28 Sep 2026; most of the rest use Viasat Ka-band."
+      "answer": `Yes. A United 737-800 was the first mainline aircraft to fly with Starlink, on October 15, 2025. Starlink is free for MileagePlus members and had reached ${SL.equipped} of the ${SL.total} -800s as of ${STARLINK_ROSTER_AS_OF}; most of the rest use Viasat Ka-band.`
     },
     {
       "question": "When was United's first mainline Starlink flight?",
@@ -115,5 +120,5 @@ export const _737_800 = {
       "label": "All Types"
     }
   ],
-  "contentHtml": "<div class=\"section\"><h2 id=\"overview\">Overview</h2><p>The <strong>Boeing 737-800</strong> is the <strong>most numerous type</strong> in United's fleet with <strong>141 aircraft</strong>, delivered between 1998 and 2017 — the backbone of domestic operations. On <strong>October 15, 2025</strong> a United 737-800 became the <strong>first mainline aircraft to fly with Starlink WiFi</strong> (flight UA2940, Newark–Houston), and the type is now being retrofitted with United's <strong>Signature Interior</strong> — seatback 4K screens, Bluetooth audio, power at every seat and larger overhead bins.</p><div class=\"highlight-box\"><strong>Key facts:</strong> 141 aircraft · Most numerous type · First mainline Starlink jet (Oct 2025) · Signature Interior retrofit underway · Multiple seat configs</div></div><div class=\"section\"><h2 id=\"seat-config\">Seat Configuration</h2><table class=\"config-table\"><thead><tr><th>Config</th><th>Count</th><th>First</th><th>E+</th><th>Economy</th><th>Total</th></tr></thead><tbody><tr><td><strong>Primary</strong></td><td>137</td><td>16</td><td>54</td><td>96</td><td>166</td></tr><tr><td>Variant A</td><td>4</td><td>16</td><td>42</td><td>108</td><td>166</td></tr></tbody></table></div><div class=\"section\"><h2 id=\"wifi\">WiFi & In-Flight Entertainment</h2><p>The 737-800 leads United's mainline <strong>Starlink</strong> rollout: it was the first Boeing type FAA-certified for the system, and 94 of the 141 had it as of 28 Sep 2026. Starlink is <strong>free for MileagePlus members</strong> and replaces the older Viasat Ka-band system, which the rest of the fleet still carries pending its install. Most aircraft have AVOD seatback screens, with the Signature Interior adding 4K seatback screens to more of the fleet.</p></div><div class=\"section\"><h2 id=\"routes\">Routes & Hubs</h2><p>All United hubs, domestic workhorse for short to medium-haul.</p><h3>Related Aircraft</h3><p>Other 737s: <a href=\"/fleet/737-max-9\">MAX 9</a> (178), <a href=\"/fleet/737-max-8\">MAX 8</a> (123), <a href=\"/fleet/737-900er\">737-900ER</a> (136), <a href=\"/fleet/737-900\">737-900</a> (12), <a href=\"/fleet/737-700\">737-700</a> (40).</p></div>"
+  "contentHtml": `<div class=\"section\"><h2 id=\"overview\">Overview</h2><p>The <strong>Boeing 737-800</strong> is the <strong>most numerous type</strong> in United's fleet with <strong>141 aircraft</strong>, delivered between 1998 and 2017 — the backbone of domestic operations. On <strong>October 15, 2025</strong> a United 737-800 became the <strong>first mainline aircraft to fly with Starlink WiFi</strong> (flight UA2940, Newark–Houston), and the type is now being retrofitted with United's <strong>Signature Interior</strong> — seatback 4K screens, Bluetooth audio, power at every seat and larger overhead bins.</p><div class=\"highlight-box\"><strong>Key facts:</strong> 141 aircraft · Most numerous type · First mainline Starlink jet (Oct 2025) · Signature Interior retrofit underway · Multiple seat configs</div></div><div class=\"section\"><h2 id=\"seat-config\">Seat Configuration</h2><table class=\"config-table\"><thead><tr><th>Config</th><th>Count</th><th>First</th><th>E+</th><th>Economy</th><th>Total</th></tr></thead><tbody><tr><td><strong>Primary</strong></td><td>137</td><td>16</td><td>54</td><td>96</td><td>166</td></tr><tr><td>Variant A</td><td>4</td><td>16</td><td>42</td><td>108</td><td>166</td></tr></tbody></table></div><div class=\"section\"><h2 id=\"wifi\">WiFi & In-Flight Entertainment</h2><p>The 737-800 leads United's mainline <strong>Starlink</strong> rollout: it was the first Boeing type FAA-certified for the system, and ${SL.equipped} of the ${SL.total} had it as of ${STARLINK_ROSTER_AS_OF}. Starlink is <strong>free for MileagePlus members</strong> and replaces the older Viasat Ka-band system, which the rest of the fleet still carries pending its install. Most aircraft have AVOD seatback screens, with the Signature Interior adding 4K seatback screens to more of the fleet.</p></div><div class=\"section\"><h2 id=\"routes\">Routes & Hubs</h2><p>All United hubs, domestic workhorse for short to medium-haul.</p><h3>Related Aircraft</h3><p>Other 737s: <a href=\"/fleet/737-max-9\">MAX 9</a> (178), <a href=\"/fleet/737-max-8\">MAX 8</a> (123), <a href=\"/fleet/737-900er\">737-900ER</a> (136), <a href=\"/fleet/737-900\">737-900</a> (12), <a href=\"/fleet/737-700\">737-700</a> (40).</p></div>`
 };

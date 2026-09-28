@@ -49,14 +49,14 @@ export const _767_400er = {
     "wingspan": "51.9 m (170 ft)",
     "length": "61.4 m (201 ft)"
   },
-  "title": "United Airlines Boeing 767-400ER — 16 Aircraft, Polaris & Premium Plus Seat Map | The Blue Board",
-  "description": "United's 16 Boeing 767-400ERs offer 34 Polaris (1-1-1) and Premium Plus on Newark & Dulles transatlantic, São Paulo, and Newark–Honolulu. Retiring by ~2030.",
+  "title": "United 767-400ER: {count} Aircraft & Seat Map",
+  "description": "United's {count} Boeing 767-400ERs offer 34 Polaris (1-1-1) and Premium Plus on Newark & Dulles transatlantic, São Paulo, and Newark–Honolulu. Retiring by ~2030.",
   "keywords": "United Airlines 767-400ER, United 767-400ER seat map, United Airlines 767-400ER configuration, United 767-400ER Polaris, United 767-400ER Premium Plus, United 767-400ER WiFi, United 767-400ER Newark Honolulu, United 767-400ER retirement, UA 767-400ER",
-  "ogTitle": "United Airlines Boeing 767-400ER — 16 Aircraft, Retrofitted Polaris Flagship",
-  "ogDescription": "16 Boeing 767-400ERs with 34 Polaris and 24 Premium Plus seats (retrofitted 2022–23), flying Newark and Dulles transatlantic, São Paulo, and Newark–Honolulu.",
+  "ogTitle": "United 767-400ER — {count} Aircraft, Retrofitted Polaris Flagship",
+  "ogDescription": "{count} Boeing 767-400ERs with 34 Polaris and 24 Premium Plus seats (retrofitted 2022–23), flying Newark and Dulles transatlantic, São Paulo, and Newark–Honolulu.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 767-400ER Fleet",
-  "twitterTitle": "United Airlines Boeing 767-400ER — Retrofitted Polaris Flagship",
-  "twitterDescription": "United's 16 Boeing 767-400ERs: 34 Polaris (1-1-1) + Premium Plus, transatlantic from Newark & Dulles plus Newark–Honolulu. Retiring by ~2030. Seat map & registry.",
+  "twitterTitle": "United 767-400ER — {count} Aircraft, Retrofitted Polaris Flagship",
+  "twitterDescription": "United's {count} Boeing 767-400ERs: 34 Polaris (1-1-1) + Premium Plus, transatlantic from Newark & Dulles plus Newark–Honolulu. Retiring by ~2030. Seat map.",
   "breadcrumbName": "Boeing 767-400ER",
   "faqSchema": [
     {

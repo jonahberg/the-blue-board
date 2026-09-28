@@ -44,14 +44,14 @@ export const _737_700 = {
     "wingspan": "34.3 m (113 ft)",
     "length": "33.6 m (110 ft)"
   },
-  "title": "United Airlines Boeing 737-700 — 40 Aircraft: Seat Map, WiFi & Specs | The Blue Board",
-  "description": "United Airlines' 40 Boeing 737-700s — the smallest and oldest mainline 737 still flying. Seat map, cabins, WiFi, IFE and delivery dates, updated 2026.",
+  "title": "United 737-700: {count} Aircraft & Seat Map",
+  "description": "United Airlines' {count} Boeing 737-700s — the smallest and oldest mainline 737 still flying. Seat map, cabins, WiFi, IFE and delivery dates, updated 2026.",
   "keywords": "United Airlines 737-700, United 737-700 seat map, United 737-700 WiFi, United 737-700 retirement, oldest United 737, UA 737-700",
-  "ogTitle": "United Airlines Boeing 737-700 — 40 Aircraft, Seat Map & WiFi",
-  "ogDescription": "United's 40 Boeing 737-700s — its smallest, oldest mainline 737. Seat map, cabins, WiFi, IFE, specs and delivery dates.",
+  "ogTitle": "United Airlines Boeing 737-700 — {count} Aircraft, Seat Map & WiFi",
+  "ogDescription": "United's {count} Boeing 737-700s — its smallest, oldest mainline 737. Seat map, cabins, WiFi, IFE, specs and delivery dates.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 737-700 Fleet",
-  "twitterTitle": "United Airlines Boeing 737-700 — 40 Aircraft, Seat Map & WiFi",
-  "twitterDescription": "United's 40 Boeing 737-700s — smallest and oldest mainline 737. Seat configs, WiFi, specs and delivery dates.",
+  "twitterTitle": "United Airlines Boeing 737-700 — {count} Aircraft, Seat Map & WiFi",
+  "twitterDescription": "United's {count} Boeing 737-700s — smallest and oldest mainline 737. Seat configs, WiFi, specs and delivery dates.",
   "breadcrumbName": "Boeing 737-700",
   "faqSchema": [
     {

@@ -49,14 +49,14 @@ export const _777_200er = {
     "wingspan": "60.9 m (200 ft)",
     "length": "63.7 m (209 ft)"
   },
-  "title": "United Airlines Boeing 777-200ER — 55 Aircraft, Polaris & Seat Map Guide | The Blue Board",
-  "description": "United's 55 Boeing 777-200ERs anchor long-haul international with 50 Polaris lie-flats. A mixed Pratt & GE fleet, and the 777 that led United's Starlink rollout.",
+  "title": "United 777-200ER: {count} Aircraft & Seat Map",
+  "description": "United's {count} Boeing 777-200ERs anchor long-haul international with 50 Polaris lie-flats: a mixed Pratt & GE fleet that led United's Starlink rollout.",
   "keywords": "United Airlines 777-200ER, United 777-200ER seat map, United 777-200ER Polaris, United 777-200ER engines, United 777-200ER Starlink, UA 777-200ER",
-  "ogTitle": "United Airlines 777-200ER — 55 Aircraft, Polaris Long-Haul Fleet",
-  "ogDescription": "United's 55 Boeing 777-200ERs: a 276-seat international layout with 50 Polaris lie-flats, a mixed Pratt & GE fleet leading United's Starlink widebody rollout.",
+  "ogTitle": "United Airlines 777-200ER — {count} Aircraft, Polaris Long-Haul Fleet",
+  "ogDescription": "United's {count} Boeing 777-200ERs: a 276-seat international layout with 50 Polaris lie-flats, a mixed Pratt & GE fleet leading United's Starlink widebody rollout.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 777-200ER Fleet",
-  "twitterTitle": "United Airlines 777-200ER — 55 Aircraft, Polaris Long-Haul Fleet",
-  "twitterDescription": "United's 55 Boeing 777-200ERs. 276 seats · 50 Polaris lie-flats · mixed Pratt/GE fleet · long-haul international. Seat map, WiFi & Starlink status.",
+  "twitterTitle": "United Airlines 777-200ER — {count} Aircraft, Polaris Long-Haul Fleet",
+  "twitterDescription": "United's {count} Boeing 777-200ERs. 276 seats · 50 Polaris lie-flats · mixed Pratt/GE fleet · long-haul international. Seat map, WiFi & Starlink status.",
   "breadcrumbName": "Boeing 777-200ER",
   "faqSchema": [
     {

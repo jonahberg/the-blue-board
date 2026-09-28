@@ -31,12 +31,12 @@ import { SITE_URL } from './site.js';
 const FLEET_COUNT_TEXT = FLEET_DB_COUNT.toLocaleString('en-US');
 
 /** `<title>` / `og:title`. */
-export const HOME_TITLE = 'The Blue Board | United Airlines Flight Tracker & Ops Dashboard';
+export const HOME_TITLE = 'United Airlines Flight Tracker & Hub Delays | The Blue Board';
 
 /** `<meta name="description">`. */
 export const HOME_DESCRIPTION =
-  'The Blue Board is an independent United Airlines flight tracker and operations dashboard '
-  + 'with live flight status, hub delays, fleet data, Starlink coverage, schedules, and weather.';
+  'Independent United Airlines flight tracker and ops dashboard: live flight status, hub '
+  + 'delays, fleet data, Starlink coverage, schedules and weather.';
 
 /**
  * The crawlable page brief. Rendered inside `<section class="sr-only">` BEFORE any

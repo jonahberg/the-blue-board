@@ -1,3 +1,8 @@
+import { STARLINK_ROSTER_AS_OF, starlinkForType } from '../starlink-facts.js';
+
+/** Build-time Starlink join (roster × fleet DB) for this type — see src/data/starlink-facts.js. */
+const SL = starlinkForType('737-900ER');
+
 export const _737_900er = {
   "slug": "737-900er",
   "typeCode": "737-900ER",
@@ -44,14 +49,14 @@ export const _737_900er = {
     "wingspan": "34.3 m (113 ft)",
     "length": "42.1 m (138 ft)"
   },
-  "title": "United Airlines Boeing 737-900ER — 136 Aircraft: Seat Map, WiFi & Specs | The Blue Board",
-  "description": "United Airlines' 136 Boeing 737-900ERs — high-density domestic trunk jet. Seat maps, cabins, Viasat/Starlink WiFi, Signature Interior and delivery dates.",
+  "title": "United 737-900ER: {count} Aircraft & Seat Maps",
+  "description": "United Airlines' {count} Boeing 737-900ERs — high-density domestic trunk jet. Seat maps, cabins, Viasat/Starlink WiFi, Signature Interior and delivery dates.",
   "keywords": "United Airlines 737-900ER, United 737-900ER seat map, United 737-900ER Starlink, United 737-900ER Signature Interior, United 737-900ER WiFi, UA 737-900ER",
-  "ogTitle": "United Airlines 737-900ER — 136 Aircraft, Seat Map & WiFi",
-  "ogDescription": "United's 136 Boeing 737-900ERs — high-density domestic trunk jet. Seat maps, cabins, WiFi, Signature Interior, specs and delivery dates.",
+  "ogTitle": "United Airlines 737-900ER — {count} Aircraft, Seat Map & WiFi",
+  "ogDescription": "United's {count} Boeing 737-900ERs — high-density domestic trunk jet. Seat maps, cabins, WiFi, Signature Interior, specs and delivery dates.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 737-900ER Fleet",
-  "twitterTitle": "United Airlines 737-900ER — 136 Aircraft, Seat Map & WiFi",
-  "twitterDescription": "United's 136 Boeing 737-900ERs — high-density trunk jet. Starlink on more than half the fleet, Viasat on the rest. Seat configs, specs and delivery dates.",
+  "twitterTitle": "United Airlines 737-900ER — {count} Aircraft, Seat Map & WiFi",
+  "twitterDescription": "United's {count} Boeing 737-900ERs — high-density trunk jet. Starlink on more than half the fleet, Viasat on the rest. Seat configs, specs and delivery dates.",
   "breadcrumbName": "Boeing 737-900ER",
   "faqSchema": [
     {
@@ -64,7 +69,7 @@ export const _737_900er = {
     },
     {
       "question": "Does the United 737-900ER have Starlink WiFi?",
-      "answer": "Increasingly, yes. United's free Starlink WiFi — free for MileagePlus members — had reached 76 of the 136 -900ERs as of 28 Sep 2026; the rest still fly with Viasat Ka-band."
+      "answer": `Increasingly, yes. United's free Starlink WiFi — free for MileagePlus members — had reached ${SL.equipped} of the ${SL.total} -900ERs as of ${STARLINK_ROSTER_AS_OF}; the rest still fly with Viasat Ka-band.`
     },
     {
       "question": "Does the United 737-900ER have seatback screens?",
@@ -115,5 +120,5 @@ export const _737_900er = {
       "label": "All Types"
     }
   ],
-  "contentHtml": "<div class=\"section\"><h2 id=\"overview\">Overview</h2><p>The <strong>Boeing 737-900ER</strong> is the largest variant of the 737 Next Generation family and one of United's high-density domestic trunk aircraft, with <strong>136 aircraft</strong>. The ER (Extended Range) designation adds fuel capacity and range over the base 737-900. United's <strong>Signature Interior</strong> — HD seatback screens, Bluetooth audio, power at every seat and larger overhead bins — is rolling out across the fleet.</p><div class=\"highlight-box\"><strong>Key facts:</strong> 136 aircraft · 179 seats · Largest NG variant · Signature Interior rollout · Starlink on 76 of 136</div></div><div class=\"section\"><h2 id=\"seat-config\">Seat Configuration</h2><table class=\"config-table\"><thead><tr><th>Cabin</th><th>Seats</th><th>Layout</th><th>Pitch</th></tr></thead><tbody><tr><td><strong>First</strong></td><td>20</td><td>2-2</td><td>37–38\"</td></tr><tr><td><span class=\"cabin-tag cabin-ep\">Economy Plus</span></td><td>45</td><td>3-3</td><td>34\"</td></tr><tr><td>Economy</td><td>114</td><td>3-3</td><td>30\"</td></tr></tbody></table></div><div class=\"section\"><h2 id=\"wifi\">WiFi & In-Flight Entertainment</h2><p>United's <strong>free Starlink WiFi</strong> — free for MileagePlus members — had reached <strong>76 of the 136</strong> -900ERs as of 28 Sep 2026; the rest fly with <strong>Viasat Ka-band</strong>. Most have AVOD seatback screens, the rest personal-device entertainment, and the Signature Interior retrofit continues alongside the Starlink installs.</p></div><div class=\"section\"><h2 id=\"routes\">Routes & Hubs</h2><p>Domestic routes from all major hubs, similar deployment to the 737 MAX 9 which it's being supplemented by.</p><h3>Related Aircraft</h3><p>Other 737s: <a href=\"/fleet/737-max-9\">MAX 9</a> (178), <a href=\"/fleet/737-max-8\">MAX 8</a> (123), <a href=\"/fleet/737-800\">737-800</a> (141), <a href=\"/fleet/737-900\">737-900</a> (12), <a href=\"/fleet/737-700\">737-700</a> (40).</p></div>"
+  "contentHtml": `<div class=\"section\"><h2 id=\"overview\">Overview</h2><p>The <strong>Boeing 737-900ER</strong> is the largest variant of the 737 Next Generation family and one of United's high-density domestic trunk aircraft, with <strong>136 aircraft</strong>. The ER (Extended Range) designation adds fuel capacity and range over the base 737-900. United's <strong>Signature Interior</strong> — HD seatback screens, Bluetooth audio, power at every seat and larger overhead bins — is rolling out across the fleet.</p><div class=\"highlight-box\"><strong>Key facts:</strong> 136 aircraft · 179 seats · Largest NG variant · Signature Interior rollout · Starlink on 76 of 136</div></div><div class=\"section\"><h2 id=\"seat-config\">Seat Configuration</h2><table class=\"config-table\"><thead><tr><th>Cabin</th><th>Seats</th><th>Layout</th><th>Pitch</th></tr></thead><tbody><tr><td><strong>First</strong></td><td>20</td><td>2-2</td><td>37–38\"</td></tr><tr><td><span class=\"cabin-tag cabin-ep\">Economy Plus</span></td><td>45</td><td>3-3</td><td>34\"</td></tr><tr><td>Economy</td><td>114</td><td>3-3</td><td>30\"</td></tr></tbody></table></div><div class=\"section\"><h2 id=\"wifi\">WiFi & In-Flight Entertainment</h2><p>United's <strong>free Starlink WiFi</strong> — free for MileagePlus members — had reached <strong>${SL.equipped} of the ${SL.total}</strong> -900ERs as of ${STARLINK_ROSTER_AS_OF}; the rest fly with <strong>Viasat Ka-band</strong>. Most have AVOD seatback screens, the rest personal-device entertainment, and the Signature Interior retrofit continues alongside the Starlink installs.</p></div><div class=\"section\"><h2 id=\"routes\">Routes & Hubs</h2><p>Domestic routes from all major hubs, similar deployment to the 737 MAX 9 which it's being supplemented by.</p><h3>Related Aircraft</h3><p>Other 737s: <a href=\"/fleet/737-max-9\">MAX 9</a> (178), <a href=\"/fleet/737-max-8\">MAX 8</a> (123), <a href=\"/fleet/737-800\">737-800</a> (141), <a href=\"/fleet/737-900\">737-900</a> (12), <a href=\"/fleet/737-700\">737-700</a> (40).</p></div>`
 };

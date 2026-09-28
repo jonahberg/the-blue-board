@@ -3,13 +3,13 @@ import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../starlink-facts.js';
 export const iad = {
   "iata": "IAD",
   "variant": "full",
-  "title": "United Airlines IAD Hub Status — Washington Dulles Delays, On-Time Performance & Flight Tracker",
-  "description": "Live United Airlines status at Washington Dulles (IAD). AI-powered delay risk predictions, real-time delays, cancellations, on-time performance, Starlink WiFi aircraft, and departure schedules. United's Washington D.C. hub — updated every 30 seconds.",
+  "title": "United Dulles Hub Delays & On-Time",
+  "description": "Live United delays, cancellations and on-time performance at Washington Dulles (IAD), United's D.C. hub, with AI delay-risk predictions and departures.",
   "keywords": "United Airlines IAD delays, United Washington Dulles hub status, United Airlines IAD on-time, United IAD cancellations today, United Airlines Dulles delays, IAD flight status, United hub Washington, United Airlines Dulles departures",
-  "ogTitle": "United Airlines IAD Hub — Live Washington Dulles Status",
+  "ogTitle": "United Dulles (IAD) Hub — Live Delays & On-Time",
   "ogDescription": "Real-time United Airlines operations at Washington Dulles. AI delay predictions, cancellations, on-time %, Starlink WiFi fleet, and schedules.",
   "ogImageAlt": "The Blue Board — United Airlines IAD Hub Status",
-  "twitterTitle": "United Airlines IAD Hub — Live Washington Dulles Status",
+  "twitterTitle": "United Dulles (IAD) Hub — Live Delays & On-Time",
   "twitterDescription": "AI delay predictions, cancellations, on-time performance at United's Washington D.C. hub. Updated every 30 seconds.",
   "breadcrumbName": "IAD — Washington Dulles",
   "faqSchema": [
