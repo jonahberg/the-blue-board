@@ -44,14 +44,14 @@ export const _777_200 = {
     "wingspan": "60.9 m (200 ft)",
     "length": "63.7 m (209 ft)"
   },
-  "title": "United Airlines Boeing 777-200 — 19 Aircraft, Seat Map & Fleet Status | The Blue Board",
-  "description": "United's 19 Boeing 777-200s are its oldest domestic widebodies — 364 seats, no Polaris, Pratt-powered, several now stored at Victorville. Seat map, WiFi & status.",
+  "title": "United 777-200: {count} Aircraft & Seat Map",
+  "description": "United's {count} Boeing 777-200s are its oldest domestic widebodies: 364 seats, no Polaris, Pratt-powered, several stored at Victorville. Seat map, WiFi & status.",
   "keywords": "United Airlines 777-200, United 777-200 seat map, United 777-200 configuration, United 777-200 stored Victorville, United 777-200 retirement, UA 777-200",
-  "ogTitle": "United Airlines 777-200 — 19 Aircraft, United's Oldest Widebody",
-  "ogDescription": "United's 19 Boeing 777-200s: 364-seat domestic layout, no Polaris, Pratt-powered — the airline's oldest jets, with several now stored.",
+  "ogTitle": "United Airlines 777-200 — {count} Aircraft, United's Oldest Widebody",
+  "ogDescription": "United's {count} Boeing 777-200s: 364-seat domestic layout, no Polaris, Pratt-powered — the airline's oldest jets, with several now stored.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 777-200 Fleet",
-  "twitterTitle": "United Airlines 777-200 — 19 Aircraft, United's Oldest Widebody",
-  "twitterDescription": "United's 19 Boeing 777-200s. 364 seats · no Polaris · Pratt-powered · several stored at Victorville. Seat map, WiFi & fleet status.",
+  "twitterTitle": "United Airlines 777-200 — {count} Aircraft, United's Oldest Widebody",
+  "twitterDescription": "United's {count} Boeing 777-200s. 364 seats · no Polaris · Pratt-powered · several stored at Victorville. Seat map, WiFi & fleet status.",
   "breadcrumbName": "Boeing 777-200",
   "faqSchema": [
     {

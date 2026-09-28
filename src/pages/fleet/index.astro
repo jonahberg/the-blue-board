@@ -6,6 +6,7 @@ import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
 import StatTile from '../../components/site/StatTile.astro';
 import { FLEET_DB_AS_OF, formatFleetAsOf } from '../../lib/fleet-utils.js';
+import { withBrand } from '../../lib/page-seo.js';
 
 // Build type summaries for the grid
 const typeSummaries: Record<
@@ -103,11 +104,11 @@ const HUB_LINKS = [
   { slug: 'gum', label: 'GUM — Guam' },
 ];
 
-const title =
-  'United Airlines Fleet Database — 1,139 Aircraft, 19 Types, Seat Maps & Guides | The Blue Board';
-const description =
-  'Complete United Airlines fleet database with 1,139 mainline aircraft across 19 types. Detailed guides for every aircraft type — Boeing 737, 757, 767, 777, 787 Dreamliner, and Airbus A319, A320, A321neo. Seat configurations, WiFi, Starlink status, and full aircraft registries.';
-const shareTitle = 'United Airlines Fleet — 1,139 Aircraft Database | The Blue Board';
+// SEO strings: counts come from the per-type data, never hand-typed (see src/lib/page-seo.js).
+const totalAircraftText = totalAircraft.toLocaleString('en-US');
+const title = withBrand(`United Airlines Fleet: ${totalAircraftText} Aircraft, ${fleetOrder.length} Types`);
+const description = `All ${totalAircraftText} United Airlines mainline aircraft across ${fleetOrder.length} types: seat maps, WiFi, Starlink status and registries for every Boeing and Airbus type.`;
+const shareTitle = `United Airlines Fleet — ${totalAircraftText} Aircraft Database | The Blue Board`;
 
 // JSON-LD. The Starlink figures come from the build-time facts, so these are
 // objects rather than the literal <script> text they used to be.
@@ -203,7 +204,7 @@ const hubLinkClass =
   ogTitle={shareTitle}
   ogDescription="Complete United Airlines fleet database. Every mainline aircraft — 737, 757, 767, 777, 787, A319, A320, A321neo — with seat configs, WiFi, and detailed type guides."
   ogImageAlt="The Blue Board — United Airlines Fleet Database"
-  twitterDescription={`Complete United Airlines fleet. 1,139 aircraft, 19 types. Seat maps, WiFi, Starlink status. Fleet data as of ${formatFleetAsOf()}.`}
+  twitterDescription={`Complete United Airlines fleet. ${totalAircraftText} aircraft, ${fleetOrder.length} types. Seat maps, WiFi, Starlink status. Fleet data as of ${formatFleetAsOf()}.`}
   jsonLd={[datasetSchema, itemListSchema, faqSchema]}
 >
   <div class="mx-auto max-w-5xl px-4 py-8">

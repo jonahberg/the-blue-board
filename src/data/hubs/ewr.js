@@ -3,13 +3,13 @@ import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../starlink-facts.js';
 export const ewr = {
   "iata": "EWR",
   "variant": "full",
-  "title": "United Airlines EWR Hub Status — Newark Liberty Delays, On-Time Performance & Flight Tracker",
-  "description": "Live United Airlines status at Newark Liberty (EWR). AI-powered delay risk predictions, real-time delays, cancellations, on-time performance, Starlink WiFi aircraft, and departure schedules. United's most delay-prone hub — updated every 30 seconds.",
+  "title": "United Newark Hub Delays & On-Time",
+  "description": "Live United delays, cancellations and on-time performance at Newark Liberty (EWR), United's most delay-prone hub, with AI delay-risk predictions.",
   "keywords": "United Airlines EWR delays, United Newark hub status, United Airlines EWR on-time, United EWR cancellations today, United Airlines Newark delays, EWR flight status, United hub Newark, United Airlines Newark departures",
-  "ogTitle": "United Airlines EWR Hub — Live Newark Liberty Status",
+  "ogTitle": "United Newark (EWR) Hub — Live Delays & On-Time",
   "ogDescription": "Real-time United Airlines operations at Newark Liberty. AI delay predictions, cancellations, on-time %, Starlink WiFi fleet, and schedules.",
   "ogImageAlt": "The Blue Board — United Airlines EWR Hub Status",
-  "twitterTitle": "United Airlines EWR Hub — Live Newark Liberty Status",
+  "twitterTitle": "United Newark (EWR) Hub — Live Delays & On-Time",
   "twitterDescription": "AI delay predictions, cancellations, on-time performance at United's East Coast gateway. Updated every 30 seconds.",
   "breadcrumbName": "EWR — Newark",
   "faqSchema": [

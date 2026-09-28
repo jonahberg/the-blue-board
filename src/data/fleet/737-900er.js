@@ -44,14 +44,14 @@ export const _737_900er = {
     "wingspan": "34.3 m (113 ft)",
     "length": "42.1 m (138 ft)"
   },
-  "title": "United Airlines Boeing 737-900ER — 136 Aircraft: Seat Map, WiFi & Specs | The Blue Board",
-  "description": "United Airlines' 136 Boeing 737-900ERs — high-density domestic trunk jet. Seat maps, cabins, Viasat/Starlink WiFi, Signature Interior and delivery dates.",
+  "title": "United 737-900ER: {count} Aircraft & Seat Maps",
+  "description": "United Airlines' {count} Boeing 737-900ERs — high-density domestic trunk jet. Seat maps, cabins, Viasat/Starlink WiFi, Signature Interior and delivery dates.",
   "keywords": "United Airlines 737-900ER, United 737-900ER seat map, United 737-900ER Starlink, United 737-900ER Signature Interior, United 737-900ER WiFi, UA 737-900ER",
-  "ogTitle": "United Airlines 737-900ER — 136 Aircraft, Seat Map & WiFi",
-  "ogDescription": "United's 136 Boeing 737-900ERs — high-density domestic trunk jet. Seat maps, cabins, WiFi, Signature Interior, specs and delivery dates.",
+  "ogTitle": "United Airlines 737-900ER — {count} Aircraft, Seat Map & WiFi",
+  "ogDescription": "United's {count} Boeing 737-900ERs — high-density domestic trunk jet. Seat maps, cabins, WiFi, Signature Interior, specs and delivery dates.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 737-900ER Fleet",
-  "twitterTitle": "United Airlines 737-900ER — 136 Aircraft, Seat Map & WiFi",
-  "twitterDescription": "United's 136 Boeing 737-900ERs — high-density trunk jet. Starlink on more than half the fleet, Viasat on the rest. Seat configs, specs and delivery dates.",
+  "twitterTitle": "United Airlines 737-900ER — {count} Aircraft, Seat Map & WiFi",
+  "twitterDescription": "United's {count} Boeing 737-900ERs — high-density trunk jet. Starlink on more than half the fleet, Viasat on the rest. Seat configs, specs and delivery dates.",
   "breadcrumbName": "Boeing 737-900ER",
   "faqSchema": [
     {

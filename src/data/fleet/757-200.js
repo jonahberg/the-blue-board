@@ -44,14 +44,14 @@ export const _757_200 = {
     "wingspan": "38.1 m (125 ft)",
     "length": "47.3 m (155 ft)"
   },
-  "title": "United Airlines Boeing 757-200 — 40 Aircraft, Seat Map & A321XLR Phase-Out | The Blue Board",
-  "description": "United's 40 Boeing 757-200s still fly transcon, Hawaii & transatlantic in 2026 but are being phased out for the A321XLR. Seat map, lie-flat, WiFi & registry.",
+  "title": "United 757-200: {count} Aircraft & Seat Map",
+  "description": "United's {count} Boeing 757-200s still fly transcon, Hawaii & transatlantic in 2026 but are being phased out for the A321XLR. Seat map, lie-flat, WiFi & registry.",
   "keywords": "United Airlines 757-200, United 757-200 seat map, United Airlines 757-200 configuration, United 757-200 WiFi, United 757-200 retirement, United 757-200 A321XLR replacement, UA 757-200",
-  "ogTitle": "United Airlines Boeing 757-200 — 40 Aircraft, Being Replaced by the A321XLR",
-  "ogDescription": "40 Boeing 757-200s with 16 lie-flat seats — still flying transcon, Hawaii & transatlantic in 2026 as United phases them out for the Airbus A321XLR.",
+  "ogTitle": "United 757-200 — {count} Aircraft, Being Replaced by the A321XLR",
+  "ogDescription": "{count} Boeing 757-200s with 16 lie-flat seats — still flying transcon, Hawaii & transatlantic in 2026 as United phases them out for the Airbus A321XLR.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 757-200 Fleet",
-  "twitterTitle": "United Airlines Boeing 757-200 — 40 Aircraft, Being Replaced by the A321XLR",
-  "twitterDescription": "United's 40 Boeing 757-200s: 16 lie-flat seats, transcon/Hawaii/transatlantic, now phasing out for the A321XLR. Seat map, WiFi & registry.",
+  "twitterTitle": "United 757-200 — {count} Aircraft, Being Replaced by the A321XLR",
+  "twitterDescription": "United's {count} Boeing 757-200s: 16 lie-flat seats, transcon/Hawaii/transatlantic, now phasing out for the A321XLR. Seat map, WiFi & registry.",
   "breadcrumbName": "Boeing 757-200",
   "faqSchema": [
     {

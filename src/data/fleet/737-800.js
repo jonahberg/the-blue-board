@@ -44,14 +44,14 @@ export const _737_800 = {
     "wingspan": "34.3 m (113 ft)",
     "length": "39.5 m (130 ft)"
   },
-  "title": "United Airlines Boeing 737-800 — 141 Aircraft & First Starlink Jet | The Blue Board",
-  "description": "United Airlines' 141 Boeing 737-800s — the first mainline jet to fly free Starlink WiFi (Oct 2025). Seat maps, cabins, Signature Interior, IFE and more.",
+  "title": "United 737-800: {count} Aircraft & Seat Maps",
+  "description": "United Airlines' {count} Boeing 737-800s — the first mainline jet to fly free Starlink WiFi (Oct 2025). Seat maps, cabins, Signature Interior, IFE and more.",
   "keywords": "United Airlines 737-800, United 737-800 seat map, United 737-800 Starlink, first mainline Starlink flight, UA2940, United 737-800 WiFi",
-  "ogTitle": "United Airlines 737-800 — 141 Aircraft, First Mainline Starlink Jet",
-  "ogDescription": "United's 141 Boeing 737-800s — the first mainline aircraft to fly Starlink WiFi (Oct 15 2025, UA2940 EWR–IAH). Seat maps, cabins, Signature Interior and IFE.",
+  "ogTitle": "United Airlines 737-800 — {count} Aircraft, First Mainline Starlink Jet",
+  "ogDescription": "United's {count} Boeing 737-800s — the first mainline aircraft to fly Starlink WiFi (Oct 15 2025, UA2940 EWR–IAH). Seat maps, cabins, Signature Interior and IFE.",
   "ogImageAlt": "The Blue Board — United Airlines Boeing 737-800 Fleet",
-  "twitterTitle": "United Airlines 737-800 — 141 Aircraft, First Mainline Starlink Jet",
-  "twitterDescription": "United's 141 Boeing 737-800s — first mainline jet with Starlink WiFi. Seat configs, Signature Interior, WiFi and delivery dates.",
+  "twitterTitle": "United Airlines 737-800 — {count} Aircraft, First Mainline Starlink Jet",
+  "twitterDescription": "United's {count} Boeing 737-800s — first mainline jet with Starlink WiFi. Seat configs, Signature Interior, WiFi and delivery dates.",
   "breadcrumbName": "Boeing 737-800",
   "faqSchema": [
     {

@@ -3,13 +3,13 @@ import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../starlink-facts.js';
 export const ord = {
   "iata": "ORD",
   "variant": "full",
-  "title": "United Airlines ORD Hub Status — Chicago O'Hare Delays, On-Time Performance & Flight Tracker",
-  "description": "Live United Airlines status at Chicago O'Hare (ORD). AI-powered delay risk predictions, real-time delays, cancellations, on-time performance, Starlink WiFi aircraft, and departure schedules. United's largest hub — updated every 30 seconds.",
+  "title": "United O'Hare Hub Delays & On-Time",
+  "description": "Live United delays, cancellations and on-time performance at Chicago O'Hare (ORD), United's largest hub, with AI delay-risk predictions and departures.",
   "keywords": "United Airlines ORD delays, United Chicago O'Hare hub status, United Airlines ORD on-time, United ORD cancellations today, United Airlines Chicago delays, ORD flight status, United hub Chicago, United Airlines O'Hare departures",
-  "ogTitle": "United Airlines ORD Hub — Live Chicago O'Hare Status",
+  "ogTitle": "United O'Hare (ORD) Hub — Live Delays & On-Time",
   "ogDescription": "Real-time United Airlines operations at Chicago O'Hare. AI delay predictions, cancellations, on-time %, Starlink WiFi fleet, and schedules.",
   "ogImageAlt": "The Blue Board — United Airlines ORD Hub Status",
-  "twitterTitle": "United Airlines ORD Hub — Live Chicago O'Hare Status",
+  "twitterTitle": "United O'Hare (ORD) Hub — Live Delays & On-Time",
   "twitterDescription": "AI delay predictions, cancellations, on-time performance at United's largest hub. Updated every 30 seconds.",
   "breadcrumbName": "ORD — Chicago O'Hare",
   "faqSchema": [

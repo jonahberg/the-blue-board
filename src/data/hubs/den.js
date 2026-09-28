@@ -3,13 +3,13 @@ import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../starlink-facts.js';
 export const den = {
   "iata": "DEN",
   "variant": "full",
-  "title": "United Airlines DEN Hub Status — Denver International Delays, On-Time Performance & Flight Tracker",
-  "description": "Live United Airlines status at Denver International (DEN). AI-powered delay risk predictions, real-time delays, cancellations, on-time performance, Starlink WiFi aircraft, and departure schedules. United's second-largest hub — updated every 30 seconds.",
+  "title": "United Denver Hub Delays & On-Time",
+  "description": "Live United delays, cancellations and on-time performance at Denver (DEN), United's second-largest hub, with AI delay-risk predictions and departures.",
   "keywords": "United Airlines DEN delays, United Denver hub status, United Airlines DEN on-time, United DEN cancellations today, United Airlines Denver delays, DEN flight status, United hub Denver, United Airlines Denver departures",
-  "ogTitle": "United Airlines DEN Hub — Live Denver International Status",
+  "ogTitle": "United Denver (DEN) Hub — Live Delays & On-Time",
   "ogDescription": "Real-time United Airlines operations at Denver International. AI delay predictions, cancellations, on-time %, Starlink WiFi fleet, and schedules.",
   "ogImageAlt": "The Blue Board — United Airlines DEN Hub Status",
-  "twitterTitle": "United Airlines DEN Hub — Live Denver International Status",
+  "twitterTitle": "United Denver (DEN) Hub — Live Delays & On-Time",
   "twitterDescription": "AI delay predictions, cancellations, on-time performance at United's second-largest hub. Updated every 30 seconds.",
   "breadcrumbName": "DEN — Denver",
   "faqSchema": [
