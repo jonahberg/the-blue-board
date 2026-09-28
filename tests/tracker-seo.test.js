@@ -13,6 +13,7 @@ import { GET as getAtcJson } from '../src/pages/trackers/atc.json.ts';
 import { GET as getUnitedCsv } from '../src/pages/trackers/united-hubs.csv.ts';
 import { GET as getUnitedJson } from '../src/pages/trackers/united-hubs.json.ts';
 import { GET as getSitemap } from '../src/pages/sitemap.xml.ts';
+import { TRACKER_DOWNLOAD_NAMES } from '../src/lib/tracker-downloads.js';
 
 describe('tracker SEO snippets', () => {
   it('keeps parent titles and descriptions inside intentional SERP bounds', () => {
@@ -100,5 +101,19 @@ describe('tracker downloads', () => {
     const json = await getUnitedJson().json();
     expect(json.projects).toHaveLength(unitedProjects.length);
     expect(Object.keys(json.hubs)).toHaveLength(unitedHubDetailCodes.length);
+  });
+
+  it('sets no headers the static build would silently discard (F109)', () => {
+    for (const res of [getAtcCsv(), getAtcJson(), getUnitedCsv(), getUnitedJson()]) {
+      expect(res.headers.get('content-disposition')).toBeNull();
+      expect(res.headers.get('cache-control')).toBeNull();
+    }
+  });
+
+  it('names each download on the link instead, where the filename can take effect', () => {
+    expect(TRACKER_DOWNLOAD_NAMES).toEqual({
+      atc: 'blue-board-faa-tfdm-airports',
+      'united-hubs': 'blue-board-united-hub-projects',
+    });
   });
 });

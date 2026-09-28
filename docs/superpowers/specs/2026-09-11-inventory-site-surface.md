@@ -180,7 +180,7 @@ Global headers: X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Poli
 | script-src | 'self' https://unpkg.com https://va.vercel-scripts.com |
 | style-src | 'self' 'unsafe-inline' https://unpkg.com |
 | font-src | 'self' |
-| img-src | 'self' data: blob: https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://mesonet.agron.iastate.edu https://theblueboard.co |
+| img-src | 'self' data: blob: https://*.basemaps.cartocdn.com https://mesonet.agron.iastate.edu https://theblueboard.co (the OpenStreetMap tile host was dropped in v1.9.0 — no map loads OSM tiles; audit F143) |
 | connect-src | 'self' https://theblueboard.co https://va.vercel-scripts.com |
 | frame-ancestors | 'none' |
 `/api/(.*)`: ACAO theblueboard.co, expose `X-BB-Feed-Stale`, `X-Robots-Tag: noindex, nofollow`.

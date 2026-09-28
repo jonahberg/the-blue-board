@@ -311,9 +311,4 @@
   }
 }
 
-/* Keyless basemap fallback: darken OSM tiles in CSS. */
-.bb-osm-dark {
-  filter: invert(1) hue-rotate(180deg) brightness(0.65) contrast(1.15) saturate(0.35);
-}
-
 @import "./content.css";

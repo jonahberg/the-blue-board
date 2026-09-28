@@ -4,6 +4,8 @@
  * The correction link is a pre-filled GitHub issue so a reader who spots a wrong
  * figure lands in a form that already names the page and asks for a source.
  */
+import { TRACKER_DOWNLOAD_NAMES } from '../../lib/tracker-downloads.js';
+
 interface Props {
   slug: 'atc' | 'united-hubs';
   pageLabel: string;
@@ -31,8 +33,12 @@ const linkClass =
     class="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-stretch sm:justify-end"
     aria-label="Download tracker data or report a correction"
   >
-    <a href={`/trackers/${slug}.csv`} download class={linkClass}>Download CSV</a>
-    <a href={`/trackers/${slug}.json`} download class={linkClass}>Download JSON</a>
+    <a href={`/trackers/${slug}.csv`} download={`${TRACKER_DOWNLOAD_NAMES[slug]}.csv`} class={linkClass}
+      >Download CSV</a
+    >
+    <a href={`/trackers/${slug}.json`} download={`${TRACKER_DOWNLOAD_NAMES[slug]}.json`} class={linkClass}
+      >Download JSON</a
+    >
     <a
       href={correctionHref}
       target="_blank"

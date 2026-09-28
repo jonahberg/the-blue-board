@@ -19,20 +19,20 @@ export function toCsv(rows, columns) {
     .join('\n')}\n`;
 }
 
-/** @param {string} filename */
-export function csvHeaders(filename) {
-  return {
-    'Content-Type': 'text/csv; charset=utf-8',
-    'Content-Disposition': `attachment; filename="${filename}"`,
-    'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
-  };
-}
+/**
+ * The tracker exports are prerendered (`output: 'static'`), so an endpoint's own
+ * Cache-Control and Content-Disposition never reach a visitor — production headers come from
+ * vercel.json's `/trackers/(.*)` rule (F109). Only the Content-Type is kept: the build uses it.
+ */
+export const CSV_HEADERS = { 'Content-Type': 'text/csv; charset=utf-8' };
+export const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8' };
 
-/** @param {string} filename */
-export function jsonHeaders(filename) {
-  return {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Disposition': `attachment; filename="${filename}"`,
-    'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
-  };
-}
+/**
+ * The descriptive download name per tracker, applied by the link's `download` attribute
+ * (same-origin, so it overrides the URL's `atc.csv`) — the one place it can take effect.
+ * @type {Record<'atc' | 'united-hubs', string>}
+ */
+export const TRACKER_DOWNLOAD_NAMES = {
+  atc: 'blue-board-faa-tfdm-airports',
+  'united-hubs': 'blue-board-united-hub-projects',
+};

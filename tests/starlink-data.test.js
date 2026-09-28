@@ -110,7 +110,9 @@ describe('starlink-data API', () => {
 
   // --- Cron cache ---
 
-  it('serves cron-populated cache when available', async () => {
+  // Real path, not a test artefact: api/cron/sync-starlink.ts stashes its result on
+  // globalThis.__starlinkCache, which a later request on the SAME warm instance serves first.
+  it('serves the same-instance cron result (globalThis.__starlinkCache from sync-starlink) first', async () => {
     const cronData = { aircraft: [], totalCount: 0, syncedAt: '2026-04-04T12:00:00Z' };
     (globalThis).__starlinkCache = cronData;
 
