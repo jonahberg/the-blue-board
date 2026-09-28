@@ -170,13 +170,15 @@ export function myFlightGateLabels(td) {
   const dIata = td.destination?.iata || '';
   const oTerm = td.origin?.terminal || getUnitedTerminal(oIata, oIata, dIata);
   const dTerm = td.destination?.terminal || getUnitedTerminal(dIata, oIata, dIata);
+  // 'T2' for a numbered terminal; a lettered one is spelled out — 'TG' read as a typo (F18).
+  const term = (t) => (/^\d+$/.test(String(t)) ? `T${t}` : `Terminal ${t}`);
+  const label = (t, gate) => {
+    if (gate) return t ? `${term(t)} Gate ${gate}` : `Gate ${gate}`;
+    return t ? term(t) : '—';
+  };
   return {
-    origin: td.origin?.gate ? `T${oTerm || '?'} Gate ${td.origin.gate}` : oTerm ? `T${oTerm}` : '—',
-    destination: td.destination?.gate
-      ? `T${dTerm || '?'} Gate ${td.destination.gate}`
-      : dTerm
-        ? `T${dTerm}`
-        : '—',
+    origin: label(oTerm, td.origin?.gate),
+    destination: label(dTerm, td.destination?.gate),
   };
 }
 

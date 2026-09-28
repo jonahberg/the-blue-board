@@ -199,7 +199,7 @@ describe('myFlightGateLabels', () => {
       origin: { iata: 'ORD', terminal: '2', gate: 'C12' },
       destination: { iata: 'DEN', terminal: 'B', gate: '38' },
     };
-    expect(myFlightGateLabels(td)).toEqual({ origin: 'T2 Gate C12', destination: 'TB Gate 38' });
+    expect(myFlightGateLabels(td)).toEqual({ origin: 'T2 Gate C12', destination: 'Terminal B Gate 38' });
   });
 
   it('falls back to the United hub terminal when the feed publishes none', () => {
@@ -209,7 +209,7 @@ describe('myFlightGateLabels', () => {
       destination: { iata: 'DEN' },
     };
     // ORD domestic is Terminal 1; DEN has no gate, so it degrades to the terminal alone.
-    expect(myFlightGateLabels(td)).toEqual({ origin: 'T1 Gate B6', destination: 'TB' });
+    expect(myFlightGateLabels(td)).toEqual({ origin: 'T1 Gate B6', destination: 'Terminal B' });
   });
 
   it('picks the international concourse when either end is international', () => {
@@ -218,7 +218,13 @@ describe('myFlightGateLabels', () => {
       origin: { iata: 'IAH', gate: '12' },
       destination: { iata: 'FRA' },
     };
-    expect(myFlightGateLabels(td).origin).toBe('TE Gate 12');
+    // A lettered terminal is spelled out: 'TE' / 'TG' read as a typo (F18).
+    expect(myFlightGateLabels(td).origin).toBe('Terminal E Gate 12');
+  });
+
+  it('shows a gate with no known terminal as the gate alone', () => {
+    const td = { success: true, origin: { iata: 'XYZ', gate: '4' }, destination: { iata: 'ABC' } };
+    expect(myFlightGateLabels(td).origin).toBe('Gate 4');
   });
 
   it('shows an em dash rather than inventing a gate', () => {

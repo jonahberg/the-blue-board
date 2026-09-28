@@ -353,7 +353,10 @@ export default function MyFlightsView() {
         </>
       ) : null}
 
-      <ManualConnectionCheck />
+      {/* Beside the centred empty state a full-width card read as a separate page (F77). */}
+      <div className={watched.length === 0 ? 'mx-auto max-w-xl' : undefined}>
+        <ManualConnectionCheck />
+      </div>
     </div>
   );
 }

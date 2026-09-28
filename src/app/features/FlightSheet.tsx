@@ -282,7 +282,7 @@ export function FlightSheet() {
         Non-modal, with no overlay and no close-on-outside-interaction. This panel sits
         BESIDE the live map rather than over it: a modal Radix dialog dims the map, makes it
         inert to pan, zoom and marker clicks, and closes itself on the first map click — so
-        "Centre map" would fly a map the viewer could not see or touch. Escape and the ✕ still
+        "Center map" would fly a map the viewer could not see or touch. Escape and the ✕ still
         close it, and clicking another aircraft swaps the panel's subject instead.
       */}
       <SheetContent
@@ -369,7 +369,7 @@ export function FlightSheet() {
                     focusOn(flight.lat, flight.lon);
                   }}
                 >
-                  Centre map
+                  Center map
                 </Button>
               </div>
               <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
@@ -498,9 +498,9 @@ export function FlightSheet() {
                   tz={destTz}
                 />
                 <p className="pt-1 text-[11px] text-muted-foreground">
-                  Source:{' '}
-                  {TIMES_SOURCE_LABEL[times.data.source ?? ''] ?? times.data.source ?? 'AeroDataBox'}.
-                  united.com and the airport display remain the systems of record.
+                  Times from{' '}
+                  {TIMES_SOURCE_LABEL[times.data.source ?? ''] ?? times.data.source ?? 'AeroDataBox'} —
+                  check united.com or the airport display before you travel.
                 </p>
               </div>
             ) : (

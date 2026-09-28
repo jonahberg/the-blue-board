@@ -5,7 +5,7 @@
  * F20 (Sep 2026 audit): on a phone every "View on map" / "Track" / "Centre map" centred the map
  * and then opened this panel full-screen on top of it (at 768px the 448px right panel covered
  * the centred plane). Below 1024px it is now a bottom sheet that peeks at 40dvh, leaving the
- * map's centre visible; it expands on request and drops back to the peek on "Centre map".
+ * map's centre visible; it expands on request and drops back to the peek on "Center map".
  * F10/F71: an unmatched 787-9 was labelled "likely United Express".
  * F11: times are labelled in the airport's zone even when the payload carries none.
  */
@@ -95,13 +95,13 @@ describe('FlightSheet on a phone (F20)', () => {
     expect(dialog().className).not.toMatch(/(^|\s)w-full(\s|$)/);
   });
 
-  it('expands on request and drops back to the peek on "Centre map"', async () => {
+  it('expands on request and drops back to the peek on "Center map"', async () => {
     viewport(390);
     await open(flight());
     fireEvent.click(screen.getByRole('button', { name: 'More details' }));
     expect(dialog().className).toContain('max-h-[85dvh]');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Centre map' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Center map' }));
     expect(h.focusOn).toHaveBeenCalledWith(40.91, -104.62);
     expect(dialog().className).toContain('max-h-[40dvh]');
   });

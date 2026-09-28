@@ -12,7 +12,7 @@ import JumpNav from '../components/site/JumpNav.astro';
 import PillNav from '../components/site/PillNav.astro';
 import StatTile from '../components/site/StatTile.astro';
 import fleetDb from '../../public/data/fleet.json';
-import { FLEET_DB_AS_OF, formatFleetAsOf } from '../lib/fleet-utils.js';
+import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
 
 const { data } = Astro.props;
 const slug: string = data.slug;
@@ -191,7 +191,9 @@ function statusClass(status: string | undefined): string {
                   <td class="font-mono font-bold text-foreground">{ac.r}</td>
                   <td>{ac.a || '—'}</td>
                   <td>{ac.c || '—'}</td>
-                  <td>{isStarlink ? <span class="starlink-on">{ac.w}</span> : ac.w || '—'}</td>
+                  {/* The database's raw codes are inconsistent ('Satl Ku' / 'Satl KU'); the
+                      dashboard's display names are not (F78). */}
+                  <td>{isStarlink ? <span class="starlink-on">{ac.w}</span> : ac.w ? normalizeWifi(ac.w) : '—'}</td>
                   <td>{ac.i || '—'}</td>
                   <td>{ac.p || '—'}</td>
                   <td>{ac.d || '—'}</td>

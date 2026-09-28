@@ -52,7 +52,7 @@ export const SlHero = memo(function SlHero({
         Starlink Rollout
       </p>
 
-      <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-12">
         <div className="shrink-0">
           <p className="font-mono text-5xl leading-none font-bold tabular-nums" id="sl-hero-count">
             {equipped ?? '—'}
@@ -78,7 +78,7 @@ export const SlHero = memo(function SlHero({
         </div>
 
         {bars ? (
-          <div className="w-full max-w-md space-y-2" id="sl-bars">
+          <div className="w-full max-w-md space-y-2 lg:max-w-2xl lg:flex-1" id="sl-bars">
             {bars.map((bar) => (
               <div key={bar.label} className="flex items-center gap-2">
                 <span className="w-16 shrink-0 text-[11px] text-muted-foreground">{bar.label}</span>

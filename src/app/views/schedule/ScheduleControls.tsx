@@ -150,7 +150,7 @@ export function ScheduleControls({
             <SelectTrigger
               size="sm"
               aria-label="Schedule hub"
-              className="min-h-11 w-[9.5rem] font-mono text-[11px] pointer-fine:md:min-h-0"
+              className="min-h-11 w-auto min-w-[9.5rem] font-mono text-[11px] pointer-fine:md:min-h-0"
             >
               <SelectValue placeholder="All Hubs" />
             </SelectTrigger>

@@ -6,7 +6,7 @@
 import L from 'leaflet';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { panelAwareCentre } from '../src/app/map/LiveMap';
+import { panelAwareCentre, viewZoom } from '../src/app/map/LiveMap';
 
 function stubWide(wide: boolean) {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -66,5 +66,18 @@ describe('panelAwareCentre', () => {
     const centre = panelAwareCentre(map, [10, 20], 6) as L.LatLng;
     expect(centre.lat).toBe(10 + 110);
     expect(centre.lng).toBe(20);
+  });
+});
+
+describe('viewZoom (F78: the phone map cropped SFO and LAX)', () => {
+  it('steps a preset out one zoom level below 640px, and leaves wider maps alone', () => {
+    expect(viewZoom(4, 390)).toBe(3);
+    expect(viewZoom(4, 639)).toBe(3);
+    expect(viewZoom(4, 640)).toBe(4);
+    expect(viewZoom(4, 1440)).toBe(4);
+  });
+
+  it('does not guess for a map that has no width yet', () => {
+    expect(viewZoom(4, 0)).toBe(4);
   });
 });

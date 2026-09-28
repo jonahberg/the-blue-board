@@ -71,6 +71,15 @@ export const VerificationLedger = memo(function VerificationLedger({
             </div>
           </dl>
         </div>
+        {/* The verifier publishes its own tallies on its own schedule, so they need not add up
+            to the equipped count above, which comes from the roster (F18: 594 + 7 vs 598). */}
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          The verifier&rsquo;s own tallies
+          {summary?.generatedAt && formatVerifyDate(summary.generatedAt)
+            ? `, as of ${formatVerifyDate(summary.generatedAt) as string}`
+            : ''}
+          {' '}— they can differ from the equipped count by a few tails.
+        </p>
 
         {conflicts.size > 0 ? (
           <p

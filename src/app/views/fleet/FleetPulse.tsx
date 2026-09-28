@@ -74,7 +74,7 @@ export function FleetPulse({
       </p>
 
       {fleetTotal > 0 && airborne > 0 && utilPct != null ? (
-        <p className="mt-0.5 text-xs font-medium text-primary">
+        <p className="mt-0.5 text-xs font-medium text-foreground">
           {utilPct}% fleet utilization ({matched}/{fleetTotal})
         </p>
       ) : null}

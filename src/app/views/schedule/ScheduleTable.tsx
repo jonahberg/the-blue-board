@@ -25,6 +25,7 @@
  * "jump to now" and the palette's row highlight measure against.
  */
 
+import { Eye } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -576,15 +577,21 @@ export const ScheduleTable = forwardRef<
 
                   <TableCell>
                     {row.ident !== '—' ? (
+                      // A toggle: one name per flight, the state in aria-pressed (F18) — a
+                      // column of identical "Watch flight" buttons told a screen reader nothing.
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-11 md:size-7"
-                        aria-label={isWatched(row.ident) ? 'Unwatch flight' : 'Watch flight'}
-                        title={`${isWatched(row.ident) ? 'Unwatch' : 'Watch'} this flight`}
+                        className="size-11 pointer-fine:md:size-7"
+                        aria-label={`Watch ${row.ident}`}
+                        aria-pressed={isWatched(row.ident)}
+                        title={`${isWatched(row.ident) ? 'Stop watching' : 'Watch'} ${row.ident}`}
                         onClick={() => onToggleWatch(row)}
                       >
-                        <span aria-hidden="true">{isWatched(row.ident) ? '👁️' : '👁'}</span>
+                        <Eye
+                          aria-hidden="true"
+                          className={isWatched(row.ident) ? 'text-primary' : 'text-muted-foreground'}
+                        />
                       </Button>
                     ) : null}
                   </TableCell>

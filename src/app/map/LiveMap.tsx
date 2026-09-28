@@ -34,6 +34,14 @@ export type MapView = 'us' | 'pacific';
 export const US_VIEW = { center: [39, -98] as [number, number], zoom: 4 };
 export const PACIFIC_VIEW = { center: [25, 145] as [number, number], zoom: 4 };
 
+/**
+ * A preset view's zoom for a map this wide. Zoom 4 spans the lower 48 in ~660px, so on a
+ * phone it cropped SFO and LAX off the left edge (F78); one step out fits them.
+ */
+export function viewZoom(zoom: number, widthPx: number): number {
+  return widthPx > 0 && widthPx < 640 ? zoom - 1 : zoom;
+}
+
 type Airport = { iata: string; lat: number; lon: number; hub?: boolean };
 
 const HUBS: Airport[] = (AIRPORTS as Airport[]).filter((a) => a.hub);
@@ -201,7 +209,7 @@ export function LiveMap({
       : undefined;
     const map = L.map(hostRef.current, {
       center: home ? [home.lat, home.lon] : US_VIEW.center,
-      zoom: home ? 5 : US_VIEW.zoom,
+      zoom: home ? 5 : viewZoom(US_VIEW.zoom, hostRef.current.clientWidth),
       zoomControl: false,
       // A flight crossing the antimeridian has to stay reachable by panning either way.
       worldCopyJump: true,
@@ -419,7 +427,7 @@ export function LiveMap({
       return;
     }
     const target = view === 'pacific' ? PACIFIC_VIEW : US_VIEW;
-    requestMove((m) => flyOrJump(m, target.center, target.zoom, 1.2));
+    requestMove((m) => flyOrJump(m, target.center, viewZoom(target.zoom, m.getSize().x), 1.2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
