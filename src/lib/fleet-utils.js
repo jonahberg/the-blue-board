@@ -61,6 +61,17 @@ export const WIFI_DISPLAY = {
   'Satl Ka US': 'Satellite Ka (US)',
   'Satl KU': 'Satellite Ku', 'Satl Ku': 'Satellite Ku',
   'ViaSatKA': 'ViaSat Ka',
+  // Fleet-sheet codes added Sep 2026. Each display name follows the provider United itself reports
+  // for the tail (flight-status `WifiPrvdr`, as mirrored per tail on unitedstarlinktracker.com/fleet):
+  //  - 'Thales': the ex-LiveTV system (Thales bought LiveTV in 2014) on Viasat Ka capacity over the
+  //    continental US — the same install the old 'Satl Ka US' code described.
+  //  - 'ViaSatPrtl': the sheet's meaning is undocumented, but United reports every such tail as
+  //    Thales, so it groups with Thales rather than guessing at a "portal-only" tier.
+  //  - 'ViaSatKA?': the sheet author's uncertainty; United reports all of these tails as Viasat.
+  //  - 'Panasnc': Panasonic Ku-band, the same system 'Satl Ku' describes on A319/A320/757/widebodies.
+  'Thales': 'Thales Ka (US)', 'ViaSatPrtl': 'Thales Ka (US)',
+  'ViaSatKA?': 'ViaSat Ka',
+  'Panasnc': 'Satellite Ku',
   'Starlink': 'Starlink', 'NO': 'NO'
 };
 
