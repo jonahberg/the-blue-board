@@ -111,6 +111,8 @@ export type FlightTimes = {
   diverted?: boolean;
   status?: string;
   error?: string;
+  /** Set when no schedule board lists the flight and only FR24 identity is known (F1). */
+  timesUnavailable?: boolean;
   departure: { gate: TimeTriple; takeoff: TimeTriple };
   arrival: { gate: TimeTriple; landing: TimeTriple };
   origin: FlightTimesEndpoint;
@@ -119,7 +121,16 @@ export type FlightTimes = {
 
 export type IropsHubMetrics = Record<
   string,
-  { total?: number; operated?: number; onTime?: number; cancellations?: number }
+  {
+    total?: number;
+    operated?: number;
+    onTime?: number;
+    cancellations?: number;
+    /** The source board's `meta.generatedAt`, Unix seconds (F91). */
+    generatedAt?: number | null;
+    /** Seconds between that board and the irops run. */
+    dataAgeSec?: number | null;
+  }
 >;
 
 export type IropsData = {
@@ -130,6 +141,8 @@ export type IropsData = {
   diversions: number;
   totalFlights: number;
   hubMetrics: IropsHubMetrics;
+  /** Age of the oldest hub board behind these metrics, seconds (F91). */
+  oldestHubAgeSec?: number | null;
 };
 
 export type FaaAirport = {
@@ -173,7 +186,8 @@ export type ScheduleMeta = {
   partialReason?: string;
   pagesFailed?: number;
   liveFeedFallbackAdded?: number;
-  generatedAt?: string;
+  /** /api/schedule stamps Unix seconds; an ISO string is tolerated (see boardAsOfMs). */
+  generatedAt?: number | string;
   hubDisruptionMinutes?: number;
 };
 

@@ -252,7 +252,7 @@ export function FlightCard({
               ? 'via schedule snapshot + Flightradar24 live'
               : 'via schedule snapshot'}
           </p>
-        ) : hasPayload && (td as { timesUnavailable?: boolean } | null)?.timesUnavailable ? (
+        ) : hasPayload && td?.timesUnavailable ? (
           // FR24-only answer: a live leg with no published times, not a flight without a schedule.
           <p className="text-[10px] text-muted-foreground">Live tracking only — no schedule times yet</p>
         ) : null}

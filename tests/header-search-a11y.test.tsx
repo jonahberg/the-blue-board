@@ -90,7 +90,7 @@ describe('header search button', () => {
   // <Button> has no aria-label, so at phone width its only text is the aria-hidden 🔍.
   // Fix: add `aria-label="Find a flight"` to that Button. When that lands, `it.fails`
   // starts failing — flip it to a plain `it`.
-  it.fails('has an explicit aria-label, so it is named even when the label text is hidden', () => {
+  it('has an explicit aria-label, so it is named even when the label text is hidden', () => {
     renderHeader();
     const label = searchButton().getAttribute('aria-label');
     expect(label).toMatch(/find a flight|search/i);

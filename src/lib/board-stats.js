@@ -17,6 +17,7 @@
 //                   rows whose delta no real flight could have (F4: "+54h" cross-
 //                   instance pairs and stale 10h estimates were counted Late)
 
+import { ON_TIME_GRACE_SECONDS } from './hub-health.js';
 import { classifySchedStatus } from './schedule-status.js';
 import { isPlausibleDelta } from './schedule-plausibility.js';
 
@@ -76,7 +77,7 @@ export function computeScheduleStatCounts(flights, { dir = 'departures', nowSec 
     const actT = realT || (isArr ? fl.time?.estimated?.arrival : fl.time?.estimated?.departure);
     if (!schedT || !actT || derived) continue;
     if (!isPlausibleDelta(actT, schedT, { estimate: !realT })) continue;
-    if (actT > schedT + 1800) late++;
+    if (actT > schedT + ON_TIME_GRACE_SECONDS) late++;
     else onTime++;
   }
 

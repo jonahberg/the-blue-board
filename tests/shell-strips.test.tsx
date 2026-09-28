@@ -23,17 +23,33 @@ vi.mock('../src/app/data/api', () => ({
   fetchNewsLatest: () =>
     Promise.resolve([{ title: 'United adds a new Pacific route from SFO', slug: 'new-pacific-route' }]),
 }));
+// Mutable per test: the strip's network chip and stale dimming read these (F5/F91).
+const hubState = vi.hoisted(() => ({
+  hubs: [] as { hub: string; otp: number | null; source: string | null; asOfMs: number | null }[],
+  faaIndex: {} as Record<string, unknown>,
+  iropsScore: null as number | null,
+}));
+function resetHubState() {
+  const now = Date.now();
+  hubState.hubs = [
+    { hub: 'ORD', otp: 83, source: 'server', asOfMs: now - 5 * 60_000 },
+    { hub: 'DEN', otp: 71, source: 'server', asOfMs: now - 5 * 60_000 },
+  ];
+  hubState.faaIndex = {};
+  hubState.iropsScore = null;
+}
 vi.mock('../src/app/state/schedule', () => ({
   useHubHealth: () => ({
-    hubs: [
-      { hub: 'ORD', otp: 83, source: 'server' },
-      { hub: 'DEN', otp: 71, source: 'server' },
-    ],
-    byHub: { ORD: 83, DEN: 71 },
+    hubs: hubState.hubs,
+    byHub: Object.fromEntries(hubState.hubs.map((h) => [h.hub, h.otp])),
   }),
 }));
-vi.mock('../src/app/state/weather', () => ({ useWeather: () => ({ faaIndex: {} }) }));
-vi.mock('../src/app/state/irops', () => ({ useIrops: () => ({ loading: false }) }));
+vi.mock('../src/app/state/weather', () => ({
+  useWeather: () => ({ faaIndex: hubState.faaIndex }),
+}));
+vi.mock('../src/app/state/irops', () => ({
+  useIrops: () => ({ loading: false, score: hubState.iropsScore }),
+}));
 vi.mock('../src/app/state/prefs', () => ({ usePrefs: () => ({ homeAirport: '' }) }));
 
 const { default: NewsBanner } = await import('../src/app/features/NewsBanner');
@@ -46,6 +62,7 @@ const classesOf = (el: Element | null) => (el?.getAttribute('class') ?? '').spli
 beforeEach(() => {
   vi.useFakeTimers();
   localStorage.clear();
+  resetHubState();
 });
 afterEach(() => {
   cleanup();
@@ -118,5 +135,30 @@ describe('HubHealthStrip', () => {
       const chip = screen.getByRole('link', { name: new RegExp(hub) });
       expect(classesOf(chip)).toContain('min-h-6');
     }
+  });
+
+  const renderStrip = () =>
+    render(
+      <TooltipProvider>
+        <HubHealthStrip />
+      </TooltipProvider>,
+    );
+
+  it('labels the network chip from the on-time readings alone when nothing else is wrong', () => {
+    renderStrip();
+    expect(screen.getByText('Smooth Ops')).toBeTruthy();
+  });
+
+  it('never reads Smooth Ops while the IROPS score is high (F5/F33)', () => {
+    hubState.iropsScore = 90;
+    renderStrip();
+    expect(screen.queryByText('Smooth Ops')).toBeNull();
+  });
+
+  it('dims a chip whose reading comes from an hours-old board (F91)', () => {
+    hubState.hubs[1] = { ...hubState.hubs[1], asOfMs: Date.now() - 3 * 60 * 60_000 };
+    renderStrip();
+    expect(classesOf(screen.getByRole('link', { name: /DEN/ }))).toContain('opacity-60');
+    expect(classesOf(screen.getByRole('link', { name: /ORD/ }))).not.toContain('opacity-60');
   });
 });
