@@ -142,23 +142,32 @@ export function boardAsOfMs(meta, fetchedAtMs, nowMs = Date.now()) {
 export function formatBoardAsOf(ms, timeZone) {
   const date = new Date(ms);
   try {
-    return date.toLocaleTimeString('en-US', {
+    const text = date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       timeZone,
       timeZoneName: 'short',
     });
+    const named = ZONE_NAMES[timeZone];
+    return named ? text.replace(/GMT[+-]\d+(:\d+)?$/, named) : text;
   } catch {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 }
 
 /**
- * Board time-zone abbreviation ("CDT") for the NOW divider and the footer.
+ * `en-US` has names for the US zones but prints the Pacific hubs as "GMT+9" / "GMT+10" (the NRT
+ * board read "── NOW · 12:56 GMT+9 ──"). Neither zone observes DST, so one name each is exact.
+ */
+const ZONE_NAMES = { 'Asia/Tokyo': 'JST', 'Pacific/Guam': 'ChST' };
+
+/**
+ * Board time-zone abbreviation ("CDT", "JST") for the NOW divider and the footer.
  */
 export function hubTzAbbrev(timeZone, now = new Date()) {
   try {
-    return now.toLocaleTimeString('en-US', { timeZone, timeZoneName: 'short' }).split(' ').pop();
+    const abbrev = now.toLocaleTimeString('en-US', { timeZone, timeZoneName: 'short' }).split(' ').pop() || '';
+    return /^GMT[+-]/.test(abbrev) && ZONE_NAMES[timeZone] ? ZONE_NAMES[timeZone] : abbrev;
   } catch {
     return '';
   }

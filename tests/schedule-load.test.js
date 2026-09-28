@@ -124,6 +124,13 @@ describe('hub-local formatting', () => {
     expect(hubTzAbbrev('America/Chicago', new Date('2026-09-13T23:12:00Z'))).toBe('CDT');
     expect(hubTzAbbrev('Not/AZone')).toBe('');
   });
+
+  it('names the Pacific hub zones instead of printing GMT offsets (F103)', () => {
+    // The NRT board read "── NOW · 12:56 GMT+9 ──".
+    expect(hubTzAbbrev('Asia/Tokyo', new Date('2026-09-13T23:12:00Z'))).toBe('JST');
+    expect(hubTzAbbrev('Pacific/Guam', new Date('2026-09-13T23:12:00Z'))).toBe('ChST');
+    expect(formatBoardAsOf(Date.parse('2026-09-13T23:12:00Z'), 'Asia/Tokyo')).toMatch(/^8:12\s?AM JST$/);
+  });
 });
 
 describe('completeness suffix', () => {

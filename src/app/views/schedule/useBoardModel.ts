@@ -30,6 +30,7 @@ import { HUB_TZ } from '@/lib/hubTz.js';
 import { applySightingsToBoard } from '@/lib/reg-overlay.js';
 import { normalizeFlightNum } from '@/lib/reg-ledger.js';
 import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
+import { hubTzAbbrev } from '@/lib/schedule-load.js';
 import { getScheduleFleetFamily } from '@/lib/schedule-filters.js';
 import { buildScheduleRow } from '@/lib/schedule-row-model.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
@@ -477,15 +478,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       futureIndex = firstFutureIndex(times, nowSec) as number;
       dividerIndex = nowDividerIndex(times, nowSec) as number;
       if (dividerIndex >= 0) {
-        let abbrev = '';
-        try {
-          abbrev =
-            new Date().toLocaleTimeString('en-US', { timeZone: hubTz, timeZoneName: 'short' }).split(' ').pop() ||
-            '';
-        } catch {
-          abbrev = '';
-        }
-        dividerLabel = `${formatSchedTime(nowSec, hubTz)} ${abbrev}`.trim();
+        dividerLabel = `${formatSchedTime(nowSec, hubTz)} ${hubTzAbbrev(hubTz) as string}`.trim();
       }
     }
 
@@ -495,13 +488,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       classify: (flight: object) => classify(flight as ScheduleRow),
     }) as BoardModel['stats'];
 
-    let tzAbbrev = '';
-    try {
-      tzAbbrev =
-        new Date().toLocaleTimeString('en-US', { timeZone: hubTz, timeZoneName: 'short' }).split(' ').pop() || '';
-    } catch {
-      tzAbbrev = '';
-    }
+    const tzAbbrev = hubTzAbbrev(hubTz) as string;
 
     return {
       rows: models,
