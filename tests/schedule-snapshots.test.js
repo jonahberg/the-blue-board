@@ -195,6 +195,28 @@ describe('isCompleteSnapshotAcceptable', () => {
     expect(isCompleteSnapshotAcceptable({ partial: false, total: 650 }, { partial: false, total: 700 })).toBe(true);
   });
 
+  it('counts rows the provider pipeline deliberately filtered, so a legitimately thinner board is stored (prod, v1.9.0)', () => {
+    // v1.9.0 drops partner codeshares and other-day rows (meta.filtered). The first post-deploy warm
+    // of NRT arrivals returned a complete 10-flight board against a stored pre-filter 26-flight
+    // board; the retain guard called it truncated, so the stale board (codeshares included) stayed
+    // pinned in Supabase. Deliberately filtered rows are not missing rows.
+    expect(isCompleteSnapshotAcceptable(
+      { partial: false, total: 10, meta: { filtered: { partnerCodeshares: 16, offDay: 0, repaired: 0 } } },
+      { partial: false, total: 26 }
+    )).toBe(true);
+    expect(isCompleteSnapshotAcceptable(
+      { partial: false, total: 380, meta: { filtered: { partnerCodeshares: 0, offDay: 12, repaired: 1 } } },
+      { partial: false, total: 399 }
+    )).toBe(true);
+  });
+
+  it('still rejects a truncated fetch that happens to carry a few filtered rows', () => {
+    expect(isCompleteSnapshotAcceptable(
+      { partial: false, total: 300, meta: { filtered: { partnerCodeshares: 3, offDay: 2, repaired: 0 } } },
+      { partial: false, total: 700 }
+    )).toBe(false);
+  });
+
   it('accepts anything when the stored complete total is zero or missing', () => {
     expect(isCompleteSnapshotAcceptable({ partial: false, total: 1 }, { partial: false, total: 0 })).toBe(true);
     expect(isCompleteSnapshotAcceptable({ partial: false, total: 1 }, { partial: false })).toBe(true);

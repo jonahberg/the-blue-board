@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-09-28
+
+### Fixed
+- **Filtered schedule boards are stored again.** v1.9.0 drops partner codeshares and other-day rows, so a correct board can be much smaller than the pre-filter snapshot it replaces. The snapshot guard that rejects "materially thinner" complete boards (to catch truncated fetches) treated those as truncated. The first post-deploy warm of NRT arrivals (10 flights vs a stored 26) was refused, which left the stale board with codeshares pinned in Supabase. The guard now counts deliberately filtered rows; genuine truncation is still rejected. (`api/_schedule-snapshots.ts`, `tests/schedule-snapshots.test.js`)
+
 ## [1.9.0] - 2026-09-28
 
 Fixes every finding from the Sep 27 2026 whole-site audit (141 agents; 128 of 130 findings independently reproduced) and cleans up the test suite.
