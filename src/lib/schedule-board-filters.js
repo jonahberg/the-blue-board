@@ -1,7 +1,7 @@
 // The schedule board's row-filter predicate, pulled out of getFilteredScheduleFlights
 // so its time-range buckets, domestic/intl classification, and delay-risk-band gating
-// are testable in isolation. Filter strings arrive as a plain object (read off the DOM
-// by the caller); the classifiers/lookups it needs arrive via ctx so this stays pure.
+// are testable in isolation. Filter strings arrive as a plain object (the board's filter
+// state, from useBoardModel); the classifiers/lookups it needs arrive via ctx so this stays pure.
 export function matchesScheduleFilters(fl, filterValues, ctx) {
   const {
     statusFilter, aircraftFilter, fleetFamilyFilter, routeTypeFilter,

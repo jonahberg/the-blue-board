@@ -47,7 +47,9 @@ export function supportMeterModel(data) {
     const pct = clampPct((boards.used / boards.budget) * 100);
     rows.push({
       key: 'boards',
-      label: "Today's board refreshes",
+      // AeroDataBox UNITS (4 per board refresh), not boards: "812/1400 board refreshes" read as
+      // 812 boards when it meant ~203 (F132).
+      label: 'Schedule API units today',
       valueLabel: `${boards.used}/${boards.budget}`,
       pct,
       warn: pct >= SUPPORT_WARN_PCT,
