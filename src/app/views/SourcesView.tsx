@@ -14,7 +14,20 @@
  * the styling disagreed about the same fact. It is a once-a-day community sync — DAILY.
  */
 
-import { CalendarDays, ClipboardList, CloudRain, CloudSun, Handshake, Landmark, MapIcon, MessageCircle, Plane, Radio, Route, Zap } from 'lucide-react';
+import {
+  CalendarDays,
+  ClipboardList,
+  CloudRain,
+  CloudSun,
+  Handshake,
+  Landmark,
+  MapIcon,
+  MessageCircle,
+  Plane,
+  Radio,
+  Route,
+  Zap,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
