@@ -342,3 +342,20 @@ export function emptyBoardReason({ rawCount, partial }) {
   if (Number(rawCount) > 0) return 'filtered';
   return partial ? 'upstream' : 'none';
 }
+
+/**
+ * F16: the first viewer of a today board older than the 1h TTL is served that old board while
+ * the server refreshes it in the background — and, with no polling on the board, kept looking at
+ * it. Re-request such a board once, after the stale serve's 60s CDN object has expired, so the
+ * viewer picks up the refresh their own visit triggered.
+ *
+ * @param {{day: number, stale?: boolean, dataAge?: number, followUp?: boolean}} input
+ *   `followUp` marks a load that is itself the re-request (never chain them).
+ * @returns {number|null}  delay in ms, or null for no re-request.
+ */
+export const STALE_FOLLOW_UP_MS = 75_000;
+export function staleFollowUpDelayMs({ day, stale, dataAge, followUp = false }) {
+  if (followUp || day !== 0) return null;
+  const old = Number(dataAge) > 3600;
+  return stale || old ? STALE_FOLLOW_UP_MS : null;
+}

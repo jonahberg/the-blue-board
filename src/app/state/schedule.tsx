@@ -43,6 +43,7 @@ import {
   retryDelayMs,
   serverClockOffsetSec,
   shouldRetryPartial,
+  staleFollowUpDelayMs,
   swapStorageKey,
 } from '@/lib/schedule-load.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
@@ -436,8 +437,18 @@ export function ScheduleProvider({
     [],
   );
 
+  // One pending stale follow-up per board (F16); see staleFollowUpDelayMs.
+  const followUps = useRef(new Map<BoardKey, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = followUps.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
   const runLoad = useCallback(
-    async (hub: string, dir: BoardDirection, day: number) => {
+    async (hub: string, dir: BoardDirection, day: number, followUp = false) => {
       const key = boardKey(hub, dir, day);
       setLoading((prev) => ({ ...prev, [key]: true }));
       try {
@@ -455,8 +466,24 @@ export function ScheduleProvider({
         // one worth anchoring. Tomorrow and yesterday open at the top, as they should. The
         // signal names THIS board: by the time a slow load lands the viewer may be reading a
         // different one, and that board must not be yanked to a NOW line it never asked for.
-        if (day === 0) setAutoScroll((prev) => ({ key, n: (prev?.n ?? 0) + 1 }));
+        if (day === 0 && !followUp) setAutoScroll((prev) => ({ key, n: (prev?.n ?? 0) + 1 }));
         diffWatched((result.flights || []) as Record<string, unknown>[], dir, result.meta ?? null);
+        const delay = staleFollowUpDelayMs({
+          day,
+          stale: Boolean(result.stale),
+          dataAge: Number(result.meta?.dataAge),
+          followUp,
+        }) as number | null;
+        if (delay !== null && !followUps.current.has(key)) {
+          followUps.current.set(
+            key,
+            setTimeout(() => {
+              followUps.current.delete(key);
+              aggCache.current.delete(cacheKey);
+              void runLoad(hub, dir, day, true);
+            }, delay),
+          );
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Schedule load failed';
         setErrors((prev) => ({ ...prev, [key]: message }));

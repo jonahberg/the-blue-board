@@ -19,6 +19,8 @@ import {
   swapStorageKey,
   swapSummary,
   emptyBoardReason,
+  staleFollowUpDelayMs,
+  STALE_FOLLOW_UP_MS,
 } from '../src/lib/schedule-load.js';
 
 describe('cache + storage keys are the shipped strings', () => {
@@ -379,3 +381,18 @@ describe('emptyBoardReason (F14)', () => {
     expect(emptyBoardReason({ rawCount: 0, partial: false })).toBe('none');
   });
 });
+
+describe('staleFollowUpDelayMs (F16)', () => {
+  it('re-requests a stale or >1h-old TODAY board once, after the 60s stale CDN object expires', () => {
+    expect(staleFollowUpDelayMs({ day: 0, stale: true, dataAge: 3720 })).toBe(STALE_FOLLOW_UP_MS);
+    expect(staleFollowUpDelayMs({ day: 0, stale: false, dataAge: 62690 })).toBe(STALE_FOLLOW_UP_MS);
+    expect(STALE_FOLLOW_UP_MS).toBeGreaterThan(60_000);
+  });
+
+  it('leaves fresh boards, other days, and the follow-up itself alone', () => {
+    expect(staleFollowUpDelayMs({ day: 0, stale: false, dataAge: 600 })).toBeNull();
+    expect(staleFollowUpDelayMs({ day: 1, stale: true, dataAge: 40000 })).toBeNull();
+    expect(staleFollowUpDelayMs({ day: 0, stale: true, dataAge: 5000, followUp: true })).toBeNull();
+  });
+});
+
