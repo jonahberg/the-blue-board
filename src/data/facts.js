@@ -45,7 +45,7 @@ export const HUB_LINE_SHORT = "8 hubs + NRT gateway";
 export const STARLINK_TARGET_2026 = '~1,000';
 
 /** Airframe count in The Blue Board's fleet database (2026-09-28 snapshot — NOT United's live fleet size). */
-export const FLEET_DB_COUNT = 1152;
+export const FLEET_DB_COUNT = 1139;
 
 /**
  * The day that fleet database (`/data/fleet.json`) last changed. It is a hand-maintained

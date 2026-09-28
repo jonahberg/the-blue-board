@@ -27,7 +27,7 @@ import { fleetOrder, fleetTypes } from '../data/fleet/index.js';
 import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../data/starlink-facts.js';
 import { SITE_URL } from './site.js';
 
-/** "1,152" — the same rendering the Markdown twins and the agent-readiness pins use. */
+/** "1,139" — the same rendering the Markdown twins and the agent-readiness pins use. */
 const FLEET_COUNT_TEXT = FLEET_DB_COUNT.toLocaleString('en-US');
 
 /** `<title>` / `og:title`. */

@@ -85,7 +85,7 @@ rate-limited, and marked `noindex` — please read the pages rather than scrapin
 - **Hub Delay Alerts**: Real-time delay counts, cancellations, and on-time performance for all 8 United hubs plus the Tokyo-Narita gateway
 - **Ground Stop & FAA Monitoring**: NAS status alerts affecting United operations
 - **Starlink WiFi Checker**: 425+ United aircraft (as of mid-2026) with Starlink satellite WiFi — search by tail number or flight
-- **Fleet Database**: 1,152 aircraft with type, seat configuration, IFE details, and delivery dates
+- **Fleet Database**: 1,139 aircraft with type, seat configuration, IFE details, and delivery dates
 - **Departure & Arrival Schedules**: Real-time schedules with on-time stats and equipment swap alerts
 - **NEXRAD Weather Radar**: Overlay on the live map showing precipitation affecting flights
 - **METAR Conditions**: Current weather observations at all hub airports
@@ -136,13 +136,13 @@ The Blue Board is the only flight tracker built exclusively for United Airlines 
 ## Pages
 
 - https://theblueboard.co — Live dashboard (flight map, schedules, fleet, weather, analytics)
-- https://theblueboard.co/fleet — Complete fleet database (1,152 aircraft, 19 types, searchable)
+- https://theblueboard.co/fleet — Complete fleet database (1,139 aircraft, 19 types, searchable)
 - https://theblueboard.co/fleet/737-800 — Boeing 737-800 fleet guide (141 aircraft)
 - https://theblueboard.co/fleet/737-900er — Boeing 737-900ER fleet guide (136 aircraft)
 - https://theblueboard.co/fleet/737-max-9 — Boeing 737 MAX 9 fleet guide (178 aircraft)
 - https://theblueboard.co/fleet/737-max-8 — Boeing 737 MAX 8 fleet guide (123 aircraft)
-- https://theblueboard.co/fleet/a319 — Airbus A319 fleet guide (76 aircraft)
-- https://theblueboard.co/fleet/a320 — Airbus A320 fleet guide (68 aircraft)
+- https://theblueboard.co/fleet/a319 — Airbus A319 fleet guide (68 aircraft)
+- https://theblueboard.co/fleet/a320 — Airbus A320 fleet guide (63 aircraft)
 - https://theblueboard.co/fleet/a321neo — Airbus A321neo fleet guide (76 aircraft; covers the new A321XLR)
 - https://theblueboard.co/fleet/777-200er — Boeing 777-200ER fleet guide (55 aircraft, Polaris)
 - https://theblueboard.co/fleet/787-9-dreamliner — Boeing 787-9 Dreamliner fleet guide (59 aircraft, Polaris, new Polaris Studio suites)
