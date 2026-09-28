@@ -4,6 +4,7 @@ import {
   CHART_GEOMETRY,
   STARLINK_CHART_COLORS,
   buildVelocityChart,
+  niceStep,
   formatChartMonth,
   velocityCap,
   velocityFootnote,
@@ -161,21 +162,43 @@ describe('buildVelocityChart', () => {
     expect(chart.bars[7].monthLabel).toBeNull();
   });
 
-  it('scales the cumulative line on its own right axis, ending at the top', () => {
+  it('scales the cumulative line on its own right axis, against a round maximum (F76)', () => {
     const chart = buildVelocityChart(months, 0);
     expect(chart.maxCum).toBe(138);
     expect(chart.linePath.startsWith('M')).toBe(true);
     expect(chart.dots).toHaveLength(4);
-    expect(chart.dots[3].cy).toBeCloseTo(CHART_GEOMETRY.padT, 6);
+    // 138 on a 0–150 axis: the last dot sits just below the top gridline.
+    const plotHeight = CHART_GEOMETRY.H - CHART_GEOMETRY.padT - CHART_GEOMETRY.padB;
+    expect(chart.dots[3].cy).toBeCloseTo(CHART_GEOMETRY.padT + plotHeight * (12 / 150), 6);
     expect(chart.endValue.text).toBe(138);
-    expect(chart.rightTicks.map((t) => t.value)).toEqual([0, 35, 69, 104, 138]);
+    expect(chart.endValue.y).toBeLessThan(chart.dots[3].cy);
+    expect(chart.rightTicks.map((t) => t.value)).toEqual([0, 50, 100, 150]);
   });
 
-  it('emits four left-axis ticks from zero to the cap', () => {
+  it('never prints the line total twice — no tick equal to it (F76)', () => {
+    const exact = [month('2025-10', 'OCT 25', 100, 0, 100), month('2025-11', 'NOV', 50, 0, 150)];
+    const chart = buildVelocityChart(exact, 0);
+    expect(chart.endValue.text).toBe(150);
+    expect(chart.rightTicks.map((t) => t.value)).toEqual([0, 50, 100]);
+  });
+
+  it('emits round left-axis ticks from zero to at least the cap', () => {
     const chart = buildVelocityChart(months, 0);
-    expect(chart.leftTicks[0].value).toBe(0);
-    expect(chart.leftTicks[3].value).toBe(chart.cap);
-    expect(chart.leftTicks[0].y).toBeGreaterThan(chart.leftTicks[3].y);
+    const values = chart.leftTicks.map((t) => t.value);
+    expect(values[0]).toBe(0);
+    expect(values[values.length - 1]).toBeGreaterThanOrEqual(chart.cap);
+    const step = values[1] - values[0];
+    expect(values.every((v, i) => v === i * step)).toBe(true);
+    expect([1, 2, 2.5, 5].some((m) => step / 10 ** Math.floor(Math.log10(step)) === m)).toBe(true);
+    expect(chart.leftTicks[0].y).toBeGreaterThan(chart.leftTicks[1].y);
+  });
+
+  it('niceStep rounds up to 1, 2, 2.5 or 5 × 10^k', () => {
+    expect(niceStep(80, 4)).toBe(20);
+    expect(niceStep(80, 3)).toBe(50);
+    expect(niceStep(598, 4)).toBe(200);
+    expect(niceStep(10, 4)).toBe(2.5);
+    expect(niceStep(0, 4)).toBe(1);
   });
 
   it('states the covered range in the subtitle and forwards the footnote', () => {

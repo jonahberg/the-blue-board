@@ -49,9 +49,36 @@ export function velocityCap(months) {
   return Math.max(5, Math.ceil((hasOutlier ? secondT * 1.2 : maxT) / 5) * 5);
 }
 
+/**
+ * A round tick step: `max / count` rounded UP to 1, 2, 2.5 or 5 × 10^k, so an axis reads
+ * 0/20/40/60/80 or 0/200/400/600 instead of 0/27/53/80 and 0/150/299/449/598 (F76).
+ *
+ * @param {number} max
+ * @param {number} count  the most intervals wanted.
+ * @returns {number}
+ */
+export function niceStep(max, count) {
+  const raw = (Number(max) || 0) / Math.max(1, count);
+  if (!(raw > 0)) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 5, 10]) {
+    if (m * mag >= raw - 1e-9) return m * mag;
+  }
+  return 10 * mag;
+}
+
+/** Ticks from 0 to the first multiple of a nice step at or above `max`. */
+function niceTicks(max, count) {
+  const step = niceStep(max, count);
+  const top = Math.max(step, Math.ceil(max / step - 1e-9) * step);
+  const values = [];
+  for (let v = 0; v <= top + 1e-9; v += step) values.push(Math.round(v * 100) / 100);
+  return { top, values };
+}
+
 /** The jagged "axis break" drawn across a capped bar's top. */
-function zigzagPath(x, bw, padT) {
-  let d = `M ${x - 2} ${padT + 8}`;
+function zigzagPath(x, bw, topY) {
+  let d = `M ${x - 2} ${topY + 8}`;
   for (let z = 0; z < Math.ceil((bw + 4) / 8); z++) d += ' l 4 -5 l 4 5';
   return d;
 }
@@ -92,12 +119,19 @@ export function buildVelocityChart(months, undated = 0) {
   const step = cw / n;
   const bw = Math.max(8, Math.floor(step * 0.56));
 
+  // Bars are CAPPED at `cap` (the outlier rule) but SCALED against a round axis maximum at or
+  // above it, so the ticks are numbers a reader can use. A capped bar stops at the cap line.
   const cap = velocityCap(months);
+  const left = niceTicks(cap, 4);
+  const barMax = left.top;
+  const capY = padT + ch - (cap / barMax) * ch;
   const maxCum = months[n - 1].cumulative || 1;
+  const right = niceTicks(maxCum, 4);
+  const cumMax = right.top;
 
-  const leftTicks = [0, Math.round(cap / 3), Math.round((cap * 2) / 3), cap].map((value) => ({
+  const leftTicks = left.values.map((value) => ({
     value,
-    y: padT + ch - (value / cap) * ch,
+    y: padT + ch - (value / barMax) * ch,
   }));
 
   const cappedMonths = [];
@@ -108,8 +142,8 @@ export function buildVelocityChart(months, undated = 0) {
     // Inside a capped bar the split stays proportional, so the stack still reads Express-heavy.
     const eVis = isCapped && d.total ? visTotal * (d.express / d.total) : d.express;
     const mVis = visTotal - eVis;
-    const eh = (eVis / cap) * ch;
-    const mh = (mVis / cap) * ch;
+    const eh = (eVis / barMax) * ch;
+    const mh = (mVis / barMax) * ch;
     const yE = padT + ch - eh;
     const yM = yE - mh;
     if (isCapped) cappedMonths.push(d);
@@ -130,11 +164,11 @@ export function buildVelocityChart(months, undated = 0) {
       expressRect: eVis > 0 ? { y: yE, height: eh } : null,
       mainlineRect: mVis > 0 ? { y: yM, height: mh } : null,
       capped: isCapped,
-      zigzag: isCapped ? zigzagPath(x, bw, padT) : null,
+      zigzag: isCapped ? zigzagPath(x, bw, capY) : null,
       countLabel: isCapped
-        ? { x: x + bw / 2, y: padT - 6, text: `${d.total}*` }
+        ? { x: x + bw / 2, y: capY - 6, text: `${d.total}*` }
         : d.total > 0
-          ? { x: x + bw / 2, y: padT + ch - (visTotal / cap) * ch - 5, text: String(d.total) }
+          ? { x: x + bw / 2, y: padT + ch - (visTotal / barMax) * ch - 5, text: String(d.total) }
           : null,
       monthLabel: showLabel ? { x: x + bw / 2, y: H - padB + 16, text: d.label } : null,
     };
@@ -143,18 +177,17 @@ export function buildVelocityChart(months, undated = 0) {
   let linePath = '';
   const dots = months.map((d, i) => {
     const cx = padL + i * step + step / 2;
-    const cy = padT + ch - (d.cumulative / maxCum) * ch;
+    const cy = padT + ch - (d.cumulative / cumMax) * ch;
     linePath += `${i === 0 ? 'M' : 'L'}${cx} ${cy} `;
     return { cx, cy };
   });
 
-  const rightTicks = [
-    0,
-    Math.round(maxCum / 4),
-    Math.round(maxCum / 2),
-    Math.round((maxCum * 3) / 4),
-    maxCum,
-  ].map((value) => ({ value, y: padT + ch - (value / maxCum) * ch }));
+  // The line's end is labelled with the real total (`endValue`, beside the last dot), so a tick
+  // carrying the same number would print it twice at one height.
+  const rightTicks = right.values
+    .filter((value) => value !== maxCum)
+    .map((value) => ({ value, y: padT + ch - (value / cumMax) * ch }));
+  const lastDot = dots[n - 1];
 
   return {
     width: W,
@@ -168,7 +201,7 @@ export function buildVelocityChart(months, undated = 0) {
     rightTicks,
     linePath,
     dots,
-    endValue: { x: W - padR - 4, y: padT - 4, text: maxCum },
+    endValue: { x: W - padR - 4, y: Math.max(padT - 4, lastDot.cy - 7), text: maxCum },
     subtitle: `Aircraft equipped per month · ${formatChartMonth(months[0].ym)} – ${formatChartMonth(months[n - 1].ym)}`,
     footnote: velocityFootnote(cappedMonths, undated),
     cappedMonths,
