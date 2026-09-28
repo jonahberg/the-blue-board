@@ -28,10 +28,10 @@ type Tiers = { critical: NasItem[]; active: NasItem[]; monitoring: NasItem[] };
 
 /** The badge classes `sevBadgeClass()` returns, mapped onto the theme's tokens. */
 const BADGE_TONE: Record<string, string> = {
-  'sev-gs': 'border-red-500/40 bg-red-500/15 text-red-400',
-  'sev-gdp': 'border-amber-500/40 bg-amber-500/15 text-amber-400',
-  'sev-afp': 'border-amber-500/40 bg-amber-500/15 text-amber-400',
-  'sev-mit': 'border-sky-500/40 bg-sky-500/15 text-sky-400',
+  'sev-gs': 'border-destructive/40 bg-destructive/15 text-destructive',
+  'sev-gdp': 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
+  'sev-afp': 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
+  'sev-mit': 'border-bb-info/40 bg-bb-info/15 text-bb-info',
   'sev-cdr': 'border-border bg-muted text-muted-foreground',
   'sev-other': 'border-border bg-muted text-muted-foreground',
 };
@@ -88,7 +88,7 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
                       {index > 0 ? ' · ' : ''}
                       {part.kind === 'delay' ? (
                         <>
-                          avg <span className="font-mono text-amber-400">{part.text}</span>
+                          avg <span className="font-mono text-bb-warn">{part.text}</span>
                         </>
                       ) : (
                         part.text

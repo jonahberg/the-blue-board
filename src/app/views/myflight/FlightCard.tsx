@@ -221,7 +221,7 @@ export function FlightCard({
               {isStarlink ? (
                 <Badge
                   variant="outline"
-                  className="ml-1 border-emerald-500/40 bg-emerald-500/15 text-[9px] font-normal text-emerald-400"
+                  className="ml-1 border-bb-ok/40 bg-bb-ok/15 text-[9px] font-normal text-bb-ok"
                 >
                   ⚡ Starlink Confirmed
                 </Badge>

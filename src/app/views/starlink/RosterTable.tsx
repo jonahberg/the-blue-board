@@ -265,7 +265,7 @@ export const RosterTable = memo(function RosterTable({
                     </button>
                     {newTails.has(aircraft.tail) ? (
                       <span
-                        className="ml-1 rounded border px-1 py-0.5 text-[9px] font-semibold text-amber-400"
+                        className="ml-1 rounded border px-1 py-0.5 text-[9px] font-semibold text-bb-warn"
                         title={`Starlink equipment first seen ${aircraft.dateFound ?? 'recently'}`}
                       >
                         NEW
@@ -292,7 +292,7 @@ export const RosterTable = memo(function RosterTable({
                     <TableCell>
                       {live ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold">
-                          <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-400" />
+                          <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
                           Airborne
                         </span>
                       ) : (

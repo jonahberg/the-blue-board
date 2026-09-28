@@ -86,7 +86,7 @@ export function LegalMenu() {
             Fleet Database
           </a>
           <Ext href="https://github.com/jonahberg/the-blue-board/issues">Support / Feedback</Ext>
-          <Ext href="https://buymeacoffee.com/notjbg" className="font-semibold text-amber-400 underline-offset-2 hover:underline">
+          <Ext href="https://buymeacoffee.com/notjbg" className="font-semibold text-primary underline-offset-2 hover:underline">
             ☕ Donate
           </Ext>
           <Ext href="https://x.com/theblueboard">@theblueboard</Ext>

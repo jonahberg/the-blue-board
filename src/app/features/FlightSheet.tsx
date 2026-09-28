@@ -109,10 +109,10 @@ function TimeRow({
           variant="outline"
           className={
             resolved.delta.tone === 'late'
-              ? 'border-amber-500/30 text-amber-400'
+              ? 'border-bb-warn/30 text-bb-warn'
               : resolved.delta.tone === 'early'
-                ? 'border-sky-500/30 text-sky-400'
-                : 'border-emerald-500/30 text-emerald-400'
+                ? 'border-bb-info/30 text-bb-info'
+                : 'border-bb-ok/30 text-bb-ok'
           }
         >
           {resolved.delta.label}
@@ -334,7 +334,7 @@ export function FlightSheet() {
               1200 (VFR) with an empty class, which is routine — the Ticker filters on the
               same `squawk-alert` class for the same reason. */}
           {squawk && squawk.cls === 'squawk-alert' ? (
-            <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300">
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
               {squawk.text}
             </p>
           ) : null}
@@ -416,7 +416,7 @@ export function FlightSheet() {
                     {reg}
                   </Button>
                   {isStarlink ? (
-                    <Badge className="border-violet-500/30 bg-violet-500/10 text-violet-300">
+                    <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
                       ⚡ Starlink confirmed
                     </Badge>
                   ) : null}

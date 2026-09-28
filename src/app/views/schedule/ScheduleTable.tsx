@@ -397,7 +397,7 @@ export const ScheduleTable = forwardRef<
                       <span
                         className={cn(
                           'block text-[9px]',
-                          row.actualLine.early ? 'text-emerald-400' : 'text-muted-foreground',
+                          row.actualLine.early ? 'text-bb-ok' : 'text-muted-foreground',
                         )}
                       >
                         {row.actualLine.text}
@@ -534,7 +534,7 @@ export const ScheduleTable = forwardRef<
                       <span className="block text-[9px] text-muted-foreground">as of {boardAsOf}</span>
                     ) : null}
                     {row.faaContext ? (
-                      <span className="block text-[9px] text-amber-400">{row.faaContext}</span>
+                      <span className="block text-[9px] text-bb-warn">{row.faaContext}</span>
                     ) : null}
                   </TableCell>
 

@@ -139,7 +139,7 @@ export default function DelayExplainDialog() {
           ) : null}
 
           {state.phase === 'error' ? (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-400">
+            <p className="rounded-md border border-bb-warn/40 bg-bb-warn/10 px-2.5 py-2 text-xs text-bb-warn">
               <span aria-hidden="true">⚠️ </span>
               {state.message}
             </p>

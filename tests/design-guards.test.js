@@ -97,3 +97,53 @@ describe('content pages keep an 11px type floor (audit F75)', () => {
     expect(hits(CONTENT, /text-\[(?:[0-9]|10)px\]|font-size:\s*(?:[0-9]|10)px/)).toEqual([]);
   });
 });
+
+describe('status colour comes from the DESIGN.md tokens, not the raw Tailwind palette (audit F72)', () => {
+  // The dashboard carried ~260 raw palette classes (text-amber-400, text-emerald-400 …), so its
+  // "ok" green was a different green from the content pages' --color-bb-ok. Status is
+  // bb-ok / bb-warn / destructive, Starlink is bb-starlink, informative is bb-info, and
+  // anything else is a neutral token. Zinc/gray/slate scrims are not status and are not scanned.
+  const SCOPE = ['src/app', 'src/components', 'src/pages', 'src/layouts'].flatMap((p) => [
+    ...walk(resolve(ROOT, p)),
+  ]);
+  const HUES = 'red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
+  const RAW = new RegExp(
+    `(?<![\\w-])(?:text|bg|border(?:-[lrtbxy])?|fill|stroke|ring|decoration|outline|from|to|via|shadow|accent|caret)-(?:${HUES})-\\d{2,3}\\b`,
+  );
+
+  it('uses no raw chromatic palette utility anywhere in the UI', () => {
+    expect(hits(SCOPE, RAW)).toEqual([]);
+  });
+
+  it('every token utility it uses is declared in global.css', () => {
+    const css = readFileSync(resolve(ROOT, 'src/styles/global.css'), 'utf8');
+    for (const token of ['bb-ok', 'bb-warn', 'bb-info', 'bb-starlink']) {
+      expect(css, `--color-${token} missing from @theme`).toMatch(new RegExp(`--color-${token}:`));
+    }
+  });
+});
+
+describe('every var(--x) in markup names a declared custom property (audit F72)', () => {
+  // `text-[var(--bb-warn)]` shipped on six content pages and resolved to nothing: Tailwind's
+  // @theme emits --color-bb-warn, never --bb-warn. A misnamed var() fails silently in CSS.
+  const declared = new Set();
+  for (const css of ['src/styles/global.css', 'src/styles/content.css']) {
+    for (const m of readFileSync(resolve(ROOT, css), 'utf8').matchAll(/(--[\w-]+)\s*:/g)) declared.add(m[1]);
+  }
+  const SCOPE = ['src/app', 'src/components', 'src/pages', 'src/layouts'].flatMap((p) => [
+    ...walk(resolve(ROOT, p)),
+  ]);
+
+  it('finds no var() of an undeclared name', () => {
+    const offenders = [];
+    for (const path of SCOPE) {
+      const src = readFileSync(path, 'utf8');
+      // A property the same file sets inline (`style={{ '--gap': … }}`) is declared too.
+      const local = new Set([...src.matchAll(/['"](--[\w-]+)['"]\s*:/g)].map((m) => m[1]));
+      for (const m of src.matchAll(/var\((--[\w-]+)/g)) {
+        if (!declared.has(m[1]) && !local.has(m[1])) offenders.push(`${relative(ROOT, path)}: ${m[1]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});

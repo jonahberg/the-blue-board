@@ -84,7 +84,7 @@ export const SlHero = memo(function SlHero({
                 <span className="w-16 shrink-0 text-[11px] text-muted-foreground">{bar.label}</span>
                 <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
                   <div
-                    className={`h-full rounded-full ${bar.label === 'Express' ? 'bg-emerald-500' : 'bg-primary'}`}
+                    className={`h-full rounded-full ${bar.label === 'Express' ? 'bg-bb-ok' : 'bg-primary'}`}
                     style={{ width: `${Math.max(0, Math.min(100, bar.pct))}%` }}
                   />
                 </div>
@@ -114,14 +114,14 @@ export const SlHero = memo(function SlHero({
                 title="Show these on the live map"
                 aria-label={`Show ${airborneCount} airborne Starlink aircraft on the live map`}
               >
-                <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-400" />
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
                 {airborneCount} AIRBORNE NOW
               </button>
             ) : (
               // Degraded tier: the Live map's Starlink toggle is disabled, so a click-through
               // would land on a map with nothing filtered. State the count, offer no journey.
               <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold">
-                <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-400" />
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
                 {airborneCount} AIRBORNE NOW
               </span>
             )

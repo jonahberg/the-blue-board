@@ -141,7 +141,7 @@ export function DeliveryTimeline({
         {stats.newest ? (
           <>
             {' · '}Newest:{' '}
-            <strong className="font-medium text-emerald-400">
+            <strong className="font-medium text-foreground">
               {stats.newest.r} ({stats.newest.d})
             </strong>
           </>
@@ -149,7 +149,7 @@ export function DeliveryTimeline({
         {stats.oldest ? (
           <>
             {' · '}Oldest:{' '}
-            <strong className="font-medium text-amber-400">
+            <strong className="font-medium text-foreground">
               {stats.oldest.r} ({stats.oldest.d})
             </strong>
           </>

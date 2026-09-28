@@ -182,7 +182,7 @@ export function ManualConnectionCheck() {
       <div id="conn-manual-result" className="mt-2.5">
         {state.phase === 'message' ? (
           <p
-            className={`text-[11px] ${state.tone === 'error' ? 'text-red-400' : 'text-muted-foreground'}`}
+            className={`text-[11px] ${state.tone === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}
           >
             {state.text}
           </p>

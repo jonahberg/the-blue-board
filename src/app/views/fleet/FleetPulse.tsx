@@ -105,7 +105,7 @@ export function FleetPulse({
           <Badge variant="outline" className="gap-1 text-[10px]">
             <span
               aria-hidden="true"
-              className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400"
+              className="inline-block size-1.5 animate-pulse rounded-full bg-bb-ok"
             />
             LIVE
           </Badge>

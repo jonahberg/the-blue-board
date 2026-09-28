@@ -98,14 +98,14 @@ export function AirborneTable({
                 <TableCell className="text-xs">{row.phase}</TableCell>
                 <TableCell>
                   {row.starlink ? (
-                    <span className="rounded border border-violet-500/30 bg-violet-500/10 px-1 py-0.5 text-[9px] font-medium text-violet-300">
+                    <span className="rounded border border-bb-starlink/30 bg-bb-starlink/10 px-1 py-0.5 text-[9px] font-medium text-bb-starlink">
                       SL
                     </span>
                   ) : null}
                 </TableCell>
                 <TableCell>
                   {row.special ? (
-                    <span className="rounded border px-1 py-0.5 text-[9px] text-amber-400">
+                    <span className="rounded border px-1 py-0.5 text-[9px] text-bb-warn">
                       ⭐ {row.special.name}
                     </span>
                   ) : null}

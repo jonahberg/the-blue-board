@@ -242,8 +242,8 @@ export default function Fr24LookupDialog() {
               </div>
 
               {previousLegDate !== null ? (
-                <p className="rounded-r border-l-[3px] border-amber-500 bg-amber-500/10 px-2.5 py-1.5 text-[9px] leading-relaxed text-muted-foreground">
-                  <span className="font-semibold text-amber-400">
+                <p className="rounded-r border-l-[3px] border-bb-warn bg-bb-warn/10 px-2.5 py-1.5 text-[9px] leading-relaxed text-muted-foreground">
+                  <span className="font-semibold text-bb-warn">
                     Last operated{previousLegDate ? ` ${previousLegDate}` : ''}
                   </span>
                   <br />
@@ -253,10 +253,10 @@ export default function Fr24LookupDialog() {
               ) : null}
 
               {disclaimer.show ? (
-                <p className="rounded-r border-l-[3px] border-amber-500 bg-amber-500/10 px-2.5 py-1.5 text-[9px] leading-relaxed text-muted-foreground">
+                <p className="rounded-r border-l-[3px] border-bb-warn bg-bb-warn/10 px-2.5 py-1.5 text-[9px] leading-relaxed text-muted-foreground">
                   {disclaimer.legDateLabel ? (
                     <>
-                      <span className="font-semibold text-amber-400">
+                      <span className="font-semibold text-bb-warn">
                         Leg date: {disclaimer.legDateLabel}
                       </span>
                       <br />
@@ -341,7 +341,7 @@ export default function Fr24LookupDialog() {
       {/* Not a modal and not a live region: the announcer already said this once. */}
       {failure ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex justify-center px-4">
-          <div className="pointer-events-auto flex max-w-md items-start gap-2 rounded-md border border-amber-500/40 bg-card px-3 py-2 text-[11px] leading-relaxed shadow-lg">
+          <div className="pointer-events-auto flex max-w-md items-start gap-2 rounded-md border border-bb-warn/40 bg-card px-3 py-2 text-[11px] leading-relaxed shadow-lg">
             <span className="flex-1">{failure}</span>
             <Button
               size="sm"

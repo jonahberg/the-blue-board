@@ -55,9 +55,9 @@ export type HubCardModel = {
 };
 
 const STATUS_TONE: Record<HubCardModel['status']['tone'], string> = {
-  delay: 'text-red-400',
-  caution: 'text-amber-400',
-  normal: 'text-emerald-400',
+  delay: 'text-destructive',
+  caution: 'text-bb-warn',
+  normal: 'text-bb-ok',
 };
 
 function StatusPart({ part }: { part: HubCardStatusPart }) {
@@ -96,7 +96,7 @@ export function HubCard({ model, highlighted }: { model: HubCardModel; highlight
         {model.deice ? (
           <Badge
             variant="outline"
-            className="border-amber-500/40 px-1.5 py-0 font-mono text-[9px] uppercase tracking-wide text-amber-400"
+            className="border-bb-warn/40 px-1.5 py-0 font-mono text-[9px] uppercase tracking-wide text-bb-warn"
           >
             De-ice
           </Badge>
@@ -164,7 +164,7 @@ export function HubCard({ model, highlighted }: { model: HubCardModel; highlight
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-amber-400 underline"
+                    className="text-[10px] text-bb-warn underline"
                   >
                     Advisory
                   </a>

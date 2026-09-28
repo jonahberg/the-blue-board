@@ -78,7 +78,7 @@ function Row({
       <span className="col-span-3 flex items-center justify-end gap-2 sm:col-span-1">
         {row.airborne ? (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold">
-            <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-400" />
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
             Airborne
           </span>
         ) : row.inbound ? (

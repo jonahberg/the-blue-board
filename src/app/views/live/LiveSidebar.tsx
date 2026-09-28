@@ -180,7 +180,7 @@ export function LiveSidebar({
                           </Badge>
                         ) : null}
                         {selected ? (
-                          <span className="text-[9px] text-emerald-400">✓ FILTERED</span>
+                          <span className="text-[9px] text-bb-ok">✓ FILTERED</span>
                         ) : null}
                         <span className="ml-auto font-mono text-muted-foreground">
                           ↗ {row.outbound} ↙ {row.inbound}

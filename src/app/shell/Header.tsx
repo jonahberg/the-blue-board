@@ -64,9 +64,9 @@ export function Header({
           variant="outline"
           className={cn(
             'gap-1.5 font-mono',
-            state === 'live' && 'border-emerald-500/30 text-emerald-400',
-            state === 'stale' && 'border-amber-500/30 text-amber-400',
-            state === 'none' && 'border-red-500/30 text-red-400',
+            state === 'live' && 'border-bb-ok/30 text-bb-ok',
+            state === 'stale' && 'border-bb-warn/30 text-bb-warn',
+            state === 'none' && 'border-destructive/30 text-destructive',
           )}
         >
           <span aria-hidden="true">{state === 'live' ? '●' : state === 'stale' ? '▲' : '■'}</span>

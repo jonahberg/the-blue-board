@@ -302,7 +302,7 @@ const hubLinkClass =
       fleetFamilies.map((fam) => (
         <section class="mt-8">
           <div class="mb-3 flex flex-wrap items-baseline gap-2.5 border-b border-border pb-2">
-            <span class="font-mono text-xl font-bold tracking-wide text-[var(--bb-warn)] tabular-nums">
+            <span class="font-mono text-xl font-bold tracking-wide text-bb-warn tabular-nums">
               {fam.count}
             </span>
             <h2 class="text-base font-bold tracking-tight text-foreground">{fam.name}</h2>
@@ -325,7 +325,7 @@ const hubLinkClass =
                         'mr-1 inline-block rounded-sm px-1.5 py-0.5 font-semibold text-foreground',
                         t.bodyType === 'widebody'
                           ? 'bg-primary/25'
-                          : 'bg-[color-mix(in_oklab,var(--bb-ok)_22%,transparent)]',
+                          : 'bg-bb-ok/22',
                       ]}
                     >
                       {t.bodyType === 'widebody' ? 'Widebody' : 'Narrowbody'}

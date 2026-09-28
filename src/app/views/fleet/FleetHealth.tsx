@@ -27,11 +27,11 @@ export type HealthModel = {
 export type StarlinkChip = { label: string; value: string; tone: 'ok' | 'primary' | 'express' | 'neutral' | 'new' };
 
 const CHIP_TONES: Record<StarlinkChip['tone'], string> = {
-  ok: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400',
+  ok: 'border-bb-ok/20 bg-bb-ok/10 text-bb-ok',
   primary: 'border-primary/20 bg-primary/10 text-primary',
-  express: 'border-violet-500/20 bg-violet-500/10 text-violet-400',
+  express: 'border-bb-starlink/20 bg-bb-starlink/10 text-bb-starlink',
   neutral: 'border-border bg-muted/40 text-foreground',
-  new: 'border-amber-500/25 bg-amber-500/10 text-amber-400',
+  new: 'border-primary/20 bg-primary/10 text-primary',
 };
 
 export function FleetLoadError({ onRetry }: { onRetry: () => void }) {

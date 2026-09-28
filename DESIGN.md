@@ -73,15 +73,27 @@ One token is ours, not shadcn's:
 text it is only 3.0:1. `--primary-fill` is the same hue, darker (5.8:1 with white).
 `tests/primary-contrast.test.js` pins both pairs. Text and outlines stay `--primary`.
 
-Two status hues shadcn does not carry are declared in a real `@theme` block:
+The hues shadcn does not carry are declared in a real `@theme` block:
 
 | Token | Value | Use |
 |---|---|---|
-| `--color-bb-warn` | `oklch(0.76 0.12 85)` | caution / degraded |
-| `--color-bb-ok` | `oklch(0.74 0.16 150)` | clear / on-time |
+| `--color-bb-warn` | `oklch(0.76 0.12 85)` | caution / degraded / in progress |
+| `--color-bb-ok` | `oklch(0.74 0.16 150)` | clear / on-time / live |
+| `--color-bb-info` | `oklch(0.75 0.13 230)` | informative, not a problem: an estimate, an advisory, "announced" |
+| `--color-bb-starlink` | `oklch(0.702 0.183 293.541)` (`#A78BFA`) | Starlink metal — badges, chips, charts |
 
-They are emitted as custom properties (so `content.css` can reach them with `var()`) **and**
-as utilities (`bg-bb-ok`, `text-bb-warn`, `border-bb-warn`).
+Red is shadcn's own `--destructive` (`text-destructive`, `bg-destructive/15`). They are emitted
+as custom properties (so `content.css` can reach them with `var(--color-bb-ok)` — never
+`var(--bb-ok)`, which is not declared) **and** as utilities (`bg-bb-ok`, `text-bb-warn`,
+`border-bb-warn/40`).
+
+**The dashboard and every component use these tokens, never the raw Tailwind palette.**
+`text-amber-400` and `text-bb-warn` are different ambers; mixing them is how the dashboard's
+"ok" green drifted from the content pages' (audit F72). `tests/design-guards.test.js` fails on
+any chromatic palette utility (`amber-400`, `emerald-500/40`, `violet-300` …) under `src/app`,
+`src/components`, `src/pages` or `src/layouts`, and on any `var(--x)` whose name is not
+declared. A count that is a fact rather than a verdict (the IROPS totals) stays in body
+colour: hue is for status.
 
 ### Domain colour constants — `src/lib/*`
 
@@ -261,6 +273,7 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-09 | One accent: United blue as `--primary`; amber retired | The amber secondary was doing two jobs — personality and "caution". Caution is now `--color-bb-warn`, and the accent is unambiguous. |
 | 2026-09 | Status/phase/category colours stay in `src/lib` | They are encodings shared by map, chart and table, and they are unit-tested. A CSS token cannot be asserted in a test. |
 | 2026-09 | Dashboard nav breaks at `lg`, content pages at `md` | The dashboard needs the full tab bar's width; a content page does not. |
+| 2026-09 | Status colour is the token set only; `bb-info` + `bb-starlink` added | ~260 raw palette classes had put a second amber and a second green in the dashboard (audit F72). Red maps to `--destructive` (identical to `red-400` in dark); amber/green render slightly quieter as `bb-warn`/`bb-ok`. The trackers' editorial gold accent became `--primary` (the amber secondary was already retired). |
 | 2026-09 | `--primary-fill` for filled primary surfaces | White on `--primary` measured 2.99:1 (axe, audit F37). Darkening `--primary` itself would have cost its contrast as text on the dark surfaces, so fills got their own token. |
 | 2026-09 | Touch floor relaxes on `pointer-fine:md:`, not `md:` | Tablets are touch devices at `md` widths (audit F24). |
 | 2026-09 | Flight panel is a bottom sheet below `lg` | A right-hand sheet covered the whole phone map it was meant to sit beside (audit F20). |

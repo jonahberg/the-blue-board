@@ -49,6 +49,6 @@ describe('NasPanel', () => {
     const { container } = render(<NasPanel nas={nas} />);
     expect(screen.getByText('Critical')).toBeTruthy();
     const badge = [...container.querySelectorAll('span, div')].find((el) => el.textContent === 'GS');
-    expect(badge?.className).toMatch(/red/);
+    expect(badge?.className).toMatch(/\bdestructive\b/);
   });
 });

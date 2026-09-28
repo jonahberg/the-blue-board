@@ -86,7 +86,7 @@ function statusClass(status: string | undefined): string {
   const value = (status || '').toLowerCase();
   if (value.includes('stored')) return 'text-destructive';
   if (value.includes('maint') || value.includes('paint') || value.includes('mod')) {
-    return 'text-[var(--bb-warn)]';
+    return 'text-bb-warn';
   }
   return 'text-muted-foreground';
 }

@@ -352,7 +352,7 @@ export default function ScheduleView() {
               href="https://aerodatabox.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-emerald-400 underline"
+              className="text-bb-ok underline"
             >
               AeroDataBox
             </a>{' '}

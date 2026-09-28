@@ -101,8 +101,8 @@ export function Ticker() {
         className={cn(
           'truncate text-[11px] transition-opacity duration-300 motion-reduce:transition-none',
           fading ? 'opacity-0' : 'opacity-100',
-          item.cls === 'advisory' && 'text-amber-400',
-          item.cls === 'critical' && 'font-medium text-red-400',
+          item.cls === 'advisory' && 'text-bb-warn',
+          item.cls === 'critical' && 'font-medium text-destructive',
           item.cls === 'disclaimer' && 'text-muted-foreground',
         )}
       >

@@ -15,11 +15,12 @@ interface Props {
 
 const { tone = 'default', class: className = '' } = Astro.props;
 
-// `--bb-warn` / `--bb-ok` are the two status hues declared in `content.css`.
+// `bb-warn` / `bb-ok` are the two status hues DESIGN.md declares in global.css's `@theme`
+// (`--color-bb-*`); the bare `--bb-warn` name is not declared anywhere (audit F72).
 const TONE_CLASS = {
   default: 'border-l-primary',
-  warn: 'border-l-[var(--bb-warn)]',
-  ok: 'border-l-[var(--bb-ok)]',
+  warn: 'border-l-bb-warn',
+  ok: 'border-l-bb-ok',
   alert: 'border-l-destructive',
 } as const;
 ---

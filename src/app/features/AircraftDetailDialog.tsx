@@ -180,7 +180,7 @@ export default function AircraftDetailDialog() {
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {specialEntry ? <Badge variant="outline">⭐ {specialEntry.name}</Badge> : null}
                   {isStarlink ? (
-                    <Badge className="border-violet-500/30 bg-violet-500/10 text-violet-300">
+                    <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
                       ⚡ STARLINK
                     </Badge>
                   ) : null}
@@ -264,7 +264,7 @@ export default function AircraftDetailDialog() {
                   <Fact
                     label="Starlink"
                     value={isStarlink ? 'Yes ⚡' : 'No'}
-                    tone={isStarlink ? 'text-emerald-400' : 'text-muted-foreground'}
+                    tone={isStarlink ? 'text-bb-ok' : 'text-muted-foreground'}
                   />
                   {/* The cabin string is the longest value here: it gets two columns so it
                       reads on one line at desktop width. */}
@@ -313,7 +313,7 @@ export default function AircraftDetailDialog() {
                     className="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-emerald-400">
+                      <span className="text-sm font-semibold text-bb-ok">
                         {phase.icon} Airborne — {liveFlight.flightIATA || liveFlight.callsign || '?'}
                       </span>
                       <span className="text-[10px] text-muted-foreground">View on map →</span>

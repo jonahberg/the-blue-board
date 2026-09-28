@@ -211,7 +211,7 @@ export default function WaitlistDialog() {
             <div aria-hidden="true" className="text-3xl">
               ✈️
             </div>
-            <p className="mt-2 text-base font-semibold text-emerald-400">You&rsquo;re on the list! ✈</p>
+            <p className="mt-2 text-base font-semibold text-bb-ok">You&rsquo;re on the list! ✈</p>
             <p className="mt-2 text-xs text-muted-foreground">
               We&rsquo;ll keep you posted on launch updates.
             </p>
@@ -251,7 +251,7 @@ export default function WaitlistDialog() {
             </div>
 
             {error ? (
-              <p id="waitlist-error" role="alert" className="text-xs text-red-400">
+              <p id="waitlist-error" role="alert" className="text-xs text-destructive">
                 {error}
               </p>
             ) : null}

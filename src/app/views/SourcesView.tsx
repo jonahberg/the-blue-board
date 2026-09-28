@@ -29,8 +29,8 @@ type Source = {
 
 /** Freshness is a claim about data age, so it is always a word — never a colour alone. */
 const FRESHNESS_TONE: Record<Freshness, string> = {
-  LIVE: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
-  DAILY: 'border-sky-500/40 bg-sky-500/15 text-sky-300',
+  LIVE: 'border-bb-ok/40 bg-bb-ok/15 text-bb-ok',
+  DAILY: 'border-bb-info/40 bg-bb-info/15 text-bb-info',
   TILES: 'border-border bg-muted/60 text-muted-foreground',
   COMPUTED: 'border-border bg-muted/60 text-muted-foreground',
 };

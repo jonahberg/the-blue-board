@@ -52,7 +52,7 @@ export const VerificationLedger = memo(function VerificationLedger({
           </p>
           <dl className="flex gap-5">
             <div className="text-center">
-              <dd className="font-mono text-lg font-semibold tabular-nums text-emerald-400">
+              <dd className="font-mono text-lg font-semibold tabular-nums text-bb-ok">
                 {summary?.verifiedStarlink ?? '—'}
               </dd>
               <dt className="text-[10px] text-muted-foreground">Verified Starlink</dt>

@@ -107,7 +107,7 @@ export function FleetTable({
                     {aircraft.r}
                   </button>
                   {specialEntry ? (
-                    <span className="ml-1 rounded border px-1 py-0.5 text-[9px] text-amber-400">
+                    <span className="ml-1 rounded border px-1 py-0.5 text-[9px] text-bb-warn">
                       ⭐ {specialEntry.name}
                     </span>
                   ) : null}
@@ -122,7 +122,7 @@ export function FleetTable({
                 <TableCell className="text-xs text-muted-foreground">{status}</TableCell>
                 <TableCell>
                   {starlinkTails.has(aircraft.r) ? (
-                    <span className="rounded border border-violet-500/30 bg-violet-500/10 px-1 py-0.5 text-[9px] font-medium text-violet-300">
+                    <span className="rounded border border-bb-starlink/30 bg-bb-starlink/10 px-1 py-0.5 text-[9px] font-medium text-bb-starlink">
                       SL
                     </span>
                   ) : null}

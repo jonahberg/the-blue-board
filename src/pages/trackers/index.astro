@@ -39,7 +39,7 @@ const itemListSchema = {
     <Breadcrumbs items={[{ label: 'Trackers' }]} />
 
     <header class="mt-6">
-      <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-amber-400">
+      <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
         Living Pages
       </div>
       <h1 class="mt-0.5 mb-1.5 text-lg font-bold tracking-tight text-balance text-foreground sm:text-2xl">
@@ -58,10 +58,10 @@ const itemListSchema = {
           const t = trackers[slug];
           return (
             <a
-              class="block rounded-r-md border border-border border-l-[3px] border-l-amber-400 bg-card px-5 py-4.5 text-foreground transition-colors hover:border-primary hover:border-l-amber-400"
+              class="block rounded-r-md border border-border border-l-[3px] border-l-primary bg-card px-5 py-4.5 text-foreground transition-colors hover:border-primary hover:border-l-primary"
               href={t.href}
             >
-              <div class="mb-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-amber-400">
+              <div class="mb-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
                 {t.name}
               </div>
               <div class="mb-1.5 text-[15px] font-bold text-foreground">{t.question}</div>
@@ -95,7 +95,7 @@ const itemListSchema = {
                 </div>
               </div>
               <div class="mb-3 text-[11px] leading-normal text-muted-foreground">
-                <strong class="font-mono text-[11px] font-semibold uppercase tracking-wide text-amber-400">
+                <strong class="font-mono text-[11px] font-semibold uppercase tracking-wide text-primary">
                   Latest · {fmtShort(t.latestChange.date)}
                 </strong>
                 <br />
