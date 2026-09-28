@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler from '../api/cron/refresh-metar.js';
+import { collectMetarStations } from '../src/lib/weather-cards.js';
 
 const HUB_ICAOS = 'KEWR,KIAH,KORD,KDEN,KSFO,KLAX,KIAD,RJAA,PGUM';
 
@@ -99,6 +100,31 @@ describe('refresh-metar cron', () => {
     spy.mockRestore();
   });
 
+  it('warms exactly the hub request the client makes on page load (same ids, same order)', async () => {
+    // With no watched flights and no boards loaded, the client's first /api/metar chunk is
+    // the nine hubs in collectMetarStations order — the only request the CDN warm can match.
+    const pageLoad = collectMetarStations({ getStation: () => '' }).stations.join(',');
+    expect(pageLoad).toBe(HUB_ICAOS);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => [] });
+    await handler(makeReq(), createRes());
+    expect(String(globalThis.fetch.mock.calls[0][0])).toMatch(new RegExp(`ids=${pageLoad}$`));
+  });
+
+  it('names the stations the warm did not get back', async () => {
+    const all = HUB_ICAOS.split(',');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => all.filter((id) => id !== 'RJAA').map((icaoId) => ({ icaoId })),
+    });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.body).toEqual({ ok: true, stations: 8, missing: ['RJAA'] });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing RJAA'));
+    log.mockRestore();
+  });
+
   it('requests the full hub ICAO list with the production origin header', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
@@ -110,7 +136,8 @@ describe('refresh-metar cron', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining(`ids=${HUB_ICAOS}`),
-      expect.objectContaining({ headers: { origin: 'https://theblueboard.co' } })
+      // Accept: application/json — the client's variant under /api/metar's Vary: Accept.
+      expect.objectContaining({ headers: { origin: 'https://theblueboard.co', Accept: 'application/json' } })
     );
   });
 
