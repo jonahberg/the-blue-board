@@ -7,7 +7,8 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 
 import { computeScheduleStatCounts } from '../src/lib/board-stats.js';
-import { operatedOutcome } from '../src/lib/hub-health.js';
+import { computeBoardOtp, operatedOutcome } from '../src/lib/hub-health.js';
+import { classifySchedStatus } from '../src/lib/schedule-status.js';
 import { computeMetrics } from '../api/irops.js';
 
 const ROWS = JSON.parse(readFileSync(new URL('./fixtures/schedule-board-rows.json', import.meta.url), 'utf8'));
@@ -60,5 +61,13 @@ describe('one "operated" definition (D9)', () => {
   it('the strip still reconciles: every row lands in exactly one bucket', () => {
     const s = computeScheduleStatCounts(BOARD, { dir: 'departures', nowSec: NOW });
     expect(s.onTime + s.late + s.upcoming + s.canceled + s.presumed + s.uncategorized).toBe(s.total);
+  });
+
+  it("the hub strip's client fallback (computeBoardOtp) agrees too", () => {
+    // Seven copies of the board: 28 operated, over computeBoardOtp's 25-flight floor.
+    const rows = Array.from({ length: 7 }, () => BOARD).flat();
+    const strip = computeScheduleStatCounts(rows, { dir: 'departures', nowSec: NOW });
+    const classify = (fl, dir) => classifySchedStatus(fl, dir, NOW);
+    expect(computeBoardOtp({ 'ORD-departures-0': rows }, { classify })).toEqual({ ORD: strip.otp });
   });
 });

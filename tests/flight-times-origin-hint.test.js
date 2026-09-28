@@ -116,6 +116,36 @@ describe('/api/flight-times ?from= origin hint (D2)', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('an FR24-only answer about another leg is dropped under a hint (the production path)', async () => {
+    // No board lists the flight; FR24 answers with the airborne ICT→ORD leg. Pinned to ORD,
+    // that is the wrong leg — 404, never "departs from ICT" again.
+    process.env.FR24_API_TOKEN = 'test-token';
+    serveBoards({});
+    const ICT_LEG = {
+      data: [{
+        fr24_id: '3cab0001', flight: 'UA786', callsign: 'UAL786', type: 'B738', reg: 'N37267',
+        orig_icao: 'KICT', dest_icao: 'KORD', dest_icao_actual: null,
+        datetime_takeoff: '2026-09-28T14:36:00Z', datetime_landed: null, flight_ended: false,
+        first_seen: '2026-09-28T14:20:00Z', last_seen: '2026-09-28T16:04:30Z',
+      }],
+    };
+    globalThis.fetch.mockImplementation(async (url) => {
+      if (String(url).includes('flightaware.com')) return { ok: false, status: 403, text: async () => 'blocked' };
+      if (String(url).includes('fr24api.flightradar24.com')) return { ok: true, status: 200, json: async () => ICT_LEG };
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    try {
+      const plain = createRes();
+      await handler(createReq('UA786', { officialFallback: '1' }), plain);
+      expect(plain.body.origin.iata).toBe('ICT');
+      const pinned = createRes();
+      await handler(createReq('UA786', { officialFallback: '1', from: 'ORD' }), pinned);
+      expect(pinned.statusCode).toBe(404);
+    } finally {
+      delete process.env.FR24_API_TOKEN;
+    }
+  });
+
   it('a malformed hint is rejected', async () => {
     const res = createRes();
     await handler(createReq('UA786', { from: 'OR D;' }), res);

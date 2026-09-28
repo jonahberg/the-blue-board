@@ -14,9 +14,6 @@ import { isPlausibleDelta } from './schedule-plausibility.js';
 /** Fixed left-to-right order of the hub-health bar. */
 export const HUB_ORDER = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
 
-/** A row counts as having operated only in these three classifier states. */
-const OPERATED_KEYS = new Set(['departed', 'enroute', 'landed']);
-
 /**
  * On-time window: a departure within 30 minutes of schedule still counts. The ONE constant
  * behind every on-time figure (this module, api/irops.ts) and the copy that explains it.
@@ -163,7 +160,9 @@ const MIN_OPERATED = 25;
  * across legs — a completed departures row that backfilled real.arrival but not
  * real.departure would otherwise score flight duration as delay (F021).
  *
- * Three classes of row are excluded, matching the per-board OTP card exactly:
+ * Rows are counted with `operatedOutcome()` — the one definition the board header and
+ * /api/irops share (D9) — after `status.inferred` rows are dropped. Among what it excludes,
+ * matching the per-board OTP card exactly:
  *  - `status.inferred` — a long-past "scheduled" the classifier reclassified, with no
  *    real out-time, so there is no trustworthy baseline.
  *  - `_source.liveFeedFallback` — live-feed rescue rows carry last-seen/ETA times.
@@ -189,16 +188,12 @@ export function computeBoardOtp(schedRawByHub, { classify }) {
     if (!totalsByHub[hub]) continue;
     flights.forEach(fl => {
       const status = classify(fl, boardDir, key);
-      if (!OPERATED_KEYS.has(status.key)) return;
       if (status.inferred) return;
-      if (fl._source?.liveFeedFallback) return;
-      if (fl._source?.scheduleTimeDerivedFromActual?.departure || fl._source?.scheduleTimeDerivedFromActual?.arrival) return;
-      const isArr = boardDir === 'arrivals';
-      const schedT = isArr ? fl.time?.scheduled?.arrival : fl.time?.scheduled?.departure;
-      const realT = isArr ? fl.time?.real?.arrival : fl.time?.real?.departure;
-      if (!realT || !schedT) return; // skip flights without the direction-appropriate real timestamp
+      // D9: the one operated definition (operatedOutcome), fed the classifier's key.
+      const outcome = operatedOutcome(fl, boardDir, status.key);
+      if (!outcome) return;
       totalsByHub[hub].operated++;
-      if (realT <= schedT + ON_TIME_GRACE_SECONDS) totalsByHub[hub].onTime++;
+      if (outcome === 'onTime') totalsByHub[hub].onTime++;
     });
   }
 
