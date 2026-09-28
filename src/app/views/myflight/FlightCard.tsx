@@ -244,10 +244,17 @@ export function FlightCard({
           </div>
         ) : null}
 
-        {hasPayload && td?.source === 'schedule-cache' ? (
+        {hasPayload && td?.source?.startsWith('schedule-cache') ? (
           // The three-tier fallback behind /api/flight-times is otherwise invisible: a
           // snapshot-sourced card would look exactly as authoritative as a live one.
-          <p className="text-[10px] text-muted-foreground">via schedule snapshot</p>
+          <p className="text-[10px] text-muted-foreground">
+            {td.source === 'schedule-cache+fr24'
+              ? 'via schedule snapshot + Flightradar24 live'
+              : 'via schedule snapshot'}
+          </p>
+        ) : hasPayload && (td as { timesUnavailable?: boolean } | null)?.timesUnavailable ? (
+          // FR24-only answer: a live leg with no published times, not a flight without a schedule.
+          <p className="text-[10px] text-muted-foreground">Live tracking only — no schedule times yet</p>
         ) : null}
 
         {reg ? (
