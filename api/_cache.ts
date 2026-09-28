@@ -1,7 +1,7 @@
 // Shared in-memory cache for API endpoints
 // TTL-based with optional max-size eviction and stale-while-revalidate support
 
-import type { CacheStoreOptions, CacheEntry } from './types.js';
+import type { CacheStoreOptions, CacheEntry } from './_types.js';
 
 export class CacheStore<T = unknown> {
   name: string;

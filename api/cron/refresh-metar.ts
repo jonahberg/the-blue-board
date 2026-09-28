@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '../types.js';
+import type { VercelRequest, VercelResponse } from '../_types.js';
 import { isAuthorizedCronRequest } from '../_cron-auth.js';
 
 const HUB_ICAOS = 'KEWR,KIAH,KORD,KDEN,KSFO,KLAX,KIAD,RJAA,PGUM';

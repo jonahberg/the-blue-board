@@ -11,7 +11,7 @@
 // PRIVACY: stores only the push endpoint + its two client keys + watched flight numbers. No
 // email, no user id. RLS is service-role only (sql/014_watch_subscriptions.sql).
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { getSupabase } from './_supabase.js';
 import { getVapidPublicKey, isPushConfigured } from './_web-push.js';

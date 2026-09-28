@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { getSupabase } from './_supabase.js';
 import { buildEmailFooterHtml, listUnsubscribeHeaders } from './_email-footer.js';

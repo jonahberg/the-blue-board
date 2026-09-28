@@ -18,7 +18,7 @@
 //      the flight — and then only for a leg that is live or just ended (Sep 2026 audit F0/F1).
 // Only when ALL tiers fail does the endpoint return success:false with a reason.
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
 import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime, pickFr24SummaryLeg, FR24_LEG_EARLY_MS } from './_official-fr24.js';
 import { airportTz } from '../src/lib/time-format.js';

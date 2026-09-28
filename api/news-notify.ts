@@ -27,7 +27,7 @@
  *     has a cross-request race.
  */
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { getSupabase } from './_supabase.js';
 import { isAuthorizedCronRequest } from './_cron-auth.js';
 import { escapeHtml, sanitizeHeaderValue } from '../src/lib/escape.js';

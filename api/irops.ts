@@ -2,7 +2,7 @@
 // via the internal /api/schedule endpoint (which benefits from cron cache warming),
 // computes disruption metrics, caches for 15 minutes.
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
 import { getStartOfHubDay, defaultSchedDayOffset } from '../src/lib/hubTz.js';
@@ -12,7 +12,7 @@ const isRateLimited = createRateLimiter('irops', 60);
 
 const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
 export const HUB_TZ: Record<string, string> = {ORD:'America/Chicago',DEN:'America/Denver',IAH:'America/Chicago',EWR:'America/New_York',SFO:'America/Los_Angeles',IAD:'America/New_York',LAX:'America/Los_Angeles',NRT:'Asia/Tokyo',GUM:'Pacific/Guam'};
-const iropsCache = new CacheStore('irops', { maxSize: 1, defaultTTL: 15 * 60 * 1000 });
+const iropsCache = new CacheStore<Record<string, unknown>>('irops', { maxSize: 1, defaultTTL: 15 * 60 * 1000 });
 let fetching: Promise<any> | null = null;
 // Persistent per-hub cache — survives full refresh failures
 let hubCache: Record<string, { flights: any[]; fetchedAt: number; generatedAt: number | null }> = {};

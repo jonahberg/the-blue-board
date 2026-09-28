@@ -14,7 +14,7 @@
 // watch alert may be a few minutes stale; that is acceptable. Upstream lookups are budget-capped at
 // MAX_DISTINCT_FLIGHTS per run (soonest departures first) and sends at MAX_SENDS_PER_RUN.
 
-import type { VercelRequest, VercelResponse } from '../types.js';
+import type { VercelRequest, VercelResponse } from '../_types.js';
 import { isAuthorizedCronRequest } from '../_cron-auth.js';
 import { getSupabase } from '../_supabase.js';
 import { isPushConfigured, ensureVapidConfigured, sendPush } from '../_web-push.js';

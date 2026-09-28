@@ -22,7 +22,7 @@
 // Heavily cached at the CDN (s-maxage 300 + SWR) since none of this needs to be fresh to the
 // second and it is public, unauthenticated, and safe to share across all visitors.
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { hydrateAdbSpend, getAdbDailyUnitBudget } from './_cost-state.js';
 import { fetchFr24UsageRaw } from './fr24-usage.js';
 import { createRateLimiter } from './_rate-limit.js';

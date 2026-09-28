@@ -9,7 +9,7 @@
 // positive cache that matches upstream's max-age=300. On any failure it returns
 // 502 — the client treats a non-200 as "no data" and simply hides the strip.
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/fleet-summary';

@@ -16,7 +16,7 @@
 // Same path, so the service worker's offline allowlist (`/api/starlink-data`) still matches.
 
 import { createRequire } from 'node:module';
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import {
   applyVerifiedStarlinkOverrides,

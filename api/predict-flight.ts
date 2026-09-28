@@ -1,7 +1,7 @@
 // Proxy endpoint for Starlink flight prediction
 // Calls upstream unitedstarlinktracker.com/api/predict-flight
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/predict-flight';

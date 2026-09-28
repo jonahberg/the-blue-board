@@ -8,7 +8,7 @@
 // "ok", and a board fetched once (usually the evening before, as "tomorrow") is never refreshed
 // again all day — the frozen-board failure mode this cron exists to prevent.
 
-import type { VercelRequest, VercelResponse } from '../types.js';
+import type { VercelRequest, VercelResponse } from '../_types.js';
 import { UNITED_HUBS } from '../_hubs.js';
 import { isAuthorizedCronRequest } from '../_cron-auth.js';
 import { sendAlert } from '../_alert.js';

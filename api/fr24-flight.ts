@@ -5,7 +5,7 @@
 //   Live positions: GET /api/live/flight-positions/full?flights={iata}
 //   Flight summary: GET /api/flight-summary/light?flights={iata}
 
-import type { VercelRequest, VercelResponse } from './types.js';
+import type { VercelRequest, VercelResponse } from './_types.js';
 import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime, pickFr24SummaryLeg } from './_official-fr24.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
 
