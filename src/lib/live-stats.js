@@ -29,6 +29,16 @@ export function isOnGround(f) {
   return getPhase(f.alt, f.vr, f.spd).phase === 'Ground';
 }
 
+/**
+ * The Live sidebar's five phase buckets for one flight — Ground by `isOnGround`, otherwise
+ * `getPhaseGroup(getPhase())`. The Stats donut counts with this too (D16).
+ * @param {Object} f
+ * @returns {'Ground'|'Climb'|'Cruise'|'Descent'|'Approach'}
+ */
+export function phaseGroupOf(f) {
+  return isOnGround(f) ? 'Ground' : getPhaseGroup(getPhase(f.alt, f.vr, f.spd).phase);
+}
+
 /** The complement of `isOnGround` — the one "airborne" filter the tabs share. */
 export function isAirborne(f) {
   return !isOnGround(f);
@@ -101,7 +111,7 @@ export function computeLiveStats(flights, filtered, fleetSize, starlink, { match
   // Same ground rule as the bar: a flight the feed flags onGround is Ground here too.
   const phaseGroups = { Ground: 0, Climb: 0, Cruise: 0, Descent: 0, Approach: 0 };
   flights.forEach(f => {
-    const g = isOnGround(f) ? 'Ground' : getPhaseGroup(getPhase(f.alt, f.vr, f.spd).phase);
+    const g = phaseGroupOf(f);
     if (phaseGroups[g] !== undefined) phaseGroups[g]++;
   });
 

@@ -4,7 +4,7 @@
 //
 // Extracted verbatim from src/dashboard/main.js (:4105-4266).
 
-import { getPhase } from './flight-phase.js';
+import { phaseGroupOf } from './live-stats.js';
 
 /**
  * The 19 mainline types, in the fixed display order the Fleet and Stats tabs share.
@@ -12,8 +12,8 @@ import { getPhase } from './flight-phase.js';
  */
 export const TYPE_ORDER = ["A319","A320","A321neo","737-700","737-800","737-900","737-900ER","737 MAX 8","737 MAX 9","757-200","757-300","767-300ER","767-400ER","777-200","777-200ER","777-300ER","787-8","787-9","787-10"];
 
-/** The phases the donut slices, in render order. */
-const PHASE_ORDER = ['Cruise', 'Climb', 'Descent', 'En Route', 'Takeoff', 'Approach', 'Ground'];
+/** The phases the donut slices, in render order — the Live sidebar's five buckets (D16). */
+const PHASE_ORDER = ['Cruise', 'Climb', 'Descent', 'Approach', 'Ground'];
 
 /**
  * Airborne count vs fleet total for each mainline type.
@@ -44,19 +44,20 @@ export function typeUtilization(airborneFlights, fleetDb, { matchAircraft }) {
 /**
  * Flight-phase histogram across the whole feed.
  *
- * Unlike the Live sidebar this keeps Cruise and En Route apart — the donut shows
- * all seven phases. `total` floors at 1 so the percentage maths never divides by
- * zero on an empty feed.
+ * The SAME five buckets and ground rule as the Live sidebar (`phaseGroupOf`): Takeoff counts
+ * as Climb and En Route as Cruise. Stats used to slice seven phases, so the two tabs gave
+ * different numbers for the same feed (live audit Sep 28 2026, D16). `total` floors at 1 so
+ * the percentage maths never divides by zero on an empty feed.
  *
  * @param {Array<Object>} flights
  * @returns {{counts: Record<string, number>, total: number, order: string[]}}
  *   `order` is the render order with zero-count phases dropped.
  */
 export function phaseBreakdown(flights) {
-  const counts = { 'Takeoff': 0, 'Climb': 0, 'Cruise': 0, 'En Route': 0, 'Descent': 0, 'Approach': 0, 'Ground': 0 };
+  const counts = { 'Climb': 0, 'Cruise': 0, 'Descent': 0, 'Approach': 0, 'Ground': 0 };
   flights.forEach(f => {
-    const p = getPhase(f.alt, f.vr, f.spd);
-    if (counts[p.phase] !== undefined) counts[p.phase]++;
+    const g = phaseGroupOf(f);
+    if (counts[g] !== undefined) counts[g]++;
   });
   const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
   return { counts, total, order: PHASE_ORDER.filter(p => counts[p] > 0) };

@@ -2,9 +2,9 @@
  * "Flights by Phase" — the donut and its legend (inventory §25,
  * `main.js:4141-4181`).
  *
- * The donut is `aria-hidden`: an SVG of seven arcs is not readable, and the legend beside
+ * The donut is `aria-hidden`: an SVG of five arcs is not readable, and the legend beside
  * it already states every phase, its count and its share in text. A screen reader gets the
- * same seven rows from the sr-only table at the end — the numbers, not a description of a
+ * same five rows from the sr-only table at the end — the numbers, not a description of a
  * picture of the numbers.
  *
  * Geometry (r 36, stroke 12, one percentage point = 2.26 user units) and the colour ramp

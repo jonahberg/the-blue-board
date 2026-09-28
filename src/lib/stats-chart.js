@@ -81,7 +81,7 @@ export function ageBarPct(avg) {
  *
  * Re-stepped from the legacy ramp, which shipped THREE blues (`#005DAA` Cruise,
  * `#3b82f6` Climb, `#6366f1` En Route) — adjacent slices a full-colour reader cannot
- * separate, before colour-vision deficiency is considered. These seven pass the
+ * separate, before colour-vision deficiency is considered. These five pass the
  * categorical checks (lightness band, CVD separation ≥ 8 ΔE, normal-vision floor,
  * 3:1 against the surface) with one deliberate exception: `Ground` is the neutral
  * "not airborne" residual and stays gray by design, the way an "Other" slice does.
@@ -93,8 +93,6 @@ export const PHASE_COLORS = {
   Cruise: '#4f8ef7',
   Climb: '#12a06d',
   Descent: '#c2710c',
-  'En Route': '#9061f9',
-  Takeoff: '#0e9ba8',
   Approach: '#dc2f4a',
   Ground: '#7a8699',
 };
@@ -102,27 +100,26 @@ export const PHASE_COLORS = {
 /**
  * Glyph per phase — main.js :4153. Always paired with the phase name. Unlike the map's
  * flight-phase.js set, every glyph here is distinct: the legend is where a reader separates
- * the donut's slices, and Cruise and En Route sharing ✈️ could not (audit F73). These stay
- * text glyphs rather than lucide components — this module is DOM-free and the glyphs are
- * data the legend and the sr-only table both print (DESIGN.md Decisions Log).
+ * the donut's slices (audit F73). These stay text glyphs rather than lucide components — this
+ * module is DOM-free and the glyphs are data the legend and the sr-only table both print
+ * (DESIGN.md Decisions Log).
  */
 export const PHASE_ICONS = {
-  Takeoff: '🛫',
   Climb: '↗️',
   Cruise: '✈️',
-  'En Route': '➡️',
   Descent: '↘️',
   Approach: '🛬',
   Ground: '🅿️',
 };
 
-/** The legend's row order — main.js :4156, independent of the donut's slice order. */
+/**
+ * The legend's row order: the Live sidebar's five buckets (D16 — En Route and Takeoff are
+ * counted inside Cruise and Climb, as Live counts them).
+ */
 export const PHASE_LEGEND_ORDER = [
   'Cruise',
   'Climb',
   'Descent',
-  'En Route',
-  'Takeoff',
   'Approach',
   'Ground',
 ];

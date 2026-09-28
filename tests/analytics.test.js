@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { typeUtilization, phaseBreakdown, hubMatrix, topRoutes, avgAgeByType } from '../src/lib/analytics.js';
+import { computeLiveStats } from '../src/lib/live-stats.js';
 
 const HUBS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
 const airborne = (over = {}) => ({ alt: 10000, vr: 0, spd: 240, onGround: false, ...over });
@@ -42,7 +43,10 @@ describe('typeUtilization', () => {
 });
 
 describe('phaseBreakdown', () => {
-  it('counts every flight into its exact phase, ground included', () => {
+  // D16 (live audit Sep 28 2026): Stats sliced seven phases (En Route and Takeoff apart) while
+  // Live's sidebar counts five buckets, so the two tabs disagreed about the same feed. Stats
+  // now uses Live's five buckets and Live's ground rule.
+  it('counts every flight into one of the Live tab\'s five buckets, ground included', () => {
     const out = phaseBreakdown([
       airborne({ alt: 10000, vr: 0 }),
       airborne({ alt: 10000, vr: 0 }),
@@ -53,14 +57,22 @@ describe('phaseBreakdown', () => {
       airborne({ alt: 5000, vr: 0 }),
       airborne({ alt: 0, vr: 0, spd: 5 }),
     ]);
-    expect(out.counts).toEqual({ Takeoff: 1, Climb: 1, Cruise: 2, 'En Route': 1, Descent: 1, Approach: 1, Ground: 1 });
+    // Takeoff folds into Climb, En Route into Cruise — exactly getPhaseGroup().
+    expect(out.counts).toEqual({ Climb: 2, Cruise: 3, Descent: 1, Approach: 1, Ground: 1 });
     expect(out.total).toBe(8);
   });
 
-  it('keeps Cruise and En Route as separate slices, unlike the sidebar', () => {
-    const out = phaseBreakdown([airborne({ alt: 10000 }), airborne({ alt: 5000 })]);
-    expect(out.counts.Cruise).toBe(1);
-    expect(out.counts['En Route']).toBe(1);
+  it('matches the Live sidebar count for the same feed, feed-flagged ground included', () => {
+    const feed = [
+      airborne({ alt: 10000 }),
+      airborne({ alt: 5000 }),
+      airborne({ alt: 3000, vr: 10 }),
+      airborne({ alt: 800, vr: 10 }),
+      airborne({ alt: 3000, vr: -5 }),
+      airborne({ alt: 3000, spd: 60, onGround: true }), // the feed says ground; telemetry does not
+    ];
+    const live = computeLiveStats(feed, feed, 1000, null, { matchAircraft: () => null, isFiltered: false });
+    expect(phaseBreakdown(feed).counts).toEqual(live.phaseGroups);
   });
 
   it('renders the donut order with zero-count phases dropped', () => {
