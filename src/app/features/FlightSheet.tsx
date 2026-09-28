@@ -387,14 +387,24 @@ export function FlightSheet() {
                   }
                 />
               </dl>
+              {/* D10: altitude against a 41,000 ft scale — labelled, because an unlabelled
+                  filling bar under the metrics reads as route progress. */}
               <div
+                role="meter"
+                aria-label={`Altitude: ${metrics.altFt ? `${metrics.altFt.toLocaleString()} ft` : 'unknown'} of a 41,000 ft scale`}
+                aria-valuemin={0}
+                aria-valuemax={41000}
+                aria-valuenow={metrics.altFt ?? 0}
                 className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted"
-                aria-hidden="true"
               >
                 <div
                   className="h-full rounded-full bg-primary"
                   style={{ width: `${metrics.altPct}%` }}
                 />
+              </div>
+              <div className="mt-1 flex justify-between text-[10px] text-muted-foreground" aria-hidden="true">
+                <span>Altitude scale</span>
+                <span>0 – 41,000 ft</span>
               </div>
             </div>
           ) : null}
