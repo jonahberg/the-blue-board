@@ -341,7 +341,7 @@ export const articles = [
     date: '2026-03-24',
     category: 'Fleet',
     sources: [
-      { name: 'United Airlines Elevated', url: 'https://www.united.com/en/us/newsroom/elevated.html' },
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-03-24-United-to-Add-250-Planes-in-Next-Two-Years-Most-by-Any-Airline-Includes-New,-Premium-Customer-Experiences,-Aircraft-Variants,-Subfleet,-Seats-and-Amenities' },
     ],
     summary: 'United announces the most aircraft deliveries of any airline in a two-year period — 250+ new planes by April 2028, headlined by the Coastliner A321neo for transcon, the A321XLR for international, and a reimagined CRJ450 regional jet.',
     body: `<p>United went big today. In a dual-city event out of Chicago and Los Angeles, the airline dropped the next phase of its United Next strategy: more than 250 new aircraft deliveries by April 2028 — the most by any airline in a two-year span — plus three entirely new aircraft variants. This is the kind of fleet announcement that changes the competitive landscape.</p>
@@ -368,7 +368,8 @@ export const articles = [
     date: '2026-03-24',
     category: 'Fleet',
     sources: [
-      { name: 'United Airlines Elevated', url: 'https://www.united.com/en/us/newsroom/elevated.html' },
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-03-24-United-to-Add-250-Planes-in-Next-Two-Years-Most-by-Any-Airline-Includes-New,-Premium-Customer-Experiences,-Aircraft-Variants,-Subfleet,-Seats-and-Amenities' },
+      { name: 'United Airlines Newsroom (Relax Row)', url: 'https://united.mediaroom.com/2026-03-24-Introducing-the-United-Relax-Row-Economy-Seats-that-Transform-into-a-Couch-for-More-Comfortable-International-Travel' },
     ],
     summary: 'Alongside 250+ new aircraft, United rolls out a full onboard experience overhaul — Relax Row for Economy long-haul, free Starlink for all MileagePlus members, a Chef\'s Table dining partnership, and seatback screens at every seat across 1,200+ planes.',
     body: `<p>The fleet news grabbed the headlines today, but there's an equally important story buried in the details: United is overhauling what it actually feels like to sit on its airplanes, in every cabin, on every type of flight. This isn't a press release about one new seat or one new route — it's a top-to-bottom rethinking of the onboard product.</p>
@@ -393,7 +394,7 @@ export const articles = [
     date: '2026-03-20',
     category: 'Operations',
     sources: [
-      { name: 'United Airlines Newsroom', url: 'https://www.united.com/en/us/newsroom/announcements/cision-125448' },
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/news-releases?item=125448' },
     ],
     summary: 'CEO Scott Kirby tells employees United is prepared for jet fuel prices that have more than doubled — planning for $175/barrel oil through 2027 while trimming ~5 points of near-term capacity and accelerating investments in new clubs, hub infrastructure, and all 120+ aircraft deliveries for 2026.',
     body: `<p>In a memo to employees, United CEO Scott Kirby laid out the airline's response to jet fuel prices that have more than doubled in three weeks following the war in Iran. Rather than the industry's typical playbook of cost cuts, furloughs, and deferred aircraft orders, Kirby says United will do the opposite: invest more.</p>
@@ -429,7 +430,7 @@ export const articles = [
     date: '2026-03-19',
     category: 'Fleet',
     sources: [
-      { name: 'United Airlines Newsroom', url: 'https://www.united.com/en/us/newsroom' },
+      { name: 'United Airlines (via Stars and Stripes Guam)', url: 'https://guam.stripes.com/travel/united-airlines-boeing-737-max-8.html' },
       { name: 'AeroTime', url: 'https://www.aerotime.aero/articles/united-airlines-boeing-737-800-guam-max-aircraft' },
     ],
     summary: 'United Airlines has stationed its first Boeing 737 MAX aircraft at Guam, expanding its Pacific island hub with modern, fuel-efficient narrowbodies.',
