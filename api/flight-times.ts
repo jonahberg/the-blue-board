@@ -273,7 +273,7 @@ function loadSnapshotMemo(key: string): Promise<any> {
 }
 
 export type ScheduleLegPhase = 'active' | 'recent' | 'upcoming' | 'landed';
-export interface ScheduleLeg { row: any; dir: 'departures' | 'arrivals'; schedDep: number; }
+export interface ScheduleLeg { row: any; dir: 'departures' | 'arrivals'; schedDep: number; off: number; }
 
 /** Where a board row's leg is at `nowSec`. Boards can be an hour stale, so a leg whose times say
  *  it should be flying counts as active even before a real departure lands in the snapshot. */
@@ -308,7 +308,7 @@ export function pickScheduleLeg(legs: ScheduleLeg[], nowSec: number): ScheduleLe
 }
 
 async function collectScheduleLegs(flightNum: string, offsets: number[], dateParam: string): Promise<ScheduleLeg[]> {
-  const reads: Promise<{ rows: any[]; dir: 'departures' | 'arrivals' }>[] = [];
+  const reads: Promise<{ rows: any[]; dir: 'departures' | 'arrivals'; off: number }>[] = [];
   for (const off of offsets) {
     for (const dir of ['departures', 'arrivals'] as const) {
       for (const hub of UNITED_HUBS) {
@@ -318,6 +318,7 @@ async function collectScheduleLegs(flightNum: string, offsets: number[], datePar
         }
         reads.push(loadSnapshotMemo(`agg:${hub}:${dir}:${getStartOfHubDay(hub, off)}`).then((snapshot) => ({
           dir,
+          off,
           rows: (Array.isArray(snapshot?.data?.flights) ? snapshot.data.flights : []).filter(
             (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
           ),
@@ -328,11 +329,11 @@ async function collectScheduleLegs(flightNum: string, offsets: number[], datePar
   // One leg per scheduled departure. The origin hub's departures row wins (it has the departure
   // gate); an arrivals row for the same leg only lends its destination gate/terminal.
   const byDep = new Map<number, ScheduleLeg>();
-  for (const { rows, dir } of (await Promise.all(reads)).sort((a, b) => (a.dir === b.dir ? 0 : a.dir === 'departures' ? -1 : 1))) {
+  for (const { rows, dir, off } of (await Promise.all(reads)).sort((a, b) => (a.dir === b.dir ? 0 : a.dir === 'departures' ? -1 : 1))) {
     for (const row of rows) {
       const schedDep = row?.time?.scheduled?.departure || 0;
       const existing = byDep.get(schedDep);
-      if (!existing) { byDep.set(schedDep, { row, dir, schedDep }); continue; }
+      if (!existing) { byDep.set(schedDep, { row, dir, schedDep, off }); continue; }
       const destInfo = existing.row?.airport?.destination?.info || {};
       const arrInfo = row?.airport?.destination?.info || {};
       if (dir === 'arrivals' && (!destInfo.gate || !destInfo.terminal)) {
@@ -413,8 +414,13 @@ async function fetchScheduleCacheTimes(flight: string, dateParam = ''): Promise<
         best = pickScheduleLeg(legs, nowSec);
         phase = best ? scheduleLegPhase(best.row, nowSec).phase : null;
       }
-      // Today's leg is long done (or there is none): the next occurrence is tomorrow's.
-      if (!best || phase === 'landed') legs = legs.concat(await collectScheduleLegs(flightNum, [1], ''));
+      // No leg on today's boards at all: the next occurrence is tomorrow's. Today's LANDED leg
+      // keeps answering until the hub day rolls over, as it always has — flipping it to tomorrow's
+      // "scheduled" a couple of hours after landing would make the watch cron push a spurious
+      // landed→scheduled alert (api/_watch-diff.ts treats any phase change as significant).
+      if (!legs.some((leg) => leg.off === 0) && (!best || phase === 'landed')) {
+        legs = legs.concat(await collectScheduleLegs(flightNum, [1], ''));
+      }
     }
     const best = pickScheduleLeg(legs, nowSec);
     return best ? scheduleLegPayload(flightNum, best.row) : null;

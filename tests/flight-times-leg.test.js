@@ -191,6 +191,25 @@ describe('flight-times resolves the right leg (F0) with gate times (F1)', () => 
     expect(res.body.departure.gate.scheduled).toBe(TONIGHT_DEP_ISO);
   });
 
+  it('today\'s landed leg keeps answering until the hub day rolls over (no spurious watch alert)', async () => {
+    // A morning run of the flight: SFO dep 08:00 PDT Sep 27 (15:00Z), landed ~19:13Z. At 16:00
+    // PDT the Sep 28 board already lists tomorrow's run. Flipping to it would make the watch
+    // cron push landed→scheduled (api/_watch-diff.ts treats any phase change as significant).
+    const shift = Date.parse('2026-09-27T15:00:00Z') / 1000 - ROWS.UA2278_SFO_departures.time.scheduled.departure;
+    const today = shiftRow(ROWS.UA2278_SFO_departures, shift);
+    today.time.real = { departure: today.time.scheduled.departure + 600, arrival: today.time.estimated.arrival };
+    vi.setSystemTime(Date.parse('2026-09-27T23:00:00Z'));
+    serveBoards({
+      [key('SFO', 'departures', 0)]: board(today),
+      [key('SFO', 'departures', 1)]: board(shiftRow(ROWS.UA2278_SFO_departures, shift + 86400)),
+    });
+    mockUpstream({ data: [] });
+    const res = createRes();
+    await handler(createReq('UA2278', { officialFallback: '0' }), res);
+    expect(res.body.departure.gate.scheduled).toBe('2026-09-27T15:00:00.000Z');
+    expect(res.body.departure.gate.actual).not.toBe('');
+  });
+
   it('connection check has gate times on both legs → a real verdict, not NO DATA (F1 repro)', async () => {
     vi.setSystemTime(Date.parse('2026-09-27T04:35:00Z'));
     serveBoards({
