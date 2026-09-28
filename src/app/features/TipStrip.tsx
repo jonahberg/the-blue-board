@@ -21,6 +21,7 @@
  * 44 px hit area comes from its `after:` box, not from the row's height.
  */
 
+import { Lightbulb } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -87,7 +88,7 @@ export default function TipStrip() {
 
   return (
     <div className="flex h-8 shrink-0 items-center gap-2 border-t bg-muted/40 px-3 text-[11px] text-muted-foreground">
-      <span aria-hidden="true">💡</span>
+      <Lightbulb aria-hidden="true" className="size-3.5 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{tip}</span>
       <Button
         variant="ghost"

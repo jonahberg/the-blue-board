@@ -10,6 +10,8 @@
  * reachable by keyboard and announced as actionable.
  */
 
+import { TriangleAlert } from 'lucide-react';
+
 import { swapSummary } from '@/lib/schedule-load.js';
 import { cn } from '@/lib/utils';
 import type { EquipmentSwap } from '../../state/schedule';
@@ -40,7 +42,7 @@ export function SwapSummary({
         'px-2.5 py-1.5 text-left text-[11px] text-bb-warn pointer-fine:md:min-h-0',
       )}
     >
-      <span aria-hidden="true">⚠️</span>
+      <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0" />
       <span>{summary.text}</span>
       {summary.downgrades > 0 ? (
         <span className="text-destructive">

@@ -25,7 +25,7 @@
  * "jump to now" and the palette's row highlight measure against.
  */
 
-import { Eye } from 'lucide-react';
+import { CalendarDays, Eye, SearchX, Star, TriangleAlert, Zap } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +66,7 @@ const COLUMNS: { key: SortColumn | null; label: string; className?: string; srLa
   // Right-aligned like the values under it (tailwind-merge lets this beat the base text-left).
   { key: null, label: 'Delay / Risk', className: 'min-w-[5.5rem] text-right' },
   { key: null, label: 'Fleet' },
-  { key: null, label: '👁️', srLabel: 'Watch' },
+  { key: null, label: 'watch', srLabel: 'Watch' },
 ];
 
 const HIGHLIGHT_MS = 2000;
@@ -322,7 +322,7 @@ export const ScheduleTable = forwardRef<
                 >
                   {column.srLabel ? (
                     <>
-                      <span aria-hidden="true">{column.label}</span>
+                      <Eye aria-hidden="true" className="size-3.5" />
                       <span className="sr-only">{column.srLabel}</span>
                     </>
                   ) : (
@@ -339,9 +339,7 @@ export const ScheduleTable = forwardRef<
               <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                 {emptyReason === 'filtered' ? (
                   <>
-                    <span className="block text-2xl" aria-hidden="true">
-                      🔍
-                    </span>
+                    <SearchX aria-hidden="true" className="mx-auto mb-1 size-6" />
                     No flights match your filters
                     <span className="mt-1 block text-[10px]">
                       Try adjusting status, search or the advanced filters
@@ -352,17 +350,13 @@ export const ScheduleTable = forwardRef<
                   </>
                 ) : emptyReason === 'upstream' ? (
                   <>
-                    <span className="block text-2xl" aria-hidden="true">
-                      ⚠️
-                    </span>
+                    <TriangleAlert aria-hidden="true" className="mx-auto mb-1 size-6" />
                     Couldn't load {emptySubject} from the schedule provider
                     <span className="mt-1 block text-[10px]">Try Retry in a moment</span>
                   </>
                 ) : (
                   <>
-                    <span className="block text-2xl" aria-hidden="true">
-                      📅
-                    </span>
+                    <CalendarDays aria-hidden="true" className="mx-auto mb-1 size-6" />
                     No United flights listed for {emptySubject} yet
                     <span className="mt-1 block text-[10px]">
                       The provider publishes a day's board as it approaches
@@ -497,7 +491,7 @@ export const ScheduleTable = forwardRef<
                     )}
                     {row.special ? (
                       <Badge variant="secondary" className="ml-1 px-1 py-0 text-[9px]">
-                        ⭐ {row.special}
+                        <Star aria-hidden="true" /> {row.special}
                       </Badge>
                     ) : null}
                     {row.fleet?.enrich ? (
@@ -567,7 +561,11 @@ export const ScheduleTable = forwardRef<
                   <TableCell className="max-w-28">
                     {row.fleet ? (
                       <span className="block truncate text-[10px]" title={row.fleet.badge}>
-                        <span aria-hidden="true">{row.fleet.starlink ? '⚡' : '✓'}</span>{' '}
+                        {row.fleet.starlink ? (
+                          <Zap aria-hidden="true" className="inline size-3 align-[-2px]" />
+                        ) : (
+                          <span aria-hidden="true">✓</span>
+                        )}{' '}
                         {row.fleet.badge}
                       </span>
                     ) : row.reg ? (

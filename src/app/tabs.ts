@@ -11,6 +11,17 @@
  * The old internal id `tab-analytics` published `#stats`, which is the id used here.
  */
 
+import {
+  CalendarDays,
+  ChartColumn,
+  CloudSun,
+  Info,
+  Plane,
+  Radio,
+  TicketsPlane,
+  Zap,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { lazy } from 'react';
 import type { ComponentType, LazyExoticComponent } from 'react';
 
@@ -31,8 +42,11 @@ export type TabDef = {
   label: string;
   /** Short label for the mobile bottom nav. */
   shortLabel: string;
-  /** Decorative glyph — always paired with the text label, never the only signal. */
-  icon: string;
+  /**
+   * A lucide icon (DESIGN.md: icons are lucide-react), rendered `aria-hidden` beside the text
+   * label — decoration, never the only signal. Starlink is `Zap`, the ⚡ its badges use (F73).
+   */
+  icon: LucideIcon;
   /** In the mobile bottom bar rather than behind "More". */
   mobilePrimary: boolean;
   View: LazyExoticComponent<ComponentType>;
@@ -44,7 +58,7 @@ export const TABS: TabDef[] = [
     hash: '#myflight',
     label: 'My Flights',
     shortLabel: 'My Flights',
-    icon: '🎫',
+    icon: TicketsPlane,
     mobilePrimary: true,
     View: lazy(() => import('./views/MyFlightsView')),
   },
@@ -53,7 +67,7 @@ export const TABS: TabDef[] = [
     hash: '#live',
     label: 'Live Ops',
     shortLabel: 'Live',
-    icon: '📡',
+    icon: Radio,
     mobilePrimary: true,
     View: lazy(() => import('./views/LiveView')),
   },
@@ -62,7 +76,7 @@ export const TABS: TabDef[] = [
     hash: '#schedule',
     label: 'Schedule',
     shortLabel: 'Schedule',
-    icon: '📅',
+    icon: CalendarDays,
     mobilePrimary: true,
     View: lazy(() => import('./views/ScheduleView')),
   },
@@ -71,7 +85,7 @@ export const TABS: TabDef[] = [
     hash: '#fleet',
     label: 'Fleet',
     shortLabel: 'Fleet',
-    icon: '✈️',
+    icon: Plane,
     mobilePrimary: false,
     View: lazy(() => import('./views/FleetView')),
   },
@@ -80,7 +94,7 @@ export const TABS: TabDef[] = [
     hash: '#starlink',
     label: 'Starlink',
     shortLabel: 'Starlink',
-    icon: '🛰️',
+    icon: Zap,
     mobilePrimary: false,
     View: lazy(() => import('./views/StarlinkView')),
   },
@@ -89,7 +103,7 @@ export const TABS: TabDef[] = [
     hash: '#weather',
     label: 'Delays · Weather · Hubs',
     shortLabel: 'Weather',
-    icon: '🌦',
+    icon: CloudSun,
     mobilePrimary: true,
     View: lazy(() => import('./views/WeatherView')),
   },
@@ -98,7 +112,7 @@ export const TABS: TabDef[] = [
     hash: '#stats',
     label: 'Stats',
     shortLabel: 'Stats',
-    icon: '📊',
+    icon: ChartColumn,
     mobilePrimary: false,
     View: lazy(() => import('./views/StatsView')),
   },
@@ -107,7 +121,7 @@ export const TABS: TabDef[] = [
     hash: '#sources',
     label: 'Sources',
     shortLabel: 'Sources',
-    icon: 'ℹ️',
+    icon: Info,
     mobilePrimary: false,
     View: lazy(() => import('./views/SourcesView')),
   },

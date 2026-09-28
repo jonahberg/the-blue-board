@@ -16,6 +16,7 @@
  * is ~180 rows, which buries the roster and the ledger below it. "Show all" lifts the cap.
  */
 
+import { Radio } from 'lucide-react';
 import { memo } from 'react';
 
 import { Card } from '@/components/ui/card';
@@ -100,9 +101,7 @@ function Row({
                 : `Track ${row.tail}'s inbound flight${row.inbound?.flight ? ` ${row.inbound.flight}` : ''} on the live map`
             }
           >
-            <span aria-hidden="true" className="mr-1">
-              📡
-            </span>
+            <Radio aria-hidden="true" className="mr-1 inline size-3 align-[-2px]" />
             {row.airborne ? 'Track' : 'Track inbound'}
           </button>
         ) : null}

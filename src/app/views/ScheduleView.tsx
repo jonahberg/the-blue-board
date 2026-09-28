@@ -18,6 +18,7 @@
  *    live aircraft positions only.
  */
 
+import { CalendarDays, Plane, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -283,16 +284,12 @@ export default function ScheduleView() {
 
       {!hub ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-          <span className="text-2xl" aria-hidden="true">
-            📅
-          </span>
+          <CalendarDays aria-hidden="true" className="size-6" />
           <p className="text-xs">Select a hub to load schedule data</p>
         </div>
       ) : error ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-          <span className="text-2xl" aria-hidden="true">
-            ⚠️
-          </span>
+          <TriangleAlert aria-hidden="true" className="size-6" />
           <p className="text-xs">Error loading schedule: {error}</p>
           <p className="text-[10px] text-muted-foreground">Try again in a moment</p>
           <Button size="sm" onClick={refresh}>
@@ -302,9 +299,7 @@ export default function ScheduleView() {
       ) : isLoading && !board ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            <span className="mr-1" aria-hidden="true">
-              ✈️
-            </span>
+            <Plane aria-hidden="true" className="mr-1 inline size-3.5 align-[-2px]" />
             Loading {hub} {dir} for {dayLabel}…
           </p>
           <Skeleton className="h-14 w-full" />

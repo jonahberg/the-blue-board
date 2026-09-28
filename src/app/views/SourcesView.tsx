@@ -14,13 +14,16 @@
  * the styling disagreed about the same fact. It is a once-a-day community sync — DAILY.
  */
 
+import { CalendarDays, ClipboardList, CloudRain, CloudSun, Handshake, Landmark, MapIcon, MessageCircle, Plane, Radio, Route, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
 type Freshness = 'LIVE' | 'DAILY' | 'TILES' | 'COMPUTED';
 
 type Source = {
-  icon: string;
+  icon: LucideIcon;
   name: string;
   freshness?: Freshness;
   desc: string;
@@ -37,21 +40,21 @@ const FRESHNESS_TONE: Record<Freshness, string> = {
 
 const SOURCES: Source[] = [
   {
-    icon: '📡',
+    icon: Radio,
     name: 'Live Flight Positions — Flightradar24',
     freshness: 'LIVE',
     desc: 'Real-time aircraft positions with registration, origin, destination, aircraft type, and flight number. Updates every 30 seconds. Positions only — never schedules.',
     links: [{ label: 'flightradar24.com →', href: 'https://www.flightradar24.com' }],
   },
   {
-    icon: '📅',
+    icon: CalendarDays,
     name: 'Flight Schedule — AeroDataBox',
     freshness: 'LIVE',
     desc: 'Schedule data via AeroDataBox: airport departure and arrival boards with status, gate, terminal, and aircraft info.',
     links: [{ label: 'aerodatabox.com →', href: 'https://aerodatabox.com' }],
   },
   {
-    icon: '✈️',
+    icon: Plane,
     name: 'Fleet Database — United Fleet Site',
     freshness: 'DAILY',
     desc: 'Comprehensive fleet data: mainline aircraft with type, config, WiFi, IFE, seats, delivery year.',
@@ -64,7 +67,7 @@ const SOURCES: Source[] = [
     ],
   },
   {
-    icon: '⚡',
+    icon: Zap,
     name: 'Starlink Tracker — @martinamps',
     freshness: 'DAILY',
     desc: 'Starlink-equipped United aircraft with fleet stats & predictions. Community-maintained tracker, synced once a day.',
@@ -77,21 +80,21 @@ const SOURCES: Source[] = [
     ],
   },
   {
-    icon: '🌦',
+    icon: CloudSun,
     name: 'Aviation Weather — AWC',
     freshness: 'LIVE',
     desc: 'METAR observations and flight-category readings for hub airports, from the Aviation Weather Center (NOAA).',
     links: [{ label: 'aviationweather.gov →', href: 'https://aviationweather.gov' }],
   },
   {
-    icon: '🌧',
+    icon: CloudRain,
     name: 'NEXRAD Radar — Iowa State / NWS',
     freshness: 'LIVE',
     desc: 'Composite NEXRAD radar imagery overlaid on maps.',
     links: [{ label: 'Iowa State Mesonet →', href: 'https://mesonet.agron.iastate.edu' }],
   },
   {
-    icon: '🗺',
+    icon: MapIcon,
     name: 'Basemap — CARTO / OpenStreetMap',
     freshness: 'TILES',
     desc: 'Dark basemap tiles by CARTO. Map data © OpenStreetMap contributors, licensed under the Open Database License (ODbL).',
@@ -101,14 +104,14 @@ const SOURCES: Source[] = [
     ],
   },
   {
-    icon: '🏛',
+    icon: Landmark,
     name: 'NAS Status — FAA',
     freshness: 'LIVE',
     desc: 'National Airspace System status, ground stops, ground delay programs, departure and arrival delays, runway configuration and closures.',
     links: [{ label: 'nasstatus.faa.gov →', href: 'https://nasstatus.faa.gov' }],
   },
   {
-    icon: '🛠',
+    icon: Route,
     name: 'Route Estimation — Algorithmic',
     freshness: 'COMPUTED',
     desc: 'Origin/destination airports estimated using aircraft position, heading, and nearest airport matching. Routes marked as "estimated" — not from flight plans.',
@@ -117,7 +120,7 @@ const SOURCES: Source[] = [
 
 const COMMUNITY: Source[] = [
   {
-    icon: '💬',
+    icon: MessageCircle,
     name: 'r/UnitedAirlines',
     desc: 'The United Airlines community on Reddit — news, trip reports, MileagePlus discussion, and more.',
     links: [{ label: 'reddit.com/r/UnitedAirlines →', href: 'https://www.reddit.com/r/UnitedAirlines/' }],
@@ -128,9 +131,7 @@ function SourceCard({ source }: { source: Source }) {
   return (
     <Card size="sm" className="min-w-0">
       <CardContent className="flex gap-3">
-        <span aria-hidden="true" className="text-xl leading-none">
-          {source.icon}
-        </span>
+        <source.icon aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             {source.name}
@@ -168,13 +169,17 @@ function SourceCard({ source }: { source: Source }) {
 export default function SourcesView() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-3 p-3 md:p-6">
-      <h2 className="text-base font-semibold text-primary">📋 Data Sources &amp; Credits</h2>
+      <h2 className="flex items-center gap-1.5 text-base font-semibold text-primary">
+        <ClipboardList aria-hidden="true" className="size-4" /> Data Sources &amp; Credits
+      </h2>
 
       {SOURCES.map((source) => (
         <SourceCard key={source.name} source={source} />
       ))}
 
-      <h2 className="pt-3 text-sm font-semibold text-primary">🤝 Community</h2>
+      <h2 className="flex items-center gap-1.5 pt-3 text-sm font-semibold text-primary">
+        <Handshake aria-hidden="true" className="size-4" /> Community
+      </h2>
       {COMMUNITY.map((source) => (
         <SourceCard key={source.name} source={source} />
       ))}

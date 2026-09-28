@@ -19,6 +19,7 @@
  * or moving towards it — is worse than no rotation at all.
  */
 
+import { Newspaper, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -113,7 +114,7 @@ export default function NewsBanner() {
         paused.current = false;
       }}
     >
-      <span aria-hidden="true">📰</span>
+      <Newspaper aria-hidden="true" className="size-3.5 shrink-0" />
       <a
         href={href}
         onClick={() => trackClick(current.slug)}
@@ -137,7 +138,7 @@ export default function NewsBanner() {
         className="relative h-8 min-w-11 shrink-0 px-2 py-0 text-[11px] after:absolute after:inset-x-0 after:-inset-y-1.5"
         onClick={dismiss}
       >
-        ✕
+        <X aria-hidden="true" />
       </Button>
     </div>
   );

@@ -10,6 +10,7 @@
  * than not offering it.
  */
 
+import { Building2, CloudRain, Earth, Globe, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -94,10 +95,10 @@ export function MapControls({
         className="bg-background"
       >
         <ToggleGroupItem value="hubs" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
-          <span aria-hidden="true">🏢</span> Hubs
+          <Building2 aria-hidden="true" /> Hubs
         </ToggleGroupItem>
         <ToggleGroupItem value="longhaul" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
-          <span aria-hidden="true">🌍</span> Long-haul
+          <Globe aria-hidden="true" /> Long-haul
         </ToggleGroupItem>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -108,7 +109,7 @@ export function MapControls({
                 className={`gap-1.5 text-xs ${TOUCH_TARGET}`}
                 disabled={!starlinkAvailable}
               >
-                <span aria-hidden="true">⚡</span> Starlink
+                <Zap aria-hidden="true" /> Starlink
               </ToggleGroupItem>
             </span>
           </TooltipTrigger>
@@ -117,10 +118,10 @@ export function MapControls({
           ) : null}
         </Tooltip>
         <ToggleGroupItem value="wx" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
-          <span aria-hidden="true">🌧</span> Radar
+          <CloudRain aria-hidden="true" /> Radar
         </ToggleGroupItem>
         <ToggleGroupItem value="pacific" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
-          <span aria-hidden="true">🌏</span> Pacific
+          <Earth aria-hidden="true" /> Pacific
         </ToggleGroupItem>
       </ToggleGroup>
       <Button

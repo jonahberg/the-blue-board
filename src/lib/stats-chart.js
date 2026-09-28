@@ -99,12 +99,18 @@ export const PHASE_COLORS = {
   Ground: '#7a8699',
 };
 
-/** Decorative glyph per phase — main.js :4153. Always paired with the phase name. */
+/**
+ * Glyph per phase — main.js :4153. Always paired with the phase name. Unlike the map's
+ * flight-phase.js set, every glyph here is distinct: the legend is where a reader separates
+ * the donut's slices, and Cruise and En Route sharing ✈️ could not (audit F73). These stay
+ * text glyphs rather than lucide components — this module is DOM-free and the glyphs are
+ * data the legend and the sr-only table both print (DESIGN.md Decisions Log).
+ */
 export const PHASE_ICONS = {
   Takeoff: '🛫',
   Climb: '↗️',
   Cruise: '✈️',
-  'En Route': '✈️',
+  'En Route': '➡️',
   Descent: '↘️',
   Approach: '🛬',
   Ground: '🅿️',

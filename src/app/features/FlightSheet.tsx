@@ -15,6 +15,7 @@
  *    the first two are unavailable in exactly the mobile contexts that share most.
  */
 
+import { Eye, Star, Zap } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -417,10 +418,14 @@ export function FlightSheet() {
                   </Button>
                   {isStarlink ? (
                     <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
-                      ⚡ Starlink confirmed
+                      <Zap aria-hidden="true" /> Starlink confirmed
                     </Badge>
                   ) : null}
-                  {specialEntry ? <Badge variant="outline">⭐ {specialEntry.name}</Badge> : null}
+                  {specialEntry ? (
+                    <Badge variant="outline">
+                      <Star aria-hidden="true" /> {specialEntry.name}
+                    </Badge>
+                  ) : null}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {/* normalizeWifi turns the database's raw codes ("Satl Ku") into the
@@ -528,7 +533,7 @@ export function FlightSheet() {
               }}
               aria-pressed={watched}
             >
-              {watched ? '👁️ Watching' : '👁️ Watch'}
+              <Eye aria-hidden="true" /> {watched ? 'Watching' : 'Watch'}
             </Button>
             <Button size="sm" variant="outline" className="min-h-11 pointer-fine:md:min-h-9" onClick={() => void onShare()}>
               Share

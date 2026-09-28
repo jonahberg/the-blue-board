@@ -9,6 +9,8 @@
  * not a blank one — because this table's subject is the fleet, and a regional is not in it.
  */
 
+import { Star } from 'lucide-react';
+
 import {
   Table,
   TableBody,
@@ -105,8 +107,8 @@ export function AirborneTable({
                 </TableCell>
                 <TableCell>
                   {row.special ? (
-                    <span className="rounded border px-1 py-0.5 text-[9px] text-bb-warn">
-                      ⭐ {row.special.name}
+                    <span className="inline-flex items-center gap-0.5 rounded border px-1 py-0.5 text-[9px] text-foreground">
+                      <Star aria-hidden="true" className="size-2.5" /> {row.special.name}
                     </span>
                   ) : null}
                 </TableCell>

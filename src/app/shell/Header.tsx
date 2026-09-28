@@ -8,6 +8,8 @@
  * for the case where the feed has never produced flights at all.
  */
 
+import { Eye, House, Search } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -100,7 +102,7 @@ export function Header({
           aria-haspopup="dialog"
           aria-keyshortcuts="Meta+K Control+K"
         >
-          <span aria-hidden="true">🔍</span>
+          <Search aria-hidden="true" />
           <span className="hidden sm:inline">Find a flight</span>
           <kbd
             aria-hidden="true"
@@ -119,7 +121,7 @@ export function Header({
           aria-controls="watch-panel"
           aria-label={`Watched flights (${watch.watched.length})`}
         >
-          <span aria-hidden="true">👁️</span>
+          <Eye aria-hidden="true" />
           {watch.watched.length > 0 ? (
             <span className="ml-1 rounded-full bg-primary-fill px-1.5 font-mono text-[10px] text-primary-foreground">
               {watch.watched.length}
@@ -136,7 +138,7 @@ export function Header({
               onClick={cycleHomeAirport}
               aria-label={`Home hub: ${homeAirport || 'no preference'}. Change.`}
             >
-              <span aria-hidden="true">🏠</span> {homeAirport || '—'}
+              <House aria-hidden="true" /> {homeAirport || '—'}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">

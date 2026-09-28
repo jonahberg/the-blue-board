@@ -18,6 +18,7 @@
  * about somebody else's departure.
  */
 
+import { Plane } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -228,8 +229,8 @@ export default function Fr24LookupDialog() {
                     {flight.origin?.name || ''}
                   </div>
                 </div>
-                <div className="flex-1 text-center text-muted-foreground" aria-hidden="true">
-                  ✈ →
+                <div className="flex flex-1 justify-center text-muted-foreground" aria-hidden="true">
+                  <Plane className="size-4" />
                 </div>
                 <div className="min-w-0 text-center">
                   <div className="font-mono text-lg font-bold">

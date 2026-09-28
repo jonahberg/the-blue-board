@@ -11,6 +11,8 @@
  * one control that helps, which is clearing the filters.
  */
 
+import { Star } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -107,8 +109,8 @@ export function FleetTable({
                     {aircraft.r}
                   </button>
                   {specialEntry ? (
-                    <span className="ml-1 rounded border px-1 py-0.5 text-[9px] text-bb-warn">
-                      ⭐ {specialEntry.name}
+                    <span className="ml-1 inline-flex items-center gap-0.5 rounded border px-1 py-0.5 text-[9px] text-foreground">
+                      <Star aria-hidden="true" className="size-2.5" /> {specialEntry.name}
                     </span>
                   ) : null}
                 </TableCell>

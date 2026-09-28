@@ -13,6 +13,7 @@
  * contract every dialog on the site honours.
  */
 
+import { CalendarDays } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -115,8 +116,8 @@ export function ScheduleControls({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.15em] text-primary">
-          📅 Flight Schedule
+        <h2 className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-primary">
+          <CalendarDays aria-hidden="true" className="size-3.5" /> Flight Schedule
         </h2>
 
         <ToggleGroup

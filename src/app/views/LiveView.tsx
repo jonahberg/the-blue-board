@@ -10,6 +10,7 @@
  * sidebar counts is exactly what the map draws.
  */
 
+import { SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -208,7 +209,7 @@ export default function LiveView() {
                 className="pointer-events-auto min-h-11 bg-background text-xs"
                 onClick={() => setSidebarOpen(true)}
               >
-                🔍 Filters
+                <SlidersHorizontal aria-hidden="true" /> Filters
               </Button>
             ) : null}
           </div>

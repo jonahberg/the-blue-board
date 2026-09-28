@@ -19,6 +19,7 @@
  * `src/pages/index.astro` (the island is `client:only`, so nothing here is crawlable).
  */
 
+import { Zap } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Card } from '@/components/ui/card';
@@ -415,7 +416,7 @@ export default function FleetView() {
               <span className="text-muted-foreground">({subTabCounts.airborne})</span>
             </TabsTrigger>
             <TabsTrigger value="starlink" className="h-full! min-h-11 grow-0 pointer-fine:md:min-h-0">
-              🛰️ Starlink{' '}
+              <Zap aria-hidden="true" /> Starlink{' '}
               <span className="text-muted-foreground">({subTabCounts.starlink})</span>
             </TabsTrigger>
             <TabsTrigger value="special" className="h-full! min-h-11 grow-0 pointer-fine:md:min-h-0">

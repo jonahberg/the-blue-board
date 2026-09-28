@@ -15,6 +15,8 @@
  * that `tests/leaflet-required-styles.test.js` now guards.
  */
 
+import { X } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { STORAGE_KEYS, writeString } from '../state/storage';
 import { useUi } from '../state/ui';
@@ -43,7 +45,7 @@ export default function BmacToast() {
         className="absolute right-0.5 top-0.5 h-11 w-11 p-0 text-muted-foreground md:right-1 md:top-1 pointer-fine:md:h-7 pointer-fine:md:w-7"
         onClick={dismiss}
       >
-        ✕
+        <X aria-hidden="true" />
       </Button>
       <p className="text-xs leading-relaxed">
         Glad you landed ✈️ — if The Blue Board helped today, you can support the server costs.

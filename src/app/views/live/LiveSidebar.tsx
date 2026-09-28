@@ -6,6 +6,7 @@
  * that clears every filter at once.
  */
 
+import { Building2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -97,7 +98,7 @@ export function LiveSidebar({
                 className="flex w-full items-center gap-2 border-b px-2.5 py-2 text-left text-xs hover:bg-accent"
                 onClick={() => onHubFilter(search.hubMatch as string)}
               >
-                <span aria-hidden="true">🏢</span>
+                <Building2 aria-hidden="true" className="size-3.5 shrink-0" />
                 Filter map to {search.hubMatch}
                 <span className="ml-auto font-mono text-muted-foreground">
                   {

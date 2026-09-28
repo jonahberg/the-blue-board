@@ -20,6 +20,7 @@
  * whatever opened it — the row in the table you were reading, not the top of the page.
  */
 
+import { Eye, Share2, Star, Zap } from 'lucide-react';
 import { useCallback, useMemo, useRef } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -178,10 +179,14 @@ export default function AircraftDetailDialog() {
               </DialogDescription>
               {specialEntry || isStarlink ? (
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  {specialEntry ? <Badge variant="outline">⭐ {specialEntry.name}</Badge> : null}
+                  {specialEntry ? (
+                    <Badge variant="outline">
+                      <Star aria-hidden="true" /> {specialEntry.name}
+                    </Badge>
+                  ) : null}
                   {isStarlink ? (
                     <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
-                      ⚡ STARLINK
+                      <Zap aria-hidden="true" /> STARLINK
                     </Badge>
                   ) : null}
                 </div>
@@ -412,7 +417,7 @@ export default function AircraftDetailDialog() {
                     );
                   }}
                 >
-                  {watched ? '👁 Watching' : '👁 Watch'}
+                  <Eye aria-hidden="true" /> {watched ? 'Watching' : 'Watch'}
                 </Button>
               ) : null}
               <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
@@ -435,7 +440,7 @@ export default function AircraftDetailDialog() {
                 className="min-h-11 pointer-fine:md:min-h-0"
                 onClick={onShare}
               >
-                🔗 Share
+                <Share2 aria-hidden="true" /> Share
               </Button>
             </DialogFooter>
           </>

@@ -14,6 +14,8 @@
  *    "LOADING…" forever, and points at united.com (F008).
  */
 
+import { Zap } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -223,7 +225,7 @@ export function FlightCard({
                   variant="outline"
                   className="ml-1 border-bb-ok/40 bg-bb-ok/15 text-[9px] font-normal text-bb-ok"
                 >
-                  ⚡ Starlink Confirmed
+                  <Zap aria-hidden="true" /> Starlink Confirmed
                 </Badge>
               ) : (
                 <StarlinkBadge flight={entry.flight} forecast={false} />

@@ -9,6 +9,8 @@
  * The hub code links to its hub guide, which is also why this strip is worth crawling.
  */
 
+import { House } from 'lucide-react';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -93,11 +95,7 @@ export function HubHealthStrip() {
                       stale && 'opacity-60',
                     )}
                   >
-                    {isHome ? (
-                      <span aria-hidden="true" className="text-[10px]">
-                        🏠
-                      </span>
-                    ) : null}
+                    {isHome ? <House aria-hidden="true" className="size-3" /> : null}
                     <SeverityGlyph severity={severity} program={program?.marker} />
                     <span className="font-medium">{entry.hub}</span>
                     <span

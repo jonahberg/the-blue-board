@@ -147,3 +147,38 @@ describe('every var(--x) in markup names a declared custom property (audit F72)'
     expect(offenders).toEqual([]);
   });
 });
+
+describe('dashboard chrome icons are lucide-react, not emoji (DESIGN.md Components; audit F73)', () => {
+  // Pictographic emoji render differently on every OS (🎫 is a concert ticket on Apple) and
+  // mixed with lucide in the same bar. Content copy (welcome, toasts, news) may still use
+  // them; the navigation and control chrome below may not. Typographic glyphs (✓ ✕ ⚠ →) are
+  // outside this range and stay allowed.
+  const CHROME = [
+    'src/app/tabs.ts',
+    'src/app/shell/TabBar.tsx',
+    'src/app/shell/MobileNav.tsx',
+    'src/app/shell/Header.tsx',
+    'src/app/shell/HubHealthStrip.tsx',
+    'src/app/views/live/MapControls.tsx',
+    'src/app/views/SourcesView.tsx',
+    'src/app/views/StatsView.tsx',
+    'src/app/features/SearchPalette.tsx',
+    'src/app/features/NewsBanner.tsx',
+    'src/app/features/TipStrip.tsx',
+  ].map((p) => resolve(ROOT, p));
+
+  it('uses no pictographic emoji outside comments', () => {
+    const PICTO = /[\u{1F000}-\u{1FAFF}]/u;
+    const offenders = [];
+    for (const path of CHROME) {
+      readFileSync(path, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          const code = line.trim();
+          if (code.startsWith('//') || code.startsWith('*') || code.startsWith('/*') || code.startsWith('{/*')) return;
+          if (PICTO.test(line)) offenders.push(`${relative(ROOT, path)}:${i + 1}`);
+        });
+    }
+    expect(offenders).toEqual([]);
+  });
+});

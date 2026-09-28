@@ -11,6 +11,7 @@
  * much of the fleet you are currently looking at.
  */
 
+import { Star } from 'lucide-react';
 import { memo } from 'react';
 
 import { Input } from '@/components/ui/input';
@@ -131,7 +132,8 @@ export const RosterControls = memo(function RosterControls({
         onClick={() => onNewOnly(!newOnly)}
         className="min-h-11 rounded-md border px-3 text-xs font-medium aria-pressed:bg-accent aria-pressed:text-accent-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-9"
       >
-        ★ New this week
+        <Star aria-hidden="true" className="mr-1 inline size-3.5 align-[-2px]" />
+        New this week
       </button>
 
       <span id="sl-filtered-count" className="text-[11px] text-muted-foreground">

@@ -137,6 +137,11 @@ describe('the phase ramp carries identity beyond colour', () => {
     }
   });
 
+  it('gives every legend phase its own glyph — Cruise and En Route both drew ✈️ (F73)', () => {
+    const glyphs = PHASE_LEGEND_ORDER.map((phase) => PHASE_ICONS[phase]);
+    expect(new Set(glyphs).size).toBe(glyphs.length);
+  });
+
   it('assigns seven distinct hues — the legacy ramp shipped three near-identical blues', () => {
     const hues = PHASE_LEGEND_ORDER.map((phase) => PHASE_COLORS[phase]);
     expect(new Set(hues).size).toBe(hues.length);

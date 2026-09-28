@@ -17,6 +17,7 @@
  * single most common reason for an empty result.
  */
 
+import { CalendarDays, Plane, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -198,7 +199,7 @@ export function SearchPalette() {
                     setSearchOpen(false);
                   }}
                 >
-                  <span aria-hidden="true">✈️</span>
+                  <Plane aria-hidden="true" />
                   {/* Fixed-width ident so the route column starts in the same place for
                       UA19 and UA1844 (7ch also fits a UAL callsign fallback). */}
                   <span className="w-[7ch] shrink-0 font-mono font-medium">
@@ -249,7 +250,7 @@ export function SearchPalette() {
                       setSearchOpen(false);
                     }}
                   >
-                    <span aria-hidden="true">🔎</span>
+                    <Search aria-hidden="true" />
                     Look up <span className="font-mono font-medium">{lookupIdent}</span> times and
                     gates
                   </CommandItem>
@@ -261,7 +262,7 @@ export function SearchPalette() {
                     setSearchOpen(false);
                   }}
                 >
-                  <span aria-hidden="true">📅</span>
+                  <CalendarDays aria-hidden="true" />
                   Open the Schedule tab
                 </CommandItem>
               </CommandGroup>

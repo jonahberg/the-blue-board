@@ -19,6 +19,7 @@
  * text selection and hands a screen reader one enormous, unlabelled control.
  */
 
+import { Radio } from 'lucide-react';
 import { Fragment, memo } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -143,7 +144,7 @@ function Expansion({
         <div className="mt-4 flex flex-wrap gap-2">
           {icao24 ? (
             <Button size="sm" className="min-h-11 pointer-fine:md:min-h-8" onClick={() => onTrack(icao24)}>
-              📡 Track on Live Map
+              <Radio aria-hidden="true" /> Track on Live Map
             </Button>
           ) : null}
           <Button

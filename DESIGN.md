@@ -165,7 +165,14 @@ raw `contentHtml` string read identically.
 ## Components
 
 Primitives are shadcn, installed into `src/components/ui/` and edited there rather than
-wrapped. Icons are **lucide-react**.
+wrapped. Icons are **lucide-react** — tabs, buttons, chips, badges, panel titles, empty
+states and dismiss controls — always `aria-hidden` beside a text label or inside a control
+that has its own name. Starlink is `Zap` (⚡) everywhere. Two things stay text glyphs on
+purpose: the `src/lib` encodings (`PHASE_ICONS`, the ops-health `⛔`/`⚠` markers, the
+`✓`/`⚠` weather prefixes), because that layer is DOM-free and those strings also travel into
+the ticker, tooltips and screen-reader text; and emoji inside **copy** (the welcome dialog,
+toasts, the waitlist, news) where they are part of the sentence, not a control.
+`tests/design-guards.test.js` keeps pictographic emoji out of the navigation chrome.
 
 | Need | Primitive | Where |
 |---|---|---|
@@ -274,6 +281,7 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-09 | Status/phase/category colours stay in `src/lib` | They are encodings shared by map, chart and table, and they are unit-tested. A CSS token cannot be asserted in a test. |
 | 2026-09 | Dashboard nav breaks at `lg`, content pages at `md` | The dashboard needs the full tab bar's width; a content page does not. |
 | 2026-09 | Status colour is the token set only; `bb-info` + `bb-starlink` added | ~260 raw palette classes had put a second amber and a second green in the dashboard (audit F72). Red maps to `--destructive` (identical to `red-400` in dark); amber/green render slightly quieter as `bb-warn`/`bb-ok`. The trackers' editorial gold accent became `--primary` (the amber secondary was already retired). |
+| 2026-09 | Chrome icons are lucide; lib glyphs and copy emoji stay text | Tabs, chips and badges mixed emoji with lucide and rendered differently per OS (🎫 is a concert ticket on Apple; audit F73). Phase/status glyphs are `src/lib` data that also reach the ticker and sr-only text, so they stay strings — with every legend glyph distinct. |
 | 2026-09 | `--primary-fill` for filled primary surfaces | White on `--primary` measured 2.99:1 (axe, audit F37). Darkening `--primary` itself would have cost its contrast as text on the dark surfaces, so fills got their own token. |
 | 2026-09 | Touch floor relaxes on `pointer-fine:md:`, not `md:` | Tablets are touch devices at `md` widths (audit F24). |
 | 2026-09 | Flight panel is a bottom sheet below `lg` | A right-hand sheet covered the whole phone map it was meant to sit beside (audit F20). |
