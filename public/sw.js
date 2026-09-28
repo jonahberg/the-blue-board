@@ -124,7 +124,9 @@ self.addEventListener('fetch', (event) => {
     const offlineSafe = isOfflineSafeData(url.pathname);
     event.respondWith((async () => {
       try {
-        const networkRequest = new Request(request, { cache: 'no-store' });
+        // 'no-cache', not 'no-store': still always asks the network, but revalidates with the
+        // browser's ETag, so an unchanged ~75 KB roster comes back as a 304 (F58).
+        const networkRequest = new Request(request, { cache: 'no-cache' });
         const networkResponse = await fetch(networkRequest);
         if (offlineSafe && isCacheable(networkResponse)) {
           event.waitUntil(putAndTrim(DATA_CACHE, request, networkResponse.clone(), DATA_MAX));

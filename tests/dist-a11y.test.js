@@ -91,10 +91,9 @@ describe.skipIf(!hasDist)('share cards', () => {
     return out;
   }
 
-  // KNOWN BUG (cross-file, src/components/site/Seo.astro:82 hard-codes image/png while every
-  // hub/fleet/news/tracker page's og:image is a .jpg). `it.fails` keeps CI green until the
-  // Seo.astro fix lands — then this reports "expected to fail" and must become a plain `it`.
-  it.fails('og:image:type matches the og:image file type on every page', () => {
+  // Seo.astro used to hard-code image/png while every hub/fleet/news/tracker page's og:image
+  // is a .jpg (F40); it now derives the type from the file (src/lib/og-image-type.js).
+  it('og:image:type matches the og:image file type on every page', () => {
     expect(mismatches()).toEqual([]);
   });
 });

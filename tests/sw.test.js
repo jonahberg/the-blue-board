@@ -455,6 +455,14 @@ describe('sw.js — runtime caches really fill (strict body semantics)', () => {
     expect(offline.response.body).toBe('{"total":637}');
   });
 
+  it('always asks the network for data, but lets the browser revalidate with its ETag (no-cache, not no-store)', async () => {
+    const { handlers, fetchMock } = makeStrictEnv();
+    fetchMock.mockResolvedValue(strictResponse('{"ok":true}'));
+    await runFetchStrict(handlers, new Request(`${ORIGIN}/api/starlink-data?fields=roster`));
+    const sent = fetchMock.mock.calls[0][0];
+    expect(sent.cache).toBe('no-cache');
+  });
+
   it.each([
     '/api/schedule?hub=ORD&dir=departures&timestamp=1790395200',
     '/api/starlink-data',

@@ -86,10 +86,8 @@ describe('header search button', () => {
     expect(screen.getByRole('button', { name: 'What is this dashboard?' })).toBeTruthy();
   });
 
-  // KNOWN PRODUCT BUG (cross-file request to the src/app/shell owner): Header.tsx's search
-  // <Button> has no aria-label, so at phone width its only text is the aria-hidden 🔍.
-  // Fix: add `aria-label="Find a flight"` to that Button. When that lands, `it.fails`
-  // starts failing — flip it to a plain `it`.
+  // Header.tsx's search <Button> once had no aria-label, so at phone width its only text was
+  // the aria-hidden icon. It now carries `aria-label="Find a flight"`.
   it('has an explicit aria-label, so it is named even when the label text is hidden', () => {
     renderHeader();
     const label = searchButton().getAttribute('aria-label');
