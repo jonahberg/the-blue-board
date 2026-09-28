@@ -94,7 +94,7 @@ const TICK_MS = 30000;
 type MismatchState = { disputed: DisputedClaim[]; summary: VerifySummary | null };
 
 export default function StarlinkView() {
-  const { starlink, fleetSummary, fleetByReg } = useFleet();
+  const { starlink, fleetSummary, fleetByReg, loadStarlinkFlights } = useFleet();
   const feed = useFeed();
   const { homeAirport } = usePrefs();
   const { tab, setTab, select, focusOn, openAircraft, setStarlinkFilter } = useUi();
@@ -174,6 +174,13 @@ export default function StarlinkView() {
       },
     );
   }, [active]);
+
+  // ── Per-tail schedules: fetched the first time the tab opens, not at dashboard boot (F58) ──
+  useEffect(() => {
+    if (active && !starlink.degraded) loadStarlinkFlights();
+  }, [active, starlink.degraded, loadStarlinkFlights]);
+  const flightsLoading =
+    !starlink.degraded && (starlink.flightsStatus === 'idle' || starlink.flightsStatus === 'loading');
 
   // ── Live picture ───────────────────────────────────────────────────────────────────────
   // Keyed on the feed's array identity, which changes once per successful poll — NOT on the
@@ -452,8 +459,8 @@ export default function StarlinkView() {
           onTrack={onBoardTrack}
         />
       ) : (
-        <p className="text-xs text-muted-foreground" id="sl-board-note">
-          {BOARD_UNAVAILABLE_NOTE}
+        <p className="text-xs text-muted-foreground" id="sl-board-note" aria-live="polite">
+          {flightsLoading ? 'Loading the hub departures board…' : BOARD_UNAVAILABLE_NOTE}
         </p>
       )}
 

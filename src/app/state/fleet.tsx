@@ -1,6 +1,10 @@
 /**
- * Fleet reference data: `/data/fleet.json`, `/api/starlink-data` and `/api/fleet-summary`,
- * loaded in parallel once per session (inventory §34 `loadFleetData()`).
+ * Fleet reference data: `/data/fleet.json`, `/api/starlink-data?fields=roster` and
+ * `/api/fleet-summary`, loaded in parallel once per session (inventory §34 `loadFleetData()`).
+ *
+ * The Starlink per-tail schedules (`flightsByTail`, ~93% of the old 1 MB boot payload) are NOT
+ * part of the boot: only the Starlink tab reads them, so it calls `loadStarlinkFlights()` when
+ * it first opens and they arrive as `/api/starlink-data?fields=flights` (F58).
  *
  * Three things downstream depend on:
  *  - `fleetByReg` — the registration index `matchAircraft()` needs to turn a live feed row
@@ -18,24 +22,36 @@
  * without this the WiFi column shows "ViaSat Ka" beside a Starlink badge.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { applyStarlinkWifiOverlay } from '@/lib/fleet-utils.js';
 import { indexSpecialAircraft } from '@/lib/special-aircraft.js';
 import { applyVerifiedStarlinkOverrides } from '@/lib/starlink-overrides.js';
-import {
-  fetchFleetDb,
-  fetchFleetSummary,
-  fetchStarlinkData,
-  fetchStarlinkFallback,
-} from '../data/api';
+import { ApiError, fetchFleetDb, fetchFleetSummary, fetchStarlinkFallback } from '../data/api';
 import type {
   FleetAircraft,
   FleetSummary,
   StarlinkAircraft,
+  StarlinkData,
   StarlinkFleetStats,
 } from '../data/types';
+
+/**
+ * `/api/starlink-data?fields=…`. Local rather than in `data/api.ts` only because this
+ * workstream does not own that file; it mirrors `getJson()` there exactly.
+ */
+async function fetchStarlinkPart<T>(fields: 'roster' | 'flights'): Promise<T> {
+  const path = `/api/starlink-data?fields=${fields}`;
+  const res = await fetch(path, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new ApiError(res.status, `${path} → HTTP ${res.status}`);
+  return (await res.json()) as T;
+}
+
+export const fetchStarlinkRoster = () =>
+  fetchStarlinkPart<Omit<StarlinkData, 'flightsByTail'> & { flightsByTail?: StarlinkData['flightsByTail'] }>('roster');
+export const fetchStarlinkFlights = () =>
+  fetchStarlinkPart<Pick<StarlinkData, 'flightsByTail'>>('flights');
 
 /** Registration → the fleet site's special-aircraft entry. */
 export type SpecialIndex = Map<string, { name: string; type: 'named' | 'livery' }>;
@@ -43,7 +59,10 @@ export type SpecialIndex = Map<string, { name: string; type: 'named' | 'livery' 
 export type StarlinkState = {
   /** Registrations known to carry Starlink. */
   tails: Set<string>;
+  /** Empty until `loadStarlinkFlights()` has answered (see `flightsStatus`). */
   flightsByTail: Record<string, unknown>;
+  /** The lazily loaded schedules: 'idle' until the Starlink tab asks for them. */
+  flightsStatus: 'idle' | 'loading' | 'ready' | 'failed';
   stats: StarlinkFleetStats | null;
   aircraft: StarlinkAircraft[];
   lastUpdated: string | null;
@@ -63,11 +82,14 @@ export type FleetValue = {
   loading: boolean;
   loadFailed: boolean;
   retry: () => void;
+  /** Fetch the Starlink per-tail schedules once; later calls are no-ops unless it failed. */
+  loadStarlinkFlights: () => void;
 };
 
 const EMPTY_STARLINK: StarlinkState = {
   tails: new Set<string>(),
   flightsByTail: {},
+  flightsStatus: 'idle',
   stats: null,
   aircraft: [],
   lastUpdated: null,
@@ -100,7 +122,7 @@ export function FleetProvider({ children }: { children: ReactNode }) {
     async function load() {
       const [dbResult, starlinkResult, summaryResult] = await Promise.allSettled([
         fetchFleetDb(),
-        fetchStarlinkData(),
+        fetchStarlinkRoster(),
         fetchFleetSummary(),
       ]);
       if (cancelled) return;
@@ -118,15 +140,18 @@ export function FleetProvider({ children }: { children: ReactNode }) {
         const aircraft = applyVerifiedStarlinkOverrides(
           Array.isArray(data.aircraft) ? data.aircraft : [],
         ) as StarlinkAircraft[];
-        setStarlink({
+        // A server that predates `?fields=` still sends the schedules: use them.
+        const inline = data.flightsByTail && Object.keys(data.flightsByTail).length > 0;
+        setStarlink((current) => ({
           tails: new Set(aircraft.map((a) => a.tail).filter(Boolean)),
-          flightsByTail: data.flightsByTail ?? {},
+          flightsByTail: inline ? data.flightsByTail! : current.flightsByTail,
+          flightsStatus: inline ? 'ready' : current.flightsStatus,
           stats: data.fleetStats ?? null,
           aircraft,
           lastUpdated: data.lastUpdated ?? null,
           syncedAt: data.syncedAt ?? null,
           degraded: false,
-        });
+        }));
       } else {
         try {
           const fallback = applyVerifiedStarlinkOverrides(
@@ -152,6 +177,31 @@ export function FleetProvider({ children }: { children: ReactNode }) {
     };
   }, [attempt]);
 
+  // The schedules, on demand. `flightsRequested` stops a second request while one is in flight
+  // or after success; a failure clears it so the next tab open retries.
+  const flightsRequested = useRef(false);
+  const loadStarlinkFlights = useCallback(() => {
+    if (flightsRequested.current) return;
+    flightsRequested.current = true;
+    setStarlink((current) =>
+      current.flightsStatus === 'ready' ? current : { ...current, flightsStatus: 'loading' },
+    );
+    fetchStarlinkFlights().then(
+      (data) =>
+        setStarlink((current) => ({
+          ...current,
+          flightsByTail: data?.flightsByTail ?? {},
+          flightsStatus: 'ready',
+        })),
+      () => {
+        flightsRequested.current = false;
+        setStarlink((current) =>
+          current.flightsStatus === 'ready' ? current : { ...current, flightsStatus: 'failed' },
+        );
+      },
+    );
+  }, []);
+
   const fleetDb = useMemo(
     () => applyStarlinkWifiOverlay(rawFleetDb, starlink.tails) as FleetAircraft[],
     [rawFleetDb, starlink.tails],
@@ -175,8 +225,9 @@ export function FleetProvider({ children }: { children: ReactNode }) {
       loading,
       loadFailed,
       retry,
+      loadStarlinkFlights,
     }),
-    [fleetDb, fleetByReg, starlink, fleetSummary, special, loading, loadFailed, retry],
+    [fleetDb, fleetByReg, starlink, fleetSummary, special, loading, loadFailed, retry, loadStarlinkFlights],
   );
 
   return <FleetContext.Provider value={value}>{children}</FleetContext.Provider>;
