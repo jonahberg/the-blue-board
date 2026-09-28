@@ -25,7 +25,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { getHubDayLabel } from '@/lib/hubTz.js';
 import { activeAdvFilterCount, advFilterLabel } from '@/lib/schedule-load.js';
@@ -165,16 +164,25 @@ export function ScheduleControls({
             </SelectContent>
           </Select>
 
-          <Tabs value={dir} onValueChange={(value) => onDir(value as BoardDirection)}>
-            <TabsList className="h-auto">
-              <TabsTrigger value="departures" className="min-h-11 px-2.5 text-[10px] md:min-h-0">
-                Departures
-              </TabsTrigger>
-              <TabsTrigger value="arrivals" className="min-h-11 px-2.5 text-[10px] md:min-h-0">
-                Arrivals
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {/* A segmented control, not Tabs: the board is one table below, so there is no
+              tab panel for a TabsTrigger's aria-controls to point at (F39). The `value &&`
+              guard stops a click on the selected item from emptying the selection. */}
+          <ToggleGroup
+            type="single"
+            value={dir}
+            onValueChange={(value) => {
+              if (value) onDir(value as BoardDirection);
+            }}
+            size="sm"
+            aria-label="Board direction"
+          >
+            <ToggleGroupItem value="departures" className="min-h-11 px-2.5 text-[10px] md:min-h-0">
+              Departures
+            </ToggleGroupItem>
+            <ToggleGroupItem value="arrivals" className="min-h-11 px-2.5 text-[10px] md:min-h-0">
+              Arrivals
+            </ToggleGroupItem>
+          </ToggleGroup>
 
           <Input
             aria-label="Find in board"
