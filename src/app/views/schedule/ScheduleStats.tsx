@@ -65,6 +65,9 @@ export function ScheduleStats({
         <Metric
           value={otp === null || otp === undefined ? '—' : `${otp}%`}
           valueClass={tone.className}
+          // D9: the one "operated" definition (hub-health.js operatedOutcome), shared with the
+          // hub strip — spelled out so the two counts are visibly the same thing.
+          title={`Operated: flights with a recorded ${dir === 'arrivals' ? 'arrival' : 'departure'} time (estimates don't count), the same count the hub strip uses. On time = within 30 min of schedule.`}
           label={
             <>
               <JargonTerm term="otp">On-Time</JargonTerm>{' '}

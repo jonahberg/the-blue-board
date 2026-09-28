@@ -9,6 +9,7 @@
 // markup, the FAA-program blend and the 🏠 marker stay in renderHubHealthBar().
 
 import { networkStatus } from './ops-health.js';
+import { isPlausibleDelta } from './schedule-plausibility.js';
 
 /** Fixed left-to-right order of the hub-health bar. */
 export const HUB_ORDER = ['ORD','DEN','IAH','EWR','SFO','IAD','LAX','NRT','GUM'];
@@ -24,6 +25,46 @@ const OPERATED_KEYS = new Set(['departed', 'enroute', 'landed']);
  */
 export const ON_TIME_GRACE_MIN = 30;
 export const ON_TIME_GRACE_SECONDS = ON_TIME_GRACE_MIN * 60;
+
+/** Provider (generic) status words that say the flight left the gate. */
+const OPERATED_STATUS_TEXT = new Set(['departed', 'en-route', 'landed', 'diverted']);
+
+/**
+ * THE definition of an operated flight, for every on-time figure on the site (live audit
+ * Sep 28 2026, D9: the ORD board header said "170 operated" while the hub strip and
+ * /api/irops said 146 for the same board). Both now count with this.
+ *
+ * A board row is OPERATED when all of these hold:
+ *  1. its status is departed / en-route / landed / diverted — the provider's generic status
+ *     text, or the board classifier's key when the caller has one (`statusKey`);
+ *  2. it has a REAL time in the board's direction — `real.departure` on a departures board,
+ *     `real.arrival` on an arrivals board. An estimate is a forecast, not evidence;
+ *  3. it has a scheduled time in that direction;
+ *  4. it is not a synthetic row (`_source.liveFeedFallback`, or a schedule time derived
+ *     from the actual — those always score on-time and inflate OTP when the feed degrades);
+ *  5. the real-vs-scheduled delta is one a real flight could have (`isPlausibleDelta`: AeroDataBox
+ *     can pair yesterday's schedule with today's actual).
+ * It is ON TIME when real <= scheduled + ON_TIME_GRACE_MIN.
+ *
+ * @param {Object} fl  an /api/schedule board row.
+ * @param {'departures'|'arrivals'} [dir]
+ * @param {string} [statusKey]  a classifier key ('enroute' etc.) standing in for the status text.
+ * @returns {'onTime'|'late'|null} null = not operated (by this definition).
+ */
+export function operatedOutcome(fl, dir = 'departures', statusKey) {
+  const status = statusKey
+    ? (statusKey === 'enroute' ? 'en-route' : String(statusKey).toLowerCase())
+    : String(fl?.status?.generic?.status?.text || '').toLowerCase();
+  if (!OPERATED_STATUS_TEXT.has(status)) return null;
+  const isArr = dir === 'arrivals';
+  const realT = isArr ? fl.time?.real?.arrival : fl.time?.real?.departure;
+  const schedT = isArr ? fl.time?.scheduled?.arrival : fl.time?.scheduled?.departure;
+  if (!realT || !schedT) return null;
+  if (fl._source?.liveFeedFallback) return null;
+  if (fl._source?.scheduleTimeDerivedFromActual?.departure || fl._source?.scheduleTimeDerivedFromActual?.arrival) return null;
+  if (!isPlausibleDelta(realT, schedT)) return null;
+  return realT <= schedT + ON_TIME_GRACE_SECONDS ? 'onTime' : 'late';
+}
 
 /**
  * The hub chip's tooltip line, with the on-time rule spelled out.

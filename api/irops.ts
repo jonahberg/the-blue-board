@@ -6,7 +6,7 @@ import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
 import { getStartOfHubDay, defaultSchedDayOffset } from '../src/lib/hubTz.js';
-import { HUB_READING_STALE_MS, ON_TIME_GRACE_SECONDS, boardAsOfMs } from '../src/lib/hub-health.js';
+import { HUB_READING_STALE_MS, boardAsOfMs, operatedOutcome } from '../src/lib/hub-health.js';
 
 const isRateLimited = createRateLimiter('irops', 60);
 
@@ -188,22 +188,15 @@ export function computeMetrics(
       if (overdueMin > 30) hubMetrics[hub].delayed30++;
       if (overdueMin > 60) hubMetrics[hub].delayed60++;
 
-      const hasOperated = status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted';
-      const realDep = fl.time?.real?.departure;
-      if (!hasOperated || !realDep) continue;
-
-      const schedT = fl.time?.scheduled?.departure;
-      if (!schedT) continue;
-
-      // Exclude degraded synthetic rows (live-feed rescue / schedule-derived-from-actual): their
-      // scheduled time equals the actual, so they always score on-time and inflate hub OTP exactly
-      // when the FR24 feed is degraded — mirrors the dashboard's per-board exclusion.
-      // (Audit P1: degraded-rows-inflate-hub-otp.)
-      if (fl._source?.liveFeedFallback) continue;
-      if (fl._source?.scheduleTimeDerivedFromActual?.departure || fl._source?.scheduleTimeDerivedFromActual?.arrival) continue;
+      // D9: the ONE operated definition (src/lib/hub-health.js operatedOutcome), shared with
+      // the schedule stat strip so the board header and the hub strip count the same flights.
+      const outcome = operatedOutcome(fl, 'departures');
+      if (!outcome) continue;
+      const realDep = fl.time.real.departure;
+      const schedT = fl.time.scheduled.departure;
 
       hubMetrics[hub].operated++;
-      if (realDep <= schedT + ON_TIME_GRACE_SECONDS) {
+      if (outcome === 'onTime') {
         hubMetrics[hub].onTime++;
       } else {
         const delayMin = Math.round((realDep - schedT) / 60);

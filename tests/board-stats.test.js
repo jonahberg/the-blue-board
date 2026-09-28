@@ -87,37 +87,33 @@ describe('computeScheduleStatCounts', () => {
     expect(c.uncategorized).toBe(2); // the two excluded synthetic rows are not hidden
   });
 
-  it('scores an operated row lacking a real timestamp against its estimated time', () => {
-    // classifyBase keys 'departed'/'landed' off provider status text alone, so an
-    // operated row can carry no real time — OTP must fall back to the estimate, and
-    // to the correct leg (departures → estimated.departure).
-    const late = computeScheduleStatCounts(
-      [flight('departed', { sched: NOW - 7200, est: NOW - 7200 + 3600 })], // +60m via estimate
+  it('does not score an operated row that has only an estimated time (D9: one operated definition)', () => {
+    // Live audit Sep 28 2026: this estimate fallback made the ORD header read "170 operated"
+    // beside /api/irops' 146. An estimate is a forecast, not evidence the flight operated on
+    // time or late — the row is reconciled as uncategorized, as /api/irops leaves it out.
+    const c = computeScheduleStatCounts(
+      [flight('departed', { sched: NOW - 7200, est: NOW - 7200 + 3600 })],
       { dir: 'departures', nowSec: NOW, classify }
     );
-    expect(late.late).toBe(1);
-    expect(late.onTime).toBe(0);
-    expect(late.operated).toBe(1);
+    expect(c.operated).toBe(0);
+    expect(c.late).toBe(0);
+    expect(c.uncategorized).toBe(1);
 
-    const onTime = computeScheduleStatCounts(
-      [flight('departed', { sched: NOW - 7200, est: NOW - 7200 + 600 })], // +10m via estimate
-      { dir: 'departures', nowSec: NOW, classify }
+    const arr = computeScheduleStatCounts(
+      [arrFlight('landed', { sched: NOW - 3600, est: NOW - 3600 + 5400, realDep: NOW - 9000 })],
+      { dir: 'arrivals', nowSec: NOW, classify }
     );
-    expect(onTime.onTime).toBe(1);
-    expect(onTime.late).toBe(0);
-    expect(onTime.operated).toBe(1);
+    expect(arr.operated).toBe(0);
+    expect(arr.uncategorized).toBe(1);
   });
 
-  it('scores an arrivals row off estimated ARRIVAL when real arrival is absent (F021)', () => {
-    // realDep is present but must be ignored — the estimate that matters is the
-    // arrival leg. A +90m estimated arrival with an on-time departure is still late.
-    const flights = [
-      arrFlight('landed', { sched: NOW - 3600, est: NOW - 3600 + 5400, realDep: NOW - 9000 }),
-    ];
-    const c = computeScheduleStatCounts(flights, { dir: 'arrivals', nowSec: NOW, classify });
-    expect(c.late).toBe(1);
-    expect(c.onTime).toBe(0);
+  it('scores a diverted row with a real out-time, as /api/irops does (D9)', () => {
+    const c = computeScheduleStatCounts(
+      [flight('diverted', { sched: NOW - 7200, real: NOW - 7100 })],
+      { dir: 'departures', nowSec: NOW, classify }
+    );
     expect(c.operated).toBe(1);
+    expect(c.onTime).toBe(1);
   });
 
   it('keeps implausible deltas out of Late and reconciles them as uncategorized (F4)', () => {
