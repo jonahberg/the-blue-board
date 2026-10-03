@@ -25,12 +25,23 @@ import { SupportMeter } from './SupportMeter';
 
 const HUB_LINKS = ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM'];
 
-function Ext({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
+function Ext({
+  href,
+  children,
+  className,
+  support,
+}: {
+  href: string;
+  children: React.ReactNode;
+  className?: string;
+  support?: string;
+}) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+      data-support={support}
       className={className ?? 'underline-offset-2 hover:underline'}
     >
       {children}
@@ -86,7 +97,7 @@ export function LegalMenu() {
             Fleet Database
           </a>
           <Ext href="https://github.com/jonahberg/the-blue-board/issues">Support / Feedback</Ext>
-          <Ext href="https://buymeacoffee.com/notjbg" className="font-semibold text-primary underline-offset-2 hover:underline">
+          <Ext href="https://buymeacoffee.com/notjbg" support="legal-menu" className="font-semibold text-primary underline-offset-2 hover:underline">
             ☕ Donate
           </Ext>
           <Ext href="https://x.com/theblueboard">@theblueboard</Ext>

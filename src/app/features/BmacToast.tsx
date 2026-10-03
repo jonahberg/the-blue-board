@@ -54,6 +54,7 @@ export default function BmacToast() {
         href={BMAC_URL}
         target="_blank"
         rel="noopener noreferrer"
+        data-support="landed-toast"
         className="mt-2.5 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground pointer-fine:md:min-h-9"
       >
         ☕ Buy Me a Coffee

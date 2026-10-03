@@ -10,9 +10,9 @@
  *  - the "do not use this for operational or safety-critical decisions" line, which is the
  *    one sentence on this site that has to be unmissable.
  *
- * The seventeen supporter names are transcribed verbatim from `legacy/index.html:978-1001`
- * and updated from the Buy Me a Coffee CSV export. They are people who paid for this to
- * exist; dropping or misspelling one in a rewrite is not a cosmetic bug.
+ * The supporter names live in `src/data/supporters.js` (verbatim from Buy Me a Coffee, pinned
+ * by `tests/supporters.test.js`). They are people who paid for this to exist; dropping or
+ * misspelling one in a rewrite is not a cosmetic bug.
  */
 
 import { Button } from '@/components/ui/button';
@@ -22,28 +22,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { SUPPORTERS } from '@/data/supporters.js';
 import { useUi } from '../state/ui';
 
-/** Verbatim from legacy/index.html:980-996 — seventeen names, in order. */
-const SUPPORTERS = [
-  '@LinBros88',
-  'Greeby',
-  'u/WrldDriftR',
-  'LoveBlueBoard',
-  '@paytonwolfee',
-  'Danny',
-  '@misadventurelab',
-  'natto',
-  '@MissLynsey',
-  'K2',
-  'James W',
-  'Aaron',
-  '@pconrad0',
-  'Stephen R',
-  'FlyerTalk JCG1005',
-  'ML',
-  'Leo',
-];
 
 const SOURCES: { href: string; label: string; rest: React.ReactNode }[] = [
   {
@@ -86,12 +67,13 @@ const SOURCES: { href: string; label: string; rest: React.ReactNode }[] = [
   },
 ];
 
-function Ext({ href, children }: { href: string; children: React.ReactNode }) {
+function Ext({ href, children, support }: { href: string; children: React.ReactNode; support?: string }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+      data-support={support}
       className="text-primary underline-offset-2 hover:underline"
     >
       {children}
@@ -153,8 +135,8 @@ export default function DisclaimerDialog() {
           <p>
             <strong>Support:</strong> Built by a United flyer, not a corporation. If Blue Board
             saved you a headache today, consider{' '}
-            <Ext href="https://buymeacoffee.com/notjbg">supporting our site ☕</Ext>,{' '}
-            <Ext href="https://buymeacoffee.com/notjbg/membership">become a monthly supporter →</Ext>,
+            <Ext href="https://buymeacoffee.com/notjbg" support="about">supporting our site ☕</Ext>,{' '}
+            <Ext href="https://buymeacoffee.com/notjbg/membership" support="about-membership">become a monthly supporter →</Ext>,
             or <Ext href="https://github.com/jonahberg/the-blue-board/issues">suggest a feature →</Ext>
           </p>
 
@@ -174,7 +156,7 @@ export default function DisclaimerDialog() {
             </ul>
             <p className="mt-2.5 text-[10px] text-muted-foreground">
               Want to see your name here?{' '}
-              <Ext href="https://buymeacoffee.com/notjbg">Support the project</Ext>
+              <Ext href="https://buymeacoffee.com/notjbg" support="about-wall">Support the project</Ext>
             </p>
           </div>
         </div>

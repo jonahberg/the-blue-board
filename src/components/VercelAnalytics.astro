@@ -7,5 +7,14 @@
 // (the requestPath breakdown showed "/" alone).
 // `is:inline` keeps Astro from bundling it; the script is served by Vercel per deployment.
 // CSP: script-src allows https://va.vercel-scripts.com (vercel.json).
+//
+// The second script is a processed (bundled, external `_astro/`) module, not an inline one:
+// it counts clicks on Buy Me a Coffee links by placement (src/lib/support-tracking.js), on the
+// dashboard and every content page alike.
 ---
 <script is:inline defer src="/_vercel/insights/script.js"></script>
+<script>
+  import { installSupportClickTracking } from '../lib/support-tracking.js';
+
+  installSupportClickTracking(document);
+</script>

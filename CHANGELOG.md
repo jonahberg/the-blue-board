@@ -4,6 +4,15 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.1] - 2026-10-03
+
+### Added
+- **Six new names on the Supporters Wall:** @Benchilada129, Paul Leonard, Mickey Kopanski, /u/bcb354, james macnutt and Greg Calvert — every public Buy Me a Coffee supporter since the wall was last updated in February. The list now lives in `src/data/supporters.js`, pinned by `tests/supporters.test.js`, and `bun scripts/supporters-diff.mjs` lists any public supporter not on it yet (read-only; adding a name stays a manual edit).
+- **Support-link click counts.** Every Buy Me a Coffee link (landed toast, About dialog ×3, legal menu, site footer, news articles) sends one anonymous `support_click` Web Analytics event labelled with its placement, so it's knowable which ones people actually use. One delegated listener covers the dashboard and every content page. (`src/lib/support-tracking.js`)
+
+### Fixed
+- **Custom analytics events were never recorded.** The dashboard called `window.va.track()`, but with the analytics script tag `va` is a function (`va('event', …)`), so every custom event since v1.8.0 — including the news-banner click count — was silently dropped. `src/lib/track.js` now owns the calling convention and queues events that fire before the deferred script loads.
+
 ## [1.11.0] - 2026-09-28
 
 ### Changed
