@@ -5,15 +5,24 @@
  * is declared once in `src/app/tabs.ts` (`mobilePrimary`) rather than duplicated here — the
  * old bar hard-coded its overflow list and silently desynced when My Flights was promoted,
  * lighting up two buttons at once and none for Fleet or Starlink.
+ *
+ * Below the tabs the sheet carries About and a Support link (v1.11.3). The ⓘ menu that holds
+ * them on desktop sits in the attribution strip, which is hidden below `md:`, so on a phone the
+ * About dialog — the independence statement, the "not for operational or safety-critical
+ * decisions" line and the Supporters Wall — and every donate link were unreachable. Both rows
+ * are plain list items: nothing here opens by itself or asks for anything.
  */
 
-import { Ellipsis } from 'lucide-react';
+import { BadgeInfo, Coffee, Ellipsis } from 'lucide-react';
 import { useState } from 'react';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { useUi } from '../state/ui';
 import { TABS } from '../tabs';
 import type { TabId } from '../tabs';
+
+const ROW = 'flex min-h-11 w-full items-center gap-3 rounded-md px-2 text-sm';
 
 export function MobileNav({
   tab,
@@ -23,6 +32,7 @@ export function MobileNav({
   onSelect: (id: TabId) => void;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const { setDisclaimerOpen } = useUi();
   const primary = TABS.filter((entry) => entry.mobilePrimary);
   const overflow = TABS.filter((entry) => !entry.mobilePrimary);
   const overflowActive = overflow.some((entry) => entry.id === tab);
@@ -67,10 +77,7 @@ export function MobileNav({
               <li key={entry.id}>
                 <button
                   type="button"
-                  className={cn(
-                    'flex min-h-11 w-full items-center gap-3 rounded-md px-2 text-sm',
-                    tab === entry.id ? 'text-primary' : 'text-foreground',
-                  )}
+                  className={cn(ROW, tab === entry.id ? 'text-primary' : 'text-foreground')}
                   onClick={() => {
                     onSelect(entry.id);
                     setMoreOpen(false);
@@ -81,6 +88,32 @@ export function MobileNav({
                 </button>
               </li>
             ))}
+            <li className="mt-2 border-t pt-2">
+              <button
+                type="button"
+                className={cn(ROW, 'text-foreground')}
+                onClick={() => {
+                  // Same close-then-open as the desktop ⓘ menu's About link (LegalPopover).
+                  setMoreOpen(false);
+                  setDisclaimerOpen(true);
+                }}
+              >
+                <BadgeInfo aria-hidden="true" className="size-4" />
+                About
+              </button>
+            </li>
+            <li>
+              <a
+                href="https://buymeacoffee.com/notjbg"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-support="mobile-more"
+                className={cn(ROW, 'text-muted-foreground')}
+              >
+                <Coffee aria-hidden="true" className="size-4" />
+                Support The Blue Board
+              </a>
+            </li>
           </ul>
         </SheetContent>
       </Sheet>

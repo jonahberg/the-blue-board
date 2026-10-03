@@ -6,6 +6,8 @@
 // In prod FlightAware answers Vercel with a bot-wall or HTTP 402/403 (Sep 2026 audit F135); the
 // FlightAware-success test below covers the parser for the day it answers again.
 // Leg choice and the board+FR24 merge are in flight-times-leg.test.js.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const snapshotMocks = vi.hoisted(() => ({
@@ -324,5 +326,66 @@ describe('flight-times fallback chain (#1)', () => {
     await handler(reqTomorrow, resTomorrow);
     expect(resTomorrow.body.source).toBe('schedule-cache');
     expect(resTomorrow.body.departure.gate.scheduled).toBe(new Date(tomorrowDep * 1000).toISOString());
+  });
+});
+
+// v1.11.3: the watch-alerts cron resolves flights through this schedule-cache tier, straight from
+// the persisted board snapshot — /api/schedule's serve path never sees these rows. A row that says
+// "arrived" at a time still ahead of the clock is exactly what would push a false "Landed".
+describe('schedule-cache tier never reports an arrival that has not happened (Oct 3 2026)', () => {
+  const FIXTURE = JSON.parse(
+    readFileSync(resolve(process.cwd(), 'tests/fixtures/ord-2026-10-03-future-actuals.json'), 'utf8'),
+  );
+  const rows = (id) => FIXTURE.arrivals.flights.filter((f) => f.identification.number.default === id);
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetFlightTimesCache();
+    snapshotMocks.loadScheduleSnapshot.mockReset();
+    resetMirroredQuotaBlock();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  function serveArrivals(flights) {
+    const arrKey = `agg:ORD:arrivals:${getStartOfHubDay('ORD', 0)}`;
+    snapshotMocks.loadScheduleSnapshot.mockImplementation(async (key) =>
+      key === arrKey ? { data: { flights, total: flights.length }, refreshedAt: Date.now() - 600_000 } : null,
+    );
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('flightaware.com')) {
+        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
+      }
+      throw new Error(`paid/upstream fetch must not happen: ${url}`);
+    });
+  }
+
+  it("answers today's UA2113, not yesterday's date-shifted 'arrived' leg", async () => {
+    // 17:00Z: today's UA2113 has not left LAX. The shifted row claims it arrived at 22:55Z.
+    vi.setSystemTime(new Date('2026-10-03T17:00:00Z'));
+    serveArrivals(rows('UA2113'));
+    const res = createRes();
+    await handler(createReq('UA2113'), res);
+    expect(res.body.source).toBe('schedule-cache');
+    expect(res.body.status).not.toBe('landed');
+    expect(res.body.arrival.gate.actual).toBe('');
+    expect(res.body.departure.gate.scheduled).toBe('2026-10-03T17:44:00.000Z');
+  });
+
+  it('reports UA4422 en route until its reported gate arrival is actually behind us', async () => {
+    vi.setSystemTime(new Date('2026-10-03T17:55:14Z'));
+    serveArrivals(rows('UA4422'));
+    const early = createRes();
+    await handler(createReq('UA4422'), early);
+    expect(early.body.status).toBe('en-route');
+    expect(early.body.arrival.gate.actual).toBe('');
+    expect(early.body.arrival.gate.estimated).toBe('2026-10-03T18:03:00.000Z');
+
+    __resetFlightTimesCache();
+    vi.setSystemTime(new Date('2026-10-03T18:10:00Z'));
+    const later = createRes();
+    await handler(createReq('UA4422'), later);
+    expect(later.body.status).toBe('landed');
+    expect(later.body.arrival.gate.actual).toBe('2026-10-03T18:03:00.000Z');
   });
 });

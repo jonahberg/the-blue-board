@@ -4,7 +4,8 @@ import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js
 import { getHubTerminal } from './_hubs.js';
 import { hydrateAdbSpend, isAdbOrganicRefreshGated, isAdbBudgetPacingDisabled, getAdbPacedAllowance, recordAdbUnits, getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
-import { isPlausibleDelta } from '../src/lib/schedule-plausibility.js';
+import { isImplausibleLegSpan, isPlausibleDelta } from '../src/lib/schedule-plausibility.js';
+import { clearFutureActuals } from '../src/lib/schedule-actuals.js';
 
 const AERODATABOX_BASE_URL = 'https://prod.api.market/api/v1/aedbx/aerodatabox';
 // Each FIDS window request is billed at 2 units by the provider (1 board = 2 windows = 4 units).
@@ -908,12 +909,16 @@ export async function fetchViaAeroDataBox(
   const dayStart = getStartOfHubDay(hub.toUpperCase(), 0, new Date(ts * 1000));
   const dayEnd = getStartOfHubDay(hub.toUpperCase(), 1, new Date(ts * 1000));
   const operators = buildOperatorIndex(rawFlights, hub, dir);
-  const filtered = { partnerCodeshares: 0, offDay: 0, repaired: 0 };
+  // `staleLegs`: rows whose legs span longer than any flight (v1.11.3). Like partnerCodeshares
+  // and offDay they are deliberate drops, and the snapshot retain guard counts them as such.
+  const filtered = { partnerCodeshares: 0, offDay: 0, repaired: 0, staleLegs: 0 };
+  // "Has this happened yet?" is asked against this server's clock, read after the windows returned.
+  const nowSec = Math.floor(Date.now() / 1000);
 
   const seen = new Set<string>();
   const exactDeduped: any[] = [];
   for (const raw of rawFlights) {
-    const normalized = normalizeFlight(raw, hub, dir);
+    let normalized = normalizeFlight(raw, hub, dir);
     if (!normalized) continue;
     // Both FIDS windows can return the same flight: collapse the repeat first so the filter
     // counters below count flights, not window hits.
@@ -927,7 +932,19 @@ export async function fetchViaAeroDataBox(
       filtered.partnerCodeshares++;
       continue;
     }
+    // v1.11.3 (Oct 3 2026, ORD): an "actual" later than the clock is a forecast — UA845 came back
+    // Departed 9.5h before it left, UA2113 Arrived at 22:55Z with the clock at 17:55Z. Clear it
+    // BEFORE the repair, which would otherwise derive a scheduled time from it and pull
+    // yesterday's leg into today's hub day.
+    normalized = clearFutureActuals(normalized, nowSec);
     if (repairScheduleInstance(normalized, dir).repaired) filtered.repaired++;
+    // AeroDataBox returns yesterday's leg with its ARRIVAL shifted a day (UA2113 LAX→ORD: off
+    // 10-02 17:58Z, "arrived" 10-03 22:55Z). Once that arrival is no longer in the future nothing
+    // above catches it, and the repair has just copied it into the scheduled arrival — a 29h leg.
+    if (isImplausibleLegSpan(normalized)) {
+      filtered.staleLegs++;
+      continue;
+    }
     if (!isInHubDay(normalized, dir, dayStart, dayEnd)) {
       filtered.offDay++;
       continue;
@@ -938,9 +955,9 @@ export async function fetchViaAeroDataBox(
   // The exact key above intentionally includes the scheduled time, so schedule revisions,
   // operator-code clones and foreign codeshare leaks survive it — collapse those here.
   const { flights, dedupe } = dedupeBoardFlights(exactDeduped, dir);
-  if (dedupe.revisions > 0 || dedupe.operatorClones > 0 || dedupe.foreign > 0 || filtered.partnerCodeshares > 0 || filtered.offDay > 0) {
+  if (dedupe.revisions > 0 || dedupe.operatorClones > 0 || dedupe.foreign > 0 || filtered.partnerCodeshares > 0 || filtered.offDay > 0 || filtered.staleLegs > 0) {
     console.log(
-      `AeroDataBox dedupe for ${hub} ${dir}: collapsed ${dedupe.revisions} schedule-revision dupes, ${dedupe.operatorClones} operator-code clones; dropped ${dedupe.foreign} foreign rows, ${filtered.partnerCodeshares} partner codeshares, ${filtered.offDay} off-day rows; repaired ${filtered.repaired} cross-instance schedules`
+      `AeroDataBox dedupe for ${hub} ${dir}: collapsed ${dedupe.revisions} schedule-revision dupes, ${dedupe.operatorClones} operator-code clones; dropped ${dedupe.foreign} foreign rows, ${filtered.partnerCodeshares} partner codeshares, ${filtered.offDay} off-day rows, ${filtered.staleLegs} stale legs; repaired ${filtered.repaired} cross-instance schedules`
     );
   }
 

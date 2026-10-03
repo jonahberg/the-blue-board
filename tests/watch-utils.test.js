@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_WATCHED, readWatched, writeWatched, isSignificantStatusChange, flightTimesCacheTtl, applyWatchChanges } from '../src/lib/watch-utils.js';
+import { MAX_WATCHED, readWatched, writeWatched, isSignificantStatusChange, flightTimesCacheTtl, applyWatchChanges, watchedFlightLanded } from '../src/lib/watch-utils.js';
+import { classifySchedStatus } from '../src/lib/schedule-status.js';
 
 function fakeStorage(initial = {}) {
   const map = new Map(Object.entries(initial));
@@ -95,6 +96,64 @@ describe('isSignificantStatusChange', () => {
 
   it('stays quiet for a cosmetic change with no significant keyword (edge case)', () => {
     expect(isSignificantStatusChange('On time', 'On Time')).toBe(false);
+  });
+});
+
+describe('AeroDataBox says "Arrived", never "Landed" (v1.11.3)', () => {
+  // classifySchedStatus shows the provider word, so a landed AeroDataBox row reads "Arrived".
+  // Neither the watch alert nor the "glad you landed" toast knew that word: the toast's
+  // `.includes('landed')` could never match, and Expected → Arrived was not even a change.
+  const NOW = 2_000_000;
+  const arrivedRow = {
+    status: { generic: { status: { text: 'landed', diverted: false }, type: '' }, text: 'arrived', icon: 'green', live: false },
+    time: {
+      scheduled: { departure: NOW - 4 * 3600, arrival: NOW - 1800 },
+      real: { departure: NOW - 4 * 3600, arrival: NOW - 1500 },
+      estimated: { departure: null, arrival: null },
+    },
+  };
+
+  it('treats a watched flight arriving as significant', () => {
+    expect(isSignificantStatusChange('Expected', 'Arrived')).toBe(true);
+    expect(isSignificantStatusChange('Approaching', 'Arrived')).toBe(true);
+    expect(isSignificantStatusChange('En route', 'Arrived')).toBe(true);
+  });
+
+  it('stays quiet when only the landed vocabulary flips between providers', () => {
+    expect(isSignificantStatusChange('Landed', 'Arrived')).toBe(false);
+    expect(isSignificantStatusChange('Arrived', 'Landed')).toBe(false);
+    expect(isSignificantStatusChange('LANDED', 'Landed')).toBe(false);
+  });
+
+  it('treats leaving the landed state the same whichever word it was stored as', () => {
+    expect(isSignificantStatusChange('Landed', 'Expected')).toBe(true);
+    expect(isSignificantStatusChange('Arrived', 'Expected')).toBe(true);
+  });
+
+  it('watchedFlightLanded fires for a real AeroDataBox arrival', () => {
+    const status = classifySchedStatus(arrivedRow, 'arrivals', NOW);
+    expect(status.text).toBe('Arrived');
+    expect(status.text.toLowerCase().includes('landed')).toBe(false); // the old check
+    expect(watchedFlightLanded('Expected', status)).toBe(true);
+    expect(watchedFlightLanded('Departed', classifySchedStatus(arrivedRow, 'departures', NOW))).toBe(true);
+  });
+
+  it('watchedFlightLanded ignores a presumed landing, a repeat, and anything that is not a landing', () => {
+    const presumed = classifySchedStatus(
+      { ...arrivedRow, status: { generic: { status: { text: 'scheduled', diverted: false }, type: '' }, text: 'expected', icon: '', live: false }, time: { ...arrivedRow.time, real: { departure: null, arrival: null } } },
+      'arrivals',
+      NOW + 3 * 3600,
+    );
+    expect(presumed.key).toBe('landed');
+    expect(presumed.inferred).toBe(true);
+    expect(watchedFlightLanded('Expected', presumed)).toBe(false);
+
+    const status = classifySchedStatus(arrivedRow, 'arrivals', NOW);
+    expect(watchedFlightLanded('Arrived', status)).toBe(false);
+    expect(watchedFlightLanded('Landed', status)).toBe(false);
+    expect(watchedFlightLanded('Expected', { key: 'enroute', text: 'En Route' })).toBe(false);
+    expect(watchedFlightLanded('Expected', { key: 'diverted', text: 'Diverted' })).toBe(false);
+    expect(watchedFlightLanded('Expected', null)).toBe(false);
   });
 });
 

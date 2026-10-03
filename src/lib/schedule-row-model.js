@@ -353,6 +353,48 @@ export const OTP_SEVERITY_LABEL = {
 };
 
 /**
+ * A row's React key: ident + scheduled time + route + tail.
+ *
+ * `${ident}-${scheduledTime}` alone was not unique: the EWR departures board listed UA3772 twice
+ * at 09:21 (one to BNA on N68891, one with no destination on N225UA), the two rows shared a key,
+ * and a stale row survived a hub switch (v1.11.3). The board index is NOT part of it — that
+ * would remount every row on every re-sort; `uniqueRowKeys()` adds a suffix only to a row that
+ * still collides.
+ */
+function scheduleRowKey(flight, ident, schedTimeSec, reg, index) {
+  const orig = flight?.airport?.origin?.code?.iata || '';
+  const dest = flight?.airport?.destination?.code?.iata || '';
+  return `${ident}-${schedTimeSec ?? `i${index}`}-${orig}-${dest}-${reg || ''}`;
+}
+
+/**
+ * Make every row key on a board unique: the first row with a key keeps it, a later identical
+ * one (a true duplicate the provider sent twice) gets `~2`, `~3`, …
+ *
+ * @param {Array<{key: string}>} models  in board order.
+ * @returns {Array<{key: string}>} the same array when nothing collided.
+ */
+export function uniqueRowKeys(models) {
+  if (!Array.isArray(models)) return models;
+  const seen = new Map();
+  let out = null;
+  models.forEach((model, i) => {
+    const count = (seen.get(model.key) || 0) + 1;
+    seen.set(model.key, count);
+    if (count === 1) {
+      if (out) out.push(model);
+      return;
+    }
+    if (!out) out = models.slice(0, i);
+    let key = `${model.key}~${count}`;
+    while (seen.has(key)) key = `${key}~`;
+    seen.set(key, 1);
+    out.push({ ...model, key });
+  });
+  return out || models;
+}
+
+/**
  * One fully-shaped board row.
  *
  * Status, registration and the risk model arrive PRE-COMPUTED from the caller, which caches
@@ -422,7 +464,7 @@ export function buildScheduleRow(flight, ctx) {
 
   return {
     ident,
-    key: `${ident}-${schedTimeSec ?? index}`,
+    key: scheduleRowKey(flight, ident, schedTimeSec, reg, index),
     raw: flight,
     timeText: formatSchedTime(schedTimeSec, timeZone),
     dateChip: dateChipLabel(schedTimeSec, dayStartSec, timeZone),

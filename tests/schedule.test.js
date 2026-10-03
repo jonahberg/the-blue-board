@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const scheduleSnapshotMocks = vi.hoisted(() => ({
@@ -2380,5 +2382,65 @@ describe('background provider refresh age gate', () => {
     await Promise.all(vercelFunctionMocks.waitUntil.mock.calls.map(c => c[0]));
     const aeroCalls = fetchSpy.mock.calls.filter(([url]) => /aerodatabox|aedbx/i.test(String(url)));
     expect(aeroCalls.length).toBe(0);
+  });
+});
+
+// v1.11.3: boards are served from snapshots up to ~3h old, so "is this actual time in the past?"
+// has to be asked again at SERVE time, against the request's clock — a row the provider fetched
+// at 17:14Z can be correct at 18:10Z and wrong at 17:55Z. The fixture is the real ORD arrivals
+// board read at 17:55Z on Oct 3 2026.
+describe('serve-time: no actual time later than the request (Oct 3 2026 ORD)', () => {
+  const FIXTURE = JSON.parse(
+    readFileSync(resolve(process.cwd(), 'tests/fixtures/ord-2026-10-03-future-actuals.json'), 'utf8'),
+  );
+  const ARR = FIXTURE.arrivals.flights;
+
+  beforeEach(() => {
+    resetScheduleTestState();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-03T17:55:14Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanupScheduleTestEnv();
+  });
+
+  async function serve() {
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'arrivals', timestamp: String(getStartOfHubDay('ORD', 0)) },
+    }, res);
+    return res;
+  }
+
+  it('clears future actuals and drops the date-shifted legs from a stored snapshot, without touching the stored board', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 500, headers: { get: () => null }, json: async () => ({}), text: async () => '',
+    });
+    const stored = { flights: structuredClone(ARR), total: ARR.length, partial: false, meta: { completeness: 1, source: 'aerodatabox' } };
+    scheduleSnapshotMocks.loadScheduleSnapshot.mockResolvedValue({ data: stored, refreshedAt: Date.now() - 40 * 60 * 1000 });
+
+    const res = await serve();
+    expect(res.statusCode).toBe(200);
+    const now = Math.floor(Date.now() / 1000);
+    const future = res.body.flights.filter((f) => Object.values(f.time.real).some((t) => t && t > now + 300));
+    expect(future).toEqual([]);
+    const ids = res.body.flights.map((f) => f.identification.number.default);
+    for (const id of ['UA2113', 'UA2835', 'UA2665']) expect(ids.filter((x) => x === id)).toHaveLength(1);
+    expect(res.body.total).toBe(ARR.length - 3);
+    const ua4422 = res.body.flights.find((f) => f.identification.number.default === 'UA4422');
+    expect(classifySchedStatus(ua4422, 'arrivals', now).key).toBe('enroute');
+    // The stored snapshot is shared with every later request: it must come through unmodified.
+    expect(stored.flights).toEqual(ARR);
+
+    // 15 minutes later the same stored board is served again (in-memory complete tier), and
+    // UA4422's 18:03Z arrival is now behind the clock: it is Arrived.
+    vi.setSystemTime(new Date('2026-10-03T18:10:00Z'));
+    const later = await serve();
+    const landed = later.body.flights.find((f) => f.identification.number.default === 'UA4422');
+    expect(landed.time.real.arrival).toBe(Date.parse('2026-10-03T18:03:00Z') / 1000);
+    expect(classifySchedStatus(landed, 'arrivals', Math.floor(Date.now() / 1000)).key).toBe('landed');
   });
 });

@@ -33,7 +33,7 @@ import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
 import { hubTzAbbrev } from '@/lib/schedule-load.js';
 import { regMatchesModel } from '@/lib/schedule-reg-guard.js';
 import { getScheduleFleetFamily } from '@/lib/schedule-filters.js';
-import { buildScheduleRow } from '@/lib/schedule-row-model.js';
+import { buildScheduleRow, uniqueRowKeys } from '@/lib/schedule-row-model.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
 import { analyzeSwapImpact } from '@/lib/swap-impact.js';
 import { formatSchedTime } from '@/lib/schedule-row-model.js';
@@ -423,7 +423,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       starlinkTails,
     };
 
-    const models: RowModel[] = sorted.map((row, index) => {
+    const built: RowModel[] = sorted.map((row, index) => {
       const status = classify(row);
       const reg = regFor(row);
       // The delay cell only reaches for a prediction when there is no fact to show, so the
@@ -484,6 +484,9 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
         }) as number,
       }) as RowModel;
     });
+    // A provider can list the same flight twice at the same minute (EWR UA3772): React keys
+    // must still be unique, or a stale row survives the next board (v1.11.3).
+    const models = uniqueRowKeys(built) as RowModel[];
 
     // The NOW divider belongs on today's board under the default time-ascending sort only —
     // it is meaningless halfway down a list sorted by flight number.
