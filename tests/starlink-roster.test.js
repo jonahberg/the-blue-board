@@ -12,6 +12,7 @@ import {
   operatorLabel,
   relativeDeparture,
   rolloutBars,
+  rolloutBarsNote,
   rosterOptions,
   sortRoster,
   starlinkSinceLabel,
@@ -230,27 +231,48 @@ describe('buildIndustryRows', () => {
 });
 
 describe('rolloutBars', () => {
-  it('uses the given percentages when upstream supplies them', () => {
-    const bars = rolloutBars({
-      express: 300, expressTotal: 500, expressPct: 60,
-      mainline: 100, mainlineTotal: 1000, mainlinePct: 10,
-    });
+  const SHARE = { count: 100, total: 1000, pct: 10, source: 'fleet-db' };
+
+  it("takes Express from the tracker and Mainline from the shared mainline share", () => {
+    const bars = rolloutBars(
+      { express: 300, expressTotal: 500, expressPct: 60, mainline: 100, mainlineTotal: 1161, mainlinePct: 9 },
+      SHARE,
+    );
     expect(bars.map((b) => `${b.label} ${b.installed}/${b.total} ${b.pct}%`)).toEqual([
       'Express 300/500 60%',
       'Mainline 100/1000 10%',
     ]);
   });
 
-  it('derives a missing percentage from the counts', () => {
-    const bars = rolloutBars({ express: 250, expressTotal: 500, mainline: 1, mainlineTotal: 4 });
+  it("never prints the tracker's mainline census when the share has a different one", () => {
+    const mainline = rolloutBars({ express: 1, expressTotal: 2, mainline: 263, mainlineTotal: 1161 }, {
+      count: 263, total: 1139, pct: 23, source: 'fleet-db',
+    }).find((b) => b.label === 'Mainline');
+    expect(mainline).toEqual({ label: 'Mainline', installed: 263, total: 1139, pct: 23 });
+  });
+
+  it('derives a missing Express percentage from the counts', () => {
+    const bars = rolloutBars({ express: 250, expressTotal: 500 }, SHARE);
     expect(bars[0].pct).toBe(50);
-    expect(bars[1].pct).toBe(25);
   });
 
   it('returns null without fleet denominators, so the degraded tier shows no bars', () => {
-    expect(rolloutBars(null)).toBeNull();
-    expect(rolloutBars({ express: 10, mainline: 5 })).toBeNull();
-    expect(rolloutBars({ express: 10, expressTotal: 0, mainline: 5, mainlineTotal: 9 })).toBeNull();
+    expect(rolloutBars(null, SHARE)).toBeNull();
+    expect(rolloutBars({ express: 10, mainline: 5 }, SHARE)).toBeNull();
+    expect(rolloutBars({ express: 10, expressTotal: 0, mainline: 5, mainlineTotal: 9 }, SHARE)).toBeNull();
+    expect(rolloutBars({ express: 10, expressTotal: 20 }, null)).toBeNull();
+  });
+});
+
+describe('rolloutBarsNote', () => {
+  it('names both denominators', () => {
+    expect(rolloutBarsNote({ count: 263, total: 1139, pct: 23, source: 'fleet-db' })).toBe(
+      'Mainline: 263 of 1,139 aircraft in our fleet database · Express: per the Starlink tracker',
+    );
+    expect(rolloutBarsNote({ count: 263, total: 1161, pct: 23, source: 'tracker' })).toBe(
+      'Mainline and Express: per the Starlink tracker',
+    );
+    expect(rolloutBarsNote(null)).toBe('');
   });
 });
 

@@ -135,8 +135,8 @@ export function FleetHealth({
           Starlink Equipped
         </p>
         {starlinkShare ? (
-          // D15: the denominator is named — the tracker's mainline count is a different census
-          // from the fleet-database total printed above.
+          // D15: the denominator is named. It is the fleet-database total printed above; the
+          // tracker's census only stands in while the database is unavailable.
           <p className="text-[10px] text-muted-foreground">{starlinkShareCaption(starlinkShare)}</p>
         ) : null}
 

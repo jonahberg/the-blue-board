@@ -144,7 +144,8 @@ export default function FleetView() {
     [lastGoodTs],
   );
 
-  // ONE Starlink % for the ring and the "Mainline Fleet" chip (F93): see starlinkMainlineShare.
+  // ONE Starlink % for the ring, the "Mainline Fleet" chip (F93) and the Starlink tab's
+  // Mainline bar: see starlinkMainlineShare.
   const starlinkShare = useMemo(
     () =>
       starlinkMainlineShare(starlink.stats, fleetDb, starlink.tails) as {

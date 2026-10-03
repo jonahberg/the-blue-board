@@ -71,6 +71,45 @@ export function starlinkCountsByType(fleetDb, rosterTails) {
   return out;
 }
 
+/**
+ * The Express half of the build-time fleet share, read from the SAME upstream /api/data payload
+ * as the roster tails (so both halves are one snapshot): `fleetStats.express` is
+ * `{ starlink, total }`. We keep no Express database, so the tracker's count is the only one.
+ * Null when the block is missing or implausible (non-integers, an empty fleet, more equipped
+ * than exist) — the refresh script then keeps the committed roster.
+ * @param {any} upstream  the unitedstarlinktracker.com /api/data body
+ * @returns {{installed: number, total: number}|null}
+ */
+export function starlinkExpressCounts(upstream) {
+  const e = upstream?.fleetStats?.express;
+  const installed = Number(e?.starlink);
+  const total = Number(e?.total);
+  if (!Number.isInteger(installed) || !Number.isInteger(total)) return null;
+  if (total <= 0 || total > 2500 || installed < 0 || installed > total) return null;
+  return { installed, total };
+}
+
+/**
+ * Starlink share of United's combined (mainline + Express) fleet, in whole percent — the
+ * figure the hub pages print beside the equipped count.
+ *
+ * Mainline uses the dashboard's one mainline definition (`starlinkMainlineShare`): roster tails
+ * inside fleet.json over fleet.json. The tracker's own mainline total is NOT used — on Oct 3
+ * 2026 it carried 16 retired A319/A320s and an undelivered MAX 10. Express is the tracker's.
+ *
+ * @param {ReadonlyArray<{r?: string}>} fleetDb
+ * @param {Iterable<string>} rosterTails  mainline Starlink tails
+ * @param {{installed: number, total: number}|null|undefined} express
+ * @returns {number|null}  null without an Express block (no denominator to divide by).
+ */
+export function starlinkFleetSharePct(fleetDb, rosterTails, express) {
+  const db = fleetDb || [];
+  if (!express || !(express.total > 0) || db.length === 0) return null;
+  const onRoster = new Set([...rosterTails].map((t) => String(t).toUpperCase()));
+  const mainline = db.filter((a) => a?.r && onRoster.has(String(a.r).toUpperCase())).length;
+  return Math.round(((mainline + express.installed) / (db.length + express.total)) * 100);
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**

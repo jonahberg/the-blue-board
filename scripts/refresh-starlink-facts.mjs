@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 
 import {
   starlinkLabel, starlinkAsOf, isPlausibleStarlinkCount, starlinkRosterTails, isPlausibleStarlinkRoster,
+  starlinkExpressCounts,
 } from '../src/lib/starlink-facts.js';
 import { VERIFIED_STARLINK_OVERRIDES } from '../src/lib/starlink-overrides.js';
 
@@ -46,7 +47,8 @@ try {
 }
 
 // The mainline roster (tail list) behind the per-type "N of the M" sentences on the fleet guide
-// pages — joined to public/data/fleet.json by registration in src/data/starlink-facts.js.
+// pages — joined to public/data/fleet.json by registration in src/data/starlink-facts.js — plus
+// the Express counts the hub pages' "~N% of the combined fleet" divides by.
 // Independently guarded: a failed or partial fetch keeps the committed roster and never fails
 // the build. /api/data is the only upstream endpoint that lists tails (~1.3MB, build-time only).
 try {
@@ -59,14 +61,18 @@ try {
   clearTimeout(timeout);
   if (!resp.ok) throw new Error(`data ${resp.status}`);
 
-  const tails = starlinkRosterTails(await resp.json(), VERIFIED_STARLINK_OVERRIDES);
+  const upstream = await resp.json();
+  const tails = starlinkRosterTails(upstream, VERIFIED_STARLINK_OVERRIDES);
   const committed = facts.roster?.tails?.length ?? 0;
   if (!isPlausibleStarlinkRoster(tails, committed)) {
     throw new Error(`implausible roster of ${tails.length} tails (committed ${committed})`);
   }
-  facts.roster = { syncedAt: new Date().toISOString(), tails };
+  // The Express half of the hub pages' fleet share — same payload, so one snapshot.
+  const express = starlinkExpressCounts(upstream);
+  if (!express) throw new Error('implausible Express fleet counts');
+  facts.roster = { syncedAt: new Date().toISOString(), tails, express };
   await writeFile(jsonPath, JSON.stringify(facts, null, 2) + '\n');
-  console.log(`Starlink roster refreshed: ${tails.length} mainline tails`);
+  console.log(`Starlink roster refreshed: ${tails.length} mainline tails, Express ${express.installed}/${express.total}`);
 } catch (err) {
   console.warn(`Starlink roster refresh skipped (${err?.message ?? err}) — keeping committed: ${facts.roster?.tails?.length ?? 0} tails`);
 }

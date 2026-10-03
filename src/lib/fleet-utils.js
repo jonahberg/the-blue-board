@@ -206,37 +206,49 @@ function isMainlineNotInDb(f) {
 
 // ─── Starlink % — THE definition ───
 /**
- * Starlink share of the mainline fleet, the ONE definition the Fleet ring and its "Mainline
- * Fleet" chip both render (F93):
+ * Starlink share of the mainline fleet, the ONE definition the Fleet ring, its "Mainline
+ * Fleet" chip AND the Starlink tab's Mainline rollout bar all render (F93):
  *
  *   mainline Starlink aircraft ÷ mainline fleet, both from the SAME population.
  *
- * With the tracker's fleet stats that is `mainline / mainlineTotal` (the Starlink tab's own
- * figure). Without them it falls back to the fleet database: airframes in it that are on the
- * Starlink roster ÷ airframes in it. It never mixes the two — the tracker's 247 over the
- * database's 1078 was a numerator counting 16 tails the denominator did not contain.
+ * The population is our fleet database: airframes in it that are on the Starlink roster ÷
+ * airframes in it. That is the mainline total the Fleet and Stats tabs print, so no tab can
+ * quote a different one.
+ *
+ * The tracker's own `mainline / mainlineTotal` is only the fallback while the database has
+ * not loaded (or failed). It is not a second definition of the same thing: on Oct 3 2026 its
+ * 1,161 was our 1,139 plus 22 tails, 19 of which had no sighting in the 89 days of
+ * `reg_sightings`: 16 A319/A320s (12 of them the tails retired from the database on Sep 28),
+ * the undelivered MAX 10 and two 787s not yet flying. Only 3 were new deliveries in service.
+ * The numerator never counts a tail the denominator does not contain (the tracker's 247 over
+ * the database's 1078 once did).
  *
  * @param {{mainline?: number, mainlineTotal?: number}|null|undefined} stats
  * @param {Array<{r?: string}>} fleetDb
- * @param {{has: (tail: string) => boolean}} tails
- * @returns {{count: number, total: number, pct: number}|null}
+ * @param {{has: (tail: string) => boolean, size?: number}} tails
+ * @returns {{count: number, total: number, pct: number, source: 'fleet-db'|'tracker'}|null}
+ *   null until a population AND the roster have loaded.
  */
 export function starlinkMainlineShare(stats, fleetDb, tails) {
-  if (stats && Number(stats.mainlineTotal) > 0 && Number.isFinite(Number(stats.mainline))) {
+  const db = fleetDb || [];
+  // An empty roster means it has not arrived yet, not "0% equipped".
+  const rosterLoaded = Boolean(tails && (tails.size === undefined || tails.size > 0));
+  if (db.length && rosterLoaded) {
+    const count = db.filter((a) => a && a.r && tails.has(a.r)).length;
+    return { count, total: db.length, pct: Math.round((count / db.length) * 100), source: 'fleet-db' };
+  }
+  if (!db.length && stats && Number(stats.mainlineTotal) > 0 && Number.isFinite(Number(stats.mainline))) {
     const count = Number(stats.mainline), total = Number(stats.mainlineTotal);
     return { count, total, pct: Math.round((count / total) * 100), source: 'tracker' };
   }
-  const db = fleetDb || [];
-  if (!db.length) return null;
-  const count = db.filter((a) => a && a.r && tails && tails.has(a.r)).length;
-  return { count, total: db.length, pct: Math.round((count / db.length) * 100), source: 'fleet-db' };
+  return null;
 }
 
 /**
  * The words under the Starlink bar: whose denominator it is (live audit Sep 28 2026, D15 — the
  * card printed "22% (250/1157)" right under "1078 total", two populations, neither named).
- * The tracker counts United's mainline fleet its own way; our fleet database is a separate
- * census, so the two totals legitimately differ and the caption says which one this is.
+ * Normally it is our fleet database, the total printed above it; the tracker's census only
+ * stands in while the database is unavailable, and the caption says so.
  *
  * @param {{count: number, total: number, source?: string}|null|undefined} share
  * @returns {string}

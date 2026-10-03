@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getTransformedRoutes } from '@vercel/routing-utils';
 import { hubs } from '../src/data/hubs/index.js';
+import { TAB_HASHES, resolveTabParam } from '../src/app/tabs';
 
 // Every other test reads vercel.json as plain JSON, so an invalid path-to-regexp `source`
 // passes `bun run test` and only fails the Vercel production build — which fails no GitHub
@@ -100,6 +101,17 @@ describe('redirects', () => {
 
   it('/sitemap-index.xml → /sitemap.xml (the default @astrojs/sitemap name crawlers probe)', () => {
     expect(redirectFor('/sitemap-index.xml')).toEqual({ status: 308, location: '/sitemap.xml' });
+  });
+
+  it.each(['/starlink', '/starlink/'])('%s → /#starlink (308; Starlink is a dashboard tab, not a page)', (path) => {
+    expect(redirectFor(path)).toEqual({ status: 308, location: '/#starlink' });
+  });
+
+  it('the /starlink redirect lands on the hash that really opens the Starlink tab', () => {
+    // ui.tsx initialTab() matches location.hash against TAB_HASHES exactly.
+    expect(TAB_HASHES.starlink).toBe('#starlink');
+    expect(resolveTabParam(redirectFor('/starlink').location.replace(/^\//, ''))).toBe('starlink');
+    expect(redirectFor('/starlinks')).toBeNull();
   });
 
   it('no redirect lands on another redirect (no chains or loops)', () => {

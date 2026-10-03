@@ -7,6 +7,7 @@
 // The chart lives next door in starlink-chart.js; the recency badge, the integrity tripwire,
 // the hub-local time format and the board cap policy live in starlink-view.js.
 
+import { starlinkShareCaption } from './fleet-utils.js';
 import { isRecentlyFound } from './starlink-view.js';
 
 /**
@@ -181,11 +182,19 @@ export function buildIndustryRows(airlines) {
 /**
  * The hero's Express / Mainline rollout bars.
  *
+ * The Mainline bar is `starlinkMainlineShare()` — the same count, denominator and percentage
+ * the Fleet tab's ring prints — so the two tabs cannot quote different mainline totals (they
+ * did: "Mainline 261 / 1161" here beside 1,139 on Fleet and Stats). Express is the tracker's
+ * count: we keep no Express database.
+ *
  * Returns null in the degraded tier: the static fallback roster carries no fleet
  * denominators, and a percentage bar with a guessed denominator is a lie with a ruler on it.
+ *
+ * @param {{express?: number, expressTotal?: number, expressPct?: number}|null|undefined} stats
+ * @param {{count: number, total: number, pct: number}|null|undefined} mainlineShare
  */
-export function rolloutBars(stats) {
-  if (!stats || !stats.expressTotal || !stats.mainlineTotal) return null;
+export function rolloutBars(stats, mainlineShare) {
+  if (!stats || !stats.expressTotal || !mainlineShare || !(mainlineShare.total > 0)) return null;
   const pct = (value, total, given) =>
     given != null ? given : Math.round((value / total) * 100);
   return [
@@ -197,11 +206,23 @@ export function rolloutBars(stats) {
     },
     {
       label: 'Mainline',
-      installed: stats.mainline,
-      total: stats.mainlineTotal,
-      pct: pct(stats.mainline, stats.mainlineTotal, stats.mainlinePct),
+      installed: mainlineShare.count,
+      total: mainlineShare.total,
+      pct: mainlineShare.pct,
     },
   ];
+}
+
+/**
+ * The line under the rollout bars: whose denominator each bar is (D15, applied to this tab).
+ *
+ * @param {{count: number, total: number, source?: string}|null|undefined} mainlineShare
+ * @returns {string}
+ */
+export function rolloutBarsNote(mainlineShare) {
+  if (!mainlineShare) return '';
+  if (mainlineShare.source === 'tracker') return 'Mainline and Express: per the Starlink tracker';
+  return `Mainline: ${starlinkShareCaption(mainlineShare)} · Express: per the Starlink tracker`;
 }
 
 /**
