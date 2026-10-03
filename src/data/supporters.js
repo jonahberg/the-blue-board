@@ -39,4 +39,5 @@ export const SUPPORTERS = [
   '/u/bcb354',
   'james macnutt',
   'Greg Calvert',
+  'JayS',
 ];
