@@ -8,7 +8,7 @@
  * for the case where the feed has never produced flights at all.
  */
 
-import { Eye, House, Search } from 'lucide-react';
+import { Coffee, Eye, House, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -146,10 +146,33 @@ export function Header({
           </TooltipContent>
         </Tooltip>
 
+        {/* Phones only. The ⓘ menu that carries Donate sits in the attribution strip, hidden
+            below `md:`, and the phone header has no room for a fifth control (13 px spare at
+            360 px) — so below `md:` this slot is the support link and "What is this
+            dashboard?" moves into the More sheet. Counted as `mobile-header` by the delegated
+            support_click listener (src/lib/support-tracking.js). */}
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="min-h-11 min-w-11 p-0 md:hidden"
+        >
+          <a
+            href="https://buymeacoffee.com/notjbg"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-support="mobile-header"
+            aria-label="Support The Blue Board"
+            title="Support The Blue Board"
+          >
+            <Coffee aria-hidden="true" />
+          </a>
+        </Button>
+
         <Button
           variant="ghost"
           size="sm"
-          className="min-h-11 min-w-11 p-0 md:h-8 md:w-8 pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
+          className="hidden min-h-11 min-w-11 p-0 md:inline-flex md:h-8 md:w-8 pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
           onClick={onOpenHelp}
           aria-label="What is this dashboard?"
         >

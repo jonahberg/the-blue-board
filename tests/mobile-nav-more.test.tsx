@@ -74,4 +74,16 @@ describe('MobileNav More sheet', () => {
     mount();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  it('carries "What is this dashboard?" (the header gives its phone slot to Support)', () => {
+    let opened = 0;
+    render(
+      <UiProvider>
+        <MobileNav tab="live" onSelect={() => {}} onOpenHelp={() => { opened += 1; }} />
+      </UiProvider>,
+    );
+    const sheet = openMore();
+    fireEvent.click(within(sheet).getByRole('button', { name: 'What is this dashboard?' }));
+    expect(opened).toBe(1);
+  });
 });
