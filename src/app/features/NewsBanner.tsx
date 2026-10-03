@@ -23,6 +23,7 @@ import { Newspaper, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { track } from '@/lib/track.js';
 import { fetchNewsLatest } from '../data/api';
 import { STORAGE_KEYS, readString, writeString } from '../state/storage';
 
@@ -33,14 +34,9 @@ const ROTATE_MS = 6000;
 const IDLE_TIMEOUT_MS = 4000;
 const FALLBACK_DELAY_MS = 1500;
 
-/** Vercel Analytics, if the script loaded. Never a hard dependency. */
+/** Vercel Analytics custom event. Never a hard dependency — see src/lib/track.js. */
 function trackClick(slug: string) {
-  try {
-    const va = (window as unknown as { va?: { track?: (name: string, data: unknown) => void } }).va;
-    va?.track?.('news_banner_click', { slug });
-  } catch {
-    /* analytics is never allowed to break a link */
-  }
+  track('news_banner_click', { slug });
 }
 
 export default function NewsBanner() {
