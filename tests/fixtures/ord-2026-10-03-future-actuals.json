@@ -1,0 +1,1225 @@
+{
+ "_about": "Rows from theblueboard.co/api/schedule?hub=ORD (2026-10-03, served 17:55Z = capturedAt). Board snapshots were generated at meta.generatedAt; every row here is verbatim post-normalization.",
+ "capturedAt": 1791050114,
+ "departures": {
+  "meta": {
+   "generatedAt": 1791047696,
+   "filtered": {
+    "offDay": 1,
+    "repaired": 0,
+    "partnerCodeshares": 0
+   }
+  },
+  "flights": [
+   {
+    "identification": {
+     "number": {
+      "default": "UA1363"
+     },
+     "callsign": "UAL1363"
+    },
+    "status": {
+     "icon": "green",
+     "live": true,
+     "text": "departed",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "departed",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": 1791050400
+     },
+     "estimated": {
+      "arrival": 1791066360,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791066720,
+      "departure": 1791050400
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     },
+     "destination": {
+      "code": {
+       "iata": "LAX"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "6"
+      },
+      "name": "Los Angeles"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "A21N",
+      "text": "Airbus A321 NEO"
+     },
+     "registration": "N14565"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": false,
+      "gateDistinctDep": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA845"
+     },
+     "callsign": "UAL845"
+    },
+    "status": {
+     "icon": "green",
+     "live": true,
+     "text": "departed",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "departed",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": 1791081000
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791117300,
+      "departure": 1791081000
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     },
+     "destination": {
+      "code": {
+       "iata": "GRU"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "3"
+      },
+      "name": "S\u00e3o Paulo"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "B78X",
+      "text": "Boeing 787-10"
+     },
+     "registration": "N14001"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": false,
+      "hasGateDep": true,
+      "hasRunwayArr": false,
+      "hasRunwayDep": false,
+      "gateDistinctArr": false,
+      "gateDistinctDep": true
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA2759"
+     },
+     "callsign": "UAL2759"
+    },
+    "status": {
+     "icon": "green",
+     "live": true,
+     "text": "departed",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "departed",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": 1791021720
+     },
+     "estimated": {
+      "arrival": 1791028560,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791029520,
+      "departure": 1791021600
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     },
+     "destination": {
+      "code": {
+       "iata": "EWR"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "C"
+      },
+      "name": "Newark"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "B739",
+      "text": "Boeing 737-900"
+     },
+     "registration": "N39475"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": false,
+      "gateDistinctDep": true
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA4699"
+     },
+     "callsign": ""
+    },
+    "status": {
+     "icon": "yellow",
+     "live": false,
+     "text": "canceleduncertain",
+     "generic": {
+      "type": "canceled_uncertain",
+      "status": {
+       "text": "canceled_uncertain",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": null
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791040860,
+      "departure": 1791029640
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "2"
+      },
+      "name": "ORD"
+     },
+     "destination": {
+      "code": {
+       "iata": "SRQ"
+      },
+      "info": {
+       "gate": "",
+       "terminal": ""
+      },
+      "name": "Sarasota/Bradenton"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "E175",
+      "text": "Embraer 175"
+     },
+     "registration": ""
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": false,
+      "hasGateDep": false,
+      "hasRunwayArr": false,
+      "hasRunwayDep": false,
+      "gateDistinctArr": false,
+      "gateDistinctDep": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA1706"
+     },
+     "callsign": "UAL1706"
+    },
+    "status": {
+     "icon": "",
+     "live": false,
+     "text": "expected",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "scheduled",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": null
+     },
+     "estimated": {
+      "arrival": 1791067020,
+      "departure": 1791053760
+     },
+     "scheduled": {
+      "arrival": 1791067380,
+      "departure": 1791053760
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     },
+     "destination": {
+      "code": {
+       "iata": "PHX"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "3"
+      },
+      "name": "Phoenix"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "B739",
+      "text": "Boeing 737-900"
+     },
+     "registration": ""
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": false,
+      "gateDistinctDep": false
+     }
+    }
+   }
+  ]
+ },
+ "arrivals": {
+  "meta": {
+   "generatedAt": 1791048075,
+   "filtered": {
+    "offDay": 58,
+    "repaired": 20,
+    "partnerCodeshares": 0
+   }
+  },
+  "flights": [
+   {
+    "identification": {
+     "number": {
+      "default": "UA4422"
+     },
+     "callsign": "GJS4422"
+    },
+    "status": {
+     "icon": "green",
+     "live": false,
+     "text": "arrived",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "landed",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": 1791050580,
+      "departure": 1791043680
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791051120,
+      "departure": 1791044100
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "FSD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": ""
+      },
+      "name": "Sioux Falls"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "2"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "",
+      "text": "Canadair CRJ"
+     },
+     "registration": "N569GJ"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": true,
+      "gateDistinctDep": true
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA2835"
+     },
+     "callsign": "UAL2618"
+    },
+    "status": {
+     "icon": "green",
+     "live": false,
+     "text": "arrived",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "landed",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": 1791051360,
+      "departure": 1790965260
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791051360,
+      "departure": 1790962920
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "SEA"
+      },
+      "info": {
+       "gate": "",
+       "terminal": ""
+      },
+      "name": "Seattle"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "A21N",
+      "text": "Airbus A321 NEO"
+     },
+     "registration": "N14504"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": true,
+      "gateDistinctDep": true
+     },
+     "scheduleTimeDerivedFromActual": {
+      "arrival": true,
+      "departure": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA2835"
+     },
+     "callsign": "UAL2835"
+    },
+    "status": {
+     "icon": "",
+     "live": false,
+     "text": "expected",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "scheduled",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": null
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": 1791049320
+     },
+     "scheduled": {
+      "arrival": 1791064800,
+      "departure": 1791049320
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "SEA"
+      },
+      "info": {
+       "gate": "",
+       "terminal": ""
+      },
+      "name": "Seattle"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "B739",
+      "text": "Boeing 737-900"
+     },
+     "registration": "N37464"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": false,
+      "hasGateDep": true,
+      "hasRunwayArr": false,
+      "hasRunwayDep": true,
+      "gateDistinctArr": false,
+      "gateDistinctDep": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA2113"
+     },
+     "callsign": "UAL2113"
+    },
+    "status": {
+     "icon": "",
+     "live": false,
+     "text": "expected",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "scheduled",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": null
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": 1791049440
+     },
+     "scheduled": {
+      "arrival": 1791064980,
+      "departure": 1791049440
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "LAX"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "6"
+      },
+      "name": "Los Angeles"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "",
+      "text": "Boeing 737"
+     },
+     "registration": "N37506"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": false,
+      "hasGateDep": true,
+      "hasRunwayArr": false,
+      "hasRunwayDep": true,
+      "gateDistinctArr": false,
+      "gateDistinctDep": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA2113"
+     },
+     "callsign": "UAL1941"
+    },
+    "status": {
+     "icon": "green",
+     "live": false,
+     "text": "arrived",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "landed",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": 1791068100,
+      "departure": 1790963880
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791068100,
+      "departure": 1790963040
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "LAX"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "6"
+      },
+      "name": "Los Angeles"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "B753",
+      "text": "Boeing 757-300"
+     },
+     "registration": "N57862"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": true,
+      "gateDistinctDep": true
+     },
+     "scheduleTimeDerivedFromActual": {
+      "arrival": true,
+      "departure": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA2665"
+     },
+     "callsign": "UAL308"
+    },
+    "status": {
+     "icon": "green",
+     "live": false,
+     "text": "arrived",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "landed",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": 1791076500,
+      "departure": 1790808900
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791076500,
+      "departure": 1790808900
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "PHL"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "D"
+      },
+      "name": "Philadelphia"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "",
+      "text": "Boeing 737"
+     },
+     "registration": "N62889"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": true,
+      "gateDistinctDep": true
+     },
+     "scheduleTimeDerivedFromActual": {
+      "arrival": true,
+      "departure": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA2665"
+     },
+     "callsign": ""
+    },
+    "status": {
+     "icon": "",
+     "live": false,
+     "text": "expected",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "scheduled",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": null
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791078000,
+      "departure": null
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": ""
+      },
+      "info": {
+       "gate": "",
+       "terminal": ""
+      },
+      "name": "Philadelphia"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "A320",
+      "text": "Airbus A320"
+     },
+     "registration": ""
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": false,
+      "hasGateDep": false,
+      "hasRunwayArr": false,
+      "hasRunwayDep": false,
+      "gateDistinctArr": false,
+      "gateDistinctDep": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA3450"
+     },
+     "callsign": "RPA3561"
+    },
+    "status": {
+     "icon": "green",
+     "live": false,
+     "text": "arrived",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "landed",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": 1791086580,
+      "departure": 1791042420
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791044340,
+      "departure": 1791041820
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "IND"
+      },
+      "info": {
+       "gate": "",
+       "terminal": ""
+      },
+      "name": "Indianapolis"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "2"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "E175",
+      "text": "Embraer 175"
+     },
+     "registration": "N755YX"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": true,
+      "gateDistinctDep": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA1958"
+     },
+     "callsign": "UAL1958"
+    },
+    "status": {
+     "icon": "green",
+     "live": false,
+     "text": "arrived",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "landed",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": 1791005160,
+      "departure": 1790991420
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791006900,
+      "departure": 1790991480
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "SFO"
+      },
+      "info": {
+       "gate": "F15",
+       "terminal": "3"
+      },
+      "name": "San Francisco"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "1"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "B753",
+      "text": "Boeing 757-300"
+     },
+     "registration": "N57868"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": true,
+      "gateDistinctDep": true
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA882"
+     },
+     "callsign": "UAL882"
+    },
+    "status": {
+     "icon": "",
+     "live": false,
+     "text": "expected",
+     "generic": {
+      "type": "",
+      "status": {
+       "text": "scheduled",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": null
+     },
+     "estimated": {
+      "arrival": 1791018060,
+      "departure": 1791015300
+     },
+     "scheduled": {
+      "arrival": 1791057900,
+      "departure": 1791015300
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "HND"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "3"
+      },
+      "name": "Tokyo"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "5"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "B78X",
+      "text": "Boeing 787-10"
+     },
+     "registration": "N12020"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": true,
+      "hasGateDep": true,
+      "hasRunwayArr": true,
+      "hasRunwayDep": true,
+      "gateDistinctArr": false,
+      "gateDistinctDep": false
+     }
+    }
+   },
+   {
+    "identification": {
+     "number": {
+      "default": "UA5043"
+     },
+     "callsign": ""
+    },
+    "status": {
+     "icon": "yellow",
+     "live": false,
+     "text": "canceleduncertain",
+     "generic": {
+      "type": "canceled_uncertain",
+      "status": {
+       "text": "canceled_uncertain",
+       "diverted": false
+      }
+     }
+    },
+    "time": {
+     "real": {
+      "arrival": null,
+      "departure": null
+     },
+     "estimated": {
+      "arrival": null,
+      "departure": null
+     },
+     "scheduled": {
+      "arrival": 1791025020,
+      "departure": 1791020700
+     }
+    },
+    "airport": {
+     "origin": {
+      "code": {
+       "iata": "LAF"
+      },
+      "info": {
+       "gate": "",
+       "terminal": ""
+      },
+      "name": "Lafayette"
+     },
+     "destination": {
+      "code": {
+       "iata": "ORD"
+      },
+      "info": {
+       "gate": "",
+       "terminal": "2"
+      },
+      "name": "ORD"
+     }
+    },
+    "aircraft": {
+     "model": {
+      "code": "",
+      "text": "Bombardier CRJ"
+     },
+     "registration": "N910SW",
+     "regSource": "live_feed"
+    },
+    "_source": {
+     "provider": "aerodatabox",
+     "timeSource": {
+      "hasGateArr": false,
+      "hasGateDep": false,
+      "hasRunwayArr": false,
+      "hasRunwayDep": false,
+      "gateDistinctArr": false,
+      "gateDistinctDep": false
+     }
+    }
+   }
+  ]
+ }
+}

@@ -18,6 +18,7 @@ import {
   swapCell,
   swapTone,
   terminalGateCell,
+  uniqueRowKeys,
 } from '../src/lib/schedule-row-model.js';
 
 const CHI = 'America/Chicago';
@@ -566,5 +567,50 @@ describe('buildScheduleRow', () => {
       ctx,
     );
     expect(a.key).not.toBe(b.key);
+  });
+});
+
+// v1.11.3: the EWR departures board listed UA3772 twice at 09:21 (one to BNA on N68891, one with
+// no destination on N225UA). The React key was `${ident}-${scheduledTime}`, so both rows shared
+// one key and a stale row survived a hub switch.
+describe('row keys are unique on a board', () => {
+  const T = NOON_UTC;
+  const row = (dest, reg) => ({
+    identification: { number: { default: 'UA3772' } },
+    aircraft: { model: { code: '', text: '' }, registration: reg },
+    airport: { origin: { code: { iata: 'EWR' } }, destination: { code: { iata: dest } } },
+    time: { scheduled: { departure: T } },
+  });
+  const ctxFor = (reg, index) => ({
+    hub: 'EWR',
+    dir: 'departures',
+    dayStartSec: T - 7 * 3600,
+    timeZone: 'America/New_York',
+    index,
+    reg,
+    status: { key: 'departed', text: 'Departed', cls: 'departed' },
+    riskContext: { origCode: 'EWR', destCode: '', depHub: 'EWR', arrHub: '' },
+    effectiveTime: T,
+  });
+  const build = (flights) =>
+    uniqueRowKeys(flights.map((f, i) => buildScheduleRow(f, ctxFor(f.aircraft.registration, i))));
+
+  it('tells the two EWR UA3772 rows apart by route and tail', () => {
+    const [a, b] = build([row('BNA', 'N68891'), row('', 'N225UA')]);
+    expect(a.key).not.toBe(b.key);
+    expect(a.key).toContain('UA3772');
+  });
+
+  it('suffixes only a true duplicate, so ordinary keys do not depend on sort position', () => {
+    const one = build([row('BNA', 'N68891')])[0].key;
+    const keys = build([row('', 'N225UA'), row('BNA', 'N68891'), row('BNA', 'N68891')]).map((m) => m.key);
+    expect(new Set(keys).size).toBe(3);
+    expect(keys[1]).toBe(one);
+    expect(keys[2]).not.toBe(one);
+  });
+
+  it('leaves the models untouched when every key is already unique', () => {
+    const models = [row('BNA', 'N68891'), row('', 'N225UA')].map((f, i) => buildScheduleRow(f, ctxFor(f.aircraft.registration, i)));
+    expect(uniqueRowKeys(models)).toEqual(models);
   });
 });
