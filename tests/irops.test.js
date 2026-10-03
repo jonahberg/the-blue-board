@@ -111,7 +111,7 @@ describe('computeMetrics', () => {
     };
     const unseen = makeFlight('ORD', { schedDep: t, schedArr: t + 3 * 3600, status: 'canceled_uncertain', flightNum: 'UA2000' });
     const flown = makeFlight('ORD', { schedDep: t, realDep: t, status: 'departed', flightNum: 'UA3000' });
-    const sightings = new Map([['UA1094', { reg: 'N12345', origin: 'ORD', dest: 'LAX', seenAtMs: (t + 2 * 3600) * 1000 }]]);
+    const sightings = new Map([['UA1094', { reg: 'N12345', origin: 'ORD', dest: 'LAX', seenAtMs: (t + 2 * 3600) * 1000, airborneAtMs: (t + 2 * 3600) * 1000 }]]);
     const boards = overlayHubBoards({ ORD: [seenFlying, unseen, flown] }, sightings, (t + 6 * 3600) * 1000);
     const nowSec = t + 6 * 3600;
 
@@ -136,9 +136,12 @@ describe('computeMetrics', () => {
   it('v1.12.0: overlayHubBoards is idempotent and needs a matching origin', () => {
     const t = 1700000000;
     const fl = makeFlight('DEN', { schedDep: t, schedArr: t + 3 * 3600, status: 'canceled_uncertain', flightNum: 'UA1094', origin: 'DEN' });
-    const elsewhere = new Map([['UA1094', { reg: 'N1', origin: 'ORD', dest: 'LAX', seenAtMs: (t + 3600) * 1000 }]]);
+    const elsewhere = new Map([['UA1094', { reg: 'N1', origin: 'ORD', dest: 'LAX', seenAtMs: (t + 3600) * 1000, airborneAtMs: (t + 3600) * 1000 }]]);
     expect(computeMetrics(overlayHubBoards({ DEN: [fl] }, elsewhere, (t + 6 * 3600) * 1000)).cancellations).toBe(1);
-    const here = new Map([['UA1094', { reg: 'N1', origin: 'DEN', dest: 'LAX', seenAtMs: (t + 3600) * 1000 }]]);
+    const here = new Map([['UA1094', { reg: 'N1', origin: 'DEN', dest: 'LAX', seenAtMs: (t + 3600) * 1000, airborneAtMs: (t + 3600) * 1000 }]]);
+    // Seen only on the ground (no airborne time): no evidence, still a cancellation.
+    const groundOnly = new Map([['UA1094', { reg: 'N1', origin: 'DEN', dest: 'LAX', seenAtMs: (t + 3600) * 1000, airborneAtMs: null }]]);
+    expect(computeMetrics(overlayHubBoards({ DEN: [fl] }, groundOnly, (t + 6 * 3600) * 1000)).cancellationsLikely).toBe(1);
     const once = overlayHubBoards({ DEN: [fl] }, here, (t + 6 * 3600) * 1000);
     const twice = overlayHubBoards(once, here, (t + 6 * 3600) * 1000);
     expect(twice.DEN).toBe(once.DEN);

@@ -25,13 +25,18 @@ function row({ ident = 'UA1094', schedDep = NOW - 4 * H, schedArr = NOW - 1 * H,
   };
 }
 const sightings = (seenAtSec, over = {}) =>
-  new Map([['UA1094', { reg: 'N12345', origin: 'ORD', dest: 'DEN', seenAtMs: seenAtSec * 1000, ...over }]]);
+  new Map([['UA1094', { reg: 'N12345', origin: 'ORD', dest: 'DEN', seenAtMs: seenAtSec * 1000, airborneAtMs: seenAtSec * 1000, ...over }]]);
 const overlay = (fl, seenAtSec, dir = 'departures', over) =>
   applySightingsToBoard({ dir, flights: [fl] }, sightings(seenAtSec, over), NOW * 1000).flights[0];
 
 describe('classifySchedStatus — seen airborne', () => {
   it('an unseen Likely Canceled is still Likely Canceled', () => {
     expect(classifySchedStatus(row(), 'departures', NOW).key).toBe('canceled_uncertain');
+  });
+
+  it('seen only on the ground (a taxiway hold) is still Likely Canceled', () => {
+    const held = overlay(row(), NOW - 2 * H, 'departures', { airborneAtMs: null });
+    expect(classifySchedStatus(held, 'departures', NOW).key).toBe('canceled_uncertain');
   });
 
   it('departures: Departed, flagged seen — not presumed, not a cancellation', () => {

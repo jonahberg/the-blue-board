@@ -28,6 +28,7 @@ import { getTypicalFleetStats } from '@/lib/equipment-swaps.js';
 import { getFAADelayContext } from '@/lib/faa-context.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
 import { applySightingsToBoard } from '@/lib/reg-overlay.js';
+import { isOnGround } from '@/lib/flight-phase.js';
 import { normalizeFlightNum } from '@/lib/reg-ledger.js';
 import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
 import { hubTzAbbrev } from '@/lib/schedule-load.js';
@@ -252,7 +253,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     if (rows.length && liveFlights.length && liveFeedTs) {
       const sightings = new Map<
         string,
-        { reg: string; origin: string; dest: string; seenAtMs: number; onGround: boolean }
+        { reg: string; origin: string; dest: string; seenAtMs: number; airborneAtMs: number | null; onGround: boolean }
       >();
       for (const flight of liveFlights) {
         if (!flight?.reg) continue;
@@ -265,7 +266,9 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
           origin: flight.origin || '',
           dest: flight.dest || '',
           seenAtMs: liveFeedTs,
-          // An aircraft at the gate is not proof a Likely Canceled flight flew (seenAirborneMatches).
+          // Only an AIRBORNE aircraft is proof a Likely Canceled flight flew (seenAirborneMatches):
+          // the same isOnGround rule the server's sightings writer uses.
+          airborneAtMs: isOnGround(flight) ? null : liveFeedTs,
           onGround: flight.onGround === true,
         });
       }

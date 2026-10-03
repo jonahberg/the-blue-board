@@ -68,7 +68,7 @@ describe('/api/flight-times snapshot tier — seen-airborne override', () => {
   afterEach(() => { vi.useRealTimers(); });
 
   it('seen flying from SFO → departed, never a cancellation push', async () => {
-    sightingsMock.map = new Map([['UA2278', { reg: 'N76265', origin: 'SFO', dest: 'ORD', seenAtMs: (SCHED_DEP + 2 * 3600) * 1000 }]]);
+    sightingsMock.map = new Map([['UA2278', { reg: 'N76265', origin: 'SFO', dest: 'ORD', seenAtMs: (SCHED_DEP + 2 * 3600) * 1000, airborneAtMs: (SCHED_DEP + 2 * 3600) * 1000 }]]);
     const res = createRes();
     await handler(cronReq(), res);
     expect(res.statusCode).toBe(200);
@@ -89,8 +89,16 @@ describe('/api/flight-times snapshot tier — seen-airborne override', () => {
     expect(d.nextState.lastStatus).toBe('expected');
   });
 
+  it('held on the taxiway (ground sightings only) → still canceled_uncertain, no push', async () => {
+    sightingsMock.map = new Map([['UA2278', { reg: 'N76265', origin: 'SFO', dest: 'ORD', seenAtMs: (SCHED_DEP + 2 * 3600) * 1000, airborneAtMs: null }]]);
+    const res = createRes();
+    await handler(cronReq(), res);
+    expect(res.body.status).toBe('canceled_uncertain');
+    expect(diffWatch('UA2278', { lastStatus: 'expected' }, { status: res.body.status }).notify).toBe(false);
+  });
+
   it('a sighting from another origin does not un-cancel it', async () => {
-    sightingsMock.map = new Map([['UA2278', { reg: 'N76265', origin: 'LAX', dest: 'ORD', seenAtMs: (SCHED_DEP + 2 * 3600) * 1000 }]]);
+    sightingsMock.map = new Map([['UA2278', { reg: 'N76265', origin: 'LAX', dest: 'ORD', seenAtMs: (SCHED_DEP + 2 * 3600) * 1000, airborneAtMs: (SCHED_DEP + 2 * 3600) * 1000 }]]);
     const res = createRes();
     await handler(cronReq(), res);
     expect(res.body.status).toBe('canceled_uncertain');

@@ -21,6 +21,7 @@ import {
   DEFAULT_FLIGHT_SPAN_MS,
 } from './reg-ledger.js';
 import { cancellationKind } from './cancellation.js';
+import { isOnGround } from './flight-phase.js';
 
 /** A sighting this recent means "airborne right now" → rows get live:{seenAt}. */
 export const LIVE_RECENT_MS = 15 * 60e3;
@@ -29,6 +30,15 @@ export const LIVE_RECENT_MS = 15 * 60e3;
  * Shape parsed live-feed flights (src/lib/feed-health.js parseFr24Feed output) into
  * reg_sightings upsert rows. Mainline UA only, reg required, deduped by key (first wins —
  * feed order is stable within a poll and duplicates are pathological anyway).
+ *
+ * Every aircraft with a reg is recorded, on the ground too: the tail ledger wants a tail as soon
+ * as the aircraft is at the gate. An AIRBORNE one (the dashboard's own rule, flight-phase.js
+ * isOnGround: the feed's flag or under 100 ft and 50 kt) also carries `airborne_at` — the only
+ * evidence the seen-airborne override accepts (v1.12.0). A ground row has NO `airborne_at` key at
+ * all, and api/_reg-sightings.ts upserts it separately, so a taxi-in after landing never erases the
+ * airborne time the flight earned (a mixed upsert would write NULL into the missing column).
+ *
+ * @returns {Array<{flight_key:string, reg:string, origin:string, dest:string, seen_at:string, airborne_at?:string}>}
  */
 export function extractSightings(parsedFlights, nowMs) {
   const rows = [];
@@ -40,13 +50,15 @@ export function extractSightings(parsedFlights, nowMs) {
     const key = normalizeFlightNum(f.flightIATA) || normalizeFlightNum(f.callsign);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    rows.push({
+    const row = {
       flight_key: key,
       reg: f.reg,
       origin: String(f.origin || '').toUpperCase(),
       dest: String(f.dest || '').toUpperCase(),
       seen_at: seenAtIso,
-    });
+    };
+    if (!isOnGround(f)) row.airborne_at = seenAtIso;
+    rows.push(row);
   }
   return rows;
 }
@@ -79,20 +91,25 @@ export function sightingMatchesFlight(sighting, flight) {
 // fly this leg is rewritten to departed, so neither the board, the IROPS index nor a watch alert
 // calls it cancelled. An unseen one stays Likely Canceled — some are real.
 //
+// The evidence must be AIRBORNE (`airborneAtMs`, reg_sightings.airborne_at): any sighting at all
+// (`seenAtMs`) would let a flight held on a taxiway with its transponder on — a ground stop — and
+// then cancelled read as flown, hiding real cancellations exactly on the bad nights. A row with no
+// airborne time (a ground-only sighting, or one written before the column existed) proves nothing.
+//
 // reg_sightings keeps only the LATEST sighting per flight number, so the gate is strict:
-//   - the sighting is no earlier than 45 min before the scheduled departure (an early pushback) and
-//     no later than 18h after it (the longest United block times) — anything earlier is a previous
-//     leg or a previous day's instance, not this departure;
+//   - the airborne time is no earlier than 15 min before the scheduled (gate) departure — wheels-up
+//     earlier than that would need a pushback 25+ min early — and no later than 18h after it (the
+//     longest United block times). An airborne time before that is a previous leg or a previous
+//     day's instance: a through flight's inbound leg on final approach, for one;
 //   - its origin is present and equals the row's origin (it left THIS airport), and on an arrivals
 //     board its destination is present and equals the row's destination (it was coming HERE);
-//   - plus every sightingMatchesFlight() guard (operation window, no contradicting route code).
-//   - it is not marked on the ground. The browser's overlay (useBoardModel) passes the live feed's
-//     onGround flag, so an aircraft parked at the gate never un-cancels a flight.
-// Known limit: reg_sightings has no on-ground column and extractSightings() does not drop on-ground
-// feed rows, so on the SERVER an aircraft that sat at the gate broadcasting a cancelled flight's
-// callsign would pass. Not observed: across Sep 30 – Oct 3 the earliest in-window sighting of an
-// uncertain departure was 34 min AFTER its scheduled time.
-export const SEEN_AIRBORNE_BEFORE_DEP_MS = 45 * 60e3;
+//   - plus every sightingMatchesFlight() guard (operation window, no contradicting route code);
+//   - it is not marked on the ground (the browser's overlay passes its live feed's flag).
+// Known limit: origin/dest belong to the LATEST sighting, which can be a ground sighting newer than
+// the airborne time. A through flight (one number, two legs) whose late inbound leg was airborne
+// within the window, whose cancelled continuation was then seen at the gate, would pass. That needs
+// all four at once; not observed.
+export const SEEN_AIRBORNE_BEFORE_DEP_MS = 15 * 60e3;
 export const SEEN_AIRBORNE_AFTER_DEP_MS = 18 * 3600e3;
 
 /** 'departures' | 'arrivals' | null — null means "unknown", and the override then does nothing. */
@@ -103,7 +120,7 @@ function boardDirection(dir) {
 /**
  * The stricter gate for un-cancelling a row (see the block comment above).
  *
- * @param {{reg:string, origin?:string, dest?:string, seenAtMs:number, onGround?:boolean}} sighting
+ * @param {{reg:string, origin?:string, dest?:string, seenAtMs:number, airborneAtMs?:number|null, onGround?:boolean}} sighting
  * @param {object} flight  a board row.
  * @param {'departures'|'arrivals'} dir  the board's direction; anything else never matches.
  * @returns {boolean}
@@ -111,9 +128,10 @@ function boardDirection(dir) {
 export function seenAirborneMatches(sighting, flight, dir) {
   const board = boardDirection(dir);
   if (!board || sighting?.onGround === true || !sightingMatchesFlight(sighting, flight)) return false;
-  const seen = Number(sighting.seenAtMs);
+  const airborne = Number(sighting.airborneAtMs);
+  if (sighting.airborneAtMs == null || !Number.isFinite(airborne) || airborne <= 0) return false;
   const dep = Number(flight.time.scheduled.departure) * 1000; // sightingMatchesFlight guarantees it
-  if (seen < dep - SEEN_AIRBORNE_BEFORE_DEP_MS || seen > dep + SEEN_AIRBORNE_AFTER_DEP_MS) return false;
+  if (airborne < dep - SEEN_AIRBORNE_BEFORE_DEP_MS || airborne > dep + SEEN_AIRBORNE_AFTER_DEP_MS) return false;
   const so = String(sighting.origin || '').toUpperCase();
   const fo = String(flight.airport?.origin?.code?.iata || '').toUpperCase();
   if (!so || so !== fo) return false;
@@ -139,14 +157,15 @@ function seenDepartedStatus() {
  *
  *  - backfills a blank registration from the sighting (`aircraft.regSource: 'live_feed'`);
  *  - marks a row airborne right now (`live: {seenAt}`) when the sighting is recent;
- *  - rewrites a Likely Canceled row the feed saw fly to departed, keeping the evidence in
- *    `_source.seenAirborne` ({seenAt, reg, origin, dest, providerStatus}). Never a departure time.
+ *  - rewrites a Likely Canceled row the feed saw AIRBORNE on this leg to departed, keeping the
+ *    evidence in `_source.seenAirborne` ({airborneAt, seenAt, reg, origin, dest, providerStatus}).
+ *    Never a departure time. Reg backfill and the LIVE flag still key off `seenAtMs`, unchanged.
  *
  * Idempotent: an overlaid board overlays to itself (api/irops.ts re-applies it with fresher
  * sightings to boards /api/schedule already overlaid).
  *
  * @param {any} payload  a board ({flights, dir?, …}); anything without a flights array passes through.
- * @param {Map<string, {reg:string, origin?:string, dest?:string, seenAtMs:number}>} sightingsByKey
+ * @param {Map<string, {reg:string, origin?:string, dest?:string, seenAtMs:number, airborneAtMs?:number|null}>} sightingsByKey
  * @param {number} nowMs
  * @param {{dir?: 'departures'|'arrivals'}} [opts]  the board direction; wins over `payload.dir`.
  *   With neither, the seen-airborne override is skipped (fail closed).
@@ -176,6 +195,7 @@ export function applySightingsToBoard(payload, sightingsByKey, nowMs, opts = {})
       next._source = {
         ...(fl._source || {}),
         seenAirborne: {
+          airborneAt: Number(s.airborneAtMs),
           seenAt: Number(s.seenAtMs),
           reg: s.reg,
           origin: String(s.origin || '').toUpperCase(),

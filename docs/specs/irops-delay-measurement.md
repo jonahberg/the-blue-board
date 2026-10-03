@@ -83,8 +83,9 @@ A calm Saturday (every hub 83–96% on-time, no FAA programs, zero confirmed can
 
 - **Phase 3, done differently than planned.** Rather than re-weighting `canceled_uncertain`, the
   serve-time sightings overlay (`src/lib/reg-overlay.js`) now rewrites a "Likely Canceled" row to
-  departed when `reg_sightings` saw that flight airborne from that origin between 45 min before and
-  18 h after its scheduled departure. At 22:54Z on Oct 3, 38 of the 45 uncertain departures had been
+  departed when `reg_sightings.airborne_at` (`sql/016`; airborne sightings only, never ground)
+  shows that flight airborne from that origin between 15 min before and 18 h after its scheduled
+  departure. The numbers below used any sighting (`seen_at`), before the column existed. At 22:54Z on Oct 3, 38 of the 45 uncertain departures had been
   seen; at 23:25Z 44 of 55. The unseen remainder still counts ×3 and is reported separately
   (`cancellationsLikely`). The same rule reaches `/api/irops`, `/api/flight-times` (the watch cron)
   and the browser's own live-feed overlay.
@@ -96,9 +97,10 @@ A calm Saturday (every hub 83–96% on-time, no FAA programs, zero confirmed can
 
 Known limits: `reg_sightings` keeps only the latest sighting per flight number, so on a past day's
 board the override is a lower bound (yesterday's Express flight numbers fly again today and overwrite
-their sightings); and on-ground feed rows are not filtered, so a cancelled aircraft broadcasting its
-callsign at the gate would read as flown (not observed: the earliest in-window sighting of an
-uncertain departure across Sep 30 – Oct 3 was 34 min after its scheduled time).
+their sightings). `airborne_at` has no backfill, so the override only covers flights seen airborne
+after v1.12.0 deployed. A row's origin/dest come from its latest sighting, which can be a newer
+ground sighting than the airborne time: a through flight whose late inbound leg was airborne inside
+the window, and whose cancelled continuation was then seen at the gate, would pass (not observed).
 
 ## Still open
 

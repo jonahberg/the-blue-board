@@ -20,17 +20,30 @@ const sighting = (over = {}) => ({ reg: 'N12345', origin: 'ORD', dest: 'SFO', se
 
 describe('extractSightings', () => {
   it('builds upsert rows from parsed feed flights, deduped by key, reg required', () => {
+    const air = { alt: 10000, spd: 220, vr: 0, onGround: false };
     const rows = extractSightings([
-      { flightIATA: 'UA123', callsign: 'UAL123', reg: 'N12345', origin: 'ORD', dest: 'SFO' },
-      { flightIATA: 'UA123', callsign: 'UAL123', reg: 'N99999', origin: 'ORD', dest: 'SFO' }, // dup key: first wins
-      { flightIATA: '', callsign: 'UAL456', reg: 'N45678', origin: 'ewr', dest: 'lax' },
+      { flightIATA: 'UA123', callsign: 'UAL123', reg: 'N12345', origin: 'ORD', dest: 'SFO', ...air },
+      { flightIATA: 'UA123', callsign: 'UAL123', reg: 'N99999', origin: 'ORD', dest: 'SFO', ...air }, // dup key: first wins
+      { flightIATA: '', callsign: 'UAL456', reg: 'N45678', origin: 'ewr', dest: 'lax', alt: 0, spd: 4, onGround: true },
       { flightIATA: 'UA789', callsign: 'UAL789', reg: '' },          // no reg
       { flightIATA: 'G7929', callsign: 'GJS929', reg: 'N11111' },    // not mainline
     ], NOW);
+    const at = new Date(NOW).toISOString();
     expect(rows).toEqual([
-      { flight_key: 'UA123', reg: 'N12345', origin: 'ORD', dest: 'SFO', seen_at: new Date(NOW).toISOString() },
-      { flight_key: 'UA456', reg: 'N45678', origin: 'EWR', dest: 'LAX', seen_at: new Date(NOW).toISOString() },
+      { flight_key: 'UA123', reg: 'N12345', origin: 'ORD', dest: 'SFO', seen_at: at, airborne_at: at },
+      // On the ground: still recorded (the tail ledger wants it), but with no airborne_at KEY at all.
+      { flight_key: 'UA456', reg: 'N45678', origin: 'EWR', dest: 'LAX', seen_at: at },
     ]);
+    expect(Object.keys(rows[1])).not.toContain('airborne_at');
+  });
+
+  it('marks airborne with the dashboard rule: the feed flag, or under 100 ft and 50 kt', () => {
+    const base = { flightIATA: 'UA1', reg: 'N1', origin: 'ORD', dest: 'DEN' };
+    const one = (f) => extractSightings([{ ...base, ...f }], NOW)[0];
+    expect(one({ alt: 11000, spd: 230, onGround: false }).airborne_at).toBeDefined();
+    expect(one({ alt: 11000, spd: 230, onGround: true }).airborne_at).toBeUndefined();   // feed says ground
+    expect(one({ alt: 0, spd: 10, onGround: false }).airborne_at).toBeUndefined();       // taxiing: <100 ft, <50 kt
+    expect(one({ alt: 20, spd: 70, onGround: false }).airborne_at).toBeDefined();        // takeoff roll past 50 kt
   });
   it('handles garbage input', () => {
     expect(extractSightings(null, NOW)).toEqual([]);
@@ -124,8 +137,11 @@ describe('applySightingsToBoard — seen-airborne override for canceled_uncertai
   const likely = (over = {}) => boardFlight({ status: uncertain(), aircraft: { registration: 'N77777' }, ...over });
   const board = (fl, dir = 'departures') => ({ dir, hub: 'ORD', flights: [fl] });
   const mapOf = (s) => new Map([['UA123', s]]);
-  // An old sighting (not "live now"): seen 3h after the scheduled departure, i.e. it flew.
-  const flew = (over = {}) => sighting({ seenAtMs: depSec * 1000 + 3 * H, ...over });
+  // An old AIRBORNE sighting (not "live now"): 3h after the scheduled departure, i.e. it flew.
+  const flew = (over = {}) => {
+    const seenAtMs = over.seenAtMs ?? depSec * 1000 + 3 * H;
+    return sighting({ seenAtMs, airborneAtMs: seenAtMs, ...over });
+  };
   const at = depSec * 1000 + 6 * H; // the clock: well after the flight
 
   it('turns a seen-airborne Likely Canceled into departed, with the evidence in _source', () => {
@@ -135,7 +151,8 @@ describe('applySightingsToBoard — seen-airborne override for canceled_uncertai
     expect(fl.status.generic.type).toBe('');
     expect(fl.status.text).toBe('departed');
     expect(fl._source.seenAirborne).toEqual({
-      seenAt: depSec * 1000 + 3 * H, reg: 'N12345', origin: 'ORD', dest: 'SFO', providerStatus: 'canceled_uncertain',
+      airborneAt: depSec * 1000 + 3 * H, seenAt: depSec * 1000 + 3 * H,
+      reg: 'N12345', origin: 'ORD', dest: 'SFO', providerStatus: 'canceled_uncertain',
     });
     expect(cancellationKind(fl)).toBeNull();
     // No departure time is invented from a sighting.
@@ -168,19 +185,50 @@ describe('applySightingsToBoard — seen-airborne override for canceled_uncertai
     expect(out.flights[0].status.generic.status.text).toBe('canceled_uncertain');
   });
 
-  it('a sighting long before the scheduled departure does not count (latest sighting = an earlier leg)', () => {
-    // 50 min before scheduled departure: inside the reg-backfill window (2h) but not proof it flew.
-    const early = flew({ seenAtMs: depSec * 1000 - 50 * 60e3 });
+  it('an airborne time well before the scheduled departure does not count (an earlier leg, e.g. a through flight inbound)', () => {
+    // 20 min before scheduled (gate) departure: inside the reg-backfill window (2h) but wheels-up
+    // that early would need a 25+ min early pushback — far likelier the inbound leg on final.
+    const early = flew({ seenAtMs: depSec * 1000 - 20 * 60e3 });
     const out = applySightingsToBoard(board(likely()), mapOf(early), at);
     expect(out.flights[0].status.generic.status.text).toBe('canceled_uncertain');
-    // …while 40 min before (an early pushback) does.
-    const justBefore = flew({ seenAtMs: depSec * 1000 - 40 * 60e3 });
+    // …while 10 min before (an early pushback, short taxi) does.
+    const justBefore = flew({ seenAtMs: depSec * 1000 - 10 * 60e3 });
     expect(applySightingsToBoard(board(likely()), mapOf(justBefore), at).flights[0].status.generic.status.text).toBe('departed');
+  });
+
+  it('a ground-only sighting, or one with no airborne time, does not count', () => {
+    // seenAtMs in the window but no airborne evidence: written on the ground, or before sql/016.
+    for (const airborneAtMs of [null, undefined, 0, NaN]) {
+      const s = flew({ airborneAtMs });
+      expect(applySightingsToBoard(board(likely()), mapOf(s), at).flights[0].status.generic.status.text).toBe('canceled_uncertain');
+    }
+  });
+
+  it('taxiway hold: seen on the ground after the scheduled departure, then still Likely Canceled → stays Likely Canceled', () => {
+    // A ground stop: the aircraft pushed, held on the taxiway with its transponder on for 90 min
+    // (ground sightings, no airborne_at), and the flight was then cancelled. Its latest sighting is
+    // AFTER the scheduled departure and from the right origin — the old seen_at rule called it flown.
+    const held = sighting({ seenAtMs: depSec * 1000 + 90 * 60e3, airborneAtMs: null });
+    const out = applySightingsToBoard(board(likely()), mapOf(held), depSec * 1000 + 100 * 60e3);
+    expect(out.flights[0].status.generic.status.text).toBe('canceled_uncertain');
+    expect(cancellationKind(out.flights[0])).toBe('likely');
+    expect(out.flights[0]._source?.seenAirborne).toBeUndefined();
+    // …and an airborne time left over from YESTERDAY's flight with this number is no evidence either.
+    const yesterday = sighting({ seenAtMs: depSec * 1000 + 90 * 60e3, airborneAtMs: depSec * 1000 - 21 * H });
+    expect(applySightingsToBoard(board(likely()), mapOf(yesterday), depSec * 1000 + 100 * 60e3).flights[0].status.generic.status.text)
+      .toBe('canceled_uncertain');
+  });
+
+  it('reg backfill and the LIVE flag still key off seenAtMs (a ground sighting still fills the tail)', () => {
+    const parkedAtGate = sighting({ seenAtMs: NOW - 5 * 60e3, airborneAtMs: null });
+    const out = applySightingsToBoard({ dir: 'departures', flights: [boardFlight()] }, mapOf(parkedAtGate), NOW);
+    expect(out.flights[0].aircraft.registration).toBe('N12345');
+    expect(out.flights[0].live).toEqual({ seenAt: parkedAtGate.seenAtMs });
   });
 
   it('a sighting more than 18h after the scheduled departure does not count', () => {
     const fl = likely({ time: { scheduled: { departure: depSec, arrival: depSec + 20 * 3600 } } }); // ultra long-haul
-    const late = flew({ seenAtMs: depSec * 1000 + 19 * H });
+    const late = flew({ seenAtMs: depSec * 1000 + 19 * H }); // airborneAtMs follows seenAtMs in flew()
     expect(applySightingsToBoard(board(fl), mapOf(late), at + 20 * H).flights[0].status.generic.status.text).toBe('canceled_uncertain');
     const inside = flew({ seenAtMs: depSec * 1000 + 17 * H });
     expect(applySightingsToBoard(board(fl), mapOf(inside), at + 20 * H).flights[0].status.generic.status.text).toBe('departed');

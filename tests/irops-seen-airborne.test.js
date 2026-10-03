@@ -37,7 +37,9 @@ describe('/api/irops — seen-airborne override', () => {
       time: { scheduled: { departure: schedDep, arrival: schedDep + 4 * 3600 }, real: {}, estimated: {} },
     });
     sightingsMock.map = new Map([
-      ['UA1094', { reg: 'N12345', origin: 'ORD', dest: 'SFO', seenAtMs: (schedDep + 3 * 3600) * 1000 }],
+      ['UA1094', { reg: 'N12345', origin: 'ORD', dest: 'SFO', seenAtMs: (schedDep + 3 * 3600) * 1000, airborneAtMs: (schedDep + 3 * 3600) * 1000 }],
+      // Seen at ORD after its departure time, but only ever on the ground: still a likely cancellation.
+      ['UA2000', { reg: 'N54321', origin: 'ORD', dest: 'SFO', seenAtMs: (schedDep + 1 * 3600) * 1000, airborneAtMs: null }],
     ]);
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const hub = new URL(String(url)).searchParams.get('hub');

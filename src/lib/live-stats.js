@@ -14,20 +14,12 @@
 //  - the averages only count airborne aircraft that actually reported a value — a zero
 //    altitude is a missing reading, not sea level.
 
-import { getPhase, getPhaseGroup } from './flight-phase.js';
+import { getPhase, getPhaseGroup, isOnGround } from './flight-phase.js';
 import { fleetUtilization } from './fleet-utils.js';
 
-/**
- * On the ground: the feed says so, OR the telemetry does (under 100 ft and 50 kt — the
- * `getPhase()` Ground rule). One definition for every count on every tab.
- * @param {Object} f
- * @returns {boolean}
- */
-export function isOnGround(f) {
-  if (!f) return true;
-  if (f.onGround) return true;
-  return getPhase(f.alt, f.vr, f.spd).phase === 'Ground';
-}
+// `isOnGround` lives in flight-phase.js (no data imports) so the server's sightings writer
+// (src/lib/reg-overlay.js, imported by api/) can share it; re-exported here for the tabs.
+export { isOnGround };
 
 /**
  * The Live sidebar's five phase buckets for one flight — Ground by `isOnGround`, otherwise
