@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.2] - 2026-10-03
+
+### Fixed
+- **Google Search Console "Datasets: Missing field 'description'" (critical).** The 15 per-airport tracker pages (`/trackers/atc/*`, `/trackers/united-hubs/*`) declared `isPartOf` as a name-and-URL-only `Dataset` node, which Google validates as a Dataset in its own right. They now reference the parent tracker's Dataset by `@id` (`/trackers/atc#dataset`, `/trackers/united-hubs#dataset`). `tests/structured-data-datasets.test.js` fails the build output if any Dataset node lacks a name or description. schema.org validator: 0 errors, 0 warnings.
+
 ## [1.11.1] - 2026-10-03
 
 ### Added

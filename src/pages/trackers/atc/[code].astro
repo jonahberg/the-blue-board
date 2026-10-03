@@ -73,7 +73,8 @@ const schemas = [
       { '@type': 'GovernmentOrganization', name: 'Federal Aviation Administration' },
       { '@type': 'Airport', name: airport.name, iataCode: code },
     ],
-    isPartOf: { '@type': 'Dataset', name: 'FAA TFDM electronic flight strips rollout', url: 'https://theblueboard.co/trackers/atc' },
+    // A reference, not a second (partial) Dataset node: see the @id on /trackers/atc.
+    isPartOf: { '@id': 'https://theblueboard.co/trackers/atc#dataset' },
     mainEntityOfPage: canonical,
   },
   {
@@ -85,7 +86,7 @@ const schemas = [
     dateModified: atcMeta.lastVerified,
     creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
     spatialCoverage: { '@type': 'Place', name: `${airport.city}, ${airport.state}` },
-    isPartOf: 'https://theblueboard.co/trackers/atc',
+    isPartOf: { '@id': 'https://theblueboard.co/trackers/atc#dataset' },
     distribution: [
       { '@type': 'DataDownload', encodingFormat: 'text/csv', contentUrl: 'https://theblueboard.co/trackers/atc.csv' },
       { '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: 'https://theblueboard.co/trackers/atc.json' },

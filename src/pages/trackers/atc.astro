@@ -218,6 +218,9 @@ const faqSchema = {
 const datasetSchema = {
   '@context': 'https://schema.org',
   '@type': 'Dataset',
+  // Per-airport pages point at this node by @id rather than restating a partial Dataset —
+  // Google validates every typed Dataset node, and a name+url stub fails "missing description".
+  '@id': 'https://theblueboard.co/trackers/atc#dataset',
   name: 'FAA TFDM electronic flight strips rollout — airport-by-airport status',
   description:
     'Status of all 89 airports in the FAA’s Terminal Flight Data Manager (electronic flight strips) program: live, scheduled, or still on paper, with sourced go-live dates.',
