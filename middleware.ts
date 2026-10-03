@@ -29,9 +29,11 @@ export const config = {
   // `_agent/` is excluded too: it is the rewrite target, and re-entering would loop.
   // The list is the directories a build actually emits into dist/ — `css/`, `js/` and
   // `fonts/` went with the hand-written dashboard bundle in v1.8.0, and an exclusion for a
-  // directory that no longer exists only hides a dead path from its 404.
+  // directory that no longer exists only hides a dead path from its 404. `email/` holds the
+  // images that update emails embed (public/email/<yyyy-mm>/) — fetched by mail clients and
+  // image proxies, never negotiated.
   matcher: [
-    '/((?!_agent/|_astro/|_vercel/|api/|data/|icons/|og/|favicon\\.svg|favicon\\.ico|manifest\\.json|og-image\\.png|robots\\.txt|sw\\.js).*)',
+    '/((?!_agent/|_astro/|_vercel/|api/|data/|email/|icons/|og/|favicon\\.svg|favicon\\.ico|manifest\\.json|og-image\\.png|robots\\.txt|sw\\.js).*)',
   ],
 };
 

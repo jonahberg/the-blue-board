@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.6] - 2026-10-03
+
+### Added
+- **Images for the October 2026 update email** in `public/email/2026-10/` (six JPEGs, 1120px wide, ~430KB total), served from the site's own domain so the sent email's images never break. `email/` joins the middleware matcher's static-asset exclusions.
+
 ## [1.11.5] - 2026-10-03
 
 ### Fixed
