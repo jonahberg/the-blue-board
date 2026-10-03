@@ -227,6 +227,9 @@ const faqSchema = {
 const datasetSchema = {
   '@context': 'https://schema.org',
   '@type': 'Dataset',
+  // Per-hub pages point at this node by @id rather than restating a partial Dataset —
+  // Google validates every typed Dataset node, and a name+url stub fails "missing description".
+  '@id': 'https://theblueboard.co/trackers/united-hubs#dataset',
   name: 'United Airlines hub construction projects — clubs, terminals, gates',
   description:
     'Every tracked United Airlines ground-infrastructure project across its eight hubs, with status (open / under construction / announced / rumored), dates, sizes, costs, and sources.',

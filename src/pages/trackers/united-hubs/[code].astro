@@ -83,7 +83,8 @@ const schemas = [
       { '@type': 'Organization', name: 'United Airlines' },
       { '@type': 'Airport', name: hub.name, iataCode: code },
     ],
-    isPartOf: { '@type': 'Dataset', name: 'United Airlines hub construction projects', url: 'https://theblueboard.co/trackers/united-hubs' },
+    // A reference, not a second (partial) Dataset node: see the @id on /trackers/united-hubs.
+    isPartOf: { '@id': 'https://theblueboard.co/trackers/united-hubs#dataset' },
     mainEntityOfPage: canonical,
   },
   {
