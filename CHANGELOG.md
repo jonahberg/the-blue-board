@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.9] - 2026-10-03
+
+### Changed
+- **Phones get a support button in the header.** About 77% of visitors arrive on a phone, where the only donate link was two taps deep in More. Below `md:` the header's "?" slot is now a ☕ link to Buy Me a Coffee (counted as `support_click` from `mobile-header`). There was no room for a fifth control — 13 px spare at 360 px — so "What is this dashboard?" moved into the More sheet. Tablets and desktop are unchanged.
+
 ## [1.11.8] - 2026-10-03
 
 ### Changed

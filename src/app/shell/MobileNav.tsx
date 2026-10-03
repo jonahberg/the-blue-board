@@ -13,7 +13,7 @@
  * are plain list items: nothing here opens by itself or asks for anything.
  */
 
-import { BadgeInfo, Coffee, Ellipsis } from 'lucide-react';
+import { BadgeInfo, CircleHelp, Coffee, Ellipsis } from 'lucide-react';
 import { useState } from 'react';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -27,9 +27,12 @@ const ROW = 'flex min-h-11 w-full items-center gap-3 rounded-md px-2 text-sm';
 export function MobileNav({
   tab,
   onSelect,
+  onOpenHelp,
 }: {
   tab: TabId;
   onSelect: (id: TabId) => void;
+  /** Reopens the welcome dialog — the header's "?" gives its phone slot to the support link. */
+  onOpenHelp?: () => void;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const { setDisclaimerOpen } = useUi();
@@ -88,7 +91,22 @@ export function MobileNav({
                 </button>
               </li>
             ))}
-            <li className="mt-2 border-t pt-2">
+            {onOpenHelp ? (
+              <li className="mt-2 border-t pt-2">
+                <button
+                  type="button"
+                  className={cn(ROW, 'text-foreground')}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onOpenHelp();
+                  }}
+                >
+                  <CircleHelp aria-hidden="true" className="size-4" />
+                  What is this dashboard?
+                </button>
+              </li>
+            ) : null}
+            <li className={onOpenHelp ? undefined : 'mt-2 border-t pt-2'}>
               <button
                 type="button"
                 className={cn(ROW, 'text-foreground')}

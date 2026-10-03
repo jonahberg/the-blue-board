@@ -173,7 +173,7 @@ function DashboardShell() {
       <NewsBanner />
       <TipStrip />
       <Attribution />
-      <MobileNav tab={tab} onSelect={(id) => setTab(id)} />
+      <MobileNav tab={tab} onSelect={(id) => setTab(id)} onOpenHelp={() => setOnboardingOpen(true)} />
 
       <Suspense fallback={null}>
         <FlightSheet />

@@ -63,4 +63,20 @@ describe('Header search button', () => {
       expect(classes).toContain('pointer-fine:md:min-h-0');
     }
   });
+
+  it('on phones swaps the "?" for a labelled support link; the "?" returns from md: up', () => {
+    renderHeader();
+    const support = screen.getByRole('link', { name: 'Support The Blue Board' });
+    expect(support.getAttribute('href')).toBe('https://buymeacoffee.com/notjbg');
+    expect(support.getAttribute('target')).toBe('_blank');
+    expect(support.getAttribute('rel')).toContain('noopener');
+    expect(support.getAttribute('data-support')).toBe('mobile-header');
+    const supportClasses = support.className.split(/\s+/);
+    expect(supportClasses).toContain('md:hidden');
+    expect(supportClasses).toContain('min-h-11');
+    expect(supportClasses).toContain('min-w-11');
+    const help = screen.getByRole('button', { name: 'What is this dashboard?' }).className.split(/\s+/);
+    expect(help).toContain('hidden');
+    expect(help).toContain('md:inline-flex');
+  });
 });
