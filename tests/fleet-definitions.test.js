@@ -87,20 +87,31 @@ describe('Starlink matching — the one predicate (F101)', () => {
 });
 
 describe('starlinkMainlineShare — the one Starlink %', () => {
-  it("uses the tracker's own mainline population when it has one", () => {
+  // Oct 3 2026: the Starlink tab read "Mainline 261 / 1161" while Fleet and Stats said 1,139.
+  // The tracker's 1,161 was the database plus 22 tails, 19 of them unseen for 89 days
+  // (retired A319/A320s, the undelivered MAX 10), so the database is THE mainline population.
+  it("uses the fleet database even when the tracker has its own (larger) mainline total", () => {
+    const tails = new Set(['N100UA', 'N101UA']);
     expect(
-      starlinkMainlineShare({ mainline: 247, mainlineTotal: 1156 }, FLEET_DB, new Set()),
-    ).toEqual({ count: 247, total: 1156, pct: 21, source: 'tracker' });
+      starlinkMainlineShare({ mainline: 247, mainlineTotal: 1156 }, FLEET_DB, tails),
+    ).toEqual({ count: 2, total: 10, pct: 20, source: 'fleet-db' });
   });
 
-  it('otherwise counts roster tails INSIDE the fleet database, never the whole roster', () => {
+  it('counts roster tails INSIDE the fleet database, never the whole roster', () => {
     const tails = new Set(['N100UA', 'N101UA', 'N99999']); // N99999 is not in the database
     expect(starlinkMainlineShare(null, FLEET_DB, tails)).toEqual({ count: 2, total: 10, pct: 20, source: 'fleet-db' });
   });
 
-  it('is null before either source has loaded', () => {
+  it("falls back to the tracker's population only while the fleet database is unavailable", () => {
+    expect(
+      starlinkMainlineShare({ mainline: 247, mainlineTotal: 1156 }, [], new Set(['N1'])),
+    ).toEqual({ count: 247, total: 1156, pct: 21, source: 'tracker' });
+  });
+
+  it('is null before a population and the roster have loaded (never a fake 0 %)', () => {
     expect(starlinkMainlineShare(null, [], new Set(['N1']))).toBeNull();
     expect(starlinkMainlineShare({ mainline: 5, mainlineTotal: 0 }, [], new Set())).toBeNull();
+    expect(starlinkMainlineShare(null, FLEET_DB, new Set())).toBeNull();
   });
 });
 
@@ -114,14 +125,14 @@ describe('fleet database age (F86)', () => {
 // D15 (live audit Sep 28 2026): the Fleet card printed "22% (250/1157)" directly under
 // "1078 total" — two different denominators, neither labelled.
 describe('starlinkShareCaption — the denominator says whose it is', () => {
-  it('names the Starlink tracker when its mainline total is the denominator', () => {
-    const share = starlinkMainlineShare({ mainline: 250, mainlineTotal: 1157 }, FLEET_DB, new Set());
+  it('names the Starlink tracker when its mainline total stands in for the database', () => {
+    const share = starlinkMainlineShare({ mainline: 250, mainlineTotal: 1157 }, [], new Set(['N1']));
     expect(share.source).toBe('tracker');
     expect(starlinkShareCaption(share)).toBe('250 of 1,157 mainline aircraft per the Starlink tracker');
   });
 
   it('names our fleet database when that is the denominator', () => {
-    const share = starlinkMainlineShare(null, FLEET_DB, new Set(['N100UA', 'N101UA']));
+    const share = starlinkMainlineShare({ mainline: 250, mainlineTotal: 1157 }, FLEET_DB, new Set(['N100UA', 'N101UA']));
     expect(share.source).toBe('fleet-db');
     expect(starlinkShareCaption(share)).toBe('2 of 10 aircraft in our fleet database');
   });

@@ -9,7 +9,9 @@
  * inviting the reader to read 594 as a share of the number above it (F99).
  *
  * The rollout bars are hidden whole in the degraded tier: the static fallback roster carries
- * no fleet denominators, so a percentage there would be a guess wearing a ruler.
+ * no fleet denominators, so a percentage there would be a guess wearing a ruler. The Mainline
+ * bar is the Fleet tab's `starlinkMainlineShare()`, and the line under the bars names each
+ * bar's denominator (D15) — Mainline is our fleet database, Express the tracker's count.
  *
  * "● N AIRBORNE NOW" is a real button, not a decorated span — it navigates to the Live tab
  * with the Starlink map filter enabled, and only when that filter can actually be enabled.
@@ -24,6 +26,7 @@ export type RolloutBar = { label: string; installed: number; total: number; pct:
 export const SlHero = memo(function SlHero({
   equipped,
   bars,
+  barsNote = '',
   newThisWeek,
   airborneCount,
   canFilterMap,
@@ -35,6 +38,8 @@ export const SlHero = memo(function SlHero({
 }: {
   equipped: number | null;
   bars: RolloutBar[] | null;
+  /** `rolloutBarsNote()` — whose denominator each bar is. */
+  barsNote?: string;
   newThisWeek: number;
   airborneCount: number;
   /** False in the degraded tier — the Live map's Starlink toggle is disabled there. */
@@ -93,6 +98,11 @@ export const SlHero = memo(function SlHero({
                 </span>
               </div>
             ))}
+            {barsNote ? (
+              <p className="text-[11px] text-muted-foreground" id="sl-bars-note">
+                {barsNote}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>

@@ -8,7 +8,7 @@
  */
 import starlinkLive from './starlink-live.json';
 import fleetDb from '../../public/data/fleet.json';
-import { starlinkCountsByType, starlinkRosterAsOf } from '../lib/starlink-facts.js';
+import { starlinkCountsByType, starlinkFleetSharePct, starlinkRosterAsOf } from '../lib/starlink-facts.js';
 
 /** Starlink-equipped aircraft count — refreshed at build by scripts/refresh-starlink-facts.mjs. */
 export const STARLINK_EQUIPPED = starlinkLive.live.count;
@@ -34,3 +34,18 @@ export const STARLINK_ROSTER_AS_OF = starlinkRosterAsOf(starlinkLive.roster?.syn
 export function starlinkForType(type) {
   return STARLINK_BY_TYPE[type] ?? { equipped: 0, total: 0 };
 }
+
+// ─── Starlink share of the combined fleet, for the hub pages ───
+// Was hand-typed "about 24%" on seven hub pages while the live share was ~37%. Computed from
+// the same build-time roster snapshot: mainline tails inside fleet.json over fleet.json (the
+// dashboard's mainline total), plus the tracker's Express count over its Express fleet.
+
+const fleetSharePct = starlinkFleetSharePct(fleetDb, starlinkLive.roster?.tails ?? [], starlinkLive.roster?.express);
+if (fleetSharePct == null) {
+  // Only reachable if the committed JSON is hand-broken: the refresh script never writes a
+  // roster without a plausible Express block. Fail the build rather than print "NaN%".
+  throw new Error('starlink-live.json roster.express is missing or invalid — cannot compute the fleet share');
+}
+
+/** 37 — whole-percent Starlink share of the combined mainline + Express fleet. */
+export const STARLINK_FLEET_SHARE_PCT = fleetSharePct;

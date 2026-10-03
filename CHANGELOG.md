@@ -4,6 +4,13 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.5] - 2026-10-03
+
+### Fixed
+- **One mainline total on every tab.** The Starlink tab's rollout bar read "Mainline 263 / 1161" while Fleet and Stats said 1,139 mainline aircraft. 1,161 was the upstream Starlink tracker's own census, and it was the stale one. Our fleet database is a strict subset of it; of the 22 extra tails, 19 have no sighting in the 89 days of `reg_sightings` (Jul 6 – Oct 3): 16 A319/A320s (12 of them the tails the database retired on Sep 28), the undelivered 737 MAX 10 and two 787s not yet flying. Only 3 are new deliveries in service (N17482, N37469, N81113), so the tracker overstates the in-service fleet by 17 to 19 and the database understates it by 3. The Starlink tab's Mainline bar is now the Fleet tab's `starlinkMainlineShare()`: roster tails inside the fleet database over the fleet database (263 / 1,139 · 23%). The tracker's mainline total is only a fallback while the database is unavailable, and a line under the bars names each denominator (Express stays the tracker's count; we keep no Express database). (`src/lib/fleet-utils.js`, `src/lib/starlink-roster.js`, `src/app/views/StarlinkView.tsx`, `src/app/views/starlink/SlHero.tsx`, `tests/mainline-total-one-source.test.tsx`)
+- **Hub pages print the real Starlink share.** Seven hub pages (ORD, DEN, IAH, EWR, SFO, IAD, LAX) said the 600+ equipped aircraft were "about 24% of the combined fleet". That was hand-typed; the roster is 616 of about 1,650 (37%). The share is now computed at build from the same roster snapshot as the fleet guides' per-type counts: mainline roster tails inside the fleet database plus the tracker's Express count, over the fleet database plus the Express fleet. The refresh script stores the Express counts from the same `/api/data` payload as the tails. A test recomputes it and fails on any other "N% of the fleet" in hub copy. (`scripts/refresh-starlink-facts.mjs`, `src/lib/starlink-facts.js`, `src/data/starlink-facts.js`, `src/data/hubs/*.js`, `tests/starlink-fleet-share.test.js`)
+- **`/starlink` no longer 404s.** `/starlink` and `/starlink/` redirect (308) to `/#starlink`, the hash that opens the Starlink tab. (`vercel.json`, `tests/vercel-routes.test.js`)
+
 ## [1.11.4] - 2026-10-03
 
 ### Added

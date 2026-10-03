@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Card } from '@/components/ui/card';
 import { matchAircraft } from '@/lib/fleet-match.js';
+import { starlinkMainlineShare } from '@/lib/fleet-utils.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
 import { scrollBehavior } from '@/lib/motion.js';
@@ -41,6 +42,7 @@ import {
   freshnessAgo,
   ledgerHasData,
   rolloutBars,
+  rolloutBarsNote,
   rosterOptions,
   sortRoster,
 } from '@/lib/starlink-roster.js';
@@ -95,7 +97,7 @@ const TICK_MS = 30000;
 type MismatchState = { disputed: DisputedClaim[]; summary: VerifySummary | null };
 
 export default function StarlinkView() {
-  const { starlink, fleetSummary, fleetByReg, loadStarlinkFlights } = useFleet();
+  const { starlink, fleetSummary, fleetDb, fleetByReg, loadStarlinkFlights } = useFleet();
   const feed = useFeed();
   const { homeAirport } = usePrefs();
   const { tab, setTab, select, focusOn, openAircraft, setStarlinkFilter } = useUi();
@@ -213,7 +215,23 @@ export default function StarlinkView() {
 
   // ── Hero ───────────────────────────────────────────────────────────────────────────────
   const equipped = starlink.stats ? starlink.stats.total : aircraft.length || null;
-  const bars = useMemo(() => rolloutBars(starlink.stats) as RolloutBar[] | null, [starlink.stats]);
+  // The Mainline bar is the Fleet tab's figure, from the same function and the same inputs:
+  // the fleet database's mainline total, never the tracker's own (stale) census.
+  const mainlineShare = useMemo(
+    () =>
+      starlinkMainlineShare(starlink.stats, fleetDb, starlink.tails) as {
+        count: number;
+        total: number;
+        pct: number;
+        source?: string;
+      } | null,
+    [starlink.stats, fleetDb, starlink.tails],
+  );
+  const bars = useMemo(
+    () => rolloutBars(starlink.stats, mainlineShare) as RolloutBar[] | null,
+    [starlink.stats, mainlineShare],
+  );
+  const barsNote = useMemo(() => rolloutBarsNote(mainlineShare) as string, [mainlineShare]);
   const newTails = useMemo(() => {
     const set = new Set<string>();
     for (const a of aircraft) if (isRecentlyFound(a.dateFound, nowMs)) set.add(a.tail);
@@ -427,6 +445,7 @@ export default function StarlinkView() {
       <SlHero
         equipped={equipped}
         bars={bars}
+        barsNote={barsNote}
         newThisWeek={newTails.size}
         airborneCount={airborneCount}
         canFilterMap={canFilterMap}
