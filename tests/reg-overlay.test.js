@@ -186,6 +186,14 @@ describe('applySightingsToBoard — seen-airborne override for canceled_uncertai
     expect(applySightingsToBoard(board(fl), mapOf(inside), at + 20 * H).flights[0].status.generic.status.text).toBe('departed');
   });
 
+  it('an on-ground sighting does not count (the browser feed knows; an aircraft at the gate proves nothing)', () => {
+    const parked = flew({ onGround: true });
+    const out = applySightingsToBoard(board(likely()), mapOf(parked), at);
+    expect(out.flights[0].status.generic.status.text).toBe('canceled_uncertain');
+    // Server records carry no onGround field at all and still count.
+    expect(applySightingsToBoard(board(likely()), mapOf(flew()), at).flights[0].status.generic.status.text).toBe('departed');
+  });
+
   it('a contradicting destination does not count', () => {
     const out = applySightingsToBoard(board(likely()), mapOf(flew({ dest: 'LAX' })), at);
     expect(out.flights[0].status.generic.status.text).toBe('canceled_uncertain');

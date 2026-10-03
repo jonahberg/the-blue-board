@@ -250,7 +250,10 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     // engine's recency gate by the time they reach this tab — but the feed here is 30 s old.
     let boardRows = rows;
     if (rows.length && liveFlights.length && liveFeedTs) {
-      const sightings = new Map<string, { reg: string; origin: string; dest: string; seenAtMs: number }>();
+      const sightings = new Map<
+        string,
+        { reg: string; origin: string; dest: string; seenAtMs: number; onGround: boolean }
+      >();
       for (const flight of liveFlights) {
         if (!flight?.reg) continue;
         const key =
@@ -262,6 +265,8 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
           origin: flight.origin || '',
           dest: flight.dest || '',
           seenAtMs: liveFeedTs,
+          // An aircraft at the gate is not proof a Likely Canceled flight flew (seenAirborneMatches).
+          onGround: flight.onGround === true,
         });
       }
       if (sightings.size) {

@@ -86,9 +86,12 @@ export function sightingMatchesFlight(sighting, flight) {
 //   - its origin is present and equals the row's origin (it left THIS airport), and on an arrivals
 //     board its destination is present and equals the row's destination (it was coming HERE);
 //   - plus every sightingMatchesFlight() guard (operation window, no contradicting route code).
-// Known limit: extractSightings() does not drop on-ground feed rows, so an aircraft that sat at the
-// gate broadcasting a cancelled flight's callsign would pass. Not observed: across Sep 30 – Oct 3
-// the earliest in-window sighting of an uncertain departure was 34 min AFTER its scheduled time.
+//   - it is not marked on the ground. The browser's overlay (useBoardModel) passes the live feed's
+//     onGround flag, so an aircraft parked at the gate never un-cancels a flight.
+// Known limit: reg_sightings has no on-ground column and extractSightings() does not drop on-ground
+// feed rows, so on the SERVER an aircraft that sat at the gate broadcasting a cancelled flight's
+// callsign would pass. Not observed: across Sep 30 – Oct 3 the earliest in-window sighting of an
+// uncertain departure was 34 min AFTER its scheduled time.
 export const SEEN_AIRBORNE_BEFORE_DEP_MS = 45 * 60e3;
 export const SEEN_AIRBORNE_AFTER_DEP_MS = 18 * 3600e3;
 
@@ -100,14 +103,14 @@ function boardDirection(dir) {
 /**
  * The stricter gate for un-cancelling a row (see the block comment above).
  *
- * @param {{reg:string, origin?:string, dest?:string, seenAtMs:number}} sighting
+ * @param {{reg:string, origin?:string, dest?:string, seenAtMs:number, onGround?:boolean}} sighting
  * @param {object} flight  a board row.
  * @param {'departures'|'arrivals'} dir  the board's direction; anything else never matches.
  * @returns {boolean}
  */
 export function seenAirborneMatches(sighting, flight, dir) {
   const board = boardDirection(dir);
-  if (!board || !sightingMatchesFlight(sighting, flight)) return false;
+  if (!board || sighting?.onGround === true || !sightingMatchesFlight(sighting, flight)) return false;
   const seen = Number(sighting.seenAtMs);
   const dep = Number(flight.time.scheduled.departure) * 1000; // sightingMatchesFlight guarantees it
   if (seen < dep - SEEN_AIRBORNE_BEFORE_DEP_MS || seen > dep + SEEN_AIRBORNE_AFTER_DEP_MS) return false;
