@@ -308,7 +308,8 @@ describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
     // Every exclusion names a directory or file a build really emits into dist/.
     for (const skipped of ['/api/irops', '/data/fleet.json', '/icons/icon-192.png',
       '/og/og-news.jpg', '/sw.js', '/manifest.json', '/robots.txt', '/favicon.svg',
-      '/og-image.png', '/_astro/x.js', '/_astro/index.BcD3f.css', '/_agent/home.md']) {
+      '/og-image.png', '/_astro/x.js', '/_astro/index.BcD3f.css', '/_agent/home.md',
+      '/email/2026-10/hero-live-map.jpg']) {
       expect(re.test(skipped), `should skip ${skipped}`).toBe(false);
     }
     // The v1.7 bundle directories are gone, so their paths are ordinary dead URLs now and
