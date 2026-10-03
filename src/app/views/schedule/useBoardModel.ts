@@ -28,6 +28,7 @@ import { getTypicalFleetStats } from '@/lib/equipment-swaps.js';
 import { getFAADelayContext } from '@/lib/faa-context.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
 import { applySightingsToBoard } from '@/lib/reg-overlay.js';
+import { isOnGround } from '@/lib/flight-phase.js';
 import { normalizeFlightNum } from '@/lib/reg-ledger.js';
 import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
 import { hubTzAbbrev } from '@/lib/schedule-load.js';
@@ -87,6 +88,8 @@ export type StatusModel = {
   presumed: boolean;
   asOf: boolean;
   live: boolean;
+  /** Provider said Likely Canceled; the live feed saw it fly (v1.12.0). */
+  seen?: boolean;
 };
 
 export type SwapModel = {
@@ -248,7 +251,10 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     // engine's recency gate by the time they reach this tab — but the feed here is 30 s old.
     let boardRows = rows;
     if (rows.length && liveFlights.length && liveFeedTs) {
-      const sightings = new Map<string, { reg: string; origin: string; dest: string; seenAtMs: number }>();
+      const sightings = new Map<
+        string,
+        { reg: string; origin: string; dest: string; seenAtMs: number; airborneAtMs: number | null; onGround: boolean }
+      >();
       for (const flight of liveFlights) {
         if (!flight?.reg) continue;
         const key =
@@ -260,10 +266,16 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
           origin: flight.origin || '',
           dest: flight.dest || '',
           seenAtMs: liveFeedTs,
+          // Only an AIRBORNE aircraft is proof a Likely Canceled flight flew (seenAirborneMatches):
+          // the same isOnGround rule the server's sightings writer uses.
+          airborneAtMs: isOnGround(flight) ? null : liveFeedTs,
+          onGround: flight.onGround === true,
         });
       }
       if (sightings.size) {
-        const out = applySightingsToBoard({ flights: rows }, sightings, Date.now()) as {
+        // `dir` lets the seen-airborne override run here too (v1.12.0): a Likely Canceled flight
+        // this browser's feed has in the air flips to Departed · LIVE without waiting for the CDN.
+        const out = applySightingsToBoard({ flights: rows }, sightings, Date.now(), { dir }) as {
           flights: ScheduleRow[];
         };
         boardRows = out.flights;

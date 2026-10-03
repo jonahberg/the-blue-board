@@ -10,10 +10,14 @@
 //
 // Network status = the WORST of three signals:
 //
-//   level        label         IROPS index (irops-score.js)   FAA programs at a UA hub     hub on-time
-//   normal       Smooth Ops    < 5   NORMAL OPERATIONS         none                         avg > 70%, every hub ≥ 50%
-//   minor        Some Delays   5–15  MINOR DISRUPTION          GDP / departure delays       avg ≤ 70%
-//   significant  Disrupted     ≥ 15  SIGNIFICANT DISRUPTION    ground stop / closure        any hub < 50%
+//   level        label         IROPS index (irops-score.js)    FAA programs at a UA hub     hub on-time
+//   normal       Smooth Ops    < 20   NORMAL OPERATIONS         none                         avg > 70%, every hub ≥ 50%
+//   minor        Some Delays   20–40  MINOR DISRUPTION          GDP / departure delays       avg ≤ 70%
+//   significant  Disrupted     ≥ 40   SIGNIFICANT DISRUPTION    ground stop / closure        any hub < 50%
+//
+// The IROPS bands were < 5 / < 15 until v1.12.0 (Oct 3 2026), when a calm Saturday — every hub
+// 83–96% on-time, no programs, no confirmed cancellations — read "Disrupted". The constants live in
+// irops-score.js (IROPS_MINOR_AT / IROPS_SIGNIFICANT_AT); the FAA and on-time columns did not move.
 //
 // The FAA column is hubProgramMarker()'s amber/red — the same call the per-hub chips use.
 // The ticker is advisory whenever the level is not normal, so it can never claim "all

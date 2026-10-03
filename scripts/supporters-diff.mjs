@@ -12,11 +12,13 @@
 // here and must be checked in the BMC dashboard. Anonymous "Someone" entries are skipped.
 
 import { SUPPORTERS } from '../src/data/supporters.js';
+import { onWallMatcher } from '../src/lib/supporter-names.js';
 
 const FEED = 'https://app.buymeacoffee.com/api/creators/slug/notjbg/coffees';
 const MAX_PAGES = 20;
 
-const onWall = new Set(SUPPORTERS.map((name) => name.trim().toLowerCase()));
+// Spacing, punctuation and case are ignored ("Flyer Talk JCG1005" is "FlyerTalk JCG1005").
+const isOnWall = onWallMatcher(SUPPORTERS);
 const missing = new Map();
 
 for (let page = 1; page <= MAX_PAGES; page += 1) {
@@ -26,7 +28,7 @@ for (let page = 1; page <= MAX_PAGES; page += 1) {
   const rows = Array.isArray(body?.data) ? body.data : [];
   for (const row of rows) {
     const name = String(row?.profile_full_name ?? row?.supporter_name ?? '').trim();
-    if (!name || name === 'Someone' || onWall.has(name.toLowerCase()) || missing.has(name)) continue;
+    if (!name || name === 'Someone' || isOnWall(name) || missing.has(name)) continue;
     missing.set(name, {
       when: String(row?.support_created_on ?? '').slice(0, 10),
       type: row?.support_type ?? '',

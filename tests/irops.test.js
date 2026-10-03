@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import handler, { __resetIropsForTests, computeMetrics, getStartOfDayForHub, HUB_TZ } from '../api/irops.js';
+import handler, { __resetIropsForTests, computeMetrics, getStartOfDayForHub, HUB_TZ, overlayHubBoards } from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
+import { IROPS_MINOR_AT, IROPS_SIGNIFICANT_AT } from '../src/lib/irops-score.js';
 
 // Helper to build a flight object matching FR24's schedule structure
 function makeFlight(hub, {
@@ -97,6 +98,65 @@ describe('computeMetrics', () => {
     expect(result.hubMetrics.ORD.cancellations).toBe(2);
     // score = (2 cancels * 3 / 3 flights) * 100 = 200 — soft cancels move the index too.
     expect(result.score).toBe(200);
+    // v1.12.0: …and the unconfirmed one is reported on its own, so the Delays tab can say so.
+    expect(result.cancellationsLikely).toBe(1);
+    expect(result.hubMetrics.ORD.cancellationsLikely).toBe(1);
+    expect(result.likelyCanceledSeenFlying).toBe(0);
+  });
+
+  it('v1.12.0: a Likely Canceled flight seen flying is not a cancellation (overlaid board)', () => {
+    const t = 1700000000;
+    const seenFlying = {
+      ...makeFlight('ORD', { schedDep: t, schedArr: t + 3 * 3600, status: 'canceled_uncertain', flightNum: 'UA1094' }),
+    };
+    const unseen = makeFlight('ORD', { schedDep: t, schedArr: t + 3 * 3600, status: 'canceled_uncertain', flightNum: 'UA2000' });
+    const flown = makeFlight('ORD', { schedDep: t, realDep: t, status: 'departed', flightNum: 'UA3000' });
+    const sightings = new Map([['UA1094', { reg: 'N12345', origin: 'ORD', dest: 'LAX', seenAtMs: (t + 2 * 3600) * 1000, airborneAtMs: (t + 2 * 3600) * 1000 }]]);
+    const boards = overlayHubBoards({ ORD: [seenFlying, unseen, flown] }, sightings, (t + 6 * 3600) * 1000);
+    const nowSec = t + 6 * 3600;
+
+    const before = computeMetrics({ ORD: [seenFlying, unseen, flown] }, nowSec);
+    const after = computeMetrics(boards, nowSec);
+    expect(before.cancellations).toBe(2);
+    expect(before.score).toBe(200); // (2×3)/3
+    expect(after.cancellations).toBe(1);
+    expect(after.cancellationsLikely).toBe(1);
+    expect(after.likelyCanceledSeenFlying).toBe(1);
+    expect(after.hubMetrics.ORD).toMatchObject({ cancellations: 1, cancellationsLikely: 1, likelyCanceledSeenFlying: 1 });
+    expect(after.score).toBe(100); // (1×3)/3 — the seen one stays in the denominator, scores nothing
+    // It flew: no overdue "hold" either, even though it has no real departure time.
+    expect(after.delayed30).toBe(0);
+    expect(after.worstDelays).toEqual([]);
+    // Not operated (no provider time), so it cannot move the on-time figure.
+    expect(after.hubMetrics.ORD.operated).toBe(1);
+    // The input boards are untouched (hubCache keeps what /api/schedule served).
+    expect(seenFlying.status.generic.status.text).toBe('canceled_uncertain');
+  });
+
+  it('v1.12.0: overlayHubBoards is idempotent and needs a matching origin', () => {
+    const t = 1700000000;
+    const fl = makeFlight('DEN', { schedDep: t, schedArr: t + 3 * 3600, status: 'canceled_uncertain', flightNum: 'UA1094', origin: 'DEN' });
+    const elsewhere = new Map([['UA1094', { reg: 'N1', origin: 'ORD', dest: 'LAX', seenAtMs: (t + 3600) * 1000, airborneAtMs: (t + 3600) * 1000 }]]);
+    expect(computeMetrics(overlayHubBoards({ DEN: [fl] }, elsewhere, (t + 6 * 3600) * 1000)).cancellations).toBe(1);
+    const here = new Map([['UA1094', { reg: 'N1', origin: 'DEN', dest: 'LAX', seenAtMs: (t + 3600) * 1000, airborneAtMs: (t + 3600) * 1000 }]]);
+    // Seen only on the ground (no airborne time): no evidence, still a cancellation.
+    const groundOnly = new Map([['UA1094', { reg: 'N1', origin: 'DEN', dest: 'LAX', seenAtMs: (t + 3600) * 1000, airborneAtMs: null }]]);
+    expect(computeMetrics(overlayHubBoards({ DEN: [fl] }, groundOnly, (t + 6 * 3600) * 1000)).cancellationsLikely).toBe(1);
+    const once = overlayHubBoards({ DEN: [fl] }, here, (t + 6 * 3600) * 1000);
+    const twice = overlayHubBoards(once, here, (t + 6 * 3600) * 1000);
+    expect(twice.DEN).toBe(once.DEN);
+    expect(computeMetrics(twice).cancellations).toBe(0);
+  });
+
+  it('v1.12.0: a Likely Canceled row with a real departure operated — not a cancellation (matches the board)', () => {
+    const t = 1700000000;
+    const flights = [
+      makeFlight('ORD', { schedDep: t, realDep: t + 600, status: 'canceled_uncertain' }),
+      makeFlight('ORD', { schedDep: t, realDep: t, status: 'landed' }),
+    ];
+    const result = computeMetrics({ ORD: flights });
+    expect(result.cancellations).toBe(0);
+    expect(result.score).toBe(0);
   });
 
   it('weights 60-min delays at 2x (F017: no longer double-counted)', () => {
@@ -147,14 +207,14 @@ describe('computeMetrics', () => {
     }
     const oldStyle = computeMetrics({ EWR: flights }, t); // "now" == schedule → nothing overdue yet
     expect(oldStyle.delayed60).toBe(0);
-    expect(oldStyle.score).toBeLessThan(15); // MINOR — the bug's behaviour
+    expect(oldStyle.score).toBeLessThan(IROPS_MINOR_AT); // NORMAL — the bug's behaviour
 
     const result = computeMetrics({ EWR: flights }, now);
     // Each held flight is >60m overdue → counts in both cumulative buckets.
     expect(result.delayed30).toBe(10);
     expect(result.delayed60).toBe(10);
     // score = (delayed60*2 + (delayed30-delayed60)*1) / total * 100 = (10*2 + 0) / 30 * 100 ≈ 66.7
-    expect(result.score).toBeGreaterThanOrEqual(15); // SIGNIFICANT
+    expect(result.score).toBeGreaterThanOrEqual(IROPS_SIGNIFICANT_AT); // SIGNIFICANT (≥40 since v1.12.0)
     // Held flights also surface in worstDelays with their overdue magnitude.
     expect(result.worstDelays.length).toBeGreaterThan(0);
     expect(result.worstDelays[0].delay).toBeGreaterThanOrEqual(120);
@@ -166,7 +226,7 @@ describe('computeMetrics', () => {
   // (now - scheduledDeparture) minutes forever. Measured on production 2026-07-08:
   // 548 rows scored as "overdue >30m", 122 of them over 6 hours, worst 1028 minutes
   // (a 17.1-hour "hold" on a 90-minute regional hop), driving score 74.4 vs the
-  // SIGNIFICANT threshold of 15. A plane cannot still be at the gate after the clock
+  // SIGNIFICANT threshold (then 15). A plane cannot still be at the gate after the clock
   // has passed the time it was scheduled to land.
 
   it('F073b: a row past its scheduled arrival is a stale row, not a held flight', () => {

@@ -7,6 +7,7 @@
 // the clock are injected; the badge update and the notification itself stay in main.js.
 
 import { resolveFlightStatus } from './flight-status-resolve.js';
+import { isLikelyCanceledText } from './cancellation.js';
 
 const WATCHED_KEY = 'bb_watched_flights';
 
@@ -80,12 +81,17 @@ function isLandedText(lower) {
 /**
  * Is this status transition worth waking the passenger for?
  *
+ * Moving INTO "Likely Canceled" is not (v1.12.0): the provider's unconfirmed cancellation was wrong
+ * for 38 of 45 flights on Oct 3 2026 — they were seen flying. The board still shows the label and
+ * the stored status still moves, so a later Canceled or Departed alerts as usual.
+ *
  * @param {string|null|undefined} oldStatus
  * @param {string|null|undefined} newStatus
  * @returns {boolean} false when either side is missing or nothing changed.
  */
 export function isSignificantStatusChange(oldStatus, newStatus) {
   if (!oldStatus || !newStatus || oldStatus === newStatus) return false;
+  if (isLikelyCanceledText(newStatus)) return false;
   const nl = newStatus.toLowerCase();
   // A provider-vocabulary flip inside the landed state ("Landed" ⇄ "Arrived") is not news.
   if (isLandedText(nl) && isLandedText(oldStatus.toLowerCase())) return false;

@@ -133,6 +133,10 @@ export type IropsHubMetrics = Record<
     operated?: number;
     onTime?: number;
     cancellations?: number;
+    /** The unconfirmed part of `cancellations` ("Likely Canceled", not seen flying) — v1.12.0. */
+    cancellationsLikely?: number;
+    /** "Likely Canceled" flights the live feed saw fly; not in `cancellations` — v1.12.0. */
+    likelyCanceledSeenFlying?: number;
     /** The source board's `meta.generatedAt`, Unix seconds (F91). */
     generatedAt?: number | null;
     /** Seconds between that board and the irops run. */
@@ -142,7 +146,12 @@ export type IropsHubMetrics = Record<
 
 export type IropsData = {
   score: number;
+  /** Confirmed + likely (unconfirmed, not seen flying); the number the score weights ×3. */
   cancellations: number;
+  /** The unconfirmed part of `cancellations`. Absent on payloads from before v1.12.0. */
+  cancellationsLikely?: number;
+  /** "Likely Canceled" flights the live feed saw fly — not cancellations. Absent before v1.12.0. */
+  likelyCanceledSeenFlying?: number;
   delayed30: number;
   delayed60: number;
   diversions: number;

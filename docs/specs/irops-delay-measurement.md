@@ -76,9 +76,35 @@ time that genuinely differs from the runway time. Those are the rows where `time
 gate-based. The other 64% remain taxi-inflated, and we cannot do better with this feed — but now we
 can *tell*, instead of assuming.
 
+## Update — 2026-10-03 (v1.12.0): Phases 2 and 3 shipped, on thin data
+
+A calm Saturday (every hub 83–96% on-time, no FAA programs, zero confirmed cancellations) read
+`SIGNIFICANT DISRUPTION`. Two causes, both fixed:
+
+- **Phase 3, done differently than planned.** Rather than re-weighting `canceled_uncertain`, the
+  serve-time sightings overlay (`src/lib/reg-overlay.js`) now rewrites a "Likely Canceled" row to
+  departed when `reg_sightings.airborne_at` (`sql/016`; airborne sightings only, never ground)
+  shows that flight airborne from that origin between 15 min before and 18 h after its scheduled
+  departure. The numbers below used any sighting (`seen_at`), before the column existed. At 22:54Z on Oct 3, 38 of the 45 uncertain departures had been
+  seen; at 23:25Z 44 of 55. The unseen remainder still counts ×3 and is reported separately
+  (`cancellationsLikely`). The same rule reaches `/api/irops`, `/api/flight-times` (the watch cron)
+  and the browser's own live-feed overlay.
+- **Phase 2, hand-picked after all.** Bands moved from <5 / <15 to <20 / <40, approved by the owner
+  on four days of full-day scores (seen-flying removed): Oct 3 ≈ 18, Sep 30 ≈ 23–27, Oct 2 ≈ 32–35,
+  Oct 1 ≈ 34–38, against Jul 3's 56.7. That is not the trailing-90-day percentile derivation this
+  spec asked for, and four ordinary days are a thin base. **Recheck after the first real weather
+  day**; the percentile approach below is still the right long-term answer.
+
+Known limits: `reg_sightings` keeps only the latest sighting per flight number, so on a past day's
+board the override is a lower bound (yesterday's Express flight numbers fly again today and overwrite
+their sightings). `airborne_at` has no backfill, so the override only covers flights seen airborne
+after v1.12.0 deployed. A row's origin/dest come from its latest sighting, which can be a newer
+ground sighting than the airborne time: a through flight whose late inbound leg was airborne inside
+the window, and whose cancelled continuation was then seen at the gate, would pass (not observed).
+
 ## Still open
 
-**Phase 2 — thresholds.** `score >= 15` renders `SIGNIFICANT DISRUPTION`. The index scored ≥ 51 on
+**Phase 2 — thresholds.** *(Interim bands shipped in v1.12.0 — see the update above.)* `score >= 15` renders `SIGNIFICANT DISRUPTION`. The index scored ≥ 51 on
 26 of 26 days with real data (median ~62); `NORMAL` (<5) and `MINOR` (5–15) were unreachable. Phase 1
 cuts the numerator materially but will not, on its own, make the label informative. Re-derive the
 cutoffs from percentiles of the corrected trailing-90-day distribution — `schedule_snapshots` holds
@@ -87,7 +113,8 @@ most days"* and self-corrects as United's baseline shifts.
 
 Do **not** hand-pick new cutoffs. Wait for a week of gate-based data first.
 
-**Phase 3 — `canceled_uncertain` weighting.** AeroDataBox's *"suspects a cancellation, has not
+**Phase 3 — `canceled_uncertain` weighting.** *(Seen-flying rows dropped in v1.12.0 — see above; the
+×3 weight on unseen ones is unchanged.)* AeroDataBox's *"suspects a cancellation, has not
 confirmed it"*. The UI honestly renders it "Likely Canceled"; the index counts it at ×3, identical to
 a confirmed cancellation. The mapping changed around 2026-07-03: before, these arrived as hard
 `canceled` (~3.7% of flights); after, as `canceled_uncertain` (~5–7%). Understand the rate change

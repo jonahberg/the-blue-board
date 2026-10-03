@@ -1,7 +1,7 @@
 // Client-fallback IROPS severity engine: the F017 weighted score, the
 // score→label/class thresholds, and the small-sample rate floor. Both updateIrops
 // (client fallback) and renderIropsFromAPI (server path) import these so the
-// <5/<15 thresholds live in exactly one place and cannot silently drift apart.
+// <20/<40 thresholds live in exactly one place and cannot silently drift apart.
 
 // F007/F015: a cancellation RATE from a tiny sample is a lie — one cancelled GUM
 // flight on a 4-flight board is not a "25% cancellation rate". Only publish a rate
@@ -45,10 +45,35 @@ export function iropsHubRates(hubMetrics) {
   return byHub;
 }
 
+// ── The bands (v1.12.0, Oct 3 2026; were <5 / <15 since Jul 2026) ──
+// The old cutoffs were picked before the index measured delay at the gate and before "Likely
+// Canceled" flights the live feed saw fly were dropped from it; on the corrected index every
+// recent day still read SIGNIFICANT. Full-day departure scores, uncertain-but-seen-flying removed:
+//
+//   day            D15 on-time   score    old band       new band
+//   Sat Oct 3      calm          ≈ 18     SIGNIFICANT    NORMAL
+//   Wed Sep 30     66%           ≈ 23–27  SIGNIFICANT    MINOR
+//   Fri Oct 2      57%           ≈ 32–35  SIGNIFICANT    MINOR
+//   Thu Oct 1      46%           ≈ 34–38  SIGNIFICANT    MINOR
+//   Fri Jul 3      meltdown      56.7     SIGNIFICANT    SIGNIFICANT   (151 cancels, 17 ground stops)
+//
+// Owner-approved. Four ordinary days and one meltdown is a thin base: recheck against the first
+// real weather day (docs/specs/irops-delay-measurement.md). The index is one input to the network
+// status — a ground stop, a closure or a hub under 50% on-time still reads "Disrupted" whatever it
+// says (src/lib/ops-health.js networkStatus).
+export const IROPS_MINOR_AT = 20;
+export const IROPS_SIGNIFICANT_AT = 40;
+
+/** The bands in words, for the explainer tooltips — built from the constants so copy cannot drift. */
+export const IROPS_BANDS_TEXT =
+  `Normal under ${IROPS_MINOR_AT} · Minor ${IROPS_MINOR_AT}–${IROPS_SIGNIFICANT_AT} · Significant ${IROPS_SIGNIFICANT_AT}+`;
+
 export function iropsScoreCls(score) {
-  return score < 5 ? 'low' : score < 15 ? 'med' : 'high';
+  return score < IROPS_MINOR_AT ? 'low' : score < IROPS_SIGNIFICANT_AT ? 'med' : 'high';
 }
 
 export function iropsScoreLabel(score) {
-  return score < 5 ? 'NORMAL OPERATIONS' : score < 15 ? 'MINOR DISRUPTION' : 'SIGNIFICANT DISRUPTION';
+  return score < IROPS_MINOR_AT
+    ? 'NORMAL OPERATIONS'
+    : score < IROPS_SIGNIFICANT_AT ? 'MINOR DISRUPTION' : 'SIGNIFICANT DISRUPTION';
 }

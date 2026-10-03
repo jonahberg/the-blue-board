@@ -19,6 +19,8 @@
 //   5. No duplicate notify for unchanged state: if nothing meaningful changed, notify:false and
 //      the stored state is left as-is.
 
+import { isLikelyCanceledText } from '../src/lib/cancellation.js';
+
 export interface WatchState {
   lastStatus?: string;
   lastGate?: string;
@@ -42,9 +44,16 @@ export interface WatchDiffResult {
 }
 
 // A status string that means "we don't actually know" — never a notify trigger, never stored.
+// AeroDataBox's soft "Likely Canceled" (canceled_uncertain) is one of them (v1.12.0): it was wrong
+// for 38 of 45 flights on Oct 3 2026 (seen flying), against 0–3 confirmed cancellations a day, and
+// /api/flight-times passes the raw token through, so it used to push "UA123: canceled_uncertain".
+// A seen-flying one now resolves departed; an unseen one waits for the provider to confirm
+// (canceled pushes as before) or for the flight to move. Reversible: drop the isLikelyCanceledText
+// clause to push it again.
 export function isUnknownStatus(status: string | undefined | null): boolean {
   const s = String(status || '').trim().toLowerCase();
   if (!s) return true;
+  if (isLikelyCanceledText(s)) return true;
   return s === 'unknown' || s === 'n/a' || s === 'scheduled?' || s === '—' || s === '-';
 }
 
@@ -57,7 +66,7 @@ type FlightPhase = 'cancelled' | 'diverted' | 'landed' | 'delayed' | 'airborne' 
 
 function statusPhase(status: string): FlightPhase {
   const s = String(status || '').toLowerCase().trim();
-  if (!s) return 'unknown';
+  if (!s || isLikelyCanceledText(s)) return 'unknown';
   if (s.includes('cancel')) return 'cancelled';
   if (s.includes('divert')) return 'diverted';
   if (s.includes('landed') || s.includes('arrived')) return 'landed';

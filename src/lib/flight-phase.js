@@ -49,6 +49,20 @@ export function getPhase(alt, vr, spd) {
 }
 
 /**
+ * On the ground: the feed says so, OR the telemetry does (under 100 ft and 50 kt — the
+ * `getPhase()` Ground rule). One definition for every count on every tab, and for the
+ * server's sightings writer (src/lib/reg-overlay.js extractSightings: only an airborne
+ * sighting is evidence that a "Likely Canceled" flight flew).
+ * @param {Object} f
+ * @returns {boolean}
+ */
+export function isOnGround(f) {
+  if (!f) return true;
+  if (f.onGround) return true;
+  return getPhase(f.alt, f.vr, f.spd).phase === 'Ground';
+}
+
+/**
  * Collapse the seven phases into the five buckets the sidebar filter offers.
  * Anything unrecognised falls into Cruise, matching the En Route default above.
  *

@@ -22,7 +22,7 @@ import { useEffect, useMemo } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
 import { countIropsFromBoards } from '@/lib/irops-client.js';
-import { iropsScore, iropsScoreCls, iropsScoreLabel } from '@/lib/irops-score.js';
+import { IROPS_BANDS_TEXT, iropsScore, iropsScoreCls, iropsScoreLabel } from '@/lib/irops-score.js';
 import { faaAlertLines } from '@/lib/weather-cards.js';
 import { cn } from '@/lib/utils';
 import { JargonTerm } from '../../features/JargonTerm';
@@ -36,27 +36,34 @@ const SCORE_TONE: Record<string, string> = {
   high: 'border-destructive/40 bg-destructive/15 text-destructive',
 };
 
-const SERVER_TOOLTIP =
-  'Network-wide severity across all United hubs, weighting cancellations (×3), diversions (×2), 60min+ delays (×2) and 30–60min delays (×1) — including flights held past schedule — per 100 scheduled flights: Normal · Minor · Significant.';
+// The bands come from irops-score.js (IROPS_BANDS_TEXT), never retyped here — v1.12.0 moved them.
+const LIKELY_NOTE =
+  'Cancellations include flights the schedule provider lists as Likely Canceled (unconfirmed); Likely Canceled flights the live flight feed saw flying are not counted.';
 
-const CLIENT_TOOLTIP =
-  'Estimated from the schedule boards loaded in your session (server IROPS feed unavailable). Severity weights cancellations (×3), diversions (×2), 60min+ delays (×2) and 30–60min delays (×1) per 100 scheduled flights: Normal · Minor · Significant.';
+const SERVER_TOOLTIP = `Network-wide severity across all United hubs, weighting cancellations (×3), diversions (×2), 60min+ delays (×2) and 30–60min delays (×1) — including flights held past schedule — per 100 scheduled flights: ${IROPS_BANDS_TEXT}. ${LIKELY_NOTE}`;
+
+const CLIENT_TOOLTIP = `Estimated from the schedule boards loaded in your session (server IROPS feed unavailable). Severity weights cancellations (×3), diversions (×2), 60min+ delays (×2) and 30–60min delays (×1) per 100 scheduled flights: ${IROPS_BANDS_TEXT}. ${LIKELY_NOTE}`;
 
 type Counts = {
   cancellations: number | null;
+  /** The unconfirmed ("Likely Canceled") part of `cancellations`; null on an old server payload. */
+  cancellationsLikely: number | null;
+  /** "Likely Canceled" flights seen flying, not counted; null on an old server payload. */
+  likelyCanceledSeenFlying: number | null;
   delayed30: number;
   delayed60: number;
   diversions: number;
   total: number;
 };
 
-function Metric({ label, value }: { label: string; value: number | string }) {
+function Metric({ label, value, note }: { label: string; value: number | string; note?: string | null }) {
   // Counts are facts, not verdicts: the score beside them carries the severity, so the
   // numbers stay in body colour instead of five decorative hues (audit F72).
   return (
     <div className="flex flex-col items-center px-2">
       <span className="font-mono text-sm font-semibold tabular-nums text-foreground">{value}</span>
       <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      {note ? <span className="font-mono text-[9px] text-muted-foreground">{note}</span> : null}
     </div>
   );
 }
@@ -105,6 +112,8 @@ export function IropsSection() {
   const counts: Counts | null = usingServer
     ? {
         cancellations: server!.cancellations ?? null,
+        cancellationsLikely: server!.cancellationsLikely ?? null,
+        likelyCanceledSeenFlying: server!.likelyCanceledSeenFlying ?? null,
         delayed30: server!.delayed30,
         delayed60: server!.delayed60,
         diversions: server!.diversions,
@@ -132,6 +141,12 @@ export function IropsSection() {
   // which is mounted on every tab. See that file for why.
 
   const faaLines = useMemo(() => faaAlertLines(faaIndex) as string[], [faaIndex]);
+
+  // v1.12.0: say how much of the cancellation count is unconfirmed, and how many "Likely
+  // Canceled" flights were seen flying and left out — the index is only as honest as this split.
+  const likelyNote =
+    counts && counts.cancellationsLikely ? `incl. ${counts.cancellationsLikely} likely` : null;
+  const seenFlying = counts?.likelyCanceledSeenFlying ?? 0;
 
   return (
     <section id="irops-section" aria-labelledby="irops-label" className="scroll-mt-4">
@@ -188,13 +203,21 @@ export function IropsSection() {
               </span>
 
               <div className="ml-auto flex flex-wrap items-center divide-x divide-border">
-                <Metric label="Cancellations" value={counts.cancellations ?? '—'} />
+                <Metric label="Cancellations" value={counts.cancellations ?? '—'} note={likelyNote} />
                 <Metric label=">30m" value={counts.delayed30} />
                 <Metric label=">60m" value={counts.delayed60} />
                 <Metric label="Diversions" value={counts.diversions} />
                 <Metric label="Total Flights" value={counts.total} />
               </div>
             </div>
+
+            {seenFlying > 0 ? (
+              <p className="border-t px-3 py-1.5 text-[10px] text-muted-foreground">
+                {seenFlying} {seenFlying === 1 ? 'flight' : 'flights'} the schedule provider lists as Likely
+                Canceled {seenFlying === 1 ? 'was' : 'were'} seen flying by the live feed and{' '}
+                {seenFlying === 1 ? 'is' : 'are'} not counted as cancellations.
+              </p>
+            ) : null}
 
             {/* Only the client path carried this strip: the server payload has no per-airport
                 FAA detail, and duplicating it under an authoritative bar implies it came from

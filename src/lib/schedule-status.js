@@ -18,6 +18,8 @@
 // so it drops out of the "Scheduled"/"Upcoming" buckets and the status filter. This uses only
 // data already on the flight object — zero extra API calls.
 
+import { isCanceledUncertainStatus } from './cancellation.js';
+
 // Grace window before a past-time, un-actualized flight is treated as operated. Generous on
 // purpose: a genuinely delayed flight holding at the gate keeps a FUTURE estimated time (see
 // effective-time logic below) and is never reclassified, so this only catches flights whose
@@ -85,7 +87,7 @@ function classifyBase(flight) {
   // (the UI used to render the raw string "Canceleduncertain"). MUST be checked before the
   // generic cancel branch below, whose includes('cancel') would swallow it. `label` mirrors
   // `text` — it is the field name in the agreed frontend contract for this status.
-  if (statusText === 'canceled_uncertain' || generic?.type === 'canceled_uncertain' || txtLower.includes('canceleduncertain') || txtLower.includes('canceled uncertain')) {
+  if (isCanceledUncertainStatus(s)) {
     return { text: 'Likely Canceled', label: 'Likely Canceled', cls: 'warn', key: 'canceled_uncertain' };
   }
   if (statusText === 'canceled' || statusText === 'cancelled' || txtLower.includes('cancel') || (iconColor === 'red' && generic?.type === 'canceled')) return { text: txt || 'Canceled', cls: 'canceled', key: 'canceled' };
@@ -131,6 +133,8 @@ function classifyBase(flight) {
  *        confirmed by the provider — callers exclude these from on-time stats (no trustworthy
  *        actual time) and badge them as presumed in the UI.
  *        live:true marks a status confirmed by a live-feed sighting (Phase 2) — badge as LIVE, not presumed.
+ *        seen:true marks a row the provider called Likely Canceled that the live feed saw fly
+ *        (v1.12.0, reg-overlay.js seen-airborne override) — the board says "seen airborne".
  */
 export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.floor(Date.now() / 1000), opts = {}) {
   const base = classifyBase(flight);
@@ -147,6 +151,14 @@ export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.fl
         : { text: 'Departed', cls: 'departed', key: 'departed' };
     }
     return base;
+  }
+
+  // Seen airborne (v1.12.0): the provider said CanceledUncertain, the live feed saw the aircraft
+  // fly this leg, and the serve-time overlay (src/lib/reg-overlay.js) rewrote the row to departed
+  // with the evidence in `_source.seenAirborne`. That is a departure without a provider time, so it
+  // never scores on-time (operatedOutcome needs a real time) and is never presumed from the clock.
+  if (flight._source?.seenAirborne && base.key === 'departed') {
+    return classifySeenAirborne(flight, isArr, nowSec, opts);
   }
 
   if (!RECLASSIFIABLE_KEYS.has(base.key)) return base;
@@ -180,4 +192,26 @@ export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.fl
       : { text: 'Departed', cls: 'departed', key: 'departed', inferred: true, presumed: true };
   }
   return base;
+}
+
+/**
+ * A seen-airborne row (see classifySchedStatus). Departures: Departed — LIVE while the sighting is
+ * fresh. Arrivals: En Route (LIVE while fresh) until the arrival is past the operated grace, then
+ * Landed presumed: the sighting proves the departure, never a landing time.
+ */
+function classifySeenAirborne(flight, isArr, nowSec, opts) {
+  const liveSeenAtMs = Number(flight.live?.seenAt);
+  const live = Number.isFinite(liveSeenAtMs) && liveSeenAtMs > 0 && nowSec - liveSeenAtMs / 1000 <= LIVE_SIGHTING_MAX_AGE_S;
+  if (!isArr) {
+    return live
+      ? { text: 'Departed', cls: 'departed', key: 'departed', live: true, seen: true }
+      : { text: 'Departed', cls: 'departed', key: 'departed', seen: true };
+  }
+  if (live) return { text: 'En Route', cls: 'enroute', key: 'enroute', live: true, seen: true };
+  const time = flight.time || {};
+  const eff = effectiveTime(time.scheduled?.arrival, time.estimated?.arrival);
+  if (eff && eff < nowSec - operatedGraceSeconds(opts?.hubDisruptionMinutes)) {
+    return { text: 'Landed', cls: 'landed', key: 'landed', inferred: true, presumed: true, seen: true };
+  }
+  return { text: 'En Route', cls: 'enroute', key: 'enroute', seen: true };
 }
