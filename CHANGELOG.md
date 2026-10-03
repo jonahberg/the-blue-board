@@ -11,6 +11,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 - **Support-link click counts.** Every Buy Me a Coffee link (landed toast, About dialog ×3, legal menu, site footer, news articles) sends one anonymous `support_click` Web Analytics event labelled with its placement, so it's knowable which ones people actually use. One delegated listener covers the dashboard and every content page. (`src/lib/support-tracking.js`)
 
 ### Fixed
+- **Google Search Console "Datasets: Missing field 'description'" (critical).** The 15 per-airport tracker pages (`/trackers/atc/*`, `/trackers/united-hubs/*`) declared `isPartOf` as a name-and-URL-only `Dataset` node, which Google validates as a Dataset in its own right. They now reference the parent tracker's Dataset by `@id` (`/trackers/atc#dataset`, `/trackers/united-hubs#dataset`). `tests/structured-data-datasets.test.js` fails the build output if any Dataset node lacks a name or description. schema.org validator: 0 errors, 0 warnings.
 - **Custom analytics events were never recorded.** The dashboard called `window.va.track()`, but with the analytics script tag `va` is a function (`va('event', …)`), so every custom event since v1.8.0 — including the news-banner click count — was silently dropped. `src/lib/track.js` now owns the calling convention and queues events that fire before the deferred script loads.
 
 ## [1.11.0] - 2026-09-28
