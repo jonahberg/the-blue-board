@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.4] - 2026-10-03
+
+### Added
+- **Supporters Wall:** JayS (Oct 3). Caught by `bun scripts/supporters-diff.mjs` on its first real run.
+
 ## [1.11.3] - 2026-10-03
 
 ### Fixed

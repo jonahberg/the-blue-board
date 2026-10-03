@@ -30,7 +30,7 @@ describe('Supporters Wall (src/data/supporters.js)', () => {
   });
 
   it('includes the supporters added in Oct 2026', () => {
-    for (const name of ['@Benchilada129', 'Paul Leonard', 'Mickey Kopanski', '/u/bcb354', 'james macnutt', 'Greg Calvert']) {
+    for (const name of ['@Benchilada129', 'Paul Leonard', 'Mickey Kopanski', '/u/bcb354', 'james macnutt', 'Greg Calvert', 'JayS']) {
       expect(SUPPORTERS).toContain(name);
     }
   });
