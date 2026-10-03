@@ -210,6 +210,20 @@ describe('isCompleteSnapshotAcceptable', () => {
     )).toBe(true);
   });
 
+  it('counts date-shifted stale legs as deliberately dropped too (v1.11.3 meta.filtered.staleLegs)', () => {
+    // 20 stale legs + 2 off-day rows on top of 18 kept: 40 >= 80 * 0.5. Without staleLegs in the
+    // sum it is 20 < 40 and the fresh, correct board is refused as "truncated".
+    expect(isCompleteSnapshotAcceptable(
+      { partial: false, total: 18, meta: { filtered: { partnerCodeshares: 0, offDay: 2, repaired: 20, staleLegs: 20 } } },
+      { partial: false, total: 80 }
+    )).toBe(true);
+    // `repaired` rows are still on the board (or counted elsewhere) — it never adds to the sum.
+    expect(isCompleteSnapshotAcceptable(
+      { partial: false, total: 18, meta: { filtered: { partnerCodeshares: 0, offDay: 2, repaired: 20, staleLegs: 0 } } },
+      { partial: false, total: 80 }
+    )).toBe(false);
+  });
+
   it('still rejects a truncated fetch that happens to carry a few filtered rows', () => {
     expect(isCompleteSnapshotAcceptable(
       { partial: false, total: 300, meta: { filtered: { partnerCodeshares: 3, offDay: 2, repaired: 0 } } },

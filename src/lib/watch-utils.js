@@ -70,6 +70,13 @@ export function applyWatchChanges(list, changes, now = Date.now()) {
   return next || list;
 }
 
+// AeroDataBox's word for a landed flight is "Arrived" (classifySchedStatus shows the provider
+// word), FR24's is "Landed". Both are the landed state (v1.11.3; api/_watch-diff.ts's
+// statusPhase already treats them as one).
+function isLandedText(lower) {
+  return lower.includes('landed') || lower.includes('arrived');
+}
+
 /**
  * Is this status transition worth waking the passenger for?
  *
@@ -80,16 +87,36 @@ export function applyWatchChanges(list, changes, now = Date.now()) {
 export function isSignificantStatusChange(oldStatus, newStatus) {
   if (!oldStatus || !newStatus || oldStatus === newStatus) return false;
   const nl = newStatus.toLowerCase();
-  // Always notify: cancelled, diverted, landed, departed
-  if (nl.includes('cancel') || nl.includes('divert') || nl.includes('landed') || nl.includes('departed')) return true;
+  // A provider-vocabulary flip inside the landed state ("Landed" ⇄ "Arrived") is not news.
+  if (isLandedText(nl) && isLandedText(oldStatus.toLowerCase())) return false;
+  // Always notify: cancelled, diverted, landed (or arrived), departed
+  if (nl.includes('cancel') || nl.includes('divert') || isLandedText(nl) || nl.includes('departed')) return true;
   // Notify if delay appeared or gate changed
   if (nl.includes('delay')) return true;
   if (nl.includes('gate') && nl !== oldStatus.toLowerCase()) return true;
   // Generic status text changed (e.g. scheduled → en route)
   const ol = oldStatus.toLowerCase();
-  const significantKeys = ['cancel', 'divert', 'landed', 'departed', 'en route', 'delay', 'gate'];
+  const significantKeys = ['cancel', 'divert', 'landed', 'arrived', 'departed', 'en route', 'delay', 'gate'];
   if (significantKeys.some(k => nl.includes(k) || ol.includes(k))) return true;
   return false;
+}
+
+/**
+ * Did this watched flight just land? The "glad you landed" toast asks this (inventory §12).
+ *
+ * `status` is the `classifySchedStatus()` result for the row, and its `key` decides — never the
+ * display text, which is the provider's own word: AeroDataBox rows read "Arrived", so the
+ * shipped `text.includes('landed')` check could not fire on a single board row (v1.11.3).
+ * A presumed/inferred landing (the clock passed the grace window) is a guess, not an arrival,
+ * and a flight already stored as landed has not just landed.
+ *
+ * @param {string|null|undefined} previousStatus  the stored status text.
+ * @param {{key?: string, inferred?: boolean, presumed?: boolean}|null|undefined} status
+ * @returns {boolean}
+ */
+export function watchedFlightLanded(previousStatus, status) {
+  if (!status || status.key !== 'landed' || status.inferred || status.presumed) return false;
+  return !isLandedText(String(previousStatus || '').toLowerCase());
 }
 
 /**

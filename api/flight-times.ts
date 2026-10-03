@@ -28,6 +28,7 @@ import { airportTz } from '../src/lib/time-format.js';
 import { loadScheduleSnapshot } from './_schedule-snapshots.js';
 import { UNITED_HUBS } from './_hubs.js';
 import { getStartOfHubDay, getHubLocalDate } from '../src/lib/hubTz.js';
+import { sanitizeBoardFlights } from '../src/lib/schedule-actuals.js';
 
 // ═══ Registration + date-aware candidate ranking (F001, F005/F013) ═══
 
@@ -310,7 +311,13 @@ export function pickScheduleLeg(legs: ScheduleLeg[], nowSec: number): ScheduleLe
   return best;
 }
 
-async function collectScheduleLegs(flightNum: string, offsets: number[], dateParam: string, origin = ''): Promise<ScheduleLeg[]> {
+async function collectScheduleLegs(
+  flightNum: string,
+  offsets: number[],
+  dateParam: string,
+  origin = '',
+  nowSec = Math.floor(Date.now() / 1000),
+): Promise<ScheduleLeg[]> {
   const reads: Promise<{ rows: any[]; dir: 'departures' | 'arrivals'; off: number }>[] = [];
   for (const off of offsets) {
     for (const dir of ['departures', 'arrivals'] as const) {
@@ -322,10 +329,17 @@ async function collectScheduleLegs(flightNum: string, offsets: number[], datePar
         reads.push(loadSnapshotMemo(`agg:${hub}:${dir}:${getStartOfHubDay(hub, off)}`).then((snapshot) => ({
           dir,
           off,
-          rows: (Array.isArray(snapshot?.data?.flights) ? snapshot.data.flights : []).filter(
-            (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
-              && (!origin || String(f?.airport?.origin?.code?.iata || '').toUpperCase() === origin)
-          ),
+          // v1.11.3: these rows come straight from the persisted snapshot — /api/schedule's serve
+          // pass never sees them, and the watch-alerts cron reads them through here. A real time
+          // still in the future is not an arrival, and a date-shifted earlier leg is not this
+          // flight: either one would push a false "Landed".
+          rows: sanitizeBoardFlights(
+            (Array.isArray(snapshot?.data?.flights) ? snapshot.data.flights : []).filter(
+              (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
+                && (!origin || String(f?.airport?.origin?.code?.iata || '').toUpperCase() === origin)
+            ),
+            nowSec,
+          ).flights as any[],
         })));
       }
     }
@@ -404,17 +418,17 @@ async function fetchScheduleCacheTimes(flight: string, dateParam = '', origin = 
     let legs: ScheduleLeg[];
     if (dateParam) {
       // F005/F013: each hub reads only the offset whose hub-local date is the one asked for.
-      legs = await collectScheduleLegs(flightNum, [0, 1, -1], dateParam, origin);
+      legs = await collectScheduleLegs(flightNum, [0, 1, -1], dateParam, origin, nowSec);
     } else {
       // Today's boards, both directions: the destination hub's arrivals board carries a leg that
       // left the origin hub "yesterday" (a red-eye past midnight).
-      legs = await collectScheduleLegs(flightNum, [0], '', origin);
+      legs = await collectScheduleLegs(flightNum, [0], '', origin, nowSec);
       let best = pickScheduleLeg(legs, nowSec);
       let phase = best ? scheduleLegPhase(best.row, nowSec).phase : null;
       // Only an upcoming leg (or nothing) is left today: yesterday's board may still hold the one
       // in the air — a red-eye out of a hub to a non-hub never appears on today's boards.
       if (!best || phase === 'upcoming' || phase === 'landed') {
-        legs = legs.concat(await collectScheduleLegs(flightNum, [-1], '', origin));
+        legs = legs.concat(await collectScheduleLegs(flightNum, [-1], '', origin, nowSec));
         best = pickScheduleLeg(legs, nowSec);
         phase = best ? scheduleLegPhase(best.row, nowSec).phase : null;
       }
@@ -423,7 +437,7 @@ async function fetchScheduleCacheTimes(flight: string, dateParam = '', origin = 
       // "scheduled" a couple of hours after landing would make the watch cron push a spurious
       // landed→scheduled alert (api/_watch-diff.ts treats any phase change as significant).
       if (!legs.some((leg) => leg.off === 0) && (!best || phase === 'landed')) {
-        legs = legs.concat(await collectScheduleLegs(flightNum, [1], '', origin));
+        legs = legs.concat(await collectScheduleLegs(flightNum, [1], '', origin, nowSec));
       }
     }
     const best = pickScheduleLeg(legs, nowSec);

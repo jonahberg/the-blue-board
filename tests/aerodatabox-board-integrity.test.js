@@ -82,6 +82,9 @@ describe('F4/F103: only the hub day, with instance-consistent times', () => {
     arr: leg('ORD', { sched: ORD_DAY - 3.5 * H, revised: ORD_DAY + 19.9 * H }),
   });
   // UA2113 LAX→ORD: departed on time two days ago, "arrived" today → "Arrived +54h20m".
+  // v1.8.3 read this as a real arrival and kept it with a derived schedule. It is not: no LAX→ORD
+  // leg blocks for 58 hours. It is an old leg whose ARRIVAL AeroDataBox shifted onto today, the
+  // same shape that put a "29h" UA2113 on the Oct 3 board (v1.11.3), so it is now dropped.
   const twoDaysLate = raw({
     number: 'UA 2113', callSign: 'UAL2113', status: 'Arrived',
     dep: leg('LAX', { sched: ORD_DAY - 35.3 * H, revised: ORD_DAY - 35.2 * H }),
@@ -117,20 +120,27 @@ describe('F4/F103: only the hub day, with instance-consistent times', () => {
   });
 
   it('repairs a row whose scheduled arrival belongs to another instance instead of reporting a delay', async () => {
+    mockBoard('arrivals', [crossInstance]);
+    const board = await fetchViaAeroDataBox('ORD', 'arrivals', ORD_DAY, 8000);
+    expect(idents(board)).toEqual(['UA5375']);
+    const f = board.flights[0];
+    // The board-side scheduled time now comes from today's real arrival and says so, so the
+    // row renders "Arrived hh:mm (actual)" with no delta and stays out of on-time/late.
+    expect(f.time.scheduled.arrival).toBe(f.time.real.arrival);
+    expect(f._source.scheduleTimeDerivedFromActual.arrival).toBe(true);
+    expect(f.time.scheduled.arrival - f.time.scheduled.departure).toBeGreaterThan(0);
+    // The departure side was consistent (real ≈ scheduled) and is kept.
+    expect(f.time.scheduled.departure).toBe(ORD_DAY + 17.6 * H);
+    expect(board.meta.filtered.repaired).toBe(1);
+  });
+
+  it('drops a leg whose real departure and arrival are further apart than any flight (v1.11.3)', async () => {
     mockBoard('arrivals', [crossInstance, twoDaysLate]);
     const board = await fetchViaAeroDataBox('ORD', 'arrivals', ORD_DAY, 8000);
-    expect(idents(board)).toEqual(['UA2113', 'UA5375']);
-    for (const f of board.flights) {
-      // The board-side scheduled time now comes from today's real arrival and says so, so the
-      // row renders "Arrived hh:mm (actual)" with no delta and stays out of on-time/late.
-      expect(f.time.scheduled.arrival).toBe(f.time.real.arrival);
-      expect(f._source.scheduleTimeDerivedFromActual.arrival).toBe(true);
-      expect(f.time.scheduled.arrival - f.time.scheduled.departure).toBeGreaterThan(0);
-    }
-    const ua5375 = board.flights.find((f) => f.identification.number.default === 'UA5375');
-    // The departure side was consistent (real ≈ scheduled) and is kept.
-    expect(ua5375.time.scheduled.departure).toBe(ORD_DAY + 17.6 * H);
-    expect(board.meta.filtered.repaired).toBe(2);
+    // The repair would have pulled it into today; the block-time check is what stops it.
+    expect(idents(board)).toEqual(['UA5375']);
+    expect(board.meta.filtered.staleLegs).toBe(1);
+    expect(board.meta.filtered.offDay).toBe(0);
   });
 
   it('clips rows scheduled on the next hub day', async () => {
@@ -160,6 +170,100 @@ describe('F4/F103: only the hub day, with instance-consistent times', () => {
     mockBoard('arrivals', [realLate, ghost]);
     const board = await fetchViaAeroDataBox('ORD', 'arrivals', ORD_DAY + 15 * H, 8000);
     expect(idents(board)).toEqual(['UA500']);
+  });
+});
+
+describe('v1.11.3: an actual time cannot be in the future (ORD, Oct 3 2026)', () => {
+  // The prod boards read at 17:55Z carried 13 rows with time.real.* later than the clock. These
+  // are those rows translated back into raw FIDS items. Only Date is faked: fetchWindow's abort
+  // timer has to stay real.
+  const DAY = getStartOfHubDay('ORD', 0, new Date('2026-10-03T12:00:00Z'));
+  const at = (isoUtc) => Date.parse(isoUtc) / 1000;
+  const setNow = (isoUtc) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(isoUtc));
+  };
+  afterEach(() => vi.useRealTimers());
+
+  // Yesterday's UA2113 LAX→ORD (off 17:58Z Oct 2) with its arrival shifted onto Oct 3 22:55Z.
+  const shiftedUa2113 = raw({
+    number: 'UA 2113', callSign: 'UAL1941', status: 'Arrived', model: 'Boeing 757-300', reg: 'N57862',
+    dep: leg('LAX', { sched: at('2026-10-02T17:44:00Z'), revised: at('2026-10-02T17:58:00Z'), runway: at('2026-10-02T18:10:00Z') }),
+    arr: leg('ORD', { sched: at('2026-10-02T22:03:00Z'), revised: at('2026-10-03T22:55:00Z'), runway: at('2026-10-03T22:45:00Z') }),
+  });
+  // Today's UA2113, not yet departed — the row that must survive.
+  const todayUa2113 = raw({
+    number: 'UA 2113', callSign: 'UAL2113', status: 'Expected', reg: 'N37506',
+    dep: leg('LAX', { sched: at('2026-10-03T17:44:00Z'), revised: at('2026-10-03T17:44:00Z') }),
+    arr: leg('ORD', { sched: at('2026-10-03T22:03:00Z') }),
+  });
+  // UA845 ORD→GRU flagged Departed at its 9:30 PM CDT departure, 9.5 hours early.
+  const ua845 = raw({
+    number: 'UA 845', callSign: 'UAL845', status: 'Departed', model: 'Boeing 787-10', reg: 'N14001',
+    dep: leg('ORD', { sched: at('2026-10-04T02:30:00Z'), revised: at('2026-10-04T02:30:00Z') }),
+    arr: leg('GRU', { sched: at('2026-10-04T12:35:00Z') }),
+  });
+  // UA4422 FSD→ORD flagged Arrived with a gate time 8 minutes ahead of the clock.
+  const ua4422 = raw({
+    number: 'UA 4422', callSign: 'GJS4422', status: 'Arrived', model: 'Canadair CRJ', reg: 'N569GJ',
+    dep: leg('FSD', { sched: at('2026-10-03T16:15:00Z'), revised: at('2026-10-03T16:08:00Z'), runway: at('2026-10-03T16:20:00Z') }),
+    arr: leg('ORD', { sched: at('2026-10-03T18:12:00Z'), revised: at('2026-10-03T18:03:00Z'), runway: at('2026-10-03T17:56:00Z') }),
+  });
+  const noFutureActual = (board, nowSec) =>
+    board.flights.every((f) => !Object.values(f.time.real).some((t) => t && t > nowSec + 300));
+  const rowsOf = (board, id) => board.flights.filter((f) => f.identification.number.default === id);
+
+  it("keeps yesterday's date-shifted UA2113 off today's arrivals at 17:55Z, and today's UA2113 on", async () => {
+    setNow('2026-10-03T17:55:14Z');
+    mockBoard('arrivals', [shiftedUa2113, todayUa2113]);
+    const board = await fetchViaAeroDataBox('ORD', 'arrivals', DAY, 8000);
+    const ua2113 = rowsOf(board, 'UA2113');
+    expect(ua2113).toHaveLength(1);
+    expect(ua2113[0].status.text).toBe('expected');
+    expect(ua2113[0].time.scheduled.departure).toBe(at('2026-10-03T17:44:00Z'));
+    expect(noFutureActual(board, at('2026-10-03T17:55:14Z'))).toBe(true);
+    // Its own scheduled arrival (Oct 2) is what puts it off-day once the bogus actual is gone.
+    expect(board.meta.filtered.offDay).toBe(1);
+    expect(board.meta.filtered.repaired).toBe(0);
+  });
+
+  it('drops the same shifted leg after 22:55Z, when its "arrival" is no longer in the future', async () => {
+    setNow('2026-10-03T23:30:00Z');
+    mockBoard('arrivals', [shiftedUa2113, todayUa2113]);
+    const board = await fetchViaAeroDataBox('ORD', 'arrivals', DAY, 8000);
+    expect(rowsOf(board, 'UA2113')).toHaveLength(1);
+    expect(rowsOf(board, 'UA2113')[0].identification.callsign).toBe('UAL2113');
+    expect(board.meta.filtered.staleLegs).toBe(1);
+  });
+
+  it('UA845 is Expected tonight, not Departed', async () => {
+    setNow('2026-10-03T17:55:14Z');
+    mockBoard('departures', [ua845]);
+    const board = await fetchViaAeroDataBox('ORD', 'departures', DAY, 8000);
+    const [f] = rowsOf(board, 'UA845');
+    expect(f.time.real.departure).toBeNull();
+    expect(f.time.estimated.departure).toBe(at('2026-10-04T02:30:00Z'));
+    expect(f.status.generic.status.text).toBe('scheduled');
+    expect(f.status.live).toBe(false);
+    expect(f._source.futureActualCleared).toEqual({ departure: true, arrival: false });
+  });
+
+  it('UA4422 is en route until its arrival time has actually passed', async () => {
+    setNow('2026-10-03T17:55:14Z');
+    mockBoard('arrivals', [ua4422]);
+    const early = await fetchViaAeroDataBox('ORD', 'arrivals', DAY, 8000);
+    const [f] = rowsOf(early, 'UA4422');
+    expect(f.time.real.arrival).toBeNull();
+    expect(f.time.real.departure).toBe(at('2026-10-03T16:08:00Z'));
+    expect(f.time.estimated.arrival).toBe(at('2026-10-03T18:03:00Z'));
+    expect(f.status.generic.status.text).toBe('en-route');
+
+    vi.restoreAllMocks();
+    vi.setSystemTime(new Date('2026-10-03T18:10:00Z'));
+    mockBoard('arrivals', [ua4422]);
+    const later = await fetchViaAeroDataBox('ORD', 'arrivals', DAY, 8000);
+    expect(rowsOf(later, 'UA4422')[0].time.real.arrival).toBe(at('2026-10-03T18:03:00Z'));
+    expect(rowsOf(later, 'UA4422')[0].status.generic.status.text).toBe('landed');
   });
 });
 

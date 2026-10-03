@@ -18,6 +18,7 @@ import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { peekRegSightings, kickRegSightingsRefresh, peekRegSightingsLoadedAt } from './_reg-sightings.js';
 import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
+import { sanitizeServedBoard } from '../src/lib/schedule-actuals.js';
 
 const isRateLimited = createRateLimiter('schedule', 30);
 
@@ -1793,14 +1794,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // wrapping here covers every 200 path: hot cache, stale, degraded, snapshot, fresh.
     const sightingsRefresh = kickRegSightingsRefresh();
     if (sightingsRefresh) enqueueBackgroundTask(sightingsRefresh);
-    const withDisruption = (payload: any) => ({
-      ...applySightingsToBoard(payload, peekRegSightings(), Date.now()),
-      meta: {
-        ...(payload?.meta || {}),
-        hubDisruptionMinutes: peekHubDisruptionMinutes(hub),
-        regSightingsAt: peekRegSightingsLoadedAt() || undefined,
-      },
-    });
+    //
+    // v1.11.3: every 200 path also re-asks "has this actual time happened yet?" against the
+    // REQUEST clock. Boards are served from snapshots up to ~3h old, so a provider time that was
+    // in the future when it was fetched is cleared here until it is not (and a date-shifted
+    // earlier leg in a snapshot written before v1.11.3 is dropped). Non-mutating, like the
+    // sightings merge: the payload is a shared cache entry.
+    const withDisruption = (payload: any) => {
+      const board = sanitizeServedBoard(payload, Math.floor(Date.now() / 1000));
+      return {
+        ...applySightingsToBoard(board, peekRegSightings(), Date.now()),
+        meta: {
+          ...(board?.meta || {}),
+          hubDisruptionMinutes: peekHubDisruptionMinutes(hub),
+          regSightingsAt: peekRegSightingsLoadedAt() || undefined,
+        },
+      };
+    };
 
     // Authorized cron warms bypass every serve-from-cache path below: a complete snapshot would
     // otherwise satisfy the warm request, report "ok", and never be refetched — freezing the board
@@ -1994,7 +2004,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // value or 0, never fetches, never throws), same non-blocking contract as the main path.
         const hubFromKey = /^agg:([A-Z]{3,4}):/.exec(aggKey)?.[1] || '';
         const hubDisruptionMinutes = hubFromKey ? peekHubDisruptionMinutes(hubFromKey) : 0;
-        const degraded = buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope);
+        const degraded = sanitizeServedBoard(
+          buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope),
+          Math.floor(Date.now() / 1000),
+        );
         res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
         return res.status(200).json({ ...degraded, meta: { ...degraded.meta, hubDisruptionMinutes } });
       }

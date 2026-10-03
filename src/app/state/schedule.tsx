@@ -53,7 +53,7 @@ import {
   swapStorageKey,
 } from '@/lib/schedule-load.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
-import { isSignificantStatusChange } from '@/lib/watch-utils.js';
+import { isSignificantStatusChange, watchedFlightLanded } from '@/lib/watch-utils.js';
 import { ApiError, fetchSchedule } from '../data/api';
 import type { ScheduleMeta, ScheduleResponse } from '../data/types';
 import { useIrops } from './irops';
@@ -368,8 +368,9 @@ export function ScheduleProvider({
           // demonstrably done its job, so it is the one moment the donation ask is made.
           // Inside the significant-change branch on purpose — an inferred or repeated
           // "Landed" is not an arrival, and `showBmacToast` caps the rest (14-day cooldown,
-          // once per load, 3-second delay).
-          if (next.toLowerCase().includes('landed')) showBmacToast(ident);
+          // once per load, 3-second delay). Decided on the classified KEY: the text is the
+          // provider's word, and AeroDataBox says "Arrived" (v1.11.3).
+          if (watchedFlightLanded(previous, status)) showBmacToast(ident);
         }
         // Always restamp, changed or not: the stored status is the baseline the NEXT load
         // compares against, and leaving it behind re-fires the same alert every refresh.

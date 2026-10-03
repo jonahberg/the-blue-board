@@ -4,6 +4,16 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.3] - 2026-10-03
+
+### Fixed
+- **Boards no longer show flights as Departed or Arrived at times that haven't happened yet.** At 17:55Z on Oct 3 the ORD boards had 13 rows with an "actual" time later than the clock. Two causes: (1) AeroDataBox sometimes returns yesterday's leg with its arrival moved forward a day. UA2113 LAX→ORD "left" Oct 2 17:58Z and "arrived" Oct 3 22:55Z, a 29-hour flight. The schedule repair copied that arrival into the scheduled arrival, which moved the old leg into today's board. (2) Rows marked Departed or Arrived whose time was still ahead: UA845 ORD→GRU showed Departed 9.5 hours before departure, and UA4422 showed Arrived 8 minutes before its gate time. Now an actual time more than 5 minutes ahead of the server clock is treated as an estimate, and the status steps back (en route if the flight really departed, otherwise expected). This check runs before the repair. A row whose departure-to-arrival span is longer than any flight (20h) is dropped and counted in `meta.filtered.staleLegs`. The snapshot guard counts those rows as intentionally dropped. Every board served by `/api/schedule`, and every flight `/api/flight-times` reads from a snapshot (the watch-alerts cron uses this path), is re-checked against the request time. Without that, a snapshot up to 3 hours old could still show an arrival that hasn't happened, or send a false "Landed" push. (`src/lib/schedule-actuals.js`, `src/lib/schedule-plausibility.js`, `api/_schedule-aerodatabox.ts`, `api/schedule.ts`, `api/flight-times.ts`, `api/_schedule-snapshots.ts`)
+- **The "Glad you landed" toast now fires when a watched flight lands.** It checked whether the status text contained "landed", but AeroDataBox calls a landed flight "Arrived", so it never matched. The watch alert also ignored Expected → Arrived. "Landed" is now decided by the classified status, never by a presumed landing or a repeat. "Landed" ⇄ "Arrived" vocabulary flips no longer count as a change. (`src/lib/watch-utils.js`, `src/app/state/schedule.tsx`)
+- **No ghost row after switching hubs.** Schedule rows were keyed by flight number and scheduled time. EWR listed UA3772 twice at 09:21, so two rows shared a React key. Keys now include the route and the aircraft, and a true duplicate gets a suffix. (`src/lib/schedule-row-model.js`)
+
+### Changed
+- **The phone "More" sheet now has About and Support The Blue Board.** On phones the ⓘ menu is hidden along with the attribution strip, which left no way to reach the About dialog (independence statement, safety line, Supporters Wall) or any donate link. This is the release's only visible UI change. Both are plain list rows; nothing opens on its own. (`src/app/shell/MobileNav.tsx`)
+
 ## [1.11.2] - 2026-10-03
 
 ### Fixed
