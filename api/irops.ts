@@ -7,6 +7,9 @@ import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
 import { getStartOfHubDay, defaultSchedDayOffset } from '../src/lib/hubTz.js';
 import { HUB_READING_STALE_MS, boardAsOfMs, operatedOutcome } from '../src/lib/hub-health.js';
+import { cancellationKind } from '../src/lib/cancellation.js';
+import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
+import { awaitRegSightings, type SightingRecord } from './_reg-sightings.js';
 
 const isRateLimited = createRateLimiter('irops', 60);
 
@@ -77,7 +80,12 @@ async function fetchHubFromScheduleAPI(hub: string, timestamp: number): Promise<
 
 interface HubMetric {
   total: number;
+  /** Confirmed + likely (unconfirmed, not seen flying) — the number the score weights ×3. */
   cancellations: number;
+  /** The unconfirmed part of `cancellations`: AeroDataBox "Likely Canceled", not seen flying. */
+  cancellationsLikely: number;
+  /** "Likely Canceled" rows the live feed saw fly — not cancellations, not in the score. */
+  likelyCanceledSeenFlying: number;
   delayed30: number;
   delayed60: number;
   diversions: number;
@@ -95,16 +103,20 @@ interface WorstDelay {
   delay: number;
 }
 
+// Cancellations come from src/lib/cancellation.js cancellationKind(), the same rule the boards use.
 // 'canceled_uncertain' is AeroDataBox's soft-cancel state ("Likely Canceled"); it groups under
-// Canceled everywhere else in the UI, so the server-side metrics must count it too — otherwise
-// likely-canceled rows vanish from the IROPS index and the Delays tab cancellation counts.
-const CANCELED_STATUSES = new Set(['canceled', 'cancelled', 'canceled_uncertain']);
+// Canceled everywhere else in the UI, so it still counts here — except (v1.12.0) when it is not a
+// cancellation at all: a row the live feed saw fly has been rewritten to departed by the sightings
+// overlay before it gets here (at 22:54Z on Oct 3 2026, 38 of the 45 uncertain departures had been
+// seen airborne; Sep 30 – Oct 2 carried 130–150 uncertain a day against 0–3 confirmed), and a row
+// with a real departure time operated (the board already shows it Departed). What is left is reported twice: inside `cancellations`, and on its own
+// as `cancellationsLikely`, so the Delays tab can say how many are unconfirmed.
 
 // F073: a flight "held on the ground" during a ground stop keeps a pre-departure
 // status (scheduled/delayed) with NO real departure while its scheduled time slides
 // into the past. The old code counted it toward totalFlights but never toward
 // delayed30/60, so the IROPS index UNDERstated disruption exactly during ground stops
-// (the "MINOR DISRUPTION at 13.6 vs the ≥15 SIGNIFICANT threshold" case). Treat such
+// (the "MINOR DISRUPTION at 13.6 vs the then-≥15 SIGNIFICANT threshold" case). Treat such
 // an overdue flight as delayed by the minutes elapsed since its scheduled departure —
 // the same time-inference philosophy the board uses for "Departed*" rows.
 //
@@ -119,8 +131,8 @@ const CANCELED_STATUSES = new Set(['canceled', 'cancelled', 'canceled_uncertain'
 // from a held flight — so a 07:00 departure that flew but never got a "departed" status was
 // still accruing overdue minutes at 23:00. Measured on production 2026-07-08: 548 rows
 // scored overdue >30m, 122 of them beyond 6 hours, worst 1028 minutes — a 17.1-hour "hold"
-// on a 90-minute regional hop — driving the index to 74.4 against a SIGNIFICANT threshold
-// of 15, and putting impossible phantom holds in the user-visible worstDelays list.
+// on a 90-minute regional hop — driving the index to 74.4 against the SIGNIFICANT threshold
+// (then 15; 40 since v1.12.0), and putting impossible phantom holds in the user-visible worstDelays list.
 //
 // Two guards, in order of how much we trust them:
 //   1. Scheduled arrival. A plane cannot still be awaiting departure once the clock has
@@ -147,7 +159,7 @@ const OVERDUE_MAX_MIN = 240;
 const CONFIRMED_DELAY_MAX_MIN = 16 * 60;
 
 function overdueDelayMinutes(fl: any, status: string, nowSec: number): number {
-  if (CANCELED_STATUSES.has(status)) return 0;
+  if (cancellationKind(fl) !== null) return 0;
   if (status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted') return 0;
   if (fl.time?.real?.departure) return 0;
   const schedT = fl.time?.scheduled?.departure;
@@ -174,11 +186,20 @@ export function computeMetrics(
     const generatedAt = generatedAtByHub[hub] ?? null;
     const dataAgeSec = generatedAt === null ? null : Math.max(0, nowSec - generatedAt);
     if (dataAgeSec !== null && (oldestHubAgeSec === null || dataAgeSec > oldestHubAgeSec)) oldestHubAgeSec = dataAgeSec;
-    hubMetrics[hub] = { total: flights.length, cancellations: 0, delayed30: 0, delayed60: 0, diversions: 0, operated: 0, onTime: 0, generatedAt, dataAgeSec };
+    hubMetrics[hub] = {
+      total: flights.length, cancellations: 0, cancellationsLikely: 0, likelyCanceledSeenFlying: 0,
+      delayed30: 0, delayed60: 0, diversions: 0, operated: 0, onTime: 0, generatedAt, dataAgeSec,
+    };
 
     for (const fl of flights) {
       const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
-      if (CANCELED_STATUSES.has(status)) { hubMetrics[hub].cancellations++; continue; }
+      if (fl._source?.seenAirborne) hubMetrics[hub].likelyCanceledSeenFlying++;
+      const cancelled = cancellationKind(fl);
+      if (cancelled) {
+        hubMetrics[hub].cancellations++;
+        if (cancelled === 'likely') hubMetrics[hub].cancellationsLikely++;
+        continue;
+      }
       if (status === 'diverted') hubMetrics[hub].diversions++;
 
       // F073: held/overdue flights count toward delayed30/60 (numerator only; total is
@@ -209,12 +230,15 @@ export function computeMetrics(
     }
   }
 
-  let cancellations = 0, delayed30 = 0, delayed60 = 0, diversions = 0;
+  let cancellations = 0, cancellationsLikely = 0, likelyCanceledSeenFlying = 0, delayed30 = 0, delayed60 = 0, diversions = 0;
   const worstDelays: WorstDelay[] = [];
 
   for (const fl of allFlights) {
     const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
-    if (CANCELED_STATUSES.has(status)) cancellations++;
+    if (fl._source?.seenAirborne) likelyCanceledSeenFlying++;
+    const cancelled = cancellationKind(fl);
+    if (cancelled) cancellations++;
+    if (cancelled === 'likely') cancellationsLikely++;
     // F017: a diverted flight is weighted once, as a diversion. It normally has a (late) real
     // departure, so without this early-out it would also fall into the delay buckets below and
     // score diversions*2 + delayed60*2 = 4 points — more than a cancellation (×3).
@@ -269,6 +293,8 @@ export function computeMetrics(
     score: parseFloat(score.toFixed(1)),
     totalFlights,
     cancellations,
+    cancellationsLikely,
+    likelyCanceledSeenFlying,
     delayed30,
     delayed60,
     diversions,
@@ -291,17 +317,41 @@ export function getStartOfDayForHub(hub: string): number {
   return getStartOfHubDay(hub, defaultSchedDayOffset(hub));
 }
 
+/**
+ * The seen-airborne override (src/lib/reg-overlay.js) over every hub's departures board, so a
+ * "Likely Canceled" flight the live feed saw fly is never scored as a cancellation. /api/schedule
+ * already overlays the boards it serves, but this copy can be up to an hour old on the CDN and the
+ * per-hub fallback older still; re-applying with this instance's sightings is idempotent.
+ * Non-mutating: hubCache keeps the boards exactly as /api/schedule served them.
+ */
+export function overlayHubBoards(
+  flightsByHub: Record<string, any[]>,
+  sightings: Map<string, SightingRecord>,
+  nowMs: number = Date.now(),
+): Record<string, any[]> {
+  const out: Record<string, any[]> = {};
+  for (const [hub, flights] of Object.entries(flightsByHub)) {
+    out[hub] = Array.isArray(flights)
+      ? applySightingsToBoard({ dir: 'departures', hub, flights }, sightings, nowMs, { dir: 'departures' }).flights
+      : flights;
+  }
+  return out;
+}
+
 async function buildIropsData() {
   const flightsByHub: Record<string, any[]> = {};
   const generatedAtByHub: Record<string, number | null> = {};
 
-  // Fetch all hubs in parallel via the internal schedule API (cached by cron)
+  // Fetch all hubs in parallel via the internal schedule API (cached by cron), and the reg
+  // sightings beside them (bounded; never throws — an empty map just means no override).
+  const sightingsPromise = awaitRegSightings(5000);
   const results = await Promise.allSettled(
     HUBS.map(async (hub) => {
       const board = await fetchHubFromScheduleAPI(hub, getStartOfDayForHub(hub));
       return { hub, ...board };
     })
   );
+  const sightings = await sightingsPromise;
 
   const useHubCache = (hub: string) => {
     flightsByHub[hub] = hubCache[hub].flights;
@@ -335,7 +385,7 @@ async function buildIropsData() {
     }
   }
 
-  return computeMetrics(flightsByHub, Math.floor(Date.now() / 1000), generatedAtByHub);
+  return computeMetrics(overlayHubBoards(flightsByHub, sightings), Math.floor(Date.now() / 1000), generatedAtByHub);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

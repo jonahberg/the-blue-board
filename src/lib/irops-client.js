@@ -36,16 +36,22 @@ export function collectTodayDepartureRows(boardsByKey) {
  * Count the IROPS inputs across the collected rows.
  *
  * "Likely Canceled" (`canceled_uncertain`) groups with cancellations — a flight the
- * provider suspects is cancelled is a disruption whether or not it is later confirmed.
+ * provider suspects is cancelled is a disruption whether or not it is later confirmed —
+ * and is also counted on its own (`cancellationsLikely`) so the Delays tab can say how many
+ * are unconfirmed, the same split /api/irops reports. A Likely Canceled row the live feed
+ * saw fly arrives already rewritten to departed (src/lib/reg-overlay.js) and counts as neither;
+ * `likelyCanceledSeenFlying` says how many of those there were (also as /api/irops does).
  * `delayed30` stays CUMULATIVE (it includes the >60m rows) so the bar's ">30m" figure
  * remains truthful; `iropsScore()` derives the exclusive 30–60 bucket itself.
  *
  * @param {Array<{fl: Object, dir: string, key: string}>} rows
  * @param {{classify: (fl: Object, dir: string, key: string) => {key: string}}} deps
- * @returns {{cancellations: number, delayed30: number, delayed60: number, diversions: number, total: number}}
+ * @returns {{cancellations: number, cancellationsLikely: number, likelyCanceledSeenFlying: number, delayed30: number, delayed60: number, diversions: number, total: number}}
  */
 export function countIropsFromRows(rows, { classify }) {
   let cancellations = 0;
+  let cancellationsLikely = 0;
+  let likelyCanceledSeenFlying = 0;
   let delayed30 = 0;
   let delayed60 = 0;
   let diversions = 0;
@@ -56,6 +62,8 @@ export function countIropsFromRows(rows, { classify }) {
     // timestamp, so a hardcoded 'departures' would miscount an arrivals board's rows.
     const status = classify(fl, dir, key) || {};
     if (status.key === 'canceled' || status.key === 'canceled_uncertain') cancellations += 1;
+    if (status.key === 'canceled_uncertain') cancellationsLikely += 1;
+    if (fl?._source?.seenAirborne) likelyCanceledSeenFlying += 1;
     if (status.key === 'diverted') diversions += 1;
 
     const schedT = fl?.time?.scheduled?.departure || fl?.time?.scheduled?.arrival || 0;
@@ -72,7 +80,7 @@ export function countIropsFromRows(rows, { classify }) {
     }
   }
 
-  return { cancellations, delayed30, delayed60, diversions, total: list.length };
+  return { cancellations, cancellationsLikely, likelyCanceledSeenFlying, delayed30, delayed60, diversions, total: list.length };
 }
 
 /**

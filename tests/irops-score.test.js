@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { iropsScore, iropsScoreCls, iropsScoreLabel, iropsRateFloor, iropsHubRates } from '../src/lib/irops-score.js';
+import {
+  iropsScore, iropsScoreCls, iropsScoreLabel, iropsRateFloor, iropsHubRates,
+  IROPS_MINOR_AT, IROPS_SIGNIFICANT_AT, IROPS_BANDS_TEXT,
+} from '../src/lib/irops-score.js';
 
 describe('iropsScore (F017 weighting)', () => {
   it('returns 0 with no flights (never divides by zero)', () => {
@@ -31,24 +34,48 @@ describe('iropsScore (F017 weighting)', () => {
 });
 
 describe('iropsScoreLabel / iropsScoreCls thresholds', () => {
-  it('labels at the <5 and <15 boundaries', () => {
-    expect(iropsScoreLabel(4.9)).toBe('NORMAL OPERATIONS');
-    expect(iropsScoreLabel(5)).toBe('MINOR DISRUPTION');
-    expect(iropsScoreLabel(14.9)).toBe('MINOR DISRUPTION');
-    expect(iropsScoreLabel(15)).toBe('SIGNIFICANT DISRUPTION');
+  // v1.12.0 (Oct 3 2026): the bands moved from <5 / <15 to <20 / <40. Measured full-day scores,
+  // Likely Canceled flights seen flying removed: Sat Oct 3 (calm) ≈ 18, Wed Sep 30 (66% D15) ≈ 23–27,
+  // Fri Oct 2 (57%) ≈ 32–35, Thu Oct 1 (46%) ≈ 34–38 — all four read SIGNIFICANT under the old bands.
+  // The Jul 3 2026 meltdown (151 cancellations, 17 ground stops) scored 56.7.
+  it('pins the band constants', () => {
+    expect(IROPS_MINOR_AT).toBe(20);
+    expect(IROPS_SIGNIFICANT_AT).toBe(40);
   });
 
-  it('classes at the <5 and <15 boundaries', () => {
-    expect(iropsScoreCls(4.9)).toBe('low');
-    expect(iropsScoreCls(5)).toBe('med');
-    expect(iropsScoreCls(15)).toBe('high');
+  it('labels at the 20 and 40 boundaries', () => {
+    expect(iropsScoreLabel(0)).toBe('NORMAL OPERATIONS');
+    expect(iropsScoreLabel(19.9)).toBe('NORMAL OPERATIONS');
+    expect(iropsScoreLabel(20)).toBe('MINOR DISRUPTION');
+    expect(iropsScoreLabel(39.9)).toBe('MINOR DISRUPTION');
+    expect(iropsScoreLabel(40)).toBe('SIGNIFICANT DISRUPTION');
+    expect(iropsScoreLabel(56.7)).toBe('SIGNIFICANT DISRUPTION'); // Jul 3 2026
+  });
+
+  it('classes at the 20 and 40 boundaries', () => {
+    expect(iropsScoreCls(19.9)).toBe('low');
+    expect(iropsScoreCls(20)).toBe('med');
+    expect(iropsScoreCls(39.9)).toBe('med');
+    expect(iropsScoreCls(40)).toBe('high');
+  });
+
+  it('a calm Saturday (≈18) is normal; the old SIGNIFICANT floor (15) is no longer disruption', () => {
+    expect(iropsScoreLabel(18)).toBe('NORMAL OPERATIONS');
+    expect(iropsScoreCls(15)).toBe('low');
+    expect(iropsScoreLabel(35.3)).toBe('MINOR DISRUPTION'); // the Sep 26 audit's "SIGNIFICANT" reading
   });
 
   it('coerces the stringified toFixed score correctly', () => {
-    const s = iropsScore({ cancellations: 2, total: 100 }); // "6.0" (string)
+    const s = iropsScore({ cancellations: 8, total: 100 }); // "24.0" (string)
     expect(typeof s).toBe('string');
     expect(iropsScoreLabel(s)).toBe('MINOR DISRUPTION');
     expect(iropsScoreCls(s)).toBe('med');
+    expect(iropsScoreCls('19.9')).toBe('low');
+    expect(iropsScoreCls('40.0')).toBe('high');
+  });
+
+  it('states the bands in words for the tooltips, from the same constants', () => {
+    expect(IROPS_BANDS_TEXT).toBe('Normal under 20 · Minor 20–40 · Significant 40+');
   });
 });
 

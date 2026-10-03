@@ -1791,7 +1791,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Phase 2: reg-sightings merge, same non-blocking peek+kick contract as the FAA
     // disruption context above — a cold cache means "no merge this serve", never a wait.
     // applySightingsToBoard NEVER mutates its input (cache entries are shared objects);
-    // wrapping here covers every 200 path: hot cache, stale, degraded, snapshot, fresh.
+    // wrapping here covers every 200 path: hot cache, stale, degraded, snapshot, fresh (and the
+    // catch path below). v1.12.0: it also carries the seen-airborne override — a "Likely Canceled"
+    // row the live feed saw fly this leg is served as departed (src/lib/reg-overlay.js). That is
+    // serve-time only: caches and snapshots keep the provider's row, so a later sighting still
+    // applies and nothing stale is persisted.
     const sightingsRefresh = kickRegSightingsRefresh();
     if (sightingsRefresh) enqueueBackgroundTask(sightingsRefresh);
     //
@@ -1803,7 +1807,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const withDisruption = (payload: any) => {
       const board = sanitizeServedBoard(payload, Math.floor(Date.now() / 1000));
       return {
-        ...applySightingsToBoard(board, peekRegSightings(), Date.now()),
+        ...applySightingsToBoard(board, peekRegSightings(), Date.now(), { dir: dir as 'departures' | 'arrivals' }),
         meta: {
           ...(board?.meta || {}),
           hubDisruptionMinutes: peekHubDisruptionMinutes(hub),
@@ -2002,14 +2006,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (persistentFallback) {
         // Error-path serve: still attach the disruption context — peeked synchronously (cached
         // value or 0, never fetches, never throws), same non-blocking contract as the main path.
-        const hubFromKey = /^agg:([A-Z]{3,4}):/.exec(aggKey)?.[1] || '';
+        const keyMatch = /^agg:([A-Z]{3,4}):(departures|arrivals):/.exec(aggKey);
+        const hubFromKey = keyMatch?.[1] || '';
         const hubDisruptionMinutes = hubFromKey ? peekHubDisruptionMinutes(hubFromKey) : 0;
         const degraded = sanitizeServedBoard(
           buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope),
           Math.floor(Date.now() / 1000),
         );
+        // Same sightings overlay as every other 200 (peek is synchronous and never throws), so the
+        // error path cannot serve a seen-flying flight as Likely Canceled.
+        const overlaid = applySightingsToBoard(degraded, peekRegSightings(), Date.now(), {
+          dir: keyMatch?.[2] as 'departures' | 'arrivals' | undefined,
+        });
         res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
-        return res.status(200).json({ ...degraded, meta: { ...degraded.meta, hubDisruptionMinutes } });
+        return res.status(200).json({ ...overlaid, meta: { ...degraded.meta, hubDisruptionMinutes } });
       }
     }
     return res.status(502).json({ error: 'Upstream service unavailable' });

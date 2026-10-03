@@ -14,7 +14,7 @@ vi.mock('../api/_supabase.js', () => ({
 import {
   recordFeedSightings, peekRegSightings, kickRegSightingsRefresh,
   peekRegSightingsLoadedAt, shouldWriteSightings, __resetRegSightingsForTests,
-  isRegSightingsConfigured, REG_SIGHTINGS_WRITE_MIN_INTERVAL_MS,
+  isRegSightingsConfigured, REG_SIGHTINGS_WRITE_MIN_INTERVAL_MS, awaitRegSightings,
 } from '../api/_reg-sightings.js';
 
 const FLIGHTS = [{ flightIATA: 'UA123', callsign: 'UAL123', reg: 'N12345', origin: 'ORD', dest: 'SFO' }];
@@ -103,5 +103,36 @@ describe('peek + kick', () => {
     await kickRegSightingsRefresh();
     expect(peekRegSightings().size).toBe(0);
     expect(kickRegSightingsRefresh()).toBeNull();
+  });
+});
+
+// v1.12.0: /api/irops and the flight-times snapshot tier score/alert on what they read, so a cold
+// cache must not silently mean "nobody was seen flying".
+describe('awaitRegSightings', () => {
+  it('waits for a cold load and returns it', async () => {
+    gtMock.mockResolvedValueOnce({
+      data: [{ flight_key: 'UA1094', reg: 'N12345', origin: 'ORD', dest: 'DEN', seen_at: new Date(5e12).toISOString() }],
+      error: null,
+    });
+    const map = await awaitRegSightings(1000);
+    expect(map.get('UA1094')).toEqual({ reg: 'N12345', origin: 'ORD', dest: 'DEN', seenAtMs: 5e12 });
+    expect(gtMock).toHaveBeenCalledTimes(1);
+    // Warm: no second query inside the cache TTL.
+    expect((await awaitRegSightings(1000)).size).toBe(1);
+    expect(gtMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after the timeout with whatever the cache holds (never hangs the caller)', async () => {
+    gtMock.mockImplementationOnce(() => new Promise(() => {})); // Supabase never answers
+    const started = Date.now();
+    const map = await awaitRegSightings(30);
+    expect(map.size).toBe(0);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('is an empty map without Supabase configured', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
+    expect((await awaitRegSightings(10)).size).toBe(0);
+    expect(gtMock).not.toHaveBeenCalled();
   });
 });

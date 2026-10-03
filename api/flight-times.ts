@@ -29,6 +29,8 @@ import { loadScheduleSnapshot } from './_schedule-snapshots.js';
 import { UNITED_HUBS } from './_hubs.js';
 import { getStartOfHubDay, getHubLocalDate } from '../src/lib/hubTz.js';
 import { sanitizeBoardFlights } from '../src/lib/schedule-actuals.js';
+import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
+import { awaitRegSightings, type SightingRecord } from './_reg-sightings.js';
 
 // ═══ Registration + date-aware candidate ranking (F001, F005/F013) ═══
 
@@ -317,6 +319,7 @@ async function collectScheduleLegs(
   dateParam: string,
   origin = '',
   nowSec = Math.floor(Date.now() / 1000),
+  sightings: Map<string, SightingRecord> = new Map(),
 ): Promise<ScheduleLeg[]> {
   const reads: Promise<{ rows: any[]; dir: 'departures' | 'arrivals'; off: number }>[] = [];
   for (const off of offsets) {
@@ -333,12 +336,24 @@ async function collectScheduleLegs(
           // pass never sees them, and the watch-alerts cron reads them through here. A real time
           // still in the future is not an arrival, and a date-shifted earlier leg is not this
           // flight: either one would push a false "Landed".
-          rows: sanitizeBoardFlights(
-            (Array.isArray(snapshot?.data?.flights) ? snapshot.data.flights : []).filter(
-              (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
-                && (!origin || String(f?.airport?.origin?.code?.iata || '').toUpperCase() === origin)
-            ),
-            nowSec,
+          //
+          // v1.12.0: the same seen-airborne override /api/schedule serves with. A "Likely Canceled"
+          // row the live feed saw fly reads departed here too — the watch cron resolves flights
+          // through this tier, and an unconfirmed cancellation must never become a push.
+          rows: applySightingsToBoard(
+            {
+              dir,
+              flights: sanitizeBoardFlights(
+                (Array.isArray(snapshot?.data?.flights) ? snapshot.data.flights : []).filter(
+                  (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
+                    && (!origin || String(f?.airport?.origin?.code?.iata || '').toUpperCase() === origin)
+                ),
+                nowSec,
+              ).flights as any[],
+            },
+            sightings,
+            nowSec * 1000,
+            { dir },
           ).flights as any[],
         })));
       }
@@ -415,20 +430,22 @@ async function fetchScheduleCacheTimes(flight: string, dateParam = '', origin = 
   const flightNum = flight.replace('UAL', 'UA');
   const nowSec = Math.floor(Date.now() / 1000);
   try {
+    // Waited for (bounded): a cold lambda must not resolve a seen-flying flight as Likely Canceled.
+    const sightings = await awaitRegSightings(2000);
     let legs: ScheduleLeg[];
     if (dateParam) {
       // F005/F013: each hub reads only the offset whose hub-local date is the one asked for.
-      legs = await collectScheduleLegs(flightNum, [0, 1, -1], dateParam, origin, nowSec);
+      legs = await collectScheduleLegs(flightNum, [0, 1, -1], dateParam, origin, nowSec, sightings);
     } else {
       // Today's boards, both directions: the destination hub's arrivals board carries a leg that
       // left the origin hub "yesterday" (a red-eye past midnight).
-      legs = await collectScheduleLegs(flightNum, [0], '', origin, nowSec);
+      legs = await collectScheduleLegs(flightNum, [0], '', origin, nowSec, sightings);
       let best = pickScheduleLeg(legs, nowSec);
       let phase = best ? scheduleLegPhase(best.row, nowSec).phase : null;
       // Only an upcoming leg (or nothing) is left today: yesterday's board may still hold the one
       // in the air — a red-eye out of a hub to a non-hub never appears on today's boards.
       if (!best || phase === 'upcoming' || phase === 'landed') {
-        legs = legs.concat(await collectScheduleLegs(flightNum, [-1], '', origin, nowSec));
+        legs = legs.concat(await collectScheduleLegs(flightNum, [-1], '', origin, nowSec, sightings));
         best = pickScheduleLeg(legs, nowSec);
         phase = best ? scheduleLegPhase(best.row, nowSec).phase : null;
       }
@@ -437,7 +454,7 @@ async function fetchScheduleCacheTimes(flight: string, dateParam = '', origin = 
       // "scheduled" a couple of hours after landing would make the watch cron push a spurious
       // landed→scheduled alert (api/_watch-diff.ts treats any phase change as significant).
       if (!legs.some((leg) => leg.off === 0) && (!best || phase === 'landed')) {
-        legs = legs.concat(await collectScheduleLegs(flightNum, [1], '', origin, nowSec));
+        legs = legs.concat(await collectScheduleLegs(flightNum, [1], '', origin, nowSec, sightings));
       }
     }
     const best = pickScheduleLeg(legs, nowSec);

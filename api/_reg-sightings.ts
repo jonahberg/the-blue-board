@@ -100,6 +100,30 @@ export function kickRegSightingsRefresh(): Promise<Map<string, SightingRecord>> 
   return sightingsInFlight;
 }
 
+/**
+ * For callers that already await I/O and score or alert on what they read — /api/irops and the
+ * /api/flight-times snapshot tier (the watch-alerts cron's path) — a cold cache must not mean "no
+ * sightings": on a fresh lambda that would count every seen-flying Likely Canceled as a
+ * cancellation. Waits for the refresh up to `timeoutMs`, then returns whatever the cache holds.
+ * Never throws; an unconfigured or failing Supabase yields an empty map, as peekRegSightings does.
+ * /api/schedule keeps the non-blocking peek+kick contract: a board serve never waits on this.
+ */
+export async function awaitRegSightings(timeoutMs = 2500): Promise<Map<string, SightingRecord>> {
+  const refresh = kickRegSightingsRefresh();
+  if (refresh) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => { timer = setTimeout(resolve, timeoutMs); });
+    try {
+      await Promise.race([refresh, timeout]);
+    } catch {
+      /* fetchSightingsMap never rejects; belt and braces */
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  return peekRegSightings();
+}
+
 export function __resetRegSightingsForTests(): void {
   sightingsCache = null;
   sightingsInFlight = null;

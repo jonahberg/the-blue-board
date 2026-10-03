@@ -201,10 +201,12 @@ describe('networkLabel', () => {
   });
 
   it('is never Smooth Ops while the IROPS index says disruption (audit Sep 26: 85% vs IROPS 35.3)', () => {
+    // v1.12.0 bands (<20 / <40): the audit's 35.3 is now MINOR, so the chip reads Some Delays —
+    // still never Smooth Ops beside a disruption badge.
     const readings = [94, 85, 74, 83, 90, 76, 91];
-    expect(networkLabel(readings, { iropsScore: 35.3 })).toMatchObject({ avg: 85, label: 'Disrupted', severity: 'red' });
-    expect(networkLabel(readings, { iropsScore: 8 })).toMatchObject({ label: 'Some Delays', severity: 'amber' });
-    expect(networkLabel(readings, { iropsScore: 3 })).toMatchObject({ label: 'Smooth Ops', severity: 'green' });
+    expect(networkLabel(readings, { iropsScore: 45 })).toMatchObject({ avg: 85, label: 'Disrupted', severity: 'red' });
+    expect(networkLabel(readings, { iropsScore: 35.3 })).toMatchObject({ label: 'Some Delays', severity: 'amber' });
+    expect(networkLabel(readings, { iropsScore: 18 })).toMatchObject({ label: 'Smooth Ops', severity: 'green' });
   });
 
   it('is never Smooth Ops while a hub has an FAA program', () => {

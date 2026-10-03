@@ -516,7 +516,14 @@ export const ScheduleTable = forwardRef<
                         LIVE
                       </Badge>
                     ) : null}
-                    {row.status.presumed ? (
+                    {row.status.seen ? (
+                      <span
+                        className="block text-[9px] text-muted-foreground"
+                        title="The schedule provider listed this flight as Likely Canceled, but the live flight feed saw it airborne"
+                      >
+                        seen airborne
+                      </span>
+                    ) : row.status.presumed ? (
                       <span
                         className="block text-[9px] text-muted-foreground"
                         title="Presumed — the scheduled time passed without a live update"

@@ -87,6 +87,8 @@ export type StatusModel = {
   presumed: boolean;
   asOf: boolean;
   live: boolean;
+  /** Provider said Likely Canceled; the live feed saw it fly (v1.12.0). */
+  seen?: boolean;
 };
 
 export type SwapModel = {
@@ -263,7 +265,9 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
         });
       }
       if (sightings.size) {
-        const out = applySightingsToBoard({ flights: rows }, sightings, Date.now()) as {
+        // `dir` lets the seen-airborne override run here too (v1.12.0): a Likely Canceled flight
+        // this browser's feed has in the air flips to Departed · LIVE without waiting for the CDN.
+        const out = applySightingsToBoard({ flights: rows }, sightings, Date.now(), { dir }) as {
           flights: ScheduleRow[];
         };
         boardRows = out.flights;

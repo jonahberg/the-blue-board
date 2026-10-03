@@ -49,7 +49,7 @@ describe('countIropsFromRows', () => {
   it('counts a clean board as nothing but a denominator', () => {
     const rows = collectTodayDepartureRows({ 'ORD-departures-0': [row(NOON, NOON), row(NOON, NOON)] });
     expect(countIropsFromRows(rows, { classify: classifyAs('departed') })).toEqual({
-      cancellations: 0, delayed30: 0, delayed60: 0, diversions: 0, total: 2,
+      cancellations: 0, cancellationsLikely: 0, likelyCanceledSeenFlying: 0, delayed30: 0, delayed60: 0, diversions: 0, total: 2,
     });
   });
 
@@ -59,6 +59,7 @@ describe('countIropsFromRows', () => {
     let i = 0;
     const counts = countIropsFromRows(rows, { classify: () => ({ key: seq[i++] }) });
     expect(counts.cancellations).toBe(2);
+    expect(counts.cancellationsLikely).toBe(1); // v1.12.0: the unconfirmed one is also reported on its own
   });
 
   it('counts diversions separately', () => {
@@ -104,7 +105,7 @@ describe('countIropsFromRows', () => {
       [{ fl: {}, dir: 'departures', key: 'ORD-departures-0' }],
       { classify: () => undefined },
     );
-    expect(counts).toEqual({ cancellations: 0, delayed30: 0, delayed60: 0, diversions: 0, total: 1 });
+    expect(counts).toEqual({ cancellations: 0, cancellationsLikely: 0, likelyCanceledSeenFlying: 0, delayed30: 0, delayed60: 0, diversions: 0, total: 1 });
     expect(countIropsFromRows(null, { classify: classifyAs('departed') }).total).toBe(0);
   });
 });
