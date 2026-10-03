@@ -78,11 +78,21 @@ def render(label_top, label_main, label_sub, out_path):
     draw.rectangle([0, band_top, W, H], fill=BG_TINT)
     draw.line([0, band_top, W, band_top], fill=AMBER, width=4)
 
-    font_label = load_font(FONT_CANDIDATES_BOLD, 22)
-    font_main = load_font(FONT_CANDIDATES_BOLD, 54)
-    font_sub = load_font(FONT_CANDIDATES_REG, 26)
-
     pad_x = 60
+    font_label = load_font(FONT_CANDIDATES_BOLD, 22)
+    # Long titles ("What's United Building at Your Hub?") ran off the right edge at 54px:
+    # step the size down until each line fits inside the side padding.
+    main_size = 54
+    font_main = load_font(FONT_CANDIDATES_BOLD, main_size)
+    while main_size > 34 and draw.textlength(label_main, font=font_main) > W - 2 * pad_x:
+        main_size -= 2
+        font_main = load_font(FONT_CANDIDATES_BOLD, main_size)
+    sub_size = 26
+    font_sub = load_font(FONT_CANDIDATES_REG, sub_size)
+    while sub_size > 18 and draw.textlength(label_sub, font=font_sub) > W - 2 * pad_x:
+        sub_size -= 1
+        font_sub = load_font(FONT_CANDIDATES_REG, sub_size)
+
     y = band_top + 28
     draw.text((pad_x, y), label_top, font=font_label, fill=AMBER)
     y += 40

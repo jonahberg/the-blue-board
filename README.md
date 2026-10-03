@@ -4,7 +4,7 @@
 
 **[→ Live Dashboard](https://theblueboard.co)** · **[📋 Changelog](CHANGELOG.md)** · **[🎨 Design System](DESIGN.md)** · **[☕ Support the Project](https://buymeacoffee.com/notjbg)** · **[💡 Suggest a Feature](https://github.com/jonahberg/the-blue-board/issues)** · **[𝕏 Follow @theblueboard](https://x.com/theblueboard)**
 
-![The Blue Board — Live Operations Map](public/og-image.png)
+![The Blue Board — Live Ops: every United flight in the air, with on-time performance for every hub](docs/screenshots/live-ops.jpg)
 
 <!-- This is a static Markdown file and cannot import the data modules.
      Hub-count language and the fleet database count below must be kept in sync
@@ -21,6 +21,13 @@ The Blue Board is a fan-built operations dashboard that lets you see United Airl
 
 **Not affiliated with United Airlines, Inc.** This is an independent project by an aviation enthusiast.
 
+| | |
+|---|---|
+| ![Departure board for Chicago O'Hare with tail numbers, seat configs, Wi-Fi and LIVE tags](docs/screenshots/departure-board.jpg) | ![Starlink rollout: aircraft equipped and month-by-month installation pace](docs/screenshots/starlink.jpg) |
+| **Schedule** — every hub's departures and arrivals, with tail, seat config and Wi-Fi | **Starlink** — the rollout tracked tail by tail |
+| ![What's Changing at United's Hubs? tracker](docs/screenshots/hub-tracker.jpg) | ![The Blue Board on a phone](docs/screenshots/mobile.jpg) |
+| **Trackers** — every new club, gate and concourse at United's hubs | **Mobile** — built for the phone in your hand at the gate |
+
 ---
 
 ## Features
@@ -35,10 +42,10 @@ Server-side disruption scoring across all 8 United hubs plus the Tokyo-Narita ga
 Departure and arrival boards for all 9 UA hubs (ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, GUM). Filter by status or aircraft type. Equipment swap detection flags when a plane type changes. On-time performance stats. All times in airport-local timezone.
 
 ### ✈️ [Fleet](https://theblueboard.co#fleet)
-Complete database of 1,078+ mainline aircraft — searchable and sortable by type, registration, seat config, WiFi, and IFE. Live fleet status correlates airborne flights with the database, and a delivery timeline charts the fleet by family. **19 dedicated fleet type pages** ([737 MAX 9](https://theblueboard.co/fleet/737-max-9), [A321neo](https://theblueboard.co/fleet/a321neo), [787-9](https://theblueboard.co/fleet/787-9-dreamliner), etc.) with full aircraft registries, structured data, and cross-type navigation.
+Database of 1,139 mainline aircraft (snapshot as of Sep 28, 2026) — searchable and sortable by type, registration, seat config, WiFi, and IFE. Live fleet status correlates airborne flights with the database, and a delivery timeline charts the fleet by family. **19 dedicated fleet type pages** ([737 MAX 9](https://theblueboard.co/fleet/737-max-9), [A321neo](https://theblueboard.co/fleet/a321neo), [787-9](https://theblueboard.co/fleet/787-9-dreamliner), etc.) with full aircraft registries, structured data, and cross-type navigation.
 
 ### 🛰️ [Starlink](https://theblueboard.co#starlink)
-Its own tab since the rebuild. The full roster of Starlink-equipped aircraft (500+ and climbing toward United's ~1,000 target) with sortable columns and filters by fleet, type, and operator, a retrofit-pace chart with a completion projection, and a mismatch report that flags aircraft the upstream tracker and the fleet database disagree about.
+Its own tab since the rebuild. The full roster of Starlink-equipped aircraft (600+ and climbing toward United's ~1,000 end-of-2026 target) with sortable columns and filters by fleet, type, and operator, a retrofit-pace chart with a completion projection, and a mismatch report that flags aircraft the upstream tracker and the fleet database disagree about.
 
 ### 🎫 [My Flights](https://theblueboard.co#myflight)
 Save the flights you actually care about. Add one by number, see its live position, route, aircraft and times, and pin it to the watch list for browser push notifications on status changes — including background alerts that fire with the tab closed ([setup](docs/setup-push-alerts.md)). Stored on your device; nothing is sent to a server you didn't ask for.
@@ -99,8 +106,8 @@ Living, data-driven pages that follow aviation's long-running stories — each w
     ┌──────────▼──────────────────────────────┐
     │        Vercel Serverless Functions       │
     │                                          │
-    │  /api/schedule        — hub boards (FR24 │
-    │                         + AeroDataBox)   │
+    │  /api/schedule        — hub boards       │
+    │                         (AeroDataBox)    │
     │  /api/irops           — IROPS metrics    │
     │  /api/fr24-feed       — live flight feed │
     │  /api/fr24-flight     — flight lookup    │
@@ -121,7 +128,7 @@ Living, data-driven pages that follow aviation's long-running stories — each w
     │  /api/fr24-usage      — credit monitor   │
     │                                          │
     │  Cron jobs (vercel.json):                │
-    │  /api/cron/warm-schedules  — hourly      │
+    │  /api/cron/warm-schedules  — every 30min │
     │  /api/cron/sync-starlink   — every 4hrs  │
     │  /api/cron/refresh-metar   — every 5min  │
     │  /api/cron/watch-alerts    — every 5min  │
@@ -130,7 +137,9 @@ Living, data-driven pages that follow aviation's long-running stories — each w
     ┌──────────▼──────────────────────────────┐
     │           Supabase (Postgres)            │
     │  waitlist · schedule_snapshots           │
-    │  news_notifications · push_subscriptions │
+    │  reg_sightings · watch_subscriptions     │
+    │  schedule_provider_spend                 │
+    │  news_notifications · starlink_snapshot  │
     │  RLS policies on every table             │
     └─────────────────────────────────────────┘
 ```
@@ -143,7 +152,7 @@ asset prefix.
 ### Why Server-Side Proxies?
 
 - **Rate limiting** — One server fetches data for all users, not 500 browsers hammering APIs independently
-- **Caching** — Complete schedule boards cached up to 6h at the edge (60s when partial), IROPS cached 5min, reducing upstream load by 90%+
+- **Caching** — Schedule boards are served from the edge cache and Supabase snapshots and refreshed through the day (hourly while people are viewing them), IROPS cached 5min, reducing upstream load by 90%+
 - **UA filtering** — Server filters to United flights only, shrinking payloads dramatically
 - **CORS** — Some sources (AWC, FAA) don't allow direct browser requests
 - **Batching** — METAR data for all 9 tracked boards (United's 8 hubs plus the Tokyo-Narita gateway) fetched in a single request
@@ -154,16 +163,16 @@ asset prefix.
 
 | Source | Data | Freshness | Notes |
 |--------|------|-----------|-------|
-| [Flightradar24](https://flightradar24.com) | Live positions, schedules, flight lookup | ~15s–60s | Server-side proxy with caching; schedules can recover through a configured FR24 scraper transport when direct fetches are blocked |
-| [AeroDataBox](https://aerodatabox.com) | Hub schedule boards (refresh + fallback) | Hourly warm + on-demand | Metered api.market (MagicAPI) gateway (RapidAPI-compatible); spend capped by a cross-instance daily unit budget |
+| [Flightradar24](https://flightradar24.com) | Live positions, flight lookup, aircraft history | ~15s–60s | Official FR24 API, server-side proxy with caching |
+| [AeroDataBox](https://aerodatabox.com) | Hub schedule boards | Every 30 min + on-demand | Metered api.market (MagicAPI) gateway (RapidAPI-compatible); spend capped by a cross-instance daily unit budget |
 | [Aviation Weather Center](https://aviationweather.gov) | METAR observations | ~5min | NOAA/CORS proxy, batched |
 | [FAA NAS Status](https://nasstatus.faa.gov) | Delays & ground stops | ~5min | XML→JSON proxy |
-| [United Fleet Site](https://unitedfleetsite.com/) | Fleet database | Daily | Community-maintained |
-| [Starlink Tracker](https://unitedstarlinktracker.com) | WiFi-equipped aircraft | Daily | [@martinamps](https://github.com/martinamps/ua-starlink-tracker) |
+| [United Fleet Site](https://unitedfleetsite.com/) | Fleet database | Periodic snapshot (Sep 28, 2026) | Community-maintained; new tails confirmed in the FAA registry |
+| [Starlink Tracker](https://unitedstarlinktracker.com) | WiFi-equipped aircraft | Every 4 hours | [@martinamps](https://github.com/martinamps/ua-starlink-tracker) |
 | [Iowa State NEXRAD](https://mesonet.agron.iastate.edu) | Radar imagery | ~5min | Direct tile server |
-| [Supabase](https://supabase.com) | Waitlist, schedule snapshots, notifications | Real-time | Postgres with RLS |
-| [Anthropic Claude](https://anthropic.com) | AI delay explanations | On-demand | Haiku model, cached 5min |
-| [Resend](https://resend.com) | Email delivery | On-demand | Welcome emails, news digests |
+| [Supabase](https://supabase.com) | Waitlist, schedule snapshots, tail sightings, watch alerts | Real-time | Postgres with RLS |
+| [Anthropic Claude](https://anthropic.com) | AI delay explanations | On-demand | Claude Haiku 4.5 via Vercel AI Gateway, cached 5min |
+| [Resend](https://resend.com) | Email delivery | On-demand | Welcome emails, update emails |
 
 ---
 
@@ -177,8 +186,8 @@ asset prefix.
 - **Radar:** Iowa State NEXRAD WMS tiles
 - **Fonts:** [Geist Sans + Geist Mono](https://vercel.com/font) via `@fontsource-variable`, bundled into `_astro/` — no font CDN
 - **Hosting:** [Vercel](https://vercel.com) (serverless functions + edge CDN + routing middleware)
-- **Database:** [Supabase](https://supabase.com) (waitlist, schedule snapshots, news notifications, push subscriptions)
-- **Email:** [Resend](https://resend.com) (waitlist welcome emails, news digest broadcasts)
+- **Database:** [Supabase](https://supabase.com) (waitlist, schedule snapshots, tail sightings, watch subscriptions, provider spend)
+- **Email:** [Resend](https://resend.com) (waitlist welcome emails, update broadcasts)
 - **AI:** [Anthropic Claude](https://anthropic.com) via the Vercel AI Gateway (delay explanations)
 - **Runtime:** [Bun](https://bun.sh) (package manager + script runner)
 - **Testing:** [Vitest](https://vitest.dev) + [Playwright](https://playwright.dev) (`bun run test`, never bare `bun test`)
@@ -247,9 +256,9 @@ This project is free, ad-free, and open source. It costs real money to keep runn
 
 If The Blue Board has saved you a trip to the gate screen or helped you spot an equipment swap before boarding, consider supporting the project:
 
-### **[→ Donate](https://buymeacoffee.com/notjbg)**
+### **[→ Buy the board a Wi-Fi pass](https://buymeacoffee.com/notjbg)** · **[→ Become a member](https://buymeacoffee.com/notjbg/membership)**
 
-Every donation helps cover server costs and keeps the dashboard free for everyone. You can also suggest a feature with your coffee — I read every one.
+Every supporter goes on the **Supporters Wall** (About, on the dashboard). Memberships start at $3/month: Crew Members get their name on the wall, First Class members also get *The Ops Brief* — a monthly behind-the-scenes note — and Captain's Circle feature requests go to the front of the line. You can also suggest a feature with your support — I read every one.
 
 ---
 

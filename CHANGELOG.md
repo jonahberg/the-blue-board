@@ -4,6 +4,12 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.8] - 2026-10-03
+
+### Changed
+- **Social preview images show the current site.** `public/og-image.png` (the card for every shared theblueboard.co link) still showed the pre-v1.8.0 dashboard — emoji tabs, "Fleet: 1078". It's now today's Live Ops view, and all 15 section/hub/tracker cards in `public/og/` are regenerated from it with `scripts/generate-og.py`, which now shrinks a title that would run off the card ("What's United Building at Your Hub?" lost its "?").
+- **README refreshed:** new screenshots (`docs/screenshots/`), fleet count 1,078 → 1,139 (Sep 28 snapshot), Starlink 500+ → 600+, schedule boards credited to AeroDataBox (not Flightradar24, matching the site's own attribution), cron and cache timings brought up to date (warm every 30 min, Starlink every 4h, no more "6h edge cache"), Supabase tables listed as they are, and the support section names the Supporters Wall and membership tiers.
+
 ## [1.11.7] - 2026-10-03
 
 ### Added
