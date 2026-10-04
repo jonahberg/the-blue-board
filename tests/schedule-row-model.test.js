@@ -237,6 +237,72 @@ describe('fleetCell', () => {
     expect(fleetCell('N00000', fleetByReg, starlink)).toBeNull();
     expect(fleetCell('', fleetByReg, starlink)).toBeNull();
   });
+
+  describe('with the United Express fleet (4th argument)', () => {
+    // buildExpressFleet() entries, as indexExpressFleet() keys them.
+    const expressByReg = {
+      N85377: { r: 'N85377', t: 'E175', o: 'SkyWest Airlines', oc: 'SKW', w: '', c: '', x: true },
+      N140SY: { r: 'N140SY', t: 'E175', o: 'SkyWest Airlines', oc: 'SKW', w: 'Starlink', c: '', x: true },
+      N14148: { r: 'N14148', t: '', o: 'CommutAir', oc: 'UCA', w: '', c: '', x: true },
+      N504GJ: { r: 'N504GJ', t: 'CRJ550', o: 'GoJet Airlines', oc: 'GJS', w: '', c: '10F/20E+/20Y', x: true },
+      N946SW: { r: 'N946SW', t: 'CRJ200', o: 'SkyWest Airlines', oc: 'SKW', w: 'None', c: '50Y', x: true },
+    };
+
+    it('answers a tail the mainline database misses: type badge, type · operator line', () => {
+      expect(fleetCell('N85377', fleetByReg, starlink, expressByReg)).toEqual({
+        badge: 'E175',
+        starlink: false,
+        enrich: 'E175 · SkyWest Airlines',
+        source: 'express',
+      });
+    });
+
+    it('reads Starlink from the Express entry or the roster set', () => {
+      expect(fleetCell('N140SY', fleetByReg, new Set(), expressByReg)).toMatchObject({
+        starlink: true,
+        enrich: 'E175 · SkyWest Airlines · ⚡ Starlink',
+        source: 'express',
+      });
+      expect(fleetCell('N85377', fleetByReg, new Set(['N85377']), expressByReg)?.starlink).toBe(true);
+    });
+
+    it('prefers a verified cabin for the badge, and says "United Express" when the type is unknown', () => {
+      expect(fleetCell('N504GJ', fleetByReg, starlink, expressByReg)?.badge).toBe('10F/20E+/20Y');
+      expect(fleetCell('N14148', fleetByReg, starlink, expressByReg)).toEqual({
+        badge: 'United Express',
+        starlink: false,
+        enrich: 'CommutAir',
+        source: 'express',
+      });
+    });
+
+    it('says "No Wi-Fi" only for a type verified to have none; unknown Wi-Fi says nothing', () => {
+      expect(fleetCell('N946SW', fleetByReg, starlink, expressByReg)).toEqual({
+        badge: '50Y',
+        starlink: false,
+        enrich: 'CRJ200 · SkyWest Airlines · No Wi-Fi',
+        source: 'express',
+      });
+      expect(fleetCell('N85377', fleetByReg, starlink, expressByReg)?.enrich).not.toMatch(/Wi-?Fi/);
+    });
+
+    it('leaves mainline and roster-only answers exactly as they were', () => {
+      expect(fleetCell('N12345', fleetByReg, starlink, expressByReg)).toEqual(fleetCell('N12345', fleetByReg, starlink));
+      expect(fleetCell('N12345', fleetByReg, starlink, expressByReg)?.source).toBe('fleet');
+      // A Starlink tail the Express index does not have yet still reads from the roster.
+      expect(fleetCell('N642SY', fleetByReg, new Set(['N642SY']), expressByReg)).toEqual({
+        badge: 'Starlink',
+        starlink: true,
+        enrich: '⚡ Starlink',
+        source: 'starlink-roster',
+      });
+      expect(fleetCell('N00000', fleetByReg, starlink, expressByReg)).toBeNull();
+    });
+
+    it('matches a hyphenated tail against the Express index', () => {
+      expect(fleetCell('N85-377', fleetByReg, starlink, expressByReg)?.source).toBe('express');
+    });
+  });
 });
 
 describe('swapTone / swapCell', () => {

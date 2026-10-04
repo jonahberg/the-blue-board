@@ -9,7 +9,7 @@
  *   ?hub=             selects that schedule board; with no ?tab (or ?tab=live) it is ALSO the
  *                     Live map's hub filter — `readLiveHubDeepLink()`, read by the Live view
  *                     (the hub pages' "Live <HUB> Map" CTA, F13/F45)
- *   ?view=starlink    the Starlink tab (its airborne/special siblings are Fleet-tab filters)
+ *   ?view=starlink    the Starlink tab (its airborne/special/express siblings are Fleet-tab sub-views)
  *   ?aircraft=        opens the aircraft dialog
  *   ?waitlist=1       opens the waitlist dialog
  *
@@ -40,8 +40,11 @@ type DeepLinkDeps = {
 export type FleetDeepLinks = {
   /** `?type=` or `?filter=` — a status shortcut or an aircraft type, resolved by the view. */
   filter: string | null;
-  /** `?view=airborne|special` — a Fleet sub-view. `?view=starlink` is tab routing, above. */
-  view: 'airborne' | 'special' | null;
+  /**
+   * `?view=airborne|special|express` — a Fleet sub-view (`express` is the United Express list).
+   * `?view=starlink` is tab routing, above.
+   */
+  view: 'airborne' | 'special' | 'express' | null;
 };
 
 /**
@@ -58,7 +61,7 @@ export function readFleetDeepLinks(): FleetDeepLinks {
   const view = params.get('view')?.toLowerCase();
   return {
     filter: params.get('type') ?? params.get('filter'),
-    view: view === 'airborne' || view === 'special' ? view : null,
+    view: view === 'airborne' || view === 'special' || view === 'express' ? view : null,
   };
 }
 
@@ -127,7 +130,7 @@ export function useDeepLinks(deps: DeepLinkDeps) {
       if (resolved === 'schedule') depsRef.current.setTab('schedule');
     }
 
-    // ?view=starlink is tab routing and belongs here. ?view=airborne|special and
+    // ?view=starlink is tab routing and belongs here. ?view=airborne|special|express and
     // ?type=/?filter= select rows INSIDE the Fleet tab: the Fleet view reads those itself
     // through `readFleetDeepLinks()`, once its database has actually loaded.
     if (params.get('view')?.toLowerCase() === 'starlink') depsRef.current.setTab('starlink');

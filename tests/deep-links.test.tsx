@@ -184,4 +184,10 @@ describe('readFleetDeepLinks', () => {
     window.history.replaceState(null, '', '/?view=starlink');
     expect(readFleetDeepLinks()).toEqual({ filter: null, view: null });
   });
+
+  it('reads ?view=express — the United Express sub-view — and does not route on it', () => {
+    window.history.replaceState(null, '', '/?tab=fleet&view=Express');
+    expect(readFleetDeepLinks()).toEqual({ filter: null, view: 'express' });
+    expect(mountAt('/?view=express').deps.setTab).not.toHaveBeenCalled();
+  });
 });

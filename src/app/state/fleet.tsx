@@ -14,6 +14,12 @@
  *    roster and mark the tier `degraded`: in that state the Starlink filter and the
  *    "confirmed" badge must not claim more than the fallback can support.
  *  - `loadFailed` — the fleet panels show a retry state rather than an empty table.
+ *  - `expressDb` / `expressByReg` — the United Express fleet (`/api/express-fleet` joined with
+ *    the Starlink roster's Express entries, `buildExpressFleet`). Fetched alongside the others but
+ *    never awaited by them: a slow or failed answer costs the Express details and nothing else,
+ *    and `loading` / `loadFailed` stay about the mainline database. It is a SEPARATE index on
+ *    purpose — `fleetDb`, `fleetByReg` and `matchAircraft()` stay mainline-only, so the
+ *    "1,139 mainline" figure, utilisation and the Starlink counts never move.
  *
  * Starlink reconciliation (#249, ported from the legacy `loadFleetData()`): the roster gets the
  * evidence-backed tails the upstream tracker is missing (`applyVerifiedStarlinkOverrides`), and
@@ -25,10 +31,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { buildExpressFleet, indexExpressFleet } from '@/lib/express-fleet.js';
 import { applyStarlinkWifiOverlay } from '@/lib/fleet-utils.js';
 import { indexSpecialAircraft } from '@/lib/special-aircraft.js';
 import { applyVerifiedStarlinkOverrides } from '@/lib/starlink-overrides.js';
 import {
+  fetchExpressFleet,
   fetchFleetDb,
   fetchFleetSummary,
   fetchStarlinkFallback,
@@ -36,6 +44,8 @@ import {
   fetchStarlinkRoster,
 } from '../data/api';
 import type {
+  ExpressAircraft,
+  ExpressTail,
   FleetAircraft,
   FleetSummary,
   StarlinkAircraft,
@@ -74,6 +84,15 @@ export type FleetValue = {
   retry: () => void;
   /** Fetch the Starlink per-tail schedules once; later calls are no-ops unless it failed. */
   loadStarlinkFlights: () => void;
+  /**
+   * The United Express fleet, by registration order. Holds the roster's Express tails even
+   * before (or without) `/api/express-fleet`. Never part of `fleetDb`.
+   */
+  expressDb: ExpressAircraft[];
+  /** Registration → Express entry, for `matchExpress()`. */
+  expressByReg: Record<string, ExpressAircraft>;
+  /** `/api/express-fleet`: 'failed' means only the roster's Express tails are known. */
+  expressStatus: 'loading' | 'ready' | 'failed';
 };
 
 const EMPTY_STARLINK: StarlinkState = {
@@ -102,12 +121,27 @@ export function FleetProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [expressTails, setExpressTails] = useState<ExpressTail[]>([]);
+  const [expressStatus, setExpressStatus] = useState<FleetValue['expressStatus']>('loading');
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+
+    // In parallel with the mainline load, not part of it: nothing waits on this answer.
+    setExpressStatus((current) => (current === 'ready' ? current : 'loading'));
+    fetchExpressFleet().then(
+      (tails) => {
+        if (cancelled) return;
+        setExpressTails(tails);
+        setExpressStatus('ready');
+      },
+      () => {
+        if (!cancelled) setExpressStatus((current) => (current === 'ready' ? current : 'failed'));
+      },
+    );
 
     async function load() {
       const [dbResult, starlinkResult, summaryResult] = await Promise.allSettled([
@@ -205,6 +239,16 @@ export function FleetProvider({ children }: { children: ReactNode }) {
 
   const special = useMemo(() => indexSpecialAircraft(fleetDb) as SpecialIndex, [fleetDb]);
 
+  // The roster arrives in the same boot as the tails, so this re-joins once when either lands.
+  const expressDb = useMemo(
+    () => buildExpressFleet(expressTails, starlink.aircraft) as ExpressAircraft[],
+    [expressTails, starlink.aircraft],
+  );
+  const expressByReg = useMemo(
+    () => indexExpressFleet(expressDb) as Record<string, ExpressAircraft>,
+    [expressDb],
+  );
+
   const value = useMemo<FleetValue>(
     () => ({
       fleetDb,
@@ -216,8 +260,24 @@ export function FleetProvider({ children }: { children: ReactNode }) {
       loadFailed,
       retry,
       loadStarlinkFlights,
+      expressDb,
+      expressByReg,
+      expressStatus,
     }),
-    [fleetDb, fleetByReg, starlink, fleetSummary, special, loading, loadFailed, retry, loadStarlinkFlights],
+    [
+      fleetDb,
+      fleetByReg,
+      starlink,
+      fleetSummary,
+      special,
+      loading,
+      loadFailed,
+      retry,
+      loadStarlinkFlights,
+      expressDb,
+      expressByReg,
+      expressStatus,
+    ],
   );
 
   return <FleetContext.Provider value={value}>{children}</FleetContext.Provider>;

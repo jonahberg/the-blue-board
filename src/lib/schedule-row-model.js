@@ -219,19 +219,43 @@ export function isRegFromLiveFeed(flight, reg) {
  * A tail the fleet database does not know but the Starlink roster does now reads Starlink, so the
  * three surfaces agree. Nothing else is invented: no cabin, no type.
  *
+ * Since the United Express fleet (src/lib/express-fleet.js), a tail the mainline database misses
+ * but the Express fleet knows reads its cabin when one is verified, else its type, else
+ * "United Express" (about a third of the discovered tails have no type yet — CommutAir and GoJet
+ * boards send no model code); the line under the tail is type · operator · ⚡ Starlink (or
+ * "No Wi-Fi" for a type verified to have none; unknown Wi-Fi says nothing). The
+ * roster-only answer stays for a Starlink tail the Express index has not caught up with.
+ *
  * @param {string} reg
  * @param {Record<string, object>} fleetByReg
  * @param {Set<string>} starlinkTails  the Starlink roster (mainline AND Express tails).
- * @returns {{badge: string, starlink: boolean, enrich: string, source: 'fleet'|'starlink-roster'}|null}
+ * @param {Record<string, {t?: string, o?: string, w?: 'Starlink'|'None'|'', c?: string}>} [expressByReg]  the
+ *   United Express fleet by registration (`indexExpressFleet`). Optional: absent, the cell is what
+ *   it was before the Express fleet existed.
+ * @returns {{badge: string, starlink: boolean, enrich: string,
+ *   source: 'fleet'|'express'|'starlink-roster'}|null}
  *   null when the tail is unknown or absent — the board renders a dash rather than inventing a
  *   cabin. `source` says which list answered.
  */
-export function fleetCell(reg, fleetByReg, starlinkTails) {
+export function fleetCell(reg, fleetByReg, starlinkTails, expressByReg) {
   if (!reg) return null;
   const regClean = reg.replace('-', '');
   const match = (fleetByReg && (fleetByReg[regClean] || fleetByReg[reg])) || null;
   const starlink = Boolean(starlinkTails && (starlinkTails.has(regClean) || starlinkTails.has(reg)));
   if (!match) {
+    const express = (expressByReg && (expressByReg[regClean] || expressByReg[reg])) || null;
+    if (express) {
+      const expressStarlink = starlink || express.w === 'Starlink';
+      return {
+        badge: String(express.c || express.t || 'United Express'),
+        starlink: expressStarlink,
+        // 'No Wi-Fi' only when the type is verified to have none (w: 'None'); unknown says nothing.
+        enrich: [express.t, express.o, expressStarlink ? '⚡ Starlink' : express.w === 'None' ? 'No Wi-Fi' : '']
+          .filter(Boolean)
+          .join(' · '),
+        source: 'express',
+      };
+    }
     return starlink ? { badge: 'Starlink', starlink: true, enrich: '⚡ Starlink', source: 'starlink-roster' } : null;
   }
   const parts = [];
@@ -490,6 +514,7 @@ export function buildScheduleRow(flight, ctx) {
     swapImpacts = [],
     fleetByReg = {},
     starlinkTails = new Set(),
+    expressByReg = {},
     special = new Map(),
     faaContext = null,
     hubOtp = {},
@@ -553,7 +578,7 @@ export function buildScheduleRow(flight, ctx) {
     regFromLive: isRegFromLiveFeed(flight, reg),
     gate: terminalGateCell(flight, dir),
     status,
-    fleet: fleetCell(reg, fleetByReg, starlinkTails),
+    fleet: fleetCell(reg, fleetByReg, starlinkTails, expressByReg),
     swap: swapCell(swapChange, reg, swapImpacts),
     special: specialEntry ? specialEntry.name : null,
     faaContext,

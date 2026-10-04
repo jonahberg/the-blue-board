@@ -59,6 +59,9 @@ const FLEET = {
   loadFailed: false,
   retry: () => {},
   loadStarlinkFlights: () => {},
+  expressDb: [],
+  expressByReg: {},
+  expressStatus: 'ready',
 } as unknown as FleetValue;
 
 vi.mock('../src/app/data/api', async (importOriginal) => ({

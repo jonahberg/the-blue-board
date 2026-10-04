@@ -43,6 +43,7 @@ import { getSupabase } from '../_supabase.js';
 import { isPushConfigured, ensureVapidConfigured, sendPush } from '../_web-push.js';
 import { recordFeedSightings } from '../_reg-sightings.js';
 import { recordAirborneSample, type RecordResult } from '../_airborne-samples.js';
+import { recordExpressTails, type ExpressRecordResult } from '../_express-tails.js';
 import { parseFr24Feed } from '../../src/lib/feed-health.js';
 import { unitedFeedUrls } from '../../src/lib/united-feed.js';
 import { fetchUnitedFeed } from '../_united-feed.js';
@@ -193,14 +194,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
   let feed: any[] | null = null;
   let airborneSample: RecordResult | { skipped: true } = { skipped: true };
+  let expressTails: ExpressRecordResult | { skipped: true } = { skipped: true };
   if (supabaseConfigured) {
     feed = await readLiveFeed();
-    airborneSample = await sampleAirborne(feed, Date.now());
+    const readAt = Date.now();
+    airborneSample = await sampleAirborne(feed, readAt);
+    // The same read keeps the United Express fleet current (sql/018; two slots an hour). Never throws.
+    expressTails = await recordExpressTails(feed, readAt);
   }
 
   // Graceful unconfigured: no VAPID keys or no Supabase → nothing to do, report honestly.
   if (!isPushConfigured() || !supabaseConfigured) {
-    return res.status(200).json({ configured: false, skipped: 'push not configured', airborneSample });
+    return res.status(200).json({ configured: false, skipped: 'push not configured', airborneSample, expressTails });
   }
   ensureVapidConfigured();
 
@@ -212,10 +217,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Postgres 42P01 (relation does not exist) means the migration hasn't run — degrade to the
     // graceful-unconfigured 200 instead of a 5-minute 500 storm until the table exists.
     if (e?.code === '42P01') {
-      return res.status(200).json({ configured: false, skipped: 'watch_subscriptions table not provisioned', airborneSample });
+      return res.status(200).json({ configured: false, skipped: 'watch_subscriptions table not provisioned', airborneSample, expressTails });
     }
     console.error('watch-alerts: subscription load failed:', e?.message || e);
-    return res.status(500).json({ error: 'subscription load failed', airborneSample });
+    return res.status(500).json({ error: 'subscription load failed', airborneSample, expressTails });
   }
 
   const nowMs = Date.now();
@@ -386,6 +391,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     resolveDeadlineHit,
     liveFeed,
     airborneSample,
+    expressTails,
     baselined,
     retired,
     sends,

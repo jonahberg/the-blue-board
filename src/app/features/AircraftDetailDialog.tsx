@@ -10,7 +10,10 @@
  *    that answers "unknown aircraft" for a tail the visitor is looking at right now is a
  *    lie with a 1.5-second window, and `?aircraft=` lands squarely inside it.
  *  - loaded, registration absent → this is a United Express regional or a foreign airframe;
- *    say so and offer Planespotters, which does know it.
+ *    say so and offer Planespotters, which does know it. When the United Express fleet
+ *    (`expressByReg`, discovered from United's own flying) knows the tail, the card shows what it
+ *    knows instead — type, operator, a verified cabin, Starlink, first/last seen and the last
+ *    United flight — and still never a guess.
  *  - loaded and found → the full card.
  *
  * Registrations are normalised the way the database stores them (dashes out, upper case)
@@ -36,13 +39,20 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cityFor } from '@/lib/airports.js';
+import { matchExpress } from '@/lib/express-fleet.js';
+import {
+  expressDateLabel,
+  expressLastSeenLabel,
+  expressOperatorLine,
+  expressWifiLabel,
+} from '@/lib/express-fleet-view.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from '@/lib/fleet-utils.js';
 import { buildSeatBar, nonMainlineAircraftSummary } from '@/lib/fleet-view.js';
 import { getPhase } from '@/lib/flight-phase.js';
 import { ENGINE_BY_TYPE } from '@/lib/special-aircraft.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { shareUrl } from '../data/share';
-import type { Flight } from '../data/types';
+import type { ExpressAircraft, Flight } from '../data/types';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
 import { useUi } from '../state/ui';
@@ -85,7 +95,7 @@ function Fact({
 
 export default function AircraftDetailDialog() {
   const { aircraftReg, openAircraft, select, focusOn, setTab, onboardingOpen, announce } = useUi();
-  const { fleetByReg, starlink, special, loading, loadFailed, retry } = useFleet();
+  const { fleetByReg, expressByReg, starlink, special, loading, loadFailed, retry } = useFleet();
   const { flights } = useFeed();
   const watch = useWatch();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -138,6 +148,13 @@ export default function AircraftDetailDialog() {
           } | null),
     [aircraft, reg, starlink.aircraft, liveFlight],
   );
+  // The United Express fleet's entry, preferred over the roster/feed fallback for identity; the
+  // fallback still supplies the live "Airborne — View on map" flight.
+  const express = useMemo(
+    () => (aircraft ? null : (matchExpress(reg, expressByReg) as ExpressAircraft | null)),
+    [aircraft, reg, expressByReg],
+  );
+  const expressStarlink = Boolean(express) && (express?.w === 'Starlink' || Boolean(fallback?.starlink));
   const specialEntry = reg ? special.get(reg) : undefined;
   const livery = liveryForTail(reg);
 
@@ -210,6 +227,20 @@ export default function AircraftDetailDialog() {
                 </div>
               ) : null}
             </>
+          ) : express ? (
+            <>
+              <DialogDescription className="flex flex-wrap items-center gap-2 text-sm">
+                <span>{express.t || 'Type unknown'}</span>
+                <span className="text-xs text-muted-foreground">{expressOperatorLine(express)}</span>
+              </DialogDescription>
+              {expressStarlink ? (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
+                    <Zap aria-hidden="true" /> STARLINK
+                  </Badge>
+                </div>
+              ) : null}
+            </>
           ) : fallback ? (
             <>
               <DialogDescription className="flex flex-wrap items-center gap-2 text-sm">
@@ -268,7 +299,55 @@ export default function AircraftDetailDialog() {
           </>
         ) : !aircraft ? (
           <>
-            {fallback ? (
+            {express ? (
+              <div className="space-y-4 p-4">
+                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Fact label="Type" value={express.t || '—'} />
+                  <Fact label="Operator" value={express.o || '—'} className="col-span-2" />
+                  <Fact
+                    label="Starlink"
+                    value={expressStarlink ? 'Yes ⚡' : 'Not on the roster'}
+                    tone={expressStarlink ? 'text-bb-ok' : 'text-muted-foreground'}
+                  />
+                  {/* "No Wi-Fi" only for a type verified to have none; unknown is a dash. */}
+                  <Fact label="WiFi" value={(expressWifiLabel(express, expressStarlink) as string) || '—'} />
+                  {/* A cabin only when one is verified for this type and operator. */}
+                  {express.c ? <Fact label="Config" value={express.c} className="col-span-2" /> : null}
+                  {express.c && express.tot ? <Fact label="Total Seats" value={String(express.tot)} /> : null}
+                  <Fact label="Last United flight" value={express.lf || '—'} tone="font-mono" />
+                  <Fact label="First seen" value={expressDateLabel(express.fs) || '—'} />
+                  <Fact label="Last seen" value={expressLastSeenLabel(express.ls) || '—'} />
+                </dl>
+                {fallback?.flight ? (
+                  <button
+                    type="button"
+                    onClick={onViewOnMap}
+                    aria-label={`View ${fallback.flight.ident} on the map`}
+                    className="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-bb-ok">
+                        Airborne — {fallback.flight.ident}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">View on map →</span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      {fallback.flight.origin || '?'} → {fallback.flight.dest || '?'}
+                    </div>
+                  </button>
+                ) : (
+                  <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                    On ground / Not currently tracked
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  A United Express (regional) aircraft — not in the United mainline fleet database.
+                  {express.fs
+                    ? ' First and last seen are when The Blue Board saw it flying a United flight.'
+                    : ' Listed by the Starlink roster; not yet seen flying a United flight here.'}
+                </p>
+              </div>
+            ) : fallback ? (
               <div className="space-y-4 p-4">
                 <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Fact label="Type" value={fallback.type || '—'} />

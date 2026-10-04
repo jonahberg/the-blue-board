@@ -179,4 +179,22 @@ describe('useBoardModel — the board-truth fields reach the row (v1.13.0)', () 
     });
     expect(result.current.rows[0].actualFromRunway).toBe(false);
   });
+
+  it('a United Express tail reads from the Express fleet when one is passed', () => {
+    const base = input([row('UA5575', 'E75L', 'N85377'), row('UA2106', 'A21N', 'N14502')], () => null);
+    const expressByReg = {
+      N85377: { r: 'N85377', t: 'E175', tk: 'E175', o: 'SkyWest Airlines', oc: 'SKW', w: '', c: '', fs: '', ls: '', lf: '', x: true },
+    } as NonNullable<BoardModelInput['expressByReg']>;
+    const { result } = renderHook(() => useBoardModel({ ...base, expressByReg }));
+    const byIdent = Object.fromEntries(result.current.rows.map((r) => [r.ident, r]));
+    expect(byIdent.UA5575.fleet).toEqual({
+      badge: 'E175',
+      starlink: false,
+      enrich: 'E175 · SkyWest Airlines',
+      source: 'express',
+    });
+    // The mainline row is untouched by the Express index.
+    expect(byIdent.UA2106.fleet?.source).toBe('fleet');
+    expect(byIdent.UA2106.fleet?.badge).toBe('20F/57E+/119Y');
+  });
 });
