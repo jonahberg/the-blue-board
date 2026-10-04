@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  flightAwareIdent,
   UNITED_OPERATORS,
   isExpressFlight,
   operatedByLine,
@@ -78,5 +79,18 @@ describe('operatedByLine', () => {
     expect(operatedByLine({ callsign: '' })).toBeNull();
     expect(operatedByLine({ callsign: 'DAL1' })).toBeNull();
     expect(operatedByLine(null)).toBeNull();
+  });
+});
+
+describe('flightAwareIdent', () => {
+  it('tracks an Express flight under its operator callsign (GoJet rows read G73375)', () => {
+    expect(flightAwareIdent('G73375', 'GJS3375')).toBe('GJS3375');
+    expect(flightAwareIdent('UA4672', ' skw4672 ')).toBe('SKW4672');
+  });
+
+  it('keeps UAL + number for mainline, whether the ident is an IATA number or a callsign', () => {
+    expect(flightAwareIdent('UA123', 'UAL123')).toBe('UAL123');
+    expect(flightAwareIdent('UAL123', undefined)).toBe('UAL123');
+    expect(flightAwareIdent('UA1', null)).toBe('UAL1');
   });
 });

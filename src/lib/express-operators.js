@@ -67,3 +67,18 @@ export function operatedByLine(flight) {
     ? `Operated by ${operator.name} (United Express)`
     : `Operated by ${operator.name}`;
 }
+
+/**
+ * The FlightAware ident for a flight. An Express flight is tracked there under its operator's
+ * own callsign (SKW4672, GJS3375); prefixing "UAL" onto the displayed number broke GoJet rows,
+ * whose flightIATA is 'G73375' ("UALG73375" is not a flight). Mainline keeps UAL + number.
+ *
+ * @param {string|null|undefined} ident  the sheet's ident: an IATA number (UA123) or a callsign.
+ * @param {string|null|undefined} callsign  the live-feed callsign, when the flight is on the map.
+ * @returns {string}  e.g. 'SKW4672', 'UAL123'.
+ */
+export function flightAwareIdent(ident, callsign) {
+  const operator = operatorFromCallsign(callsign);
+  if (operator?.express) return String(callsign).trim().toUpperCase();
+  return `UAL${String(ident ?? '').trim().replace(/^UAL?/i, '')}`;
+}

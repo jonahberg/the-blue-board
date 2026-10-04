@@ -16,6 +16,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ### Flight details
 - **"Operated by SkyWest Airlines (United Express) · SKW5292"** under the route. A mainline flight reads "Operated by United Airlines", and an unknown callsign shows nothing. It is display only: the title, search, watch, share links and schedule matching keep the feed's own flight number, so a GoJet flight is still G73375. (`src/app/features/FlightSheet.tsx`)
+- **The FlightAware link works for Express flights.** It prefixed "UAL" onto the displayed number, which turned a GoJet flight into "UALG73375", not a real flight. Express flights now link by their operator's callsign (GJS3375, SKW4672). Mainline keeps UAL + number. (`flightAwareIdent` in `src/lib/express-operators.js`)
 
 The old `pacific` map-layer key lived only in component state and was never saved, so nothing stored needs migrating. `resolveRegionId()` still maps `pacific`, other casings and unknown values safely.
 
