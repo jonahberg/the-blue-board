@@ -50,6 +50,7 @@
         "api/predict-flight.ts": { "maxDuration": 15 },
         "api/check-flight.ts": { "maxDuration": 15 },
         "api/fleet-summary.ts": { "maxDuration": 10 },
+        "api/airborne-history.ts": { "maxDuration": 10 },
         "api/starlink-mismatches.ts": { "maxDuration": 15 },
         "api/news-notify.ts": { "maxDuration": 15 },
         "api/metar.ts": { "maxDuration": 15 },

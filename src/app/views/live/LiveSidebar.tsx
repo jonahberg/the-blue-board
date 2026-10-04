@@ -16,8 +16,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { PHASE_ICONS } from '@/lib/flight-phase.js';
 import { matchLiveFlights, normalizeQuery } from '@/lib/global-search.js';
 import { hubTraffic } from '@/lib/live-filters.js';
+import { liveryForTail } from '@/lib/special-livery.js';
 import { cn } from '@/lib/utils';
 import type { Flight } from '../../data/types';
+import { SpecialLiveryMarker } from '../../features/SpecialLiveryBadge';
 
 /** The five buckets `getPhaseGroup()` collapses the seven phases into. */
 const PHASE_ROWS: { group: string; label: string }[] = [
@@ -138,6 +140,7 @@ export function LiveSidebar({
                           {f.origin || '?'}→{f.dest || '?'}
                         </span>
                         <span className="ml-auto truncate text-muted-foreground">{f.reg}</span>
+                        <SpecialLiveryMarker livery={liveryForTail(f.reg)} className="text-muted-foreground" />
                       </button>
                     </li>
                   ))}

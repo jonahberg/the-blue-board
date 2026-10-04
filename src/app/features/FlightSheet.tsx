@@ -35,6 +35,7 @@ import { flightAwareIdent, isExpressFlight, operatedByLine } from '@/lib/express
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
 import { matchAircraft, unmatchedAircraftNote } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
+import { liveryForTail } from '@/lib/special-livery.js';
 import { resolveFlightRoute } from '../data/route';
 import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
 import { ApiError, fetchFlightTimes } from '../data/api';
@@ -45,6 +46,7 @@ import { useFleet } from '../state/fleet';
 import { useMediaQuery } from '../state/hooks';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
+import { SpecialLiveryBadge } from './SpecialLiveryBadge';
 
 /** Write or clear `?flight=` without adding a history entry. */
 function setFlightParam(ident: string | null) {
@@ -265,6 +267,7 @@ export function FlightSheet() {
   ).filter(([, count]) => Number(count) > 0);
   const isStarlink = Boolean(reg) && starlink.tails.has(reg);
   const specialEntry = reg ? special.get(reg) : undefined;
+  const livery = liveryForTail(reg);
   const watched = ident ? watch.isWatched(ident) : false;
   // F11: label times in the AIRPORT's clock. Most tiers send no zone; the airport table knows it.
   const originTz =
@@ -488,6 +491,7 @@ export function FlightSheet() {
                   : 'No aircraft reported.'}
               </p>
             )}
+            {livery ? <SpecialLiveryBadge livery={livery} className="mt-2" /> : null}
           </div>
 
           <Separator />

@@ -231,3 +231,16 @@ export type PushConfig = { configured: boolean; vapidPublicKey?: string };
  * entries; every reader treats them as optional.
  */
 export type WatchedFlight = { flight: string; route: string; status: string; ts: number; dep?: number; delayBucket?: number };
+
+/**
+ * `/api/airborne-history` — one row per successful 5-minute live-feed read, oldest first. A gap in
+ * `t` is a missing read (never a zero). `note` is set, with `samples: []`, when history is
+ * unavailable (Supabase down, table not yet created).
+ */
+export type AirborneHistory = {
+  samples: { t: string; airborne: number; express?: number }[];
+  hours: number;
+  since: string;
+  generatedAt: string;
+  note?: string;
+};

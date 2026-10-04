@@ -40,6 +40,7 @@ import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from '@
 import { buildSeatBar, nonMainlineAircraftSummary } from '@/lib/fleet-view.js';
 import { getPhase } from '@/lib/flight-phase.js';
 import { ENGINE_BY_TYPE } from '@/lib/special-aircraft.js';
+import { liveryForTail } from '@/lib/special-livery.js';
 import { shareUrl } from '../data/share';
 import type { Flight } from '../data/types';
 import { useFeed } from '../state/feed';
@@ -47,6 +48,7 @@ import { useFleet } from '../state/fleet';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 import { JargonTerm } from './JargonTerm';
+import { SpecialLiveryBadge } from './SpecialLiveryBadge';
 
 /** The fleet database stores `N17104`; the feed says `N17-104` and people type `n17104`. */
 function normalizeReg(raw: string | null): string {
@@ -137,6 +139,7 @@ export default function AircraftDetailDialog() {
     [aircraft, reg, starlink.aircraft, liveFlight],
   );
   const specialEntry = reg ? special.get(reg) : undefined;
+  const livery = liveryForTail(reg);
 
   const age = aircraft?.d ? new Date().getFullYear() - parseInt(String(aircraft.d), 10) : null;
   const category = categorizeFleetStatus(aircraft?.s) as string;
@@ -191,13 +194,14 @@ export default function AircraftDetailDialog() {
                   </span>
                 ) : null}
               </DialogDescription>
-              {specialEntry || isStarlink ? (
+              {specialEntry || isStarlink || livery ? (
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {specialEntry ? (
                     <Badge variant="outline">
                       <Star aria-hidden="true" /> {specialEntry.name}
                     </Badge>
                   ) : null}
+                  <SpecialLiveryBadge livery={livery} />
                   {isStarlink ? (
                     <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
                       <Zap aria-hidden="true" /> STARLINK

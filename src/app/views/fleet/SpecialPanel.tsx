@@ -9,16 +9,26 @@
  * An airborne entry shows the pulse plus its flight and route; a grounded one shows NAMED or
  * LIVERY, so the badge always says which kind of special this is rather than only that it is
  * one.
+ *
+ * The curated paint schemes (`kind: 'paint'`, from src/data/special-liveries.js) lead the
+ * list with their one-line description under the name. They are the hand-verified answer to
+ * "which United jets wear a special livery?"; the fleet site's column carries no sources.
  */
+
+import { Paintbrush } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 
 export type SpecialRow = {
+  /** reg + kind: a tail with a name AND a livery (N76021) is two cards. */
+  key: string;
   reg: string;
   name: string;
+  /** 'paint' (curated livery) | 'named' | 'livery' (the fleet site's sticker/livery note). */
   kind: string;
   type: string;
   delivered: string;
+  description?: string;
   airborne: { flight: string; route: string } | null;
 };
 
@@ -58,11 +68,19 @@ export function SpecialPanel({
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {rows.map((row) => (
           <li
-            key={row.reg}
+            key={row.key}
             className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{row.name}</p>
+              <p className="flex min-w-0 items-center gap-1 text-sm font-medium">
+                {row.kind === 'paint' ? (
+                  <Paintbrush aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : null}
+                <span className="truncate">{row.name}</span>
+              </p>
+              {row.description ? (
+                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{row.description}</p>
+              ) : null}
               <p className="mt-0.5 text-xs">
                 <button
                   type="button"
@@ -72,7 +90,7 @@ export function SpecialPanel({
                   {row.reg}
                 </button>{' '}
                 <span className="text-muted-foreground">
-                  {row.type} · Del {row.delivered}
+                  {row.type ? `${row.type} · Del ${row.delivered}` : 'Not in the mainline fleet database'}
                 </span>
               </p>
             </div>

@@ -353,18 +353,25 @@ export function resolveFleetDeepLinkFilter(filter, { typeValues, statusValues })
  * The special-aircraft panel's rows, cross-referenced against the live feed so a named
  * aircraft that is in the air right now says so.
  *
+ * Curated special liveries (src/data/special-liveries.js) come first, as `kind: 'paint'` rows
+ * carrying their one-line description; then the fleet site's named / sticker entries. A tail
+ * can legitimately appear twice — N76021 is the named "Larry Kellner" and wears Star Alliance
+ * colours — so each row carries a `key` of reg + kind for React.
+ *
  * @param {Map<string, {name: string, type: string}>} special
  * @param {Record<string, Object>} fleetByReg
  * @param {Array<Object>} flights
- * @returns {Array<{reg: string, name: string, kind: string, type: string, delivered: string, airborne: {flight: string, route: string}|null}>}
+ * @param {Array<{tail: string, name: string, description: string}>} [liveries]  in display order.
+ * @returns {Array<{key: string, reg: string, name: string, kind: string, type: string, delivered: string, description?: string, airborne: {flight: string, route: string}|null}>}
  */
-export function buildSpecialRows(special, fleetByReg, flights) {
+export function buildSpecialRows(special, fleetByReg, flights, liveries = []) {
+  const liveryTails = new Set((liveries || []).map((l) => l.tail));
   /** @type {Record<string, {flight: string, route: string}>} */
   const airborne = {};
   (flights || []).forEach((f) => {
     if (!f || f.onGround) return;
     const reg = f.reg ? f.reg.replace('-', '') : null;
-    if (reg && special && special.has(reg)) {
+    if (reg && ((special && special.has(reg)) || liveryTails.has(reg))) {
       airborne[reg] = {
         flight: f.flightIATA || f.callsign || '',
         route: `${f.origin || '???'} > ${f.dest || '???'}`,
@@ -373,11 +380,28 @@ export function buildSpecialRows(special, fleetByReg, flights) {
   });
 
   const rows = [];
+  (liveries || []).forEach((livery) => {
+    const reg = livery.tail;
+    // Unlike the fleet-site entries, a curated livery stays even when the fleet database does
+    // not list the tail (a United Express jet): it was verified on its own sources.
+    const ac = fleetByReg && fleetByReg[reg];
+    rows.push({
+      key: `${reg}:paint`,
+      reg,
+      name: livery.name,
+      kind: 'paint',
+      type: ac ? ac.t : '',
+      delivered: (ac && ac.d) || '?',
+      description: livery.description,
+      airborne: airborne[reg] || null,
+    });
+  });
   (special ? [...special.keys()] : []).forEach((reg) => {
     const ac = fleetByReg && fleetByReg[reg];
     if (!ac) return;
     const entry = special.get(reg);
     rows.push({
+      key: `${reg}:${entry.type}`,
       reg,
       name: entry.name,
       kind: entry.type,
