@@ -48,10 +48,12 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { scrollBehavior } from '@/lib/motion.js';
 import { statusEvidenceNote } from '@/lib/schedule-row-display.js';
+import { liveryForTail } from '@/lib/special-livery.js';
 import { clampWindow, expandWindow, initialWindow, windowIncluding } from '@/lib/schedule-window.js';
 import { cn } from '@/lib/utils';
 import type { RowModel, SortColumn } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
+import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
 import { SchedulePhoneRow } from './SchedulePhoneRow';
 import { STATUS_TONE, SWAP_TONE, riskToneClass } from './tone';
 
@@ -591,6 +593,9 @@ export const ScheduleTable = forwardRef<
                     ) : (
                       '—'
                     )}
+                    {row.reg ? (
+                      <SpecialLiveryBadge livery={liveryForTail(row.reg)} variant="icon" className="ml-0.5" />
+                    ) : null}
                     {row.special ? (
                       <Badge variant="secondary" className="ml-1 px-1 py-0 text-[9px]">
                         <Star aria-hidden="true" /> {row.special}

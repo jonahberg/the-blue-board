@@ -29,7 +29,9 @@ import {
   phoneSwapText,
   phoneTimeChange,
 } from '@/lib/schedule-phone-row.js';
+import { liveryForTail } from '@/lib/special-livery.js';
 import { cn } from '@/lib/utils';
+import { SpecialLiveryMarker } from '../../features/SpecialLiveryBadge';
 import type { RowModel } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
 import { STATUS_PILL, SWAP_TONE, riskToneClass } from './tone';
@@ -166,6 +168,8 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
                 {aircraft.tail}
               </span>
             ) : null}
+            {/* Inert inside the stretched row button: icon + sr-only words, never a control. */}
+            {aircraft.tail ? <SpecialLiveryMarker livery={liveryForTail(row.reg)} /> : null}
             {aircraft.tail && aircraft.type ? <Sep /> : null}
             {aircraft.type ? <span className="shrink-0">{aircraft.type}</span> : null}
             {aircraft.seats ? (

@@ -48,6 +48,7 @@ import {
 } from '@/lib/fleet-view.js';
 import { isAirborne } from '@/lib/live-stats.js';
 import { scrollBehavior } from '@/lib/motion.js';
+import { listSpecialLiveries } from '@/lib/special-livery.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { FleetAircraft } from '../data/types';
 import { readFleetDeepLinks } from '../state/deep-links';
@@ -206,8 +207,9 @@ export default function FleetView() {
     return sortAirborneRows(rows, airborneSort.col, airborneSort.asc) as AirborneRow[];
   }, [flights, fleetByReg, starlink.tails, special, typeFilter, search, airborneSort]);
 
+  // Curated special liveries lead the panel; the fleet site's named/sticker entries follow.
   const specialRows = useMemo(
-    () => buildSpecialRows(special, fleetByReg, flights) as SpecialRow[],
+    () => buildSpecialRows(special, fleetByReg, flights, listSpecialLiveries()) as SpecialRow[],
     [special, fleetByReg, flights],
   );
 
@@ -215,7 +217,8 @@ export default function FleetView() {
     all: fleetDb.length,
     airborne: util.matched,
     starlink: starlink.aircraft.length,
-    special: special.size,
+    // A tail with a name AND a livery is two cards, so count the cards.
+    special: specialRows.length,
   };
 
   // ── Cross-zone: a variant card IS the type filter ───────────────────────────────────

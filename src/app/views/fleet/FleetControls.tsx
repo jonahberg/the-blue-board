@@ -35,6 +35,7 @@ export const STATUS_OPTIONS = [
   { value: 'stored', label: 'Stored/Maint' },
   { value: 'starlink', label: 'Starlink' },
   { value: 'special', label: 'Special/Named' },
+  { value: 'livery', label: 'Special livery' },
 ];
 
 export function FleetControls({

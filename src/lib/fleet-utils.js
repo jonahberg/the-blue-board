@@ -2,6 +2,7 @@
 // Pure data functions extracted from src/dashboard/main.js for testability.
 
 import { FLEET_DB_AS_OF } from '../data/facts.js';
+import { liveryForTail } from './special-livery.js';
 
 // ─── Fleet Health Categorization ───
 export const FLEET_HEALTH_CATEGORIES = [
@@ -117,6 +118,8 @@ export function filterFleetData(fleetDb, { type, wifi, status, search, starlinkT
     if (status === 'stored' && !a.s) return false;
     if (status === 'starlink' && !(starlinkTails && starlinkTails.has(a.r))) return false;
     if (status === 'special' && !(specialAircraftSet && specialAircraftSet.has(a.r))) return false;
+    // The curated, sourced paint schemes (src/data/special-liveries.js), not the fleet site's column.
+    if (status === 'livery' && !liveryForTail(a.r)) return false;
     if (searchUpper) {
       // Records from the fleet DB occasionally arrive with missing fields;
       // .toUpperCase() on undefined throws. Coerce defensively so a partial
