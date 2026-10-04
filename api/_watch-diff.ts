@@ -250,9 +250,13 @@ export function evaluateWatch(entry: WatchEntry, payload: unknown, nowMs: number
   // ── Unpinned (a new watch, or one stored before legs were pinned): pin + silent baseline ──
   if (!entry.legDep) {
     if (leg.phase === 'unknown' || isTerminalPhase(leg.phase)) return noChange(entry);
+    // Start from THIS leg's values, blank included: an August row's lastGate / lastEquip describe
+    // another flight, and keeping one would turn this leg's first gate assignment into a false
+    // "gate changed" push.
+    const fresh: WatchEntry = { ...entry, lastGate: undefined, lastEquip: undefined, reg: undefined, phase: undefined, delayBucket: undefined, terminalAt: undefined };
     return {
       notify: false, kind: 'none', title: '', body: '', log: null, baseline: true,
-      next: legFields(entry, leg, leg.phase, bucketNow, nowMs),
+      next: legFields(fresh, leg, leg.phase, bucketNow, nowMs),
     };
   }
 

@@ -218,6 +218,17 @@ describe('one watch = one dated leg (finding 2)', () => {
     expect(r.next.phase).toBe('scheduled');
   });
 
+  it('a legacy entry\'s old gate and tail do not survive the re-baseline (no false gate / swap push)', () => {
+    const legacy = { flight: 'UA123', addedAt: '2026-08-14T12:00:00.000Z', lastStatus: 'Landed', lastGate: 'F9', lastEquip: 'N11111' };
+    const base = evaluateWatch(legacy, payload({ gate: '', registration: '' }), NOW);
+    expect(base.baseline).toBe(true);
+    expect(base.next.lastGate).toBeUndefined();
+    expect(base.next.lastEquip).toBe('Boeing 737-900');
+    const later = evaluateWatch(base.next, payload({ gate: 'C12', registration: 'N12345' }), NOW + min(30));
+    expect(later.notify).toBe(false);
+    expect(later.next.lastGate).toBe('C12');
+  });
+
   it('records when the pinned leg ended, then retires it quietly', () => {
     const entry = pinned();
     const landedAt = SCHED_DEP_MS + min(270);
