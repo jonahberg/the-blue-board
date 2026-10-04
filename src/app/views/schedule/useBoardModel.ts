@@ -27,9 +27,7 @@ import { HUB_COORDINATES, HUB_RISK_PROFILES, computeDelayRiskModel } from '@/lib
 import { getTypicalFleetStats } from '@/lib/equipment-swaps.js';
 import { getFAADelayContext } from '@/lib/faa-context.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
-import { applySightingsToBoard } from '@/lib/reg-overlay.js';
-import { isOnGround } from '@/lib/flight-phase.js';
-import { normalizeFlightNum } from '@/lib/reg-ledger.js';
+import { applySightingsToBoard, sightingsFromLiveFeed } from '@/lib/reg-overlay.js';
 import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
 import { hubTzAbbrev } from '@/lib/schedule-load.js';
 import { regMatchesModel } from '@/lib/schedule-reg-guard.js';
@@ -90,6 +88,11 @@ export type StatusModel = {
   live: boolean;
   /** Provider said Likely Canceled; the live feed saw it fly (v1.12.0). */
   seen?: boolean;
+  /**
+   * A Landed* the live feed proved: airborne on this leg, then on the ground at the destination
+   * (v1.13.0). Still `presumed` (no provider landing time) but never "no live update".
+   */
+  seenLanded?: boolean;
 };
 
 export type SwapModel = {
@@ -100,13 +103,29 @@ export type SwapModel = {
   tone: 'downgrade' | 'upgrade' | 'lateral';
 };
 
+/** What kind of time a delay figure is measured to (src/lib/board-delay.js). */
+export type DelayBasis = 'gate' | 'runway' | 'actual' | 'estimate' | 'derived' | 'live' | 'sighting';
+
 export type DelayCell =
   | { kind: 'none' }
-  | { kind: 'delta'; text: string; minutes: number; title: string }
+  | {
+      kind: 'delta';
+      /** Already carries the bound glyph: "≥+66m" is at least, "≤+12m" at most. */
+      text: string;
+      minutes: number;
+      title: string;
+      /** What the figure measured (board-delay.js). Absent on a plain provider delta. */
+      basis?: DelayBasis;
+      /** The true delay is at least ('lower') / at most ('upper') this. */
+      bound?: 'lower' | 'upper';
+    }
   | { kind: 'risk'; risk: RiskModel; context: Record<string, unknown> };
 
 export type RowModel = {
+  /** The provider's flight number, raw: the row key, the watch target, the deep link. */
   ident: string;
+  /** What the board PRINTS: a provider letter suffix stripped ("UA526H" → "UA526"). */
+  identDisplay: string;
   key: string;
   raw: ScheduleRow;
   timeText: string;
@@ -115,6 +134,11 @@ export type RowModel = {
   actualLine: { text: string; early: boolean } | null;
   /** The provider had no scheduled time and the board derived one from the actual. */
   derivedActual: boolean;
+  /**
+   * The provider's actual on the board's side is a RUNWAY time (wheels-up / touchdown) with no
+   * separate gate time, so the delay includes the taxi-out (or stops before the taxi-in).
+   */
+  actualFromRunway: boolean;
   routeLine: string;
   routeSub: string | null;
   acCode: string;
@@ -125,7 +149,11 @@ export type RowModel = {
   regFromLive: boolean;
   gate: string;
   status: StatusModel;
-  fleet: { badge: string; starlink: boolean; enrich: string } | null;
+  /**
+   * `source` says which list answered: the fleet database, or — for a United Express tail it does
+   * not know — the Starlink roster, when `badge` is the literal 'Starlink' and there is no cabin.
+   */
+  fleet: { badge: string; starlink: boolean; enrich: string; source: 'fleet' | 'starlink-roster' } | null;
   swap: SwapModel | null;
   special: string | null;
   faaContext: string | null;
@@ -251,27 +279,12 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     // engine's recency gate by the time they reach this tab — but the feed here is 30 s old.
     let boardRows = rows;
     if (rows.length && liveFlights.length && liveFeedTs) {
-      const sightings = new Map<
-        string,
-        { reg: string; origin: string; dest: string; seenAtMs: number; airborneAtMs: number | null; onGround: boolean }
-      >();
-      for (const flight of liveFlights) {
-        if (!flight?.reg) continue;
-        const key =
-          (normalizeFlightNum(flight.flightIATA) as string) ||
-          (normalizeFlightNum(flight.callsign) as string);
-        if (!key) continue;
-        sightings.set(key, {
-          reg: flight.reg,
-          origin: flight.origin || '',
-          dest: flight.dest || '',
-          seenAtMs: liveFeedTs,
-          // Only an AIRBORNE aircraft is proof a Likely Canceled flight flew (seenAirborneMatches):
-          // the same isOnGround rule the server's sightings writer uses.
-          airborneAtMs: isOnGround(flight) ? null : liveFeedTs,
-          onGround: flight.onGround === true,
-        });
-      }
+      // One feed row per flight number (reg-overlay.js): its position too, so an arrivals row
+      // airborne right now gets `live.etaSec` and the delay can measure to the live-position ETA
+      // (board-delay.js) instead of a provider estimate the aircraft has already left behind.
+      // Only an AIRBORNE aircraft is proof a Likely Canceled flight flew: the same isOnGround rule
+      // the server's sightings writer uses.
+      const sightings = sightingsFromLiveFeed(liveFlights, liveFeedTs);
       if (sightings.size) {
         // `dir` lets the seen-airborne override run here too (v1.12.0): a Likely Canceled flight
         // this browser's feed has in the air flips to Departed · LIVE without waiting for the CDN.

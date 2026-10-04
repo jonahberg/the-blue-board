@@ -23,7 +23,6 @@ import { Eye, Star, Wifi, Zap } from 'lucide-react';
 import { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { delayColorVar } from '@/lib/delay-format.js';
 import {
   phoneAircraftLine,
   phoneStatusLabel,
@@ -32,13 +31,16 @@ import {
 } from '@/lib/schedule-phone-row.js';
 import { cn } from '@/lib/utils';
 import type { RowModel } from './useBoardModel';
-import { STATUS_PILL, SWAP_TONE, delayToneClass, riskToneClass } from './tone';
+import { DelayFigure } from './DelayFigure';
+import { STATUS_PILL, SWAP_TONE, riskToneClass } from './tone';
 
 export type SchedulePhoneRowProps = {
   row: RowModel;
   index: number;
   watched: boolean;
   boardAsOf: string;
+  /** The board's direction: a runway-time delay is wheels-up on one, touchdown on the other. */
+  dir?: 'departures' | 'arrivals';
   onOpenFlight: (row: RowModel) => void;
   onToggleWatch: (row: RowModel) => void;
   onExplainDelay: (context: Record<string, unknown>) => void;
@@ -58,6 +60,7 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
   index,
   watched,
   boardAsOf,
+  dir = 'departures',
   onOpenFlight,
   onToggleWatch,
   onExplainDelay,
@@ -99,10 +102,10 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
               <button
                 type="button"
                 onClick={() => onOpenFlight(row)}
-                aria-label={`${row.ident} flight details`}
+                aria-label={`${row.identDisplay} flight details`}
                 className="shrink-0 font-mono text-xs font-semibold text-primary after:absolute after:inset-0"
               >
-                {row.ident}
+                {row.identDisplay}
               </button>
             ) : (
               <span className="shrink-0 font-mono text-xs text-muted-foreground">—</span>
@@ -127,15 +130,12 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
                 </span>
               ) : null}
               {row.delay.kind === 'delta' ? (
-                <span
-                  className={cn(
-                    'shrink-0 font-mono text-xs font-semibold tabular-nums',
-                    delayToneClass(delayColorVar(row.delay.minutes) as string),
-                  )}
-                  title={row.delay.title}
-                >
-                  {row.delay.text}
-                </span>
+                <DelayFigure
+                  delay={row.delay}
+                  dir={dir}
+                  actualFromRunway={row.actualFromRunway}
+                  className="shrink-0 font-mono text-xs font-semibold tabular-nums"
+                />
               ) : row.delay.kind === 'risk' ? (
                 <button
                   type="button"
@@ -217,9 +217,9 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
           // Above the stretched row button, and a full 44 px on every pointer: this list only
           // renders below `md`, where the visitor is on a phone.
           className="relative z-10 size-11 shrink-0"
-          aria-label={`Watch ${row.ident}`}
+          aria-label={`Watch ${row.identDisplay}`}
           aria-pressed={watched}
-          title={`${watched ? 'Stop watching' : 'Watch'} ${row.ident}`}
+          title={`${watched ? 'Stop watching' : 'Watch'} ${row.identDisplay}`}
           onClick={() => onToggleWatch(row)}
         >
           <Eye aria-hidden="true" className={watched ? 'text-primary' : 'text-muted-foreground'} />

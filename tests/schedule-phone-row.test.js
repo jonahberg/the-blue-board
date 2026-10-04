@@ -68,6 +68,23 @@ describe('phoneAircraftLine — read back from fleetCell()', () => {
     expect(phoneAircraftLine({ reg: 'N17456', acCode: 'B39M', acShort: '737 MAX 9', fleet: null }).type).toBe('737 MAX 9');
   });
 
+  it('an Express tail only the Starlink roster knows reads Starlink, with no invented cabin', () => {
+    // fleetCell() answers from the roster for a tail the mainline fleet database lacks (v1.13.0).
+    const fleet = fleetCell('N140SY', FLEET, new Set(['N140SY']));
+    expect(fleet).toEqual({ badge: 'Starlink', starlink: true, enrich: '⚡ Starlink', source: 'starlink-roster' });
+    expect(phoneAircraftLine({ reg: 'N140SY', acCode: 'E75L', acShort: 'E175', fleet })).toEqual({
+      tail: 'N140SY',
+      type: 'E175',
+      seats: '',
+      wifi: 'Starlink',
+      starlink: true,
+    });
+  });
+
+  it('a fleet-database tail says where it came from', () => {
+    expect(fleetCell('N461UA', FLEET, STARLINK).source).toBe('fleet');
+  });
+
   it('an unknown or missing tail collapses to the type alone', () => {
     expect(phoneAircraftLine(rowFor('N00000'))).toEqual({ tail: 'N00000', type: '737-800', seats: '', wifi: '', starlink: false });
     expect(phoneAircraftLine({ reg: '', acCode: 'E175', acShort: '', fleet: null })).toEqual({
@@ -103,6 +120,18 @@ describe('phoneStatusLabel', () => {
   });
   it('says seen airborne instead of presumed when the live feed saw it', () => {
     expect(phoneStatusLabel({ text: 'Departed', presumed: true, seen: true }).note).toBe('seen airborne by the live feed');
+  });
+  it('a landing the live feed proved keeps its asterisk but says seen landing, not presumed', () => {
+    expect(phoneStatusLabel({ text: 'Landed', presumed: true, seenLanded: true })).toEqual({
+      label: 'Landed*',
+      note: 'seen landing on the live feed',
+    });
+  });
+  it('seen landing wins when the Likely-Canceled override also set seen', () => {
+    expect(phoneStatusLabel({ text: 'Landed', presumed: true, seen: true, seenLanded: true })).toEqual({
+      label: 'Landed*',
+      note: 'seen landing on the live feed',
+    });
   });
   it('passes a plain status through', () => {
     expect(phoneStatusLabel({ text: 'Canceled' })).toEqual({ label: 'Canceled', note: '' });

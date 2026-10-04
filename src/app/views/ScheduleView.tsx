@@ -363,6 +363,7 @@ export default function ScheduleView() {
             onClearFilters={onClearFilters}
             compact={!desktop}
             onOpenFlight={onOpenFlight}
+            dir={dir}
           />
           <p className="text-center text-[9px] text-muted-foreground">
             Schedule data via{' '}

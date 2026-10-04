@@ -11,8 +11,13 @@
 // data pipeline, not to this presentation layer. `tests/schedule-phone-row.test.js` pins the
 // format with a real fleet.json-shaped row, so a change to that join fails loudly there
 // instead of quietly printing an IFE code where the Wi-Fi should be.
+//
+// A United Express tail the fleet database does not know but the Starlink roster does arrives as
+// `{badge: 'Starlink', starlink: true, enrich: '⚡ Starlink', source: 'starlink-roster'}` (v1.13.0):
+// no seats, no type, and the Wi-Fi reads Starlink from the `starlink` flag, not from the string.
 
 import { WIFI_DISPLAY } from './fleet-utils.js';
+import { statusEvidenceNote } from './schedule-row-display.js';
 
 /** "12F/42E+/96Y", "50J/24PE/46E+/156Y" — a United cabin layout, never a type name. */
 const SEAT_CONFIG_RE = /^\d+[A-Z]{1,2}\+?(\/\d+[A-Z]{1,2}\+?)+$/;
@@ -85,16 +90,17 @@ export function phoneAircraftLine(row) {
 /**
  * The status pill's words, presumed rows included. The asterisk is what the desktop board
  * prints; the long form is for the pill's title and the screen-reader text, because a bare
- * "*" says nothing to either.
+ * "*" says nothing to either. The note is the desktop's (schedule-row-display.js), so a
+ * feed-proven landing says "seen landing on the live feed" on both boards, never
+ * "no live update".
  *
- * @param {{text: string, presumed?: boolean, seen?: boolean}} status
+ * @param {{text: string, presumed?: boolean, seen?: boolean, seenLanded?: boolean}} status
  * @returns {{label: string, note: string}}
  */
 export function phoneStatusLabel(status) {
   const text = String(status?.text || 'Scheduled');
-  if (status?.seen) return { label: text, note: 'seen airborne by the live feed' };
-  if (status?.presumed) return { label: `${text}*`, note: 'presumed — no live update' };
-  return { label: text, note: '' };
+  const evidence = statusEvidenceNote(status);
+  return { label: status?.presumed ? `${text}*` : text, note: evidence ? evidence.note : '' };
 }
 
 /**

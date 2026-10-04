@@ -20,15 +20,17 @@ globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
 }) as typeof requestAnimationFrame;
 
 function rowModel(i: number, patch: Partial<RowModel> = {}): RowModel {
-  const ident = `UA${1000 + i}`;
+  const ident = patch.ident ?? `UA${1000 + i}`;
   return {
     ident,
+    identDisplay: ident,
     key: `${ident}-${i}`,
     raw: {},
     timeText: '18:48',
     dateChip: null,
     actualLine: null,
     derivedActual: false,
+    actualFromRunway: false,
     routeLine: 'ROC → ORD',
     routeSub: 'Rochester',
     acCode: 'B753',
@@ -38,7 +40,7 @@ function rowModel(i: number, patch: Partial<RowModel> = {}): RowModel {
     regFromLive: false,
     gate: 'T1',
     status: { key: 'scheduled', cls: 'scheduled', text: 'Scheduled', presumed: false, asOf: false, live: false },
-    fleet: { badge: '24F/54E+/156Y', starlink: false, enrich: '24F/54E+/156Y · ViaSat Ka · AVOD · Del 2001' },
+    fleet: { badge: '24F/54E+/156Y', starlink: false, enrich: '24F/54E+/156Y · ViaSat Ka · AVOD · Del 2001', source: 'fleet' },
     swap: null,
     special: null,
     faaContext: null,
@@ -88,8 +90,9 @@ describe('SchedulePhoneRow', () => {
     const pill = within(item).getByText('Departed');
     expect(pill.className).toMatch(/\bborder-bb-ok\/40\b/);
     expect(within(item).getByText('LIVE')).toBeTruthy();
-    const delay = within(item).getByText('+208m');
+    const delay = within(item).getByText('+208m').closest('[title]')!;
     expect(delay.className).toMatch(/\btext-destructive\b/);
+    expect(delay.className).toMatch(/\bwhitespace-nowrap\b/);
   });
 
   it('line 2 is tail · type · seats · Wi-Fi', () => {
@@ -106,7 +109,12 @@ describe('SchedulePhoneRow', () => {
   it('badges Starlink instead of printing a Wi-Fi string', () => {
     renderRow(
       rowModel(1, {
-        fleet: { badge: '20F/45E+/114Y', starlink: true, enrich: '20F/45E+/114Y · Starlink · ⚡ Starlink · AVOD · Del 2009' },
+        fleet: {
+          badge: '20F/45E+/114Y',
+          starlink: true,
+          enrich: '20F/45E+/114Y · Starlink · ⚡ Starlink · AVOD · Del 2009',
+          source: 'fleet',
+        },
       }),
     );
     const item = screen.getByRole('listitem');
@@ -160,6 +168,94 @@ describe('SchedulePhoneRow', () => {
     );
     expect(screen.getByRole('listitem').textContent).toContain('Departed*');
     expect(screen.getByText(/presumed — no live update/)).toBeTruthy();
+  });
+
+  it('prints the flight number without the provider suffix, but watches and opens the raw one', () => {
+    const suffixed = rowModel(5, { ident: 'UA526H', identDisplay: 'UA526' });
+    const props = renderRow(suffixed);
+    const item = screen.getByRole('listitem');
+    expect(item.getAttribute('data-flight-row')).toBe('UA526H');
+    expect(item.textContent).not.toContain('UA526H');
+    fireEvent.click(screen.getByRole('button', { name: 'UA526 flight details' }));
+    expect(props.onOpenFlight).toHaveBeenCalledWith(suffixed);
+    fireEvent.click(screen.getByRole('button', { name: 'Watch UA526' }));
+    expect(props.onToggleWatch).toHaveBeenCalledWith(suffixed);
+    expect((vi.mocked(props.onToggleWatch).mock.calls[0][0] as RowModel).ident).toBe('UA526H');
+  });
+
+  it('a landing the live feed proved reads Landed* and says so, not "no live update"', () => {
+    renderRow(
+      rowModel(6, {
+        status: { key: 'landed', cls: 'landed', text: 'Landed', presumed: true, asOf: false, live: false, seenLanded: true },
+      }),
+    );
+    const item = screen.getByRole('listitem');
+    expect(item.textContent).toContain('Landed*');
+    expect(screen.getByText(/seen landing on the live feed/)).toBeTruthy();
+    expect(item.textContent).not.toMatch(/no live update/);
+  });
+
+  it('a wheels-up delay carries a marker with words for it', () => {
+    renderRow(
+      rowModel(7, {
+        actualFromRunway: true,
+        delay: {
+          kind: 'delta',
+          text: '+38m',
+          minutes: 38,
+          title: 'Wheels-up vs scheduled departure — includes taxi-out (the provider sent no separate gate time)',
+          basis: 'runway',
+        },
+      }),
+    );
+    const figure = screen.getByText('+38m').closest('[title]')!;
+    expect(figure.getAttribute('title')).toMatch(/Wheels-up/);
+    expect(figure.textContent).toContain('(from takeoff time; includes taxi)');
+    expect(figure.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('a touchdown delay on an arrivals board says so', () => {
+    renderRow(
+      rowModel(8, {
+        actualFromRunway: true,
+        delay: { kind: 'delta', text: '+12m', minutes: 12, title: 'Touchdown vs scheduled arrival', basis: 'runway' },
+      }),
+      { dir: 'arrivals' },
+    );
+    expect(screen.getByText('+12m').closest('[title]')!.textContent).toContain('(from touchdown time; before taxi-in)');
+  });
+
+  it('a floor reads ≥ on screen and "at least" to a screen reader', () => {
+    renderRow(
+      rowModel(9, {
+        status: { key: 'landed', cls: 'landed', text: 'Landed', presumed: true, asOf: false, live: false, seenLanded: true },
+        delay: { kind: 'delta', text: '≥+66m', minutes: 66, title: 'Landed — at least this late', basis: 'sighting', bound: 'lower' },
+      }),
+    );
+    const figure = screen.getByText('+66m').closest('[title]')!;
+    expect(figure.textContent).toContain('≥');
+    expect(figure.textContent).toContain('at least');
+    // The glyph itself is hidden from assistive tech: the words replace it.
+    expect([...figure.querySelectorAll('[aria-hidden="true"]')].map((n) => n.textContent?.trim())).toContain('≥');
+    // No runway marker on a sighting-based floor.
+    expect(figure.querySelector('svg')).toBeNull();
+  });
+
+  it('an Express tail the Starlink roster knows shows the Starlink badge on line 2', () => {
+    renderRow(
+      rowModel(10, {
+        reg: 'N140SY',
+        acCode: 'E75L',
+        acShort: 'E175',
+        fleet: { badge: 'Starlink', starlink: true, enrich: '⚡ Starlink', source: 'starlink-roster' },
+      }),
+    );
+    const item = screen.getByRole('listitem');
+    expect(within(item).getByText('N140SY')).toBeTruthy();
+    expect(within(item).getByText('E175')).toBeTruthy();
+    const starlink = within(item).getByText('Starlink');
+    expect(starlink.className).toMatch(/\btext-bb-starlink\b/);
+    expect(within(item).getAllByText(/Starlink/)).toHaveLength(1);
   });
 
   it('shows a swap with its direction in words', () => {

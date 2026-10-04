@@ -46,13 +46,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { delayColorVar } from '@/lib/delay-format.js';
 import { scrollBehavior } from '@/lib/motion.js';
+import { statusEvidenceNote } from '@/lib/schedule-row-display.js';
 import { clampWindow, expandWindow, initialWindow, windowIncluding } from '@/lib/schedule-window.js';
 import { cn } from '@/lib/utils';
 import type { RowModel, SortColumn } from './useBoardModel';
+import { DelayFigure } from './DelayFigure';
 import { SchedulePhoneRow } from './SchedulePhoneRow';
-import { STATUS_TONE, SWAP_TONE, delayToneClass, riskToneClass } from './tone';
+import { STATUS_TONE, SWAP_TONE, riskToneClass } from './tone';
 
 export type ScheduleTableHandle = {
   /** Scroll the container so the NOW divider (or the first future row) sits near the top. */
@@ -149,6 +150,8 @@ export const ScheduleTable = forwardRef<
     compact?: boolean;
     /** A phone row was tapped: open its flight sheet. */
     onOpenFlight?: (row: RowModel) => void;
+    /** The board's direction: a runway-time delay is wheels-up on one, touchdown on the other. */
+    dir?: 'departures' | 'arrivals';
   }
 >(function ScheduleTable(
   {
@@ -169,6 +172,7 @@ export const ScheduleTable = forwardRef<
     onClearFilters,
     compact = false,
     onOpenFlight,
+    dir = 'departures',
   },
   ref,
 ) {
@@ -371,6 +375,7 @@ export const ScheduleTable = forwardRef<
                   index={index}
                   watched={isWatched(row.ident)}
                   boardAsOf={boardAsOf}
+                  dir={dir}
                   onOpenFlight={openFlight}
                   onToggleWatch={onToggleWatch}
                   onExplainDelay={onExplainDelay}
@@ -486,7 +491,9 @@ export const ScheduleTable = forwardRef<
                     ) : null}
                   </TableCell>
 
-                  <TableCell className="font-mono font-semibold text-primary">{row.ident}</TableCell>
+                  {/* The printed number drops a provider suffix ("UA526H" → "UA526"); the row
+                      attributes, the watch toggle and the palette keep the raw `ident`. */}
+                  <TableCell className="font-mono font-semibold text-primary">{row.identDisplay}</TableCell>
 
                   <TableCell>
                     <span className="font-mono">{row.routeLine}</span>
@@ -603,21 +610,18 @@ export const ScheduleTable = forwardRef<
                         LIVE
                       </Badge>
                     ) : null}
-                    {row.status.seen ? (
-                      <span
-                        className="block text-[9px] text-muted-foreground"
-                        title="The schedule provider listed this flight as Likely Canceled, but the live flight feed saw it airborne"
-                      >
-                        seen airborne
-                      </span>
-                    ) : row.status.presumed ? (
-                      <span
-                        className="block text-[9px] text-muted-foreground"
-                        title="Presumed — the scheduled time passed without a live update"
-                      >
-                        presumed (no live update)
-                      </span>
-                    ) : null}
+                    {(() => {
+                      // seen landing → seen airborne → presumed (schedule-row-display.js).
+                      const evidence = statusEvidenceNote(row.status);
+                      return evidence ? (
+                        <span className="block text-[9px] text-muted-foreground" title={evidence.title}>
+                          {evidence.text}
+                          {evidence.note.startsWith(evidence.text) && evidence.note !== evidence.text ? (
+                            <span className="sr-only">{evidence.note.slice(evidence.text.length)}</span>
+                          ) : null}
+                        </span>
+                      ) : null;
+                    })()}
                     {row.status.asOf ? (
                       <span className="block text-[9px] text-muted-foreground">as of {boardAsOf}</span>
                     ) : null}
@@ -628,12 +632,7 @@ export const ScheduleTable = forwardRef<
 
                   <TableCell className="text-right font-mono tabular-nums">
                     {row.delay.kind === 'delta' ? (
-                      <span
-                        className={delayToneClass(delayColorVar(row.delay.minutes) as string)}
-                        title={row.delay.title}
-                      >
-                        {row.delay.text}
-                      </span>
+                      <DelayFigure delay={row.delay} dir={dir} actualFromRunway={row.actualFromRunway} />
                     ) : row.delay.kind === 'risk' ? (
                       <button
                         type="button"
@@ -675,9 +674,9 @@ export const ScheduleTable = forwardRef<
                         variant="ghost"
                         size="icon"
                         className="size-11 pointer-fine:md:size-7"
-                        aria-label={`Watch ${row.ident}`}
+                        aria-label={`Watch ${row.identDisplay}`}
                         aria-pressed={isWatched(row.ident)}
-                        title={`${isWatched(row.ident) ? 'Stop watching' : 'Watch'} ${row.ident}`}
+                        title={`${isWatched(row.ident) ? 'Stop watching' : 'Watch'} ${row.identDisplay}`}
                         onClick={() => onToggleWatch(row)}
                       >
                         <Eye
