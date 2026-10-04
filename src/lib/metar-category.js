@@ -57,6 +57,25 @@ export function computeFlightCategory(rawMetar) {
   return 'VFR';
 }
 
+/**
+ * The part of a METAR that describes the weather AT the station NOW: everything before the
+ * remarks (`RMK`) and before any trend forecast (`BECMG`, `TEMPO`, `NOSIG`).
+ *
+ * Remarks report weather that is somewhere else or already over — KIAH 032353Z carried
+ * `RMK … SHRA SW-W` (showers to the south-west) on a dry VFR observation, and the old
+ * whole-string scan read that as rain on the field: a caution-level ops impact, which painted
+ * IAH's radar dot the same yellow as MVFR under a label that said VFR (phone QA, Oct 3 2026).
+ * A trend group is a forecast, not an observation.
+ *
+ * @param {string|null|undefined} rawMetar
+ * @returns {string}
+ */
+export function metarObservedPart(rawMetar) {
+  const raw = String(rawMetar || '');
+  const cut = raw.search(/\s(?:RMK|BECMG|TEMPO|NOSIG)(?=\s|$)/);
+  return cut === -1 ? raw : raw.slice(0, cut);
+}
+
 // Compute operational impact — considers wind, precip, phenomena beyond just ceiling/vis
 // Returns: {level: 'normal'|'caution'|'warning'|'severe', reasons: string[], color: string}
 export const OPS_COLORS = {normal:'#22c55e',caution:'#eab308',warning:'#ef4444',severe:'#c026d3'};
@@ -83,8 +102,11 @@ export function computeOpsImpact(rawMetar, fltCat) {
     else if (gust >= 30) { bump('caution'); reasons.push(`gusts ${gust}kt`); }
   }
 
-  // Weather phenomena — parse ALL groups, not just first
-  const wxAll = [...rawMetar.matchAll(/\s([+-]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)+)(?=\s)/g)];
+  // Weather phenomena — parse ALL groups, not just first — from the observation only: a
+  // remark ("SHRA SW-W", "TS DSNT") or a TEMPO forecast is not weather on the field.
+  // The trailing space lets the last body group match the `(?=\s)` lookahead.
+  const observed = `${metarObservedPart(rawMetar)} `;
+  const wxAll = [...observed.matchAll(/\s([+-]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)+)(?=\s)/g)];
   const wxCombined = wxAll.map(m => m[1]).join(' ');
   if (wxCombined.includes('TS')) { bump('warning'); reasons.push('thunderstorms'); }
   if (wxCombined.includes('FZ')) { bump('warning'); reasons.push('freezing precipitation'); }
@@ -94,7 +116,7 @@ export function computeOpsImpact(rawMetar, fltCat) {
   if (wxCombined.includes('FG')) { bump('caution'); reasons.push('fog'); }
 
   // Low clouds + active precip (even if not technically ceiling)
-  const allClouds = [...rawMetar.matchAll(/(FEW|SCT|BKN|OVC)(\d{3})/g)];
+  const allClouds = [...observed.matchAll(/(FEW|SCT|BKN|OVC)(\d{3})/g)];
   const lowestAlt = allClouds.length ? parseInt(allClouds[0][2]) * 100 : 99999;
   if (lowestAlt <= 1500 && wxAll.length > 0 && level === 'normal') {
     bump('caution'); reasons.push('low clouds with active weather');

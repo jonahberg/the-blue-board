@@ -7,6 +7,7 @@
 // abbreviation are injected so the module stays pure.
 
 import { HUB_TZ } from './hubTz.js';
+import { isOnGround } from './flight-phase.js';
 
 /**
  * Has upstream first recorded this tail's Starlink within the last 7 days?
@@ -85,6 +86,12 @@ export function formatFlightTime(ts, airportIata, tzAbbrev) {
  * Map of tail → live airborne flight from the LIVE OPS feed. One pass over the feed;
  * cheap enough to rebuild per render.
  *
+ * "Airborne" is the dashboard's one definition, `isOnGround()` in flight-phase.js negated: NOT
+ * on the ground = the feed's on-ground flag is off AND the aircraft is above 100 ft or faster
+ * than 50 kt. This index used to read the feed flag alone, so taxiing Starlink aircraft counted
+ * as airborne and the Starlink tab said 202 while Stats (live-stats.js `isAirborne`) said 191
+ * (live audit Oct 4 2026).
+ *
  * Pass the shared `makeIsStarlinkFlight` predicate and a fleet-match resolver so this index
  * agrees with the map and the stat bar (F101): a row with no registration but a matched
  * ICAO24 is found, and a hyphenated reg is keyed the way the roster stores it. A roster Set
@@ -99,7 +106,7 @@ export function airborneByTail(flights, starlink, resolveTail) {
   const live = {};
   const norm = (reg) => String(reg || '').replace(/-/g, '').toUpperCase();
   for (const f of (flights || [])) {
-    if (!f || f.onGround) continue;
+    if (!f || isOnGround(f)) continue;
     const tail = norm((resolveTail && resolveTail(f)) || f.reg);
     if (!tail) continue;
     const isStarlink = typeof starlink === 'function' ? starlink(f) : starlink.has(tail);

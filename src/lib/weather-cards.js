@@ -314,15 +314,57 @@ export function buildHubCardModel({ hub, metar = null, faa = null }) {
     unavailable: !hasRenderableMetarData(metar),
     hasDetail: Boolean(explainer || faaExplainer || raw || advisoryUrls.length || notam),
     /**
-     * The radar's permanent label after the bold hub code: the category alone ("IFR"). The
-     * full ops reason used to ride in it too ("MVFR (marginal ceilings/visibility)"), and a
-     * label that wide centred over EWR covered IAD's (audit Sep 2026). The reason is the
-     * label's hover title (`markerDetail`) and the hub card's status line.
+     * The radar's permanent label after the bold hub code: the category ("IFR"), plus a ⚠ when
+     * the observation carries an ops impact the category does not (rain, gusts, fog on a VFR
+     * field). The full ops reason used to ride in it too ("MVFR (marginal ceilings/
+     * visibility)"), and a label that wide centred over EWR covered IAD's (audit Sep 2026).
+     * The reason is the label's hover title (`markerDetail`) and the hub card's status line.
      */
-    markerLabel: cat,
+    // A no-break space: the label wraps per word on a phone, and a ⚠ alone on a third line
+    // read as a separate marker.
+    markerLabel: opsBeyondCategory(cat, ops.level) ? `${cat}\u00a0⚠` : cat,
     markerDetail: ops.level !== 'normal' ? String(ops.reasons[0] || ops.level) : '',
+    /**
+     * The radar dot is the FLIGHT CATEGORY colour — what the legend under the map explains
+     * and what the label beside the dot says. It used to take `borderColor`, the worst-of
+     * ops colour, and `OPS_COLORS.caution` is the same hex as `CAT_COLORS.MVFR`: a VFR hub
+     * with light rain (IAD 040052Z `-RA`) or a misread remark (IAH 032353Z) wore the MVFR
+     * yellow under a "VFR" label, so the yellow looked like it had landed on the wrong hub
+     * (phone QA, Oct 3 2026). The ops impact is the ⚠ in the label instead.
+     */
+    markerColor: catColor,
     jargon: { metar: false },
   };
+}
+
+/**
+ * Does the ops impact say more than the category already does? `computeOpsImpact()` bumps
+ * MVFR to caution, IFR to warning and LIFR to severe on its own, so only a level ABOVE the
+ * category's own is news (VFR + rain, MVFR + thunderstorms).
+ * @param {string} cat
+ * @param {string} level
+ */
+function opsBeyondCategory(cat, level) {
+  const rank = { normal: 0, caution: 1, warning: 2, severe: 3 };
+  const own = { VFR: 0, MVFR: 1, IFR: 2, LIFR: 3 }[cat] ?? 0;
+  return (rank[level] ?? 0) > own;
+}
+
+/**
+ * The radar's markers, one per hub, KEYED by hub. The map recolours each marker by looking
+ * its hub up in this list, never by position, so the order of `models` cannot move a colour
+ * from one airport to another.
+ *
+ * @param {Array<{hub: string, markerColor: string, markerLabel: string, markerDetail: string}>} models
+ * @returns {Array<{hub: string, color: string, label: string, detail: string}>}
+ */
+export function radarMarkers(models) {
+  return (models || []).map((m) => ({
+    hub: m.hub,
+    color: m.markerColor,
+    label: m.markerLabel,
+    detail: m.markerDetail,
+  }));
 }
 
 /**

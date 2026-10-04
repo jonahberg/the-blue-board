@@ -11,13 +11,20 @@
  * re-spend twenty lookups. The counters drive the terminal "STATUS UNAVAILABLE" chip
  * (F008) — a card that says "LOADING…" for the twentieth consecutive poll is lying
  * about the state of the world.
+ *
+ * Through flights (phone QA Oct 4 2026): one flight number can fly two legs a day, and the
+ * server's "current leg" can be the wrong one while the first is still in the air (UA1872
+ * MCO→IAH→MSP). Given the live feed, the sweep asks again with `from=<the airborne aircraft's
+ * origin>` whenever the aircraft is flying a different leg than the cached answer describes —
+ * once per origin per five minutes, so a leg the boards do not know cannot loop.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { findLiveFlight, liveLegOrigin } from '@/lib/my-flights.js';
 import { flightTimesCacheTtl } from '@/lib/watch-utils.js';
 import { ApiError, fetchFlightTimes } from '../../data/api';
-import type { FlightTimes } from '../../data/types';
+import type { Flight, FlightTimes } from '../../data/types';
 
 export type FlightTimesEntry = { data: FlightTimes | null; failures: number };
 export type FlightTimesMap = Record<string, FlightTimesEntry>;
@@ -25,10 +32,14 @@ export type FlightTimesMap = Record<string, FlightTimesEntry>;
 /** How often the hook re-examines the ladder. The TTL, not this, decides what refetches. */
 const SWEEP_MS = 15000;
 
-type CacheEntry = { data: FlightTimes; ts: number };
+/** `from` = the origin the answer was pinned to, when the sweep asked for a specific leg. */
+type CacheEntry = { data: FlightTimes; ts: number; from?: string };
 
 const cache = new Map<string, CacheEntry>();
 const failures = new Map<string, number>();
+/** flight → the last leg-origin retry, so an unanswerable one is not re-asked every sweep. */
+const legRetries = new Map<string, { from: string; ts: number }>();
+const LEG_RETRY_MS = 5 * 60000;
 /** In-flight requests, so a sweep landing on a slow lookup does not start a second one. */
 const inFlight = new Set<string>();
 
@@ -36,6 +47,7 @@ const inFlight = new Set<string>();
 export function clearFlightTimesCache(): void {
   cache.clear();
   failures.clear();
+  legRetries.clear();
 }
 
 function snapshot(flights: string[]): FlightTimesMap {
@@ -49,7 +61,7 @@ function snapshot(flights: string[]): FlightTimesMap {
   return map;
 }
 
-export function useFlightTimes(flights: string[]): {
+export function useFlightTimes(flights: string[], live?: Flight[]): {
   times: FlightTimesMap;
   /** True until every watched flight has been asked about at least once. */
   loading: boolean;
@@ -59,6 +71,9 @@ export function useFlightTimes(flights: string[]): {
   const [times, setTimes] = useState<FlightTimesMap>(() => snapshot(flights));
   const [version, setVersion] = useState(0);
   const mounted = useRef(true);
+  // Read at sweep time: the feed moves every poll and must not restart the sweep timer.
+  const liveRef = useRef(live);
+  liveRef.current = live;
 
   useEffect(() => {
     mounted.current = true;
@@ -81,12 +96,12 @@ export function useFlightTimes(flights: string[]): {
 
     let cancelled = false;
 
-    async function fetchOne(flight: string) {
+    async function fetchOne(flight: string, from?: string) {
       if (inFlight.has(flight)) return;
       inFlight.add(flight);
       try {
-        const data = await fetchFlightTimes(flight);
-        cache.set(flight, { data, ts: Date.now() });
+        const data = await fetchFlightTimes(flight, undefined, from);
+        cache.set(flight, { data, ts: Date.now(), ...(from ? { from } : {}) });
         failures.set(flight, 0);
       } catch (error) {
         // A 4xx/5xx is a miss; so is a network failure. Both count towards the terminal
@@ -105,8 +120,16 @@ export function useFlightTimes(flights: string[]): {
       const now = Date.now();
       for (const flight of list) {
         const entry = cache.get(flight);
+        // The live aircraft is flying another leg of this number: ask for that one.
+        const legFrom = entry ? (liveLegOrigin(entry.data, findLiveFlight(liveRef.current ?? [], flight)) as string) : '';
+        const tried = legRetries.get(flight);
+        if (legFrom && entry?.from !== legFrom && !(tried && tried.from === legFrom && now - tried.ts < LEG_RETRY_MS)) {
+          legRetries.set(flight, { from: legFrom, ts: now });
+          void fetchOne(flight, legFrom);
+          continue;
+        }
         const ttl = flightTimesCacheTtl(entry?.data ?? null, flight, now);
-        if (!entry || now - entry.ts >= ttl) void fetchOne(flight);
+        if (!entry || now - entry.ts >= ttl) void fetchOne(flight, entry?.from);
       }
     }
 

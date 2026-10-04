@@ -124,7 +124,8 @@ export const trackers = {
     lastUpdated: atcMeta.lastUpdated,
     lastVerified: atcMeta.lastVerified,
     entryCount: atcAirports.length,
-    entryNoun: 'airports',
+    // Singular: the index page counts it through countLabel() ("1 airport", "89 airports").
+    entryNoun: 'airport',
     metric: `${atcAirports.filter((a) => a.status === 'live').length}/${atcAirports.length} digital`,
     segments: [
       { label: 'Live', count: atcAirports.filter((a) => a.status === 'live').length, tone: 'green' },
@@ -143,7 +144,7 @@ export const trackers = {
     lastUpdated: unitedHubsMeta.lastUpdated,
     lastVerified: unitedHubsMeta.lastVerified,
     entryCount: unitedProjects.length,
-    entryNoun: 'projects',
+    entryNoun: 'project',
     metric: `${unitedProjects.filter((p) => p.status === 'under-construction' || p.status === 'announced').length} active`,
     segments: [
       { label: 'Building', count: unitedProjects.filter((p) => p.status === 'under-construction').length, tone: 'amber' },

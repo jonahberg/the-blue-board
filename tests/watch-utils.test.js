@@ -73,14 +73,22 @@ describe('isSignificantStatusChange', () => {
     expect(isSignificantStatusChange('SCHEDULED', 'DEPARTED')).toBe(true);
   });
 
-  it('notifies when a delay appears or a gate changes', () => {
-    expect(isSignificantStatusChange('SCHEDULED', 'DELAYED +25m')).toBe(true);
-    expect(isSignificantStatusChange('Gate C12', 'Gate C14')).toBe(true);
+  // Changed Oct 4 2026 (audit finding 3/4, phone QA): the status WORD no longer carries delays or
+  // gates. A "Delayed" word was on 4 of 2,651 departure rows on Oct 3 while 610 left 15+ min late,
+  // so in-tab delay alerts now come from the estimated departure in minutes
+  // (evaluateWatchObservation, below); no board status reads "Gate …" at all.
+  it('a delay word or a gate word is not a phase change', () => {
+    expect(isSignificantStatusChange('SCHEDULED', 'DELAYED +25m')).toBe(false);
+    expect(isSignificantStatusChange('Gate C12', 'Gate C14')).toBe(false);
   });
 
-  it('notifies when either side mentions a significant keyword', () => {
+  // Changed: "either side mentions a keyword" is what let "En route (was: En Route)" fire for a
+  // flight that had already landed (phone QA Oct 4 2026). Only a forward phase change notifies.
+  it('notifies on a forward phase change only — never a re-statement or a step back', () => {
     expect(isSignificantStatusChange('SCHEDULED', 'EN ROUTE')).toBe(true);
-    expect(isSignificantStatusChange('DELAYED', 'SCHEDULED')).toBe(true);
+    expect(isSignificantStatusChange('DELAYED', 'SCHEDULED')).toBe(false);
+    expect(isSignificantStatusChange('En Route', 'En route')).toBe(false);
+    expect(isSignificantStatusChange('Departed', 'En Route')).toBe(false);
   });
 
   it('stays quiet when the status is unchanged', () => {
@@ -125,9 +133,13 @@ describe('AeroDataBox says "Arrived", never "Landed" (v1.11.3)', () => {
     expect(isSignificantStatusChange('LANDED', 'Landed')).toBe(false);
   });
 
-  it('treats leaving the landed state the same whichever word it was stored as', () => {
-    expect(isSignificantStatusChange('Landed', 'Expected')).toBe(true);
-    expect(isSignificantStatusChange('Arrived', 'Expected')).toBe(true);
+  // Changed Oct 4 2026: leaving the landed state used to alert. It is either the next day's leg on a
+  // board (the in-tab twin of the push cron's hub-midnight false alerts, audit finding 2) or the
+  // departures board — which never advances to landed — loading after the arrivals board. Neither
+  // is news, whichever landed word was stored.
+  it('treats leaving the landed state the same whichever word it was stored as: quiet', () => {
+    expect(isSignificantStatusChange('Landed', 'Expected')).toBe(false);
+    expect(isSignificantStatusChange('Arrived', 'Expected')).toBe(false);
   });
 
   it('watchedFlightLanded fires for a real AeroDataBox arrival', () => {

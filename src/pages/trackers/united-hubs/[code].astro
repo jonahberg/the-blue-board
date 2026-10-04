@@ -1,6 +1,7 @@
 ---
 import { unitedHubsMeta, unitedHubs } from '../../../data/trackers/united-hubs.js';
 import { getAtcAirport, getHubProjects, unitedHubDetailCodes, formatCompactNumber, formatTrackerDate, countLabel, unitedHubSeo } from '../../../lib/tracker-detail.js';
+import { countIs, plural } from '../../../lib/plural.js';
 import TrackerDetailLayout from '../../../components/trackers/TrackerDetailLayout.astro';
 import StatusBadge from '../../../components/trackers/StatusBadge.astro';
 import SourceDisclosure from '../../../components/trackers/SourceDisclosure.astro';
@@ -55,11 +56,11 @@ const projectList = projects.map((project) => project.name).join(', ');
 const faq = [
   {
     question: `What is United building at ${code}?`,
-    answer: `${countLabel(projects.length, 'project')} are tracked at ${code}: ${projectList}. Each item is labeled by current status and by whether United or the airport authority is doing the work.`,
+    answer: `${countIs(projects.length, 'project')} tracked at ${code}: ${projectList}. Each item is labeled by current status and by whether United or the airport authority is doing the work.`,
   },
   {
     question: `How many active United projects are at ${code}?`,
-    answer: `${activeCount} ${activeCount === 1 ? 'project is' : 'projects are'} under construction or announced, ${openCount} ${openCount === 1 ? 'is' : 'are'} already open, and the remaining items are explicitly labeled if they are only rumored.`,
+    answer: `${countIs(activeCount, 'project')} under construction or announced, ${openCount} ${openCount === 1 ? 'is' : 'are'} already open, and the remaining items are explicitly labeled if they are only rumored.`,
   },
   {
     question: `Which United project at ${code} has a published timeline?`,
@@ -139,10 +140,10 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
 >
   <section class={SECTION} aria-label={`${code} project summary`}>
     <div class={SUMMARY_GRID}>
-      <div class={STAT}><strong class={STAT_VALUE}>{projects.length}</strong><span class={STAT_LABEL}>Tracked projects</span></div>
+      <div class={STAT}><strong class={STAT_VALUE}>{projects.length}</strong><span class={STAT_LABEL}>Tracked {plural(projects.length, 'project')}</span></div>
       <div class={STAT}><strong class={STAT_VALUE}>{activeCount}</strong><span class={STAT_LABEL}>Building or announced</span></div>
       <div class={STAT}><strong class={STAT_VALUE}>{openCount}</strong><span class={STAT_LABEL}>Already open</span></div>
-      <div class={STAT}><strong class={STAT_VALUE}>{totalGates || '—'}</strong><span class={STAT_LABEL}>Tracked new gates</span></div>
+      <div class={STAT}><strong class={STAT_VALUE}>{totalGates || '—'}</strong><span class={STAT_LABEL}>Tracked new {plural(totalGates, 'gate')}</span></div>
     </div>
   </section>
 
@@ -184,7 +185,7 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
     <h2 id="hub-read-heading" class={SECTION_H2}>The read on {code}</h2>
     <p class={SECTION_P}>
       {leadProject.name} is the clearest headline at {code}: {leadProject.details}
-      {` Across the full list, ${unitedLedCount} of ${projects.length} projects are led or jointly built by United; the rest belong to the airport authority and affect United's operation without being United capital projects.`}
+      {` Across the full list, ${unitedLedCount} of ${countLabel(projects.length, 'project')} ${unitedLedCount === 1 ? 'is' : 'are'} led or jointly built by United; the rest belong to the airport authority and affect United's operation without being United capital projects.`}
     </p>
     {hub.quietNote && <p class={NOTE}>{hub.quietNote}</p>}
   </section>

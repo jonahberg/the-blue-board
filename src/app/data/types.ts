@@ -223,4 +223,9 @@ export type ScheduleResponse = {
 export type PushConfig = { configured: boolean; vapidPublicKey?: string };
 
 /** One entry of `bb_watched_flights` (storage contract, inventory §29 — do not reshape). */
-export type WatchedFlight = { flight: string; route: string; status: string; ts: number };
+/**
+ * `bb_watched_flights` entry. `dep` (the followed leg's scheduled departure, epoch seconds) and
+ * `delayBucket` (the delay band already announced) were added Oct 2026 and are absent on older
+ * entries; every reader treats them as optional.
+ */
+export type WatchedFlight = { flight: string; route: string; status: string; ts: number; dep?: number; delayBucket?: number };

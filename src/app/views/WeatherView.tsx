@@ -8,16 +8,24 @@
  * comes last. Below 1024 px the two panels stack, radar first, because on a phone the map is
  * the thing you can read at a glance.
  *
- * The map and the cards are two views of ONE model: `buildHubCardModel()` decides a hub's
- * colour once, and both the card's top border and the radar marker take it. Clicking a
- * marker scrolls to that card and flashes it, which is what makes them feel like one thing
- * rather than a map beside a list.
+ * The map and the cards are two views of ONE model: `buildHubCardModel()` decides each hub's
+ * colours once. The radar dot takes the flight-category colour the legend explains (with a ⚠
+ * in its label when there is an ops impact on top); the card's top border takes the worst-of
+ * ops colour, explained by the status line printed under it. Clicking a marker scrolls to that
+ * card and flashes it, which is what makes them feel like one thing rather than a map beside
+ * a list.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { scrollBehavior } from '@/lib/motion.js';
-import { assignJargonFirsts, buildHubCardModel, radarTitle, WX_HUBS } from '@/lib/weather-cards.js';
+import {
+  assignJargonFirsts,
+  buildHubCardModel,
+  radarMarkers,
+  radarTitle,
+  WX_HUBS,
+} from '@/lib/weather-cards.js';
 import { useUi } from '../state/ui';
 import { useWeather } from '../state/weather';
 import type { RadarHub } from '../map/RadarMap';
@@ -48,15 +56,7 @@ export default function WeatherView() {
     return assignJargonFirsts(built) as HubCardModel[];
   }, [metarByHub, faaIndex]);
 
-  const radarHubs = useMemo<RadarHub[]>(
-    () => models.map((m) => ({
-      hub: m.hub,
-      color: m.borderColor,
-      label: m.markerLabel,
-      detail: m.markerDetail,
-    })),
-    [models],
-  );
+  const radarHubs = useMemo<RadarHub[]>(() => radarMarkers(models) as RadarHub[], [models]);
 
   const selectHub = useCallback((hub: string) => {
     document

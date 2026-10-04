@@ -1,6 +1,7 @@
 // @ts-check
 
 import { atcAirports, unitedHubs, unitedProjects } from '../data/trackers/index.js';
+import { countLabel } from './plural.js';
 
 export const unitedHubDetailCodes = Object.keys(unitedHubs);
 const atcCodeSet = new Set(atcAirports.map((airport) => airport.code));
@@ -13,7 +14,7 @@ export const trackerParentSeo = {
   },
   atc: {
     title: 'FAA Electronic Flight Strips Tracker: 89 Airports',
-    description: `The FAA is replacing paper flight strips at 89 airport towers. Live airport-by-airport TFDM tracker: ${atcAirports.filter((airport) => airport.status === 'live').length} airports digital, ${atcAirports.filter((airport) => airport.status !== 'live').length} still on paper. Check yours.`,
+    description: `The FAA is replacing paper flight strips at 89 airport towers. Live airport-by-airport TFDM tracker: ${countLabel(atcAirports.filter((airport) => airport.status === 'live').length, 'airport')} digital, ${atcAirports.filter((airport) => airport.status !== 'live').length} still on paper. Check yours.`,
   },
   'united-hubs': {
     title: 'United Hub Construction Tracker: Clubs, Gates & Terminals',
@@ -39,10 +40,9 @@ export function formatCompactNumber(value) {
   return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 }
 
-/** @param {number} count @param {string} singular */
-export function countLabel(count, singular) {
-  return `${count} ${singular}${count === 1 ? '' : 's'}`;
-}
+// The counted-noun helper moved to ./plural.js (with `plural` and `countIs`); re-exported so
+// the pages that already import it from here keep working.
+export { countLabel };
 
 /** @param {string} code */
 export function getHubProjects(code) {

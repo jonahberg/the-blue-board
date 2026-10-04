@@ -4,6 +4,39 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-10-04
+
+**Every claim on the front page now holds up on a phone.** A Reddit commenter said "half the features don't work", so we audited each claim the post made: a live data audit of the nine hub boards (Oct 4, 00:36–01:28Z), plus phone QA at 360 and 390 px. This release fixes what failed. Before→after numbers come from offline replays of the new code on the same real boards, the live feed and the sightings ledger.
+
+### Flight-watch alerts
+- **Watch a flight and you hear when it departs, lands or runs late.** A watch follows one dated leg (scheduled departure plus origin). It no longer jumps to tomorrow's flight with the same number at hub midnight, and it ends quietly 3 hours after landing. Landed and departed come from the arrivals-board row for that leg plus the live-feed sightings ledger: airborne means departed, and seen on the ground at the destination after flying the leg means landed. That works for non-hub destinations too. On real `/api/flight-times` answers the new code called **6 of 6 landings and 6 of 6 departures** right; prod got them wrong. (`src/lib/watch-leg.js`, `api/flight-times.ts`, `api/cron/watch-alerts.ts`)
+- **Delay alerts at 15, 30 and 60 minutes, then every hour**, from the estimated or actual gate departure, and never twice for the same band. (`src/lib/watch-rules.js`)
+- **Alerts work on whatever tab you're on.** In-tab alerts used to come only from a Schedule-board reload. They now also fire from the My Flights polling path and the live feed, on any tab. Both sources go through one rule, so an alert never fires twice. The background push and the tab share that rule (`src/lib/watch-rules.js`) and only ever move forward. A spelling change ("En route" vs "En Route") is never news, and "Glad you landed" appears only on a real landing. (`src/app/state/watch-alerts.tsx`, `src/lib/watch-utils.js`)
+- **A "Turn on notifications" button in the watch panel**, with states for on, blocked, iOS (add to Home Screen first) and unsupported. On a through flight (UA1872 MCO→IAH→MSP), My Flights now follows the leg the aircraft is actually flying. It ignores the other leg's live position, and the ETA stops counting once the aircraft is on the ground at the destination.
+- One JSON log line per push (flight, leg date, old → new, reason, result), with no endpoint or other personal data.
+
+### Boards that tell the truth
+- **LIVE means airborne now.** The badge used to light for any recent sighting, including aircraft parked at the gate with the transponder on. It now needs a recent airborne fix for this flight, no earlier than 15 minutes before departure. Rows marked LIVE while the aircraft sat on the ground: **80 → 0**.
+- **Landed flights say Landed.** An arrival the feed saw airborne on this leg and then on the ground at its destination reads **Landed\*** with "seen landing on the live feed", not "En Route" or "Expected · RISK". Landed aircraft still shown en route: **26 → 0**. Arrivals stuck "En Route" 90+ minutes after their arrival time: **7 → 0**.
+- **Delays follow the evidence** (`src/lib/board-delay.js`). The cell uses the live-position ETA, a landing proved by the feed (shown as a floor, "≥"), or departure plus the scheduled block when the provider's estimate is physically impossible. Two examples: UA407 read **−75m** after leaving 38 minutes late and now reads **+38m**; UA1963 read **+0m** while still cruising past its arrival time and now reads **+79m**. A delay measured to wheels-up gets a takeoff icon and the words "from takeoff time; includes taxi". 298 runway-time departures are flagged that way on one snapshot. On airborne arrivals, delays more than 45 minutes off the live-position ETA: **12 → 0**.
+- **One flight, one row.** The same flight number, route and tail listed twice collapses into the row with the best evidence, when the board is fetched and when it is served. Duplicate groups: **32 → 0**.
+- **Express Starlink shows up.** United Express tails are not in the mainline fleet database, so their Wi-Fi read "—" even on aircraft the Starlink tab lists. Express rows showing Starlink Wi-Fi: **3 → 1,270**.
+- "En Route" has one spelling. A missing airport code is recovered from the airport name. Flight numbers print without the provider's letter suffix ("UA526", not "UA526H"); the watch and deep links keep the raw number.
+- `warm-schedules` adds one extra today-arrivals refresh per run, paid only while the day's AeroDataBox spend is under its paced line. `SCHEDULE_WARM_EXTRA_ARRIVALS=0` turns it off.
+
+### The board on a phone
+- **Below 768 px the schedule is a two-line list**, not a 1,065 px table with status, tail, Wi-Fi and the watch eye off-screen. Line one is time, flight, route, a status pill with LIVE, and the delay or RISK. Line two is tail · type · seats · Wi-Fi, with Starlink badged. Tapping a row opens the flight sheet. The watch eye is a 44 px target. The toolbar folds to two rows and the stat cards to a 4×2 grid. Rows fully on the first screen: **none → 5 at 360×780, 1 → 7 at 390×844**. Desktop and tablet keep the table.
+- **The waitlist popup is now a strip.** It used to open over the board after five minutes or a run of clicks. Now a slim "Stay in the loop" line appears above the bottom nav. You can dismiss it, and a "no" holds for 30 days. The sign-up dialog opens only when asked for (the strip's button or `?waitlist=1`). Strip sign-ups are recorded as `source: 'dashboard'`.
+- **Radar dots match their labels.** A dot took the worst-of ops colour, and "caution" is the same yellow as MVFR, so a rainy VFR hub wore MVFR yellow under a "VFR" label. Dots now use the flight-category colour, and ops impact shows as "VFR ⚠".
+- The welcome dialog's button stays pinned. Hub chips are 44 px on touch screens. A phone shows one engagement strip at a time.
+
+### Smaller fixes
+- 219 more airports have time zones, so the flight sheet reads "8:40 PM CDT" instead of "your time".
+- Tracker pages pluralise counts correctly ("1 flight", not "1 flights"). (`src/lib/plural.js`)
+- Board markers always come with words. "Landed\*" carries "seen landing", "≥"/"≤" are read as "at least"/"at most", and the takeoff/touchdown icon carries its own sentence. The table and the phone row share that wording (`src/lib/schedule-row-display.js`).
+
+**Deploy notes:** existing watches re-baseline silently on their first check after deploy, so no alert fires for a change that happened before it. The extra arrivals refresh is gated by `SCHEDULE_WARM_EXTRA_ARRIVALS`. CDN copies of boards can show old LIVE stamps for up to about an hour.
+
 ## [1.12.0] - 2026-10-03
 
 ### Fixed

@@ -22,8 +22,13 @@ import {
 } from './reg-ledger.js';
 import { cancellationKind } from './cancellation.js';
 import { isOnGround } from './flight-phase.js';
+import { liveArrivalEstimate } from './my-flights.js';
 
-/** A sighting this recent means "airborne right now" → rows get live:{seenAt}. */
+/**
+ * An AIRBORNE fix this recent means "airborne right now" → rows get live:{seenAt}. Since v1.12.1 the
+ * fix must be airborne (`airborneAtMs`) and the sighting's latest word: a parked or landed aircraft
+ * with its transponder on is "seen", not live (Oct 4 2026 audit: 28–42 wrong LIVE badges).
+ */
 export const LIVE_RECENT_MS = 15 * 60e3;
 
 /**
@@ -118,6 +123,36 @@ function boardDirection(dir) {
 }
 
 /**
+ * The airborne fix of THIS flight instance, or null: the sighting's `airborneAtMs` when it passes
+ * the instance gate described above (every sightingMatchesFlight() guard, airborne no earlier than
+ * 15 min before the scheduled departure and no later than 18h after it, origin present and equal to
+ * the row's, and on an arrivals board the destination too). It says the aircraft flew this leg; it
+ * says nothing about whether it is still in the air (see isAirborneNow()).
+ *
+ * @param {{reg:string, origin?:string, dest?:string, seenAtMs:number, airborneAtMs?:number|null}} sighting
+ * @param {object} flight  a board row.
+ * @param {'departures'|'arrivals'} dir
+ * @returns {number|null} epoch ms.
+ */
+export function instanceAirborneAt(sighting, flight, dir) {
+  const board = boardDirection(dir);
+  if (!board || !sightingMatchesFlight(sighting, flight)) return null;
+  const airborne = Number(sighting.airborneAtMs);
+  if (sighting.airborneAtMs == null || !Number.isFinite(airborne) || airborne <= 0) return null;
+  const dep = Number(flight.time.scheduled.departure) * 1000; // sightingMatchesFlight guarantees it
+  if (airborne < dep - SEEN_AIRBORNE_BEFORE_DEP_MS || airborne > dep + SEEN_AIRBORNE_AFTER_DEP_MS) return null;
+  const so = String(sighting.origin || '').toUpperCase();
+  const fo = String(flight.airport?.origin?.code?.iata || '').toUpperCase();
+  if (!so || so !== fo) return null;
+  if (board === 'arrivals') {
+    const sd = String(sighting.dest || '').toUpperCase();
+    const fd = String(flight.airport?.destination?.code?.iata || '').toUpperCase();
+    if (!sd || sd !== fd) return null;
+  }
+  return airborne;
+}
+
+/**
  * The stricter gate for un-cancelling a row (see the block comment above).
  *
  * @param {{reg:string, origin?:string, dest?:string, seenAtMs:number, airborneAtMs?:number|null, onGround?:boolean}} sighting
@@ -126,21 +161,132 @@ function boardDirection(dir) {
  * @returns {boolean}
  */
 export function seenAirborneMatches(sighting, flight, dir) {
-  const board = boardDirection(dir);
-  if (!board || sighting?.onGround === true || !sightingMatchesFlight(sighting, flight)) return false;
+  if (sighting?.onGround === true) return false;
+  return instanceAirborneAt(sighting, flight, dir) != null;
+}
+
+// ── Airborne NOW vs seen on the ground (v1.12.1, live audit Oct 4 2026) ──
+// The LIVE badge used to mean "any sighting under 15 min old", so a parked or landed aircraft with
+// its transponder on read "Departed · LIVE" / "En Route · LIVE": ORD UA303, UA2048, UA1922, UA6000
+// and UA2059 had landed 19:34–19:54 CDT and still said En Route · LIVE, SFO UA1151 sat at 0 kt as
+// "Departed · LIVE", and UA845 to GRU read Departed · LIVE 1h40m before its departure. The rules now:
+//   - LIVE needs the sighting's LATEST word to be airborne (`airborneAtMs >= seenAtMs`; the server
+//     writer stamps both on an airborne poll and only `seen_at` on a ground one), that fix inside this
+//     instance (instanceAirborneAt) and under LIVE_RECENT_MS old;
+//   - a sighting that is newer than a row's LIVE stamp and is not airborne-now clears the stamp (the
+//     browser re-overlays boards the CDN cached with the server's stamps);
+//   - an aircraft that flew this leg and was LATER seen on the ground at a plausible arrival time has
+//     landed: `_source.track.landed`, which the classifier shows as Landed* "seen on the ground".
+//     Only a sighting with a prior airborne fix can say that: the server's reg_sightings row (airborne
+//     time kept when the ground poll updates `seen_at`), or the browser's ground sighting on a row the
+//     server already stamped with this instance's airborne fix.
+
+/** Is the sighting's latest word "airborne"? Server rows: airborne_at === seen_at; feed rows: the flag. */
+function isAirborneNow(sighting) {
+  if (!sighting || sighting.onGround === true) return false;
   const airborne = Number(sighting.airborneAtMs);
   if (sighting.airborneAtMs == null || !Number.isFinite(airborne) || airborne <= 0) return false;
-  const dep = Number(flight.time.scheduled.departure) * 1000; // sightingMatchesFlight guarantees it
-  if (airborne < dep - SEEN_AIRBORNE_BEFORE_DEP_MS || airborne > dep + SEEN_AIRBORNE_AFTER_DEP_MS) return false;
-  const so = String(sighting.origin || '').toUpperCase();
-  const fo = String(flight.airport?.origin?.code?.iata || '').toUpperCase();
-  if (!so || so !== fo) return false;
-  if (board === 'arrivals') {
-    const sd = String(sighting.dest || '').toUpperCase();
-    const fd = String(flight.airport?.destination?.code?.iata || '').toUpperCase();
-    if (!sd || sd !== fd) return false;
+  return airborne >= Number(sighting.seenAtMs);
+}
+
+/** When the sighting last saw the aircraft on the ground, or null (its latest word is airborne). */
+function groundSeenAt(sighting) {
+  const seen = Number(sighting?.seenAtMs);
+  if (!Number.isFinite(seen) || seen <= 0) return null;
+  return isAirborneNow(sighting) ? null : seen;
+}
+
+/** Floor between the airborne fix and a ground sighting before it can count as a landing. */
+const MIN_LANDING_AFTER_DEP_MS = 30 * 60e3;
+
+/**
+ * The earliest a ground sighting can be this leg's LANDING: half the scheduled block after the
+ * scheduled departure (30 min when the block is unknown). An air return sooner than that is not
+ * an arrival.
+ */
+function earliestLandingMs(flight) {
+  const dep = Number(flight?.time?.scheduled?.departure) * 1000;
+  const arr = Number(flight?.time?.scheduled?.arrival) * 1000;
+  const half = arr > dep ? (arr - dep) / 2 : MIN_LANDING_AFTER_DEP_MS;
+  return dep + Math.max(MIN_LANDING_AFTER_DEP_MS, half);
+}
+
+/**
+ * This row's tracking evidence after one sighting: the prior stamp merged with what the sighting adds.
+ *
+ * @returns {{airborneAt:number, groundAt?:number, landed?:boolean}|null}
+ */
+function mergeTrack(prior, sighting, flight, dir) {
+  const fix = instanceAirborneAt(sighting, flight, dir);
+  const airborneAt = Math.max(Number(prior?.airborneAt) || 0, fix || 0);
+  if (!airborneAt) return null;
+  const track = { airborneAt };
+  let groundAt = Number(prior?.groundAt) > airborneAt ? Number(prior.groundAt) : 0;
+  const ground = groundSeenAt(sighting);
+  // A ground sighting only says "landed HERE" when its route is this row's: on an arrivals board
+  // sightingMatchesFlight() let blank codes through, so require the destination outright.
+  const sd = String(sighting?.dest || '').toUpperCase();
+  const fd = String(flight?.airport?.destination?.code?.iata || '').toUpperCase();
+  if (ground && ground > airborneAt && sd && sd === fd) groundAt = Math.max(groundAt, ground);
+  if (groundAt > airborneAt) {
+    track.groundAt = groundAt;
+    if (groundAt >= earliestLandingMs(flight)) track.landed = true;
   }
-  return true;
+  return track;
+}
+
+function sameTrack(a, b) {
+  if (!a || !b) return !a && !b;
+  return a.airborneAt === b.airborneAt && (a.groundAt || 0) === (b.groundAt || 0) && !!a.landed === !!b.landed;
+}
+
+function sameLive(a, b) {
+  if (!a || !b) return !a && !b;
+  return a.seenAt === b.seenAt && (a.etaSec || 0) === (b.etaSec || 0);
+}
+
+/**
+ * Feed rows → the sightings map applySightingsToBoard() takes, for a browser that has the live feed.
+ * Same shape the board hook builds inline, plus the position (`lat`, `lon`, `spd`) so an arrivals row
+ * that is airborne now also gets `live.etaSec`, the My Flights "ETA from live position" figure
+ * (src/lib/my-flights.js liveArrivalEstimate).
+ *
+ * @param {Array<object>} liveFlights  parseFr24Feed() rows.
+ * @param {number} liveFeedTs  when the feed was generated (epoch ms).
+ * @returns {Map<string, {reg:string, origin:string, dest:string, seenAtMs:number, airborneAtMs:number|null, onGround:boolean, lat?:number, lon?:number, spd?:number}>}
+ */
+export function sightingsFromLiveFeed(liveFlights, liveFeedTs) {
+  const map = new Map();
+  if (!Array.isArray(liveFlights) || !Number.isFinite(Number(liveFeedTs))) return map;
+  for (const flight of liveFlights) {
+    if (!flight?.reg) continue;
+    const key = normalizeFlightNum(flight.flightIATA) || normalizeFlightNum(flight.callsign);
+    if (!key || map.has(key)) continue;
+    map.set(key, {
+      reg: flight.reg,
+      origin: flight.origin || '',
+      dest: flight.dest || '',
+      seenAtMs: Number(liveFeedTs),
+      airborneAtMs: isOnGround(flight) ? null : Number(liveFeedTs),
+      onGround: flight.onGround === true,
+      lat: flight.lat,
+      lon: flight.lon,
+      spd: flight.spd,
+    });
+  }
+  return map;
+}
+
+/** `live.etaSec` for an arrivals row airborne now, when the sighting carries a position. */
+function liveEtaSec(sighting, flight, nowMs) {
+  if (!Number.isFinite(Number(sighting?.lat)) || !Number.isFinite(Number(sighting?.lon))) return 0;
+  const dest = flight?.airport?.destination?.code?.iata || '';
+  const est = liveArrivalEstimate(
+    { lat: Number(sighting.lat), lon: Number(sighting.lon), spd: Number(sighting.spd), onGround: false },
+    dest,
+    nowMs,
+  );
+  return est ? Math.round(Date.parse(est.etaISO) / 1000) : 0;
 }
 
 // The status object the AeroDataBox normalizer emits for "Departed" (mapAeroStatus), minus its
@@ -156,19 +302,22 @@ function seenDepartedStatus() {
  * reference (cheap no-op for the common all-provider-regs case).
  *
  *  - backfills a blank registration from the sighting (`aircraft.regSource: 'live_feed'`);
- *  - marks a row airborne right now (`live: {seenAt}`) when the sighting is recent;
+ *  - records this instance's tracking evidence in `_source.track` ({airborneAt, groundAt?, landed?}):
+ *    the airborne fix, a later ground sighting at the destination, and whether that is a landing;
+ *  - marks a row airborne right now (`live: {seenAt, etaSec?}`) only on a recent AIRBORNE fix of this
+ *    instance, and clears a LIVE stamp a newer non-airborne sighting contradicts;
  *  - rewrites a Likely Canceled row the feed saw AIRBORNE on this leg to departed, keeping the
  *    evidence in `_source.seenAirborne` ({airborneAt, seenAt, reg, origin, dest, providerStatus}).
- *    Never a departure time. Reg backfill and the LIVE flag still key off `seenAtMs`, unchanged.
+ *    Never a departure time. Reg backfill still keys off `seenAtMs`, unchanged.
  *
  * Idempotent: an overlaid board overlays to itself (api/irops.ts re-applies it with fresher
- * sightings to boards /api/schedule already overlaid).
+ * sightings to boards /api/schedule already overlaid, and the browser re-applies its own feed).
  *
  * @param {any} payload  a board ({flights, dir?, …}); anything without a flights array passes through.
- * @param {Map<string, {reg:string, origin?:string, dest?:string, seenAtMs:number, airborneAtMs?:number|null}>} sightingsByKey
+ * @param {Map<string, {reg:string, origin?:string, dest?:string, seenAtMs:number, airborneAtMs?:number|null, onGround?:boolean, lat?:number, lon?:number, spd?:number}>} sightingsByKey
  * @param {number} nowMs
  * @param {{dir?: 'departures'|'arrivals'}} [opts]  the board direction; wins over `payload.dir`.
- *   With neither, the seen-airborne override is skipped (fail closed).
+ *   With neither, the tracking stamps and the seen-airborne override are skipped (fail closed).
  * @returns {any} the same payload, or a copy with the changed rows replaced.
  */
 export function applySightingsToBoard(payload, sightingsByKey, nowMs, opts = {}) {
@@ -181,27 +330,41 @@ export function applySightingsToBoard(payload, sightingsByKey, nowMs, opts = {})
     const s = sightingsByKey.get(key);
     if (!s || !sightingMatchesFlight(s, fl)) return fl;
     const hasProviderReg = !!fl.aircraft?.registration;
-    const isRecent = nowMs - Number(s.seenAtMs) <= LIVE_RECENT_MS;
+    const prior = fl._source?.track || null;
+    const track = dir ? mergeTrack(prior, s, fl, dir) : prior;
+    const fix = dir ? instanceAirborneAt(s, fl, dir) : null;
+    const airborneNow = !!fix && isAirborneNow(s) && nowMs - fix <= LIVE_RECENT_MS && !track?.landed;
+    let live = fl.live;
+    if (airborneNow) {
+      const etaSec = dir === 'arrivals' ? liveEtaSec(s, fl, nowMs) : 0;
+      live = etaSec ? { seenAt: fix, etaSec } : { seenAt: fix };
+    } else if (live && (track?.landed || Number(s.seenAtMs) >= Number(live.seenAt))) {
+      live = undefined; // a newer sighting does not have it in the air
+    }
     const flew = !!dir && cancellationKind(fl, dir) === 'likely' && seenAirborneMatches(s, fl, dir);
-    if (hasProviderReg && !isRecent && !flew) return fl; // nothing to add
+    const trackChanged = !sameTrack(prior, track);
+    const liveChanged = !sameLive(fl.live, live);
+    if (hasProviderReg && !trackChanged && !liveChanged && !flew) return fl; // nothing to add
     changed = true;
     const next = { ...fl };
     if (!hasProviderReg) {
       next.aircraft = { ...(fl.aircraft || {}), registration: s.reg, regSource: 'live_feed' };
     }
-    if (isRecent) next.live = { seenAt: Number(s.seenAtMs) };
+    if (liveChanged) {
+      if (live) next.live = live;
+      else delete next.live;
+    }
+    if (trackChanged || flew) next._source = { ...(fl._source || {}) };
+    if (trackChanged) next._source.track = track;
     if (flew) {
       next.status = seenDepartedStatus();
-      next._source = {
-        ...(fl._source || {}),
-        seenAirborne: {
-          airborneAt: Number(s.airborneAtMs),
-          seenAt: Number(s.seenAtMs),
-          reg: s.reg,
-          origin: String(s.origin || '').toUpperCase(),
-          dest: String(s.dest || '').toUpperCase(),
-          providerStatus: 'canceled_uncertain',
-        },
+      next._source.seenAirborne = {
+        airborneAt: Number(s.airborneAtMs),
+        seenAt: Number(s.seenAtMs),
+        reg: s.reg,
+        origin: String(s.origin || '').toUpperCase(),
+        dest: String(s.dest || '').toUpperCase(),
+        providerStatus: 'canceled_uncertain',
       };
     }
     return next;

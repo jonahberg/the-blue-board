@@ -19,6 +19,7 @@ import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { peekRegSightings, kickRegSightingsRefresh, peekRegSightingsLoadedAt } from './_reg-sightings.js';
 import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
 import { sanitizeServedBoard } from '../src/lib/schedule-actuals.js';
+import { dedupeServedBoard } from '../src/lib/board-dedupe.js';
 
 const isRateLimited = createRateLimiter('schedule', 30);
 
@@ -1804,8 +1805,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // in the future when it was fetched is cleared here until it is not (and a date-shifted
     // earlier leg in a snapshot written before v1.11.3 is dropped). Non-mutating, like the
     // sightings merge: the payload is a shared cache entry.
+    // v1.12.1: and one physical flight is one row — snapshots written before the same-tail dedupe
+    // (src/lib/board-dedupe.js) still carry the re-timed copies and "Approaching" ghosts.
     const withDisruption = (payload: any) => {
-      const board = sanitizeServedBoard(payload, Math.floor(Date.now() / 1000));
+      const board = dedupeServedBoard(
+        sanitizeServedBoard(payload, Math.floor(Date.now() / 1000)),
+        dir as 'departures' | 'arrivals',
+      );
       return {
         ...applySightingsToBoard(board, peekRegSightings(), Date.now(), { dir: dir as 'departures' | 'arrivals' }),
         meta: {
@@ -2009,9 +2015,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const keyMatch = /^agg:([A-Z]{3,4}):(departures|arrivals):/.exec(aggKey);
         const hubFromKey = keyMatch?.[1] || '';
         const hubDisruptionMinutes = hubFromKey ? peekHubDisruptionMinutes(hubFromKey) : 0;
-        const degraded = sanitizeServedBoard(
-          buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope),
-          Math.floor(Date.now() / 1000),
+        const degraded = dedupeServedBoard(
+          sanitizeServedBoard(
+            buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope),
+            Math.floor(Date.now() / 1000),
+          ),
+          (keyMatch?.[2] || 'departures') as 'departures' | 'arrivals',
         );
         // Same sightings overlay as every other 200 (peek is synchronous and never throws), so the
         // error path cannot serve a seen-flying flight as Likely Canceled.

@@ -51,6 +51,24 @@ export const STATUS_TONE: Record<string, string> = {
   unknown: 'text-muted-foreground',
 };
 
+/**
+ * `classifySchedStatus().cls` → the phone row's status PILL (border + fill + text). A filled
+ * shape reads at a glance in a scrolling list where a coloured word alone did not; the word
+ * inside it is still the signal, so the pill never carries meaning by colour alone.
+ */
+export const STATUS_PILL: Record<string, string> = {
+  scheduled: 'border-border text-muted-foreground',
+  estimated: 'border-bb-info/40 bg-bb-info/10 text-bb-info',
+  delayed: 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
+  departed: 'border-bb-ok/40 bg-bb-ok/10 text-bb-ok',
+  enroute: 'border-bb-ok/40 bg-bb-ok/10 text-bb-ok',
+  landed: 'border-bb-ok/40 bg-bb-ok/10 text-bb-ok',
+  canceled: 'border-destructive/50 bg-destructive/15 text-destructive',
+  warn: 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
+  diverted: 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn',
+  unknown: 'border-border text-muted-foreground',
+};
+
 /** Equipment-swap impact class → chip classes. */
 export const SWAP_TONE: Record<string, string> = {
   downgrade: 'border-destructive/40 bg-destructive/15 text-destructive',

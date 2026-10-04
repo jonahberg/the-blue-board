@@ -18,16 +18,18 @@ globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
   return 0;
 }) as typeof requestAnimationFrame;
 
-function rowModel(i: number): RowModel {
-  const ident = `UA${1000 + i}`;
+function rowModel(i: number, patch: Partial<RowModel> = {}): RowModel {
+  const ident = patch.ident ?? `UA${1000 + i}`;
   return {
     ident,
+    identDisplay: ident,
     key: `${ident}-${i}`,
     raw: {},
     timeText: '12:00',
     dateChip: null,
     actualLine: null,
     derivedActual: false,
+    actualFromRunway: false,
     routeLine: 'ORD → DEN',
     routeSub: null,
     acCode: 'B738',
@@ -44,6 +46,7 @@ function rowModel(i: number): RowModel {
     delay: { kind: 'none' },
     watchRoute: 'ORD→DEN',
     effectiveTime: 0,
+    ...patch,
   } as RowModel;
 }
 
@@ -52,6 +55,8 @@ function renderTable({
   dividerIndex = 300,
   emptyReason = 'filtered' as EmptyReason,
   onClearFilters = vi.fn(),
+  onToggleWatch = vi.fn(),
+  dir = 'departures' as 'departures' | 'arrivals',
 } = {}) {
   const ref = createRef<ScheduleTableHandle>();
   render(
@@ -65,11 +70,12 @@ function renderTable({
         sort={{ column: 'time', asc: true }}
         onSort={vi.fn()}
         isWatched={() => false}
-        onToggleWatch={vi.fn()}
+        onToggleWatch={onToggleWatch}
         onOpenAircraft={vi.fn()}
         onExplainDelay={vi.fn()}
         boardAsOf="9:17 PM CDT"
         windowKey="ORD:departures:0"
+        dir={dir}
         emptyReason={emptyReason}
         emptySubject="tomorrow's EWR arrivals (Mon, Sep 28)"
         onClearFilters={onClearFilters}
@@ -153,5 +159,83 @@ describe('ScheduleTable columns (F64)', () => {
     expect(delay.className).not.toMatch(/\btext-left\b/);
     const status = headers.find((th) => th.textContent?.startsWith('Status'))!;
     expect(status.className).toMatch(/w-\[9rem\]/);
+  });
+});
+
+describe('ScheduleTable evidence markers (v1.13.0)', () => {
+  it('prints the flight number without the provider suffix; the row and the watch keep the raw one', () => {
+    const onToggleWatch = vi.fn();
+    const row = rowModel(0, { ident: 'UA526H', identDisplay: 'UA526' });
+    renderTable({ rows: [row], dividerIndex: -1, onToggleWatch });
+    const tr = document.querySelector('[data-flight-row]')!;
+    expect(tr.getAttribute('data-flight-row')).toBe('UA526H');
+    expect(tr.textContent).toContain('UA526');
+    expect(tr.textContent).not.toContain('UA526H');
+    fireEvent.click(screen.getByRole('button', { name: 'Watch UA526' }));
+    expect(onToggleWatch.mock.calls[0][0].ident).toBe('UA526H');
+  });
+
+  it('a landing the live feed proved: Landed* with "seen landing", never "presumed (no live update)"', () => {
+    renderTable({
+      rows: [
+        rowModel(0, {
+          status: { key: 'landed', cls: 'landed', text: 'Landed', presumed: true, asOf: false, live: false, seenLanded: true },
+        }),
+      ],
+      dividerIndex: -1,
+    });
+    const tr = document.querySelector('[data-flight-row]')!;
+    expect(tr.textContent).toContain('Landed*');
+    expect(tr.textContent).toContain('seen landing on the live feed');
+    expect(tr.textContent).not.toMatch(/no live update/);
+    expect(screen.getByText('seen landing').getAttribute('title')).toMatch(/on the ground at the destination/);
+  });
+
+  it('a plain presumed row still says presumed (no live update)', () => {
+    renderTable({
+      rows: [
+        rowModel(0, {
+          status: { key: 'landed', cls: 'landed', text: 'Landed', presumed: true, asOf: false, live: false },
+        }),
+      ],
+      dividerIndex: -1,
+    });
+    expect(screen.getByText('presumed (no live update)')).toBeTruthy();
+  });
+
+  it('a wheels-up delay gets a marker and words; a floor reads ≥ with "at least"', () => {
+    renderTable({
+      rows: [
+        rowModel(0, {
+          actualFromRunway: true,
+          delay: { kind: 'delta', text: '+38m', minutes: 38, title: 'Wheels-up vs scheduled departure', basis: 'runway' },
+        }),
+        rowModel(1, {
+          delay: { kind: 'delta', text: '≥+66m', minutes: 66, title: 'At least this late', basis: 'sighting', bound: 'lower' },
+        }),
+      ],
+      dividerIndex: -1,
+    });
+    const runway = screen.getByText('+38m').closest('[title]')!;
+    expect(runway.textContent).toContain('(from takeoff time; includes taxi)');
+    expect(runway.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    const floor = screen.getByText('+66m').closest('[title]')!;
+    expect(floor.textContent).toMatch(/≥\s*at least \+66m/);
+    expect(floor.className).toMatch(/\bwhitespace-nowrap\b/);
+    expect(floor.querySelector('svg')).toBeNull();
+  });
+
+  it('on an arrivals board a runway delay is a touchdown', () => {
+    renderTable({
+      rows: [
+        rowModel(0, {
+          actualFromRunway: true,
+          delay: { kind: 'delta', text: '+12m', minutes: 12, title: 'Touchdown vs scheduled arrival', basis: 'runway' },
+        }),
+      ],
+      dividerIndex: -1,
+      dir: 'arrivals',
+    });
+    expect(screen.getByText('+12m').closest('[title]')!.textContent).toContain('(from touchdown time; before taxi-in)');
   });
 });

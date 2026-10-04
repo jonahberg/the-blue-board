@@ -237,6 +237,16 @@ export default function ScheduleView() {
     [watch],
   );
 
+  // A phone row is one big tap target: it opens the flight sheet by flight number, the same
+  // way the search palette and `?flight=` do.
+  const { select } = ui;
+  const onOpenFlight = useCallback(
+    (row: RowModel) => {
+      if (row.ident && row.ident !== '—') select({ kind: 'ident', ident: row.ident });
+    },
+    [select],
+  );
+
   const aircraft = useMemo(
     () => aircraftOptions(rows).map((option) => ({ value: option.code, label: option.label })),
     [rows],
@@ -258,10 +268,13 @@ export default function ScheduleView() {
   }, []);
 
   return (
-    // No `h-full`: at phone width the controls and the stat strip are tall enough that a
-    // height-locked column squeezes the table down to a row and a half. The tab area already
-    // scrolls, so the page grows and the table keeps its own scroll height.
-    <div className="flex min-h-0 flex-col gap-2 p-2 md:p-3">
+    // From `md` up there is no `h-full`: the toolbar and the seven stat cards are tall enough
+    // that a height-locked column would squeeze the table, so the tab area scrolls and the
+    // table keeps its own scroll height. Below `md` the controls and stats are compact, so the
+    // column IS height-locked and the flight list takes exactly the space that is left — one
+    // scroller, nothing hidden under the bottom chrome (the list keeps a 12rem floor, and the
+    // tab area scrolls on a screen too short for even that).
+    <div className="flex min-h-0 flex-col gap-2 p-2 max-md:h-full md:p-3">
       <ScheduleControls
         hub={hub}
         dir={dir}
@@ -309,6 +322,14 @@ export default function ScheduleView() {
         <>
           <SwapSummary swaps={swaps} impactsFor={impactsFor} onOpenFilters={() => setDrawerOpen(true)} />
           <ScheduleStats
+            compact={!desktop}
+            footnote={
+              !desktop && cacheNote ? (
+                <span className="text-muted-foreground" data-testid="sched-cache-note">
+                  {cacheNote}
+                </span>
+              ) : undefined
+            }
             stats={model.stats}
             dir={dir}
             dayLabel={dayLabel}
@@ -318,7 +339,7 @@ export default function ScheduleView() {
             }
           />
           <StalenessBanner condition={condition} onRetry={refresh} />
-          {cacheNote ? (
+          {cacheNote && desktop ? (
             <p className="px-1 text-[10px] text-muted-foreground" data-testid="sched-cache-note">
               {cacheNote}
             </p>
@@ -340,6 +361,9 @@ export default function ScheduleView() {
             emptyReason={emptyReason}
             emptySubject={emptySubject}
             onClearFilters={onClearFilters}
+            compact={!desktop}
+            onOpenFlight={onOpenFlight}
+            dir={dir}
           />
           <p className="text-center text-[9px] text-muted-foreground">
             Schedule data via{' '}

@@ -6,6 +6,8 @@ import { hydrateAdbSpend, isAdbOrganicRefreshGated, isAdbBudgetPacingDisabled, g
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { isImplausibleLegSpan, isPlausibleDelta } from '../src/lib/schedule-plausibility.js';
 import { clearFutureActuals } from '../src/lib/schedule-actuals.js';
+import { collapseSameTailDuplicates } from '../src/lib/board-dedupe.js';
+import { iataForAirportName } from '../src/lib/airport-codes.js';
 
 const AERODATABOX_BASE_URL = 'https://prod.api.market/api/v1/aedbx/aerodatabox';
 // Each FIDS window request is billed at 2 units by the provider (1 board = 2 windows = 4 units).
@@ -63,7 +65,11 @@ function hubLocalDate(hub: string, ts: number): string {
 function normalizeAirportCode(airport: any): string {
   const iata = String(airport?.iata || '').trim().toUpperCase();
   if (iata) return iata;
-  return icaoToIata(String(airport?.icao || '').trim().toUpperCase());
+  const fromIcao = icaoToIata(String(airport?.icao || '').trim().toUpperCase());
+  if (fromIcao) return fromIcao;
+  // v1.12.1: a row with only a name ("San Francisco") gets the code when the name is unambiguous —
+  // the board printed "San Francisco → DEN" beside "SFO → DEN" (live audit Oct 4 2026).
+  return iataForAirportName(airport?.name || airport?.shortName || airport?.municipalityName);
 }
 
 function airportName(airport: any): string {
@@ -515,9 +521,11 @@ function timesMatch(a: number | null | undefined, b: number | null | undefined, 
 export function dedupeBoardFlights(
   flights: any[],
   dir: string
-): { flights: any[]; dedupe: { revisions: number; operatorClones: number; foreign: number } } {
+): { flights: any[]; dedupe: { revisions: number; operatorClones: number; foreign: number; sameTail: number } } {
   const isDep = dir === 'departures';
-  const dedupe = { revisions: 0, operatorClones: 0, foreign: 0 };
+  // `sameTail` (v1.12.1) is the part of `revisions` collapsed by the ident + route + tail rule below;
+  // it is counted in `revisions` too, so the snapshot ranking (rankingTotal) credits the dropped rows.
+  const dedupe = { revisions: 0, operatorClones: 0, foreign: 0, sameTail: 0 };
 
   // (a) Collapse schedule-revision dupes: rows sharing flight number + the same REAL departure
   // (or arrival) timestamp describe one physical movement; keep the row with the EARLIEST
@@ -548,12 +556,19 @@ export function dedupeBoardFlights(
       revisionWinners.set(key, f);
     }
   }
-  const afterRevisions = flights.filter((f) => {
+  const afterRealMatch = flights.filter((f) => {
     const key = revisionKey(f);
     if (!key || revisionWinners.get(key) === f) return true;
     dedupe.revisions++;
     return false;
   });
+  // (a2) v1.12.1: one physical flight is one row even when the copies share NO timestamp — a re-timed
+  // copy (EWR UA1462 "+4h13m" and "+0m" on N47298) or an "Approaching" ghost beside the "Arrived" row
+  // (LAX UA38). Same ident + route + tail → keep the row with the best evidence (src/lib/board-dedupe.js).
+  const sameTail = collapseSameTailDuplicates(afterRealMatch, isDep ? 'departures' : 'arrivals');
+  const afterRevisions: any[] = sameTail.flights as any[];
+  dedupe.sameTail = sameTail.collapsed;
+  dedupe.revisions += sameTail.collapsed;
 
   // (b)+(c) Non-UA idents: a row matching a UA row on route + time is the same physical flight
   // listed under its operator/codeshare ident — keep the UA row. Real timestamps are the ground

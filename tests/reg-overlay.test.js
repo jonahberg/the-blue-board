@@ -97,14 +97,23 @@ describe('applySightingsToBoard', () => {
     expect(out.flights[0].aircraft.regSource).toBeUndefined();
   });
 
-  it('attaches live:{seenAt} for recent sightings — including rows WITH a provider reg', () => {
-    const recent = sighting({ seenAtMs: NOW - 5 * 60e3 });
-    const withReg = { flights: [boardFlight({ aircraft: { registration: 'N77777' } })] };
-    expect(applySightingsToBoard(withReg, mapOf(recent), NOW).flights[0].live).toEqual({ seenAt: recent.seenAtMs });
-    const old = sighting({ seenAtMs: NOW - LIVE_RECENT_MS - 1000 });
-    const out = applySightingsToBoard({ flights: [boardFlight()] }, mapOf(old), NOW);
-    expect(out.flights[0].live).toBeUndefined();          // old sighting: reg fills, no live flag
+  it('attaches live:{seenAt} for a recent AIRBORNE fix of this instance — including rows WITH a provider reg', () => {
+    // v1.12.1: LIVE needs an airborne fix (airborneAtMs, the sighting's latest word) and the board
+    // direction; the fix must be no earlier than 15 min before the scheduled departure.
+    const recent = sighting({ seenAtMs: NOW - 5 * 60e3, airborneAtMs: NOW - 5 * 60e3 });
+    const withReg = { dir: 'departures', flights: [boardFlight({ aircraft: { registration: 'N77777' } })] };
+    expect(applySightingsToBoard(withReg, mapOf(recent), NOW).flights[0].live).toEqual({ seenAt: recent.airborneAtMs });
+    const old = sighting({ seenAtMs: NOW - LIVE_RECENT_MS - 1000, airborneAtMs: NOW - LIVE_RECENT_MS - 1000 });
+    const out = applySightingsToBoard({ dir: 'departures', flights: [boardFlight()] }, mapOf(old), NOW);
+    expect(out.flights[0].live).toBeUndefined();          // old fix: reg fills, no live flag
     expect(out.flights[0].aircraft.registration).toBe('N12345');
+  });
+
+  it('a recent sighting with NO airborne fix (or no board direction) never earns live', () => {
+    const parked = sighting({ seenAtMs: NOW - 5 * 60e3 });
+    expect(applySightingsToBoard({ dir: 'departures', flights: [boardFlight()] }, mapOf(parked), NOW).flights[0].live).toBeUndefined();
+    const airborneNoDir = sighting({ seenAtMs: NOW - 5 * 60e3, airborneAtMs: NOW - 5 * 60e3 });
+    expect(applySightingsToBoard({ flights: [boardFlight()] }, mapOf(airborneNoDir), NOW).flights[0].live).toBeUndefined();
   });
 
   it('does not mutate the input payload or its flights (shared cache objects)', () => {
@@ -219,11 +228,13 @@ describe('applySightingsToBoard — seen-airborne override for canceled_uncertai
       .toBe('canceled_uncertain');
   });
 
-  it('reg backfill and the LIVE flag still key off seenAtMs (a ground sighting still fills the tail)', () => {
+  it('reg backfill still keys off seenAtMs (a ground sighting fills the tail) — but a ground sighting is never LIVE', () => {
+    // v1.12.1 (live audit Oct 4 2026): the LIVE flag used to key off seenAtMs too, so an aircraft
+    // parked at the gate read "Departed · LIVE" (SFO UA1151 at 0 kt).
     const parkedAtGate = sighting({ seenAtMs: NOW - 5 * 60e3, airborneAtMs: null });
     const out = applySightingsToBoard({ dir: 'departures', flights: [boardFlight()] }, mapOf(parkedAtGate), NOW);
     expect(out.flights[0].aircraft.registration).toBe('N12345');
-    expect(out.flights[0].live).toEqual({ seenAt: parkedAtGate.seenAtMs });
+    expect(out.flights[0].live).toBeUndefined();
   });
 
   it('a sighting more than 18h after the scheduled departure does not count', () => {
