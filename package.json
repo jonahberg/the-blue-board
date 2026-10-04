@@ -1,6 +1,6 @@
 {
   "name": "the-blue-board",
-  "description": "The Blue Board \u2014 Unofficial United Airlines operations dashboard",
+  "description": "The Blue Board — Unofficial United Airlines operations dashboard",
   "author": "Jonah Berg (https://github.com/jonahberg)",
   "license": "FSL-1.1-MIT",
   "repository": "jonahberg/the-blue-board",
@@ -24,6 +24,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
     "@astrojs/react": "^5.0.7",
+    "@fastify/busboy": "3.2.1",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@supabase/supabase-js": "^2.49.1",
