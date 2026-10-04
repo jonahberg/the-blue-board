@@ -38,8 +38,8 @@ export function humanizeStatusText(text) {
  * Defensive against old cached payloads: every new contract field (label,
  * presumed, canceled_uncertain key) may be absent — degrades to prior behavior.
  *
- * @param {{text?:string, cls?:string, key?:string, inferred?:boolean, presumed?:boolean, label?:string, live?:boolean, seen?:boolean}|null} status
- * @returns {{text:string, cls:string, presumed:boolean, asOf:boolean, live?:boolean, seen?:boolean}}
+ * @param {{text?:string, cls?:string, key?:string, inferred?:boolean, presumed?:boolean, label?:string, live?:boolean, seen?:boolean, seenLanded?:boolean}|null} status
+ * @returns {{text:string, cls:string, presumed:boolean, asOf:boolean, live?:boolean, seen?:boolean, seenLanded?:boolean}}
  *   text     display label (without the presumed asterisk — caller appends "*")
  *   cls      CSS class for .sched-status
  *   presumed row is a time-inferred departure/landing (render "Departed*" + tooltip)
@@ -47,6 +47,9 @@ export function humanizeStatusText(text) {
  *   live     status confirmed by a live-feed sighting (Phase 2) — badge as LIVE, not presumed
  *   seen     the provider said Likely Canceled but the live feed saw it fly (v1.12.0) — the board
  *            says "seen airborne" instead of "presumed (no live update)": there WAS a live update
+ *   seenLanded  (v1.12.1) a Landed* the live feed proved — airborne on this leg, then seen on the
+ *            ground at the destination. Still presumed (no provider landing time), but the honest
+ *            sub-label is "seen on the ground", not "no live update". Only present when true.
  */
 export function displayScheduleStatus(status) {
   if (!status || typeof status !== 'object') {
@@ -70,8 +73,9 @@ export function displayScheduleStatus(status) {
   // live:true — pass the flag through so the board can badge them LIVE, not presumed.
   const live = status.live === true;
   const seen = status.seen === true;
+  const extra = status.seenLanded === true ? { seenLanded: true } : {};
   let text = status.label || status.text || '';
-  if (!text) return { text: 'Scheduled', cls: status.cls || 'scheduled', presumed, asOf: true, live, seen };
+  if (!text) return { text: 'Scheduled', cls: status.cls || 'scheduled', presumed, asOf: true, live, seen, ...extra };
   if (looksRawStatusText(text)) text = humanizeStatusText(text);
-  return { text, cls: status.cls || 'unknown', presumed, asOf: false, live, seen };
+  return { text, cls: status.cls || 'unknown', presumed, asOf: false, live, seen, ...extra };
 }

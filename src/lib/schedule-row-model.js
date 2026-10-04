@@ -17,7 +17,13 @@
 //     the city stranded in the subtitle.
 //   · Terminal comes before gate. The column header says "Term / Gate", so a bare gate value
 //     must never sit where a terminal is expected.
+//   · The delay is measured to the best EVIDENCE, not blindly to the provider's estimate
+//     (board-delay.js, live audit Oct 4 2026): UA2059 read "+3h28m" and landed +66m, UA407 read
+//     "−75m" after leaving the gate 38 min late. Each delta now says what it measured (`basis`) and
+//     whether it is only a floor or a ceiling (`bound`, rendered "≥" / "≤").
 
+import { iataForAirportName, isPlaceholderAirportName } from './airport-codes.js';
+import { boardTimeEvidence } from './board-delay.js';
 import { formatDelayMinutes } from './delay-format.js';
 import { ICAO_TO_FLEET_TYPE } from './equipment-swaps.js';
 import { normalizeWifi } from './fleet-utils.js';
@@ -111,6 +117,21 @@ export function shortAirportName(airport) {
 }
 
 /**
+ * The flight number as the board PRINTS it: a provider letter suffix stripped ("UA526H" → "UA526",
+ * "UA409E" → "UA409"). AeroDataBox appends one to some United Express rows (live audit Oct 4 2026);
+ * no passenger knows the flight by it. Display only: `ident` keeps the raw value for the row key,
+ * the watch list and deep links — the stripped number can be a DIFFERENT real flight.
+ *
+ * @param {string|null|undefined} ident
+ * @returns {string}
+ */
+export function displayFlightIdent(ident) {
+  const raw = String(ident || '');
+  const m = /^([A-Z]{2}\d{1,4})[A-Z]$/.exec(raw);
+  return m ? m[1] : raw;
+}
+
+/**
  * The route cell: the hub on the board's side, the other end on the other.
  *
  * @param {object} flight
@@ -123,8 +144,10 @@ export function shortAirportName(airport) {
 export function routeCell(flight, hub, dir) {
   const isDep = dir !== 'arrivals';
   const endpoint = isDep ? flight?.airport?.destination : flight?.airport?.origin;
-  const code = endpoint?.code?.iata;
-  const name = shortAirportName(endpoint);
+  // Codes, not cities (live audit Oct 4 2026: "San Francisco → DEN" beside "SFO → DEN"): a missing
+  // code is recovered from an unambiguous airport name, and a placeholder name ("Unknown") is no name.
+  const name = isPlaceholderAirportName(endpoint?.name) ? '' : shortAirportName(endpoint);
+  const code = endpoint?.code?.iata || iataForAirportName(endpoint?.name);
   const primary = code || name || '—';
   return {
     routeLine: isDep ? `${hub} → ${primary}` : `${primary} → ${hub}`,
@@ -190,18 +213,27 @@ export function isRegFromLiveFeed(flight, reg) {
 /**
  * The Fleet cell plus the enrichment line under the registration.
  *
+ * The fleet database is mainline-only, so United Express rows — about 40% of a board — matched
+ * nothing and showed "—" even on the 321 Express aircraft the Starlink tab lists as equipped
+ * (N140SY: "—" here, "Starlink" there, "Starlink likely" in My Flights; live audit Oct 4 2026).
+ * A tail the fleet database does not know but the Starlink roster does now reads Starlink, so the
+ * three surfaces agree. Nothing else is invented: no cabin, no type.
+ *
  * @param {string} reg
  * @param {Record<string, object>} fleetByReg
- * @param {Set<string>} starlinkTails
- * @returns {{badge: string, starlink: boolean, enrich: string}|null} null when the tail is
- *   unknown or absent — the board renders a dash rather than inventing a cabin.
+ * @param {Set<string>} starlinkTails  the Starlink roster (mainline AND Express tails).
+ * @returns {{badge: string, starlink: boolean, enrich: string, source: 'fleet'|'starlink-roster'}|null}
+ *   null when the tail is unknown or absent — the board renders a dash rather than inventing a
+ *   cabin. `source` says which list answered.
  */
 export function fleetCell(reg, fleetByReg, starlinkTails) {
   if (!reg) return null;
   const regClean = reg.replace('-', '');
   const match = (fleetByReg && (fleetByReg[regClean] || fleetByReg[reg])) || null;
-  if (!match) return null;
   const starlink = Boolean(starlinkTails && (starlinkTails.has(regClean) || starlinkTails.has(reg)));
+  if (!match) {
+    return starlink ? { badge: 'Starlink', starlink: true, enrich: '⚡ Starlink', source: 'starlink-roster' } : null;
+  }
   const parts = [];
   if (match.seats && typeof match.seats === 'object') {
     parts.push(
@@ -214,7 +246,7 @@ export function fleetCell(reg, fleetByReg, starlinkTails) {
   if (starlink) parts.push('⚡ Starlink');
   if (match.i) parts.push(match.i);
   if (match.d) parts.push(`Del ${match.d}`);
-  return { badge: String(match.c || match.t || ''), starlink, enrich: parts.join(' · ') };
+  return { badge: String(match.c || match.t || ''), starlink, enrich: parts.join(' · '), source: 'fleet' };
 }
 
 /**
@@ -252,6 +284,30 @@ export function swapCell(change, reg, impacts) {
   };
 }
 
+/** What each kind of measured time is called in the delay cell's tooltip. */
+function delayTitle({ basis, bound, hasRealTime, dir }) {
+  const side = dir === 'arrivals' ? 'arrival' : 'departure';
+  switch (basis) {
+    case 'runway':
+      return dir === 'arrivals'
+        ? 'Touchdown vs scheduled arrival — before taxi-in (the provider sent no separate gate time)'
+        : 'Wheels-up vs scheduled departure — includes taxi-out (the provider sent no separate gate time)';
+    case 'derived':
+      return `Estimated ${side}: departure plus the scheduled block time (the provider's estimate contradicted it)`;
+    case 'live':
+      return 'ETA from live position vs scheduled arrival';
+    case 'sighting':
+      if (bound === 'lower') {
+        return dir === 'arrivals'
+          ? 'Landed — at least this late: measured to the last airborne position in the live feed'
+          : 'At least this late — from when the live feed last saw it airborne and the scheduled block time';
+      }
+      return `At most this late — the live feed saw it airborne before the provider's ${side} time`;
+    default:
+      return `${hasRealTime ? 'Actual' : 'Estimated'} vs scheduled ${side}`;
+  }
+}
+
 /**
  * DELAY / RISK — facts beat predictions.
  *
@@ -262,8 +318,10 @@ export function swapCell(change, reg, impacts) {
  *      time inference), or when the delta is big enough to be a fact on its own. A delta that
  *      no real flight could have (schedule-plausibility.js: a two-day cross-instance "+54h", a
  *      stale 10h estimate) is not a fact, and neither is a scheduled time the board derived
- *      from the actual.
- *   3. Otherwise a future row shows its predicted risk, worded so it cannot read as a fact.
+ *      from the actual. A bound ("≥" / "≤", board-delay.js) is shown only when it says something.
+ *   3. Otherwise a FUTURE row shows its predicted risk, worded so it cannot read as a fact. A row
+ *      whose best time is already behind the clock (`pastDue`) is not a future row: ORD UA303 read
+ *      "Expected · RISK: LOW" 36 minutes after it landed (live audit Oct 4 2026).
  *   4. Otherwise nothing.
  *
  * @param {object} input
@@ -271,15 +329,19 @@ export function swapCell(change, reg, impacts) {
  * @param {boolean} input.presumed  the status was inferred from elapsed time, so there is no
  *   trustworthy actual time behind it.
  * @param {number|undefined} input.schedTimeSec
- * @param {number|undefined} input.actualTimeSec  real time, else estimated.
- * @param {boolean} input.hasRealTime  a provider-confirmed time exists ON THE BOARD'S SIDE
+ * @param {number|undefined} input.actualTimeSec  the measured time (board-delay.js evidence).
+ * @param {boolean} input.hasRealTime  a provider-confirmed or observed time ON THE BOARD'S SIDE
  *   (real departure on departures, real arrival on arrivals) — vs an estimate.
  * @param {boolean} [input.derivedActual]  the scheduled time was derived from the actual.
  * @param {('departures'|'arrivals')} input.dir
  * @param {object|null} input.risk  the delay-risk model, or null.
- * @returns {{kind:'none'}|{kind:'delta',minutes:number,text:string,title:string}|{kind:'risk',risk:object}}
+ * @param {('gate'|'runway'|'actual'|'estimate'|'derived'|'live'|'sighting'|null)} [input.basis]
+ *   what kind of time `actualTimeSec` is (board-delay.js).
+ * @param {('lower'|'upper'|null)} [input.bound]  the true delay is at least / at most this.
+ * @param {boolean} [input.pastDue]  a not-yet-operated row whose best time has passed.
+ * @returns {{kind:'none'}|{kind:'delta',minutes:number,text:string,title:string,basis?:string,bound?:string}|{kind:'risk',risk:object}}
  */
-export function delayCell({ statusKey, presumed, schedTimeSec, actualTimeSec, hasRealTime, derivedActual = false, dir, risk }) {
+export function delayCell({ statusKey, presumed, schedTimeSec, actualTimeSec, hasRealTime, derivedActual = false, dir, risk, basis = null, bound = null, pastDue = false }) {
   const isTerminal =
     statusKey === 'canceled' || statusKey === 'canceled_uncertain' || statusKey === 'diverted';
   if (isTerminal) return { kind: 'none' };
@@ -291,17 +353,24 @@ export function delayCell({ statusKey, presumed, schedTimeSec, actualTimeSec, ha
     isPlausibleDelta(actualTimeSec, schedTimeSec, { estimate: !hasRealTime });
   const minutes = measurable ? Math.round((actualTimeSec - schedTimeSec) / 60) : null;
 
-  if (minutes !== null && ((hasOperated && !presumed) || minutes > ACTUAL_LINE_THRESHOLD_MINUTES)) {
+  // A floor below the noise line, or a ceiling on a row that has not operated, says nothing.
+  const boundSays =
+    bound === 'lower' ? minutes !== null && minutes > ACTUAL_LINE_THRESHOLD_MINUTES
+      : bound === 'upper' ? minutes !== null && hasOperated
+        : true;
+  const isFact = minutes !== null && ((hasOperated && !presumed) || minutes > ACTUAL_LINE_THRESHOLD_MINUTES);
+  if (isFact && boundSays) {
+    const prefix = bound === 'lower' ? '≥' : bound === 'upper' ? '≤' : '';
     return {
       kind: 'delta',
       minutes,
-      text: formatDelayMinutes(minutes),
-      title: `${hasRealTime ? 'Actual' : 'Estimated'} vs scheduled ${
-        dir === 'arrivals' ? 'arrival' : 'departure'
-      }`,
+      text: `${prefix}${formatDelayMinutes(minutes)}`,
+      title: delayTitle({ basis, bound, hasRealTime, dir }),
+      ...(basis ? { basis } : {}),
+      ...(bound ? { bound } : {}),
     };
   }
-  if (risk) return { kind: 'risk', risk };
+  if (risk && !pastDue) return { kind: 'risk', risk };
   return { kind: 'none' };
 }
 
@@ -429,21 +498,12 @@ export function buildScheduleRow(flight, ctx) {
     effectiveTime = 0,
   } = ctx;
 
-  const isDep = dir !== 'arrivals';
   const ident = flight?.identification?.number?.default || '—';
-  const time = flight?.time || {};
-  const schedTimeSec = isDep ? time.scheduled?.departure : time.scheduled?.arrival;
-  const actualTimeSec = isDep
-    ? time.real?.departure || time.estimated?.departure
-    : time.real?.arrival || time.estimated?.arrival;
-  // Direction-aware: on an arrivals board a real DEPARTURE says nothing about the arrival time
-  // being compared, so an estimated arrival must still be titled (and bounded) as an estimate.
-  const hasRealTime = Boolean(isDep ? time.real?.departure : time.real?.arrival);
-  const derivedActual = Boolean(
-    isDep
-      ? flight?._source?.scheduleTimeDerivedFromActual?.departure
-      : flight?._source?.scheduleTimeDerivedFromActual?.arrival,
-  );
+  // Which time the delay is measured to, and what kind of time it is (board-delay.js). Direction-
+  // aware: on an arrivals board a real DEPARTURE says nothing about the arrival time being
+  // compared, so an estimated arrival is still titled (and bounded) as an estimate.
+  const evidence = boardTimeEvidence(flight, dir, rawStatus);
+  const { schedTimeSec, actualTimeSec, hasRealTime, derivedActual } = evidence;
 
   const status = displayScheduleStatus(rawStatus);
   status.key = rawStatus?.key;
@@ -460,16 +520,30 @@ export function buildScheduleRow(flight, ctx) {
     derivedActual,
     dir,
     risk,
+    basis: evidence.basis,
+    bound: evidence.bound,
+    // Not a future flight: its best time has passed, or the live feed has it airborne or landed.
+    pastDue: rawStatus?.pastDue === true || rawStatus?.seenLanded === true || rawStatus?.live === true,
   });
 
   return {
     ident,
+    // v1.12.1: what the Flight column should PRINT — the provider's letter suffix stripped
+    // ("UA526H" → "UA526"). `ident` stays raw: it is the row key, the watch target, the deep link.
+    identDisplay: displayFlightIdent(ident),
     key: scheduleRowKey(flight, ident, schedTimeSec, reg, index),
     raw: flight,
     timeText: formatSchedTime(schedTimeSec, timeZone),
     dateChip: dateChipLabel(schedTimeSec, dayStartSec, timeZone),
-    actualLine: actualDeltaLine({ schedTimeSec, actualTimeSec, derivedActual, estimate: !hasRealTime, timeZone }),
+    // A bound is not a time the flight did anything at; the "→ HH:MM" line would claim one.
+    actualLine: evidence.bound
+      ? null
+      : actualDeltaLine({ schedTimeSec, actualTimeSec, derivedActual, estimate: !hasRealTime, timeZone }),
     derivedActual,
+    // v1.12.1: the provider's actual on the board's side is a RUNWAY time (wheels-up on departures,
+    // touchdown on arrivals) — it sent no distinct gate time, so the delay includes taxi-out (or
+    // stops before taxi-in). The delay cell's title says so; the UI may mark it.
+    actualFromRunway: evidence.actualFromRunway,
     routeLine,
     routeSub,
     acCode,

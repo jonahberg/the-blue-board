@@ -201,6 +201,9 @@ describe('warm-schedules handler', () => {
     process.env.CRON_SECRET = SECRET;
     process.env.SCHEDULE_WARM_DELAY_MS = '0';
     process.env.SCHEDULE_WARM_TASKS_PER_RUN = '3'; // pin the per-call env read (see plan describe)
+    // These suites count the ring plan's warms exactly; the headroom-paid extra arrivals warm
+    // (v1.12.1) has its own suite in tests/warm-extra-arrivals.test.js.
+    process.env.SCHEDULE_WARM_EXTRA_ARRIVALS = '0';
     __resetAlertThrottleForTests();
     __resetAdbSpendForTests();
   });
@@ -211,6 +214,7 @@ describe('warm-schedules handler', () => {
     delete process.env.SCHEDULE_WARM_DELAY_MS;
     delete process.env.SCHEDULE_WARM_TASKS_PER_RUN;
     delete process.env.ALERT_WEBHOOK_URL;
+    delete process.env.SCHEDULE_WARM_EXTRA_ARRIVALS;
     __resetAlertThrottleForTests();
     __resetAdbSpendForTests();
   });

@@ -49,6 +49,17 @@ const RECLASSIFIABLE_KEYS = new Set(['scheduled', 'estimated', 'delayed']);
 // 15-min "recent" gate plus one full board-cache staleness grace.
 const LIVE_SIGHTING_MAX_AGE_S = 1200;
 
+// A LIVE stamp earlier than this before the scheduled departure is a previous leg (or a stamp from
+// before v1.12.1, when any sighting counted), never this departure: the overlay's airborne gate.
+const LIVE_BEFORE_DEP_S = 15 * 60;
+
+// An arrival the provider still calls en route / approaching / departed, with no live fix, whose best
+// arrival time is this far behind the clock has landed (live audit Oct 4 2026: LAX UA38 "Approaching"
+// 371 min after it arrived, ORD UA2472, ten such rows on the arrivals boards). Wider than the 60-min
+// grace for rows that never moved: an aircraft really still in the air beyond the feed's coverage
+// would need an arrival estimate wrong by more than this.
+export const EN_ROUTE_AGING_SECONDS = 90 * 60;
+
 // Effective time = the most current expectation for when the flight leaves/arrives.
 // Math.max(scheduled, estimated) is deliberate and load-bearing:
 //   - genuine delay: estimated > scheduled, we use estimated (often still in the FUTURE → kept)
@@ -95,7 +106,12 @@ function classifyBase(flight) {
   if (statusText === 'departed' || txtLower.startsWith('departed')) return { text: txt || 'Departed', cls: 'departed', key: 'departed' };
   // A flight is en-route if: FR24 says so, OR it's live with a real departure (actually airborne)
   const isAirborne = s.live === true && (flight.time?.real?.departure != null);
-  if (statusText === 'en-route' || txtLower.includes('en route') || isAirborne) return { text: txt || 'En Route', cls: 'enroute', key: 'enroute' };
+  // One spelling: the provider says "EnRoute"/"Approaching", a served-board repair says "en route"
+  // (schedule-actuals.js) and a sighting says "En Route" — the board showed "En Route" and "En route"
+  // side by side (live audit Oct 4 2026). "Approaching" is a real sub-state and keeps its word.
+  if (statusText === 'en-route' || txtLower.includes('en route') || isAirborne) {
+    return { text: txtLower.includes('approach') ? 'Approaching' : 'En Route', cls: 'enroute', key: 'enroute' };
+  }
   if (statusText === 'scheduled') {
     // `txt` is the provider's free-text status and is shown verbatim in the Status column.
     // AeroDataBox emits both 'Expected' and the meaningless 'Unknown' for rows that are
@@ -117,6 +133,43 @@ function classifyBase(flight) {
   return { text: txt || 'Unknown', cls: 'unknown', key: 'unknown' };
 }
 
+/** The overlay's tracking stamp (reg-overlay.js mergeTrack), or null. */
+function trackOf(flight) {
+  const track = flight?._source?.track;
+  return track && Number(track.airborneAt) > 0 ? track : null;
+}
+
+/**
+ * Is the row's LIVE stamp proof the aircraft is airborne now? Fresh (≤ 20 min) and not earlier than
+ * 15 min before the scheduled departure — the same gate the overlay applies before stamping.
+ */
+function isLiveNow(flight, nowSec) {
+  const seenAtMs = Number(flight?.live?.seenAt);
+  if (!Number.isFinite(seenAtMs) || seenAtMs <= 0) return false;
+  if (nowSec - seenAtMs / 1000 > LIVE_SIGHTING_MAX_AGE_S) return false;
+  const dep = Number(flight?.time?.scheduled?.departure);
+  return !(dep > 0 && seenAtMs / 1000 < dep - LIVE_BEFORE_DEP_S);
+}
+
+/** Landed, inferred from tracking: the aircraft flew this leg and was then seen on the ground there. */
+function seenLandedStatus() {
+  return { text: 'Landed', cls: 'landed', key: 'landed', inferred: true, presumed: true, seenLanded: true };
+}
+
+/** Landed, inferred from elapsed time. */
+function presumedLandedStatus() {
+  return { text: 'Landed', cls: 'landed', key: 'landed', inferred: true, presumed: true };
+}
+
+/** Has an arrival that is (or was) moving run out of time to still be in the air? */
+function enRouteHasAged(flight, nowSec, opts) {
+  const time = flight.time || {};
+  const eff = effectiveTime(time.scheduled?.arrival, time.estimated?.arrival);
+  if (!eff) return false;
+  const grace = Math.max(EN_ROUTE_AGING_SECONDS, operatedGraceSeconds(opts?.hubDisruptionMinutes));
+  return eff < nowSec - grace;
+}
+
 /**
  * Classify a schedule flight for display.
  *
@@ -128,13 +181,18 @@ function classifyBase(flight) {
  *        meta.hubDisruptionMinutes, derived from live FAA programs) extends the operated-
  *        inference grace to max(3600, (hubDisruptionMinutes + 60) * 60) seconds so a GDP hub
  *        stops minting false time-inferred Departed rows. 0/undefined = legacy behavior.
- * @returns {{text:string, cls:string, key:string, inferred?:boolean, presumed?:boolean, live?:boolean, label?:string}}
+ * @returns {{text:string, cls:string, key:string, inferred?:boolean, presumed?:boolean, live?:boolean, label?:string, seen?:boolean, seenLanded?:boolean, pastDue?:boolean}}
  *        inferred:true / presumed:true both mark a status derived from elapsed time rather than
  *        confirmed by the provider — callers exclude these from on-time stats (no trustworthy
  *        actual time) and badge them as presumed in the UI.
- *        live:true marks a status confirmed by a live-feed sighting (Phase 2) — badge as LIVE, not presumed.
+ *        live:true marks a status confirmed by a recent AIRBORNE live-feed fix (Phase 2, v1.12.1) —
+ *        badge as LIVE, not presumed.
  *        seen:true marks a row the provider called Likely Canceled that the live feed saw fly
  *        (v1.12.0, reg-overlay.js seen-airborne override) — the board says "seen airborne".
+ *        seenLanded:true (v1.12.1) marks a Landed* the live feed proved: airborne on this leg, then
+ *        on the ground at the destination. Presumed (no provider time), but not "no live update".
+ *        pastDue:true (v1.12.1) marks a not-yet-operated row whose best time is already behind the
+ *        clock: it is no longer a future flight, so it gets no delay-risk prediction.
  */
 export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.floor(Date.now() / 1000), opts = {}) {
   const base = classifyBase(flight);
@@ -161,19 +219,42 @@ export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.fl
     return classifySeenAirborne(flight, isArr, nowSec, opts);
   }
 
-  if (!RECLASSIFIABLE_KEYS.has(base.key)) return base;
+  const track = trackOf(flight);
+  const live = isLiveNow(flight, nowSec);
 
-  // Live-sighting reclassification (Phase 2): the aircraft was seen airborne by the live
+  // Landed, seen (v1.12.1): the feed had this aircraft airborne on this leg and then on the ground at
+  // its destination. Stronger than every "still flying" word the provider may still be sending —
+  // ORD UA303 read "Expected · RISK: LOW" 36 min after it landed. A provider landing time wins.
+  if (isArr && track?.landed && !live && !['landed', 'canceled', 'diverted'].includes(base.key)) {
+    return seenLandedStatus();
+  }
+
+  if (!RECLASSIFIABLE_KEYS.has(base.key)) {
+    // An arrival stuck "En Route" / "Approaching" / "Departed" hours after its arrival time has landed.
+    if (isArr && (base.key === 'enroute' || base.key === 'departed') && !live && enRouteHasAged(flight, nowSec, opts)) {
+      return presumedLandedStatus();
+    }
+    return base;
+  }
+
+  // Live-sighting reclassification (Phase 2): the aircraft was seen AIRBORNE by the live
   // feed moments ago. Stronger evidence than elapsed time, so it runs BEFORE the
   // time-inference below and carries live:true instead of presumed:true (there IS a
   // trustworthy signal — just not a provider timestamp, so still excluded from OTP
   // stats the same way presumed rows are, via the absence of time.real).
-  // Never 'landed' from a sighting: a recent sighting means airborne.
-  const liveSeenAtMs = Number(flight.live?.seenAt);
-  if (Number.isFinite(liveSeenAtMs) && liveSeenAtMs > 0 && nowSec - liveSeenAtMs / 1000 <= LIVE_SIGHTING_MAX_AGE_S) {
+  // Never 'landed' from a LIVE fix: a recent airborne fix means airborne.
+  if (live) {
     return isArr
       ? { text: 'En Route', cls: 'enroute', key: 'enroute', live: true }
       : { text: 'Departed', cls: 'departed', key: 'departed', live: true };
+  }
+
+  // Tracked (v1.12.1): the feed saw this instance airborne, just not in the last 20 min. It left;
+  // an arrival is en route until it is seen down or its arrival time is long past.
+  if (track) {
+    if (!isArr) return { text: 'Departed', cls: 'departed', key: 'departed' };
+    if (enRouteHasAged(flight, nowSec, opts)) return presumedLandedStatus();
+    return { text: 'En Route', cls: 'enroute', key: 'enroute' };
   }
 
   // Reclassify purely on elapsed time. This path is only reached for not-yet-operated provider
@@ -188,26 +269,30 @@ export function classifySchedStatus(flight, dir = 'departures', nowSec = Math.fl
   const grace = operatedGraceSeconds(opts?.hubDisruptionMinutes);
   if (eff < nowSec - grace) {
     return isArr
-      ? { text: 'Landed', cls: 'landed', key: 'landed', inferred: true, presumed: true }
+      ? presumedLandedStatus()
       : { text: 'Departed', cls: 'departed', key: 'departed', inferred: true, presumed: true };
   }
+  // Past due (v1.12.1): the best time — the provider's estimate when it has one, even an early one
+  // (UA303 was estimated 01:02Z against 01:33Z scheduled, and landed 00:41Z) — is behind the clock.
+  if ((estimated > 0 ? estimated : eff) < nowSec) return { ...base, pastDue: true };
   return base;
 }
 
 /**
- * A seen-airborne row (see classifySchedStatus). Departures: Departed — LIVE while the sighting is
- * fresh. Arrivals: En Route (LIVE while fresh) until the arrival is past the operated grace, then
- * Landed presumed: the sighting proves the departure, never a landing time.
+ * A seen-airborne row (see classifySchedStatus). Departures: Departed — LIVE while the fix is
+ * fresh. Arrivals: En Route (LIVE while fresh) until it is seen on the ground (Landed*, seen) or the
+ * arrival is past the operated grace (Landed*, presumed): the sighting proves the departure, never a
+ * landing time.
  */
 function classifySeenAirborne(flight, isArr, nowSec, opts) {
-  const liveSeenAtMs = Number(flight.live?.seenAt);
-  const live = Number.isFinite(liveSeenAtMs) && liveSeenAtMs > 0 && nowSec - liveSeenAtMs / 1000 <= LIVE_SIGHTING_MAX_AGE_S;
+  const live = isLiveNow(flight, nowSec);
   if (!isArr) {
     return live
       ? { text: 'Departed', cls: 'departed', key: 'departed', live: true, seen: true }
       : { text: 'Departed', cls: 'departed', key: 'departed', seen: true };
   }
   if (live) return { text: 'En Route', cls: 'enroute', key: 'enroute', live: true, seen: true };
+  if (trackOf(flight)?.landed) return { ...seenLandedStatus(), seen: true };
   const time = flight.time || {};
   const eff = effectiveTime(time.scheduled?.arrival, time.estimated?.arrival);
   if (eff && eff < nowSec - operatedGraceSeconds(opts?.hubDisruptionMinutes)) {

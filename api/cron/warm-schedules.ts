@@ -264,6 +264,56 @@ export function applyIropsPriority(
   return { plan: [...priority, ...rest], injected, displaced };
 }
 
+// ── Extra today-ARRIVALS warm, paid only from headroom (v1.12.1, pure) ──
+// The ring revisits each today board ~every 3h, so between views an arrivals board was 1.5–2.6h
+// stale (live audit Oct 4 2026) — and arrivals are the board whose statuses change all evening.
+// One extra today-arrivals board per fire, rotated across the nine hubs, but ONLY while the day's
+// metered spend is under the budget's paced line minus EXTRA_ARRIVALS_HEADROOM_UNITS: the extras can
+// never take the day past budget − 150 (1,250 of the 1,400 production budget), and on a busy day
+// they stop on their own. The math, on the Sep 27 – Oct 2 2026 spend (1,042–1,272 units/day, median
+// ~1,107; the ring alone is 768): a typical day leaves ~140–200 units under that line ≈ 35–50 extra
+// boards, so each arrivals board gets ~4–5 more warms a day (~8 → ~12, every ~2h instead of ~3h).
+// The extra is skipped when the run is already slow (EXTRA_ARRIVALS_MAX_ELAPSED_MS), so the 300s
+// budget holds: 180s + one 55s warm + the 3s gap + the ≤10s sightings backstop + the ≤20s Starlink
+// ping + alerting ≈ 273s.
+export const EXTRA_ARRIVALS_HEADROOM_UNITS = 150;
+export const EXTRA_ARRIVALS_MAX_ELAPSED_MS = 180_000;
+const ADB_UNITS_PER_BOARD = 4;
+
+/** Operator kill switch: SCHEDULE_WARM_EXTRA_ARRIVALS=0/off/false/no turns the extra warm off. */
+export function isExtraArrivalsWarmEnabled(): boolean {
+  const setting = String(process.env.SCHEDULE_WARM_EXTRA_ARRIVALS ?? '').trim().toLowerCase();
+  return !(setting === '0' || setting === 'off' || setting === 'false' || setting === 'no');
+}
+
+/** The budget-minus-headroom paced line, the same shape as getAdbPacedAllowance (1h head start). */
+export function extraArrivalsSpendLine(budget: number, nowMs: number): number {
+  const pool = budget - EXTRA_ARRIVALS_HEADROOM_UNITS;
+  if (!(pool > 0)) return 0;
+  const DAY_MS = 86_400_000;
+  const msIntoDay = ((nowMs % DAY_MS) + DAY_MS) % DAY_MS;
+  return Math.min(pool, Math.floor((pool * (msIntoDay + 3_600_000)) / DAY_MS));
+}
+
+/**
+ * The extra today-arrivals board for this fire, or null (no headroom, a slow run, or every arrivals
+ * board is already in the plan). Rotates over the hubs by warm slot, skipping boards the plan holds.
+ */
+export function pickExtraArrivalsTask(
+  plan: WarmTask[],
+  opts: { nowMs: number; unitsToday: number; budget: number; elapsedMs: number }
+): WarmTask | null {
+  if (!isExtraArrivalsWarmEnabled() || opts.elapsedMs > EXTRA_ARRIVALS_MAX_ELAPSED_MS) return null;
+  if (opts.unitsToday + ADB_UNITS_PER_BOARD > extraArrivalsSpendLine(opts.budget, opts.nowMs)) return null;
+  const slot = getWarmSlot(opts.nowMs);
+  for (let k = 0; k < HUBS.length; k++) {
+    const hub = HUBS[(((slot + k) % HUBS.length) + HUBS.length) % HUBS.length];
+    const inPlan = plan.some((t) => t.hub === hub && t.dir === 'arrivals' && t.dayOffset === 0);
+    if (!inPlan) return { hub, dir: 'arrivals', dayOffset: 0, label: 'today' };
+  }
+  return null;
+}
+
 export function buildScheduleWarmUrl(hub: string, dir: string, timestamp: number): string {
   // Background warming uses the PROVIDER (AeroDataBox) — the only source that returns the full
   // board from Vercel — and keeps officialFallback off so warming never burns FR24 credits, and
@@ -345,6 +395,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  const startedAt = Date.now();
   const results: Record<string, any> = {};
   // Schedule warms are tracked separately from the Starlink ping: starlink-data has a 5-tier
   // fallback chain and no AeroDataBox dependency, so it succeeds even mid-incident — counting it
@@ -398,6 +449,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (i < warmPlan.length - 1) {
       await new Promise(r => setTimeout(r, getInterTaskDelayMs()));
     }
+  }
+
+  // v1.12.1: one extra today-arrivals board, paid only from spend headroom (see pickExtraArrivalsTask).
+  try {
+    await hydrateAdbSpend();
+    const extra = pickExtraArrivalsTask(warmPlan, {
+      nowMs: Date.now(),
+      unitsToday: getAdbUnitsToday(),
+      budget: getAdbDailyUnitBudget(),
+      elapsedMs: Date.now() - startedAt,
+    });
+    if (extra) {
+      await new Promise(r => setTimeout(r, getInterTaskDelayMs()));
+      const { key, result } = await warmOne(extra.hub, extra.dir, getStartOfHubDay(extra.hub, 0), extra.label);
+      results[key] = { ...result, extra: true };
+      if (result.status === 'ok') { scheduleWarmed++; warmed++; } else { scheduleFailed++; failed++; }
+      warmPlan = [...warmPlan, extra];
+    }
+  } catch (e: any) {
+    console.warn('warm-schedules extra arrivals warm skipped:', e?.message || e);
   }
 
   // Best-effort snapshot GC: prune schedule_snapshots rows past their TTL so the table doesn't
