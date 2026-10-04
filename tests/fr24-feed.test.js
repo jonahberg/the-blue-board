@@ -41,12 +41,16 @@ function resetFeedTestState() {
   __resetFeedStateForTests();
   process.env.FR24_EMPTY_RETRY_DELAY_MS = '0';
   delete process.env.FR24_FEED_STALE_SERVE_MAX_MS;
+  // These cases pin the airline=UAL read's own retry/cache/stale behaviour, one request at a time;
+  // the Express-operator second request has its own describe block below.
+  process.env.FR24_EXPRESS_OPERATOR_FEED = '0';
 }
 
 function cleanupFeedTestEnv() {
   vi.useRealTimers();
   delete process.env.FR24_EMPTY_RETRY_DELAY_MS;
   delete process.env.FR24_FEED_STALE_SERVE_MAX_MS;
+  delete process.env.FR24_EXPRESS_OPERATOR_FEED;
 }
 
 describe('fr24-feed API', () => {
@@ -663,5 +667,65 @@ describe('fr24-feed emptiness predicate matches the client parse', () => {
     await handler(feedReq('UAL'), res);
     expect(res.statusCode).toBe(200);
     expect(res.body.oo44pp).toEqual(AC);
+  });
+});
+
+// Oct 4 2026: FR24 filed 14 SkyWest flights with United numbers under airline=SKW, so a lone
+// airline=UAL read never had them. The proxy now makes a second, best-effort request for the
+// Express operators and keeps only their United-numbered rows (src/lib/united-feed.js).
+describe('fr24-feed: the Express-operator second request', () => {
+  beforeEach(() => {
+    resetFeedTestState();
+    delete process.env.FR24_EXPRESS_OPERATOR_FEED; // on, as in production
+  });
+  afterEach(cleanupFeedTestEnv);
+
+  const UA_SKYWEST = ['e75a', 43.5, -112.0, 120, 21000, 380, '', 'T-KIDA1', 'E75L', 'N85377', 1, 'IDA', 'DEN', 'UA5793', 0, 0, 'SKW5793', '', 'SKW'];
+  const AA_SKYWEST = ['e75b', 32.9, -97.0, 90, 18000, 360, '', 'T-KDFW1', 'E75L', 'N603SK', 1, 'DFW', 'MSN', 'AA3412', 0, 0, 'SKW3412', '', 'SKW'];
+  const UAL_AC = ['b789', 41.98, -87.9, 90, 35000, 480, '', 'T-KORD1', 'B789', 'N24973', 1, 'ORD', 'LHR', 'UA958', 0, 0, 'UAL958', '', 'UAL'];
+  const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => '' });
+  const isUnitedUrl = (url) => String(url).includes('airline=UAL&');
+
+  it("serves United's own rows plus SkyWest's United flying, never its American flying", async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      isUnitedUrl(url) ? ok({ full_count: 1, version: 4, u1: UAL_AC }) : ok({ s1: UA_SKYWEST, s2: AA_SKYWEST }),
+    );
+    const res = createRes();
+    await handler(feedReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(Object.keys(res.body).sort()).toEqual(['full_count', 's1', 'u1', 'version']);
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(urls).toHaveLength(2);
+    expect(urls.every((u) => u.includes('estimated=1') && u.includes('gnd=1'))).toBe(true);
+    expect(urls.some((u) => u.includes('airline=SKW%2CRPA%2CGJS%2CUCA%2CASH%2CAWI'))).toBe(true);
+  });
+
+  it('a failed operator request still serves the United feed as a 200', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (isUnitedUrl(url)) return ok({ u1: UAL_AC });
+      return { ok: false, status: 502, json: async () => ({}), text: async () => 'bad gateway' };
+    });
+    const res = createRes();
+    await handler(feedReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(Object.keys(res.body)).toEqual(['u1']);
+  });
+
+  it('cannot rescue an EMPTY United feed: a few SkyWest rows are not a United sky', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      isUnitedUrl(url) ? ok(EMPTY_BODY) : ok({ s1: UA_SKYWEST }),
+    );
+    const res = createRes();
+    await handler(feedReq(), res);
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('other airline codes stay a single request', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ok({ d1: AC }));
+    const res = createRes();
+    await handler(feedReq('DAL'), res);
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('airline=DAL&');
   });
 });

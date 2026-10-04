@@ -101,15 +101,16 @@ export const PLANE_LEGEND = Object.freeze(
 );
 
 /**
- * The legend rows that can appear on the map right now. Long-haul amber is drawn only while
- * the Long-haul layer is on, and Starlink violet only while the Starlink roster has tails —
- * a key row for a colour the map cannot currently show would just be a puzzle.
+ * The legend rows that can appear on the map right now. By default the map draws mainline vs
+ * United Express (plus ground and anything you watch); Starlink violet and long-haul amber are
+ * highlights you switch on, so their rows appear only while that highlight is on — a key row for
+ * a colour the map is not drawing would just be a puzzle.
  *
- * @param {{longhaulLayer?: boolean, starlinkRoster?: boolean}} state
+ * @param {{longhaulLayer?: boolean, starlinkLayer?: boolean}} state
  * @returns {Array<(typeof PLANE_LEGEND)[number]>}
  */
-export function visibleLegendRows({ longhaulLayer = false, starlinkRoster = false } = {}) {
+export function visibleLegendRows({ longhaulLayer = false, starlinkLayer = false } = {}) {
   return PLANE_LEGEND.filter((row) =>
-    row.id === 'longhaul' ? longhaulLayer : row.id === 'starlink' ? starlinkRoster : true,
+    row.id === 'longhaul' ? longhaulLayer : row.id === 'starlink' ? starlinkLayer : true,
   );
 }

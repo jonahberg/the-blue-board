@@ -16,6 +16,7 @@ import { peekHubDisruptionMinutes, kickDisruptionRefresh } from './faa.js';
 import { waitUntil } from '@vercel/functions';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
+import { fetchUnitedFeed } from './_united-feed.js';
 import { peekRegSightings, kickRegSightingsRefresh, peekRegSightingsLoadedAt } from './_reg-sightings.js';
 import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
 import { sanitizeServedBoard } from '../src/lib/schedule-actuals.js';
@@ -651,7 +652,6 @@ const OFFICIAL_API_PAGE_SIZE = 10000; // FR24 API allows up to 20,000 per reques
 const OFFICIAL_QUOTA_BLOCK_MS = 30 * 60 * 1000;
 let officialQuotaBlockedUntil = 0;
 
-const LIVE_FEED_URL = 'https://data-cloud.flightradar24.com/zones/fcgi/feed.js?airline=UAL';
 const LIVE_FEED_CACHE_TTL_MS = 15_000;
 const LIVE_FEED_TIMEOUT_MS = 10_000;
 const HUB_COORDS: Record<string, { lat: number; lon: number }> = {
@@ -744,28 +744,20 @@ async function fetchUnitedLiveFeed(deadlineMs?: number): Promise<any | null> {
 
   liveFeedInFlight = (async () => {
     const remaining = deadlineMs ? Math.max(500, deadlineMs - Date.now()) : LIVE_FEED_TIMEOUT_MS;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), Math.min(remaining, LIVE_FEED_TIMEOUT_MS));
     try {
-      const resp = await fetch(LIVE_FEED_URL, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
-          'Accept': 'application/json',
-        },
-      });
-      if (!resp.ok) {
-        console.warn(`FR24 live feed fallback returned ${resp.status}`);
+      // The complete United feed: airline=UAL plus the United-numbered flights FR24 files under
+      // their Express operator (api/_united-feed.ts).
+      const data = await fetchUnitedFeed(Math.min(remaining, LIVE_FEED_TIMEOUT_MS));
+      if (!data) {
+        console.warn('FR24 live feed fallback returned an HTTP error');
         return null;
       }
-      const data = await resp.json();
       liveFeedCache = { data, expires: Date.now() + LIVE_FEED_CACHE_TTL_MS };
       return data;
     } catch (error: any) {
       console.warn('FR24 live feed fallback failed:', error?.message || error);
       return null;
     } finally {
-      clearTimeout(timeout);
       liveFeedInFlight = null;
     }
   })();

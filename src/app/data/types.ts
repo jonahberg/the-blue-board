@@ -30,6 +30,8 @@ export type Flight = {
   onGround: boolean;
   callsign: string;
   airline: string;
+  /** FR24 projected this position (receiver "F-EST", out of range — usually over an ocean). */
+  positionEstimated?: boolean;
 };
 
 /** A row of `/data/fleet.json`. */

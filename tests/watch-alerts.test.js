@@ -115,6 +115,9 @@ describe('watch-alerts cron', () => {
     sendPush.mockResolvedValue({ ok: true, statusCode: 201, gone: false });
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://test.supabase.co';
     process.env.FR24_EMPTY_RETRY_DELAY_MS = '0';
+    // One feed read = one United request in these cases; the Express-operator second request is
+    // covered in tests/united-feed.test.js and tests/fr24-feed.test.js.
+    process.env.FR24_EXPRESS_OPERATOR_FEED = '0';
     recordAirborneSample.mockImplementation(async (parsed) => ({ recorded: true, airborne: parsed.length }));
     fetchMock = vi.fn(() => Promise.resolve(flightResponse()));
     globalThis.fetch = fetchMock;
@@ -126,6 +129,7 @@ describe('watch-alerts cron', () => {
     vi.restoreAllMocks();
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.FR24_EMPTY_RETRY_DELAY_MS;
+    delete process.env.FR24_EXPRESS_OPERATOR_FEED;
   });
 
   it('returns 401 and touches nothing when the cron request is unauthorized', async () => {

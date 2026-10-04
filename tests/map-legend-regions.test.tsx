@@ -38,7 +38,7 @@ afterEach(() => {
 describe('MapLegend', () => {
   it('starts closed on a phone: only the 44 px Key button shows', () => {
     stubWidth(390);
-    render(<MapLegend longhaulLayer={false} starlinkRoster />);
+    render(<MapLegend longhaulLayer={false} starlinkLayer />);
     const button = screen.getByRole('button', { name: 'Key' });
     expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(button.className).toMatch(/\bmin-h-11\b/);
@@ -49,7 +49,7 @@ describe('MapLegend', () => {
 
   it('opens and closes on tap', () => {
     stubWidth(390);
-    render(<MapLegend longhaulLayer={false} starlinkRoster />);
+    render(<MapLegend longhaulLayer={false} starlinkLayer />);
     fireEvent.click(screen.getByRole('button', { name: 'Key' }));
     const hide = screen.getByRole('button', { name: 'Hide key' });
     expect(hide.getAttribute('aria-expanded')).toBe('true');
@@ -60,14 +60,14 @@ describe('MapLegend', () => {
 
   it('starts open from md up', () => {
     stubWidth(1280);
-    render(<MapLegend longhaulLayer starlinkRoster />);
+    render(<MapLegend longhaulLayer starlinkLayer />);
     expect(screen.getByRole('group', { name: 'Map key' }).hidden).toBe(false);
     expect(screen.getByRole('button', { name: 'Hide key' })).toBeTruthy();
   });
 
   it('draws each swatch with the exact fill and size the marker uses', () => {
     stubWidth(1280);
-    const { container } = render(<MapLegend longhaulLayer starlinkRoster />);
+    const { container } = render(<MapLegend longhaulLayer starlinkLayer />);
     const items = container.querySelectorAll('[data-legend]');
     expect(items).toHaveLength(PLANE_LEGEND.length);
     for (const row of PLANE_LEGEND) {
@@ -79,13 +79,29 @@ describe('MapLegend', () => {
     }
     const express = container.querySelector('[data-legend="express"] svg')!;
     expect(express.getAttribute('fill')).toBe(PLANE_COLORS.express);
-    // Size is the Express cue that survives Starlink violet, and the key says so in words.
+    // With the Starlink highlight on, size is the Express cue that survives violet, and the key
+    // says so in words.
     expect(screen.getByText('Smaller icon = United Express')).toBeTruthy();
   });
 
-  it('leaves out long-haul with the layer off and Starlink with no roster', () => {
+  it('by default (no highlights) is mainline vs Express, with no size footnote', () => {
     stubWidth(1280);
-    const { container } = render(<MapLegend longhaulLayer={false} starlinkRoster={false} />);
+    const { container } = render(<MapLegend longhaulLayer={false} starlinkLayer={false} />);
+    const ids = [...container.querySelectorAll('[data-legend]')].map((el) => el.getAttribute('data-legend'));
+    expect(ids).toEqual(['watched', 'express', 'airborne', 'ground']);
+    expect(screen.queryByText('Smaller icon = United Express')).toBeNull();
+  });
+
+  it('adds a highlight row only while that highlight is on', () => {
+    stubWidth(1280);
+    const { container } = render(<MapLegend longhaulLayer={false} starlinkLayer />);
+    const ids = [...container.querySelectorAll('[data-legend]')].map((el) => el.getAttribute('data-legend'));
+    expect(ids).toEqual(['watched', 'starlink', 'express', 'airborne', 'ground']);
+  });
+
+  it('leaves out long-haul and Starlink with both highlights off', () => {
+    stubWidth(1280);
+    const { container } = render(<MapLegend longhaulLayer={false} starlinkLayer={false} />);
     const ids = [...container.querySelectorAll('[data-legend]')].map((el) => el.getAttribute('data-legend'));
     expect(ids).toEqual(['watched', 'express', 'airborne', 'ground']);
   });

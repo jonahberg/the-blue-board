@@ -374,7 +374,7 @@ export function FlightSheet() {
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Live position
+                  {flight.positionEstimated ? 'Estimated position' : 'Live position'}
                 </h3>
                 <Button
                   size="sm"
@@ -388,6 +388,12 @@ export function FlightSheet() {
                   Center map
                 </Button>
               </div>
+              {flight.positionEstimated ? (
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Out of receiver range — Flightradar24 is projecting this position from the flight&apos;s
+                  last report and route.
+                </p>
+              ) : null}
               <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                 <Metric
                   label="Altitude"
