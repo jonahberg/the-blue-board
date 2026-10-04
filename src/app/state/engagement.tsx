@@ -38,7 +38,7 @@ import { safeLocalStorage } from './storage';
 export const NON_ENGAGEMENT_SELECTOR =
   '[role="tab"], [role="tablist"], nav, [role="dialog"], [role="alertdialog"], [data-no-engagement]';
 
-/** Does this click count towards the T2 threshold? */
+/** Does this click count towards the T2 strip trigger's threshold? */
 export function countsAsEngagement(target: EventTarget | null): boolean {
   const el = target instanceof Element ? target : null;
   return !el?.closest(NON_ENGAGEMENT_SELECTOR);
@@ -57,7 +57,16 @@ export type EngagementState = {
   showOnboardingInitially: boolean;
   /** True once `init()` has run, so a consumer can tell "no" from "not asked yet". */
   ready: boolean;
+  /**
+   * Which surface opened the waitlist dialog, sent as the signup's `source`. `'popup'` is the
+   * dialog's historical value (the `?waitlist=1` link keeps it); `'dashboard'` marks a signup
+   * that came through the Oct 2026 strip, so the two can be compared in the waitlist table.
+   * Both are already in the API's `VALID_SOURCES` and the table's CHECK constraint.
+   */
+  waitlistSource: WaitlistSource;
 };
+
+export type WaitlistSource = 'popup' | 'dashboard';
 
 let state: EngagementState = {
   clicks: 0,
@@ -66,6 +75,7 @@ let state: EngagementState = {
   submitted: false,
   showOnboardingInitially: false,
   ready: false,
+  waitlistSource: 'popup',
 };
 
 const listeners = new Set<() => void>();
@@ -144,6 +154,11 @@ export function markWaitlistSubmitted(): void {
   setState({ submitted: true });
 }
 
+/** Record which surface is opening the waitlist dialog (see `waitlistSource`). */
+export function setWaitlistSource(source: WaitlistSource): void {
+  if (state.waitlistSource !== source) setState({ waitlistSource: source });
+}
+
 /** Test/HMR seam — production never tears the store down. */
 export function resetEngagement(): void {
   detachClicks?.();
@@ -156,6 +171,7 @@ export function resetEngagement(): void {
     submitted: false,
     showOnboardingInitially: false,
     ready: false,
+    waitlistSource: 'popup',
   };
 }
 

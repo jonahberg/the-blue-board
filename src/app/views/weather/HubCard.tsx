@@ -51,6 +51,8 @@ export type HubCardModel = {
   hasDetail: boolean;
   markerLabel: string;
   markerDetail: string;
+  /** The radar dot's colour: the flight category, never the worst-of ops colour. */
+  markerColor: string;
   jargon: { metar: boolean };
 };
 

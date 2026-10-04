@@ -24,6 +24,7 @@ import BmacToast from './features/BmacToast';
 import LegalPopover from './features/LegalPopover';
 import NewsBanner from './features/NewsBanner';
 import TipStrip from './features/TipStrip';
+import WaitlistStrip from './features/WaitlistStrip';
 import { Attribution } from './shell/Attribution';
 import { ErrorBoundary } from './shell/ErrorBoundary';
 import { Header } from './shell/Header';
@@ -169,9 +170,17 @@ function DashboardShell() {
           the panel from its bottom edge and moves nothing the visitor is looking at, where
           the old above-the-header placement shoved the whole dashboard down mid-load (CLS
           0.11 on a phone). It also keeps the fixed chrome above the content to the header,
-          the ticker and the hub strip. */}
-      <NewsBanner />
-      <TipStrip />
+          the ticker and the hub strip.
+
+          On a phone the slot shows ONE line at a time, the first one present in this order:
+          the waitlist strip (once its triggers fire), the news, the tip. Three stacked lines
+          were ~100 px of a 780 px screen (audit Oct 3 2026); the others wait their turn and
+          come back as the one above is dismissed. A tablet or desktop shows all of them. */}
+      <div className="flex shrink-0 flex-col max-md:[&>*~*]:hidden">
+        <WaitlistStrip />
+        <NewsBanner />
+        <TipStrip />
+      </div>
       <Attribution />
       <MobileNav tab={tab} onSelect={(id) => setTab(id)} onOpenHelp={() => setOnboardingOpen(true)} />
 

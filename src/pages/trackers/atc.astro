@@ -4,6 +4,7 @@ import { atcMeta, atcAirports } from '../../data/trackers/atc.js';
 import { unitedHubs } from '../../data/trackers/united-hubs.js';
 import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
 import { trackerParentSeo } from '../../lib/tracker-detail.js';
+import { countIs, countLabel, plural } from '../../lib/plural.js';
 import StatStrip from '../../components/trackers/StatStrip.astro';
 import TrackerMap from '../../components/trackers/TrackerMap.astro';
 import TrackerSearch from '../../components/trackers/TrackerSearch.astro';
@@ -166,7 +167,7 @@ const columns = [
 
 // ---- stats ----
 const stats = [
-  { label: 'towers live on digital strips', value: String(liveCount), tone: 'green', sub: 'of 89 in the program' },
+  { label: `${plural(liveCount, 'tower')} live on digital strips`, value: String(liveCount), tone: 'green', sub: 'of 89 in the program' },
   { label: 'still on paper today', value: String(stillOnPaper), tone: 'amber', sub: `${plannedCount} scheduled · ${paperNoDateCount} no date` },
   { label: 'copper→fiber rebuild done', value: atcMeta.stats.fiber.value, sub: `as of ${new Date(`${atcMeta.stats.fiber.asOf}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}` },
   { label: 'FAA target for all 89', value: atcMeta.stats.target.value, sub: 'IG estimated 2030 — for fewer' },
@@ -182,7 +183,7 @@ const faq = [
   },
   {
     question: 'Which airports already use electronic flight strips?',
-    answer: `${liveCount} airports are live on the FAA's TFDM system as verified ${fmtDate(atcMeta.lastVerified)}: ${liveCodes}.`,
+    answer: `${countIs(liveCount, 'airport')} live on the FAA's TFDM system as verified ${fmtDate(atcMeta.lastVerified)}: ${liveCodes}.`,
   },
   {
     question: 'When will my airport stop using paper?',
@@ -257,9 +258,9 @@ const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-for
   canonical={canonical}
   ogImage={ogImage}
   ogTitle="Is Your Airport Off Paper Yet? — Modern Skies Tracker"
-  ogDescription={`${liveCount} airport towers are off paper flight strips, ${stillOnPaper} to go. The airport-by-airport FAA modernization tracker.`}
+  ogDescription={`${countIs(liveCount, 'airport tower')} off paper flight strips, ${stillOnPaper} to go. The airport-by-airport FAA modernization tracker.`}
   ogImageAlt="Modern Skies Tracker — airports live on digital flight strips vs still on paper"
-  twitterDescription={`${liveCount} airport towers off paper, ${stillOnPaper} to go. Check your airport.`}
+  twitterDescription={`${countLabel(liveCount, 'airport tower')} off paper, ${stillOnPaper} to go. Check your airport.`}
   jsonLd={[faqSchema, datasetSchema]}
   dataAttrs={{ 'data-trk-page': 'atc' }}
 >
@@ -313,7 +314,7 @@ const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-for
         points={mapPoints}
         legend={legend}
         offMap={offMap}
-        ariaLabel={`US map of the FAA electronic flight strips rollout: ${liveCount} airports live, ${plannedCount} scheduled, ${paperNoDateCount} with no date. Full details in the table below.`}
+        ariaLabel={`US map of the FAA electronic flight strips rollout: ${countLabel(liveCount, 'airport')} live, ${plannedCount} scheduled, ${paperNoDateCount} with no date. Full details in the table below.`}
         hint="Hover or tap a dot for details — full list in the table below"
       />
     </section>

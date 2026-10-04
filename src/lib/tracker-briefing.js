@@ -6,6 +6,8 @@
 // the tracker data and the `bb_tracker_watches` list are injected, so the copy and the
 // deep links are testable without a DOM or localStorage.
 
+import { countIs, countLabel } from './plural.js';
+
 /** @type {Record<string, string>} */
 export const TRACKER_STATUS_LABEL = {
   live: 'Tower is live on electronic flight strips',
@@ -56,8 +58,8 @@ export function buildTrackerBriefing({
       home: false,
       title: 'Infrastructure trackers',
       summary:
-        `${liveCount} of ${(atcAirports || []).length} towers are digital. `
-        + `${(unitedProjects || []).length} projects are tracked across United's eight hubs. `
+        `${liveCount} of ${countLabel((atcAirports || []).length, 'tower')} ${liveCount === 1 ? 'is' : 'are'} digital. `
+        + `${countIs((unitedProjects || []).length, 'project')} tracked across United's eight hubs. `
         + 'Set a home hub for the local briefing.',
       hubLink: { href: '/trackers/united-hubs', text: 'All hub projects →' },
       atcLink: { href: '/trackers/atc', text: 'All 89 towers →' },
@@ -69,7 +71,7 @@ export function buildTrackerBriefing({
   if (airport) facts.push(TRACKER_STATUS_LABEL[airport.status] || 'tower status is tracked');
   if (projects.length) {
     facts.push(
-      `${projects.length} hub ${projects.length === 1 ? 'project' : 'projects'}, ${activeProjects} active or announced`,
+      `${countLabel(projects.length, 'hub project')}, ${activeProjects} active or announced`,
     );
   }
 

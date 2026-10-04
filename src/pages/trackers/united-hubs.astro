@@ -4,6 +4,7 @@ import { unitedHubsMeta, unitedHubs, unitedProjects } from '../../data/trackers/
 import { atcAirports } from '../../data/trackers/atc.js';
 import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
 import { trackerParentSeo } from '../../lib/tracker-detail.js';
+import { countLabel } from '../../lib/plural.js';
 import StatStrip from '../../components/trackers/StatStrip.astro';
 import TrackerMap from '../../components/trackers/TrackerMap.astro';
 import TrackerSearch from '../../components/trackers/TrackerSearch.astro';
@@ -55,7 +56,7 @@ const hubPulseEntities = Object.fromEntries(
       code,
       {
         label: `${code} · ${unitedHubs[code].city}`,
-        summary: `${projects.length} tracked ${projects.length === 1 ? 'project' : 'projects'} · ${moving} active or announced.`,
+        summary: `${countLabel(projects.length, 'tracked project')} · ${moving} active or announced.`,
         href: `/trackers/united-hubs#hub-${code.toLowerCase()}`,
       },
     ];
@@ -360,8 +361,7 @@ const chipClass =
                   {h.name}
                 </a>
                 <span class="font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {h.city}, {h.state} · {projects.length}{' '}
-                  {projects.length === 1 ? 'project' : 'projects'}
+                  {h.city}, {h.state} · {countLabel(projects.length, 'project')}
                 </span>
                 {atcCodes.has(code) && (
                   <a

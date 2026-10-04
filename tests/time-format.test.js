@@ -82,6 +82,44 @@ describe('airportTz', () => {
     expect(airportTz(undefined)).toBe('');
   });
 
+  it('a Fargo flight reads "PM CDT" like every other row, not "your time" (phone QA, Oct 3 2026)', () => {
+    // UA6000 FAR→ORD: the sheet printed "6:24 PM your time" because FAR had no zone.
+    expect(formatTimeWithTz('2026-10-03T23:24:00Z', airportTz('FAR'))).toBe('6:24 PM CDT');
+  });
+
+  it('knows the zone of every airport on a captured ORD board (Oct 3 2026)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const board = JSON.parse(
+      readFileSync(resolve(__dirname, 'fixtures/ord-2026-10-03-future-actuals.json'), 'utf8'),
+    );
+    const codes = new Set();
+    for (const dir of ['departures', 'arrivals']) {
+      for (const row of board[dir].flights) {
+        codes.add(row.airport?.origin?.code?.iata);
+        codes.add(row.airport?.destination?.code?.iata);
+      }
+    }
+    codes.delete(undefined);
+    codes.delete('');
+    expect(codes.size).toBeGreaterThan(10);
+    expect([...codes].filter((code) => !airportTz(code))).toEqual([]);
+  });
+
+  it('puts the split-state airports on the right side of their zone line', () => {
+    expect(airportTz('DIK')).toBe('America/Denver'); // Dickinson ND: Mountain
+    expect(airportTz('XWA')).toBe('America/Chicago'); // Williston ND: Central
+    expect(airportTz('RAP')).toBe('America/Denver'); // Rapid City SD
+    expect(airportTz('PIR')).toBe('America/Chicago'); // Pierre SD
+    expect(airportTz('BFF')).toBe('America/Denver'); // Scottsbluff NE
+    expect(airportTz('LBF')).toBe('America/Chicago'); // North Platte NE
+    expect(airportTz('PNS')).toBe('America/Chicago'); // Pensacola FL
+    expect(airportTz('PAH')).toBe('America/Chicago'); // Paducah KY
+    expect(airportTz('SDF')).toBe('America/Kentucky/Louisville');
+    expect(airportTz('PRC')).toBe('America/Phoenix'); // Arizona keeps no DST
+    expect(airportTz('CMX')).toBe('America/Detroit'); // Hancock MI is Eastern
+  });
+
   it('an ORD takeoff reads in Chicago time, not the viewer\'s (F11 repro)', () => {
     // 03:17Z = 22:17 CDT the evening before.
     expect(formatTimeWithTz('2026-09-27T03:17:53Z', airportTz('ORD'))).toBe('10:17 PM CDT');

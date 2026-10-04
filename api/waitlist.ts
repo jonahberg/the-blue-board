@@ -17,7 +17,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // break); the DB is the backstop for writers that bypass the API (anon-key
 // direct inserts).
 //
-// Existing callers: 'popup' (main.js waitlist modal). If you add a new
+// Existing callers: 'popup' (the waitlist dialog opened by the ?waitlist=1
+// link — and, before Oct 2026, by its passive timers) and 'dashboard' (the
+// dialog opened from the dashboard's "Stay in the loop" strip, which replaced
+// the passive popup; see src/app/features/WaitlistStrip.tsx). If you add a new
 // callsite that passes a different source, add it here AND in
 // sql/006_waitlist_checks.sql — both must allow it.
 const VALID_SOURCES = new Set([

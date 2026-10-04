@@ -4,8 +4,9 @@
  *
  * `src/app/features/WaitlistDialog.tsx` routes every close — the ✕, Escape and a click on
  * the backdrop — through one `close()` that writes `bb_waitlist_dismissed`. That timestamp
- * is what keeps the passive triggers (five minutes, the click threshold) quiet for a week,
- * so a close path that forgets to write it re-asks on the next visit.
+ * is what keeps the passive ask — since Oct 2026 the "Stay in the loop" strip that the five-
+ * minute and click-threshold triggers reveal — quiet for 30 days, so a close path that forgets
+ * to write it re-asks on the next visit.
  *
  * The modal is opened the way `?waitlist=1` opens it: `setWaitlistOpen(true)` on the real
  * UiProvider.
@@ -15,7 +16,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DISMISS_TTL_MS } from '../src/lib/engagement.js';
-import { shouldShowWaitlist } from '../src/lib/waitlist-gate.js';
+import { shouldShowWaitlist, shouldShowWaitlistStrip } from '../src/lib/waitlist-gate.js';
 import WaitlistDialog from '../src/app/features/WaitlistDialog';
 import { resetEngagement } from '../src/app/state/engagement';
 import { UiProvider, useUi } from '../src/app/state/ui';
@@ -50,8 +51,9 @@ function expectFreshDismissal(before: number) {
   expect(written).toBeGreaterThanOrEqual(before);
   expect(written).toBeLessThanOrEqual(Date.now());
   expect(written - before).toBeLessThan(DISMISS_TTL_MS);
-  // …and the next passive trigger is suppressed by it.
+  // …and the next passive ask is suppressed by it: the old modal gate and the strip alike.
   expect(shouldShowWaitlist(localStorage, { shownThisSession: false })).toBe(false);
+  expect(shouldShowWaitlistStrip(localStorage, { triggered: true })).toBe(false);
 }
 
 beforeEach(() => {

@@ -162,52 +162,60 @@ export default function Onboarding() {
         if (!open) dismiss();
       }}
     >
-      <DialogContent className="max-h-[90svh] gap-4 overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+      {/* A column whose MIDDLE scrolls: header on top, the button pinned at the bottom. As one
+          scrolling box the primary button sat below the fold at 360×780 with nothing to say
+          there was more (phone QA, Oct 3 2026); now the way out is always on screen. */}
+      <DialogContent className="flex max-h-[90svh] flex-col gap-3 overflow-hidden sm:max-w-lg">
+        <DialogHeader className="shrink-0 pr-8">
           <DialogTitle>Welcome to The Blue Board ✈️</DialogTitle>
           <DialogDescription>
             Your real-time command center for United flights
           </DialogDescription>
         </DialogHeader>
 
-        <ul className="space-y-2.5">
-          {FEATURES.map((feature) => (
-            <li key={feature.title} className="flex gap-3">
-              <span aria-hidden="true" className="text-lg leading-none">
-                {feature.icon}
-              </span>
-              <div className="min-w-0">
-                <strong className="text-sm">{feature.title}</strong>
-                <p className="text-xs leading-relaxed text-muted-foreground">{feature.desc}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div
+          data-testid="onboarding-scroll"
+          className="-mx-4 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4"
+        >
+          <ul className="space-y-2.5">
+            {FEATURES.map((feature) => (
+              <li key={feature.title} className="flex gap-3">
+                <span aria-hidden="true" className="text-lg leading-none">
+                  {feature.icon}
+                </span>
+                <div className="min-w-0">
+                  <strong className="text-sm">{feature.title}</strong>
+                  <p className="text-xs leading-relaxed text-muted-foreground">{feature.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
 
-        <div className="space-y-1.5 text-center">
-          <Label htmlFor="onboarding-home-hub" className="justify-center text-xs text-muted-foreground">
-            Set your home hub for a personalized experience
-          </Label>
-          <Select value={hub} onValueChange={setHub}>
-            <SelectTrigger id="onboarding-home-hub" className="mx-auto w-[260px]">
-              <SelectValue placeholder="No preference" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_PREFERENCE}>No preference</SelectItem>
-              {HUBS.map((option) => (
-                <SelectItem key={option.code} value={option.code}>
-                  {option.code} — {option.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-1.5 text-center">
+            <Label htmlFor="onboarding-home-hub" className="justify-center text-xs text-muted-foreground">
+              Set your home hub for a personalized experience
+            </Label>
+            <Select value={hub} onValueChange={setHub}>
+              <SelectTrigger id="onboarding-home-hub" className="mx-auto w-[260px]">
+                <SelectValue placeholder="No preference" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_PREFERENCE}>No preference</SelectItem>
+                {HUBS.map((option) => (
+                  <SelectItem key={option.code} value={option.code}>
+                    {option.code} — {option.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <p className="text-center text-[11px] text-muted-foreground">
+            Built by a United flyer, for United flyers. Not affiliated with United Airlines.
+          </p>
         </div>
 
-        <p className="text-center text-[11px] text-muted-foreground">
-          Built by a United flyer, for United flyers. Not affiliated with United Airlines.
-        </p>
-
-        <Button className="min-h-11 w-full" onClick={dismiss}>
+        <Button className="min-h-11 w-full shrink-0" onClick={dismiss}>
           Let&rsquo;s Fly the Friendly Skies ✈️
         </Button>
       </DialogContent>

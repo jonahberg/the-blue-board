@@ -86,6 +86,20 @@ describe('Dashboard layout', () => {
     expect(news).toBeLessThan(attribution);
     expect(tip).toBeLessThan(attribution);
   });
+
+  it('shows ONE engagement line at a time on a phone: waitlist strip, then news, then tip (Oct 2026)', () => {
+    const waitlist = jsx.indexOf('<WaitlistStrip');
+    const news = jsx.indexOf('<NewsBanner');
+    const tip = jsx.indexOf('<TipStrip');
+    expect(waitlist).toBeGreaterThan(jsx.indexOf('</Tabs>'));
+    expect(waitlist).toBeLessThan(news);
+    expect(news).toBeLessThan(tip);
+    // The three share one wrapper whose phone rule hides every child after the first present.
+    const slotOpen = jsx.lastIndexOf('<div', waitlist);
+    const slotTag = jsx.slice(slotOpen, waitlist);
+    expect(slotTag).toContain('max-md:[&>*~*]:hidden');
+    expect(jsx.indexOf('</div>', tip)).toBeLessThan(jsx.indexOf('<Attribution'));
+  });
 });
 
 describe('NewsBanner', () => {
@@ -125,7 +139,7 @@ describe('TipStrip', () => {
 });
 
 describe('HubHealthStrip', () => {
-  it('gives every hub chip at least a 24px target', () => {
+  it('gives every hub chip 24px for a mouse and 44px for a finger (phone QA, Oct 3 2026)', () => {
     render(
       <TooltipProvider>
         <HubHealthStrip />
@@ -133,7 +147,9 @@ describe('HubHealthStrip', () => {
     );
     for (const hub of ['ORD', 'DEN']) {
       const chip = screen.getByRole('link', { name: new RegExp(hub) });
-      expect(classesOf(chip)).toContain('min-h-6');
+      expect(classesOf(chip)).toEqual(expect.arrayContaining(['min-h-6', 'pointer-coarse:min-h-11']));
+      // Keyed to the pointer, never to width: a tablet at md is still a touch screen.
+      expect(classesOf(chip).some((c) => /^md:min-h/.test(c))).toBe(false);
     }
   });
 
