@@ -4,6 +4,53 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-10-04
+
+**Special paint jobs, and a 24-hour airborne graph.** Two more asks from the Reddit launch thread. One commenter wanted to know "if the airplane has a special paint job (stars and stripes, friendship plane, continental retro, the future is saf)". Another wanted "the 24 hour graph" of the airborne count.
+
+### Special liveries
+- **16 United aircraft wear a special-livery badge.** Every entry names its tail, cites at least two independent sources (United's own release counts once it names the aircraft), and was confirmed in that paint by a 2025–26 photo. All four the commenter named are covered:
+  - Stars and Stripes (America 250): N91007 (787-10) and N78285 (737-800)
+  - Continental retro: N75435
+  - Friend Ship retro: N475UA
+  - The Future is SAF: N24988
+  - Star Alliance colours: 11 tails
+
+  Left out on purpose:
+  - Both "Her Art Here" 757s, which have been repainted, though most online lists still show them
+  - the SkyWest "Mountain Ascent" E175, not in service until 2027
+  - decal-only aircraft
+  - liveries since painted over
+
+  The tests fail if an omitted tail is added back, or if a livery tail leaves the fleet database. A red build there means re-verify the entry, not a flaky test. (`src/data/special-liveries.js`, `src/lib/special-livery.js`)
+- **Where the badges show:**
+  - the flight sheet and the aircraft dialog ("Special livery: Star Alliance", with a tap-to-open description)
+  - the Fleet tab: a chip on the tail, a **Special livery** status filter (`?filter=livery`), and livery cards on the Special panel that show the flight when the aircraft is airborne
+  - a small icon on the schedule boards' tail cell and in live-sidebar search
+
+  The icon is lucide `Paintbrush`, since ⭐ already marks named aircraft. (`src/app/features/SpecialLiveryBadge.tsx`)
+
+### 24-hour airborne graph
+- **"United airborne" now has a 24-hour graph.**
+  - On desktop it's a sparkline in the stat bar's Airborne cell. On a phone, which had no airborne number at all, it's a new 44 px row under the map controls.
+  - Either one opens a chart with a tap, hover or arrow-key readout in your own time zone.
+  - The number counts every United flight, mainline and Express. Map filters don't apply, and the chart says so beside the live map's own count.
+  - (`src/app/views/live/AirborneHistory.tsx`, `src/lib/airborne-history.js`)
+- **Recorded every 5 minutes, kept indefinitely.**
+  - The 5-minute `watch-alerts` cron reads the live feed once per run and stores the airborne, ground, mainline and Express counts in `airborne_samples` (`sql/017_airborne_samples.sql`). That's about 288 rows a day, so the week- and month-scale trend graphs can come later.
+  - A failed feed read stores nothing: gaps are gaps, never zeros. One missed read is bridged; two or more break the line.
+  - The count uses the stat bar's own rule (`countAirborne` uses the same `isOnGround`), and a test pins the two together on a real feed snapshot.
+  - (`api/_airborne-samples.ts`, `src/lib/airborne-count.js`)
+- **Honest from day one.** The table starts empty, so the chart says "Collecting since <time> — the 24-hour graph fills in as data arrives", and shades the part not yet collected instead of drawing a flat line.
+- **`GET /api/airborne-history?hours=1–168`**
+  - Errors and limits:
+    - Invalid input returns 400.
+    - The rate limit is 30 requests a minute.
+    - A missing table or Supabase error returns 200 with an empty list and a note, cached for only 30 s, and never a 5xx.
+  - Successful responses are cached for 5 minutes at the CDN, and long windows are paged past PostgREST's 1,000-row cap.
+  - (`api/airborne-history.ts`)
+- **The ticker counted airborne differently.** It used the feed's raw ground flag, so its number could disagree with the stat bar. It now uses the same rule. (`src/app/shell/Ticker.tsx`)
+
 ## [1.14.0] - 2026-10-04
 
 **A map key, United Express you can tell apart, and a recentre for every region.** Three asks from the Reddit launch thread: nobody could tell what the aircraft colours meant, Express flights looked exactly like mainline ones, and the only preset view was the Pacific.

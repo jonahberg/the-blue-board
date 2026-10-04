@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { decodeSquawk } from '@/lib/flight-phase.js';
+import { decodeSquawk, isOnGround } from '@/lib/flight-phase.js';
 import { deriveOpsHealth } from '@/lib/ops-health.js';
 import { buildTickerItems } from '@/lib/ticker.js';
 import { cn } from '@/lib/utils';
@@ -61,7 +61,9 @@ export function Ticker() {
 
     return buildTickerItems({
       opsHealth,
-      airborne: feed.flights.filter((f) => !f.onGround).length,
+      // Same definition as the stat bar and the 24-hour graph (isOnGround), not the raw feed
+      // flag: a parked jet with no ground flag, or a flagged one at altitude, counted differently.
+      airborne: feed.flights.filter((f) => !isOnGround(f)).length,
       total: feed.flights.length,
       fleetCount: fleetDb.length,
       starlinkCount: starlink.tails.size,
