@@ -17,6 +17,7 @@ import { getDisruptedAirportsMap } from '../faa.js';
 import { getStartOfHubDay } from '../../src/lib/hubTz.js';
 import { parseFr24Feed } from '../../src/lib/feed-health.js';
 import { recordFeedSightings } from '../_reg-sightings.js';
+import { fetchUnitedFeed } from '../_united-feed.js';
 import { cleanupExpiredSnapshots } from '../_schedule-snapshots.js';
 
 const HUBS = UNITED_HUBS;
@@ -485,18 +486,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // same endpoint fr24-feed.ts proxies); failure never fails the cron. 10s timeout keeps
   // the run inside the 300s maxDuration budget (see the budget math comment at the top).
   try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 10000);
-    const feedRes = await fetch('https://data-cloud.flightradar24.com/zones/fcgi/feed.js?airline=UAL', {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)', 'Accept': 'application/json' },
-    });
-    clearTimeout(t);
-    if (feedRes.ok) {
-      const recorded = await recordFeedSightings(parseFr24Feed(await feedRes.json()));
+    // The complete United feed (api/_united-feed.ts): Express flights FR24 files under their
+    // operator get sightings too.
+    const feed = await fetchUnitedFeed(10000);
+    if (feed) {
+      const recorded = await recordFeedSightings(parseFr24Feed(feed));
       results.regSightings = { ok: true, recorded };
     } else {
-      results.regSightings = { ok: false, status: feedRes.status };
+      results.regSightings = { ok: false, status: 'http-error' };
     }
   } catch (e: any) {
     console.warn('warm-schedules reg-sightings backstop failed:', e?.message || e);

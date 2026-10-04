@@ -103,7 +103,7 @@ produces them, are unit-tested, and are the only sanctioned hex literals in the 
 
 | Module | Export | Encodes |
 |---|---|---|
-| `plane-icon.js` | `PLANE_COLORS`, `PLANE_SIZES`, `PLANE_LEGEND` | map marker fill: watched → Starlink violet → long-haul amber → United Express white (airborne) → phase; airborne Express draws at 85% size in any colour. The map key renders `PLANE_LEGEND`, which is computed by `planeIconSpec` itself |
+| `plane-icon.js` | `PLANE_COLORS`, `PLANE_SIZES`, `PLANE_LEGEND` | map marker fill: watched → Starlink violet (only with the Starlink highlight on) → long-haul amber (only with the Long-haul highlight on) → United Express white (airborne) → phase; airborne Express draws at 85% size in any colour. By default the map is mainline vs Express. The map key renders `PLANE_LEGEND`, which is computed by `planeIconSpec` itself |
 | `metar-explain.js` | `CAT_COLORS` | VFR / MVFR / IFR / LIFR flight categories |
 | `metar-category.js` | `OPS_COLORS` | normal / caution / warning / severe ops impact |
 | `fleet-utils.js` | status list | active, maintenance, stored, NEXT retrofit, painting, Starlink install, future GUM |
@@ -114,7 +114,7 @@ produces them, are unit-tested, and are the only sanctioned hex literals in the 
 | `connection-risk.js` | `CONN_COLORS` | connection risk bands |
 | `weather-cards.js` | `NEUTRAL_MARKER_COLOR`, `UNKNOWN_CAT_COLOR` | no-data map markers |
 
-Owner-approved: Starlink aircraft render **violet** `#A78BFA` on the map (Jul 4 2026).
+Owner-approved: Starlink aircraft render **violet** `#A78BFA` on the map (Jul 4 2026) — since v1.16.0 only while the Starlink highlight is on (Oct 4 2026).
 
 ### The status rule
 
@@ -295,5 +295,6 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-10 | Radar dots take the flight-category colour; ops impact is a ⚠ in the label | `OPS_COLORS.caution` equals `CAT_COLORS.MVFR`, so a rainy VFR hub wore MVFR yellow under a "VFR" label. |
 | 2026-10 | United Express markers: `--foreground` white, 85% size when airborne; on the ground they read as ground | Express is identified by callsign prefix (`src/lib/express-operators.js`) — the feed's airline field is `UAL` on every row. Every other token was taken: `bb-warn`/`bb-ok`/`bb-starlink` are the long-haul/watched/Starlink fills, `bb-info` sits ~20° from mainline blue, red is alarm. Size carries Express through Starlink violet, which wins the fill on ~3 in 4 Express jets. |
 | 2026-10 | Map key on the Live map, drawn from `PLANE_LEGEND`; closed below `md` | "I couldn't figure out the meaning of the color-coding" (Reddit). The swatches are `planeIconSpec` output, so the key cannot drift; on a phone it waits behind a 44 px button rather than covering the map. |
+| 2026-10 | The map's default is mainline vs United Express; Starlink and Long-haul are highlights you switch on | Owner, Oct 4 2026: "by default have mainline and Express colors different, with no other filters, and then people can click for Starlink or long haul." With Starlink violet always on, ~3 in 4 Express jets drew violet and Express looked missing. The Starlink control now highlights instead of filtering; the key lists only what the map is drawing. |
 | 2026-10 | Region presets replace the Pacific toggle: eleven bounding boxes in `src/lib/map-regions.js`, framed with `fitBounds` | One box serves every viewport. Oceania and Pacific cross the antimeridian through `normalizeLonContinuity`, and the map re-snaps markers, hub rings and the route to the visible world copy on every `moveend` (`wrapLonNear`). |
 | 2026-10 | Board evidence markers carry words: "Landed*" + "seen landing", "≥"/"≤" + "at least"/"at most", a takeoff/touchdown icon + "from takeoff time; includes taxi" | A feed-proven landing is not "no live update", a floor is not a measurement, and a wheels-up delay includes taxi-out. Each glyph is `aria-hidden` beside sr-only words, and the wording lives in `src/lib/schedule-row-display.js` so the table and the phone row agree. |

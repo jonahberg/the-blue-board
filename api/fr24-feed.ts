@@ -4,6 +4,8 @@ import { CacheStore } from './_cache.js';
 import { waitUntil } from '@vercel/functions';
 import { parseFr24Feed, FEED_FRESH_MS } from '../src/lib/feed-health.js';
 import { recordFeedSightings } from './_reg-sightings.js';
+import { feedUrl, mergeUnitedFeed, unitedFeedUrls } from '../src/lib/united-feed.js';
+import { expressOperatorFeedEnabled } from './_united-feed.js';
 
 const isRateLimited = createRateLimiter('fr24-feed', 30);
 
@@ -142,7 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // One upstream attempt, with its OWN controller/timeout — a retried attempt must never inherit
     // the first attempt's already-armed (or already-fired) abort signal.
-    const fetchUpstreamOnce = async (deadline: number) => {
+    const fetchUpstreamOnce = async (deadline: number, url: string) => {
       const controller = new AbortController();
       // Clamp each attempt to whatever is left of the invocation budget, never just its own 15s:
       // two naive 15s attempts overshoot maxDuration and the platform kills us before the catch
@@ -151,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const attemptTimeoutMs = Math.max(2000, Math.min(FR24_UPSTREAM_TIMEOUT_MS, deadline - Date.now()));
       const timeout = setTimeout(() => controller.abort(), attemptTimeoutMs);
       try {
-        const upstream = await fetch(`https://data-cloud.flightradar24.com/zones/fcgi/feed.js?airline=${encodeURIComponent(normalizedAirline)}`, {
+        const upstream = await fetch(url, {
           signal: controller.signal,
           headers: {
             'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
@@ -191,7 +193,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // flights and renders NO DATA. A permanent lie is strictly worse than the 503 this guard was
       // built to raise, so the server's success predicate has to be the client's.
       const deadline = Date.now() + FR24_UPSTREAM_DEADLINE_MS;
-      let payload = await fetchUpstreamOnce(deadline);
+      // United = two requests (src/lib/united-feed.js): airline=UAL, plus the United-numbered
+      // flights FR24 files under their Express operator (14 SkyWest flights on Oct 4 2026 were in
+      // NO airline=UAL read). The operator request runs alongside and is best-effort: it can never
+      // fail, retry or slow down the United read beyond the shared deadline.
+      const urls = isUal ? unitedFeedUrls() : null;
+      const expressTask = urls && expressOperatorFeedEnabled()
+        ? fetchUpstreamOnce(deadline, urls.express).catch(() => null)
+        : Promise.resolve(null);
+      const primaryUrl = urls ? urls.united : feedUrl(normalizedAirline);
+      let payload = await fetchUpstreamOnce(deadline, primaryUrl);
       let parsed = parseFr24Feed(payload);
       if (parsed.length === 0) {
         const retryDelayMs = getEmptyRetryDelayMs();
@@ -203,9 +214,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const canRetry = isUal && (deadline - Date.now()) >= retryDelayMs + 2000;
         if (!canRetry) throw new EmptyFeedError();
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-        payload = await fetchUpstreamOnce(deadline);
+        payload = await fetchUpstreamOnce(deadline, primaryUrl);
         parsed = parseFr24Feed(payload);
         if (parsed.length === 0) throw new EmptyFeedError();
+      }
+      if (urls) {
+        const merged = mergeUnitedFeed(payload, await expressTask);
+        if (merged.added > 0) {
+          payload = merged.payload;
+          parsed = parseFr24Feed(payload);
+        }
       }
       // Phase 2: harvest flight→tail sightings from every FRESH feed fetch (cache hits carry
       // nothing new). Throttled inside recordFeedSightings (≤1 upsert/min/instance) and

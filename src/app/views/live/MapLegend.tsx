@@ -6,8 +6,8 @@
  *
  * Every swatch is the marker itself: `PLANE_LEGEND` (src/lib/plane-icon.js) runs each row's
  * flags through `planeIconSpec`, so the fill and size here are the ones the map draws and the
- * two cannot drift. Rows the map cannot currently draw (long-haul with the layer off, Starlink
- * without a roster) are left out by `visibleLegendRows`.
+ * two cannot drift. Rows the map is not drawing (long-haul or Starlink with its highlight off)
+ * are left out by `visibleLegendRows`.
  *
  * A disclosure, not a Popover: on a tablet or desktop the key is simply open in the map's
  * bottom-left corner (the Leaflet controls live bottom-right). Below `md` it starts closed —
@@ -26,13 +26,14 @@ type LegendRow = { id: string; label: string; fill: string; size: number };
 
 export function MapLegend({
   longhaulLayer,
-  starlinkRoster,
+  starlinkLayer,
   className,
 }: {
   /** The Long-haul layer is on, so amber markers can appear. */
   longhaulLayer: boolean;
   /** The Starlink roster has tails, so violet markers can appear. */
-  starlinkRoster: boolean;
+  /** The Starlink highlight is on (v1.16.0: off by default). */
+  starlinkLayer: boolean;
   className?: string;
 }) {
   const roomy = useMediaQuery('(min-width: 768px)');
@@ -40,7 +41,7 @@ export function MapLegend({
   const [choice, setChoice] = useState<boolean | null>(null);
   const open = choice ?? roomy;
   const panelId = useId();
-  const rows = visibleLegendRows({ longhaulLayer, starlinkRoster }) as LegendRow[];
+  const rows = visibleLegendRows({ longhaulLayer, starlinkLayer }) as LegendRow[];
 
   return (
     <div className={cn('flex flex-col items-start gap-1', className)}>
@@ -71,9 +72,12 @@ export function MapLegend({
             </li>
           ))}
         </ul>
-        {/* Most Express jets are Starlink aircraft and draw violet, so size is the Express cue
-            that survives every colour (plane-icon.js). */}
-        <p className="mt-1 text-muted-foreground">Smaller icon = United Express</p>
+        {/* With the Starlink highlight on, most Express jets draw violet (about 3 in 4 are
+            Starlink aircraft), so size is the Express cue that survives (plane-icon.js). With it
+            off, Express has its own colour and the note would only add noise. */}
+        {starlinkLayer ? (
+          <p className="mt-1 text-muted-foreground">Smaller icon = United Express</p>
+        ) : null}
       </div>
       <Button
         size="sm"

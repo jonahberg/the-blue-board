@@ -9,6 +9,8 @@
 // rather than per-response transport signals (x-vercel-cache HIT/STALE was making
 // the chip flap every poll while data was seconds old).
 
+import { isEstimatedPosition } from './united-feed.js';
+
 /**
  * Parse the raw FR24 feed body into flight objects.
  * Meta keys (full_count / version / stats) and non-array values are skipped;
@@ -38,7 +40,10 @@ export function parseFr24Feed(data) {
       flightIATA: arr[13] || '',
       onGround: arr[14] === 1,
       callsign: arr[16] || '',
-      airline: arr[18] || ''
+      airline: arr[18] || '',
+      // Index 7 is the receiver. "F-EST" = FR24 projected this position (out of receiver range,
+      // usually over an ocean); the flight panel says so rather than present it as a fix.
+      positionEstimated: isEstimatedPosition(arr[7]),
     };
     if (f.lat && f.lon) parsed.push(f);
   }

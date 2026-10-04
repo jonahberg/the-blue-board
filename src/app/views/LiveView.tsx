@@ -79,14 +79,18 @@ export default function LiveView() {
     [starlink.tails, fleetByReg],
   );
 
-  // A Starlink filter that survives the roster going away would hide the entire fleet.
-  const starlinkOnly = starlinkFilter && starlinkAvailable;
+  // v1.16.0: the Starlink control HIGHLIGHTS Starlink aircraft violet, like Long-haul highlights
+  // amber; it no longer filters the map. By default the map draws two things only: mainline and
+  // United Express (owner, Oct 4 2026: "mainline and Express colors different, with no other
+  // filters, and then people can click for Starlink or long haul"). The shared `starlinkFilter`
+  // state keeps its name because the Starlink tab's "● N AIRBORNE NOW" chip still switches here
+  // with it on. A highlight that survives the roster going away would light nothing, so it reads
+  // as on only while the roster is usable.
+  const starlinkHighlight = starlinkFilter && starlinkAvailable;
 
-  // The toggle reads pressed only when the filter is actually in force: a pressed-but-disabled
-  // control (roster empty or degraded) would say the map is filtered when it is not.
   const activeLayers = useMemo<LayerKey[]>(
-    () => (starlinkOnly ? [...layers, 'starlink'] : layers),
-    [layers, starlinkOnly],
+    () => (starlinkHighlight ? [...layers, 'starlink'] : layers),
+    [layers, starlinkHighlight],
   );
 
   const onLayersChange = useCallback(
@@ -103,10 +107,10 @@ export default function LiveView() {
     () =>
       filterLiveFlights(
         feed.flights,
-        { hub: hubFilter, phaseGroup: phaseFilter, starlinkOnly },
+        { hub: hubFilter, phaseGroup: phaseFilter, starlinkOnly: false },
         { hubs: HUB_AIRPORTS, isStarlink: isStarlinkFlight as LibPredicate },
       ) as Flight[],
-    [feed.flights, hubFilter, phaseFilter, starlinkOnly, isStarlinkFlight],
+    [feed.flights, hubFilter, phaseFilter, isStarlinkFlight],
   );
 
   const stats = useMemo(
@@ -114,9 +118,9 @@ export default function LiveView() {
       // The same predicate as the Starlink filter, so the stat and the filtered map agree.
       computeLiveStats(feed.flights, filtered, fleetDb.length, isStarlinkFlight as LibPredicate, {
         matchAircraft: ((f: Flight) => matchAircraft(f, fleetByReg)) as LibMatcher,
-        isFiltered: Boolean(hubFilter || phaseFilter || starlinkOnly),
+        isFiltered: Boolean(hubFilter || phaseFilter),
       }) as LiveStats,
-    [feed.flights, filtered, fleetDb.length, isStarlinkFlight, fleetByReg, hubFilter, phaseFilter, starlinkOnly],
+    [feed.flights, filtered, fleetDb.length, isStarlinkFlight, fleetByReg, hubFilter, phaseFilter],
   );
 
   const watchedIdents = useMemo(
@@ -196,6 +200,7 @@ export default function LiveView() {
               hubs: layers.includes('hubs'),
               wx: layers.includes('wx'),
               longhaul: layers.includes('longhaul'),
+              starlink: starlinkHighlight,
             }}
             regionRequest={regionRequest}
             homeAirport={homeAirport}
@@ -231,7 +236,7 @@ export default function LiveView() {
           <MapLegend
             className="pointer-events-none absolute bottom-2 left-2 z-[500]"
             longhaulLayer={layers.includes('longhaul')}
-            starlinkRoster={starlink.tails.size > 0}
+            starlinkLayer={starlinkHighlight}
           />
 
           {/* The overlay appears only when the feed has NEVER produced flights: one failed

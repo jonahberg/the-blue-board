@@ -120,7 +120,8 @@ export type LiveMapProps = {
   watchedIdents: Set<string>;
   starlinkTails: Set<string>;
   focus: { lat: number; lon: number; key: number } | null;
-  layers: { hubs: boolean; wx: boolean; longhaul: boolean };
+  /** `starlink` = the Starlink highlight is on (v1.16.0 — off by default). */
+  layers: { hubs: boolean; wx: boolean; longhaul: boolean; starlink?: boolean };
   /** The last region preset picked, or null until the viewer picks one. */
   regionRequest: RegionRequest | null;
   /** IATA of the viewer's home hub — decides the initial centre and zoom. */
@@ -366,7 +367,8 @@ export function LiveMap({
       const phase = (getPhase(flight.alt, flight.vr, flight.spd) as { phase: string }).phase;
       const ident = flight.flightIATA || flight.callsign || '';
       const watched = Boolean(ident) && watchedIdents.has(ident);
-      const starlink = Boolean(flight.reg) && starlinkTails.has(flight.reg);
+      // Violet only while the Starlink highlight is on; by default the map is mainline vs Express.
+      const starlink = Boolean(layers.starlink) && Boolean(flight.reg) && starlinkTails.has(flight.reg);
       const longhaul =
         layers.longhaul &&
         Boolean(isLonghaul(flight.origin, flight.dest, flight.callsign, AIRPORT_COORDS));
@@ -410,7 +412,7 @@ export function LiveMap({
         markers.delete(id);
       }
     }
-  }, [filtered, selectedId, watchedIdents, starlinkTails, layers.longhaul]);
+  }, [filtered, selectedId, watchedIdents, starlinkTails, layers.longhaul, layers.starlink]);
 
   // ── NEXRAD overlay ────────────────────────────────────────────────────────
   useEffect(() => {

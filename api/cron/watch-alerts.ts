@@ -44,6 +44,8 @@ import { isPushConfigured, ensureVapidConfigured, sendPush } from '../_web-push.
 import { recordFeedSightings } from '../_reg-sightings.js';
 import { recordAirborneSample, type RecordResult } from '../_airborne-samples.js';
 import { parseFr24Feed } from '../../src/lib/feed-health.js';
+import { unitedFeedUrls } from '../../src/lib/united-feed.js';
+import { fetchUnitedFeed } from '../_united-feed.js';
 import { evaluateWatch, retireIfDone, watchQuery, watchQueryKey, type WatchEntry } from '../_watch-diff.js';
 
 const PAGE_SIZE = 500;
@@ -67,7 +69,8 @@ function feedEmptyRetryMs(): number {
 // mid-persist (which would drop state and re-notify next run).
 const RESOLVE_DEADLINE_MS = 100_000;
 
-export const LIVE_FEED_URL = 'https://data-cloud.flightradar24.com/zones/fcgi/feed.js?airline=UAL';
+/** The United request, kept as an export for callers/tests that name it; reads go through fetchUnitedFeed. */
+export const LIVE_FEED_URL = unitedFeedUrls().united;
 
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
@@ -113,18 +116,10 @@ async function loadAllSubscriptions(supabase: ReturnType<typeof getSupabase>): P
  */
 async function readLiveFeed(): Promise<any[] | null> {
   const attempt = async (): Promise<any[] | null> => {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), FEED_ABORT_MS);
-    try {
-      const resp = await fetch(LIVE_FEED_URL, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)', Accept: 'application/json' },
-      });
-      if (!resp.ok) return null;
-      return parseFr24Feed(await resp.json());
-    } finally {
-      clearTimeout(t);
-    }
+    // The complete United feed (api/_united-feed.ts), so the airborne samples and the sightings
+    // count the Express flights FR24 files under their operator too.
+    const payload = await fetchUnitedFeed(FEED_ABORT_MS);
+    return payload ? parseFr24Feed(payload) : null;
   };
   try {
     let parsed = await attempt();

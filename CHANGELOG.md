@@ -4,6 +4,32 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-10-04
+
+**Every United flight on the map, and Express you can't miss.** The owner looked at the map and saw too few United Express flights. Two causes turned up, and this release fixes both.
+
+### The feed now has every United flight
+- **SkyWest flights FlightRadar24 files under SkyWest.** FR24 lists some United Express flights under the operator, not United. At 18:08Z on Oct 4, 14 SkyWest flights with United numbers came back only under `airline=SKW`, 10 of them airborne (UA5793 IDA–DEN, UA5068 MEI–IAH, UA5139 IAH–HEZ…). So they were missing from the map, the boards' LIVE badges, the sightings ledger and the airborne count.
+  - Every feed read is now two requests: `airline=UAL`, plus the six United Express operators (SKW, RPA, GJS, UCA, ASH, AWI). An operator row is kept only when its flight number is United's (UA…, or G7… for GoJet, which flies only for United).
+  - SkyWest's American and Delta flights in that same response stay out (6 at the time).
+  - The operator request runs alongside the United one and can't fail or slow the United read. `FR24_EXPRESS_OPERATOR_FEED=0` turns it off without a deploy.
+  - (`src/lib/united-feed.js`, `api/_united-feed.ts`, `api/fr24-feed.ts`)
+- **Positions FR24's own map shows.** The plain request also left out:
+  - estimated positions for flights out of receiver range over an ocean (UA15 LHR–EWR, UA1111 SFO–LIH, about 5 airborne)
+  - aircraft seen only by FAA airport-surface tracking (about 56 on the ground, which the "landed" evidence relies on)
+
+  Every read now sends FR24's own source switches. An estimated position is labelled in the flight panel: "Estimated position — out of receiver range".
+- **All four readers use the complete feed:** the map's proxy, the schedule's live-feed rescue, the 5-minute watch-alerts cron (and so the 24-hour airborne samples) and the warm-schedules sightings backstop.
+- **Cross-checked against the nine hubs' boards.** Every board flight still missing after the merge was absent from FR24 entirely, under any filter. An independent ADS-B network (adsb.lol) showed those tails transmitting nothing, or parked: N27267 (UA2804) was on the ground at Portland, Maine. They were landed flights whose board snapshot hadn't caught the arrival.
+
+### The map: mainline vs Express by default
+- **Two colours by default:** mainline blue and United Express white, plus grey on the ground and green for anything you watch.
+- **Starlink and Long-haul are highlights you switch on.** Starlink violet used to be on all the time. About 3 in 4 Express jets are Starlink aircraft, so most Express flights drew violet and Express looked missing.
+  - The Starlink control now highlights Starlink aircraft violet, like Long-haul highlights amber. It no longer filters the map.
+  - The Starlink tab's "● N airborne now" chip still opens the map with the Starlink highlight on.
+- **The key shows only what's drawn.** It lists the Starlink and Long-haul rows only while those highlights are on. "Smaller icon = United Express" appears only with Starlink on, because that's the only time Express needs a size cue.
+- (`src/app/views/LiveView.tsx`, `src/app/map/LiveMap.tsx`, `src/lib/plane-icon.js`, `src/app/views/live/MapLegend.tsx`)
+
 ## [1.15.0] - 2026-10-04
 
 **Special paint jobs, and a 24-hour airborne graph.** Two more asks from the Reddit launch thread. One commenter wanted to know "if the airplane has a special paint job (stars and stripes, friendship plane, continental retro, the future is saf)". Another wanted "the 24 hour graph" of the airborne count.

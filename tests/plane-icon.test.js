@@ -198,9 +198,11 @@ describe('visibleLegendRows', () => {
     expect(visibleLegendRows({}).map((row) => row.id)).toEqual(['watched', 'express', 'airborne', 'ground']);
   });
 
-  it('adds long-haul with the layer and Starlink with the roster', () => {
+  it('adds long-haul and Starlink only while their highlights are on (v1.16.0: off by default)', () => {
     expect(visibleLegendRows({ longhaulLayer: true }).map((row) => row.id)).toContain('longhaul');
-    expect(visibleLegendRows({ starlinkRoster: true }).map((row) => row.id)).toContain('starlink');
-    expect(visibleLegendRows({ longhaulLayer: true, starlinkRoster: true })).toHaveLength(PLANE_LEGEND.length);
+    expect(visibleLegendRows({ starlinkLayer: true }).map((row) => row.id)).toContain('starlink');
+    expect(visibleLegendRows({ longhaulLayer: true, starlinkLayer: true })).toHaveLength(PLANE_LEGEND.length);
+    // The old roster flag no longer turns violet on: a roster alone is not a highlight.
+    expect(visibleLegendRows({ starlinkRoster: true }).map((row) => row.id)).not.toContain('starlink');
   });
 });
