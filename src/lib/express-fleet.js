@@ -71,11 +71,15 @@ export function operatorCodeFromRoster(label) {
 }
 
 // Type normalisation. `key` decides the cabin lookup; `label` is what the dashboard prints.
-// The roster's "E175SC" stays its own key until its cabin is known to match a standard E175.
+// The E175 comes in two United layouts: the 76-seat standard and the 70-seat "SC" (Embraer's
+// Special Configuration, built for pilot scope limits). Only the Starlink roster tells them
+// apart per tail ("ERJ-175" vs "E175SC"), so a roster-labelled E175 gets a variant key and an
+// E175 known only from the feed or a board stays the bare 'E175' key, which has no cabin for an
+// operator flying both layouts (SkyWest, Mesa).
 const ROSTER_TYPES = {
-  'ERJ-175': { key: 'E175', label: 'E175' },
+  'ERJ-175': { key: 'E175-76', label: 'E175' },
   E175: { key: 'E175', label: 'E175' },
-  E175SC: { key: 'E175SC', label: 'E175' },
+  E175SC: { key: 'E175-70', label: 'E175' },
   'CRJ-550': { key: 'CRJ550', label: 'CRJ550' },
   CRJ550: { key: 'CRJ550', label: 'CRJ550' },
 };
@@ -108,13 +112,34 @@ export function normalizeExpressType({ rosterType, model, fr24Type } = {}) {
 }
 
 /**
- * Cabin layouts by type key and operator code: only layouts that are verified AND the single
- * layout in service for that pair. Anything else gets no cabin — a wrong seat count on a flight
- * panel is worse than none.
- * Filled from the Oct 2026 research pass (see the CHANGELOG entry for sources).
+ * Cabin layouts by type key and operator code (`*` = every operator): only layouts that are
+ * verified with high confidence AND the single layout that key can mean. Anything else gets no
+ * cabin — a wrong seat count on a flight panel is worse than none.
+ *
+ * Research pass, Oct 4 2026 (united.com aircraft pages via the Wayback Machine, aeroLOPA, UAL FY2025
+ * 10-K, SkyWest Q2 2026 10-Q, Wikipedia "United Express", unitedstarlinktracker.com):
+ *  - E175 standard 76 = 12F/16E+/48Y; E175 SC 70 = 12F/32E+/26Y (united.com "Version 2"/"Version 1").
+ *    SkyWest flies both, so only a roster-labelled tail gets a cabin. Republic flies only the 76.
+ *    Mesa is left out: Wikipedia and the tracker disagree on which Mesa tails are the 70-seaters.
+ *  - CRJ550 50 = 10F/20E+/20Y (GoJet and SkyWest, one layout).
+ *  - CRJ200 50 = 50Y (SkyWest); ERJ145 50 = 6E+/44Y, no First (CommutAir). Neither has Wi-Fi.
+ *  - Not filled (medium/low confidence): CRJ700, E170, CRJ450 (not in scheduled service yet).
  * @type {Readonly<Record<string, {config: string, seats: Record<string, number>, tot: number}>>}
  */
-export const EXPRESS_CABINS = Object.freeze({});
+const E175_76 = Object.freeze({ config: '12F/16E+/48Y', seats: Object.freeze({ F: 12, 'E+': 16, Y: 48 }), tot: 76 });
+const E175_70 = Object.freeze({ config: '12F/32E+/26Y', seats: Object.freeze({ F: 12, 'E+': 32, Y: 26 }), tot: 70 });
+export const EXPRESS_CABINS = Object.freeze({
+  'E175-76|SKW': E175_76,
+  'E175-70|SKW': E175_70,
+  'E175-76|RPA': E175_76,
+  'E175|RPA': E175_76, // Republic's United E175s are all 76-seaters, so the bare key is safe
+  'CRJ550|*': Object.freeze({ config: '10F/20E+/20Y', seats: Object.freeze({ F: 10, 'E+': 20, Y: 20 }), tot: 50 }),
+  'CRJ200|SKW': Object.freeze({ config: '50Y', seats: Object.freeze({ Y: 50 }), tot: 50 }),
+  'ERJ145|UCA': Object.freeze({ config: '6E+/44Y', seats: Object.freeze({ 'E+': 6, Y: 44 }), tot: 50 }),
+});
+
+/** Types verified to have no Wi-Fi at all (united.com, aeroLOPA). A Starlink roster entry overrides. */
+export const EXPRESS_NO_WIFI_TYPES = Object.freeze(new Set(['CRJ200', 'ERJ145']));
 
 /** The cabin for a type key + operator code, or null. */
 export function expressCabinFor(typeKey, operatorCode) {
@@ -152,7 +177,8 @@ export function buildExpressFleet(tails, roster) {
       tk: type.key,
       o: operator,
       oc: operatorCode,
-      w: rosterEntry ? 'Starlink' : '',
+      // Starlink from the roster; 'None' only for types verified to have no Wi-Fi; '' = unknown.
+      w: rosterEntry ? 'Starlink' : EXPRESS_NO_WIFI_TYPES.has(type.key) ? 'None' : '',
       c: cabin?.config || '',
       ...(cabin ? { seats: cabin.seats, tot: cabin.tot } : {}),
       fs: seen?.fs || '',

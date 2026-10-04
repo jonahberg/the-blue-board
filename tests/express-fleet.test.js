@@ -82,14 +82,15 @@ describe('normalizeReg and the roster operator labels', () => {
 describe('normalizeExpressType', () => {
   it("prefers the roster's curated type, then the board model, then the feed designator", () => {
     expect(normalizeExpressType({ rosterType: 'CRJ-550', fr24Type: 'CRJ7' })).toEqual({ key: 'CRJ550', label: 'CRJ550' });
-    expect(normalizeExpressType({ rosterType: 'ERJ-175' })).toEqual({ key: 'E175', label: 'E175' });
+    expect(normalizeExpressType({ rosterType: 'ERJ-175' })).toEqual({ key: 'E175-76', label: 'E175' });
     expect(normalizeExpressType({ model: 'CRJ2', fr24Type: 'E75L' })).toEqual({ key: 'CRJ200', label: 'CRJ200' });
     expect(normalizeExpressType({ fr24Type: 'E75S' })).toEqual({ key: 'E175', label: 'E175' });
     expect(normalizeExpressType({ fr24Type: 'E145' })).toEqual({ key: 'ERJ145', label: 'ERJ145' });
   });
 
-  it('keeps E175SC its own cabin key, and never guesses CRJ550 vs CRJ700 without the roster', () => {
-    expect(normalizeExpressType({ rosterType: 'E175SC' })).toEqual({ key: 'E175SC', label: 'E175' });
+  it('keeps the 70-seat E175 SC its own cabin key, and never guesses CRJ550 vs CRJ700 without the roster', () => {
+    expect(normalizeExpressType({ rosterType: 'E175SC' })).toEqual({ key: 'E175-70', label: 'E175' });
+    expect(normalizeExpressType({ fr24Type: 'E75L' })).toEqual({ key: 'E175', label: 'E175' }); // variant unknown
     expect(normalizeExpressType({ fr24Type: 'CRJ7' })).toEqual({ key: 'CRJ7', label: 'CRJ700/550' });
     expect(normalizeExpressType({})).toEqual({ key: '', label: '' });
   });
@@ -113,9 +114,11 @@ describe('buildExpressFleet', () => {
     const gojet = fleet.find((e) => e.r === 'N504GJ');
     expect(gojet).toMatchObject({ t: 'CRJ550', tk: 'CRJ550', o: 'GoJet Airlines', oc: 'GJS', w: 'Starlink', x: true, lf: 'G73375' });
     const rosterOnly = fleet.find((e) => e.r === 'N642SY');
-    expect(rosterOnly).toMatchObject({ t: 'E175', tk: 'E175SC', o: 'SkyWest Airlines', w: 'Starlink', ls: '' });
+    expect(rosterOnly).toMatchObject({ t: 'E175', tk: 'E175-70', o: 'SkyWest Airlines', w: 'Starlink', ls: '', c: '12F/32E+/26Y', tot: 70 });
     const skw = fleet.find((e) => e.r === 'N85377');
-    expect(skw).toMatchObject({ t: 'E175', o: 'SkyWest Airlines', w: '' });
+    // A SkyWest E175 the roster does not label could be either layout: no cabin, Wi-Fi unknown.
+    expect(skw).toMatchObject({ t: 'E175', o: 'SkyWest Airlines', w: '', c: '' });
+    expect(skw).not.toHaveProperty('tot');
   });
 
   it('indexes and matches by registration, from a flight or a bare tail', () => {
@@ -255,5 +258,37 @@ describe('GET /api/express-fleet', () => {
     supabaseMocks.getSupabaseAdmin.mockResolvedValue(client);
     const out = await loadExpressTails(Date.UTC(2026, 9, 4));
     expect(out.ok && out.tails.map((t) => t.r)).toEqual(['N504GJ', 'N85377']);
+  });
+});
+
+describe('cabins and Wi-Fi only where verified', () => {
+  const fleet = (tails, roster = []) => indexExpressFleet(buildExpressFleet(tails, roster));
+  it('fills the single-layout pairs', () => {
+    const f = fleet([
+      { r: 'N722YX', op: 'RPA', ft: 'E75L', m: 'E175' },
+      { r: 'N504GJ', op: 'GJS', ft: 'CRJ7' },
+      { r: 'N457SW', op: 'SKW', ft: 'CRJ2', m: 'CRJ2' },
+      { r: 'N14148', op: 'UCA', ft: 'E145' },
+      { r: 'N85377', op: 'SKW', ft: 'E75L' },
+    ], [
+      { tail: 'N504GJ', fleet: 'Express', type: 'CRJ-550', operator: 'GoJet dba UAX' },
+      { tail: 'N85377', fleet: 'Express', type: 'ERJ-175', operator: 'SkyWest dba UAX' },
+    ]);
+    expect(f.N722YX).toMatchObject({ c: '12F/16E+/48Y', tot: 76, w: '' });
+    expect(f.N504GJ).toMatchObject({ c: '10F/20E+/20Y', tot: 50, w: 'Starlink' });
+    expect(f.N457SW).toMatchObject({ t: 'CRJ200', c: '50Y', tot: 50, w: 'None' });
+    expect(f.N14148).toMatchObject({ t: 'ERJ145', c: '6E+/44Y', tot: 50, w: 'None' });
+    expect(f.N85377).toMatchObject({ c: '12F/16E+/48Y', tot: 76, w: 'Starlink' });
+  });
+
+  it('leaves Mesa E175s, CRJ700s and E170s without a cabin', () => {
+    const f = fleet([
+      { r: 'N86311', op: 'ASH', ft: 'E75L' },
+      { r: 'N782SK', op: 'SKW', ft: 'CRJ7' },
+      { r: 'N638RW', op: 'RPA', ft: 'E170' },
+    ], [{ tail: 'N86311', fleet: 'Express', type: 'E175SC', operator: 'Mesa dba UAX' }]);
+    expect(f.N86311.c).toBe('');
+    expect(f.N782SK).toMatchObject({ t: 'CRJ700/550', c: '', w: '' });
+    expect(f.N638RW).toMatchObject({ t: 'E170', c: '' });
   });
 });
