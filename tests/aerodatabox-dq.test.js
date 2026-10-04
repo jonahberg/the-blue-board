@@ -163,7 +163,7 @@ describe('dedupeBoardFlights — foreign rows (#4c)', () => {
     const b = row({ ident: 'UA2', dest: 'LAX', schedDep: T + 100 });
     const { flights, dedupe } = dedupeBoardFlights([a, b], 'departures');
     expect(flights).toHaveLength(2);
-    expect(dedupe).toEqual({ revisions: 0, operatorClones: 0, foreign: 0 });
+    expect(dedupe).toEqual({ revisions: 0, operatorClones: 0, foreign: 0, sameTail: 0 });
   });
 });
 
@@ -277,7 +277,7 @@ describe('fetchViaAeroDataBox end-to-end board hygiene', () => {
 
     const idents = result.flights.map((f) => f.identification.number.default).sort();
     expect(idents).toEqual(['UA2610', 'UA5982', 'UA929']);
-    expect(result.meta.dedupe).toEqual({ revisions: 1, operatorClones: 1, foreign: 1 });
+    expect(result.meta.dedupe).toEqual({ revisions: 1, operatorClones: 1, foreign: 1, sameTail: 0 });
 
     const ua5982 = result.flights.find((f) => f.identification.number.default === 'UA5982');
     // ORIGINAL schedule kept (the true-delay row, sched 2h48m before the real departure) — the

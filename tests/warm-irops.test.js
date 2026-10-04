@@ -166,6 +166,9 @@ describe('warm-schedules handler IROPS integration', () => {
     process.env.SCHEDULE_WARM_DELAY_MS = '0';
     process.env.SCHEDULE_WARM_TASKS_PER_RUN = '3';
     __resetFaaDisruptionCacheForTests();
+    // These suites count the ring plan's warms exactly; the headroom-paid extra arrivals warm
+    // (v1.12.1) has its own suite in tests/warm-extra-arrivals.test.js.
+    process.env.SCHEDULE_WARM_EXTRA_ARRIVALS = '0';
     __resetAlertThrottleForTests();
     __resetAdbSpendForTests();
   });
@@ -175,6 +178,7 @@ describe('warm-schedules handler IROPS integration', () => {
     delete process.env.SCHEDULE_WARM_DELAY_MS;
     delete process.env.SCHEDULE_WARM_TASKS_PER_RUN;
     __resetFaaDisruptionCacheForTests();
+    delete process.env.SCHEDULE_WARM_EXTRA_ARRIVALS;
     __resetAlertThrottleForTests();
     __resetAdbSpendForTests();
   });
