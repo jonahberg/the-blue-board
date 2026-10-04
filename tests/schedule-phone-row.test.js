@@ -95,7 +95,12 @@ describe('phoneAircraftLine — read back from fleetCell()', () => {
       wifi: 'Starlink',
       starlink: true,
     });
-    // No Starlink: the Wi-Fi is unknown, so it is left out — never "No Wi-Fi".
+    // A type verified to have no Wi-Fi says so.
+    const crj = fleetCell('N946SW', FLEET, new Set(), {
+      N946SW: { r: 'N946SW', t: 'CRJ200', o: 'SkyWest Airlines', w: 'None', c: '50Y', x: true },
+    });
+    expect(phoneAircraftLine({ reg: 'N946SW', acCode: 'CRJ2', acShort: 'CRJ200', fleet: crj }).wifi).toBe('No Wi-Fi');
+    // No Starlink and not verified: the Wi-Fi is unknown, so it is left out — never "No Wi-Fi".
     const plain = fleetCell('N85377', FLEET, new Set(), EXPRESS);
     expect(phoneAircraftLine({ reg: 'N85377', acCode: 'E75L', acShort: 'E175', fleet: plain })).toEqual({
       tail: 'N85377',

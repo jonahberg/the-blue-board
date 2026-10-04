@@ -25,8 +25,8 @@ const SEAT_CONFIG_RE = /^\d+[A-Z]{1,2}\+?(\/\d+[A-Z]{1,2}\+?)+$/;
 /** Every Wi-Fi label `normalizeWifi()` can produce, raw codes included (it passes unknowns through). */
 const WIFI_LABELS = new Set([...Object.keys(WIFI_DISPLAY), ...Object.values(WIFI_DISPLAY), 'Starlink']);
 
-/** fleet.json writes "NO" for a tail without Wi-Fi. */
-const NO_WIFI = new Set(['NO', 'No', 'None', 'none']);
+/** fleet.json writes "NO" for a tail without Wi-Fi; an Express cell says "No Wi-Fi" (verified types only). */
+const NO_WIFI = new Set(['NO', 'No', 'None', 'none', 'No Wi-Fi']);
 
 /**
  * The changed time under the scheduled one: "→ 22:16 (+208m)" becomes `22:16`. The minutes

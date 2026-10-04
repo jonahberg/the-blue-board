@@ -245,6 +245,7 @@ describe('fleetCell', () => {
       N140SY: { r: 'N140SY', t: 'E175', o: 'SkyWest Airlines', oc: 'SKW', w: 'Starlink', c: '', x: true },
       N14148: { r: 'N14148', t: '', o: 'CommutAir', oc: 'UCA', w: '', c: '', x: true },
       N504GJ: { r: 'N504GJ', t: 'CRJ550', o: 'GoJet Airlines', oc: 'GJS', w: '', c: '10F/20E+/20Y', x: true },
+      N946SW: { r: 'N946SW', t: 'CRJ200', o: 'SkyWest Airlines', oc: 'SKW', w: 'None', c: '50Y', x: true },
     };
 
     it('answers a tail the mainline database misses: type badge, type · operator line', () => {
@@ -273,6 +274,16 @@ describe('fleetCell', () => {
         enrich: 'CommutAir',
         source: 'express',
       });
+    });
+
+    it('says "No Wi-Fi" only for a type verified to have none; unknown Wi-Fi says nothing', () => {
+      expect(fleetCell('N946SW', fleetByReg, starlink, expressByReg)).toEqual({
+        badge: '50Y',
+        starlink: false,
+        enrich: 'CRJ200 · SkyWest Airlines · No Wi-Fi',
+        source: 'express',
+      });
+      expect(fleetCell('N85377', fleetByReg, starlink, expressByReg)?.enrich).not.toMatch(/Wi-?Fi/);
     });
 
     it('leaves mainline and roster-only answers exactly as they were', () => {

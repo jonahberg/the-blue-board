@@ -157,8 +157,8 @@ describe('FlightSheet United Express aircraft from the Express fleet', () => {
     expect(section.textContent).toContain('E175');
     expect(screen.getByRole('button', { name: 'N85377' })).toBeTruthy();
     expect(section.textContent).toContain('SkyWest Airlines · United Express');
-    // In the viewer's zone: 06:00Z on Oct 1 is still Sep 30 in the Americas.
-    expect(section.textContent).toMatch(/Seen flying United since (Sep 30|Oct 1), 2026/);
+    // Zulu, like the dashboard clock: the backfilled 06:00Z reads Oct 1 in every zone.
+    expect(section.textContent).toContain('Seen flying United since Oct 1, 2026');
     expect(section.textContent).not.toContain('not in mainline fleet DB');
     // Not on the Starlink roster: Wi-Fi is not stated at all — never "no Wi-Fi".
     expect(section.textContent).not.toMatch(/Starlink|No Wi-?Fi|None/i);
@@ -177,6 +177,18 @@ describe('FlightSheet United Express aircraft from the Express fleet', () => {
     expect(section.textContent).toContain('Starlink confirmed');
     expect(section.textContent).toContain('12F/16E+/48Y · Starlink');
     expect(section.textContent).toContain('(76 total)');
+  });
+
+  it('says "No Wi-Fi" for a type verified to have none, beside its verified cabin', async () => {
+    viewport(1280);
+    fleet.expressByReg = {
+      N946SW: { ...N85377, r: 'N946SW', t: 'CRJ200', tk: 'CRJ200', w: 'None', c: '50Y', seats: { Y: 50 }, tot: 50 },
+    };
+    await open(skw({ reg: 'N946SW', callsign: 'SKW5102', flightIATA: 'UA5102', acType: 'CRJ2' }));
+    const section = aircraftSection();
+    expect(section.textContent).toContain('50Y · No Wi-Fi');
+    expect(section.textContent).toContain('(50 total)');
+    expect(section.textContent).not.toContain('Starlink');
   });
 
   it('falls back to the feed designator when the Express fleet has no type yet', async () => {

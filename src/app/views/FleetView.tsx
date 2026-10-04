@@ -233,6 +233,7 @@ export default function FleetView() {
       ) as ExpressAircraft[],
     [expressDb, expressSearch, expressSort],
   );
+  const expressHasCabin = useMemo(() => expressDb.some((entry) => entry.c), [expressDb]);
 
   // Curated special liveries lead the panel; the fleet site's named/sticker entries follow.
   const specialRows = useMemo(
@@ -521,6 +522,7 @@ export default function FleetView() {
           <TabsContent value="express">
             <ExpressFleetPanel
               rows={expressRows}
+              showCabin={expressHasCabin}
               summary={expressSummary}
               staleDays={EXPRESS_STALE_DAYS}
               status={expressStatus}

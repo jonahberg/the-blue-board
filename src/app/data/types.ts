@@ -101,8 +101,11 @@ export type ExpressAircraft = {
   o: string;
   /** Operator ICAO code. */
   oc: string;
-  /** 'Starlink' when the Starlink roster lists the tail; otherwise '' (unknown, not "none"). */
-  w: 'Starlink' | '';
+  /**
+   * 'Starlink' when the Starlink roster lists the tail; 'None' for a type verified to have no
+   * Wi-Fi (CRJ200, ERJ145); '' when unknown — which never means "none".
+   */
+  w: 'Starlink' | 'None' | '';
   /** Verified cabin layout, '' when not known. */
   c: string;
   seats?: Record<string, number>;

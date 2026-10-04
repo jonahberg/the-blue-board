@@ -9,7 +9,8 @@
  *
  * What it does not know, it does not say. A third of the tails have no type yet (CommutAir and
  * GoJet boards send no model code), a cabin appears only when one is verified for that type and
- * operator, and Wi-Fi is stated only when it is Starlink — a dash is "not known", never "none".
+ * operator, and Wi-Fi is "Starlink" from the roster or "No Wi-Fi" for a type verified to have none
+ * — otherwise a dash, which is "not known", never "none".
  *
  * Its own search box rather than the mainline controls: the type, Wi-Fi and status filters
  * there are the mainline database's values and would do nothing here.
@@ -47,6 +48,16 @@ export type ExpressSummary = {
   byType: Record<string, number>;
 };
 
+/** A value the Express fleet does not know: a muted dash, with the words for a screen reader. */
+function Unknown({ label }: { label: string }) {
+  return (
+    <span className="text-muted-foreground" title={label}>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 function CountChips({ label, counts }: { label: string; counts: Record<string, number> }) {
   const rows = expressCountRows(counts) as { label: string; count: number }[];
   if (!rows.length) return null;
@@ -64,6 +75,7 @@ function CountChips({ label, counts }: { label: string; counts: Record<string, n
 
 export function ExpressFleetPanel({
   rows,
+  showCabin,
   summary,
   staleDays,
   status,
@@ -76,6 +88,12 @@ export function ExpressFleetPanel({
 }: {
   /** Already searched and sorted. */
   rows: ExpressAircraft[];
+  /**
+   * Any entry in the WHOLE Express fleet has a verified cabin. Decided over the fleet, not the
+   * searched rows, so the Config column does not come and go as a search narrows. None is
+   * verified yet: the column appears with the first one, not as a column of dashes.
+   */
+  showCabin: boolean;
   /** Of the whole Express fleet, not the searched rows. */
   summary: ExpressSummary;
   staleDays: number;
@@ -87,9 +105,6 @@ export function ExpressFleetPanel({
   nowMs: number;
   onOpenAircraft: (reg: string) => void;
 }) {
-  // No Express cabin is verified yet: the column appears with the first one, not as a column of
-  // dashes.
-  const showCabin = rows.some((row) => row.c);
   const columns = 6 + (showCabin ? 1 : 0);
 
   return (
@@ -148,7 +163,8 @@ export function ExpressFleetPanel({
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
-                <SortableHeader col="r" label="Reg" sort={sort} onSort={onSort} />
+                {/* The tail stays pinned while a phone scrolls the other columns sideways. */}
+                <SortableHeader col="r" label="Reg" sort={sort} onSort={onSort} className="sticky left-0 z-20 bg-card" />
                 <SortableHeader col="t" label="Type" sort={sort} onSort={onSort} />
                 <SortableHeader col="o" label="Operator" sort={sort} onSort={onSort} />
                 <SortableHeader col="w" label="WiFi" sort={sort} onSort={onSort} />
@@ -167,7 +183,7 @@ export function ExpressFleetPanel({
               ) : (
                 rows.map((row) => (
                   <TableRow key={row.r}>
-                    <TableCell className="font-mono">
+                    <TableCell className="sticky left-0 z-[1] bg-background font-mono">
                       <button
                         type="button"
                         onClick={() => onOpenAircraft(row.r)}
@@ -176,32 +192,29 @@ export function ExpressFleetPanel({
                         {row.r}
                       </button>
                     </TableCell>
-                    <TableCell>
-                      {row.t || (
-                        <span className="text-muted-foreground">
-                          <span aria-hidden="true">—</span>
-                          <span className="sr-only">Type not known</span>
-                        </span>
-                      )}
+                    <TableCell>{row.t || <Unknown label="Type not known" />}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">
+                      {row.o || <Unknown label="Operator not known" />}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs">{row.o || '—'}</TableCell>
                     <TableCell className="text-xs">
                       {row.w === 'Starlink' ? (
                         <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-bb-starlink">
                           <Zap aria-hidden="true" className="size-3" /> Starlink
                         </span>
+                      ) : row.w === 'None' ? (
+                        // Verified for the type (CRJ200, ERJ145), not inferred from a blank.
+                        <span className="whitespace-nowrap">No Wi-Fi</span>
                       ) : (
-                        // Off the Starlink roster the Wi-Fi is unknown — not "none".
-                        <span className="text-muted-foreground" title="Not known — only Starlink is tracked here">
-                          <span aria-hidden="true">—</span>
-                          <span className="sr-only">Not known</span>
-                        </span>
+                        // Off the Starlink roster, and not a type verified to have none: unknown.
+                        <Unknown label="Wi-Fi not known" />
                       )}
                     </TableCell>
                     {showCabin ? (
-                      <TableCell className="font-mono text-xs">{row.c || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {row.c || <Unknown label="Cabin not verified for this type and operator" />}
+                      </TableCell>
                     ) : null}
-                    <TableCell className="font-mono text-xs">{row.lf || '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">{row.lf || <Unknown label="Not seen on a United flight yet" />}</TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums">
                       {row.ls ? (
                         <time dateTime={row.ls} title={expressDateLabel(row.ls)}>

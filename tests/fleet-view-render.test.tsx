@@ -199,6 +199,25 @@ describe('FleetView — the United Express sub-tab', () => {
     expect(expressPanel().querySelectorAll('tbody tr')).toHaveLength(3);
   });
 
+  it('shows a verified cabin column and "No Wi-Fi" once the fleet has them', async () => {
+    const crj = { r: 'N946SW', t: 'CRJ200', tk: 'CRJ200', o: 'SkyWest Airlines', oc: 'SKW', w: 'None', c: '50Y', seats: { Y: 50 }, tot: 50, fs: '2026-10-01T06:00:00Z', ls: '2026-10-04T18:13:07Z', lf: 'UA5102', x: true };
+    withExpress();
+    const list = [...EXPRESS, crj];
+    ctl.fleet = { ...(ctl.fleet as object), expressDb: list, expressByReg: Object.fromEntries(list.map((e) => [e.r, e])) };
+    window.history.replaceState(null, '', '/?tab=fleet&view=express');
+    render(<FleetView />);
+    const box = await screen.findByRole('searchbox', { name: 'United Express search' });
+    expect(expressPanel().querySelector('thead')?.textContent).toContain('Config');
+    const crjRow = [...expressPanel().querySelectorAll('tbody tr')].find((r) => r.textContent?.includes('N946SW'))!;
+    expect(crjRow.textContent).toContain('No Wi-Fi');
+    expect(crjRow.textContent).toContain('50Y');
+    // The column is decided over the whole fleet: a search that hides the CRJ keeps it.
+    fireEvent.change(box, { target: { value: 'commutair' } });
+    expect(expressPanel().querySelector('thead')?.textContent).toContain('Config');
+    // An unknown Wi-Fi is a dash, never "No Wi-Fi".
+    expect(expressPanel().querySelector('tbody tr')?.textContent).not.toContain('No Wi-Fi');
+  });
+
   it('sorts by a header button, with aria-sort on the cell', async () => {
     withExpress();
     window.history.replaceState(null, '', '/?tab=fleet&view=express');

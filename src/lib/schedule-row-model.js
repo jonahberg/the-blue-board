@@ -222,13 +222,14 @@ export function isRegFromLiveFeed(flight, reg) {
  * Since the United Express fleet (src/lib/express-fleet.js), a tail the mainline database misses
  * but the Express fleet knows reads its cabin when one is verified, else its type, else
  * "United Express" (about a third of the discovered tails have no type yet — CommutAir and GoJet
- * boards send no model code); the line under the tail is type · operator · ⚡ Starlink. The
+ * boards send no model code); the line under the tail is type · operator · ⚡ Starlink (or
+ * "No Wi-Fi" for a type verified to have none; unknown Wi-Fi says nothing). The
  * roster-only answer stays for a Starlink tail the Express index has not caught up with.
  *
  * @param {string} reg
  * @param {Record<string, object>} fleetByReg
  * @param {Set<string>} starlinkTails  the Starlink roster (mainline AND Express tails).
- * @param {Record<string, {t?: string, o?: string, w?: string, c?: string}>} [expressByReg]  the
+ * @param {Record<string, {t?: string, o?: string, w?: 'Starlink'|'None'|'', c?: string}>} [expressByReg]  the
  *   United Express fleet by registration (`indexExpressFleet`). Optional: absent, the cell is what
  *   it was before the Express fleet existed.
  * @returns {{badge: string, starlink: boolean, enrich: string,
@@ -248,7 +249,10 @@ export function fleetCell(reg, fleetByReg, starlinkTails, expressByReg) {
       return {
         badge: String(express.c || express.t || 'United Express'),
         starlink: expressStarlink,
-        enrich: [express.t, express.o, expressStarlink ? '⚡ Starlink' : ''].filter(Boolean).join(' · '),
+        // 'No Wi-Fi' only when the type is verified to have none (w: 'None'); unknown says nothing.
+        enrich: [express.t, express.o, expressStarlink ? '⚡ Starlink' : express.w === 'None' ? 'No Wi-Fi' : '']
+          .filter(Boolean)
+          .join(' · '),
         source: 'express',
       };
     }

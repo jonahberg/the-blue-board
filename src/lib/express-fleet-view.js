@@ -5,9 +5,10 @@
 //
 // Honesty rules, shared by every surface:
 //  - An unknown type, cabin or operator is unknown — a dash, never a guess.
-//  - Wi-Fi is "Starlink" when the Starlink roster lists the tail, and otherwise not stated: the
-//    discovery records no Wi-Fi at all, and an Express jet off the roster may have another
-//    system or none — so a blank must never read as "no Wi-Fi".
+//  - Wi-Fi is "Starlink" when the Starlink roster lists the tail, "No Wi-Fi" only for a type
+//    verified to have none (`w: 'None'` — CRJ200, ERJ145; EXPRESS_NO_WIFI_TYPES), and otherwise
+//    not stated: an Express jet off the roster may have another system or none, so a blank must
+//    never read as "no Wi-Fi".
 //  - "First seen" is when the Blue Board first saw the tail flying United (the table began on
 //    Oct 1 2026), not a delivery date.
 
@@ -25,6 +26,19 @@ export const EXPRESS_SORT_COLUMNS = Object.freeze(['r', 't', 'o', 'w', 'c', 'lf'
 export function expressOperatorLine(entry) {
   const operator = String(entry?.o || '').trim();
   return operator ? `${operator} · United Express` : 'United Express';
+}
+
+/**
+ * The Wi-Fi words for an Express entry: 'Starlink', 'No Wi-Fi' (verified for the type), or ''
+ * when it is not known. Starlink wins — the roster is the stronger signal.
+ * @param {{w?: string}|null|undefined} entry
+ * @param {boolean} [starlink]  the caller's own Starlink test (the roster Set), OR'd in.
+ * @returns {'Starlink'|'No Wi-Fi'|''}
+ */
+export function expressWifiLabel(entry, starlink = false) {
+  if (starlink || entry?.w === 'Starlink') return 'Starlink';
+  if (entry?.w === 'None') return 'No Wi-Fi';
+  return '';
 }
 
 /**
@@ -87,11 +101,18 @@ export function sortExpressFleet(list, col, asc) {
 }
 
 /**
- * 'Oct 1, 2026' — the "Seen flying United since …" date; '' when unparseable.
- * @param {string|null|undefined} iso
- * @param {string} [timeZone]  defaults to the viewer's zone.
+ * Dates are Zulu, like the dashboard's own clock. The table's backfilled first-seen values are
+ * hub-local midnights on Oct 1 2026 (04:00–07:00Z); in a Pacific viewer's zone every one of them
+ * would read "Sep 30", a day before the table began.
  */
-export function expressDateLabel(iso, timeZone) {
+const DATE_ZONE = 'UTC';
+
+/**
+ * 'Oct 1, 2026' — the "Seen flying United since …" date (UTC); '' when unparseable.
+ * @param {string|null|undefined} iso
+ * @param {string} [timeZone]  defaults to UTC.
+ */
+export function expressDateLabel(iso, timeZone = DATE_ZONE) {
   const ms = Date.parse(iso || '');
   if (!Number.isFinite(ms)) return '';
   try {
@@ -107,9 +128,9 @@ export function expressDateLabel(iso, timeZone) {
  * 'just now' rather than a negative age.
  * @param {string|null|undefined} iso
  * @param {number} [now]
- * @param {string} [timeZone]  for the short date; defaults to the viewer's zone.
+ * @param {string} [timeZone]  for the short date; defaults to UTC.
  */
-export function expressLastSeenLabel(iso, now = Date.now(), timeZone) {
+export function expressLastSeenLabel(iso, now = Date.now(), timeZone = DATE_ZONE) {
   const ms = Date.parse(iso || '');
   if (!Number.isFinite(ms)) return '';
   const mins = Math.round((now - ms) / 60000);

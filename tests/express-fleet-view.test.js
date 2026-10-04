@@ -9,6 +9,7 @@ import {
   expressDateLabel,
   expressLastSeenLabel,
   expressOperatorLine,
+  expressWifiLabel,
   filterExpressFleet,
   sortExpressFleet,
 } from '../src/lib/express-fleet-view.js';
@@ -34,6 +35,22 @@ describe('expressOperatorLine', () => {
     expect(expressOperatorLine({ o: 'SkyWest Airlines' })).toBe('SkyWest Airlines · United Express');
     expect(expressOperatorLine({ o: '' })).toBe('United Express');
     expect(expressOperatorLine(null)).toBe('United Express');
+  });
+});
+
+describe('expressWifiLabel', () => {
+  it('Starlink from the roster, "No Wi-Fi" only when verified, otherwise nothing', () => {
+    expect(expressWifiLabel({ w: 'Starlink' })).toBe('Starlink');
+    expect(expressWifiLabel({ w: 'None' })).toBe('No Wi-Fi');
+    expect(expressWifiLabel({ w: '' })).toBe('');
+    expect(expressWifiLabel(null)).toBe('');
+    // The caller's roster test wins over a type-level "None".
+    expect(expressWifiLabel({ w: 'None' }, true)).toBe('Starlink');
+  });
+
+  it('the CRJ200 in the fixture is verified Wi-Fi-free; the bare SkyWest E175 is unknown', () => {
+    expect(expressWifiLabel(FLEET.find((e) => e.r === 'N946SW'))).toBe('No Wi-Fi');
+    expect(expressWifiLabel(FLEET.find((e) => e.r === 'N85377'))).toBe('');
   });
 });
 
@@ -95,8 +112,11 @@ describe('sortExpressFleet', () => {
 describe('date labels', () => {
   const NOW = Date.parse('2026-10-04T18:30:00Z');
 
-  it('first seen is a full short date', () => {
+  it('first seen is a full short date, in UTC by default', () => {
     expect(expressDateLabel('2026-10-01T05:00:00Z', 'UTC')).toBe('Oct 1, 2026');
+    // A backfilled hub-local midnight stays Oct 1 whatever the viewer's zone.
+    expect(expressDateLabel('2026-10-01T07:00:00Z')).toBe('Oct 1, 2026');
+    expect(expressDateLabel('2026-10-01T04:00:00Z', 'America/Los_Angeles')).toBe('Sep 30, 2026');
     expect(expressDateLabel('', 'UTC')).toBe('');
     expect(expressDateLabel('garbage', 'UTC')).toBe('');
   });

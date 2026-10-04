@@ -33,7 +33,7 @@ import { cityFor } from '@/lib/airports.js';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
 import { flightAwareIdent, isExpressFlight, operatedByLine } from '@/lib/express-operators.js';
 import { matchExpress } from '@/lib/express-fleet.js';
-import { expressDateLabel, expressOperatorLine } from '@/lib/express-fleet-view.js';
+import { expressDateLabel, expressOperatorLine, expressWifiLabel } from '@/lib/express-fleet-view.js';
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
 import { matchAircraft, unmatchedAircraftNote } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
@@ -275,6 +275,8 @@ export function FlightSheet() {
   ).filter(([, count]) => Number(count) > 0);
   const isStarlink = Boolean(reg) && starlink.tails.has(reg);
   const expressStarlink = Boolean(expressAircraft) && (isStarlink || expressAircraft?.w === 'Starlink');
+  /** 'Starlink', 'No Wi-Fi' (verified for the type) or '' — unknown is not stated. */
+  const expressWifi = expressAircraft ? (expressWifiLabel(expressAircraft, expressStarlink) as string) : '';
   /** A cabin only when one is verified for the type and operator — never a guessed seat count. */
   const expressSeats = expressAircraft?.c
     ? Object.entries(expressAircraft.seats ?? {}).filter(([, count]) => Number(count) > 0)
@@ -516,11 +518,11 @@ export function FlightSheet() {
                   ) : null}
                 </div>
                 <p className="text-xs text-muted-foreground">{expressOperatorLine(expressAircraft)}</p>
-                {/* Wi-Fi is stated only when it is Starlink: off the roster it is unknown, and a
-                    blank here must not read as "no Wi-Fi". */}
-                {expressAircraft.c || expressStarlink ? (
+                {/* Wi-Fi is stated when it is Starlink, or "No Wi-Fi" for a type verified to have
+                    none; otherwise it is unknown, and a blank here must not read as "no Wi-Fi". */}
+                {expressAircraft.c || expressWifi ? (
                   <p className="text-xs text-muted-foreground">
-                    {[expressAircraft.c, expressStarlink ? 'Starlink' : ''].filter(Boolean).join(' · ')}
+                    {[expressAircraft.c, expressWifi].filter(Boolean).join(' · ')}
                   </p>
                 ) : null}
                 {expressSeats.length > 0 ? (

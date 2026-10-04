@@ -40,7 +40,12 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cityFor } from '@/lib/airports.js';
 import { matchExpress } from '@/lib/express-fleet.js';
-import { expressDateLabel, expressLastSeenLabel, expressOperatorLine } from '@/lib/express-fleet-view.js';
+import {
+  expressDateLabel,
+  expressLastSeenLabel,
+  expressOperatorLine,
+  expressWifiLabel,
+} from '@/lib/express-fleet-view.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from '@/lib/fleet-utils.js';
 import { buildSeatBar, nonMainlineAircraftSummary } from '@/lib/fleet-view.js';
 import { getPhase } from '@/lib/flight-phase.js';
@@ -304,6 +309,8 @@ export default function AircraftDetailDialog() {
                     value={expressStarlink ? 'Yes ⚡' : 'Not on the roster'}
                     tone={expressStarlink ? 'text-bb-ok' : 'text-muted-foreground'}
                   />
+                  {/* "No Wi-Fi" only for a type verified to have none; unknown is a dash. */}
+                  <Fact label="WiFi" value={(expressWifiLabel(express, expressStarlink) as string) || '—'} />
                   {/* A cabin only when one is verified for this type and operator. */}
                   {express.c ? <Fact label="Config" value={express.c} className="col-span-2" /> : null}
                   {express.c && express.tot ? <Fact label="Total Seats" value={String(express.tot)} /> : null}

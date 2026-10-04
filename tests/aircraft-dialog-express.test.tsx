@@ -104,13 +104,25 @@ describe('AircraftDetailDialog — a tail from the United Express fleet', () => 
     expect(text).toContain('E175');
     expect(text).toContain('SkyWest Airlines · United Express');
     expect(text).toContain('UA5928');
-    expect(text).toMatch(/First seen\s*(Sep 30|Oct 1), 2026/);
+    expect(text).toMatch(/First seen\s*Oct 1, 2026/);
     expect(text).toContain('Last seen');
     expect(text).toContain('Not on the roster');
+    // Wi-Fi unknown for a SkyWest E175 the roster does not list: a dash, never "No Wi-Fi".
+    expect(text).toMatch(/WiFi—/);
+    expect(text).not.toContain('No Wi-Fi');
     expect(text).not.toContain('Not in mainline fleet database');
     // No cabin is verified for it: no Config, no seat count.
     expect(text).not.toContain('Config');
     expect(text).not.toContain('Total Seats');
+  });
+
+  it('shows a verified cabin and "No Wi-Fi" for a CRJ200', async () => {
+    express.byReg = { N946SW: { ...N85377, r: 'N946SW', t: 'CRJ200', tk: 'CRJ200', w: 'None', c: '50Y', seats: { Y: 50 }, tot: 50 } };
+    ui.aircraftReg = 'N946SW';
+    const text = (await renderDialog()).textContent || '';
+    expect(text).toMatch(/WiFiNo Wi-Fi/);
+    expect(text).toMatch(/Config50Y/);
+    expect(text).toMatch(/Total Seats50/);
   });
 
   it('keeps the live flight button and the roster Starlink for an Express Starlink tail', async () => {
