@@ -23,6 +23,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
+import { liveryForTail } from '@/lib/special-livery.js';
+import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
 import type { FleetAircraft } from '../../data/types';
 import type { SpecialIndex } from '../../state/fleet';
 import { SortableHeader } from './SortableHeader';
@@ -113,6 +115,7 @@ export function FleetTable({
                       <Star aria-hidden="true" className="size-2.5" /> {specialEntry.name}
                     </span>
                   ) : null}
+                  <SpecialLiveryBadge livery={liveryForTail(aircraft.r)} variant="compact" className="ml-1" />
                 </TableCell>
                 <TableCell>{aircraft.t}</TableCell>
                 <TableCell className="font-mono tabular-nums">{aircraft.a ?? ''}</TableCell>

@@ -19,6 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { liveryForTail } from '@/lib/special-livery.js';
+import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
 import { SortableHeader } from './SortableHeader';
 import type { SortState } from './SortableHeader';
 
@@ -111,6 +113,7 @@ export function AirborneTable({
                       <Star aria-hidden="true" className="size-2.5" /> {row.special.name}
                     </span>
                   ) : null}
+                  <SpecialLiveryBadge livery={liveryForTail(row.reg)} variant="compact" className="ml-1" />
                 </TableCell>
               </TableRow>
             ))
