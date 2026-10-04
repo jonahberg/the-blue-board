@@ -101,15 +101,20 @@ const CODE_TYPES = {
  *   curated type first, then the schedule board's model code, then the live feed's designator.
  * @returns {{key: string, label: string}}  key '' when nothing is known.
  */
-export function normalizeExpressType({ rosterType, model, fr24Type } = {}) {
+export function normalizeExpressType({ rosterType, model, fr24Type, operator } = {}) {
   const roster = ROSTER_TYPES[String(rosterType ?? '').trim().toUpperCase()];
   if (roster) return roster;
   for (const code of [model, fr24Type]) {
     const hit = CODE_TYPES[String(code ?? '').trim().toUpperCase()];
     if (hit) return hit;
   }
-  return { key: '', label: '' };
+  // An operator that flies ONE type for United needs no designator: CommutAir's United fleet is
+  // all ERJ145XR (UAL FY2025 10-K; united.com). The board backfill carried no model for its 44 tails.
+  const single = SINGLE_TYPE_OPERATORS[String(operator ?? '').trim().toUpperCase()];
+  return single || { key: '', label: '' };
 }
+
+const SINGLE_TYPE_OPERATORS = { UCA: { key: 'ERJ145', label: 'ERJ145' } };
 
 /**
  * Cabin layouts by type key and operator code (`*` = every operator): only layouts that are
@@ -167,8 +172,8 @@ export function buildExpressFleet(tails, roster) {
   const out = new Map();
   const add = (reg, opCode, sources, seen) => {
     const rosterEntry = rosterByReg.get(reg);
-    const type = normalizeExpressType({ rosterType: rosterEntry?.type, model: sources.m, fr24Type: sources.ft });
     const operatorCode = opCode || operatorCodeFromRoster(rosterEntry?.operator);
+    const type = normalizeExpressType({ rosterType: rosterEntry?.type, model: sources.m, fr24Type: sources.ft, operator: operatorCode });
     const operator = UNITED_OPERATORS[operatorCode]?.name || '';
     const cabin = type.key ? expressCabinFor(type.key, operatorCode) : null;
     out.set(reg, {

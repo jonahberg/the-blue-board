@@ -83,11 +83,13 @@ describe('sortExpressFleet', () => {
   });
 
   it('keeps blanks last in BOTH directions', () => {
-    // CommutAir and GoJet boards send no model code: their type is unknown.
+    // GoJet boards send no model code, so N504GJ's type is unknown. (CommutAir has none either, but
+    // it flies only the ERJ145 for United, so its type follows from the operator.)
     const byTypeAsc = sortExpressFleet(FLEET, 't', true).map((e) => e.t);
     const byTypeDesc = sortExpressFleet(FLEET, 't', false).map((e) => e.t);
-    expect(byTypeAsc.slice(-2)).toEqual(['', '']);
-    expect(byTypeDesc.slice(-2)).toEqual(['', '']);
+    expect(byTypeAsc.slice(-1)).toEqual(['']);
+    expect(byTypeDesc.slice(-1)).toEqual(['']);
+    expect(byTypeAsc).toContain('ERJ145');
     expect(byTypeAsc[0]).toBe('CRJ200');
     // Wi-Fi: the two Starlink tails lead whichever way it is flipped.
     expect(sortExpressFleet(FLEET, 'w', false).slice(0, 2).map((e) => e.w)).toEqual(['Starlink', 'Starlink']);
@@ -143,7 +145,8 @@ describe('summary rows and the coverage note', () => {
     expect(expressCountRows(summary.byType)).toEqual([
       { label: 'E175', count: 3 },
       { label: 'CRJ200', count: 1 },
-      { label: 'Unknown type', count: 2 },
+      { label: 'ERJ145', count: 1 },
+      { label: 'Unknown type', count: 1 },
     ]);
     expect(expressCountRows(null)).toEqual([]);
   });

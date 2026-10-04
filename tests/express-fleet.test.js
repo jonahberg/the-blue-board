@@ -292,3 +292,12 @@ describe('cabins and Wi-Fi only where verified', () => {
     expect(f.N638RW).toMatchObject({ t: 'E170', c: '' });
   });
 });
+
+describe('single-type operators', () => {
+  it('a CommutAir tail with no designator is an ERJ145 (its only United type), with its verified cabin', () => {
+    expect(normalizeExpressType({ operator: 'UCA' })).toEqual({ key: 'ERJ145', label: 'ERJ145' });
+    expect(normalizeExpressType({ operator: 'SKW' })).toEqual({ key: '', label: '' });
+    const [e] = buildExpressFleet([{ r: 'N14148', op: 'UCA', ft: null, m: null }], []);
+    expect(e).toMatchObject({ t: 'ERJ145', c: '6E+/44Y', tot: 50, w: 'None', o: 'CommutAir' });
+  });
+});

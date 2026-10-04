@@ -4,6 +4,48 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-10-04
+
+**United Express aircraft in the fleet database.** About 40% of a United hub board is United Express, and every one of those aircraft used to read "not in mainline fleet DB". The site now knows about 473 of the ~513 United Express jets: type, operator, Starlink, and the cabin where it's verified.
+
+### How the Express fleet is built
+- **Discovered from United's own flying, not imported.** SkyWest and Republic also fly for American and Delta, so no registry or operator list can say which tails are United's.
+  - A tail qualifies only when the live feed shows it flying a United-numbered flight (UA…, or G7… for GoJet) under a United Express operator's callsign (SkyWest, Republic, GoJet, CommutAir, Mesa) on a regional type.
+  - SkyWest's American and Delta flying, mainline jets, and mismatched board rows (a 737 under a SkyWest callsign) stay out.
+  - (`src/lib/express-fleet.js` `expressTailFromFlight`)
+- **It keeps itself current.** The 5-minute `watch-alerts` cron already reads the complete United feed. Twice an hour it upserts every qualifying tail into the new `express_tails` table (`sql/018`, row-level security on, no public access). A tail unseen on a United flight for 45 days drops out on its own.
+  - Backfilled Oct 4 from four days of hub boards: 454 tails, none of them mainline.
+  - With the Starlink roster's Express entries that makes 473 of the ~513 aircraft. The rest arrive as they fly.
+  - (`api/_express-tails.ts`, `api/cron/watch-alerts.ts`)
+- **`GET /api/express-fleet`** returns the tails seen in the last 45 days with operator, type codes, last United flight, and first/last seen.
+  - Cached for 30 minutes at the CDN.
+  - It never returns a 5xx: a failed read is an empty 200 with a note.
+  - (`api/express-fleet.ts`)
+- **`matchAircraft` and the mainline numbers don't move.** The "1,139 mainline" figure, fleet utilization, the Starlink counts and the delivery timeline are untouched, and a guard test pins them with the Express data loaded, failed or pending.
+
+### Cabins only where verified
+Every layout below was checked on united.com's aircraft pages (via the Wayback Machine), aeroLOPA, United's FY2025 10-K, SkyWest's Q2 2026 10-Q and Wikipedia:
+
+| Aircraft | Cabin | Notes |
+|---|---|---|
+| E175, standard | 76: 12F/16E+/48Y | |
+| E175 "SC" (Special Configuration, built for pilot scope limits) | 70: 12F/32E+/26Y | |
+| CRJ550 (GoJet, SkyWest) | 50: 10F/20E+/20Y | |
+| CRJ200 (SkyWest) | 50Y | no Wi-Fi |
+| ERJ145 (CommutAir) | 50: 6E+/44Y | no Wi-Fi |
+
+- **SkyWest flies both E175 layouts**, so a SkyWest E175 gets a cabin only when the Starlink roster names its variant.
+- **Republic flies only the 76-seat E175.**
+- **Mesa's E175s have no cabin shown**, because the sources disagree on which Mesa tails are the 70-seaters.
+- **No cabin yet (not verified well enough):** CRJ700, E170, and the new CRJ450.
+- **"No Wi-Fi" is shown only for the two types verified to have none.** An unknown Wi-Fi reads "—".
+
+### Where it shows
+- **Flight panel:** an Express aircraft's type, operator, cabin and seats, Wi-Fi, and "Seen flying United since…", where it used to say "not in mainline fleet DB".
+- **Aircraft dialog:** type, operator, Starlink, Wi-Fi, cabin, last United flight, and first/last seen.
+- **Schedule boards:** Express rows get the cabin badge and "type · operator · ⚡ Starlink / No Wi-Fi". On ORD departures, 36 of 153 rows gained aircraft details.
+- **Fleet tab:** a new **United Express** sub-tab (`?view=express`) with counts by operator and type, its own search, and a sortable table. "All Aircraft (1139)" is unchanged.
+
 ## [1.16.0] - 2026-10-04
 
 **Every United flight on the map, and Express you can't miss.** The owner looked at the map and saw too few United Express flights. Two causes turned up, and this release fixes both.
