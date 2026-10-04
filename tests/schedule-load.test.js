@@ -187,6 +187,17 @@ describe('staleness / degradation ladder', () => {
     expect(out.tone).toBe('muted');
   });
 
+  it('a board the server held back for budget says "not fetched yet", not "not responding"', () => {
+    // Without this the empty tomorrow board after a hub's midnight read "The upstream data source
+    // is not responding." (its partialReason is first_page_failed) — nothing had failed.
+    const out = describeBoardCondition(
+      { partial: true, meta: { providerDeferred: true, partialReason: 'first_page_failed' } },
+      { asOf },
+    );
+    expect(out.kind).toBe('banner');
+    expect(out.message).toBe("This board hasn't been fetched yet — the schedule provider is paced to a daily limit.");
+  });
+
   it('a degraded board states the absolute time and the consequence', () => {
     const out = describeBoardCondition({ degraded: true, meta: { dataAge: 7200 } }, { asOf });
     expect(out.kind).toBe('banner');
@@ -379,6 +390,13 @@ describe('emptyBoardReason (F14)', () => {
     expect(emptyBoardReason({ rawCount: 640, partial: false })).toBe('filtered');
     expect(emptyBoardReason({ rawCount: 0, partial: true })).toBe('upstream'); // first_page_failed
     expect(emptyBoardReason({ rawCount: 0, partial: false })).toBe('none');
+  });
+
+  it('says "not loaded yet" when the server held the fetch back for budget (Oct 4 2026)', () => {
+    // The tomorrow board right after a hub's local midnight: empty + partial, but nothing failed.
+    expect(emptyBoardReason({ rawCount: 0, partial: true, deferred: true })).toBe('deferred');
+    // Rows the filters hid are still the filters' doing.
+    expect(emptyBoardReason({ rawCount: 12, partial: true, deferred: true })).toBe('filtered');
   });
 });
 

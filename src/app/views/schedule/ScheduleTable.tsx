@@ -32,7 +32,7 @@
  * and swaps only the markup each row paints. Desktop and tablet keep the table untouched.
  */
 
-import { CalendarDays, Eye, SearchX, Star, TriangleAlert, Zap } from 'lucide-react';
+import { CalendarDays, Clock, Eye, SearchX, Star, TriangleAlert, Zap } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -124,7 +124,7 @@ function SortableHead({
 }
 
 /** Why a board paints no rows — each says something different to the viewer (F14). */
-export type EmptyReason = 'filtered' | 'upstream' | 'none';
+export type EmptyReason = 'filtered' | 'deferred' | 'upstream' | 'none';
 
 export const ScheduleTable = forwardRef<
   ScheduleTableHandle,
@@ -320,6 +320,14 @@ export const ScheduleTable = forwardRef<
         <Button variant="outline" size="sm" className="mt-2 min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onClearFilters}>
           Clear filters
         </Button>
+      </>
+    ) : emptyReason === 'deferred' ? (
+      <>
+        <Clock aria-hidden="true" className="mx-auto mb-1 size-6" />
+        Still waiting on {emptySubject}
+        <span className="mt-1 block text-[10px]">
+          The schedule provider is paced to a daily limit — try Retry in a little while
+        </span>
       </>
     ) : emptyReason === 'upstream' ? (
       <>

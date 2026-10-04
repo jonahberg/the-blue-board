@@ -2444,3 +2444,91 @@ describe('serve-time: no actual time later than the request (Oct 3 2026 ORD)', (
     expect(classifySchedStatus(landed, 'arrivals', Math.floor(Date.now() / 1000)).key).toBe('landed');
   });
 });
+
+// Oct 4 2026, live: ORD and IAH TOMORROW boards came back empty ("Couldn't load") after each hub's
+// local midnight. The warm ring reaches a hub's new tomorrow board up to ~9h later, and the paced
+// organic gate (372 units spent vs a 370 paced line, 1,400 budget) held back the first load too —
+// with no copy to fall back on and the FR24 scrape Cloudflare-blocked, the board was simply empty.
+// A first load (no complete copy anywhere) of yesterday/today/tomorrow may now run ahead of the
+// paced line by the first-load headroom (10% of the budget); anything else stays fully paced.
+describe('first load of a board with no copy anywhere', () => {
+  beforeEach(() => {
+    resetScheduleTestState();
+    resetFallbackBreaker();
+    __resetAdbSpendForTests();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '1400'; // the production budget
+    // 05:20 UTC = 12:20 AM CDT: ORD has just rolled over, and the paced line is
+    // floor(1400 x 6.33/24) = 369 — the live state that emptied the tomorrow boards.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-04T05:20:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete process.env.AERODATABOX_DAILY_UNIT_BUDGET;
+    cleanupScheduleTestEnv();
+  });
+
+  async function loadColdBoard(dayOffset) {
+    const ts = getStartOfHubDay('ORD', dayOffset);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => (
+      { ok: false, status: 403, text: async () => 'blocked', json: async () => ({}), headers: { get: () => null } }
+    ));
+    const res = createRes();
+    await handler({
+      method: 'GET',
+      headers: { origin: 'http://localhost:3000' },
+      query: { hub: 'ORD', dir: 'departures', timestamp: String(ts) },
+    }, res);
+    const providerCalled = fetchSpy.mock.calls.some(([url]) => /aerodatabox|aedbx/i.test(String(url)));
+    return { res, providerCalled };
+  }
+
+  it('lets the first load of tomorrow run ahead of the paced line, within the headroom', async () => {
+    await recordAdbUnits(getAdbPacedAllowance(Date.now()) + 3); // just past the paced line
+    expect(isAdbOrganicRefreshGated(Date.now())).toBe(true); // setup sanity: a REFRESH would be held back
+
+    const { res, providerCalled } = await loadColdBoard(1);
+
+    expect(res.statusCode).toBe(200);
+    expect(providerCalled).toBe(true);
+  });
+
+  it('covers yesterday and today too — the three days the dashboard offers', async () => {
+    await recordAdbUnits(getAdbPacedAllowance(Date.now()) + 3);
+    expect((await loadColdBoard(-1)).providerCalled).toBe(true);
+    resetScheduleTestState();
+    expect((await loadColdBoard(0)).providerCalled).toBe(true);
+  });
+
+  it('keeps other days fully paced, so the ±7-day range cannot be walked to drain the headroom', async () => {
+    await recordAdbUnits(getAdbPacedAllowance(Date.now()) + 3);
+
+    const { res, providerCalled } = await loadColdBoard(3);
+
+    expect(res.statusCode).toBe(200);
+    expect(providerCalled).toBe(false);
+    expect(res.body.meta.providerDeferred).toBe(true);
+  });
+
+  it('holds back once the headroom is spent, and tells the page "not loaded yet" rather than "failed"', async () => {
+    await recordAdbUnits(getAdbPacedAllowance(Date.now()) + 140); // 10% of 1,400
+
+    const { res, providerCalled } = await loadColdBoard(1);
+
+    expect(res.statusCode).toBe(200);
+    expect(providerCalled).toBe(false);
+    expect(res.body.total).toBe(0);
+    expect(res.body.meta.providerDeferred).toBe(true);
+  });
+
+  it('does not call a provider FAILURE deferred when the gate was open', async () => {
+    // 0 units spent: the provider is attempted (and 403s). The empty board is a failure, not a hold.
+    const { res, providerCalled } = await loadColdBoard(1);
+
+    expect(providerCalled).toBe(true);
+    expect(res.body.meta.providerDeferred).toBeUndefined();
+  });
+});

@@ -205,6 +205,8 @@ export type ScheduleMeta = {
   /** /api/schedule stamps Unix seconds; an ISO string is tolerated (see boardAsOfMs). */
   generatedAt?: number | string;
   hubDisruptionMinutes?: number;
+  /** Empty because the provider's daily budget held the fetch back: "not loaded yet", not a failure. */
+  providerDeferred?: boolean;
 };
 
 export type ScheduleResponse = {
