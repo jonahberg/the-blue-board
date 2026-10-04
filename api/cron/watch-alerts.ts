@@ -7,25 +7,31 @@
 // lifecycle, are api/_watch-diff.ts's job (evaluateWatch); this file does the I/O.
 //
 // Each run:
-//   1. Loads every subscription.
-//   2. Harvests the free public FR24 live feed ONCE (only when some watch is live) into reg_sightings
-//      — the same write api/fr24-feed.ts and the warm cron make. That is what lets /api/flight-times
-//      see a watched flight airborne (departed) and on the ground at its destination (landed) every
-//      five minutes, including at non-hub destinations no arrivals board covers (Oct 4 2026 audit,
-//      finding 1). Failure never fails the run.
+//   1. Reads the free public FR24 live feed ONCE, first, on every run whenever Supabase is configured
+//      — ahead of the push gate, so it depends neither on VAPID nor on anyone watching a flight — and
+//      records one "United flights airborne" sample from it (api/_airborne-samples.ts → the Live
+//      tab's 24-hour graph). A failed or meta-only read records nothing: a gap in the graph, never a
+//      zero. Failure never fails the run.
+//   2. Loads every subscription, then harvests that same read into reg_sightings (only when some
+//      watch is live) — the same write api/fr24-feed.ts and the warm cron make. That is what lets
+//      /api/flight-times see a watched flight airborne (departed) and on the ground at its destination
+//      (landed) every five minutes, including at non-hub destinations no arrivals board covers
+//      (Oct 4 2026 audit, finding 1). Failure never fails the run.
 //   3. Resolves each distinct watched leg once through /api/flight-times with officialFallback=0:
 //      a pinned watch asks for its own leg (`dep` + `from`), an unpinned one for the flight.
 //   4. Evaluates, pushes, and logs ONE structured line per push (flight, leg date, old → new, reason;
 //      never an endpoint), so a later audit can prove what was sent.
 //   5. Persists the watch state.
 //
-// GRACEFUL UNCONFIGURED: when VAPID / Supabase env is absent the cron no-ops with 200 — the client
-// stays on today's in-tab behaviour (see docs/setup-push-alerts.md for the owner setup).
+// GRACEFUL UNCONFIGURED: when VAPID / Supabase env is absent the cron no-ops with 200 (after step 1's
+// sample, when Supabase alone is there) — the client stays on today's in-tab behaviour (see
+// docs/setup-push-alerts.md for the owner setup).
 //
 // COST: never calls the paid FR24 official API — /api/flight-times is asked with officialFallback=0,
 // so it only touches the free FlightAware scrape + schedule-snapshot cache + the sightings ledger, and
-// the live-feed harvest is the free public feed, once per run. Upstream lookups are budget-capped at
-// MAX_DISTINCT_FLIGHTS per run (soonest pinned legs first) and sends at MAX_SENDS_PER_RUN.
+// the live-feed read is the free public feed, once per run (twice only when the first body is empty).
+// Upstream lookups are budget-capped at MAX_DISTINCT_FLIGHTS per run (soonest pinned legs first) and
+// sends at MAX_SENDS_PER_RUN.
 //
 // LATENCY: /api/flight-times answers with `s-maxage=60, stale-while-revalidate=300`, so a five-minute
 // cron usually receives the answer computed on its previous run. An alert can trail the event by up
@@ -36,6 +42,7 @@ import { isAuthorizedCronRequest } from '../_cron-auth.js';
 import { getSupabase } from '../_supabase.js';
 import { isPushConfigured, ensureVapidConfigured, sendPush } from '../_web-push.js';
 import { recordFeedSightings } from '../_reg-sightings.js';
+import { recordAirborneSample, type RecordResult } from '../_airborne-samples.js';
 import { parseFr24Feed } from '../../src/lib/feed-health.js';
 import { evaluateWatch, retireIfDone, watchQuery, watchQueryKey, type WatchEntry } from '../_watch-diff.js';
 
@@ -44,7 +51,17 @@ const MAX_DISTINCT_FLIGHTS = 50; // upstream lookup budget per run
 const MAX_SENDS_PER_RUN = 200;
 const MAX_FAILS = 3; // delete a subscription after this many consecutive failures
 const RESOLVE_ABORT_MS = 9000; // per-flight upstream timeout
-const FEED_ABORT_MS = 8000; // the one live-feed harvest per run
+const FEED_ABORT_MS = 8000; // per attempt of the one live-feed read per run
+// The free feed sometimes 200s a meta-only body for a beat (api/fr24-feed.ts, Aug 4 2026 probe), so an
+// empty read is retried ONCE after this pause — the same one-retry rule and knob fr24-feed.ts uses.
+// A timeout or HTTP error is not retried. Zero in tests.
+const FEED_EMPTY_RETRY_DEFAULT_MS = 400;
+function feedEmptyRetryMs(): number {
+  const raw = process.env.FR24_EMPTY_RETRY_DELAY_MS;
+  if (raw === undefined || String(raw).trim() === '') return FEED_EMPTY_RETRY_DEFAULT_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : FEED_EMPTY_RETRY_DEFAULT_MS;
+}
 // Stop resolving once this much wall clock has elapsed, leaving >=20s headroom under the 120s
 // maxDuration (vercel.json) for the send + persist passes so the run never gets force-killed
 // mid-persist (which would drop state and re-notify next run).
@@ -89,20 +106,55 @@ async function loadAllSubscriptions(supabase: ReturnType<typeof getSupabase>): P
   return out;
 }
 
-/** One free live-feed read → reg_sightings. Never throws. */
-async function harvestLiveSightings(): Promise<{ ok: boolean; recorded: number }> {
-  try {
+/**
+ * One free live-feed read: the parsed flights, or null for a failed read (HTTP error, timeout, or a
+ * meta-only body twice in a row — zero aircraft is never a real United sky, feed-health.js). Never
+ * throws.
+ */
+async function readLiveFeed(): Promise<any[] | null> {
+  const attempt = async (): Promise<any[] | null> => {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), FEED_ABORT_MS);
-    const resp = await fetch(LIVE_FEED_URL, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)', Accept: 'application/json' },
-    });
-    clearTimeout(t);
-    if (!resp.ok) return { ok: false, recorded: 0 };
-    const parsed = parseFr24Feed(await resp.json());
-    // A meta-only body (zero aircraft) is a failed read, not an empty sky (feed-health.js).
-    if (parsed.length === 0) return { ok: false, recorded: 0 };
+    try {
+      const resp = await fetch(LIVE_FEED_URL, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)', Accept: 'application/json' },
+      });
+      if (!resp.ok) return null;
+      return parseFr24Feed(await resp.json());
+    } finally {
+      clearTimeout(t);
+    }
+  };
+  try {
+    let parsed = await attempt();
+    if (parsed && parsed.length === 0) {
+      const pause = feedEmptyRetryMs();
+      if (pause > 0) await new Promise((resolve) => setTimeout(resolve, pause));
+      parsed = await attempt();
+    }
+    return parsed && parsed.length > 0 ? parsed : null;
+  } catch (e: any) {
+    console.warn('watch-alerts live-feed read failed:', e?.message || e);
+    return null;
+  }
+}
+
+/** The run's one feed read → one airborne sample. Never throws, whatever the writer does. */
+async function sampleAirborne(parsed: any[] | null, atMs: number): Promise<RecordResult> {
+  if (!parsed) return { recorded: false, reason: 'feed read failed' };
+  try {
+    return await recordAirborneSample(parsed, atMs);
+  } catch (e: any) {
+    console.warn('watch-alerts airborne sample failed:', e?.message || e);
+    return { recorded: false, reason: 'write threw' };
+  }
+}
+
+/** The same read → reg_sightings. Never throws. */
+async function harvestLiveSightings(parsed: any[] | null): Promise<{ ok: boolean; recorded: number }> {
+  if (!parsed) return { ok: false, recorded: 0 };
+  try {
     return { ok: true, recorded: await recordFeedSightings(parsed) };
   } catch (e: any) {
     console.warn('watch-alerts live-feed harvest failed:', e?.message || e);
@@ -140,9 +192,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // The run's ONE live-feed read, first and unconditionally (Supabase permitting): the 24-hour
+  // airborne graph needs a sample every five minutes whether or not anyone is watching a flight or
+  // push is configured. The sightings harvest below reuses the same parse.
+  const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let feed: any[] | null = null;
+  let airborneSample: RecordResult | { skipped: true } = { skipped: true };
+  if (supabaseConfigured) {
+    feed = await readLiveFeed();
+    airborneSample = await sampleAirborne(feed, Date.now());
+  }
+
   // Graceful unconfigured: no VAPID keys or no Supabase → nothing to do, report honestly.
-  if (!isPushConfigured() || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    return res.status(200).json({ configured: false, skipped: 'push not configured' });
+  if (!isPushConfigured() || !supabaseConfigured) {
+    return res.status(200).json({ configured: false, skipped: 'push not configured', airborneSample });
   }
   ensureVapidConfigured();
 
@@ -154,10 +217,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Postgres 42P01 (relation does not exist) means the migration hasn't run — degrade to the
     // graceful-unconfigured 200 instead of a 5-minute 500 storm until the table exists.
     if (e?.code === '42P01') {
-      return res.status(200).json({ configured: false, skipped: 'watch_subscriptions table not provisioned' });
+      return res.status(200).json({ configured: false, skipped: 'watch_subscriptions table not provisioned', airborneSample });
     }
     console.error('watch-alerts: subscription load failed:', e?.message || e);
-    return res.status(500).json({ error: 'subscription load failed' });
+    return res.status(500).json({ error: 'subscription load failed', airborneSample });
   }
 
   const nowMs = Date.now();
@@ -187,11 +250,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const capped = candidates.slice(0, MAX_DISTINCT_FLIGHTS);
   const flightsCapped = candidates.length > MAX_DISTINCT_FLIGHTS;
 
-  // One live-feed harvest, before resolving, so this run's lookups can already see it (subject to
-  // /api/flight-times' own one-minute sightings cache).
+  // The run's feed read → reg_sightings, before resolving, so this run's lookups can already see it
+  // (subject to /api/flight-times' own one-minute sightings cache). Only when some watch is live.
   let liveFeed: { ok: boolean; recorded: number } | { skipped: true } = { skipped: true };
   if (capped.length > 0 && Date.now() - runStart <= RESOLVE_DEADLINE_MS) {
-    liveFeed = await harvestLiveSightings();
+    liveFeed = await harvestLiveSightings(feed);
   }
 
   // Resolve each once (serial to be gentle on the free upstream tiers), bounded by wall clock:
@@ -327,6 +390,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     flightsCapped,
     resolveDeadlineHit,
     liveFeed,
+    airborneSample,
     baselined,
     retired,
     sends,

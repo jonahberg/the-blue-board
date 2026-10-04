@@ -100,11 +100,13 @@ beforeEach(() => {
   __resetRegSightingsForTests();
   sendPush.mockResolvedValue({ ok: true, statusCode: 201, gone: false });
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://test.supabase.co';
+  process.env.FR24_EMPTY_RETRY_DELAY_MS = '0';
 });
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.FR24_EMPTY_RETRY_DELAY_MS;
 });
 
 describe('finding 2 — a hub-day rollover never pushes', () => {
@@ -234,10 +236,14 @@ describe('one live-feed harvest per run feeds reg_sightings', () => {
     expect(calls.sightings).toEqual([expect.objectContaining({ flight_key: 'UA1', origin: 'ORD', dest: 'SFO', reg: 'N11111', airborne_at: expect.any(String) })]);
   });
 
-  it('skips the harvest when nothing is live', async () => {
+  it('skips the sightings harvest when nothing is live (the feed is still read once, for the airborne sample)', async () => {
     vi.useFakeTimers({ toFake: ['Date'], now: Date.parse('2026-10-05T05:10:00.000Z') });
-    const urls = serve(() => leg());
-    await run([{ flight: 'UA1', legDep: TODAY_DEP, retired: true, retiredAt: '2026-10-04T05:00:00.000Z' }]);
-    expect(urls).toHaveLength(0);
+    const feed = { full_count: 1, version: 4, abc123: ['A1B2C3', 41.9, -88.5, 270, 23000, 420, '1234', '', 'B739', 'N11111', 0, 'ORD', 'SFO', 'UA1', 0, 1500, 'UAL1'] };
+    const urls = serve(() => leg(), feed);
+    const { res, calls } = await run([{ flight: 'UA1', legDep: TODAY_DEP, retired: true, retiredAt: '2026-10-04T05:00:00.000Z' }]);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('data-cloud.flightradar24.com');
+    expect(res._json.liveFeed).toEqual({ skipped: true });
+    expect(calls.sightings).toEqual([]);
   });
 });

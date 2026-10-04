@@ -13,6 +13,7 @@
 import { parseFr24Feed, parseStaleHeader } from '@/lib/feed-health.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '@/lib/metar.js';
 import type {
+  AirborneHistory,
   FaaAirport,
   FleetAircraft,
   FleetSummary,
@@ -85,6 +86,14 @@ export async function fetchFr24Feed(
   const flights = parseFr24Feed(await res.json()) as Flight[];
   if (flights.length === 0) throw new ApiError(res.status, 'Feed returned no aircraft');
   return { flights, staleMs };
+}
+
+/**
+ * The Live tab's 24-hour airborne graph. Never a 5xx by contract: an unavailable history is a 200
+ * with `samples: []` and a `note`, so a throw here means the request itself failed.
+ */
+export function fetchAirborneHistory(hours = 24): Promise<AirborneHistory> {
+  return getJson<AirborneHistory>(`/api/airborne-history?hours=${encodeURIComponent(String(hours))}`);
 }
 
 /** `from` pins the leg departing that airport (a multi-leg flight number, D2). */

@@ -16,11 +16,17 @@ vi.mock('../api/_web-push.js', () => ({
   ensureVapidConfigured: vi.fn(() => true),
   sendPush: vi.fn(() => Promise.resolve({ ok: true, statusCode: 201, gone: false })),
 }));
+// The 24-hour airborne graph's sampler (api/_airborne-samples.ts) has its own tests; here only its
+// call contract matters: once per run with the parsed feed, never on a failed read, never fatal.
+vi.mock('../api/_airborne-samples.js', () => ({
+  recordAirborneSample: vi.fn(async (parsed) => ({ recorded: true, airborne: parsed.length })),
+}));
 
 import handler from '../api/cron/watch-alerts.js';
 import { isAuthorizedCronRequest } from '../api/_cron-auth.js';
 import { getSupabase } from '../api/_supabase.js';
 import { isPushConfigured, ensureVapidConfigured, sendPush } from '../api/_web-push.js';
+import { recordAirborneSample } from '../api/_airborne-samples.js';
 
 // Build a chainable Supabase mock covering the two shapes the handler uses:
 //   loadAllSubscriptions: from().select().order().range()  → { data, error }
@@ -70,6 +76,17 @@ function flightResponse({ ok = true, status = 'Departed', gate = 'C1', registrat
 const PINNED = (flight = 'UA1') => ({ flight, legDep: LEG_DEP, legOrigin: 'ORD', legDest: 'SFO', legDate: '2026-10-03', phase: 'scheduled', lastStatus: 'Scheduled', delayBucket: 0 });
 const isFeed = (url) => String(url).includes('data-cloud.flightradar24.com');
 const flightTimesCalls = (fetchMock) => fetchMock.mock.calls.filter(([url]) => !isFeed(url));
+const feedCalls = (fetchMock) => fetchMock.mock.calls.filter(([url]) => isFeed(url));
+// [icao24, lat, lon, hdg, alt ft, spd kt, squawk, radar, type, reg, ts, origin, dest, flight, onGround, vr fpm, callsign]
+const LIVE_FEED = {
+  full_count: 2,
+  version: 4,
+  a1: ['A1B2C3', 41.9, -88.5, 270, 23000, 420, '1234', '', 'B739', 'N11111', 0, 'ORD', 'SFO', 'UA1', 0, 1500, 'UAL1'],
+  a2: ['A1B2C4', 41.97, -87.9, 0, 0, 0, '', '', 'B772', 'N22222', 0, 'ORD', 'LHR', 'UA930', 1, 0, 'UAL930'],
+};
+/** fetch that answers the live feed with `feed` and /api/flight-times with flightResponse(). */
+const routedFetch = (feed) => vi.fn((url) =>
+  Promise.resolve(isFeed(url) ? { ok: true, json: async () => feed } : flightResponse()));
 const NOW_MS = Date.parse('2026-10-03T18:20:00.000Z');
 
 function makeReq(overrides = {}) {
@@ -97,6 +114,8 @@ describe('watch-alerts cron', () => {
     ensureVapidConfigured.mockReturnValue(true);
     sendPush.mockResolvedValue({ ok: true, statusCode: 201, gone: false });
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://test.supabase.co';
+    process.env.FR24_EMPTY_RETRY_DELAY_MS = '0';
+    recordAirborneSample.mockImplementation(async (parsed) => ({ recorded: true, airborne: parsed.length }));
     fetchMock = vi.fn(() => Promise.resolve(flightResponse()));
     globalThis.fetch = fetchMock;
     vi.useFakeTimers({ toFake: ['Date'], now: NOW_MS });
@@ -106,6 +125,7 @@ describe('watch-alerts cron', () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.FR24_EMPTY_RETRY_DELAY_MS;
   });
 
   it('returns 401 and touches nothing when the cron request is unauthorized', async () => {
@@ -118,24 +138,122 @@ describe('watch-alerts cron', () => {
     expect(sendPush).not.toHaveBeenCalled();
   });
 
-  it('no-ops with 200 {configured:false} when push is unconfigured', async () => {
+  it('when push is unconfigured: still takes the airborne sample, then no-ops with 200 {configured:false}', async () => {
     isPushConfigured.mockReturnValue(false);
+    fetchMock = routedFetch(LIVE_FEED);
+    globalThis.fetch = fetchMock;
     const res = makeRes();
     await handler(makeReq(), res);
     expect(res._status).toBe(200);
     expect(res._json.configured).toBe(false);
     expect(getSupabase).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(feedCalls(fetchMock)).toHaveLength(1);
+    expect(flightTimesCalls(fetchMock)).toHaveLength(0);
+    expect(recordAirborneSample).toHaveBeenCalledTimes(1);
+    expect(res._json.airborneSample).toEqual({ recorded: true, airborne: 2 });
     expect(sendPush).not.toHaveBeenCalled();
   });
 
-  it('no-ops with 200 {configured:false} when NEXT_PUBLIC_SUPABASE_URL is absent', async () => {
+  it('no-ops with 200 {configured:false} when NEXT_PUBLIC_SUPABASE_URL is absent — no feed read, no sample', async () => {
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     const res = makeRes();
     await handler(makeReq(), res);
     expect(res._status).toBe(200);
     expect(res._json.configured).toBe(false);
     expect(getSupabase).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(recordAirborneSample).not.toHaveBeenCalled();
+  });
+
+  describe('the 24-hour airborne sample (one per run, from the one feed read)', () => {
+    it('records exactly one sample per run from the parsed feed, even with no live watch', async () => {
+      const { client } = makeSupabase({ rows: [] });
+      getSupabase.mockReturnValue(client);
+      fetchMock = routedFetch(LIVE_FEED);
+      globalThis.fetch = fetchMock;
+      const res = makeRes();
+      await handler(makeReq(), res);
+      expect(res._status).toBe(200);
+      expect(feedCalls(fetchMock)).toHaveLength(1);
+      expect(recordAirborneSample).toHaveBeenCalledTimes(1);
+      const [parsed, atMs] = recordAirborneSample.mock.calls[0];
+      expect(parsed.map((f) => f.fr24id).sort()).toEqual(['a1', 'a2']);
+      expect(atMs).toBe(NOW_MS);
+      // Nobody is watching → the sightings harvest is still skipped, as before.
+      expect(res._json.liveFeed).toEqual({ skipped: true });
+      expect(res._json.airborneSample).toEqual({ recorded: true, airborne: 2 });
+    });
+
+    it('records NOTHING when the feed body is meta-only, after retrying the read once (a gap, never a zero)', async () => {
+      const { client } = makeSupabase({ rows: [] });
+      getSupabase.mockReturnValue(client);
+      fetchMock = routedFetch({ full_count: 0, version: 4 });
+      globalThis.fetch = fetchMock;
+      const res = makeRes();
+      await handler(makeReq(), res);
+      expect(res._status).toBe(200);
+      expect(feedCalls(fetchMock)).toHaveLength(2);
+      expect(recordAirborneSample).not.toHaveBeenCalled();
+      expect(res._json.airborneSample).toEqual({ recorded: false, reason: 'feed read failed' });
+    });
+
+    it('a meta-only first body that recovers on the retry is sampled once', async () => {
+      const { client } = makeSupabase({ rows: [] });
+      getSupabase.mockReturnValue(client);
+      let feedReads = 0;
+      fetchMock = vi.fn((url) => {
+        if (!isFeed(url)) return Promise.resolve(flightResponse());
+        feedReads++;
+        return Promise.resolve({ ok: true, json: async () => (feedReads === 1 ? { full_count: 0, version: 4 } : LIVE_FEED) });
+      });
+      globalThis.fetch = fetchMock;
+      const res = makeRes();
+      await handler(makeReq(), res);
+      expect(feedReads).toBe(2);
+      expect(recordAirborneSample).toHaveBeenCalledTimes(1);
+    });
+
+    it('records nothing on an HTTP error or a network throw, and the run still succeeds', async () => {
+      const { client } = makeSupabase({ rows: [] });
+      getSupabase.mockReturnValue(client);
+      globalThis.fetch = vi.fn((url) => (isFeed(url) ? Promise.resolve({ ok: false, status: 503 }) : Promise.resolve(flightResponse())));
+      let res = makeRes();
+      await handler(makeReq(), res);
+      expect(res._status).toBe(200);
+      globalThis.fetch = vi.fn((url) => (isFeed(url) ? Promise.reject(new Error('ECONNRESET')) : Promise.resolve(flightResponse())));
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      res = makeRes();
+      await handler(makeReq(), res);
+      expect(res._status).toBe(200);
+      expect(recordAirborneSample).not.toHaveBeenCalled();
+    });
+
+    it('a sample writer that rejects never fails the run', async () => {
+      const { client } = makeSupabase({ rows: [] });
+      getSupabase.mockReturnValue(client);
+      globalThis.fetch = routedFetch(LIVE_FEED);
+      recordAirborneSample.mockRejectedValue(new Error('supabase down'));
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const res = makeRes();
+      await handler(makeReq(), res);
+      expect(res._status).toBe(200);
+      expect(res._json.configured).toBe(true);
+      expect(res._json.airborneSample).toEqual({ recorded: false, reason: 'write threw' });
+    });
+
+    it('the sightings harvest reuses the same read when a watch is live (one feed fetch, not two)', async () => {
+      const { client } = makeSupabase({
+        rows: [{ id: 's1', endpoint: 'https://push/s1', p256dh: 'p', auth: 'a', failed_count: 0, watches: [PINNED()] }],
+      });
+      getSupabase.mockReturnValue(client);
+      fetchMock = routedFetch(LIVE_FEED);
+      globalThis.fetch = fetchMock;
+      const res = makeRes();
+      await handler(makeReq(), res);
+      expect(feedCalls(fetchMock)).toHaveLength(1);
+      expect(recordAirborneSample).toHaveBeenCalledTimes(1);
+      expect(res._json.liveFeed.ok).toBe(true);
+    });
   });
 
   it('treats a missing watch_subscriptions table (Postgres 42P01) as unconfigured → 200', async () => {
@@ -308,7 +426,8 @@ describe('watch-alerts cron', () => {
 
     expect(res._json.resolveDeadlineHit).toBe(true);
     expect(res._json.resolved).toBe(0);
-    expect(fetchMock).not.toHaveBeenCalled();
+    // The run's one live-feed read (the airborne sample) happens first; no leg is resolved.
+    expect(flightTimesCalls(fetchMock)).toHaveLength(0);
   });
 
   it('counts a persist write error instead of silently swallowing it (dedup safety)', async () => {

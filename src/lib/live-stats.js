@@ -16,6 +16,7 @@
 
 import { getPhase, getPhaseGroup, isOnGround } from './flight-phase.js';
 import { fleetUtilization } from './fleet-utils.js';
+import { countAirborne } from './airborne-count.js';
 
 // `isOnGround` lives in flight-phase.js (no data imports) so the server's sightings writer
 // (src/lib/reg-overlay.js, imported by api/) can share it; re-exported here for the tabs.
@@ -60,10 +61,13 @@ function toStarlinkPredicate(starlink, matchAircraft) {
  * @param {((f: Object) => boolean)|{has: (reg: string) => boolean, size: number}} starlink
  *   the shared Starlink predicate, or the roster Set (see toStarlinkPredicate).
  * @param {{matchAircraft: (f: Object) => {r: string}|null, isFiltered: boolean}} deps
- * @returns {{airborne: number, ground: number, climbing: number, cruising: number,
- *   descending: number, starlink: number, avgAlt: string, avgSpd: string,
+ * @returns {{airborne: number, airborneAll: number, ground: number, climbing: number,
+ *   cruising: number, descending: number, starlink: number, avgAlt: string, avgSpd: string,
  *   utilization: string, note: string, phaseGroups: Record<string, number>}}
- *   avgAlt/avgSpd/utilization are the display strings, '--' when unknown.
+ *   avgAlt/avgSpd/utilization are the display strings, '--' when unknown. `airborne` counts the
+ *   FILTERED set (the bar's number); `airborneAll` counts every flight with `countAirborne()` —
+ *   the server's 5-minute sampler runs the same function on the same unfiltered feed, so it is
+ *   the number the 24-hour airborne graph's latest point is comparable to.
  */
 export function computeLiveStats(flights, filtered, fleetSize, starlink, { matchAircraft, isFiltered }) {
   let airborne = 0, ground = 0, climbing = 0, cruising = 0, descending = 0;
@@ -109,6 +113,7 @@ export function computeLiveStats(flights, filtered, fleetSize, starlink, { match
 
   return {
     airborne,
+    airborneAll: countAirborne(flights).airborne,
     ground,
     climbing,
     cruising,
