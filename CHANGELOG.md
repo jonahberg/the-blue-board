@@ -4,6 +4,17 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.1] - 2026-10-04
+
+**Tomorrow's board after midnight, and tooltips you can tap.** A full phone-and-desktop click-through of the live site (197 checks) found two real problems.
+
+### Schedule boards
+- **Tomorrow's board loads right after a hub's midnight.** When a hub passes local midnight, "tomorrow" becomes a day nobody has fetched yet, and the warm cron reaches it up to ~9 hours later. The AeroDataBox spend pacing (the UTC day starts at 7 PM CDT, so the US evening has the smallest allowance) held back the first load too. With no copy to fall back on and the FR24 web scrape Cloudflare-blocked from Vercel, the board read "Couldn't load". Seen live at 05:20Z Oct 4: **372 of 1,400** units spent against a paced line of 370, ORD and IAH tomorrow boards empty. Now the first load of a yesterday, today or tomorrow board with no copy anywhere may run ahead of the paced line by 10% of the daily budget (140 units, 35 boards). That headroom is measured on the shared cross-instance counter. The absolute budget, the explicit-0 kill switch and pacing for refreshes are unchanged, and other days stay fully paced. (`api/_cost-state.ts` `isAdbFirstLoadGated`, `api/schedule.ts`)
+- **"Not loaded yet" is no longer called a failure.** When the budget does hold a board back, the server marks it `meta.providerDeferred`. The page then says "Still waiting on tomorrow's ORD departures… the schedule provider is paced to a daily limit" instead of "Couldn't load… from the schedule provider", and the banner no longer claims the source "is not responding". (`src/lib/schedule-load.js`, `ScheduleTable.tsx`)
+
+### Tooltips on touch screens
+- **Tap a "?" or a dotted term and it explains itself.** Radix tooltips open on hover and focus only, so on a phone the IROPS "What does this mean?" button, every jargon term and the hub-chip details did nothing when tapped. A touch or pen tap now toggles the tooltip, and a second tap or a tap elsewhere closes it. Mouse hover and keyboard focus are unchanged. The trigger's own action still runs, so a tapped hub chip still opens its hub guide. The toggle is applied after the event: on a real tap the trigger's focus opens the tooltip and Radix's close-on-click shuts it again, which is why a naive fix makes the *second* tap look like the first. Verified in Chromium with iPhone touch emulation: prod opens **0 of 2** tooltips on tap, this build **2 of 2**. (`src/components/ui/tooltip.tsx`, `src/lib/tap-tooltip.js`)
+
 ## [1.13.0] - 2026-10-04
 
 **Every claim on the front page now holds up on a phone.** A Reddit commenter said "half the features don't work", so we audited each claim the post made: a live data audit of the nine hub boards (Oct 4, 00:36–01:28Z), plus phone QA at 360 and 390 px. This release fixes what failed. Before→after numbers come from offline replays of the new code on the same real boards, the live feed and the sightings ledger.

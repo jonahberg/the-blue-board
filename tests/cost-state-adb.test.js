@@ -13,6 +13,8 @@ import {
   getAdbUnitsToday,
   isAdbBudgetExhausted,
   isAdbOrganicRefreshGated,
+  isAdbFirstLoadGated,
+  getAdbFirstLoadHeadroom,
   isAdbBudgetPacingDisabled,
   getAdbPacedAllowance,
   hydrateAdbSpend,
@@ -563,5 +565,47 @@ describe('ADB spend day-rollover races', () => {
     });
     await hydrateAdbSpend();
     expect(getAdbUnitsToday()).toBe(0);
+  });
+});
+
+describe('first-load headroom (isAdbFirstLoadGated)', () => {
+  const atUtc = (h, m = 0) => Date.UTC(2026, 9, 4, h, m);
+
+  beforeEach(() => {
+    __resetAdbSpendForTests();
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue(null);
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '1400';
+  });
+
+  afterEach(() => {
+    delete process.env.AERODATABOX_DAILY_UNIT_BUDGET;
+    delete process.env.AERODATABOX_BUDGET_PACING;
+    __resetAdbSpendForTests();
+  });
+
+  it('runs 10% of the budget ahead of the paced line, measured on the shared counter', async () => {
+    expect(getAdbFirstLoadHeadroom()).toBe(140);
+    const line = getAdbPacedAllowance(atUtc(5, 20)); // 369: the Oct 4 05:20Z state
+    await recordAdbUnits(line + 3);
+    expect(isAdbOrganicRefreshGated(atUtc(5, 20))).toBe(true); // a refresh is held back...
+    expect(isAdbFirstLoadGated(atUtc(5, 20))).toBe(false); // ...a first load is not
+    await recordAdbUnits(137); // line + 140
+    expect(isAdbFirstLoadGated(atUtc(5, 20))).toBe(true);
+  });
+
+  it('never exceeds the absolute budget and honours the explicit-0 kill switch', async () => {
+    await recordAdbUnits(1400);
+    expect(isAdbFirstLoadGated(atUtc(23, 30))).toBe(true);
+    __resetAdbSpendForTests();
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '0';
+    expect(isAdbFirstLoadGated(atUtc(12))).toBe(true);
+  });
+
+  it('with pacing switched off, only the absolute budget gates a first load', async () => {
+    process.env.AERODATABOX_BUDGET_PACING = 'off';
+    await recordAdbUnits(1399);
+    expect(isAdbFirstLoadGated(atUtc(0, 30))).toBe(false);
+    await recordAdbUnits(1);
+    expect(isAdbFirstLoadGated(atUtc(0, 30))).toBe(true);
   });
 });

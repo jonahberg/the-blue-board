@@ -4,6 +4,8 @@ import * as React from "react"
 import { cn } from "cn"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
 
+import { tapToggleOpen } from "@/lib/tap-tooltip.js"
+
 function TooltipProvider({
   delayDuration = 0,
   ...props
@@ -17,16 +19,71 @@ function TooltipProvider({
   )
 }
 
+// Radix tooltips never open on a touch tap, so on a phone every "?" and jargon term did nothing.
+// Tooltip owns its open state so TooltipTrigger can flip it on a touch/pen tap (tapToggleOpen).
+// Mouse and keyboard behaviour is unchanged, and the trigger's own click still runs — a tapped
+// hub-guide link still navigates; the tap only adds the explanation, it never swallows the action.
+const TooltipTapContext = React.createContext<{
+  open: boolean
+  setOpen: (open: boolean) => void
+} | null>(null)
+
 function Tooltip({
+  open: openProp,
+  defaultOpen = false,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
+  const open = openProp ?? uncontrolledOpen
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      if (openProp === undefined) setUncontrolledOpen(next)
+      onOpenChange?.(next)
+    },
+    [openProp, onOpenChange]
+  )
+  const tap = React.useMemo(() => ({ open, setOpen }), [open, setOpen])
+  return (
+    <TooltipTapContext.Provider value={tap}>
+      <TooltipPrimitive.Root
+        data-slot="tooltip"
+        open={open}
+        onOpenChange={setOpen}
+        {...props}
+      />
+    </TooltipTapContext.Provider>
+  )
 }
 
 function TooltipTrigger({
+  onPointerDown,
+  onClick,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  const tap = React.useContext(TooltipTapContext)
+  const press = React.useRef<{ pointerType: string; wasOpen: boolean } | null>(null)
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      onPointerDown={(event) => {
+        // Before Radix's own pointerdown handler, which closes an open tooltip.
+        press.current = { pointerType: event.pointerType, wasOpen: Boolean(tap?.open) }
+        onPointerDown?.(event)
+      }}
+      onClick={(event) => {
+        onClick?.(event)
+        const next = tapToggleOpen(press.current)
+        press.current = null
+        // Applied after this event: on a real tap the trigger's focus (which fires between
+        // pointerup and click) opens the tooltip and Radix's close-on-click, which runs right
+        // after this handler, shuts it again — so setting it here would be overwritten, and the
+        // first tap did nothing while the second looked like the first.
+        if (next !== null && tap) window.setTimeout(() => tap.setOpen(next), 0)
+      }}
+      {...props}
+    />
+  )
 }
 
 function TooltipContent({

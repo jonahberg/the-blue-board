@@ -2,7 +2,7 @@ import { waitUntil } from '@vercel/functions';
 import { HUB_TZ } from './irops.js';
 import { icaoToIata, isInternationalRoute } from '../src/lib/airport-metadata.js';
 import { getHubTerminal } from './_hubs.js';
-import { hydrateAdbSpend, isAdbOrganicRefreshGated, isAdbBudgetPacingDisabled, getAdbPacedAllowance, recordAdbUnits, getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
+import { hydrateAdbSpend, isAdbOrganicRefreshGated, isAdbFirstLoadGated, getAdbFirstLoadHeadroom, isAdbBudgetPacingDisabled, getAdbPacedAllowance, recordAdbUnits, getAdbUnitsToday, getAdbDailyUnitBudget } from './_cost-state.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { isImplausibleLegSpan, isPlausibleDelta } from '../src/lib/schedule-plausibility.js';
 import { clearFutureActuals } from '../src/lib/schedule-actuals.js';
@@ -845,7 +845,9 @@ export async function fetchViaAeroDataBox(
   dir: string,
   ts: number,
   timeoutMs = 12000,
-  opts: { bypassDailyBudget?: boolean } = {}
+  // firstLoad: the board has no complete copy anywhere (see isAdbFirstLoadGated) — it may run a
+  // little ahead of the paced line instead of serving an empty board.
+  opts: { bypassDailyBudget?: boolean; firstLoad?: boolean } = {}
 ) {
   if (!process.env.AERODATABOX_API_KEY) return null;
 
@@ -865,7 +867,7 @@ export async function fetchViaAeroDataBox(
       );
       return null;
     }
-  } else if (isAdbOrganicRefreshGated()) {
+  } else if (opts.firstLoad ? isAdbFirstLoadGated() : isAdbOrganicRefreshGated()) {
     // Paced gate (see _cost-state.ts): organic spend is capped at the day's pro-rated allowance,
     // not just the absolute daily budget, so the US afternoon peak still has units left after the
     // 7 PM CDT (UTC midnight) rollover crowd and the overnight warms.
@@ -881,7 +883,7 @@ export async function fetchViaAeroDataBox(
       console.warn(
         isAdbBudgetPacingDisabled()
           ? `AeroDataBox daily unit budget exhausted (${getAdbUnitsToday()}/${getAdbDailyUnitBudget()}); pacing disabled; skipping organic schedule fetch`
-          : `AeroDataBox organic budget gate: ${getAdbUnitsToday()} units >= paced allowance ${getAdbPacedAllowance()} (budget ${getAdbDailyUnitBudget()}/day); skipping organic schedule fetch (cron warms unaffected)`
+          : `AeroDataBox organic budget gate: ${getAdbUnitsToday()} units >= paced allowance ${getAdbPacedAllowance()}${opts.firstLoad ? ` + first-load headroom ${getAdbFirstLoadHeadroom()}` : ''} (budget ${getAdbDailyUnitBudget()}/day); skipping organic schedule fetch (cron warms unaffected)`
       );
     }
     return null;

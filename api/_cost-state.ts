@@ -215,6 +215,35 @@ export function isAdbOrganicRefreshGated(nowMs = Date.now()): boolean {
   return getAdbUnitsToday() >= getAdbPacedAllowance(nowMs);
 }
 
+// ── First loads get a small head start on the paced line ──
+//
+// Pacing exists so REFRESHES of boards people already have cannot binge the day's pool early. It
+// was also holding back FIRST loads — a board with no complete copy anywhere — and those have
+// nothing to fall back on: the FR24 web scrape is Cloudflare-challenged from Vercel, so the viewer
+// got an empty "Couldn't load" board. That happened nightly: the warm ring reaches each hub's new
+// TOMORROW board up to ~9h after the hub's local midnight, and the US evening is when the paced
+// allowance is smallest (the UTC day starts at 7 PM CDT). Seen live Oct 4 2026 05:20Z: 372 of
+// 1,400 units spent, paced line 370, ORD and IAH tomorrow boards empty.
+//
+// A first load may run ahead of the paced line by the headroom (10% of the budget: 140 units = 35
+// boards in prod). It is measured on the same cross-instance counter, so it bounds GLOBAL spend;
+// the absolute budget and the explicit-0 kill switch still hold; and pacing catches up later in
+// the day, so the daily TOTAL is unchanged.
+const ADB_FIRST_LOAD_HEADROOM_FRACTION = 0.1;
+
+export function getAdbFirstLoadHeadroom(): number {
+  return Math.ceil(getAdbDailyUnitBudget() * ADB_FIRST_LOAD_HEADROOM_FRACTION);
+}
+
+/** isAdbOrganicRefreshGated for a board with no complete copy anywhere. Sync; hot-path safe. */
+export function isAdbFirstLoadGated(nowMs = Date.now()): boolean {
+  const budget = getAdbDailyUnitBudget();
+  if (budget === 0) return true;
+  if (isAdbBudgetExhausted()) return true;
+  if (isAdbBudgetPacingDisabled()) return false;
+  return getAdbUnitsToday() >= Math.min(budget, getAdbPacedAllowance(nowMs) + getAdbFirstLoadHeadroom());
+}
+
 /**
  * Record provider spend: bump the in-memory counter immediately, then write-through via the
  * atomic increment RPC and adopt the returned cross-instance total. Callers may ignore the

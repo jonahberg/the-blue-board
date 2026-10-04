@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadScheduleSnapshot, saveScheduleSnapshot, isSnapshotCandidateBetter } from './_schedule-snapshots.js';
-import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock, __resetAdbSpendForTests, isOfficialFr24DailyCapReached, recordOfficialFr24Call, getOfficialFr24CallsToday, getOfficialFr24DailyCap, isAdbOrganicRefreshGated, isAdbBudgetExhausted } from './_cost-state.js';
+import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock, __resetAdbSpendForTests, isOfficialFr24DailyCapReached, recordOfficialFr24Call, getOfficialFr24CallsToday, getOfficialFr24DailyCap, isAdbOrganicRefreshGated, isAdbFirstLoadGated, isAdbBudgetExhausted } from './_cost-state.js';
 import { UNITED_HUB_SET, getHubTerminal } from './_hubs.js';
 import { isAuthorizedCronRequest } from './_cron-auth.js';
 import { isOfficialFr24Enabled } from './_official-fr24.js';
@@ -34,6 +34,11 @@ type ScheduleFetchOptions = {
   providerBudgetExempt?: boolean;
   // Set by triggerBackgroundRefresh only. Never set from user input.
   backgroundRefresh?: boolean;
+  // Set by the on-demand handler only, for a yesterday/today/tomorrow board with no complete copy
+  // anywhere (any copy would already have been served). The provider may then run a little ahead
+  // of the paced line (isAdbFirstLoadGated) instead of serving an empty board. Never set from user
+  // input.
+  providerFirstLoad?: boolean;
 };
 
 // In-memory LRU cache for FR24 schedule data
@@ -1456,7 +1461,8 @@ async function fetchAllPages(
     // near the line. Suppression must mean "pacing was already gating us when we asked", so a
     // provider FAILURE with the gate open beforehand keeps the official rescue available exactly as
     // it was before pacing existed.
-    const pacedOnlyGate = !options.providerBudgetExempt && isAdbOrganicRefreshGated() && !isAdbBudgetExhausted();
+    const organicGated = options.providerFirstLoad ? isAdbFirstLoadGated() : isAdbOrganicRefreshGated();
+    const pacedOnlyGate = !options.providerBudgetExempt && organicGated && !isAdbBudgetExhausted();
 
     // Primary: AeroDataBox returns the full forward schedule (incl. not-yet-departed flights).
     if (allowProviderFallback && process.env.AERODATABOX_API_KEY) {
@@ -1464,6 +1470,7 @@ async function fetchAllPages(
         const providerTimeout = Math.min(Math.floor((effectiveDeadline - Date.now()) * 0.7), 30000);
         const providerResult = await fetchViaAeroDataBox(logHub, dir, ts, providerTimeout, {
           bypassDailyBudget: !!options.providerBudgetExempt,
+          firstLoad: !!options.providerFirstLoad,
         });
         if (providerResult && providerResult.total > 0) {
           // Overlay the free live feed for active flights only when the provider board is partial.
@@ -1955,12 +1962,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Every path above serves a complete copy when one exists, so a request that gets here has
+    // none. For the three days the dashboard offers (yesterday/today/tomorrow), the provider may
+    // run a little ahead of the paced line instead of serving an empty board — the new tomorrow
+    // board after a hub's local midnight is the everyday case (isAdbFirstLoadGated). Any other day
+    // stays fully paced, so the ±7-day timestamp range cannot be walked to drain the headroom.
+    const dayOffset = Math.round((ts - getStartOfHubDay(hub, 0)) / 86400);
+    const providerFirstLoad = !forceRefresh && dayOffset >= -1 && dayOffset <= 1;
+    // An empty board because the budget held the provider back is "not loaded yet", not "the
+    // provider failed": meta.providerDeferred lets the page say so (src/lib/schedule-load.js).
+    // Read after the fetch, which hydrated the cross-instance spend counter.
+    const markIfDeferred = (board: any) => {
+      const heldBack = !forceRefresh && allowProviderFallback && !!process.env.AERODATABOX_API_KEY &&
+        Number(board?.total || 0) === 0 &&
+        (providerFirstLoad ? isAdbFirstLoadGated() : isAdbOrganicRefreshGated());
+      return heldBack ? { ...board, meta: { ...(board?.meta || {}), providerDeferred: true } } : board;
+    };
+
     const aggPromise = fetchAllPages(hub, dir, ts, undefined, functionDeadline, {
       allowTargetedOfficialRescue: allowOfficialFallback,
       disableOfficialSource: !allowOfficialFallback,
       disableProviderFallback: !allowProviderFallback,
       disableScraperFallback: !allowScraperFallback,
       providerBudgetExempt: forceRefresh,
+      providerFirstLoad,
     }).then(async result => {
       // F037/F026: same build-time generatedAt stamp as triggerBackgroundRefresh's callback.
       result.meta = { ...(result.meta || {}), generatedAt: Math.floor(Date.now() / 1000) };
@@ -1999,7 +2024,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Never let it pin: a CDN HIT on the warm URL would silently skip the refresh next cycle.
       // (The partial branches above set s-maxage=60, which expires long before the next warm.)
       setAggregateCacheHeader(res, result, cdnMaxAge, swr, wantsForce);
-      return res.status(200).json(withDisruption(result));
+      return res.status(200).json(withDisruption(markIfDeferred(result)));
     } finally {
       // Compare-and-delete (see triggerBackgroundRefresh): never evict an entry that a
       // concurrent forced warm registered over this one.

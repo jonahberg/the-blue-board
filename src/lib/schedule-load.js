@@ -227,7 +227,10 @@ export function describeBoardCondition(result, { asOf } = {}) {
 
   const ageText = hasAge ? formatDataAge(dataAge) : '';
   let message;
-  if (degraded && hasAge) {
+  if (meta.providerDeferred) {
+    // Nothing failed: the server held the fetch back to stay inside the provider's daily budget.
+    message = "This board hasn't been fetched yet — the schedule provider is paced to a daily limit.";
+  } else if (degraded && hasAge) {
     message = partial
       ? `Statuses as of ${asOf} (partial board, ${ageText} old) — showing the latest data we have.`
       : `Statuses as of ${asOf} (${ageText} old) — showing the latest data we have.`;
@@ -331,15 +334,19 @@ export function shouldAutoScroll(signal, currentKey, lastHandledN) {
 }
 
 /**
- * Why a board paints no rows (F14): the viewer's filters hid them, the provider failed (a 200
- * with no rows and partial:true — e.g. partialReason 'first_page_failed'), or the day simply has
- * no published board yet. The table used to say "No flights match your filters" for all three.
+ * Why a board paints no rows (F14): the viewer's filters hid them, the server has not fetched it
+ * yet because the provider's daily budget held it back (meta.providerDeferred — e.g. a hub's new
+ * tomorrow board just after its local midnight), the provider failed (a 200 with no rows and
+ * partial:true — e.g. partialReason 'first_page_failed'), or the day simply has no published
+ * board yet. The table used to say "No flights match your filters" for all of them.
  *
- * @param {{rawCount: number, partial?: boolean}} board  the board's RAW (unfiltered) row count.
- * @returns {('filtered'|'upstream'|'none')}
+ * @param {{rawCount: number, partial?: boolean, deferred?: boolean}} board  the board's RAW
+ *   (unfiltered) row count.
+ * @returns {('filtered'|'deferred'|'upstream'|'none')}
  */
-export function emptyBoardReason({ rawCount, partial }) {
+export function emptyBoardReason({ rawCount, partial, deferred }) {
   if (Number(rawCount) > 0) return 'filtered';
+  if (deferred) return 'deferred';
   return partial ? 'upstream' : 'none';
 }
 

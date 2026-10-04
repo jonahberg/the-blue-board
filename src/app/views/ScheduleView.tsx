@@ -256,9 +256,14 @@ export default function ScheduleView() {
   const showJumpToNow = day === 0 && model.firstFutureIndex >= 0;
 
   // F14: an empty table is not always "your filters". A 200 with no rows and partial:true is
-  // the provider failing (the banner above already says so); with no filters and a clean
-  // response, the day simply has no published board yet.
-  const emptyReason = emptyBoardReason({ rawCount: rows.length, partial: board?.partial }) as EmptyReason;
+  // the provider failing (the banner above already says so) — unless the server says it held the
+  // fetch back for budget (meta.providerDeferred), which is "not loaded yet"; with no filters and
+  // a clean response, the day simply has no published board yet.
+  const emptyReason = emptyBoardReason({
+    rawCount: rows.length,
+    partial: board?.partial,
+    deferred: Boolean(board?.meta?.providerDeferred),
+  }) as EmptyReason;
   const dayWord = ['Yesterday', 'Today', 'Tomorrow'][day + 1] ?? dayLabel;
   const emptySubject = `${dayWord.toLowerCase()}'s ${hub} ${dir} (${dayLabel})`;
   const windowKey = `${key}|${JSON.stringify(debouncedFilters)}|${sort.column}:${sort.asc}`;
