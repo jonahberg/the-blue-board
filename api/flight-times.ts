@@ -1,8 +1,16 @@
 // Flight Times API — departure/arrival times for one United flight number
-// Usage: /api/flight-times?flight=UA2221[&date=YYYY-MM-DD][&from=ORD][&officialFallback=0]
+// Usage: /api/flight-times?flight=UA2221[&date=YYYY-MM-DD][&from=ORD][&dep=<epoch s>][&officialFallback=0]
 // `from` pins the leg DEPARTING that airport — a multi-leg flight number (UA786 ICT→ORD→LGA)
 // otherwise resolves to whichever leg is in the air, which is not the one a connecting
 // passenger boards (live audit Sep 28 2026, D2).
+// `dep` pins the leg by its SCHEDULED departure (epoch seconds or ISO): the answer is that leg or a
+// 404, never another day's. The watch cron asks this way once a watch is tied to one dated leg, so a
+// hub-day rollover can never swap the leg under it (Oct 4 2026 audit, finding 2).
+//
+// Status is built from the best evidence for the leg (Oct 4 2026 audit, finding 1): the SAME leg's
+// arrivals-board row (destination hub) lends its arrival times and further-along status to the
+// departures row, and the reg_sightings ledger upgrades a leg the live feed saw airborne to departed
+// and one it then saw on the ground at the destination to landed (src/lib/watch-leg.js).
 // Returns scheduled, estimated, and actual gate/takeoff/landing times
 //
 // Source chain (Jul 3 2026 audit: FlightAware's bot-wall serves a parseable trackpollBootstrap
@@ -31,6 +39,8 @@ import { getStartOfHubDay, getHubLocalDate } from '../src/lib/hubTz.js';
 import { sanitizeBoardFlights } from '../src/lib/schedule-actuals.js';
 import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
 import { awaitRegSightings, type SightingRecord } from './_reg-sightings.js';
+import { applyLegEvidence, mergeLegRows } from '../src/lib/watch-leg.js';
+import { normalizeFlightNum } from '../src/lib/reg-ledger.js';
 
 // ═══ Registration + date-aware candidate ranking (F001, F005/F013) ═══
 
@@ -295,33 +305,46 @@ export function scheduleLegPhase(row: any, nowSec: number): { phase: ScheduleLeg
   return { phase: 'upcoming', depSec, arrSec };
 }
 
+/** A sighting airborne this recently says which leg of a multi-leg flight number is in the air. */
+const AIRBORNE_LEG_HINT_MS = 30 * 60e3;
+
 /** The leg a flight number means right now: in the air > just landed > the next departure >
  *  an older landed leg. Replaces "first board row that matches", which served tomorrow night's
- *  departure while tonight's red-eye was still airborne. */
-export function pickScheduleLeg(legs: ScheduleLeg[], nowSec: number): ScheduleLeg | null {
+ *  departure while tonight's red-eye was still airborne.
+ *
+ *  Two legs can both look "active" on a through flight (UA1872 MCO→IAH→MSP, phone QA Oct 4 2026):
+ *  the first is in the air, the second is only overdue because its aircraft has not arrived. A leg
+ *  with a real departure, or departing the airport the live feed last saw this flight number leave
+ *  (`sighting`), outranks one that is "active" by the clock alone; between two clock-only active
+ *  legs the EARLIER one is in the air — the later one cannot leave before it lands. */
+export function pickScheduleLeg(legs: ScheduleLeg[], nowSec: number, sighting?: SightingRecord | null): ScheduleLeg | null {
   const rank: Record<ScheduleLegPhase, number> = { active: 4, recent: 3, upcoming: 2, landed: 1 };
+  const airborneAt = Number(sighting?.airborneAtMs);
+  const airborneOrigin = Number.isFinite(airborneAt) && airborneAt > 0 && nowSec * 1000 - airborneAt <= AIRBORNE_LEG_HINT_MS
+    ? String(sighting?.origin || '').toUpperCase()
+    : '';
   let best: ScheduleLeg | null = null;
   let bestRank = -1;
   let bestDep = 0;
   for (const leg of legs) {
     const { phase, depSec } = scheduleLegPhase(leg.row, nowSec);
-    const r = rank[phase];
+    let r = rank[phase];
+    if (phase === 'active') {
+      const origin = String(leg.row?.airport?.origin?.code?.iata || '').toUpperCase();
+      if (leg.row?.time?.real?.departure || (airborneOrigin && origin === airborneOrigin)) r = 5;
+    }
     const better = r > bestRank
-      || (r === bestRank && (phase === 'upcoming' ? depSec < bestDep : depSec > bestDep));
+      || (r === bestRank && (phase === 'upcoming' || r === 4 ? depSec < bestDep : depSec > bestDep));
     if (better) { best = leg; bestRank = r; bestDep = depSec; }
   }
   return best;
 }
 
-async function collectScheduleLegs(
-  flightNum: string,
-  offsets: number[],
-  dateParam: string,
-  origin = '',
-  nowSec = Math.floor(Date.now() / 1000),
-  sightings: Map<string, SightingRecord> = new Map(),
-): Promise<ScheduleLeg[]> {
-  const reads: Promise<{ rows: any[]; dir: 'departures' | 'arrivals'; off: number }>[] = [];
+type BoardRead = { hub: string; dir: 'departures' | 'arrivals'; off: number };
+
+/** Board reads for today-relative day offsets, optionally only the hub days that ARE `dateParam`. */
+function offsetReads(offsets: number[], dateParam = ''): BoardRead[] {
+  const reads: BoardRead[] = [];
   for (const off of offsets) {
     for (const dir of ['departures', 'arrivals'] as const) {
       for (const hub of UNITED_HUBS) {
@@ -329,50 +352,89 @@ async function collectScheduleLegs(
           const d = getHubLocalDate(hub, getStartOfHubDay(hub, off) * 1000);
           if (`${d.year}-${d.month}-${d.day}` !== dateParam) continue;
         }
-        reads.push(loadSnapshotMemo(`agg:${hub}:${dir}:${getStartOfHubDay(hub, off)}`).then((snapshot) => ({
-          dir,
-          off,
-          // v1.11.3: these rows come straight from the persisted snapshot — /api/schedule's serve
-          // pass never sees them, and the watch-alerts cron reads them through here. A real time
-          // still in the future is not an arrival, and a date-shifted earlier leg is not this
-          // flight: either one would push a false "Landed".
-          //
-          // v1.12.0: the same seen-airborne override /api/schedule serves with. A "Likely Canceled"
-          // row the live feed saw fly reads departed here too — the watch cron resolves flights
-          // through this tier, and an unconfirmed cancellation must never become a push.
-          rows: applySightingsToBoard(
-            {
-              dir,
-              flights: sanitizeBoardFlights(
-                (Array.isArray(snapshot?.data?.flights) ? snapshot.data.flights : []).filter(
-                  (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
-                    && (!origin || String(f?.airport?.origin?.code?.iata || '').toUpperCase() === origin)
-                ),
-                nowSec,
-              ).flights as any[],
-            },
-            sightings,
-            nowSec * 1000,
-            { dir },
-          ).flights as any[],
-        })));
+        reads.push({ hub, dir, off });
       }
     }
   }
-  // One leg per scheduled departure. The origin hub's departures row wins (it has the departure
-  // gate); an arrivals row for the same leg only lends its destination gate/terminal.
+  return reads;
+}
+
+/** The boards that can hold the leg scheduled to depart at `depSec`: each hub's departures board
+ *  for the hub day containing it, and its arrivals boards for that day and the next (a red-eye lands
+ *  on the destination's next day). */
+export function pinnedLegReads(depSec: number): BoardRead[] {
+  const reads: BoardRead[] = [];
+  for (const hub of UNITED_HUBS) {
+    for (let off = -2; off <= 2; off++) {
+      if (depSec >= getStartOfHubDay(hub, off) && depSec < getStartOfHubDay(hub, off + 1)) {
+        reads.push({ hub, dir: 'departures', off }, { hub, dir: 'arrivals', off }, { hub, dir: 'arrivals', off: off + 1 });
+        break;
+      }
+    }
+  }
+  return reads;
+}
+
+/** A `dep` query value (epoch seconds or ISO) → epoch seconds within four days of now, else 0. */
+export function parseDepParam(raw: unknown, nowSec: number): number {
+  if (typeof raw !== 'string' || !raw.trim()) return 0;
+  const v = raw.trim();
+  const sec = /^\d{9,11}$/.test(v) ? Number(v) : Math.floor(Date.parse(v) / 1000);
+  if (!Number.isFinite(sec) || Math.abs(sec - nowSec) > 4 * 86400) return 0;
+  return sec;
+}
+
+/** Between legs this far apart, a pinned `dep` names the nearer one; further, neither. */
+const PINNED_LEG_TOLERANCE_SEC = 2 * 3600;
+
+async function collectScheduleLegs(
+  flightNum: string,
+  plan: BoardRead[],
+  origin = '',
+  nowSec = Math.floor(Date.now() / 1000),
+  sightings: Map<string, SightingRecord> = new Map(),
+): Promise<ScheduleLeg[]> {
+  const reads: Promise<{ rows: any[]; dir: 'departures' | 'arrivals'; off: number }>[] = [];
+  for (const { hub, dir, off } of plan) {
+    reads.push(loadSnapshotMemo(`agg:${hub}:${dir}:${getStartOfHubDay(hub, off)}`).then((snapshot) => ({
+      dir,
+      off,
+      // v1.11.3: these rows come straight from the persisted snapshot — /api/schedule's serve
+      // pass never sees them, and the watch-alerts cron reads them through here. A real time
+      // still in the future is not an arrival, and a date-shifted earlier leg is not this
+      // flight: either one would push a false "Landed".
+      //
+      // v1.12.0: the same seen-airborne override /api/schedule serves with. A "Likely Canceled"
+      // row the live feed saw fly reads departed here too — the watch cron resolves flights
+      // through this tier, and an unconfirmed cancellation must never become a push.
+      rows: applySightingsToBoard(
+        {
+          dir,
+          flights: sanitizeBoardFlights(
+            (Array.isArray(snapshot?.data?.flights) ? snapshot.data.flights : []).filter(
+              (f: any) => String(f?.identification?.number?.default || '').toUpperCase() === flightNum
+                && (!origin || String(f?.airport?.origin?.code?.iata || '').toUpperCase() === origin)
+            ),
+            nowSec,
+          ).flights as any[],
+        },
+        sightings,
+        nowSec * 1000,
+        { dir },
+      ).flights as any[],
+    })));
+  }
+  // One leg per scheduled departure. The origin hub's departures row is the base (it has the
+  // departure gate); the same leg's arrivals row — the only one that ever advances to landed —
+  // lends its arrival times, its further-along status and its destination gate (mergeLegRows).
+  // Before Oct 4 2026 it lent only the gate, so a hub-to-hub watch never saw "landed".
   const byDep = new Map<number, ScheduleLeg>();
   for (const { rows, dir, off } of (await Promise.all(reads)).sort((a, b) => (a.dir === b.dir ? 0 : a.dir === 'departures' ? -1 : 1))) {
     for (const row of rows) {
       const schedDep = row?.time?.scheduled?.departure || 0;
       const existing = byDep.get(schedDep);
       if (!existing) { byDep.set(schedDep, { row, dir, schedDep, off }); continue; }
-      const destInfo = existing.row?.airport?.destination?.info || {};
-      const arrInfo = row?.airport?.destination?.info || {};
-      if (dir === 'arrivals' && (!destInfo.gate || !destInfo.terminal)) {
-        existing.row = structuredClone(existing.row);
-        existing.row.airport.destination.info = { ...arrInfo, ...Object.fromEntries(Object.entries(destInfo).filter(([, v]) => v)) };
-      }
+      if (dir === 'arrivals' && existing.dir === 'departures') existing.row = mergeLegRows(existing.row, row);
     }
   }
   return [...byDep.values()];
@@ -426,38 +488,49 @@ function scheduleLegPayload(flightNum: string, match: any) {
   };
 }
 
-async function fetchScheduleCacheTimes(flight: string, dateParam = '', origin = ''): Promise<any | null> {
+async function fetchScheduleCacheTimes(
+  flight: string,
+  dateParam = '',
+  origin = '',
+  depSec = 0,
+  sightings: Map<string, SightingRecord> = new Map(),
+): Promise<any | null> {
   const flightNum = flight.replace('UAL', 'UA');
   const nowSec = Math.floor(Date.now() / 1000);
+  const sighting = sightings.get(normalizeFlightNum(flightNum) || flightNum) || null;
   try {
-    // Waited for (bounded): a cold lambda must not resolve a seen-flying flight as Likely Canceled.
-    const sightings = await awaitRegSightings(2000);
     let legs: ScheduleLeg[];
+    if (depSec) {
+      // A pinned leg: that scheduled departure (the nearest within two hours) or nothing.
+      legs = (await collectScheduleLegs(flightNum, pinnedLegReads(depSec), origin, nowSec, sightings))
+        .filter((leg) => Math.abs(leg.schedDep - depSec) <= PINNED_LEG_TOLERANCE_SEC)
+        .sort((a, b) => Math.abs(a.schedDep - depSec) - Math.abs(b.schedDep - depSec));
+      return legs.length ? scheduleLegPayload(flightNum, legs[0].row) : null;
+    }
     if (dateParam) {
       // F005/F013: each hub reads only the offset whose hub-local date is the one asked for.
-      legs = await collectScheduleLegs(flightNum, [0, 1, -1], dateParam, origin, nowSec, sightings);
+      legs = await collectScheduleLegs(flightNum, offsetReads([0, 1, -1], dateParam), origin, nowSec, sightings);
     } else {
       // Today's boards, both directions: the destination hub's arrivals board carries a leg that
       // left the origin hub "yesterday" (a red-eye past midnight).
-      legs = await collectScheduleLegs(flightNum, [0], '', origin, nowSec, sightings);
-      let best = pickScheduleLeg(legs, nowSec);
+      legs = await collectScheduleLegs(flightNum, offsetReads([0]), origin, nowSec, sightings);
+      let best = pickScheduleLeg(legs, nowSec, sighting);
       let phase = best ? scheduleLegPhase(best.row, nowSec).phase : null;
       // Only an upcoming leg (or nothing) is left today: yesterday's board may still hold the one
       // in the air — a red-eye out of a hub to a non-hub never appears on today's boards.
       if (!best || phase === 'upcoming' || phase === 'landed') {
-        legs = legs.concat(await collectScheduleLegs(flightNum, [-1], '', origin, nowSec, sightings));
-        best = pickScheduleLeg(legs, nowSec);
+        legs = legs.concat(await collectScheduleLegs(flightNum, offsetReads([-1]), origin, nowSec, sightings));
+        best = pickScheduleLeg(legs, nowSec, sighting);
         phase = best ? scheduleLegPhase(best.row, nowSec).phase : null;
       }
       // No leg on today's boards at all: the next occurrence is tomorrow's. Today's LANDED leg
-      // keeps answering until the hub day rolls over, as it always has — flipping it to tomorrow's
-      // "scheduled" a couple of hours after landing would make the watch cron push a spurious
-      // landed→scheduled alert (api/_watch-diff.ts treats any phase change as significant).
+      // keeps answering until the hub day rolls over, as it always has. (The watch cron no longer
+      // depends on this: a watch is pinned to one leg and asks for it by `dep`.)
       if (!legs.some((leg) => leg.off === 0) && (!best || phase === 'landed')) {
-        legs = legs.concat(await collectScheduleLegs(flightNum, [1], '', origin, nowSec, sightings));
+        legs = legs.concat(await collectScheduleLegs(flightNum, offsetReads([1]), origin, nowSec, sightings));
       }
     }
-    const best = pickScheduleLeg(legs, nowSec);
+    const best = pickScheduleLeg(legs, nowSec, sighting);
     return best ? scheduleLegPayload(flightNum, best.row) : null;
   } catch (e: any) {
     console.warn('flight-times schedule-cache lookup failed:', e?.message || e);
@@ -510,10 +583,14 @@ export function mergeFr24IntoSchedule(sched: any, fr24: any): any {
 // the gate times every consumer needs. FR24 is then asked only about that leg, and only once it
 // could have started — an hour before its departure — so a not-yet-departed flight never pays for
 // (or is answered with) the previous day's leg.
-async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey: string, reason: string, dateParam = '', allowOfficial = true, origin = '') {
+async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey: string, reason: string, dateParam = '', allowOfficial = true, origin = '', depSec = 0) {
   // allowOfficial=false lets a caller (e.g. api/cron/watch-alerts.ts) skip the paid FR24 official
   // API tier entirely and resolve only from the free FlightAware scrape + schedule-snapshot cache.
-  const sched = await fetchScheduleCacheTimes(flight, dateParam, origin);
+  //
+  // Waited for (bounded): a cold lambda must not resolve a seen-flying flight as Likely Canceled,
+  // nor miss the airborne / on-the-ground evidence a watch alert is built from.
+  const sightings = await awaitRegSightings(2000);
+  const sched = await fetchScheduleCacheTimes(flight, dateParam, origin, depSec, sightings);
   let result: any = sched;
   if (allowOfficial) {
     const schedDepMs = sched ? Date.parse(sched.departure.gate.scheduled) : NaN;
@@ -521,7 +598,8 @@ async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey
       || !Number.isFinite(schedDepMs)
       || !!sched.departure.gate.actual
       || Date.parse(sched.departure.gate.estimated || sched.departure.gate.scheduled) - Date.now() <= FR24_LEG_EARLY_MS;
-    if (legStarted && !sched?.cancelled) {
+    // A pinned leg the boards do not hold is not answered from FR24's guess at "the" leg.
+    if (legStarted && !sched?.cancelled && !(depSec && !sched)) {
       const fr24 = await fetchFr24Summary(flight, Number.isFinite(schedDepMs) ? schedDepMs : null);
       result = sched ? mergeFr24IntoSchedule(sched, fr24) : fr24;
     }
@@ -529,6 +607,10 @@ async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey
   // An origin-pinned lookup answers about THAT leg or not at all (D2).
   if (result && origin && result.origin?.iata && result.origin.iata !== origin) result = null;
   result = normalizeLegStatus(result);
+  // The live feed's word on THIS leg: airborne → departed, then on the ground at the destination →
+  // landed. Only ever an upgrade (src/lib/watch-leg.js applyLegEvidence).
+  const flightKey = normalizeFlightNum(flight) || flight.replace('UAL', 'UA');
+  result = applyLegEvidence(result, sightings.get(flightKey), Date.now());
   if (result) {
     setCache(cacheKey, result);
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
@@ -573,9 +655,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid from parameter' });
   }
 
+  // Optional scheduled-departure pin: that leg or a 404. Anything malformed or more than four days
+  // from now is ignored, like `date`.
+  const pinnedDep = parseDepParam(req.query.dep, Math.floor(Date.now() / 1000));
+
   // The official-tier flag is part of the key (F138): an officialFallback=0 caller (the watch cron)
   // must never be handed an answer the paid tier produced for somebody else.
-  const cacheKey = `fa:${flight}:${dateParam}:${origin}:${allowOfficial ? 1 : 0}`;
+  const cacheKey = `fa:${flight}:${dateParam}:${origin}:${pinnedDep || ''}:${allowOfficial ? 1 : 0}`;
   const cached = getCached(cacheKey);
   if (cached) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
@@ -601,7 +687,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     clearTimeout(timeout);
 
     if (!resp.ok) {
-      return await respondViaFallbacks(res, flight, cacheKey, `flightaware HTTP ${resp.status}`, dateParam, allowOfficial, origin);
+      return await respondViaFallbacks(res, flight, cacheKey, `flightaware HTTP ${resp.status}`, dateParam, allowOfficial, origin, pinnedDep);
     }
 
     // Cap response body size to prevent a misbehaving or malicious FlightAware
@@ -616,14 +702,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const match = html.match(/trackpollBootstrap\s*=\s*(\{[\s\S]{1,200000}?\});\s*(?:var|<\/script)/);
     if (!match) {
       // FlightAware blocked — fall down the chain
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware blocked (no bootstrap)', dateParam, allowOfficial, origin);
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware blocked (no bootstrap)', dateParam, allowOfficial, origin, pinnedDep);
     }
 
     let bootstrap: any;
     try {
       bootstrap = JSON.parse(match[1]);
     } catch (e) {
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap unparseable', dateParam, allowOfficial, origin);
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap unparseable', dateParam, allowOfficial, origin, pinnedDep);
     }
 
     // Find the most relevant flight — scan ALL activity log entries, then rank
@@ -637,6 +723,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const actLog = val?.activityLog?.flights || [];
       for (const f of actLog) {
         if (origin && String(f.origin?.iata || '').toUpperCase() !== origin) continue;
+        const pinnedSched = f.gateDepartureTimes?.scheduled || f.takeoffTimes?.scheduled || 0;
+        if (pinnedDep && Math.abs(pinnedSched - pinnedDep) > PINNED_LEG_TOLERANCE_SEC) continue;
         const hasActualDep = !!(f.takeoffTimes?.actual || f.gateDepartureTimes?.actual);
         const hasLanded = !!f.landingTimes?.actual;
         const depSec = f.gateDepartureTimes?.scheduled || f.gateDepartureTimes?.estimated || f.gateDepartureTimes?.actual || f.takeoffTimes?.scheduled || 0;
@@ -650,7 +738,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // A bootstrap that parses but contains ZERO flights is FlightAware's bot-wall, not a
       // definitive "this flight does not exist" — treat it as a source failure and fall through
       // to FR24 / the schedule snapshot layer instead of 404ing every flight. (Jul 3 2026 audit.)
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap empty (bot-wall)', dateParam, allowOfficial, origin);
+      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap empty (bot-wall)', dateParam, allowOfficial, origin, pinnedDep);
     }
 
     const f = bestFlight;
@@ -709,6 +797,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(result);
   } catch (e) {
     console.error('FlightAware scrape error:', e);
-    return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error', dateParam, allowOfficial, origin);
+    return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error', dateParam, allowOfficial, origin, pinnedDep);
   }
 }

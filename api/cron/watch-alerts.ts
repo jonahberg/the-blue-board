@@ -1,49 +1,62 @@
-// Vercel Cron Job: server-side flight-watch diff engine + Web Push delivery.
+// Vercel Cron Job: server-side flight-watch alerts + Web Push delivery.
 // Config in vercel.json: { "path": "/api/cron/watch-alerts", "schedule": "*/5 * * * *" }
 //
-// This is the "killer feature" foundation: background flight alerts that survive the tab closing.
-// The in-tab watch engine (main.js) only runs while the dashboard is open (F031/F049); this cron
-// resolves every watched flight server-side every 5 minutes and pushes a real notification through
-// the browser's push service.
+// Background flight alerts that survive the tab closing. The in-tab watch engine only runs while the
+// dashboard is open; this cron resolves every watched leg server-side every 5 minutes and pushes a
+// real notification through the browser's push service. What pushes, and the one-watch-one-leg
+// lifecycle, are api/_watch-diff.ts's job (evaluateWatch); this file does the I/O.
+//
+// Each run:
+//   1. Loads every subscription.
+//   2. Harvests the free public FR24 live feed ONCE (only when some watch is live) into reg_sightings
+//      — the same write api/fr24-feed.ts and the warm cron make. That is what lets /api/flight-times
+//      see a watched flight airborne (departed) and on the ground at its destination (landed) every
+//      five minutes, including at non-hub destinations no arrivals board covers (Oct 4 2026 audit,
+//      finding 1). Failure never fails the run.
+//   3. Resolves each distinct watched leg once through /api/flight-times with officialFallback=0:
+//      a pinned watch asks for its own leg (`dep` + `from`), an unpinned one for the flight.
+//   4. Evaluates, pushes, and logs ONE structured line per push (flight, leg date, old → new, reason;
+//      never an endpoint), so a later audit can prove what was sent.
+//   5. Persists the watch state.
 //
 // GRACEFUL UNCONFIGURED: when VAPID / Supabase env is absent the cron no-ops with 200 — the client
 // stays on today's in-tab behaviour (see docs/setup-push-alerts.md for the owner setup).
 //
-// COST: never calls the paid FR24 official API — it resolves flights through /api/flight-times with
-// officialFallback=0, so it only touches the free FlightAware scrape + schedule-snapshot cache. A
-// watch alert may be a few minutes stale; that is acceptable. Upstream lookups are budget-capped at
-// MAX_DISTINCT_FLIGHTS per run (soonest departures first) and sends at MAX_SENDS_PER_RUN.
+// COST: never calls the paid FR24 official API — /api/flight-times is asked with officialFallback=0,
+// so it only touches the free FlightAware scrape + schedule-snapshot cache + the sightings ledger, and
+// the live-feed harvest is the free public feed, once per run. Upstream lookups are budget-capped at
+// MAX_DISTINCT_FLIGHTS per run (soonest pinned legs first) and sends at MAX_SENDS_PER_RUN.
+//
+// LATENCY: /api/flight-times answers with `s-maxage=60, stale-while-revalidate=300`, so a five-minute
+// cron usually receives the answer computed on its previous run. An alert can trail the event by up
+// to ~10 minutes; that is the accepted cost of not cache-busting the production endpoint.
 
 import type { VercelRequest, VercelResponse } from '../_types.js';
 import { isAuthorizedCronRequest } from '../_cron-auth.js';
 import { getSupabase } from '../_supabase.js';
 import { isPushConfigured, ensureVapidConfigured, sendPush } from '../_web-push.js';
-import { diffWatch, type WatchState } from '../_watch-diff.js';
+import { recordFeedSightings } from '../_reg-sightings.js';
+import { parseFr24Feed } from '../../src/lib/feed-health.js';
+import { evaluateWatch, retireIfDone, watchQuery, watchQueryKey, type WatchEntry } from '../_watch-diff.js';
 
 const PAGE_SIZE = 500;
 const MAX_DISTINCT_FLIGHTS = 50; // upstream lookup budget per run
 const MAX_SENDS_PER_RUN = 200;
 const MAX_FAILS = 3; // delete a subscription after this many consecutive failures
 const RESOLVE_ABORT_MS = 9000; // per-flight upstream timeout
+const FEED_ABORT_MS = 8000; // the one live-feed harvest per run
 // Stop resolving once this much wall clock has elapsed, leaving >=20s headroom under the 120s
 // maxDuration (vercel.json) for the send + persist passes so the run never gets force-killed
 // mid-persist (which would drop state and re-notify next run).
 const RESOLVE_DEADLINE_MS = 100_000;
+
+export const LIVE_FEED_URL = 'https://data-cloud.flightradar24.com/zones/fcgi/feed.js?airline=UAL';
 
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'https://theblueboard.co';
-
-interface WatchEntry {
-  flight: string;
-  date?: string;
-  addedAt?: string;
-  lastStatus?: string;
-  lastGate?: string;
-  lastEquip?: string;
-}
 
 interface SubscriptionRow {
   id: string;
@@ -52,12 +65,6 @@ interface SubscriptionRow {
   auth: string;
   watches: WatchEntry[];
   failed_count: number;
-}
-
-interface ResolvedFlight {
-  status?: string;
-  gate?: string;
-  equip?: string;
 }
 
 async function loadAllSubscriptions(supabase: ReturnType<typeof getSupabase>): Promise<SubscriptionRow[]> {
@@ -82,10 +89,34 @@ async function loadAllSubscriptions(supabase: ReturnType<typeof getSupabase>): P
   return out;
 }
 
-// Resolve one flight through the free tiers only (officialFallback=0). Never throws.
-async function resolveFlight(flight: string, date?: string): Promise<ResolvedFlight | null> {
-  const params = new URLSearchParams({ flight, officialFallback: '0' });
-  if (date) params.set('date', date);
+/** One free live-feed read → reg_sightings. Never throws. */
+async function harvestLiveSightings(): Promise<{ ok: boolean; recorded: number }> {
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), FEED_ABORT_MS);
+    const resp = await fetch(LIVE_FEED_URL, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)', Accept: 'application/json' },
+    });
+    clearTimeout(t);
+    if (!resp.ok) return { ok: false, recorded: 0 };
+    const parsed = parseFr24Feed(await resp.json());
+    // A meta-only body (zero aircraft) is a failed read, not an empty sky (feed-health.js).
+    if (parsed.length === 0) return { ok: false, recorded: 0 };
+    return { ok: true, recorded: await recordFeedSightings(parsed) };
+  } catch (e: any) {
+    console.warn('watch-alerts live-feed harvest failed:', e?.message || e);
+    return { ok: false, recorded: 0 };
+  }
+}
+
+// Resolve one leg through the free tiers only (officialFallback=0). The whole payload comes back:
+// the evaluation reads times, not just the status word. Never throws.
+async function resolveLeg(query: ReturnType<typeof watchQuery>): Promise<any | null> {
+  const params = new URLSearchParams({ flight: query.flight, officialFallback: '0' });
+  if (query.date) params.set('date', query.date);
+  if (query.dep) params.set('dep', String(query.dep));
+  if (query.from) params.set('from', query.from);
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), RESOLVE_ABORT_MS);
@@ -97,12 +128,7 @@ async function resolveFlight(flight: string, date?: string): Promise<ResolvedFli
     if (!resp.ok) return null;
     const d = (await resp.json()) as any;
     if (!d || d.success === false) return null;
-    return {
-      status: String(d.status || ''),
-      gate: String(d.origin?.gate || ''),
-      // Registration (tail) is the sharpest equipment-swap signal; fall back to type text.
-      equip: String(d.registration || d.aircraft || ''),
-    };
+    return d;
   } catch {
     return null;
   }
@@ -134,50 +160,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'subscription load failed' });
   }
 
-  // Collect the distinct (flight,date) pairs across every subscription, remembering the earliest
-  // addedAt so a stable prioritization exists before we know departure times.
-  const distinct = new Map<string, { flight: string; date?: string }>();
+  const nowMs = Date.now();
+
+  // Retire finished legs first (no lookup, no push), then collect the distinct lookups the live
+  // watches need. Pinned legs are ordered by departure so the budget goes to the soonest ones;
+  // unpinned watches (which can only baseline) come after.
+  const distinct = new Map<string, { query: ReturnType<typeof watchQuery>; order: number }>();
+  const retiredThisRun = new Set<WatchEntry>();
   for (const sub of subs) {
     if (!Array.isArray(sub.watches)) continue;
+    sub.watches = sub.watches.map((w) => {
+      if (!w?.flight) return w;
+      const after = retireIfDone(w, nowMs);
+      if (after !== w) retiredThisRun.add(after);
+      return after;
+    });
     for (const w of sub.watches) {
-      if (!w?.flight) continue;
-      const key = `${w.flight}:${w.date || ''}`;
-      if (!distinct.has(key)) distinct.set(key, { flight: w.flight, date: w.date });
+      if (!w?.flight || w.retired) continue;
+      const key = watchQueryKey(w);
+      if (distinct.has(key)) continue;
+      const legDep = Date.parse(w.legDep || '');
+      distinct.set(key, { query: watchQuery(w), order: Number.isFinite(legDep) ? legDep : Number.MAX_SAFE_INTEGER });
     }
   }
-
-  // Prioritize by date (dated/today first, undated treated as today), then flight number, and cap
-  // at the upstream budget before we spend any lookups.
-  const candidates = Array.from(distinct.values()).sort((a, b) => {
-    const ad = a.date || '', bd = b.date || '';
-    if (ad !== bd) return ad < bd ? -1 : 1;
-    return a.flight < b.flight ? -1 : 1;
-  });
+  const candidates = Array.from(distinct.entries()).sort(([ak, a], [bk, b]) => (a.order - b.order) || (ak < bk ? -1 : 1));
   const capped = candidates.slice(0, MAX_DISTINCT_FLIGHTS);
   const flightsCapped = candidates.length > MAX_DISTINCT_FLIGHTS;
 
-  // Resolve each once (serial to be gentle on the free upstream tiers). A slow FlightAware tier can
-  // take up to RESOLVE_ABORT_MS each, so bound the loop by wall clock: stop resolving once
-  // RESOLVE_DEADLINE_MS elapses, leaving >=20s headroom under maxDuration (vercel.json) for the
-  // send + persist passes below. Unresolved flights keep their stored state and alert next run.
-  const resolved = new Map<string, ResolvedFlight>();
+  // One live-feed harvest, before resolving, so this run's lookups can already see it (subject to
+  // /api/flight-times' own one-minute sightings cache).
+  let liveFeed: { ok: boolean; recorded: number } | { skipped: true } = { skipped: true };
+  if (capped.length > 0 && Date.now() - runStart <= RESOLVE_DEADLINE_MS) {
+    liveFeed = await harvestLiveSightings();
+  }
+
+  // Resolve each once (serial to be gentle on the free upstream tiers), bounded by wall clock:
+  // unresolved legs keep their stored state and are evaluated next run.
+  const resolved = new Map<string, any>();
   let resolveDeadlineHit = false;
-  for (const c of capped) {
+  for (const [key, c] of capped) {
     if (Date.now() - runStart > RESOLVE_DEADLINE_MS) {
       resolveDeadlineHit = true;
       break;
     }
-    const r = await resolveFlight(c.flight, c.date);
-    if (r) resolved.set(`${c.flight}:${c.date || ''}`, r);
+    const r = await resolveLeg(c.query);
+    if (r) resolved.set(key, r);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
   let sends = 0;
   let capped200 = false;
   let subsUpdated = 0;
   let subsDeleted = 0;
   let failuresBumped = 0;
   let writeErrors = 0;
+  let baselined = 0;
+  let retired = 0;
   const supabase = getSupabase();
 
   for (const sub of subs) {
@@ -185,29 +222,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let mutated = false;
     let sawFailure = false;
     const newWatches: WatchEntry[] = [];
+    const original = new Map<WatchEntry, string>();
 
     for (const w of sub.watches) {
       if (!w?.flight) continue;
-      const r = resolved.get(`${w.flight}:${w.date || ''}`);
-      if (!r) {
-        newWatches.push(w); // couldn't resolve (uncapped, upstream miss); keep state untouched
+      if (w.retired) {
+        if (retiredThisRun.has(w)) {
+          retired++;
+          mutated = true;
+        }
+        newWatches.push(w);
         continue;
       }
-      const prev: WatchState = { lastStatus: w.lastStatus, lastGate: w.lastGate, lastEquip: w.lastEquip };
-      const diff = diffWatch(w.flight, prev, { status: r.status, gate: r.gate, equip: r.equip });
+      original.set(w, JSON.stringify(w));
+      const payload = resolved.get(watchQueryKey(w));
+      if (!payload) {
+        newWatches.push(w); // couldn't resolve (capped, deadline, upstream miss): state untouched
+        continue;
+      }
+      const ev = evaluateWatch(w, payload, nowMs);
+      if (ev.baseline) baselined++;
 
-      // Persist the diff's next state regardless of whether we notify.
-      const updated: WatchEntry = { ...w, ...diff.nextState };
-
-      if (diff.notify && sends < MAX_SENDS_PER_RUN) {
-        const payload = {
-          title: diff.title,
-          body: diff.body,
-          tag: `${w.flight.toLowerCase()}-${w.date || today}`,
-          url: `/?flight=${encodeURIComponent(w.flight)}`,
-        };
+      if (ev.notify && sends < MAX_SENDS_PER_RUN) {
+        const tag = `${w.flight.toLowerCase()}-${ev.next.legDate || ev.log?.legDate || ''}`;
+        const message = { title: ev.title, body: ev.body, tag, url: `/?flight=${encodeURIComponent(w.flight)}` };
         sends++;
-        const result = await sendPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+        const result = await sendPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, message);
+        // One structured line per push: what was said and why. No endpoint, no subscription id.
+        console.log(JSON.stringify({
+          event: 'watch-push',
+          ...ev.log,
+          result: result.ok ? 'sent' : result.gone ? 'gone' : `failed:${result.statusCode}`,
+        }));
         if (result.gone) {
           // Dead endpoint — drop the whole subscription immediately.
           sawFailure = true;
@@ -215,12 +261,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
         if (!result.ok) sawFailure = true;
-      } else if (diff.notify) {
+      } else if (ev.notify) {
         capped200 = true;
+        // Not sent: keep the old state so the alert goes out next run instead of being swallowed.
+        newWatches.push(w);
+        continue;
       }
 
-      newWatches.push(updated);
-      if (JSON.stringify(updated) !== JSON.stringify(w)) mutated = true;
+      newWatches.push(ev.next);
+      if (JSON.stringify(ev.next) !== original.get(w)) mutated = true;
     }
 
     // Persist state / failure bookkeeping. A push has already fired for notifying watches, so an
@@ -277,6 +326,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     resolved: resolved.size,
     flightsCapped,
     resolveDeadlineHit,
+    liveFeed,
+    baselined,
+    retired,
     sends,
     sendCapReached: capped200,
     subsUpdated,

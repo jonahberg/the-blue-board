@@ -42,7 +42,7 @@ import { buildJourneyContextStr, resolveJourneyStatuses, shapeJourney } from '@/
 import {
   buildInboundRiskContext,
   findInboundAircraft,
-  findLiveFlight,
+  liveFlightForLeg,
   reconcileLiveArrival,
   resolveMyFlightRoute,
 } from '@/lib/my-flights.js';
@@ -76,7 +76,7 @@ export default function MyFlightsView() {
 
   const watched = watch.watched;
   const idents = useMemo(() => watched.map((entry) => entry.flight), [watched]);
-  const { times } = useFlightTimes(idents);
+  const { times } = useFlightTimes(idents, flights);
 
   // ── The 1 s countdown, only while this tab is looked at (inventory §30) ──
   const active = tab === 'myflight';
@@ -94,7 +94,7 @@ export default function MyFlightsView() {
       watched
         .map((entry) => {
           const td = times[entry.flight]?.data;
-          const live = findLiveFlight(flights, entry.flight) as Flight | null;
+          const live = liveFlightForLeg(flights, entry.flight, td) as Flight | null;
           // F001: the live-feed tail first, then flight-times' `registration`.
           // `td.aircraft` is the TYPE string and is never a tail — deriving one from it
           // used to fail aircraft-history's own format check and kill the journey chain.
@@ -118,7 +118,7 @@ export default function MyFlightsView() {
   const { connections, connRisks, connectionIndex } = useMemo(() => {
     const nowMs = Date.now();
     const tds = watched.map((entry) =>
-      reconcileLiveArrival(times[entry.flight]?.data ?? null, findLiveFlight(flights, entry.flight), nowMs),
+      reconcileLiveArrival(times[entry.flight]?.data ?? null, liveFlightForLeg(flights, entry.flight, times[entry.flight]?.data), nowMs),
     );
     const found = findWatchedConnections(watched, tds, HUB_CODES) as unknown as ConnectionPair[];
     const risks = found.map((conn) => computeConnectionRisk(conn) as ConnectionRisk);
@@ -133,7 +133,8 @@ export default function MyFlightsView() {
   const cards = useMemo<MyFlightCardModel[]>(() => {
     return watched.map((entry) => {
       const record = times[entry.flight];
-      const liveFlight = findLiveFlight(flights, entry.flight) as Flight | null;
+      // Only the live row for THIS leg: a through flight's other leg must not drive the card.
+      const liveFlight = liveFlightForLeg(flights, entry.flight, record?.data) as Flight | null;
       // D1: live data wins while airborne — `arrival.etaSource === 'live'` marks the swap.
       const td = reconcileLiveArrival(record?.data ?? null, liveFlight, Date.now());
       const failures = record?.failures ?? 0;

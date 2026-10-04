@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The cron orchestrator is mocked at its module seams: cron auth, Supabase, and Web Push are
-// stubbed so we exercise the real diff→notify→send→persist control flow (diffWatch stays real)
-// without any network or DB. global.fetch is stubbed for the /api/flight-times resolve step.
+// stubbed so we exercise the real evaluate→notify→send→persist control flow (evaluateWatch stays
+// real) without any network or DB. global.fetch is stubbed per URL: /api/flight-times for the resolve
+// step, and the public FR24 feed for the once-per-run sightings harvest.
+//
+// Since Oct 4 2026 a watch is tied to ONE dated leg and its first evaluation is a silent baseline
+// (api/_watch-diff.ts). The notify-path tests below therefore start from a watch already PINNED to
+// the leg flightResponse() describes (PINNED), where they used to start from {lastStatus:'Scheduled'}
+// — an unpinned entry like that now baselines without a push (see the legacy test at the end).
 vi.mock('../api/_cron-auth.js', () => ({ isAuthorizedCronRequest: vi.fn(() => true) }));
 vi.mock('../api/_supabase.js', () => ({ getSupabase: vi.fn() }));
 vi.mock('../api/_web-push.js', () => ({
@@ -47,13 +53,24 @@ function makeSupabase({ rows = [], loadError = null, writeError = null } = {}) {
   return { client, calls };
 }
 
-// A /api/flight-times response for resolveFlight. success:false or ok:false → resolve miss (null).
-function flightResponse({ ok = true, status = 'Departed', gate = 'C1', registration = 'N1', success = true } = {}) {
+const LEG_DEP = '2026-10-03T18:00:00.000Z';
+// A /api/flight-times response for the resolve step. success:false or ok:false → resolve miss (null).
+function flightResponse({ ok = true, status = 'Departed', gate = 'C1', registration = 'N1', success = true, actualDep } = {}) {
+  const departed = /depart|route/i.test(status);
   return {
     ok,
-    json: async () => ({ success, status, origin: { gate }, registration }),
+    json: async () => ({
+      success, status, origin: { iata: 'ORD', gate, tz: 'America/Chicago' }, destination: { iata: 'SFO' }, registration,
+      departure: { gate: { scheduled: LEG_DEP, estimated: '', actual: actualDep ?? (departed ? '2026-10-03T18:03:00.000Z' : '') } },
+      arrival: { gate: {}, landing: {} },
+    }),
   };
 }
+/** A watch already pinned to flightResponse()'s leg, before it left. */
+const PINNED = (flight = 'UA1') => ({ flight, legDep: LEG_DEP, legOrigin: 'ORD', legDest: 'SFO', legDate: '2026-10-03', phase: 'scheduled', lastStatus: 'Scheduled', delayBucket: 0 });
+const isFeed = (url) => String(url).includes('data-cloud.flightradar24.com');
+const flightTimesCalls = (fetchMock) => fetchMock.mock.calls.filter(([url]) => !isFeed(url));
+const NOW_MS = Date.parse('2026-10-03T18:20:00.000Z');
 
 function makeReq(overrides = {}) {
   return { method: 'GET', headers: { authorization: 'Bearer secret' }, query: {}, ...overrides };
@@ -82,9 +99,11 @@ describe('watch-alerts cron', () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://test.supabase.co';
     fetchMock = vi.fn(() => Promise.resolve(flightResponse()));
     globalThis.fetch = fetchMock;
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW_MS });
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
   });
@@ -145,7 +164,7 @@ describe('watch-alerts cron', () => {
   it('sends a push and persists the new state on a significant status change, resetting failed_count', async () => {
     const { client, calls } = makeSupabase({
       rows: [{ id: 's1', endpoint: 'https://push/s1', p256dh: 'p', auth: 'a', failed_count: 0,
-        watches: [{ flight: 'UA1', lastStatus: 'Scheduled' }] }],
+        watches: [PINNED()] }],
     });
     getSupabase.mockReturnValue(client);
     fetchMock.mockResolvedValue(flightResponse({ status: 'Departed' }));
@@ -160,18 +179,20 @@ describe('watch-alerts cron', () => {
     expect(sendPush).toHaveBeenCalledTimes(1);
     const [target, payload] = sendPush.mock.calls[0];
     expect(target.endpoint).toBe('https://push/s1');
-    expect(payload.tag).toContain('ua1');
+    // Tagged with the LEG's date, so tomorrow's alert for the same flight never replaces today's.
+    expect(payload.tag).toBe('ua1-2026-10-03');
     expect(payload.url).toBe('/?flight=UA1');
     // State persisted with the new status and failed_count zeroed.
     expect(calls.updates).toHaveLength(1);
     expect(calls.updates[0].payload.watches[0].lastStatus).toBe('Departed');
+    expect(calls.updates[0].payload.watches[0].phase).toBe('departed');
     expect(calls.updates[0].payload.failed_count).toBe(0);
   });
 
   it('does NOT notify or persist when the resolve step misses (upstream null)', async () => {
     const { client, calls } = makeSupabase({
       rows: [{ id: 's1', endpoint: 'https://push/s1', p256dh: 'p', auth: 'a', failed_count: 0,
-        watches: [{ flight: 'UA1', lastStatus: 'Scheduled' }] }],
+        watches: [PINNED()] }],
     });
     getSupabase.mockReturnValue(client);
     fetchMock.mockResolvedValue(flightResponse({ ok: false }));
@@ -188,7 +209,7 @@ describe('watch-alerts cron', () => {
   it('deletes the whole subscription when a push comes back gone (404/410)', async () => {
     const { client, calls } = makeSupabase({
       rows: [{ id: 's1', endpoint: 'https://push/s1', p256dh: 'p', auth: 'a', failed_count: 0,
-        watches: [{ flight: 'UA1', lastStatus: 'Scheduled' }] }],
+        watches: [PINNED()] }],
     });
     getSupabase.mockReturnValue(client);
     fetchMock.mockResolvedValue(flightResponse({ status: 'Departed' }));
@@ -207,7 +228,7 @@ describe('watch-alerts cron', () => {
   it('deletes a subscription that arrives already at MAX_FAILS', async () => {
     const { client, calls } = makeSupabase({
       rows: [{ id: 's1', endpoint: 'https://push/s1', p256dh: 'p', auth: 'a', failed_count: 3,
-        watches: [{ flight: 'UA1', lastStatus: 'Departed' }] }],
+        watches: [{ ...PINNED(), phase: 'departed', lastStatus: 'Departed' }] }],
     });
     getSupabase.mockReturnValue(client);
     fetchMock.mockResolvedValue(flightResponse({ status: 'Departed' })); // same status → no notify
@@ -223,7 +244,7 @@ describe('watch-alerts cron', () => {
   it('bumps (not resets) failed_count when a send fails without going gone', async () => {
     const { client, calls } = makeSupabase({
       rows: [{ id: 's1', endpoint: 'https://push/s1', p256dh: 'p', auth: 'a', failed_count: 1,
-        watches: [{ flight: 'UA1', lastStatus: 'Scheduled' }] }],
+        watches: [PINNED()] }],
     });
     getSupabase.mockReturnValue(client);
     fetchMock.mockResolvedValue(flightResponse({ status: 'Departed' }));
@@ -239,7 +260,7 @@ describe('watch-alerts cron', () => {
   });
 
   it('caps upstream lookups at MAX_DISTINCT_FLIGHTS (50) and flags flightsCapped', async () => {
-    const watches = Array.from({ length: 60 }, (_, i) => ({ flight: 'UA' + (i + 1), lastStatus: 'Scheduled' }));
+    const watches = Array.from({ length: 60 }, (_, i) => PINNED('UA' + (i + 1)));
     const { client } = makeSupabase({
       rows: [{ id: 's1', endpoint: 'https://push/s1', p256dh: 'p', auth: 'a', failed_count: 0, watches }],
     });
@@ -249,7 +270,8 @@ describe('watch-alerts cron', () => {
     const res = makeRes();
     await handler(makeReq(), res);
 
-    expect(fetchMock).toHaveBeenCalledTimes(50);
+    // 50 /api/flight-times lookups; the one live-feed harvest is not a lookup.
+    expect(flightTimesCalls(fetchMock)).toHaveLength(50);
     expect(res._json.flightsCapped).toBe(true);
     expect(res._json.distinctFlights).toBe(60);
   });
@@ -257,7 +279,7 @@ describe('watch-alerts cron', () => {
   it('caps sends at MAX_SENDS_PER_RUN (200) and flags sendCapReached', async () => {
     const rows = Array.from({ length: 210 }, (_, i) => ({
       id: 's' + i, endpoint: 'https://push/s' + i, p256dh: 'p', auth: 'a', failed_count: 0,
-      watches: [{ flight: 'UA1', lastStatus: 'Scheduled' }],
+      watches: [PINNED()],
     }));
     const { client } = makeSupabase({ rows });
     getSupabase.mockReturnValue(client);
@@ -274,7 +296,7 @@ describe('watch-alerts cron', () => {
   it('stops resolving and flags resolveDeadlineHit once the wall-clock deadline trips', async () => {
     const { client } = makeSupabase({
       rows: [{ id: 's1', endpoint: 'https://push/s1', p256dh: 'p', auth: 'a', failed_count: 0,
-        watches: [{ flight: 'UA1', lastStatus: 'Scheduled' }] }],
+        watches: [PINNED()] }],
     });
     getSupabase.mockReturnValue(client);
     // First Date.now() call = runStart; the loop-guard call jumps past the deadline → break.
@@ -292,7 +314,7 @@ describe('watch-alerts cron', () => {
   it('counts a persist write error instead of silently swallowing it (dedup safety)', async () => {
     const { client, calls } = makeSupabase({
       rows: [{ id: 's1', endpoint: 'https://push/s1', p256dh: 'p', auth: 'a', failed_count: 0,
-        watches: [{ flight: 'UA1', lastStatus: 'Scheduled' }] }],
+        watches: [PINNED()] }],
       writeError: { message: 'row lock timeout' },
     });
     getSupabase.mockReturnValue(client);

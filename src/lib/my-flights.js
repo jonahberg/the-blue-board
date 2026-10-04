@@ -10,6 +10,7 @@
 
 import { AIRPORT_COORDS } from './airports.js';
 import { haversineNm } from './geo.js';
+import { isOnGround } from './flight-phase.js';
 import { getUnitedTerminal } from './hub-terminals.js';
 
 /**
@@ -200,11 +201,96 @@ export function reconcileLiveArrival(td, liveFlight, nowMs = Date.now()) {
   return /** @type {T} */ (reconcileImpl(t, liveFlight, nowMs));
 }
 
+/**
+ * Is this live-feed row the leg the payload describes? A through flight number flies two legs
+ * (UA1872 MCO→IAH→MSP); the feed row for the first must never drive the second's card (phone QA
+ * Oct 4 2026: "IAH→MSP, 2h 9m, ETA from live position" while the aircraft cruised MCO→IAH). Codes
+ * missing on either side never veto.
+ *
+ * @param {Object|null|undefined} liveFlight
+ * @param {string} origin
+ * @param {string} dest
+ * @returns {boolean}
+ */
+export function liveFlightMatchesLeg(liveFlight, origin, dest) {
+  if (!liveFlight) return false;
+  const lo = String(liveFlight.origin || '').toUpperCase();
+  const ld = String(liveFlight.dest || '').toUpperCase();
+  if (lo && origin && lo !== String(origin).toUpperCase()) return false;
+  if (ld && dest && ld !== String(dest).toUpperCase()) return false;
+  return true;
+}
+
+/** On the ground within this distance of an airport = at that airport. */
+const AT_AIRPORT_NM = 5;
+
+/**
+ * Is a live-feed aircraft on the ground at this airport? (The feed's ground flag or the
+ * telemetry's, within 5 nm of the field.)
+ *
+ * @param {Object|null|undefined} liveFlight
+ * @param {string} iata
+ * @returns {boolean}
+ */
+export function onGroundAt(liveFlight, iata) {
+  if (!liveFlight || !isOnGround(liveFlight)) return false;
+  const apt = AIRPORT_COORDS[String(iata || '').toUpperCase()];
+  if (!apt || !Number.isFinite(liveFlight.lat) || !Number.isFinite(liveFlight.lon)) return false;
+  return haversineNm(liveFlight.lat, liveFlight.lon, apt.lat, apt.lon) <= AT_AIRPORT_NM;
+}
+
+/**
+ * The live-feed row for this card's leg, or null — `findLiveFlight()` plus the route check.
+ *
+ * @param {Array<Object>} flights
+ * @param {string} flightNumber
+ * @param {Object|null|undefined} td
+ * @returns {Object|null}
+ */
+export function liveFlightForLeg(flights, flightNumber, td) {
+  const live = findLiveFlight(flights, flightNumber);
+  if (!live || !td || td.success === false) return live;
+  return liveFlightMatchesLeg(live, td.origin?.iata, td.destination?.iata) ? live : null;
+}
+
+/**
+ * The origin to ask /api/flight-times for when the live aircraft is flying a DIFFERENT leg of this
+ * flight number than the payload describes — its own origin — else ''. Only an airborne aircraft
+ * counts: one on the ground could be anywhere in its day.
+ *
+ * @param {Object|null|undefined} td
+ * @param {Object|null|undefined} liveFlight  findLiveFlight()'s row (not route-checked).
+ * @returns {string}
+ */
+export function liveLegOrigin(td, liveFlight) {
+  if (!td || td.success === false || !liveFlight || isOnGround(liveFlight)) return '';
+  const lo = String(liveFlight.origin || '').toUpperCase();
+  if (!lo) return '';
+  return liveFlightMatchesLeg(liveFlight, td.origin?.iata, td.destination?.iata) ? '' : lo;
+}
+
 /** @param {any} td @param {any} liveFlight @param {number} nowMs */
 function reconcileImpl(td, liveFlight, nowMs) {
   if (!td || td.success === false || td.cancelled) return td;
   if (td.arrival?.gate?.actual || td.arrival?.landing?.actual) return td;
+  // Another leg of the same flight number says nothing about this one.
+  if (liveFlight && !liveFlightMatchesLeg(liveFlight, td.origin?.iata, td.destination?.iata)) return td;
   const dest = td.destination?.iata || liveFlight?.dest || '';
+  // On the ground at the destination: it has landed, whatever a stale provider estimate says
+  // (phone QA Oct 4 2026: "2h 21m to arrival" on UA2059 as it touched down at ORD).
+  if (liveFlight && onGroundAt(liveFlight, dest) && (td.departure?.gate?.actual || td.departure?.takeoff?.actual || /depart|route|air/i.test(String(td.status || '')))) {
+    const nowISO = new Date(nowMs).toISOString();
+    return {
+      ...td,
+      status: 'landed',
+      arrival: {
+        ...td.arrival,
+        gate: { scheduled: '', actual: '', ...(td.arrival?.gate || {}), estimated: nowISO },
+        etaSource: 'live-ground',
+        providerEstimate: td.arrival?.gate?.estimated || '',
+      },
+    };
+  }
   const live = liveArrivalEstimate(liveFlight, dest, nowMs);
   if (!live) return td;
   const current = td.arrival?.gate?.estimated || td.arrival?.gate?.scheduled || '';

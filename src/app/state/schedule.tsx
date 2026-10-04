@@ -53,14 +53,15 @@ import {
   swapStorageKey,
 } from '@/lib/schedule-load.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
-import { isSignificantStatusChange, watchedFlightLanded } from '@/lib/watch-utils.js';
+import { observationFromBoardRow } from '@/lib/watch-utils.js';
 import { ApiError, fetchSchedule } from '../data/api';
 import type { ScheduleMeta, ScheduleResponse } from '../data/types';
 import { useIrops } from './irops';
 import { STORAGE_KEYS, safeLocalStorage, safeSessionStorage } from './storage';
 import { useUi } from './ui';
 import { useWatch } from './watch';
-import type { WatchChange } from './watch';
+import { useWatchAlerts } from './watch-alerts';
+import type { WatchObservation } from './watch-alerts';
 
 export type BoardDirection = 'departures' | 'arrivals';
 
@@ -108,9 +109,6 @@ export type ScheduleCurrent = { hub: string; dir: BoardDirection; day: number };
 /** A row the search palette asked the board to reveal. Cleared once the table has scrolled. */
 export type ScheduleGoto = { flight: string; key: number } | null;
 
-/** A watched flight that changed status while the page was visible (inventory §6). */
-export type WatchAlert = { message: string; key: number } | null;
-
 /**
  * "Board `key` landed; anchor it at NOW."
  *
@@ -142,8 +140,6 @@ export type ScheduleValue = {
   autoScroll: AutoScrollSignal;
   /** Board-time "now" in seconds, anchored to the schedule server rather than the device. */
   nowSec: () => number;
-  watchAlert: WatchAlert;
-  clearWatchAlert: () => void;
   /** Loaded rows grouped by hub — the input `computeBoardOtp()` takes. */
   rawByHub: Record<string, Record<string, unknown>[]>;
 };
@@ -178,7 +174,6 @@ export function ScheduleProvider({
   const [errors, setErrors] = useState<Record<BoardKey, string>>({});
   const [pendingGoto, setPendingGoto] = useState<ScheduleGoto>(null);
   const [autoScroll, setAutoScroll] = useState<AutoScrollSignal>(null);
-  const [watchAlert, setWatchAlert] = useState<WatchAlert>(null);
   // A hub's "today" board is empty until its first departures roll, so before the local
   // rollover hour the completed day is the useful one. Derived in the initialiser rather
   // than in a view effect: doing it later costs one wasted AeroDataBox board (day 0, then
@@ -189,12 +184,13 @@ export function ScheduleProvider({
     day: defaultSchedDayOffset(defaultHub) as number,
   }));
 
-  const { announce, select, showBmacToast } = useUi();
+  const { announce, select } = useUi();
   const watch = useWatch();
   // The watch list is read at diff time, never as an effect dependency — a board landing
   // must not be able to re-run because someone starred a flight.
   const watchRef = useRef(watch);
   watchRef.current = watch;
+  const { observe: observeWatched } = useWatchAlerts();
 
   // A `useState` initializer runs once, so a home hub that resolves later (or a viewer who
   // changes it from the canopy) would never reach the board. Follow `defaultHub` until the
@@ -300,11 +296,14 @@ export function ScheduleProvider({
   /**
    * The watched-flight diff (inventory §6), run on every board that lands.
    *
-   * Two whole classes of row are skipped rather than announced: a TIME-INFERRED status (we
-   * guessed "Departed" because the clock crossed the grace window) is not evidence, and a
-   * transition INTO `unknown` is pipeline noise — announcing either sends a traveller a
-   * speculative alert and, worse, overwrites the stored status so the REAL transition later
-   * compares against a fabricated one.
+   * Each watched row becomes an observation for the shared in-tab alert rule
+   * (`useWatchAlerts().observe`, which also hears the My Flights polling path — phone QA Oct 4
+   * 2026). Two whole classes of row are skipped rather than announced (observationFromBoardRow):
+   * a TIME-INFERRED status (we guessed "Departed" because the clock crossed the grace window) is
+   * not evidence, and a transition INTO `unknown` is pipeline noise. Announcing either sends a
+   * traveller a speculative alert and, worse, overwrites the stored status so the REAL
+   * transition later compares against a fabricated one. The rule itself decides news vs a
+   * re-statement and persists the whole board in ONE write.
    */
   const diffWatched = useCallback(
     (rows: Record<string, unknown>[], dir: BoardDirection, meta: ScheduleMeta | null) => {
@@ -312,74 +311,16 @@ export function ScheduleProvider({
       if (!store.watched.length) return;
       const opts = classifyOptsFor(meta);
       const now = nowSec();
-      // One board is ONE event, so the restamps it produces are one save. Collected here and
-      // applied in a single read-modify-write below: a per-flight save derives every write
-      // from the same pre-board list, so on a board where three watched flights moved only
-      // the last one survives — and the other two re-announce themselves on the next load.
-      const changes: WatchChange[] = [];
+      const observations: (WatchObservation | null)[] = [];
       for (const row of rows) {
-        const flight = row as {
-          identification?: { number?: { default?: string } };
-          airport?: { origin?: { code?: { iata?: string } }; destination?: { code?: { iata?: string } } };
-        };
-        const ident = flight.identification?.number?.default;
-        if (!ident) continue;
-        const entry = store.watched.find((w) => w.flight === ident);
-        if (!entry) continue;
-        const status = classifySchedStatus(row, dir, now, opts) as {
-          key: string;
-          text: string;
-          inferred?: boolean;
-        };
-        if (status.inferred) continue;
-        if (status.key === 'unknown') continue;
-        const next = status.text;
-        const previous = entry.status;
-        if (previous && next !== previous && isSignificantStatusChange(previous, next)) {
-          const orig = flight.airport?.origin?.code?.iata || '?';
-          const dest = flight.airport?.destination?.code?.iata || '?';
-          const message = `🔔 ${ident} ${orig}→${dest}: ${next} (was: ${previous})`;
-          if (typeof document !== 'undefined' && document.hidden) {
-            // Not visible — the browser's own notification is the only channel that reaches
-            // someone who has tabbed away from a flight they are waiting on.
-            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-              try {
-                const notification = new Notification('The Blue Board', {
-                  body: `${ident}: ${next} (was: ${previous})`,
-                  icon: '/icons/icon-192.png',
-                  tag: `bb-watch-${ident}`,
-                  data: { flight: ident },
-                });
-                // Clicking the notification has to land on the flight, not just the tab —
-                // the whole point is that the viewer was away when it changed.
-                notification.onclick = () => {
-                  window.focus();
-                  select({ kind: 'ident', ident });
-                };
-              } catch {
-                /* a notification that cannot be shown must never break a board load */
-              }
-            }
-          } else {
-            setWatchAlert({ message, key: Date.now() });
-            announce(message);
-          }
-          // Inventory §12: a watched flight LANDING is the one moment this dashboard has
-          // demonstrably done its job, so it is the one moment the donation ask is made.
-          // Inside the significant-change branch on purpose — an inferred or repeated
-          // "Landed" is not an arrival, and `showBmacToast` caps the rest (14-day cooldown,
-          // once per load, 3-second delay). Decided on the classified KEY: the text is the
-          // provider's word, and AeroDataBox says "Arrived" (v1.11.3).
-          if (watchedFlightLanded(previous, status)) showBmacToast(ident);
-        }
-        // Always restamp, changed or not: the stored status is the baseline the NEXT load
-        // compares against, and leaving it behind re-fires the same alert every refresh.
-        changes.push({ flight: ident, status: next });
+        const ident = (row as { identification?: { number?: { default?: string } } }).identification?.number?.default;
+        if (!ident || !store.watched.some((w) => w.flight === ident)) continue;
+        const status = classifySchedStatus(row, dir, now, opts) as { key: string; text: string; inferred?: boolean };
+        observations.push(observationFromBoardRow(row, status) as WatchObservation | null);
       }
-      // A board on which nothing moved reduces to the same list and writes nothing at all.
-      store.applyStatusChanges(changes);
+      observeWatched(observations);
     },
-    [announce, select, nowSec, showBmacToast],
+    [nowSec, observeWatched],
   );
 
   /** Store one landed board and run the post-load fan-out. */
@@ -648,7 +589,6 @@ export function ScheduleProvider({
   );
 
   const clearGoto = useCallback(() => setPendingGoto(null), []);
-  const clearWatchAlert = useCallback(() => setWatchAlert(null), []);
 
   const rawByHub = useMemo(() => {
     const grouped: Record<string, Record<string, unknown>[]> = {};
@@ -676,8 +616,6 @@ export function ScheduleProvider({
       clearGoto,
       autoScroll,
       nowSec,
-      watchAlert,
-      clearWatchAlert,
       rawByHub,
     }),
     [
@@ -695,8 +633,6 @@ export function ScheduleProvider({
       clearGoto,
       autoScroll,
       nowSec,
-      watchAlert,
-      clearWatchAlert,
       rawByHub,
     ],
   );

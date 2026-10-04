@@ -55,8 +55,12 @@ export type PushState = {
   dismissPrompt: () => void;
 };
 
-/** One entry of a batched update: the flight, plus whichever fields have moved. */
-export type WatchChange = { flight: string; status?: string; route?: string };
+/**
+ * One entry of a batched update: the flight, plus whichever fields have moved — the status, the
+ * route, the scheduled departure of the leg the entry follows (`dep`, epoch seconds) and the delay
+ * band already announced (`delayBucket`). See `evaluateWatchObservation()` in watch-utils.js.
+ */
+export type WatchChange = { flight: string; status?: string; route?: string; dep?: number; delayBucket?: number };
 
 export type WatchValue = {
   watched: WatchedFlight[];
