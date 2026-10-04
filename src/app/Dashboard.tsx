@@ -43,6 +43,7 @@ import { PrefsProvider, usePrefs } from './state/prefs';
 import { ScheduleProvider, useSchedule } from './state/schedule';
 import { UiProvider, useUi } from './state/ui';
 import { WatchProvider } from './state/watch';
+import { WatchAlertsProvider, useWatchAlerts } from './state/watch-alerts';
 import { WeatherProvider } from './state/weather';
 import { TABS } from './tabs';
 import type { TabId } from './tabs';
@@ -87,7 +88,8 @@ function DashboardShell() {
     announce,
   } = useUi();
   const { flights } = useFeed();
-  const { setCurrent, watchAlert, clearWatchAlert } = useSchedule();
+  const { setCurrent } = useSchedule();
+  const { alert: watchAlert, clearAlert: clearWatchAlert } = useWatchAlerts();
   const [watchOpen, setWatchOpen] = useState(false);
   // Views stay mounted once visited. Radix unmounts inactive TabsContent by default, which
   // would tear the Leaflet map down and rebuild it on every tab switch — losing the pan,
@@ -216,9 +218,11 @@ export default function Dashboard() {
             <FeedProvider>
               <FleetProvider>
                 <WatchProvider>
-                  <IropsProvider>
-                    <ShellWithPrefs />
-                  </IropsProvider>
+                  <WatchAlertsProvider>
+                    <IropsProvider>
+                      <ShellWithPrefs />
+                    </IropsProvider>
+                  </WatchAlertsProvider>
                 </WatchProvider>
               </FleetProvider>
             </FeedProvider>

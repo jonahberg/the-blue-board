@@ -15,6 +15,7 @@ import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { getSupabase } from './_supabase.js';
 import { getVapidPublicKey, isPushConfigured } from './_web-push.js';
+import { carryWatchState } from './_watch-diff.js';
 
 const isRateLimited = createRateLimiter('push-subscribe', 20);
 
@@ -137,12 +138,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ configured: true, success: true, removed: true });
     }
 
+    // The client re-posts its whole list ({flight} only) on every add/remove. Carry each still-listed
+    // watch's server state (its pinned leg, baseline, retirement) across, so adding UA2 neither wipes
+    // UA1's baseline nor revives a finished UA1 onto tomorrow's flight (api/_watch-diff.ts). Best
+    // effort: a failed read just means fresh watches, which baseline silently on the next cron run.
+    let prior: unknown = null;
+    try {
+      const { data, error: readError } = await supabase
+        .from('watch_subscriptions')
+        .select('watches')
+        .eq('endpoint', endpoint)
+        .maybeSingle();
+      if (!readError) prior = (data as any)?.watches ?? null;
+    } catch {
+      /* no prior state */
+    }
+
     const { error } = await supabase.from('watch_subscriptions').upsert(
       {
         endpoint,
         p256dh,
         auth,
-        watches,
+        watches: carryWatchState(watches, prior),
         last_seen_at: new Date().toISOString(),
         failed_count: 0,
       },

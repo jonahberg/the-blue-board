@@ -20,7 +20,7 @@ vi.mock(process.cwd() + '/api/_reg-sightings.ts', () => ({
 import handler, { __resetFlightTimesCache } from '../api/flight-times.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
-import { diffWatch } from '../api/_watch-diff.js';
+import { evaluateWatch } from '../api/_watch-diff.js';
 
 const ROWS = JSON.parse(readFileSync(new URL('./fixtures/schedule-board-rows.json', import.meta.url), 'utf8'));
 const SCHED_DEP = ROWS.UA2278_SFO_departures.time.scheduled.departure; // 2026-09-27T05:35Z
@@ -34,6 +34,12 @@ function likelyCanceledRow() {
   };
   return row;
 }
+// A watch pinned to this leg before it was due out (what the cron holds by now).
+const watching = () => evaluateWatch(
+  { flight: 'UA2278' },
+  { success: true, status: 'expected', origin: { iata: 'SFO' }, destination: { iata: 'ORD' }, departure: { gate: { scheduled: new Date(SCHED_DEP * 1000).toISOString() } }, arrival: {} },
+  (SCHED_DEP - 3600) * 1000,
+).next;
 const key = (hub, dir, off = 0) => `agg:${hub}:${dir}:${getStartOfHubDay(hub, off)}`;
 function createRes() {
   return {
@@ -75,7 +81,9 @@ describe('/api/flight-times snapshot tier — seen-airborne override', () => {
     expect(res.body.source).toBe('schedule-cache');
     expect(res.body.status).toBe('departed');
     expect(res.body.cancelled).toBe(false);
-    expect(diffWatch('UA2278', { lastStatus: 'expected' }, { status: res.body.status }).title).toBe('UA2278: departed');
+    const d = evaluateWatch(watching(), res.body, NOW_MS);
+    expect(d.kind).toBe('departed');
+    expect(d.title).toBe('UA2278 departed SFO');
   });
 
   it('unseen → still canceled_uncertain, which the push engine does not announce', async () => {
@@ -84,9 +92,9 @@ describe('/api/flight-times snapshot tier — seen-airborne override', () => {
     await handler(cronReq(), res);
     expect(res.body.status).toBe('canceled_uncertain');
     expect(res.body.cancelled).toBe(false);
-    const d = diffWatch('UA2278', { lastStatus: 'expected' }, { status: res.body.status });
+    const d = evaluateWatch(watching(), res.body, NOW_MS);
     expect(d.notify).toBe(false);
-    expect(d.nextState.lastStatus).toBe('expected');
+    expect(d.next.lastStatus).toBe('expected');
   });
 
   it('held on the taxiway (ground sightings only) → still canceled_uncertain, no push', async () => {
@@ -94,7 +102,7 @@ describe('/api/flight-times snapshot tier — seen-airborne override', () => {
     const res = createRes();
     await handler(cronReq(), res);
     expect(res.body.status).toBe('canceled_uncertain');
-    expect(diffWatch('UA2278', { lastStatus: 'expected' }, { status: res.body.status }).notify).toBe(false);
+    expect(evaluateWatch(watching(), res.body, NOW_MS).notify).toBe(false);
   });
 
   it('a sighting from another origin does not un-cancel it', async () => {

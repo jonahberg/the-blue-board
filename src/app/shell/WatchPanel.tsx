@@ -12,25 +12,55 @@
  *
  * It is also NOT gated on the server having VAPID keys. The prompt buys two different
  * things: server-side push while the tab is closed, and the browser `Notification` the
- * schedule diff fires while the tab is merely in the background (§6). The second needs
+ * in-tab watch fires while the tab is merely in the background (§6). The second needs
  * nothing from the server, and a deployment without keys still benefits from it.
+ *
+ * The panel itself carries the standing control (phone QA Oct 4 2026: it said "Enable
+ * notifications for background alerts" with nothing to press). One honest line per state —
+ * on, available (with the button), blocked (and how to undo it), iPhone/iPad Safari (needs the
+ * Home Screen), unsupported — from `notificationControlState()` in watch-utils.js. The button
+ * runs the same `push.enable()` the prompt does: permission, then the push subscription.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { watchAlertsFootnote } from '@/lib/watch-utils.js';
+import { notificationControlState } from '@/lib/watch-utils.js';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 
 const PROMPT_DELAY_MS = 500;
 const PROMPT_VISIBLE_MS = 15000;
 
+/** What this browser can do about notifications. Read once per panel mount; never during SSR. */
+function notificationEnv() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return { hasNotification: false, hasPush: false, isIos: false, isStandalone: false };
+  }
+  const nav = navigator as Navigator & { standalone?: boolean };
+  const isIos = /iP(hone|ad|od)/.test(nav.userAgent) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
+  let isStandalone = nav.standalone === true;
+  try {
+    isStandalone = isStandalone || window.matchMedia('(display-mode: standalone)').matches;
+  } catch {
+    /* no matchMedia */
+  }
+  return {
+    hasNotification: typeof Notification !== 'undefined',
+    hasPush: 'serviceWorker' in nav && 'PushManager' in window,
+    isIos,
+    isStandalone,
+  };
+}
+
 export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const watch = useWatch();
   const { select, announce } = useUi();
   const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [enabling, setEnabling] = useState(false);
+  const env = useMemo(notificationEnv, []);
+  const control = notificationControlState(watch.push, env) as { state: string; text: string; canEnable: boolean };
 
   // 500 ms after the first add: long enough that it reads as a consequence of the action
   // rather than an interruption of it, and gone again after fifteen seconds whether or
@@ -49,12 +79,19 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
 
   async function onEnablePush() {
     setShowPushPrompt(false);
-    const result = await watch.push.enable();
-    announce(
-      result === 'granted'
-        ? '🔔 Push notifications enabled for watched flights'
-        : 'Notifications stay in this tab. You can enable them later in your browser settings.',
-    );
+    setEnabling(true);
+    try {
+      const result = await watch.push.enable();
+      announce(
+        result === 'granted'
+          ? '🔔 Notifications on for watched flights'
+          : result === 'denied'
+            ? 'Notifications are blocked. You can allow them in your browser’s site settings.'
+            : 'Notifications stay in this tab. You can enable them later in your browser settings.',
+      );
+    } finally {
+      setEnabling(false);
+    }
   }
 
   return (
@@ -128,9 +165,28 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
               </>
             ) : null}
 
-            <p className="border-t pt-2 text-[11px] leading-relaxed text-muted-foreground">
-              {watchAlertsFootnote(watch.push)}
-            </p>
+            <section aria-labelledby="watch-notifications-heading" className="space-y-2 border-t pt-3">
+              <h3 id="watch-notifications-heading" className="text-xs font-medium">
+                Notifications
+              </h3>
+              <p
+                className="text-[11px] leading-relaxed text-muted-foreground"
+                data-state={control.state}
+                aria-live="polite"
+              >
+                {control.text}
+              </p>
+              {control.canEnable ? (
+                <Button
+                  size="sm"
+                  className="min-h-11 pointer-fine:md:min-h-0"
+                  disabled={enabling}
+                  onClick={() => void onEnablePush()}
+                >
+                  {enabling ? 'Asking your browser…' : 'Turn on notifications'}
+                </Button>
+              ) : null}
+            </section>
           </div>
         </SheetContent>
       </Sheet>

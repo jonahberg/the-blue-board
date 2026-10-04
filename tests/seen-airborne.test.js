@@ -9,7 +9,7 @@ import { computeScheduleStatCounts } from '../src/lib/board-stats.js';
 import { countIropsFromRows } from '../src/lib/irops-client.js';
 import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
 import { isSignificantStatusChange } from '../src/lib/watch-utils.js';
-import { diffWatch, isUnknownStatus } from '../api/_watch-diff.js';
+import { evaluateWatch, isUnknownStatus } from '../api/_watch-diff.js';
 import { mapAeroStatus } from '../api/_schedule-aerodatabox.js';
 
 const NOW = 1_791_070_000; // Oct 3 2026, 23:46Z — unix seconds
@@ -96,20 +96,32 @@ describe('stat strip + client IROPS fallback', () => {
 });
 
 describe('watch alerts never push a cancellation for the soft state', () => {
+  // The push engine now takes the /api/flight-times payload for the watch's pinned leg (api/_watch-diff.ts
+  // evaluateWatch) instead of a bare status word (diffWatch); the three rules below are unchanged.
+  const DEP = '2026-10-03T22:00:00.000Z';
+  const leg = (status, extra = {}) => ({
+    success: true, status, cancelled: status === 'canceled', diverted: false,
+    origin: { iata: 'EWR', gate: '' }, destination: { iata: 'ORD' }, registration: '',
+    departure: { gate: { scheduled: DEP, estimated: '', actual: '' }, takeoff: {} },
+    arrival: { gate: {}, landing: {} }, ...extra,
+  });
+  const watching = () => evaluateWatch({ flight: 'UA1094' }, leg('expected'), Date.parse(DEP) - 3600e3).next;
+  const later = Date.parse(DEP) + 3600e3;
   it('push cron: canceled_uncertain is not a flight event (no notify, not stored)', () => {
     expect(isUnknownStatus('canceled_uncertain')).toBe(true);
     expect(isUnknownStatus('Likely Canceled')).toBe(true);
-    const d = diffWatch('UA1094', { lastStatus: 'expected' }, { status: 'canceled_uncertain' });
+    const d = evaluateWatch(watching(), leg('canceled_uncertain'), later);
     expect(d.notify).toBe(false);
-    expect(d.nextState.lastStatus).toBe('expected');
+    expect(d.next.lastStatus).toBe('expected');
   });
   it('push cron: the seen-airborne row resolves departed — a departure, not a cancellation', () => {
-    const d = diffWatch('UA1094', { lastStatus: 'expected' }, { status: 'departed' });
+    const d = evaluateWatch(watching(), leg('departed'), later);
     expect(d.notify).toBe(true);
-    expect(d.title).toBe('UA1094: departed');
+    expect(d.kind).toBe('departed');
+    expect(d.title).toBe('UA1094 departed EWR');
   });
   it('push cron: a CONFIRMED cancellation still pushes', () => {
-    expect(diffWatch('UA1094', { lastStatus: 'expected' }, { status: 'canceled' }).notify).toBe(true);
+    expect(evaluateWatch(watching(), leg('canceled'), later).kind).toBe('cancelled');
   });
   it('in-tab: entering Likely Canceled does not alert; leaving it does', () => {
     expect(isSignificantStatusChange('Scheduled', 'Likely Canceled')).toBe(false);
