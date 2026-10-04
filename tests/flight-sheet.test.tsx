@@ -135,6 +135,41 @@ describe('FlightSheet aircraft line for a tail missing from the fleet DB (F10/F7
   });
 });
 
+describe('FlightSheet operating carrier (v1.14.0)', () => {
+  // The feed's airline field is 'UAL' on every row; the callsign names who flies it.
+  it('names the United Express operator and its own callsign', async () => {
+    viewport(1280);
+    await open(flight({ flightIATA: 'UA5123', callsign: 'SKW5123', acType: 'E75L', reg: 'N612UX' }));
+    expect(screen.getByText(/^Operated by SkyWest Airlines \(United Express\)/)).toBeTruthy();
+    expect(screen.getByText('· SKW5123')).toBeTruthy();
+  });
+
+  it('is display only: a GoJet flight keeps its feed ident in the title and the share link', async () => {
+    viewport(1280);
+    await open(flight({ flightIATA: 'G73375', callsign: 'GJS3375' }));
+    expect(screen.getByText(/^Operated by GoJet Airlines \(United Express\)/)).toBeTruthy();
+    expect(dialog().querySelector('[data-slot="sheet-title"]')?.textContent).toBe('G73375');
+    expect(new URL(window.location.href).searchParams.get('flight')).toBe('G73375');
+  });
+
+  it('says United Airlines for mainline, without repeating the callsign', async () => {
+    viewport(1280);
+    await open(flight());
+    const line = screen.getByText('Operated by United Airlines');
+    expect(line.textContent).toBe('Operated by United Airlines');
+    expect(screen.queryByText(/UAL2106/)).toBeNull();
+  });
+
+  it('says nothing when the operator is unknown (edge case)', async () => {
+    viewport(1280);
+    await open(flight({ callsign: 'N123AB' }));
+    expect(screen.queryByText(/^Operated by/)).toBeNull();
+    cleanup();
+    await open(flight({ callsign: '' }));
+    expect(screen.queryByText(/^Operated by/)).toBeNull();
+  });
+});
+
 describe('FlightSheet times (F11)', () => {
   it('labels an ORD takeoff in Chicago time even when the payload has no tz', async () => {
     viewport(1280);

@@ -4,6 +4,21 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-10-04
+
+**A map key, United Express you can tell apart, and a recentre for every region.** Three asks from the Reddit launch thread: nobody could tell what the aircraft colours meant, Express flights looked exactly like mainline ones, and the only preset view was the Pacific.
+
+### Live map
+- **A map key.** It sits in the map's bottom-left corner and lists every marker state the map can draw right now: Watching, Starlink Wi-Fi, Long-haul (> 2,500 nm, shown only while the Long-haul layer is on), United Express, Mainline airborne and On the ground, plus "Smaller icon = United Express". On a tablet or desktop it starts open. On a phone it starts as a 44 px "Key" button, so it never covers the map until tapped. The swatches are drawn by `planeIconSpec` itself (`PLANE_LEGEND`), so the key and the markers cannot disagree. It replaces the desktop-only "Starlink-equipped" chip. (`src/app/views/live/MapLegend.tsx`, `src/lib/plane-icon.js`)
+- **United Express flights look different.** The feed's airline field reads UAL on every aircraft (821 of 821), so Express is read from the callsign instead: SKW SkyWest, RPA Republic, GJS GoJet, UCA CommutAir, ASH Mesa and AWI Air Wisconsin are United Express, UAL is mainline, and any other prefix is left alone rather than guessed. That sample was UAL 586, SKW 112, ASH 36, RPA 34, GJS 28, UCA 22. An airborne Express flight now draws white at 85% size, because regional jets are the small ones. On the ground it reads as ground like every other aircraft. Watching, Starlink and long-haul still win the colour, but the smaller size stays. That matters: about three in four Express jets are Starlink aircraft and draw violet (179 of 235 in a desktop check at 17:43Z). Each marker's screen-reader name now ends "United Express (SkyWest Airlines)". (`src/lib/express-operators.js`, `src/app/map/LiveMap.tsx`)
+- **Fly the map to any region.** The Pacific toggle is now a region menu at the front of the toolbar: United States, Mexico & Central America, Caribbean, South America, Atlantic & Europe, Africa, Middle East & India, East Asia, Southeast Asia, Oceania and Pacific. Each preset is a box drawn around the airports United serves there, and the map picks the zoom that fits it on a phone or a desktop. Picking the region you are already on recentres the map. On a touch screen the menu opens on a tap, not on a swipe that starts on it. (`src/lib/map-regions.js`, `src/app/views/live/MapControls.tsx`)
+- **Aircraft no longer vanish after a long move.** Each aircraft was placed on the copy of the world nearest the map's centre only when the feed refreshed, every 30 seconds. After a move from the US to East Asia, everything east of about 82°E sat one world away. So the old Pacific button showed an empty ocean for up to 30 seconds, the West Coast hub rings were missing from the Pacific view, and a SFO→SYD route line drew off-screen. Markers, hub rings and the selected route now move to the visible copy at the end of every move, which is what lets the Oceania and Pacific presets cross the date line. Checked in Chromium on a phone and a desktop: every preset lands inside its box, and the Pacific view shows NRT, GUM, SFO and LAX together. (`src/lib/geo.js` `wrapLonNear`, `src/app/map/LiveMap.tsx`)
+
+### Flight details
+- **"Operated by SkyWest Airlines (United Express) · SKW5292"** under the route. A mainline flight reads "Operated by United Airlines", and an unknown callsign shows nothing. It is display only: the title, search, watch, share links and schedule matching keep the feed's own flight number, so a GoJet flight is still G73375. (`src/app/features/FlightSheet.tsx`)
+
+The old `pacific` map-layer key lived only in component state and was never saved, so nothing stored needs migrating. `resolveRegionId()` still maps `pacific`, other casings and unknown values safely.
+
 ## [1.13.1] - 2026-10-04
 
 **Tomorrow's board after midnight, and tooltips you can tap.** A full phone-and-desktop click-through of the live site (197 checks) found two real problems.

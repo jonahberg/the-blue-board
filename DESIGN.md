@@ -103,7 +103,7 @@ produces them, are unit-tested, and are the only sanctioned hex literals in the 
 
 | Module | Export | Encodes |
 |---|---|---|
-| `plane-icon.js` | (inline in `planeIconSvg`) | map marker fill: watched → Starlink violet → long-haul amber → phase |
+| `plane-icon.js` | `PLANE_COLORS`, `PLANE_SIZES`, `PLANE_LEGEND` | map marker fill: watched → Starlink violet → long-haul amber → United Express white (airborne) → phase; airborne Express draws at 85% size in any colour. The map key renders `PLANE_LEGEND`, which is computed by `planeIconSpec` itself |
 | `metar-explain.js` | `CAT_COLORS` | VFR / MVFR / IFR / LIFR flight categories |
 | `metar-category.js` | `OPS_COLORS` | normal / caution / warning / severe ops impact |
 | `fleet-utils.js` | status list | active, maintenance, stored, NEXT retrofit, painting, Starlink install, future GUM |
@@ -188,6 +188,8 @@ toasts, the waitlist, news) where they are part of the sentence, not a control.
 | Tab navigation | `Tabs` | `shell/TabBar.tsx` |
 | Segmented filters | `ToggleGroup` / `Toggle` | `views/schedule/ScheduleControls.tsx` |
 | Dropdown filters | `Select` | schedule / fleet / starlink controls |
+| "Fly to" commands (map region presets) | `DropdownMenu` + `RadioItem` — `onSelect` fires on every pick, so re-picking recentres; touch opens on click, not pointerdown | `views/live/MapControls` (`RegionMenu`) |
+| Map key | disclosure (`Button` with `aria-expanded`), open from `md`, a 44 px "Key" button below | `views/live/MapLegend` |
 | Data grids | `Table` + sortable `<th><button>`; below `md` the schedule board is a two-line `<ol>` list instead (`SchedulePhoneRow`) | `views/schedule/ScheduleTable`, `views/fleet/SortableHeader`, `components/trackers/TrackerTable.astro` |
 | Status pills | `Badge` | throughout |
 | Loading | `Skeleton` | every async view |
@@ -291,4 +293,7 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-10 | Schedule board is a two-line list below `md`; toolbar and stat cards compact there | At 390 px the table was 1,065 px wide with status, tail, Wi-Fi and the watch eye off-screen, and at 360×780 no row was above the fold. Desktop/tablet keep the table. |
 | 2026-10 | The passive waitlist ask is a strip, not a modal; one engagement strip at a time on a phone | The five-minute popup covered the board uninvited. The strip honours a "no" for 30 days; its signups carry `source: 'dashboard'` to compare with the link-driven `popup`. |
 | 2026-10 | Radar dots take the flight-category colour; ops impact is a ⚠ in the label | `OPS_COLORS.caution` equals `CAT_COLORS.MVFR`, so a rainy VFR hub wore MVFR yellow under a "VFR" label. |
+| 2026-10 | United Express markers: `--foreground` white, 85% size when airborne; on the ground they read as ground | Express is identified by callsign prefix (`src/lib/express-operators.js`) — the feed's airline field is `UAL` on every row. Every other token was taken: `bb-warn`/`bb-ok`/`bb-starlink` are the long-haul/watched/Starlink fills, `bb-info` sits ~20° from mainline blue, red is alarm. Size carries Express through Starlink violet, which wins the fill on ~3 in 4 Express jets. |
+| 2026-10 | Map key on the Live map, drawn from `PLANE_LEGEND`; closed below `md` | "I couldn't figure out the meaning of the color-coding" (Reddit). The swatches are `planeIconSpec` output, so the key cannot drift; on a phone it waits behind a 44 px button rather than covering the map. |
+| 2026-10 | Region presets replace the Pacific toggle: eleven bounding boxes in `src/lib/map-regions.js`, framed with `fitBounds` | One box serves every viewport. Oceania and Pacific cross the antimeridian through `normalizeLonContinuity`, and the map re-snaps markers, hub rings and the route to the visible world copy on every `moveend` (`wrapLonNear`). |
 | 2026-10 | Board evidence markers carry words: "Landed*" + "seen landing", "≥"/"≤" + "at least"/"at most", a takeoff/touchdown icon + "from takeoff time; includes taxi" | A feed-proven landing is not "no live update", a floor is not a measurement, and a wheels-up delay includes taxi-out. Each glyph is `aria-hidden` beside sr-only words, and the wording lives in `src/lib/schedule-row-display.js` so the table and the phone row agree. |

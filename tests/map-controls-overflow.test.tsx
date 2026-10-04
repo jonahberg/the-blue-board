@@ -19,6 +19,8 @@ function mount() {
         className="flex overflow-x-auto"
         active={['hubs']}
         onChange={() => {}}
+        region="us"
+        onRegion={() => {}}
         starlinkAvailable
         refreshing={false}
         onRefresh={() => {}}

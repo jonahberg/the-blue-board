@@ -21,7 +21,9 @@ import { filterLiveFlights } from '@/lib/live-filters.js';
 import { matchAircraft } from '@/lib/fleet-match.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
 import { AIRPORTS } from '@/lib/airports.js';
+import { DEFAULT_REGION_ID, resolveRegionId } from '@/lib/map-regions.js';
 import { LiveMap } from '../map/LiveMap';
+import type { RegionRequest } from '../map/LiveMap';
 import type { Flight } from '../data/types';
 import { readLiveHubDeepLink } from '../state/deep-links';
 import { useFeed } from '../state/feed';
@@ -33,6 +35,7 @@ import { useWatch } from '../state/watch';
 import { LiveSidebar } from './live/LiveSidebar';
 import { MapControls } from './live/MapControls';
 import type { LayerKey } from './live/MapControls';
+import { MapLegend } from './live/MapLegend';
 import { StatsBar } from './live/StatsBar';
 import type { LiveStats } from './live/stats';
 import { makeIsStarlinkFlight } from './live/starlink-match';
@@ -56,6 +59,13 @@ export default function LiveView() {
   // Every layer except Starlink is local. Starlink's toggle is shared state because the
   // Starlink tab's "● N AIRBORNE NOW" chip switches to this tab with the filter already on.
   const [layers, setLayers] = useState<LayerKey[]>(['hubs']);
+  // The region preset last picked. Local, like the layers (neither has ever been persisted);
+  // null until a pick, so the map keeps the home-hub / US opening view it was built with.
+  const [regionRequest, setRegionRequest] = useState<RegionRequest | null>(null);
+  const onRegion = useCallback((id: string) => {
+    // A fresh key per pick: re-picking the same region after panning away still recentres.
+    setRegionRequest((prev) => ({ id: resolveRegionId(id) as string, key: (prev?.key ?? 0) + 1 }));
+  }, []);
   // `?hub=den` (hub guides, the hub strip's share links) opens the map filtered to that hub.
   const [deepLinkHub] = useState(() => readLiveHubDeepLink(HUB_CODES));
   const [hubFilter, setHubFilter] = useState(deepLinkHub ?? '');
@@ -187,7 +197,7 @@ export default function LiveView() {
               wx: layers.includes('wx'),
               longhaul: layers.includes('longhaul'),
             }}
-            view={layers.includes('pacific') ? 'pacific' : 'us'}
+            regionRequest={regionRequest}
             homeAirport={homeAirport}
           />
 
@@ -198,6 +208,8 @@ export default function LiveView() {
               className="pointer-events-auto flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]"
               active={activeLayers}
               onChange={onLayersChange}
+              region={regionRequest?.id ?? DEFAULT_REGION_ID}
+              onRegion={onRegion}
               starlinkAvailable={starlinkAvailable}
               refreshing={feed.refreshing}
               onRefresh={feed.refresh}
@@ -214,16 +226,13 @@ export default function LiveView() {
             ) : null}
           </div>
 
-          {starlinkAvailable ? (
-            <p className="pointer-events-none absolute bottom-2 left-2 z-[500] hidden rounded-md border bg-background px-2 py-1 text-[11px] md:block">
-              <span
-                className="mr-1.5 inline-block size-2 rounded-full align-middle"
-                style={{ background: '#A78BFA' }}
-                aria-hidden="true"
-              />
-              Starlink-equipped
-            </p>
-          ) : null}
+          {/* The map key replaces the old desktop-only "Starlink-equipped" chip. Bottom-left:
+              Leaflet's zoom and attribution controls own the bottom-right corner. */}
+          <MapLegend
+            className="pointer-events-none absolute bottom-2 left-2 z-[500]"
+            longhaulLayer={layers.includes('longhaul')}
+            starlinkRoster={starlink.tails.size > 0}
+          />
 
           {/* The overlay appears only when the feed has NEVER produced flights: one failed
               poll against three-minute-old data must not blank a working map. */}
