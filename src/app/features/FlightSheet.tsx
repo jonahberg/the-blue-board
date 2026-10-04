@@ -32,6 +32,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cityFor } from '@/lib/airports.js';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
 import { flightAwareIdent, isExpressFlight, operatedByLine } from '@/lib/express-operators.js';
+import { matchExpress } from '@/lib/express-fleet.js';
+import { expressDateLabel, expressOperatorLine } from '@/lib/express-fleet-view.js';
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
 import { matchAircraft, unmatchedAircraftNote } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
@@ -40,7 +42,7 @@ import { resolveFlightRoute } from '../data/route';
 import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
 import { ApiError, fetchFlightTimes } from '../data/api';
 import { shareUrl } from '../data/share';
-import type { Flight, FlightTimes, TimeTriple } from '../data/types';
+import type { ExpressAircraft, Flight, FlightTimes, TimeTriple } from '../data/types';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
 import { useMediaQuery } from '../state/hooks';
@@ -149,7 +151,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 export function FlightSheet() {
   const { selection, select, focusOn, openAircraft, announce } = useUi();
   const { flights } = useFeed();
-  const { fleetByReg, starlink, special, loading: fleetLoading } = useFleet();
+  const { fleetByReg, expressByReg, starlink, special, loading: fleetLoading } = useFleet();
   const watch = useWatch();
 
   const open = selection !== null;
@@ -241,6 +243,12 @@ export function FlightSheet() {
     () => (flight ? (matchAircraft(flight, fleetByReg) as Record<string, unknown> | null) : null),
     [flight, fleetByReg],
   );
+  // Only when the mainline database misses: a United Express tail from the Express fleet. It is
+  // a separate lookup so `matchAircraft` (and every mainline count) stays mainline-only.
+  const expressAircraft = useMemo(
+    () => (flight && !aircraft ? (matchExpress(flight, expressByReg) as ExpressAircraft | null) : null),
+    [flight, aircraft, expressByReg],
+  );
 
   const onShare = useCallback(async () => {
     if (!ident) return;
@@ -260,12 +268,17 @@ export function FlightSheet() {
   const metrics = flight
     ? (getFlightPopupMetrics(flight) as { altFt: number | null; altPct: number; speedText: string })
     : null;
-  const reg = (aircraft?.r as string | undefined) ?? flight?.reg ?? '';
+  const reg = (aircraft?.r as string | undefined) ?? expressAircraft?.r ?? flight?.reg ?? '';
   /** Per-cabin blocks, in the database's own order (NJ / NPP / NE+ / NY etc). */
   const seats = Object.entries(
     (aircraft?.seats as Record<string, number> | undefined) ?? {},
   ).filter(([, count]) => Number(count) > 0);
   const isStarlink = Boolean(reg) && starlink.tails.has(reg);
+  const expressStarlink = Boolean(expressAircraft) && (isStarlink || expressAircraft?.w === 'Starlink');
+  /** A cabin only when one is verified for the type and operator — never a guessed seat count. */
+  const expressSeats = expressAircraft?.c
+    ? Object.entries(expressAircraft.seats ?? {}).filter(([, count]) => Number(count) > 0)
+    : [];
   const specialEntry = reg ? special.get(reg) : undefined;
   const livery = liveryForTail(reg);
   const watched = ident ? watch.isWatched(ident) : false;
@@ -481,6 +494,54 @@ export function FlightSheet() {
                   </p>
                 ) : aircraft.tot ? (
                   <p className="text-xs text-muted-foreground">{String(aircraft.tot)} seats</p>
+                ) : null}
+              </div>
+            ) : expressAircraft && flight ? (
+              <div className="space-y-1.5 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* The Express fleet's type when a board or the roster has named it; otherwise
+                      the feed's own designator, which is a reading, not a guess. */}
+                  <span className="font-medium">{expressAircraft.t || flight.acType || 'Type unknown'}</span>
+                  <Button
+                    variant="link"
+                    className="h-auto p-0 font-mono text-sm"
+                    onClick={() => openAircraft(reg)}
+                  >
+                    {reg}
+                  </Button>
+                  {expressStarlink ? (
+                    <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
+                      <Zap aria-hidden="true" /> Starlink confirmed
+                    </Badge>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">{expressOperatorLine(expressAircraft)}</p>
+                {/* Wi-Fi is stated only when it is Starlink: off the roster it is unknown, and a
+                    blank here must not read as "no Wi-Fi". */}
+                {expressAircraft.c || expressStarlink ? (
+                  <p className="text-xs text-muted-foreground">
+                    {[expressAircraft.c, expressStarlink ? 'Starlink' : ''].filter(Boolean).join(' · ')}
+                  </p>
+                ) : null}
+                {expressSeats.length > 0 ? (
+                  <p className="flex flex-wrap items-center gap-1 text-xs">
+                    {expressSeats.map(([cabin, count]) => (
+                      <span key={cabin} className="rounded border px-1.5 py-0.5 font-mono tabular-nums">
+                        {count}
+                        {cabin}
+                      </span>
+                    ))}
+                    {expressAircraft.tot ? (
+                      <span className="text-muted-foreground">({String(expressAircraft.tot)} total)</span>
+                    ) : null}
+                  </p>
+                ) : expressAircraft.c && expressAircraft.tot ? (
+                  <p className="text-xs text-muted-foreground">{String(expressAircraft.tot)} seats</p>
+                ) : null}
+                {expressDateLabel(expressAircraft.fs) ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Seen flying United since {expressDateLabel(expressAircraft.fs)}
+                  </p>
                 ) : null}
               </div>
             ) : (

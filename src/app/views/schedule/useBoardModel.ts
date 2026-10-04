@@ -37,7 +37,7 @@ import { classifySchedStatus } from '@/lib/schedule-status.js';
 import { analyzeSwapImpact } from '@/lib/swap-impact.js';
 import { formatSchedTime } from '@/lib/schedule-row-model.js';
 import type { EquipmentSwap } from '../../state/schedule';
-import type { FaaIndex, FleetAircraft, Flight, NasData } from '../../data/types';
+import type { ExpressAircraft, FaaIndex, FleetAircraft, Flight, NasData } from '../../data/types';
 import type { WeatherOps } from '../../state/weather';
 import type { IropsHubRate } from '../../state/irops';
 
@@ -153,7 +153,7 @@ export type RowModel = {
    * `source` says which list answered: the fleet database, or — for a United Express tail it does
    * not know — the Starlink roster, when `badge` is the literal 'Starlink' and there is no cabin.
    */
-  fleet: { badge: string; starlink: boolean; enrich: string; source: 'fleet' | 'starlink-roster' } | null;
+  fleet: { badge: string; starlink: boolean; enrich: string; source: 'fleet' | 'express' | 'starlink-roster' } | null;
   swap: SwapModel | null;
   special: string | null;
   faaContext: string | null;
@@ -209,6 +209,11 @@ export type BoardModelInput = {
   fleetDb: FleetAircraft[];
   fleetByReg: Record<string, FleetAircraft>;
   starlinkTails: Set<string>;
+  /**
+   * The United Express fleet by registration — the Fleet cell answers from it when the mainline
+   * database misses (`fleetCell`). Optional: absent, Express rows read as before.
+   */
+  expressByReg?: Record<string, ExpressAircraft>;
   special: Map<string, { name: string }>;
   faaIndex: FaaIndex;
   weatherOpsByHub: Record<string, WeatherOps>;
@@ -256,6 +261,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     fleetDb,
     fleetByReg,
     starlinkTails,
+    expressByReg,
     special,
     faaIndex,
     weatherOpsByHub,
@@ -491,6 +497,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
           : [],
         fleetByReg,
         starlinkTails,
+        expressByReg,
         special,
         faaContext,
         hubOtp,
@@ -562,6 +569,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     fleetDb,
     fleetByReg,
     starlinkTails,
+    expressByReg,
     special,
     faaIndex,
     weatherOpsByHub,

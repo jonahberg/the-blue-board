@@ -60,6 +60,9 @@ const FLEET = {
   loadFailed: false,
   retry: () => {},
   loadStarlinkFlights: () => {},
+  expressDb: [],
+  expressByReg: {},
+  expressStatus: 'ready',
 } as unknown as FleetValue;
 
 const FEED = { flights: [] } as unknown as FeedValue;

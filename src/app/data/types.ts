@@ -59,6 +59,60 @@ export type FleetAircraft = {
   seats?: Record<string, number>;
 };
 
+/**
+ * One United Express tail from `/api/express-fleet` (sql/018_express_tails.sql): seen flying a
+ * United flight in the last `staleDays` days.
+ */
+export type ExpressTail = {
+  /** Registration. */
+  r: string;
+  /** Operator ICAO code: SKW / RPA / GJS / UCA / ASH / AWI. */
+  op: string;
+  /** Live-feed type designator (E75L, CRJ7 …), when the feed has reported one. */
+  ft: string | null;
+  /** Schedule-board model code (E175, CRJ2 …), when a board has listed one. */
+  m: string | null;
+  /** Last United flight number seen (UA5575, G73375 …). */
+  lf: string | null;
+  /** First / last seen, ISO. */
+  fs: string;
+  ls: string;
+};
+
+export type ExpressFleetResponse = {
+  tails: ExpressTail[];
+  staleDays: number;
+  generatedAt: string;
+  /** Set, with `tails: []`, when the table could not be read. */
+  note?: string;
+};
+
+/**
+ * One entry of the dashboard's United Express fleet — `buildExpressFleet()` in
+ * `src/lib/express-fleet.js`. Shaped like a `/data/fleet.json` row where the fields overlap.
+ */
+export type ExpressAircraft = {
+  r: string;
+  /** Display type ('E175', 'CRJ700/550'), '' when unknown. */
+  t: string;
+  /** Type key for the cabin lookup, '' when unknown. */
+  tk: string;
+  /** Operator name ('SkyWest Airlines'), '' when unknown. */
+  o: string;
+  /** Operator ICAO code. */
+  oc: string;
+  /** 'Starlink' when the Starlink roster lists the tail; otherwise '' (unknown, not "none"). */
+  w: 'Starlink' | '';
+  /** Verified cabin layout, '' when not known. */
+  c: string;
+  seats?: Record<string, number>;
+  tot?: number;
+  fs: string;
+  ls: string;
+  lf: string;
+  x: true;
+};
+
 export type StarlinkAircraft = {
   tail: string;
   fleet?: string;

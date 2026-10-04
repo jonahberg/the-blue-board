@@ -141,6 +141,7 @@ export default function ScheduleView() {
     fleetDb: fleet.fleetDb,
     fleetByReg: fleet.fleetByReg,
     starlinkTails: fleet.starlink.tails,
+    expressByReg: fleet.expressByReg,
     special: fleet.special,
     faaIndex: weather?.faaIndex ?? {},
     weatherOpsByHub: weather?.weatherOpsByHub ?? {},

@@ -14,6 +14,8 @@ import { parseFr24Feed, parseStaleHeader } from '@/lib/feed-health.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '@/lib/metar.js';
 import type {
   AirborneHistory,
+  ExpressFleetResponse,
+  ExpressTail,
   FaaAirport,
   FleetAircraft,
   FleetSummary,
@@ -134,6 +136,16 @@ export function fetchStarlinkRoster(): Promise<
 
 export function fetchStarlinkFlights(): Promise<Pick<StarlinkData, 'flightsByTail'>> {
   return getJson('/api/starlink-data?fields=flights');
+}
+
+/**
+ * The United Express fleet discovered from United's own flying. Never a 5xx by contract: an
+ * unreadable table is a 200 with `tails: []` and a `note`, so a throw here means the request
+ * itself failed. Either way the caller has no Express data, and nothing else depends on it.
+ */
+export async function fetchExpressFleet(): Promise<ExpressTail[]> {
+  const data = await getJson<ExpressFleetResponse>('/api/express-fleet');
+  return Array.isArray(data?.tails) ? data.tails : [];
 }
 
 export function fetchFleetSummary(): Promise<FleetSummary> {

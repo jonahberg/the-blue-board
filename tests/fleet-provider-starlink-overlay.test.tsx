@@ -32,6 +32,8 @@ vi.mock('../src/app/data/api', async (importOriginal) => ({
   fetchFleetDb: async () => ctl.fleetDb,
   fetchFleetSummary: async () => null,
   fetchStarlinkFallback: async () => ctl.fallback,
+  // The Express fleet has its own suite (express-fleet-mainline-guard); keep it off fetch() here.
+  fetchExpressFleet: async () => [],
 }));
 
 // `/api/starlink-data?fields=…` goes through fetch() — modelled the way the endpoint answers:

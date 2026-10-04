@@ -81,6 +81,31 @@ describe('phoneAircraftLine — read back from fleetCell()', () => {
     });
   });
 
+  it('a United Express fleet tail: Starlink from the flag, never its type as seats or Wi-Fi', () => {
+    const EXPRESS = {
+      N140SY: { r: 'N140SY', t: 'E175', o: 'SkyWest Airlines', w: 'Starlink', c: '', x: true },
+      N85377: { r: 'N85377', t: 'E175', o: 'SkyWest Airlines', w: '', c: '', x: true },
+    };
+    const sl = fleetCell('N140SY', FLEET, new Set(), EXPRESS);
+    expect(sl.source).toBe('express');
+    expect(phoneAircraftLine({ reg: 'N140SY', acCode: 'E75L', acShort: 'E175', fleet: sl })).toEqual({
+      tail: 'N140SY',
+      type: 'E175',
+      seats: '',
+      wifi: 'Starlink',
+      starlink: true,
+    });
+    // No Starlink: the Wi-Fi is unknown, so it is left out — never "No Wi-Fi".
+    const plain = fleetCell('N85377', FLEET, new Set(), EXPRESS);
+    expect(phoneAircraftLine({ reg: 'N85377', acCode: 'E75L', acShort: 'E175', fleet: plain })).toEqual({
+      tail: 'N85377',
+      type: 'E175',
+      seats: '',
+      wifi: '',
+      starlink: false,
+    });
+  });
+
   it('a fleet-database tail says where it came from', () => {
     expect(fleetCell('N461UA', FLEET, STARLINK).source).toBe('fleet');
   });

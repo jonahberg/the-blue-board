@@ -25,7 +25,8 @@ vi.mock('../src/app/state/ui', () => ({ useUi: () => ui }));
 const feed = vi.hoisted(() => ({ flights: [] as unknown[] }));
 vi.mock('../src/app/state/feed', () => ({ useFeed: () => feed }));
 const fleet = vi.hoisted(() => ({
-  fleetByReg: {},
+  fleetByReg: {} as Record<string, unknown>,
+  expressByReg: {} as Record<string, unknown>,
   starlink: { tails: new Set<string>() },
   special: new Map(),
   loading: false,
@@ -78,6 +79,9 @@ async function open(f: Flight) {
 const dialog = () => document.querySelector('[data-slot="sheet-content"]') as HTMLElement;
 
 beforeEach(() => {
+  fleet.fleetByReg = {};
+  fleet.expressByReg = {};
+  fleet.starlink = { tails: new Set<string>() };
   h.focusOn.mockReset();
   h.times = { success: false, error: 'No schedule data for this flight today.' };
 });
@@ -132,6 +136,70 @@ describe('FlightSheet aircraft line for a tail missing from the fleet DB (F10/F7
     viewport(1280);
     await open(flight({ acType: 'E75L', reg: 'N612UX' }));
     expect(screen.getByText(/United Express \(regional\)/)).toBeTruthy();
+  });
+});
+
+describe('FlightSheet United Express aircraft from the Express fleet', () => {
+  const N85377 = {
+    r: 'N85377', t: 'E175', tk: 'E175', o: 'SkyWest Airlines', oc: 'SKW', w: '', c: '',
+    fs: '2026-10-01T06:00:00Z', ls: '2026-10-04T18:00:24Z', lf: 'UA5928', x: true,
+  };
+  const skw = (overrides: Partial<Flight> = {}) =>
+    flight({ flightIATA: 'UA5928', callsign: 'SKW5928', acType: 'E75L', reg: 'N85377', ...overrides });
+  const aircraftSection = () =>
+    [...dialog().querySelectorAll('h3')].find((h) => h.textContent === 'Aircraft')!.parentElement!;
+
+  it('shows type, tail, operator and "seen flying United since" instead of the unmatched note', async () => {
+    viewport(1280);
+    fleet.expressByReg = { N85377 };
+    await open(skw());
+    const section = aircraftSection();
+    expect(section.textContent).toContain('E175');
+    expect(screen.getByRole('button', { name: 'N85377' })).toBeTruthy();
+    expect(section.textContent).toContain('SkyWest Airlines · United Express');
+    // In the viewer's zone: 06:00Z on Oct 1 is still Sep 30 in the Americas.
+    expect(section.textContent).toMatch(/Seen flying United since (Sep 30|Oct 1), 2026/);
+    expect(section.textContent).not.toContain('not in mainline fleet DB');
+    // Not on the Starlink roster: Wi-Fi is not stated at all — never "no Wi-Fi".
+    expect(section.textContent).not.toMatch(/Starlink|No Wi-?Fi|None/i);
+    // The operating-carrier header line is untouched.
+    expect(screen.getByText(/^Operated by SkyWest Airlines \(United Express\)/)).toBeTruthy();
+  });
+
+  it('says Starlink when the roster lists the tail, and the cabin only when one is verified', async () => {
+    viewport(1280);
+    fleet.expressByReg = {
+      N140SY: { ...N85377, r: 'N140SY', w: 'Starlink', c: '12F/16E+/48Y', seats: { F: 12, 'E+': 16, Y: 48 }, tot: 76 },
+    };
+    fleet.starlink = { tails: new Set(['N140SY']) };
+    await open(skw({ reg: 'N140SY' }));
+    const section = aircraftSection();
+    expect(section.textContent).toContain('Starlink confirmed');
+    expect(section.textContent).toContain('12F/16E+/48Y · Starlink');
+    expect(section.textContent).toContain('(76 total)');
+  });
+
+  it('falls back to the feed designator when the Express fleet has no type yet', async () => {
+    viewport(1280);
+    fleet.expressByReg = { N14148: { ...N85377, r: 'N14148', t: '', tk: '', o: 'CommutAir', oc: 'UCA' } };
+    await open(skw({ reg: 'N14148', callsign: 'UCA4226', flightIATA: 'UA4226', acType: 'E145' }));
+    const section = aircraftSection();
+    expect(section.textContent).toContain('E145');
+    expect(section.textContent).toContain('CommutAir · United Express');
+  });
+
+  it('leaves a mainline aircraft block byte-identical', async () => {
+    viewport(1280);
+    fleet.fleetByReg = {
+      N14512: { r: 'N14512', t: 'A321neo', c: '20F/57E+/119Y', w: 'ViaSatKA', i: 'Seatback', tot: 196, seats: { F: 20, 'E+': 57, Y: 119 } },
+    };
+    await open(flight());
+    const before = aircraftSection().innerHTML;
+    cleanup();
+    // Even an Express index that (wrongly) listed the same tail must not touch the mainline block.
+    fleet.expressByReg = { N14512: { ...N85377, r: 'N14512' } };
+    await open(flight());
+    expect(aircraftSection().innerHTML).toBe(before);
   });
 });
 

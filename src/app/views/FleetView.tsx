@@ -4,7 +4,8 @@
  *  Zone 1 "Fleet Pulse"  what is happening right now: how many are airborne, how much of the
  *                        fleet that is, and how much of it can fly at all today.
  *  Zone 2 "Composition"  what the fleet IS: families, delivery history, cabin layouts.
- *  Zone 3 "Lookup"       the database itself, searchable down to one airframe.
+ *  Zone 3 "Lookup"       the database itself, searchable down to one airframe — plus the United
+ *                        Express fleet as its own sub-tab, never mixed into the mainline rows.
  *
  * That order is the point of the tab. A visitor who arrives from a hub page wanting "how
  * old is United's fleet" gets an answer in Zone 2 without ever touching a filter; a spotter
@@ -34,6 +35,8 @@ import {
   starlinkMainlineShare,
 } from '@/lib/fleet-utils.js';
 import { matchAircraft } from '@/lib/fleet-match.js';
+import { EXPRESS_STALE_DAYS, summarizeExpressFleet } from '@/lib/express-fleet.js';
+import { filterExpressFleet, sortExpressFleet } from '@/lib/express-fleet-view.js';
 import {
   buildAirborneRows,
   buildConfigGallery,
@@ -50,7 +53,7 @@ import { isAirborne } from '@/lib/live-stats.js';
 import { scrollBehavior } from '@/lib/motion.js';
 import { listSpecialLiveries } from '@/lib/special-livery.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
-import type { FleetAircraft } from '../data/types';
+import type { ExpressAircraft, FleetAircraft } from '../data/types';
 import { readFleetDeepLinks } from '../state/deep-links';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
@@ -58,6 +61,8 @@ import { useUi } from '../state/ui';
 import { AirborneTable } from './fleet/AirborneTable';
 import type { AirborneRow, AirborneSortCol } from './fleet/AirborneTable';
 import { DeliveryTimeline } from './fleet/DeliveryTimeline';
+import { ExpressFleetPanel } from './fleet/ExpressFleetPanel';
+import type { ExpressSortCol, ExpressSummary } from './fleet/ExpressFleetPanel';
 import type { TimelineModel, TimelineStats } from './fleet/DeliveryTimeline';
 import { FleetComposition } from './fleet/FleetComposition';
 import { FleetControls, STATUS_OPTIONS } from './fleet/FleetControls';
@@ -72,13 +77,14 @@ import type { ConfigEntry } from './fleet/SeatConfigGallery';
 import { SpecialPanel } from './fleet/SpecialPanel';
 import type { SpecialRow } from './fleet/SpecialPanel';
 
-type SubView = 'all' | 'airborne' | 'special';
+type SubView = 'all' | 'airborne' | 'special' | 'express';
 
 /** How long the `?view=`/`?type=` deep links wait for the fleet database before giving up. */
 const DEEP_LINK_TIMEOUT_MS = 10000;
 
 export default function FleetView() {
-  const { fleetDb, fleetByReg, starlink, special, loading, loadFailed, retry } = useFleet();
+  const { fleetDb, fleetByReg, starlink, special, loading, loadFailed, retry, expressDb, expressStatus } =
+    useFleet();
   const { flights, lastGoodTs } = useFeed();
   const { openAircraft, setTab } = useUi();
 
@@ -93,6 +99,11 @@ export default function FleetView() {
   });
   const [airborneSort, setAirborneSort] = useState<{ col: AirborneSortCol; asc: boolean }>({
     col: 'type',
+    asc: true,
+  });
+  const [expressSearch, setExpressSearch] = useState('');
+  const [expressSort, setExpressSort] = useState<{ col: ExpressSortCol; asc: boolean }>({
+    col: 'r',
     asc: true,
   });
 
@@ -207,6 +218,22 @@ export default function FleetView() {
     return sortAirborneRows(rows, airborneSort.col, airborneSort.asc) as AirborneRow[];
   }, [flights, fleetByReg, starlink.tails, special, typeFilter, search, airborneSort]);
 
+  // The United Express sub-tab: its own list, search and sort. The summary is of the whole
+  // Express fleet, so a search never makes the fleet look smaller than it is.
+  const expressSummary = useMemo(
+    () => summarizeExpressFleet(expressDb) as ExpressSummary,
+    [expressDb],
+  );
+  const expressRows = useMemo(
+    () =>
+      sortExpressFleet(
+        filterExpressFleet(expressDb, expressSearch),
+        expressSort.col,
+        expressSort.asc,
+      ) as ExpressAircraft[],
+    [expressDb, expressSearch, expressSort],
+  );
+
   // Curated special liveries lead the panel; the fleet site's named/sticker entries follow.
   const specialRows = useMemo(
     () => buildSpecialRows(special, fleetByReg, flights, listSpecialLiveries()) as SpecialRow[],
@@ -219,6 +246,7 @@ export default function FleetView() {
     starlink: starlink.aircraft.length,
     // A tail with a name AND a livery is two cards, so count the cards.
     special: specialRows.length,
+    express: expressDb.length,
   };
 
   // ── Cross-zone: a variant card IS the type filter ───────────────────────────────────
@@ -378,19 +406,25 @@ export default function FleetView() {
       <section ref={lookupRef} id="fleet-lookup-zone" className="space-y-3 scroll-mt-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="text-sm font-semibold">Aircraft Lookup</h3>
-          <p className="text-[11px] text-muted-foreground">
-            Fleet data via{' '}
-            <a
-              href="https://unitedfleetsite.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-foreground"
-            >
-              United Fleet Site
-            </a>
-            {/* A hand-maintained snapshot with no refresh job — say how old it is (F86). */}
-            , as of <time dateTime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>
-          </p>
+          {subView === 'express' ? (
+            <p className="text-[11px] text-muted-foreground">
+              United Express aircraft seen flying United flights, from the live feed and hub boards
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Fleet data via{' '}
+              <a
+                href="https://unitedfleetsite.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                United Fleet Site
+              </a>
+              {/* A hand-maintained snapshot with no refresh job — say how old it is (F86). */}
+              , as of <time dateTime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>
+            </p>
+          )}
         </div>
 
         <Tabs
@@ -427,20 +461,27 @@ export default function FleetView() {
             <TabsTrigger value="special" className="h-full! min-h-11 grow-0 pointer-fine:md:min-h-0">
               Special <span className="text-muted-foreground">({subTabCounts.special})</span>
             </TabsTrigger>
+            <TabsTrigger value="express" className="h-full! min-h-11 grow-0 pointer-fine:md:min-h-0">
+              United Express <span className="text-muted-foreground">({subTabCounts.express})</span>
+            </TabsTrigger>
           </TabsList>
 
-          <FleetControls
-            search={search}
-            onSearchChange={setSearch}
-            type={typeFilter}
-            onTypeChange={setTypeFilter}
-            typeOptions={typeOptions}
-            wifi={wifiFilter}
-            onWifiChange={setWifiFilter}
-            wifiOptions={wifiOptions}
-            status={statusFilter}
-            onStatusChange={setStatusFilter}
-          />
+          {/* The mainline controls filter the mainline database; the Express panel has its own
+              search, and these type/Wi-Fi/status values would do nothing there. */}
+          {subView !== 'express' ? (
+            <FleetControls
+              search={search}
+              onSearchChange={setSearch}
+              type={typeFilter}
+              onTypeChange={setTypeFilter}
+              typeOptions={typeOptions}
+              wifi={wifiFilter}
+              onWifiChange={setWifiFilter}
+              wifiOptions={wifiOptions}
+              status={statusFilter}
+              onStatusChange={setStatusFilter}
+            />
+          ) : null}
 
           <TabsContent value="all">
             <FleetTable
@@ -475,6 +516,25 @@ export default function FleetView() {
 
           <TabsContent value="special">
             <SpecialPanel rows={specialRows} loading={loading} onOpenAircraft={openAircraft} />
+          </TabsContent>
+
+          <TabsContent value="express">
+            <ExpressFleetPanel
+              rows={expressRows}
+              summary={expressSummary}
+              staleDays={EXPRESS_STALE_DAYS}
+              status={expressStatus}
+              search={expressSearch}
+              onSearchChange={setExpressSearch}
+              sort={expressSort}
+              onSort={(col) =>
+                setExpressSort((current) =>
+                  current.col === col ? { col, asc: !current.asc } : { col, asc: true },
+                )
+              }
+              nowMs={Date.now()}
+              onOpenAircraft={openAircraft}
+            />
           </TabsContent>
         </Tabs>
       </section>

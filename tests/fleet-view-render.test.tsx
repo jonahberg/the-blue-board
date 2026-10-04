@@ -9,7 +9,7 @@
  *  - The database's age is stated, not "updated daily".
  */
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FeedValue } from '../src/app/state/feed';
@@ -17,7 +17,7 @@ import type { FleetValue } from '../src/app/state/fleet';
 import type { UiValue } from '../src/app/state/ui';
 import FleetView from '../src/app/views/FleetView';
 
-const ctl = vi.hoisted(() => ({ fleet: null as unknown, flights: [] as unknown[] }));
+const ctl = vi.hoisted(() => ({ fleet: null as unknown, flights: [] as unknown[], opened: [] as string[] }));
 
 vi.mock('../src/app/state/fleet', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/fleet')>()),
@@ -29,7 +29,7 @@ vi.mock('../src/app/state/feed', async (importOriginal) => ({
 }));
 vi.mock('../src/app/state/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/ui')>()),
-  useUi: () => ({ openAircraft: () => {}, setTab: () => {} }) as unknown as UiValue,
+  useUi: () => ({ openAircraft: (reg: string) => ctl.opened.push(reg), setTab: () => {} }) as unknown as UiValue,
 }));
 
 // 8 mainline airframes, 2 on Starlink; one more Starlink tail the database does not list.
@@ -64,6 +64,9 @@ function fleetValue(stats: unknown = null): FleetValue {
     loading: false,
     loadFailed: false,
     retry: () => {},
+    expressDb: [],
+    expressByReg: {},
+    expressStatus: 'ready',
   } as unknown as FleetValue;
 }
 
@@ -78,6 +81,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  ctl.opened = [];
   ctl.fleet = fleetValue();
   ctl.flights = [
     flight('N100UA', 'UAL1', 'A319'), // mainline, matched
@@ -133,5 +137,78 @@ describe('FleetView', () => {
     expect(lookup.querySelector('time')?.getAttribute('dateTime')).toBe('2026-09-28');
     // Node 24 / current ICU abbreviate September as "Sept" in en-GB; Bun's ICU says "Sep".
     expect(lookup.textContent).toMatch(/as of 28 Sept? 2026/);
+  });
+});
+
+describe('FleetView — the United Express sub-tab', () => {
+  // buildExpressFleet() output: two discovered tails (one on the Starlink roster), one with no type.
+  const EXPRESS = [
+    { r: 'N140SY', t: 'E175', tk: 'E175SC', o: 'SkyWest Airlines', oc: 'SKW', w: 'Starlink', c: '', fs: '2026-10-01T05:00:00Z', ls: '2026-10-04T18:13:07Z', lf: 'UA6005', x: true },
+    { r: 'N14148', t: '', tk: '', o: 'CommutAir', oc: 'UCA', w: '', c: '', fs: '2026-10-01T05:00:00Z', ls: '2026-10-04T18:13:06Z', lf: 'UA4226', x: true },
+    { r: 'N85377', t: 'E175', tk: 'E175', o: 'SkyWest Airlines', oc: 'SKW', w: '', c: '', fs: '2026-10-01T06:00:00Z', ls: '2026-10-02T12:00:00Z', lf: 'UA5928', x: true },
+  ];
+
+  function withExpress() {
+    ctl.fleet = {
+      ...(fleetValue() as object),
+      expressDb: EXPRESS,
+      expressByReg: Object.fromEntries(EXPRESS.map((e) => [e.r, e])),
+      expressStatus: 'ready',
+    };
+  }
+
+  const expressPanel = () => document.querySelector('[role="tabpanel"][data-state="active"]') as HTMLElement;
+
+  it('?view=express opens a separate list; All Aircraft keeps the mainline count', async () => {
+    withExpress();
+    window.history.replaceState(null, '', '/?tab=fleet&view=express');
+    render(<FleetView />);
+    await waitFor(() => expect(screen.getByRole('searchbox', { name: 'United Express search' })).toBeTruthy());
+    expect(screen.getByRole('tab', { name: /All Aircraft \(8\)/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /United Express \(3\)/ })).toBeTruthy();
+    expect(screen.getByText('Fleet Overview — 8 Mainline Aircraft')).toBeTruthy();
+
+    const panel = expressPanel();
+    expect(panel.textContent).toContain('3 aircraft');
+    expect(panel.textContent).toContain('1 Starlink');
+    expect(panel.textContent).toContain('SkyWest Airlines 2');
+    expect(panel.textContent).toContain('Unknown type 1');
+    expect(panel.textContent).toContain('about 3 of ~513 aircraft');
+    expect(panel.querySelectorAll('tbody tr')).toHaveLength(3);
+    // The mainline filters do not apply here and are not shown.
+    expect(screen.queryByRole('searchbox', { name: 'Fleet search' })).toBeNull();
+    // No cabin is verified: no Config column of dashes.
+    expect(panel.querySelector('thead')?.textContent).not.toContain('Config');
+  });
+
+  it('searches, and a registration opens the aircraft dialog', async () => {
+    withExpress();
+    window.history.replaceState(null, '', '/?tab=fleet&view=express');
+    render(<FleetView />);
+    const box = await screen.findByRole('searchbox', { name: 'United Express search' });
+    fireEvent.change(box, { target: { value: 'commutair' } });
+    const rows = expressPanel().querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('N14148');
+    fireEvent.click(screen.getByRole('button', { name: 'N14148' }));
+    expect(ctl.opened).toEqual(['N14148']);
+
+    fireEvent.change(box, { target: { value: 'zzz' } });
+    expect(expressPanel().textContent).toContain('No United Express aircraft match');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(expressPanel().querySelectorAll('tbody tr')).toHaveLength(3);
+  });
+
+  it('sorts by a header button, with aria-sort on the cell', async () => {
+    withExpress();
+    window.history.replaceState(null, '', '/?tab=fleet&view=express');
+    render(<FleetView />);
+    await screen.findByRole('searchbox', { name: 'United Express search' });
+    const lastSeen = screen.getByRole('button', { name: /Last seen/ });
+    fireEvent.click(lastSeen);
+    fireEvent.click(lastSeen);
+    expect(lastSeen.closest('th')?.getAttribute('aria-sort')).toBe('descending');
+    const regs = [...expressPanel().querySelectorAll('tbody tr')].map((r) => r.querySelector('button')?.textContent);
+    expect(regs).toEqual(['N140SY', 'N14148', 'N85377']);
   });
 });
