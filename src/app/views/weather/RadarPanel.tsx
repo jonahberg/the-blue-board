@@ -1,10 +1,12 @@
 /**
  * The radar half of the tab: the NEXRAD frame, its timestamp, and the category legend.
  *
- * The legend is the key to BOTH the map markers and the hub-card borders — one set of four
- * colours, explained once. It carries the category names as text, so the four colours are a
- * shorthand for a label that is already written down rather than the only way to read the
- * map.
+ * The legend is the key to the map markers and each hub card's category chip — one set of
+ * four colours, explained once. It carries the category names as text, so the four colours
+ * are a shorthand for a label that is already written down rather than the only way to read
+ * the map. The ⚠ entry explains the one mark a marker label can carry beyond its category:
+ * an ops impact (rain, gusts, fog) on top of it. (A card's top border is the worst-of ops
+ * colour and is explained by the status line printed beneath it, not by this legend.)
  */
 
 import { WX_LEGEND } from '@/lib/weather-cards.js';
@@ -47,6 +49,10 @@ export function RadarPanel({
             {entry.cat}
           </li>
         ))}
+        <li className="flex items-center gap-1.5">
+          <span aria-hidden="true">⚠</span>
+          ops impact (rain, gusts, fog…)
+        </li>
       </ul>
     </div>
   );

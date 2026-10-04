@@ -23,6 +23,13 @@
  *
  * The scroll container, not the window, is the scroll parent: `offsetTop` inside it is what
  * "jump to now" and the palette's row highlight measure against.
+ *
+ * **Below `md` the same window paints a list, not the table** (`compact`). At 390 px the
+ * ten-column table was 1,065 px wide: tail, seats, Wi-Fi, status, LIVE and the watch eye were
+ * all off-screen with no hint that they existed (audit Oct 3 2026). The phone list
+ * (`SchedulePhoneRow`) keeps everything that makes this component work — the painted window,
+ * the NOW divider, `data-row-index` / `data-flight-row`, jump-to-now and the palette reveal —
+ * and swaps only the markup each row paints. Desktop and tablet keep the table untouched.
  */
 
 import { CalendarDays, Eye, SearchX, Star, TriangleAlert, Zap } from 'lucide-react';
@@ -44,6 +51,7 @@ import { scrollBehavior } from '@/lib/motion.js';
 import { clampWindow, expandWindow, initialWindow, windowIncluding } from '@/lib/schedule-window.js';
 import { cn } from '@/lib/utils';
 import type { RowModel, SortColumn } from './useBoardModel';
+import { SchedulePhoneRow } from './SchedulePhoneRow';
 import { STATUS_TONE, SWAP_TONE, delayToneClass, riskToneClass } from './tone';
 
 export type ScheduleTableHandle = {
@@ -70,6 +78,8 @@ const COLUMNS: { key: SortColumn | null; label: string; className?: string; srLa
 ];
 
 const HIGHLIGHT_MS = 2000;
+
+const noop = () => {};
 
 /**
  * 44 px of hit area below `md:` for the buttons that sit INSIDE a row — the tail links and
@@ -135,6 +145,10 @@ export const ScheduleTable = forwardRef<
     /** "Tomorrow's arrivals at EWR" — used by the empty states. */
     emptySubject: string;
     onClearFilters: () => void;
+    /** Paint the phone list instead of the table (below `md`). */
+    compact?: boolean;
+    /** A phone row was tapped: open its flight sheet. */
+    onOpenFlight?: (row: RowModel) => void;
   }
 >(function ScheduleTable(
   {
@@ -153,11 +167,14 @@ export const ScheduleTable = forwardRef<
     emptyReason,
     emptySubject,
     onClearFilters,
+    compact = false,
+    onOpenFlight,
   },
   ref,
 ) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const bodyRef = useRef<HTMLTableSectionElement>(null);
+  // The `<tbody>` on a desktop, the `<ol>` on a phone: both carry the same row attributes.
+  const bodyRef = useRef<HTMLElement>(null);
 
   // The painted window: reset around NOW whenever the board/filter/sort identity changes, and
   // only clamped (never reset) when the same board just re-derives on a clock tick.
@@ -183,7 +200,9 @@ export const ScheduleTable = forwardRef<
   const scrollToElement = (target: HTMLElement, smooth: boolean) => {
     const container = scrollRef.current;
     if (!container) return;
-    const top = Math.max(0, target.offsetTop - 60);
+    // 60 px clears the desktop table's sticky header and shows the row before NOW; the phone
+    // list has no header, so it only needs room for the NOW divider itself.
+    const top = Math.max(0, target.offsetTop - (compact ? 28 : 60));
     requestAnimationFrame(() => {
       if (typeof container.scrollTo === 'function') {
         container.scrollTo({ top, behavior: smooth ? scrollBehavior() : 'auto' });
@@ -257,6 +276,8 @@ export const ScheduleTable = forwardRef<
     [anchor, rows, start, end, windowKey],
   );
 
+  const openFlight = onOpenFlight ?? noop;
+
   const showEarlier = () => {
     prependAnchor.current = scrollRef.current?.scrollHeight ?? null;
     setWin(expandWindow({ start, end }, rows.length, 'earlier'));
@@ -283,6 +304,97 @@ export const ScheduleTable = forwardRef<
       </TableCell>
     </TableRow>
   );
+
+  const emptyContent =
+    emptyReason === 'filtered' ? (
+      <>
+        <SearchX aria-hidden="true" className="mx-auto mb-1 size-6" />
+        No flights match your filters
+        <span className="mt-1 block text-[10px]">
+          Try adjusting status, search or the advanced filters
+        </span>
+        <Button variant="outline" size="sm" className="mt-2 min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onClearFilters}>
+          Clear filters
+        </Button>
+      </>
+    ) : emptyReason === 'upstream' ? (
+      <>
+        <TriangleAlert aria-hidden="true" className="mx-auto mb-1 size-6" />
+        Couldn't load {emptySubject} from the schedule provider
+        <span className="mt-1 block text-[10px]">Try Retry in a moment</span>
+      </>
+    ) : (
+      <>
+        <CalendarDays aria-hidden="true" className="mx-auto mb-1 size-6" />
+        No United flights listed for {emptySubject} yet
+        <span className="mt-1 block text-[10px]">
+          The provider publishes a day's board as it approaches
+        </span>
+      </>
+    );
+
+  if (compact) {
+    const moreItem = (key: string, count: number, label: string, onMore: () => void, withShowAll: boolean) => (
+      <li key={key} className="flex flex-wrap items-center gap-2 border-b p-1">
+        <Button variant="outline" size="sm" className="min-h-11 text-xs" onClick={onMore}>
+          {label} ({count})
+        </Button>
+        {withShowAll ? (
+          <Button variant="ghost" size="sm" className="min-h-11 text-xs" onClick={showAll}>
+            Show all {rows.length}
+          </Button>
+        ) : null}
+      </li>
+    );
+    return (
+      <div
+        ref={scrollRef}
+        tabIndex={0}
+        data-schedule-scroller=""
+        aria-label="Flight list, scrollable region"
+        // Fills what the phone column leaves (ScheduleView is height-locked below `md`).
+        className="relative min-h-48 flex-1 basis-0 overflow-y-auto rounded-md border bg-card/30"
+      >
+        {rows.length === 0 ? (
+          <div className="px-3 py-10 text-center text-xs text-muted-foreground">{emptyContent}</div>
+        ) : (
+          // `role="list"` is explicit because Safari drops list semantics from a list with
+          // `list-style: none`, which is every Tailwind list.
+          <ol ref={bodyRef as React.RefObject<HTMLOListElement>} role="list" aria-label="Flights">
+            {start > 0 ? moreItem('sched-more-earlier', start, 'Show earlier flights', showEarlier, end >= rows.length) : null}
+            {rows.slice(start, end).flatMap((row, offset) => {
+              const index = start + offset;
+              const items = [
+                <SchedulePhoneRow
+                  key={row.key}
+                  row={row}
+                  index={index}
+                  watched={isWatched(row.ident)}
+                  boardAsOf={boardAsOf}
+                  onOpenFlight={openFlight}
+                  onToggleWatch={onToggleWatch}
+                  onExplainDelay={onExplainDelay}
+                />,
+              ];
+              if (index === dividerIndex) {
+                items.unshift(
+                  <li
+                    key="sched-now-divider"
+                    aria-label="Current time marker"
+                    className="border-b bg-primary/10 px-2 py-1 font-mono text-[10px] tracking-wide text-primary"
+                  >
+                    ── NOW · {dividerLabel} ──
+                  </li>,
+                );
+              }
+              return items;
+            })}
+            {end < rows.length ? moreItem('sched-more-later', rows.length - end, 'Show later flights', showLater, true) : null}
+          </ol>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -333,36 +445,11 @@ export const ScheduleTable = forwardRef<
             )}
           </TableRow>
         </TableHeader>
-        <TableBody ref={bodyRef}>
+        <TableBody ref={bodyRef as React.RefObject<HTMLTableSectionElement>}>
           {rows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
-                {emptyReason === 'filtered' ? (
-                  <>
-                    <SearchX aria-hidden="true" className="mx-auto mb-1 size-6" />
-                    No flights match your filters
-                    <span className="mt-1 block text-[10px]">
-                      Try adjusting status, search or the advanced filters
-                    </span>
-                    <Button variant="outline" size="sm" className="mt-2 min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onClearFilters}>
-                      Clear filters
-                    </Button>
-                  </>
-                ) : emptyReason === 'upstream' ? (
-                  <>
-                    <TriangleAlert aria-hidden="true" className="mx-auto mb-1 size-6" />
-                    Couldn't load {emptySubject} from the schedule provider
-                    <span className="mt-1 block text-[10px]">Try Retry in a moment</span>
-                  </>
-                ) : (
-                  <>
-                    <CalendarDays aria-hidden="true" className="mx-auto mb-1 size-6" />
-                    No United flights listed for {emptySubject} yet
-                    <span className="mt-1 block text-[10px]">
-                      The provider publishes a day's board as it approaches
-                    </span>
-                  </>
-                )}
+                {emptyContent}
               </TableCell>
             </TableRow>
           ) : (

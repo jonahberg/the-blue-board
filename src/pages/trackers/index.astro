@@ -1,6 +1,7 @@
 ---
 import { trackers, trackerOrder } from '../../data/trackers/index.js';
 import { trackerParentSeo } from '../../lib/tracker-detail.js';
+import { countLabel } from '../../lib/plural.js';
 import BaseLayout from '../../components/site/BaseLayout.astro';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import LastUpdated from '../../components/trackers/LastUpdated.astro';
@@ -103,7 +104,7 @@ const itemListSchema = {
               </div>
               <div class="flex flex-wrap items-center justify-between gap-2.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>
-                  {t.entryCount} {t.entryNoun} ·{' '}
+                  {countLabel(t.entryCount, t.entryNoun)} ·{' '}
                   <LastUpdated iso={t.lastVerified} prefix="verified" />
                 </span>
                 <span class="text-primary">Open tracker &rarr;</span>

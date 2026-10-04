@@ -11,9 +11,15 @@
  *
  * Escape closes the drawer and returns focus to the toggle (inventory §17), the same
  * contract every dialog on the site honours.
+ *
+ * Below `md` the same controls fold into TWO rows (day + direction, then hub · find · three
+ * icon buttons). The wide toolbar wrapped to four 44 px rows on a phone, which together with
+ * the stat cards pushed every flight below the fold at 360×780 (audit Oct 3 2026). Every
+ * control is still here, at 44 px, with its full name in `aria-label`; only the words that
+ * did not fit became icons. The desktop/tablet toolbar is untouched.
  */
 
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, Crosshair, LoaderCircle, RotateCw, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -112,6 +118,160 @@ export function ScheduleControls({
       idPrefix={idPrefix}
     />
   );
+
+  const filterSheet = (
+    <Sheet open={drawerOpen} onOpenChange={onDrawerOpen}>
+      <SheetContent
+        side="bottom"
+        className="data-[side=bottom]:h-[80vh]"
+        // The sheet is opened by the toolbar button rather than a `SheetTrigger`, so
+        // Radix has no remembered element to hand focus back to on close.
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          toggleRef.current?.focus();
+        }}
+      >
+        <SheetHeader>
+          <SheetTitle>Filters</SheetTitle>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" id="sched-adv-filters-mobile">
+          {filterPanel('sched-m')}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+
+  if (!desktop) {
+    const filtersName = activeCount > 0 ? `Filters (${activeCount} active)` : 'Filters';
+    return (
+      <div className="flex flex-col gap-2">
+        <h2 className="sr-only">Flight Schedule</h2>
+        <div className="flex items-center justify-between gap-2">
+          <ToggleGroup
+            type="single"
+            value={String(day)}
+            onValueChange={(value) => {
+              if (value) onDay(Number(value));
+            }}
+            size="sm"
+            aria-label="Schedule day"
+          >
+            {DAYS.map((offset) => (
+              <ToggleGroupItem
+                key={offset}
+                value={String(offset)}
+                aria-label={`${DAY_NAMES[offset]} (${getHubDayLabel(hub || 'ORD', offset) as string})`}
+                className="min-h-11 px-2 text-[11px]"
+              >
+                {DAY_NAMES[offset]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <ToggleGroup
+            type="single"
+            value={dir}
+            onValueChange={(value) => {
+              if (value) onDir(value as BoardDirection);
+            }}
+            size="sm"
+            aria-label="Board direction"
+          >
+            <ToggleGroupItem value="departures" className="min-h-11 px-2 text-[11px]">
+              Departures
+            </ToggleGroupItem>
+            <ToggleGroupItem value="arrivals" className="min-h-11 px-2 text-[11px]">
+              Arrivals
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <Select
+            value={hub || ALL_HUBS}
+            onValueChange={(value) => onHub(value === ALL_HUBS ? '' : value)}
+          >
+            <SelectTrigger
+              size="sm"
+              aria-label="Schedule hub"
+              className="min-h-11 w-[5.75rem] shrink-0 font-mono text-xs"
+            >
+              {/* The code alone: the full "ORD — Chicago O'Hare" took a whole row on a phone. */}
+              <SelectValue placeholder="All hubs">{hub || 'All hubs'}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_HUBS}>All Hubs</SelectItem>
+              {HUB_OPTIONS.map((option) => (
+                <SelectItem key={option.code} value={option.code}>
+                  {option.code} — {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Input
+            aria-label="Find in board"
+            placeholder="Find…"
+            value={filters.search}
+            onChange={(event) => onFilters({ search: event.target.value })}
+            // 16px: iOS zooms the page on focus below that (DESIGN.md).
+            className="min-h-11 min-w-0 flex-1 font-mono text-base"
+          />
+
+          {showJumpToNow ? (
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-11 shrink-0"
+              onClick={onJumpToNow}
+              aria-label="Jump to now"
+              title="Scroll to the current time"
+            >
+              <Crosshair aria-hidden="true" />
+            </Button>
+          ) : null}
+
+          <Button
+            size="icon"
+            className="size-11 shrink-0"
+            onClick={onRefresh}
+            disabled={loading}
+            aria-label={loading ? 'Loading…' : 'Refresh'}
+            title="Refresh the board"
+          >
+            {loading ? (
+              <LoaderCircle aria-hidden="true" className="animate-spin" />
+            ) : (
+              <RotateCw aria-hidden="true" />
+            )}
+          </Button>
+
+          <Button
+            ref={toggleRef}
+            variant="outline"
+            size="icon"
+            aria-expanded={drawerOpen}
+            aria-haspopup="dialog"
+            aria-label={filtersName}
+            title={filtersName}
+            className={cn('relative size-11 shrink-0', activeCount > 0 && 'text-primary')}
+            onClick={() => onDrawerOpen(!drawerOpen)}
+          >
+            <SlidersHorizontal aria-hidden="true" />
+            {activeCount > 0 ? (
+              <span
+                aria-hidden="true"
+                className="absolute -top-1 -right-1 min-w-4 rounded-full bg-primary-fill px-1 font-mono text-[9px] leading-4 text-primary-foreground"
+              >
+                {activeCount}
+              </span>
+            ) : null}
+          </Button>
+        </div>
+
+        {filterSheet}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -229,25 +389,7 @@ export function ScheduleControls({
           {filterPanel('sched')}
         </div>
       ) : (
-        <Sheet open={drawerOpen} onOpenChange={onDrawerOpen}>
-          <SheetContent
-            side="bottom"
-            className="data-[side=bottom]:h-[80vh]"
-            // The sheet is opened by the toolbar button rather than a `SheetTrigger`, so
-            // Radix has no remembered element to hand focus back to on close.
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              toggleRef.current?.focus();
-            }}
-          >
-            <SheetHeader>
-              <SheetTitle>Filters</SheetTitle>
-            </SheetHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" id="sched-adv-filters-mobile">
-              {filterPanel('sched-m')}
-            </div>
-          </SheetContent>
-        </Sheet>
+        filterSheet
       )}
     </div>
   );

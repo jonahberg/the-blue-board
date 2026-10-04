@@ -84,3 +84,41 @@ export function onboardingMayOpen(showOnboardingInitially, waitlistOpen) {
 export function clicksReachedThreshold(clicks, triggerClicks) {
   return clicks === triggerClicks;
 }
+
+// ═══ THE "STAY IN THE LOOP" STRIP (Oct 2026) ═══
+// The passive triggers (T1: five minutes of use, T2: the click threshold) used to open the
+// waitlist as a MODAL over whatever the visitor was reading — the board, mid-scroll (phone
+// QA, Oct 3 2026). They now reveal a slim strip in the engagement slot below the panel
+// instead; the modal only ever opens because someone asked for it (`?waitlist=1`, or the
+// strip's own button). The storage keys are the dialog's — `bb_waitlist_submitted` and
+// `bb_waitlist_dismissed` — so a dismissal of either surface silences both. What changes is
+// the window: a strip that sits in view until dismissed is a bigger ask than a one-off modal,
+// so a "no" is honoured for 30 days, not the modal's 7.
+
+/** A dismissed or closed waitlist ask stays away from the strip for 30 days. */
+export const WAITLIST_STRIP_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Should the strip be on screen?
+ *
+ * Fails CLOSED on a store that throws: without somewhere to record a dismissal the strip
+ * would come back on every page view, which is exactly the nagging this replaced.
+ *
+ * @param {{getItem: Function}|null} storage
+ * @param {{triggered?: boolean, submitted?: boolean, now?: number}} [opts]
+ *   `triggered` — T1 or T2 has fired this session; `submitted` — the in-memory flag, which
+ *   outlives a failed storage write.
+ * @returns {boolean}
+ */
+export function shouldShowWaitlistStrip(storage, opts = {}) {
+  const { triggered = false, submitted = false, now = Date.now() } = opts;
+  if (!triggered || submitted || !storage) return false;
+  try {
+    if (storage.getItem('bb_waitlist_submitted') === 'true') return false;
+    const ts = parseInt(storage.getItem('bb_waitlist_dismissed'), 10);
+    if (ts > 0 && now - ts < WAITLIST_STRIP_COOLDOWN_MS) return false;
+  } catch (e) {
+    return false;
+  }
+  return true;
+}

@@ -142,10 +142,12 @@ carries a `PHASE_ICONS` glyph in the legend. A new series goes through both.
 
 **Dashboard** (`src/app/Dashboard.tsx`) — a full-height column:
 `OfflineBanner` → `Header` → `Ticker` → `HubHealthStrip` → `WatchBanner` → `TabBar`
-(desktop) → active view → `NewsBanner` → `TipStrip` → `Attribution` → `MobileNav`
-(mobile). Only the view scrolls; the chrome is `shrink-0`. The late-arriving strips (news,
-tips) mount **below** the panel, never above it, so their arrival never shoves the data the
-visitor is reading (`tests/shell-strips.test.tsx`).
+(desktop) → active view → engagement slot (`WaitlistStrip` → `NewsBanner` → `TipStrip`) →
+`Attribution` → `MobileNav` (mobile). Only the view scrolls; the chrome is `shrink-0`. The
+late-arriving strips mount **below** the panel, never above it, so their arrival never shoves
+the data the visitor is reading. Below `md` the slot shows **one** strip at a time — the first
+present, in that order — so three asks never stack ~100 px onto a phone's first screen
+(`tests/shell-strips.test.tsx`).
 
 **Content pages** — everything goes through `BaseLayout.astro`: skip link → `SiteHeader`
 → `<main id="main">` → `SiteFooter`. Chrome (header, footer) is `max-w-5xl`; page content is
@@ -180,13 +182,13 @@ toasts, the waitlist, news) where they are part of the sentence, not a control.
 | Filter drawers, watch list, mobile "More" | `Sheet` | `views/LiveView`, `views/schedule/ScheduleControls`, `shell/WatchPanel`, `shell/MobileNav` |
 | Aircraft detail, delay explain, FR24 lookup, disclaimer, onboarding | `Dialog` (modal) | `features/*Dialog.tsx`, `features/Onboarding.tsx` |
 | Global search (⌘K) | `Command` | `features/SearchPalette.tsx` |
-| Waitlist signup | `Dialog` + `Input`/`Textarea`/`Label` | `features/WaitlistDialog.tsx` |
+| Waitlist signup | `Dialog` + `Input`/`Textarea`/`Label`, opened only on request (`?waitlist=1` or the strip's button) | `features/WaitlistDialog.tsx`, `features/WaitlistStrip.tsx` |
 | Legal / attribution disclosure | `Popover` | `features/LegalPopover.tsx` |
 | Jargon definitions | `Tooltip` | `features/JargonTerm.tsx` |
 | Tab navigation | `Tabs` | `shell/TabBar.tsx` |
 | Segmented filters | `ToggleGroup` / `Toggle` | `views/schedule/ScheduleControls.tsx` |
 | Dropdown filters | `Select` | schedule / fleet / starlink controls |
-| Data grids | `Table` + sortable `<th><button>` | `views/schedule/ScheduleTable`, `views/fleet/SortableHeader`, `components/trackers/TrackerTable.astro` |
+| Data grids | `Table` + sortable `<th><button>`; below `md` the schedule board is a two-line `<ol>` list instead (`SchedulePhoneRow`) | `views/schedule/ScheduleTable`, `views/fleet/SortableHeader`, `components/trackers/TrackerTable.astro` |
 | Status pills | `Badge` | throughout |
 | Loading | `Skeleton` | every async view |
 | Hints | `Tooltip` | throughout |
@@ -195,8 +197,9 @@ toasts, the waitlist, news) where they are part of the sentence, not a control.
 `Sheet`; a small anchored disclosure → `Popover`. Never hand-roll an overlay: the primitives
 bring the focus trap, the Escape handler and the accessible name for free.
 
-**Engagement surfaces stay quiet.** The news banner, tip strip, support meter and BMAC toast
-(`features/NewsBanner`, `TipStrip`, `SupportMeter`, `BmacToast`) are dismissible inline
+**Engagement surfaces stay quiet.** The waitlist strip, news banner, tip strip, support meter
+and BMAC toast (`features/WaitlistStrip`, `NewsBanner`, `TipStrip`, `SupportMeter`,
+`BmacToast`) are dismissible inline
 elements, never modals, and their show/hide rules live in `src/lib/engagement.js`,
 `tips.js`, `support-meter.js` and `waitlist-gate.js` — not in the components. Nothing that
 asks the visitor for something may interrupt the data they came for.
@@ -285,3 +288,6 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-09 | `--primary-fill` for filled primary surfaces | White on `--primary` measured 2.99:1 (axe, audit F37). Darkening `--primary` itself would have cost its contrast as text on the dark surfaces, so fills got their own token. |
 | 2026-09 | Touch floor relaxes on `pointer-fine:md:`, not `md:` | Tablets are touch devices at `md` widths (audit F24). |
 | 2026-09 | Flight panel is a bottom sheet below `lg` | A right-hand sheet covered the whole phone map it was meant to sit beside (audit F20). |
+| 2026-10 | Schedule board is a two-line list below `md`; toolbar and stat cards compact there | At 390 px the table was 1,065 px wide with status, tail, Wi-Fi and the watch eye off-screen, and at 360×780 no row was above the fold. Desktop/tablet keep the table. |
+| 2026-10 | The passive waitlist ask is a strip, not a modal; one engagement strip at a time on a phone | The five-minute popup covered the board uninvited. The strip honours a "no" for 30 days; its signups carry `source: 'dashboard'` to compare with the link-driven `popup`. |
+| 2026-10 | Radar dots take the flight-category colour; ops impact is a ⚠ in the label | `OPS_COLORS.caution` equals `CAT_COLORS.MVFR`, so a rainy VFR hub wore MVFR yellow under a "VFR" label. |
