@@ -6,6 +6,7 @@ import {
   greatCirclePoints,
   normalizeLonContinuity,
   isLonghaul,
+  wrapLonNear,
 } from '../src/lib/geo.js';
 
 // Coordinates copied verbatim from the AIRPORTS table so the fixtures below are
@@ -151,6 +152,38 @@ describe('normalizeLonContinuity', () => {
     expect(normalizeLonContinuity(null)).toEqual([]);
     expect(normalizeLonContinuity(undefined)).toEqual([]);
     expect(normalizeLonContinuity([[10, 20]])).toEqual([[10, 20]]);
+  });
+});
+
+describe('wrapLonNear', () => {
+  it('leaves a longitude already near the reference alone', () => {
+    expect(wrapLonNear(-87.9, -98)).toBe(-87.9);
+    expect(wrapLonNear(140, 125)).toBe(140);
+  });
+
+  it('moves an Asian aircraft onto the copy a Pacific view is looking at', () => {
+    // US view (centre -98) snapped NRT traffic to the copy west of the US…
+    expect(wrapLonNear(140, -98)).toBe(-220);
+    // …which an East Asia view (centre ~128) or an antimeridian Pacific view (~185) must undo.
+    expect(wrapLonNear(-220, 128)).toBe(140);
+    expect(wrapLonNear(-122.4, 185)).toBeCloseTo(237.6, 6);
+  });
+
+  it('always lands within ±180° of the reference, whatever the input range', () => {
+    for (const ref of [-500, -180, -98, 0, 145, 180, 245, 600]) {
+      for (const lon of [-720, -350, -181, -180, -1, 0, 1, 179, 180, 181, 359, 721]) {
+        const out = wrapLonNear(lon, ref);
+        expect(out - ref).toBeGreaterThanOrEqual(-180);
+        expect(out - ref).toBeLessThan(180);
+        // Same meridian: differs from the input by whole turns only.
+        expect(Math.abs(((out - lon) % 360 + 360) % 360)).toBeCloseTo(0, 9);
+      }
+    }
+  });
+
+  it('passes a non-finite input through unchanged (edge case)', () => {
+    expect(wrapLonNear(Number.NaN, 0)).toBeNaN();
+    expect(wrapLonNear(10, Number.NaN)).toBe(10);
   });
 });
 

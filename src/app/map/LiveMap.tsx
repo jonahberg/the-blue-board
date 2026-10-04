@@ -12,7 +12,8 @@
  *
  * Marker colours, sizes and the SVG come from `src/lib/plane-icon.js`; the phase, the
  * long-haul test and the great-circle maths come from `src/lib/flight-phase.js` and
- * `src/lib/geo.js`. Nothing about those rules is re-implemented here.
+ * `src/lib/geo.js`; the operating carrier from `src/lib/express-operators.js`; the region
+ * presets from `src/lib/map-regions.js`. Nothing about those rules is re-implemented here.
  */
 
 import { useEffect, useRef } from 'react';
@@ -23,16 +24,22 @@ import { AIRPORTS, AIRPORT_COORDS, IATA_CITIES } from '@/lib/airports.js';
 import { resolveFlightRoute } from '../data/route';
 import { centreForOcclusion, flightPanelOcclusion } from '@/lib/flight-panel-occlusion.js';
 import { getPhase } from '@/lib/flight-phase.js';
-import { greatCirclePoints, isLonghaul, normalizeLonContinuity } from '@/lib/geo.js';
+import { operatorFromCallsign } from '@/lib/express-operators.js';
+import { greatCirclePoints, isLonghaul, normalizeLonContinuity, wrapLonNear } from '@/lib/geo.js';
+import { regionBounds } from '@/lib/map-regions.js';
 import { prefersReducedMotion } from '@/lib/motion.js';
 import { planeIconSpec } from '@/lib/plane-icon.js';
 import type { Flight } from '../data/types';
 import { makeBasemapLayer, makeRadarLayer } from './basemap';
 
-export type MapView = 'us' | 'pacific';
-
+/** The opening view when the viewer has no home hub. Region presets fly to bounds instead. */
 export const US_VIEW = { center: [39, -98] as [number, number], zoom: 4 };
-export const PACIFIC_VIEW = { center: [25, 145] as [number, number], zoom: 4 };
+
+/**
+ * A request to fly to a region preset. `key` changes on every pick, so choosing the region the
+ * map was last sent to — after panning away from it — still recentres.
+ */
+export type RegionRequest = { id: string; key: number };
 
 /**
  * A preset view's zoom for a map this wide. Zoom 4 spans the lower 48 in ~660px, so on a
@@ -62,6 +69,21 @@ export function flyOrJump(
 ): void {
   if (reduce) map.setView(center, zoom, { animate: false });
   else map.flyTo(center, zoom, { duration });
+}
+
+/**
+ * Frame a region preset, animated unless the visitor asked for reduced motion — the bounds
+ * counterpart of `flyOrJump`. `fitBounds` picks the zoom for the map's own size, so one box
+ * serves a phone and a desktop.
+ */
+export function flyOrJumpToBounds(
+  map: Pick<L.Map, 'flyToBounds' | 'fitBounds'>,
+  bounds: L.LatLngBoundsExpression,
+  duration: number,
+  reduce: boolean = prefersReducedMotion(),
+): void {
+  if (reduce) map.fitBounds(bounds, { animate: false });
+  else map.flyToBounds(bounds, { duration });
 }
 
 /**
@@ -99,7 +121,8 @@ export type LiveMapProps = {
   starlinkTails: Set<string>;
   focus: { lat: number; lon: number; key: number } | null;
   layers: { hubs: boolean; wx: boolean; longhaul: boolean };
-  view: MapView;
+  /** The last region preset picked, or null until the viewer picks one. */
+  regionRequest: RegionRequest | null;
   /** IATA of the viewer's home hub — decides the initial centre and zoom. */
   homeAirport?: string;
   className?: string;
@@ -110,7 +133,7 @@ const iconCache = new Map<string, L.DivIcon>();
 
 function planeIcon(
   flight: Flight,
-  opts: { longhaul: boolean; phase: string; watched: boolean; starlink: boolean },
+  opts: { longhaul: boolean; phase: string; watched: boolean; starlink: boolean; express: boolean },
 ): L.DivIcon {
   const { size, svg, key, hdgRounded } = planeIconSpec(flight.hdg, opts) as {
     size: number;
@@ -130,10 +153,26 @@ function planeIcon(
   return icon;
 }
 
-/** "UA123 ORD to DEN, cruising" — the marker's accessible name. */
-function markerLabel(flight: Flight, phase: string): string {
+/**
+ * "UA123 ORD to DEN, cruising" — the marker's accessible name. An Express flight also says who
+ * flies it, so the white marker is never the only signal.
+ */
+function markerLabel(flight: Flight, phase: string, operator: { name: string; express: boolean } | null): string {
   const ident = (flight.flightIATA || flight.callsign || 'Flight').trim();
-  return `${ident} ${flight.origin || '?'} to ${flight.dest || '?'}, ${phase.toLowerCase()}`;
+  const base = `${ident} ${flight.origin || '?'} to ${flight.dest || '?'}, ${phase.toLowerCase()}`;
+  return operator?.express ? `${base}, United Express (${operator.name})` : base;
+}
+
+/** Shift a layer's coordinates by whole turns of longitude (markers, rings and polylines). */
+function shiftLayerLon(layer: L.Layer, delta: number): void {
+  if (!delta) return;
+  if (layer instanceof L.Polyline) {
+    const shifted = (layer.getLatLngs() as L.LatLng[]).map((p) => L.latLng(p.lat, p.lng + delta));
+    layer.setLatLngs(shifted);
+  } else if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+    const p = layer.getLatLng();
+    layer.setLatLng([p.lat, p.lng + delta]);
+  }
 }
 
 export function LiveMap({
@@ -145,7 +184,7 @@ export function LiveMap({
   starlinkTails,
   focus,
   layers,
-  view,
+  regionRequest,
   homeAirport,
   className,
 }: LiveMapProps) {
@@ -190,6 +229,8 @@ export function LiveMap({
   const hubLayerRef = useRef<L.LayerGroup>(L.layerGroup());
   const radarRef = useRef<L.TileLayer | null>(null);
   const routeRef = useRef<L.LayerGroup | null>(null);
+  /** The selected aircraft's longitude in the route group's own coordinates. */
+  const routeAnchorLngRef = useRef<number | null>(null);
   const markersRef = useRef(new Map<string, L.Marker>());
   const flightsRef = useRef(flights);
   flightsRef.current = flights;
@@ -233,12 +274,41 @@ export function LiveMap({
     });
     observer.observe(hostRef.current);
 
+    // Leaflet draws one copy of each layer, and everything is snapped to the world copy
+    // nearest the centre. A region move (US → East Asia or across the date line) changes which
+    // copy that is, so without this the aircraft east of ~82°E sat a world away until the next
+    // 30 s poll, the West Coast hub rings vanished from the Pacific view and a SFO→SYD route
+    // drew off-screen. Re-snap on every settled move; it is a no-op unless a copy changed.
+    const resnap = () => {
+      const centerLng = map.getCenter().lng;
+      for (const marker of markersRef.current.values()) {
+        const { lng } = marker.getLatLng();
+        shiftLayerLon(marker, wrapLonNear(lng, centerLng) - lng);
+      }
+      hubLayerRef.current.eachLayer((layer) => {
+        if (!(layer instanceof L.CircleMarker)) return;
+        const { lng } = layer.getLatLng();
+        shiftLayerLon(layer, wrapLonNear(lng, centerLng) - lng);
+      });
+      const anchor = routeAnchorLngRef.current;
+      if (routeRef.current && anchor !== null) {
+        const delta = wrapLonNear(anchor, centerLng) - anchor;
+        if (delta) {
+          routeRef.current.eachLayer((layer) => shiftLayerLon(layer, delta));
+          routeAnchorLngRef.current = anchor + delta;
+        }
+      }
+    };
+    map.on('moveend', resnap);
+
     return () => {
+      map.off('moveend', resnap);
       observer.disconnect();
       map.remove();
       mapRef.current = null;
       markersRef.current.clear();
       routeRef.current = null;
+      routeAnchorLngRef.current = null;
       radarRef.current = null;
     };
     // Home hub only seeds the FIRST render; changing it later must not yank the viewport
@@ -251,8 +321,10 @@ export function LiveMap({
     const group = hubLayerRef.current;
     group.clearLayers();
     if (!layers.hubs) return;
+    const centerLng = mapRef.current?.getCenter().lng ?? 0;
     for (const hub of HUBS) {
-      L.circleMarker([hub.lat, hub.lon], {
+      const lon = wrapLonNear(hub.lon, centerLng);
+      L.circleMarker([hub.lat, lon], {
         radius: 8,
         color: '#005DAA',
         fillColor: '#005DAA',
@@ -266,7 +338,7 @@ export function LiveMap({
           offset: [0, -10],
         })
         .addTo(group);
-      L.circleMarker([hub.lat, hub.lon], {
+      L.circleMarker([hub.lat, lon], {
         radius: 8,
         color: '#005DAA',
         fillOpacity: 0,
@@ -289,9 +361,7 @@ export function LiveMap({
       seen.add(flight.fr24id);
       // Snap each aircraft to the world copy nearest the current centre, so an IDL-crossing
       // flight (SFO→SYD) is never drawn a world away from the rest of the fleet.
-      let lon = flight.lon;
-      while (lon - centerLng > 180) lon -= 360;
-      while (lon - centerLng < -180) lon += 360;
+      const lon = wrapLonNear(flight.lon, centerLng);
 
       const phase = (getPhase(flight.alt, flight.vr, flight.spd) as { phase: string }).phase;
       const ident = flight.flightIATA || flight.callsign || '';
@@ -300,7 +370,12 @@ export function LiveMap({
       const longhaul =
         layers.longhaul &&
         Boolean(isLonghaul(flight.origin, flight.dest, flight.callsign, AIRPORT_COORDS));
-      const icon = planeIcon(flight, { longhaul, phase, watched, starlink });
+      // The callsign, not the feed's always-'UAL' airline field, names the operator.
+      const operator = operatorFromCallsign(flight.callsign) as
+        | { code: string; name: string; express: boolean }
+        | null;
+      const express = Boolean(operator?.express);
+      const icon = planeIcon(flight, { longhaul, phase, watched, starlink, express });
       const zIndexOffset = watched ? 1000 : flight.fr24id === selectedId ? 900 : 0;
 
       const existing = markers.get(flight.fr24id);
@@ -325,7 +400,7 @@ export function LiveMap({
       const element = marker.getElement();
       if (element) {
         element.setAttribute('role', 'img');
-        element.setAttribute('aria-label', markerLabel(flight, phase));
+        element.setAttribute('aria-label', markerLabel(flight, phase, operator));
       }
     }
 
@@ -356,6 +431,7 @@ export function LiveMap({
     if (routeRef.current) {
       map.removeLayer(routeRef.current);
       routeRef.current = null;
+      routeAnchorLngRef.current = null;
     }
     const flight = selectedId ? flights.find((f) => f.fr24id === selectedId) : null;
     // Estimated routes draw too — the panel already names them, and a flight whose feed
@@ -363,12 +439,22 @@ export function LiveMap({
     const { origin, dest } = resolveFlightRoute(flight ?? null);
     if (!flight || !origin || !dest) return undefined;
 
-    const traveled = normalizeLonContinuity(
+    const rawTraveled = normalizeLonContinuity(
       greatCirclePoints(origin.lat, origin.lon, flight.lat, flight.lon, 60),
     ) as [number, number][];
-    const remaining = normalizeLonContinuity(
+    // The line is continuous from the ORIGIN, so a transpacific route can land a world away
+    // from the marker. Move the whole route by whole turns so the aircraft's own point sits on
+    // the copy the map is looking at — where the marker was snapped.
+    const planeLng = rawTraveled[rawTraveled.length - 1][1];
+    const shift = wrapLonNear(planeLng, map.getCenter().lng) - planeLng;
+    const traveled = rawTraveled.map(([lat, lon]) => [lat, lon + shift]) as [number, number][];
+    // greatCirclePoints answers in [-180, 180], so the remaining leg is re-joined to the
+    // traveled one at the aircraft rather than trusted to start on the same copy.
+    const rawRemaining = normalizeLonContinuity(
       greatCirclePoints(flight.lat, flight.lon, dest.lat, dest.lon, 60),
     ) as [number, number][];
+    const joinShift = wrapLonNear(rawRemaining[0][1], planeLng + shift) - rawRemaining[0][1];
+    const remaining = rawRemaining.map(([lat, lon]) => [lat, lon + joinShift]) as [number, number][];
 
     const label = (airport: Airport) =>
       airport.iata + (IATA_CITIES[airport.iata] ? ` — ${IATA_CITIES[airport.iata]}` : '');
@@ -394,14 +480,18 @@ export function LiveMap({
       }).bindTooltip(label(dest), { direction: 'top' }),
     ]).addTo(map);
     routeRef.current = group;
+    routeAnchorLngRef.current = planeLng + shift;
 
     return () => {
       map.removeLayer(group);
-      if (routeRef.current === group) routeRef.current = null;
+      if (routeRef.current === group) {
+        routeRef.current = null;
+        routeAnchorLngRef.current = null;
+      }
     };
   }, [selectedId, flights]);
 
-  // ── Focus + US/Pacific view ───────────────────────────────────────────────
+  // ── Focus + region presets ────────────────────────────────────────────────
   // Every view-on-map action outside Live Ops (My Flights, Starlink "Track", the aircraft
   // dialog, the flight sheet, ⌘K) switches to Live and requests a move in the same commit —
   // while the Live panel is still `display:none` and Leaflet's cached size is 0×0. Animating
@@ -418,18 +508,14 @@ export function LiveMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
 
-  const firstViewRender = useRef(true);
+  // The opening view comes from the map constructor (home hub or US_VIEW), so nothing moves
+  // until the viewer actually picks a region.
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    if (firstViewRender.current) {
-      firstViewRender.current = false;
-      return;
-    }
-    const target = view === 'pacific' ? PACIFIC_VIEW : US_VIEW;
-    requestMove((m) => flyOrJump(m, target.center, viewZoom(target.zoom, m.getSize().x), 1.2));
+    if (!regionRequest) return;
+    const bounds = L.latLngBounds(regionBounds(regionRequest.id) as L.LatLngTuple[]);
+    requestMove((m) => flyOrJumpToBounds(m, bounds, 1.2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
+  }, [regionRequest?.key]);
 
   return (
     <div

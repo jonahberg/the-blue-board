@@ -31,6 +31,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cityFor } from '@/lib/airports.js';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
+import { flightAwareIdent, isExpressFlight, operatedByLine } from '@/lib/express-operators.js';
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
 import { matchAircraft, unmatchedAircraftNote } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
@@ -328,6 +329,17 @@ export function FlightSheet() {
               ? `${cityFor(route.originIata) || route.originIata || '?'} → ${cityFor(route.destIata) || route.destIata || '?'}`
               : 'Flight details'}
           </SheetDescription>
+          {/* Who actually flies it, from the callsign (the feed's airline field is always UAL).
+              Display only — the ident above stays the feed's own. An Express flight also shows
+              the operator's own callsign (SKW5123), which is what ATC and FR24 call it. */}
+          {flight && operatedByLine(flight) ? (
+            <p className="text-xs text-muted-foreground">
+              {operatedByLine(flight)}
+              {isExpressFlight(flight) && flight.callsign !== ident ? (
+                <span className="font-mono"> · {flight.callsign}</span>
+              ) : null}
+            </p>
+          ) : null}
         </SheetHeader>
 
         <div className="space-y-5 px-4 pb-8">
@@ -554,9 +566,9 @@ export function FlightSheet() {
             {ident ? (
               <a
                 className="text-primary underline-offset-2 hover:underline"
-                // `ident` can be an IATA number (UA123) or a callsign (UAL123); strip either
-                // prefix before re-adding UAL, or a callsign becomes UALL123.
-                href={`https://flightaware.com/live/flight/UAL${ident.replace(/^UAL?/i, '')}`}
+                // Express flights use their operator's callsign; mainline gets UAL + number
+                // (flightAwareIdent — a callsign must not become UALL123).
+                href={`https://flightaware.com/live/flight/${flightAwareIdent(ident, flight?.callsign)}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >

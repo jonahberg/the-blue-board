@@ -5,10 +5,10 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { flyOrJump, prefersReducedMotion } from '../src/app/map/LiveMap';
+import { flyOrJump, flyOrJumpToBounds, prefersReducedMotion } from '../src/app/map/LiveMap';
 
 function fakeMap() {
-  return { flyTo: vi.fn(), setView: vi.fn() };
+  return { flyTo: vi.fn(), setView: vi.fn(), flyToBounds: vi.fn(), fitBounds: vi.fn() };
 }
 
 function stubMatchMedia(reduce: boolean) {
@@ -52,5 +52,27 @@ describe('flyOrJump', () => {
     const { resolve } = await import('node:path');
     const src = readFileSync(resolve(__dirname, '../src/app/map/LiveMap.tsx'), 'utf8');
     expect(src.match(/\.flyTo\(/g)).toHaveLength(1); // the one inside flyOrJump
+    expect(src.match(/\.flyToBounds\(/g)).toHaveLength(1); // the one inside flyOrJumpToBounds
+    expect(src.match(/\.fitBounds\(/g)).toHaveLength(1); // its reduced-motion branch
+  });
+});
+
+describe('flyOrJumpToBounds (region presets)', () => {
+  const bounds: [[number, number], [number, number]] = [[-48, 110], [-5, 190]];
+
+  it('animates by default', () => {
+    stubMatchMedia(false);
+    const map = fakeMap();
+    flyOrJumpToBounds(map as never, bounds, 1.2);
+    expect(map.flyToBounds).toHaveBeenCalledWith(bounds, { duration: 1.2 });
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('jumps without animation under prefers-reduced-motion', () => {
+    stubMatchMedia(true);
+    const map = fakeMap();
+    flyOrJumpToBounds(map as never, bounds, 1.2);
+    expect(map.fitBounds).toHaveBeenCalledWith(bounds, { animate: false });
+    expect(map.flyToBounds).not.toHaveBeenCalled();
   });
 });

@@ -20,7 +20,8 @@ import { cleanup, render } from '@testing-library/react';
 import L from 'leaflet';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LiveMap, PACIFIC_VIEW } from '../src/app/map/LiveMap';
+import { LiveMap } from '../src/app/map/LiveMap';
+import { regionBounds } from '../src/lib/map-regions.js';
 import type { LiveMapProps } from '../src/app/map/LiveMap';
 
 let resizeCallbacks: Array<() => void> = [];
@@ -88,7 +89,7 @@ function props(overrides: Partial<LiveMapProps> = {}): LiveMapProps {
     starlinkTails: new Set(),
     focus: null,
     layers: { hubs: false, wx: false, longhaul: false },
-    view: 'us',
+    regionRequest: null,
     ...overrides,
   } as LiveMapProps;
 }
@@ -135,22 +136,62 @@ describe('LiveMap focus while the Live panel is hidden', () => {
     expect(L.latLng(fly.mock.calls[0][0] as L.LatLngExpression).lat).toBeCloseTo(37.6213, 4);
   });
 
-  it('does not throw when the US/Pacific view changes while hidden, and flies there once visible', () => {
+  it('does not throw when a region preset is picked while hidden, and flies there once visible', () => {
     hostSize = { w: 800, h: 600 };
     const { rerender } = render(<LiveMap {...props()} />);
     hostSize = { w: 0, h: 0 };
     fireResize();
     const fly = vi.spyOn(L.Map.prototype, 'flyTo');
-    rerender(<LiveMap {...props({ view: 'pacific' })} />);
+    rerender(<LiveMap {...props({ regionRequest: { id: 'pacific', key: 1 } })} />);
     expect(fly).not.toHaveBeenCalled();
 
     hostSize = { w: 800, h: 600 };
     fireResize();
     expect(uncaught).toEqual([]);
+    // flyToBounds resolves to one flyTo at the box's centre and fitted zoom.
     expect(fly).toHaveBeenCalledTimes(1);
     const target = L.latLng(fly.mock.calls[0][0] as L.LatLngExpression);
-    expect(target.lat).toBeCloseTo(PACIFIC_VIEW.center[0], 4);
-    expect(target.lng).toBeCloseTo(PACIFIC_VIEW.center[1], 4);
-    expect(fly.mock.calls[0][1]).toBe(PACIFIC_VIEW.zoom);
+    const [[south, west], [north, east]] = regionBounds('pacific');
+    expect(target.lat).toBeGreaterThan(south);
+    expect(target.lat).toBeLessThan(north);
+    // The Pacific box crosses the antimeridian: its centre is past 180°, not back over Africa.
+    expect(target.lng).toBeGreaterThan(180);
+    expect(target.lng).toBeGreaterThan(west);
+    expect(target.lng).toBeLessThan(east);
+    expect(Number.isFinite(fly.mock.calls[0][1] as number)).toBe(true);
+  });
+
+  it('does not move the map on mount, before any region is picked', () => {
+    hostSize = { w: 800, h: 600 };
+    const fly = vi.spyOn(L.Map.prototype, 'flyTo');
+    render(<LiveMap {...props()} />);
+    expect(fly).not.toHaveBeenCalled();
+  });
+
+  it('flies again when the same region is picked twice (recentre after panning away)', () => {
+    hostSize = { w: 800, h: 600 };
+    const { rerender } = render(<LiveMap {...props()} />);
+    const fly = vi.spyOn(L.Map.prototype, 'flyTo');
+    rerender(<LiveMap {...props({ regionRequest: { id: 'europe', key: 1 } })} />);
+    rerender(<LiveMap {...props({ regionRequest: { id: 'europe', key: 2 } })} />);
+    expect(fly).toHaveBeenCalledTimes(2);
+    // A re-render with the same request is not a new pick.
+    rerender(<LiveMap {...props({ regionRequest: { id: 'europe', key: 2 } })} />);
+    expect(fly).toHaveBeenCalledTimes(2);
+  });
+
+  it('survives an unknown or legacy region id (edge case)', () => {
+    hostSize = { w: 800, h: 600 };
+    const { rerender } = render(<LiveMap {...props()} />);
+    const fly = vi.spyOn(L.Map.prototype, 'flyTo');
+    rerender(<LiveMap {...props({ regionRequest: { id: 'atlantis', key: 1 } })} />);
+    expect(uncaught).toEqual([]);
+    expect(fly).toHaveBeenCalledTimes(1);
+    const [[south, west], [north, east]] = regionBounds('us');
+    const target = L.latLng(fly.mock.calls[0][0] as L.LatLngExpression);
+    expect(target.lat).toBeGreaterThan(south);
+    expect(target.lat).toBeLessThan(north);
+    expect(target.lng).toBeGreaterThan(west);
+    expect(target.lng).toBeLessThan(east);
   });
 });

@@ -98,6 +98,24 @@ export function normalizeLonContinuity(pts) {
 }
 
 /**
+ * The copy of `lon` (shifted by whole turns) that lies within ±180° of `refLon`.
+ *
+ * Leaflet draws one copy of each marker, so a marker has to sit on the world copy the map is
+ * looking at. The live map snaps every aircraft, hub ring and route line to the copy nearest
+ * its current centre — which, after a region preset like Oceania (centre ≈ 150°E, or past 180°
+ * when the box crosses the antimeridian), is not the copy the US view used.
+ *
+ * @param {number} lon  longitude in degrees, any range.
+ * @param {number} refLon  the longitude to stay near (e.g. the map centre), any range.
+ * @returns {number}  `lon + 360k` with the result in [refLon − 180, refLon + 180).
+ *   A non-finite input comes back unchanged.
+ */
+export function wrapLonNear(lon, refLon) {
+  if (!Number.isFinite(lon) || !Number.isFinite(refLon)) return lon;
+  return lon - 360 * Math.floor((lon - refLon + 180) / 360);
+}
+
+/**
  * Is this a long-haul flight? (>2500 nm between the endpoints.)
  *
  * When either endpoint is unknown, falls back to the old sub-100 flight-number
