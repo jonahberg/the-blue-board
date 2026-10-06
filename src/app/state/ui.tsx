@@ -17,6 +17,7 @@ import type { ReactNode } from 'react';
 import { bmacEligible } from '@/lib/engagement.js';
 import { DEFAULT_TAB, TAB_HASHES } from '../tabs';
 import { safeLocalStorage } from './storage';
+import { canonicalizeHashParams, cleanTabHash } from '@/lib/tab-hash.js';
 import type { TabId } from '../tabs';
 import type { Flight } from '../data/types';
 
@@ -99,7 +100,11 @@ export function useUi(): UiValue {
 /** The tab named by the URL hash on first paint, else Live. */
 function initialTab(): TabId {
   if (typeof window === 'undefined') return DEFAULT_TAB;
-  const hash = window.location.hash;
+  // Tolerate params after the '#' ('#fleet&utm_source=email…', the Oct 6 2026 email's links):
+  // move them into the query so the URL is canonical, and match the tab on what precedes them.
+  const canonical = canonicalizeHashParams(window.location);
+  if (canonical) window.history.replaceState(null, '', canonical);
+  const hash = cleanTabHash(window.location.hash);
   const match = (Object.keys(TAB_HASHES) as TabId[]).find((id) => TAB_HASHES[id] === hash);
   return match ?? DEFAULT_TAB;
 }
