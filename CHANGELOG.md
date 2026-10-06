@@ -4,6 +4,20 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.1] - 2026-10-06
+
+**"Is this plane missing?" — it wasn't.** A reader emailed that N666UA, the 767-300ER on his UA146 Newark–London flight, was missing from the database and blank on the board. It was in the database all along, and it flew the flight. Two things made it look missing.
+
+- **A search now says which filter is hiding the plane.** The Aircraft Lookup's Wi-Fi filter was still set to Starlink, and N666UA has Satellite Ku Wi-Fi. "No aircraft match your filters" didn't say why. Now a search that matches a plane the filters hide says so: "N666UA (767-300ER) is in the fleet, but your Wi-Fi: Starlink filter is hiding it."
+  - **Show it** drops those filters but keeps the search; Clear Filters is still there.
+  - With several matches it reads "3 aircraft match "N66", but … hiding them".
+  - It blames only the filter that actually empties the list.
+  - (`searchHiddenByFilters` / `searchHiddenMessage` in `src/lib/fleet-utils.js`, `FleetTable.tsx`)
+- **"Not assigned yet" instead of a dash.** At 3:46 PM PT the schedule hadn't named an aircraft for the 7:00 PM PT departure, so the tail column showed "—", which reads as missing data.
+  - A flight that hasn't operated and has no tail now says **Not assigned yet** on the desktop board and **Tail not assigned** on the phone row, with a note that it usually appears a few hours before departure or once the plane shows up on live tracking.
+  - Departed, landed, canceled and past-due rows keep the dash.
+  - (`isTailPending` in `src/lib/schedule-row-model.js`)
+
 ## [1.17.0] - 2026-10-04
 
 **United Express aircraft in the fleet database.** About 40% of a United hub board is United Express, and every one of those aircraft used to read "not in mainline fleet DB". The site now knows about 473 of the ~513 United Express jets: type, operator, Starlink, and the cabin where it's verified.

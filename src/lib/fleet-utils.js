@@ -133,6 +133,48 @@ export function filterFleetData(fleetDb, { type, wifi, status, search, starlinkT
   });
 }
 
+/**
+ * Why a fleet search came back empty when the plane IS in the database: the search alone matches
+ * aircraft, but the type, Wi-Fi or status filter hides every one of them. A reader emailed (Oct 5
+ * 2026) "N666UA is missing" with Wi-Fi = Starlink still set from earlier in the session; the
+ * 767-300ER was there all along, and "No aircraft match your filters" did not say which filter.
+ *
+ * @returns {{count: number, first: object, blocking: Array<{key: 'type'|'wifi'|'status', value: string}>}|null}
+ *   null when there is no search, no filter, something is still shown, or the search itself
+ *   matches nothing (then the plain empty state is the truth).
+ */
+export function searchHiddenByFilters(fleetDb, opts) {
+  const { search, type, wifi, status } = opts || {};
+  if (!String(search ?? '').trim() || !(type || wifi || status)) return null;
+  if (filterFleetData(fleetDb, opts).length > 0) return null;
+  const matches = filterFleetData(fleetDb, { ...opts, type: '', wifi: '', status: '' });
+  if (matches.length === 0) return null;
+  const only = (key, value) => filterFleetData(matches, { ...opts, type: '', wifi: '', status: '', [key]: value }).length === 0;
+  let blocking = [['type', type], ['wifi', wifi], ['status', status]]
+    .filter(([key, value]) => value && only(key, value))
+    .map(([key, value]) => ({ key, value }));
+  // No single filter empties it: the combination does, so every active filter is to blame.
+  if (blocking.length === 0) {
+    blocking = [['type', type], ['wifi', wifi], ['status', status]].filter(([, v]) => v).map(([key, value]) => ({ key, value }));
+  }
+  return { count: matches.length, first: matches[0], blocking };
+}
+
+const STATUS_FILTER_LABELS = { active: 'Active', stored: 'Stored', starlink: 'Starlink', special: 'Special', livery: 'Special livery' };
+
+/** The sentence for searchHiddenByFilters(): which aircraft, and which filter is hiding them. */
+export function searchHiddenMessage(hint, search) {
+  if (!hint) return '';
+  const label = (b) => (b.key === 'type' ? `type: ${b.value}` : b.key === 'wifi' ? `Wi-Fi: ${b.value}` : `status: ${STATUS_FILTER_LABELS[b.value] || b.value}`);
+  const filters = hint.blocking.map(label).join(' + ');
+  const noun = hint.blocking.length > 1 ? 'filters are' : 'filter is';
+  if (hint.count === 1) {
+    const type = hint.first.t ? ` (${hint.first.t})` : '';
+    return `${hint.first.r}${type} is in the fleet, but your ${filters} ${noun} hiding it.`;
+  }
+  return `${hint.count} aircraft match “${String(search).trim()}”, but your ${filters} ${noun} hiding them.`;
+}
+
 /** Aircraft of one family subgroup, from a type → count map. */
 export function subgroupTotal(subgroup, counts) {
   return (subgroup?.types || []).reduce((n, t) => n + ((counts && counts[t]) || 0), 0);

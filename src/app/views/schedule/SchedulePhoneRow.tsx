@@ -167,10 +167,14 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
               >
                 {aircraft.tail}
               </span>
+            ) : row.regPending ? (
+              <span className="shrink-0" title="The schedule has not named the aircraft yet">
+                Tail not assigned
+              </span>
             ) : null}
             {/* Inert inside the stretched row button: icon + sr-only words, never a control. */}
             {aircraft.tail ? <SpecialLiveryMarker livery={liveryForTail(row.reg)} /> : null}
-            {aircraft.tail && aircraft.type ? <Sep /> : null}
+            {(aircraft.tail || row.regPending) && aircraft.type ? <Sep /> : null}
             {aircraft.type ? <span className="shrink-0">{aircraft.type}</span> : null}
             {aircraft.seats ? (
               <>

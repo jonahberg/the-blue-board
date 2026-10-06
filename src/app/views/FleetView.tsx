@@ -29,6 +29,8 @@ import { TYPE_ORDER, typeUtilization } from '@/lib/analytics.js';
 import {
   FLEET_DB_AS_OF,
   filterFleetData,
+  searchHiddenByFilters,
+  searchHiddenMessage,
   fleetUtilization,
   formatFleetAsOf,
   sortFleetData,
@@ -272,6 +274,26 @@ export default function FleetView() {
     setSearch('');
   }, []);
 
+  // A search that finds a plane the other filters hide says so, and "Show it" drops those
+  // filters but keeps the search (reader email Oct 5 2026: "N666UA is missing" with Wi-Fi =
+  // Starlink still on — the 767 was in the database all along).
+  const hiddenHint = useMemo(() => {
+    const hint = searchHiddenByFilters(fleetDb, {
+      type: typeFilter,
+      wifi: wifiFilter,
+      status: statusFilter,
+      search,
+      starlinkTails: starlink.tails,
+      specialAircraftSet: special,
+    });
+    return hint ? { message: searchHiddenMessage(hint, search) as string, plural: hint.count > 1 } : null;
+  }, [fleetDb, typeFilter, wifiFilter, statusFilter, search, starlink.tails, special]);
+  const showHidden = useCallback(() => {
+    setTypeFilter('');
+    setWifiFilter('');
+    setStatusFilter('');
+  }, []);
+
   // ── Deep links: ?type= / ?filter= / ?view=airborne|special ──────────────────────────
   // The shipped dashboard polled every 200 ms for up to 10 s because the fleet database
   // arrives after the URL is read. Here the same wait is an effect that latches the first
@@ -497,6 +519,8 @@ export default function FleetView() {
               special={special}
               filtersActive={filtersActive}
               onClearFilters={clearFilters}
+              hiddenHint={hiddenHint}
+              onShowHidden={showHidden}
               onOpenAircraft={openAircraft}
             />
           </TabsContent>
