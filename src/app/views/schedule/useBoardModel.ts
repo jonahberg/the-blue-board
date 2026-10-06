@@ -147,6 +147,8 @@ export type RowModel = {
   reg: string;
   /** The tail came from live tracking, not the schedule feed — the row says so. */
   regFromLive: boolean;
+  /** No tail yet on a flight that has not operated: "Not assigned yet", not a dash. */
+  regPending?: boolean;
   gate: string;
   status: StatusModel;
   /**

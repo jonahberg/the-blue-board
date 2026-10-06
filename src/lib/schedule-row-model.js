@@ -274,6 +274,21 @@ export function fleetCell(reg, fleetByReg, starlinkTails, expressByReg) {
 }
 
 /**
+ * A flight that has not operated yet and has no tail: the schedule has not named the aircraft
+ * yet (it usually does a few hours out, and the live feed backfills it once the plane is seen).
+ * The board says "Not assigned yet" instead of a bare dash, which a reader took for missing
+ * data (Oct 5 2026: UA146 EWR-LHR at 3:46 PM PT for a 7:00 PM PT departure, flown by N666UA).
+ *
+ * @param {{reg?: string, statusKey?: string, pastDue?: boolean}} row
+ */
+export function isTailPending({ reg, statusKey, pastDue } = {}) {
+  if (reg) return false;
+  if (pastDue) return false;
+  const done = ['departed', 'enroute', 'landed', 'canceled', 'canceled_uncertain', 'diverted'];
+  return !done.includes(String(statusKey || ''));
+}
+
+/**
  * Which way an equipment swap went, from its impact list.
  *
  * A downgrade outranks an upgrade: a swap that adds Starlink but loses Polaris is a
@@ -550,6 +565,11 @@ export function buildScheduleRow(flight, ctx) {
     // Not a future flight: its best time has passed, or the live feed has it airborne or landed.
     pastDue: rawStatus?.pastDue === true || rawStatus?.seenLanded === true || rawStatus?.live === true,
   });
+  const regPending = isTailPending({
+    reg,
+    statusKey: status.key,
+    pastDue: rawStatus?.pastDue === true || rawStatus?.seenLanded === true || rawStatus?.live === true,
+  });
 
   return {
     ident,
@@ -576,6 +596,7 @@ export function buildScheduleRow(flight, ctx) {
     acShort,
     reg,
     regFromLive: isRegFromLiveFeed(flight, reg),
+    regPending,
     gate: terminalGateCell(flight, dir),
     status,
     fleet: fleetCell(reg, fleetByReg, starlinkTails, expressByReg),

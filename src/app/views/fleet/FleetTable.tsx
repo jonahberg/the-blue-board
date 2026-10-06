@@ -52,6 +52,8 @@ export function FleetTable({
   special,
   filtersActive,
   onClearFilters,
+  hiddenHint = null,
+  onShowHidden,
   onOpenAircraft,
 }: {
   rows: FleetAircraft[];
@@ -61,15 +63,25 @@ export function FleetTable({
   special: SpecialIndex;
   filtersActive: boolean;
   onClearFilters: () => void;
+  /** The search matches aircraft the other filters hide (searchHiddenByFilters). */
+  hiddenHint?: { message: string; plural: boolean } | null;
+  onShowHidden?: () => void;
   onOpenAircraft: (reg: string) => void;
 }) {
   if (rows.length === 0 && filtersActive) {
     return (
-      <div className="rounded-lg border border-dashed p-6 text-center">
-        <p className="text-sm">No aircraft match your filters.</p>
-        <Button variant="outline" size="lg" className="mt-3 min-h-11 pointer-fine:md:min-h-0" onClick={onClearFilters}>
-          Clear Filters
-        </Button>
+      <div className="rounded-lg border border-dashed p-6 text-center" role="status">
+        <p className="text-sm">{hiddenHint ? hiddenHint.message : 'No aircraft match your filters.'}</p>
+        <div className="mt-3 flex flex-wrap justify-center gap-2">
+          {hiddenHint && onShowHidden ? (
+            <Button size="lg" className="min-h-11 pointer-fine:md:min-h-0" onClick={onShowHidden}>
+              {hiddenHint.plural ? 'Show them' : 'Show it'}
+            </Button>
+          ) : null}
+          <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" onClick={onClearFilters}>
+            Clear Filters
+          </Button>
+        </div>
       </div>
     );
   }
