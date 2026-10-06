@@ -4,6 +4,18 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.2] - 2026-10-06
+
+**The update email's tab links open the right tab.** The Oct 6 email put its UTM tags after the `#` (`/#schedule?utm_source=email…`, `/?view=express#fleet&utm_source=email…`). The dashboard matched the whole hash against `#schedule`, found nothing, and opened Live. So "See United Express →" and the Schedule and Starlink images all landed on the wrong tab, and those visits lost their email attribution.
+
+- The email is already in 183 inboxes and gets clicked for days, so the site now tolerates that shape.
+  - The tab is whatever comes before the first `?` or `&` in the hash.
+  - The trapped parameters move into the query, where they belong (existing query keys win).
+  - The hash-change handler applies the same rule.
+  - (`src/lib/tab-hash.js`, `src/app/state/ui.tsx`, `resolveTabParam` in `src/app/tabs.ts`)
+- Checked in Chromium against the exact email URLs: the Express link opens the Fleet tab on the United Express list, the Schedule image opens Schedule, and the Starlink image opens Starlink.
+- The email builder now puts UTM tags before the `#`, so the next send doesn't repeat this.
+
 ## [1.17.1] - 2026-10-06
 
 **"Is this plane missing?" — it wasn't.** A reader emailed that N666UA, the 767-300ER on his UA146 Newark–London flight, was missing from the database and blank on the board. It was in the database all along, and it flew the flight. Two things made it look missing.

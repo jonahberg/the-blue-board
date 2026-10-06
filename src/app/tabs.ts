@@ -148,7 +148,8 @@ export function tabById(id: string): TabDef | undefined {
  */
 export function resolveTabParam(value: string | null | undefined): TabId | null {
   if (!value) return null;
-  const key = value.replace(/^#/, '').replace(/^tab-/, '').toLowerCase();
+  // Everything after a '?' or '&' in a hash is a stray query (the Oct 6 2026 email's UTM tags).
+  const key = value.replace(/^#/, '').split(/[?&]/)[0].replace(/^tab-/, '').toLowerCase();
   if (key === 'irops') return 'weather';
   if (key === 'analytics') return 'stats';
   return TABS.some((tab) => tab.id === key) ? (key as TabId) : null;
