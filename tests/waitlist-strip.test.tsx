@@ -11,6 +11,11 @@
  *   3. the strip's button opens the dialog (email focused — they asked) and the signup is
  *      sent with `source: 'dashboard'`, while `?waitlist=1` keeps `popup`;
  *   4. dismissing or submitting keeps the strip away for 30 days, reusing the dialog's keys.
+ *
+ * Since the deep-use donation prompt (Oct 2026) the same trigger brings up ONE ask per visit,
+ * and the strip is it only while the prompt cools down — so every test here starts as a
+ * visitor who answered the prompt "Maybe later" just now. The hand-off itself is pinned in
+ * tests/donate-prompt-dialog.test.tsx.
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -20,10 +25,12 @@ const postWaitlist = vi.hoisted(() => vi.fn(async () => ({ success: true })));
 vi.mock('../src/app/data/api', () => ({ postWaitlist }));
 vi.mock('../src/lib/track.js', () => ({ track: vi.fn() }));
 
+import { donatePromptRecord } from '../src/lib/donate-prompt.js';
 import { TRIGGER_TIME_MS } from '../src/lib/engagement.js';
 import { WAITLIST_STRIP_COOLDOWN_MS, shouldShowWaitlistStrip } from '../src/lib/waitlist-gate.js';
 import WaitlistDialog from '../src/app/features/WaitlistDialog';
 import WaitlistStrip, { T2_SETTLE_MS } from '../src/app/features/WaitlistStrip';
+import { resetDeepUseAsk } from '../src/app/state/deep-use';
 import { countsAsEngagement, resetEngagement, useEngagement } from '../src/app/state/engagement';
 import { UiProvider, useUi } from '../src/app/state/ui';
 import type { UiValue } from '../src/app/state/ui';
@@ -67,6 +74,8 @@ const strip = () => screen.queryByRole('button', { name: 'Get updates' });
 beforeEach(() => {
   vi.useFakeTimers();
   localStorage.clear();
+  localStorage.setItem('bb_donate_prompt', donatePromptRecord('later', Date.now()));
+  resetDeepUseAsk();
   resetEngagement();
   postWaitlist.mockClear();
 });
@@ -74,6 +83,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  resetDeepUseAsk();
   resetEngagement();
   localStorage.clear();
   ui = null;

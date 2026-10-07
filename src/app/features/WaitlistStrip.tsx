@@ -20,6 +20,11 @@
  * are sent with `source: 'dashboard'` (the dialog's link-driven ones keep `popup`), which is
  * how the two can be compared.
  *
+ * Since Oct 2026 the T1/T2 trigger lives in `state/deep-use.ts` and is shared with the
+ * donation prompt: the first time it fires, ONE of the two asks is latched for the visit.
+ * Heavy users get the donation prompt while it is eligible, and this strip while it cools
+ * down (`chooseDeepUseAsk`, src/lib/donate-prompt.js).
+ *
  * No live region: a strip arriving five minutes in is not news, and the live-region inventory
  * in DESIGN.md is closed. Its buttons are `data-no-engagement` so they never advance the T2
  * counter that summoned the strip in the first place.
@@ -29,62 +34,29 @@ import { Mail, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { TRIGGER_TIME_MS } from '@/lib/engagement.js';
 import { track } from '@/lib/track.js';
-import { clicksReachedThreshold, shouldShowWaitlistStrip } from '@/lib/waitlist-gate.js';
-import { initEngagement, setWaitlistSource, useEngagement } from '../state/engagement';
+import { shouldShowWaitlistStrip } from '@/lib/waitlist-gate.js';
+import { deepUseAskThisVisit, useDeepUseTrigger } from '../state/deep-use';
+import { setWaitlistSource, useEngagement } from '../state/engagement';
 import { STORAGE_KEYS, safeLocalStorage, writeString } from '../state/storage';
 import { useUi } from '../state/ui';
 
-/**
- * T2 waits for the clicking to stop before the strip appears: a quiet spell of this long means
- * the visitor has paused. Another click restarts the wait.
- */
-export const T2_SETTLE_MS = 2000;
+export { T2_SETTLE_MS } from '../state/deep-use';
 
 export default function WaitlistStrip() {
   // Subscribing to the UI store also re-renders this when the dialog closes.
   const { setWaitlistOpen } = useUi();
   const engagement = useEngagement();
-  const [triggered, setTriggered] = useState(false);
+  const triggered = useDeepUseTrigger();
   const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    initEngagement();
-  }, []);
-
-  // T1 — five minutes of use.
-  useEffect(() => {
-    const timer = setTimeout(() => setTriggered(true), TRIGGER_TIME_MS as number);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // T2 — the click threshold (20 new / 30 returning), counted by the store's document-level
-  // listener with navigation clicks excluded. Equality ARMS it once; it fires after the pause.
-  const t2Armed = useRef(false);
-  const t2Timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (clicksReachedThreshold(engagement.clicks, engagement.triggerClicks)) t2Armed.current = true;
-    if (!t2Armed.current) return;
-    if (t2Timer.current) clearTimeout(t2Timer.current);
-    t2Timer.current = setTimeout(() => {
-      t2Armed.current = false;
-      t2Timer.current = null;
-      setTriggered(true);
-    }, T2_SETTLE_MS);
-  }, [engagement.clicks, engagement.triggerClicks]);
-  useEffect(
-    () => () => {
-      if (t2Timer.current) clearTimeout(t2Timer.current);
-    },
-    [],
-  );
 
   // Re-read on every render: closing the dialog writes the dismissal and submitting flips
   // `submitted`, and either has to take the strip away with it.
   const visible =
     !dismissed &&
     engagement.ready &&
+    triggered &&
+    deepUseAskThisVisit() === 'waitlist' &&
     shouldShowWaitlistStrip(safeLocalStorage(), {
       triggered,
       submitted: engagement.submitted,

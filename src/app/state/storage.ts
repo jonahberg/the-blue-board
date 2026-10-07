@@ -22,6 +22,8 @@ export const STORAGE_KEYS = {
   waitlistSubmitted: 'bb_waitlist_submitted',
   waitlistDismissed: 'bb_waitlist_dismissed',
   bmacDismissed: 'bb-bmac-dismissed',
+  /** The deep-use donation prompt's answer (Oct 2026, new — not a legacy key). */
+  donatePrompt: 'bb_donate_prompt',
   newsDismissedSlug: 'news_dismissed_slug',
   schedPreloadTs: 'bb_sched_preload_ts',
   /**
