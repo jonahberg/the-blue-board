@@ -4,6 +4,30 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0] - 2026-10-06
+
+**A donation ask for people who really use the board.** When someone has been on the dashboard for 5 minutes, or has tapped around 20 times (30 for a returning visitor), a small popup asks them to donate:
+
+> **Keep The Blue Board going.** Glad it's been useful. The Blue Board is free, with no ads. Donations cover the flight data and servers that keep it running.
+> [Maybe later] [Donate to keep it going]
+
+That moment used to show the "Stay in the loop" email bar. From Oct 3 to Oct 6 it reached 322 visitors and got 5 opens from 376 showings, and no donations.
+
+The popup keeps out of the way:
+- It waits until the visitor has stopped tapping, typing and scrolling for 3 seconds.
+- It never opens on top of a flight panel, dialog or popover, and never into a tab in the background.
+- It shows at most once per visit.
+- "Maybe later", Escape or the close button quiets it for 30 days. Donate quiets it for 90, because the site can't see whether they paid.
+
+On visits during that quiet period, the email bar returns as the heavy-use ask. Only one of the two ever shows per visit.
+
+Implementation:
+- The trigger now lives in `state/deep-use.ts`, shared by both asks.
+- The rules are in `src/lib/donate-prompt.js`.
+- The popup is `features/DonatePrompt.tsx`.
+- Analytics: a `donate_prompt` event (`shown`/`donate`/`later`). The link also counts as a `support_click` from `deep-use-prompt`.
+- DESIGN.md records the exception to "engagement surfaces stay quiet".
+
 ## [1.17.2] - 2026-10-06
 
 **The update email's tab links open the right tab.** The Oct 6 email put its UTM tags after the `#` (`/#schedule?utm_source=email…`, `/?view=express#fleet&utm_source=email…`). The dashboard matched the whole hash against `#schedule`, found nothing, and opened Live. So "See United Express →" and the Schedule and Starlink images all landed on the wrong tab, and those visits lost their email attribution.

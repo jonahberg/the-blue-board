@@ -183,6 +183,7 @@ toasts, the waitlist, news) where they are part of the sentence, not a control.
 | Aircraft detail, delay explain, FR24 lookup, disclaimer, onboarding | `Dialog` (modal) | `features/*Dialog.tsx`, `features/Onboarding.tsx` |
 | Global search (⌘K) | `Command` | `features/SearchPalette.tsx` |
 | Waitlist signup | `Dialog` + `Input`/`Textarea`/`Label`, opened only on request (`?waitlist=1` or the strip's button) | `features/WaitlistDialog.tsx`, `features/WaitlistStrip.tsx` |
+| Donation prompt for heavy users | `Dialog` (modal) on the deep-use trigger, after a pause | `features/DonatePrompt.tsx`, `state/deep-use.ts` |
 | Legal / attribution disclosure | `Popover` | `features/LegalPopover.tsx` |
 | Jargon definitions | `Tooltip` | `features/JargonTerm.tsx` |
 | Tab navigation | `Tabs` | `shell/TabBar.tsx` |
@@ -205,6 +206,13 @@ and BMAC toast (`features/WaitlistStrip`, `NewsBanner`, `TipStrip`, `SupportMete
 elements, never modals, and their show/hide rules live in `src/lib/engagement.js`,
 `tips.js`, `support-meter.js` and `waitlist-gate.js` — not in the components. Nothing that
 asks the visitor for something may interrupt the data they came for.
+
+**One exception, on the owner's call (Oct 2026): the deep-use donation prompt**
+(`features/DonatePrompt.tsx`, rules in `src/lib/donate-prompt.js`). It is a modal `Dialog`.
+It shows only to heavy users, on the waitlist strip's trigger, at most once per visit. It
+waits for a 3-second pause, never opens over another dialog, sheet or popover, and goes
+quiet for 30 days after "Maybe later" (90 after Donate). On a visit where it is the ask, the
+email strip stays down.
 
 Astro-side building blocks live in `src/components/site/` (`StatTile`, `HighlightBox`,
 `JumpNav`, `PillNav`, `Breadcrumbs`, `ContentSection`, `Seo`, `JsonLd`) and
@@ -292,6 +300,7 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-09 | Flight panel is a bottom sheet below `lg` | A right-hand sheet covered the whole phone map it was meant to sit beside (audit F20). |
 | 2026-10 | Schedule board is a two-line list below `md`; toolbar and stat cards compact there | At 390 px the table was 1,065 px wide with status, tail, Wi-Fi and the watch eye off-screen, and at 360×780 no row was above the fold. Desktop/tablet keep the table. |
 | 2026-10 | The passive waitlist ask is a strip, not a modal; one engagement strip at a time on a phone | The five-minute popup covered the board uninvited. The strip honours a "no" for 30 days; its signups carry `source: 'dashboard'` to compare with the link-driven `popup`. |
+| 2026-10 | Heavy users get ONE modal ask, for donations; one deep-use ask per visit | Owner, Oct 6 2026: "a pop up for donations if someone really is going deep on the site", worded "donate to support costs and keep the blue board going" (no coffee). From Oct 3 to Oct 6 the deep-use trigger reached 322 visitors; the email strip it showed got 5 opens from 376 showings and no donations. The prompt takes that moment while it is eligible, and the strip gets it while the prompt cools down. |
 | 2026-10 | Radar dots take the flight-category colour; ops impact is a ⚠ in the label | `OPS_COLORS.caution` equals `CAT_COLORS.MVFR`, so a rainy VFR hub wore MVFR yellow under a "VFR" label. |
 | 2026-10 | United Express markers: `--foreground` white, 85% size when airborne; on the ground they read as ground | Express is identified by callsign prefix (`src/lib/express-operators.js`) — the feed's airline field is `UAL` on every row. Every other token was taken: `bb-warn`/`bb-ok`/`bb-starlink` are the long-haul/watched/Starlink fills, `bb-info` sits ~20° from mainline blue, red is alarm. Size carries Express through Starlink violet, which wins the fill on ~3 in 4 Express jets. |
 | 2026-10 | Map key on the Live map, drawn from `PLANE_LEGEND`; closed below `md` | "I couldn't figure out the meaning of the color-coding" (Reddit). The swatches are `planeIconSpec` output, so the key cannot drift; on a phone it waits behind a 44 px button rather than covering the map. |
