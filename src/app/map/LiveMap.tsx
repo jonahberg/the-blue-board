@@ -28,7 +28,7 @@ import { operatorFromCallsign } from '@/lib/express-operators.js';
 import { greatCirclePoints, isLonghaul, normalizeLonContinuity, wrapLonNear } from '@/lib/geo.js';
 import { regionBounds } from '@/lib/map-regions.js';
 import { prefersReducedMotion } from '@/lib/motion.js';
-import { planeIconSpec } from '@/lib/plane-icon.js';
+import { HUB_RING, planeIconSpec } from '@/lib/plane-icon.js';
 import type { Flight } from '../data/types';
 import { makeBasemapLayer, makeRadarLayer } from './basemap';
 
@@ -325,13 +325,8 @@ export function LiveMap({
     const centerLng = mapRef.current?.getCenter().lng ?? 0;
     for (const hub of HUBS) {
       const lon = wrapLonNear(hub.lon, centerLng);
-      L.circleMarker([hub.lat, lon], {
-        radius: 8,
-        color: '#005DAA',
-        fillColor: '#005DAA',
-        fillOpacity: 0.3,
-        weight: 2,
-      })
+      // HUB_RING is also the map key's swatch (MapLegend), so the two cannot drift.
+      L.circleMarker([hub.lat, lon], { ...HUB_RING })
         .bindTooltip(hub.iata, {
           permanent: true,
           direction: 'top',
@@ -340,8 +335,8 @@ export function LiveMap({
         })
         .addTo(group);
       L.circleMarker([hub.lat, lon], {
-        radius: 8,
-        color: '#005DAA',
+        radius: HUB_RING.radius,
+        color: HUB_RING.color,
         fillOpacity: 0,
         weight: 1,
         className: 'hub-pulse',

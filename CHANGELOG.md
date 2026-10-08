@@ -4,6 +4,15 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.1] - 2026-10-07
+
+**The map key explains the blue circles.** A reader asked: "there's some flights that have a blue circle over them, is that to indicate something? When clicked, it says 'P Ground.'"
+
+The circles are the United hub markers (EWR, IAH, ORD, DEN, SFO, LAX, IAD, GUM, NRT). Planes parked at a hub sit underneath them. The key only listed planes, though, so nothing on screen said what the circles were. "🅿️ Ground" just means on the ground, the same as every grey plane.
+
+- The key now ends with a **United hub** row whenever the Hubs layer is on, which is the default.
+- The row's swatch uses the same `HUB_RING` style the map draws (`src/lib/plane-icon.js`), so the two can't drift apart.
+
 ## [1.18.0] - 2026-10-06
 
 **A donation ask for people who really use the board.** When someone has been on the dashboard for 5 minutes, or has tapped around 20 times (30 for a returning visitor), a small popup asks them to donate:
