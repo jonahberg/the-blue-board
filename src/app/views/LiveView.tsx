@@ -237,6 +237,7 @@ export default function LiveView() {
             className="pointer-events-none absolute bottom-2 left-2 z-[500]"
             longhaulLayer={layers.includes('longhaul')}
             starlinkLayer={starlinkHighlight}
+            hubsLayer={layers.includes('hubs')}
           />
 
           {/* The overlay appears only when the feed has NEVER produced flights: one failed

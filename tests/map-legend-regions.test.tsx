@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RegionMenu } from '../src/app/views/live/MapControls';
 import { MapLegend } from '../src/app/views/live/MapLegend';
 import { MAP_REGIONS } from '../src/lib/map-regions.js';
-import { PLANE_COLORS, PLANE_LEGEND } from '../src/lib/plane-icon.js';
+import { HUB_RING, PLANE_COLORS, PLANE_LEGEND } from '../src/lib/plane-icon.js';
 
 function stubWidth(px: number) {
   window.matchMedia = vi.fn().mockImplementation((query: string) => {
@@ -97,6 +97,25 @@ describe('MapLegend', () => {
     const { container } = render(<MapLegend longhaulLayer={false} starlinkLayer />);
     const ids = [...container.querySelectorAll('[data-legend]')].map((el) => el.getAttribute('data-legend'));
     expect(ids).toEqual(['watched', 'starlink', 'express', 'airborne', 'ground']);
+  });
+
+  it('names the hub ring while the Hubs layer is on, drawn in the ring’s own style', () => {
+    stubWidth(1280);
+    const { container } = render(<MapLegend longhaulLayer={false} starlinkLayer={false} hubsLayer />);
+    const ids = [...container.querySelectorAll('[data-legend]')].map((el) => el.getAttribute('data-legend'));
+    expect(ids).toEqual(['watched', 'express', 'airborne', 'ground', 'hub']);
+    const hub = container.querySelector('[data-legend="hub"]')!;
+    expect(hub.textContent).toBe('United hub');
+    const circle = hub.querySelector('circle')!;
+    expect(circle.getAttribute('stroke')).toBe(HUB_RING.color);
+    expect(circle.getAttribute('fill')).toBe(HUB_RING.fillColor);
+    expect(Number(circle.getAttribute('fill-opacity'))).toBe(HUB_RING.fillOpacity);
+  });
+
+  it('leaves the hub row out with the Hubs layer off', () => {
+    stubWidth(1280);
+    const { container } = render(<MapLegend longhaulLayer={false} starlinkLayer={false} hubsLayer={false} />);
+    expect(container.querySelector('[data-legend="hub"]')).toBeNull();
   });
 
   it('leaves out long-haul and Starlink with both highlights off', () => {

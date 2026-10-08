@@ -39,6 +39,22 @@ export const PLANE_COLORS = Object.freeze({
   airborne: '#6BAAED',
 });
 
+/**
+ * The ring LiveMap draws on each United hub while the Hubs layer is on (on by default), and the
+ * map key's swatch for it. Planes parked at a hub sit under it, which reads as "a blue circle
+ * over that flight" unless the key says what it is (reader question, Oct 7 2026).
+ */
+export const HUB_RING = Object.freeze({
+  radius: 8,
+  color: '#005DAA',
+  fillColor: '#005DAA',
+  fillOpacity: 0.3,
+  weight: 2,
+});
+
+/** The key row for the hub ring, shown only while the Hubs layer is on. */
+export const HUB_LEGEND_ROW = Object.freeze({ id: 'hub', label: 'United hub' });
+
 /** Marker edge length in CSS px. */
 export const PLANE_SIZES = Object.freeze({
   watched: 16,
