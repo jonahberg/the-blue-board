@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   LIVE_ETA_ALLOWANCE_MIN,
+  LIVE_ETA_CLIMB_GUARD_NM,
   liveArrivalEstimate,
   myFlightCountdown,
   myFlightTimes,
@@ -64,6 +65,57 @@ describe('liveArrivalEstimate', () => {
     expect(liveArrivalEstimate({ ...LIVE, spd: 10 }, 'ORD', NOW)).toBeNull();
     expect(liveArrivalEstimate(LIVE, 'ZZZ', NOW)).toBeNull();
     expect(liveArrivalEstimate(null, 'ORD', NOW)).toBeNull();
+  });
+});
+
+// QA Oct 28 2026: UA1021 EWR→PTY (~1,950 nm, ~5 h) read "12h 4m to arrival" just after takeoff.
+// Just past the EWR departure fix: 8,000 ft, 210 kt, climbing 2,500 fpm.
+const UA1021_CLIMBING = {
+  ...LIVE, lat: 40.45, lon: -74.3, alt: 8000 / 3.28084, spd: 210 / 1.944, vr: 2500 / 196.85,
+  origin: 'EWR', dest: 'PTY', flightIATA: 'UA1021', callsign: 'UAL1021', reg: 'N37502',
+};
+const UA1021_TD = {
+  ...UA1215,
+  flight: 'UA1021',
+  origin: { iata: 'EWR', name: 'Newark', terminal: 'C', gate: '', tz: 'America/New_York' },
+  destination: { iata: 'PTY', name: 'Panama City', terminal: '', gate: '', tz: 'America/Panama' },
+  departure: {
+    gate: { scheduled: '2026-10-28T15:00:00.000Z', estimated: '', actual: '2026-10-28T15:05:00.000Z' },
+    takeoff: { scheduled: '', estimated: '', actual: '2026-10-28T15:25:00Z' },
+  },
+  arrival: {
+    landing: { scheduled: '', estimated: '', actual: '' },
+    gate: { scheduled: '2026-10-28T20:02:00.000Z', estimated: '2026-10-28T20:00:00.000Z', actual: '' },
+  },
+};
+const CLIMB_NOW = Date.parse('2026-10-28T15:29:00Z');
+
+describe('liveArrivalEstimate — climb-out guard', () => {
+  it('gives no live ETA while climbing out far from the destination (the "12h 4m" case)', () => {
+    expect(liveArrivalEstimate(UA1021_CLIMBING, 'PTY', CLIMB_NOW)).toBeNull();
+    // Still climbing at a cruise-like altitude: no estimate yet either.
+    expect(liveArrivalEstimate({ ...UA1021_CLIMBING, alt: 30000 / 3.28084, spd: 430 / 1.944 }, 'PTY', CLIMB_NOW)).toBeNull();
+  });
+
+  it('the provider estimate stands while climbing, in the countdown and the payload', () => {
+    const td = reconcileLiveArrival(UA1021_TD, UA1021_CLIMBING, CLIMB_NOW);
+    expect(td).toBe(UA1021_TD);
+    expect(td.arrival.gate.estimated).toBe('2026-10-28T20:00:00.000Z');
+  });
+
+  it('level at cruise, the live ETA returns', () => {
+    const cruise = { ...UA1021_CLIMBING, lat: 33.0, lon: -77.5, alt: 37000 / 3.28084, spd: 470 / 1.944, vr: 0 };
+    const est = liveArrivalEstimate(cruise, 'PTY', CLIMB_NOW);
+    expect(est).not.toBeNull();
+    const hours = (Date.parse(est.etaISO) - CLIMB_NOW) / 3600e3;
+    expect(hours).toBeGreaterThan(2);
+    expect(hours).toBeLessThan(4.5);
+  });
+
+  it('near the destination the guard steps aside: descent and approach keep the live ETA', () => {
+    expect(LIVE_ETA_CLIMB_GUARD_NM).toBe(150);
+    // UA1215 above: 14,050 ft, descending, ~45 nm out.
+    expect(liveArrivalEstimate(LIVE, 'ORD', NOW)).not.toBeNull();
   });
 });
 
