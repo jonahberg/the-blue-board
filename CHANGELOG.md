@@ -4,6 +4,37 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.1] - 2026-10-28
+
+**Dependency and security refresh. Nothing visitors see changes.** `bun audit` drops from 130 advisories (3 critical, 56 high) to 33 (1 critical, 10 high). Every one that remains is in build tooling or a devDependency, and every one is waiting on an upstream release or a major upgrade listed under "Held back" below.
+
+### Updated
+- In-range updates for direct dependencies: `@supabase/supabase-js` 2.106.2 → 2.118.0, `@vercel/functions` 3.6.1 → 3.10.4, `fast-xml-parser` 5.8.0 → 5.11.2, `lucide-react` 1.45.0 → 1.63.0, `radix-ui` 1.6.7 → 1.8.1, `react`/`react-dom` 19.3.0 → 19.3.1, `resend` 6.12.4 → 6.35.0, `shadcn` 4.21.0 → 4.23.0, `tailwind-merge` 3.6.0 → 3.7.0.
+- Dev dependencies: `vite` 7.3.3 → 7.3.7, `vitest` 4.1.7 → 4.1.12, `@vercel/node` 5.8.8 → 5.10.2, `playwright` 1.60.0 → 1.64.1, `axe-core` and `@axe-core/playwright` → 4.14.0, `jsdom` 30.0.1 → 30.1.3 (still pinned exactly).
+- `@types/bun` now uses `~1.3.14` so it can't drift ahead of the Bun 1.3.14 that `packageManager` and CI pin. The `^` range would have pulled in the 1.4 types.
+
+### Security
+- **The build now uses the patched Vite.** After the update, `astro` and `@astrojs/react` still had their own nested Vite 7.3.3, which is inside the advisory range (`<=7.3.4`). Both now use the top-level 7.3.7. Vitest uses it too, in place of the nested Vite 8.0.14 it carried before.
+- **Stale transitive packages re-resolved to their patched releases** in the same major: `js-yaml` 4.3.2, `devalue` 5.9.4, `svgo` 4.1.0, `smol-toml` 1.9.1, `tar` 7.5.22, `http-cache-semantics` 4.3.0, `source-map-js` 1.2.2, `fast-uri` 3.1.9, `ip-address` 10.7.5, `brace-expansion` 1.1.21, `postcss` 8.5.32, `nanoid` 3.3.20, plus the `undici` 7.x and 8.x copies (7.30.1, 8.12.3). `shadcn` 4.23 replaced `@modelcontextprotocol/sdk` 1.x with `@modelcontextprotocol/server` 2.x. That removes the SDK's express/body-parser/qs/proxy-addr/hono chain, which carried one of the three criticals (`proxy-addr`).
+- **Two `overrides`:**
+  - `zod: ^4.6.7`. `@vercel/functions` → `@vercel/oidc` → `@vercel/cli-config` pins `zod@4.1.11` exactly, which is in the vulnerable range, and that chain ships with the functions. Every copy of zod in the tree is 4.x, so the override doesn't cross a major.
+  - `esbuild: ^0.27.7`. Without it, Bun dedupes Vite onto the `esbuild@0.27.0` that `@vercel/node` pins, and Vite uses esbuild to minify the production bundle. The override keeps every copy on 0.27.7, the version Vite already used.
+- PR #277 (`@fastify/busboy` 3.2.1) stays closed for the reason given on it: the vulnerable 2.1.1 comes in through the `undici@5.28.4` that `@vercel/node` pins exactly. That is still true on the newest `@vercel/node` (28.0.0).
+
+### Held back
+- **`astro` 6 → 7 and `@astrojs/react` 5 → 7.** All six remaining Astro advisories are fixed only in 7.x, including the critical AVIF image-optimization RCE (GHSA-26w7-cxv4-gfx2). Astro 7 requires Vite 8, and Vite 8 is why v1.8.0 pinned `@astrojs/react` to 5.x: the second Vite it hoisted broke `@tailwindcss/vite`. Why the risk is low until then:
+  - This site never uses `astro:assets`, has no `/_image` endpoint, and renders nothing at request time (`output: 'static'`).
+  - So these advisories can only be triggered at build time, by content committed to this repo.
+  - `sharp` (3 high; Astro's optional image dependency, `^0.34` in Astro 6, unused here) and `esbuild` (1 low; Windows dev server only; Astro 6 needs `^0.27.3`) clear with the same upgrade. It needs its own PR with a visual check.
+- **`@anthropic-ai/sdk` 0.100 → 1.x.** SDK 1.0.0 is the release that switches requests to API version `2026-10-21` and changes how credentials are sent. `api/delay-explain.ts` authenticates to Vercel AI Gateway with `apiKey: null` plus `authToken`, so this upgrade needs testing against the gateway.
+- **`typescript` 7:** still blocked by `@vercel/node` (see the 1.7.4 note). **`vite` 8 / `vitest` 5:** these go with Astro 7.
+- **`cn` 0.2.6 → 0.5.0:** a 0.x minor (breaking under semver) with no published changelog. It builds every shadcn component's class string at runtime inside the client-only island, where neither the build nor the tests would notice a change.
+- **Exact pins inside Vercel's own packages:** `undici` 5.28.4 (18 advisories) and `@fastify/busboy` 2.1.1 (2) via `@vercel/node`; `path-to-regexp` 6.1.0 via `@vercel/node` and `@vercel/routing-utils`; `ajv` 8.6.3 via `@vercel/static-config`. All are devDependencies, and the one import in `api/` is type-only. `tests/vercel-routes.test.js` compiles `vercel.json` with routing-utils, so forcing a different `path-to-regexp` would make that test disagree with the platform.
+- **`deepmerge` 4.3.1:** no fixed version has been published (it's in the `shadcn` CLI only).
+
+### Verified
+- Run on Node 24.22.2 and Bun 1.3.14, the versions CI uses: `bun install --frozen-lockfile`, `bun run typecheck`, and `bun run build`. The CSP hashes didn't change: `verify-csp-hashes` reports both inline scripts allowed. `bun run test` passed 3,786 tests in 252 files, the same as before the update.
+
 ## [1.19.0] - 2026-10-28
 
 **Tomorrow's flights stop reading as hours late.** On Oct 7 a reader emailed about tomorrow's 08:20 UA934 EWR→LHR. United had it on time; the board said **RISK: HIGH**, and the AI explanation said it was "already 440 minutes delayed" during "evening peak hours (20:53 local)".
