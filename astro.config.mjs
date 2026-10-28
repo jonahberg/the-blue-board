@@ -19,6 +19,10 @@ export default defineConfig({
   build: {
     format: 'file',
   },
+  // Astro 7 changed the default to 'jsx', which drops whitespace that contains a line break
+  // between inline elements. The templates rely on that whitespace for word spacing: the
+  // footer rendered "Privacy ·Open Dashboard". `true` is Astro 6's behaviour.
+  compressHTML: true,
   integrations: [react()],
   vite: {
     plugins: [tailwindcss()],

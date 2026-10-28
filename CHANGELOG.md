@@ -4,6 +4,44 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.1] - 2026-10-28
+
+**Astro 7. Nothing visitors see changes.** This clears all six open Dependabot alerts, which were all on `astro`, including the critical AVIF image-optimization RCE (GHSA-26w7-cxv4-gfx2). `bun audit` drops from 33 advisories (1 critical, 10 high) to 24 (0 critical, 7 high). Every page was compared against a v1.20.0 build (see Verified).
+
+### Security
+- `astro` 6.4.8 → 7.3.8. That fixes GHSA-26w7-cxv4-gfx2 (critical, fixed in 7.2.8), GHSA-98hj-9722-w3j8, GHSA-376h-93r7-7g6f, GHSA-f48w-9m4c-m7f5 and GHSA-4g3v-8h47-v7g6 (moderate), and GHSA-7pw4-f3q4-r2p2 (low). 7.3.8 is the newest 7.x that is at least two weeks old; 7.4.0 came out Oct 15.
+- `sharp` 0.34.5 → 0.35.5 clears its 3 high advisories. It is Astro's optional image dependency and isn't used here.
+
+### Updated
+- `@astrojs/react` 5.0.7 → 7.0.1, the release that pairs with Astro 7.3.
+- `vite` 7.3.7 → 8.3.4. Astro 7 is built on Vite 8: Rolldown bundles, Oxc minifies JS, and Lightning CSS minifies CSS. 8.3.4 rather than 8.3.5 because 8.3.5 is a week old, and 8.3.3 already has every Vite security fix.
+- There is exactly one Vite in the tree. `astro`, `@astrojs/react`, `@tailwindcss/vite` and `vitest` all use the top-level 8.3.4. v1.8.0 pinned `@astrojs/react` to 5.x because a second, hoisted Vite 8 made `@tailwindcss/vite` fail ("Missing field `tsconfigPaths`"). With a single Vite that can't happen, and `@tailwindcss/vite` 4.3.3 already supports Vite 8.
+- `vitest` stays on 4.1.12, which supports Vite 8. Vitest 5 isn't needed for this.
+
+### Changed
+Astro 7 changes that would have shown on the site:
+- **`compressHTML: true`** in `astro.config.mjs`. Astro 7's new default (`'jsx'`) drops whitespace that contains a line break between inline elements, so the footer read "Privacy ·Open Dashboard". `true` is Astro 6's behaviour.
+- **HTML entities in attributes.** Astro 7's compiler no longer decodes an entity in a static attribute or component prop. The tracker search boxes showed a literal `Boise&hellip;` / `Polaris&hellip;`, and the Newark heading read `More on Newark &amp; United`. These three strings now use the characters themselves (`…`, `&`), which render the same on both versions. There are no other entities in `.astro` attributes. (`src/pages/trackers/atc.astro`, `src/pages/trackers/united-hubs.astro`, `src/pages/newark.astro`)
+- **CSP hashes.** Astro's two inline island scripts (the `astro:only` shim and the `astro-island` runtime) changed bytes, so both `'sha256-…'` tokens in `vercel.json` are replaced. `verify-csp-hashes` failed the first build until they were.
+
+### Overrides
+- `zod: ^4.6.7` stays. `@vercel/cli-config` still pins `zod@4.1.11`.
+- `esbuild: ^0.27.7` stays, for a different reason than before:
+  - The v1.19.1 reason is gone. Vite 8 loads esbuild only when `build.minify` or `build.cssMinify` is `'esbuild'`, and Astro 7 doesn't depend on it.
+  - The only copies left come through `@vercel/node`, which pins 0.27.0, and its `tsx`, which wants `~0.27.0`. Without the override they split into 0.27.0 and 0.27.7, and the low Windows dev-server advisory (`>=0.27.3 <0.28.1`) remains either way.
+  - Overriding to `^0.28` would cross a 0.x minor on Vercel's exact pin. So the override now just keeps one copy.
+- The 24 advisories left are the ones v1.19.1 lists under "Held back": Vercel's exact pins (`undici`, `@fastify/busboy`, `path-to-regexp`, `ajv`), `deepmerge` in the `shadcn` CLI, and the esbuild one above.
+
+### Verified
+- Run on Node 24.22.2 and Bun 1.3.14, the versions CI uses: `bun install --frozen-lockfile`, `bun run typecheck`, and `bun run build` (`verify-csp-hashes`: both inline scripts allowed). `bun run test` passed 3,851 tests in 256 files, the same as v1.20.0.
+- Compared with v1.20.0's `dist/`, after normalizing asset hashes:
+  - All 69 HTML pages have the same elements, attributes and text.
+  - The only whitespace difference left is inside the jump-nav pills (`<a> Overview </a>`). They are `inline-flex`, so it doesn't render.
+  - Every other output file is byte-identical except `feed.xml`'s `lastBuildDate`. The font files are identical.
+  - The CSS differs only in minification: Lightning CSS keeps some `calc()`s that esbuild folded, and it adds `-webkit-text-decoration` prefixes.
+- Screenshots at 1440 and 390 px against v1.20.0: `/` (Schedule tab), `/hubs/ewr`, `/trackers/united-hubs`, `/trackers/atc`, `/fleet`, `/newark`, a news article and `/404`. The static pages are pixel-identical. `/` and `/newark` differ only in live numbers. No page errors on either build.
+- `astro dev` still serves the Tailwind CSS and proxies `/api`.
+
 ## [1.20.0] - 2026-10-28
 
 **Heavy users are asked to join the email list again, not only to donate.** When someone has been on the dashboard for 5 minutes, or has tapped around 20 times (30 for a returning visitor), they get one ask. Since v1.18.0 that was the donation popup whenever it was eligible, so the "Stay in the loop" email bar almost never showed: 0 opens in 191 showings since Oct 7, and no email signups since Oct 5. The email popup that used to open by itself had brought in 188 of the first 192.
