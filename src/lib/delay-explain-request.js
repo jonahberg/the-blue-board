@@ -11,7 +11,8 @@
 // are accepted here rather than forcing either caller to flatten first, because the
 // server contract is a set of strings and this is the one place that knows it.
 
-import { RISK_BANDS } from './delay-risk.js';
+import { RISK_BANDS, liveConditionsApply } from './delay-risk.js';
+import { HUB_TZ } from './hubTz.js';
 
 /**
  * The colour for a risk LABEL, straight off the band table the score came from.
@@ -129,6 +130,13 @@ export function hubLocalTime(timeZone, now = new Date()) {
 export function buildDelayExplainBody(ctx) {
   const context = ctx || {};
   const score = Number(context.riskScore);
+  // The departure the badge scored (riskTimesForRow / liveConditionsApply): a later day's
+  // flight is scored without today's conditions, so the model must not be handed them either —
+  // the prompt rules forbid discussing a topic whose line is absent.
+  // The same zone the risk model scored the row in (useBoardModel / board-risk.js).
+  const timeZone = HUB_TZ[context.hub] || 'America/Chicago';
+  const nowMs = Number.isFinite(context.nowMs) ? context.nowMs : Date.now();
+  const live = liveConditionsApply(context.scheduledDep, nowMs, timeZone);
   const body = {
     flight: context.flight,
     route: context.route,
@@ -136,15 +144,55 @@ export function buildDelayExplainBody(ctx) {
     riskLabel: context.riskLabel,
     factors: asFactors(context.factors ?? context.riskFactors),
     hub: context.hub,
-    otp: asOtp(context.otp),
-    weather: asWeather(context.weather),
-    destWeather: asWeather(context.destWeather),
-    faaStatus: context.faaStatus,
-    inbound: context.inbound,
-    irops: asIrops(context.irops),
+    scheduled: scheduledDepartureLocal(context.scheduledDep, timeZone, nowMs),
+    otp: live ? asOtp(context.otp) : undefined,
+    weather: live ? asWeather(context.weather) : undefined,
+    destWeather: live ? asWeather(context.destWeather) : undefined,
+    faaStatus: live ? context.faaStatus : undefined,
+    inbound: live ? context.inbound : undefined,
+    irops: live ? asIrops(context.irops) : undefined,
     hubTime: context.hubTime,
     connection: context.connection,
   };
   if (Number.isFinite(score)) body.riskScore = score;
   return body;
+}
+
+/**
+ * "Thu Oct 29, 08:20 local (tomorrow)" — the flight's own scheduled departure in its hub's
+ * zone, tagged against the hub's current day, so the model anchors time-of-day on the flight
+ * and not on the clock the dialog was opened at.
+ *
+ * @param {number|string|null|undefined} scheduled  epoch seconds/ms or an ISO string.
+ * @param {string} timeZone
+ * @param {number} [nowMs]
+ * @returns {string} '' when the time is unknown or the zone is rejected.
+ */
+export function scheduledDepartureLocal(scheduled, timeZone, nowMs = Date.now()) {
+  const ms = typeof scheduled === 'number' ? (scheduled > 1e12 ? scheduled : scheduled * 1000) : Date.parse(scheduled || '');
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  try {
+    // Assembled from parts: ICU versions disagree on the joiner ("Thu, Oct 8, 08:20" on Node 24,
+    // "Thu, Oct 8 at 08:20" on newer ICU), and h23 avoids the "24:05" midnight quirk.
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      })
+        .formatToParts(new Date(ms))
+        .map((part) => [part.type, part.value]),
+    );
+    const when = `${parts.weekday} ${parts.month} ${parts.day}, ${parts.hour}:${parts.minute}`;
+    const dayKey = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone });
+    const days = Math.round((Date.parse(dayKey(ms)) - Date.parse(dayKey(nowMs))) / 86400e3);
+    const rel = days === 0 ? 'today' : days === 1 ? 'tomorrow' : days === -1 ? 'yesterday' : '';
+    return `${when} local${rel ? ` (${rel})` : ''}`;
+  } catch {
+    return '';
+  }
 }

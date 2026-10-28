@@ -391,18 +391,93 @@ function finalize(state) {
   };
 }
 
+/**
+ * The model's time inputs for one schedule row, pairing like with like.
+ *
+ * A delay is a time minus the scheduled time OF THE SAME EVENT. AeroDataBox usually sends an
+ * arrival estimate long before it sends a departure one (every tomorrow row, and most of
+ * today's later rows), and the old `estimated.departure || estimated.arrival` fallback then
+ * measured the ARRIVAL estimate against the scheduled DEPARTURE: the "delay" was the block
+ * time. Oct 7 2026, a reader: tomorrow's on-time UA934 EWR→LHR (08:20 → 20:40 BST) read
+ * "Already 440min delayed", HIGH 59/100; on Oct 28 830 rows across the 20 hub boards carried
+ * a delay like it.
+ *
+ * @param {object} flight  a provider schedule row.
+ * @returns {{scheduledTime: number|string, comparisonTime: number|string, delayBaseTime: number|string}}
+ *   `scheduledTime` stays the departure (time-of-day and inbound read it); `delayBaseTime` is
+ *   the scheduled time `comparisonTime` is measured against. Empty strings when absent.
+ */
+export function riskTimesForRow(flight) {
+  const t = flight?.time || {};
+  const schedDep = t.scheduled?.departure || '';
+  const schedArr = t.scheduled?.arrival || '';
+  const scheduledTime = schedDep || schedArr;
+  const dep = t.real?.departure || t.estimated?.departure || '';
+  if (schedDep && dep) return { scheduledTime, comparisonTime: dep, delayBaseTime: schedDep };
+  const arr = t.real?.arrival || t.estimated?.arrival || '';
+  if (schedArr && arr) return { scheduledTime, comparisonTime: arr, delayBaseTime: schedArr };
+  return { scheduledTime, comparisonTime: '', delayBaseTime: '' };
+}
+
+/** How far ahead a departure on a later hub-local day may still be scored on live conditions. */
+export const LIVE_CONDITIONS_HORIZON_MS = 6 * 3600e3;
+
+function hubDayKey(ms, timeZone) {
+  try {
+    return new Date(ms).toLocaleDateString('en-CA', { timeZone: timeZone || 'America/Chicago' });
+  } catch {
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * Do the hub's conditions RIGHT NOW say anything about this departure?
+ *
+ * FAA programs, the METAR, today's on-time rate and cancellations, the NAS plan and the inbound
+ * aircraft all describe the operation in progress. Tomorrow morning's flight is not in it: the
+ * same Oct 7 report scored tomorrow's 08:20 UA934 on that evening's planned ground stop, and
+ * every tomorrow row read MOD on that evening's departure delays. A departure on a later
+ * hub-local day is scored on live conditions only when it is within LIVE_CONDITIONS_HORIZON_MS
+ * (a 00:30 red-eye seen at 23:00 is still tonight's operation).
+ *
+ * @param {number|string|Date} scheduledTime
+ * @param {number} nowMs
+ * @param {string} timeZone  the departure hub's zone.
+ * @returns {boolean} true when unknown — the old behaviour, never a silent drop.
+ */
+export function liveConditionsApply(scheduledTime, nowMs, timeZone) {
+  const scheduledMs = toMillis(scheduledTime);
+  if (!scheduledMs) return true;
+  if (scheduledMs - nowMs <= LIVE_CONDITIONS_HORIZON_MS) return true;
+  return hubDayKey(scheduledMs, timeZone) <= hubDayKey(nowMs, timeZone);
+}
+
 export function computeDelayRiskModel(input) {
   const state = createState();
   const nowMs = input.nowMs || Date.now();
   const scheduledMs = toMillis(input.scheduledTime);
+  // `delayBaseTime` is the scheduled time of the event `comparisonTime` belongs to
+  // (riskTimesForRow); absent, the comparison is against the departure, as before.
+  const delayBaseMs = toMillis(input.delayBaseTime) || scheduledMs;
   const comparisonMs = toMillis(input.comparisonTime);
 
-  if (scheduledMs && comparisonMs && comparisonMs > scheduledMs) {
-    const delayMin = Math.max(0, Math.round((comparisonMs - scheduledMs) / 60000));
+  if (delayBaseMs && comparisonMs && comparisonMs > delayBaseMs) {
+    const delayMin = Math.max(0, Math.round((comparisonMs - delayBaseMs) / 60000));
     if (delayMin >= 120) addPoints(state, 'actual-delay', 50, `Already ${delayMin}min delayed`);
     else if (delayMin >= 60) addPoints(state, 'actual-delay', 40, `Already ${delayMin}min delayed`);
     else if (delayMin >= 30) addPoints(state, 'actual-delay', 30, `${delayMin}min delay`);
     else if (delayMin >= 15) addPoints(state, 'actual-delay', 15, `${delayMin}min delay`);
+  }
+
+  if (!liveConditionsApply(input.scheduledTime, nowMs, input.timeZone)) {
+    // A later day's flight: only what is known about IT — a published delay, the hub's
+    // structural baseline, its own time of day.
+    collectTimeOfDaySignal(state, input.timeZone, input.scheduledTime, nowMs);
+    const laterHubProfile = input.hubProfile || HUB_RISK_PROFILES[input.originHub];
+    if (laterHubProfile && laterHubProfile.base > 0) {
+      addPoints(state, 'hub-profile', laterHubProfile.base, laterHubProfile.base >= 4 ? laterHubProfile.name : '');
+    }
+    return finalize(state);
   }
 
   collectFaaSignals(state, input.originHub, input.originFaa, 'origin');

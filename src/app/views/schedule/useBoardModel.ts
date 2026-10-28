@@ -23,10 +23,11 @@ import { INTL_AIRPORTS } from '@/lib/airport-metadata.js';
 import { computeScheduleStatCounts } from '@/lib/board-stats.js';
 import { effectiveRowTime, firstFutureIndex, nowDividerIndex } from '@/lib/board-now.js';
 import { getScheduleRiskContext } from '@/lib/delay-explain-context.js';
-import { HUB_COORDINATES, HUB_RISK_PROFILES, computeDelayRiskModel } from '@/lib/delay-risk.js';
+import { HUB_COORDINATES, HUB_RISK_PROFILES, computeDelayRiskModel, riskTimesForRow } from '@/lib/delay-risk.js';
 import { getTypicalFleetStats } from '@/lib/equipment-swaps.js';
 import { getFAADelayContext } from '@/lib/faa-context.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
+import { withFleetType } from '@/lib/aircraft-type.js';
 import { applySightingsToBoard, sightingsFromLiveFeed } from '@/lib/reg-overlay.js';
 import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
 import { hubTzAbbrev } from '@/lib/schedule-load.js';
@@ -147,7 +148,7 @@ export type RowModel = {
   reg: string;
   /** The tail came from live tracking, not the schedule feed — the row says so. */
   regFromLive: boolean;
-  /** No tail yet on a flight that has not operated: "Not assigned yet", not a dash. */
+  /** No tail yet on a flight that has not operated: "Not in our feed yet", not a dash. */
   regPending?: boolean;
   gate: string;
   status: StatusModel;
@@ -357,14 +358,19 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
         depHub: string;
         arrHub: string;
       };
-      const schedTime = flight.time?.scheduled?.departure || flight.time?.scheduled?.arrival;
-      const estTime = flight.time?.estimated?.departure || flight.time?.estimated?.arrival;
-      const actTime = flight.time?.real?.departure || flight.time?.real?.arrival;
+      // Departure against departure, arrival against arrival (riskTimesForRow): the old
+      // fallback measured an arrival estimate against the scheduled departure.
+      const { scheduledTime, comparisonTime, delayBaseTime } = riskTimesForRow(flight) as {
+        scheduledTime: number | string;
+        comparisonTime: number | string;
+        delayBaseTime: number | string;
+      };
       const result = computeDelayRiskModel({
         currentFlightNumber: flight.identification?.number?.default || '',
         nowMs: Date.now(),
-        scheduledTime: schedTime || '',
-        comparisonTime: actTime || estTime || '',
+        scheduledTime,
+        comparisonTime,
+        delayBaseTime,
         originHub: depHub,
         destinationHub: arrHub,
         originFaa: faaIndex[depHub],
@@ -384,7 +390,17 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       return value;
     };
 
-    const filtered = boardRows.filter((row) =>
+    // A blank provider type code comes from our own fleet databases by tail (aircraft-type.js):
+    // UA146 read "—" beside N653UA, a 767-300ER. Filled once here so the Aircraft cell, filter
+    // and sort all read the same code. The copy keeps its resolved tail.
+    const typedRows = boardRows.map((row) => {
+      const reg = regFor(row);
+      const typed = withFleetType(row, reg, fleetByReg, expressByReg) as ScheduleRow;
+      if (typed !== row) regCache.set(typed, reg);
+      return typed;
+    });
+
+    const filtered = typedRows.filter((row) =>
       matchesScheduleFilters(
         row,
         {

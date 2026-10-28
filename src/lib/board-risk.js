@@ -12,7 +12,7 @@
 // score or say "RISK N/A"; it may never guess.
 
 import { getScheduleRiskContext } from './delay-explain-context.js';
-import { HUB_COORDINATES, HUB_RISK_PROFILES, computeDelayRiskModel } from './delay-risk.js';
+import { HUB_COORDINATES, HUB_RISK_PROFILES, computeDelayRiskModel, riskTimesForRow } from './delay-risk.js';
 import { HUB_TZ } from './hubTz.js';
 import { classifySchedStatus } from './schedule-status.js';
 
@@ -42,15 +42,14 @@ export function computeScheduleRowRisk(row, hub, dir, nowSec, deps) {
   }
 
   const { depHub, arrHub } = getScheduleRiskContext(row, hub, dir);
-  const schedTime = row.time?.scheduled?.departure || row.time?.scheduled?.arrival;
-  const estTime = row.time?.estimated?.departure || row.time?.estimated?.arrival;
-  const actTime = row.time?.real?.departure || row.time?.real?.arrival;
+  const { scheduledTime, comparisonTime, delayBaseTime } = riskTimesForRow(row);
 
   const result = computeDelayRiskModel({
     currentFlightNumber: row.identification?.number?.default || '',
     nowMs: Date.now(),
-    scheduledTime: schedTime || '',
-    comparisonTime: actTime || estTime || '',
+    scheduledTime,
+    comparisonTime,
+    delayBaseTime,
     originHub: depHub,
     destinationHub: arrHub,
     originFaa: faaIndex[depHub],
@@ -81,14 +80,16 @@ export function computeScheduleRowRisk(row, hub, dir, nowSec, deps) {
  */
 export function findBoardRiskForFlight(flightNum, boards, nowSec, deps) {
   if (!flightNum) return null;
+  // Today's and tomorrow's boards both carry the same flight number. The first board in the
+  // store used to win, so a card could show TOMORROW's instance's risk; the instance whose
+  // scheduled departure is nearest to now (and not long gone) is the one the card is about.
+  let best = null;
   for (const [key, board] of Object.entries(boards || {})) {
     const rows = Array.isArray(board?.rows) ? board.rows : [];
     if (!rows.length) continue;
     const parts = key.split('-');
     const boardHub = board?.hub || parts[0];
     const boardDir = (board?.dir || parts[1]) === 'arrivals' ? 'arrivals' : 'departures';
-    const row = rows.find((f) => f.identification?.number?.default === flightNum);
-    if (!row) continue;
     const classifyOpts = {
       hubDisruptionMinutes:
         Number.isFinite(Number(board?.meta?.hubDisruptionMinutes)) &&
@@ -96,11 +97,17 @@ export function findBoardRiskForFlight(flightNum, boards, nowSec, deps) {
           ? Number(board.meta.hubDisruptionMinutes)
           : 0,
     };
-    const risk = computeScheduleRowRisk(row, boardHub, boardDir, nowSec, {
-      ...deps,
-      classifyOpts,
-    });
-    if (risk) return risk;
+    for (const row of rows) {
+      if (row.identification?.number?.default !== flightNum) continue;
+      const risk = computeScheduleRowRisk(row, boardHub, boardDir, nowSec, {
+        ...deps,
+        classifyOpts,
+      });
+      if (!risk) continue;
+      const dep = Number(row.time?.scheduled?.departure || row.time?.scheduled?.arrival) || 0;
+      const distance = Math.abs(dep - nowSec);
+      if (!best || distance < best.distance) best = { risk, distance };
+    }
   }
-  return null;
+  return best ? best.risk : null;
 }

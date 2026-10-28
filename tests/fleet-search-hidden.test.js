@@ -49,7 +49,7 @@ describe('searchHiddenByFilters', () => {
 
 import { isTailPending } from '../src/lib/schedule-row-model.js';
 
-describe('isTailPending (board says "Not assigned yet", not a dash)', () => {
+describe('isTailPending (board says "Not in our feed yet", not a dash)', () => {
   it('is true for a flight that has not operated and has no tail', () => {
     expect(isTailPending({ reg: '', statusKey: 'scheduled' })).toBe(true);
     expect(isTailPending({ reg: '', statusKey: undefined })).toBe(true);
