@@ -168,8 +168,8 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
                 {aircraft.tail}
               </span>
             ) : row.regPending ? (
-              <span className="shrink-0" title="The schedule has not named the aircraft yet">
-                Tail not assigned
+              <span className="shrink-0" title="Our schedule feed names the aircraft 1–2 hours before departure; United may have assigned it already">
+                Tail not in feed yet
               </span>
             ) : null}
             {/* Inert inside the stretched row button: icon + sr-only words, never a control. */}

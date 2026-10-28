@@ -274,10 +274,14 @@ export function fleetCell(reg, fleetByReg, starlinkTails, expressByReg) {
 }
 
 /**
- * A flight that has not operated yet and has no tail: the schedule has not named the aircraft
- * yet (it usually does a few hours out, and the live feed backfills it once the plane is seen).
- * The board says "Not assigned yet" instead of a bare dash, which a reader took for missing
- * data (Oct 5 2026: UA146 EWR-LHR at 3:46 PM PT for a 7:00 PM PT departure, flown by N666UA).
+ * A flight that has not operated yet and has no tail: our schedule feed has not named the
+ * aircraft yet (AeroDataBox publishes tails ~1–2h out — Oct 28 2026: 32% of departures 0–2h
+ * out had one, 5% at 4–6h, 0 of 1,283 tomorrow — and the live feed backfills once the plane is
+ * seen). The board says "Not in our feed yet" instead of a bare dash, which a reader took for
+ * missing data (Oct 5 2026: UA146 EWR-LHR at 3:46 PM PT for a 7:00 PM PT departure, flown by
+ * N666UA). It said "Not assigned yet" until v1.19.0 — but United assigns about a day ahead,
+ * and the same reader had tomorrow's UA934 tail (N657UA) from united.com while the board said
+ * it was unassigned. The words describe our feed, not United.
  *
  * @param {{reg?: string, statusKey?: string, pastDue?: boolean}} row
  */
@@ -418,12 +422,15 @@ export function delayCell({ statusKey, presumed, schedTimeSec, actualTimeSec, ha
  *
  * @returns {Record<string, unknown>}
  */
-export function delayExplainContext({ ident, riskContext, statusText, risk, hubOtp, weatherOpsByHub, iropsHubRates }) {
+export function delayExplainContext({ ident, riskContext, statusText, risk, hubOtp, weatherOpsByHub, iropsHubRates, scheduledDep }) {
   const { origCode, destCode, depHub, arrHub } = riskContext || {};
   return {
     flight: ident,
     route: `${origCode || ''}→${destCode || ''}`,
     status: statusText,
+    // The flight's own scheduled departure (epoch seconds). Without it the model only had the
+    // CURRENT hub time and explained tomorrow's 08:20 as an evening departure (Oct 7 2026).
+    scheduledDep: scheduledDep || undefined,
     riskLabel: risk?.label,
     riskScore: risk?.score,
     riskFactors: risk?.factors,
@@ -610,6 +617,7 @@ export function buildScheduleRow(flight, ctx) {
             context: delayExplainContext({
               ident,
               riskContext,
+              scheduledDep: flight?.time?.scheduled?.departure,
               statusText: status.text,
               risk,
               hubOtp,

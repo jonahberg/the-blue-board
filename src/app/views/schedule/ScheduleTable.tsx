@@ -593,9 +593,9 @@ export const ScheduleTable = forwardRef<
                     ) : row.regPending ? (
                       <span
                         className="font-sans text-muted-foreground"
-                        title="The schedule has not named the aircraft yet. It usually appears a few hours before departure, or as soon as the plane shows up on live tracking."
+                        title="United usually assigns the aircraft about a day ahead, but our schedule feed only names it 1–2 hours before departure. It shows here then, or as soon as the plane appears on live tracking. United's own flight status may already have it."
                       >
-                        Not assigned yet
+                        Not in our feed yet
                       </span>
                     ) : (
                       '—'

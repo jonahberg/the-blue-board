@@ -198,6 +198,37 @@ describe('delay-explain API', () => {
     expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
+  it('anchors the prompt on the flight’s own departure, not the clock the dialog opened at', async () => {
+    // Oct 7 2026: tomorrow's 08:20 UA934 was explained as "evening peak hours (20:53 local)" —
+    // the prompt carried only the current hub time.
+    const res = createRes();
+    await handler(makeReq({
+      body: { flight: 'UA934', route: 'EWR→LHR', scheduled: 'Thu Oct 8, 08:20 local (tomorrow)', hubTime: '08:53 PM local' },
+    }), res);
+    const call = mockCreate.mock.calls[0][0];
+    expect(call.messages[0].content).toContain('Scheduled departure: Thu Oct 8, 08:20 local (tomorrow)');
+    expect(call.system).toMatch(/Anchor time-of-day on the "Scheduled departure" line/);
+  });
+
+  it('does not serve today’s explanation for tomorrow’s same-numbered flight', async () => {
+    const shared = { flight: 'UASAMEDAY', route: 'EWR→LHR', riskScore: 6, factors: ['EWR congestion baseline'] };
+    mockCreate.mockReset();
+    mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'today' }] });
+    mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'tomorrow' }] });
+    const a = createRes();
+    await handler(makeReq({ body: { ...shared, scheduled: 'Wed Oct 7, 11:30 local (today)' } }), a);
+    const b = createRes();
+    await handler(makeReq({ body: { ...shared, scheduled: 'Thu Oct 8, 08:20 local (tomorrow)' } }), b);
+    expect(b.body.cached).toBeFalsy();
+    expect(b.body.explanation).toBe('tomorrow');
+  });
+
+  it('a non-string scheduled field cannot crash the cache key', async () => {
+    const res = createRes();
+    await handler(makeReq({ body: { flight: 'UANUM', scheduled: 12345 } }), res);
+    expect(res.statusCode).toBe(200);
+  });
+
   // --- Error handling ---
 
   it('returns 503 for API auth errors (401)', async () => {

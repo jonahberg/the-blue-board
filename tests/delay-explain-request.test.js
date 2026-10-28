@@ -7,6 +7,7 @@ import {
   hubLocalTime,
   iropsContextStr,
   riskLabelColor,
+  scheduledDepartureLocal,
   weatherContextStr,
 } from '../src/lib/delay-explain-request.js';
 
@@ -146,6 +147,7 @@ describe('buildDelayExplainBody', () => {
         'riskLabel',
         'riskScore',
         'route',
+        'scheduled',
         'status',
         'weather',
       ].sort(),
@@ -201,5 +203,49 @@ describe('buildDelayExplainBody', () => {
   it('survives an empty context without throwing', () => {
     expect(() => buildDelayExplainBody(null)).not.toThrow();
     expect(buildDelayExplainBody({}).factors).toEqual([]);
+  });
+});
+
+describe('scheduledDepartureLocal + the later-day gate (Oct 7 2026, UA934)', () => {
+  const VIEWED = Date.parse('2026-10-08T00:53:00Z'); // 20:53 EDT Oct 7
+  const TOMORROW_0820 = Math.floor(Date.parse('2026-10-08T12:20:00Z') / 1000);
+
+  it('names the flight’s own departure in hub time, tagged against the hub’s day', () => {
+    expect(scheduledDepartureLocal(TOMORROW_0820, 'America/New_York', VIEWED)).toBe(
+      'Thu Oct 8, 08:20 local (tomorrow)',
+    );
+    expect(scheduledDepartureLocal(TOMORROW_0820 * 1000, 'America/New_York', Date.parse('2026-10-08T11:00:00Z'))).toMatch(
+      /\(today\)$/,
+    );
+    expect(scheduledDepartureLocal('', 'America/New_York', VIEWED)).toBe('');
+  });
+
+  it('a later day’s flight is explained without today’s conditions', () => {
+    const body = buildDelayExplainBody({
+      flight: 'UA934',
+      hub: 'EWR',
+      scheduledDep: TOMORROW_0820,
+      nowMs: VIEWED,
+      otp: 90,
+      weather: 'MODERATE: gusts',
+      faaStatus: 'EWR Ground stop',
+      irops: '0% cancelled',
+      inbound: 'UA1 from LAX',
+    });
+    expect(body.scheduled).toBe('Thu Oct 8, 08:20 local (tomorrow)');
+    for (const key of ['otp', 'weather', 'destWeather', 'faaStatus', 'irops', 'inbound']) {
+      expect(body[key]).toBeUndefined();
+    }
+  });
+
+  it('the same flight an hour out keeps them', () => {
+    const body = buildDelayExplainBody({
+      flight: 'UA934',
+      hub: 'EWR',
+      scheduledDep: TOMORROW_0820,
+      nowMs: Date.parse('2026-10-08T11:20:00Z'),
+      faaStatus: 'EWR Ground stop',
+    });
+    expect(body.faaStatus).toBe('EWR Ground stop');
   });
 });

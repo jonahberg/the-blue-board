@@ -226,6 +226,7 @@ export default function MyFlightsView() {
             flight: entry.flight,
             route: `${origCode}→${destCode}`,
             status: resolvedStatus || 'scheduled',
+            scheduledDep: td?.departure?.gate?.scheduled || '',
             riskLabel: risk.label,
             riskScore: risk.score,
             factors: risk.factors,

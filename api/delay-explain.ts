@@ -85,6 +85,8 @@ interface DelayContext {
   irops?: string;
   hubTime?: string;
   connection?: string;
+  /** The flight's own scheduled departure, hub-local ("Thu Oct 8, 08:20 local (tomorrow)"). */
+  scheduled?: string;
 }
 
 // Sanitize context fields: truncate to max length, strip instruction-like patterns
@@ -106,7 +108,10 @@ function getCacheKey(ctx: DelayContext): string {
   // would collide and serve one passenger's cached explanation to the other. Keep it short;
   // it's already truncated to 100 chars when used in the prompt.
   const connectionKey = (ctx.connection || '').slice(0, 100);
-  return `${ctx.flight}:${ctx.route || ''}:${ctx.status || ''}:${ctx.riskScore}:${(ctx.factors || []).join(',')}:${ctx.otp || ''}:${ctx.hub || ''}:${ctx.irops || ''}:${inboundKey}:${weatherKey}:${faaKey}:${connectionKey}`;
+  // `scheduled` is in the prompt (the flight's own departure), so it is in the key: today's and
+  // tomorrow's UA934 with the same factors must not share an explanation.
+  const scheduledKey = String(ctx.scheduled || '').slice(0, 60);
+  return `${ctx.flight}:${scheduledKey}:${ctx.route || ''}:${ctx.status || ''}:${ctx.riskScore}:${(ctx.factors || []).join(',')}:${ctx.otp || ''}:${ctx.hub || ''}:${ctx.irops || ''}:${inboundKey}:${weatherKey}:${faaKey}:${connectionKey}`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -163,6 +168,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const lines = [
       `Flight: ${flight} (${route || 'unknown route'})`,
       `Status: ${status || 'scheduled'}`,
+      ...(ctx.scheduled ? [`Scheduled departure: ${sanitize(ctx.scheduled, 60)}`] : []),
       `Risk Level: ${riskLabel || 'LOW'} (score ${riskScore}/100)`,
     ];
     if (ctx.factors && Array.isArray(ctx.factors)) {
@@ -210,7 +216,7 @@ Analysis framework — discuss ONLY topics where data is provided:
 2. FAA STATUS (only if "FAA status" data is present): Explain the airport program or delay status and its stated cause. If the FAA status says delays are due to weather or thunderstorms, treat that as authoritative network-level weather constraint.
 3. WEATHER (only if weather data is present): Distinguish between departure weather (taxi, de-icing, takeoff) and arrival weather (holds, diversions). If FAA status cites weather but the METAR looks normal, say the operational impact is likely broader airspace/weather flow control rather than field conditions alone. SFO LIFR = single-stream runway ops (~50% capacity). EWR LIFR = crossing runway restrictions.
 4. NETWORK HEALTH (only if OTP or disruption data is present): Explain what low OTP or high cancellation rates mean for this flight.
-5. TIME-OF-DAY: You may always comment on time-of-day cascade effects if the hub time is provided, since this is general knowledge.
+5. TIME-OF-DAY: Anchor time-of-day on the "Scheduled departure" line when it is present — that is when this flight operates. "Current local time at hub" is only the moment of the question: never describe the flight as operating at that time. If the scheduled departure is on a later day (e.g. "(tomorrow)"), say the flight has not operated yet and that today's conditions are not a forecast for it.
 6. DELAY MAGNITUDE: If a large delay is already reported, explain what a delay of that size typically means operationally — but stick to general implications, not invented specifics about this aircraft's history.
 
 For LOW-risk flights with clean conditions, say so positively and briefly.

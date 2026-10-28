@@ -4,6 +4,22 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0] - 2026-10-28
+
+**Tomorrow's flights stop reading as hours late.** On Oct 7 a reader emailed about tomorrow's 08:20 UA934 EWR→LHR. United had it on time; the board said **RISK: HIGH**, and the AI explanation said it was "already 440 minutes delayed" during "evening peak hours (20:53 local)".
+
+Three things were wrong, and all of them are fixed:
+
+- **The "delay" was the flight's block time.** The risk badge compared the scheduled *departure* with whatever estimate came first, and AeroDataBox sends an *arrival* estimate long before a departure one. 08:20 EDT to 20:40 BST is exactly 440 minutes. Measured on Oct 28, 830 rows across the 20 hub boards (today and tomorrow, both directions) carried a fake "Already N min delayed" worth 30–50 points; tomorrow's EWR departures showed 10 HIGH and 9 MOD. Departures are now measured against departures and arrivals against arrivals (`riskTimesForRow` in `src/lib/delay-risk.js`), on the board and in My Flights. After the fix, 133 rows carry a delay, all of them real.
+- **Tonight's conditions were scored onto tomorrow's flights.** FAA programs, the METAR, the day's on-time rate and cancellations, the NAS plan and the inbound aircraft describe the operation in progress. A flight on a later hub-local day that's more than 6 hours out is now scored on what's known about that flight: any published delay, the hub's baseline and its own time of day (`liveConditionsApply`). A 00:30 red-eye seen at 23:00 still counts as tonight's operation. **Visible change:** tomorrow's boards now read mostly LOW.
+- **The AI never knew when the flight was.** It got only the current hub time, so it described the time you asked. It now gets the flight's own departure ("Thu Oct 8, 08:20 local (tomorrow)"), which is also part of its cache key. Its time-of-day rule now uses that departure, and a later day's flight is explained without tonight's weather, FAA and disruption lines.
+
+**The Aircraft column fills in from our own fleet database.** The same reader saw "—" next to UA146's N653UA, a tail the aircraft card itself calls a 767-300ER. AeroDataBox sends no type code on about 30% of rows. When the tail is in the mainline or United Express database, the type now comes from there: 417 of the 421 such rows on Oct 28. One shared fill (`src/lib/aircraft-type.js`) feeds the cell, the Aircraft filter and the sort. It also stopped N15712, a 737-700, from showing up as AeroDataBox's "Boeing 707-300". A code the provider did send is never overridden.
+
+**"Not assigned yet" now says "Not in our feed yet".** United usually assigns the aircraft about a day ahead. The reader could see tomorrow's UA934 tail (N657UA) on united.com while the board said "unassigned". AeroDataBox only names tails 1–2 hours before departure. Measured Oct 28: 32% of departures 0–2 hours out had one, 5% at 4–6 hours, and 0 of 1,283 of tomorrow's. The words now describe our feed, not United. On phones the label reads "Tail not in feed yet".
+
+**My Flights borrows the right day's board risk.** A card with no risk inputs of its own reused the first loaded board that had the flight number, which could be tomorrow's. It now uses the instance nearest to now.
+
 ## [1.18.1] - 2026-10-07
 
 **The map key explains the blue circles.** A reader asked: "there's some flights that have a blue circle over them, is that to indicate something? When clicked, it says 'P Ground.'"
