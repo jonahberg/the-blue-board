@@ -8,6 +8,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 **Dependency and security refresh. Nothing visitors see changes.** `bun audit` drops from 130 advisories (3 critical, 56 high) to 33 (1 critical, 10 high). Every one that remains is in build tooling or a devDependency, and every one is waiting on an upstream release or a major upgrade listed under "Held back" below.
 
+### Fixed
+- The AI delay explanation named an arrivals row's departure time in Chicago time and called it "local" when the origin isn't a United hub (GIG, SJO, TLV): v1.19.0's new scheduled-departure line had no time zone for those airports. It now says UTC.
+
 ### Updated
 - In-range updates for direct dependencies: `@supabase/supabase-js` 2.106.2 → 2.118.0, `@vercel/functions` 3.6.1 → 3.10.4, `fast-xml-parser` 5.8.0 → 5.11.2, `lucide-react` 1.45.0 → 1.63.0, `radix-ui` 1.6.7 → 1.8.1, `react`/`react-dom` 19.3.0 → 19.3.1, `resend` 6.12.4 → 6.35.0, `shadcn` 4.21.0 → 4.23.0, `tailwind-merge` 3.6.0 → 3.7.0.
 - Dev dependencies: `vite` 7.3.3 → 7.3.7, `vitest` 4.1.7 → 4.1.12, `@vercel/node` 5.8.8 → 5.10.2, `playwright` 1.60.0 → 1.64.1, `axe-core` and `@axe-core/playwright` → 4.14.0, `jsdom` 30.0.1 → 30.1.3 (still pinned exactly).
