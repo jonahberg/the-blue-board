@@ -6,7 +6,13 @@
  *   2. it waits for a pause and never opens over another dialog;
  *   3. "Maybe later" / Escape and Donate store their answers, and the strip does not come up
  *      in the same visit;
- *   4. on a later visit inside the cooldown the strip is the ask again.
+ *   4. on a later visit inside the cooldown, with the email ask also quiet, the strip is the
+ *      ask again.
+ *
+ * Since Oct 28 2026 the prompt wins a 60/40 roll against the email dialog while both are
+ * eligible; every test here fixes the dice to donate (`resetDeepUseAsk(() => 0)`). The roll
+ * and the email side are pinned in tests/deep-use-ask.test.js and
+ * tests/email-prompt-dialog.test.tsx.
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -28,6 +34,7 @@ import {
   donatePromptRecord,
   parseDonatePromptRecord,
 } from '../src/lib/donate-prompt.js';
+import { EMAIL_PROMPT_STORAGE_KEY, emailPromptRecord } from '../src/lib/email-prompt.js';
 import { TRIGGER_TIME_MS } from '../src/lib/engagement.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -60,7 +67,7 @@ function reachDeepUseAndPause() {
 beforeEach(() => {
   vi.useFakeTimers();
   localStorage.clear();
-  resetDeepUseAsk();
+  resetDeepUseAsk(() => 0);
   resetEngagement();
   track.mockClear();
 });
@@ -154,8 +161,9 @@ describe('DonatePrompt', () => {
     expect(track).toHaveBeenCalledWith('donate_prompt', { action: 'donate' });
   });
 
-  it('on a later visit inside the cooldown the email strip is the ask', () => {
+  it('on a later visit inside the cooldown, with the email ask also quiet, the email strip is the ask', () => {
     localStorage.setItem(DONATE_PROMPT_STORAGE_KEY, donatePromptRecord('later', Date.now() - 3 * DAY));
+    localStorage.setItem(EMAIL_PROMPT_STORAGE_KEY, emailPromptRecord(Date.now() - 3 * DAY));
     mount();
     reachDeepUseAndPause();
     expect(prompt()).toBeNull();

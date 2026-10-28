@@ -150,12 +150,28 @@ export const LIVE_ETA_CONTRADICTION_MIN = 30;
 const LIVE_ETA_MIN_KT = 80;
 
 /**
+ * Climb-out guard (QA Oct 28 2026): UA1021 EWR→PTY, a ~5 h flight, read "12h 4m to arrival"
+ * just after takeoff, then 8h 29m, 7h 2m, 6h 52m, and only 4h 41m at cruise — remaining
+ * distance ÷ a climbing aircraft's groundspeed. And past `LIVE_ETA_CONTRADICTION_MIN` that
+ * guess overrode the provider's estimate, in the countdown and the connection checker alike.
+ * Far from the destination, an aircraft still below cruise or still climbing has a groundspeed
+ * that says nothing about the rest of the flight, so there is no live ETA yet and the
+ * provider's estimate stands. Near the destination (descent, approach) the live ETA is the
+ * point, so the guard only applies beyond `LIVE_ETA_CLIMB_GUARD_NM`.
+ */
+export const LIVE_ETA_CLIMB_GUARD_NM = 150;
+/** ~FL200, in metres (the live feed's unit — src/lib/feed-health.js). */
+const LIVE_ETA_CRUISE_MIN_ALT_M = 6000;
+/** ~500 ft/min, in metres per second. */
+const LIVE_ETA_CLIMBING_VR_MS = 2.5;
+
+/**
  * The gate-arrival time the live feed implies: remaining great-circle distance to the
  * destination ÷ current groundspeed, plus `LIVE_ETA_ALLOWANCE_MIN`.
  *
  * `Flight.spd` is metres/second (src/lib/feed-health.js converts FR24's knots on parse).
- * Returns null whenever the answer would be a guess: on the ground, at taxi speed, or
- * with no coordinates for the destination.
+ * Returns null whenever the answer would be a guess: on the ground, at taxi speed, still
+ * climbing out far from the destination, or with no coordinates for the destination.
  *
  * @param {Object|null|undefined} liveFlight  a live-feed row.
  * @param {string} destIata
@@ -171,6 +187,14 @@ export function liveArrivalEstimate(liveFlight, destIata, nowMs = Date.now()) {
   const { lat, lon } = liveFlight;
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const remainingNm = haversineNm(lat, lon, dest.lat, dest.lon);
+  if (remainingNm > LIVE_ETA_CLIMB_GUARD_NM) {
+    // Only telemetry that IS present can show a climb-out: a caller without altitude (a
+    // server-side sighting carries none) keeps the plain estimate it always had.
+    const alt = liveFlight.alt == null ? NaN : Number(liveFlight.alt);
+    const vr = liveFlight.vr == null ? NaN : Number(liveFlight.vr);
+    if (Number.isFinite(alt) && alt < LIVE_ETA_CRUISE_MIN_ALT_M) return null;
+    if (Number.isFinite(vr) && vr > LIVE_ETA_CLIMBING_VR_MS) return null;
+  }
   const minutes = (remainingNm / groundspeedKt) * 60 + LIVE_ETA_ALLOWANCE_MIN;
   return { etaISO: new Date(nowMs + minutes * 60000).toISOString(), remainingNm, groundspeedKt };
 }

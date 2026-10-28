@@ -22,6 +22,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import BmacToast from './features/BmacToast';
 import DonatePrompt from './features/DonatePrompt';
+import EmailPrompt from './features/EmailPrompt';
 import LegalPopover from './features/LegalPopover';
 import NewsBanner from './features/NewsBanner';
 import TipStrip from './features/TipStrip';
@@ -176,7 +177,7 @@ function DashboardShell() {
           the ticker and the hub strip.
 
           On a phone the slot shows ONE line at a time, the first one present in this order:
-          the waitlist strip (once its triggers fire, on visits when the donation prompt is not
+          the waitlist strip (once its triggers fire, on visits when neither deep-use modal is
           the ask), the news, the tip. Three stacked lines
           were ~100 px of a 780 px screen (audit Oct 3 2026); the others wait their turn and
           come back as the one above is dismissed. A tablet or desktop shows all of them. */}
@@ -203,8 +204,10 @@ function DashboardShell() {
       </Suspense>
       <LegalPopover />
       <BmacToast />
-      {/* The deep-use donation prompt: the one modal ask, on the email strip's trigger. */}
+      {/* The deep-use asks: ONE per visit, on the email strip's trigger — the donation
+          prompt or (EmailPrompt) the waitlist dialog above, opened after a pause. */}
       <DonatePrompt />
+      <EmailPrompt />
       <IropsAnnouncer />
     </div>
   );

@@ -5,9 +5,11 @@
 // it fired for 322 visitors, and the email strip it summoned got 5 opens from 376 showings
 // and no donations.
 //
-// One ask per visit. The first time the trigger fires, `chooseDeepUseAsk` picks the
-// donation prompt or the email strip, and the caller latches that choice for the page's
-// life, so answering the prompt does not bring the strip up in the same visit.
+// One ask per visit. The first time the trigger fires, `chooseDeepUseAsk`
+// (src/lib/deep-use-ask.js) picks the donation prompt, the email dialog or the email strip,
+// and the caller latches that choice for the page's life, so answering one ask does not
+// bring another up in the same visit. Since Oct 28 2026 the prompt is the ask about 60% of
+// the time it is eligible, not every time.
 //
 // The popup still owes the data its manners (DESIGN.md "Engagement surfaces stay quiet"):
 // it opens only once the visitor has paused, never over another dialog or sheet, and
@@ -69,21 +71,8 @@ export function donatePromptEligible(storage, now = Date.now()) {
 }
 
 /**
- * Which ask the deep-use trigger brings up on this visit: the donation prompt while it is
- * eligible, otherwise the email strip (whose own gate, `shouldShowWaitlistStrip`, still
- * decides whether it shows). Null without a working store.
- *
- * @param {{getItem: Function}|null|undefined} storage
- * @param {number} [now]
- * @returns {'donate'|'waitlist'|null}
- */
-export function chooseDeepUseAsk(storage, now = Date.now()) {
-  if (!storage) return null;
-  return donatePromptEligible(storage, now) ? 'donate' : 'waitlist';
-}
-
-/**
- * May the prompt open at this instant?
+ * May the prompt open at this instant? The email dialog, when it is the deep-use ask, waits
+ * on the same rule (`EmailPrompt.tsx`).
  * @param {{now: number, lastActivity: number, otherDialogOpen: boolean, hidden: boolean}} s
  * @returns {boolean}
  */

@@ -40,4 +40,5 @@ export const SUPPORTERS = [
   'james macnutt',
   'Greg Calvert',
   'JayS',
+  'Gabriel Sandoval',
 ];

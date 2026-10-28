@@ -1,18 +1,25 @@
 /**
  * "✈ Stay in the loop" — the email-capture modal (inventory §11, §16).
  *
- * Since Oct 2026 this dialog only opens because someone ASKED for it:
- *   T4     `?waitlist=1`, someone arriving on the link deliberately (source `popup`, as it
- *          always was);
- *   strip  the "Get updates" button on the `WaitlistStrip` (source `dashboard`).
- * The two passive triggers — T1 (five minutes of use) and T2 (the click threshold) — used to
- * pop this modal over the board uninvited (phone QA, Oct 3 2026). They now reveal the strip
- * instead; see `WaitlistStrip.tsx` and `shouldShowWaitlistStrip()`. (T3, the flight-landing
- * trigger, went earlier: that moment gets its own BMAC toast — inventory §12.)
+ * It opens three ways:
+ *   T4        `?waitlist=1`, someone arriving on the link deliberately (source `popup`, as
+ *             it always was);
+ *   strip     the "Get updates" button on the `WaitlistStrip` (source `dashboard`);
+ *   deep-use  by itself, for a heavy user, on the visits the deep-use latch picks email
+ *             (`EmailPrompt.tsx`, source `deep-use`, Oct 28 2026).
+ * The passive triggers — T1 (five minutes of use) and T2 (the click threshold) — used to pop
+ * this modal over the board the moment they fired, mid-scroll (phone QA, Oct 3 2026). From
+ * Oct 4 they revealed the strip instead, and that took signups to zero; since Oct 28 they
+ * open it again on about 40% of heavy-user visits, but only with the donation prompt's
+ * manners: after a 3-second pause, never over another dialog, never into a hidden tab.
+ * (T3, the flight-landing trigger, went earlier: that moment gets its own BMAC toast —
+ * inventory §12.)
  *
- * Every open is a request, so Radix's autofocus on the email field is right for all of them.
- * The submitted flag still outranks every open: someone who has already given an email is
- * never asked again, however they arrive.
+ * The link and the strip are requests, so Radix's autofocus on the email field is right for
+ * them. The deep-use open is not, and on a phone that autofocus would raise the keyboard over
+ * the board: there focus goes to the dialog itself (`focusContentOnOpen`). The submitted flag
+ * still outranks every open: someone who has already given an email is never asked again,
+ * however they arrive.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -24,10 +31,13 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  focusContentOnOpen,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { emailPromptRecord } from '@/lib/email-prompt.js';
+import { track } from '@/lib/track.js';
 import { postWaitlist } from '../data/api';
 import {
   initEngagement,
@@ -62,17 +72,25 @@ export default function WaitlistDialog() {
     if (waitlistOpen) markWaitlistShown();
   }, [waitlistOpen]);
 
+  const deepUse = engagement.waitlistSource === 'deep-use';
+
   /**
    * Every close path — ✕, Escape, backdrop — writes the dismissal timestamp. The strip reads
-   * it as a 30-day "not now" (`shouldShowWaitlistStrip`); `?waitlist=1` deliberately ignores
-   * it, because arriving on that link is the request.
+   * it as a 30-day "not now" (`shouldShowWaitlistStrip`), and so does the deep-use email ask
+   * (`emailPromptEligible`); `?waitlist=1` deliberately ignores it, because arriving on that
+   * link is the request. Closing the deep-use ask without signing up also writes its own
+   * 30-day record (`bb_email_prompt`) — read the source BEFORE it is reset below.
    */
   const close = useCallback(() => {
+    if (engagement.waitlistSource === 'deep-use' && !engagement.submitted) {
+      writeString(STORAGE_KEYS.emailPrompt, emailPromptRecord());
+      track('email_prompt', { action: 'later' });
+    }
     setWaitlistOpen(false);
     markWaitlistShown();
     writeString(STORAGE_KEYS.waitlistDismissed, String(Date.now()));
     setWaitlistSource('popup');
-  }, [setWaitlistOpen]);
+  }, [setWaitlistOpen, engagement.waitlistSource, engagement.submitted]);
 
   const submit = useCallback(async () => {
     const value = email.trim();
@@ -92,6 +110,7 @@ export default function WaitlistDialog() {
       // them "that email is already registered" reads as a rejection of something they
       // just did correctly.
       if (data.success || data.error === 'duplicate') {
+        if (engagement.waitlistSource === 'deep-use') track('email_prompt', { action: 'submit' });
         writeString(STORAGE_KEYS.waitlistSubmitted, 'true');
         markWaitlistSubmitted();
         setDone(true);
@@ -115,6 +134,10 @@ export default function WaitlistDialog() {
   // `done` is local state, so it dies with the dialog and cannot reopen it later.
   const open = waitlistOpen && (done || !engagement.submitted);
 
+  useEffect(() => {
+    if (open && deepUse) track('email_prompt', { action: 'shown' });
+  }, [open, deepUse]);
+
   return (
     <Dialog
       open={open}
@@ -128,7 +151,11 @@ export default function WaitlistDialog() {
           way legacy did with z 10001 > 10000. `DialogContent` renders its own overlay, so
           the lift has to be passed through — content alone would leave the waitlist card
           floating above onboarding's backdrop but below its own. */}
-      <DialogContent className="z-[60] sm:max-w-[480px]" overlayClassName="z-[60]">
+      <DialogContent
+        className="z-[60] sm:max-w-[480px]"
+        overlayClassName="z-[60]"
+        onOpenAutoFocus={deepUse ? focusContentOnOpen : undefined}
+      >
         <DialogHeader>
           <DialogTitle className="text-xl">✈ Stay in the loop</DialogTitle>
           <DialogDescription>

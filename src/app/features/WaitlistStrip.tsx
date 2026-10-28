@@ -21,9 +21,11 @@
  * how the two can be compared.
  *
  * Since Oct 2026 the T1/T2 trigger lives in `state/deep-use.ts` and is shared with the
- * donation prompt: the first time it fires, ONE of the two asks is latched for the visit.
- * Heavy users get the donation prompt while it is eligible, and this strip while it cools
- * down (`chooseDeepUseAsk`, src/lib/donate-prompt.js).
+ * deep-use modals: the first time it fires, ONE ask is latched for the visit. Heavy users get
+ * the donation prompt or the email dialog (60/40 while both are eligible, Oct 28 2026), and
+ * this strip only when neither is (`chooseDeepUseAsk`, src/lib/deep-use-ask.js). Closing
+ * the email dialog writes the dismissal this strip reads, so in practice the strip is now a
+ * rare fallback rather than the deep-use ask.
  *
  * No live region: a strip arriving five minutes in is not news, and the live-region inventory
  * in DESIGN.md is closed. Its buttons are `data-no-engagement` so they never advance the T2

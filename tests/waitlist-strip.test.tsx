@@ -12,10 +12,12 @@
  *      sent with `source: 'dashboard'`, while `?waitlist=1` keeps `popup`;
  *   4. dismissing or submitting keeps the strip away for 30 days, reusing the dialog's keys.
  *
- * Since the deep-use donation prompt (Oct 2026) the same trigger brings up ONE ask per visit,
- * and the strip is it only while the prompt cools down — so every test here starts as a
- * visitor who answered the prompt "Maybe later" just now. The hand-off itself is pinned in
- * tests/donate-prompt-dialog.test.tsx.
+ * Since the deep-use asks (Oct 2026) the same trigger brings up ONE ask per visit, and the
+ * strip is it only while both the donation prompt and the email dialog cool down — so every
+ * test here starts as a visitor who answered both "not now" just now (the email ask's own
+ * record only, not the shared `bb_waitlist_dismissed`, which would hide the strip too). The
+ * hand-offs are pinned in tests/donate-prompt-dialog.test.tsx and
+ * tests/email-prompt-dialog.test.tsx.
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -26,6 +28,7 @@ vi.mock('../src/app/data/api', () => ({ postWaitlist }));
 vi.mock('../src/lib/track.js', () => ({ track: vi.fn() }));
 
 import { donatePromptRecord } from '../src/lib/donate-prompt.js';
+import { emailPromptRecord } from '../src/lib/email-prompt.js';
 import { TRIGGER_TIME_MS } from '../src/lib/engagement.js';
 import { WAITLIST_STRIP_COOLDOWN_MS, shouldShowWaitlistStrip } from '../src/lib/waitlist-gate.js';
 import WaitlistDialog from '../src/app/features/WaitlistDialog';
@@ -75,6 +78,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   localStorage.clear();
   localStorage.setItem('bb_donate_prompt', donatePromptRecord('later', Date.now()));
+  localStorage.setItem('bb_email_prompt', emailPromptRecord(Date.now()));
   resetDeepUseAsk();
   resetEngagement();
   postWaitlist.mockClear();

@@ -18,11 +18,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // direct inserts).
 //
 // Existing callers: 'popup' (the waitlist dialog opened by the ?waitlist=1
-// link — and, before Oct 2026, by its passive timers) and 'dashboard' (the
+// link — and, before Oct 2026, by its passive timers), 'dashboard' (the
 // dialog opened from the dashboard's "Stay in the loop" strip, which replaced
-// the passive popup; see src/app/features/WaitlistStrip.tsx). If you add a new
-// callsite that passes a different source, add it here AND in
-// sql/006_waitlist_checks.sql — both must allow it.
+// the passive popup; see src/app/features/WaitlistStrip.tsx) and 'deep-use'
+// (the dialog the dashboard opens by itself for a heavy user after a pause,
+// Oct 28 2026; see src/app/features/EmailPrompt.tsx). If you add a new
+// callsite that passes a different source, add it here AND in a sql/
+// migration (006, then 019 for 'deep-use') — both must allow it.
 const VALID_SOURCES = new Set([
   'popup',
   'hero',
@@ -31,7 +33,17 @@ const VALID_SOURCES = new Set([
   'hub',
   'fleet',
   'dashboard',
+  'deep-use',
 ]);
+
+// A source the API accepts but the table's CHECK constraint does not yet (a
+// migration not applied before the deploy) must not cost the signup: Postgres
+// reports it as check_violation 23514 on waitlist_source_enum, and the row is
+// retried once as 'popup' — attribution degrades, signup doesn't break, the
+// same trade as the coercion above. The warning says which migration is owed.
+function isSourceCheckViolation(error: { code?: string; message?: string } | null): boolean {
+  return Boolean(error && error.code === '23514' && /waitlist_source_enum/.test(error.message || ''));
+}
 
 // Window for classifying a signup as "new" rather than a re-submission. After
 // the upsert returns, if created_at is within this window of now, the row was
@@ -256,18 +268,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     //   2. Two concurrent first-time submissions both saw existing=[], both
     //      upserted, both sent email.
     // Reading created_at from the upsert's returning-row closes both.
-    const { data, error } = await getSupabase()
-      .from('waitlist')
-      .upsert(
-        {
-          email: normalizedEmail,
-          source: safeSource,
-          feature_request: safeFeatureRequest,
-        },
-        { onConflict: 'email' }
-      )
-      .select('created_at')
-      .single();
+    const upsert = (rowSource: string) =>
+      getSupabase()
+        .from('waitlist')
+        .upsert(
+          {
+            email: normalizedEmail,
+            source: rowSource,
+            feature_request: safeFeatureRequest,
+          },
+          { onConflict: 'email' }
+        )
+        .select('created_at')
+        .single();
+
+    let { data, error } = await upsert(safeSource);
+    if (safeSource !== 'popup' && isSourceCheckViolation(error)) {
+      console.warn(`Waitlist source '${safeSource}' rejected by waitlist_source_enum — apply the sql/ migration that allows it; saved as 'popup'`);
+      ({ data, error } = await upsert('popup'));
+    }
 
     if (error) {
       console.error('Waitlist upsert error:', error.message);
