@@ -238,6 +238,12 @@ describe('scheduledDepartureLocal + the later-day gate (Oct 7 2026, UA934)', () 
     }
   });
 
+  it('a non-hub origin is named in UTC, never in a guessed zone', () => {
+    // Arrivals rows put the ORIGIN in `hub`; GIG has no HUB_TZ entry.
+    const body = buildDelayExplainBody({ flight: 'UA128', hub: 'GIG', scheduledDep: TOMORROW_0820, nowMs: VIEWED });
+    expect(body.scheduled).toBe('Thu Oct 8, 12:20 UTC (today)');
+  });
+
   it('the same flight an hour out keeps them', () => {
     const body = buildDelayExplainBody({
       flight: 'UA934',

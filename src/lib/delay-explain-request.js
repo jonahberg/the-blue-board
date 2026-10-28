@@ -144,7 +144,11 @@ export function buildDelayExplainBody(ctx) {
     riskLabel: context.riskLabel,
     factors: asFactors(context.factors ?? context.riskFactors),
     hub: context.hub,
-    scheduled: scheduledDepartureLocal(context.scheduledDep, timeZone, nowMs),
+    // A non-hub origin (an arrivals row from GIG) has no zone here: say UTC rather than print
+    // Chicago time as "local".
+    scheduled: HUB_TZ[context.hub]
+      ? scheduledDepartureLocal(context.scheduledDep, timeZone, nowMs)
+      : scheduledDepartureLocal(context.scheduledDep, 'UTC', nowMs, 'UTC'),
     otp: live ? asOtp(context.otp) : undefined,
     weather: live ? asWeather(context.weather) : undefined,
     destWeather: live ? asWeather(context.destWeather) : undefined,
@@ -166,9 +170,11 @@ export function buildDelayExplainBody(ctx) {
  * @param {number|string|null|undefined} scheduled  epoch seconds/ms or an ISO string.
  * @param {string} timeZone
  * @param {number} [nowMs]
+ * @param {string} [label]  what the zone is called in the text: 'local', or 'UTC' when the
+ *   caller had no zone for the airport.
  * @returns {string} '' when the time is unknown or the zone is rejected.
  */
-export function scheduledDepartureLocal(scheduled, timeZone, nowMs = Date.now()) {
+export function scheduledDepartureLocal(scheduled, timeZone, nowMs = Date.now(), label = 'local') {
   const ms = typeof scheduled === 'number' ? (scheduled > 1e12 ? scheduled : scheduled * 1000) : Date.parse(scheduled || '');
   if (!Number.isFinite(ms) || ms <= 0) return '';
   try {
@@ -191,7 +197,7 @@ export function scheduledDepartureLocal(scheduled, timeZone, nowMs = Date.now())
     const dayKey = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone });
     const days = Math.round((Date.parse(dayKey(ms)) - Date.parse(dayKey(nowMs))) / 86400e3);
     const rel = days === 0 ? 'today' : days === 1 ? 'tomorrow' : days === -1 ? 'yesterday' : '';
-    return `${when} local${rel ? ` (${rel})` : ''}`;
+    return `${when} ${label}${rel ? ` (${rel})` : ''}`;
   } catch {
     return '';
   }
