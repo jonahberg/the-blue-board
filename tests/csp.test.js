@@ -92,6 +92,25 @@ describe('Content-Security-Policy configuration', () => {
     expect(csp).toMatch(/frame-ancestors\s+'none'/);
   });
 
+  it("locks base-uri, form-action and object-src to 'none' (Oct 28 2026)", () => {
+    // base-uri: an injected <base href> could re-point every relative script/link URL.
+    // form-action: the site has no <form> that submits natively (inputs post via fetch), so no
+    //   form may navigate anywhere — see the guard below.
+    // object-src: no <object>/<embed> plugins; default-src 'self' would otherwise allow them.
+    expect(directive('base-uri')).toBe("'none'");
+    expect(directive('form-action')).toBe("'none'");
+    expect(directive('object-src')).toBe("'none'");
+  });
+
+  it('names each directive once (a duplicate is ignored by browsers, so it hides an edit)', () => {
+    const names = csp
+      .split(';')
+      .map((part) => part.trim().split(/\s+/)[0])
+      .filter(Boolean);
+    expect(names.length).toBeGreaterThan(0);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
   it('allows the basemap + radar tile hosts in img-src (dropping one blanks the map)', () => {
     // Leaflet loads the CARTO basemap and Iowa Mesonet NEXRAD radar as <img> tiles;
     // both are gated by img-src. Removing a host silently blanks the map/radar —
@@ -162,6 +181,26 @@ describe('authored markup carries no inline script', () => {
         ) || [];
       if (handlers.length) offenders.push(file);
     }
+    expect(offenders).toEqual([]);
+  });
+
+  it("no .astro page or public/ HTML has a <form> (form-action 'none' would block its submit)", () => {
+    // Every input on the site posts with fetch() and never navigates, which is what lets the CSP
+    // say form-action 'none'. A native <form> added later would fail silently in the browser.
+    function filesIn(dir, exts) {
+      const found = [];
+      if (!existsSync(dir)) return found;
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = resolve(dir, entry.name);
+        if (entry.isDirectory()) found.push(...filesIn(path, exts));
+        else if (exts.some((ext) => entry.name.endsWith(ext))) found.push(path);
+      }
+      return found;
+    }
+    const offenders = [
+      ...filesIn(resolve(__dirname, '..', 'src'), ['.astro']),
+      ...filesIn(resolve(__dirname, '..', 'public'), ['.html']),
+    ].filter((file) => /<form[\s>]/i.test(readFileSync(file, 'utf8')));
     expect(offenders).toEqual([]);
   });
 

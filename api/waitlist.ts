@@ -1,3 +1,4 @@
+import { waitUntil } from '@vercel/functions';
 import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { getSupabase } from './_supabase.js';
@@ -11,11 +12,27 @@ import { SOCIAL_PROOF_USERS, HUB_LINE_LONG } from '../src/data/facts.js';
 const isRateLimited = createRateLimiter('waitlist', 5, 60 * 60 * 1000);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// RFC 5321's limit on a forward-path. Checked before EMAIL_RE so an oversized body never reaches
+// the regex or the table.
+const MAX_EMAIL_LENGTH = 254;
+
+// Browsers send Origin on every fetch POST, same-origin included, so a request without one is not
+// from the site and is refused like a foreign origin.
+function isAllowedOrigin(origin: string): boolean {
+  return origin === 'https://theblueboard.co' || /^http:\/\/localhost(:\d+)?$/.test(origin);
+}
+
+// Site-wide ceiling on welcome emails: at most this many per rolling 24 h, counted as waitlist rows
+// created in that window. Real traffic is a few signups a week; the cap protects the sending
+// domain (theblueboard.co, which also sends the broadcasts) if the form is used to mail addresses
+// that never asked. Over the cap the signup is still saved, only the email is skipped.
+export const WELCOME_EMAIL_DAILY_CAP = 50;
+const WELCOME_EMAIL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // Matches the CHECK constraint in sql/006_waitlist_checks.sql. The API coerces
 // out-of-whitelist values to 'popup' (attribution degrades, signup doesn't
-// break); the DB is the backstop for writers that bypass the API (anon-key
-// direct inserts).
+// break); the DB is the backstop for any writer that bypasses the API.
+// sql/020 revoked the anon grants and dropped the anon INSERT policy, but the waitlist_source_enum CHECK still binds every writer, so 019's constraint half still matters.
 //
 // Existing callers: 'popup' (the waitlist dialog opened by the ?waitlist=1
 // link — and, before Oct 2026, by its passive timers), 'dashboard' (the
@@ -228,13 +245,57 @@ async function sendWelcomeEmail(email: string): Promise<void> {
   }
 }
 
+// How many signups the last 24 h saw, or null when the count can't be read.
+async function countRecentSignups(): Promise<number | null> {
+  const since = new Date(Date.now() - WELCOME_EMAIL_WINDOW_MS).toISOString();
+  const { count, error } = await getSupabase()
+    .from('waitlist')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', since);
+  if (error) {
+    console.error('Welcome email cap: signup count failed, email skipped:', error.message);
+    return null;
+  }
+  return typeof count === 'number' ? count : null;
+}
+
+// Runs after the response (see queueWelcomeEmail). The cap check fails closed: when the count
+// can't be read the email is skipped, never sent unchecked. Never rejects.
+async function sendWelcomeEmailIfUnderCap(email: string): Promise<void> {
+  if (!process.env.RESEND_API_KEY) return; // no sender configured: skip the count query too
+  try {
+    const recent = await countRecentSignups();
+    if (recent === null) return;
+    if (recent > WELCOME_EMAIL_DAILY_CAP) {
+      console.warn(`Welcome email skipped: ${recent} signups in the last 24 h is over the daily cap of ${WELCOME_EMAIL_DAILY_CAP}`);
+      return;
+    }
+    await sendWelcomeEmail(email);
+  } catch (e) {
+    console.error('Welcome email cap check error, email skipped:', e);
+  }
+}
+
+// The welcome email (and its cap check) run after the response is sent, so a new address and one
+// already on the list answer in the same time: both wait only for the upsert. waitUntil keeps the
+// function alive until the send finishes; outside a Vercel request it is unavailable and the
+// promise simply runs on in-process.
+function queueWelcomeEmail(email: string): void {
+  const task = sendWelcomeEmailIfUnderCap(email);
+  try {
+    waitUntil(task);
+  } catch {
+    /* no request context (tests, local scripts) */
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS
+  // CORS. An absent Origin is refused too (see isAllowedOrigin).
   const origin = req.headers?.origin || '';
-  if (origin && origin !== 'https://theblueboard.co' && !/^http:\/\/localhost(:\d+)?$/.test(origin)) {
+  if (!isAllowedOrigin(origin)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
-  res.setHeader('Access-Control-Allow-Origin', origin || 'https://theblueboard.co');
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -250,11 +311,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { email, source, featureRequest } = req.body || {};
 
-  if (!email || typeof email !== 'string' || !EMAIL_RE.test(email.trim())) {
+  const trimmedEmail = typeof email === 'string' ? email.trim() : '';
+  if (!trimmedEmail || trimmedEmail.length > MAX_EMAIL_LENGTH || !EMAIL_RE.test(trimmedEmail)) {
     return res.status(400).json({ error: 'Invalid or missing email address' });
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = trimmedEmail.toLowerCase();
   const safeSource = typeof source === 'string' && VALID_SOURCES.has(source) ? source : 'popup';
   const safeFeatureRequest =
     typeof featureRequest === 'string' ? featureRequest.slice(0, 500) : null;
@@ -296,10 +358,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const createdAtMs = data?.created_at ? new Date(data.created_at).getTime() : 0;
     const isNewSignup = createdAtMs > 0 && Date.now() - createdAtMs < NEW_SIGNUP_WINDOW_MS;
 
-    // Await the send in serverless runtimes so the function does not exit
-    // before Resend receives the outbound request.
+    // Not awaited: see queueWelcomeEmail.
     if (isNewSignup) {
-      await sendWelcomeEmail(normalizedEmail);
+      queueWelcomeEmail(normalizedEmail);
     }
 
     return res.status(200).json({ success: true });

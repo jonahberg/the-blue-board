@@ -23,7 +23,7 @@ function clearVapid() {
   delete process.env.WEB_PUSH_CONTACT;
 }
 
-const TARGET = { endpoint: 'https://push/x', keys: { p256dh: 'p', auth: 'a' } };
+const TARGET = { endpoint: 'https://fcm.googleapis.com/fcm/send/x', keys: { p256dh: 'p', auth: 'a' } };
 
 describe('_web-push', () => {
   beforeEach(() => {
@@ -87,6 +87,52 @@ describe('_web-push', () => {
       expect(sub).toEqual({ endpoint: TARGET.endpoint, keys: TARGET.keys });
       expect(body).toBe(JSON.stringify({ title: 'hi' }));
       expect(opts).toEqual({ TTL: 3600 });
+    });
+  });
+
+  describe('sendPush: endpoint allowlist at send time (Oct 28 2026)', () => {
+    // A row stored before api/push-subscribe.ts checked the push service must not make the cron
+    // POST to an arbitrary URL. Skipped as an ordinary failure (gone:false), so watch-alerts'
+    // failed_count bookkeeping prunes it instead of this check deleting rows by itself.
+    it.each([
+      ['an internal address', 'https://169.254.169.254/latest/meta-data'],
+      ['a look-alike host', 'https://fcm.googleapis.com.attacker.com/x'],
+      ['plain http', 'http://fcm.googleapis.com/fcm/send/x'],
+      ['a non-default port', 'https://fcm.googleapis.com:8443/x'],
+      ['a single-label host', 'https://push/x'],
+    ])('never contacts %s, logs only the host, and reports ok:false / gone:false', async (_name, endpoint) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { webpush, sendPush } = await load();
+      const r = await sendPush({ endpoint, keys: TARGET.keys }, { title: 'hi' });
+      expect(r).toEqual({ ok: false, statusCode: 0, gone: false });
+      expect(webpush.sendNotification).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toMatch(/not a known push service/);
+      // The path is the subscription's secret; the log carries the host only.
+      expect(warn.mock.calls[0][0]).not.toContain('/latest/meta-data');
+      warn.mockRestore();
+    });
+
+    it('handles a target with no endpoint without throwing', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { webpush, sendPush } = await load();
+      const r = await sendPush({ keys: TARGET.keys }, {});
+      expect(r).toEqual({ ok: false, statusCode: 0, gone: false });
+      expect(webpush.sendNotification).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it.each([
+      'https://fcm.googleapis.com/fcm/send/abc',
+      'https://web.push.apple.com/abc',
+      'https://updates.push.services.mozilla.com/wpush/v2/abc',
+      'https://wns2-par02p.notify.windows.com/w/?token=abc',
+    ])('sends to %s', async (endpoint) => {
+      const { webpush, sendPush } = await load();
+      webpush.sendNotification.mockResolvedValue({ statusCode: 201 });
+      const r = await sendPush({ endpoint, keys: TARGET.keys }, {});
+      expect(r.ok).toBe(true);
+      expect(webpush.sendNotification.mock.calls[0][0].endpoint).toBe(endpoint);
     });
   });
 
