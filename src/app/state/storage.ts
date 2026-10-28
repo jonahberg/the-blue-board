@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   bmacDismissed: 'bb-bmac-dismissed',
   /** The deep-use donation prompt's answer (Oct 2026, new — not a legacy key). */
   donatePrompt: 'bb_donate_prompt',
+  /** The deep-use email ask's "not now" (Oct 28 2026, new — not a legacy key). */
+  emailPrompt: 'bb_email_prompt',
   newsDismissedSlug: 'news_dismissed_slug',
   schedPreloadTs: 'bb_sched_preload_ts',
   /**

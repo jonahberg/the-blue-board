@@ -5,7 +5,6 @@ import {
   DONATE_PROMPT_STORAGE_KEY,
   DONATE_QUIET_MS,
   DONATE_TAPPED_COOLDOWN_MS,
-  chooseDeepUseAsk,
   donatePromptEligible,
   donatePromptMayOpen,
   donatePromptRecord,
@@ -48,22 +47,7 @@ describe('donatePromptEligible', () => {
   });
 });
 
-describe('chooseDeepUseAsk', () => {
-  it('gives heavy users the donation prompt first, and the email strip while it cools down', () => {
-    expect(chooseDeepUseAsk(store(null), now)).toBe('donate');
-    expect(chooseDeepUseAsk(answered('later', 3), now)).toBe('waitlist');
-    expect(chooseDeepUseAsk(answered('donate', 3), now)).toBe('waitlist');
-    expect(chooseDeepUseAsk(answered('later', 31), now)).toBe('donate');
-  });
-
-  it('asks nothing without a store', () => {
-    expect(chooseDeepUseAsk(null, now)).toBeNull();
-  });
-
-  it('a store that throws on read falls back to the strip, whose own gate then fails closed', () => {
-    expect(chooseDeepUseAsk({ getItem: () => { throw new Error('denied'); } }, now)).toBe('waitlist');
-  });
-});
+// The deep-use chooser (donate vs email vs strip) is pinned in tests/deep-use-ask.test.js.
 
 describe('donatePromptMayOpen', () => {
   const base = { now, lastActivity: now - DONATE_QUIET_MS, otherDialogOpen: false, hidden: false };

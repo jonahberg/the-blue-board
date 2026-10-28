@@ -170,6 +170,46 @@ describe('waitlist API', () => {
     expect(upsertArg.feature_request.length).toBe(500);
   });
 
+  it('passes every dashboard source through, including the deep-use email ask (Oct 28 2026)', async () => {
+    for (const source of ['popup', 'dashboard', 'deep-use']) {
+      mockUpsert.mockClear();
+      const res = makeRes();
+      await handler(makeReq({ body: { email: 'a@b.com', source } }), res);
+      expect(res._status).toBe(200);
+      expect(mockUpsert).toHaveBeenCalledTimes(1);
+      expect(mockUpsert.mock.calls[0][0].source).toBe(source);
+    }
+  });
+
+  it('keeps the signup when the table has not been migrated for a source yet (sql/019): retried once as popup', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const violation = {
+      data: null,
+      error: { code: '23514', message: 'new row for relation "waitlist" violates check constraint "waitlist_source_enum"' },
+    };
+    const ok = { data: { created_at: new Date().toISOString(), id: 1 }, error: null };
+    mockSingle.mockReturnValueOnce(Promise.resolve(violation)).mockReturnValueOnce(Promise.resolve(ok));
+
+    const res = makeRes();
+    await handler(makeReq({ body: { email: 'a@b.com', source: 'deep-use' } }), res);
+
+    expect(res._status).toBe(200);
+    expect(mockUpsert.mock.calls.map((call) => call[0].source)).toEqual(['deep-use', 'popup']);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/deep-use.*waitlist_source_enum/));
+    warn.mockRestore();
+  });
+
+  it('does not retry other constraint failures', async () => {
+    upsertResult = {
+      data: null,
+      error: { code: '23514', message: 'new row for relation "waitlist" violates check constraint "waitlist_email_format"' },
+    };
+    const res = makeRes();
+    await handler(makeReq({ body: { email: 'a@b.com', source: 'deep-use' } }), res);
+    expect(res._status).toBe(500);
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+  });
+
   it('sends a welcome email for first-time signups when Resend is configured', async () => {
     process.env.RESEND_API_KEY = 're_test_key';
 

@@ -60,13 +60,14 @@ export type EngagementState = {
   /**
    * Which surface opened the waitlist dialog, sent as the signup's `source`. `'popup'` is the
    * dialog's historical value (the `?waitlist=1` link keeps it); `'dashboard'` marks a signup
-   * that came through the Oct 2026 strip, so the two can be compared in the waitlist table.
-   * Both are already in the API's `VALID_SOURCES` and the table's CHECK constraint.
+   * that came through the Oct 2026 strip; `'deep-use'` one that came through the dialog the
+   * deep-use trigger opened by itself (`EmailPrompt.tsx`, Oct 28 2026). All three are in the
+   * API's `VALID_SOURCES`; `'deep-use'` needs sql/019 for the table's CHECK constraint.
    */
   waitlistSource: WaitlistSource;
 };
 
-export type WaitlistSource = 'popup' | 'dashboard';
+export type WaitlistSource = 'popup' | 'dashboard' | 'deep-use';
 
 let state: EngagementState = {
   clicks: 0,
@@ -173,6 +174,11 @@ export function resetEngagement(): void {
     ready: false,
     waitlistSource: 'popup',
   };
+}
+
+/** The store as it stands, for code outside React (the deep-use latch). */
+export function engagementSnapshot(): EngagementState {
+  return state;
 }
 
 export function useEngagement(): EngagementState {

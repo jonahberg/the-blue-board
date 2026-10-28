@@ -6,9 +6,11 @@
  * one MODAL ask on the dashboard: DESIGN.md's "engagement surfaces stay quiet" rule bends
  * for it on the owner's call, and the rest of that rule is kept:
  *   - it comes up on the deep-use trigger (`state/deep-use.ts`, the email strip's T1/T2)
- *     and only when this visit's latched ask is the prompt (`deepUseAskThisVisit`);
+ *     and only when this visit's latched ask is the prompt (`deepUseAskThisVisit`) — since
+ *     Oct 28 2026 about 60% of the visits it is eligible on; the rest get the email dialog
+ *     (`EmailPrompt.tsx`, `chooseDeepUseAsk` in src/lib/deep-use-ask.js);
  *   - it waits for a pause — `DONATE_QUIET_MS` with no tap, key or scroll — and never opens
- *     over another dialog, sheet or popover, or into a hidden tab (`donatePromptMayOpen`);
+ *     over another dialog, sheet or popover, or into a hidden tab (`useDeepUsePause`);
  *   - any close that isn't Donate is "Maybe later" and quiets it for 30 days; Donate
  *     quiets it for 90, since the dashboard cannot see whether they paid.
  *
@@ -17,7 +19,7 @@
  * placement (src/lib/support-tracking.js).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -28,54 +30,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { donatePromptMayOpen, donatePromptRecord } from '@/lib/donate-prompt.js';
+import { donatePromptRecord } from '@/lib/donate-prompt.js';
 import { track } from '@/lib/track.js';
-import { deepUseAskThisVisit, useDeepUseTrigger } from '../state/deep-use';
+import { deepUseAskThisVisit, useDeepUsePause, useDeepUseTrigger } from '../state/deep-use';
 import { STORAGE_KEYS, writeString } from '../state/storage';
 
 /** Never "fix" this URL — the Buy Me a Coffee account is `notjbg`. */
 const DONATE_URL = 'https://buymeacoffee.com/notjbg';
 
-/** How often a waiting prompt re-checks for a pause. */
-const POLL_MS = 1000;
-
-const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchmove', 'scroll'] as const;
-
-function otherDialogOpen(): boolean {
-  return document.querySelector('[role="dialog"], [role="alertdialog"]') !== null;
-}
-
 export default function DonatePrompt() {
   const triggered = useDeepUseTrigger();
   const [open, setOpen] = useState(false);
   const [answered, setAnswered] = useState(false);
-  const lastActivity = useRef(0);
 
   const waiting = triggered && !answered && !open && deepUseAskThisVisit() === 'donate';
 
   // While waiting, every tap, key and scroll restarts the pause; the clock starts at the
   // trigger itself, so the prompt never lands on the very click that summoned it.
-  useEffect(() => {
-    if (!waiting) return;
-    lastActivity.current = Date.now();
-    const mark = () => {
-      lastActivity.current = Date.now();
-    };
-    for (const name of ACTIVITY_EVENTS) window.addEventListener(name, mark, { capture: true, passive: true });
-    const poll = setInterval(() => {
-      const may = donatePromptMayOpen({
-        now: Date.now(),
-        lastActivity: lastActivity.current,
-        otherDialogOpen: otherDialogOpen(),
-        hidden: document.visibilityState === 'hidden',
-      });
-      if (may) setOpen(true);
-    }, POLL_MS);
-    return () => {
-      clearInterval(poll);
-      for (const name of ACTIVITY_EVENTS) window.removeEventListener(name, mark, { capture: true });
-    };
-  }, [waiting]);
+  useDeepUsePause(waiting, () => setOpen(true));
 
   useEffect(() => {
     if (open) track('donate_prompt', { action: 'shown' });
