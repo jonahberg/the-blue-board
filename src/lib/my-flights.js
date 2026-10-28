@@ -188,9 +188,12 @@ export function liveArrivalEstimate(liveFlight, destIata, nowMs = Date.now()) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const remainingNm = haversineNm(lat, lon, dest.lat, dest.lon);
   if (remainingNm > LIVE_ETA_CLIMB_GUARD_NM) {
-    const alt = Number(liveFlight.alt);
-    const vr = Number(liveFlight.vr) || 0;
-    if (!(alt >= LIVE_ETA_CRUISE_MIN_ALT_M) || vr > LIVE_ETA_CLIMBING_VR_MS) return null;
+    // Only telemetry that IS present can show a climb-out: a caller without altitude (a
+    // server-side sighting carries none) keeps the plain estimate it always had.
+    const alt = liveFlight.alt == null ? NaN : Number(liveFlight.alt);
+    const vr = liveFlight.vr == null ? NaN : Number(liveFlight.vr);
+    if (Number.isFinite(alt) && alt < LIVE_ETA_CRUISE_MIN_ALT_M) return null;
+    if (Number.isFinite(vr) && vr > LIVE_ETA_CLIMBING_VR_MS) return null;
   }
   const minutes = (remainingNm / groundspeedKt) * 60 + LIVE_ETA_ALLOWANCE_MIN;
   return { etaISO: new Date(nowMs + minutes * 60000).toISOString(), remainingNm, groundspeedKt };

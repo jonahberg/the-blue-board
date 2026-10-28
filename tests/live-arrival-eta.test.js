@@ -112,6 +112,11 @@ describe('liveArrivalEstimate — climb-out guard', () => {
     expect(hours).toBeLessThan(4.5);
   });
 
+  it('a caller with no altitude or climb rate keeps the plain estimate (the board’s sightings)', () => {
+    const { alt, vr, ...positionOnly } = UA1021_CLIMBING;
+    expect(liveArrivalEstimate(positionOnly, 'PTY', CLIMB_NOW)).not.toBeNull();
+  });
+
   it('near the destination the guard steps aside: descent and approach keep the live ETA', () => {
     expect(LIVE_ETA_CLIMB_GUARD_NM).toBe(150);
     // UA1215 above: 14,050 ft, descending, ~45 nm out.

@@ -272,6 +272,9 @@ export function sightingsFromLiveFeed(liveFlights, liveFeedTs) {
       lat: flight.lat,
       lon: flight.lon,
       spd: flight.spd,
+      // For the live ETA's climb-out guard (my-flights.js liveArrivalEstimate).
+      alt: flight.alt,
+      vr: flight.vr,
     });
   }
   return map;
@@ -282,7 +285,7 @@ function liveEtaSec(sighting, flight, nowMs) {
   if (!Number.isFinite(Number(sighting?.lat)) || !Number.isFinite(Number(sighting?.lon))) return 0;
   const dest = flight?.airport?.destination?.code?.iata || '';
   const est = liveArrivalEstimate(
-    { lat: Number(sighting.lat), lon: Number(sighting.lon), spd: Number(sighting.spd), onGround: false },
+    { lat: Number(sighting.lat), lon: Number(sighting.lon), spd: Number(sighting.spd), alt: sighting.alt, vr: sighting.vr, onGround: false },
     dest,
     nowMs,
   );
