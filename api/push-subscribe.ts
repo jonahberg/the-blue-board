@@ -15,6 +15,7 @@ import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { getSupabase } from './_supabase.js';
 import { getVapidPublicKey, isPushConfigured } from './_web-push.js';
+import { isAllowedPushEndpoint } from './_push-endpoint.js';
 import { carryWatchState } from './_watch-diff.js';
 
 const isRateLimited = createRateLimiter('push-subscribe', 20);
@@ -23,8 +24,9 @@ const MAX_WATCHES = 10;
 const FLIGHT_RE = /^UA\d{1,4}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Known push-service host substrings — sane validation, not an allowlist that breaks new browsers.
-// We only require an https URL to a plausible push host; anything wildly off is rejected.
+// The loose shape check used to find a row to DELETE. Removing a row by its endpoint string is
+// harmless, and it lets a subscription stored before the push-service allowlist still be removed by
+// its owner. Storing (and so later POSTing to) an endpoint needs isAllowedPushEndpoint.
 function isValidEndpoint(endpoint: unknown): endpoint is string {
   if (typeof endpoint !== 'string' || endpoint.length > 2048) return false;
   let u: URL;
@@ -136,6 +138,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ error: 'Something went wrong' });
       }
       return res.status(200).json({ configured: true, success: true, removed: true });
+    }
+
+    // Only a browser vendor's push service may be stored: the watch-alerts cron POSTs to this URL.
+    if (!isAllowedPushEndpoint(endpoint)) {
+      return res.status(400).json({ error: 'Unsupported push service' });
     }
 
     // The client re-posts its whole list ({flight} only) on every add/remove. Carry each still-listed

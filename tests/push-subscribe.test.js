@@ -142,6 +142,51 @@ describe('push-subscribe API', () => {
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 
+  describe('push-service allowlist (Oct 28 2026)', () => {
+    // The watch-alerts cron POSTs to the stored endpoint, so only a browser vendor's push service
+    // may be stored. Full matrix in tests/push-endpoint.test.js; this checks the handler wiring.
+    const subscribe = (endpoint) =>
+      makeReq({ body: { subscription: { endpoint, keys: VALID_SUB.keys }, watches: [{ flight: 'UA1' }] } });
+
+    it.each([
+      'https://fcm.googleapis.com/fcm/send/abc',
+      'https://web.push.apple.com/QGuQyavXutnMH8Zq',
+      'https://updates.push.services.mozilla.com/wpush/v2/gAAAA',
+      'https://wns2-par02p.notify.windows.com/w/?token=BQYAAAD',
+    ])('stores %s', async (endpoint) => {
+      const res = makeRes();
+      await handler(subscribe(endpoint), res);
+      expect(res._status).toBe(200);
+      expect(mockUpsert).toHaveBeenCalledTimes(1);
+      expect(mockUpsert.mock.calls[0][0].endpoint).toBe(endpoint);
+    });
+
+    it.each([
+      ['an arbitrary https host', 'https://example.com/push'],
+      ['a look-alike host', 'https://evil-fcm.googleapis.com.attacker.com/x'],
+      ['a suffix appended to a real host', 'https://fcm.googleapis.com.attacker.com/x'],
+      ['plain http', 'http://fcm.googleapis.com/fcm/send/abc'],
+      ['an IPv4 literal', 'https://169.254.169.254/latest/meta-data'],
+      ['an IPv6 literal', 'https://[::1]/x'],
+      ['a non-default port', 'https://fcm.googleapis.com:8443/x'],
+      ['userinfo', 'https://fcm.googleapis.com@evil.com/x'],
+    ])('refuses to store %s (400, no write)', async (_name, endpoint) => {
+      const res = makeRes();
+      await handler(subscribe(endpoint), res);
+      expect(res._status).toBe(400);
+      expect(mockUpsert).not.toHaveBeenCalled();
+    });
+
+    it('still lets the owner of an older, non-allowlisted row unsubscribe (delete by endpoint is harmless)', async () => {
+      const endpoint = 'https://push.example.net/legacy-sub';
+      const res = makeRes();
+      await handler(makeReq({ body: { action: 'unsubscribe', subscription: { endpoint } } }), res);
+      expect(res._status).toBe(200);
+      expect(deleteEq).toHaveBeenCalledWith('endpoint', endpoint);
+      expect(mockUpsert).not.toHaveBeenCalled();
+    });
+  });
+
   it('POST drops invalid flight numbers and caps at 10 watches', async () => {
     const many = Array.from({ length: 15 }, (_, i) => ({ flight: 'UA' + (i + 1) }));
     many.push({ flight: 'DL999' }); // wrong airline — dropped

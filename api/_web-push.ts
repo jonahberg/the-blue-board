@@ -5,6 +5,7 @@
 // degrade to today's in-tab behaviour, never error. isPushConfigured() is that single detector.
 
 import webpush from 'web-push';
+import { endpointHostForLog, isAllowedPushEndpoint } from './_push-endpoint.js';
 
 export function getVapidPublicKey(): string {
   return process.env.WEB_PUSH_VAPID_PUBLIC_KEY || '';
@@ -53,8 +54,17 @@ export interface PushSendResult {
 /**
  * Send one push. Never throws — returns a structured result the caller uses to prune dead
  * subscriptions (404/410 → gone). Assumes ensureVapidConfigured() already returned true.
+ *
+ * An endpoint that is not on a known push service (api/_push-endpoint.ts) is never contacted: a
+ * row stored before that allowlist existed must not make the cron POST to an arbitrary URL. It is
+ * reported as an ordinary failure (not `gone`), so watch-alerts' failed_count bookkeeping prunes it
+ * after a few runs rather than this check deleting rows on its own.
  */
 export async function sendPush(target: PushTarget, payload: object): Promise<PushSendResult> {
+  if (!isAllowedPushEndpoint(target?.endpoint)) {
+    console.warn(`sendPush: skipped an endpoint that is not a known push service (host: ${endpointHostForLog(target?.endpoint)})`);
+    return { ok: false, statusCode: 0, gone: false };
+  }
   try {
     const res = await webpush.sendNotification(
       { endpoint: target.endpoint, keys: target.keys },

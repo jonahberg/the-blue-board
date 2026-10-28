@@ -20,6 +20,17 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
 process.env.NODE_ENV = 'test';
 delete process.env.VERCEL_ENV;
 
+// The welcome email (and its daily-cap count) run after the response via waitUntil. Capture each
+// promise so a test can await the background work before asserting on it; without this mock,
+// waitUntil is a silent no-op outside a Vercel request and the send would race the assertions.
+const background = vi.hoisted(() => ({ tasks: [] }));
+vi.mock('@vercel/functions', () => ({
+  waitUntil: vi.fn((promise) => { background.tasks.push(promise); }),
+}));
+async function flushBackground() {
+  while (background.tasks.length) await Promise.all(background.tasks.splice(0));
+}
+
 vi.mock('resend', () => ({
   Resend: vi.fn(function () {
     return {
@@ -30,7 +41,8 @@ vi.mock('resend', () => ({
   }),
 }));
 
-import handler from '../api/waitlist.js';
+import handler, { WELCOME_EMAIL_DAILY_CAP } from '../api/waitlist.js';
+import { waitUntil } from '@vercel/functions';
 
 // Use unique IPs per test to avoid rate limiter collisions
 let ipCounter = 100;
@@ -43,6 +55,10 @@ let upsertResult;
 let mockSingle;
 let mockUpsertSelect;
 let mockUpsert;
+// The daily-cap query: from('waitlist').select('*', { count, head }).gte('created_at', since).
+let countResult;
+let mockCountGte;
+let mockCountSelect;
 
 function makeReq(overrides = {}) {
   return {
@@ -77,12 +93,17 @@ describe('waitlist API', () => {
     mockSingle = vi.fn(() => Promise.resolve(upsertResult));
     mockUpsertSelect = vi.fn(() => ({ single: mockSingle }));
     mockUpsert = vi.fn(() => ({ select: mockUpsertSelect }));
-    mockFrom.mockReturnValue({ upsert: mockUpsert });
+    countResult = { count: 1, error: null };
+    mockCountGte = vi.fn(() => Promise.resolve(countResult));
+    mockCountSelect = vi.fn(() => ({ gte: mockCountGte }));
+    mockFrom.mockReturnValue({ upsert: mockUpsert, select: mockCountSelect });
+    background.tasks.length = 0;
 
     delete process.env.RESEND_API_KEY;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await flushBackground();
     delete process.env.RESEND_API_KEY;
     delete process.env.EMAIL_POSTAL_ADDRESS;
   });
@@ -215,6 +236,7 @@ describe('waitlist API', () => {
 
     const res = makeRes();
     await handler(makeReq(), res);
+    await flushBackground();
 
     expect(mockEmailSend).toHaveBeenCalledTimes(1);
     expect(mockEmailSend).toHaveBeenCalledWith(
@@ -238,12 +260,17 @@ describe('waitlist API', () => {
 
     const res = makeRes();
     await handler(makeReq(), res);
+    await flushBackground();
 
     expect(mockEmailSend).not.toHaveBeenCalled();
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(mockCountSelect).not.toHaveBeenCalled();
     expect(res._status).toBe(200);
   });
 
-  it('waits for Resend before returning success', async () => {
+  it('answers without waiting for Resend: the send is handed to waitUntil (Oct 28 2026)', async () => {
+    // Awaiting the send only for NEW addresses made the response time say whether an address
+    // was already on the list. Now both answer after the upsert alone.
     process.env.RESEND_API_KEY = 're_test_key';
 
     let resolveSend;
@@ -252,18 +279,33 @@ describe('waitlist API', () => {
     }));
 
     const res = makeRes();
-    const pending = handler(makeReq(), res);
-
-    await vi.waitFor(() => {
-      expect(mockEmailSend).toHaveBeenCalledTimes(1);
-      expect(typeof resolveSend).toBe('function');
-    });
-    expect(res._status).toBe(0);
-
-    resolveSend({ data: { id: 'email_456' }, error: null });
-    await pending;
+    await handler(makeReq(), res);
 
     expect(res._status).toBe(200);
+    expect(res._json).toEqual({ success: true });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(typeof waitUntil.mock.calls[0][0]?.then).toBe('function');
+
+    await vi.waitFor(() => expect(mockEmailSend).toHaveBeenCalledTimes(1));
+    resolveSend({ data: { id: 'email_456' }, error: null });
+    await flushBackground();
+  });
+
+  it('runs the daily-cap count after the response too, so a new address waits only for the upsert', async () => {
+    process.env.RESEND_API_KEY = 're_test_key';
+    let resolveCount;
+    mockCountGte.mockImplementation(() => new Promise((resolve) => { resolveCount = resolve; }));
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+
+    // Answered while the count query is still outstanding.
+    expect(res._status).toBe(200);
+    expect(mockEmailSend).not.toHaveBeenCalled();
+
+    resolveCount({ count: 1, error: null });
+    await flushBackground();
+    expect(mockEmailSend).toHaveBeenCalledTimes(1);
   });
 
   it('still succeeds when Resend returns an error', async () => {
@@ -273,6 +315,7 @@ describe('waitlist API', () => {
 
     const res = makeRes();
     await handler(makeReq(), res);
+    await flushBackground();
 
     expect(res._status).toBe(200);
     expect(errorSpy).toHaveBeenCalled();
@@ -290,6 +333,7 @@ describe('waitlist API', () => {
 
     const res = makeRes();
     await handler(makeReq(), res);
+    await flushBackground();
 
     expect(mockEmailSend).toHaveBeenCalledTimes(1);
     const sent = mockEmailSend.mock.calls[0][0];
@@ -306,6 +350,7 @@ describe('waitlist API', () => {
 
     const res = makeRes();
     await handler(makeReq(), res);
+    await flushBackground();
 
     const sent = mockEmailSend.mock.calls[0][0];
     expect(sent.headers).toBeDefined();
@@ -321,6 +366,7 @@ describe('waitlist API', () => {
 
     const res = makeRes();
     await handler(makeReq(), res);
+    await flushBackground();
 
     const sent = mockEmailSend.mock.calls[0][0];
     expect(sent.html).toContain('The Blue Board, PO Box 12345, Chicago, IL 60601');
@@ -332,6 +378,7 @@ describe('waitlist API', () => {
 
     const res = makeRes();
     await handler(makeReq(), res);
+    await flushBackground();
 
     const sent = mockEmailSend.mock.calls[0][0];
     expect(sent.html).not.toContain('PO Box 12345');
@@ -371,5 +418,187 @@ describe('waitlist API', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // ── Oct 28 2026 hardening ───────────────────────────────────────────────
+
+  describe('email length', () => {
+    // local@domain with the domain padded so the whole address is exactly n characters.
+    function emailOfLength(n) {
+      const local = 'a';
+      const tld = '.com';
+      return local + '@' + 'b'.repeat(n - local.length - 1 - tld.length) + tld;
+    }
+
+    it('accepts a 254-character address', async () => {
+      const email = emailOfLength(254);
+      expect(email).toHaveLength(254);
+      const res = makeRes();
+      await handler(makeReq({ body: { email } }), res);
+      expect(res._status).toBe(200);
+      expect(mockUpsert.mock.calls[0][0].email).toBe(email);
+    });
+
+    it('rejects a 255-character address with the usual 400, before touching the table', async () => {
+      const email = emailOfLength(255);
+      expect(email).toHaveLength(255);
+      const res = makeRes();
+      await handler(makeReq({ body: { email } }), res);
+      expect(res._status).toBe(400);
+      expect(res._json).toEqual({ error: 'Invalid or missing email address' });
+      expect(mockUpsert).not.toHaveBeenCalled();
+    });
+
+    it('measures the trimmed address (surrounding whitespace is not counted)', async () => {
+      const res = makeRes();
+      await handler(makeReq({ body: { email: '   ' + emailOfLength(254) + '   ' } }), res);
+      expect(res._status).toBe(200);
+    });
+
+    it('rejects a 100k-character string without saving it', async () => {
+      const res = makeRes();
+      await handler(makeReq({ body: { email: 'a@' + 'b.'.repeat(50_000) + ' ' } }), res);
+      expect(res._status).toBe(400);
+      expect(mockUpsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Origin is required', () => {
+    it('refuses a POST with no Origin header', async () => {
+      const res = makeRes();
+      await handler(makeReq({ headers: { 'x-real-ip': uniqueIp() } }), res);
+      expect(res._status).toBe(403);
+      expect(mockUpsert).not.toHaveBeenCalled();
+    });
+
+    it('refuses an empty Origin header', async () => {
+      const res = makeRes();
+      await handler(makeReq({ headers: { origin: '', 'x-real-ip': uniqueIp() } }), res);
+      expect(res._status).toBe(403);
+      expect(mockUpsert).not.toHaveBeenCalled();
+    });
+
+    it('refuses a request with no headers at all', async () => {
+      const res = makeRes();
+      await handler(makeReq({ headers: undefined }), res);
+      expect(res._status).toBe(403);
+    });
+
+    it('refuses look-alike origins', async () => {
+      for (const origin of [
+        'http://theblueboard.co',
+        'https://theblueboard.co.evil.com',
+        'https://www.theblueboard.co',
+        'https://theblueboard.co:8443',
+        'http://localhost.evil.com',
+        'null',
+      ]) {
+        const res = makeRes();
+        await handler(makeReq({ headers: { origin, 'x-real-ip': uniqueIp() } }), res);
+        expect(res._status, origin).toBe(403);
+      }
+      expect(mockUpsert).not.toHaveBeenCalled();
+    });
+
+    it('accepts the site and localhost, echoing the origin back', async () => {
+      for (const origin of ['https://theblueboard.co', 'http://localhost', 'http://localhost:4321']) {
+        const res = makeRes();
+        await handler(makeReq({ headers: { origin, 'x-real-ip': uniqueIp() } }), res);
+        expect(res._status, origin).toBe(200);
+        expect(res._headers['Access-Control-Allow-Origin']).toBe(origin);
+      }
+    });
+  });
+
+  describe('daily welcome-email cap', () => {
+    beforeEach(() => {
+      process.env.RESEND_API_KEY = 're_test_key';
+    });
+
+    it(`counts the last 24 h of signups before sending (cap ${WELCOME_EMAIL_DAILY_CAP})`, async () => {
+      expect(WELCOME_EMAIL_DAILY_CAP).toBe(50);
+      const before = Date.now();
+      const res = makeRes();
+      await handler(makeReq(), res);
+      await flushBackground();
+
+      expect(mockCountSelect).toHaveBeenCalledWith('*', { count: 'exact', head: true });
+      const [column, since] = mockCountGte.mock.calls[0];
+      expect(column).toBe('created_at');
+      const sinceMs = Date.parse(since);
+      expect(before - sinceMs).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 1000);
+      expect(before - sinceMs).toBeLessThanOrEqual(24 * 60 * 60 * 1000 + 1000);
+      expect(mockEmailSend).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends when the count is exactly at the cap (the new row is included in the count)', async () => {
+      countResult = { count: WELCOME_EMAIL_DAILY_CAP, error: null };
+      const res = makeRes();
+      await handler(makeReq(), res);
+      await flushBackground();
+      expect(res._status).toBe(200);
+      expect(mockEmailSend).toHaveBeenCalledTimes(1);
+    });
+
+    it('over the cap: saves the signup, skips the email, logs a warning', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      countResult = { count: WELCOME_EMAIL_DAILY_CAP + 1, error: null };
+      const res = makeRes();
+      await handler(makeReq(), res);
+      await flushBackground();
+
+      expect(res._status).toBe(200);
+      expect(res._json).toEqual({ success: true });
+      expect(mockUpsert).toHaveBeenCalledTimes(1);
+      expect(mockEmailSend).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/daily cap of 50/));
+      warn.mockRestore();
+    });
+
+    it('count query error: signup succeeds (fails open), email is skipped (fails closed)', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      countResult = { count: null, error: { message: 'statement timeout' } };
+      const res = makeRes();
+      await handler(makeReq(), res);
+      await flushBackground();
+
+      expect(res._status).toBe(200);
+      expect(mockUpsert).toHaveBeenCalledTimes(1);
+      expect(mockEmailSend).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/count failed/), 'statement timeout');
+      errorSpy.mockRestore();
+    });
+
+    it('count query throws: signup succeeds, email is skipped, nothing rejects', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockCountGte.mockImplementation(() => Promise.reject(new Error('socket hang up')));
+      const res = makeRes();
+      await handler(makeReq(), res);
+      await expect(flushBackground()).resolves.toBeUndefined();
+
+      expect(res._status).toBe(200);
+      expect(mockEmailSend).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    it('a missing count (null without an error) also skips the email', async () => {
+      countResult = { count: null, error: null };
+      const res = makeRes();
+      await handler(makeReq(), res);
+      await flushBackground();
+      expect(res._status).toBe(200);
+      expect(mockEmailSend).not.toHaveBeenCalled();
+    });
+
+    it('does not run the count query when Resend is not configured', async () => {
+      delete process.env.RESEND_API_KEY;
+      const res = makeRes();
+      await handler(makeReq(), res);
+      await flushBackground();
+      expect(res._status).toBe(200);
+      expect(mockCountSelect).not.toHaveBeenCalled();
+      expect(mockEmailSend).not.toHaveBeenCalled();
+    });
   });
 });

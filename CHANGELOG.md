@@ -4,6 +4,25 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.2] - 2026-10-28
+
+**Security hardening. Nothing visitors see changes.** These close the findings of a review of the server functions and the site's security headers.
+
+### Security
+- **Email sign-up** (`api/waitlist.ts`):
+  - Addresses longer than 254 characters, the most an email address can be, are refused with the usual "invalid email" message.
+  - Signing up now takes the same time whether or not the address is already on the list. The welcome email, which only new addresses get, used to be sent before the response, so timing could hint at whether an address was already signed up. It is now sent after the response (`waitUntil`).
+  - Welcome emails are capped at 50 a day across the whole site (`WELCOME_EMAIL_DAILY_CAP`), counted as sign-ups in the last 24 hours. Real traffic is a few a week, so the cap only matters if the form is used to send email to addresses that never asked for it. That would hurt the reputation of the address the update emails come from. Over the cap, the sign-up is still saved and only the email is skipped, with a warning in the logs. If the count can't be read, the same happens: the sign-up goes through and the email is skipped.
+  - A request without an `Origin` header is now refused, like one from another site. Browsers send it on every sign-up, so the site's own forms are unaffected.
+- **Flight alerts** (`api/push-subscribe.ts`, `api/_web-push.ts`, new `api/_push-endpoint.ts`): the server only stores, and only sends to, the push services browsers use: Google's (Chrome and other Chromium browsers), Apple's (Safari), Mozilla's (Firefox) and Microsoft's (Edge). The host must belong to one of those services (a look-alike name doesn't pass), over `https`, with no port. A subscription to anything else is refused. An older one is never contacted: it is skipped when an alert is due, and the existing cleanup removes it after three failed attempts. Unsubscribing still works for any subscription.
+- **Security headers** (`vercel.json`): the Content-Security-Policy adds `base-uri 'none'`, `form-action 'none'` and `object-src 'none'`. The site has no forms that submit by navigating (every input posts with `fetch`) and no embedded plugins, so nothing changes on screen.
+- **Database permissions** (`sql/020_revoke_public_grants.sql`): records a change applied directly to the database. The public key that ships to every browser no longer has any privileges on the site's tables, and the public sign-up insert rule is gone. The server functions use their own key and are unaffected. The `waitlist_source_enum` check from 006/019 still applies to every writer.
+
+### Verified
+- Node 24.22.2 and Bun 1.4.4: `bun install --frozen-lockfile`, `bun run typecheck`, and `bun run build` (`verify-csp-hashes`: both inline scripts allowed). `bun run test` passed 3,955 tests in 257 files, up from 3,851 in 256. The new file is `tests/push-endpoint.test.js`.
+- New tests cover the 254/255-character boundary, a missing, empty or look-alike `Origin`, a response that doesn't wait for the email or the cap count, the cap at 50 and 51, a failed or missing count, each browser's push service, look-alike hosts, `http`, IP literals, ports, user-info and other malformed URLs, the send-time skip, and the three new CSP directives.
+- There is no `<form>`, `<base>`, `<object>` or `<embed>` in `src/`, `public/` or the built `dist/`. A new test fails if a `.astro` page or `public/` HTML file adds a `<form>`.
+
 ## [1.20.1] - 2026-10-28
 
 **Astro 7. Nothing visitors see changes.** This clears all six open Dependabot alerts, which were all on `astro`, including the critical AVIF image-optimization RCE (GHSA-26w7-cxv4-gfx2). `bun audit` drops from 33 advisories (1 critical, 10 high) to 24 (0 critical, 7 high). Every page was compared against a v1.20.0 build (see Verified).

@@ -77,7 +77,7 @@
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
         { "key": "Vary", "value": "Accept, Accept-Encoding" },
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://va.vercel-scripts.com 'sha256-Y8t0ntteBwH+PqGKUyjWW3CAk+BNJKSoQc0xZ68FjhM=' 'sha256-tQIkdAw2vqfQ1PjgUE4ML2A4pIV8SByQ1Seeehy6UIc='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://mesonet.agron.iastate.edu https://theblueboard.co; connect-src 'self' https://theblueboard.co https://va.vercel-scripts.com; frame-ancestors 'none'" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://va.vercel-scripts.com 'sha256-Y8t0ntteBwH+PqGKUyjWW3CAk+BNJKSoQc0xZ68FjhM=' 'sha256-tQIkdAw2vqfQ1PjgUE4ML2A4pIV8SByQ1Seeehy6UIc='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://mesonet.agron.iastate.edu https://theblueboard.co; connect-src 'self' https://theblueboard.co https://va.vercel-scripts.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'" }
       ]
     },
     {
