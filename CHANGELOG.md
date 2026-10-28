@@ -4,6 +4,30 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.0] - 2026-10-28
+
+**Heavy users are asked to join the email list again, not only to donate.** When someone has been on the dashboard for 5 minutes, or has tapped around 20 times (30 for a returning visitor), they get one ask. Since v1.18.0 that was the donation popup whenever it was eligible, so the "Stay in the loop" email bar almost never showed: 0 opens in 191 showings since Oct 7, and no email signups since Oct 5. The email popup that used to open by itself had brought in 188 of the first 192.
+
+Now, when both asks are eligible, the donation popup is the ask 60% of the time and the "Stay in the loop" dialog 40%. If only one is eligible, it gets that one. If neither is, the email bar is the fallback, as before.
+
+The email dialog stays out of the way the same way the donation popup does:
+- It waits until the visitor has stopped tapping, typing and scrolling for 3 seconds.
+- It never opens on top of a flight panel, dialog or popover, and never into a tab in the background.
+- It doesn't put the cursor in the email field, so a phone's keyboard stays down until they tap it.
+- Only one ask ever shows per visit.
+- Closing it without signing up quiets it for 30 days, and so does a "no" to the email bar. Anyone who has signed up never sees it.
+
+Implementation:
+- The choice is `chooseDeepUseAsk` in `src/lib/deep-use-ask.js` (`DEEP_USE_DONATE_WEIGHT = 0.6`). The email rules are in `src/lib/email-prompt.js` (new `bb_email_prompt` key).
+- `features/EmailPrompt.tsx` opens the existing `WaitlistDialog`. The wait-for-a-pause logic is shared with `DonatePrompt` (`useDeepUsePause` in `state/deep-use.ts`).
+- Signups from this path carry `source: 'deep-use'`. `sql/019_waitlist_source_deep_use.sql` adds it to the table's CHECK constraint and anon policy. Until that runs, the API saves these signups as `popup` instead of failing.
+- Analytics: an `email_prompt` event (`shown`/`submit`/`later`). `donate_prompt` is unchanged.
+- DESIGN.md's exception to "engagement surfaces stay quiet" now covers both asks.
+
+**My Flights no longer counts down "12h 4m" right after takeoff.** On a ~5-hour EWR→PTY flight, the countdown read 12h 4m just after takeoff, then 8h 29m and 7h 2m, and was only right at cruise. It divided the remaining distance by the plane's climb-out speed. Once that guess was more than 30 minutes off the schedule provider's estimate, it replaced that estimate, in the countdown and in the connection checker. Now, while a plane more than 150 nm from its destination is below about FL200 or still climbing, the provider's estimate stands. Descent and approach work as before (`liveArrivalEstimate`, `src/lib/my-flights.js`).
+
+**Gabriel Sandoval is on the Supporters Wall.** Thank you!
+
 ## [1.19.1] - 2026-10-28
 
 **Dependency and security refresh. Nothing visitors see changes.** `bun audit` drops from 130 advisories (3 critical, 56 high) to 33 (1 critical, 10 high). Every one that remains is in build tooling or a devDependency, and every one is waiting on an upstream release or a major upgrade listed under "Held back" below.
