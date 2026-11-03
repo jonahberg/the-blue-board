@@ -41,18 +41,19 @@ export const HUB_LINE_SHORT = "8 hubs + NRT gateway";
 // (ERR_IMPORT_ATTRIBUTE_MISSING — prod incidents 2026-06-01 and 2026-08-11→09-10, the latter
 // silently 500'd every waitlist signup for a month). tests/api-esm-json-imports.test.js guards it.
 
-/** United's public target for Starlink-equipped aircraft by end of 2026. */
-export const STARLINK_TARGET_2026 = '~1,000';
+// STARLINK_TARGET_2026 ('~1,000' aircraft, from United's Q2 2026 release) was removed on 2026-11-03: United's
+// Q3 2026 release restates the goal as Starlink on 61% of flights by the end of 2026 and fleet-wide by the end
+// of 2027, with no aircraft-count target. Nothing imported it.
 
-/** Airframe count in The Blue Board's fleet database (2026-09-28 snapshot — NOT United's live fleet size). */
-export const FLEET_DB_COUNT = 1139;
+/** Airframe count in The Blue Board's fleet database (2026-11-03 snapshot — NOT United's live fleet size). */
+export const FLEET_DB_COUNT = 1154;
 
 /**
  * The day that fleet database (`/data/fleet.json`) last changed. It is a hand-maintained
  * snapshot with no refresh job, so copy describing it says "as of" this — never "updated
  * daily" (F86).
  */
-export const FLEET_DB_AS_OF = '2026-09-28';
+export const FLEET_DB_AS_OF = '2026-11-03';
 
 /** Conservative, verified social-proof user count. Raise via this constant only when re-verified. */
 export const SOCIAL_PROOF_USERS = '22,000+';
