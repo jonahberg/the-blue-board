@@ -67,9 +67,9 @@ const hubPulseEntities = Object.fromEntries(
 // or every hub would read "construction". Legend explains the distinction. ----
 const hubMapMeta = {
   IAH: { shape: 'diamond', tone: 'yellow', badge: { label: 'United building', tone: 'yellow', glyph: '◆' },
-    line1: '4 projects — the 54,000 sq ft flagship club and 22 new gates target fall 2026.' },
+    line1: '4 projects — the 54,000 sq ft flagship club and 22 new gates opened in October 2026.' },
   IAD: { shape: 'diamond', tone: 'yellow', badge: { label: 'United building', tone: 'yellow', glyph: '◆' },
-    line1: "5 projects — a 14-gate concourse and United's new 40,000 sq ft club open this fall." },
+    line1: "5 projects — a 14-gate concourse and United's new 40,000 sq ft club, due this fall but still undated." },
   SFO: { shape: 'diamond', tone: 'accent', badge: { label: 'Club announced', tone: 'accent', glyph: '◇' },
     line1: '2 projects — a 25,000 sq ft club with an outdoor terrace, due by end of 2026.' },
   DEN: { shape: 'diamond', tone: 'accent', badge: { label: 'Polaris announced', tone: 'accent', glyph: '◇' },
@@ -178,26 +178,26 @@ const columns = [
 const stats = [
   { label: 'new flagship clubs in 2026', value: '3', tone: 'green', sub: 'IAH · IAD · SFO' },
   { label: 'new club space this year', value: '~119k', tone: 'amber', sub: 'sq ft — IAH 54k + IAD 40k + SFO 25k' },
-  { label: 'new gates targeted fall 2026', value: '36', sub: '22 at IAH · 14 at IAD' },
-  { label: 'largest club, once IAH opens', value: '54,000', sub: 'sq ft — DEN holds the title today' },
+  { label: 'new gates targeted fall 2026', value: '36', sub: '22 open at IAH · 14 due at IAD' },
+  { label: 'largest club in the network', value: '54,000', sub: 'sq ft — IAH Terminal B North, open since Oct 22' },
 ];
 
 // ---- FAQ ----
 const faq = [
   {
-    question: 'When does the new United Club at Houston (IAH) open?',
+    question: 'When did the new United Club at Houston (IAH) open?',
     answer:
-      'United has committed to "by the end of 2026." The 54,000 sq ft club rides on the new Terminal B North Concourse, targeted for fall 2026 — if the concourse slips, the club slips.',
+      'October 22, 2026, together with the new 22-gate Terminal B North Concourse. The club is 54,000 sq ft with 800 seats, near gate B11, open 5:30 a.m. to 9 p.m. daily. Terminal B’s check-in lobby is still closed, so Terminal B passengers check in at Terminal C.',
   },
   {
     question: 'What is the largest United Club?',
     answer:
-      'Today: the ~35,000 sq ft United Club B-East in Denver. Once Houston’s Terminal B club opens, that crown moves to IAH at 54,000 sq ft — likely the largest airline-branded lounge in the country.',
+      'Houston’s 54,000 sq ft United Club in Terminal B North, open since October 22, 2026 — United calls it the largest club of any airline in the Americas. Before it, the title belonged to the ~35,000 sq ft United Club B-East in Denver.',
   },
   {
     question: 'What is United building at Washington Dulles?',
     answer:
-      'A new 14-gate, 435,000 sq ft Concourse E (built by the airports authority, occupied entirely by United) with a ~40,000 sq ft flagship United Club above the AeroTrain station — both now expected in October 2026, after a slip from late September. Behind it sits the $20B+ Dulles master plan unveiled in July 2026, a decade-long rebuild that includes plans for one of the largest United Polaris lounges in the world.',
+      'A new 14-gate, 435,000 sq ft Concourse E (built by the airports authority, occupied entirely by United) with a ~40,000 sq ft flagship United Club above the AeroTrain station. Both slipped from late September to an expected October opening, then October passed without one: MWAA’s October 13 fact sheet says only “fall 2026,” and no date has been announced. Behind it sits the $20B+ Dulles master plan unveiled in July 2026, a decade-long rebuild that includes plans for one of the largest United Polaris lounges in the world.',
   },
   {
     question: 'Is United building anything at LAX?',
@@ -506,8 +506,8 @@ const chipClass =
           </span>
           <span class="text-xs leading-relaxed text-muted-foreground">
             sq ft — the Houston club, roughly the floor area of the entire White House, and a
-            little over a football field of playing turf. Largest airline lounge in the country
-            when it opens.
+            little over a football field of playing turf. Open since October 22, 2026 — the largest
+            airline lounge in the country.
           </span>
         </li>
         <li class="flex items-baseline gap-3 border-b border-border py-2 last:border-b-0">
@@ -516,8 +516,7 @@ const chipClass =
           </span>
           <span class="text-xs leading-relaxed text-muted-foreground">
             sq ft of new club space opening in 2026 alone — more than United's entire Denver club
-            footprint (~100,000 sq ft across four locations), which is currently the biggest at
-            any hub.
+            footprint (~100,000 sq ft across four locations).
           </span>
         </li>
         <li class="flex items-baseline gap-3 border-b border-border py-2 last:border-b-0">

@@ -15,12 +15,12 @@ const faqEntries = [
   {
     question: 'How long will the Newark flight caps last?',
     answer:
-      'The FAA first imposed an interim cap of 28 arrivals and 28 departures per hour on May 20, 2025, then raised it to 34/34. The cap was later extended to 72 total operations per hour (36 arrivals + 36 departures) through October 24, 2026. A subsequent Federal Register order (order 2026-12589, issued June 23, 2026) extended the 72-per-hour cap through October 30, 2027.',
+      'The FAA first imposed an interim cap of 28 arrivals and 28 departures per hour on May 20, 2025, then raised it to 34/34. The cap was later extended to 72 total operations per hour (36 arrivals + 36 departures) through October 24, 2026. A subsequent FAA order (Federal Register document 2026-12589, issued June 18 and published June 23, 2026) extended the 72-per-hour cap through October 30, 2027, and the FAA’s October 9, 2026 scheduling notice for summer 2027 confirmed it, saying staffing at the Philadelphia TRACON’s Area C remains level and will not increase significantly before the summer 2027 season starts.',
   },
   {
     question: 'Is it safe to fly through Newark?',
     answer:
-      "Yes. The caps exist because of an air traffic control staffing shortfall at the Philadelphia TRACON, and PHL TRACON's Area C — the team that handles EWR arrivals — has been running at roughly 48% of target staffing. Rather than let controllers manage more traffic than they can safely separate, the FAA reduced Newark's hourly schedule to match available controller capacity. The caps are a capacity-management response to a staffing gap, not a signal of unsafe operations.",
+      "Yes. The caps exist because of an air traffic control staffing shortfall at the Philadelphia TRACON, and PHL TRACON's Area C — the team that handles EWR arrivals — had 28 certified controllers against a target of 46 (60.8%) at the time of the FAA's June 2026 order, with six of them due to rotate back to New York by the end of July 2026. Rather than let controllers manage more traffic than they can safely separate, the FAA reduced Newark's hourly schedule to match available controller capacity. The caps are a capacity-management response to a staffing gap, not a signal of unsafe operations.",
   },
   {
     question: 'Which flights are most affected?',
@@ -75,7 +75,12 @@ const timeline = [
   {
     date: 'Jun 23, 2026',
     label: 'Federal Register order 2026-12589',
-    detail: 'The FAA extends the 72-operations-per-hour cap through October 30, 2027, citing continued Philadelphia TRACON Area C staffing shortfalls (roughly 48% of target staffing) and the need for a durable planning horizon for airlines and passengers.',
+    detail: 'The FAA extends the 72-operations-per-hour cap through October 30, 2027 (the order was issued June 18 and published June 23), citing continued Philadelphia TRACON Area C staffing shortfalls — 28 certified controllers against a target of 46 (60.8%), with six temporary controllers due to leave by the end of July 2026 — and saying it does not expect Area C to reach its target before the end of the summer 2027 season.',
+  },
+  {
+    date: 'Oct 9, 2026',
+    label: 'Summer 2027 schedules: cap confirmed',
+    detail: 'The FAA’s summer 2027 scheduling notice restates the cap through October 30, 2027, noting that Area C staffing remains level and will not increase significantly before the summer 2027 season starts.',
   },
 ];
 const faqSchema = {
@@ -121,11 +126,12 @@ const ctaClass =
           class="font-semibold text-foreground">72 total operations per hour</strong
         > (36 arrivals + 36 departures), extended through <strong
           class="font-semibold text-foreground">October 30, 2027</strong
-        > by Federal Register order 2026-12589 (issued June 23, 2026). The cap exists because the
-        Philadelphia TRACON facility that controls EWR arrivals — its Area C team specifically — has
-        been running at roughly <strong class="font-semibold text-foreground"
-          >48% of target staffing</strong
-        >, a shortfall exposed by a series of 2025 telecommunications and radar outages. Some
+        > by Federal Register order 2026-12589 (issued June 18, published June 23, 2026). The cap
+        exists because the Philadelphia TRACON facility that controls EWR arrivals — its Area C team
+        specifically — had only <strong class="font-semibold text-foreground"
+          >28 of its 46 targeted certified controllers (60.8%)</strong
+        > when that order was issued, a shortfall exposed by a series of 2025 telecommunications and
+        radar outages. Some
         construction weekends have seen even lower rates. This page is the bookmarkable reference
         for what's happening at Newark and why.
       </p>
