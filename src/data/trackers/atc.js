@@ -9,7 +9,8 @@
  *            "planned"     = in the FAA's Aug-2023 deployment waterfall with a published planned IOC date
  *            "paper"       = cut in the FAA's 2022 descope, restored to scope in 2025 — no published date
  *  - goLiveDate: ONLY where defensible — DOT OIG confirmed-actuals (sites 1–7) or event-dated press
- *    (DCA, MDW, AUS, DAY, SDF). Eight live airports have no published cutover date; they carry no goLiveDate.
+ *    (DCA, MDW, AUS, DAY, SDF, FLL, SMF, ATL). Nine live airports have no published cutover date (DEN's
+ *    FAA-announced cutover week straddles Sept/Oct 2026); they carry no goLiveDate.
  *    Precision varies (YYYY-MM-DD vs YYYY-MM) to match what the source supports. Do not backfill
  *    from the waterfall — planned IOC dates are not go-live dates.
  *  - plannedIoc: the airport's slot in the FAA's Aug-2023 waterfall (DOT OIG report AV2024031,
@@ -29,7 +30,7 @@
  *  - After every source pass: bump atcMeta.lastVerified. If facts changed, also bump
  *    atcMeta.lastUpdated and add a changelog entry. Then run `bun run test`.
  *
- * Last verified: 2026-09-28
+ * Last verified: 2026-11-03
  */
 
 /** @typedef {'live'|'in-progress'|'planned'|'paper'} AtcStatus */
@@ -53,8 +54,8 @@
 export const atcMeta = {
   slug: "atc",
   name: "Modern Skies Tracker",
-  lastUpdated: "2026-09-28",
-  lastVerified: "2026-09-28",
+  lastUpdated: "2026-11-03",
+  lastVerified: "2026-11-03",
   // Headline stats that can't be derived from the entries below. Live/paper counts ARE derived —
   // never hardcode them here (tests pin that).
   stats: {
@@ -72,10 +73,15 @@ export const atcMeta = {
     },
   },
   changelog: [
+    { date: "2026-10-28", entry: "Atlanta (ATL) becomes the 26th airport on electronic strips, per the FAA — about six months after its 2023-plan slot. We can now name 24 of the 26; the FAA hasn't publicly named the 22nd or the 24th." },
+    { date: "2026-10-15", entry: "Sacramento (SMF) becomes the 25th — another tower cut from the program in 2022 and restored in 2025." },
+    { date: "2026-10-01", entry: "Denver (DEN), a United hub, makes the switch the week of September 28 and becomes the 23rd airport off paper — right on its 2023-plan slot." },
+    { date: "2026-09-28", entry: "Sen. Eric Schmitt introduces the Modern Skies Act — $30B, $10B each for ATC technology, airport infrastructure such as towers, and a terminal pilot program. Introduced only; nothing appropriated yet." },
     { date: "2026-09-22", entry: "Transportation Secretary Duffy asks Congress for another $30B — $10B each for software and telecom, airports, and towers. Like the coalition's $20B ask, not yet appropriated." },
     { date: "2026-09-16", entry: "The FAA's own progress sheet now counts 22 of 89 towers on electronic strips — two more than the 20 we can name, so two cutovers haven't been publicly announced yet. Copper-to-fiber conversion reaches 65%." },
     { date: "2026-08-27", entry: "Louisville (SDF) becomes the 21st airport to drop paper strips, per the FAA." },
     { date: "2026-08-19", entry: "Dayton (DAY) becomes the 20th — a tower cut from the program in 2022 and restored in 2025." },
+    { date: "2026-07-30", entry: "Fort Lauderdale (FLL) becomes the 19th tower off paper, per the FAA — an announcement we only caught in November." },
     { date: "2026-07-27", entry: "Tracker first published — 18 airports live, 71 still on paper." },
     { date: "2026-07-15", entry: "The Modern Skies Coalition — 66 aviation groups — asks Congress for another $20B. Not yet appropriated." },
     { date: "2026-07-14", entry: "Austin (AUS) becomes the 18th airport to drop paper strips." },
@@ -444,10 +450,12 @@ export const atcAirports = [
       "state": "GA",
       "lat": 33.6367,
       "lng": -84.4281,
-      "status": "planned",
-      "plannedIoc": "2026-04-28",
-      "note": "Its April 2026 slot in the FAA’s schedule has passed — still listed as planned.",
+      "status": "live",
+      "goLiveDate": "2026-10",
+      "note": "26th airport off paper, per the FAA (week of October 26, 2026) — about six months after its April 2026 slot in the 2023 schedule.",
       "sources": [
+          "https://content.govdelivery.com/accounts/USAFAA/bulletins/430d193",
+          "https://www.fox5atlanta.com/news/atlanta-airport-upgrades-air-traffic-control-system-boost-safety",
           "https://modernskies.faa.gov/",
           "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
       ]
@@ -521,9 +529,10 @@ export const atcAirports = [
       "state": "CO",
       "lat": 39.86,
       "lng": -104.6738,
-      "status": "planned",
-      "plannedIoc": "2026-09-29",
+      "status": "live",
+      "note": "23rd airport off paper — controllers made the switch the week of September 28, 2026, per the FAA, right on its September 2026 slot in the 2023 schedule.",
       "sources": [
+          "https://content.govdelivery.com/accounts/USAFAA/bulletins/42d4213",
           "https://modernskies.faa.gov/",
           "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
       ]
@@ -644,10 +653,11 @@ export const atcAirports = [
       "state": "FL",
       "lat": 26.0726,
       "lng": -80.1527,
-      "status": "planned",
-      "plannedIoc": "2027-09-28",
-      "note": "Shows as active on the FAA’s Modern Skies dashboard as of Sept. 28, 2026, but we haven’t found an announcement — still listed as planned until one appears.",
+      "status": "live",
+      "goLiveDate": "2026-07",
+      "note": "19th tower off paper, per the FAA (week of July 27, 2026) — more than a year ahead of its September 2027 slot in the 2023 schedule.",
       "sources": [
+          "https://content.govdelivery.com/accounts/USAFAA/bulletins/422d3d7",
           "https://modernskies.faa.gov/",
           "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
       ]
@@ -1344,8 +1354,11 @@ export const atcAirports = [
       "state": "CA",
       "lat": 38.6954,
       "lng": -121.591,
-      "status": "paper",
+      "status": "live",
+      "goLiveDate": "2026-10",
+      "note": "25th airport off paper, per the FAA (week of October 12, 2026) — one of the towers cut from the program in 2022 and restored in 2025.",
       "sources": [
+          "https://content.govdelivery.com/accounts/USAFAA/bulletins/42f4cb0",
           "https://modernskies.faa.gov/",
           "https://www.oig.dot.gov/sites/default/files/library-items/FAA%20Terminal%20Flight%20Data%20Manager%20Final%20Report%207.17.24.pdf"
       ]
