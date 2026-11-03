@@ -111,7 +111,7 @@ export const unitedProjects = [
     openedDate: "2026-10-22",
     sizeSqFt: 54_000,
     details:
-      "The headliner, open since October 22, 2026: 54,000 sq ft near gate B11 with 800 seats, two bars, two buffets and a 1,350 sq ft outdoor terrace — the largest club in United's network, and in United's words the largest club of any airline in the Americas. More than 50% bigger than Denver's B-East, which held United's crown until now. It landed on time — the rare project on this page that did.",
+      "The headliner, open since October 22, 2026: 54,000 sq ft near gate B11 with 800 seats, two bars, two buffets and a 1,350 sq ft outdoor terrace — the largest club in United's network, and in United's words the largest club of any airline in the Americas. More than 50% bigger than Denver's B-East, which held United's crown until now.",
     sources: [
       "https://united.mediaroom.com/2026-10-21-United-Opens-New-Concourse-at-George-Bush-Intercontinental-Airport-with-More-Gates,-Local-Restaurants-and-the-Largest-Airline-Club-in-the-Americas",
       "https://thepointsguy.com/news/new-united-airlines-club-houston-terminal-b",
@@ -359,7 +359,7 @@ export const unitedProjects = [
     builder: "airport-authority",
     targetDate: "end of 2027",
     details:
-      "DEN's multi-year rebuild of the main terminal — the part every United flyer touches is security: the 17-lane East Checkpoint opened in August 2025 (early and under budget), an eight-lane North Checkpoint on Level 5 — mainly for connecting international passengers, open 12:30–8:15 p.m. — opened October 22, 2026 alongside a redesigned international arrivals area, and the whole program is substantially complete by end of 2027.",
+      "DEN's multi-year rebuild of the main terminal — the part every United flyer touches is security: the 17-lane East Checkpoint opened in August 2025 (early and under budget), an eight-lane North Checkpoint on Level 5 — mainly for connecting international passengers, open 12:30–8:15 p.m. — opened by late October 2026 (announced October 22) alongside a redesigned international arrivals area, and the whole program is substantially complete by end of 2027.",
     sources: [
       "https://northfortynews.com/category/news/denver-international-airport-opens-new-arrivals-area-security-checkpoint-as-great-hall-renovations-continue/",
       "https://www.flydenver.com/about-den/projects-and-infrastructure/great-hall-program/",
@@ -554,7 +554,7 @@ export const unitedHubsMeta = {
   changelog: [
     { date: "2026-10-29", entry: "LAX's people mover slips again: the contractor now targets February 5, 2027 for passengers, and LAWA won't confirm any date until final testing is done." },
     { date: "2026-10-22", entry: "Houston's Terminal B North Concourse opens: 22 gates and United's largest club anywhere — 54,000 sq ft, 800 seats. Denver's B-East hands over the crown." },
-    { date: "2026-10-22", entry: "Denver opens an eight-lane North Checkpoint and a redesigned international arrivals area as the Great Hall program heads for its end-of-2027 finish." },
+    { date: "2026-10-22", entry: "Denver announces an eight-lane North Checkpoint and a redesigned international arrivals area as the Great Hall program heads for its end-of-2027 finish." },
     { date: "2026-10-13", entry: "MWAA's new Dulles Concourse E fact sheet drops the October target for plain 'fall 2026' — still no opening date." },
     { date: "2026-10-05", entry: "Chicago issues the caisson permit for the first phase of O'Hare's new Concourse E; groundbreaking is still to come." },
     { date: "2026-09-24", entry: "LAX's people mover slips again: contractor completion now December 8, passenger service early January 2027 — not October." },
