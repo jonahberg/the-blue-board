@@ -87,7 +87,7 @@ export const unitedProjects = [
     projectType: "terminal",
     status: "under-construction",
     builder: "joint",
-    targetDate: "North Concourse open; rest of Terminal B in progress",
+    targetDate: "remaining North Concourse gates by Christmas 2026",
     costUsd: 2_550_000_000,
     gates: 22,
     details:
