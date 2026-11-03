@@ -77,7 +77,7 @@ export const _737_max_8 = {
     },
     {
       "question": "Will United fly the 737 MAX 8 to Guam?",
-      "answer": "Yes. MAX 8s have been based in Guam (GUM) since April 2026, and in October 2026 United said it had finished replacing the Guam 737-800 fleet with ten MAX 8s ahead of its end-of-year goal. They fly to Tokyo, Manila, Taipei and the Island Hopper in a 164-seat layout with 14 First seats, and Starlink installs on the Guam jets began in October 2026."
+      "answer": "Yes. MAX 8s have been based in Guam (GUM) since April 2026, and in October 2026 United said it had finished replacing the Guam 737-800 fleet with ten MAX 8s ahead of its end-of-year goal. They fly to Tokyo, Manila, Taipei and the Island Hopper in a 164-seat layout with 14 First seats, and by mid-October 2026 United had completed Starlink installs on two of the Guam jets."
     }
   ],
   "headerTitle": "United Airlines <span class=\"type-badge\">737 MAX 8</span>",

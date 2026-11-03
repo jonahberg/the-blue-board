@@ -6,7 +6,8 @@ import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
 import StatTile from '../../components/site/StatTile.astro';
 import SupportNote from '../../components/site/SupportNote.astro';
-import { FLEET_DB_AS_OF, formatFleetAsOf } from '../../lib/fleet-utils.js';
+import { FLEET_DB_AS_OF, formatFleetAsOf, polarisAircraftCount } from '../../lib/fleet-utils.js';
+import fleetDb from '../../../public/data/fleet.json';
 import { withBrand } from '../../lib/page-seo.js';
 
 // Build type summaries for the grid
@@ -43,10 +44,17 @@ for (const fam of fleetFamilies) {
 
 // Compute fleet-wide stats
 const totalAircraft = fleetOrder.reduce((sum, key) => sum + fleetTypes[key].count, 0);
-const polarisAircraft = fleetOrder.reduce(
-  (sum, key) => sum + (fleetTypes[key].seatConfig.hasPolaris ? fleetTypes[key].count : 0),
-  0,
+// Per tail, not per type: 4 of the 777-200ERs fly a domestic layout with no Polaris cabin.
+const polarisTypeKeys = fleetOrder.filter((key) => fleetTypes[key].seatConfig.hasPolaris);
+const polarisTypeTotal = polarisTypeKeys.reduce((sum, key) => sum + fleetTypes[key].count, 0);
+const polarisAircraft = polarisAircraftCount(
+  fleetDb,
+  polarisTypeKeys.map((key) => fleetTypes[key].typeCode),
 );
+const polarisNote =
+  polarisTypeTotal > polarisAircraft
+    ? ` (the other ${polarisTypeTotal - polarisAircraft} fly a domestic layout without it)`
+    : '';
 const widebodyAircraft = fleetOrder.reduce(
   (sum, key) => sum + (fleetTypes[key].bodyType === 'widebody' ? fleetTypes[key].count : 0),
   0,
@@ -163,7 +171,7 @@ const faqSchema = {
       name: 'Which United Airlines planes have Polaris business class?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: `United Polaris lie-flat business class is available on all widebody international aircraft: Boeing 777-200ER (${fleetTypes['777-200er'].count}), 777-300ER (${fleetTypes['777-300er'].count}), 787-8 (${fleetTypes['787-8-dreamliner'].count}), 787-9 (${fleetTypes['787-9-dreamliner'].count}), 787-10 (${fleetTypes['787-10-dreamliner'].count}), 767-300ER (${fleetTypes['767-300er'].count}), and 767-400ER (${fleetTypes['767-400er'].count}). That's ${polarisAircraft} aircraft with Polaris seats. Use The Blue Board's fleet database to check the exact seat configuration for any specific aircraft.`,
+        text: `United Polaris lie-flat business class is available on all widebody international aircraft: Boeing 777-200ER (${fleetTypes['777-200er'].count}), 777-300ER (${fleetTypes['777-300er'].count}), 787-8 (${fleetTypes['787-8-dreamliner'].count}), 787-9 (${fleetTypes['787-9-dreamliner'].count}), 787-10 (${fleetTypes['787-10-dreamliner'].count}), 767-300ER (${fleetTypes['767-300er'].count}), and 767-400ER (${fleetTypes['767-400er'].count}). That's ${polarisAircraft} aircraft with Polaris seats${polarisNote}. Use The Blue Board's fleet database to check the exact seat configuration for any specific aircraft.`,
       },
     },
     {
@@ -282,7 +290,7 @@ const hubLinkClass =
           jet arrived in June 2026 with 20 lie-flat Polaris suites and Premium Plus and debuted in
           domestic service in September. It is scheduled to start replacing the <a
             href="/fleet/757-200">Boeing 757-200</a
-          > on long, thin transatlantic routes on December 1, 2026, from Washington Dulles to Amsterdam and Dublin.
+          > on long, thin transatlantic routes; its first, Washington Dulles to Dublin and Amsterdam, are scheduled from December 1, 2026.
         </li>
         <li>
           <strong>Free Starlink WiFi passes {STARLINK_EQUIPPED_LABEL} aircraft.</strong> United
@@ -415,7 +423,7 @@ const hubLinkClass =
           >787-9</a
         > ({fleetTypes['787-9-dreamliner'].count}), <a href="/fleet/787-10-dreamliner">787-10</a> ({fleetTypes['787-10-dreamliner'].count}), <a href="/fleet/767-300er"
           >767-300ER</a
-        > ({fleetTypes['767-300er'].count}), and <a href="/fleet/767-400er">767-400ER</a> ({fleetTypes['767-400er'].count}). That's {polarisAircraft} aircraft with Polaris seats.
+        > ({fleetTypes['767-300er'].count}), and <a href="/fleet/767-400er">767-400ER</a> ({fleetTypes['767-400er'].count}). That's {polarisAircraft} aircraft with Polaris seats{polarisNote}.
         Use the <a href="/?tab=fleet">interactive fleet database</a> to check the exact seat configuration
         for any specific aircraft by registration number.
       </p>

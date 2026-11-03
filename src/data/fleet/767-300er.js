@@ -77,7 +77,7 @@ export const _767_300er = {
     },
     {
       "question": "Is United retiring the 767-300ER?",
-      "answer": "Yes, gradually. CEO Scott Kirby said in September 2025 that by the end of the decade United will be 'well into retiring the 767', and United's October 2026 fleet plan keeps all 53 767s through the end of 2026. The premium-heavy Boeing 787-9 is the designated replacement for the high-Polaris 767s, while thinner routes shift to the Airbus A321XLR."
+      "answer": "Yes, gradually. CEO Scott Kirby said in September 2025 that by the end of the decade United will be 'well into retiring the 767', and United's October 2026 fleet plan projects all 53 767s still in the fleet at year-end 2026. The premium-heavy Boeing 787-9 is the designated replacement for the high-Polaris 767s, while thinner routes shift to the Airbus A321XLR."
     },
     {
       "question": "Does the United 767-300ER have Starlink WiFi?",

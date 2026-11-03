@@ -77,7 +77,7 @@ export const a321neo = {
     },
     {
       "question": "What is the Airbus A321XLR and how is it different from the A321neo?",
-      "answer": "The A321XLR is a new long-range version of the A321neo. United took delivery of its first in June 2026 and debuted it in domestic service in September 2026, starting with Washington Dulles–San Diego; it is United's first single-aisle jet with lie-flat United Polaris business suites (20) and Premium Plus (12) in a 150-seat, four-cabin layout. Powered by the same Pratt & Whitney PW1100G family, it's replacing the Boeing 757-200 on long, thin routes, with Washington Dulles to Amsterdam and Dublin scheduled from December 1, 2026."
+      "answer": "The A321XLR is a new long-range version of the A321neo. United took delivery of its first in June 2026 and debuted it in domestic service in September 2026, starting with Washington Dulles–San Diego; it is United's first single-aisle jet with lie-flat United Polaris business suites (20) and Premium Plus (12) in a 150-seat, four-cabin layout. Powered by the same Pratt & Whitney PW1100G family, it's replacing the Boeing 757-200 on long, thin routes; its first transatlantic flights, Washington Dulles to Dublin and Amsterdam, are scheduled from December 1, 2026."
     },
     {
       "question": "What makes the A321neo special?",
