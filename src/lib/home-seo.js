@@ -351,8 +351,8 @@ export function homeJsonLd({ lastmod }) {
             text:
               `The Blue Board tracks ${STARLINK_EQUIPPED_LABEL} United Airlines aircraft equipped `
               + `with SpaceX Starlink satellite WiFi (as of ${STARLINK_AS_OF}), and the count is `
-              + "climbing weekly toward United's goal of roughly 1,000 aircraft by the end of "
-              + '2026. Starlink is free for MileagePlus members. Go to the Fleet tab and check '
+              + "climbing weekly; United expects Starlink on 61% of its flights by the end of 2026 "
+              + 'and fleet-wide by the end of 2027. Starlink is free for MileagePlus members. Go to the Fleet tab and check '
               + 'the Starlink section to search by tail number, aircraft type, or fleet. You can '
               + 'also see WiFi status when looking up a specific flight.',
           },

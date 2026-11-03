@@ -60,7 +60,7 @@ export const _757_200 = {
     },
     {
       "question": "Is United retiring the Boeing 757-200?",
-      "answer": "Not yet — the 757-200 is still flying in 2026, but United ordered the A321XLR to begin replacing and retiring its 757-200s, and the XLR is taking over 757 flying on some international routes from 2026. United has not published a retirement date for the 757. The Airbus A321XLR, which entered revenue service in September 2026, is the designated replacement on thin transatlantic routes, while A321neo and Boeing 737 jets backfill domestic flying."
+      "answer": "Not yet — the 757-200 is still flying in 2026, but United ordered the A321XLR to begin replacing and retiring its 757-200s, and the XLR is taking over 757 flying on some international routes from 2026. United has not published a retirement date for the 757, and its October 2026 fleet plan projects all 61 757s still in the fleet at year-end 2026. The Airbus A321XLR, which entered revenue service in September 2026, is the designated replacement on thin transatlantic routes, while A321neo and Boeing 737 jets backfill domestic flying."
     },
     {
       "question": "Does the United 757-200 have lie-flat seats?",

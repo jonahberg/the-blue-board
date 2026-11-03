@@ -60,7 +60,7 @@ export const _757_300 = {
     },
     {
       "question": "Is United retiring the Boeing 757-300?",
-      "answer": "Not yet — the 757-300 is still flying in 2026, but United has not published a retirement date for the 757-300. A321neo and Boeing 737 jets are backfilling this high-density domestic flying, while the A321XLR replaces the 757-200 on thin transatlantic routes."
+      "answer": "Not yet — the 757-300 is still flying in 2026, but United has not published a retirement date for the 757-300, and its October 2026 fleet plan projects all 61 757s still in the fleet at year-end 2026. A321neo and Boeing 737 jets are backfilling this high-density domestic flying, while the A321XLR replaces the 757-200 on thin transatlantic routes."
     },
     {
       "question": "What is the seat configuration on United's 757-300?",

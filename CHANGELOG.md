@@ -4,6 +4,69 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.0] - 2026-11-03
+
+**Fleet and airport pages brought up to date as of November 3, 2026.** Every fact that changed was traced to a source dated after the last refresh (Sep 28). A second pass, done separately from the research, then reopened each source. On the fleet side it found 5 claims their own source contradicted. Across both sides it flagged 6 more that were missing a source or overstated one. All 11 are fixed here. The PR description summarises the change ledgers and both verification passes, and lists the calls left for the owner.
+
+### Fleet database (`public/data/fleet.json`)
+- **1,139 to 1,154 aircraft.**
+  - **17 tails added, each confirmed in the FAA registry:**
+    - 737 MAX 9: 10.
+    - 787-9 with the Elevated interior: 5.
+    - A321neo: 2. One of them, N64324, is United's third A321XLR.
+    - N37489 is in the list in place of the sheet's N13489, which the FAA registry shows as a Cessna.
+  - **2 A319s removed:** N802UA and N881UA. United's Oct 20 fleet plan matches our database on every family except A319/A320, where we had exactly 2 too many. These were the only two that weren't flying before Sep 30.
+  - **Stored, not retired:** N437UA and N466UA were ferried to Victorville, so they are marked VCV Stored.
+- **Field changes:** WiFi, configuration and status changes from the fleet sheet, applied field by field. A WiFi change to Starlink was held back unless the Starlink roster confirmed it. That includes the new XLR N64324: its WiFi is left blank until the roster lists it, and the dashboard's live roster overlay will then show Starlink by itself.
+- **Database totals:** `FLEET_DB_COUNT` 1,154 and `FLEET_DB_AS_OF` 2026-11-03.
+
+### Fleet pages
+- **Starlink target:** United's old "~1,000 aircraft by end of 2026" target is replaced on every page with its Q3 2026 framing: about 61% of flights by the end of 2026 and fleet-wide by the end of 2027. `STARLINK_TARGET_2026` is removed.
+- **737 MAX 10:** the FAA certified it on Oct 20, 2026. United's Q3 10-Q expects no deliveries in 2026 and 19 in 2027.
+- **A321XLR:** it debuted in domestic service in September. Its first transatlantic flights, Dulles to Dublin and Amsterdam, are scheduled from Dec 1, 2026. Delivery figures come from the 10-Q.
+- **787-9 Elevated:**
+  - Seats are 39 Economy Plus and 84 Economy, from United's newest release (Mar 19, 2026). An older release said 33/90.
+  - New routes: SFO to Zurich and Seoul, and Houston.
+- **/fleet:**
+  - The FAQ gives United's own fleet count at Sep 30 (1,143 mainline, 432 regional) next to our database total.
+  - The Polaris count is now counted aircraft by aircraft (`polarisAircraftCount` in `src/lib/fleet-utils.js`). It shows 223, not 227: 4 of the 777-200ERs fly a domestic layout with no Polaris cabin.
+- **Fleet-plan wording:** the 757, 767 and 777 numbers are now described as what United's fleet plan "projects", not "keeps", because the year-end column is an estimate.
+
+### Hub and airport pages
+- **IAH:**
+  - Terminal B's 22-gate North Concourse and United's largest club anywhere (54,000 sq ft, 800 seats) opened Oct 22, 2026.
+  - About 500 daily departures, per United.
+  - The Terminal B check-in lobby is still closed.
+  - EZE is paused Oct 24 to Nov 10.
+  - New: TGZ, and CTG from December.
+- **ORD:**
+  - ORD to Narita launched Oct 24.
+  - TLV is back.
+  - Air Wisconsin is removed from the Express list; it left United Express in 2023.
+- **IAD:**
+  - Concourse E is still "fall 2026", with no date announced.
+  - TLV restarted Oct 25.
+- **LAX:** the people mover now opens Feb 5, 2027.
+- **DEN:**
+  - North Checkpoint opened by late October (announced Oct 22).
+  - MUC is listed as year-round with a Jan to Feb pause, not as seasonal.
+- **GUM:** the 737 MAX 8 swap is complete, and two of those jets have Starlink.
+- **NRT:**
+  - Daily widebody service to six US hubs.
+  - The Tokyo wording now says United splits its service between Narita and Haneda.
+- **EWR / SFO / LAX:**
+  - Summer 2027 routes added. EWR to LIM ends Mar 26.
+  - SFO's AMS is now listed as seasonal.
+- **/newark:** Area C staffing corrected to the FAA order's figure: 28 of 46 targeted controllers (60.8%), with the order dated June 18. The page had said about 48%.
+- **ATC tracker:** FLL, DEN, SMF and ATL now run on electronic flight strips.
+- **`public/llms.txt`, `public/llms-full.txt`:** hub departure figures and Tokyo wording now match the hub pages.
+
+### Verified
+- `bun run test`: 3,966 passed in 259 files. The new test file is `tests/polaris-count.test.js`.
+- `bun run typecheck` passed.
+- `bun run build` passed (`verify-csp-hashes`: both inline scripts allowed).
+- The 17 new tails were checked in the FAA registry by the producer and again by the verifier.
+
 ## [1.21.0] - 2026-11-03
 
 **An in-page donation ask on the fleet and hub pages.** Google now sends these pages about 1,000 visitors a month, and in October the only ask they saw was the footer button: about 1,800 fleet-page visitors produced 1 support click, and visitors arriving from Google produced 4 in total. Each fleet page, hub page, and the two index pages now ask in the page itself, worded the way the owner worded the donation prompt ("donate to support costs and keep The Blue Board going", no coffee). It's never a popup.

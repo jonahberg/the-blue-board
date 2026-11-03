@@ -134,9 +134,9 @@ describe('FleetView', () => {
     render(<FleetView />);
     const lookup = document.getElementById('fleet-lookup-zone') as HTMLElement;
     expect(lookup.textContent).not.toMatch(/updated daily/i);
-    expect(lookup.querySelector('time')?.getAttribute('dateTime')).toBe('2026-09-28');
+    expect(lookup.querySelector('time')?.getAttribute('dateTime')).toBe('2026-11-03');
     // Node 24 / current ICU abbreviate September as "Sept" in en-GB; Bun's ICU says "Sep".
-    expect(lookup.textContent).toMatch(/as of 28 Sept? 2026/);
+    expect(lookup.textContent).toMatch(/as of 3 Nov 2026/);
   });
 });
 

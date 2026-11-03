@@ -192,6 +192,19 @@ export function familyTotal(family, counts) {
 export { FLEET_DB_AS_OF };
 
 /** '2026-02-12' → '12 Feb 2026' (UTC, so the label never shifts a day in a western zone). */
+/**
+ * How many aircraft of the given type codes actually carry a Polaris (J) cabin, counted per
+ * tail from fleet.json's `c` config string (e.g. "50J/24PE/46E+/156Y"). Type-level counts
+ * overstate it: a few 777-200ERs fly a domestic "32F/124E+/206Y" layout with no Polaris.
+ *
+ * @param {Array<{t: string, c?: string}>} fleetDb
+ * @param {Iterable<string>} typeCodes  fleet.json `t` values, e.g. "777-200ER"
+ */
+export function polarisAircraftCount(fleetDb, typeCodes) {
+  const types = new Set(typeCodes);
+  return fleetDb.filter((a) => types.has(a.t) && /(^|\/)\d+J(\/|$)/.test(a.c || '')).length;
+}
+
 export function formatFleetAsOf(iso = FLEET_DB_AS_OF) {
   const d = new Date(`${iso}T00:00:00Z`);
   if (isNaN(d.getTime())) return iso;
