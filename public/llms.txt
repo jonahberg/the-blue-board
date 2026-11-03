@@ -116,14 +116,14 @@ The Blue Board is the only flight tracker built exclusively for United Airlines 
 
 | Hub | IATA | Airport | Daily Departures |
 |-----|------|---------|-----------------|
-| Chicago O'Hare | ORD | O'Hare International Airport | ~750 |
-| Denver | DEN | Denver International Airport | ~540 |
-| Houston | IAH | George Bush Intercontinental Airport | ~480 |
+| Chicago O'Hare | ORD | O'Hare International Airport | ~640 (late-September 2026 schedule) |
+| Denver | DEN | Denver International Airport | ~570 |
+| Houston | IAH | George Bush Intercontinental Airport | ~500 |
 | Newark | EWR | Newark Liberty International Airport | ~350-400 (FAA caps) |
-| San Francisco | SFO | San Francisco International Airport | ~300 |
-| Washington Dulles | IAD | Washington Dulles International Airport | ~250 |
-| Los Angeles | LAX | Los Angeles International Airport | ~200 |
-| Tokyo Narita | NRT | Narita International Airport | Asia-Pacific connecting point (most US-Tokyo service uses Haneda/HND) |
+| San Francisco | SFO | San Francisco International Airport | ~310 |
+| Washington Dulles | IAD | Washington Dulles International Airport | ~265 |
+| Los Angeles | LAX | Los Angeles International Airport | ~145 |
+| Tokyo Narita | NRT | Narita International Airport | Asia-Pacific connecting point (United splits its mainland-US Tokyo service between Narita and Haneda/HND) |
 | Guam | GUM | Antonio B. Won Pat International Airport | Pacific hub |
 
 ## Data Sources
