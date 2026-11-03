@@ -71,17 +71,17 @@ const cabinShortLabel: Record<string, string> = {
 
 // Family table rows: the per-family total is hand-maintained copy (MAINTENANCE.md).
 const FAMILY_ROWS = [
-  { name: 'Boeing 737', total: 581, role: 'Domestic / Short-haul', types: [
+  { name: 'Boeing 737', total: 640, role: 'Domestic / Short-haul', types: [
     { slug: '737-700', label: '737-700' }, { slug: '737-800', label: '-800' }, { slug: '737-900', label: '-900' },
     { slug: '737-900er', label: '-900ER' }, { slug: '737-max-8', label: 'MAX 8' }, { slug: '737-max-9', label: 'MAX 9' },
   ] },
-  { name: 'Airbus A320 Family', total: 206, role: 'Domestic / Medium-haul', types: [
+  { name: 'Airbus A320 Family', total: 209, role: 'Domestic / Medium-haul', types: [
     { slug: 'a319', label: 'A319' }, { slug: 'a320', label: 'A320' }, { slug: 'a321neo', label: 'A321neo' },
   ] },
   { name: 'Boeing 777', total: 96, role: 'Long-haul International', types: [
     { slug: '777-200', label: '777-200' }, { slug: '777-200er', label: '-200ER' }, { slug: '777-300er', label: '-300ER' },
   ] },
-  { name: 'Boeing 787 Dreamliner', total: 81, role: 'Long-haul International', types: [
+  { name: 'Boeing 787 Dreamliner', total: 97, role: 'Long-haul International', types: [
     { slug: '787-8-dreamliner', label: '787-8' }, { slug: '787-9-dreamliner', label: '-9' }, { slug: '787-10-dreamliner', label: '-10' },
   ] },
   { name: 'Boeing 757', total: 61, role: 'Transcon / Hawaii', types: [
@@ -117,15 +117,15 @@ const datasetSchema = {
   '@type': 'Dataset',
   name: 'United Airlines Fleet Database',
   description:
-    'Complete database of United Airlines mainline fleet with 1,139 aircraft across 19 types. Includes aircraft type, registration, seat configuration, WiFi type, IFE system, delivery date, operational status, and Starlink satellite internet equipment status.',
+    `Complete database of United Airlines mainline fleet with ${totalAircraftText} aircraft across ${fleetOrder.length} types. Includes aircraft type, registration, seat configuration, WiFi type, IFE system, delivery date, operational status, and Starlink satellite internet equipment status.`,
   url: 'https://theblueboard.co/fleet',
   license: 'https://creativecommons.org/licenses/by-nc/4.0/',
   creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
-  dateModified: '2026-07-07',
+  dateModified: FLEET_DB_AS_OF,
   temporalCoverage: '2025/..',
   keywords: ['United Airlines', 'fleet database', 'aircraft', 'seat configuration', 'Starlink WiFi', 'Polaris'],
   variableMeasured: [
-    { '@type': 'PropertyValue', name: 'Aircraft Count', value: '1139' },
+    { '@type': 'PropertyValue', name: 'Aircraft Count', value: String(totalAircraft) },
     { '@type': 'PropertyValue', name: 'Aircraft Types', value: '19' },
     { '@type': 'PropertyValue', name: 'Starlink Equipped', value: String(STARLINK_EQUIPPED) },
   ],
@@ -215,7 +215,7 @@ const hubLinkClass =
         United Airlines Fleet Database
       </h1>
       <p class="mt-2 text-sm text-muted-foreground">
-        1,139 mainline aircraft · 19 types · seat configs · WiFi · Starlink · as of
+        {totalAircraftText} mainline aircraft · {fleetOrder.length} types · seat configs · WiFi · Starlink · as of
         <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>
       </p>
       <a
@@ -237,7 +237,7 @@ const hubLinkClass =
 
     <ContentSection heading="Fleet Overview">
       <p>
-        United Airlines operates one of the world's largest and most diverse fleets, with 1,139
+        United Airlines operates one of the world's largest and most diverse fleets, with {totalAircraftText}
         mainline aircraft spanning narrowbody and widebody types from Boeing and Airbus — and it is
         in the middle of its biggest fleet renewal in decades, taking 250+ new jets by 2028 while
         rolling out free Starlink WiFi and the new Polaris Studio suite.

@@ -11,7 +11,7 @@ export const a319 = {
   "deliveryRange": "1997–2007",
   "role": "Domestic / Short-haul",
   "seatConfig": {
-    "total": "128",
+    "total": "126",
     "cabins": [
       {
         "name": "First",
@@ -25,7 +25,7 @@ export const a319 = {
       },
       {
         "name": "Economy",
-        "seats": 80,
+        "seats": 78,
         "cssClass": "cabin-y"
       }
     ],
@@ -62,7 +62,7 @@ export const a319 = {
     },
     {
       "question": "What is the seat configuration on United's A319?",
-      "answer": "128 passengers: 12 First (2-2), 36 Economy Plus, 80 Economy."
+      "answer": "126 passengers: 12 First (2-2), 36 Economy Plus, 78 Economy."
     },
     {
       "question": "Is United retiring the A319?",
@@ -78,7 +78,7 @@ export const a319 = {
     }
   ],
   "headerTitle": "United Airlines <span class=\"type-badge\">A319</span>",
-  "subtitle": "68 aircraft · 128 seats · Retiring by ~2030",
+  "subtitle": "68 aircraft · 126 seats · Retiring by ~2030",
   "jumpNav": [
     {
       "href": "#overview",
@@ -113,5 +113,5 @@ export const a319 = {
       "label": "All Types"
     }
   ],
-  "contentHtml": `<div class=\"section\"><h2 id=\"overview\">Overview</h2><p>The <strong>Airbus A319</strong> is the smallest and oldest member of United's A320 family — <strong>68 aircraft</strong> delivered between 1997 and 2007. It works short- and medium-haul domestic routes and smaller markets from hubs like <a href=\"/hubs/ord\">Chicago (ORD)</a> and <a href=\"/hubs/den\">Denver (DEN)</a>. In October 2025 United's chief commercial officer confirmed the A319 and <a href=\"/fleet/a320\">A320</a> will be retired by around 2030, replaced by the larger, more efficient <a href=\"/fleet/a321neo\">A321neo</a>.</p><div class=\"highlight-box highlight-warn\"><strong>Retiring by ~2030:</strong> United plans to phase out its A319s by the end of the decade. Many are still being refreshed with the Signature Interior on the way out, while the airline's free Starlink WiFi rollout reaches the fleet.</div></div><div class=\"section\"><h2 id=\"seat-config\">Seat Configuration</h2><table class=\"config-table\"><thead><tr><th>Cabin</th><th>Seats</th><th>Layout</th></tr></thead><tbody><tr><td><strong>First</strong></td><td>12</td><td>2-2</td></tr><tr><td><span class=\"cabin-tag cabin-ep\">Economy Plus</span></td><td>36</td><td>3-3</td></tr><tr><td>Economy</td><td>80</td><td>3-3</td></tr></tbody></table></div><div class=\"section\"><h2 id=\"wifi\">WiFi & In-Flight Entertainment</h2><p>Most A319s carry legacy Viasat Ka-band or Ku-band satellite WiFi today, but United's fleet-wide <strong>Starlink</strong> rollout — free for MileagePlus members — is reaching aircraft across the fleet (${STARLINK_EQUIPPED_LABEL} jets equipped by ${STARLINK_AS_OF}, on track for about 1,000 by year-end). Entertainment varies by aircraft: United is retrofitting A319s with its <strong>Signature Interior</strong> (seatback screens at every seat, Bluetooth audio and power), while older frames still stream to your own device.</p></div><div class=\"section\"><h2 id=\"routes\">Routes & Hubs</h2><p>Short- and medium-haul domestic routes and smaller markets, flown from United hubs including <a href=\"/hubs/ord\">Chicago (ORD)</a>, <a href=\"/hubs/den\">Denver (DEN)</a>, <a href=\"/hubs/iah\">Houston (IAH)</a> and <a href=\"/hubs/ewr\">Newark (EWR)</a>.</p><h3>Related Aircraft</h3><p><a href=\"/fleet/a320\">A320</a> (63) is the stretched sibling, and the newer <a href=\"/fleet/a321neo\">A321neo</a> (76) is taking over as the A319 and A320 retire.</p></div>`
+  "contentHtml": `<div class=\"section\"><h2 id=\"overview\">Overview</h2><p>The <strong>Airbus A319</strong> is the smallest and oldest member of United's A320 family — <strong>68 aircraft</strong> delivered between 1997 and 2007. It works short- and medium-haul domestic routes and smaller markets from hubs like <a href=\"/hubs/ord\">Chicago (ORD)</a> and <a href=\"/hubs/den\">Denver (DEN)</a>. In October 2025 United's chief commercial officer confirmed the A319 and <a href=\"/fleet/a320\">A320</a> will be retired by around 2030, replaced by the larger, more efficient <a href=\"/fleet/a321neo\">A321neo</a>.</p><div class=\"highlight-box highlight-warn\"><strong>Retiring by ~2030:</strong> United plans to phase out its A319s by the end of the decade. Many are still being refreshed with the Signature Interior on the way out, while the airline's free Starlink WiFi rollout reaches the fleet.</div></div><div class=\"section\"><h2 id=\"seat-config\">Seat Configuration</h2><table class=\"config-table\"><thead><tr><th>Cabin</th><th>Seats</th><th>Layout</th></tr></thead><tbody><tr><td><strong>First</strong></td><td>12</td><td>2-2</td></tr><tr><td><span class=\"cabin-tag cabin-ep\">Economy Plus</span></td><td>36</td><td>3-3</td></tr><tr><td>Economy</td><td>78</td><td>3-3</td></tr></tbody></table></div><div class=\"section\"><h2 id=\"wifi\">WiFi & In-Flight Entertainment</h2><p>Most A319s carry legacy Viasat Ka-band or Ku-band satellite WiFi today, but United's fleet-wide <strong>Starlink</strong> rollout — free for MileagePlus members — is reaching aircraft across the fleet (${STARLINK_EQUIPPED_LABEL} jets equipped by ${STARLINK_AS_OF}, on track for about 1,000 by year-end). Entertainment varies by aircraft: United is retrofitting A319s with its <strong>Signature Interior</strong> (seatback screens at every seat, Bluetooth audio and power), while older frames still stream to your own device.</p></div><div class=\"section\"><h2 id=\"routes\">Routes & Hubs</h2><p>Short- and medium-haul domestic routes and smaller markets, flown from United hubs including <a href=\"/hubs/ord\">Chicago (ORD)</a>, <a href=\"/hubs/den\">Denver (DEN)</a>, <a href=\"/hubs/iah\">Houston (IAH)</a> and <a href=\"/hubs/ewr\">Newark (EWR)</a>.</p><h3>Related Aircraft</h3><p><a href=\"/fleet/a320\">A320</a> (63) is the stretched sibling, and the newer <a href=\"/fleet/a321neo\">A321neo</a> (78) is taking over as the A319 and A320 retire.</p></div>`
 };

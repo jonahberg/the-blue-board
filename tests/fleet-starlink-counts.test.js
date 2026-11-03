@@ -26,6 +26,7 @@ const PAGES = [
   ['a321neo', 'A321neo'],
   ['737-max-9', '737 MAX 9'],
   ['737-max-8', '737 MAX 8'],
+  ['737-900', '737-900'],
 ];
 
 describe('build-time Starlink roster', () => {

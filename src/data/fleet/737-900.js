@@ -1,3 +1,8 @@
+import { STARLINK_ROSTER_AS_OF, starlinkForType } from '../starlink-facts.js';
+
+/** Build-time Starlink join (roster × fleet DB) for this type — see src/data/starlink-facts.js. */
+const SL = starlinkForType('737-900');
+
 export const _737_900 = {
   "slug": "737-900",
   "typeCode": "737-900",
@@ -31,7 +36,7 @@ export const _737_900 = {
     "hasPremiumPlus": false,
     "hasFirst": true
   },
-  "primaryWifi": "Satellite Ka",
+  "primaryWifi": "Satellite Ka (Starlink rollout underway)",
   "ifeType": "DTV / Personal Device",
   "seatPower": "First & E+ only",
   "aircraftSchema": {
@@ -64,7 +69,7 @@ export const _737_900 = {
     },
     {
       "question": "Does the United 737-900 have WiFi?",
-      "answer": "Yes, all 12 have satellite Ka-band WiFi. United's free Starlink WiFi (free for MileagePlus members) is rolling out across the mainline fleet, but this small, older subfleet currently retains its existing system."
+      "answer": `Yes. United's free Starlink WiFi (free for MileagePlus members) had reached ${SL.equipped} of the ${SL.total} as of ${STARLINK_ROSTER_AS_OF}; the rest carry satellite Ka-band WiFi until their install.`
     },
     {
       "question": "Does the United 737-900 have seatback screens?",
@@ -111,5 +116,5 @@ export const _737_900 = {
       "label": "All Types"
     }
   ],
-  "contentHtml": "<div class=\"section\"><h2 id=\"overview\">Overview</h2><p>The <strong>Boeing 737-900</strong> is a small, older <strong>12-aircraft</strong> subfleet, all delivered in 2001. Unlike the more common 737-900ER, the base 737-900 lacks the extended-range bulkhead and winglets. As a small, aging subfleet it largely retains its original cabin while United focuses the Signature Interior on newer and larger 737s.</p></div><div class=\"section\"><h2 id=\"seat-config\">Seat Configuration</h2><table class=\"config-table\"><thead><tr><th>Cabin</th><th>Seats</th><th>Layout</th></tr></thead><tbody><tr><td><strong>First</strong></td><td>20</td><td>2-2</td></tr><tr><td><span class=\"cabin-tag cabin-ep\">Economy Plus</span></td><td>42–45</td><td>3-3</td></tr><tr><td>Economy</td><td>114–117</td><td>3-3</td></tr></tbody></table><p>Two seat configs exist: 20F/42E+/117Y (4 aircraft) and 20F/45E+/114Y (8 aircraft).</p></div><div class=\"section\"><h2 id=\"wifi\">WiFi & In-Flight Entertainment</h2><p>All 12 have <strong>satellite Ka-band WiFi</strong> and DTV/personal-device entertainment, with power in First and Economy Plus only. United's <strong>free Starlink WiFi</strong> — free for MileagePlus members — is rolling out across the mainline fleet, though this small, older subfleet currently retains its satellite system.</p></div><div class=\"section\"><h2 id=\"routes\">Routes & Hubs</h2><p>Short-haul domestic routes.</p><h3>Related Aircraft</h3><p>Other 737s: <a href=\"/fleet/737-900er\">737-900ER</a> (136), <a href=\"/fleet/737-max-9\">MAX 9</a> (178), <a href=\"/fleet/737-max-8\">MAX 8</a> (123), <a href=\"/fleet/737-800\">737-800</a> (141), <a href=\"/fleet/737-700\">737-700</a> (40).</p></div>"
+  "contentHtml": `<div class=\"section\"><h2 id=\"overview\">Overview</h2><p>The <strong>Boeing 737-900</strong> is a small, older <strong>12-aircraft</strong> subfleet, all delivered in 2001. Unlike the more common 737-900ER, the base 737-900 lacks the extended-range bulkhead and winglets. As a small, aging subfleet it largely retains its original cabin while United focuses the Signature Interior on newer and larger 737s.</p></div><div class=\"section\"><h2 id=\"seat-config\">Seat Configuration</h2><table class=\"config-table\"><thead><tr><th>Cabin</th><th>Seats</th><th>Layout</th></tr></thead><tbody><tr><td><strong>First</strong></td><td>20</td><td>2-2</td></tr><tr><td><span class=\"cabin-tag cabin-ep\">Economy Plus</span></td><td>42–45</td><td>3-3</td></tr><tr><td>Economy</td><td>114–117</td><td>3-3</td></tr></tbody></table><p>Two seat configs exist: 20F/42E+/117Y (4 aircraft) and 20F/45E+/114Y (8 aircraft).</p></div><div class=\"section\"><h2 id=\"wifi\">WiFi & In-Flight Entertainment</h2><p>United's <strong>free Starlink WiFi</strong> — free for MileagePlus members — had reached ${SL.equipped} of the ${SL.total} as of ${STARLINK_ROSTER_AS_OF}; the rest carry <strong>satellite Ka-band WiFi</strong> until their install. All 12 have DTV/personal-device entertainment, with power in First and Economy Plus only.</p></div><div class=\"section\"><h2 id=\"routes\">Routes & Hubs</h2><p>Short-haul domestic routes.</p><h3>Related Aircraft</h3><p>Other 737s: <a href=\"/fleet/737-900er\">737-900ER</a> (136), <a href=\"/fleet/737-max-9\">MAX 9</a> (188), <a href=\"/fleet/737-max-8\">MAX 8</a> (123), <a href=\"/fleet/737-800\">737-800</a> (141), <a href=\"/fleet/737-700\">737-700</a> (40).</p></div>`
 };
