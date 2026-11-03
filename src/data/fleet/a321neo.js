@@ -9,7 +9,7 @@ export const a321neo = {
   "displayName": "Airbus A321neo",
   "manufacturer": "Airbus",
   "family": "Airbus A320 Family",
-  "count": 76,
+  "count": 78,
   "bodyType": "narrowbody",
   "deliveryRange": "2023–2026",
   "role": "Domestic / Medium-haul",

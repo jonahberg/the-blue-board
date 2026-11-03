@@ -4,7 +4,7 @@ export const _787_9_dreamliner = {
   "displayName": "Boeing 787-9 Dreamliner",
   "manufacturer": "Boeing",
   "family": "Boeing 787 Dreamliner",
-  "count": 59,
+  "count": 64,
   "bodyType": "widebody",
   "deliveryRange": "2014–2026",
   "role": "Long-haul International",

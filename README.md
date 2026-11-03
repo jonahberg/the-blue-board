@@ -42,7 +42,7 @@ Server-side disruption scoring across all 8 United hubs plus the Tokyo-Narita ga
 Departure and arrival boards for all 9 UA hubs (ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, GUM). Filter by status or aircraft type. Equipment swap detection flags when a plane type changes. On-time performance stats. All times in airport-local timezone.
 
 ### ✈️ [Fleet](https://theblueboard.co#fleet)
-Database of 1,139 mainline aircraft (snapshot as of Sep 28, 2026) — searchable and sortable by type, registration, seat config, WiFi, and IFE. Live fleet status correlates airborne flights with the database, and a delivery timeline charts the fleet by family. **19 dedicated fleet type pages** ([737 MAX 9](https://theblueboard.co/fleet/737-max-9), [A321neo](https://theblueboard.co/fleet/a321neo), [787-9](https://theblueboard.co/fleet/787-9-dreamliner), etc.) with full aircraft registries, structured data, and cross-type navigation.
+Database of 1,156 mainline aircraft (snapshot as of Nov 3, 2026) — searchable and sortable by type, registration, seat config, WiFi, and IFE. Live fleet status correlates airborne flights with the database, and a delivery timeline charts the fleet by family. **19 dedicated fleet type pages** ([737 MAX 9](https://theblueboard.co/fleet/737-max-9), [A321neo](https://theblueboard.co/fleet/a321neo), [787-9](https://theblueboard.co/fleet/787-9-dreamliner), etc.) with full aircraft registries, structured data, and cross-type navigation.
 
 ### 🛰️ [Starlink](https://theblueboard.co#starlink)
 Its own tab since the rebuild. The full roster of Starlink-equipped aircraft (600+ and climbing toward United's ~1,000 end-of-2026 target) with sortable columns and filters by fleet, type, and operator, a retrofit-pace chart with a completion projection, and a mismatch report that flags aircraft the upstream tracker and the fleet database disagree about.
@@ -167,7 +167,7 @@ asset prefix.
 | [AeroDataBox](https://aerodatabox.com) | Hub schedule boards | Every 30 min + on-demand | Metered api.market (MagicAPI) gateway (RapidAPI-compatible); spend capped by a cross-instance daily unit budget |
 | [Aviation Weather Center](https://aviationweather.gov) | METAR observations | ~5min | NOAA/CORS proxy, batched |
 | [FAA NAS Status](https://nasstatus.faa.gov) | Delays & ground stops | ~5min | XML→JSON proxy |
-| [United Fleet Site](https://unitedfleetsite.com/) | Fleet database | Periodic snapshot (Sep 28, 2026) | Community-maintained; new tails confirmed in the FAA registry |
+| [United Fleet Site](https://unitedfleetsite.com/) | Fleet database | Periodic snapshot (Nov 3, 2026) | Community-maintained; new tails confirmed in the FAA registry |
 | [Starlink Tracker](https://unitedstarlinktracker.com) | WiFi-equipped aircraft | Every 4 hours | [@martinamps](https://github.com/martinamps/ua-starlink-tracker) |
 | [Iowa State NEXRAD](https://mesonet.agron.iastate.edu) | Radar imagery | ~5min | Direct tile server |
 | [Supabase](https://supabase.com) | Waitlist, schedule snapshots, tail sightings, watch alerts | Real-time | Postgres with RLS |

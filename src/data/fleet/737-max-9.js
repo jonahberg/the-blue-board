@@ -9,7 +9,7 @@ export const _737_max_9 = {
   "displayName": "Boeing 737 MAX 9",
   "manufacturer": "Boeing",
   "family": "Boeing 737",
-  "count": 178,
+  "count": 188,
   "bodyType": "narrowbody",
   "deliveryRange": "2018–2026",
   "role": "Domestic / Short-haul",
