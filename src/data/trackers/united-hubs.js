@@ -25,7 +25,7 @@
  *  - After every source pass: bump unitedHubsMeta.lastVerified. If facts changed, also bump
  *    unitedHubsMeta.lastUpdated and add a changelog entry. Then run `bun run test`.
  *
- * Last verified: 2026-09-28
+ * Last verified: 2026-11-03
  */
 
 /** @typedef {'club'|'polaris'|'club-fly'|'terminal'|'gates'|'other'} UnitedProjectType */
@@ -87,12 +87,15 @@ export const unitedProjects = [
     projectType: "terminal",
     status: "under-construction",
     builder: "joint",
-    targetDate: "fall 2026",
+    targetDate: "North Concourse open; rest of Terminal B in progress",
     costUsd: 2_550_000_000,
     gates: 22,
     details:
-      "United's rebuild of 1969-vintage Terminal B: a 765,000 sq ft North Concourse with 22 new gates, a nearly doubled central processor for check-in, security and baggage claim behind ~67,000 sq ft of glass, 18 modernized South Concourse regional gates, and a new bag system. United is in for $1.9B+, the City of Houston ~$624M. The B lobby has been closed since January 2025 — B passengers check in at Terminal C until it reopens.",
+      "United's rebuild of 1969-vintage Terminal B. The big piece is done: the 765,000 sq ft, 22-gate North Concourse opened to passengers on October 22, 2026, with United bringing its gates into service in stages through Christmas. Still to come are a nearly doubled central processor for check-in, security and baggage claim, the modernized South Concourse (48 Terminal B gates in all), and a new bag system. United is in for $1.9B+, the City of Houston ~$624M. The B lobby has been closed since January 2025 and is still closed — B passengers check in at Terminal C.",
     sources: [
+      "https://united.mediaroom.com/2026-10-21-United-Opens-New-Concourse-at-George-Bush-Intercontinental-Airport-with-More-Gates,-Local-Restaurants-and-the-Largest-Airline-Club-in-the-Americas",
+      "https://www.fox26houston.com/news/united-unveiled-new-terminal-b-north-concourse-bush-airport",
+      "https://travel.yahoo.com/news/articles/united-airlines-debuts-major-terminal-213700884.html",
       "https://www.fly2houston.com/airport-business/newsroom/articles/item/visible-progress-defines-the-iah-terminal-b-transformation/",
       "https://www.fly2houston.com/airport-business/newsroom/articles/item/iah-terminal-b-update-houstons-bold-blueprint-for-the-future-of-travel/",
       "https://simpleflying.com/36-new-gates-one-us-airline-wins-big-airport-expansions-2026/",
@@ -103,13 +106,15 @@ export const unitedProjects = [
     hub: "IAH",
     name: "United Club, Terminal B North",
     projectType: "club",
-    status: "under-construction",
+    status: "open",
     builder: "united",
-    targetDate: "by end of 2026",
+    openedDate: "2026-10-22",
     sizeSqFt: 54_000,
     details:
-      "The headliner: a 54,000 sq ft club on the new North Concourse's mezzanine — the largest in United's network and likely the largest airline-branded lounge in the country, more than 50% bigger than the Denver club that currently holds United's crown. Tied to the concourse's fall 2026 completion, so if the concourse slips, the club slips.",
+      "The headliner, open since October 22, 2026: 54,000 sq ft near gate B11 with 800 seats, two bars, two buffets and a 1,350 sq ft outdoor terrace — the largest club in United's network, and in United's words the largest club of any airline in the Americas. More than 50% bigger than Denver's B-East, which held United's crown until now. It landed on time — the rare project on this page that did.",
     sources: [
+      "https://united.mediaroom.com/2026-10-21-United-Opens-New-Concourse-at-George-Bush-Intercontinental-Airport-with-More-Gates,-Local-Restaurants-and-the-Largest-Airline-Club-in-the-Americas",
+      "https://thepointsguy.com/news/new-united-airlines-club-houston-terminal-b",
       "https://thepointsguy.com/news/united-airlines-lounge-plans-2026/",
       "https://www.fly2houston.com/airport-business/newsroom/articles/item/visible-progress-defines-the-iah-terminal-b-transformation/",
     ],
@@ -153,12 +158,13 @@ export const unitedProjects = [
     projectType: "terminal",
     status: "under-construction",
     builder: "airport-authority",
-    targetDate: "October 2026",
+    targetDate: "fall 2026",
     sizeSqFt: 435_000,
     gates: 14,
     details:
-      "A 435,000 sq ft midfield concourse built by MWAA and occupied entirely by United: 14 gates sized for both narrowbody and widebody aircraft, 46,000 sq ft of concessions, and a direct AeroTrain connection. MWAA floated September in mid-July; on September 16 its board heard the opening now slips into October, after operational testing turned up issues to fix — still no exact day. The published cost keeps drifting — United's 2024 announcement said 'more than $500 million', 2026 grant coverage put phase 1 near $900M, and September coverage says $700M — so we don't print a single number.",
+      "A 435,000 sq ft midfield concourse built by MWAA and occupied entirely by United: 14 gates sized for both narrowbody and widebody aircraft, a food court and new concessions, and a direct AeroTrain connection. MWAA floated September in mid-July; on September 16 its board heard the opening slips into October, after operational testing turned up issues to fix. October came and went without an opening: MWAA's October 13 fact sheet just says 'fall 2026,' and as of early November neither MWAA nor United has announced a date. The published cost keeps drifting — United's 2024 announcement said 'more than $500 million', 2026 grant coverage put phase 1 near $900M, and September coverage says $700M — so we don't print a single number.",
     sources: [
+      "https://www.flydulles.com/sites/flydulles.com/files/Dulles-T2-Fact-Sheet-10-13-2026.pdf",
       "https://www.ffxnow.com/2026/09/18/mwaa-now-expecting-october-opening-for-dulles-airports-concourse-e/",
       "https://www.flydulles.com/Next",
       "https://www.prnewswire.com/news-releases/more-than-half-a-billion-dollar-expansion--modernization-coming-to-uniteds-washington-dulles-hub-302320375.html",
@@ -172,11 +178,12 @@ export const unitedProjects = [
     projectType: "club",
     status: "under-construction",
     builder: "joint",
-    targetDate: "October 2026",
+    targetDate: "fall 2026",
     sizeSqFt: 40_000,
     details:
-      "United's new flagship Dulles club: ~40,000 sq ft above the AeroTrain escalators, seating around 650 — a ~70% jump in United Club space at IAD. The design riffs on L'Enfant's DC street grid ('there's no cul-de-sacs, there's no dead ends,' per United's club chief). Buffet and bar, no showers. Opens with the concourse — now expected in October 2026.",
+      "United's new flagship Dulles club: ~40,000 sq ft above the AeroTrain escalators, seating around 650 — a ~70% jump in United Club space at IAD. The design riffs on L'Enfant's DC street grid ('there's no cul-de-sacs, there's no dead ends,' per United's club chief). Buffet and bar, no showers. Opens with the concourse — expected in October, but MWAA's latest word (October 13) is just 'fall 2026,' with no date announced yet.",
     sources: [
+      "https://www.flydulles.com/sites/flydulles.com/files/Dulles-T2-Fact-Sheet-10-13-2026.pdf",
       "https://thepointsguy.com/news/united-club-washington-dulles-makeover-new-space/",
       "https://www.ffxnow.com/2026/09/18/mwaa-now-expecting-october-opening-for-dulles-airports-concourse-e/",
       "https://thepointsguy.com/news/united-airlines-lounge-plans-2026/",
@@ -271,8 +278,9 @@ export const unitedProjects = [
     openedDate: "2023-09",
     sizeSqFt: 35_000,
     details:
-      "The current title-holder: United's largest club in the network at ~35,000 sq ft — until Houston's 54,000 sq ft flagship opens and takes the crown. Still the benchmark for what United means by a 'big' club.",
+      "The former title-holder: United's largest club in the network at ~35,000 sq ft until Houston's 54,000 sq ft Terminal B North club opened on October 22, 2026 and took the crown. Still the benchmark for what United meant by a 'big' club.",
     sources: [
+      "https://united.mediaroom.com/2026-10-21-United-Opens-New-Concourse-at-George-Bush-Intercontinental-Airport-with-More-Gates,-Local-Restaurants-and-the-Largest-Airline-Club-in-the-Americas",
       "https://www.prnewswire.com/news-releases/united-opens-two-new-clubs-in-denver-including-its-largest-club-in-the-world-301925629.html",
       "https://united.mediaroom.com/news-releases?item=125398",
     ],
@@ -351,8 +359,9 @@ export const unitedProjects = [
     builder: "airport-authority",
     targetDate: "end of 2027",
     details:
-      "DEN's multi-year rebuild of the main terminal — the part every United flyer touches is security: the 17-lane East Checkpoint opened in August 2025 (early and under budget), more lanes arrive late summer 2026, and the whole program wraps by end of 2027.",
+      "DEN's multi-year rebuild of the main terminal — the part every United flyer touches is security: the 17-lane East Checkpoint opened in August 2025 (early and under budget), an eight-lane North Checkpoint on Level 5 — mainly for connecting international passengers, open 12:30–8:15 p.m. — opened October 22, 2026 alongside a redesigned international arrivals area, and the whole program is substantially complete by end of 2027.",
     sources: [
+      "https://northfortynews.com/category/news/denver-international-airport-opens-new-arrivals-area-security-checkpoint-as-great-hall-renovations-continue/",
       "https://www.flydenver.com/about-den/projects-and-infrastructure/great-hall-program/",
       "https://www.tsa.gov/news/press/releases/2025/08/04/tsa-begin-operations-new-east-security-checkpoint-den",
     ],
@@ -404,8 +413,9 @@ export const unitedProjects = [
     targetDate: "14 gates in 2030, 24 by 2034",
     gates: 24,
     details:
-      "Pulled forward in August 2026: the City now breaks ground 'later this year' on a first phase of 14 gates opening in 2030, freeing room to build the Global Terminal; the last 10 gates follow in 2034, for ~460,000 sq ft west of Concourse D serving regional, narrowbody and preclearance flights. Sequencing was worked out with United and American. Until the shovels are actually in, it stays 'announced' — this is the same concourse whose funding was in doubt as recently as February.",
+      "Pulled forward in August 2026: the City now breaks ground 'later this year' on a first phase of 14 gates opening in 2030, freeing room to build the Global Terminal; the last 10 gates follow in 2034, for ~460,000 sq ft west of Concourse D serving regional, narrowbody and preclearance flights. Sequencing was worked out with United and American. A caisson (foundation) permit for the first phase was issued by early October, but the ceremonial groundbreaking hasn't happened yet. Until the shovels are actually in, it stays 'announced' — this is the same concourse whose funding was in doubt as recently as February.",
     sources: [
+      "https://chicago.urbanize.city/post/caisson-permit-issued-first-phase-ohare-concourse-e",
       "https://www.chicago.gov/city/en/depts/mayor/press_room/press_releases/2026/august/concourse-e-ohare.html",
       "https://chicagoyimby.com/2026/09/new-timeline-and-details-revealed-for-ordnext.html",
       "https://chicago.suntimes.com/city-hall/2026/02/05/chicago-aviation-chief-michael-mcmurray-ohare-expansion-video",
@@ -484,10 +494,11 @@ export const unitedProjects = [
     projectType: "other",
     status: "under-construction",
     builder: "airport-authority",
-    targetDate: "early January 2027",
+    targetDate: "February 2027 (contractor's estimate)",
     details:
-      "LAWA's 2.25-mile train to the rental-car center and Metro, with its east station serving United's Terminals 7/8. A monument to slipped dates: originally due March 2023, projected finished January 2026 by its lenders' analysts, then posted for October 2026 — and in September the contractor pushed completion to December 8, putting passenger service in early January 2027 after 30 days of testing and approvals, a date it says isn't guaranteed. It's ~99% complete, amid a July lawsuit from the contractor blaming LAWA for the delays and a grand jury report faulting the contractor. Not United's project, but it's the thing that will actually change how you get to a United flight at LAX.",
+      "LAWA's 2.25-mile train to the rental-car center and Metro, with its east station serving United's Terminals 7/8. A monument to slipped dates: originally due March 2023, projected finished January 2026 by its lenders' analysts, then posted for October 2026, then early January 2027 — and in late October the contractor's monthly report moved passenger service to February 5, 2027, a month later still. LAWA says no opening date can be confirmed until the contractor finishes final testing, which resumed after four electrical arc blasts during September testing. It's ~99% complete, amid a July lawsuit from the contractor blaming LAWA for the delays and a grand jury report faulting the contractor. Not United's project, but it's the thing that will actually change how you get to a United flight at LAX.",
     sources: [
+      "https://www.aviationpros.com/airport-business/airport-infrastructure-operations/news/55415246/lax-people-mover-launch-postponed-again-city-officials-duck-questions-on-the-delay",
       "https://mynewsla.com/traffic/2026/09/24/lax-officials-say-automated-people-mover-to-open-in-january/",
       "https://crankyflier.com/2026/07/23/lets-dig-in-to-the-lax-people-mover-saga/",
       "https://www.lawa.org/transforminglax/projects/terminals-7-and-8",
@@ -516,31 +527,36 @@ export const unitedProjects = [
 export const unitedHubsMeta = {
   slug: "united-hubs",
   name: "United Hub Tracker",
-  lastUpdated: "2026-09-28",
-  lastVerified: "2026-09-28",
+  lastUpdated: "2026-11-03",
+  lastVerified: "2026-11-03",
   // Headline stats that can't be derived from the entries above. Counts of projects/clubs ARE
   // derived at build time — never hardcode them here (tests pin that).
   stats: {
     newClubSqFt2026: {
       label: "new club space opening in 2026",
       value: "~119,000 sq ft",
-      note: "IAH 54,000 + IAD 40,000 (MWAA's figure; TPG says 39,000) + SFO 25,000 — the three clubs United has publicly committed to opening by end of 2026.",
+      note: "IAH 54,000 (open since October 22) + IAD 40,000 (MWAA's figure; TPG says 39,000) + SFO 25,000 — the three clubs United has publicly committed to opening by end of 2026.",
       source: "https://thepointsguy.com/news/united-airlines-lounge-plans-2026/",
     },
     newGates2026: {
       label: "new gates targeted for fall 2026",
       value: "36",
-      note: "22 at IAH Terminal B North + 14 at IAD Concourse E.",
+      note: "22 at IAH Terminal B North (opened October 22, 2026, phasing into service by Christmas) + 14 at IAD Concourse E (still awaiting an opening date).",
       source: "https://simpleflying.com/36-new-gates-one-us-airline-wins-big-airport-expansions-2026/",
     },
     largestClub: {
-      label: "largest club in the network (once IAH opens)",
+      label: "largest club in the network",
       value: "54,000 sq ft",
-      note: "Today's largest is Denver B-East at ~35,000 sq ft.",
-      source: "https://thepointsguy.com/news/united-airlines-lounge-plans-2026/",
+      note: "Houston's Terminal B North club, open since October 22, 2026. Denver B-East (~35,000 sq ft) held the title before it.",
+      source: "https://united.mediaroom.com/2026-10-21-United-Opens-New-Concourse-at-George-Bush-Intercontinental-Airport-with-More-Gates,-Local-Restaurants-and-the-Largest-Airline-Club-in-the-Americas",
     },
   },
   changelog: [
+    { date: "2026-10-29", entry: "LAX's people mover slips again: the contractor now targets February 5, 2027 for passengers, and LAWA won't confirm any date until final testing is done." },
+    { date: "2026-10-22", entry: "Houston's Terminal B North Concourse opens: 22 gates and United's largest club anywhere — 54,000 sq ft, 800 seats. Denver's B-East hands over the crown." },
+    { date: "2026-10-22", entry: "Denver opens an eight-lane North Checkpoint and a redesigned international arrivals area as the Great Hall program heads for its end-of-2027 finish." },
+    { date: "2026-10-13", entry: "MWAA's new Dulles Concourse E fact sheet drops the October target for plain 'fall 2026' — still no opening date." },
+    { date: "2026-10-05", entry: "Chicago issues the caisson permit for the first phase of O'Hare's new Concourse E; groundbreaking is still to come." },
     { date: "2026-09-24", entry: "LAX's people mover slips again: contractor completion now December 8, passenger service early January 2027 — not October." },
     { date: "2026-09-16", entry: "Dulles Concourse E and its ~40,000 sq ft United Club slip from late September into October after operational testing turns up fixes." },
     { date: "2026-08-20", entry: "Chicago resequences ORDNext ($8.8B): O'Hare's new Concourse E breaks ground this fall (14 gates in 2030, 24 by 2034); the Global Terminal is built 2029–2033; Concourse D stays on track for late 2028." },
