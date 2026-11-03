@@ -14,6 +14,9 @@ import { track } from './track.js';
 
 export const SUPPORT_CLICK_EVENT = 'support_click';
 
+/** The Buy Me a Coffee page every donate link on the Astro content pages points at. */
+export const SUPPORT_URL = 'https://buymeacoffee.com/notjbg';
+
 /** True for buymeacoffee.com and its subdomains, never for look-alike hosts. */
 export function isSupportUrl(href) {
   try {

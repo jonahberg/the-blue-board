@@ -4,6 +4,33 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.0] - 2026-11-03
+
+**An in-page donation ask on the fleet and hub pages.** Google now sends these pages about 1,000 visitors a month, and in October the only ask they saw was the footer button: about 1,800 fleet-page visitors produced 1 support click, and visitors arriving from Google produced 4 in total. Each fleet page, hub page, and the two index pages now ask in the page itself, worded the way the owner worded the donation prompt ("donate to support costs and keep The Blue Board going", no coffee). It's never a popup.
+
+### Added
+- `src/components/site/SupportNote.astro`, which has two variants:
+  - `inline`: one quiet line under the page header: "Researched and kept current by one person — no ads, no paywall. Donate to support costs".
+  - `card`: "Did this page help?" after the content. It says the site is one person's project, how that page's facts are checked, and how many readers are on the Supporters Wall (counted from `src/data/supporters.js`, not typed), with a "Donate to keep it going" button.
+  - It is pure markup with no script, so the hash-locked CSP is unchanged.
+- Placements, each with its own `data-support` label so Web Analytics reports `support_click` per spot:
+  - `/fleet/*`: `fleet-top` and `fleet-end` (after the FAQ).
+  - `/fleet`: `fleet-index-top` and `fleet-index-end` (before "About This Data").
+  - `/hubs/*`: `hub-top` (US hubs, which have a header) and `hub-end` on every hub, including GUM and NRT.
+  - `/hubs`: `hubs-index-top` and `hubs-index-end`.
+- `SUPPORT_URL` in `src/lib/support-tracking.js`.
+- `tests/support-note.test.js`. It pins the eight placement labels (unique, lowercase, at most 40 characters), checks that the link is one the click tracker recognises, and keeps the component free of scripts, `on*=` handlers and coffee wording.
+
+### How to read it
+- Filter `support_click` by `eventData.from` for the eight labels above. The footer stays `footer`. The before number is October's 1 click from about 1,800 fleet-page visitors.
+
+### Verified
+- `bun run test`: 3,879 passed, 11 skipped, in 258 files.
+- `bun run typecheck` passed.
+- `bun run build` passed (`verify-csp-hashes`: both inline scripts allowed).
+- The built pages carry the expected labels.
+- Screenshots at 1280 and 390 px on `/fleet/757-300` and `/hubs/ord`. No console errors apart from the Vercel analytics script, which 404s locally.
+
 ## [1.20.2] - 2026-10-28
 
 **Security hardening. Nothing visitors see changes.** These close the findings of a review of the server functions and the site's security headers.

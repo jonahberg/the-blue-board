@@ -5,6 +5,7 @@ import BaseLayout from '../../components/site/BaseLayout.astro';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
 import StatTile from '../../components/site/StatTile.astro';
+import SupportNote from '../../components/site/SupportNote.astro';
 import { FLEET_DB_AS_OF, formatFleetAsOf } from '../../lib/fleet-utils.js';
 import { withBrand } from '../../lib/page-seo.js';
 
@@ -218,6 +219,7 @@ const hubLinkClass =
         1,139 mainline aircraft · 19 types · seat configs · WiFi · Starlink · as of
         <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>
       </p>
+      <SupportNote variant="inline" placement="fleet-index-top" />
       <a
         class="mt-5 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-7 text-sm font-bold text-primary-foreground hover:bg-primary-fill/90"
         href="/?tab=fleet">Explore Interactive Fleet Database &rarr;</a
@@ -453,6 +455,8 @@ const hubLinkClass =
         {HUB_LINKS.map((h) => <a class={hubLinkClass} href={`/hubs/${h.slug}`}>{h.label}</a>)}
       </nav>
     </ContentSection>
+
+    <SupportNote variant="card" placement="fleet-index-end" checkedAgainst="Fleet data is cross-checked against the FAA registry and United's own announcements." />
 
     <ContentSection heading="About This Data">
       <p>

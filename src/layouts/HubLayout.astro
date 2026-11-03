@@ -17,6 +17,7 @@ import HighlightBox from '../components/site/HighlightBox.astro';
 import JumpNav from '../components/site/JumpNav.astro';
 import PillNav from '../components/site/PillNav.astro';
 import StatTile from '../components/site/StatTile.astro';
+import SupportNote from '../components/site/SupportNote.astro';
 
 const { data } = Astro.props;
 const iata: string = data.iata;
@@ -96,6 +97,7 @@ const hubNavItems = hubOrder.map((h) => ({
               <Fragment set:html={data.headerTitle.replace(/ — /g, "&nbsp;— ")} />
             </h1>
             <p class="mt-1.5 text-xs text-muted-foreground">{data.subtitle}</p>
+            <SupportNote variant="inline" placement="hub-top" />
           </header>
 
           <section
@@ -161,6 +163,8 @@ const hubNavItems = hubOrder.map((h) => ({
         </HighlightBox>
       )
     }
+
+    <SupportNote variant="card" placement="hub-end" checkedAgainst="Hub routes are cross-checked against The Blue Board's own departure boards and United's announcements." />
 
     <section class="mt-8 border-t border-border pt-6">
       <h2

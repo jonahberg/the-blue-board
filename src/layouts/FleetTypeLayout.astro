@@ -11,6 +11,7 @@ import ContentSection from '../components/site/ContentSection.astro';
 import JumpNav from '../components/site/JumpNav.astro';
 import PillNav from '../components/site/PillNav.astro';
 import StatTile from '../components/site/StatTile.astro';
+import SupportNote from '../components/site/SupportNote.astro';
 import fleetDb from '../../public/data/fleet.json';
 import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
 import { fleetSeo } from '../lib/page-seo.js';
@@ -114,6 +115,7 @@ function statusClass(status: string | undefined): string {
         <Fragment set:html={data.headerTitle.replace(/ — /g, "&nbsp;— ")} />
       </h1>
       <p class="mt-1.5 text-xs text-muted-foreground">{data.subtitle}</p>
+      <SupportNote variant="inline" placement="fleet-top" />
     </header>
 
     <div class="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -218,6 +220,12 @@ function statusClass(status: string | undefined): string {
         ))
       }
     </ContentSection>
+
+    <SupportNote
+      variant="card"
+      placement="fleet-end"
+      checkedAgainst="Fleet data is cross-checked against the FAA registry and United's own announcements."
+    />
 
     <ContentSection id="all-types" heading="All United Fleet Types">
       <p>Explore every aircraft type in United Airlines' mainline fleet.</p>

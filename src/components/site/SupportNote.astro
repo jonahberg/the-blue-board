@@ -1,0 +1,82 @@
+---
+/**
+ * The reader-supported ask on the Astro content pages (fleet + hub pages and their indexes).
+ *
+ * Why it exists: Google sends these pages ~1,000 visitors a month, almost all one-page
+ * aircraft/airport lookups, and the only ask they saw was the footer button (October 2026:
+ * ~1,800 fleet-page visitors, 1 support click). This puts the ask where the reader is — one
+ * quiet line under the header, one card after the content — never a popup (DESIGN.md:
+ * "Engagement surfaces stay quiet").
+ *
+ * Wording follows the owner's donation-prompt line (Oct 6 2026): "donate to support costs and
+ * keep the blue board going" — no coffee.
+ *
+ * `placement` becomes the link's `data-support` label, so the delegated listener in
+ * src/lib/support-tracking.js (installed on every page by VercelAnalytics.astro) reports a
+ * `support_click` per placement, e.g. `fleet-top` vs `fleet-end`. Labels are pinned unique and
+ * ≤40 chars by tests/support-note.test.js.
+ *
+ * Pure markup — no inline <script>/<style>; the CSP is hash-locked at build.
+ */
+import { SUPPORTERS } from '../../data/supporters.js';
+import { SUPPORT_URL } from '../../lib/support-tracking.js';
+
+interface Props {
+  variant: 'inline' | 'card';
+  /** data-support label, e.g. "fleet-top". */
+  placement: string;
+  /** One sentence on how this page's facts are checked (card only). */
+  checkedAgainst?: string;
+  class?: string;
+}
+
+const { variant, placement, checkedAgainst, class: className = '' } = Astro.props;
+const supporterCount = SUPPORTERS.length;
+---
+{
+  variant === 'inline' ? (
+    <p class:list={['mt-2 text-xs text-muted-foreground', className]} data-support-note="inline">
+      Researched and kept current by one person — no ads, no paywall.{' '}
+      <a
+        href={SUPPORT_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-support={placement}
+        class="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+      >
+        Donate to support costs
+      </a>
+    </p>
+  ) : (
+    <aside
+      aria-labelledby={`support-${placement}`}
+      class:list={['mt-8 rounded-lg border border-border bg-card p-5', className]}
+      data-support-note="card"
+    >
+      <h2 id={`support-${placement}`} class="text-base font-bold tracking-tight text-foreground">
+        Did this page help?
+      </h2>
+      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+        The Blue Board is a one-person project: no ads, no paywall, no login.
+        {checkedAgainst && <> {checkedAgainst}</>} I pay the server and flight-data costs
+        myself, and donations from readers are what keep it going.
+      </p>
+      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+        {supporterCount} readers are on the Supporters Wall so far. If this page saved you a
+        search, consider joining them.
+      </p>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <a
+          href={SUPPORT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-support={placement}
+          class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-5 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
+        >
+          Donate to keep it going
+        </a>
+        <span class="text-xs text-muted-foreground">— Jonah</span>
+      </div>
+    </aside>
+  )
+}

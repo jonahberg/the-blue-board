@@ -5,6 +5,7 @@ import BaseLayout from '../../components/site/BaseLayout.astro';
 import { withBrand } from '../../lib/page-seo.js';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
+import SupportNote from '../../components/site/SupportNote.astro';
 
 const hubSummaries: Record<string, { name: string; city: string; subtitle: string; iata: string }> =
   {};
@@ -106,6 +107,7 @@ const itemListSchema = {
         Real-time operations across all 8 United hubs plus the Tokyo-Narita gateway · Delays,
         cancellations, on-time performance
       </p>
+      <SupportNote variant="inline" placement="hubs-index-top" />
     </header>
 
     <div class="mt-6 rounded-lg border border-border bg-card p-5 text-center">
@@ -262,5 +264,7 @@ const itemListSchema = {
         though most mainland-US Tokyo service now uses Tokyo Haneda (HND).
       </p>
     </ContentSection>
+
+    <SupportNote variant="card" placement="hubs-index-end" checkedAgainst="Hub routes are cross-checked against The Blue Board's own departure boards and United's announcements." />
   </div>
 </BaseLayout>
