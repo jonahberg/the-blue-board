@@ -111,7 +111,7 @@ const loadAll = () => {
   void loadProgram();
 };
 
-// Poll every 30s, but only while the tab is visible (see hub-live.ts).
+// Poll every 30s, but only while the tab is visible (the pattern hub-board.ts also follows).
 let timer: ReturnType<typeof setInterval> | null = null;
 const startPolling = () => {
   if (timer === null) timer = setInterval(loadAll, 30_000);
