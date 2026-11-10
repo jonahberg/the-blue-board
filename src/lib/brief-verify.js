@@ -9,7 +9,8 @@
 //      number, runway, airport code or name, cause — must appear in the `values` of the facts THAT
 //      ITEM cites (src/lib/brief-claims.js measures both sides with one extractor). An item that
 //      fails any check is dropped, and the report says why.
-//   4. Items may not speak as United ("we", "our").
+//   4. Items may not speak as United ("we", "our"), and an item citing a PLANNED or POSSIBLE FAA
+//      program must say so ("possible", "not in effect", "could"…): prompt rule 2, made checkable.
 //   5. The headline is checked against the union of the SURVIVING items' facts. A headline that
 //      fails (or runs past 20 words) is replaced with the template headline, never published.
 //   6. The traveler note is checked like an item, and only survives when the final tone is
@@ -33,6 +34,8 @@ const TONES = new Set(['calm', 'watch', 'disrupted']);
 const JARGON_RE = /\b(GDP|GS|IFR|LIFR|MVFR|VFR|IMC|VMC|TMI|AFP|EDCT|MIT|SWAP|IROPS|OTP|ATCSCC)\b/;
 const FIRST_PERSON_RE = /\b(?:[Ww]e|[Ww]e're|[Ww]e've|[Oo]ur|[Oo]urs|us)\b/;
 const EMOJI_RE = /\p{Extended_Pictographic}/u;
+/** Words that mark an FAA program as not (yet) in effect. */
+const HEDGE_RE = /\b(?:possible|possibly|could|may|might|planned|plans?|expects?|expected|watch(?:ing)?|later|if|not\s+(?:yet\s+)?in\s+effect|isn't\s+in\s+effect|neither\s+is\s+in\s+effect|none\s+(?:of\s+them\s+)?(?:is|are)\s+in\s+effect)\b/i;
 
 /**
  * Strict shape check of the model's JSON.
@@ -75,7 +78,7 @@ export function validateBriefShape(json) {
  * Check one sentence against the facts it cites.
  * @param {string} text
  * @param {string[]} factIds
- * @param {Map<string, {values: string[]}>} factIndex
+ * @param {Map<string, {values: string[], kind?: string}>} factIndex
  * @returns {string[]} reasons it fails; empty when it passes.
  */
 export function checkSentence(text, factIds, factIndex) {
@@ -84,11 +87,16 @@ export function checkSentence(text, factIds, factIndex) {
   if (ids.length === 0) reasons.push('no_fact_ids');
   if (ids.length > MAX_FACT_IDS) reasons.push('too_many_fact_ids');
   const allowance = emptyAllowance();
+  let citesPlanned = false;
   for (const id of ids) {
     const fact = factIndex.get(id);
     if (!fact) reasons.push(`unknown_fact_id:${id}`);
-    else allowanceFromValues(fact.values, allowance);
+    else {
+      allowanceFromValues(fact.values, allowance);
+      if (/** @type {any} */ (fact).kind === 'faa_planned') citesPlanned = true;
+    }
   }
+  if (citesPlanned && !HEDGE_RE.test(normalizeText(text))) reasons.push('planned_not_hedged');
   if (String(text).length > MAX_TEXT_CHARS) reasons.push('text_too_long');
   if (FIRST_PERSON_RE.test(normalizeText(text))) reasons.push('first_person');
   for (const claim of extractClaims(text)) {

@@ -144,6 +144,13 @@ describe('verifyBrief: items', () => {
     expect(checkSentence('Our 630 flights are airborne.', ['air.total'], new Map(FACTS.map((f) => [f.id, f])))).toEqual(['first_person']);
   });
 
+  it('drops an item that states a PLANNED program as if it were happening (prompt rule 2)', () => {
+    const index = new Map(FACTS.map((f) => [f.id, f]));
+    expect(checkSentence('Newark has a ground stop until 9:00 PM ET.', ['faa.planned.EWR'], index)).toEqual(['planned_not_hedged']);
+    expect(checkSentence('A ground stop is possible at Newark until 9:00 PM ET.', ['faa.planned.EWR'], index)).toEqual([]);
+    expect(checkSentence('The FAA may stop Newark departures until 9:00 PM ET; nothing is in effect yet.', ['faa.planned.EWR'], index)).toEqual([]);
+  });
+
   it('lets "weather" stand for any weather cause a cited fact carries', () => {
     expect(checkSentence('Weather has stopped Newark departures until 8:30 PM ET.', ['faa.active.EWR.gs'], new Map(FACTS.map((f) => [f.id, f])))).toEqual([]);
   });
@@ -196,7 +203,7 @@ describe('verifyBrief: headline, tone, traveler note', () => {
   });
 
   it('drops a traveler note unless the final tone is disrupted', () => {
-    const note = item('Check your Newark flight before leaving.', ['faa.planned.EWR']);
+    const note = item('A ground stop is possible at Newark, so check your flight before leaving.', ['faa.planned.EWR']);
     const calm = verifyBrief(brief(items, { traveler_note: note }), FACTS.filter((f) => f.id !== 'faa.active.EWR.gs'));
     expect(calm.report.travelerNote).toEqual({ status: 'dropped', reasons: ['tone_is_watch'] });
     expect(calm.brief.traveler_note).toBeNull();
