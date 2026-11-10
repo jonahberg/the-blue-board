@@ -286,4 +286,4 @@ All flight data is provided for informational purposes only and may be delayed, 
 
 ---
 
-*Built on a ✈️ by [Jonah Berg](https://github.com/jonahberg)*
+*Built on a ✈️ by [Jonah Berg](https://jonahberg.com)*

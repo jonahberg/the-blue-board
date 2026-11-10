@@ -107,6 +107,9 @@ describe('crawlable navigation', () => {
     expect(NOSCRIPT_LINKS.hubs).toHaveLength(9);
     expect(NOSCRIPT_LINKS.resources).toHaveLength(4);
     expect(NOSCRIPT_LINKS.bylineLink.label).toBe('Jonah Berg');
+    // The byline is the homepage's static-HTML author credit: it links the author's site,
+    // like every other "Built by" credit, not the GitHub profile.
+    expect(NOSCRIPT_LINKS.bylineLink.href).toBe('https://jonahberg.com');
     expect(NOSCRIPT_LINKS.bylineAfter).toContain('Not affiliated with United Airlines');
   });
 });
@@ -215,6 +218,36 @@ describe('JSON-LD', () => {
       'Hub On-Time Performance',
       'Starlink WiFi Equipment',
       'Fleet Composition',
+    ]);
+  });
+
+  it('every Person node (founder, creators) links jonahberg.com, with GitHub in sameAs', () => {
+    const people = [
+      ['Organization.founder', block('Organization').founder],
+      ['WebApplication.creator', block('WebApplication').creator],
+      ['Dataset.creator', block('Dataset').creator],
+    ];
+    for (const [where, person] of people) {
+      expect(person, where).toMatchObject({
+        '@type': 'Person',
+        name: 'Jonah Berg',
+        url: 'https://jonahberg.com',
+      });
+      expect(person.sameAs, where).toContain('https://github.com/jonahberg');
+    }
+    // No Person anywhere on the page points its url at the GitHub profile.
+    expect(JSON.stringify(jsonLd)).not.toContain('"url":"https://github.com/jonahberg"');
+  });
+
+  it('leaves the Organization and WebApplication sameAs lists as they were', () => {
+    expect(block('Organization').sameAs).toEqual([
+      'https://x.com/theblueboard',
+      'https://github.com/jonahberg/the-blue-board',
+      'https://github.com/jonahberg',
+    ]);
+    expect(block('WebApplication').sameAs).toEqual([
+      'https://x.com/theblueboard',
+      'https://github.com/jonahberg/the-blue-board',
     ]);
   });
 

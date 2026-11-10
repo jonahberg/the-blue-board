@@ -4,6 +4,39 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.1] - 2026-11-10
+
+**The author credit links to jonahberg.com again, on the homepage too.** v1.7.18 (#244) pointed "Built by Jonah Berg" at jonahberg.com. The v1.8.0 rebuild then lost it on the homepage in two ways. The dashboard's only credit moved into the ⓘ menu, and that menu's content is only in the page while it is open, so the rendered homepage had no credit link at all. The homepage's static byline and its structured data were also carried over with the GitHub profile URL. The content pages' shared footer already linked jonahberg.com and is unchanged.
+
+### Fixed
+- **Dashboard** (`src/app/shell/Attribution.tsx`): the data-credit strip along the bottom now ends "Built by Jonah Berg · Not affiliated with United Airlines, Inc.", the same wording as the ⓘ menu, styled like the strip's other links. The strip is always in the page, so the link is there for crawlers that render the dashboard.
+- **Phones** (`src/app/shell/MobileNav.tsx`): that strip is hidden below tablet width, so the More sheet gets a last row, "Built by Jonah Berg", after the Support link and styled like it.
+- **Homepage static HTML** (`src/lib/home-seo.js`): the no-JavaScript byline links jonahberg.com instead of the GitHub profile.
+- **Structured data:**
+  - The homepage's three Person nodes (Organization `founder`, WebApplication `creator`, Dataset `creator`) use `url: https://jonahberg.com`, with the GitHub profile in `sameAs`.
+  - The NewsArticle `author` on the news pages already used jonahberg.com and now also lists GitHub in `sameAs`.
+  - The Organization and WebApplication `sameAs` lists are unchanged.
+- **`public/llms.txt`, `public/llms-full.txt`:** the Creator sections list jonahberg.com first.
+- **`README.md`, `package.json` `author`:** jonahberg.com instead of the GitHub profile.
+- GitHub repository links and the Buy Me a Coffee links are untouched.
+
+### Tests
+- New `tests/author-credit.test.js`:
+  - Pins the site footer, the NewsArticle author, the llms files and the homepage Markdown twin.
+  - Gates the built site in `dist/`: the homepage byline, every Person node on every page, the footer credit on every content page, and no `href` to the GitHub profile anywhere.
+- `tests/attribution-landmark.test.tsx`: the strip renders the credit link.
+- `tests/mobile-nav-more.test.tsx`: the More sheet renders the credit link.
+- `tests/home-seo.test.js`: pins the byline href and the three Person URLs, and checks the Organization and WebApplication `sameAs` lists are unchanged.
+
+### Verified
+- `bun run test`: 3,979 passed in 260 files, up from 3,966 in 259. It ran after the build, so the `dist/` gates ran too.
+- `bun run typecheck` passed.
+- `bun run build` passed (`verify-csp-hashes`: both inline scripts allowed).
+- In `dist/`:
+  - All 69 HTML pages link jonahberg.com.
+  - No `href` points at the GitHub profile, and no Person `url` does.
+  - The remaining `github.com/jonahberg` strings are all `sameAs` entries.
+
 ## [1.22.0] - 2026-11-03
 
 **Fleet and airport pages brought up to date as of November 3, 2026.** Every fact that changed was traced to a source dated after the last refresh (Sep 28). A second pass, done separately from the research, then reopened each source. On the fleet side it found 5 claims their own source contradicted. Across both sides it flagged 6 more that were missing a source or overstated one. All 11 are fixed here. The PR description summarises the change ledgers and both verification passes, and lists the calls left for the owner.

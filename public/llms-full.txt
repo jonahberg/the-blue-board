@@ -243,6 +243,7 @@ Terms frequently used on The Blue Board:
 ## Creator
 
 Built by Jonah Berg.
+- Website: https://jonahberg.com
 - Twitter/X: https://x.com/jonahberg
 - GitHub: https://github.com/jonahberg
 - Project: https://github.com/jonahberg/the-blue-board

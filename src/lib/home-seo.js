@@ -166,7 +166,7 @@ export const NOSCRIPT_LINKS = {
     { href: '/trackers/united-hubs', label: 'United Hub Construction Tracker' },
   ],
   bylineBefore: 'Built for the United community by ',
-  bylineLink: { href: 'https://github.com/jonahberg', label: 'Jonah Berg' },
+  bylineLink: { href: 'https://jonahberg.com', label: 'Jonah Berg' },
   bylineAfter:
     '. Not affiliated with United Airlines, Inc. JavaScript is required for the live dashboard.',
 };
@@ -237,7 +237,12 @@ export function homeJsonLd({ lastmod }) {
         width: 512,
         height: 512,
       },
-      founder: { '@type': 'Person', name: 'Jonah Berg', url: 'https://github.com/jonahberg' },
+      founder: {
+        '@type': 'Person',
+        name: 'Jonah Berg',
+        url: 'https://jonahberg.com',
+        sameAs: ['https://github.com/jonahberg'],
+      },
       email: 'hello@theblueboard.co',
       contactPoint: {
         '@type': 'ContactPoint',
@@ -301,7 +306,7 @@ export function homeJsonLd({ lastmod }) {
       creator: {
         '@type': 'Person',
         name: 'Jonah Berg',
-        url: 'https://github.com/jonahberg',
+        url: 'https://jonahberg.com',
         sameAs: ['https://x.com/theblueboard', 'https://github.com/jonahberg'],
       },
       publisher: { '@id': `${SITE_URL}/#organization` },
@@ -447,7 +452,12 @@ export function homeJsonLd({ lastmod }) {
         + 'equipment details. Updated every 30 seconds.',
       url: SITE_URL,
       license: SITE_URL,
-      creator: { '@type': 'Person', name: 'Jonah Berg', url: 'https://github.com/jonahberg' },
+      creator: {
+        '@type': 'Person',
+        name: 'Jonah Berg',
+        url: 'https://jonahberg.com',
+        sameAs: ['https://github.com/jonahberg'],
+      },
       dateModified: lastmod,
       keywords: [
         'United Airlines',

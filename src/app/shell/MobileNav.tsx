@@ -10,10 +10,11 @@
  * them on desktop sits in the attribution strip, which is hidden below `md:`, so on a phone the
  * About dialog — the independence statement, the "not for operational or safety-critical
  * decisions" line and the Supporters Wall — and every donate link were unreachable. Both rows
- * are plain list items: nothing here opens by itself or asks for anything.
+ * are plain list items: nothing here opens by itself or asks for anything. The last row is the
+ * "Built by Jonah Berg" credit, for the same reason (v1.22.1).
  */
 
-import { BadgeInfo, CircleHelp, Coffee, Ellipsis } from 'lucide-react';
+import { BadgeInfo, CircleHelp, Coffee, Ellipsis, UserRound } from 'lucide-react';
 import { useState } from 'react';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -130,6 +131,18 @@ export function MobileNav({
               >
                 <Coffee aria-hidden="true" className="size-4" />
                 Support The Blue Board
+              </a>
+            </li>
+            {/* The author credit the attribution strip carries on md: and up. */}
+            <li>
+              <a
+                href="https://jonahberg.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(ROW, 'text-muted-foreground')}
+              >
+                <UserRound aria-hidden="true" className="size-4" />
+                Built by Jonah Berg
               </a>
             </li>
           </ul>
