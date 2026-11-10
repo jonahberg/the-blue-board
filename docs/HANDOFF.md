@@ -1,5 +1,9 @@
 # Handoff — v2.0 Review & Remediation Program
 
+> Historical record of the July 2026 program. Paths such as `src/dashboard/` and `public/js/`
+> predate the v1.8.0 rebuild; `CLAUDE.md` describes the current architecture and `TODOS.md` the
+> open work.
+
 **Date:** 2026-07-08 · **Branch:** `claude/blue-board-personas-2ebjuv` (merged as PR #220)
 **State:** all planned work COMPLETE and merged. Gates at branch head: `bun run test` 1033/1033 (was 942 at baseline) · `tsc --noEmit` clean · `bun run build` green (43 pages). The suite has since grown to 1079+ across the v1.7.1–v1.7.8 hotfixes.
 
@@ -30,7 +34,7 @@ A seven-persona hands-on review + five-domain code audit + independent fact-chec
 
 1. ~~**Enable background push**~~ **DONE 2026-07-09**: VAPID keys generated and set in Vercel Production, `sql/014` applied (RLS verified default-deny: one `service_role` policy; the anon/authenticated grants are inert under RLS), deployed. Verified live: `GET /api/push-subscribe` returns `configured:true`; the `*/5` watch-alerts cron fails closed without `CRON_SECRET` (401) and no-ops cheaply at zero subscribers (first run logged `subscriptions:0, sends:0`, zero upstream calls).
 2. **Set `FR24_MONTHLY_CREDIT_BUDGET`** env to the real FR24 plan credit total (support-stats meter assumes 100,000).
-3. **Before charging any money** (legal sequencing from the review — SWMonkey / Air Canada v. seats.aero precedents): replace the FlightAware HTML scrape (`api/flight-times.ts` FA tier) with licensed AeroAPI or drop it; obtain written permission for the unitedstarlinktracker.com upstream (TODOS.md items); confirm FR24 API tier covers a commercial dashboard; set `EMAIL_POSTAL_ADDRESS` (CAN-SPAM).
+3. **Before charging any money** (legal sequencing from the review — SWMonkey / Air Canada v. seats.aero precedents): replace the FlightAware HTML scrape (`api/flight-times.ts` FA tier) with licensed AeroAPI or drop it (off by default since Nov 2026, `FLIGHTAWARE_SCRAPE_ENABLED`); obtain written permission for the unitedstarlinktracker.com upstream (TODOS.md items); confirm FR24 API tier covers a commercial dashboard; set `EMAIL_POSTAL_ADDRESS` (CAN-SPAM).
 
 ## Deferred / next work (specs in the review's Part 3)
 
