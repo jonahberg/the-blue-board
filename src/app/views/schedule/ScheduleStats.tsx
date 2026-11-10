@@ -69,7 +69,10 @@ function Metric({
 }: {
   value: React.ReactNode;
   label: React.ReactNode;
-  /** A quieter second figure under the label ("+14 unconfirmed"). */
+  /**
+   * A quieter second figure ("+14 unconfirmed"), on the label's line so the card row keeps
+   * its height; it wraps under the label only when the card is too narrow.
+   */
   note?: string | null;
   valueClass?: string;
   title?: string;
@@ -79,8 +82,8 @@ function Metric({
       <span className={cn('font-mono text-lg leading-none font-semibold', valueClass)}>{value}</span>
       <span className="text-center text-[9px] uppercase tracking-wide text-muted-foreground">
         {label}
+        {note ? <span className="font-mono normal-case tracking-normal"> · {note}</span> : null}
       </span>
-      {note ? <span className="font-mono text-[9px] text-muted-foreground">{note}</span> : null}
     </Card>
   );
 }

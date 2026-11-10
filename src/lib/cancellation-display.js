@@ -73,14 +73,13 @@ export function iropsCancellationNote({ unconfirmed, seenFlying }) {
   const parts = [];
   if (soft > 0) {
     parts.push(
-      `Unconfirmed: ${soft} ${flights(soft)} the schedule provider lists as “Likely Canceled” but has not confirmed. ` +
-        'The severity score counts them; the Canceled figure does not.',
+      `${soft} unconfirmed: ${soft === 1 ? 'a flight' : `${flights(soft)}`} the schedule provider lists as “Likely Canceled” without confirming. ` +
+        `The severity score counts ${soft === 1 ? 'it' : 'them'}; Canceled does not.`,
     );
   }
   if (seen > 0) {
     parts.push(
-      `${seen} more ${seen === 1 ? 'was' : 'were'} listed as Likely Canceled but seen flying by the live feed, so ` +
-        `${seen === 1 ? 'it is' : 'they are'} not counted at all.`,
+      `${seen} more listed that way ${seen === 1 ? 'was' : 'were'} seen flying by the live feed and ${seen === 1 ? 'is' : 'are'} not counted.`,
     );
   }
   return parts.length ? parts.join(' ') : null;

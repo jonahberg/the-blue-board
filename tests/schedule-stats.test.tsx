@@ -59,9 +59,8 @@ function renderStrip(stats: BoardModel['stats'], dir: 'departures' | 'arrivals',
 
 /** The card (desktop) or grid cell (phone) whose label is exactly `label`. */
 function cardFor(label: string): HTMLElement {
-  const labelEl = screen.getAllByText(label).find((el) => el.textContent === label);
-  if (!labelEl) throw new Error(`no card labelled ${label}`);
-  return labelEl.parentElement as HTMLElement;
+  const labelEl = screen.getAllByText(label)[0];
+  return (labelEl.closest('[data-slot="card"]') ?? labelEl.parentElement) as HTMLElement;
 }
 
 describe('ScheduleStats — desktop', () => {
@@ -69,7 +68,8 @@ describe('ScheduleStats — desktop', () => {
     renderStrip(ORD_DEP, 'departures');
     const canceled = cardFor('Canceled');
     expect(within(canceled).getByText('0')).toBeTruthy();
-    expect(within(canceled).getByText('+14 unconfirmed')).toBeTruthy();
+    // On the label's line, so the card row keeps its height.
+    expect(within(canceled).getByText(/\+14 unconfirmed/)).toBeTruthy();
     // A calm zero is not painted as an alarm; the tooltip bridges to the rows' wording.
     expect(within(canceled).getByText('0').className).toMatch(/\btext-muted-foreground\b/);
     expect(canceled.getAttribute('title')).toContain('“Likely Canceled”');

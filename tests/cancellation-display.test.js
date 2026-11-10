@@ -49,17 +49,21 @@ describe('unconfirmedFigure', () => {
 describe('iropsCancellationNote', () => {
   it('says what unconfirmed means, that the score counts them, and the seen-flying exclusion', () => {
     const note = iropsCancellationNote({ unconfirmed: 53, seenFlying: 15 });
-    expect(note).toContain('Unconfirmed: 53 flights');
+    expect(note).toBe(
+      '53 unconfirmed: flights the schedule provider lists as “Likely Canceled” without confirming. ' +
+        'The severity score counts them; Canceled does not. ' +
+        '15 more listed that way were seen flying by the live feed and are not counted.',
+    );
     // Bridges to the word the rows still use.
     expect(note).toContain('Likely Canceled');
-    expect(note).toContain('The severity score counts them; the Canceled figure does not.');
-    expect(note).toContain('15 more were listed as Likely Canceled but seen flying');
   });
 
   it('handles the singular and either half alone', () => {
-    expect(iropsCancellationNote({ unconfirmed: 1, seenFlying: 0 })).toContain('Unconfirmed: 1 flight the');
+    expect(iropsCancellationNote({ unconfirmed: 1, seenFlying: 0 })).toBe(
+      '1 unconfirmed: a flight the schedule provider lists as “Likely Canceled” without confirming. The severity score counts it; Canceled does not.',
+    );
     const seenOnly = iropsCancellationNote({ unconfirmed: 0, seenFlying: 1 });
-    expect(seenOnly).toBe('1 more was listed as Likely Canceled but seen flying by the live feed, so it is not counted at all.');
+    expect(seenOnly).toBe('1 more listed that way was seen flying by the live feed and is not counted.');
     expect(iropsCancellationNote({ unconfirmed: 0, seenFlying: 0 })).toBeNull();
     expect(iropsCancellationNote({ unconfirmed: null, seenFlying: undefined })).toBeNull();
   });
