@@ -210,6 +210,41 @@ describe('delay-explain API', () => {
     expect(call.system).toMatch(/Anchor time-of-day on the "Scheduled departure" line/);
   });
 
+  it('asks for a verdict and at most two sentences of evidence, and keeps every grounding rule (Nov 2026)', async () => {
+    // A LOW flight's answer was 90 words of padding: "supporting standard taxi and departure
+    // procedures", "standard evening volume effects are always present at a major hub".
+    const res = createRes();
+    await handler(makeReq({ body: { flight: 'UA1677', route: 'ORD→LGA', riskLabel: 'LOW', riskScore: 9, factors: ['Evening - cascade risk', 'ORD volume baseline'] } }), res);
+    const call = mockCreate.mock.calls[0][0];
+    // Unchanged: the model, and the grounding block, line for line.
+    expect(call.model).toBe('claude-haiku-4-5');
+    for (const rule of [
+      'CRITICAL RULE: You may ONLY discuss data that is explicitly provided in the user message below.',
+      'If no "Aircraft journey" line is provided, do NOT discuss inbound aircraft, turnaround times, rotations, or crew legality.',
+      'If no "FAA status" line is provided, do NOT discuss FAA programs',
+      'If no "Origin weather" or "Destination weather" line is provided, do NOT discuss weather conditions',
+      'If no "Hub disruption status" line is provided, do NOT discuss cancellation rates or IROPS.',
+      'If no "Hub on-time performance" line is provided, do NOT cite OTP percentages.',
+      'If no "Passenger connection" line is provided, do NOT discuss connections.',
+      'Never fabricate operational details.',
+      'never say "we" or "our"',
+    ]) {
+      expect(call.system).toContain(rule);
+    }
+    // The output contract.
+    expect(call.system).toMatch(/Sentence one is the verdict in plain words/);
+    expect(call.system).toMatch(/at most two more sentences of evidence\. Each must carry a specific number or fact/);
+    expect(call.system).toMatch(/LOW-risk flight with nothing notable .* ONE sentence of about 25 words/);
+    expect(call.system).toMatch(/Never state generic truths about how airports, hubs, evenings/);
+    expect(call.system).toMatch(/standing baselines.*Do not restate or explain them/);
+    // The padding the old contract asked for is gone.
+    expect(call.system).not.toMatch(/2-4 sentences/);
+    expect(call.system).not.toMatch(/typically means operationally/);
+    // A backstop, not a target: three full sentences fit, a 90-word essay does not.
+    expect(call.max_tokens).toBeGreaterThanOrEqual(120);
+    expect(call.max_tokens).toBeLessThanOrEqual(200);
+  });
+
   it('does not serve today’s explanation for tomorrow’s same-numbered flight', async () => {
     const shared = { flight: 'UASAMEDAY', route: 'EWR→LHR', riskScore: 6, factors: ['EWR congestion baseline'] };
     mockCreate.mockReset();
