@@ -53,8 +53,8 @@ import type { TabId } from './tabs';
 
 // Overlays nobody sees at first paint are split out of the Dashboard chunk that gates the
 // map: the ⌘K palette (and cmdk with it), the flight sheet, and the root dialogs. Each mounts
-// as soon as its chunk arrives — well before anyone can click a plane or press ⌘K — and the
-// waitlist/onboarding triggers run from their own mount as before.
+// as soon as its chunk arrives — well before anyone can click a plane or press ⌘K. The
+// "What is this dashboard?" dialog (`Onboarding`) only ever opens on request.
 const AircraftDetailDialog = lazy(() => import('./features/AircraftDetailDialog'));
 const DelayExplainDialog = lazy(() => import('./features/DelayExplainDialog'));
 const DisclaimerDialog = lazy(() => import('./features/DisclaimerDialog'));
@@ -176,12 +176,15 @@ function DashboardShell() {
           0.11 on a phone). It also keeps the fixed chrome above the content to the header,
           the ticker and the hub strip.
 
-          On a phone the slot shows ONE line at a time, the first one present in this order:
-          the waitlist strip (once its triggers fire, on visits when neither deep-use modal is
-          the ask), the news, the tip. Three stacked lines
-          were ~100 px of a 780 px screen (audit Oct 3 2026); the others wait their turn and
-          come back as the one above is dismissed. A tablet or desktop shows all of them. */}
-      <div className="flex shrink-0 flex-col max-md:[&>*~*]:hidden">
+          The slot shows ONE line at a time, at every width, the first one present in this
+          order: the waitlist strip (once its triggers fire, on visits when neither deep-use
+          modal is the ask), the news, the tip. The others wait their turn and come back as the
+          one above is dismissed. Three stacked lines were ~100 px of a 780 px phone (audit
+          Oct 3 2026), so phones got the rule first; on a 900 px desktop the news, the tip and
+          the attribution were ~110 px under the map (Nov 2026), so it now holds everywhere.
+          Components that have nothing to say render null, so `*~*` only ever hides a strip
+          that is actually there. */}
+      <div className="flex shrink-0 flex-col [&>*~*]:hidden">
         <WaitlistStrip />
         <NewsBanner />
         <TipStrip />

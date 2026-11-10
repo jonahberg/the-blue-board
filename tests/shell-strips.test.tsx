@@ -87,17 +87,20 @@ describe('Dashboard layout', () => {
     expect(tip).toBeLessThan(attribution);
   });
 
-  it('shows ONE engagement line at a time on a phone: waitlist strip, then news, then tip (Oct 2026)', () => {
+  it('shows ONE engagement line at a time at every width: waitlist strip, then news, then tip (Oct 2026 phones; Nov 2026 everywhere)', () => {
     const waitlist = jsx.indexOf('<WaitlistStrip');
     const news = jsx.indexOf('<NewsBanner');
     const tip = jsx.indexOf('<TipStrip');
     expect(waitlist).toBeGreaterThan(jsx.indexOf('</Tabs>'));
     expect(waitlist).toBeLessThan(news);
     expect(news).toBeLessThan(tip);
-    // The three share one wrapper whose phone rule hides every child after the first present.
+    // The three share one wrapper whose rule hides every child after the first present. It is
+    // unprefixed: a breakpoint variant (the old `max-md:`) would let a desktop stack all three.
     const slotOpen = jsx.lastIndexOf('<div', waitlist);
     const slotTag = jsx.slice(slotOpen, waitlist);
-    expect(slotTag).toContain('max-md:[&>*~*]:hidden');
+    const classes = (slotTag.match(/className="([^"]*)"/)?.[1] ?? '').split(/\s+/);
+    expect(classes).toContain('[&>*~*]:hidden');
+    expect(classes.some((c) => c !== '[&>*~*]:hidden' && c.endsWith(':[&>*~*]:hidden'))).toBe(false);
     expect(jsx.indexOf('</div>', tip)).toBeLessThan(jsx.indexOf('<Attribution'));
   });
 });
