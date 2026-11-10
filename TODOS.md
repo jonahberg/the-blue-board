@@ -1,52 +1,96 @@
 # TODOS
 
-## Deferred from ultrareview v1.5.5 ship (2026-04-24)
+Open work, checked against the code on 2026-11-10. Each entry names the file it concerns.
 
-### v1.5.6 "Trust Infrastructure" sprint (2 weeks after v1.5.5)
+## Compliance
 
-**Class-of-bug prevention — the high-leverage work both CEO voices flagged:**
+- [ ] **Starlink data terms.** Six server routes use the unitedstarlinktracker.com API:
+  `api/cron/sync-starlink.ts` and `api/starlink-data.ts` (`/api/data`), `api/check-flight.ts`,
+  `api/predict-flight.ts`, `api/fleet-summary.ts` and `api/starlink-mismatches.ts`. The data is
+  credited on the Sources and Starlink tabs and on `/fleet`. Confirm the maintainer's terms for
+  this use (@martinamps) and record the answer in `docs/`.
+- [ ] **FR24 live feed terms.** `/api/fr24-feed` reads FR24's public live feed
+  (`src/lib/united-feed.js`); flight lookup and aircraft history use the FR24 API
+  (`api/fr24-flight.ts`, `api/aircraft-history.ts`). Confirm the terms that cover the live feed
+  on a public dashboard.
+- [x] **FlightAware scrape.** Removed from `api/flight-times.ts` in Nov 2026. Flight times come
+  from the hub boards and the FR24 API.
 
-- [ ] Integration-test harness: real Supabase local instance, hit API routes with service-role + anon-key both, RLS enforcement tests, template-escaping snapshot tests.
-- [ ] Tighten CSP: drop `style-src 'unsafe-inline'` after inline-style audit.
-- [ ] Cost alerting: Anthropic + FR24 spend anomaly detection via Vercel log drain.
-- [ ] Circuit breakers / graceful degradation for FR24, Anthropic, Resend, Supabase. (partial: 60s negative cache + 4s timeout shipped for `api/predict-flight.ts` and `api/check-flight.ts` in v1.5.8; FR24 live-feed last-known-good stale-serve + delay-explain gateway-403 circuit shipped in v1.7.14)
-- [ ] Feature kill-switches for non-core (waitlist, news-notify, delay-explain) via env flags.
+## Correctness
 
-### Security hygiene (backlog)
+- [ ] **Stale FAA programs on the dashboard.** After a failed `/api/faa` refresh,
+  `src/app/state/weather.tsx` keeps showing the last programs as current, indefinitely. Since
+  Nov 2026 the endpoint answers a double upstream failure with its last good answer (up to
+  30 minutes old) and an `X-BB-FAA-Stale: <age in seconds>` header. Both clients ignore the
+  header (`fetchFaa` in `src/app/data/api.ts`, and `src/scripts/newark-live.ts`). They should
+  read it, track the time of the last good answer, and show programs past a limit as stale or
+  unavailable, so an expired ground stop never reads as a live one.
+- [ ] **`/api/schedule` can run past its 60-second limit.** Two paths can:
+  - On a request, `fetchAllPages` runs to a deadline 57 seconds after the start. The handler then
+    awaits `saveScheduleSnapshot`, and for a partial board a second `getPersistentFallback`.
+    Neither has a bound.
+  - In the background, `triggerBackgroundRefresh` gives `fetchAllPages` 55 seconds from the
+    trigger rather than from the start of the request, then awaits `saveScheduleSnapshot`. The
+    handler has already awaited `hydrateQuotaBlock()` and sometimes `getPersistentFallback()`
+    before the trigger.
 
-- [ ] [compliance] FlightAware HTML scraping (`api/flight-times.ts`) uses a spoofed Chrome UA against FlightAware's Terms of Use — migrate to AeroAPI's free tier or rely on the tryFR24Summary fallback, and credit any FlightAware data shown. (Deferred from v1.5.17 compliance sweep.)
-- [ ] [compliance] Starlink upstream (unitedstarlinktracker.com) is consumed against its robots.txt with no documented permission — ask @martinamps for written permission and record it in docs. (Deferred from v1.5.17.)
-- [ ] [compliance] Set `EMAIL_POSTAL_ADDRESS` in Vercel env (real postal address / PO Box — CAN-SPAM requires it; the email footer renders it once set). Optional follow-up: an HTTPS one-click unsubscribe endpoint enables the RFC 8058 List-Unsubscribe-Post header.
+  None of the Supabase calls involved has a timeout (`api/_cost-state.ts`,
+  `api/_schedule-snapshots.ts`, `api/_reg-sightings.ts`). Two invocations timed out at 60 seconds
+  on Nov 7 2026 (12:17:55 UTC). Both were logged with status 200 and cache `STALE`, and nothing
+  else was logged, so the logs do not show which path it was. Fix: derive every deadline from
+  the request's start, leave room for the snapshot write, and put timeouts on the Supabase reads
+  and writes.
+- [ ] **Hub proximity rule.** `HUB_PROXIMITY_NM = 93` (`src/lib/live-filters.js`) counts any
+  grounded aircraft within the radius as at the hub, whatever its route. No single radius works
+  (SFO–SJC is 26.5 NM, IAD–DCA 20.4 NM). Match on the route's hub first. For missing routes, use
+  an airport-location assignment or a deliberately tight radius. Test other-airport flights and
+  missing-route flights separately.
 
-- [ ] [#26 extension] Evaluate moving waitlist off hand-rolled Supabase+Resend → Loops/Resend Audiences/ConvertKit.
-- [ ] [README drift] Audit README claims vs actual codebase ("strict CSP", "zero inline handlers", "fully escaped") and either fix the code or fix the docs.
+## Hardening
 
-### Quality
+- [ ] **DEP0169 log noise.** About 4,700 `url.parse()` deprecation warnings a week, at most one
+  per process. They appear only on the routes whose handlers read `req.query`, including
+  `/api/metar`, which loads no packages; routes that never read it (`/api/irops`, the crons) log
+  none. App code never calls `url.parse`, so the likely caller is the platform's `req.query`
+  helper. `NODE_OPTIONS=--trace-deprecation` on a Preview deploy would confirm it, and
+  `NODE_OPTIONS=--disable-warning=DEP0169` would silence it (and any future first-party
+  `url.parse` call).
+- [ ] **CSP `style-src 'unsafe-inline'`** (`vercel.json`). Drop it after an inline-style audit;
+  `script-src` already has no `'unsafe-inline'`.
+- [ ] **Spend alerting.** Nothing watches AI Gateway or FR24 credit spend. The only alert path
+  (`api/_alert.ts`) covers the schedule pipeline.
+- [ ] **Dependency audit in CI.** `.github/workflows/test.yml` runs typecheck, build and tests
+  only. There is no `bun audit` step and no Dependabot config.
+- [ ] **Secrets rotation.** No written procedure for rotating `SUPABASE_SERVICE_ROLE_KEY`,
+  `RESEND_API_KEY`, `AI_GATEWAY_API_KEY`, `FR24_API_TOKEN`, `AERODATABOX_API_KEY`, `CRON_SECRET`
+  and the VAPID keys.
+- [ ] **Logs and PII.** Check what the function logs retain (watch-alert and waitlist paths in
+  particular) and for how long.
 
-- [ ] [#14] `api/irops.ts:193` — `results.indexOf(result)` O(n²) → index-based loop. Non-user-facing; 8 hubs so real impact minimal.
-- [ ] [#21] `public/sw.js:84-85` — offline fallback serves `/index.html` for all unmatched routes. Route-aware fallback or proper offline screen.
-- [ ] [#22] `src/app/state/schedule.tsx:206` — cap the `aggCache` Map (the rebuild's `schedCache`). Nothing evicts it; only Refresh deletes a key, so a long session accumulates one full board response per hub × direction × day.
-- [ ] [#25] Drop `idx_waitlist_email` (redundant with UNIQUE constraint). Bundle with next SQL migration.
+## Tests
 
-### LOW / noted cleanups (batch with any adjacent work)
+- [ ] **Integration tests against a local Supabase.** Nothing in `tests/` exercises the real
+  service-role and anon clients, or checks that RLS is enforced. Every table has RLS enabled in
+  `sql/`.
+- [ ] **Focus return when the opener unmounts.** Opening the ⌘K palette, then the flight sheet,
+  then closing it leaves focus on `<body>`. `shouldRestoreFocus` (`src/lib/focus-return.js`)
+  gives up on a detached opener. Fall back to the "Find a flight" trigger, and drop or reword
+  the `insideClosingContent` clause in `wasFocusLost`.
+- [ ] **Engagement provider lifecycle.** Add coverage for `src/app/state/engagement.tsx`
+  (initialisation order, subscription, dismissal sequencing), using the jsdom and
+  testing-library setup the watch-provider tests use.
 
-- [ ] `src/pages/hubs/[hub].astro:10`, `src/pages/fleet/[type].astro:10` — defensive null guard + `/404` redirect (matches `news/[slug].astro`).
-- [ ] `api/_schedule-snapshots.ts:80-87` — reset `supabaseClientPromise` to null on import failure inside `.catch()`.
-- [ ] `src/lib/buildMetadata.js:1` — migrate `node:child_process` to `Bun.$` / `Bun.spawnSync` per CLAUDE.md.
-- [ ] `src/lib/delay-risk.js:172-173` — dead `roleLabel` variable; decide: restore destination-label logic or remove.
-- [ ] `.github/workflows/test.yml:13-15` — drop `actions/setup-node@v4` (redundant with `oven-sh/setup-bun@v2`).
+## Small cleanups
 
-### Audit surface gaps flagged in CEO review
-
-- [ ] Dependency vulnerability audit (`bun audit` or `npm audit` in CI).
-- [ ] Secrets rotation posture (SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, ANTHROPIC_API_KEY, CRON_SECRET).
-- [ ] Vercel log retention + PII exposure check.
-- [ ] Anthropic prompt-injection defense on user-supplied flight data in `delay-explain.ts`.
-- [ ] CORS audit on Anthropic-backed endpoints.
-
-## From the independent review of PR #254 (Sep 2026)
-
-- [ ] [correctness] Stale FAA programs: after a failed `/api/faa` refresh the last programs are shown as current forever. Track last-successful fetch time per source, render a stale/unavailable state, and stop an expired program from implying a confirmed live disruption (`src/app/state/weather.tsx`). Legacy had the same retention.
-- [ ] [correctness] Hub proximity rule: `HUB_PROXIMITY_NM = 93` admits any grounded aircraft within the radius regardless of its route, and no single radius fixes it (SFO–SJC 26.5 NM, IAD–DCA 20.4 NM). Match on the route's hub first; for missing routes use an airport-location assignment or a deliberately tight radius. Test known other-airport flights and missing-route flights separately.
-- [ ] [a11y] Focus return when the opener unmounts (⌘K palette → flight sheet → close lands on `<body>`): fall back to the stable "Find a flight" trigger. Also drop or reword the unreachable `insideClosingContent` clause in `src/lib/focus-return.js`.
-- [ ] [test] Lifecycle coverage for `src/app/state/engagement.tsx` (initialisation order, subscription, dismissal sequencing) using the jsdom + testing-library setup added for the watch provider.
+- [ ] `src/app/state/schedule.tsx:210`: the `aggCache` Map is never capped. Only Refresh deletes
+  a key, so a long session keeps one board per hub, direction and day.
+- [ ] `api/_schedule-snapshots.ts` `getSupabaseAdmin`: a failed `@supabase/supabase-js` import
+  caches a `null` promise for the life of the instance. Reset it in the `.catch()`.
+- [ ] `sql/001_waitlist.sql`: `idx_waitlist_email` duplicates the UNIQUE constraint's index.
+  Drop it in the next migration.
+- [ ] `api/irops.ts:378`: the error branch looks up its hub with `results.indexOf(result)`. Use
+  the loop index.
+- [ ] `src/lib/delay-risk.js:178`: `roleLabel` is `'at'` on both branches. Inline it, or give
+  destinations their own wording.
+- [ ] Waitlist: decide whether to stay on hand-rolled Supabase + Resend or move to a hosted list
+  (Loops, Resend Audiences, ConvertKit).

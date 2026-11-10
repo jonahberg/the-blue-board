@@ -13,21 +13,16 @@
 // and one it then saw on the ground at the destination to landed (src/lib/watch-leg.js).
 // Returns scheduled, estimated, and actual gate/takeoff/landing times
 //
-// Source chain (Jul 3 2026 audit: FlightAware's bot-wall serves a parseable trackpollBootstrap
-// with ZERO flights, which the old code treated as authoritative "No active flight found" —
-// killing the endpoint for every flight):
-//   1. FlightAware scrape (source: 'flightaware'). From Vercel's egress it is bot-walled or
-//      answers HTTP 402/403 (Sep 2026 audit F135), so it gets a short 3s budget before the chain
-//      moves on rather than holding every lookup for 10s.
-//   2. Schedule snapshot layer (source: 'schedule-cache') — the hub boards already hold
+// Source chain:
+//   1. Schedule snapshot layer (source: 'schedule-cache') — the hub boards already hold
 //      sched/est/real times and gates server-side; free, and the only tier that knows a leg
 //      before it departs.
-//   3. FR24 Official API flight-summary — ON by default, turned off by
+//   2. FR24 Official API flight-summary — ON by default, turned off by
 //      SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false and skipped for officialFallback=0 callers. Used
 //      as an OVERLAY on the board's leg (source: 'schedule-cache+fr24': takeoff/landing actuals,
 //      tail, airborne/landed), or alone (source: 'fr24', timesUnavailable) when no board lists
 //      the flight — and then only for a leg that is live or just ended (Sep 2026 audit F0/F1).
-// Only when ALL tiers fail does the endpoint return success:false with a reason.
+// Only when every tier fails does the endpoint return success:false with a reason.
 
 import type { VercelRequest, VercelResponse } from './_types.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
@@ -42,74 +37,7 @@ import { awaitRegSightings, type SightingRecord } from './_reg-sightings.js';
 import { applyLegEvidence, mergeLegRows } from '../src/lib/watch-leg.js';
 import { normalizeFlightNum } from '../src/lib/reg-ledger.js';
 
-// ═══ Registration + date-aware candidate ranking (F001, F005/F013) ═══
-
-// FlightAware's trackpollBootstrap carries the tail number, but the exact field
-// name has drifted across page versions. Try the plausible shapes in priority
-// order and validate against a registration-ish token; return '' when none is
-// present (the client degrades to "tail not yet assigned" rather than a fake
-// lookup). The type string stays in the separate `aircraft` field.
-export function extractFaRegistration(f: any): string {
-  const raw =
-    (typeof f?.aircraft === 'string' ? f.aircraft : '') ||
-    f?.aircraft?.registration || f?.aircraft?.tail ||
-    f?.registration || f?.tailNumber || f?.aircraftTailNumber ||
-    f?.flightPlan?.tailNumber || '';
-  const reg = String(raw || '').replace(/-/g, '').toUpperCase().trim();
-  return /^[A-Z0-9]{2,8}$/.test(reg) ? reg : '';
-}
-
-export type FaPhase = 'inair' | 'landed' | 'scheduled';
-export interface FaCandidate { flight: any; key: string; phase: FaPhase; depSec: number; localDate: string; }
-
-// Local calendar date (YYYY-MM-DD) of a departure epoch, in the origin timezone
-// the FlightAware payload reports. Falls back to UTC when the tz is absent.
-export function faLocalDate(depSec: number, tz: string): string {
-  if (!depSec) return '';
-  const zone = (tz || '').replace(/^:/, '') || 'UTC';
-  try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
-    }).format(new Date(depSec * 1000));
-  } catch {
-    return new Date(depSec * 1000).toISOString().slice(0, 10);
-  }
-}
-
-// Pick the most relevant FlightAware candidate. When a target date is supplied
-// (F013), candidates whose local departure date matches win outright. Within a
-// tier, the phase preference is in-air > current/future scheduled > landed >
-// stale (past-scheduled, never departed) — REVERSING the old "any past LANDED
-// leg beats today's scheduled leg" bug (F005). Scheduled ties pick the SOONEST
-// upcoming leg, not the furthest-future one.
-export function pickBestFaCandidate(
-  candidates: FaCandidate[], targetDate: string, nowSec: number
-): FaCandidate | null {
-  if (!candidates.length) return null;
-  const rank = (c: FaCandidate): number => {
-    if (c.phase === 'inair') return 3;
-    if (c.phase === 'scheduled' && c.depSec >= nowSec - 1800) return 2;
-    if (c.phase === 'landed') return 1;
-    return 0; // stale: scheduled but the departure time is well in the past
-  };
-  const sorted = candidates.slice().sort((a, b) => {
-    if (targetDate) {
-      const ad = a.localDate === targetDate ? 1 : 0;
-      const bd = b.localDate === targetDate ? 1 : 0;
-      if (ad !== bd) return bd - ad;
-    }
-    const ra = rank(a), rb = rank(b);
-    if (ra !== rb) return rb - ra;
-    // Same phase: soonest upcoming for scheduled, most-recent for everything else.
-    if (ra === 2) return a.depSec - b.depSec;
-    return b.depSec - a.depSec;
-  });
-  return sorted[0];
-}
-
 const CACHE_TTL_MS = 60_000; // 1 minute
-// FlightAware is bot-walled from Vercel (F135): don't let a dead tier add 10s to every lookup.
-const FLIGHTAWARE_TIMEOUT_MS = 3_000;
 const cache = new Map<string, { data: any; ts: number }>();
 
 function getCached(key: string): any | null {
@@ -576,16 +504,15 @@ export function mergeFr24IntoSchedule(sched: any, fr24: any): any {
   };
 }
 
-// Resolve a flight through the schedule boards and FR24, and write the response. `reason`
-// records WHY the primary (FlightAware) tier failed, and is only surfaced when every tier fails.
+// Resolve a flight through the schedule boards and FR24, and write the response.
 //
 // Boards first (F0/F1): they are free, they know TONIGHT's leg before it departs, and they carry
 // the gate times every consumer needs. FR24 is then asked only about that leg, and only once it
 // could have started — an hour before its departure — so a not-yet-departed flight never pays for
 // (or is answered with) the previous day's leg.
-async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey: string, reason: string, dateParam = '', allowOfficial = true, origin = '', depSec = 0) {
+async function respondFromChain(res: VercelResponse, flight: string, cacheKey: string, dateParam = '', allowOfficial = true, origin = '', depSec = 0) {
   // allowOfficial=false lets a caller (e.g. api/cron/watch-alerts.ts) skip the paid FR24 official
-  // API tier entirely and resolve only from the free FlightAware scrape + schedule-snapshot cache.
+  // API tier entirely and resolve only from the free schedule-snapshot cache.
   //
   // Waited for (bounded): a cold lambda must not resolve a seen-flying flight as Likely Canceled,
   // nor miss the airborne / on-the-ground evidence a watch alert is built from.
@@ -619,7 +546,7 @@ async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey
   return res.status(404).json({
     success: false,
     error: 'No flight data available',
-    reason: `${reason}; fr24 and schedule-cache fallbacks unavailable`,
+    reason: 'schedule-cache and fr24 tiers unavailable',
   });
 }
 
@@ -661,7 +588,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // The official-tier flag is part of the key (F138): an officialFallback=0 caller (the watch cron)
   // must never be handed an answer the paid tier produced for somebody else.
-  const cacheKey = `fa:${flight}:${dateParam}:${origin}:${pinnedDep || ''}:${allowOfficial ? 1 : 0}`;
+  const cacheKey = `ft:${flight}:${dateParam}:${origin}:${pinnedDep || ''}:${allowOfficial ? 1 : 0}`;
   const cached = getCached(cacheKey);
   if (cached) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
@@ -672,131 +599,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limited' });
   }
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FLIGHTAWARE_TIMEOUT_MS);
-
-    const faFlight = flight.replace('UAL', 'UA');
-    const resp = await fetch(`https://www.flightaware.com/live/flight/${encodeURIComponent(faFlight)}`, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Accept': 'text/html',
-      },
-    });
-    clearTimeout(timeout);
-
-    if (!resp.ok) {
-      return await respondViaFallbacks(res, flight, cacheKey, `flightaware HTTP ${resp.status}`, dateParam, allowOfficial, origin, pinnedDep);
-    }
-
-    // Cap response body size to prevent a misbehaving or malicious FlightAware
-    // response from burning memory/time. The bootstrap blob is typically
-    // <80KB; 500KB is generous without letting a runaway page loop consume
-    // the Lambda.
-    const rawHtml = await resp.text();
-    const html = rawHtml.length > 500_000 ? rawHtml.slice(0, 500_000) : rawHtml;
-
-    // Extract trackpollBootstrap JSON. Bound the {...} capture to avoid
-    // catastrophic regex backtracking on unexpected input shapes.
-    const match = html.match(/trackpollBootstrap\s*=\s*(\{[\s\S]{1,200000}?\});\s*(?:var|<\/script)/);
-    if (!match) {
-      // FlightAware blocked — fall down the chain
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware blocked (no bootstrap)', dateParam, allowOfficial, origin, pinnedDep);
-    }
-
-    let bootstrap: any;
-    try {
-      bootstrap = JSON.parse(match[1]);
-    } catch (e) {
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap unparseable', dateParam, allowOfficial, origin, pinnedDep);
-    }
-
-    // Find the most relevant flight — scan ALL activity log entries, then rank
-    // with date + phase awareness (F005/F013): a requested date wins, then
-    // in-air > current/future scheduled > landed > stale, with scheduled ties
-    // picking the SOONEST upcoming leg (not the furthest-future one).
-    const flights = bootstrap?.flights || {};
-    const candidates: FaCandidate[] = [];
-
-    for (const [key, val] of Object.entries(flights) as [string, any][]) {
-      const actLog = val?.activityLog?.flights || [];
-      for (const f of actLog) {
-        if (origin && String(f.origin?.iata || '').toUpperCase() !== origin) continue;
-        const pinnedSched = f.gateDepartureTimes?.scheduled || f.takeoffTimes?.scheduled || 0;
-        if (pinnedDep && Math.abs(pinnedSched - pinnedDep) > PINNED_LEG_TOLERANCE_SEC) continue;
-        const hasActualDep = !!(f.takeoffTimes?.actual || f.gateDepartureTimes?.actual);
-        const hasLanded = !!f.landingTimes?.actual;
-        const depSec = f.gateDepartureTimes?.scheduled || f.gateDepartureTimes?.estimated || f.gateDepartureTimes?.actual || f.takeoffTimes?.scheduled || 0;
-        const phase: FaPhase = (hasActualDep && !hasLanded) ? 'inair' : hasLanded ? 'landed' : 'scheduled';
-        candidates.push({ flight: f, key, phase, depSec, localDate: faLocalDate(depSec, f.origin?.TZ || '') });
-      }
-    }
-    const bestFlight = pickBestFaCandidate(candidates, dateParam, Math.floor(Date.now() / 1000))?.flight || null;
-
-    if (!bestFlight) {
-      // A bootstrap that parses but contains ZERO flights is FlightAware's bot-wall, not a
-      // definitive "this flight does not exist" — treat it as a source failure and fall through
-      // to FR24 / the schedule snapshot layer instead of 404ing every flight. (Jul 3 2026 audit.)
-      return await respondViaFallbacks(res, flight, cacheKey, 'flightaware bootstrap empty (bot-wall)', dateParam, allowOfficial, origin, pinnedDep);
-    }
-
-    const f = bestFlight;
-    const result = normalizeLegStatus({
-      success: true,
-      flight: flight.replace('UAL', 'UA'),
-      origin: {
-        iata: f.origin?.iata || '',
-        name: f.origin?.friendlyName || '',
-        terminal: f.origin?.terminal || '',
-        gate: f.origin?.gate || '',
-        tz: (f.origin?.TZ || '').replace(/^:/, '') || airportTz(f.origin?.iata),
-      },
-      destination: {
-        iata: f.destination?.iata || '',
-        name: f.destination?.friendlyName || '',
-        terminal: f.destination?.terminal || '',
-        gate: f.destination?.gate || '',
-        tz: (f.destination?.TZ || '').replace(/^:/, '') || airportTz(f.destination?.iata),
-      },
-      departure: {
-        gate: {
-          scheduled: epochToISO(f.gateDepartureTimes?.scheduled),
-          estimated: epochToISO(f.gateDepartureTimes?.estimated),
-          actual: epochToISO(f.gateDepartureTimes?.actual),
-        },
-        takeoff: {
-          scheduled: epochToISO(f.takeoffTimes?.scheduled),
-          estimated: epochToISO(f.takeoffTimes?.estimated),
-          actual: epochToISO(f.takeoffTimes?.actual),
-        },
-      },
-      arrival: {
-        landing: {
-          scheduled: epochToISO(f.landingTimes?.scheduled),
-          estimated: epochToISO(f.landingTimes?.estimated),
-          actual: epochToISO(f.landingTimes?.actual),
-        },
-        gate: {
-          scheduled: epochToISO(f.gateArrivalTimes?.scheduled),
-          estimated: epochToISO(f.gateArrivalTimes?.estimated),
-          actual: epochToISO(f.gateArrivalTimes?.actual),
-        },
-      },
-      aircraft: f.aircraftTypeFriendly || '',
-      registration: extractFaRegistration(f),
-      status: f.flightStatus || '',
-      cancelled: !!f.cancelled,
-      diverted: !!f.diverted,
-      source: 'flightaware',
-      cached: false,
-    });
-
-    setCache(cacheKey, result);
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
-    return res.status(200).json(result);
-  } catch (e) {
-    console.error('FlightAware scrape error:', e);
-    return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error', dateParam, allowOfficial, origin, pinnedDep);
-  }
+  return await respondFromChain(res, flight, cacheKey, dateParam, allowOfficial, origin, pinnedDep);
 }

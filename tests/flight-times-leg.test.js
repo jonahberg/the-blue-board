@@ -73,12 +73,11 @@ function createReq(flight, extra = {}) {
   };
 }
 
-/** FlightAware bot-walls (403, as prod sees) and FR24 answers `fr24Body`. */
+/** FR24 answers `fr24Body`; any other upstream is unexpected. */
 function mockUpstream(fr24Body) {
   const calls = [];
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
     calls.push(String(url));
-    if (String(url).includes('flightaware.com')) return { ok: false, status: 403, text: async () => 'blocked' };
     if (String(url).includes('fr24api.flightradar24.com')) {
       return { ok: true, status: 200, json: async () => fr24Body };
     }

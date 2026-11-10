@@ -1,10 +1,8 @@
-// Data-quality release (Jul 3 2026 audit) — #1 flight-times source chain:
-// FlightAware's bot-wall serves a PARSEABLE trackpollBootstrap with zero flights; that must be
-// treated as a source failure (→ schedule-cache / FR24), never as "No active flight found".
-// The FR24 tier is a paid official-API call: ON by default, and it must respect the
-// isOfficialFr24Enabled() kill switch (SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false turns it off).
-// In prod FlightAware answers Vercel with a bot-wall or HTTP 402/403 (Sep 2026 audit F135); the
-// FlightAware-success test below covers the parser for the day it answers again.
+// flight-times source chain: hub boards (schedule-cache) first, then the FR24 official API as an
+// overlay or, when no board lists the flight, on its own. The FR24 tier is a paid call: ON by
+// default, and it must respect the isOfficialFr24Enabled() kill switch
+// (SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false turns it off). Only when every tier fails does the
+// endpoint answer success:false, with a reason.
 // Leg choice and the board+FR24 merge are in flight-times-leg.test.js.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -42,31 +40,6 @@ function createReq(flight) {
     method: 'GET',
     headers: { origin: 'http://localhost:3000', 'x-real-ip': `10.0.0.${reqCounter}` },
     query: { flight },
-  };
-}
-
-function faHtml(bootstrap) {
-  return `<html><script>var trackpollBootstrap = ${JSON.stringify(bootstrap)};var other = 1;</script></html>`;
-}
-
-const EMPTY_BOOTSTRAP = { flights: {} }; // the bot-wall shape: parses fine, zero flights
-
-function populatedBootstrap(depEpoch) {
-  return {
-    flights: {
-      'UAL111-1751500000-airline-0500': {
-        activityLog: {
-          flights: [{
-            origin: { iata: 'ORD', friendlyName: "Chicago O'Hare Intl", TZ: ':America/Chicago', terminal: '1', gate: 'C18' },
-            destination: { iata: 'SFO', friendlyName: 'San Francisco Intl', TZ: ':America/Los_Angeles', terminal: '3', gate: 'F11' },
-            gateDepartureTimes: { scheduled: depEpoch, estimated: depEpoch + 300, actual: null },
-            takeoffTimes: { scheduled: depEpoch + 900, estimated: depEpoch + 1200, actual: null },
-            landingTimes: {}, gateArrivalTimes: {},
-            aircraftTypeFriendly: 'Boeing 737 MAX 9', flightStatus: 'scheduled', cancelled: false, diverted: false,
-          }],
-        },
-      },
-    },
   };
 }
 
@@ -124,30 +97,11 @@ describe('flight-times fallback chain (#1)', () => {
     delete process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED;
   });
 
-  it('serves FlightAware when its bootstrap has flights (source: flightaware — parser coverage; bot-walled in prod)', async () => {
-    const dep = Math.floor(Date.now() / 1000) + 3600;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) {
-        return { ok: true, status: 200, text: async () => faHtml(populatedBootstrap(dep)) };
-      }
-      throw new Error(`unexpected fetch: ${url}`);
-    });
-    const res = createRes();
-    await handler(createReq('UA9001'), res);
-    expect(res.statusCode).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.source).toBe('flightaware');
-    expect(res.body.origin.iata).toBe('ORD');
-  });
-
-  it('empty bootstrap (bot-wall) → falls through to FR24 instead of "No active flight found"', async () => {
+  it('no board lists the flight → FR24 answers on its own (source: fr24)', async () => {
     process.env.FR24_API_TOKEN = 'test-token';
     const calls = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       calls.push(String(url));
-      if (String(url).includes('flightaware.com')) {
-        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
-      }
       if (String(url).includes('fr24api.flightradar24.com')) {
         return { ok: true, status: 200, json: async () => FR24_SUMMARY };
       }
@@ -168,9 +122,6 @@ describe('flight-times fallback chain (#1)', () => {
     const calls = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       calls.push(String(url));
-      if (String(url).includes('flightaware.com')) {
-        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
-      }
       return { ok: true, status: 200, json: async () => FR24_SUMMARY };
     });
     const res = createRes();
@@ -192,13 +143,11 @@ describe('flight-times fallback chain (#1)', () => {
       key === ordKey ? scheduleSnapshotRow('UA9004', schedDep, estDep, realDep, schedArr) : null
     );
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) {
-        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
-      }
       throw new Error(`paid/upstream fetch must not happen: ${url}`);
     });
     const res = createRes();
     await handler(createReq('UA9004'), res);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.source).toBe('schedule-cache');
@@ -213,21 +162,21 @@ describe('flight-times fallback chain (#1)', () => {
   });
 
   it('all sources failed → success:false with a clear reason (and only then)', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) {
-        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
-      }
-      return { ok: false, status: 500, json: async () => ({}), text: async () => '' };
-    });
+    process.env.FR24_API_TOKEN = 'test-token';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => (
+      { ok: false, status: 500, json: async () => ({}), text: async () => '' }
+    ));
     const res = createRes();
     await handler(createReq('UA9005'), res);
     expect(res.statusCode).toBe(404);
-    expect(res.body.success).toBe(false);
-    expect(res.body.reason).toMatch(/bot-wall/);
-    expect(res.body.reason).toMatch(/schedule-cache/);
+    expect(res.body).toEqual({
+      success: false,
+      error: 'No flight data available',
+      reason: 'schedule-cache and fr24 tiers unavailable',
+    });
   });
 
-  it.each([402, 403])('FlightAware HTTP %i also runs the chain (FR24 disabled → schedule-cache)', async (faStatus) => {
+  it('kill switch on with a board → schedule-cache answers and FR24 is never called', async () => {
     process.env.FR24_API_TOKEN = 'test-token';
     process.env.SCHEDULE_OFFICIAL_FALLBACK_ENABLED = '0';
     const schedDep = 1_751_500_000;
@@ -238,14 +187,11 @@ describe('flight-times fallback chain (#1)', () => {
     const calls = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       calls.push(String(url));
-      if (String(url).includes('flightaware.com')) {
-        return { ok: false, status: faStatus, text: async () => 'blocked' };
-      }
       return { ok: true, status: 200, json: async () => FR24_SUMMARY };
     });
     const res = createRes();
     await handler(createReq('UA9006'), res);
-    expect(calls.some((u) => u.includes('fr24api.flightradar24.com'))).toBe(false);
+    expect(calls).toEqual([]);
     expect(res.statusCode).toBe(200);
     expect(res.body.source).toBe('schedule-cache');
   });
@@ -256,9 +202,6 @@ describe('flight-times fallback chain (#1)', () => {
   it('FR24 tier returns registration (tail) distinct from the aircraft type', async () => {
     process.env.FR24_API_TOKEN = 'test-token';
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) {
-        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
-      }
       if (String(url).includes('fr24api.flightradar24.com')) {
         return { ok: true, status: 200, json: async () => FR24_SUMMARY };
       }
@@ -278,9 +221,6 @@ describe('flight-times fallback chain (#1)', () => {
       key === ordKey ? scheduleSnapshotRow('UA9007', schedDep, null, null, schedDep + 14400) : null
     );
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) {
-        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
-      }
       throw new Error(`paid/upstream fetch must not happen: ${url}`);
     });
     const res = createRes();
@@ -305,9 +245,6 @@ describe('flight-times fallback chain (#1)', () => {
       return null;
     });
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) {
-        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
-      }
       throw new Error(`paid/upstream fetch must not happen: ${url}`);
     });
 
@@ -353,9 +290,6 @@ describe('schedule-cache tier never reports an arrival that has not happened (Oc
       key === arrKey ? { data: { flights, total: flights.length }, refreshedAt: Date.now() - 600_000 } : null,
     );
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) {
-        return { ok: true, status: 200, text: async () => faHtml(EMPTY_BOOTSTRAP) };
-      }
       throw new Error(`paid/upstream fetch must not happen: ${url}`);
     });
   }
