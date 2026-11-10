@@ -237,6 +237,9 @@ describe('delay-explain API', () => {
     expect(call.system).toMatch(/LOW-risk flight with nothing notable .* ONE sentence of about 25 words/);
     expect(call.system).toMatch(/Never state generic truths about how airports, hubs, evenings/);
     expect(call.system).toMatch(/standing baselines.*Do not restate or explain them/);
+    // A hub's cancellation figure counts the provider's unconfirmed "Likely Canceled" flights
+    // (delay-explain-request.js); the model must say so if it cites one (Nov 2026).
+    expect(call.system).toMatch(/if you cite one, say it includes unconfirmed cancellations/);
     // The padding the old contract asked for is gone.
     expect(call.system).not.toMatch(/2-4 sentences/);
     expect(call.system).not.toMatch(/typically means operationally/);
