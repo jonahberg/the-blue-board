@@ -13,21 +13,25 @@
 // and one it then saw on the ground at the destination to landed (src/lib/watch-leg.js).
 // Returns scheduled, estimated, and actual gate/takeoff/landing times
 //
-// Source chain (Jul 3 2026 audit: FlightAware's bot-wall serves a parseable trackpollBootstrap
-// with ZERO flights, which the old code treated as authoritative "No active flight found" —
-// killing the endpoint for every flight):
-//   1. FlightAware scrape (source: 'flightaware'). From Vercel's egress it is bot-walled or
-//      answers HTTP 402/403 (Sep 2026 audit F135), so it gets a short 3s budget before the chain
-//      moves on rather than holding every lookup for 10s.
-//   2. Schedule snapshot layer (source: 'schedule-cache') — the hub boards already hold
+// Source chain:
+//   1. Schedule snapshot layer (source: 'schedule-cache') — the hub boards already hold
 //      sched/est/real times and gates server-side; free, and the only tier that knows a leg
-//      before it departs.
-//   3. FR24 Official API flight-summary — ON by default, turned off by
+//      before it departs. In practice this tier answers every lookup.
+//   2. FR24 Official API flight-summary — ON by default, turned off by
 //      SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false and skipped for officialFallback=0 callers. Used
 //      as an OVERLAY on the board's leg (source: 'schedule-cache+fr24': takeoff/landing actuals,
 //      tail, airborne/landed), or alone (source: 'fr24', timesUnavailable) when no board lists
 //      the flight — and then only for a leg that is live or just ended (Sep 2026 audit F0/F1).
-// Only when ALL tiers fail does the endpoint return success:false with a reason.
+// Only when every tier fails does the endpoint return success:false with a reason.
+//
+// FlightAware HTML scrape (source: 'flightaware') — OFF unless FLIGHTAWARE_SCRAPE_ENABLED=true.
+// It used to run first, but scraping FlightAware's pages is against its Terms of Use, and from
+// Vercel's egress it never returns a flight: it answers with a bot-wall page whose
+// trackpollBootstrap parses but holds zero flights (Jul 3 2026), with HTTP 402/403 (Sep 2026
+// audit F135), or not within its 3s budget (52 aborts logged Oct 16–Nov 8 2026). A Nov 10 2026
+// probe of 24 live United flights found it answered none of them; schedule-cache answered all
+// 24. The code stays for the parser tests and for a licensed source to replace it; when enabled
+// it runs ahead of the chain above exactly as before, and any failure falls through to it.
 
 import type { VercelRequest, VercelResponse } from './_types.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
@@ -110,6 +114,21 @@ export function pickBestFaCandidate(
 const CACHE_TTL_MS = 60_000; // 1 minute
 // FlightAware is bot-walled from Vercel (F135): don't let a dead tier add 10s to every lookup.
 const FLIGHTAWARE_TIMEOUT_MS = 3_000;
+
+/** Whether the FlightAware scrape tier runs when FLIGHTAWARE_SCRAPE_ENABLED is unset or blank.
+ *  Off: the tier is against FlightAware's Terms of Use and answers nothing from Vercel (see the
+ *  header comment). Flip this one value to change the default. */
+export const FLIGHTAWARE_SCRAPE_DEFAULT = false;
+
+/** FLIGHTAWARE_SCRAPE_ENABLED, read per request so an env change needs no code deploy.
+ *  true/1/on/yes → on, false/0/off/no → off; unset, blank (Vercel stores an empty row as '') or
+ *  anything else → FLIGHTAWARE_SCRAPE_DEFAULT. */
+export function isFlightAwareScrapeEnabled(): boolean {
+  const raw = String(process.env.FLIGHTAWARE_SCRAPE_ENABLED ?? '').trim().toLowerCase();
+  if (['1', 'true', 'on', 'yes'].includes(raw)) return true;
+  if (['0', 'false', 'off', 'no'].includes(raw)) return false;
+  return FLIGHTAWARE_SCRAPE_DEFAULT;
+}
 const cache = new Map<string, { data: any; ts: number }>();
 
 function getCached(key: string): any | null {
@@ -577,7 +596,8 @@ export function mergeFr24IntoSchedule(sched: any, fr24: any): any {
 }
 
 // Resolve a flight through the schedule boards and FR24, and write the response. `reason`
-// records WHY the primary (FlightAware) tier failed, and is only surfaced when every tier fails.
+// records why the FlightAware tier did not answer (disabled, blocked, failed), and is only
+// surfaced when every tier fails.
 //
 // Boards first (F0/F1): they are free, they know TONIGHT's leg before it departs, and they carry
 // the gate times every consumer needs. FR24 is then asked only about that leg, and only once it
@@ -585,7 +605,8 @@ export function mergeFr24IntoSchedule(sched: any, fr24: any): any {
 // (or is answered with) the previous day's leg.
 async function respondViaFallbacks(res: VercelResponse, flight: string, cacheKey: string, reason: string, dateParam = '', allowOfficial = true, origin = '', depSec = 0) {
   // allowOfficial=false lets a caller (e.g. api/cron/watch-alerts.ts) skip the paid FR24 official
-  // API tier entirely and resolve only from the free FlightAware scrape + schedule-snapshot cache.
+  // API tier entirely and resolve only from the free schedule-snapshot cache (plus the FlightAware
+  // scrape, when FLIGHTAWARE_SCRAPE_ENABLED turns it on).
   //
   // Waited for (bounded): a cold lambda must not resolve a seen-flying flight as Likely Canceled,
   // nor miss the airborne / on-the-ground evidence a watch alert is built from.
@@ -672,19 +693,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limited' });
   }
 
+  if (!isFlightAwareScrapeEnabled()) {
+    return await respondViaFallbacks(res, flight, cacheKey, 'flightaware scrape disabled', dateParam, allowOfficial, origin, pinnedDep);
+  }
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FLIGHTAWARE_TIMEOUT_MS);
 
     const faFlight = flight.replace('UAL', 'UA');
-    const resp = await fetch(`https://www.flightaware.com/live/flight/${encodeURIComponent(faFlight)}`, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Accept': 'text/html',
-      },
-    });
-    clearTimeout(timeout);
+    let resp: Response;
+    let rawHtml = '';
+    try {
+      resp = await fetch(`https://www.flightaware.com/live/flight/${encodeURIComponent(faFlight)}`, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'Accept': 'text/html',
+        },
+      });
+      // The 3s budget covers the body too: clearing the timer at the headers left the read unbounded.
+      if (resp.ok) rawHtml = await resp.text();
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!resp.ok) {
       return await respondViaFallbacks(res, flight, cacheKey, `flightaware HTTP ${resp.status}`, dateParam, allowOfficial, origin, pinnedDep);
@@ -694,7 +726,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // response from burning memory/time. The bootstrap blob is typically
     // <80KB; 500KB is generous without letting a runaway page loop consume
     // the Lambda.
-    const rawHtml = await resp.text();
     const html = rawHtml.length > 500_000 ? rawHtml.slice(0, 500_000) : rawHtml;
 
     // Extract trackpollBootstrap JSON. Bound the {...} capture to avoid
@@ -795,8 +826,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCache(cacheKey, result);
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json(result);
-  } catch (e) {
-    console.error('FlightAware scrape error:', e);
+  } catch (e: any) {
+    // warn, not error: the chain below still answers, and an aborted scrape is this tier's normal
+    // failure from Vercel. It was 52 of the error feed's entries in Oct–Nov 2026.
+    console.warn('FlightAware scrape failed, using fallbacks:', e?.name || e?.message || e);
     return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error', dateParam, allowOfficial, origin, pinnedDep);
   }
 }
