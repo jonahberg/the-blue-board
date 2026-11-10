@@ -125,6 +125,17 @@ describe('hubBoardTotals', () => {
     expect(totals.otp).toBe(67);
   });
 
+  it('counts flights that left without a recorded time as presumed, never as recorded departures', () => {
+    const board = [
+      makeRow({ ident: 'UA1', sched: cst('12:00'), real: cst('12:02'), text: 'departed', generic: 'departed' }),
+      // 3 h past, still "expected" in an old snapshot: the classifier presumes it departed.
+      makeRow({ ident: 'UA2', sched: cst('12:00') }),
+      makeRow({ ident: 'UA3', sched: cst('13:30') }),
+      makeRow({ ident: 'UA4', sched: cst('16:00') }),
+    ];
+    expect(hubBoardTotals(board, NOW_SEC)).toMatchObject({ departed: 1, presumed: 2, upcoming: 1, otp: 100 });
+  });
+
   it('has no on-time share before the first departure', () => {
     const board = [makeRow({ ident: 'UA1', sched: cst('16:00') })];
     expect(hubBoardTotals(board, NOW_SEC)).toMatchObject({ departed: 0, otp: null, scheduled: 1 });
@@ -189,6 +200,28 @@ describe('buildHubBoardPayload', () => {
     expect(body.nextDay).toEqual({ dayStart: ORD_TOMORROW_START, generatedAt: cst('20:00') });
     // The day's truth is still today's board alone.
     expect(body.totals.scheduled).toBe(3);
+  });
+
+  it('never repeats tonight’s flights from rows tomorrow’s board carried over from today', () => {
+    const now = cst('22:30');
+    const tomorrow = tomorrowBoard();
+    // Carried over: tonight's UA902 (Nov 10, 23:40) also sits on Nov 11's board, plus a stray row.
+    tomorrow.flights.unshift(
+      makeRow({ ident: 'UA902', sched: cst('23:40'), dest: 'ANC' }),
+      makeRow({ ident: 'UA950', sched: cst('23:55'), dest: 'GUM' }),
+    );
+    const body = buildHubBoardPayload({
+      ...base,
+      nowSec: now,
+      today: { data: lateEveningBoard(), refreshedAt: now * 1000, dayStart: ORD_DAY_START },
+      tomorrow: { data: tomorrow, refreshedAt: now * 1000, dayStart: ORD_TOMORROW_START },
+    });
+    const ids = idents(body.flights);
+    expect(ids.filter((id) => id === 'UA902')).toHaveLength(1);
+    expect(ids).not.toContain('UA950');
+    for (const f of body.flights.filter((r) => r.nextDay)) {
+      expect(f.time.scheduled.departure).toBeGreaterThanOrEqual(ORD_TOMORROW_START);
+    }
   });
 
   it('is an honest empty state with no snapshot, or a snapshot with no rows', () => {

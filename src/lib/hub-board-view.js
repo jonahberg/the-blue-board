@@ -84,8 +84,13 @@ export function hubBoardStamp(payload, nowSec) {
  * soft CanceledUncertain state the live feed has not seen fly, labelled as unconfirmed. Before the
  * first departure there is no on-time share, and it is not printed as 0%.
  *
+ * `departed` is the dashboard's "operated": a RECORDED departure time. A snapshot is often hours
+ * old, so many flights that have left since carry no time yet; the classifier calls those
+ * "presumed departed" (the scheduled time passed an hour ago without a live update), and the
+ * dashboard prints them as their own count. So does this: `presumed` rides beside `departed`.
+ *
  * @param {any} payload  the /api/hub-board body.
- * @returns {{scheduled:number, departed:number, otp:number|null, canceled:number,
+ * @returns {{scheduled:number, departed:number, presumed:number, otp:number|null, canceled:number,
  *   likelyCanceled:number, partialPct:number|null}|null}
  */
 export function hubBoardTruth(payload) {
@@ -99,6 +104,7 @@ export function hubBoardTruth(payload) {
   return {
     scheduled: Number(t.scheduled),
     departed,
+    presumed: Number(t.presumed) || 0,
     otp,
     canceled: Number(t.canceled) || 0,
     likelyCanceled: Number(t.likelyCanceled) || 0,

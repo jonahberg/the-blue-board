@@ -175,6 +175,17 @@ describe('GET /api/hub-board — reads only the stored snapshot', () => {
     expect(failed.headers['Cache-Control']).toBe(EMPTY_CACHE_CONTROL);
   });
 
+  it('answers the empty state with no Supabase configured at all, without reading anything', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await call(makeReq({ hub: 'IAH' }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ status: 'empty', reason: 'no-snapshot', flights: [] });
+    expect(res.headers['Cache-Control']).toBe(EMPTY_CACHE_CONTROL);
+    expect(snapshotReads()).toEqual([]);
+  });
+
   it('applies the read-only sightings overlay: a Likely Canceled the feed saw fly is not counted', async () => {
     supa.rows.set(`agg:ORD:departures:${ORD_DAY_START}`, snapshotRow(ordBoard()));
     const airborne = (cst('12:00') + 20 * 60) * 1000;

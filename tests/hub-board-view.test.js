@@ -154,11 +154,18 @@ describe('hubBoardTruth', () => {
     expect(hubBoardTruth(payloadFor(ordBoard()))).toEqual({
       scheduled: 16,
       departed: 3,
+      presumed: 0,
       otp: 67,
       canceled: 1,
       likelyCanceled: 1,
       partialPct: null,
     });
+  });
+
+  it('carries presumed departures beside recorded ones', () => {
+    const board = ordBoard();
+    board.flights.push(makeRow({ ident: 'UA60', sched: cst('12:30') }), makeRow({ ident: 'UA61', sched: cst('13:15') }));
+    expect(hubBoardTruth(payloadFor(board))).toMatchObject({ departed: 3, presumed: 2 });
   });
 
   it('prints no on-time share before the first departure, and flags a partial board', () => {

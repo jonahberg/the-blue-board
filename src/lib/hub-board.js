@@ -237,8 +237,13 @@ export function buildHubBoardPayload({ hub, timeZone, nowSec, today, tomorrow = 
   const tomorrowFlights = Array.isArray(tomorrow?.data?.flights) ? tomorrow.data.flights : [];
   if (upcoming.length < HUB_BOARD_ROWS && tomorrowFlights.length) {
     const need = HUB_BOARD_ROWS - upcoming.length;
+    // A board can carry rows from the previous hub-local date (that is why the Schedule tab has a
+    // date chip): tomorrow's board may hold tonight's late flights, which are already on the list.
+    const tomorrowStart = Number(tomorrow.dayStart) || 0;
+    const onList = new Set(upcoming.map((fl) => `${fl.identification.number.default}@${schedDep(fl)}`));
     const early = sortBySchedDeparture(tomorrowFlights)
-      .filter((fl) => schedDep(fl) > 0)
+      .filter((fl) => schedDep(fl) > 0 && schedDep(fl) >= tomorrowStart)
+      .filter((fl) => !onList.has(`${fl?.identification?.number?.default || ''}@${schedDep(fl)}`))
       .slice(0, need)
       .map((fl) => ({ ...trimBoardRow(fl), nextDay: true }));
     if (early.length) {

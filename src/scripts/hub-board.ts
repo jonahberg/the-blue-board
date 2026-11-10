@@ -87,7 +87,9 @@ if (root) {
     }
     const parts: Node[][] = [
       [el('span', 'text-foreground', 'Today'), document.createTextNode(': '), figure(t.scheduled), document.createTextNode(' scheduled')],
-      [figure(t.departed), document.createTextNode(' departed')],
+      t.presumed > 0
+        ? [figure(t.departed), document.createTextNode(' departed (+'), figure(t.presumed), document.createTextNode(' presumed)')]
+        : [figure(t.departed), document.createTextNode(' departed')],
       t.otp === null
         ? [document.createTextNode('no on-time share yet')]
         : [figure(`${t.otp}%`), document.createTextNode(' on time')],
@@ -104,7 +106,7 @@ if (root) {
       truth.append(group);
     });
     truth.title =
-      'Departed counts flights with a recorded departure time. On time = within 30 minutes of schedule. "Likely canceled" is the provider\'s unconfirmed state; most such flights operate.';
+      'Departed: flights with a recorded departure time. Presumed: the scheduled time passed over an hour ago without a live update. On time = within 30 minutes of schedule, of departures with a recorded time. "Likely canceled" is the provider\'s unconfirmed state; most such flights operate.';
     truth.hidden = false;
   };
 
