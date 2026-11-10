@@ -118,6 +118,8 @@ let logSpy;
 let warnSpy;
 let errorSpy;
 beforeEach(() => {
+  // The prediction step (api/_delay-predictions.ts) has its own suite; here only the archive runs.
+  process.env.DELAY_PREDICTIONS_ENABLED = '0';
   __resetFlightHistoryForTests();
   mocks.getSupabaseAdmin.mockReset();
   mocks.awaitRegSightings.mockReset();
@@ -128,6 +130,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete process.env.FLIGHT_HISTORY_ENABLED;
+  delete process.env.DELAY_PREDICTIONS_ENABLED;
   vi.restoreAllMocks();
 });
 

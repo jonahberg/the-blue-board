@@ -26,6 +26,7 @@ import { getSupabaseAdmin } from './_schedule-snapshots.js';
 import { awaitRegSightings, type SightingRecord } from './_reg-sightings.js';
 import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
 import { boardAsOfMs } from '../src/lib/hub-health.js';
+import { logDelayPredictions, type PredictionSummary } from './_delay-predictions.js';
 import {
   FLIGHT_HISTORY_COLUMNS,
   archiveRowsFromBoard,
@@ -82,6 +83,8 @@ export type FlightHistorySummary = {
   firstError?: string;
   /** How long `finish()` waited for in-flight work. */
   waitedMs: number;
+  /** The delay-prediction step (api/_delay-predictions.ts), when it ran. */
+  predictions?: PredictionSummary;
 };
 
 export type FlightHistoryTask = { hub: string; dir: 'departures' | 'arrivals' };
@@ -267,6 +270,19 @@ export function startFlightHistoryRun(opts: { deadlineMs: number; settleMs?: num
     async finish(): Promise<FlightHistorySummary> {
       try {
         finished = true;
+        // Last in the chain, after this run's boards are merged: log the delay predictions that are
+        // due (api/_delay-predictions.ts). Same deadline, statement cap, abort and settle wait.
+        queue = queue
+          .then(async () => {
+            if (stopped || outOfBudget()) return;
+            supabasePromise ??= getSupabaseAdmin().catch(() => null);
+            const supabase = await supabasePromise;
+            if (!supabase || typeof supabase.from !== 'function') return;
+            const predictions = await logDelayPredictions({ supabase, nowMs: now(), withSignal, signal: controller.signal });
+            summary.predictions = predictions;
+            summary.statements += predictions.statements;
+          })
+          .catch(() => { /* logDelayPredictions never throws; belt and braces */ });
         const startedWait = now();
         const wait = Math.max(0, Math.min(settleMs, opts.deadlineMs - startedWait));
         let timer: ReturnType<typeof setTimeout> | undefined;
@@ -286,6 +302,11 @@ export function startFlightHistoryRun(opts: { deadlineMs: number; settleMs?: num
           `updated=${summary.updated} unchanged=${summary.unchanged} duplicates=${summary.duplicates} ` +
           `skipped=${JSON.stringify(summary.skipped)} statements=${summary.statements} errors=${summary.errors} ` +
           `boardsSkipped=${summary.boardsSkipped} waited=${summary.waitedMs}ms` +
+          (summary.predictions
+            ? ` predictions=${summary.predictions.status}:${summary.predictions.logged}/${summary.predictions.due}` +
+              (Object.keys(summary.predictions.missing).length ? ` missing=${JSON.stringify(summary.predictions.missing)}` : '') +
+              (summary.predictions.error ? ` predictionError=${JSON.stringify(summary.predictions.error)}` : '')
+            : '') +
           (summary.firstError ? ` firstError=${JSON.stringify(summary.firstError)}` : '');
         if (summary.status === 'unconfigured') {
           if (!warnedUnconfigured) { warnedUnconfigured = true; console.warn(line); }

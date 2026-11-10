@@ -286,10 +286,103 @@ select t.departed, t.on_time, t.canceled, round(t.avg_delay_min, 1) as avg_delay
 from days t, p where t.service_date = p.d;
 ```
 
-### 4. Risk-model scorecard
+### 4. Risk-model scorecard — **predictions PK range + flight_history BRIN**
 
-Needs a prediction logged server-side before departure, joined to this table on the same key —
-see "Prediction logging" below.
+Needs a prediction logged server-side before departure (`flight_delay_predictions`, see
+"Prediction logging"), joined on the leg key. Put the day bound on **both** sides: Postgres does
+not carry a range predicate across a join, and without it `flight_history` is scanned whole.
+
+```sql
+-- Last 30 days, one model version: how often each band's flights really left 15+ / 30+ min late.
+select p.band,
+       count(*)                                                                    as predicted,
+       count(*) filter (where h.dep_basis in ('gate','actual','runway') and h.sched_dep is not null) as graded,
+       round(avg(((h.dep_at - h.sched_dep) > 15)::int)
+         filter (where h.dep_basis in ('gate','actual','runway') and h.sched_dep is not null), 3) as late15_rate,
+       round(avg(((h.dep_at - h.sched_dep) > 30)::int)
+         filter (where h.dep_basis in ('gate','actual','runway') and h.sched_dep is not null), 3) as late30_rate,
+       count(*) filter (where h.outcome in ('canceled','canceled_unconfirmed'))     as canceled,
+       count(*) filter (where p.same_inputs_as_board)                              as same_inputs_as_board
+from public.flight_delay_predictions p
+left join public.flight_history h
+  on (h.flight_no, h.service_date, h.origin, h.dest) = (p.flight_no, p.service_date, p.origin, p.dest)
+ and h.service_date >= current_date - 30
+where p.service_date >= current_date - 30 and p.model_version = 'b5fd1bd.s1'
+group by p.band
+order by min(p.score);
+```
+
+Measured (314k predictions, 575k legs): hash join, `flight_history` read through the BRIN
+(795 of 9,245 pages), 28 ms.
+
+## Prediction logging (`flight_delay_predictions`)
+
+**Built**, as its own commit: `sql/021_flight_history_predictions.sql`,
+`src/lib/delay-prediction.js` (pure), `api/_delay-predictions.ts` (writer),
+`tests/delay-prediction.test.js`, `tests/delay-predictions-writer.test.js`.
+
+**When.** Last step of each warm-cron run, after its boards are merged: every leg from a hub,
+`outcome = 'unknown'`, no real departure, scheduled 90–155 min from now. The first pass that sees a
+leg logs it (`on conflict do nothing`); with the cron every 30 min that is 125–155 min before
+departure, and 95–125 only when a run was missed. `lead_min` is stored, so the scorecard can hold
+the lead fixed.
+
+**What it computes.** Exactly the board's call (`useBoardModel.ts` `computeRisk`): the archive row
+is turned back into a board row (`boardRowFromHistory`), gated by `classifySchedStatus` (the board
+only predicts `scheduled` / `estimated` / `delayed` rows), timed by `riskTimesForRow`, and scored by
+`computeDelayRiskModel` with the board's input object. A test builds the original board row and the
+board's own inputs and checks the logged score, band and top factors are identical.
+
+**Inputs, and where each comes from** — nothing metered, nothing new upstream:
+
+| model input | board (browser) | server |
+|---|---|---|
+| the row | `/api/schedule` board, ≤ 1 h CDN copy, re-overlaid with the browser's live feed | the leg's `flight_history` row = the cron's last fetch of that board (each today departures board is warmed ~every 3 h, so median age ~90 min) — `row_age_min` |
+| FAA (origin, dest) | `/api/faa` → `buildFaaIndex` | same request |
+| weather (origin, dest) | `/api/metar` for the hubs **and** the non-hub airports on loaded boards | `/api/metar` for the nine hubs — the exact URL `refresh-metar` warms every 5 min. **A non-hub destination's METAR is not cached anywhere the server can read** → `dest_weather` missing |
+| origin OTP | `/api/irops` `serverOtpFromMetrics`, unless a loaded board is ≥ 30 min fresher (`arbitrateHubHealth`) | `/api/irops` only |
+| IROPS rates | `/api/irops` `iropsHubRates` | same |
+| NAS plan | `/api/nas` `planned` | same |
+| hub disruption (classifier) | board `meta.hubDisruptionMinutes` (FAA cache) | the cron's FAA disruption cache, `peekHubDisruptionMinutes` |
+| inbound aircraft | not passed by the board | not passed |
+
+The four GETs run only when something is due, in parallel, 5 s cap, with the dashboard's own
+`Accept: application/json` so they share its CDN objects. `/api/irops` reads `/api/schedule` with
+every paid fallback off, so even a CDN miss spends no provider units.
+
+**What each record says about itself.** `inputs_missing` (comma list: `faa`, `nas`, `irops`,
+`origin_weather`, `dest_weather`; null = none), `row_age_min`, and `same_inputs_as_board` = nothing
+missing and the row no older than the board's 1 h CDN copy. Structural differences that hold for
+every record (the browser's client-board OTP override, its merge of earlier METAR cycles, the score
+moving continuously on the board while the log is one snapshot) are fixed by `model_version`
+(`b5fd1bd.s1`: the last `delay-risk.js` change, then server input set 1). A test pins the model's
+output on fixed scenarios, so changing `delay-risk.js` fails CI until the version is bumped.
+
+**Honest state.** Expect `same_inputs_as_board` on only a small share of rows: ~80% of hub
+departures go to non-hub airports (`dest_weather` missing), and about two thirds of rows are older
+than 60 min. For those, the score is the one a board without that METAR / with that older row would
+show — usually equal or lower (destination weather adds 0–8 points). The scorecard should stratify on
+both fields rather than mix. Closing the gaps would take: (1) a second METAR warm for the top ~35
+spoke destinations in `refresh-metar` (free AWC calls, new upstream traffic); (2) a fresher row —
+read the CDN copy of each due hub's departures board with the no-spend URL `/api/irops` already uses
+(~0.5–1 MB per hub per run of transfer), or log predictions from the board in hand when the cron
+warms that hub.
+
+**Schema** (`sql/021_flight_history_predictions.sql`): `service_date, predicted_at (epoch min),
+lead_min, row_age_min, score, same_inputs_as_board, flight_no, origin, dest, band, factors (top 3
+component ids, comma-separated), inputs_missing, model_version`; primary key
+`(service_date, flight_no, origin, dest)` — day first, because rows arrive in day order (a compact
+index) and every reader asks for a range of days. RLS on, no grants. Kill switch
+`DELAY_PREDICTIONS_ENABLED=0`; it also stops with `FLIGHT_HISTORY_ENABLED=0`.
+
+**Size.** Measured ~123 B heap + ~52 B key per row ≈ 175 B; ~2,600–2,900 hub departures a day ≈
+1.0 M rows ≈ **~175 MB/year**. Levers: fold the eight columns into `flight_history` (no second tuple
+header or key: ~70 B on ~55% of archive rows, ≈ 65 MB/year, at the cost of writing archive rows from
+two places); drop `factors` (−35 MB); or keep raw predictions for 13 months and the graded
+per-band/per-factor counts forever.
+
+**Undo:** `drop table if exists public.flight_delay_predictions;` and drop the commit — nothing in
+the archive depends on it.
 
 ## Writer (`api/_flight-history.ts`) and the hook
 
@@ -355,12 +448,14 @@ script does not repeat.
 
 ## Rollout and undo
 
-1. Apply `sql/021_flight_history.sql`.
+1. Apply `sql/021_flight_history.sql` (and `sql/021_flight_history_predictions.sql` if the
+   prediction commit is kept).
 2. Run `sql/021_flight_history_backfill.sql` in the SQL editor (minutes). Its result row must say
    `boards_left = 0` (else run it again); then `drop schema if exists fh_backfill cascade;`.
-3. Deploy. The next warm-cron run logs `flight-history: ok …`.
+3. Deploy. The next warm-cron run logs `flight-history: ok … predictions=ok:N/M`.
 
-Undo: `drop table if exists public.flight_history;` (and `drop schema if exists fh_backfill cascade;` if
+Undo: `drop table if exists public.flight_delay_predictions;` then
+`drop table if exists public.flight_history;` (and `drop schema if exists fh_backfill cascade;` if
 the backfill helpers are still there). To stop writing without dropping: set
 `FLIGHT_HISTORY_ENABLED=0` and redeploy.
 

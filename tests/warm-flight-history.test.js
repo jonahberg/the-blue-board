@@ -23,6 +23,10 @@ function client() {
           const b = {
             eq(c, v) { filters.push((r) => r[c] === v); return b; },
             in(c, vs) { filters.push((r) => vs.includes(r[c])); return b; },
+            gte(c, v) { filters.push((r) => r[c] >= v); return b; },
+            lte(c, v) { filters.push((r) => r[c] <= v); return b; },
+            lt(c, v) { filters.push((r) => r[c] < v); return b; },
+            limit() { return b; },
             abortSignal() { return b; },
             then(resolve) { resolve({ data: [...db.rows.values()].filter((r) => filters.every((f) => f(r))), error: null }); },
           };
@@ -133,6 +137,9 @@ describe('warm-schedules → flight history', () => {
     for (const [u] of fetchSpy.mock.calls) expect(String(u)).not.toMatch(/flight[-_]history/);
     // The archive summary stays out of the per-board results the alerting reads.
     expect(Object.keys(res.body.results)).not.toContain('flightHistory');
+    // Nothing departs 90–155 min from now in these boards, so the prediction step asked no endpoint.
+    expect(res.body.flightHistory.predictions).toMatchObject({ status: 'ok', due: 0 });
+    for (const [u] of fetchSpy.mock.calls) expect(String(u)).not.toMatch(/\/api\/(faa|metar|nas|irops)/);
   });
 
   it('an archive that throws changes nothing the run reports', async () => {
