@@ -472,14 +472,15 @@ let lastJsonFailTime = 0;
 
 const FAA_UPSTREAM_TIMEOUT_MS = 8000;
 
-// The last answer this instance got from FAA, served when both FAA sources fail. On Nov 7 2026
+// The last answer this process got from FAA, served when both FAA sources fail. On Nov 7 2026
 // (05:59–06:04 UTC) nasstatus.faa.gov answered HTTP 403 on both endpoints for about four minutes
-// and this handler returned the site's only 502s that week; the instance's previous good answer
-// was 23 minutes old. A recent real answer, marked stale, beats an error the dashboard can only
-// meet by holding what it already has. Thirty minutes covers that gap: FAA programs run for hours,
-// and past this age the honest answer is the error. The body stays the bare array the client reads
-// (an array has nowhere to carry a flag), so staleness travels in the X-BB-FAA-Stale header, the
-// age in seconds, as X-BB-Feed-Stale does for /api/fr24-feed.
+// and this handler returned the site's only 502s that week; the last successful /api/faa answer
+// in the logs was 23 minutes earlier. A recent real answer, marked stale, beats an error the
+// dashboard can only meet by holding what it already has. It lives in memory, so it helps only a
+// warm process that has answered before. Thirty minutes covers a gap like Nov 7's: FAA programs
+// run for hours, and past this age the honest answer is the error. The body stays the bare array
+// the client reads (an array has nowhere to carry a flag), so staleness travels in the
+// X-BB-FAA-Stale header, the age in seconds, as X-BB-Feed-Stale does for /api/fr24-feed.
 const FAA_LAST_GOOD_MAX_AGE_MS = 30 * 60 * 1000;
 let lastGoodFaa: { airports: FAAAirport[]; at: number } | null = null;
 

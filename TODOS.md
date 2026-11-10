@@ -29,29 +29,38 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
   explanations go through the AI Gateway with `AI_GATEWAY_API_KEY` (`api/delay-explain.ts`).
   `SCHEDULE_SOURCE_PRIORITY` (Production) has been ignored since v1.9.0 (`api/schedule.ts`).
   Remove both.
-- [ ] [ops] **DEP0169 log noise.** About 4,700 `url.parse()` deprecation warnings a week, one per
-  cold start on every route, including routes with no dependencies (`/api/metar`). They come from
-  the platform's Node launcher, not from app code. `NODE_OPTIONS=--disable-warning=DEP0169` would
-  silence them, and would also hide any future first-party `url.parse` call.
+- [ ] [ops] **DEP0169 log noise.** About 4,700 `url.parse()` deprecation warnings a week, at most
+  one per process. They appear only on the routes whose handlers read `req.query`, including
+  `/api/metar`, which loads no packages; routes that never read it (`/api/irops`, the crons) log
+  none. App code never calls `url.parse`, so the likely caller is the platform's `req.query`
+  helper. `NODE_OPTIONS=--trace-deprecation` on a Preview deploy would confirm it.
+  `NODE_OPTIONS=--disable-warning=DEP0169` would silence the warnings, and would also hide any
+  future first-party `url.parse` call.
 
 ## Correctness
 
 - [ ] **Stale FAA programs on the dashboard.** After a failed `/api/faa` refresh,
   `src/app/state/weather.tsx` keeps showing the last programs as current, indefinitely. Since
   Nov 2026 the endpoint answers a double upstream failure with its last good answer (up to
-  30 minutes old) and an `X-BB-FAA-Stale: <age in seconds>` header. The client discards headers
-  (`fetchFaa` in `src/app/data/api.ts`). It should read the header, track the time of the last
-  good answer, and show programs past a limit as stale or unavailable, so an expired ground stop
-  never reads as a live one.
-- [ ] **`/api/schedule` background refresh can outlive the function.** `triggerBackgroundRefresh`
-  gives `fetchAllPages` 55 seconds from the moment it is triggered, not from the start of the
-  request, and then awaits `saveScheduleSnapshot` with no bound. Before the trigger, the handler
-  has already awaited `hydrateQuotaBlock()` and sometimes `getPersistentFallback()`. None of the
-  Supabase calls on this path has a timeout (`api/_cost-state.ts`, `api/_schedule-snapshots.ts`,
-  `api/_reg-sightings.ts`). On Nov 7 2026 two CDN revalidations answered 200, then ran until the
-  platform killed them at 60 seconds, so the background work they started did not finish. Fix:
-  derive the refresh deadline from the request's own deadline, leaving room for the snapshot
-  write, and put timeouts on the Supabase reads and writes.
+  30 minutes old) and an `X-BB-FAA-Stale: <age in seconds>` header. Both clients ignore the
+  header (`fetchFaa` in `src/app/data/api.ts`, and `src/scripts/newark-live.ts`). They should
+  read it, track the time of the last good answer, and show programs past a limit as stale or
+  unavailable, so an expired ground stop never reads as a live one.
+- [ ] **`/api/schedule` can run past its 60-second limit.** Two paths can:
+  - On a request, `fetchAllPages` runs to a deadline 57 seconds after the start. The handler then
+    awaits `saveScheduleSnapshot`, and for a partial board a second `getPersistentFallback`.
+    Neither has a bound.
+  - In the background, `triggerBackgroundRefresh` gives `fetchAllPages` 55 seconds from the
+    trigger rather than from the start of the request, then awaits `saveScheduleSnapshot`. The
+    handler has already awaited `hydrateQuotaBlock()` and sometimes `getPersistentFallback()`
+    before the trigger.
+
+  None of the Supabase calls involved has a timeout (`api/_cost-state.ts`,
+  `api/_schedule-snapshots.ts`, `api/_reg-sightings.ts`). Two invocations timed out at 60 seconds
+  on Nov 7 2026 (12:17:55 UTC). Both were logged with status 200 and cache `STALE`, and nothing
+  else was logged, so the logs do not show which path it was. Fix: derive every deadline from
+  the request's start, leave room for the snapshot write, and put timeouts on the Supabase reads
+  and writes.
 - [ ] **Hub proximity rule.** `HUB_PROXIMITY_NM = 93` (`src/lib/live-filters.js`) counts any
   grounded aircraft within the radius as at the hub, whatever its route. No single radius works
   (SFO–SJC is 26.5 NM, IAD–DCA 20.4 NM). Match on the route's hub first. For missing routes, use

@@ -232,7 +232,7 @@ asset prefix.
 │   │   └── trackers/             # tracker map, table, search, changelog, detail layout
 │   ├── layouts/                  # HubLayout, FleetTypeLayout, NewsLayout
 │   ├── lib/                      # all testable logic + colour encodings
-│   │   ├── delay-risk.js         #   8-signal delay risk scoring
+│   │   ├── delay-risk.js         #   rule-based delay risk scoring
 │   │   ├── metar.js              #   METAR parsing + weather classification
 │   │   ├── site.js               #   canonical origin
 │   │   └── buildMetadata.js      #   SEO metadata (lastmod, sitemap)
