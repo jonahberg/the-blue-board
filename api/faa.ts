@@ -228,13 +228,19 @@ const xmlParser = new XMLParser({
   trimValues: true,
 });
 
-function parseXmlFallback(xml: string): FAAAirport[] {
+/** null when the body is not an FAA status document (a parse error, or a 200 that is really an
+ *  HTML block page): that is a failed fetch, not "no delays anywhere". */
+function parseXmlFallback(xml: string): FAAAirport[] | null {
   let parsed: any;
   try {
     parsed = xmlParser.parse(xml);
   } catch (parseErr: any) {
-    console.error('FAA XML parse error:', parseErr.message);
-    return [];
+    console.warn('FAA XML parse error:', parseErr.message);
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object' || !('AIRPORT_STATUS_INFORMATION' in parsed || 'Delay_type' in parsed)) {
+    console.warn('FAA XML fallback returned a document with no AIRPORT_STATUS_INFORMATION root');
+    return null;
   }
 
   // Collect all delays by airport, then group into FAAAirport objects
@@ -464,14 +470,41 @@ export async function getHubDisruptionMinutes(hub: string): Promise<number> {
 let jsonFailCount = 0;
 let lastJsonFailTime = 0;
 
+const FAA_UPSTREAM_TIMEOUT_MS = 8000;
+
+// The last answer this instance got from FAA, served when both FAA sources fail. On Nov 7 2026
+// (05:59–06:04 UTC) nasstatus.faa.gov answered HTTP 403 on both endpoints for about four minutes
+// and this handler returned the site's only 502s that week; the instance's previous good answer
+// was 23 minutes old. A recent real answer, marked stale, beats an error the dashboard can only
+// meet by holding what it already has. Thirty minutes covers that gap: FAA programs run for hours,
+// and past this age the honest answer is the error. The body stays the bare array the client reads
+// (an array has nowhere to carry a flag), so staleness travels in the X-BB-FAA-Stale header, the
+// age in seconds, as X-BB-Feed-Stale does for /api/fr24-feed.
+const FAA_LAST_GOOD_MAX_AGE_MS = 30 * 60 * 1000;
+let lastGoodFaa: { airports: FAAAirport[]; at: number } | null = null;
+
 /**
- * Test helper: clear the JSON-failure backoff. Without it, a test that makes the JSON source
- * fail leaves the next test skipping JSON for XML it never mocked — the suite passed only in
- * file order. Production never calls this.
+ * Test helper: clear the JSON-failure backoff and the last good answer. Without it, a test that
+ * makes the JSON source fail leaves the next test skipping JSON for XML it never mocked — the suite
+ * passed only in file order. Production never calls this.
  */
 export function __resetFaaHandlerForTests(): void {
   jsonFailCount = 0;
   lastJsonFailTime = 0;
+  lastGoodFaa = null;
+}
+
+/** GET one nasstatus endpoint. The timeout covers the body read as well as the headers. */
+async function getFaaUpstream<T>(url: string, read: (r: Response) => Promise<T>): Promise<{ ok: boolean; status: number; body?: T }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FAA_UPSTREAM_TIMEOUT_MS);
+  try {
+    const upstream = await fetch(url, { signal: controller.signal });
+    if (!upstream.ok) return { ok: false, status: upstream.status };
+    return { ok: true, status: upstream.status, body: await read(upstream) };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -488,6 +521,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: 'Rate limited — try again shortly' });
   }
 
+  let airports: FAAAirport[] | null = null;
+  // Set when neither source produced a usable answer. `untrusted` is a 200 that cannot be believed
+  // (an empty body, or something that is not an FAA document); with no last good answer to serve
+  // instead it is still answered as `[]`, as it always was. Anything else is an error.
+  let failure: { status: 502 | 504; detail: string; untrusted?: boolean } | null = null;
+
   try {
     // Try JSON primary with exponential backoff
     const now = Date.now();
@@ -496,19 +535,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : 0;
     const skipJson = jsonFailCount > 0 && (now - lastJsonFailTime) < backoffMs;
 
-    let airports: FAAAirport[] | null = null;
-
     if (!skipJson) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
-        const upstream = await fetch('https://nasstatus.faa.gov/api/airport-events', {
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-
+        const upstream = await getFaaUpstream('https://nasstatus.faa.gov/api/airport-events', (r) => r.json());
         if (upstream.ok) {
-          const json = await upstream.json();
+          const json = upstream.body;
           if (validateJsonResponse(json)) {
             airports = parseJsonResponse(json);
             jsonFailCount = 0; // Reset on success
@@ -532,30 +563,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // XML fallback
     if (!airports) {
       console.warn(`FAA using XML fallback (JSON fail count: ${jsonFailCount})`);
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-      const upstream = await fetch('https://nasstatus.faa.gov/api/airport-status-information', {
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-
-      if (!upstream.ok) return res.status(502).json({ error: 'Upstream service unavailable' });
-      const xml = await upstream.text();
-      if (!xml || !xml.trim()) {
-        res.setHeader('Cache-Control', 's-maxage=60');
-        return res.status(200).json([]);
+      const upstream = await getFaaUpstream('https://nasstatus.faa.gov/api/airport-status-information', (r) => r.text());
+      if (!upstream.ok) {
+        failure = { status: 502, detail: `XML fallback returned ${upstream.status}` };
+      } else if (!upstream.body || !upstream.body.trim()) {
+        failure = { status: 502, detail: 'XML fallback returned an empty body', untrusted: true };
+      } else {
+        airports = parseXmlFallback(upstream.body);
+        if (!airports) failure = { status: 502, detail: 'XML fallback returned an unreadable document', untrusted: true };
       }
-      airports = parseXmlFallback(xml);
     }
+  } catch (e: any) {
+    failure = { status: e?.name === 'AbortError' ? 504 : 502, detail: e?.message || String(e) };
+  }
 
+  if (airports) {
+    lastGoodFaa = { airports, at: Date.now() };
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
     res.setHeader('Content-Type', 'application/json');
     return res.status(200).json(airports);
-  } catch (e: any) {
-    console.error('FAA API error:', e);
-    if (e.name === 'AbortError') return res.status(504).json({ error: 'Upstream timeout' });
-    return res.status(502).json({ error: 'Upstream service unavailable' });
   }
+
+  const detail = failure?.detail || 'no answer';
+  const lastGood = lastGoodFaa;
+  const ageMs = lastGood ? Math.max(0, Date.now() - lastGood.at) : Infinity;
+  if (lastGood && ageMs <= FAA_LAST_GOOD_MAX_AGE_MS) {
+    const ageSec = Math.round(ageMs / 1000);
+    // warn, not error: the caller got a real (flagged) answer.
+    console.warn(`FAA upstream unavailable (${detail}); served last-known-good (${ageSec}s old)`);
+    // Short CDN life so the next request tries FAA again, and never past the age limit.
+    const shareable = Math.max(0, Math.min(60, Math.floor((FAA_LAST_GOOD_MAX_AGE_MS - ageMs) / 1000)));
+    res.setHeader('Cache-Control', shareable > 0 ? `s-maxage=${shareable}` : 'no-store');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('X-BB-FAA-Stale', String(ageSec));
+    return res.status(200).json(lastGood.airports);
+  }
+
+  if (failure?.untrusted) {
+    console.warn(`FAA ${detail}; answering with no programs`);
+    res.setHeader('Cache-Control', 's-maxage=60');
+    return res.status(200).json([]);
+  }
+
+  // Past here the request genuinely fails: these are the entries the error feed should count.
+  console.error(`FAA upstream unavailable (${detail}); no last-known-good answer to serve`);
+  if (failure?.status === 504) return res.status(504).json({ error: 'Upstream timeout' });
+  return res.status(502).json({ error: 'Upstream service unavailable' });
 }
 
 /** Normalize a value to an array (handles undefined, single object, or array) */
