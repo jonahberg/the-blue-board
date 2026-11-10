@@ -149,7 +149,7 @@ export default function Onboarding() {
               </SelectContent>
             </Select>
             <p id="onboarding-home-hub-hint" className="text-[11px] text-muted-foreground">
-              Centres the map on it and opens its schedule first.
+              Centers the map on it and opens its schedule first.
             </p>
           </div>
         </div>
