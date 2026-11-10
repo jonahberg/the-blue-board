@@ -1,32 +1,32 @@
 /**
- * The three asks — onboarding, the waitlist, the coffee — and the session state that
- * decides when they are allowed to appear (inventory §10–§12).
+ * The asks — the waitlist and the coffee — and the session state that decides when they are
+ * allowed to appear (inventory §10–§12).
+ *
+ * The welcome dialog used to be the third: it opened by itself over the live map on every
+ * first visit. Since Nov 2026 it opens only on request (the header "?", the phone "More"
+ * sheet), so nothing here decides whether it shows. What it left behind is the visit record.
  *
  * This is a module-level store rather than a context provider, for two reasons.
  *
- * The first is ORDERING, and it is a real bug if you get it wrong. `shouldShowOnboarding()`
- * WRITES `bb-visited` as a side effect, and `waitlistState().triggerClicks` READS it to
- * decide whether this visitor needs 20 clicks or 30. main.js read the threshold first, on
- * purpose (`main.js:7070-7074`), so a first-time visitor gets 20. Two sibling components
- * each doing their own read in their own effect cannot guarantee that order — React runs
- * effects in mount order, which is a rendering detail, not a contract. One `init()` that
- * does both reads in the right sequence can.
+ * The first is ORDERING, and it is a real bug if you get it wrong. `recordVisit()` WRITES
+ * `bb-visited`, and `waitlistState().triggerClicks` READS it to decide whether this visitor
+ * needs 20 clicks or 30. main.js read the threshold first, on purpose (`main.js:7070-7074`),
+ * so a first-time visitor gets 20. Two sibling components each doing their own read in their
+ * own effect cannot guarantee that order — React runs effects in mount order, which is a
+ * rendering detail, not a contract. One `init()` that does both in the right sequence can.
  *
  * The second is that `Dashboard.tsx` is closed to this work package except for the watch
  * banner, so there is nowhere to add a provider even if one were wanted.
  *
  * Storage reads in `src/lib/engagement.js` are deliberately BARE — they throw on a broken
  * store, exactly as main.js did, and the module's header says the React port is where that
- * gets decided. This is that decision: `init()` wraps them and fails CLOSED. main.js's
- * IIFE aborted on a throw, which left the onboarding overlay visible in the markup with no
- * dismiss handler attached — an undismissable wall in front of the dashboard for anyone
- * with storage disabled. Showing nothing is the better failure.
+ * gets decided. This is that decision: `init()` wraps them and fails CLOSED — no passive
+ * waitlist for anyone whose storage cannot record a "no".
  */
 
 import { useSyncExternalStore } from 'react';
 
-import { shouldShowOnboarding, waitlistState } from '@/lib/engagement.js';
-import { isDeepLinkArrival } from './deep-links';
+import { recordVisit, waitlistState } from '@/lib/engagement.js';
 import { safeLocalStorage } from './storage';
 
 /**
@@ -53,8 +53,6 @@ export type EngagementState = {
   shownThisSession: boolean;
   /** `bb_waitlist_submitted` — permanent, and `?waitlist=1` does not override it. */
   submitted: boolean;
-  /** Should the onboarding overlay come up on this load? */
-  showOnboardingInitially: boolean;
   /** True once `init()` has run, so a consumer can tell "no" from "not asked yet". */
   ready: boolean;
   /**
@@ -74,7 +72,6 @@ let state: EngagementState = {
   triggerClicks: 30,
   shownThisSession: false,
   submitted: false,
-  showOnboardingInitially: false,
   ready: false,
   waitlistSource: 'popup',
 };
@@ -111,24 +108,19 @@ export function initEngagement(): void {
   const storage = safeLocalStorage();
   let triggerClicks = 30;
   let submitted = false;
-  let showOnboardingInitially = false;
 
   if (storage) {
     try {
       // ORDER MATTERS — see the file header. The threshold is read from the store as it
-      // stands BEFORE `shouldShowOnboarding` marks the visit.
+      // stands BEFORE `recordVisit` marks the visit.
       const waitlist = waitlistState(storage);
       triggerClicks = waitlist.triggerClicks;
       submitted = waitlist.submitted;
-      // Called unconditionally: it marks the visit, which the threshold above depends on. A
-      // deep-link arrival already has a destination, so the welcome stays down (F45).
-      const wantsOnboarding = shouldShowOnboarding(storage);
-      showOnboardingInitially = wantsOnboarding && !isDeepLinkArrival();
+      recordVisit(storage);
     } catch {
-      // Fail closed: no overlay, no passive waitlist. See the header.
+      // Fail closed: no passive waitlist. See the header.
       triggerClicks = Number.POSITIVE_INFINITY;
       submitted = false;
-      showOnboardingInitially = false;
     }
   } else {
     // No storage at all (private mode, SSR): the same fail-closed posture. Without a place
@@ -136,7 +128,7 @@ export function initEngagement(): void {
     triggerClicks = Number.POSITIVE_INFINITY;
   }
 
-  setState({ triggerClicks, submitted, showOnboardingInitially, ready: true });
+  setState({ triggerClicks, submitted, ready: true });
 
   if (typeof document !== 'undefined') {
     const onClick = (event: Event) => {
@@ -170,7 +162,6 @@ export function resetEngagement(): void {
     triggerClicks: 30,
     shownThisSession: false,
     submitted: false,
-    showOnboardingInitially: false,
     ready: false,
     waitlistSource: 'popup',
   };

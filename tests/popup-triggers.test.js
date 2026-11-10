@@ -4,17 +4,17 @@ import {
   DISMISS_TTL_MS,
   TRIGGER_CLICKS_NEW,
   TRIGGER_CLICKS_RETURNING,
-  shouldShowOnboarding,
+  recordVisit,
   waitlistState,
 } from '../src/lib/engagement.js';
 import {
   clicksReachedThreshold,
-  onboardingMayOpen,
   shouldShowWaitlist,
 } from '../src/lib/waitlist-gate.js';
 
 /**
- * Trigger and suppression contracts for the waitlist modal and the onboarding overlay.
+ * Trigger and suppression contracts for the waitlist modal, and the visit record the
+ * welcome dialog leaves behind (it no longer opens by itself — Nov 2026).
  *
  * These assertions used to re-implement the legacy dashboard's (deleted main.js) IIFE guards inline, which meant they
  * verified a COPY of the logic rather than the logic. The rules now live in two pure
@@ -26,8 +26,8 @@ import {
  *   - Click threshold: 30 for a returning visitor (never 8, never 10), 20 for a new one
  *   - Session guard: once per session, and a flight landing does not reset it
  *   - Permanent suppression via bb_waitlist_submitted, which ?waitlist=1 cannot override
- *   - 7-day dismissal TTL for both the waitlist and onboarding, fail-open on a corrupt value
- *   - ?waitlist=1 forces past the session guard, the TTL and the onboarding overlay
+ *   - 7-day dismissal TTL for the waitlist, fail-open on a corrupt value
+ *   - ?waitlist=1 forces past the session guard, the TTL and an open welcome dialog
  */
 
 function createMockStorage(initial = {}) {
@@ -46,11 +46,8 @@ function returningStorage(initial = {}) {
 }
 
 /** `waitlistState().dismissedRecently` is the exported form of the TTL check (ported from the legacy main.js). */
-function isDismissedRecently(storage, key) {
-  if (key === 'bb_waitlist_dismissed') return waitlistState(storage).dismissedRecently;
-  // The onboarding key runs through the same private helper; `shouldShowOnboarding`
-  // is its only public caller, so probe it on a storage that is otherwise clean.
-  return !shouldShowOnboarding(createMockStorage({ 'bb-visited': '1', [key]: storage.getItem(key) }));
+function isDismissedRecently(storage) {
+  return waitlistState(storage).dismissedRecently;
 }
 
 describe('waitlist modal trigger logic', () => {
@@ -238,89 +235,60 @@ describe('waitlist modal trigger logic', () => {
   });
 });
 
-describe('onboarding overlay suppression', () => {
-  let storage;
+describe('the visit record (what the welcome dialog left behind, Nov 2026)', () => {
+  // The welcome dialog used to open by itself on a first visit, gated on `bb-onboarded` and
+  // `bb_onboarding_dismissed`. It now opens only on request, so the one storage effect left
+  // is marking the visit — which the waitlist's 20-vs-30 click threshold still depends on.
 
-  beforeEach(() => {
-    storage = returningStorage();
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('hides overlay when bb-onboarded is set', () => {
-    storage.setItem('bb-onboarded', '1');
-    expect(shouldShowOnboarding(storage)).toBe(false);
-  });
-
-  it('hides overlay when dismissed within 7 days (even without bb-onboarded)', () => {
-    storage.setItem('bb_onboarding_dismissed', String(Date.now() - 2 * 24 * 60 * 60 * 1000));
-    expect(shouldShowOnboarding(storage)).toBe(false);
-  });
-
-  it('shows overlay when no onboarding flag and no recent dismissal', () => {
-    expect(shouldShowOnboarding(storage)).toBe(true);
-  });
-
-  it('shows overlay when dismissal is older than 7 days and bb-onboarded not set', () => {
-    storage.setItem('bb_onboarding_dismissed', String(Date.now() - 10 * 24 * 60 * 60 * 1000));
-    expect(shouldShowOnboarding(storage)).toBe(true);
-  });
-
-  it('hides overlay when both bb-onboarded and recent dismissal exist', () => {
-    storage.setItem('bb-onboarded', '1');
-    storage.setItem('bb_onboarding_dismissed', String(Date.now()));
-    expect(shouldShowOnboarding(storage)).toBe(false);
-  });
-
-  it('marks a first-time visitor bb-visited, and shows them the overlay', () => {
+  it('marks a first-time visitor bb-visited and says it was their first visit', () => {
     const fresh = createMockStorage();
-    expect(shouldShowOnboarding(fresh)).toBe(true);
+    expect(recordVisit(fresh)).toBe(true);
     expect(fresh.getItem('bb-visited')).toBe('1');
   });
 
-  it('records the visit BEFORE the waitlist threshold is read, which is why order matters', () => {
+  it('is a no-op for a returning visitor, whatever the old onboarding keys say', () => {
+    for (const extra of [{}, { 'bb-onboarded': '1' }, { bb_onboarding_dismissed: String(Date.now()) }]) {
+      const storage = returningStorage(extra);
+      expect(recordVisit(storage)).toBe(false);
+      expect(storage._store['bb-visited']).toBe('1');
+    }
+  });
+
+  it('records the visit AFTER the waitlist threshold is read, which is why order matters', () => {
     // initEngagement() in src/app/state/engagement.tsx reads the click threshold first on
-    // purpose (as the legacy main.js did): a first-timer must get 20, and
-    // `shouldShowOnboarding` is what writes the flag that would otherwise make it 30.
+    // purpose (as the legacy main.js did): a first-timer must get 20, and `recordVisit` is
+    // what writes the flag that would otherwise make it 30.
     const fresh = createMockStorage();
     const threshold = waitlistState(fresh).triggerClicks;
-    shouldShowOnboarding(fresh);
+    recordVisit(fresh);
     expect(threshold).toBe(TRIGGER_CLICKS_NEW);
     expect(waitlistState(fresh).triggerClicks).toBe(TRIGGER_CLICKS_RETURNING);
   });
 });
 
 describe('cache-clear scenario (integration)', () => {
-  it('full flow: clear cache → onboarding → dismiss → clicks → waitlist → dismiss → suppressed for 7 days', () => {
+  it('full flow: clear cache → visit → clicks → waitlist → dismiss → suppressed for 7 days', () => {
     vi.useFakeTimers();
     const storage = createMockStorage(); // empty = simulating cache clear
 
-    // Step 1: no visited flag → the new-visitor threshold, then the overlay shows.
+    // Step 1: no visited flag → the new-visitor threshold, then the visit is recorded.
     expect(storage.getItem('bb-visited')).toBe(null);
     const triggerClicks = waitlistState(storage).triggerClicks;
     expect(triggerClicks).toBe(TRIGGER_CLICKS_NEW);
-    expect(shouldShowOnboarding(storage)).toBe(true);
+    expect(recordVisit(storage)).toBe(true);
     expect(storage.getItem('bb-visited')).toBe('1');
 
-    // Step 2: user dismisses onboarding.
-    storage.setItem('bb-onboarded', '1');
-    storage.setItem('bb_onboarding_dismissed', String(Date.now()));
-    expect(shouldShowOnboarding(storage)).toBe(false);
-
-    // Step 3: the click trigger arms at the threshold read in step 1, not the new one.
+    // Step 2: the click trigger arms at the threshold read in step 1, not the new one.
     expect(clicksReachedThreshold(triggerClicks, triggerClicks)).toBe(true);
     expect(shouldShowWaitlist(storage, { shownThisSession: false, submitted: false })).toBe(true);
 
-    // Step 4: user dismisses the waitlist modal.
+    // Step 3: user dismisses the waitlist modal.
     storage.setItem('bb_waitlist_dismissed', String(Date.now()));
 
-    // Step 5: suppressed by the TTL, even in a brand-new session.
+    // Step 4: suppressed by the TTL, even in a brand-new session.
     expect(shouldShowWaitlist(storage, { shownThisSession: false, submitted: false })).toBe(false);
 
-    // Step 6-7: eight days later it is allowed again.
+    // Step 5: eight days later it is allowed again.
     vi.advanceTimersByTime(8 * 24 * 60 * 60 * 1000);
     expect(shouldShowWaitlist(storage, { shownThisSession: false, submitted: false })).toBe(true);
 
@@ -328,44 +296,7 @@ describe('cache-clear scenario (integration)', () => {
   });
 });
 
-describe('which overlay may open first', () => {
-  // The two halves of one ordering rule. `shouldShowWaitlist()` holds the waitlist back
-  // while onboarding is up — EXCEPT for `?waitlist=1`, which is explicitly allowed through.
-  // That exception is what puts both overlays on screen at once, and Radix orders its modal
-  // layer stack by mount rather than by z-index, so the dialog the visitor deliberately
-  // followed a link to reach ends up inert and aria-hidden under onboarding's focus trap.
-  // Onboarding therefore yields and comes up when the waitlist closes.
-
-  it('holds onboarding back while the waitlist is open', () => {
-    expect(onboardingMayOpen(true, true)).toBe(false);
-  });
-
-  it('opens onboarding once the waitlist closes', () => {
-    expect(onboardingMayOpen(true, false)).toBe(true);
-  });
-
-  it('never opens onboarding that storage already ruled out', () => {
-    // Yielding must not become a way IN: a returning visitor who has been onboarded gets
-    // nothing when the waitlist closes.
-    expect(onboardingMayOpen(false, true)).toBe(false);
-    expect(onboardingMayOpen(false, false)).toBe(false);
-  });
-
-  it('coerces a not-yet-ready store to a boolean', () => {
-    expect(onboardingMayOpen(undefined, false)).toBe(false);
-    expect(onboardingMayOpen(null, false)).toBe(false);
-  });
-
-  it('is exactly the complement of the ?waitlist=1 bypass', () => {
-    // The forced waitlist is allowed up even though onboarding wants the screen...
-    const storage = { getItem: () => null };
-    expect(shouldShowWaitlist(storage, { forced: true, onboardingVisible: true })).toBe(true);
-    // ...so onboarding must be the one that waits. Without this pairing the two rules both
-    // say "yes" and the overlays collide.
-    expect(onboardingMayOpen(true, true)).toBe(false);
-  });
-
-  // Whether Onboarding.tsx actually applies this rule — waits for the waitlist, auto-opens
-  // once per load, and still reopens from the header "?" — is a render test:
-  // tests/onboarding-wiring.test.tsx.
-});
+// "Which overlay may open first" (`onboardingMayOpen`) was retired with the welcome dialog's
+// automatic open: there is nothing left to hold back while `?waitlist=1` has the screen.
+// That the dialog never opens by itself — on a first visit, a deep link or after the waitlist
+// closes — is a render test: tests/onboarding-wiring.test.tsx.

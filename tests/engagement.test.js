@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  shouldShowOnboarding,
+  recordVisit,
   waitlistState,
   bmacEligible,
   onboardingHubSeed,
@@ -41,47 +41,45 @@ describe('TTL constants', () => {
   });
 });
 
-describe('shouldShowOnboarding', () => {
-  it('shows the overlay to a first-time visitor and marks them visited', () => {
+describe('recordVisit', () => {
+  // Was shouldShowOnboarding() until Nov 2026, when the welcome dialog stopped opening by
+  // itself. The visit record is all that is left, and the waitlist threshold still reads it.
+  it('marks a first-time visitor visited and reports the first visit', () => {
     const s = fakeStorage();
-    expect(shouldShowOnboarding(s, NOW)).toBe(true);
+    expect(recordVisit(s)).toBe(true);
     expect(s.getItem('bb-visited')).toBe('1');
   });
 
-  it('hides it for a returning visitor who already completed onboarding', () => {
-    const s = fakeStorage({ 'bb-visited': '1', 'bb-onboarded': '1' });
-    expect(shouldShowOnboarding(s, NOW)).toBe(false);
+  it('leaves a returning visitor alone, onboarded or not', () => {
+    const onboarded = fakeStorage({ 'bb-visited': '1', 'bb-onboarded': '1' });
+    expect(recordVisit(onboarded)).toBe(false);
+    expect(onboarded._dump()).toEqual({ 'bb-visited': '1', 'bb-onboarded': '1' });
+
+    const never = fakeStorage({ 'bb-visited': '1' });
+    expect(recordVisit(never)).toBe(false);
+    expect(never._dump()).toEqual({ 'bb-visited': '1' });
   });
 
-  it('hides it for a returning visitor who dismissed it inside 7 days', () => {
-    const s = fakeStorage({ 'bb-visited': '1', bb_onboarding_dismissed: String(NOW - 2 * DAY) });
-    expect(shouldShowOnboarding(s, NOW)).toBe(false);
-  });
-
-  it('shows it again once the 7-day dismissal has lapsed', () => {
-    const s = fakeStorage({ 'bb-visited': '1', bb_onboarding_dismissed: String(NOW - 8 * DAY) });
-    expect(shouldShowOnboarding(s, NOW)).toBe(true);
-  });
-
-  it('hides it even on a first visit when a dismissal is still live (edge case)', () => {
-    // Same browser, cleared bb-visited but not the dismissal timestamp.
+  it('never touches the old onboarding keys (edge case)', () => {
+    // Same browser, cleared bb-visited but not the dismissal timestamp: the visit is recorded
+    // and the dismissal is left exactly as it was.
     const s = fakeStorage({ bb_onboarding_dismissed: String(NOW - DAY) });
-    expect(shouldShowOnboarding(s, NOW)).toBe(false);
-    expect(s.getItem('bb-visited')).toBe('1'); // still recorded
+    expect(recordVisit(s)).toBe(true);
+    expect(s._dump()).toEqual({ bb_onboarding_dismissed: String(NOW - DAY), 'bb-visited': '1' });
   });
 
   it('lets a throwing store propagate from the bare read (edge case)', () => {
-    // The reads are bare (ported unchanged from the legacy main.js), so a throw reaches the
+    // The read is bare (ported unchanged from the legacy main.js), so a throw reaches the
     // caller. initEngagement() in src/app/state/engagement.tsx is where that is decided —
     // it catches and fails CLOSED. Pinned here so nobody "fixes" the lib into fail-open
     // without deciding to: that is a behaviour change, not a refactor.
     const throwing = { getItem() { throw new Error('SecurityError'); }, setItem() {} };
-    expect(() => shouldShowOnboarding(throwing, NOW)).toThrow('SecurityError');
+    expect(() => recordVisit(throwing)).toThrow('SecurityError');
   });
 
   it('lets a throwing setItem propagate on a first visit too (edge case)', () => {
     const throwingWrite = { getItem: () => null, setItem() { throw new Error('QuotaExceeded'); } };
-    expect(() => shouldShowOnboarding(throwingWrite, NOW)).toThrow('QuotaExceeded');
+    expect(() => recordVisit(throwingWrite)).toThrow('QuotaExceeded');
   });
 });
 

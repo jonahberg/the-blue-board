@@ -1,19 +1,24 @@
 /**
- * The first-visit welcome overlay (inventory §10).
+ * "What is this dashboard?" — a short orientation and the home-hub picker (inventory §10).
  *
- * Six feature rows, a home-hub picker and one button. It is shown once, it is dismissed by
- * anything a visitor might reasonably do to get rid of it (the button, Escape, a click on
- * the backdrop), and every one of those routes through the SAME dismiss — the shipped
- * version had three code paths and only one of them saved the hub the visitor had just
- * chosen.
+ * OPENED ON REQUEST ONLY (Nov 2026). This was the first-visit welcome: a modal over the live
+ * map for every new visitor, six emoji feature rows and a hub picker. The map is the first
+ * impression now, so the dialog opens only from the header's "?" (`md` and up) and the phone
+ * "More" sheet's "What is this dashboard?" row — both call `setOnboardingOpen(true)`. On a
+ * phone this is the ONLY home-hub picker (the header's hub button is `hidden md:inline-flex`),
+ * so the picker stays here.
+ *
+ * Every route out (the button, Escape, the backdrop) goes through the SAME dismiss — the
+ * shipped version had three code paths and only one of them saved the hub the visitor had
+ * just chosen. That dismiss still writes `bb-onboarded` and `bb_onboarding_dismissed`, so a
+ * returning visitor's storage reads exactly as it always did; nothing gates on them now.
  *
  * Radix's Dialog supplies what `main.js:7906-7947` hand-rolled with an AbortController: a
  * real focus trap, Escape, focus on the first control, and focus returned to where it came
- * from on close. The show/hide rules stay in `src/lib/engagement.js`; the ordering rule
- * that must not be broken is documented in `state/engagement.tsx`.
+ * from on close.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -32,43 +37,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { onboardingHubSeed } from '@/lib/engagement.js';
-import { onboardingMayOpen } from '@/lib/waitlist-gate.js';
 import { STORAGE_KEYS, writeString } from '../state/storage';
-import { initEngagement, useEngagement } from '../state/engagement';
 import { usePrefs } from '../state/prefs';
 import { useUi } from '../state/ui';
 
-const FEATURES = [
-  {
-    icon: '📡',
-    title: 'Live Map',
-    desc: 'See where every United flight is right now — updated every 30 seconds',
-  },
-  {
-    icon: '⚠️',
-    title: 'AI Delay Prediction',
-    desc: '8-signal risk scoring with AI-powered explanations — plus hub delays, cancellations, and ground stops',
-  },
-  {
-    icon: '📅',
-    title: 'Schedules',
-    desc: 'Departures & arrivals at all 8 United hubs plus the Tokyo-Narita gateway, with on-time stats and equipment swap alerts',
-  },
-  {
-    icon: '🌦',
-    title: 'Weather & Hub Status',
-    desc: "Conditions at every hub airport — radar, visibility, wind, and how it's affecting flights",
-  },
-  {
-    icon: '✈️',
-    title: 'Fleet & WiFi',
-    desc: 'Check if your plane has Starlink WiFi, seat config, and aircraft details',
-  },
-  {
-    icon: '📊',
-    title: 'Stats',
-    desc: 'Fleet utilization, route patterns, and network health — the truly nerdy stuff',
-  },
+/**
+ * Where to look, one line per place. An orientation, not a feature list: each line says what
+ * the place answers, in the words a traveller would ask it.
+ */
+const ORIENTATION: { place: string; line: string }[] = [
+  { place: 'Live', line: 'every United flight in the air. Select a plane for its flight, aircraft and Wi-Fi.' },
+  { place: 'Schedule', line: 'any hub’s departures and arrivals, with a delay-risk read on flights still to go.' },
+  // The tab reads "Delays · Weather · Hubs" on a desktop and "Weather" in the phone bar.
+  { place: 'Delays · Weather', line: 'what is disrupting the network today, and the weather at every hub.' },
 ];
 
 /** The picker's options — `legacy/index.html:113-125`. */
@@ -88,55 +69,17 @@ const HUBS: { code: string; name: string }[] = [
 const NO_PREFERENCE = '__none__';
 
 export default function Onboarding() {
-  const { onboardingOpen, setOnboardingOpen, waitlistOpen } = useUi();
+  const { onboardingOpen, setOnboardingOpen } = useUi();
   const { homeAirport, setHomeAirport } = usePrefs();
-  const engagement = useEngagement();
   const [hub, setHub] = useState<string>(() => onboardingHubSeed(homeAirport, NO_PREFERENCE));
 
-  // The overlay is mounted for the life of the page and only toggles `open`, so the picker
+  // The dialog is mounted for the life of the page and only toggles `open`, so the picker
   // has to be re-seeded every time it opens. Without this it keeps the hub as it was at
-  // MOUNT: reopening via the header's "?" after setting a different hub there shows the old
-  // one, and `dismiss()` writes that stale value straight back over the visitor's choice.
-  //
-  // Re-seeding is safe precisely because it writes the CURRENT preference — legacy never
-  // pre-populated this select at all, so nothing here is a behaviour the port has to match.
+  // MOUNT: reopening it after setting a different hub from the header shows the old one, and
+  // `dismiss()` writes that stale value straight back over the visitor's choice.
   useEffect(() => {
     if (onboardingOpen) setHub(onboardingHubSeed(homeAirport, NO_PREFERENCE));
   }, [onboardingOpen, homeAirport]);
-
-  useEffect(() => {
-    initEngagement();
-  }, []);
-
-  // Opening is driven through `useUi` rather than local state so that Task 5's `?aircraft=`
-  // deep link can see the overlay is up and hold its own dialog back (inventory §10).
-  //
-  // It also YIELDS to the waitlist. `?waitlist=1` is allowed to bypass the "not while
-  // onboarding is up" guard in `shouldShowWaitlist()`, so without this both overlays land on
-  // screen at once — and Radix orders its modal layer stack by mount, not by z-index, so the
-  // dialog the visitor followed a link to reach ends up inert and `aria-hidden` underneath
-  // onboarding's focus trap. `waitlistOpen` is in the deps rather than read once, so closing
-  // the waitlist is what brings the welcome up: the ask first, then the introduction.
-  //
-  // `showOnboardingInitially` is computed once by `initEngagement()` and never recomputed,
-  // so waiting costs nothing — the decision is still true when the waitlist closes.
-  //
-  // AUTO-OPEN ONCE. Before the waitlist was in the deps this effect could only fire when
-  // `opened` flipped, which happened exactly once per load. Now that it also re-runs every
-  // time the waitlist closes, and `showOnboardingInitially` is never recomputed, an
-  // unguarded effect would RESURRECT an overlay the visitor had already dismissed: welcome
-  // shown and dismissed → 20 clicks trip the waitlist → they close it → the welcome is back,
-  // with `bb-onboarded` already written. The ref keeps the automatic open to one per load
-  // without touching storage or what `shouldShowOnboarding()` decided. The header's "?"
-  // button drives `setOnboardingOpen` directly and is unaffected.
-  const opened = engagement.ready && engagement.showOnboardingInitially;
-  const autoOpened = useRef(false);
-  useEffect(() => {
-    if (autoOpened.current) return;
-    if (!onboardingMayOpen(opened, waitlistOpen)) return;
-    autoOpened.current = true;
-    setOnboardingOpen(true);
-  }, [opened, waitlistOpen, setOnboardingOpen]);
 
   /**
    * One dismiss for every route out.
@@ -147,9 +90,8 @@ export default function Onboarding() {
    */
   const dismiss = useCallback(() => {
     if (hub && hub !== NO_PREFERENCE) setHomeAirport(hub);
-    // main.js wrote `bb-onboarded` unguarded and only wrapped the timestamp. Both are
-    // wrapped here: a quota error on a preference must not take the dashboard down, and by
-    // this point the overlay is closing either way.
+    // Both wrapped: a quota error on a preference must not take the dashboard down, and by
+    // this point the dialog is closing either way.
     writeString(STORAGE_KEYS.onboarded, '1');
     writeString(STORAGE_KEYS.onboardingDismissed, String(Date.now()));
     setOnboardingOpen(false);
@@ -162,14 +104,14 @@ export default function Onboarding() {
         if (!open) dismiss();
       }}
     >
-      {/* A column whose MIDDLE scrolls: header on top, the button pinned at the bottom. As one
-          scrolling box the primary button sat below the fold at 360×780 with nothing to say
-          there was more (phone QA, Oct 3 2026); now the way out is always on screen. */}
-      <DialogContent className="flex max-h-[90svh] flex-col gap-3 overflow-hidden sm:max-w-lg">
+      {/* A column whose MIDDLE scrolls: header on top, the button pinned at the bottom, so the
+          way out is always on screen on a short phone (phone QA, Oct 3 2026). */}
+      <DialogContent className="flex max-h-[90svh] flex-col gap-3 overflow-hidden sm:max-w-md">
         <DialogHeader className="shrink-0 pr-8">
-          <DialogTitle>Welcome to The Blue Board ✈️</DialogTitle>
+          <DialogTitle>The Blue Board</DialogTitle>
           <DialogDescription>
-            Your real-time command center for United flights
+            United’s operation as it happens, from public flight-tracking, schedule and weather
+            data. Built by a United flyer; not affiliated with United Airlines.
           </DialogDescription>
         </DialogHeader>
 
@@ -177,26 +119,24 @@ export default function Onboarding() {
           data-testid="onboarding-scroll"
           className="-mx-4 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4"
         >
-          <ul className="space-y-2.5">
-            {FEATURES.map((feature) => (
-              <li key={feature.title} className="flex gap-3">
-                <span aria-hidden="true" className="text-lg leading-none">
-                  {feature.icon}
-                </span>
-                <div className="min-w-0">
-                  <strong className="text-sm">{feature.title}</strong>
-                  <p className="text-xs leading-relaxed text-muted-foreground">{feature.desc}</p>
-                </div>
-              </li>
+          <dl className="space-y-1.5 text-sm">
+            {ORIENTATION.map(({ place, line }) => (
+              <div key={place}>
+                <dt className="inline font-semibold">{place}</dt>
+                <dd className="inline text-muted-foreground">
+                  {' — '}
+                  {line}
+                </dd>
+              </div>
             ))}
-          </ul>
+          </dl>
 
-          <div className="space-y-1.5 text-center">
-            <Label htmlFor="onboarding-home-hub" className="justify-center text-xs text-muted-foreground">
-              Set your home hub for a personalized experience
+          <div className="space-y-1.5">
+            <Label htmlFor="onboarding-home-hub" className="text-xs">
+              Home hub
             </Label>
             <Select value={hub} onValueChange={setHub}>
-              <SelectTrigger id="onboarding-home-hub" className="mx-auto w-[260px]">
+              <SelectTrigger id="onboarding-home-hub" aria-describedby="onboarding-home-hub-hint" className="w-full">
                 <SelectValue placeholder="No preference" />
               </SelectTrigger>
               <SelectContent>
@@ -208,15 +148,14 @@ export default function Onboarding() {
                 ))}
               </SelectContent>
             </Select>
+            <p id="onboarding-home-hub-hint" className="text-[11px] text-muted-foreground">
+              Centres the map on it and opens its schedule first.
+            </p>
           </div>
-
-          <p className="text-center text-[11px] text-muted-foreground">
-            Built by a United flyer, for United flyers. Not affiliated with United Airlines.
-          </p>
         </div>
 
         <Button className="min-h-11 w-full shrink-0" onClick={dismiss}>
-          Let&rsquo;s Fly the Friendly Skies ✈️
+          Done
         </Button>
       </DialogContent>
     </Dialog>
