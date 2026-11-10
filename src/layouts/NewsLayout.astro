@@ -32,7 +32,12 @@ const newsArticleSchema = {
   headline: article.title,
   datePublished: article.date,
   dateModified: article.date,
-  author: { '@type': 'Person', name: 'Jonah Berg', url: 'https://jonahberg.com' },
+  author: {
+    '@type': 'Person',
+    name: 'Jonah Berg',
+    url: 'https://jonahberg.com',
+    sameAs: ['https://github.com/jonahberg'],
+  },
   publisher: {
     '@type': 'Organization',
     // Same node as the homepage Organization (which carries contactPoint + address) so

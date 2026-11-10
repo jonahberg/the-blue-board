@@ -59,6 +59,17 @@ describe('MobileNav More sheet', () => {
     }
   });
 
+  it('credits Jonah Berg with a link to jonahberg.com (the attribution strip is hidden below md:)', () => {
+    mount();
+    const sheet = openMore();
+    const credit = within(sheet).getByRole('link', { name: /Built by Jonah Berg/ });
+    expect(credit.getAttribute('href')).toBe('https://jonahberg.com');
+    expect(credit.getAttribute('target')).toBe('_blank');
+    expect(credit.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(credit.className).toMatch(/\bmin-h-11\b/);
+    expect(credit.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it('About closes the sheet and opens the About dialog with the safety line', async () => {
     mount();
     const sheet = openMore();

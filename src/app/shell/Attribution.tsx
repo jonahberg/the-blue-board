@@ -91,6 +91,20 @@ export function Attribution() {
         contributors
       </span>
       <span aria-hidden="true">·</span>
+      {/* The dashboard's always-mounted author credit. The ⓘ menu repeats it, but Radix
+          mounts popover content only while open, so that copy is not in the rendered DOM. */}
+      <span>
+        Built by{' '}
+        <a
+          className="underline-offset-2 hover:underline"
+          href="https://jonahberg.com"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Jonah Berg
+        </a>
+      </span>
+      <span aria-hidden="true">·</span>
       <span>Not affiliated with United Airlines, Inc.</span>
       <span className="ml-auto flex items-center">
         <LegalMenu />
