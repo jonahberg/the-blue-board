@@ -3,14 +3,14 @@
  * The fleet type pages' "in the air right now" strip: how many of this type are airborne, and a
  * few of them (flight, route, tail), each opening that flight on the dashboard's live map.
  *
- * Filled by src/scripts/fleet-live.ts from `/api/fr24-feed?airline=UAL` — the same free, 15-second
- * CDN-cached feed URL the dashboard and the hub pages read, so the page adds no upstream call. The
+ * Filled by src/scripts/fleet-live.ts from `/api/fr24-feed?airline=UAL` — the free feed URL the
+ * dashboard already keeps warm at the edge (15-second CDN cache), never a metered provider. The
  * type's registrations ride along in `data-tails` (built from the registry rows the page already
  * renders); matching is by tail, not by the feed's type designator (src/lib/fleet-live.js).
  *
  * Static first: with no JS, or a failed read, the strip is its heading and one quiet line. While
  * scripting is enabled the count line and the rows reserve their height, so the strip arriving
- * moves nothing. No `aria-live` — it refreshes every minute.
+ * moves nothing. No `aria-live` — it refreshes every two minutes.
  */
 
 interface Props {

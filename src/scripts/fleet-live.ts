@@ -2,8 +2,10 @@
  * The fleet type pages' "in the air right now" strip (src/components/site/FleetLive.astro).
  *
  * Bundled by Astro into `_astro/` (CSP: `script-src 'self'`, no inline script). Reads
- * `/api/fr24-feed?airline=UAL` — the exact URL the dashboard and the hub pages poll, CDN-cached
- * for 15 s — so a crawler or a reader here costs no new upstream call. Every decision about what
+ * `/api/fr24-feed?airline=UAL` — the free feed, the exact URL the dashboard polls, CDN-cached for
+ * 15 s — never a metered provider. When no dashboard tab keeps that edge warm, a visible fleet tab
+ * causes at most one free-feed origin read per refresh, so the refresh is a slow two minutes (the
+ * hub pages, meanwhile, dropped their own 30 s poll of the same feed). Every decision about what
  * counts lives in src/lib/fleet-live.js; this file only paints, with `textContent`.
  *
  * An empty feed is a failed read (feed-health.js), not "none airborne": a failed first read leaves
@@ -13,7 +15,7 @@
 import { airborneOfType } from '../lib/fleet-live.js';
 import { parseStaleHeader } from '../lib/feed-health.js';
 
-const REFRESH_MS = 60_000;
+const REFRESH_MS = 120_000;
 const FETCH_TIMEOUT_MS = 10_000;
 
 const root = document.querySelector<HTMLElement>('[data-fleet-live]');

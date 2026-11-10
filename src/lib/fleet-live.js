@@ -1,8 +1,9 @@
 // ═══ FLEET TYPE PAGES — THIS TYPE IN THE AIR RIGHT NOW ═══
 // The /fleet/{type} pages show how many of that aircraft type are airborne, and a few of them, from
-// the same free live feed the dashboard's map and the hub pages read (`/api/fr24-feed?airline=UAL`,
-// CDN-cached for 15 s). No new upstream call: the page asks for the one URL every other surface
-// already keeps hot at the edge.
+// the same free live feed the dashboard's map reads (`/api/fr24-feed?airline=UAL`, CDN-cached for
+// 15 s). No metered provider is involved, and the page asks for the one URL the dashboard already
+// keeps warm at the edge — so a fleet page adds a feed read only when no dashboard tab has that
+// edge warm (at most one per 15 s window, and only while a fleet tab is visible).
 //
 // Matching is by REGISTRATION against the page's own registry rows, never by the feed's type
 // designator: the feed calls both the 737-900 and the 737-900ER "B739", and both the 777-200 and
