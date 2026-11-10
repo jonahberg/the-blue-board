@@ -61,7 +61,7 @@ function weekdayChip(seconds, timeZone) {
  * revisits each board on a ring), so the age is always printed, and `severity` follows the
  * dashboard's own ladder (data-age.js: recent < 1 h ≤ aging < 6 h ≤ stale).
  *
- * @param {{generatedAt?: number|null, timeZone: string}} payload
+ * @param {any} payload  the /api/hub-board body (`generatedAt`, `timeZone`).
  * @param {number} nowSec
  * @returns {{time: string, zone: string, age: string, severity: 'recent'|'aging'|'stale'}|null}
  */
@@ -84,7 +84,7 @@ export function hubBoardStamp(payload, nowSec) {
  * soft CanceledUncertain state the live feed has not seen fly, labelled as unconfirmed. Before the
  * first departure there is no on-time share, and it is not printed as 0%.
  *
- * @param {{totals?: object|null, partial?: boolean, completeness?: number|null}} payload
+ * @param {any} payload  the /api/hub-board body.
  * @returns {{scheduled:number, departed:number, otp:number|null, canceled:number,
  *   likelyCanceled:number, partialPct:number|null}|null}
  */
@@ -107,13 +107,27 @@ export function hubBoardTruth(payload) {
 }
 
 /**
+ * @typedef {object} HubBoardViewRow
+ * @property {string} key
+ * @property {string} time  hub-local "HH:MM".
+ * @property {{kind: 'change'|'day', text: string, early: boolean}|null} under  the line under it.
+ * @property {string} underSr  screen-reader words before a changed time ("estimated " / "now ").
+ * @property {string} ident  as printed (provider letter suffix stripped).
+ * @property {string} dest   the far end: an IATA code, or the airport's name when there is none.
+ * @property {string} destName  the airport's short name, '' when `dest` already is the name.
+ * @property {string} gate   "T1 · C18" / "T1" / "Gate C18", '' when unknown.
+ * @property {{label: string, note: string, cls: string, pillClass: string, live: boolean, asOf: boolean}} status
+ * @property {{glyph: string, sr: string, value: string, title: string, toneClass: string, runwayNote: string}|null} delay
+ */
+
+/**
  * The rows the page paints, at most `limit`, starting where the dashboard's NOW divider would sit
  * by THIS clock (the CDN copy can be minutes old, so the server sends spares).
  *
- * @param {{hub: string, timeZone: string, dayStart?: number|null, flights?: Array<object>}} payload
+ * @param {any} payload  the /api/hub-board body.
  * @param {number} nowSec
  * @param {number} [limit]
- * @returns {Array<object>} view rows — see the return statement for the fields.
+ * @returns {HubBoardViewRow[]}
  */
 export function hubBoardRows(payload, nowSec, limit = HUB_BOARD_VISIBLE_ROWS) {
   const flights = Array.isArray(payload?.flights) ? payload.flights : [];
