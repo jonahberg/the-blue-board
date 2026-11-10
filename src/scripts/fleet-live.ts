@@ -1,0 +1,141 @@
+/**
+ * The fleet type pages' "in the air right now" strip (src/components/site/FleetLive.astro).
+ *
+ * Bundled by Astro into `_astro/` (CSP: `script-src 'self'`, no inline script). Reads
+ * `/api/fr24-feed?airline=UAL` — the exact URL the dashboard and the hub pages poll, CDN-cached
+ * for 15 s — so a crawler or a reader here costs no new upstream call. Every decision about what
+ * counts lives in src/lib/fleet-live.js; this file only paints, with `textContent`.
+ *
+ * An empty feed is a failed read (feed-health.js), not "none airborne": a failed first read leaves
+ * the static line and releases the reserved height; a failed refresh keeps the last good strip.
+ */
+
+import { airborneOfType } from '../lib/fleet-live.js';
+import { parseStaleHeader } from '../lib/feed-health.js';
+
+const REFRESH_MS = 60_000;
+const FETCH_TIMEOUT_MS = 10_000;
+
+const root = document.querySelector<HTMLElement>('[data-fleet-live]');
+
+if (root) {
+  const tails = (root.dataset.tails || '').split(',').filter(Boolean);
+  const q = <T extends Element>(sel: string) => root.querySelector<T>(sel);
+  const body = q<HTMLElement>('[data-fl-body]');
+  const stamp = q<HTMLElement>('[data-fl-stamp]');
+  const fallback = q<HTMLElement>('[data-fl-fallback]');
+  const live = q<HTMLElement>('[data-fl-live]');
+  const count = q<HTMLElement>('[data-fl-count]');
+  const countLabel = q<HTMLElement>('[data-fl-count-label]');
+  const list = q<HTMLUListElement>('[data-fl-list]');
+  const template = q<HTMLTemplateElement>('template[data-fl-row]');
+
+  let shown = false;
+  let lastLoad = 0;
+  let loading = false;
+
+  const release = () => {
+    root.dataset.state = 'unavailable';
+    if (body) body.style.minHeight = '0';
+    if (stamp) stamp.style.minHeight = '0';
+  };
+
+  const paint = (result: NonNullable<ReturnType<typeof airborneOfType>>, asOfMs: number) => {
+    if (count) count.textContent = String(result.airborne);
+    if (countLabel) countLabel.textContent = `of ${tails.length} airborne`;
+
+    const rows = result.flights.map((flight) => {
+      const li = template?.content.firstElementChild?.cloneNode(true) as HTMLElement | undefined;
+      if (!li) return null;
+      const link = li.querySelector<HTMLAnchorElement>('[data-f="link"]');
+      if (link) link.href = flight.href;
+      const field = (name: string) => li.querySelector<HTMLElement>(`[data-f="${name}"]`);
+      const ident = field('ident');
+      if (ident) ident.textContent = flight.ident || '—';
+      const route = field('route');
+      if (route) {
+        if (flight.origin && flight.dest) {
+          // The arrow is decoration; a screen reader hears "SFO to PVG".
+          const arrow = document.createElement('span');
+          arrow.setAttribute('aria-hidden', 'true');
+          arrow.textContent = ' → ';
+          const to = document.createElement('span');
+          to.className = 'sr-only';
+          to.textContent = ' to ';
+          route.append(flight.origin, arrow, to, flight.dest);
+        } else {
+          route.textContent = 'Route not in feed';
+        }
+      }
+      const reg = field('reg');
+      if (reg) reg.textContent = flight.reg;
+      const hint = document.createElement('span');
+      hint.className = 'sr-only';
+      hint.textContent = ', open on the live map';
+      link?.append(hint);
+      return li;
+    });
+    list?.replaceChildren(...rows.filter((li): li is HTMLElement => li !== null));
+
+    if (stamp) {
+      stamp.textContent = `Live feed · ${new Date(asOfMs).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      })}`;
+    }
+    if (fallback) fallback.hidden = true;
+    if (live) live.hidden = false;
+    root.dataset.state = 'live';
+    shown = true;
+  };
+
+  const load = async () => {
+    if (loading || !tails.length) return;
+    loading = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch('/api/fr24-feed?airline=UAL', { signal: controller.signal });
+      if (!response.ok) throw new Error(`feed ${response.status}`);
+      const payload = await response.json();
+      const result = airborneOfType(payload, tails);
+      if (!result) throw new Error('empty feed');
+      // A stale-served body says how old it is; the stamp says so too (feed-health.js).
+      const staleMs = parseStaleHeader(response.headers.get('X-BB-Feed-Stale'));
+      lastLoad = Date.now();
+      paint(result, Date.now() - staleMs);
+    } catch {
+      if (!shown) release();
+    } finally {
+      clearTimeout(timer);
+      loading = false;
+    }
+  };
+
+  let timerId: ReturnType<typeof setInterval> | null = null;
+  const start = () => {
+    if (timerId === null) timerId = setInterval(load, REFRESH_MS);
+  };
+  const stop = () => {
+    if (timerId !== null) clearInterval(timerId);
+    timerId = null;
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stop();
+      return;
+    }
+    if (Date.now() - lastLoad > REFRESH_MS / 2) void load();
+    start();
+  });
+
+  if (tails.length) {
+    void load();
+    if (!document.hidden) start();
+  } else {
+    release();
+  }
+}
+
+export {};
