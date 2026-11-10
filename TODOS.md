@@ -2,40 +2,19 @@
 
 Open work, checked against the code on 2026-11-10. Each entry names the file it concerns.
 
-## Owner actions
+## Compliance
 
-- [ ] [compliance] **Starlink data permission.** Six server routes call unitedstarlinktracker.com:
+- [ ] **Starlink data terms.** Six server routes use the unitedstarlinktracker.com API:
   `api/cron/sync-starlink.ts` and `api/starlink-data.ts` (`/api/data`), `api/check-flight.ts`,
-  `api/predict-flight.ts`, `api/fleet-summary.ts` and `api/starlink-mismatches.ts`. The site's
-  robots.txt allows `/api/data` and disallows the rest of `/api/`. The data is credited on the
-  Sources and Starlink tabs and on `/fleet`, but no permission from the maintainer (@martinamps)
-  is on record. Ask for it in writing and record the answer in `docs/`.
-- [ ] [compliance] **FlightAware scrape.** Off by default since Nov 2026 (`FLIGHTAWARE_SCRAPE_ENABLED`,
-  `api/flight-times.ts`): scraping FlightAware's pages is against its Terms of Use, and from Vercel
-  it answered none of 24 live flights in the Nov 10 2026 check. Leave it off. Delete the tier, or
-  replace it with FlightAware's licensed AeroAPI if its data is ever needed.
-- [ ] [compliance] **FR24 live positions.** `/api/fr24-feed` reads FR24's public web feed
-  (`data-cloud.flightradar24.com`, `src/lib/united-feed.js`), not the licensed FR24 API that
-  `api/fr24-flight.ts` and `api/aircraft-history.ts` use. Confirm FR24's terms allow it for a
-  public dashboard.
-- [ ] [compliance] **CAN-SPAM postal address.** `EMAIL_POSTAL_ADDRESS` is not set in Vercel, so the
-  email footer (`api/_email-footer.ts`) sends without one. Set a real postal address or PO Box.
-- [ ] [ops] **Alerting is not connected.** `ALERT_WEBHOOK_URL` is not set in Vercel, so
-  `api/_alert.ts` never sends, and the schedule-pipeline alert in `api/cron/warm-schedules.ts`
-  does nothing.
-- [ ] [ops] **FR24 credit budget.** `FR24_MONTHLY_CREDIT_BUDGET` is not set, so the support meter
-  (`api/support-stats.ts`) assumes a 100,000-credit plan. Set it to the real plan size.
-- [ ] [ops] **Unused env vars.** `ANTHROPIC_API_KEY` (Production, Preview) is never read: delay
-  explanations go through the AI Gateway with `AI_GATEWAY_API_KEY` (`api/delay-explain.ts`).
-  `SCHEDULE_SOURCE_PRIORITY` (Production) has been ignored since v1.9.0 (`api/schedule.ts`).
-  Remove both.
-- [ ] [ops] **DEP0169 log noise.** About 4,700 `url.parse()` deprecation warnings a week, at most
-  one per process. They appear only on the routes whose handlers read `req.query`, including
-  `/api/metar`, which loads no packages; routes that never read it (`/api/irops`, the crons) log
-  none. App code never calls `url.parse`, so the likely caller is the platform's `req.query`
-  helper. `NODE_OPTIONS=--trace-deprecation` on a Preview deploy would confirm it.
-  `NODE_OPTIONS=--disable-warning=DEP0169` would silence the warnings, and would also hide any
-  future first-party `url.parse` call.
+  `api/predict-flight.ts`, `api/fleet-summary.ts` and `api/starlink-mismatches.ts`. The data is
+  credited on the Sources and Starlink tabs and on `/fleet`. Confirm the maintainer's terms for
+  this use (@martinamps) and record the answer in `docs/`.
+- [ ] **FR24 live feed terms.** `/api/fr24-feed` reads FR24's public live feed
+  (`src/lib/united-feed.js`); flight lookup and aircraft history use the FR24 API
+  (`api/fr24-flight.ts`, `api/aircraft-history.ts`). Confirm the terms that cover the live feed
+  on a public dashboard.
+- [x] **FlightAware scrape.** Removed from `api/flight-times.ts` in Nov 2026. Flight times come
+  from the hub boards and the FR24 API.
 
 ## Correctness
 
@@ -69,10 +48,17 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
 
 ## Hardening
 
+- [ ] **DEP0169 log noise.** About 4,700 `url.parse()` deprecation warnings a week, at most one
+  per process. They appear only on the routes whose handlers read `req.query`, including
+  `/api/metar`, which loads no packages; routes that never read it (`/api/irops`, the crons) log
+  none. App code never calls `url.parse`, so the likely caller is the platform's `req.query`
+  helper. `NODE_OPTIONS=--trace-deprecation` on a Preview deploy would confirm it, and
+  `NODE_OPTIONS=--disable-warning=DEP0169` would silence it (and any future first-party
+  `url.parse` call).
 - [ ] **CSP `style-src 'unsafe-inline'`** (`vercel.json`). Drop it after an inline-style audit;
   `script-src` already has no `'unsafe-inline'`.
 - [ ] **Spend alerting.** Nothing watches AI Gateway or FR24 credit spend. The only alert path
-  covers the schedule pipeline, and it is not connected (see Owner actions).
+  (`api/_alert.ts`) covers the schedule pipeline.
 - [ ] **Dependency audit in CI.** `.github/workflows/test.yml` runs typecheck, build and tests
   only. There is no `bun audit` step and no Dependabot config.
 - [ ] **Secrets rotation.** No written procedure for rotating `SUPABASE_SERVICE_ROLE_KEY`,
