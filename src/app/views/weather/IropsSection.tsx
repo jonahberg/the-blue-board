@@ -20,6 +20,12 @@
 import { useEffect, useMemo } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  IROPS_CANCELLATION_TOOLTIP,
+  iropsCancellationNote,
+  splitCancellations,
+  unconfirmedFigure,
+} from '@/lib/cancellation-display.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
 import { countIropsFromBoards } from '@/lib/irops-client.js';
 import { IROPS_BANDS_TEXT, iropsScore, iropsScoreCls, iropsScoreLabel } from '@/lib/irops-score.js';
@@ -37,12 +43,11 @@ const SCORE_TONE: Record<string, string> = {
 };
 
 // The bands come from irops-score.js (IROPS_BANDS_TEXT), never retyped here — v1.12.0 moved them.
-const LIKELY_NOTE =
-  'Cancellations include flights the schedule provider lists as Likely Canceled (unconfirmed); Likely Canceled flights the live flight feed saw flying are not counted.';
+// The cancellation sentence comes from cancellation-display.js (Nov 2026): the Canceled figure
+// is confirmed-only, the score still counts the unconfirmed ones, and the tooltip says both.
+const SERVER_TOOLTIP = `Network-wide severity across all United hubs, weighting cancellations (×3), diversions (×2), 60min+ delays (×2) and 30–60min delays (×1) — including flights held past schedule — per 100 scheduled flights: ${IROPS_BANDS_TEXT}. ${IROPS_CANCELLATION_TOOLTIP}`;
 
-const SERVER_TOOLTIP = `Network-wide severity across all United hubs, weighting cancellations (×3), diversions (×2), 60min+ delays (×2) and 30–60min delays (×1) — including flights held past schedule — per 100 scheduled flights: ${IROPS_BANDS_TEXT}. ${LIKELY_NOTE}`;
-
-const CLIENT_TOOLTIP = `Estimated from the schedule boards loaded in your session (server IROPS feed unavailable). Severity weights cancellations (×3), diversions (×2), 60min+ delays (×2) and 30–60min delays (×1) per 100 scheduled flights: ${IROPS_BANDS_TEXT}. ${LIKELY_NOTE}`;
+const CLIENT_TOOLTIP = `Estimated from the schedule boards loaded in your session (server IROPS feed unavailable). Severity weights cancellations (×3), diversions (×2), 60min+ delays (×2) and 30–60min delays (×1) per 100 scheduled flights: ${IROPS_BANDS_TEXT}. ${IROPS_CANCELLATION_TOOLTIP}`;
 
 type Counts = {
   cancellations: number | null;
@@ -142,11 +147,17 @@ export function IropsSection() {
 
   const faaLines = useMemo(() => faaAlertLines(faaIndex) as string[], [faaIndex]);
 
-  // v1.12.0: say how much of the cancellation count is unconfirmed, and how many "Likely
-  // Canceled" flights were seen flying and left out — the index is only as honest as this split.
-  const likelyNote =
-    counts && counts.cancellationsLikely ? `incl. ${counts.cancellationsLikely} likely` : null;
-  const seenFlying = counts?.likelyCanceledSeenFlying ?? 0;
+  // Nov 2026: the figure labelled Canceled is CONFIRMED cancellations only. The unconfirmed
+  // ("Likely Canceled") ones — every one of the 53 on Nov 10, beside NORMAL OPERATIONS — get a
+  // quieter figure of their own, and the footnote says the score still counts them. The score
+  // itself is untouched (irops-score.js / api/irops.ts, Oct 3 2026 calibration).
+  const cancellations = splitCancellations(counts?.cancellations, counts?.cancellationsLikely);
+  const footnote = counts
+    ? iropsCancellationNote({
+        unconfirmed: cancellations.split ? cancellations.unconfirmed : 0,
+        seenFlying: counts.likelyCanceledSeenFlying,
+      })
+    : null;
 
   return (
     <section id="irops-section" aria-labelledby="irops-label" className="scroll-mt-4">
@@ -203,7 +214,11 @@ export function IropsSection() {
               </span>
 
               <div className="ml-auto flex flex-wrap items-center divide-x divide-border">
-                <Metric label="Cancellations" value={counts.cancellations ?? '—'} note={likelyNote} />
+                <Metric
+                  label="Canceled"
+                  value={cancellations.confirmed ?? '—'}
+                  note={unconfirmedFigure(cancellations)}
+                />
                 <Metric label=">30m" value={counts.delayed30} />
                 <Metric label=">60m" value={counts.delayed60} />
                 <Metric label="Diversions" value={counts.diversions} />
@@ -211,12 +226,8 @@ export function IropsSection() {
               </div>
             </div>
 
-            {seenFlying > 0 ? (
-              <p className="border-t px-3 py-1.5 text-[10px] text-muted-foreground">
-                {seenFlying} {seenFlying === 1 ? 'flight' : 'flights'} the schedule provider lists as Likely
-                Canceled {seenFlying === 1 ? 'was' : 'were'} seen flying by the live feed and{' '}
-                {seenFlying === 1 ? 'is' : 'are'} not counted as cancellations.
-              </p>
+            {footnote ? (
+              <p className="border-t px-3 py-1.5 text-[10px] text-muted-foreground">{footnote}</p>
             ) : null}
 
             {/* Only the client path carried this strip: the server payload has no per-airport
