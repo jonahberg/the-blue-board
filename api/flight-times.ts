@@ -28,10 +28,10 @@
 // It used to run first, but scraping FlightAware's pages is against its Terms of Use, and from
 // Vercel's egress it never returns a flight: it answers with a bot-wall page whose
 // trackpollBootstrap parses but holds zero flights (Jul 3 2026), with HTTP 402/403 (Sep 2026
-// audit F135), or not within its 3s budget (52 aborts logged Oct 16–Nov 8 2026). A Nov 10 2026
-// probe of 24 live United flights found it answered none of them; schedule-cache answered all
-// 24. The code stays for the parser tests and for a licensed source to replace it; when enabled
-// it runs ahead of the chain above exactly as before, and any failure falls through to it.
+// audit F135), or not within its 3s budget (52 aborts in the 7 days to Nov 10 2026). A Nov 10
+// 2026 probe of 24 live United flights found it answered none of them; schedule-cache answered
+// all 24. The code stays for the parser tests and until a licensed source replaces it. When
+// enabled it runs first, and any failure falls through to the chain above.
 
 import type { VercelRequest, VercelResponse } from './_types.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
@@ -828,7 +828,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(result);
   } catch (e: any) {
     // warn, not error: the chain below still answers, and an aborted scrape is this tier's normal
-    // failure from Vercel. It was 52 of the error feed's entries in Oct–Nov 2026.
+    // failure from Vercel (52 error-feed entries in the 7 days to Nov 10 2026).
     console.warn('FlightAware scrape failed, using fallbacks:', e?.name || e?.message || e);
     return await respondViaFallbacks(res, flight, cacheKey, 'flightaware fetch error', dateParam, allowOfficial, origin, pinnedDep);
   }
