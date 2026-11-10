@@ -2,7 +2,7 @@
 // a delay measured to a runway time. Shared by the desktop table and the phone row.
 import { describe, expect, it } from 'vitest';
 
-import { delayFigure, runwayDelayMarker, statusEvidenceNote } from '../src/lib/schedule-row-display.js';
+import { delayFigure, riskControl, runwayDelayMarker, statusEvidenceNote } from '../src/lib/schedule-row-display.js';
 import { delayCell } from '../src/lib/schedule-row-model.js';
 
 describe('statusEvidenceNote', () => {
@@ -80,5 +80,35 @@ describe('runwayDelayMarker', () => {
   it('falls back to actualFromRunway when the delta carries no basis', () => {
     expect(runwayDelayMarker({ kind: 'delta', text: '+9m', minutes: 9 }, 'departures', true)?.kind).toBe('takeoff');
     expect(runwayDelayMarker({ kind: 'delta', text: '+9m', minutes: 9 }, 'departures', false)).toBeNull();
+  });
+});
+
+describe('riskControl (Nov 2026: weight goes to the exceptions)', () => {
+  it('LOW is quiet words that still say "risk", named for its flight', () => {
+    expect(riskControl('LOW', 'UA1677')).toEqual({
+      quiet: true,
+      text: 'low risk',
+      ariaLabel: 'low risk — explain the delay risk for UA1677',
+    });
+  });
+
+  it('MOD and up keep the pill and the RISK: prefix', () => {
+    for (const band of ['MOD', 'HIGH', 'V.HIGH']) {
+      const control = riskControl(band, 'UA1');
+      expect(control.quiet).toBe(false);
+      expect(control.text).toBe(`RISK: ${band}`);
+    }
+  });
+
+  it('the accessible name starts with the visible words (label in name)', () => {
+    for (const band of ['LOW', 'MOD', 'HIGH', 'V.HIGH']) {
+      const control = riskControl(band, 'UA2');
+      expect(control.ariaLabel.startsWith(control.text)).toBe(true);
+    }
+  });
+
+  it('a missing label reads as LOW, and a missing flight is simply left out of the name', () => {
+    expect(riskControl(undefined).text).toBe('low risk');
+    expect(riskControl('MOD').ariaLabel).toBe('RISK: MOD — explain the delay risk');
   });
 });

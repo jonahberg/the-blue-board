@@ -21,11 +21,22 @@ export function delayToneClass(colorVar: string): string {
   return 'text-bb-ok';
 }
 
-/** `RISK_BANDS` label → badge classes. */
+/** `RISK_BANDS` label → badge classes (the pill, MOD and up). */
 export function riskToneClass(label: string): string {
   if (label === 'V.HIGH' || label === 'HIGH') return 'border-destructive/40 bg-destructive/15 text-destructive';
   if (label === 'MOD') return 'border-bb-warn/40 bg-bb-warn/15 text-bb-warn';
   return 'border-bb-ok/40 bg-bb-ok/15 text-bb-ok';
+}
+
+/**
+ * The board's risk control (`riskControl()` in schedule-row-display.js decides quiet vs pill).
+ * Quiet = LOW: muted words, no border, no fill — still a button, and it says so on hover with
+ * a dotted underline. The pill keeps the weight for the exceptions.
+ */
+export function riskControlClass(label: string, quiet: boolean): string {
+  return quiet
+    ? 'text-muted-foreground underline-offset-2 transition-colors duration-100 hover:text-foreground hover:underline hover:decoration-dotted'
+    : `rounded-sm border px-1 ${riskToneClass(label)}`;
 }
 
 /** `describeBoardCondition().tone` → alert classes. */

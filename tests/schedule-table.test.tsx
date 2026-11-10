@@ -239,3 +239,33 @@ describe('ScheduleTable evidence markers (v1.13.0)', () => {
     expect(screen.getByText('+12m').closest('[title]')!.textContent).toContain('(from touchdown time; before taxi-in)');
   });
 });
+
+describe('ScheduleTable — the risk column gives its weight to the exceptions (Nov 2026)', () => {
+  const risk = (label: string, score: number) => ({
+    kind: 'risk' as const,
+    risk: { score, label, color: '', factors: [], components: [] },
+    context: { flight: label },
+  });
+
+  it('LOW is quiet text with a real name; MOD and HIGH keep the pill', () => {
+    renderTable({
+      rows: [
+        rowModel(1, { ident: 'UA1677', delay: risk('LOW', 9) }),
+        rowModel(2, { ident: 'UA5827', delay: risk('MOD', 30) }),
+        rowModel(3, { ident: 'UA378', delay: risk('HIGH', 60) }),
+      ],
+      dividerIndex: -1,
+    });
+    const low = screen.getByRole('button', { name: 'low risk — explain the delay risk for UA1677' });
+    expect(low.textContent).toBe('low risk');
+    expect(low.className).not.toMatch(/\bborder\b/);
+    expect(low.className).toMatch(/\btext-muted-foreground\b/);
+    // Still a 44 px target for a finger.
+    expect(low.className).toMatch(/\bmin-h-11\b/);
+
+    const mod = screen.getByRole('button', { name: /^RISK: MOD — explain the delay risk for UA5827$/ });
+    expect(mod.className).toMatch(/\bborder-bb-warn\/40\b/);
+    const high = screen.getByRole('button', { name: /^RISK: HIGH/ });
+    expect(high.className).toMatch(/\bbg-destructive\/15\b/);
+  });
+});

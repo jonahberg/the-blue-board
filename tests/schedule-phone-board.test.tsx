@@ -155,6 +155,35 @@ describe('SchedulePhoneRow', () => {
       }),
     );
     const risk = screen.getByRole('button', { name: /RISK: HIGH/ });
+    // The exceptions keep the pill (Nov 2026).
+    expect(risk.className).toMatch(/\bborder\b/);
+    expect(risk.className).toMatch(/\bbg-destructive\/15\b/);
+    fireEvent.click(risk);
+    expect(props.onExplainDelay).toHaveBeenCalledWith(context);
+    expect(props.onOpenFlight).not.toHaveBeenCalled();
+  });
+
+  it('a LOW prediction is quiet text, not a pill, but still the button to the explanation (Nov 2026)', () => {
+    // ORD, Nov 10: 96 of 97 badges said "RISK: LOW" — a column of identical green pills.
+    const context = { flight: 'UA1003' };
+    const props = renderRow(
+      rowModel(3, {
+        ident: 'UA1003',
+        delay: {
+          kind: 'risk',
+          risk: { score: 9, label: 'LOW', color: 'green', factors: [], components: [] },
+          context,
+        },
+      }),
+    );
+    const risk = screen.getByRole('button', { name: 'low risk — explain the delay risk for UA1003' });
+    expect(risk.textContent).toBe('low risk');
+    expect(risk.className).toMatch(/\btext-muted-foreground\b/);
+    expect(risk.className).not.toMatch(/\bborder\b/);
+    expect(risk.className).not.toMatch(/\bbg-/);
+    // Above the stretched row button, with its 44 px hit box.
+    expect(risk.className).toMatch(/\bz-10\b/);
+    expect(risk.className).toMatch(/after:-inset-y-3\.5/);
     fireEvent.click(risk);
     expect(props.onExplainDelay).toHaveBeenCalledWith(context);
     expect(props.onOpenFlight).not.toHaveBeenCalled();
