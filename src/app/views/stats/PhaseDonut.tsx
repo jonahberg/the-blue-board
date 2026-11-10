@@ -43,9 +43,11 @@ export function PhaseDonut({ model }: { model: PhaseModel }) {
 
   return (
     <div className="flex flex-wrap items-center gap-5">
+      {/* 144 px from `lg`, where this card sits beside the 2×2 headline numbers and the
+          smaller donut left a band of empty card under the legend (Nov 2026). */}
       <svg
         viewBox="0 0 100 100"
-        className="size-[120px] shrink-0"
+        className="size-[120px] shrink-0 lg:size-36"
         aria-hidden="true"
         focusable="false"
       >

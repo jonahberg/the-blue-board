@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 /**
- * The onboarding overlay's wiring, rendered for real (F123, F144).
+ * The "What is this dashboard?" dialog's wiring, rendered for real (F123, F144; Nov 2026).
  *
- * The pure rules — `onboardingMayOpen()` and `onboardingHubSeed()` — are unit-tested in
- * tests/popup-triggers.test.js and tests/engagement.test.js. What those cannot see is whether
- * `src/app/features/Onboarding.tsx` actually applies them:
+ * Until Nov 2026 this was the first-visit welcome and it opened by itself over the live map.
+ * The map is the first impression now: the dialog opens ONLY when asked (the header "?" and
+ * the phone "More" sheet both call `setOnboardingOpen(true)`). What this file pins:
  *
- *   - it waits for the waitlist to close before auto-opening (`waitlistOpen` in the deps);
- *   - it auto-opens at most once per load, so closing the waitlist never resurrects a
- *     welcome the visitor already dismissed;
- *   - the header's "?" (`setOnboardingOpen(true)`) still reopens it after that;
+ *   - it never opens by itself — not on a first visit, not for a returning visitor, not on a
+ *     deep-link arrival, and not when the waitlist dialog closes (that used to bring it up);
+ *   - the engagement store still records the visit, before reading nothing that depends on it,
+ *     so a first-timer's waitlist threshold is still 20;
+ *   - opened on request, its one dismiss still writes `bb-onboarded` and
+ *     `bb_onboarding_dismissed`, so a returning visitor's storage reads as it always did;
  *   - the hub picker is re-seeded from the live preference every time it opens, so a hub
  *     changed from the header is shown — and not reverted by the dismiss.
  *
@@ -18,17 +20,16 @@
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { useLayoutEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import Onboarding from '../src/app/features/Onboarding';
-import { resetEngagement } from '../src/app/state/engagement';
+import { engagementSnapshot, initEngagement, resetEngagement } from '../src/app/state/engagement';
 import { PrefsProvider, usePrefs } from '../src/app/state/prefs';
 import type { PrefsValue } from '../src/app/state/prefs';
 import { UiProvider, useUi } from '../src/app/state/ui';
 import type { UiValue } from '../src/app/state/ui';
 
-const TITLE = /Welcome to The Blue Board/;
+const TITLE = /^The Blue Board$/;
 
 let ui: UiValue | null = null;
 let prefs: PrefsValue | null = null;
@@ -60,7 +61,7 @@ function pickerText(): string {
 }
 
 function dismissWithButton() {
-  fireEvent.click(screen.getByRole('button', { name: /Fly the Friendly Skies/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
 }
 
 beforeEach(() => {
@@ -77,97 +78,106 @@ afterEach(() => {
   prefs = null;
 });
 
-describe('Onboarding auto-open yields to the waitlist', () => {
-  it('opens on a first visit when nothing else is up', async () => {
+describe('The dialog never opens by itself (Nov 2026: the live map is the first impression)', () => {
+  it('stays closed on a first visit, with nothing in storage', async () => {
     await act(async () => {
       mount();
+      initEngagement();
     });
-    expect(dialogShown()).toBe(true);
-    expect(ui!.onboardingOpen).toBe(true);
-  });
-
-  it('stays closed while the waitlist is open, and comes up once it closes', async () => {
-    // `?waitlist=1` is the real path that has the waitlist up at mount: deep-links.ts flips
-    // it before the engagement store is ready. A layout effect lands it in the same slot.
-    function WaitlistFirst() {
-      const u = useUi();
-      useLayoutEffect(() => {
-        u.setWaitlistOpen(true);
-      }, []);
-      return null;
-    }
-    await act(async () => {
-      render(
-        <UiProvider>
-          <PrefsProvider>
-            <Probe />
-            <WaitlistFirst />
-            <Onboarding />
-          </PrefsProvider>
-        </UiProvider>,
-      );
-    });
-
-    expect(ui!.waitlistOpen).toBe(true);
     expect(dialogShown()).toBe(false);
     expect(ui!.onboardingOpen).toBe(false);
-
-    await act(async () => ui!.setWaitlistOpen(false));
-    expect(ui!.onboardingOpen).toBe(true);
-    expect(dialogShown()).toBe(true);
   });
 
-  it('does not come back when the waitlist closes after the welcome was dismissed', async () => {
+  it('stays closed for a returning visitor who never dismissed it', async () => {
+    // Before Nov 2026 this visitor (arrived on a deep link once, never saw the welcome) got
+    // the modal on their next bare visit.
+    localStorage.setItem('bb-visited', '1');
     await act(async () => {
       mount();
+      initEngagement();
     });
-    expect(dialogShown()).toBe(true);
-
-    await act(async () => dismissWithButton());
     expect(dialogShown()).toBe(false);
+  });
 
-    // 20 clicks later the waitlist opens, and the visitor closes it.
+  it('stays closed when the waitlist dialog opens and closes', async () => {
+    await act(async () => {
+      mount();
+      initEngagement();
+    });
     await act(async () => ui!.setWaitlistOpen(true));
     await act(async () => ui!.setWaitlistOpen(false));
-
     expect(ui!.onboardingOpen).toBe(false);
     expect(dialogShown()).toBe(false);
   });
 
-  it('the header "?" still reopens it after a dismissal', async () => {
+  it('stays closed on a deep-link arrival, and the visit is still recorded', async () => {
+    window.history.replaceState(null, '', '/?hub=den');
     await act(async () => {
       mount();
+      initEngagement();
     });
-    await act(async () => dismissWithButton());
     expect(dialogShown()).toBe(false);
-
-    await act(async () => ui!.setOnboardingOpen(true));
-    expect(dialogShown()).toBe(true);
+    expect(localStorage.getItem('bb-visited')).toBe('1');
   });
 
-  it('does not auto-open for a visitor who has already onboarded', async () => {
-    localStorage.setItem('bb-visited', '1');
-    localStorage.setItem('bb-onboarded', '1');
-    await act(async () => {
-      mount();
-    });
-    expect(dialogShown()).toBe(false);
+  it('a first-timer still gets the 20-click waitlist threshold: the visit is recorded after it is read', () => {
+    initEngagement();
+    expect(engagementSnapshot().triggerClicks).toBe(20);
+    expect(localStorage.getItem('bb-visited')).toBe('1');
   });
 });
 
-describe('Onboarding re-seeds the hub picker from the live preference', () => {
+describe('Opened on request', () => {
+  it('opens from setOnboardingOpen(true) — the header "?" and the More sheet — and closes on Done', async () => {
+    await act(async () => {
+      mount();
+    });
+    await act(async () => ui!.setOnboardingOpen(true));
+    expect(dialogShown()).toBe(true);
+    // An orientation and the hub picker, not the old six-row feature list.
+    expect(screen.getByText('Schedule')).toBeTruthy();
+    expect(screen.getByLabelText('Home hub')).toBeTruthy();
+
+    await act(async () => dismissWithButton());
+    expect(dialogShown()).toBe(false);
+    expect(ui!.onboardingOpen).toBe(false);
+  });
+
+  it('still writes the old onboarding keys on dismiss, so a returning visitor’s storage reads as before', async () => {
+    await act(async () => {
+      mount();
+    });
+    await act(async () => ui!.setOnboardingOpen(true));
+    await act(async () => dismissWithButton());
+    expect(localStorage.getItem('bb-onboarded')).toBe('1');
+    expect(Number(localStorage.getItem('bb_onboarding_dismissed'))).toBeGreaterThan(0);
+  });
+
+  it('reopens after a dismissal', async () => {
+    await act(async () => {
+      mount();
+    });
+    await act(async () => ui!.setOnboardingOpen(true));
+    await act(async () => dismissWithButton());
+    await act(async () => ui!.setOnboardingOpen(true));
+    expect(dialogShown()).toBe(true);
+  });
+});
+
+describe('The hub picker is re-seeded from the live preference', () => {
   it('shows the current hub each time it opens, and dismissing keeps it', async () => {
     localStorage.setItem('bb_home_airport', 'ORD');
     await act(async () => {
       mount();
     });
+    await act(async () => ui!.setOnboardingOpen(true));
     expect(dialogShown()).toBe(true);
     expect(pickerText()).toContain('ORD');
 
     await act(async () => dismissWithButton());
     expect(prefs!.homeAirport).toBe('ORD');
 
-    // The header's hub picker changes the preference while the overlay is closed.
+    // The header's hub picker changes the preference while the dialog is closed.
     await act(async () => prefs!.setHomeAirport('SFO'));
     await act(async () => ui!.setOnboardingOpen(true));
     expect(dialogShown()).toBe(true);
@@ -179,25 +189,14 @@ describe('Onboarding re-seeds the hub picker from the live preference', () => {
     expect(prefs!.homeAirport).toBe('SFO');
     expect(localStorage.getItem('bb_home_airport')).toBe('SFO');
   });
-});
 
-describe('Onboarding stays down on a deep-link arrival (F45)', () => {
-  it('does not open over the view a ?hub= link was sent for, but still records the visit', async () => {
-    window.history.replaceState(null, '', '/?hub=den');
+  it('Done on "No preference" saves no hub', async () => {
     await act(async () => {
       mount();
     });
-    expect(dialogShown()).toBe(false);
-    expect(ui!.onboardingOpen).toBe(false);
-    // The visit is marked either way, so the waitlist threshold reads the same as before.
-    expect(localStorage.getItem('bb-visited')).toBe('1');
-  });
-
-  it('opens on the next bare visit, since the welcome was never dismissed', async () => {
-    localStorage.setItem('bb-visited', '1');
-    await act(async () => {
-      mount();
-    });
-    expect(dialogShown()).toBe(true);
+    await act(async () => ui!.setOnboardingOpen(true));
+    await act(async () => dismissWithButton());
+    expect(prefs!.homeAirport).toBe('');
+    expect(localStorage.getItem('bb_home_airport')).toBe(null);
   });
 });

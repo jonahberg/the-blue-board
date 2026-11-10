@@ -29,12 +29,13 @@ import {
   phoneSwapText,
   phoneTimeChange,
 } from '@/lib/schedule-phone-row.js';
+import { riskControl } from '@/lib/schedule-row-display.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { cn } from '@/lib/utils';
 import { SpecialLiveryMarker } from '../../features/SpecialLiveryBadge';
 import type { RowModel } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
-import { STATUS_PILL, SWAP_TONE, riskToneClass } from './tone';
+import { STATUS_PILL, SWAP_TONE, riskControlClass } from './tone';
 
 export type SchedulePhoneRowProps = {
   row: RowModel;
@@ -73,6 +74,10 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
   const swapText = phoneSwapText(row.swap);
   const hasIdent = row.ident !== '—';
   const notes = Boolean(swapText || row.faaContext || row.status.seen || row.special);
+  const risk =
+    row.delay.kind === 'risk'
+      ? { label: row.delay.risk.label, control: riskControl(row.delay.risk.label, row.identDisplay) }
+      : null;
 
   return (
     <li
@@ -138,19 +143,23 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
                   actualFromRunway={row.actualFromRunway}
                   className="shrink-0 font-mono text-xs font-semibold tabular-nums"
                 />
-              ) : row.delay.kind === 'risk' ? (
+              ) : risk ? (
                 <button
                   type="button"
+                  data-risk-explain={risk.label}
                   onClick={() => onExplainDelay((row.delay as { context: Record<string, unknown> }).context)}
                   title="Tap for AI analysis"
-                  // 44 px of hit area from the `after:` box, so the badge keeps the row's height.
+                  aria-label={risk.control.ariaLabel}
+                  // 44 px of hit area from the `after:` box, so the control keeps the row's height.
+                  // LOW is quiet text, MOD and up keep the pill (schedule-row-display.js).
                   className={cn(
-                    'relative z-10 shrink-0 rounded-sm border px-1 font-mono text-[9px] leading-4',
+                    'relative z-10 shrink-0 font-mono leading-4',
+                    risk.control.quiet ? 'text-[10px]' : 'text-[9px]',
                     'after:absolute after:-inset-x-1 after:-inset-y-3.5',
-                    riskToneClass(row.delay.risk.label),
+                    riskControlClass(risk.label, risk.control.quiet),
                   )}
                 >
-                  RISK: {row.delay.risk.label}
+                  {risk.control.text}
                 </button>
               ) : null}
             </span>

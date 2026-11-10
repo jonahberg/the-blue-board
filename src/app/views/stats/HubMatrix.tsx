@@ -20,6 +20,13 @@ export type MatrixModel = {
   max: number;
 };
 
+/**
+ * Every cell's box. From `lg` the matrix sits in a half-width card beside "Top Routes" (15
+ * rows); the taller cells there make its ten rows the same height as that list, so neither
+ * card is left with a blank band under it (Nov 2026).
+ */
+const CELL = 'px-1 py-1 sm:px-1.5 lg:py-2';
+
 export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel }) {
   return (
     <div className="overflow-x-auto" tabIndex={0} aria-label="Hub-to-hub flow matrix, scrollable region">
@@ -29,15 +36,15 @@ export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel 
         </caption>
         <thead>
           <tr>
-            <th scope="col" className="px-1 py-1 sm:px-1.5 text-left text-[9px] font-normal text-muted-foreground">
+            <th scope="col" className={`${CELL} text-left text-[9px] font-normal text-muted-foreground`}>
               FROM \ TO
             </th>
             {hubs.map((hub) => (
-              <th key={hub} scope="col" className="px-1 py-1 sm:px-1.5 text-center text-primary">
+              <th key={hub} scope="col" className={`${CELL} text-center text-primary`}>
                 {hub}
               </th>
             ))}
-            <th scope="col" className="px-1 py-1 sm:px-1.5 text-center text-[9px] font-normal text-muted-foreground">
+            <th scope="col" className={`${CELL} text-center text-[9px] font-normal text-muted-foreground`}>
               TOTAL
             </th>
           </tr>
@@ -45,13 +52,13 @@ export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel 
         <tbody>
           {hubs.map((origin) => (
             <tr key={origin}>
-              <th scope="row" className="px-1 py-1 sm:px-1.5 text-left font-bold text-primary">
+              <th scope="row" className={`${CELL} text-left font-bold text-primary`}>
                 {origin}
               </th>
               {hubs.map((dest) => {
                 if (origin === dest) {
                   return (
-                    <td key={dest} className="bg-muted/30 px-1 py-1 sm:px-1.5 text-center text-muted-foreground">
+                    <td key={dest} className={`bg-muted/30 ${CELL} text-center text-muted-foreground`}>
                       <span aria-hidden="true">—</span>
                       <span className="sr-only">not applicable</span>
                     </td>
@@ -62,7 +69,7 @@ export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel 
                 return (
                   <td
                     key={dest}
-                    className={`border border-border/30 px-1 py-1 sm:px-1.5 text-center ${
+                    className={`border border-border/30 ${CELL} text-center ${
                       value > 0 ? 'font-bold' : 'text-muted-foreground'
                     }`}
                     style={
@@ -76,7 +83,7 @@ export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel 
                   </td>
                 );
               })}
-              <td className="border-l-2 border-border px-1 py-1 sm:px-1.5 text-center font-bold text-muted-foreground">
+              <td className={`border-l-2 border-border ${CELL} text-center font-bold text-muted-foreground`}>
                 {model.rowTotals[origin] ?? 0}
               </td>
             </tr>

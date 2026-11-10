@@ -172,14 +172,22 @@ export type BoardModel = {
   dividerLabel: string;
   /** Index of the first future row — what "Jump to now" targets when there is no divider. */
   firstFutureIndex: number;
+  /** `computeScheduleStatCounts()` (src/lib/board-stats.js) — every row in exactly one bucket. */
   stats: {
     total: number;
     operated: number;
     otp: number | null;
     onTime: number;
     late: number;
+    /** The board says Departed / Landed, but no actual time was reported: never scored. */
+    untimed: number;
+    /** Arrivals only: left the origin, not yet landed here. */
+    inAir: number;
+    /** Every cancellation, unconfirmed ("Likely Canceled") included — what IROPS counts. */
     canceled: number;
     canceledUncertain: number;
+    /** `canceled` minus the unconfirmed: what a figure labelled "Canceled" shows. */
+    canceledConfirmed: number;
     upcoming: number;
     presumed: number;
     uncategorized: number;

@@ -60,7 +60,11 @@ describe('one "operated" definition (D9)', () => {
 
   it('the strip still reconciles: every row lands in exactly one bucket', () => {
     const s = computeScheduleStatCounts(BOARD, { dir: 'departures', nowSec: NOW });
-    expect(s.onTime + s.late + s.upcoming + s.canceled + s.presumed + s.uncategorized).toBe(s.total);
+    // Nov 2026: `untimed` (Departed / Landed with no actual time) and `inAir` (arrivals only)
+    // joined the buckets. Rows 4 and 5 — the estimate-only departures — are `untimed`: still
+    // never operated, no longer "uncategorized".
+    expect(s.untimed).toBe(2);
+    expect(s.onTime + s.late + s.untimed + s.inAir + s.upcoming + s.canceled + s.presumed + s.uncategorized).toBe(s.total);
   });
 
   it("the hub strip's client fallback (computeBoardOtp) agrees too", () => {

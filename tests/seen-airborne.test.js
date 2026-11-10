@@ -84,7 +84,11 @@ describe('stat strip + client IROPS fallback', () => {
     const c = computeScheduleStatCounts(flights(), { dir: 'departures', nowSec: NOW });
     expect(c.canceled).toBe(1);
     expect(c.canceledUncertain).toBe(1);
-    expect(c.total).toBe(c.onTime + c.late + c.upcoming + c.canceled + c.presumed + c.uncategorized);
+    // The seen row is Departed with no provider time: since Nov 2026 the strip counts it as
+    // `untimed` ("Departed · not timed"), not "uncategorized".
+    expect(c.untimed).toBe(1);
+    expect(c.uncategorized).toBe(0);
+    expect(c.total).toBe(c.onTime + c.late + c.untimed + c.inAir + c.upcoming + c.canceled + c.presumed + c.uncategorized);
   });
   it('the client fallback counts only the unseen one, and reports it as likely', () => {
     const rows = flights().map((fl) => ({ fl, dir: 'departures', key: 'ORD-departures-0' }));
