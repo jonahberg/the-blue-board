@@ -140,10 +140,10 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
 >
   <section class={SECTION} aria-label={`${code} project summary`}>
     <div class={SUMMARY_GRID}>
-      <div class={STAT}><strong class={STAT_VALUE}>{projects.length}</strong><span class={STAT_LABEL}>Tracked {plural(projects.length, 'project')}</span></div>
-      <div class={STAT}><strong class={STAT_VALUE}>{activeCount}</strong><span class={STAT_LABEL}>Building or announced</span></div>
-      <div class={STAT}><strong class={STAT_VALUE}>{openCount}</strong><span class={STAT_LABEL}>Already open</span></div>
-      <div class={STAT}><strong class={STAT_VALUE}>{totalGates || '—'}</strong><span class={STAT_LABEL}>Tracked new {plural(totalGates, 'gate')}</span></div>
+      <div class={STAT}><span class={STAT_LABEL}>Tracked {plural(projects.length, 'project')}</span><strong class={STAT_VALUE}>{projects.length}</strong></div>
+      <div class={STAT}><span class={STAT_LABEL}>Building or announced</span><strong class={STAT_VALUE}>{activeCount}</strong></div>
+      <div class={STAT}><span class={STAT_LABEL}>Already open</span><strong class={STAT_VALUE}>{openCount}</strong></div>
+      <div class={STAT}><span class={STAT_LABEL}>Tracked new {plural(totalGates, 'gate')}</span><strong class={STAT_VALUE}>{totalGates || '—'}</strong></div>
     </div>
   </section>
 

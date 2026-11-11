@@ -1,6 +1,10 @@
 ---
-// The scoreboard. 3–4 tiles, mono values, one amber "featured" tile max — amber
-// discipline. This is the strip people screenshot; keep it clean.
+// The scoreboard: 3–4 tiles, the same family as the site's StatTile and the detail pages' tiles
+// (src/components/site/stat-tile.ts), with a sub-line under each figure. A figure takes a tone only
+// when it IS a status the page encodes the same way elsewhere (the ATC page's live towers are the
+// legend's green); otherwise it stays body colour. No "featured" tile: a highlighted border was
+// decoration. This is the strip people screenshot; keep it clean.
+import { STAT_CARD, STAT_LABEL, STAT_SUB, STAT_VALUE } from '../site/stat-tile';
 import { STAT_TONE, toneClass } from './tones';
 
 interface Props {
@@ -10,29 +14,16 @@ interface Props {
 const { stats } = Astro.props;
 ---
 
-<div class="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+<!-- Each tile spans three rows of the strip's grid and lays its label, figure and sub-line on
+     them (`grid-rows-subgrid`), so the figures sit level across a row of tiles even when one label
+     wraps to two lines and its neighbour's does not. -->
+<div class="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
   {
     stats.map((s) => (
-      <div
-        class:list={[
-          'rounded-lg border border-border bg-card px-3 py-4 text-center',
-          s.tone === 'amber' && 'border-primary/60',
-        ]}
-      >
-        <div class="mb-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-          {s.label}
-        </div>
-        <div
-          class:list={[
-            'font-mono text-xl font-bold leading-tight sm:text-2xl',
-            toneClass(STAT_TONE, s.tone ?? 'default'),
-          ]}
-        >
-          {s.value}
-        </div>
-        {s.sub && (
-          <div class="mt-1.5 font-mono text-[11px] tracking-wide text-muted-foreground">{s.sub}</div>
-        )}
+      <div class:list={[STAT_CARD, 'row-span-3 grid grid-rows-subgrid gap-y-0']}>
+        <div class:list={[STAT_LABEL, 'self-end']}>{s.label}</div>
+        <div class:list={[STAT_VALUE, toneClass(STAT_TONE, s.tone ?? 'default')]}>{s.value}</div>
+        {s.sub && <div class={STAT_SUB}>{s.sub}</div>}
       </div>
     ))
   }

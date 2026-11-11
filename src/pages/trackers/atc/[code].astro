@@ -133,9 +133,9 @@ const peerLinks = atcHubDetailCodes.map((peer) => ({
 >
   <section class={SECTION} aria-label={`${code} TFDM status summary`}>
     <div class={SUMMARY_GRID}>
-      <div class={STAT}><strong class={STAT_VALUE}>{code}</strong><span class={STAT_LABEL}>Airport</span></div>
-      <div class={STAT}><strong class={STAT_VALUE}>{status.label}</strong><span class={STAT_LABEL}>Current status</span></div>
-      <div class={STAT}><strong class={STAT_VALUE}>{publishedDate ? formatTrackerDate(publishedDate) : 'Not published'}</strong><span class={STAT_LABEL}>{dateLabel}</span></div>
+      <div class={STAT}><span class={STAT_LABEL}>Airport</span><strong class={STAT_VALUE}>{code}</strong></div>
+      <div class={STAT}><span class={STAT_LABEL}>Current status</span><strong class={STAT_VALUE}>{status.label}</strong></div>
+      <div class={STAT}><span class={STAT_LABEL}>{dateLabel}</span><strong class={STAT_VALUE}>{publishedDate ? formatTrackerDate(publishedDate) : 'Not published'}</strong></div>
     </div>
   </section>
 
