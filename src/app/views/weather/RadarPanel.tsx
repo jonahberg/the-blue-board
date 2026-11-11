@@ -9,6 +9,8 @@
  * colour and is explained by the status line printed beneath it, not by this legend.)
  */
 
+import { CloudRain } from 'lucide-react';
+
 import { WX_LEGEND } from '@/lib/weather-cards.js';
 import { RadarMap } from '../../map/RadarMap';
 import type { RadarHub } from '../../map/RadarMap';
@@ -23,10 +25,14 @@ export function RadarPanel({
   onSelectHub: (hub: string) => void;
 }) {
   const legend = WX_LEGEND as { cat: string; color: string }[];
+  // `radarTitle()` opens with a 🌧 emoji; panel titles carry a lucide icon instead (DESIGN.md
+  // Components), so the glyph is dropped here and the icon drawn beside the words.
+  const words = title.replace(/^\p{Extended_Pictographic}\uFE0F?\s*/u, '');
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <h2 id="radar-title" className="shrink-0 font-mono text-xs text-muted-foreground">
-        {title}
+      <h2 id="radar-title" className="flex shrink-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
+        <CloudRain aria-hidden="true" className="size-3.5 shrink-0" />
+        {words}
       </h2>
       {/* `isolate z-0`: Leaflet's panes sit at z-index 400+ and would otherwise paint over
           any Sheet or Dialog the shell opens at z-50.
@@ -35,7 +41,10 @@ export function RadarPanel({
           resolves against a parent's HEIGHT, and this box gets its size from `min-height`
           plus `flex-1`, so `h-full` collapsed the Leaflet container to 0 px and drew an
           empty black rectangle. `inset-0` needs no resolvable parent height at all. */}
-      <div className="relative isolate z-0 min-h-[240px] flex-1 overflow-hidden rounded-lg border">
+      {/* On a phone the attribution line runs the map's full width, so the zoom stack (bottom
+          left) sat on top of it. Scoped to this map, the stack is lifted clear of the line;
+          where the shell hides the zoom buttons for touch, this changes nothing. */}
+      <div className="relative isolate z-0 min-h-[240px] flex-1 overflow-hidden rounded-lg border [&_.leaflet-bottom.leaflet-left_.leaflet-control-zoom]:mb-9">
         <RadarMap hubs={hubs} onSelectHub={onSelectHub} className="absolute inset-0" />
       </div>
       <ul className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
