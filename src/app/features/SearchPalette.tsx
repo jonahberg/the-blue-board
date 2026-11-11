@@ -355,6 +355,9 @@ export function SearchPalette() {
       >
         <CommandInput
           placeholder="UA1234, N12345, ORD-DEN, or ask a question…"
+          // At 16 px on a phone the hint is wider than the field; end it with an ellipsis rather
+          // than a word cut in half ("ask a questi").
+          className="text-ellipsis"
           value={query}
           maxLength={ASK_MAX_QUERY_CHARS}
           onValueChange={onQueryChange}

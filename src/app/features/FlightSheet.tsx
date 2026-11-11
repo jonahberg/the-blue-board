@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { focusContentOnOpen } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
@@ -309,6 +310,11 @@ export function FlightSheet() {
         side={wide ? 'right' : 'bottom'}
         data-peek={!wide && !expanded ? 'true' : undefined}
         showOverlay={false}
+        // Focus the panel itself, as the phone Filters sheet does: Radix's default focused the
+        // first button ("More details" / "Center map"), which a tap on a plane then showed
+        // ringed as if it were selected. The title still announces the panel, and Tab goes on
+        // to the first control.
+        onOpenAutoFocus={focusContentOnOpen}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
         className={
