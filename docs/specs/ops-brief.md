@@ -77,6 +77,8 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `faa.active.other` | faa | non-hub GS/GDP | The FAA also has 1 program in effect at other airports: a ground stop for flights into Boston. | calm |
 | `faa.planned.<CODE>` | faa_planned | `/api/nas` operations plan (`UNTIL`/`AFTER`/`HHMM-HHMM` Zulu, resolved to the nearest occurrence) | The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) until 9:00 PM ET. It is not in effect. | hub: watch |
 | `faa.planned.count` | faa_planned | same | The FAA's operations plan lists 2 possible or planned programs for later. None of them is in effect now. | calm |
+
+A planned program at an airport that is **not** a United hub (and the count, when every planned program is one) has severity 0: it is the last fact the model reads and the template never picks it. Prompt rule 4 has the model put them last, in one item, or leave them out.
 | `wx.<HUB>` | weather | `/api/metar`, `computeOpsImpact()`; only hubs whose impact is not normal and that have a condition to name (a caution from low cloud over mist or haze alone has none, and is skipped) | Newark (EWR) weather: low visibility, thunderstorms, heavy rain and wind gusting to 34 knots, enough to slow arrivals and departures. (caution: "which can cause minor delays"; severe: "enough to slow arrivals and departures significantly") | warning/severe → watch |
 | `wx.summary` | weather | same | Weather is not affecting operations at any of the 9 United hubs with a current report. | calm |
 | `air.total` | airborne | live feed, `isOnGround()` complement (the Live stat bar) | 630 United flights, including United Express, are in the air right now. | calm |

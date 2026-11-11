@@ -508,6 +508,7 @@ export function buildBriefFacts(sources, { nowMs }) {
     const planned = Array.isArray(sources.nas.planned) ? sources.nas.planned : [];
     const usedIds = new Set();
     let plannedCount = 0;
+    let plannedAtHub = false;
     for (const tmi of planned) {
       const fact = plannedFact(tmi, { nowMs, activeAt, asOfMs: asOf.nas ?? nowMs, skipped });
       if (!fact) continue;
@@ -516,6 +517,7 @@ export function buildBriefFacts(sources, { nowMs }) {
       usedIds.add(id);
       facts.push({ ...fact, id });
       plannedCount++;
+      if (fact.hub) plannedAtHub = true;
     }
     if (plannedCount > 0) {
       facts.push({
@@ -525,7 +527,8 @@ export function buildBriefFacts(sources, { nowMs }) {
         values: uniq([String(plannedCount), numberWord(plannedCount)]),
         at: iso(asOf.nas ?? nowMs),
         link: { tab: 'weather' },
-        severity: 3,
+        // Only possible programs away from the hubs: last, with them (plannedFact).
+        severity: plannedAtHub ? 3 : 0,
         toneFloor: 'calm',
         material: `planned:${plannedCount}`,
       });
@@ -759,7 +762,9 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
     values: uniq(values),
     at: iso(asOfMs),
     link: { tab: 'weather', hub: primary },
-    severity: isHub ? (tentative ? 22 : 30) : 6,
+    // Something that may happen at an airport that is not a United hub ranks below every other
+    // fact: it orders the model's list last, and the template never picks or leads with it.
+    severity: isHub ? (tentative ? 22 : 30) : 0,
     toneFloor: isHub ? 'watch' : 'calm',
     material: `planned:${program}:${window}`,
   };

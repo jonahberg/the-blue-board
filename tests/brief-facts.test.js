@@ -136,6 +136,17 @@ describe('buildBriefFacts: the catalogue', () => {
     expect(computeTone(facts)).toBe('watch');
   });
 
+  it('ranks possible programs at airports that are not hubs last, below every other fact', () => {
+    const { facts } = build(fixture('calm-afternoon'));
+    expect(facts.slice(-2).map((f) => f.id)).toEqual(['faa.planned.BOS', 'faa.planned.count']);
+    expect(facts.slice(-2).every((f) => f.severity === 0)).toBe(true);
+    expect(facts.slice(0, -2).every((f) => f.severity > 0)).toBe(true);
+    // A possible program at a hub still ranks as a watch, and so does the count beside it.
+    const watch = byId(build(fixture('planned-only-watch')).facts);
+    expect(watch['faa.planned.EWR'].severity).toBe(22);
+    expect(watch['faa.planned.count'].severity).toBe(3);
+  });
+
   it('drops a planned program where one is already in effect, instead of contradicting it', () => {
     const { facts, collection } = build(fixture('hub-ground-stop'));
     expect(byId(facts)['faa.active.EWR.gs']).toBeDefined();

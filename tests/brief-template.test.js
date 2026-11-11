@@ -36,6 +36,18 @@ describe('every fixture’s template brief passes the verifier', () => {
   }
 });
 
+describe('possible FAA programs away from the hubs', () => {
+  for (const name of names) {
+    it(`${name}: the template never leads with one`, () => {
+      const facts = factsFor(name);
+      const awayFromHubs = new Set(facts.filter((f) => f.kind === 'faa_planned' && !f.hub).map((f) => f.id));
+      const t = buildTemplateBrief(facts);
+      expect(awayFromHubs.has(t.items[0].fact_ids[0])).toBe(false);
+      for (const id of t.headline_fact_ids) expect(awayFromHubs.has(id)).toBe(false);
+    });
+  }
+});
+
 describe('buildTemplateBrief', () => {
   it('calm: says it is calm and gives the background', () => {
     const t = buildTemplateBrief(factsFor('calm-afternoon'));
