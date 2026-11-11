@@ -50,8 +50,8 @@ describe('track — Vercel Web Analytics custom events via the script tag', () =
 describe('support click tracking', () => {
   it('recognises the Stripe donation link and nothing that merely looks like one', () => {
     expect(isSupportUrl(supportUrl('footer'))).toBe(true);
-    expect(isSupportUrl('https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00')).toBe(true);
-    expect(isSupportUrl('https://buy.stripe.com.evil.example/14AaEW6Xx4AH9Ca7ssgEg00')).toBe(false);
+    expect(isSupportUrl('https://buy.stripe.com/cNidR80z90krbKi4gggEg05')).toBe(true);
+    expect(isSupportUrl('https://buy.stripe.com.evil.example/cNidR80z90krbKi4gggEg05')).toBe(false);
     expect(isSupportUrl('https://notbuy.stripe.com/x')).toBe(false);
     expect(isSupportUrl('https://stripe.com/')).toBe(false);
   });
