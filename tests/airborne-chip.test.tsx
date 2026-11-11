@@ -28,7 +28,7 @@ describe('AirborneChip', () => {
     render(<AirborneChip airborne={0} history={null} onOpen={() => {}} />);
     const chip = screen.getByRole('button', { name: 'United airborne: open the 24-hour graph' });
     expect(chip.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['relative', 'h-9', 'after:absolute', 'after:-inset-1', 'bg-background', 'dark:bg-background']),
+      expect.arrayContaining(['relative', 'h-9', 'after:absolute', 'after:-inset-[5px]', 'bg-background', 'dark:bg-background']),
     );
     expect(chip.textContent).toContain('—');
   });

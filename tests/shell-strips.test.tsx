@@ -148,7 +148,9 @@ describe('NewsBanner', () => {
 
     const dismiss = screen.getByRole('button', { name: 'Dismiss news' });
     expect(classesOf(dismiss)).toEqual(
-      expect.arrayContaining(['relative', 'h-8', 'min-w-11', 'after:absolute', 'after:-inset-y-1.5']),
+      // 32 px + 7 px each way, measured from inside the button's 1 px border = 44 (Nov 2026: the
+      // old -inset-y-1.5 measured 42 with elementFromPoint).
+      expect.arrayContaining(['relative', 'h-8', 'min-w-11', 'after:absolute', 'after:-inset-y-[7px]']),
     );
   });
 });

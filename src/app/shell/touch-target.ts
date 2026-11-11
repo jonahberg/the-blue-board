@@ -8,8 +8,12 @@
  * without overlapping. Inside a scroller the box is clipped at the scroller's padding edge, so a
  * scrolling row of these carries `p-1` (see `views/live/MapControls`).
  *
+ * The box is 5 px, not 4: an absolutely placed pseudo-element is measured from inside its
+ * owner's border, and every Button and Toggle here carries a 1 px border (transparent on a ghost),
+ * so `-inset-1` measured 42 × 42 with `elementFromPoint`.
+ *
  * Only a mouse at `md`+ drops back to a 32 px control with no extra box: width is not input type,
  * and an iPad at 1024 px is a touch screen.
  */
 export const TOUCH_CONTROL =
-  'relative h-9 min-w-9 after:absolute after:-inset-1 pointer-fine:md:h-8 pointer-fine:md:min-w-8 pointer-fine:md:after:hidden';
+  'relative h-9 min-w-9 after:absolute after:-inset-[5px] pointer-fine:md:h-8 pointer-fine:md:min-w-8 pointer-fine:md:after:hidden';

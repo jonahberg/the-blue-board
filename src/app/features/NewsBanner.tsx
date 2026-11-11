@@ -137,7 +137,9 @@ export default function NewsBanner({ className }: { className?: string } = {}) {
         variant="ghost"
         size="sm"
         aria-label="Dismiss news"
-        className="relative h-8 min-w-11 shrink-0 px-2 py-0 text-[11px] after:absolute after:inset-x-0 after:-inset-y-1.5"
+        // 32 px + 7 px above and below = 44: a pseudo-element is placed from inside the 1 px
+        // border, so the old `-inset-y-1.5` measured 42.
+        className="relative h-8 min-w-11 shrink-0 px-2 py-0 text-[11px] after:absolute after:inset-x-0 after:-inset-y-[7px]"
         onClick={dismiss}
       >
         <X aria-hidden="true" />

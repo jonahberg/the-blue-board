@@ -56,9 +56,10 @@ describe('Header search button', () => {
   });
 
   // Nov 2026: the phone header is 44 px, so its controls are 36 px surfaces whose `after:` box
-  // reaches 4 px out on every side — a 44 × 44 hit area that does not make the header taller.
+  // reaches 4 px past the border on every side (5 px from inside the 1 px border, where a
+  // pseudo-element is measured) — a 44 × 44 hit area that does not make the header taller.
   // `relative` anchors the box; `z-10` keeps it above the brief row's hit area from below.
-  const HIT_BOX_44 = ['relative', 'z-10', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-1'];
+  const HIT_BOX_44 = ['relative', 'z-10', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-[5px]'];
 
   it('keeps a 44px hit area on coarse pointers at every width (only a fine pointer relaxes it)', () => {
     renderHeader();

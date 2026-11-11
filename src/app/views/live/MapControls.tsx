@@ -124,12 +124,15 @@ export function RegionMenu({
       >
         <Button
           variant="outline"
-          className={cn(MAP_BUTTON, 'shrink-0 gap-1.5 px-2.5')}
+          className={cn(MAP_BUTTON, 'shrink-0 gap-1.5 px-2.5 max-sm:gap-0.5 max-sm:px-1.5')}
         >
           <Earth aria-hidden="true" />
           <span className="sr-only">Map region: </span>
-          {/* A long preset name ("Mexico & C. America") would push the row past a 375 px map. */}
-          <span className="max-w-24 truncate sm:max-w-none">{current.short}</span>
+          {/* Below `sm` a globe and a chevron, like the icon toggles beside it: a 375 px map has
+              room for "US" but not for "Caribbean" (124 px) or "Mexico & C. America" (162 px),
+              which pushed Refresh under the row's fade. The name stays for assistive tech, and
+              the menu checks it. */}
+          <span className={LABEL}>{current.short}</span>
           <ChevronDown aria-hidden="true" className="text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>

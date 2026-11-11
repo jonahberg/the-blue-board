@@ -39,7 +39,8 @@ export function WatchBanner({
   // One 32 px strip like the rows around it (Nov 2026: it was a rounded, bordered card inside
   // the full-width chrome, 56 px tall because its 44 px button set the height). It mounts above
   // the view, so it is kept as short as the news strip: the Dismiss button keeps a 44 px hit
-  // area through its `after:` box, the NewsBanner pattern, not by making the row 44 px.
+  // area through its `after:` box, the NewsBanner pattern, not by making the row 44 px (7 px: the
+  // box is measured from inside the button's 1 px border).
   return (
     <div className="flex h-8 shrink-0 items-center gap-2 border-b bg-primary/10 px-3 text-[11px] md:px-4">
       <span className="min-w-0 flex-1 truncate" title={alert.message}>
@@ -48,7 +49,7 @@ export function WatchBanner({
       <Button
         variant="ghost"
         size="sm"
-        className="relative h-8 shrink-0 px-2 py-0 text-[11px] after:absolute after:inset-x-0 after:-inset-y-1.5"
+        className="relative h-8 shrink-0 px-2 py-0 text-[11px] after:absolute after:inset-x-0 after:-inset-y-[7px]"
         onClick={onDismiss}
       >
         Dismiss

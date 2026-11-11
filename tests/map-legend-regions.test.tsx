@@ -41,9 +41,9 @@ describe('MapLegend', () => {
     render(<MapLegend longhaulLayer={false} starlinkLayer />);
     const button = screen.getByRole('button', { name: 'Key' });
     expect(button.getAttribute('aria-expanded')).toBe('false');
-    // 36 px drawn, and an `after:` box 4 px out on every side: 44 × 44 to a finger (Nov 2026).
+    // 36 px drawn, and an `after:` box 4 px past the border on every side: 44 × 44 to a finger.
     const classes = button.className.split(/\s+/);
-    expect(classes).toEqual(expect.arrayContaining(['relative', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-1']));
+    expect(classes).toEqual(expect.arrayContaining(['relative', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-[5px]']));
     expect(classes).toContain('pointer-fine:md:after:hidden');
     const panel = document.getElementById(button.getAttribute('aria-controls')!);
     expect(panel).not.toBeNull();

@@ -85,7 +85,7 @@ describe('MapControls on a phone (Nov 2026)', () => {
       expect(label?.className).toBe('max-sm:sr-only');
       expect(toggle.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
       expect(toggle.className.split(/\s+/)).toEqual(
-        expect.arrayContaining(['relative', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-1']),
+        expect.arrayContaining(['relative', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-[5px]']),
       );
     }
   });
