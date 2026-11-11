@@ -37,6 +37,7 @@ import { expressDateLabel, expressOperatorLine, expressWifiLabel } from '@/lib/e
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
 import { matchAircraft, unmatchedAircraftNote } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
+import { flightPagePath, parseFlightIdent } from '@/lib/flight-page.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { resolveFlightRoute } from '../data/route';
 import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
@@ -635,6 +636,15 @@ export function FlightSheet() {
           </div>
 
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {/* The flight's own page (/flight/UA929): times, its 30-day record, a link to share. */}
+            {ident && parseFlightIdent(ident) ? (
+              <a
+                className="text-primary underline-offset-2 hover:underline"
+                href={flightPagePath(parseFlightIdent(ident)!.ident)}
+              >
+                Open flight page
+              </a>
+            ) : null}
             {ident ? (
               <a
                 className="text-primary underline-offset-2 hover:underline"

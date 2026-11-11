@@ -1,0 +1,126 @@
+---
+/**
+ * The flight page shell: /flight (a lookup) and, served by api/flight-page.ts with the head
+ * substituted per flight, /flight/UA929.
+ *
+ * Built once by Astro through BaseLayout, so the head, header, footer and the bundled script are
+ * the site's normal ones and the CSP needs nothing new: the page script is an external `_astro/`
+ * file (src/scripts/flight-page.ts), there is no inline script and no island. Everything live is
+ * filled by that script from /api/flight (stored data only — no metered provider is ever called
+ * for this page); every word it writes comes from src/lib/flight-verdict.js and
+ * src/lib/flight-page-view.js.
+ *
+ * States (`data-state` on the root): `static` (what the HTML ships), `lookup` (no flight in the
+ * address), `loading`, `live`, `not-found`, `invalid`, `error`.
+ *
+ * No `aria-live` region except two `role="status"` lines that only ever speak after the reader
+ * pressed something (Share, and the AI read) — the verdict refreshes on a timer and stays silent.
+ */
+import { Eye, Share2 } from 'lucide-react';
+
+import BaseLayout from '../../components/site/BaseLayout.astro';
+import FlightAircraftCard from '../../components/site/FlightAircraftCard.astro';
+import FlightHistoryCard from '../../components/site/FlightHistoryCard.astro';
+import FlightReadCard from '../../components/site/FlightReadCard.astro';
+import FlightTrip from '../../components/site/FlightTrip.astro';
+import { supportUrl } from '../../lib/support-link.js';
+
+const title = 'Look up a United flight | The Blue Board';
+const description =
+  'Type a United flight number to see where it is right now, its times and delays, the aircraft, and how often it has run on time lately.';
+---
+
+<BaseLayout title={title} description={description} canonical="/flight" ogTitle="Look up a United flight">
+  <div
+    class="mx-auto max-w-4xl px-4 pt-6 pb-12 md:pt-10"
+    data-flight-page
+    data-flight-ident=""
+    data-state="static"
+  >
+    <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+      <div class="min-w-0">
+        <p class="font-mono text-[11px] tracking-widest text-muted-foreground uppercase">United flight</p>
+        <h1 class="mt-1 font-mono text-3xl font-semibold tracking-tight text-foreground md:text-4xl" data-fp-title>Find a United flight</h1>
+        <p class="mt-1.5 text-sm text-muted-foreground [@media(scripting:enabled)]:min-h-5" data-fp-route></p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2" data-fp-actions hidden>
+        <a
+          href="/#myflight"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-primary-fill px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
+          data-fp-watch
+        >
+          <Eye aria-hidden="true" className="size-4" />
+          <span data-f="watch-label">Watch this flight</span>
+        </a>
+        <button
+          type="button"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-4 text-sm font-semibold text-foreground hover:bg-accent"
+          data-fp-share
+        >
+          <Share2 aria-hidden="true" className="size-4" />
+          Share
+        </button>
+        <p class="w-full text-xs text-muted-foreground sm:w-auto" role="status" data-fp-share-status></p>
+      </div>
+    </div>
+
+    <p
+      class="mt-5 max-w-[42ch] text-lg leading-snug font-medium text-pretty text-foreground md:text-xl [@media(scripting:enabled)]:min-h-14"
+      data-fp-verdict
+    >
+      Live status, times and on-time history for any United flight.
+    </p>
+    <p class="mt-2 font-mono text-[11px] text-muted-foreground tabular-nums" data-fp-stamp></p>
+    <p class="mt-3 max-w-prose text-sm leading-relaxed text-muted-foreground" data-fp-note hidden></p>
+
+    <section class="mt-6 max-w-md" aria-labelledby="fp-lookup-label" data-fp-lookup hidden>
+      <!-- Not a form element: the CSP's form-action 'none' blocks a native submit; the script navigates. -->
+      <div class="flex gap-2" role="search" data-fp-lookup-form>
+        <label id="fp-lookup-label" for="fp-lookup-input" class="sr-only">United flight number</label>
+        <input
+          id="fp-lookup-input"
+          name="flight"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          placeholder="UA929"
+          class="min-h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 font-mono text-base text-foreground placeholder:text-muted-foreground md:text-sm"
+        />
+        <button
+          type="button"
+          class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
+          data-fp-lookup-go
+        >
+          Show flight
+        </button>
+      </div>
+      <p class="mt-2 text-xs text-destructive" data-fp-lookup-error hidden></p>
+      <p class="mt-2 text-xs text-muted-foreground">
+        A United or United Express flight number, like <span class="font-mono">UA929</span> or <span class="font-mono">5103</span>.
+      </p>
+    </section>
+
+    <FlightTrip />
+
+    <div class="mt-8 grid gap-4 lg:grid-cols-3" data-fp-cards hidden>
+      <FlightHistoryCard />
+      <FlightAircraftCard />
+      <FlightReadCard />
+    </div>
+
+    <p class="mt-10 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground" data-fp-support hidden>
+      The Blue Board is free and run by one person. If it helped you today,
+      <a
+        href={supportUrl('flight-page')}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-support="flight-page"
+        class="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+      >you can chip in toward the data bill</a>.
+    </p>
+  </div>
+</BaseLayout>
+
+<script src="../../scripts/flight-page.ts"></script>

@@ -1,0 +1,39 @@
+---
+/**
+ * "The aircraft": type, tail, seats and the cabin bar, Wi-Fi, and the tail's recent legs.
+ *
+ * The facts come from the fleet data the dashboard already uses (public/data/fleet.json and the
+ * Starlink roster) and the tail's legs from flight_history, all joined server-side by /api/flight.
+ * The cabin bar is decoration beside the cabin list printed under it (same order, same counts), so
+ * its colours (SEAT_BAR_COLORS, src/lib/special-aircraft.js) never carry meaning alone.
+ */
+import { Zap } from 'lucide-react';
+---
+
+<section class="flex min-w-0 flex-col rounded-lg border border-border bg-card p-4" aria-labelledby="fp-aircraft-title" data-fp-aircraft>
+  <div class="flex items-baseline justify-between gap-2">
+    <h2 id="fp-aircraft-title" class="text-sm font-semibold text-foreground">The aircraft</h2>
+    <span class="font-mono text-xs text-muted-foreground" data-f="reg"></span>
+  </div>
+  <p class="mt-2 text-sm leading-relaxed text-foreground" data-f="summary"></p>
+  <p class="mt-1 flex items-center gap-1 text-sm text-foreground" data-f="wifi">
+    <Zap aria-hidden="true" className="size-3.5 shrink-0 text-bb-starlink" data-f="starlink-icon" />
+    <span data-f="wifi-text"></span>
+  </p>
+  <div class="mt-3 flex h-2 gap-0.5 overflow-hidden rounded-sm" aria-hidden="true" data-f="cabin-bar"></div>
+  <p class="mt-1.5 font-mono text-[11px] leading-relaxed text-muted-foreground tabular-nums" data-f="cabins"></p>
+
+  <div data-f="legs-block" hidden>
+    <h3 class="mt-4 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Its recent flights</h3>
+    <ol class="mt-1.5 flex flex-col gap-1" data-f="legs"></ol>
+  </div>
+  <p class="mt-auto pt-3 text-[11px] leading-relaxed text-muted-foreground" data-f="note"></p>
+
+  <template data-fp-leg>
+    <li class="grid grid-cols-[3.75rem_minmax(0,1fr)_auto] items-baseline gap-x-2 font-mono text-xs tabular-nums">
+      <span class="font-medium text-foreground" data-f="flight"></span>
+      <span class="truncate text-muted-foreground" data-f="route"></span>
+      <span class="text-right" data-f="result"></span>
+    </li>
+  </template>
+</section>
