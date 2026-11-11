@@ -10,7 +10,13 @@
  *   title       — Article headline (h1, JSON-LD, RSS; og:title when ≤70 chars)
  *   seoTitle    — Optional short search headline for <title> (brand appended when it fits;
  *                 derived from the text before the first ": " / " — " when absent)
- *   date        — ISO date string (YYYY-MM-DD)
+ *   date        — ISO date string (YYYY-MM-DD): first publication. The visible date, the RSS
+ *                 pubDate, the Google News sitemap and news-latest.json all use it.
+ *   updated     — Optional YYYY-MM-DD, a real day on or after `date`: the day the article was
+ *                 last updated. Set it when the body gains an "Update, <Month D, YYYY>:" opening
+ *                 paragraph, to that day (tests/news-updated.test.js holds the two together). It
+ *                 feeds the JSON-LD dateModified and the sitemap <lastmod>, and adds a quiet
+ *                 "Updated …" beside the date line; it never moves the article in the list.
  *   category    — Fleet | Routes | Lounges | Policy | Operations
  *   sources     — Array of { name, url } external references
  *   summary     — One-line description for the index page and RSS
@@ -22,13 +28,15 @@
 
 import { hubOrder } from '../hubs/index.js';
 import { fleetOrder } from '../fleet/index.js';
+import { isIsoDay } from '../trackers/verified.js';
 
 // ── Validation ──────────────────────────────────────────────────────
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CATEGORIES = ['Fleet', 'Routes', 'Lounges', 'Policy', 'Operations'];
 
-function validate(articles) {
+/** Throws on the first article that breaks the data model above. Exported for its tests. */
+export function validateArticles(articles) {
   const slugs = new Set();
   for (const a of articles) {
     if (!a.slug || !SLUG_RE.test(a.slug)) {
@@ -41,6 +49,14 @@ function validate(articles) {
     if (!a.title) throw new Error(`News [${a.slug}]: missing title`);
     if (!a.date || !/^\d{4}-\d{2}-\d{2}$/.test(a.date)) {
       throw new Error(`News [${a.slug}]: invalid or missing date (expected YYYY-MM-DD)`);
+    }
+    if (a.updated !== undefined) {
+      if (!isIsoDay(a.updated)) {
+        throw new Error(`News [${a.slug}]: invalid updated "${a.updated}" (expected a real YYYY-MM-DD day)`);
+      }
+      if (a.updated < a.date) {
+        throw new Error(`News [${a.slug}]: updated ${a.updated} is before its date ${a.date}`);
+      }
     }
     if (!a.summary) throw new Error(`News [${a.slug}]: missing summary`);
     if (!a.body) throw new Error(`News [${a.slug}]: missing body`);
@@ -409,6 +425,7 @@ export const articles = [
     title: 'The $175-Oil Bet Pays Out: United Beats Q2, Raises Guidance, Restores the Schedule',
     seoTitle: 'United Q2 2026 Earnings: Beat and Raise',
     date: '2026-07-15',
+    updated: '2026-11-11',
     category: 'Operations',
     sources: [
       { name: 'United via PR Newswire', url: 'https://www.prnewswire.com/news-releases/united-posts-q2-results-above-wall-street-expectations-and-raises-full-year-2026-adjusted-eps-guidance-despite-a-nearly-6-billion-increase-in-anticipated-fuel-costs-302826793.html' },
@@ -490,6 +507,7 @@ export const articles = [
     title: 'Starlink Crosses the Atlantic: UA14 Becomes United\'s First Connected Widebody Flight',
     seoTitle: 'United\'s First Starlink Widebody Flight',
     date: '2026-06-22',
+    updated: '2026-11-11',
     category: 'Fleet',
     sources: [
       { name: 'AeroTime', url: 'https://www.aerotime.aero/articles/united-starlink-transatlantic-widebody-flight' },
@@ -540,6 +558,7 @@ export const articles = [
     title: 'The 757 Replacement Arrives: United Takes Delivery of Its First A321XLR',
     seoTitle: 'United Takes Delivery of Its First A321XLR',
     date: '2026-06-03',
+    updated: '2026-11-11',
     category: 'Fleet',
     sources: [
       { name: 'AeroTime', url: 'https://www.aerotime.aero/articles/united-first-airbus-a321xlr-arrives-us' },
@@ -592,6 +611,7 @@ export const articles = [
     slug: 'united-250-planes-coastliner-a321xlr-crj450',
     title: 'United Unveils Coastliner, A321XLR, and CRJ450 — 250+ Aircraft in Two Years',
     date: '2026-03-24',
+    updated: '2026-11-11',
     category: 'Fleet',
     sources: [
       { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-03-24-United-to-Add-250-Planes-in-Next-Two-Years-Most-by-Any-Airline-Includes-New,-Premium-Customer-Experiences,-Aircraft-Variants,-Subfleet,-Seats-and-Amenities' },
@@ -653,6 +673,7 @@ export const articles = [
     slug: 'kirby-playbook-for-175-oil-invest-more',
     title: 'Scott Kirby\'s Playbook for $175 Oil: Invest More, Not Less',
     date: '2026-03-20',
+    updated: '2026-11-11',
     category: 'Operations',
     sources: [
       { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/news-releases?item=125448' },
@@ -714,7 +735,7 @@ export const articles = [
 // ── Exports ─────────────────────────────────────────────────────────
 
 // Validate at import time — build fails immediately on bad data
-validate(articles);
+validateArticles(articles);
 
 /** Ordered list of slugs (newest first — same order as articles array) */
 export const newsOrder = articles.map((a) => a.slug);

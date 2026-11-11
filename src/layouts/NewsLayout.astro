@@ -19,11 +19,17 @@ const seo = newsSeo(article);
 const crossLinks = (article.tags || []).map((t: string) => resolveTag(t)).filter(Boolean);
 
 // Format date for display
-const displayDate = new Date(article.date + 'T12:00:00Z').toLocaleDateString('en-US', {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-});
+const formatDay = (day: string) =>
+  new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+const displayDate = formatDay(article.date);
+// `updated` (src/data/news/index.js): the day an "Update, …" note was added. The visible date stays
+// the publication date; the update rides beside it, and feeds dateModified and the sitemap.
+const updated: string | undefined = article.updated;
+const displayUpdated = updated ? formatDay(updated) : null;
 
 const ogImage = article.ogImage || 'https://theblueboard.co/og/og-news.jpg';
 
@@ -33,7 +39,7 @@ const newsArticleSchema = {
   '@type': 'NewsArticle',
   headline: article.title,
   datePublished: article.date,
-  dateModified: article.date,
+  dateModified: updated ?? article.date,
   author: {
     '@type': 'Person',
     name: 'Jonah Berg',
@@ -77,7 +83,15 @@ const newsArticleSchema = {
     <article class="max-w-3xl">
       <header class="mt-6 border-b border-border pb-5">
         <p class="font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
-          <span class="font-semibold text-primary">{article.category}</span> &middot; {displayDate}
+          <span class="font-semibold text-primary">{article.category}</span> &middot;
+          <time datetime={article.date}>{displayDate}</time>
+          {
+            displayUpdated && (
+              <>
+                &middot; Updated <time datetime={updated}>{displayUpdated}</time>
+              </>
+            )
+          }
         </p>
         <h1
           class="mt-2 text-2xl leading-tight font-bold tracking-tight text-balance text-foreground"
