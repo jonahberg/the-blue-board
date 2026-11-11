@@ -20,11 +20,13 @@
 //
 // Every sentence a visitor reads about it is built here (and the strip's lead in
 // usage-count.js) so that the rule cannot drift between the API, the About section, the menu,
-// the strip and the button labels.
+// the strip, the toast, the flight and content pages, /thanks, the welcome email and the button
+// labels ("THE WORDS" below).
 //
 // DOM-free and import-light: api/support-status.ts builds its body with `supportStatusFromRows`,
 // and the dashboard reads it back with `parseSupportStatus`.
 
+import { SUPPORT_AMOUNTS, supportAmountUrl, supportUrl } from './support-link.js';
 import { personalCountLine } from './usage-count.js';
 import { SUPPORTER_FALLBACK_LABEL, supporterIdentityKey, supporterLabel } from './supporter-name.js';
 
@@ -396,23 +398,143 @@ export function coverTarget(status) {
   return { kind: 'next', date: status.nextOpenDate };
 }
 
+// ═══ THE WORDS ═══
+// One voice for every ask on the site (Nov 11 2026; the owner: the donation wording "doesn't feel
+// the strongest right now"):
+//
+//   - one verb, "cover"; one unit, a day, $17 (always DAILY_COST_USD, never typed);
+//   - one reason, the core line: free because flyers (on the dashboard, flight pages and toast)
+//     or readers (on news, fleet, hub and tracker pages) cover it, one day at a time;
+//   - "I", never "we", where a person speaks; the owner signs as "Jonah";
+//   - no ask says "donate", "donation", "support the project", "server costs", "consider",
+//     "chip in" or "coffee" (tests/support-voice.test.js);
+//   - a button that can name the day it would cover says so, with the price ("Cover today · $17",
+//     "Cover tomorrow · $17", "Cover Nov 15 · $17") and goes to the fixed $17 link; every ask that
+//     cannot name a day says "Help cover a day", with no price, and goes to the any-amount link;
+//   - no sentence promises a name on the Supporters Wall (a static list from before Stripe); the
+//     reward is the day.
+//
+// Every sentence is exported from here so that no component types one.
+
+const COST = `$${DAILY_COST_USD}`;
+
+/** The one reason, on the dashboard, the flight pages and the landed toast. */
+export const CORE_LINE_FLYERS = 'The Blue Board is free because flyers cover it, one day at a time.';
+/** The one reason, on the news, fleet, hub and tracker pages. */
+export const CORE_LINE_READERS = 'The Blue Board is free because readers cover it, one day at a time.';
+/** What one day pays for. */
+export const UNIT_LINE = `${COST} pays for one day of live flight data, schedules and servers.`;
+export const THIRTY_LINE = 'It takes about 30 people a month, one for each day.';
+export const ANY_AMOUNT_LINE = 'Any amount counts toward a day.';
+/** The reward is the day (the display-name field on the Stripe checkout, api/stripe-webhook.ts). */
+export const NAME_LINE = 'You can add a name at checkout to show on the day you cover.';
+/** The rule, for under the About section's calendar. */
+export const COVER_RULE_LINE = `Each ${COST} covers the day it is given, or the next open day after it. Smaller amounts add up toward a day.`;
+/** Today, while nobody has covered it. */
+export const TODAY_OPEN_LINE = 'No one has covered today yet.';
+
+/** Every ask that cannot name a day: no price, and the any-amount link. */
+export const HELP_COVER_LABEL = 'Help cover a day';
+/** The amount ladder's last item, the any-amount link. */
+export const OTHER_AMOUNT_LABEL = 'Other amount';
+
+/** The About section's opening line (the owner's figures; words unchanged from Nov 10 2026). */
+export const ABOUT_INTRO_LINE = `The Blue Board is free, with no ads. It costs about $${MONTHLY_COST_USD} a month to run, about ${COST} a day.`;
+
+/** The landed toast. It makes no claim about today; only its button may name a day. */
+export const LANDED_TOAST_LINE = `Glad you landed ✈️ ${CORE_LINE_FLYERS}`;
+
+/** The Supporters Wall caption, and the words of its link. */
+export const WALL_CAPTION_LINE = 'These readers backed The Blue Board before days were counted.';
+export const WALL_LINK_LABEL = 'Cover a day and you can put your name on it.';
+
+/** The content pages' quiet line under the header (SupportNote inline). */
+export const READER_NOTE_LINE = 'Kept current by one person, with no ads and no paywall. Readers cover the cost, one day at a time.';
+
+/** The box at the end of a news article; the link ("Help cover a day") and a period follow it. */
+export const NEWS_SUPPORT_LINE = 'The Blue Board has no ads and no paywall. Readers cover the cost, one day at a time.';
+
+/** The flight page's line while there is no status to go on (the page's static markup). */
+export const FLIGHT_PAGE_DEFAULT_LINE = 'This page is free because flyers cover The Blue Board, one day at a time.';
+
+/** /thanks, where Stripe sends a supporter after paying. */
+export const THANKS_COST_LINE = `You just helped keep The Blue Board free, with no ads. It costs about $${MONTHLY_COST_USD} a month to run, about ${COST} a day: the live flight and schedule data, the servers, and the AI delay explanations. I'm one person, and this is how it gets paid for.`;
+export const THANKS_COUNT_LINE = `I count what comes in as days: every ${COST} covers one day, the day it is given or, if that day is already covered, the next open day after it. Smaller amounts add up with other people's until they make a day.`;
+/** Checked against the dashboard (Nov 11 2026): ⓘ sits in the attribution strip from `md`, More is the bottom bar below `lg`. */
+export const THANKS_WHERE_LINE = "The dashboard's About section (ⓘ → About on a computer, More → About on a phone) shows this month's days.";
+
 /**
- * The button: "Cover today · $17" / "Cover tomorrow · $17" / "Cover the next open day · $17",
- * "Cover a day · $17" while the status is unknown, "Support The Blue Board" when nothing is open
- * within a year.
+ * The button: "Cover today · $17" / "Cover tomorrow · $17" / "Cover Nov 15 · $17" when it can say
+ * which day $17 would cover right now, otherwise "Help cover a day" (status unknown, or nothing
+ * open within a year).
  */
 export function coverButtonLabel(status) {
-  const cost = `$${DAILY_COST_USD}`;
-  if (!status?.configured) return `Cover a day · ${cost}`;
   const target = coverTarget(status);
-  if (!target) return 'Support The Blue Board';
-  if (target.kind === 'today') return `Cover today · ${cost}`;
-  if (target.kind === 'tomorrow') return `Cover tomorrow · ${cost}`;
-  return `Cover the next open day · ${cost}`;
+  if (!target) return HELP_COVER_LABEL;
+  if (target.kind === 'today') return `Cover today · ${COST}`;
+  if (target.kind === 'tomorrow') return `Cover tomorrow · ${COST}`;
+  return `Cover ${shortDateKey(target.date)} · ${COST}`;
 }
 
-/** The rule in one line, for under the calendar. */
-export const COVER_RULE_LINE = `Each $${DAILY_COST_USD} covers the day it is given, or the next open day after it.`;
+/**
+ * Where that button goes: the fixed $17 link when it names a day and that link is set, otherwise
+ * the any-amount link. Both carry `placement` (the button's `data-support` label).
+ *
+ * @param {object|null|undefined} status
+ * @param {string} placement
+ * @param {{links?: Record<number, string|null>}} [opts] test seam for the fixed links
+ */
+export function coverButtonHref(status, placement, { links } = {}) {
+  if (!coverTarget(status)) return supportUrl(placement);
+  return supportAmountUrl(DAILY_COST_USD, placement, { links }) ?? supportUrl(placement);
+}
+
+const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const countWord = (n) => COUNT_WORDS[n] ?? String(n);
+
+/**
+ * How many days an amount pays for, from the daily cost: "one day" for exactly a day, "two days"
+ * for a whole number of them, "nearly six days" within a quarter-day under a whole number ($100 is
+ * 5.9), and '' when it is less than a day or nowhere near a whole number of days.
+ * @param {number} amount whole US dollars
+ */
+export function amountDaysPhrase(amount) {
+  if (!Number.isFinite(amount) || amount < DAILY_COST_USD) return '';
+  const days = amount / DAILY_COST_USD;
+  const whole = Math.round(days);
+  if (Math.abs(days - whole) < 1e-9) return `${countWord(whole)} ${whole === 1 ? 'day' : 'days'}`;
+  const up = Math.ceil(days);
+  return up - days <= 0.25 ? `nearly ${countWord(up)} days` : '';
+}
+
+/** A ladder button's words: "$5", "$17 · one day", "$100 · nearly six days". */
+export function amountLabel(amount) {
+  const days = amountDaysPhrase(amount);
+  return days ? `$${amount} · ${days}` : `$${amount}`;
+}
+
+/**
+ * The amount ladder for one surface (the content-page card and the About section): one button per
+ * amount that has a fixed link, smallest first, each with its own placement label (`fleet-end-17`),
+ * then "Other amount" on the any-amount link. null when no amount has a link: the surface then
+ * shows its single "Help cover a day" button instead.
+ *
+ * @param {string} placement the surface's `data-support` label, e.g. "fleet-end" or "about"
+ * @param {{other?: string, links?: Record<number, string|null>}} [opts] `other` is the "Other
+ *   amount" link's label (default `<placement>-other`); `links` is a test seam
+ * @returns {{amounts: Array<{amount: number, text: string, placement: string, href: string}>,
+ *   other: {text: string, placement: string, href: string}}|null}
+ */
+export function supportLadder(placement, { other = `${placement}-other`, links } = {}) {
+  const amounts = [];
+  for (const amount of SUPPORT_AMOUNTS) {
+    const label = `${placement}-${amount}`;
+    const href = supportAmountUrl(amount, label, { links });
+    if (href) amounts.push({ amount, text: amountLabel(amount), placement: label, href });
+  }
+  if (!amounts.length) return null;
+  return { amounts, other: { text: OTHER_AMOUNT_LABEL, placement: other, href: supportUrl(other) } };
+}
 
 /** End a sentence on a label without doubling an initial's period ("Dana R." not "Dana R.."). */
 export function sentenceEnd(label) {
@@ -425,12 +547,12 @@ export function monthFullyCovered(status) {
 }
 
 /**
- * The one line of truth: "Today is covered by Dana R." / "Today isn't covered yet.", or null
+ * The one line of truth: "Today is covered by Dana R." / "No one has covered today yet.", or null
  * when there is nothing true to say about today.
  */
 export function todayLine(status) {
   if (!status?.configured) return null;
-  return status.todayCovered ? `Today is covered by ${sentenceEnd(status.todayBy)}` : "Today isn't covered yet.";
+  return status.todayCovered ? `Today is covered by ${sentenceEnd(status.todayBy)}` : TODAY_OPEN_LINE;
 }
 
 /**
@@ -440,16 +562,24 @@ export function todayLine(status) {
 export function coverSentence(status) {
   const target = coverTarget(status);
   if (!target) return null;
-  const cost = `$${DAILY_COST_USD}`;
-  if (target.kind === 'today') return `${cost} covers today.`;
-  if (target.kind === 'tomorrow') return `${cost} covers tomorrow.`;
-  return `${cost} covers the next open day, ${shortDateKey(target.date)}.`;
+  if (target.kind === 'today') return `${COST} covers today.`;
+  if (target.kind === 'tomorrow') return `${COST} covers tomorrow.`;
+  return `${COST} covers the next open day, ${shortDateKey(target.date)}.`;
 }
 
-/** "3 of 30 days covered" */
-export function coveredCountLine(status) {
+/**
+ * The month in one sentence, so an empty month reads as an opening rather than a score:
+ * "No one has covered a day in November yet. Be the first." / "1 of 30 days in November is
+ * covered." / "7 of 30 days in November are covered." / "Every day in November is covered.
+ * Thank you." / null when the status is unknown.
+ */
+export function monthLine(status) {
   if (!status?.configured) return null;
-  return `${status.daysCovered} of ${status.daysInMonth} days covered`;
+  const month = monthName(status.month);
+  const n = status.daysCovered;
+  if (n <= 0) return `No one has covered a day in ${month} yet. Be the first.`;
+  if (n >= status.daysInMonth) return `Every day in ${month} is covered. Thank you.`;
+  return `${n} of ${status.daysInMonth} days in ${month} ${n === 1 ? 'is' : 'are'} covered.`;
 }
 
 /**
@@ -496,9 +626,10 @@ export function coverageRuns(status) {
   }));
 }
 
+
 /**
  * The deep-use strip's words and button, or null when there is nothing honest to ask about now
- * (today and the next STRIP_COVERED_HORIZON_DAYS days all covered).
+ * (today and the next STRIP_COVERED_HORIZON_DAYS days all covered, or nothing open within a year).
  *
  * `text` is the sentence for a wide screen; `short` the phone version. `lead` is the visitor's
  * own count of flights looked up this month, only when it is true and at least
@@ -510,46 +641,75 @@ export function coverageRuns(status) {
  */
 export function supportStripCopy(status, { flightsThisMonth = 0 } = {}) {
   const lead = personalCountLine(flightsThisMonth);
-  const cost = `$${DAILY_COST_USD}`;
   const button = coverButtonLabel(status);
   if (!status?.configured) {
-    return { lead, text: `${cost} keeps The Blue Board running for a day.`, short: `${cost} keeps it running for a day.`, button };
+    return {
+      lead,
+      text: `${CORE_LINE_FLYERS} ${COST} covers a full day; any amount helps.`,
+      short: 'Free because flyers cover it, a day at a time.',
+      button,
+    };
   }
   const target = coverTarget(status);
   if (!target) return null;
   const todayKey = dateKey(status.year, status.month, status.today);
   if (target.date > addDays(todayKey, STRIP_COVERED_HORIZON_DAYS)) return null;
   if (target.kind === 'today') {
-    return { lead, text: `Today isn't covered yet. ${cost} keeps The Blue Board running for a day.`, short: "Today isn't covered yet.", button };
+    return { lead, text: `${CORE_LINE_FLYERS} ${TODAY_OPEN_LINE}`, short: TODAY_OPEN_LINE, button };
   }
+  const thanks = `Today is covered, thanks to ${sentenceEnd(status.todayBy)}`;
   if (target.kind === 'tomorrow') {
-    return {
-      lead,
-      text: `Today is covered, thanks to ${sentenceEnd(status.todayBy)} ${cost} keeps The Blue Board running tomorrow.`,
-      short: "Today is covered. Tomorrow isn't yet.",
-      button,
-    };
+    return { lead, text: `${thanks} Tomorrow is still open.`, short: 'Today is covered. Tomorrow is still open.', button };
   }
   return {
     lead,
-    text: `Today is covered, thanks to ${sentenceEnd(status.todayBy)} ${cost} covers the next open day, ${shortDateKey(target.date)}.`,
+    text: `${thanks} The next open day is ${shortDateKey(target.date)}.`,
     short: `Covered through ${shortDateKey(addDays(target.date, -1))}.`,
     button,
   };
 }
 
 /**
- * The flight page's support line, in the site's day framing, or null to keep the page's own
- * sentence ("The Blue Board is free and run by one person. If it helped you today, you can chip in
- * toward the data bill."). Only an uncovered today changes it: a covered today, an unconfigured or
- * unreadable status, or no status at all says nothing about days.
+ * The flight page's support line, for every status. `text` comes before the link, `link` is its
+ * words; the page's script points the link at `coverButtonHref` for the same status.
+ *   - unknown (the page's static markup, and any failed read): the core line, "Help cover a day";
+ *   - today open: "No one has covered today yet. $17 pays for the day's flight data and servers."
+ *     and "Cover today · $17";
+ *   - today covered: "Today is covered, thanks to Dana R." and the day $17 would cover next.
  *
  * @param {ReturnType<typeof parseSupportStatus>|null|undefined} status
- * @returns {{text: string, link: string}|null}  `text` before the link, `link` its words.
+ * @returns {{text: string, link: string}}
  */
 export function flightPageSupportCopy(status) {
-  if (!status?.configured || status.todayCovered || coverTarget(status)?.kind !== 'today') return null;
-  const copy = supportStripCopy(status);
-  if (!copy) return null;
-  return { text: copy.text, link: coverButtonLabel(status) };
+  if (!status?.configured) return { text: FLIGHT_PAGE_DEFAULT_LINE, link: HELP_COVER_LABEL };
+  if (!status.todayCovered) {
+    return { text: `${TODAY_OPEN_LINE} ${COST} pays for the day's flight data and servers.`, link: coverButtonLabel(status) };
+  }
+  return { text: `Today is covered, thanks to ${sentenceEnd(status.todayBy)}`, link: coverButtonLabel(status) };
+}
+
+/**
+ * The content pages' card after the content (SupportNote card). Without an amount ladder its one
+ * button says `button`; with one, the ladder takes the button's place.
+ *
+ * @param {{checkedAgainst?: string, supporterCount: number}} opts `checkedAgainst` is the page's
+ *   one sentence on how its facts are checked; `supporterCount` the Supporters Wall's length
+ */
+export function supportCardCopy({ checkedAgainst = '', supporterCount }) {
+  const checked = typeof checkedAgainst === 'string' ? checkedAgainst.trim() : '';
+  const backed = supporterCount === 1 ? '1 reader has backed it so far.' : `${supporterCount} readers have backed it so far.`;
+  return {
+    heading: 'Did this page help?',
+    intro: [
+      "I'm Jonah, and I build The Blue Board on my own.",
+      checked,
+      'There are no ads, no paywall and no login: readers cover the cost, one day at a time.',
+      UNIT_LINE,
+    ]
+      .filter(Boolean)
+      .join(' '),
+    count: `${THIRTY_LINE} ${backed}`,
+    button: HELP_COVER_LABEL,
+    note: ANY_AMOUNT_LINE,
+  };
 }
