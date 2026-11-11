@@ -21,7 +21,7 @@ const LEAD_SEVERITY = 20;
 /** Aggregates and meta facts: background for a calm brief, never the lead when a specific fact exists. */
 const SUMMARY_IDS = new Set([
   'faa.active.count', 'faa.active.other', 'faa.planned.count', 'net.status', 'net.index', 'wx.summary',
-  'otp.floor', 'otp.soft', 'otp.min', 'otp.max', 'cxl.confirmed', 'cxl.unconfirmed', 'air.total',
+  'otp.floor', 'otp.soft', 'otp.min', 'cxl.confirmed', 'cxl.unconfirmed', 'air.total',
   'air.starlink', 'air.normal',
 ]);
 

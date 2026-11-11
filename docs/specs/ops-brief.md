@@ -9,7 +9,7 @@ what it said, and writes the brief itself whenever the model can't.
 
 ```
 United is running smoothly this afternoon.
-- Every hub is at 85% on time or better. Los Angeles is the low mark and Houston is at 100%.  [otp.floor] [otp.max]
+- Every hub is at 85% on time or better.  [otp.floor]
 - The FAA says ground stops are possible tonight at Newark until 9:00 PM ET and Boston until 7:30 PM ET. Neither is in effect.  [faa.planned.EWR] [faa.planned.BOS]
 - 630 United flights are in the air, 280 of them with Starlink.  [air.starlink]
 Written from 21 live facts and checked against them.
@@ -62,8 +62,8 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | id | kind | from | statement (example) | tone floor |
 |---|---|---|---|---|
 | `otp.<HUB>` | otp | `/api/irops` `hubMetrics`, `serverOtpFromMetrics()` (the hub strip's number) | Chicago O'Hare (ORD): 91% of departures so far today left within 30 minutes of schedule (410 departed). | <50% disrupted, <70% watch |
-| `otp.min`, `otp.max` | otp | same | Of the 7 hubs with an on-time reading, Los Angeles (LAX) is lowest at 85%. | calm |
-| `otp.floor` | otp | same, when no hub is under 70% | All 7 hubs with an on-time reading are at 85% or better; Los Angeles is the lowest. | calm |
+| `otp.min` | otp | same, only when the lowest hub is under 80% (`BRIEF_HEALTHY_HUB_OTP`): which healthy hub is lowest is not news | Of the 7 hubs with an on-time reading, Los Angeles (LAX) is lowest at 75%. | calm |
+| `otp.floor` | otp | same, when no hub is under 70%; names the lowest hub only when it is under 80% (its `link` is that hub's board either way) | All 7 hubs with an on-time reading are at 85% or better. / … at 75% or better; Los Angeles is the lowest. | calm |
 | `otp.soft` | otp | same, when some are | 2 of the 7 hubs with an on-time reading are under 70%: Houston (62%) and Newark (55%). | watch |
 | `net.index` | network | `/api/irops` `score`, `IROPS_MINOR_AT`/`IROPS_SIGNIFICANT_AT` | The Blue Board's disruption index … is 17.3, in the normal range (under 20). | minor → watch, significant → disrupted |
 | `net.status` | network | `networkStatus()` (`src/lib/ops-health.js`, the strip's chip) | … reads "Smooth Ops". | minor → watch, significant → disrupted |
@@ -335,7 +335,8 @@ already showing. Every chip href is a real deep link that resolves on a cold loa
 | `{ tab: 'schedule', hub }` (on-time, cancellations at a hub) | **yes**: `?tab=schedule&hub=ORD` | that hub's board |
 | `{ tab: 'live' }`, `{ tab: 'starlink' }` | **yes**: `#live`, `#starlink` | the tab (`air.normal` included: the Live tab shows the count, not the 7-day median) |
 | `{ tab: 'weather', section: 'irops' }` (index, network status) | **yes**: `?tab=irops` (Weather, scrolled to the IROPS section) | the IROPS bar |
-| `{ tab: 'weather', section: 'irops' }` on `otp.floor` / `otp.soft` | yes, but the IROPS bar does not show on-time | **override**: the lowest hub's board, `?tab=schedule&hub=LAX` |
+| `{ tab: 'schedule', hub }` on `otp.floor` (the lowest hub, not named in the text while every hub is healthy) | **yes** | that hub's board |
+| `{ tab: 'weather', section: 'irops' }` on `otp.soft` | yes, but the IROPS bar does not show on-time | **override**: the first soft hub's board, `?tab=schedule&hub=EWR` |
 | `{ tab: 'weather', hub }` (FAA programs at a hub, hub weather) | **yes since the brief UI**: `?tab=weather&hub=EWR` (Weather, scrolled to that hub's card, ringed like a radar click) | that hub's card |
 | `{ tab: 'weather', hub }` on `faa_planned` facts | yes, but the hub card shows only programs in effect | **override**: the NAS status panel, `?tab=weather&section=nas` **(new)**, which lists planned programs |
 | `{ tab: 'weather', hub }` for an airport without a card (BOS, LGA), `faa.active.other` | **no**: the NAS panel lists en-route programs only, so `/api/faa` programs at other airports appear nowhere | no target (plain text) |

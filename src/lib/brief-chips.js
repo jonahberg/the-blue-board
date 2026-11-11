@@ -79,7 +79,6 @@ export function chipLabel(fact) {
   if (head === 'otp') {
     const hub = hubOf(fact);
     if (second === 'min' && hub && pct) return `Lowest ${hub} ${pct}`;
-    if (second === 'max' && hub && pct) return `Highest ${hub} ${pct}`;
     if (second === 'floor' && count && pct) return `${count} hubs ≥ ${pct}`;
     if (second === 'soft') {
       const soft = codes(fact);
@@ -170,8 +169,9 @@ const SCHEDULE_HUBS = WEATHER_CARD_HUBS;
  * server's `link` and keeps it only where the destination really is the proof:
  *
  *   on-time / cancellations at a hub,
- *     and the on-time spread           → that hub's Schedule board (for the spread, the
- *                                        lowest hub, which the fact rests on)  /?tab=schedule&hub=ORD
+ *     and the on-time floor            → that hub's Schedule board (for the floor, the
+ *                                        server links the lowest hub)          /?tab=schedule&hub=ORD
+ *   soft hubs                          → the first soft hub's board
  *   index, network status,
  *     cancellation totals              → the IROPS bar (its Canceled figure is the same
  *                                        /api/irops number; the server's unfiltered
@@ -201,8 +201,8 @@ export function chipTarget(fact) {
 
   if (link.tab === 'weather') {
     if (link.section === 'irops') {
-      // The on-time spread (floor / soft hubs) is not on the IROPS bar; the hub it rests on is
-      // the lowest one, whose board shows it. The index and the network status are the bar.
+      // Soft hubs are not on the IROPS bar; the first one named (the lowest) has a board that
+      // shows it. The index and the network status are the bar.
       const low = kind === 'otp' ? codes(fact).find((c) => SCHEDULE_HUBS.includes(c)) : null;
       if (low) return { tab: 'schedule', href: `/?tab=schedule&hub=${low}` };
       return { tab: 'weather', href: '/?tab=irops' };

@@ -87,7 +87,7 @@ describe('buildBriefFacts: the catalogue', () => {
     expect(facts.map((f) => f.id).sort()).toEqual([
       'air.normal', 'air.starlink', 'air.total', 'cxl.confirmed', 'cxl.unconfirmed', 'faa.active.count',
       'faa.planned.BOS', 'faa.planned.count', 'net.index', 'net.status', 'otp.DEN', 'otp.EWR', 'otp.IAD',
-      'otp.IAH', 'otp.LAX', 'otp.ORD', 'otp.SFO', 'otp.floor', 'otp.max', 'otp.min', 'wx.summary',
+      'otp.IAH', 'otp.LAX', 'otp.ORD', 'otp.SFO', 'otp.floor', 'wx.summary',
     ]);
     expect(collection.sources).toEqual({ irops: 'ok', faa: 'ok', nas: 'ok', metar: 'ok', air: 'ok', airNormal: 'ok' });
     expect(computeTone(facts)).toBe('calm');
@@ -103,8 +103,25 @@ describe('buildBriefFacts: the catalogue', () => {
     expect(ord.statement).toBe("Chicago O'Hare (ORD): 91% of departures so far today left within 30 minutes of schedule (410 departed).");
     expect(ord.values).toEqual(['91%', '410', '30 minutes', 'ORD', "Chicago O'Hare", "O'Hare", 'Chicago']);
     expect(ord.link).toEqual({ tab: 'schedule', hub: 'ORD' });
-    expect(byId(facts)['otp.floor'].statement).toBe('All 7 hubs with an on-time reading are at 85% or better; Los Angeles is the lowest.');
-    expect(byId(facts)['otp.min'].values).toEqual(expect.arrayContaining(['85%', 'LAX', 'Los Angeles']));
+  });
+
+  it('does not single out the lowest hub while every hub is at 80% or better, and never the highest', () => {
+    const fx = fixture('calm-afternoon');
+    const calm = byId(build(fx).facts);
+    expect(calm['otp.min']).toBeUndefined();
+    expect(calm['otp.max']).toBeUndefined();
+    expect(calm['otp.floor'].statement).toBe('All 7 hubs with an on-time reading are at 85% or better.');
+    // The floor's values cannot vouch for naming the lowest hub; its chip still proves it there.
+    expect(calm['otp.floor'].values).toEqual(['7', 'seven', '85%']);
+    expect(calm['otp.floor'].link).toEqual({ tab: 'schedule', hub: 'LAX' });
+
+    // Los Angeles at 75%: below 80, so the lowest hub is worth naming again.
+    const metrics = { ...fx.sources.irops.hubMetrics, LAX: { ...fx.sources.irops.hubMetrics.LAX, onTime: 59 } };
+    const low = byId(build(fx, { irops: { ...fx.sources.irops, hubMetrics: metrics } }).facts);
+    expect(low['otp.min'].statement).toBe('Of the 7 hubs with an on-time reading, Los Angeles (LAX) is lowest at 75%.');
+    expect(low['otp.min'].values).toEqual(expect.arrayContaining(['75%', 'LAX', 'Los Angeles']));
+    expect(low['otp.floor'].statement).toBe('All 7 hubs with an on-time reading are at 75% or better; Los Angeles is the lowest.');
+    expect(low['otp.max']).toBeUndefined();
   });
 
   it('converts planned FAA windows to the airport’s local clock and says they are not in effect', () => {

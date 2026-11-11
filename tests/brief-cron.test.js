@@ -32,7 +32,7 @@ const GOOD_JSON = {
   headline: 'United is running smoothly this afternoon.',
   tone: 'calm',
   items: [
-    { text: 'Every hub with a reading is at 85% or better; Los Angeles is the low mark.', fact_ids: ['otp.floor'] },
+    { text: 'Every hub with a reading is at 85% or better.', fact_ids: ['otp.floor'] },
     { text: '630 United flights are in the air, 280 of them with Starlink.', fact_ids: ['air.starlink'] },
   ],
   traveler_note: null,

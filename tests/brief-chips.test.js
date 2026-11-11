@@ -41,7 +41,6 @@ describe('chip labels', () => {
   it('reads the mockup examples off the calm afternoon', () => {
     const f = byId(fixture('calm-afternoon'));
     expect(chipLabel(f.get('otp.LAX'))).toBe('LAX 85%');
-    expect(chipLabel(f.get('otp.min'))).toBe('Lowest LAX 85%');
     expect(chipLabel(f.get('otp.floor'))).toBe('7 hubs ≥ 85%');
     expect(chipLabel(f.get('faa.planned.BOS'))).toBe('FAA plan · BOS');
     expect(chipLabel(f.get('air.total'))).toBe('630 airborne');
@@ -66,6 +65,7 @@ describe('chip labels', () => {
     const storm = byId(fixture('storm-day'));
     expect(chipLabel(storm.get('faa.active.ORD.gdp'))).toBe('FAA delay program · ORD');
     expect(chipLabel(storm.get('otp.ORD'))).toBe('ORD 48%');
+    expect(chipLabel(storm.get('otp.min'))).toBe('Lowest EWR 41%');
     const cx = byId(fixture('unconfirmed-cancellations'));
     expect(chipLabel(cx.get('cxl.confirmed'))).toBe('6 canceled');
     expect(chipLabel(cx.get('cxl.unconfirmed'))).toBe('162 unconfirmed');
@@ -99,7 +99,7 @@ describe('chip targets', () => {
   it('links only where the destination shows the fact', () => {
     const calm = byId(fixture('calm-afternoon'));
     expect(chipTarget(calm.get('otp.LAX'))).toEqual({ tab: 'schedule', href: '/?tab=schedule&hub=LAX' });
-    // The on-time spread rests on its lowest hub, whose board shows it (the IROPS bar does not).
+    // The on-time floor links its lowest hub, whose board shows it (the IROPS bar does not).
     expect(chipTarget(calm.get('otp.floor'))).toEqual({ tab: 'schedule', href: '/?tab=schedule&hub=LAX' });
     const soft = byId(fixture('storm-day')).get('otp.soft');
     expect(chipTarget(soft)).toEqual({ tab: 'schedule', href: `/?tab=schedule&hub=${soft.values.find((v) => /^[A-Z]{3}$/.test(v))}` });

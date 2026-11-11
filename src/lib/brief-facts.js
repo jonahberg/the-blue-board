@@ -54,6 +54,12 @@ export const BRIEF_MAX_BOARD_AGE_MS = 3 * 60 * 60 * 1000;
 export const BRIEF_MAX_METAR_AGE_MS = 3 * 60 * 60 * 1000;
 /** A soft hub: below this on-time percentage the tone is at least "watch". */
 export const BRIEF_SOFT_HUB_OTP = 70;
+/**
+ * A healthy hub: at or above this on-time percentage its reading is not news. When every hub with a
+ * reading is here, no "lowest hub" fact is built, and a reading moving, appearing or disappearing
+ * does not count as a change (materialKey).
+ */
+export const BRIEF_HEALTHY_HUB_OTP = 80;
 /** "About the usual" band for the airborne comparison, in percent either side of the median. */
 export const BRIEF_AIRBORNE_USUAL_BAND_PCT = 10;
 
@@ -267,7 +273,7 @@ export function buildBriefFacts(sources, { nowMs }) {
     for (const [hub, r] of Object.entries(readings)) {
       const yesterday = defaultSchedDayOffset(hub, new Date(nowMs)) !== 0;
       const when = yesterday ? 'yesterday (its board has not rolled over to today yet)' : 'so far today';
-      const severity = r.otp < 50 ? 70 : r.otp < BRIEF_SOFT_HUB_OTP ? 45 : r.otp < 80 ? 20 : 5;
+      const severity = r.otp < 50 ? 70 : r.otp < BRIEF_SOFT_HUB_OTP ? 45 : r.otp < BRIEF_HEALTHY_HUB_OTP ? 20 : 5;
       facts.push({
         id: `otp.${hub}`,
         kind: 'otp',
@@ -286,32 +292,24 @@ export function buildBriefFacts(sources, { nowMs }) {
     if (hubs.length >= 2) {
       const sorted = [...hubs].sort((a, b) => readings[a].otp - readings[b].otp || a.localeCompare(b));
       const low = sorted[0];
-      const high = sorted[sorted.length - 1];
       const n = hubs.length;
-      facts.push({
-        id: 'otp.min',
-        kind: 'otp',
-        hub: low,
-        statement: `Of the ${n} hubs with an on-time reading, ${hubLabel(low)} is lowest at ${readings[low].otp}%.`,
-        values: uniq([`${readings[low].otp}%`, String(n), numberWord(n), ...airportForms(low)]),
-        at: iso(readings[low].at),
-        link: { tab: 'schedule', hub: low },
-        severity: readings[low].otp < BRIEF_SOFT_HUB_OTP ? 40 : 6,
-        toneFloor: 'calm',
-        material: `min:${low}:${round(readings[low].otp, 5)}`,
-      });
-      facts.push({
-        id: 'otp.max',
-        kind: 'otp',
-        hub: high,
-        statement: `Of the ${n} hubs with an on-time reading, ${hubLabel(high)} is highest at ${readings[high].otp}%.`,
-        values: uniq([`${readings[high].otp}%`, String(n), numberWord(n), ...airportForms(high)]),
-        at: iso(readings[high].at),
-        link: { tab: 'schedule', hub: high },
-        severity: 3,
-        toneFloor: 'calm',
-        material: `max:${high}:${round(readings[high].otp, 5)}`,
-      });
+      // When every hub reads healthy, which one is lowest is not news: no "lowest" fact, and the
+      // floor does not name it (so a sentence cannot either). The best hub is never news.
+      const allHealthy = readings[low].otp >= BRIEF_HEALTHY_HUB_OTP;
+      if (!allHealthy) {
+        facts.push({
+          id: 'otp.min',
+          kind: 'otp',
+          hub: low,
+          statement: `Of the ${n} hubs with an on-time reading, ${hubLabel(low)} is lowest at ${readings[low].otp}%.`,
+          values: uniq([`${readings[low].otp}%`, String(n), numberWord(n), ...airportForms(low)]),
+          at: iso(readings[low].at),
+          link: { tab: 'schedule', hub: low },
+          severity: readings[low].otp < BRIEF_SOFT_HUB_OTP ? 40 : 6,
+          toneFloor: 'calm',
+          material: `min:${low}:${round(readings[low].otp, 5)}`,
+        });
+      }
 
       const soft = sorted.filter((h) => readings[h].otp < BRIEF_SOFT_HUB_OTP);
       if (soft.length === 0) {
@@ -319,10 +317,13 @@ export function buildBriefFacts(sources, { nowMs }) {
         facts.push({
           id: 'otp.floor',
           kind: 'otp',
-          statement: `All ${n} hubs with an on-time reading are at ${floorPct}% or better; ${airportDisplayName(low)} is the lowest.`,
-          values: uniq([String(n), numberWord(n), `${floorPct}%`, ...airportForms(low)]),
+          statement: allHealthy
+            ? `All ${n} hubs with an on-time reading are at ${floorPct}% or better.`
+            : `All ${n} hubs with an on-time reading are at ${floorPct}% or better; ${airportDisplayName(low)} is the lowest.`,
+          values: uniq([String(n), numberWord(n), `${floorPct}%`, ...(allHealthy ? [] : airportForms(low))]),
           at: iso(Math.min(...hubs.map((h) => readings[h].at ?? nowMs))),
-          link: { tab: 'weather', section: 'irops' },
+          // The chip proves the floor with the lowest hub's board (the IROPS bar shows no on-time).
+          link: { tab: 'schedule', hub: low },
           severity: 8,
           toneFloor: 'calm',
           material: `floor:${n}:${round(floorPct, 5)}`,

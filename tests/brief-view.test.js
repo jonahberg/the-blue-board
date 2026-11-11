@@ -54,7 +54,7 @@ describe('briefViewState', () => {
     for (const item of view.items) for (const id of item.factIds) expect(view.factsById.has(id)).toBe(true);
     expect(view.travelerNote?.text).toMatch(/^If you are flying to Newark/);
     // "Written from N live facts" counts every fact the brief was written from, not the cited ones.
-    expect(view.factCount).toBe(34);
+    expect(view.factCount).toBe(33);
     expect(view.facts.length).toBeLessThan(view.factCount);
     expect(view.source).toBe('template');
     expect(view.hasRadio).toBe(false);
