@@ -18,7 +18,8 @@
 //      "approach", "ATC", "heard on frequency"…). Any other quoted text in a radio item, a partial
 //      or altered quote, or an unattributed one drops the item. Markup or a URL drops any item.
 //   5. The headline is checked against the union of the SURVIVING items' facts. A headline that
-//      fails (or runs past 20 words) is replaced with the template headline, never published.
+//      fails (or runs past 14 words) is replaced with the template headline, never published.
+//      Past 12 words (prompt rule 3) it is kept with a warning.
 //   6. The traveler note is checked like an item, and only survives when an FAA ground stop or
 //      ground delay program is in effect at a United hub, or the final tone is "disrupted"
 //      (travelerNoteAllowed).
@@ -33,7 +34,7 @@ import { templateHeadline } from './brief-template.js';
 export const BRIEF_MAX_ITEMS = 4;
 const MAX_TEXT_CHARS = 400;
 const MAX_HEADLINE_CHARS = 160;
-const MAX_HEADLINE_WORDS = 20;
+const MAX_HEADLINE_WORDS = 14;
 const SOFT_HEADLINE_WORDS = 12;
 const MAX_FACT_IDS = 8;
 const TONES = new Set(['calm', 'watch', 'disrupted']);

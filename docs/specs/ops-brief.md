@@ -134,7 +134,7 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    partial quote (`radio_quote_mismatch`), an unattributed one (`radio_quote_unattributed`) or an
    unbalanced quote mark drops the item. Markup or a URL drops any item (`markup_or_url`).
 5. **Limits.** At most 4 items; the rest are dropped (`over_item_limit`).
-6. **Headline.** Checked against the union of the **surviving** items' facts. Fails, or runs past 20
+6. **Headline.** Checked against the union of the **surviving** items' facts. Fails, or runs past 14
    words → replaced by the template headline (the report keeps the original). Over 12 words is a warning.
 7. **Traveler note.** Checked like an item; kept only when an FAA ground stop or ground delay
    program is in effect at a United hub, or the final tone is `disrupted` (`travelerNoteAllowed` in

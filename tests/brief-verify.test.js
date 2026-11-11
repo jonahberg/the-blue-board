@@ -211,6 +211,16 @@ describe('verifyBrief: headline, tone, traveler note', () => {
     expect(out.report.warnings).toContain('headline:over_12_words');
   });
 
+  it('replaces a headline past fourteen words with the template headline', () => {
+    // 16 words, the length of a real Nov 11 headline that shipped with only a warning.
+    const long = 'United is calm right now, with lots of Starlink flights in the air across the country.';
+    const out = verifyBrief(brief(items, { headline: long }), FACTS.filter((f) => f.toneFloor === 'calm'));
+    expect(out.report.headline).toEqual({ status: 'replaced', reasons: ['headline_too_long'], original: long });
+    expect(out.brief.headline).toBe('United is running smoothly right now.');
+    const fourteen = 'United is calm right now, with lots of Starlink flights in the air today.';
+    expect(verifyBrief(brief(items, { headline: fourteen }), FACTS.filter((f) => f.toneFloor === 'calm')).report.headline.status).toBe('kept');
+  });
+
   it('computes the tone from the facts and overrides the model', () => {
     const out = verifyBrief(brief(items, { tone: 'calm' }), FACTS);
     expect(out.report.tone).toEqual({ model: 'calm', computed: 'disrupted', final: 'disrupted', overridden: true });
