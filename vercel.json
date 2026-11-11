@@ -45,6 +45,7 @@
         "api/fr24-feed.ts": { "maxDuration": 30 },
         "api/cron/warm-schedules.ts": { "maxDuration": 300 },
         "api/delay-explain.ts": { "maxDuration": 15 },
+        "api/ask.ts": { "maxDuration": 10 },
         "api/cron/sync-starlink.ts": { "maxDuration": 30 },
         "api/starlink-data.ts": { "maxDuration": 20 },
         "api/predict-flight.ts": { "maxDuration": 15 },
