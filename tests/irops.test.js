@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import handler, { __resetIropsForTests, computeMetrics, getStartOfDayForHub, HUB_TZ, overlayHubBoards } from '../api/irops.js';
+import handler, {
+  __resetIropsForTests, computeMetrics, getStartOfDayForHub, HUB_TZ, OVERDUE_CLOCK_GRACE_SEC, overdueClockSec, overlayHubBoards,
+} from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 import { IROPS_MINOR_AT, IROPS_SIGNIFICANT_AT } from '../src/lib/irops-score.js';
 
@@ -290,6 +292,83 @@ describe('computeMetrics', () => {
     const result = computeMetrics({ ORD: flights }, now);
     for (const w of result.worstDelays) expect(w.delay).toBeLessThanOrEqual(240);
     expect(result.score).toBe(0);
+  });
+
+  // ── The overdue clock (Nov 11 2026): overdue is measured at the board's build time + 30 min ──
+  describe('overdue clock', () => {
+    it('overdueClockSec is min(now, generatedAt + 30 min), and now when the build time is unknown', () => {
+      const now = 1_790_000_000;
+      expect(OVERDUE_CLOCK_GRACE_SEC).toBe(1800);
+      expect(overdueClockSec(now, now - 3 * 3600)).toBe(now - 3 * 3600 + 1800);
+      expect(overdueClockSec(now, now - 600)).toBe(now); // younger than the grace: the wall clock
+      expect(overdueClockSec(now, null)).toBe(now);
+      expect(overdueClockSec(now, undefined)).toBe(now);
+      expect(overdueClockSec(now, 0)).toBe(now);
+    });
+
+    it('does not turn departures scheduled after a 3-hour-old board was built into held flights', () => {
+      // The LAX case: a board built at T, read at T+3h. Every departure scheduled after T still
+      // says "scheduled" on it. On the wall clock they were all "held"; at the build clock none is.
+      const built = 1_790_000_000;
+      const now = built + 3 * 3600;
+      const flights = [];
+      for (let i = 0; i < 10; i++) {
+        flights.push(makeFlight('LAX', {
+          schedDep: built + i * 900, schedArr: built + 6 * 3600, realDep: null, status: 'scheduled', flightNum: `UA${i}`,
+        }));
+      }
+      const wall = computeMetrics({ LAX: flights }, now); // no build time: the old behaviour
+      expect(wall.delayed30).toBeGreaterThan(0);
+      const clamped = computeMetrics({ LAX: flights }, now, { LAX: built });
+      // Only the departure due at T (the board's own build minute) is >0 min overdue at T+30m,
+      // and 30 minutes is not "more than 30".
+      expect(clamped.delayed30).toBe(0);
+      expect(clamped.delayed60).toBe(0);
+      expect(clamped.hubMetrics.LAX.delayed30).toBe(0);
+      expect(clamped.score).toBe(0);
+    });
+
+    it('a flight already overdue when the board was built counts, at its overdue minutes as of the build clock', () => {
+      const built = 1_790_000_000;
+      const now = built + 3 * 3600;
+      const held = makeFlight('EWR', { schedDep: built - 3600, schedArr: built + 4 * 3600, realDep: null, status: 'scheduled' });
+      const result = computeMetrics({ EWR: [held] }, now, { EWR: built });
+      expect(result.delayed30).toBe(1);
+      expect(result.delayed60).toBe(1);
+      // 60 min overdue at build + the 30-min grace = 90, not the 240 the wall clock would say.
+      expect(result.worstDelays[0].delay).toBe(90);
+    });
+
+    it('F073 still pushes a ground stop across SIGNIFICANT when the board is fresh', () => {
+      const t = 1700000000;
+      const now = t + 2 * 3600;
+      const flights = [];
+      for (let i = 0; i < 10; i++) {
+        flights.push(makeFlight('EWR', { schedDep: t, realDep: null, status: 'scheduled', flightNum: `UA${200 + i}` }));
+      }
+      for (let i = 0; i < 20; i++) {
+        flights.push(makeFlight('EWR', { schedDep: t, realDep: t, status: 'landed', flightNum: `UA${300 + i}` }));
+      }
+      // Built 5 minutes ago — the warm cron's IROPS priority keeps a disrupted hub's board this fresh.
+      const result = computeMetrics({ EWR: flights }, now, { EWR: now - 300 });
+      expect(result.delayed30).toBe(10);
+      expect(result.delayed60).toBe(10);
+      expect(result.score).toBeGreaterThanOrEqual(IROPS_SIGNIFICANT_AT);
+    });
+
+    it('each hub is measured on its own board clock', () => {
+      const now = 1_790_000_000;
+      const due = now - 2 * 3600; // scheduled 2h ago, never departed, lands in 2h
+      const row = (hub) => makeFlight(hub, { schedDep: due, schedArr: now + 2 * 3600, realDep: null, status: 'scheduled' });
+      const result = computeMetrics(
+        { ORD: [row('ORD')], DEN: [row('DEN')] },
+        now,
+        { ORD: now - 60, DEN: due - 3600 }, // ORD fresh; DEN built an hour before the flight was due
+      );
+      expect(result.hubMetrics.ORD.delayed60).toBe(1);
+      expect(result.hubMetrics.DEN.delayed30).toBe(0);
+      expect(result.delayed30).toBe(1);
+    });
   });
 
   it('F073: does not treat departed/landed/canceled flights as overdue', () => {

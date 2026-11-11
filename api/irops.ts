@@ -158,17 +158,50 @@ const OVERDUE_MAX_MIN = 240;
 // rather than fabricate — the same honest-degradation rule as overdueDelayMinutes' cap.
 const CONFIRMED_DELAY_MAX_MIN = 16 * 60;
 
-function overdueDelayMinutes(fl: any, status: string, nowSec: number): number {
+// ── The overdue clock (Nov 11 2026) ──
+// F073 measured "overdue" against the wall clock, but a hub board is a snapshot: the warm ring
+// rebuilds each today board about every 3 hours, and /api/irops cannot refresh one itself. Every
+// departure scheduled after the board was built still reads "scheduled" on it, so on the wall
+// clock it turned into a held flight 30 minutes later, and the longer the board went unrefreshed
+// the more of them there were. Measured on production boards on Nov 11 2026: LAX's 3-hour-old
+// board counted 17 rows as held; its replacement, built 3 hours later, counted 2. The four big
+// hubs' 21:00Z boards, read again 18 minutes later with no new data, gained 22 delays over 30
+// minutes and 15 over 60 (about +1.4 on the index). Replaying ORD/DEN/IAH/EWR as if their boards
+// were 1/2/3 hours old moved the four-hub index from 13.1 to 16.8 / 20.6 / 25.8 (a uniform-lag
+// bound, not an observed day), so a 2-hour-old board was enough to cross the MINOR line.
+//
+// So overdue is measured at what the board can know: its own build time, plus a short grace for
+// the minutes it has been on the shelf. On the same replay this gives 13.1 / 12.9 / 11.0 / 10.4:
+// a stale board now under-reports by 0–3 points instead of over-reporting by 4–13 (no grace:
+// 11.6 / 10.4 / 9.7; a 60-minute grace overshoots). The cost: a hold that starts after the board
+// was built stops growing until the next warm. Under an FAA program the warm cron rotates the
+// hub's today boards into every 30-minute run (warm-schedules.ts applyIropsPriority), so the
+// loss there is minutes; a hold at a hub with no FAA program can wait out a ring cycle (~3 h).
+// A board with no known build time (`generatedAt` null) keeps the wall clock, as before.
+export const OVERDUE_CLOCK_GRACE_SEC = 30 * 60;
+
+/**
+ * The clock overdue is measured against for one hub board: `min(now, generatedAt + grace)`, or
+ * `now` when the board's build time is unknown.
+ */
+export function overdueClockSec(nowSec: number, generatedAt: number | null | undefined): number {
+  if (generatedAt === null || generatedAt === undefined || !Number.isFinite(generatedAt) || generatedAt <= 0) {
+    return nowSec;
+  }
+  return Math.min(nowSec, generatedAt + OVERDUE_CLOCK_GRACE_SEC);
+}
+
+function overdueDelayMinutes(fl: any, status: string, clockSec: number): number {
   if (cancellationKind(fl) !== null) return 0;
   if (status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted') return 0;
   if (fl.time?.real?.departure) return 0;
   const schedT = fl.time?.scheduled?.departure;
-  if (!schedT || !nowSec || nowSec <= schedT) return 0;
+  if (!schedT || !clockSec || clockSec <= schedT) return 0;
 
   const schedArr = fl.time?.scheduled?.arrival;
-  if (schedArr && nowSec > schedArr) return 0;
+  if (schedArr && clockSec > schedArr) return 0;
 
-  const overdue = Math.round((nowSec - schedT) / 60);
+  const overdue = Math.round((clockSec - schedT) / 60);
   return overdue > OVERDUE_MAX_MIN ? 0 : overdue;
 }
 
@@ -177,13 +210,15 @@ export function computeMetrics(
   nowSec: number = Math.floor(Date.now() / 1000),
   generatedAtByHub: Record<string, number | null> = {},
 ) {
-  let allFlights: any[] = [];
+  // Every row with the overdue clock of the board it came from (see overdueClockSec).
+  const allRows: Array<{ fl: any; clockSec: number }> = [];
   const hubMetrics: Record<string, HubMetric> = {};
   let oldestHubAgeSec: number | null = null;
 
   for (const [hub, flights] of Object.entries(flightsByHub)) {
-    allFlights = allFlights.concat(flights);
     const generatedAt = generatedAtByHub[hub] ?? null;
+    const clockSec = overdueClockSec(nowSec, generatedAt);
+    for (const fl of flights) allRows.push({ fl, clockSec });
     const dataAgeSec = generatedAt === null ? null : Math.max(0, nowSec - generatedAt);
     if (dataAgeSec !== null && (oldestHubAgeSec === null || dataAgeSec > oldestHubAgeSec)) oldestHubAgeSec = dataAgeSec;
     hubMetrics[hub] = {
@@ -205,7 +240,7 @@ export function computeMetrics(
       // F073: held/overdue flights count toward delayed30/60 (numerator only; total is
       // untouched so the denominator semantics are unchanged). overdueDelayMinutes returns
       // 0 for anything that has already departed, so operated flights are unaffected.
-      const overdueMin = overdueDelayMinutes(fl, status, nowSec);
+      const overdueMin = overdueDelayMinutes(fl, status, clockSec);
       if (overdueMin > 30) hubMetrics[hub].delayed30++;
       if (overdueMin > 60) hubMetrics[hub].delayed60++;
 
@@ -233,7 +268,7 @@ export function computeMetrics(
   let cancellations = 0, cancellationsLikely = 0, likelyCanceledSeenFlying = 0, delayed30 = 0, delayed60 = 0, diversions = 0;
   const worstDelays: WorstDelay[] = [];
 
-  for (const fl of allFlights) {
+  for (const { fl, clockSec } of allRows) {
     const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
     if (fl._source?.seenAirborne) likelyCanceledSeenFlying++;
     const cancelled = cancellationKind(fl);
@@ -264,7 +299,7 @@ export function computeMetrics(
       // F073: held/overdue flights (past schedule, not yet departed) — the core of a
       // ground stop. overdueDelayMinutes is 0 for anything already departed, so this
       // never double-counts a flight already scored above.
-      const overdueMin = overdueDelayMinutes(fl, status, nowSec);
+      const overdueMin = overdueDelayMinutes(fl, status, clockSec);
       if (overdueMin > 30) delayed30++;
       if (overdueMin > 60) delayed60++;
       if (overdueMin > 15) {
@@ -278,7 +313,7 @@ export function computeMetrics(
 
   worstDelays.sort((a, b) => b.delay - a.delay);
 
-  const totalFlights = allFlights.length;
+  const totalFlights = allRows.length;
   // F017: delayed30 is CUMULATIVE (every delay >30m, including those >60m) so the UI's
   // ">30m" / ">60m" cards stay backward-compatible and truthful. The SCORE, however,
   // must weight each flight once: a 61-min delay is a single 2-point event, not 1+2=3
