@@ -43,6 +43,7 @@ import type { BoardDirection, EquipmentSwap } from '../state/schedule';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 import { useWeather } from '../state/weather';
+import { AskChips } from '../features/AskChips';
 import { ScheduleControls } from './schedule/ScheduleControls';
 import { ScheduleStats } from './schedule/ScheduleStats';
 import { ScheduleTable } from './schedule/ScheduleTable';
@@ -50,6 +51,7 @@ import type { EmptyReason, ScheduleTableHandle } from './schedule/ScheduleTable'
 import { StalenessBanner } from './schedule/StalenessBanner';
 import type { BoardCondition } from './schedule/StalenessBanner';
 import { SwapSummary } from './schedule/SwapSummary';
+import { useAskSchedule } from './schedule/useAskSchedule';
 import { EMPTY_FILTERS, aircraftOptions, useBoardModel } from './schedule/useBoardModel';
 import type { BoardFilters, RowModel, SortColumn } from './schedule/useBoardModel';
 
@@ -112,6 +114,9 @@ export default function ScheduleView() {
     setFilters((prev) => ({ ...prev, ...CONTEXTUAL_FILTERS }));
   }, [hub, dir, day]);
 
+  // "Ask the board" (⌘K). Called after the reset above, so the filters it sets survive the board change.
+  const ask = useAskSchedule({ hub, dir, day, setCurrent: schedule.setCurrent, filters, setFilters });
+
   const dayStartSec = useMemo(() => {
     if (!hub) return 0;
     try {
@@ -148,6 +153,7 @@ export default function ScheduleView() {
     nas: weather?.nas ?? null,
     hubOtp: hubHealth.byHub,
     iropsHubRates: irops.hubRates,
+    askFilter: ask.predicate,
   });
 
   const asOf = useMemo(
@@ -271,7 +277,8 @@ export default function ScheduleView() {
   const onClearFilters = useCallback(() => {
     setFilters(EMPTY_FILTERS);
     setDebouncedFilters(EMPTY_FILTERS);
-  }, []);
+    ask.clear();
+  }, [ask.clear]);
 
   return (
     // From `md` up there is no `h-full`: the toolbar and the seven stat cards are tall enough
@@ -300,6 +307,17 @@ export default function ScheduleView() {
         onJumpToNow={() => tableRef.current?.scrollToNow(true)}
       />
 
+
+      <AskChips
+        view="schedule"
+        // The real count of rows on the board, once the board and the debounced filters have caught up.
+        count={board && !isLoading && ask.applied && filters === debouncedFilters ? model.rows.length : null}
+        singular={dir === 'arrivals' ? 'arrival' : 'departure'}
+        where={hub ? `at ${hub}` : undefined}
+        onRemove={ask.onRemove}
+        onClear={ask.onClear}
+        className="px-1"
+      />
 
       {!hub ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">

@@ -231,6 +231,12 @@ export type BoardModelInput = {
   nas: NasData | null;
   hubOtp: Record<string, number>;
   iropsHubRates: Record<string, IropsHubRate>;
+  /**
+   * "Ask the board" (⌘K): one extra row test for what the board's own filters cannot express
+   * (src/lib/ask-apply.js makeScheduleAskPredicate). Applied with them, so the rows, the NOW line and
+   * the stat strip all count the same set.
+   */
+  askFilter?: ((row: ScheduleRow, ctx: { classify: (row: ScheduleRow) => StatusModel }) => boolean) | null;
 };
 
 
@@ -279,6 +285,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     nas,
     hubOtp,
     iropsHubRates,
+    askFilter,
   } = input;
 
   const hubTz = (HUB_TZ as Record<string, string>)[hub] || 'America/Chicago';
@@ -431,7 +438,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
           regFor,
           computeRisk,
         },
-      ),
+      ) && (!askFilter || askFilter(row, { classify })),
     );
 
     const direction = sort.asc ? 1 : -1;
@@ -603,6 +610,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     hubOtp,
     iropsHubRates,
     hubTz,
+    askFilter,
   ]);
 }
 

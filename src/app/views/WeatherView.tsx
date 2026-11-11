@@ -72,6 +72,15 @@ export default function WeatherView() {
   // `?tab=irops` lands on this tab already scrolled to the disruption bar. Consumed once —
   // leaving it set would yank the panel back on every later render.
   useEffect(() => {
+    // "Ask the board" (⌘K): "what's wrong at Newark" lands here on Newark's card, ringed like a
+    // radar-marker click. Waits for the cards to exist (they render once the METARs arrive).
+    const askedHub = pendingScroll?.match(/^hub-card-([A-Z]{3})$/)?.[1];
+    if (askedHub) {
+      if (!models.length) return;
+      requestAnimationFrame(() => selectHub(askedHub));
+      clearPendingScroll();
+      return;
+    }
     if (pendingScroll !== 'irops-section') return;
     const target = document.getElementById('irops-section');
     if (target) {
@@ -79,7 +88,7 @@ export default function WeatherView() {
       requestAnimationFrame(() => target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }));
     }
     clearPendingScroll();
-  }, [pendingScroll, clearPendingScroll]);
+  }, [pendingScroll, clearPendingScroll, models.length, selectHub]);
 
   // "Hub Stations ↓" — a hint that there is more below the fold, which removes itself the
   // moment the cards are actually in view rather than nagging about what you can already see.

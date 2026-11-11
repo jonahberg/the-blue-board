@@ -57,6 +57,8 @@ import { listSpecialLiveries } from '@/lib/special-livery.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { ExpressAircraft, FleetAircraft } from '../data/types';
 import { readFleetDeepLinks } from '../state/deep-links';
+import { AskChips } from '../features/AskChips';
+import { useAskFleet } from './fleet/useAskFleet';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
 import { useUi } from '../state/ui';
@@ -267,12 +269,28 @@ export default function FleetView() {
     });
   }, []);
 
+  // "Ask the board" (⌘K): the table's own search and status filter carry the answer.
+  const ask = useAskFleet({
+    search,
+    setSearch,
+    setTypeFilter,
+    setWifiFilter,
+    statusFilter,
+    setStatusFilter,
+    showAll: useCallback(() => {
+      setSubView('all');
+      requestAnimationFrame(() =>
+        lookupRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }),
+      );
+    }, []),
+  });
   const clearFilters = useCallback(() => {
     setTypeFilter('');
     setWifiFilter('');
     setStatusFilter('');
     setSearch('');
-  }, []);
+    ask.clear();
+  }, [ask.clear]);
 
   // A search that finds a plane the other filters hide says so, and "Show it" drops those
   // filters but keeps the search (reader email Oct 5 2026: "N666UA is missing" with Wi-Fi =
@@ -491,6 +509,18 @@ export default function FleetView() {
 
           {/* The mainline controls filter the mainline database; the Express panel has its own
               search, and these type/Wi-Fi/status values would do nothing there. */}
+          {subView === 'all' ? (
+            <AskChips
+              view="fleet"
+              count={fleetDb.length ? tableRows.length : null}
+              singular="aircraft"
+              pluralNoun="aircraft"
+              where="in the fleet list"
+              onRemove={ask.onRemove}
+              onClear={ask.onClear}
+            />
+          ) : null}
+
           {subView !== 'express' ? (
             <FleetControls
               search={search}
