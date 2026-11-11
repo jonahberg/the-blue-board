@@ -1,6 +1,6 @@
 // ═══ HTML SANITIZATION ═══
 // Shared across client (src/dashboard/main.js) and server (api/*.ts).
-// Why: prevents XSS when untrusted upstream data (FlightAware, FR24, news titles)
+// Why: prevents XSS when untrusted upstream data (FR24, news titles)
 // is interpolated into HTML strings assigned to innerHTML or email bodies.
 
 export function escapeHtml(str) {

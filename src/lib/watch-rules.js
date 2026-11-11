@@ -18,8 +18,8 @@ import { isLikelyCanceledText } from './cancellation.js';
 
 /**
  * The phase a status WORD describes, in every vocabulary a watch sees: the board's display labels
- * ("Expected", "Arrived", "Likely Canceled"), /api/flight-times' generic text ("en-route",
- * "canceled_uncertain") and FlightAware's ("En Route").
+ * ("Expected", "En Route", "Arrived", "Likely Canceled") and /api/flight-times' generic text
+ * ("en-route", "canceled_uncertain").
  *
  * "estimated" is pre-departure: api/schedule.ts's FR24 normalizer maps estimated/delayed to it, and
  * the board classifier (schedule-status.js RECLASSIFIABLE_KEYS) treats it as not yet operated. The

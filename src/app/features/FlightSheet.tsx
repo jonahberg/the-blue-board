@@ -133,7 +133,6 @@ function TimeRow({
 
 /** What the source field means, in words (the raw tier ids are internal). */
 const TIMES_SOURCE_LABEL: Record<string, string> = {
-  flightaware: 'FlightAware',
   'schedule-cache': 'hub schedule board',
   'schedule-cache+fr24': 'hub schedule board + Flightradar24 live',
   fr24: 'Flightradar24 live tracking (no schedule times)',

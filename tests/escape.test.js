@@ -10,7 +10,7 @@ describe('escapeHtml', () => {
     expect(escapeHtml("'")).toBe('&#39;');
   });
 
-  it('neutralizes a malicious gate string from FR24/FlightAware (bug #3)', () => {
+  it('neutralizes a malicious gate string from an upstream feed (bug #3)', () => {
     // Representative payload from the ultrareview: a gate like "B<img src=x onerror=...>"
     const malicious = 'B<img src=x onerror=alert(1)>';
     const safe = escapeHtml(malicious);
