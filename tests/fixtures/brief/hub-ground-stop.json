@@ -1,0 +1,458 @@
+{
+ "name": "hub-ground-stop",
+ "description": "A summer thunderstorm ground stop at Newark (in effect until 8:30 PM ET, extension probability high) with EWR on-time at 58% and 11 confirmed cancellations there; every other hub normal. Expected tone: disrupted.",
+ "nowIso": "2026-07-14T22:20:00Z",
+ "sources": {
+  "irops": {
+   "score": 19.4,
+   "totalFlights": 2574,
+   "cancellations": 34,
+   "cancellationsLikely": 23,
+   "likelyCanceledSeenFlying": 0,
+   "delayed30": 281,
+   "delayed60": 113,
+   "diversions": 0,
+   "worstDelays": [],
+   "hubMetrics": {
+    "ORD": {
+     "total": 640,
+     "cancellations": 8,
+     "cancellationsLikely": 8,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 54,
+     "delayed60": 22,
+     "diversions": 0,
+     "operated": 450,
+     "onTime": 396,
+     "generatedAt": 1784064900,
+     "dataAgeSec": 2700
+    },
+    "DEN": {
+     "total": 490,
+     "cancellations": 5,
+     "cancellationsLikely": 5,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 32,
+     "delayed60": 13,
+     "diversions": 0,
+     "operated": 360,
+     "onTime": 328,
+     "generatedAt": 1784064900,
+     "dataAgeSec": 2700
+    },
+    "IAH": {
+     "total": 450,
+     "cancellations": 4,
+     "cancellationsLikely": 4,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 33,
+     "delayed60": 13,
+     "diversions": 0,
+     "operated": 330,
+     "onTime": 297,
+     "generatedAt": 1784064900,
+     "dataAgeSec": 2700
+    },
+    "EWR": {
+     "total": 385,
+     "cancellations": 17,
+     "cancellationsLikely": 6,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 101,
+     "delayed60": 40,
+     "diversions": 0,
+     "operated": 240,
+     "onTime": 139,
+     "generatedAt": 1784064900,
+     "dataAgeSec": 2700
+    },
+    "SFO": {
+     "total": 225,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 22,
+     "delayed60": 9,
+     "diversions": 0,
+     "operated": 160,
+     "onTime": 138,
+     "generatedAt": 1784064900,
+     "dataAgeSec": 2700
+    },
+    "IAD": {
+     "total": 240,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 29,
+     "delayed60": 12,
+     "diversions": 0,
+     "operated": 170,
+     "onTime": 141,
+     "generatedAt": 1784064900,
+     "dataAgeSec": 2700
+    },
+    "LAX": {
+     "total": 122,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 10,
+     "delayed60": 4,
+     "diversions": 0,
+     "operated": 88,
+     "onTime": 78,
+     "generatedAt": 1784064900,
+     "dataAgeSec": 2700
+    },
+    "NRT": {
+     "total": 12,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 0,
+     "delayed60": 0,
+     "diversions": 0,
+     "operated": 0,
+     "onTime": 0,
+     "generatedAt": 1784064900,
+     "dataAgeSec": 2700
+    },
+    "GUM": {
+     "total": 10,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 0,
+     "delayed60": 0,
+     "diversions": 0,
+     "operated": 3,
+     "onTime": 3,
+     "generatedAt": 1784064900,
+     "dataAgeSec": 2700
+    }
+   },
+   "oldestHubAgeSec": 2700,
+   "generatedAt": "2026-07-14T22:20:00Z",
+   "cached": true
+  },
+  "faa": [
+   {
+    "airportCode": "EWR",
+    "programs": [
+     {
+      "type": "ground_stop",
+      "reason": "thunderstorms",
+      "endTime": "2026-07-15T00:30:00Z",
+      "probabilityOfExtension": "HIGH",
+      "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=57&adv_date=11102026&facId=ATCSCC",
+      "center": "ZNY"
+     }
+    ],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": true,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": [
+     {
+      "reason": "thunderstorms",
+      "type": "ground_stop",
+      "avgDelay": null,
+      "minDelay": null,
+      "maxDelay": null,
+      "trend": null,
+      "endTime": "2026-07-15T00:30:00Z"
+     }
+    ]
+   },
+   {
+    "airportCode": "LGA",
+    "programs": [
+     {
+      "type": "ground_delay",
+      "reason": "WX:Thunderstorms",
+      "avgDelay": 54,
+      "maxDelay": 121,
+      "endTime": "2026-07-15T03:59:00Z"
+     }
+    ],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": true,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": 54,
+    "minDelay": null,
+    "maxDelay": 121,
+    "delays": [
+     {
+      "reason": "WX:Thunderstorms",
+      "type": "ground_delay",
+      "avgDelay": 54,
+      "minDelay": null,
+      "maxDelay": 121,
+      "trend": null,
+      "endTime": "2026-07-15T03:59:00Z"
+     }
+    ]
+   },
+   {
+    "airportCode": "LAX",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "SFO",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "ORD",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "DEN",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "IAD",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "IAH",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "LAS",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "SAN",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   }
+  ],
+  "nas": {
+   "active": [],
+   "planned": [
+    {
+     "time": "",
+     "event": "AFTER 0100\t-EWR/LGA/JFK GROUND DELAY PROGRAM PROBABLE",
+     "decoded": "AFTER 0100\t-EWR/LGA/JFK Ground Delay Program PROBABLE",
+     "affectedAirports": [
+      "EWR",
+      "LGA",
+      "JFK"
+     ],
+     "type": "terminal"
+    }
+   ],
+   "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=57&adv_date=11102026&facId=ATCSCC"
+  },
+  "metar": [
+   {
+    "icaoId": "KEWR",
+    "stationId": "KEWR",
+    "id": "KEWR",
+    "rawOb": "METAR KEWR 142151Z 27018G34KT 2SM +TSRA BKN015CB OVC040 24/22 A2977 RMK AO2 PK WND 28041/2135",
+    "obsTime": 1784065860,
+    "fltCat": "IFR",
+    "reportTime": "2026-07-14T21:51:00Z"
+   },
+   {
+    "icaoId": "KIAH",
+    "stationId": "KIAH",
+    "id": "KIAH",
+    "rawOb": "METAR KIAH 142151Z 17008KT 10SM SCT050 BKN250 24/16 A3011 RMK AO2",
+    "obsTime": 1784065860,
+    "fltCat": "VFR",
+    "reportTime": "2026-07-14T21:51:00Z"
+   },
+   {
+    "icaoId": "KORD",
+    "stationId": "KORD",
+    "id": "KORD",
+    "rawOb": "METAR KORD 142151Z 29005KT 10SM FEW250 16/02 A3002 RMK AO2",
+    "obsTime": 1784065860,
+    "fltCat": "VFR",
+    "reportTime": "2026-07-14T21:51:00Z"
+   },
+   {
+    "icaoId": "KDEN",
+    "stationId": "KDEN",
+    "id": "KDEN",
+    "rawOb": "METAR KDEN 142151Z 00000KT 10SM FEW160 BKN220 18/M06 A3015 RMK AO2",
+    "obsTime": 1784065860,
+    "fltCat": "VFR",
+    "reportTime": "2026-07-14T21:51:00Z"
+   },
+   {
+    "icaoId": "KSFO",
+    "stationId": "KSFO",
+    "id": "KSFO",
+    "rawOb": "METAR KSFO 142151Z 31011KT 10SM CLR 22/14 A3012 RMK AO2",
+    "obsTime": 1784065860,
+    "fltCat": "VFR",
+    "reportTime": "2026-07-14T21:51:00Z"
+   },
+   {
+    "icaoId": "KLAX",
+    "stationId": "KLAX",
+    "id": "KLAX",
+    "rawOb": "METAR KLAX 142151Z 27010KT 10SM CLR 25/18 A3003 RMK AO2",
+    "obsTime": 1784065860,
+    "fltCat": "VFR",
+    "reportTime": "2026-07-14T21:51:00Z"
+   },
+   {
+    "icaoId": "KIAD",
+    "stationId": "KIAD",
+    "id": "KIAD",
+    "rawOb": "METAR KIAD 142151Z 15004KT 10SM CLR 13/05 A2996 RMK AO2",
+    "obsTime": 1784065860,
+    "fltCat": "VFR",
+    "reportTime": "2026-07-14T21:51:00Z"
+   },
+   {
+    "icaoId": "RJAA",
+    "stationId": "RJAA",
+    "id": "RJAA",
+    "rawOb": "METAR RJAA 142130Z 33003KT 9999 FEW030 06/04 Q1024 NOSIG",
+    "obsTime": 1784065860,
+    "fltCat": "VFR",
+    "reportTime": "2026-07-14T21:51:00Z"
+   },
+   {
+    "icaoId": "PGUM",
+    "stationId": "PGUM",
+    "id": "PGUM",
+    "rawOb": "METAR PGUM 142151Z 08008KT 10SM SCT018 SCT023 30/24 A2996 RMK AO2",
+    "obsTime": 1784065860,
+    "fltCat": "VFR",
+    "reportTime": "2026-07-14T21:51:00Z"
+   }
+  ],
+  "air": {
+   "airborne": 781,
+   "express": 205,
+   "starlink": 344
+  },
+  "airNormal": {
+   "median": 802,
+   "days": 7
+  },
+  "asOf": {
+   "irops": 1784067120000,
+   "faa": 1784067420000,
+   "nas": 1784067420000,
+   "metar": 1784067360000,
+   "air": 1784067585000
+  }
+ },
+ "expect": {
+  "tone": "disrupted"
+ }
+}

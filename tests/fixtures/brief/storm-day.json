@@ -1,0 +1,508 @@
+{
+ "name": "storm-day",
+ "description": "A multi-hub storm day: ground delay program at Chicago O'Hare (avg 67 min, max 140), ground stop at Newark, departure delays at Houston, ORD 48% / EWR 41% / IAH 66% on time, 87 confirmed cancellations across the hubs, disruption index 46.2. Expected tone: disrupted.",
+ "nowIso": "2026-06-18T20:05:00Z",
+ "sources": {
+  "irops": {
+   "score": 46.2,
+   "totalFlights": 2609,
+   "cancellations": 147,
+   "cancellationsLikely": 60,
+   "likelyCanceledSeenFlying": 19,
+   "delayed30": 570,
+   "delayed60": 228,
+   "diversions": 0,
+   "worstDelays": [],
+   "hubMetrics": {
+    "ORD": {
+     "total": 650,
+     "cancellations": 63,
+     "cancellationsLikely": 22,
+     "likelyCanceledSeenFlying": 9,
+     "delayed30": 198,
+     "delayed60": 79,
+     "diversions": 0,
+     "operated": 380,
+     "onTime": 182,
+     "generatedAt": 1781810400,
+     "dataAgeSec": 2700
+    },
+    "DEN": {
+     "total": 495,
+     "cancellations": 10,
+     "cancellationsLikely": 6,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 65,
+     "delayed60": 26,
+     "diversions": 0,
+     "operated": 340,
+     "onTime": 275,
+     "generatedAt": 1781810400,
+     "dataAgeSec": 2700
+    },
+    "IAH": {
+     "total": 455,
+     "cancellations": 20,
+     "cancellationsLikely": 11,
+     "likelyCanceledSeenFlying": 4,
+     "delayed30": 102,
+     "delayed60": 41,
+     "diversions": 0,
+     "operated": 300,
+     "onTime": 198,
+     "generatedAt": 1781810400,
+     "dataAgeSec": 2700
+    },
+    "EWR": {
+     "total": 390,
+     "cancellations": 45,
+     "cancellationsLikely": 15,
+     "likelyCanceledSeenFlying": 6,
+     "delayed30": 124,
+     "delayed60": 50,
+     "diversions": 0,
+     "operated": 210,
+     "onTime": 86,
+     "generatedAt": 1781810400,
+     "dataAgeSec": 2700
+    },
+    "SFO": {
+     "total": 228,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 24,
+     "delayed60": 10,
+     "diversions": 0,
+     "operated": 150,
+     "onTime": 126,
+     "generatedAt": 1781810400,
+     "dataAgeSec": 2700
+    },
+    "IAD": {
+     "total": 245,
+     "cancellations": 9,
+     "cancellationsLikely": 6,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 46,
+     "delayed60": 18,
+     "diversions": 0,
+     "operated": 160,
+     "onTime": 114,
+     "generatedAt": 1781810400,
+     "dataAgeSec": 2700
+    },
+    "LAX": {
+     "total": 124,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 10,
+     "delayed60": 4,
+     "diversions": 0,
+     "operated": 85,
+     "onTime": 75,
+     "generatedAt": 1781810400,
+     "dataAgeSec": 2700
+    },
+    "NRT": {
+     "total": 12,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 0,
+     "delayed60": 0,
+     "diversions": 0,
+     "operated": 0,
+     "onTime": 0,
+     "generatedAt": 1781810400,
+     "dataAgeSec": 2700
+    },
+    "GUM": {
+     "total": 10,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 1,
+     "delayed60": 0,
+     "diversions": 0,
+     "operated": 4,
+     "onTime": 3,
+     "generatedAt": 1781810400,
+     "dataAgeSec": 2700
+    }
+   },
+   "oldestHubAgeSec": 2700,
+   "generatedAt": "2026-06-18T20:05:00Z",
+   "cached": true
+  },
+  "faa": [
+   {
+    "airportCode": "ORD",
+    "programs": [
+     {
+      "type": "ground_delay",
+      "reason": "WX:Thunderstorms",
+      "avgDelay": 67,
+      "maxDelay": 140,
+      "endTime": "2026-06-19T02:59:00Z",
+      "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=57&adv_date=11102026&facId=ATCSCC",
+      "center": "ZAU"
+     }
+    ],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": true,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": 67,
+    "minDelay": null,
+    "maxDelay": 140,
+    "delays": [
+     {
+      "reason": "WX:Thunderstorms",
+      "type": "ground_delay",
+      "avgDelay": 67,
+      "minDelay": null,
+      "maxDelay": 140,
+      "trend": null,
+      "endTime": "2026-06-19T02:59:00Z"
+     }
+    ]
+   },
+   {
+    "airportCode": "EWR",
+    "programs": [
+     {
+      "type": "ground_stop",
+      "reason": "thunderstorms",
+      "endTime": "2026-06-18T21:15:00Z",
+      "probabilityOfExtension": "MEDIUM",
+      "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=57&adv_date=11102026&facId=ATCSCC",
+      "center": "ZNY"
+     }
+    ],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": true,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": [
+     {
+      "reason": "thunderstorms",
+      "type": "ground_stop",
+      "avgDelay": null,
+      "minDelay": null,
+      "maxDelay": null,
+      "trend": null,
+      "endTime": "2026-06-18T21:15:00Z"
+     }
+    ]
+   },
+   {
+    "airportCode": "IAH",
+    "programs": [
+     {
+      "type": "departure_delay",
+      "reason": "WX:Thunderstorms",
+      "minDelay": 31,
+      "maxDelay": 45,
+      "trend": "Increasing"
+     }
+    ],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": true,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": 31,
+    "maxDelay": 45,
+    "delays": [
+     {
+      "reason": "WX:Thunderstorms",
+      "type": "departure_delay",
+      "avgDelay": null,
+      "minDelay": 31,
+      "maxDelay": 45,
+      "trend": "Increasing",
+      "endTime": null
+     }
+    ]
+   },
+   {
+    "airportCode": "MDW",
+    "programs": [
+     {
+      "type": "ground_delay",
+      "reason": "WX:Thunderstorms",
+      "avgDelay": 48,
+      "maxDelay": 96,
+      "endTime": "2026-06-19T01:59:00Z"
+     }
+    ],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": true,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": 48,
+    "minDelay": null,
+    "maxDelay": 96,
+    "delays": [
+     {
+      "reason": "WX:Thunderstorms",
+      "type": "ground_delay",
+      "avgDelay": 48,
+      "minDelay": null,
+      "maxDelay": 96,
+      "trend": null,
+      "endTime": "2026-06-19T01:59:00Z"
+     }
+    ]
+   },
+   {
+    "airportCode": "LAX",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "SFO",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "DEN",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "IAD",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "LAS",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "SAN",
+    "programs": [],
+    "runwayConfig": null,
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   }
+  ],
+  "nas": {
+   "active": [
+    {
+     "name": "AFP-ZNY_FCA",
+     "reason": "thunderstorms",
+     "avgDelay": 38,
+     "startTime": "2026-06-18T18:00:00Z",
+     "endTime": "2026-06-19T02:00:00Z",
+     "affectedFacilities": [
+      "EWR",
+      "LGA",
+      "JFK"
+     ]
+    }
+   ],
+   "planned": [
+    {
+     "time": "",
+     "event": "AFTER 2100\t-IAD/DCA GROUND STOP POSSIBLE",
+     "decoded": "AFTER 2100\t-IAD/DCA Ground Stop POSSIBLE",
+     "affectedAirports": [
+      "IAD",
+      "DCA"
+     ],
+     "type": "terminal"
+    }
+   ],
+   "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=57&adv_date=11102026&facId=ATCSCC"
+  },
+  "metar": [
+   {
+    "icaoId": "KORD",
+    "stationId": "KORD",
+    "id": "KORD",
+    "rawOb": "METAR KORD 181951Z 25022G38KT 1 1/2SM +TSRA BKN009CB OVC025 22/20 A2971 RMK AO2",
+    "obsTime": 1781812260,
+    "fltCat": "IFR",
+    "reportTime": "2026-06-18T19:51:00Z"
+   },
+   {
+    "icaoId": "KEWR",
+    "stationId": "KEWR",
+    "id": "KEWR",
+    "rawOb": "METAR KEWR 181951Z 22016G28KT 4SM TSRA BKN030CB 27/23 A2984 RMK AO2",
+    "obsTime": 1781812260,
+    "fltCat": "MVFR",
+    "reportTime": "2026-06-18T19:51:00Z"
+   },
+   {
+    "icaoId": "KIAH",
+    "stationId": "KIAH",
+    "id": "KIAH",
+    "rawOb": "METAR KIAH 181953Z 19012KT 6SM -TSRA SCT025CB BKN060 29/24 A2995 RMK AO2",
+    "obsTime": 1781812380,
+    "fltCat": "VFR",
+    "reportTime": "2026-06-18T19:53:00Z"
+   },
+   {
+    "icaoId": "KDEN",
+    "stationId": "KDEN",
+    "id": "KDEN",
+    "rawOb": "METAR KDEN 181951Z 00000KT 10SM FEW160 BKN220 18/M06 A3015 RMK AO2",
+    "obsTime": 1781812260,
+    "fltCat": "VFR",
+    "reportTime": "2026-06-18T19:51:00Z"
+   },
+   {
+    "icaoId": "KSFO",
+    "stationId": "KSFO",
+    "id": "KSFO",
+    "rawOb": "METAR KSFO 181951Z 31011KT 10SM CLR 22/14 A3012 RMK AO2",
+    "obsTime": 1781812260,
+    "fltCat": "VFR",
+    "reportTime": "2026-06-18T19:51:00Z"
+   },
+   {
+    "icaoId": "KLAX",
+    "stationId": "KLAX",
+    "id": "KLAX",
+    "rawOb": "METAR KLAX 181951Z 27010KT 10SM CLR 25/18 A3003 RMK AO2",
+    "obsTime": 1781812260,
+    "fltCat": "VFR",
+    "reportTime": "2026-06-18T19:51:00Z"
+   },
+   {
+    "icaoId": "KIAD",
+    "stationId": "KIAD",
+    "id": "KIAD",
+    "rawOb": "METAR KIAD 181951Z 15004KT 10SM CLR 13/05 A2996 RMK AO2",
+    "obsTime": 1781812260,
+    "fltCat": "VFR",
+    "reportTime": "2026-06-18T19:51:00Z"
+   },
+   {
+    "icaoId": "RJAA",
+    "stationId": "RJAA",
+    "id": "RJAA",
+    "rawOb": "METAR RJAA 181930Z 33003KT 9999 FEW030 06/04 Q1024 NOSIG",
+    "obsTime": 1781812260,
+    "fltCat": "VFR",
+    "reportTime": "2026-06-18T19:51:00Z"
+   },
+   {
+    "icaoId": "PGUM",
+    "stationId": "PGUM",
+    "id": "PGUM",
+    "rawOb": "METAR PGUM 181951Z 08008KT 10SM SCT018 SCT023 30/24 A2996 RMK AO2",
+    "obsTime": 1781812260,
+    "fltCat": "VFR",
+    "reportTime": "2026-06-18T19:51:00Z"
+   }
+  ],
+  "air": {
+   "airborne": 702,
+   "express": 181,
+   "starlink": 311
+  },
+  "airNormal": {
+   "median": 790,
+   "days": 7
+  },
+  "asOf": {
+   "irops": 1781812680000,
+   "faa": 1781812920000,
+   "nas": 1781812920000,
+   "metar": 1781812740000,
+   "air": 1781813085000
+  }
+ },
+ "expect": {
+  "tone": "disrupted"
+ }
+}

@@ -1,0 +1,106 @@
+{
+ "facility_id": "23b485da-06ec-4d7d-8dc3-aa45e7e809c9",
+ "operations": {
+  "runways": {
+   "arrivals": [
+    "35L",
+    "35R",
+    "34R"
+   ],
+   "departures": [
+    "25",
+    "08"
+   ],
+   "source": "faa_airport_configuration",
+   "updated_at": "2026-10-24T13:06:00Z"
+  },
+  "flight_rules": "VMC",
+  "flight_rules_source": "faa_airport_configuration",
+  "flow": {
+   "arrivals": {
+    "planned_per_hour": 102,
+    "actual_last_hour": 66,
+    "scheduled_next_hour": 45
+   },
+   "departures": {
+    "planned_per_hour": 80,
+    "actual_last_hour": 64,
+    "scheduled_next_hour": 39
+   }
+  },
+  "programs": [],
+  "computed_at": "2026-10-24T20:55:26.988591Z"
+ },
+ "weather": {
+  "metar": {
+   "raw": "METAR KDEN 242053Z 36006G16KT 10SM FEW040 BKN070 BKN110 BKN150 BKN220 09/M02 A3032 RMK AO2 SLP233 T00941017 56013",
+   "observed_at": "2026-10-24T20:53:00Z",
+   "flight_category": "VFR"
+  },
+  "taf": {
+   "raw": "TAF KDEN 242048Z 2421/2524 05011KT P6SM SCT050 SCT150 BKN220 PROB30 2422/2424 -SHRA BKN035 FM250000 10007KT P6SM BKN030 ...",
+   "issued_at": "2026-10-24T20:48:00Z",
+   "valid_from": "2026-10-24T21:00:00Z",
+   "valid_to": "2026-10-26T00:00:00Z"
+  }
+ },
+ "critical": [],
+ "notable": [
+  {
+   "id": 96534,
+   "tags": [
+    "medical_emergency"
+   ],
+   "title": "Inbound emergency United 2809 on RNAV Z 35R",
+   "summary": "United 2809 taxied via taxiways L and AA to gate A22 as a medical emergency, with ground traffic yielding and medics standing by.",
+   "change": "United 2809 taxied to gate A22 for medical emergency with medics standing by",
+   "runways": [],
+   "fixes": [],
+   "happened_at": "2026-10-24T20:05:45.297891Z",
+   "evidence": [
+    {
+     "audio_sample_id": "0d58f03f-23d8-4395-85de-30ae5ff8e299",
+     "atc_channel_id": 160,
+     "received_at": "2026-10-24T20:05:01.349866Z",
+     "quote": "if you catch opposite direction United at L, give way to their medical emergency"
+    },
+    {
+     "audio_sample_id": "f97e39a9-06d1-439c-b96e-a304cf4acdc1",
+     "atc_channel_id": 1793,
+     "received_at": "2026-10-24T20:05:45.297891Z",
+     "quote": "A A to your gate and its my understanding we have medics standing for by for you"
+    }
+   ],
+   "history": [
+    {
+     "tags": [
+      "declared_emergency"
+     ],
+     "title": "Inbound emergency United 2809 on RNAV Z 35R",
+     "summary": "United 2809 landed on runway 35R, vacated the runway via taxiway P7, and was instructed to contact Ground on taxiway ED.",
+     "change": "United 2809 landed on runway 35R and exited via taxiway P7 to Ground",
+     "runways": [
+      "35R"
+     ],
+     "fixes": [],
+     "happened_at": "2026-10-24T20:02:23.348152Z",
+     "evidence": [
+      {
+       "audio_sample_id": "24eae04c-2319-421e-9fc4-9a43857afdd4",
+       "atc_channel_id": 156,
+       "received_at": "2026-10-24T20:02:19.966387Z",
+       "quote": "United 2809, turn left P7, taxi via E D, on E D contact Ground"
+      },
+      {
+       "audio_sample_id": "d1cba472-a457-4711-bb05-0b7a955d37d4",
+       "atc_channel_id": 156,
+       "received_at": "2026-10-24T20:02:23.348152Z",
+       "quote": "P7ED, contact Ground there, United 2809"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "generated_at": "2026-10-24T20:47:12.414236Z"
+}
