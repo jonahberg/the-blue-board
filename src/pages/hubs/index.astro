@@ -122,11 +122,12 @@ const itemListSchema = {
 
     <section class="mt-8">
       <h2
-        class="mb-3 border-b border-border pb-1.5 text-base font-bold tracking-tight text-foreground"
+        class="mb-3 border-b border-border pb-1.5 text-base font-bold tracking-tight text-balance text-foreground"
       >
         Airports The Blue Board Tracks — 8 Hubs + NRT Gateway
       </h2>
-      <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {/* Three across from md: the nine airports fill a 3×3 grid with no stranded last card. */}
+      <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
         {
           hubOrder.map((key) => {
             const hub = hubSummaries[key];
