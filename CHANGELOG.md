@@ -4,6 +4,34 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.26.0] - 2026-11-11
+
+**A polish pass over every screen, with the phone first.** On an iPhone the Live map now gets 509 px of a 659 px screen instead of 398.
+
+### Changed
+- **More map on a phone.** The header is 44 px instead of 61, with plain icons in place of boxed buttons (tap areas are still 44 px). The hub strip is 28 px instead of 45. The "United airborne" row is now a small chip on the map beside the Key button; it opens the same 24-hour graph. The news line no longer shows on the phone Live tab (it is on every other tab, and News is in the More menu).
+- **The phone map opens on the lower 48** instead of spending its top third on Canada, the hub labels no longer sit on top of each other, the layer buttons are icons that all fit, and the zoom buttons are gone on touch screens (pinch).
+- **One "DISRUPTED" per screen.** The hub strip's status chip steps aside when the brief line above it already says the same thing.
+- **The IROPS card says what it measures**: "index 14.8 · United cancels + delays". It can read NORMAL OPERATIONS while the brief reads DISRUPTED for an FAA ground stop, because flights a ground stop is still holding have not been delayed or canceled yet.
+- **Schedule.** One line of notes under the figures instead of three. The Reg column says Starlink once. The phone figures sit in an even grid. Refresh is a quiet outline button.
+- **FAA lines in calm sentence case** ("MIA/FLL ground stop possible"), with airport codes and acronyms left as sent.
+- **Flight pages.** The timeline spans the page, and the route line shows the plane where it is.
+- **Content pages line up.** One page width and one heading size across news, hubs, fleet, trackers, privacy and thanks; whole cards are clickable; the footer sits at the bottom of short pages; links to a section no longer land under the header.
+- **Header on a computer.** The buttons share one style, and the home-hub button says "Home hub" instead of a dash.
+
+### Fixed
+- The Starlink "+11 new this week" pill was taller than its neighbor on a phone, and the chart's tallest bar read "62*" instead of "162*".
+- The Starlink layer button on the phone map was half hidden under Filters.
+- My Flights: the connection checker was pushed below the first screen by an empty gap; a loading flight card showed "() → ()".
+- The radar map's zoom buttons overlapped its credit line on a phone.
+- Starlink was marked green in three places and violet everywhere else; it is violet.
+- Fleet tables used a different sort arrow from the schedule.
+- The Sources tab called the fleet database "daily"; it is a snapshot.
+- Several controls were 32–42 px tall on an iPad; they are 44.
+- The header wrapped to two rows on an upright iPad.
+- The page jumped 8 px on a phone when the dashboard replaced its loading placeholder.
+- Emoji in the Guam and Tokyo hub page headings, and in the radar panel title.
+
 ## [1.25.1] - 2026-11-11
 
 **The brief, tuned after its first morning live.** On the morning of Nov 11 the FAA ran a ground delay program at San Francisco for low clouds. The first briefs got the direction of that delay wrong, called it "Disrupted" while the header above them said "Some Delays", spent lines on on-time figures that were not news, and rewrote themselves ten times in two and a half hours although nothing had changed.

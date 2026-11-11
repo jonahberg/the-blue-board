@@ -94,7 +94,7 @@ export default function TipStrip() {
         variant="ghost"
         size="sm"
         aria-label="Dismiss tips"
-        className="relative h-8 shrink-0 px-2 py-0 text-[11px] after:absolute after:inset-x-0 after:-inset-y-1.5"
+        className="relative h-8 shrink-0 px-2 py-0 text-[11px] after:absolute after:inset-x-0 after:-inset-y-[7px]"
         onClick={dismiss}
       >
         Dismiss

@@ -186,6 +186,11 @@ export function IropsSection() {
                 >
                   {scoreLabel}
                 </span>
+                {/* Names the measure: the brief row above can say DISRUPTED for an FAA program
+                    while United's own cancels and delays are still in the normal band. */}
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  index {Number(score).toFixed(1)} · United cancels + delays
+                </span>
                 {!usingServer ? (
                   <span className="font-mono text-[9px] text-muted-foreground">
                     est · loaded boards

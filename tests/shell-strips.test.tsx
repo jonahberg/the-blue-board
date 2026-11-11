@@ -178,7 +178,7 @@ describe('TipStrip', () => {
     });
     const dismiss = screen.getByRole('button', { name: 'Dismiss tips' });
     expect(classesOf(dismiss.parentElement)).toContain('h-8');
-    expect(classesOf(dismiss)).toEqual(expect.arrayContaining(['relative', 'h-8', 'after:-inset-y-1.5']));
+    expect(classesOf(dismiss)).toEqual(expect.arrayContaining(['relative', 'h-8', 'after:-inset-y-[7px]']));
   });
 });
 

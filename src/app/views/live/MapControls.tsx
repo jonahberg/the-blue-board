@@ -63,7 +63,7 @@ const LABEL = 'max-sm:sr-only';
 /** A layer toggle: muted at rest, foreground on a raised surface while on. */
 const TOGGLE = cn(
   MAP_CONTROL,
-  'gap-1.5 px-2 text-muted-foreground hover:bg-muted data-[state=on]:bg-muted data-[state=on]:text-foreground max-sm:w-9 max-sm:px-0',
+  'gap-1.5 px-2 text-muted-foreground hover:bg-muted data-[state=on]:bg-muted data-[state=on]:text-foreground max-sm:w-9 max-sm:px-0 max-sm:data-[state=on]:border-primary/60 max-sm:data-[state=on]:text-primary',
 );
 
 /** Trailing-edge fade, on only while `data-overflow="right"`. */

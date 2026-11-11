@@ -354,7 +354,7 @@ export function SearchPalette() {
         label="Find a flight"
       >
         <CommandInput
-          placeholder="UA1234, N12345, ORD-DEN, or ask a question…"
+          placeholder="UA1234, N12345, ORD-DEN, or ask…"
           value={query}
           maxLength={ASK_MAX_QUERY_CHARS}
           onValueChange={onQueryChange}
