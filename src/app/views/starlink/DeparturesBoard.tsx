@@ -81,7 +81,13 @@ function Row({
 
       <span className="hidden truncate text-[11px] text-muted-foreground sm:inline">{row.type}</span>
 
-      <span className="flex min-w-0 items-center justify-end gap-2 text-right">
+      {/* A long status ("SCHED · inbound on UA3508" + Track inbound) keeps a phone line of its
+          own; SCHED or Airborne + Track shares the route's. */}
+      <span
+        className={`flex min-w-0 items-center justify-end gap-2 text-right sm:col-span-1 ${
+          row.inbound && !row.airborne ? 'col-span-2' : ''
+        }`}
+      >
         {row.airborne ? (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
