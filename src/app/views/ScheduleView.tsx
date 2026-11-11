@@ -405,7 +405,8 @@ export default function ScheduleView() {
               href="https://aerodatabox.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-bb-ok underline"
+              // Primary like every other link; bb-ok green reads as a status (DESIGN.md Colour).
+              className="text-primary underline"
             >
               AeroDataBox
             </a>{' '}
