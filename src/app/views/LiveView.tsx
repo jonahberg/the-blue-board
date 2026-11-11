@@ -33,6 +33,7 @@ import { usePrefs } from '../state/prefs';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 import { BriefSidebarPanel } from '../features/BriefPanel';
+import { AskChips } from '../features/AskChips';
 import { LiveSidebar } from './live/LiveSidebar';
 import { MapControls } from './live/MapControls';
 import type { LayerKey } from './live/MapControls';
@@ -40,6 +41,7 @@ import { MapLegend } from './live/MapLegend';
 import { StatsBar } from './live/StatsBar';
 import type { LiveStats } from './live/stats';
 import { makeIsStarlinkFlight } from './live/starlink-match';
+import { useAskLive } from './live/useAskLive';
 
 type Airport = { iata: string; lat: number; lon: number; hub?: boolean };
 
@@ -102,16 +104,30 @@ export default function LiveView() {
     [setStarlinkFilter],
   );
 
+  // "Ask the board" (⌘K): sets the controls above where they exist; `ask.apply` filters the rest.
+  const ask = useAskLive({
+    hubFilter,
+    setHubFilter,
+    setPhaseFilter,
+    starlinkFilter,
+    setStarlinkFilter,
+    regionId: regionRequest?.id ?? null,
+    onRegion,
+    isStarlink: isStarlinkFlight,
+  });
+
   // The lib modules are JSDoc'd against `Object` (they predate this TSX layer and stay
   // framework-free), so the callbacks are widened here rather than loosening the modules.
   const filtered = useMemo(
     () =>
-      filterLiveFlights(
-        feed.flights,
-        { hub: hubFilter, phaseGroup: phaseFilter, starlinkOnly: false },
-        { hubs: HUB_AIRPORTS, isStarlink: isStarlinkFlight as LibPredicate },
-      ) as Flight[],
-    [feed.flights, hubFilter, phaseFilter, isStarlinkFlight],
+      ask.apply(
+        filterLiveFlights(
+          feed.flights,
+          { hub: hubFilter, phaseGroup: phaseFilter, starlinkOnly: false },
+          { hubs: HUB_AIRPORTS, isStarlink: isStarlinkFlight as LibPredicate },
+        ) as Flight[],
+      ),
+    [feed.flights, hubFilter, phaseFilter, isStarlinkFlight, ask.apply],
   );
 
   const stats = useMemo(
@@ -119,9 +135,9 @@ export default function LiveView() {
       // The same predicate as the Starlink filter, so the stat and the filtered map agree.
       computeLiveStats(feed.flights, filtered, fleetDb.length, isStarlinkFlight as LibPredicate, {
         matchAircraft: ((f: Flight) => matchAircraft(f, fleetByReg)) as LibMatcher,
-        isFiltered: Boolean(hubFilter || phaseFilter),
+        isFiltered: Boolean(hubFilter || phaseFilter || ask.active),
       }) as LiveStats,
-    [feed.flights, filtered, fleetDb.length, isStarlinkFlight, fleetByReg, hubFilter, phaseFilter],
+    [feed.flights, filtered, fleetDb.length, isStarlinkFlight, fleetByReg, hubFilter, phaseFilter, ask.active],
   );
 
   const watchedIdents = useMemo(
@@ -159,7 +175,8 @@ export default function LiveView() {
     setHubFilter('');
     setPhaseFilter('');
     setStarlinkFilter(false);
-  }, [setStarlinkFilter]);
+    ask.clear();
+  }, [setStarlinkFilter, ask.clear]);
 
   const sidebar = (
     <LiveSidebar
@@ -182,6 +199,15 @@ export default function LiveView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <AskChips
+        view="live"
+        count={feed.lastGoodTs ? filtered.length : null}
+        singular="flight"
+        where="on the map"
+        onRemove={ask.onRemove}
+        onClear={ask.onClear}
+        className="shrink-0 border-b bg-background px-2 py-1"
+      />
       <div className="flex min-h-0 flex-1">
         {/* isolate: keeps Leaflet's z-400 panes out of the page's stacking order. */}
         <div

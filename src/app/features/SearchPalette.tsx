@@ -15,10 +15,17 @@
  * When nothing airborne matches a query that LOOKS like a flight number, the palette offers
  * a schedule lookup rather than a dead end — a flight that has not taken off yet is the
  * single most common reason for an empty result.
+ *
+ * Ask the board: when what is typed is not a strong local match (`shouldOfferAsk`), the first row
+ * is "Ask: <query>". Choosing it runs the rules parser, then `/api/ask` only if the rules are not
+ * sure (`runAsk`, src/lib/ask-client.js), and applies the validated answer: the target view filters
+ * itself and shows the chips (`features/AskChips.tsx`). A question outside the vocabulary stays
+ * here with one plain line and example questions. A late answer for a query that has since changed,
+ * or a palette that has since closed, is dropped (`askSeq`).
  */
 
-import { CalendarDays, Info, Plane, Search } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, Info, LoaderCircle, MessageCircleQuestion, Plane, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Command,
@@ -34,9 +41,16 @@ import {
   classifyEmptyState,
   matchScheduleFlights,
   normalizeQuery,
+  rankLiveFlight,
   rankLiveFlights,
+  shouldOfferAsk,
 } from '@/lib/global-search.js';
+import { ASK_EXAMPLES, ASK_HELP_LINE, ASK_UNAVAILABLE_LINE, runAsk } from '@/lib/ask-client.js';
+import { ASK_MAX_QUERY_CHARS } from '@/lib/ask-parse.js';
+import { track } from '@/lib/track.js';
 import { FR24_LOOKUP_AVAILABLE } from './Fr24LookupDialog';
+import { setAskResult } from '../state/ask';
+import type { AskResult, AskSource } from '../state/ask';
 import { useFeed } from '../state/feed';
 import { useSchedule } from '../state/schedule';
 import { useUi } from '../state/ui';
@@ -52,12 +66,24 @@ type ScheduleMatch = {
   };
 };
 
+/** Where an Ask is: idle, waiting on `/api/ask`, or answered with something that is not a result. */
+type AskUi =
+  | { status: 'idle' }
+  | { status: 'working'; query: string }
+  | { status: 'unsupported'; query: string }
+  | { status: 'unavailable'; query: string };
+
 export function SearchPalette() {
   const { searchOpen, setSearchOpen, select, openFr24, openAircraft, setTab, focusOn } = useUi();
   const { flights } = useFeed();
-  const { boards, goto, preload } = useSchedule();
+  const { boards, goto, preload, current: scheduleCurrent } = useSchedule();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [askUi, setAskUi] = useState<AskUi>({ status: 'idle' });
+  // Bumped by every new Ask, every keystroke and every close: an answer whose number is no longer
+  // current is dropped rather than applied to a palette that has moved on.
+  const askSeq = useRef(0);
+  const askAbort = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query), 150);
@@ -67,6 +93,24 @@ export function SearchPalette() {
   useEffect(() => {
     if (!searchOpen) setQuery('');
   }, [searchOpen]);
+
+  // Typing again, or closing, cancels an Ask in flight and clears its line.
+  const cancelAsk = useCallback(() => {
+    askSeq.current += 1;
+    askAbort.current?.abort();
+    askAbort.current = null;
+    setAskUi({ status: 'idle' });
+  }, []);
+  useEffect(() => {
+    if (!searchOpen) cancelAsk();
+  }, [searchOpen, cancelAsk]);
+  const onQueryChange = useCallback(
+    (value: string) => {
+      setQuery(value);
+      cancelAsk();
+    },
+    [cancelAsk],
+  );
 
   const { qNorm } = normalizeQuery(debounced) as { q: string; qNorm: string };
 
@@ -129,15 +173,28 @@ export function SearchPalette() {
         : `UA${qNorm}`
       : null;
   const empty = classifyEmptyState(qNorm) as { kind: string; display: string };
+  // Ask the board: offered only when the typed text is not a strong local match. The text is the
+  // live query (what the row says is what gets asked); the matches are the debounced ones.
+  const offerAsk =
+    qNorm.length >= 2 &&
+    (shouldOfferAsk(query, {
+      bestLiveRank: matches[0] ? (rankLiveFlight(matches[0], qNorm) as number) : -1,
+      scheduleMatches: scheduleMatches.length,
+    }) as boolean);
+  const askAnswered = askUi.status === 'unsupported' || askUi.status === 'unavailable';
   /**
    * D5 (live audit Sep 28 2026): a registration that is not airborne (N14534 at the gate)
    * gets the aircraft dialog — what `?aircraft=` opens — before the Schedule tab.
    */
   const tailReg = empty.kind === 'tail' ? empty.display.toUpperCase() : null;
 
-  // The row Enter acts on: always the first result of the CURRENT result set (F7).
-  const firstValue =
-    matches[0]?.fr24id ??
+  // The row Enter acts on: always the first result of the CURRENT result set (F7). An offered
+  // Ask is first; once it has answered "not that", the first example question is.
+  const firstValue = offerAsk
+    ? askAnswered
+      ? 'ask-example-0'
+      : 'ask'
+    : matches[0]?.fr24id ??
     scheduleMatches[0]?.key ??
     (qNorm.length >= 2
       ? tailReg
@@ -170,6 +227,119 @@ export function SearchPalette() {
           ? `${empty.display} is not in the live feed right now.`
           : 'Nothing airborne matches that.';
 
+  /** Apply a validated answer: the view filters itself; the palette closes. */
+  const applyAnswer = useCallback(
+    (result: AskResult, source: AskSource) => {
+      track('ask', { source });
+      const { view, filters } = result;
+      if (view === 'flight') {
+        const clean = (v: string | undefined) => (v || '').toUpperCase().replace(/[\s-]+/g, '');
+        const live = filters.flight
+          ? flights.find((f) => clean(f.flightIATA) === filters.flight)
+          : flights.find((f) => clean(f.reg) === filters.tail);
+        if (live) {
+          select({ kind: 'flight', flight: live });
+          if (Number.isFinite(live.lat) && Number.isFinite(live.lon)) focusOn(live.lat, live.lon);
+        } else if (filters.flight) {
+          select({ kind: 'ident', ident: filters.flight });
+        } else if (filters.tail) {
+          openAircraft(filters.tail);
+        }
+      } else if (view === 'weather') {
+        setTab('weather', filters.hub ? { scrollTo: `hub-card-${filters.hub}` } : undefined);
+      } else {
+        // A board needs a hub: the board's current one (which starts as the home hub), else the
+        // board's own default. It is shown in the board's controls and sentence, never hidden.
+        const next =
+          view === 'schedule' && !filters.hub
+            ? { view, filters: { ...filters, hub: scheduleCurrent?.hub || 'ORD' } }
+            : result;
+        if (setAskResult(next, source)) setTab(view);
+      }
+      setSearchOpen(false);
+    },
+    [flights, select, focusOn, openAircraft, setTab, setSearchOpen, scheduleCurrent?.hub],
+  );
+
+  const ask = useCallback(
+    async (text: string) => {
+      askSeq.current += 1;
+      const seq = askSeq.current;
+      askAbort.current?.abort();
+      const controller = new AbortController();
+      askAbort.current = controller;
+      setAskUi({ status: 'working', query: text });
+      const outcome = (await runAsk(text, { signal: controller.signal })) as
+        | { kind: 'result'; source: AskSource; result: AskResult }
+        | { kind: 'unsupported' }
+        | { kind: 'unavailable' };
+      if (seq !== askSeq.current) return;
+      askAbort.current = null;
+      if (outcome.kind === 'result') {
+        applyAnswer(outcome.result, outcome.source);
+        return;
+      }
+      // One event per question; the query text never goes to analytics. `unavailable` is a capped,
+      // switched-off or failed model (or no network), kept apart from questions outside the vocabulary.
+      track('ask', { source: outcome.kind });
+      setAskUi({ status: outcome.kind, query: text });
+    },
+    [applyAnswer],
+  );
+
+  const runExample = useCallback(
+    (example: string) => {
+      setQuery(example);
+      setDebounced(example);
+      void ask(example);
+    },
+    [ask],
+  );
+
+  const askGroup = offerAsk ? (
+    <>
+      <CommandGroup heading="Ask the board">
+        <CommandItem
+          value="ask"
+          disabled={askUi.status === 'working'}
+          className="min-h-11 pointer-fine:md:min-h-0 [&>svg:last-child]:hidden"
+          onSelect={() => void ask(query)}
+        >
+          {askUi.status === 'working' ? (
+            <LoaderCircle aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
+          ) : (
+            <MessageCircleQuestion aria-hidden="true" />
+          )}
+          <span className="truncate">
+            {askUi.status === 'working' ? 'Working on it… ' : 'Ask: '}
+            <span className="font-medium">{query.trim()}</span>
+          </span>
+        </CommandItem>
+      </CommandGroup>
+      {askAnswered ? (
+        <>
+          <p role="presentation" className="px-3 pt-1 pb-1 text-xs text-muted-foreground" data-testid="ask-help">
+            {askUi.status === 'unavailable' ? `${ASK_UNAVAILABLE_LINE} ` : ''}
+            {ASK_HELP_LINE}
+          </p>
+          <CommandGroup heading="Try">
+            {ASK_EXAMPLES.map((example, index) => (
+              <CommandItem
+                key={example}
+                value={`ask-example-${index}`}
+                className="min-h-11 pointer-fine:md:min-h-0 [&>svg:last-child]:hidden"
+                onSelect={() => runExample(example)}
+              >
+                <MessageCircleQuestion aria-hidden="true" />
+                <span className="font-mono text-xs">{example}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </>
+      ) : null}
+    </>
+  ) : null;
+
   return (
     <CommandDialog
       open={searchOpen}
@@ -184,12 +354,15 @@ export function SearchPalette() {
         label="Find a flight"
       >
         <CommandInput
-          placeholder="UA1234, N12345, or ORD-DEN…"
+          placeholder="UA1234, N12345, ORD-DEN, or ask a question…"
           value={query}
-          onValueChange={setQuery}
+          maxLength={ASK_MAX_QUERY_CHARS}
+          onValueChange={onQueryChange}
         />
         <CommandList>
           <CommandEmpty>{emptyMessage}</CommandEmpty>
+
+          {askGroup}
 
           {matches.length > 0 ? (
             <CommandGroup heading="Airborne now">
@@ -249,9 +422,11 @@ export function SearchPalette() {
             <>
               {/* role=presentation for the same reason cmdk gives its own CommandEmpty one:
                   this sits inside the list's role="listbox" and is not an option. */}
-              <p role="presentation" className="px-3 pt-3 pb-1 text-xs text-muted-foreground">
-                {emptyMessage}
-              </p>
+              {offerAsk ? null : (
+                <p role="presentation" className="px-3 pt-3 pb-1 text-xs text-muted-foreground">
+                  {emptyMessage}
+                </p>
+              )}
               <CommandGroup heading="Not airborne">
                 {tailReg ? (
                   <CommandItem

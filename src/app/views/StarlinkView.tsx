@@ -72,6 +72,8 @@ import { makeIsStarlinkFlight } from './live/starlink-match';
 import { IndustryStrip } from './starlink/IndustryStrip';
 import type { IndustryRow } from './starlink/IndustryStrip';
 import { RosterControls } from './starlink/RosterControls';
+import { useAskStarlink } from './starlink/useAskStarlink';
+import { AskChips } from '../features/AskChips';
 import { RosterTable } from './starlink/RosterTable';
 import type { RosterSortCol } from './starlink/RosterTable';
 import { SlHero } from './starlink/SlHero';
@@ -399,6 +401,9 @@ export default function StarlinkView() {
     setBoardShowAll(false);
   }, []);
 
+  // "Ask the board" (⌘K): a hub picks the departures board's hub, a tail goes into the roster search.
+  const ask = useAskStarlink({ boardHub, onBoardHub, search, onSearch });
+
   const onBoardWindow = useCallback((hours: WindowHours) => {
     setBoardWindow(hours);
     setBoardShowAll(false);
@@ -464,6 +469,17 @@ export default function StarlinkView() {
 
       {industry ? <IndustryStrip rows={industry} /> : null}
 
+      {ask.target === 'board' ? (
+        <AskChips
+          view="starlink"
+          count={board ? board.totalInWindow : null}
+          singular="Starlink departure"
+          where={boardHub ? `from ${boardHub} in the next ${boardWindow} hours` : undefined}
+          onRemove={ask.onRemove}
+          onClear={ask.onClear}
+        />
+      ) : null}
+
       {board ? (
         <DeparturesBoard
           board={board}
@@ -504,6 +520,16 @@ export default function StarlinkView() {
           shown={rows.length}
           total={aircraft.length}
         />
+        {ask.target === 'roster' ? (
+          <AskChips
+            view="starlink"
+            count={aircraft.length ? rows.length : null}
+            singular="Starlink aircraft"
+            pluralNoun="Starlink aircraft"
+            onRemove={ask.onRemove}
+            onClear={ask.onClear}
+          />
+        ) : null}
         <RosterTable
           rows={rows}
           totalRows={aircraft.length}

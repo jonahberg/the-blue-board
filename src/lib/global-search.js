@@ -142,3 +142,27 @@ export function classifyEmptyState(normalizedQ) {
   if (TAIL_RE.test(q)) return { kind: 'tail', display: q };
   return { kind: 'generic', display: q };
 }
+
+/**
+ * Whether the palette offers "Ask: <what they typed>" (Ask the board, src/lib/ask-client.js).
+ *
+ * Only when the query is NOT a strong local match: a flight number or a tail already has its own
+ * rows, a bare number is a flight lookup, and an exact/prefix/route hit in the live feed (rank 0–2,
+ * rankLiveFlight) is what the visitor came for. A one-word query that a loaded schedule board
+ * answers ("SFO", a tail) is a match too. Anything else with letters in it — "denver", "late
+ * arrivals into denver", "starlink 787s" — gets the Ask row.
+ *
+ * @param {string} raw  the query as typed.
+ * @param {{bestLiveRank?: number, scheduleMatches?: number}} [found]  the best rankLiveFlight() of
+ *   the live results (-1 for none) and how many loaded-board rows matched.
+ * @returns {boolean}
+ */
+export function shouldOfferAsk(raw, { bestLiveRank = -1, scheduleMatches = 0 } = {}) {
+  const text = String(raw || '').trim();
+  if (text.length < 3 || !/[a-z]/i.test(text)) return false;
+  const { qNorm } = normalizeQuery(text);
+  if (FR24_LOOKUP_RE.test(qNorm) || TAIL_RE.test(qNorm)) return false;
+  if (bestLiveRank >= 0 && bestLiveRank <= 2) return false;
+  if (scheduleMatches > 0 && !/\s/.test(text)) return false;
+  return true;
+}
