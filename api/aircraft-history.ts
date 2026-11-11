@@ -5,6 +5,7 @@
 // Returns the last 5 flight segments for the aircraft within a 36-hour window
 
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime } from './_official-fr24.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
@@ -125,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Aircraft history temporarily unavailable' });
   }
 
-  const reg = ((req.query.reg as string) || '').trim().toUpperCase().replace(/-/g, '');
+  const reg = ((getQuery(req).reg as string) || '').trim().toUpperCase().replace(/-/g, '');
   if (!reg || !/^[A-Z0-9]{4,8}$/.test(reg)) {
     return res.status(400).json({ success: false, error: 'Invalid registration format' });
   }

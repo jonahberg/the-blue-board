@@ -58,7 +58,11 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
 
 ## Hardening
 
-- [ ] **DEP0169 log noise.** About 4,700 `url.parse()` deprecation warnings a week, at most one
+- [ ] **DEP0169 log noise — shipped, confirm in production logs.** Since Nov 10 2026 every
+  handler reads its query through `getQuery(req)` (`api/_query.ts`), which parses `req.url` with
+  `new URL()` and never touches the runtime's lazy `req.query`; `tests/query.test.js` fails if a
+  file under `api/` reads `req.query` again. Tick this once a week of production logs shows no
+  DEP0169 lines. About 4,700 `url.parse()` deprecation warnings a week, at most one
   per process. They appear only on the routes whose handlers read `req.query`, including
   `/api/metar`, which loads no packages; routes that never read it (`/api/irops`, the crons) log
   none. App code never calls `url.parse`, so the likely caller is the platform's `req.query`

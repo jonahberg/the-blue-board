@@ -12,6 +12,7 @@
 // only 30 s so one blip cannot blank the graph at the edge for the full fifteen minutes.
 
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadAirborneSamples, type HistorySample } from './_airborne-samples.js';
 import { parseHistoryHours } from '../src/lib/airborne-history.js';
@@ -49,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: 'Rate limited — try again shortly' });
   }
 
-  const parsed = parseHistoryHours(req.query?.hours);
+  const parsed = parseHistoryHours(getQuery(req)?.hours);
   if (!parsed.ok) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(400).json({ error: 'hours must be a number from 1 to 168' });

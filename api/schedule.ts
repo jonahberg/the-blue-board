@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadScheduleSnapshot, saveScheduleSnapshot, isSnapshotCandidateBetter } from './_schedule-snapshots.js';
 import { budgetWithin, withinBudget, DEADLINE_SAFETY_MARGIN_MS } from './_bounded.js';
@@ -343,19 +344,19 @@ function getSingleQueryValue(value: string | string[] | undefined): string {
 }
 
 function shouldDisableOfficialFallback(req: VercelRequest): boolean {
-  const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.officialFallback).toLowerCase();
+  const queryValue = getSingleQueryValue((getQuery(req) as Record<string, string | string[] | undefined>)?.officialFallback).toLowerCase();
   const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-official-fallback'] as string | string[] | undefined).toLowerCase();
   return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
 }
 
 function shouldDisableProviderFallback(req: VercelRequest): boolean {
-  const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.providerFallback).toLowerCase();
+  const queryValue = getSingleQueryValue((getQuery(req) as Record<string, string | string[] | undefined>)?.providerFallback).toLowerCase();
   const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-provider-fallback'] as string | string[] | undefined).toLowerCase();
   return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
 }
 
 function shouldDisableScraperFallback(req: VercelRequest): boolean {
-  const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.scraperFallback).toLowerCase();
+  const queryValue = getSingleQueryValue((getQuery(req) as Record<string, string | string[] | undefined>)?.scraperFallback).toLowerCase();
   const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-scraper-fallback'] as string | string[] | undefined).toLowerCase();
   return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
 }
@@ -369,7 +370,7 @@ function shouldDisableScraperFallback(req: VercelRequest): boolean {
  */
 function hasForceRefreshParam(req: VercelRequest): boolean {
   return ['1', 'true', 'yes', 'on'].includes(
-    getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.forceRefresh).toLowerCase()
+    getSingleQueryValue((getQuery(req) as Record<string, string | string[] | undefined>)?.forceRefresh).toLowerCase()
   );
 }
 
@@ -1863,7 +1864,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // read that runs out of time keeps the in-memory block, as a failed read always has.
     await hydrateQuotaBlock(budgetWithin(QUOTA_HYDRATE_BUDGET_MS, functionDeadline));
 
-    const { hub: hubParam, dir = 'departures', timestamp } = req.query as Record<string, string>;
+    const { hub: hubParam, dir = 'departures', timestamp } = getQuery(req) as Record<string, string>;
     if (!hubParam || !timestamp) {
       return res.status(400).json({ error: 'Missing required params: hub, timestamp' });
     }
