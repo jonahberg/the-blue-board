@@ -19,8 +19,10 @@ import StatTile from '../components/site/StatTile.astro';
 import SupportNote from '../components/site/SupportNote.astro';
 import { wrapTables } from '../components/site/table-regions';
 import fleetDb from '../../public/data/fleet.json';
+import { STARLINK_ROSTER_AS_OF, starlinkForType } from '../data/starlink-facts.js';
 import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
 import { fleetSeo } from '../lib/page-seo.js';
+import { registryStarlinkNote } from '../lib/starlink-facts.js';
 
 const { data } = Astro.props;
 const slug: string = data.slug;
@@ -31,6 +33,16 @@ const seo = fleetSeo(data);
 const typeAircraft = (fleetDb as any[])
   .filter((a: any) => a.t === typeCode)
   .sort((a: any, b: any) => (a.r || '').localeCompare(b.r || ''));
+
+// The registry's WiFi column is the fleet database; the page's Starlink figure ("48 of the 79 had
+// it as of 11 Nov") is the Starlink roster joined to it. Where the two disagree, the table says
+// both, with their days (src/lib/starlink-facts.js registryStarlinkNote) — on every type page.
+const isStarlinkWifi = (w: unknown) => String(w ?? '').toLowerCase().includes('starlink');
+const registryNote = registryStarlinkNote({
+  marked: typeAircraft.filter((a: any) => isStarlinkWifi(a.w)).length,
+  roster: starlinkForType(typeCode).equipped,
+  rosterAsOf: STARLINK_ROSTER_AS_OF,
+});
 
 // Keep these pages classified as informational guides rather than product listings.
 const aircraftGuideSchema = {
@@ -181,7 +193,7 @@ function statusClass(status: string | undefined): string {
       <p>
         Complete list of every United Airlines {data.displayName} with registration, delivery year,
         seat configuration, WiFi, IFE, and current status, from public aviation records — as of
-        <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>.
+        <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>.{registryNote ? ` ${registryNote}` : ''}
       </p>
       <ScrollRegion label="Aircraft registry">
         <table class="tabular-nums">
@@ -200,7 +212,7 @@ function statusClass(status: string | undefined): string {
           <tbody>
             {
               typeAircraft.map((ac: any) => {
-                const isStarlink = ac.w && String(ac.w).toLowerCase().includes('starlink');
+                const isStarlink = isStarlinkWifi(ac.w);
                 return (
                   <tr>
                     <td class="font-mono font-bold text-foreground">{ac.r}</td>

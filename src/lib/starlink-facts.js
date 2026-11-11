@@ -123,6 +123,22 @@ export function starlinkRosterAsOf(syncedAt) {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+/**
+ * The clause under a fleet type page's registry table when its Starlink marks and the roster
+ * disagree, or '' when they agree. The page's "N of the M had Starlink" is the Starlink roster joined
+ * to the fleet database (dated by the roster's sync); the table's WiFi column is the fleet database
+ * itself (dated by its own snapshot, in the sentence this follows). Two sources on two days, in
+ * either order: on Nov 11 2026 the 737 MAX 9 page said 48 above a table marking 42.
+ * @param {{marked: number, roster: number, rosterAsOf?: string}} input
+ *   marked: rows the table marks Starlink; roster: starlinkForType().equipped; rosterAsOf: '11 Nov 2026'.
+ * @returns {string}
+ */
+export function registryStarlinkNote({ marked, roster, rosterAsOf = '' }) {
+  if (!Number.isFinite(marked) || !Number.isFinite(roster) || marked === roster) return '';
+  const when = rosterAsOf ? ` on ${rosterAsOf}` : '';
+  return `Its WiFi column marks ${marked} with Starlink as of that date; the Starlink tracker's roster listed ${roster}${when}.`;
+}
+
 // ── Build-time sources, in order (Nov 2026) ──
 // On Nov 11 2026 unitedstarlinktracker.com answered Cloudflare 521 all day, every build kept the
 // committed starlink-live.json, and /fleet regressed to "602 Starlink equipped" — a count fetched
