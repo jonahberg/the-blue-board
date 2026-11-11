@@ -52,11 +52,15 @@ const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
 // metrics carry their age and the client can prefer a fresher board it has loaded itself.
 async function fetchHubFromScheduleAPI(hub: string, timestamp: number): Promise<HubBoard> {
   // IROPS only needs aggregate departure counts and tolerates empty per-hub results, so it must
-  // NOT trigger the paid FR24/AeroDataBox/ScrapingBee fallbacks. Disabling them also makes this
-  // request's query string byte-identical to the warm cron's buildScheduleWarmUrl(), so IROPS
-  // reuses cron-warmed CDN snapshots instead of paying to recompute on every miss.
-  // (We replicate the param string inline rather than importing buildScheduleWarmUrl to avoid a
-  // circular import: warm-schedules.ts already imports getStartOfDayForHub from this file.)
+  // NOT trigger the paid FR24/AeroDataBox/ScrapingBee fallbacks — and so it can never refresh a
+  // board itself: with providerFallback=0, /api/schedule's background refresh stays off
+  // (shouldEnableProviderForBackgroundRefresh). It reads whatever the warm cron (and visitors'
+  // own board loads) last wrote to the shared memory and Supabase snapshot tiers.
+  // This query string is NOT the warm cron's: buildScheduleWarmUrl() sends providerFallback=1 and
+  // forceRefresh=1 (and its response is no-store), so this URL is its own CDN object. When an
+  // instance answers it from its hot cache, /api/schedule stamps it s-maxage=3600, so a board can
+  // sit at the edge up to ~70 min after a newer snapshot exists. (Corrected Nov 2026; this comment
+  // used to call the two byte-identical.)
   const params = new URLSearchParams({
     hub,
     dir: 'departures',

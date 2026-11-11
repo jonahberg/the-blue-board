@@ -38,7 +38,7 @@ same CDN cache entries:
 
 | request | cache | upstream on a miss | metered? |
 |---|---|---|---|
-| `/api/irops` | `s-maxage=900` | `/api/schedule` ×9 with `officialFallback=0&providerFallback=0&scraperFallback=0` (the warm cron's own key) | **no**: `providerFallback=0` keeps AeroDataBox off (`api/schedule.ts` `allowProviderFallback`), `officialFallback=0` keeps the paid FR24 API off |
+| `/api/irops` | `s-maxage=900` | `/api/schedule` ×9 with `officialFallback=0&providerFallback=0&scraperFallback=0` — its own CDN key, **not** the warm cron's (which adds `providerFallback=1&forceRefresh=1` and is `no-store`); it reads the boards the cron and visitors' loads last wrote to the shared memory and Supabase snapshot tiers, and can never refresh one itself | **no**: `providerFallback=0` keeps AeroDataBox off (`api/schedule.ts` `allowProviderFallback`), `officialFallback=0` keeps the paid FR24 API off |
 | `/api/faa`, `/api/nas` | `s-maxage=300` | `nasstatus.faa.gov` (free) | no |
 | `/api/metar?ids=KEWR,KIAH,KORD,KDEN,KSFO,KLAX,KIAD,RJAA,PGUM` | `s-maxage=300`, warmed every 5 min by `refresh-metar` with this exact query | `aviationweather.gov` (free) | no |
 | `/api/fr24-feed?airline=UAL` | `s-maxage=15` (the Live tab polls it every 30 s) | the free public FR24 feed | no |
@@ -65,11 +65,11 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `otp.min` | otp | same, only when the lowest hub is under 80% (`BRIEF_HEALTHY_HUB_OTP`): which healthy hub is lowest is not news | Of the 7 hubs with an on-time reading, Los Angeles (LAX) is lowest at 75%. | calm |
 | `otp.floor` | otp | same, when no hub is under 70%; names the lowest hub only when it is under 80% (its `link` is that hub's board either way) | All 7 hubs with an on-time reading are at 85% or better. / … at 75% or better; Los Angeles is the lowest. | calm |
 | `otp.soft` | otp | same, when some are | 2 of the 7 hubs with an on-time reading are under 70%: Houston (62%) and Newark (55%). | watch |
-| `net.index` | network | `/api/irops` `score`, `IROPS_MINOR_AT`/`IROPS_SIGNIFICANT_AT` | The Blue Board's disruption index … is 17.3, in the normal range (under 20). | minor → watch, significant → disrupted |
+| `net.index` | network | `/api/irops` `score`, `IROPS_MINOR_AT`/`IROPS_SIGNIFICANT_AT`; left out when boards more than 3 h behind hold over a quarter of the index's departures (`BRIEF_INDEX_MAX_STALE_SHARE`) | The Blue Board's disruption index … is 17.3, in the normal range (under 20). | minor → watch, significant → disrupted |
 | `net.status` | network | `networkStatus()` (`src/lib/ops-health.js`, the strip's chip) | … reads "Smooth Ops". | minor → watch, significant → disrupted |
 | `cxl.confirmed` | cancellations | `cancellations − cancellationsLikely` | 6 departures on United's current hub boards are confirmed canceled. | calm |
 | `cxl.unconfirmed` | cancellations | `cancellationsLikely`, `likelyCanceledSeenFlying` | The schedule provider marks 162 more hub departures as "likely canceled" without confirming them. That label is often wrong: 131 … were seen flying. | calm, severity 1: a caveat, below every program and planned hub program, never the template's lead (prompt rule 4: mention it only when cancellations are the story) |
-| `cxl.<HUB>` | cancellations | per hub, when ≥ 3 confirmed | Houston (IAH) has 12 confirmed cancellations among 447 departures on its current board. | ≥10% watch |
+| `cxl.<HUB>` | cancellations | per hub, when ≥ 3 confirmed and the board is no more than 3 h behind (see Floors and freshness) | Houston (IAH) has 12 confirmed cancellations among 447 departures on its current board. | ≥10% watch |
 | `faa.active.<CODE>.gs` / `.gdp` | faa | `/api/faa` programs: hubs, plus other airports we can name and put on a clock (`AIRPORT_TZ`) | The FAA has a ground stop in effect for flights heading to Newark (EWR) until 8:30 PM ET, because of thunderstorms. Those flights are held at their departure airport. … (a stop or delay program holds flights **bound for** the airport, at the airports they leave from; that airport's own departures are not what it holds) | ground stop at a hub: disrupted; ground delay program at a hub: watch; elsewhere: watch |
 | `faa.active.<HUB>.closure` | faa | hubs only, and only a whole-airport closure: nightly curfews (`DLY`, `HHMM-HHMM`), PPR/transient-GA restrictions and runway/taxiway-only NOTAMs are screened out (`isWholeAirportClosure`), also from the FAA index `networkStatus()` reads | The FAA lists Newark (EWR) as closed. | disrupted |
 | `faa.active.<HUB>.dep` / `.arr` | faa | hubs only | The FAA reports departure delays of 31 to 45 minutes at Houston (IAH), because of thunderstorms. | watch |
@@ -89,10 +89,18 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 A planned program at an airport that is **not** a United hub (and the count, when every planned program is one) has severity 0: it is the last fact the model reads and the template never picks it. Prompt rule 4 has the model put them last, in one item, or leave them out.
 
 **Floors and freshness.** A hub needs ≥ 25 operated departures (`BRIEF_MIN_OPERATED`, the client's
-own floor) for any on-time fact, and its board must be under 3 h old; live boards run 1–2 h old, so the
-strip's 60-min stale constant would drop most of them. Each fact's `at` carries the reading's own time.
-Before 6 AM local a hub's board is still yesterday's, and its statement says "yesterday". METARs older
-than 3 h are dropped. `collection.skipped` in the stored row lists every fact left out and why.
+own floor) for any on-time fact. Its board must be no more than 3 h behind (`BRIEF_MAX_BOARD_AGE_MS`)
+for its on-time and `cxl.<HUB>` facts; live boards run 1–3 h old, so the strip's 60-min stale constant
+would drop most of them. "Behind" is the board's **coverage gap** (`boardCoverageGapSec`,
+`src/lib/hub-health.js`, carried on `/api/irops` as `coverageGapSec` with `boardDayEndSec`): the part
+of the board's own day that passed after it was built. For today's board that is its age. Before 6 AM
+local a hub's board is still yesterday's, and its statement says "yesterday"; a yesterday board built
+after local midnight is final (gap 0) however old it is, and one built at 21:00 is 3 h behind (until
+Nov 2026 the rule was plain age, which dropped every final yesterday board). `net.index` is left out
+when boards more than 3 h behind hold over 25% of the index's departures (`BRIEF_INDEX_MAX_STALE_SHARE`;
+flight-weighted, so NRT and GUM never silence it); `net.status` still reads the same index, so the tone
+rules are unchanged. METARs older than 3 h are dropped. `collection.skipped` in the stored row lists
+every fact left out and why.
 
 **Reconciliation.** A planned program at an airport that already has one in effect is dropped (the
 active fact says it; a "possible" beside it would contradict it). The FAA's free text (NOTAMs,
