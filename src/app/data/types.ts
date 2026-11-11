@@ -138,8 +138,12 @@ export type StarlinkData = {
   aircraft: StarlinkAircraft[];
   flightsByTail: Record<string, unknown>;
   fleetStats: StarlinkFleetStats | null;
+  /** The tracker's own field — frozen since Oct 27 2026; not a freshness signal. */
   lastUpdated: string | null;
+  /** When our sync took the data ('' on the static fallback). */
   syncedAt: string | null;
+  /** /api/starlink-data's source ('supabase', 'supabase-stale', 'static', …); absent before Nov 2026. */
+  servedFrom?: string;
 };
 
 export type FleetSummary = {

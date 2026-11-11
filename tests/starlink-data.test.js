@@ -120,7 +120,7 @@ describe('starlink-data API', () => {
     await handler(makeReq(), res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toBe(cronData);
+    expect(res.body).toEqual({ ...cronData, servedFrom: 'cron' });
     expect(res.headers['Cache-Control']).toMatch(/s-maxage=3600/);
   });
 
@@ -201,7 +201,8 @@ describe('starlink-data API', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => mockUpstreamResponse() });
     const res = createRes();
     await handler(makeReq({ query: { fields: 'flights' } }), res);
-    expect(Object.keys(res.body).sort()).toEqual(['flightsByTail', 'lastUpdated', 'syncedAt']);
+    expect(Object.keys(res.body).sort()).toEqual(['flightsByTail', 'lastUpdated', 'servedFrom', 'syncedAt']);
+    expect(res.body.servedFrom).toBe('upstream');
     expect(res.body.flightsByTail.N37559[0].origin).toBe('ORD');
   });
 
@@ -221,6 +222,20 @@ describe('starlink-data API', () => {
     expect(res.headers['X-Starlink-Source']).toBe('static');
     expect(res.body.flightsByTail).toBeUndefined();
     expect(res.body.aircraft.length).toBeGreaterThan(0);
+    spy.mockRestore();
+  });
+
+  // Nov 2026: the body says where it came from, and the static file no longer claims a fresh sync.
+  it('the static fallback says servedFrom "static" and has no sync time (it used to stamp now)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('upstream down'));
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    for (const fields of [undefined, 'roster', 'flights']) {
+      __resetForTests();
+      const res = createRes();
+      await handler(makeReq({ query: fields ? { fields } : {} }), res);
+      expect(res.body.servedFrom).toBe('static');
+      expect(res.body.syncedAt).toBe('');
+    }
     spy.mockRestore();
   });
 });
@@ -299,6 +314,7 @@ describe('starlink-data API — Supabase snapshot + rate-limit branches', () => 
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['X-Starlink-Source']).toBe('supabase-stale');
+    expect(res.body.servedFrom).toBe('supabase-stale');
     expect(res.body.aircraft).toHaveLength(2);
     expect(res.body.aircraft.some((a) => a.tail === 'N76265')).toBe(true);
     errSpy.mockRestore();
