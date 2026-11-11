@@ -117,6 +117,16 @@ interface HubMetric {
   boardDayOffset: number | null;
   /** Unix seconds at which the board's hub-local day ends; null when unknown. */
   boardDayEndSec: number | null;
+  /**
+   * Rows marked departed/en-route/landed/diverted with no actual departure time. Guam's feed
+   * marks some rows departed and never sends a time (0 of 30 rows over Nov 8–10 2026), so its
+   * on-time figure cannot exist (src/lib/hub-health.js hubOtpUnavailableReason).
+   */
+  departedWithoutTime: number;
+  /** Rows carrying any provider departure time beyond the schedule: actual or estimated. */
+  departureTimesSeen: number;
+  /** Rows not marked departed or cancelled, with no departure time at all, over 30 min past due on the board's clock. */
+  pastDueUntimed: number;
 }
 
 interface WorstDelay {
@@ -213,6 +223,9 @@ export function overdueClockSec(nowSec: number, generatedAt: number | null | und
   return Math.min(nowSec, generatedAt + OVERDUE_CLOCK_GRACE_SEC);
 }
 
+/** Generic status words that say a flight left the gate. */
+const DEPARTED_STATUS: ReadonlySet<string> = new Set(['departed', 'en-route', 'landed', 'diverted']);
+
 function overdueDelayMinutes(fl: any, status: string, clockSec: number): number {
   if (cancellationKind(fl) !== null) return 0;
   if (status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted') return 0;
@@ -250,12 +263,20 @@ export function computeMetrics(
       total: flights.length, cancellations: 0, cancellationsLikely: 0, likelyCanceledSeenFlying: 0,
       delayed30: 0, delayed60: 0, diversions: 0, operated: 0, onTime: 0, generatedAt, dataAgeSec,
       ageSec: dataAgeSec, coverageGapSec, boardDayOffset: day ? day.dayOffset : null, boardDayEndSec: day ? day.endSec : null,
+      departedWithoutTime: 0, departureTimesSeen: 0, pastDueUntimed: 0,
     };
 
     for (const fl of flights) {
       const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
       if (fl._source?.seenAirborne) hubMetrics[hub].likelyCanceledSeenFlying++;
+      // What the board knows about departure times at all (hubOtpUnavailableReason).
+      const hasDepTime = Boolean(fl.time?.real?.departure || fl.time?.estimated?.departure);
+      if (hasDepTime) hubMetrics[hub].departureTimesSeen++;
       const cancelled = cancellationKind(fl);
+      if (!cancelled && !hasDepTime) {
+        if (DEPARTED_STATUS.has(status)) hubMetrics[hub].departedWithoutTime++;
+        else if (fl.time?.scheduled?.departure && clockSec - fl.time.scheduled.departure > 30 * 60) hubMetrics[hub].pastDueUntimed++;
+      }
       if (cancelled) {
         hubMetrics[hub].cancellations++;
         if (cancelled === 'likely') hubMetrics[hub].cancellationsLikely++;

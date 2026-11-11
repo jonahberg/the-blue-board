@@ -372,6 +372,26 @@ describe('computeMetrics', () => {
     });
   });
 
+  it('counts what a board knows about departure times (GUM-shaped vs a normal board)', () => {
+    const built = 1_794_405_600 + 8 * 3600; // a Guam morning
+    const now = built + 600;
+    const gum = [
+      makeFlight('GUM', { schedDep: built - 7200, status: 'departed' }), // departed, no time
+      makeFlight('GUM', { schedDep: built - 7000, status: 'departed' }),
+      makeFlight('GUM', { schedDep: built - 6000, schedArr: built + 3 * 3600, status: 'scheduled' }), // never advances
+      makeFlight('GUM', { schedDep: built + 3600, status: 'scheduled' }), // not due yet
+      makeFlight('GUM', { schedDep: built - 7200, status: 'canceled' }),
+    ];
+    const ord = [
+      makeFlight('ORD', { schedDep: built - 7200, realDep: built - 7100, status: 'departed' }),
+      makeFlight('ORD', { schedDep: built - 3600, estDep: built + 600, status: 'scheduled' }),
+      makeFlight('ORD', { schedDep: built - 3600, status: 'scheduled' }),
+    ];
+    const result = computeMetrics({ GUM: gum, ORD: ord }, now, { GUM: built, ORD: built });
+    expect(result.hubMetrics.GUM).toMatchObject({ departedWithoutTime: 2, departureTimesSeen: 0, pastDueUntimed: 1, operated: 0 });
+    expect(result.hubMetrics.ORD).toMatchObject({ departedWithoutTime: 0, departureTimesSeen: 2, pastDueUntimed: 1, operated: 1 });
+  });
+
   it('F073: does not treat departed/landed/canceled flights as overdue', () => {
     const t = 1700000000;
     const now = t + 3 * 3600;

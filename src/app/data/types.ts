@@ -208,6 +208,12 @@ export type IropsHubMetrics = Record<
     boardDayOffset?: number | null;
     /** Unix seconds at which the board's hub-local day ends. */
     boardDayEndSec?: number | null;
+    /** Rows marked departed with no actual departure time (Guam's feed sends none). */
+    departedWithoutTime?: number;
+    /** Rows carrying an actual or estimated departure time. */
+    departureTimesSeen?: number;
+    /** Rows with no departure time at all, over 30 min past due, not marked departed or cancelled. */
+    pastDueUntimed?: number;
   }
 >;
 

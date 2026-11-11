@@ -332,9 +332,61 @@ export function serverOtpFromMetrics(m) {
   const operated = Number(m.operated || 0);
   const onTime = Number(m.onTime || 0);
   const cancelRate = m.total > 10 ? Number(m.cancellations || 0) / m.total : 0;
-  if (operated < 5 && cancelRate >= 0.5) return 0; // mostly cancelled — show as critical
-  if (operated >= 5) return Math.round((onTime / operated) * 100);
+  if (operated < HUB_OTP_MIN_OPERATED && cancelRate >= 0.5) return 0; // mostly cancelled — show as critical
+  if (operated >= HUB_OTP_MIN_OPERATED) return Math.round((onTime / operated) * 100);
   return null; // operated < 5 and low cancel rate: no data yet
+}
+
+/** Operated departures a hub needs before the strip shows its on-time figure. */
+export const HUB_OTP_MIN_OPERATED = 5;
+
+/**
+ * True when a hub board cannot tell a departed flight from a held one: not one row carries an
+ * actual or estimated departure time, and at least 3 rows are either marked departed anyway or are
+ * over 30 minutes past due. Guam's board is like this every day (Nov 8–10 2026: 0 of 30 departure
+ * rows with an actual time; 18 never left "scheduled"); a normal hub has times on most rows, and a
+ * ground stop's held flights carry estimates. Data-driven, so a hub that starts sending times
+ * stops matching. False on payloads without the counts.
+ * @param {{departureTimesSeen?: number, departedWithoutTime?: number, pastDueUntimed?: number}|null|undefined} m
+ */
+export function boardLacksActualTimes(m) {
+  if (!m) return false;
+  const seen = Number(m.departureTimesSeen);
+  if (m.departureTimesSeen === undefined || m.departureTimesSeen === null || !Number.isFinite(seen) || seen > 0) return false;
+  return (Number(m.departedWithoutTime) || 0) + (Number(m.pastDueUntimed) || 0) >= 3;
+}
+
+/**
+ * Why a hub has no on-time figure, in the visitor's words, or null when it has one.
+ *  - 'no-board'    no departures board (empty or missing)
+ *  - 'no-actuals'  the feed sends no departure times for the hub (boardLacksActualTimes) — Guam
+ *  - 'too-few'     fewer than HUB_OTP_MIN_OPERATED departures have left so far (NRT's day starts
+ *                  with one flight and its bank leaves at 16:55–18:00 JST)
+ * `label` is what the chip shows instead of a percentage.
+ * @param {any} m  one /api/irops hubMetrics entry
+ * @param {string} hub
+ * @returns {{reason: 'no-board'|'no-actuals'|'too-few', label: string, text: string}|null}
+ */
+export function hubOtpUnavailableReason(m, hub) {
+  const total = Number(m?.total) || 0;
+  if (!m || total <= 0) {
+    return { reason: 'no-board', label: '—', text: `No ${hub} departures board right now.` };
+  }
+  if (serverOtpFromMetrics(m) !== null) return null;
+  if (boardLacksActualTimes(m)) {
+    return {
+      reason: 'no-actuals',
+      label: 'n/a',
+      text: `The schedule feed sends no actual departure times for ${hub}, so there is no on-time figure.`,
+    };
+  }
+  const operated = Number(m.operated) || 0;
+  const when = Number(m.boardDayOffset) === -1 ? 'left yesterday' : 'have left so far today';
+  return {
+    reason: 'too-few',
+    label: '—',
+    text: `${operated} of ${total} ${hub} departures ${when}; an on-time figure needs ${HUB_OTP_MIN_OPERATED}.`,
+  };
 }
 
 /**

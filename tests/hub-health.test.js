@@ -15,6 +15,9 @@ import {
   boardCoverageGapSec,
   hubBoardCoverage,
   iropsCoverageNote,
+  HUB_OTP_MIN_OPERATED,
+  boardLacksActualTimes,
+  hubOtpUnavailableReason,
 } from '../src/lib/hub-health.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
@@ -392,5 +395,55 @@ describe('hubBoardCoverage / iropsCoverageNote', () => {
   it('rounds to whole hours', () => {
     expect(iropsCoverageNote({ LAX: { total: 10, coverageGapSec: 3 * 3600 + 1 } })).toBe('0 of 1 hub boards current · LAX board 3 h old');
     expect(iropsCoverageNote({ LAX: { total: 10, coverageGapSec: 3.6 * 3600 } })).toBe('0 of 1 hub boards current · LAX board 4 h old');
+  });
+});
+
+// Nov 2026: the hub strip's dash, explained. GUM's feed sends no departure times at all; NRT's day
+// starts with one departure and its bank leaves at 16:55–18:00 JST.
+describe('boardLacksActualTimes / hubOtpUnavailableReason', () => {
+  const gum = { total: 10, operated: 0, onTime: 0, cancellations: 0, departureTimesSeen: 0, departedWithoutTime: 4, pastDueUntimed: 0 };
+  const gumMorning = { total: 9, operated: 0, onTime: 0, cancellations: 0, departureTimesSeen: 0, departedWithoutTime: 0, pastDueUntimed: 4 };
+  const nrtMorning = { total: 12, operated: 1, onTime: 1, cancellations: 0, departureTimesSeen: 12, departedWithoutTime: 0, pastDueUntimed: 0, boardDayOffset: 0 };
+
+  it('a board with no departure times anywhere and 3+ rows departed or past due lacks actual times', () => {
+    expect(boardLacksActualTimes(gum)).toBe(true);
+    expect(boardLacksActualTimes(gumMorning)).toBe(true);
+    // Before anything is due there is nothing to say yet.
+    expect(boardLacksActualTimes({ ...gumMorning, pastDueUntimed: 2 })).toBe(false);
+    // One time anywhere and the board can tell departed from held (a ground stop's held rows carry estimates).
+    expect(boardLacksActualTimes({ ...gum, departureTimesSeen: 1 })).toBe(false);
+    expect(boardLacksActualTimes(nrtMorning)).toBe(false);
+    // Payloads from before the counts existed.
+    expect(boardLacksActualTimes({ total: 10, operated: 0 })).toBe(false);
+    expect(boardLacksActualTimes(null)).toBe(false);
+  });
+
+  it('GUM: "n/a", the feed sends no times', () => {
+    expect(hubOtpUnavailableReason(gum, 'GUM')).toEqual({
+      reason: 'no-actuals',
+      label: 'n/a',
+      text: 'The schedule feed sends no actual departure times for GUM, so there is no on-time figure.',
+    });
+    expect(hubOtpUnavailableReason(gumMorning, 'GUM').reason).toBe('no-actuals');
+  });
+
+  it('NRT: a dash, too few departures so far, and how many it needs', () => {
+    expect(HUB_OTP_MIN_OPERATED).toBe(5);
+    expect(hubOtpUnavailableReason(nrtMorning, 'NRT')).toEqual({
+      reason: 'too-few',
+      label: '—',
+      text: '1 of 12 NRT departures have left so far today; an on-time figure needs 5.',
+    });
+    expect(hubOtpUnavailableReason({ ...nrtMorning, operated: 3, boardDayOffset: -1 }, 'NRT').text)
+      .toBe('3 of 12 NRT departures left yesterday; an on-time figure needs 5.');
+  });
+
+  it('no board, and null whenever the strip has a figure', () => {
+    expect(hubOtpUnavailableReason(undefined, 'IAD')).toEqual({ reason: 'no-board', label: '—', text: 'No IAD departures board right now.' });
+    expect(hubOtpUnavailableReason({ total: 0 }, 'IAD').reason).toBe('no-board');
+    expect(hubOtpUnavailableReason({ ...nrtMorning, operated: 6, onTime: 5 }, 'NRT')).toBeNull();
+    // Mostly cancelled reads 0 (critical), which is a figure.
+    expect(hubOtpUnavailableReason({ total: 20, operated: 1, onTime: 1, cancellations: 15 }, 'EWR')).toBeNull();
+    expect(serverOtpFromMetrics({ ...nrtMorning, operated: 6, onTime: 5 })).toBe(83);
   });
 });
