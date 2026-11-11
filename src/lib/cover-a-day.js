@@ -537,3 +537,19 @@ export function supportStripCopy(status, { flightsThisMonth = 0 } = {}) {
     button,
   };
 }
+
+/**
+ * The flight page's support line, in the site's day framing, or null to keep the page's own
+ * sentence ("The Blue Board is free and run by one person. If it helped you today, you can chip in
+ * toward the data bill."). Only an uncovered today changes it: a covered today, an unconfigured or
+ * unreadable status, or no status at all says nothing about days.
+ *
+ * @param {ReturnType<typeof parseSupportStatus>|null|undefined} status
+ * @returns {{text: string, link: string}|null}  `text` before the link, `link` its words.
+ */
+export function flightPageSupportCopy(status) {
+  if (!status?.configured || status.todayCovered || coverTarget(status)?.kind !== 'today') return null;
+  const copy = supportStripCopy(status);
+  if (!copy) return null;
+  return { text: copy.text, link: coverButtonLabel(status) };
+}

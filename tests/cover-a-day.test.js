@@ -25,6 +25,7 @@ import {
   coveredByLabel,
   coveredCountLine,
   daysInMonth,
+  flightPageSupportCopy,
   monthBoundsUtc,
   monthFullyCovered,
   netCents,
@@ -384,6 +385,22 @@ describe('the sentences and the button', () => {
       short: "Today isn't covered yet.",
       button: 'Cover today · $17',
     });
+  });
+
+  it('flight page: the day framing only while today is open; otherwise the page keeps its own sentence', () => {
+    expect(flightPageSupportCopy(status([pay(17, at(2))]))).toEqual({
+      text: "Today isn't covered yet. $17 keeps The Blue Board running for a day.",
+      link: 'Cover today · $17',
+    });
+    expect(flightPageSupportCopy(status([]))).toEqual({
+      text: "Today isn't covered yet. $17 keeps The Blue Board running for a day.",
+      link: 'Cover today · $17',
+    });
+    expect(flightPageSupportCopy(status([pay(17, at(10), { display_name: 'Dana R.' })]))).toBeNull();
+    expect(flightPageSupportCopy(status([pay(17 * 20, at(10))]))).toBeNull();
+    expect(flightPageSupportCopy(UNCONFIGURED_STATUS)).toBeNull();
+    expect(flightPageSupportCopy(parseSupportStatus(null, NOV10))).toBeNull();
+    expect(flightPageSupportCopy(null)).toBeNull();
   });
 
   it('strip, today covered and tomorrow open: a thank-you, then tomorrow', () => {

@@ -113,15 +113,17 @@ const description =
       <FlightReadCard />
     </div>
 
+    <!-- When /api/support-status says today is not covered, the script swaps the words for the
+         site's day framing (src/lib/cover-a-day.js flightPageSupportCopy); the link stays the same. -->
     <p class="mt-10 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground" data-fp-support hidden>
-      The Blue Board is free and run by one person. If it helped you today,
+      <span data-f="support-text">The Blue Board is free and run by one person. If it helped you today,</span>
       <a
         href={supportUrl('flight-page')}
         target="_blank"
         rel="noopener noreferrer"
         data-support="flight-page"
         class="font-medium text-foreground underline underline-offset-2 hover:text-primary"
-      >you can chip in toward the data bill</a>.
+      ><span data-f="support-link">you can chip in toward the data bill</span></a><span data-f="support-end">.</span>
     </p>
   </div>
 </BaseLayout>
