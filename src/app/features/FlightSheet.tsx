@@ -394,7 +394,7 @@ export function FlightSheet() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="min-h-11 text-xs md:h-7 pointer-fine:md:min-h-0"
+                  className="min-h-11 text-xs pointer-fine:md:h-7 pointer-fine:md:min-h-0"
                   onClick={() => {
                     setExpanded(false);
                     focusOn(flight.lat, flight.lon);

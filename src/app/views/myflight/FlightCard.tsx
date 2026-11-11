@@ -316,7 +316,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
+            className="min-h-11 text-xs pointer-fine:md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onViewOnMap(liveFlight)}
           >
             View on Map
@@ -326,7 +326,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
+            className="min-h-11 text-xs pointer-fine:md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onAircraftDetail(reg)}
           >
             Aircraft Details
@@ -336,7 +336,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
+            className="min-h-11 text-xs pointer-fine:md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onExplain(explainContext)}
           >
             Explain Delay Risk
@@ -345,7 +345,7 @@ export function FlightCard({
         <Button
           size="sm"
           variant="ghost"
-          className="ml-auto min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
+          className="ml-auto min-h-11 text-xs pointer-fine:md:h-8 pointer-fine:md:min-h-0"
           onClick={() => onUnwatch(entry.flight)}
         >
           Unwatch

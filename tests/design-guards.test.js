@@ -44,6 +44,31 @@ describe('touch targets relax only for a fine pointer (audit F24)', () => {
     expect(hits(SCOPE, /(?<![\w:-])md:min-[hw]-(0|8|9)\b/)).toEqual([]);
   });
 
+  // Nov 2026: the min-h guard above let a bare `md:h-9` / `md:size-8` through, and that is how
+  // 32–36 px iPad targets shipped (DESIGN.md Decisions Log, 2026-11-11). A height or size under
+  // 44 px (h-11) set by WIDTH alone is the same bug: it may only come from `pointer-fine:md:`.
+  // Growth (`md:h-12` on the header) is not a relaxation and is not matched. Arbitrary values
+  // (`md:h-[30px]`) are not matched either — none are in use.
+  it('has no width-only h-* / size-* under 44 px at any breakpoint', () => {
+    const SMALL = '(?:0|px|0\\.5|1|1\\.5|2|2\\.5|3|3\\.5|4|5|6|7|8|9|10)';
+    const re = new RegExp(`(?<![\\w:-])(?:sm|md|lg|xl|2xl):(?:h|size)-${SMALL}\\b`);
+    // Pinned: files outside the dashboard follow-up's ownership with a known violation, to be
+    // fixed by their owners. Empty today; a new entry needs a reason.
+    const KNOWN = [];
+    expect(hits(SCOPE, re).filter((hit) => !KNOWN.includes(hit))).toEqual([]);
+  });
+
+  it('the h-/size- guard catches what it is for and lets the relaxed forms through', () => {
+    const SMALL = '(?:0|px|0\\.5|1|1\\.5|2|2\\.5|3|3\\.5|4|5|6|7|8|9|10)';
+    const re = new RegExp(`(?<![\\w:-])(?:sm|md|lg|xl|2xl):(?:h|size)-${SMALL}\\b`);
+    for (const bad of ['min-h-11 md:h-8', 'size-11 md:size-9', 'lg:h-7', 'sm:size-6', 'md:h-10']) {
+      expect(re.test(bad), bad).toBe(true);
+    }
+    for (const ok of ['pointer-fine:md:h-8', 'pointer-fine:md:size-7', 'md:h-12', 'md:h-11', 'lg:size-36', 'h-8', 'max-md:h-8', 'md:h-full']) {
+      expect(re.test(ok), ok).toBe(false);
+    }
+  });
+
   it('gives Leaflet zoom buttons 44px on coarse pointers', () => {
     const css = readFileSync(resolve(ROOT, 'src/styles/global.css'), 'utf8');
     expect(css).toMatch(
