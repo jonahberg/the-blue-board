@@ -1,4 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs';
+
 import { describe, it, expect } from 'vitest';
+
+import { fleetTypes } from '../src/data/fleet/index.js';
 import {
   atcMeta,
   atcAirports,
@@ -153,5 +157,34 @@ describe('cross-tracker links', () => {
     for (const h of ['IAH', 'IAD', 'SFO', 'LAX', 'DEN', 'EWR', 'ORD']) {
       expect(overlap, `${h} should appear in both trackers`).toContain(h);
     }
+  });
+});
+
+// v1.28.0: the united-hubs page's "Club math" sidebar said 650 seats for the Dulles club (the
+// pre-opening "around 650") after the entry moved to United's Nov 9 wording, "more than 600". The
+// page now reads the figure out of the entry and compares it with the 787-10 cabin from the fleet
+// data; "more than a 787-10 carries twice over" no longer held (2 × 318 = 636).
+describe('united-hubs "Club math" quotes the Dulles club entry', () => {
+  const src = readFileSync(new URL('../src/pages/trackers/united-hubs.astro', import.meta.url), 'utf8');
+  const clubMathSrc = src.slice(src.indexOf('id="club-math"'), src.indexOf('</section>', src.indexOf('id="club-math"')));
+  const entry = unitedProjects.find((p) => p.id === 'iad-club-concourse-e');
+  const stated = /seating for more than (\d+)/.exec(entry?.details ?? '')?.[1];
+  const d7810 = Number(fleetTypes['787-10-dreamliner'].seatConfig.total);
+
+  it('types no seat figure: the page reads it from the entry, which states it as "more than N"', () => {
+    expect(stated, 'the entry states its seating as "more than N"').toBeTruthy();
+    expect(clubMathSrc).toContain('{iadClubSeats}+');
+    expect(clubMathSrc).toContain('{D7810_SEATS}');
+    expect(clubMathSrc).not.toMatch(/\b650\b|twice over/);
+    expect(2 * d7810).toBeGreaterThan(Number(stated));
+  });
+
+  const dist = new URL('../dist/trackers/united-hubs.html', import.meta.url);
+  it.skipIf(!existsSync(dist))('the built sidebar prints the entry\'s figure and the 787-10 comparison', () => {
+    const html = readFileSync(dist, 'utf8');
+    const box = html.slice(html.indexOf('id="club-math"'), html.indexOf('</section>', html.indexOf('id="club-math"')));
+    expect(box).toMatch(new RegExp(`>\\s*${stated}\\+\\s*<`));
+    expect(box).toContain(`roughly two full 787-10s (${d7810} seats each)`);
+    expect(box).not.toMatch(/\b650\b/);
   });
 });

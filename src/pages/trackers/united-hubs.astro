@@ -6,6 +6,7 @@ import { contentModified, entryVerified, verificationSummary, verifiedNote } fro
 import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
 import { trackerParentSeo } from '../../lib/tracker-detail.js';
 import { countLabel } from '../../lib/plural.js';
+import { fleetTypes } from '../../data/fleet/index.js';
 import StatStrip from '../../components/trackers/StatStrip.astro';
 import TrackerMap from '../../components/trackers/TrackerMap.astro';
 import TrackerSearch from '../../components/trackers/TrackerSearch.astro';
@@ -58,6 +59,14 @@ const projectById = (id) => {
 const iahTerminalB = projectById('iah-terminal-b');
 const iadConcourseE = projectById('iad-concourse-e');
 const iadClubE = projectById('iad-club-concourse-e');
+// Club math quotes the Dulles club entry's own seat figure — United's Nov 9 wording, "seating for
+// more than 600" — not a number typed here (it said 650, the pre-opening "around 650"). If the entry
+// stops saying it that way, the build stops rather than print a stale figure.
+const iadClubSeats = /seating for more than (\d+)/.exec(iadClubE.details)?.[1];
+if (!iadClubSeats) throw new Error('united-hubs club math: iad-club-concourse-e no longer says "seating for more than N"');
+const D7810_SEATS = Number(fleetTypes['787-10-dreamliner'].seatConfig.total);
+const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four'];
+const iadClubIn7810s = COUNT_WORDS[Math.round(Number(iadClubSeats) / D7810_SEATS)] ?? String(Math.round(Number(iadClubSeats) / D7810_SEATS));
 const dayOf = (iso, opts) => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', opts);
 const projectsByHub = Object.fromEntries(hubOrder.map((h) => [h, unitedProjects.filter((p) => p.hub === h)]));
 const atcCodes = new Set(atcAirports.map((a) => a.code));
@@ -557,10 +566,11 @@ const chipClass =
         </li>
         <li class="flex items-baseline gap-3 border-b border-border py-2 last:border-b-0">
           <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-primary">
-            650
+            {iadClubSeats}+
           </span>
           <span class="text-xs leading-relaxed text-muted-foreground">
-            seats in the new Dulles club — more than a 787-10 carries twice over.
+            seats in the new Dulles club — roughly {iadClubIn7810s} full 787-10s ({D7810_SEATS} seats
+            each).
           </span>
         </li>
       </ul>
