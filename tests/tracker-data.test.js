@@ -182,7 +182,7 @@ describe('united-hubs "Club math" quotes the Dulles club entry', () => {
   const dist = new URL('../dist/trackers/united-hubs.html', import.meta.url);
   it.skipIf(!existsSync(dist))('the built sidebar prints the entry\'s figure and the 787-10 comparison', () => {
     const html = readFileSync(dist, 'utf8');
-    const box = html.slice(html.indexOf('id="club-math"'), html.indexOf('</section>', html.indexOf('id="club-math"')));
+    const box = html.slice(html.indexOf('id="club-math"'), html.indexOf('</section>', html.indexOf('id="club-math"'))).replace(/\s+/g, ' ');
     expect(box).toMatch(new RegExp(`>\\s*${stated}\\+\\s*<`));
     expect(box).toContain(`roughly two full 787-10s (${d7810} seats each)`);
     expect(box).not.toMatch(/\b650\b/);
