@@ -41,6 +41,11 @@ export { BRIEF_HUBS };
 
 /** A hub reading below this many operated departures is too thin to call an outlier or set the tone. */
 export const BRIEF_MIN_OPERATED = 25;
+/**
+ * Fewer hub on-time readings than this and there is no brief to write: "running smoothly" needs
+ * evidence. The cron publishes nothing (the last brief goes stale honestly) until enough boards read.
+ */
+export const BRIEF_MIN_HUB_READINGS = 3;
 /** Hub boards older than this are left out of the brief entirely (the live boards run 1–2 hours old). */
 export const BRIEF_MAX_BOARD_AGE_MS = 3 * 60 * 60 * 1000;
 /** METAR observations older than this are not current weather. */
@@ -160,6 +165,28 @@ export function faaCausePhrase(reason) {
   return null;
 }
 
+/**
+ * True when an FAA "closure" reads like the airport is actually shut (snow removal, an emergency),
+ * false for the routine NOTAM closures the feed also carries: nightly curfews ("AD AP CLSD DLY
+ * 0730-1415"), prior-permission and transient-GA restrictions, runway- or taxiway-only closures.
+ * A false negative costs one fact; a false positive puts "closed" in front of every visitor.
+ * @param {unknown} reason
+ */
+export function isWholeAirportClosure(reason) {
+  const text = String(reason || '').toUpperCase();
+  if (/\b(DLY|DAILY|NIGHTLY|PPR|EXC|EXCEPT|NON[- ]?SKED|TRANSIENT|GA|RWY|TWY|RUNWAY|TAXIWAY|APRON|RAMP)\b/.test(text)) return false;
+  if (/\b\d{4}\s*-\s*\d{4}\b/.test(text)) return false; // a recurring local time window
+  return true;
+}
+
+/** An /api/faa airport entry without its routine closures (see isWholeAirportClosure). */
+function withoutRoutineClosures(airport) {
+  if (!airport || typeof airport !== 'object' || !airport.closure) return airport;
+  const programs = (Array.isArray(airport.programs) ? airport.programs : []).filter((p) => p?.type !== 'closure' || isWholeAirportClosure(p.reason));
+  const delays = (Array.isArray(airport.delays) ? airport.delays : []).filter((d) => d?.type !== 'closure' || isWholeAirportClosure(d.reason));
+  return { ...airport, programs, delays, closure: programs.some((p) => p?.type === 'closure') };
+}
+
 function isWeatherReason(reason) {
   return /^\s*WX\b/i.test(String(reason || '')) || /weather/i.test(String(reason || ''));
 }
@@ -236,7 +263,9 @@ export function buildBriefFacts(sources, { nowMs }) {
     airNormal: sources?.airNormal && Number.isFinite(sources.airNormal.median) ? 'ok' : 'missing',
   };
 
-  const faaIndex = status.faa === 'ok' ? buildFaaIndex(sources.faa) : {};
+  // The FAA index networkStatus() reads, minus routine closures (nightly curfews, PPR/GA and
+  // runway-only NOTAMs) that would otherwise paint a working hub "Disrupted" (isWholeAirportClosure).
+  const faaIndex = status.faa === 'ok' ? buildFaaIndex(sources.faa.map(withoutRoutineClosures)) : {};
 
   // ── On-time per hub (src/lib/hub-health.js serverOtpFromMetrics, the hub strip's number) ──
   /** @type {Record<string, {otp: number, operated: number, at: number|null}>} */
@@ -439,11 +468,18 @@ export function buildBriefFacts(sources, { nowMs }) {
       const code = String(airport?.airportCode || '').toUpperCase();
       if (!/^[A-Z]{3}$/.test(code)) continue;
       const isHub = BRIEF_HUBS.includes(code);
+      // Other airports only when we know them (a clock zone and a name): the FAA feed lists every
+      // field in the country, and a ground stop at a general-aviation airport is not United news.
+      if (!isHub && !isKnownAirportCode(code)) continue;
       const programs = Array.isArray(airport.programs) ? airport.programs : [];
       for (const p of programs) {
         const type = String(p?.type || '');
         const keep = type === 'ground_stop' || type === 'ground_delay' || (isHub && (type === 'closure' || type === 'departure_delay' || type === 'arrival_delay'));
         if (!keep) continue;
+        if (type === 'closure' && !isWholeAirportClosure(p.reason)) {
+          skipped.push(`faa.active.${code}.closure: a scheduled or partial closure, not an outage`);
+          continue;
+        }
         const fact = faaActiveFact(code, p, { isHub, nowMs, asOfMs: asOf.faa ?? nowMs });
         facts.push(fact);
         if (type === 'ground_stop' || type === 'ground_delay' || type === 'closure') {
@@ -561,7 +597,7 @@ export function buildBriefFacts(sources, { nowMs }) {
       link: { tab: 'live' },
       severity: 4,
       toneFloor: 'calm',
-      material: `air:${round(airborne, 50)}`,
+      material: `air:${round(airborne, 100)}`,
     });
     const starlink = Number(sources.air.starlink);
     if (Number.isFinite(starlink) && starlink > 0) {
@@ -574,7 +610,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'starlink' },
         severity: 3,
         toneFloor: 'calm',
-        material: `starlink:${round(starlink, 25)}`,
+        material: `starlink:${round(starlink, 50)}`,
       });
     }
     if (status.airNormal === 'ok' && sources.airNormal.median > 0) {
@@ -829,6 +865,11 @@ export function airborneNormal(days) {
   const mid = Math.floor(perDay.length / 2);
   const median = perDay.length % 2 ? perDay[mid] : Math.round((perDay[mid - 1] + perDay[mid]) / 2);
   return { median, days: perDay.length };
+}
+
+/** How many hubs carry an on-time fact (the cron's evidence gate, BRIEF_MIN_HUB_READINGS). */
+export function hubReadingCount(facts) {
+  return (facts || []).filter((f) => /^otp\.[A-Z]{3}$/.test(f.id)).length;
 }
 
 /**

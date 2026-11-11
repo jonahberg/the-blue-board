@@ -257,6 +257,18 @@ describe('honest degradation', () => {
     expect(briefRows()).toEqual([]);
   });
 
+  it('publishes nothing when fewer than three hubs have an on-time reading (thin boards)', async () => {
+    useDb();
+    const generate = modelOk();
+    const extraFacts = vi.fn(async () => ({ facts: [] }));
+    const thin = Object.fromEntries(Object.entries(CALM.sources.irops.hubMetrics).map(([hub, m]) => [hub, { ...m, operated: hub === 'ORD' || hub === 'DEN' ? m.operated : 12, onTime: hub === 'ORD' || hub === 'DEN' ? m.onTime : 11 }]));
+    const summary = await runBriefCron({ nowMs: NOW, collect: collected(CALM, { irops: { ...CALM.sources.irops, hubMetrics: thin } }), generate, extraFacts });
+    expect(summary).toEqual(expect.objectContaining({ status: 'skipped', reason: '2 hub on-time reading(s); 3 are needed' }));
+    expect(generate).not.toHaveBeenCalled();
+    expect(extraFacts).not.toHaveBeenCalled(); // nothing optional (or paid) runs either
+    expect(briefRows()).toEqual([]);
+  });
+
   it('no Supabase: unconfigured, nothing collected', async () => {
     supabaseMocks.getSupabaseAdmin.mockResolvedValue(null);
     const collect = vi.fn(collected());

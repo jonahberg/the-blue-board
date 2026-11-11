@@ -79,9 +79,12 @@ export function validateBriefShape(json) {
  * @param {string} text
  * @param {string[]} factIds
  * @param {Map<string, {values: string[], kind?: string}>} factIndex
+ * @param {{itemRules?: boolean}} [options]  itemRules (default true): the planned-hedge and radio-
+ *   attribution rules, which apply to an item or the traveler note. A headline is checked for its
+ *   claims only: it rests on the union of the items' facts and need not repeat their hedges.
  * @returns {string[]} reasons it fails; empty when it passes.
  */
-export function checkSentence(text, factIds, factIndex) {
+export function checkSentence(text, factIds, factIndex, { itemRules = true } = {}) {
   const reasons = [];
   const ids = Array.isArray(factIds) ? [...new Set(factIds)] : [];
   if (ids.length === 0) reasons.push('no_fact_ids');
@@ -96,7 +99,7 @@ export function checkSentence(text, factIds, factIndex) {
       if (/** @type {any} */ (fact).kind === 'faa_planned') citesPlanned = true;
     }
   }
-  if (citesPlanned && !HEDGE_RE.test(normalizeText(text))) reasons.push('planned_not_hedged');
+  if (itemRules && citesPlanned && !HEDGE_RE.test(normalizeText(text))) reasons.push('planned_not_hedged');
   if (String(text).length > MAX_TEXT_CHARS) reasons.push('text_too_long');
   if (FIRST_PERSON_RE.test(normalizeText(text))) reasons.push('first_person');
   for (const claim of extractClaims(text)) {
@@ -181,7 +184,7 @@ export function verifyBrief(candidate, facts) {
   const union = [...new Set(kept.flatMap((i) => i.fact_ids))];
   let headline = normalizeText(input.headline).trim();
   let headlineFactIds = [];
-  const headlineReasons = checkSentence(headline, union, factIndex).filter((r) => r !== 'too_many_fact_ids');
+  const headlineReasons = checkSentence(headline, union, factIndex, { itemRules: false }).filter((r) => r !== 'too_many_fact_ids');
   if (headline.length > MAX_HEADLINE_CHARS || wordCount(headline) > MAX_HEADLINE_WORDS) headlineReasons.push('headline_too_long');
   if (headlineReasons.length) {
     const replacement = templateHeadline(factList, tone);

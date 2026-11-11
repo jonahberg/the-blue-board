@@ -97,6 +97,9 @@ describe('verifyBrief: items', () => {
     expect(out.ok).toBe(true);
     expect(out.report.itemsKept).toBe(3);
     expect(out.report.dropped).toEqual([]);
+    // The headline rests on the items' facts but need not repeat their "possible": item-only rules.
+    expect(out.report.headline.status).toBe('kept');
+    expect(out.brief.headline).toBe('Calm across the network.');
   });
 
   it('drops an item whose number is not in the facts it cites (wrong number)', () => {

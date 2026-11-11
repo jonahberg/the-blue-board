@@ -1,0 +1,600 @@
+{
+ "name": "live-2026-11-10-evening",
+ "description": "The real site payloads captured from theblueboard.co at 23:10Z on Tue Nov 10 2026 (/api/irops, /api/faa, /api/nas, /api/metar, and the latest airborne_samples count): an FAA ground stop in effect at Boston (not a hub) for runway construction, a possible ground stop or delay program at Newark until 9:00 PM ET, every hub with a reading at 85% or better, light rain at Houston. Starlink and the 7-day airborne median were not captured. Expected tone: watch.",
+ "nowIso": "2026-11-10T23:11:00Z",
+ "sources": {
+  "irops": {
+   "score": 17.3,
+   "totalFlights": 2544,
+   "cancellations": 53,
+   "cancellationsLikely": 53,
+   "likelyCanceledSeenFlying": 15,
+   "delayed30": 208,
+   "delayed60": 72,
+   "diversions": 0,
+   "hubMetrics": {
+    "ORD": {
+     "total": 633,
+     "cancellations": 14,
+     "cancellationsLikely": 14,
+     "likelyCanceledSeenFlying": 3,
+     "delayed30": 53,
+     "delayed60": 20,
+     "diversions": 0,
+     "operated": 165,
+     "onTime": 150,
+     "generatedAt": 1794348406,
+     "dataAgeSec": 3514
+    },
+    "DEN": {
+     "total": 483,
+     "cancellations": 19,
+     "cancellationsLikely": 19,
+     "likelyCanceledSeenFlying": 5,
+     "delayed30": 10,
+     "delayed60": 3,
+     "diversions": 0,
+     "operated": 133,
+     "onTime": 127,
+     "generatedAt": 1794348406,
+     "dataAgeSec": 3514
+    },
+    "IAH": {
+     "total": 447,
+     "cancellations": 13,
+     "cancellationsLikely": 13,
+     "likelyCanceledSeenFlying": 4,
+     "delayed30": 35,
+     "delayed60": 11,
+     "diversions": 0,
+     "operated": 95,
+     "onTime": 95,
+     "generatedAt": 1794344430,
+     "dataAgeSec": 7490
+    },
+    "EWR": {
+     "total": 379,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 23,
+     "delayed60": 6,
+     "diversions": 0,
+     "operated": 153,
+     "onTime": 149,
+     "generatedAt": 1794348489,
+     "dataAgeSec": 3431
+    },
+    "SFO": {
+     "total": 223,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 38,
+     "delayed60": 23,
+     "diversions": 0,
+     "operated": 64,
+     "onTime": 60,
+     "generatedAt": 1794346225,
+     "dataAgeSec": 5695
+    },
+    "IAD": {
+     "total": 237,
+     "cancellations": 7,
+     "cancellationsLikely": 7,
+     "likelyCanceledSeenFlying": 1,
+     "delayed30": 32,
+     "delayed60": 0,
+     "diversions": 0,
+     "operated": 34,
+     "onTime": 32,
+     "generatedAt": 1794346227,
+     "dataAgeSec": 5693
+    },
+    "LAX": {
+     "total": 120,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 2,
+     "delayed30": 13,
+     "delayed60": 6,
+     "diversions": 0,
+     "operated": 39,
+     "onTime": 33,
+     "generatedAt": 1794346230,
+     "dataAgeSec": 5690
+    },
+    "NRT": {
+     "total": 12,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 0,
+     "delayed60": 0,
+     "diversions": 0,
+     "operated": 0,
+     "onTime": 0,
+     "generatedAt": 1794346232,
+     "dataAgeSec": 5688
+    },
+    "GUM": {
+     "total": 10,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 4,
+     "delayed60": 3,
+     "diversions": 0,
+     "operated": 0,
+     "onTime": 0,
+     "generatedAt": 1794348025,
+     "dataAgeSec": 3895
+    }
+   },
+   "oldestHubAgeSec": 7490,
+   "generatedAt": "2026-11-10T23:05:20.736Z",
+   "cached": true
+  },
+  "faa": [
+   {
+    "airportCode": "BOS",
+    "programs": [
+     {
+      "type": "ground_stop",
+      "reason": "runway construction",
+      "endTime": "2026-11-10T23:45:00Z",
+      "probabilityOfExtension": "MEDIUM",
+      "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=58&adv_date=11102026&facId=BOS&title=ATCSCC ADVZY 058 BOS/ZBW 11/10/2026 CDM GROUND STOP&titleDate=11/10/2026",
+      "center": "ZBW"
+     }
+    ],
+    "runwayConfig": {
+     "arrivalRunways": "22L",
+     "departureRunways": "22R",
+     "arrivalRate": 38
+    },
+    "deicing": false,
+    "notam": null,
+    "groundStop": true,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": [
+     {
+      "reason": "runway construction",
+      "type": "ground_stop",
+      "avgDelay": null,
+      "minDelay": null,
+      "maxDelay": null,
+      "trend": null,
+      "endTime": "2026-11-10T23:45:00Z"
+     }
+    ]
+   },
+   {
+    "airportCode": "LAS",
+    "programs": [],
+    "runwayConfig": {
+     "arrivalRunways": "01L/01R",
+     "departureRunways": "08L",
+     "arrivalRate": 44
+    },
+    "deicing": false,
+    "notam": "TO NON SKED TRANSIENT GA ACFT EXC 24HR PPR 702-261-7775",
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "LAX",
+    "programs": [],
+    "runwayConfig": {
+     "arrivalRunways": "25L/24R",
+     "departureRunways": "25R/24L",
+     "arrivalRate": 68
+    },
+    "deicing": false,
+    "notam": "TO NON SKED TRANSIENT GA ACFT EXC 24HR PPR CTC ATLANTIC AVIATION 310-258-9884 OR SIGNATURE AVIATION 310-410-9605",
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "SAN",
+    "programs": [],
+    "runwayConfig": {
+     "arrivalRunways": "27",
+     "departureRunways": "27",
+     "arrivalRate": 24
+    },
+    "deicing": false,
+    "notam": "TO NON SKED TRANSIENT GA ACFT EXC PPR 619-298-7704",
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "SNA",
+    "programs": [
+     {
+      "type": "closure",
+      "reason": "!SNA 11/008 SNA AD AP CLSD DLY 0730-1415 2611100730-2611211415"
+     }
+    ],
+    "runwayConfig": {
+     "arrivalRunways": "20R",
+     "departureRunways": "20R",
+     "arrivalRate": 24
+    },
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": true,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": [
+     {
+      "reason": "!SNA 11/008 SNA AD AP CLSD DLY 0730-1415 2611100730-2611211415",
+      "type": "closure",
+      "avgDelay": null,
+      "minDelay": null,
+      "maxDelay": null,
+      "trend": null,
+      "endTime": null
+     }
+    ]
+   }
+  ],
+  "nas": {
+   "active": [],
+   "planned": [
+    {
+     "time": "",
+     "event": "UNTIL 0030\t-BOS GROUND STOP POSSIBLE",
+     "decoded": "UNTIL 0030\t-BOS GROUND STOP POSSIBLE",
+     "affectedAirports": [
+      "BOS"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "UNTIL 0200\t-EWR/EWR SATS GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "decoded": "UNTIL 0200\t-EWR/EWR SATS GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "affectedAirports": [
+      "EWR",
+      "EWR"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 0200\t-SEA/BFI GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "decoded": "AFTER 0200\t-SEA/BFI GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "affectedAirports": [
+      "SEA",
+      "BFI"
+     ],
+     "type": "terminal"
+    }
+   ],
+   "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=57&adv_date=11102026&facId=ATCSCC&title=ATCSCC ADVZY 057 DCC 11/10/2026 OPERATIONS PLAN&titleDate=11/10/2026"
+  },
+  "metar": [
+   {
+    "icaoId": "KEWR",
+    "receiptTime": "2026-11-10T22:54:14.782Z",
+    "obsTime": 1794351060,
+    "reportTime": "2026-11-10T23:00:00.000Z",
+    "temp": 16.1,
+    "dewp": 3.3,
+    "wdir": 240,
+    "wspd": 10,
+    "visib": "10+",
+    "altim": 1011.6,
+    "slp": 1011.5,
+    "qcField": 12,
+    "metarType": "METAR",
+    "rawOb": "METAR KEWR 102251Z 24010KT 10SM FEW200 16/03 A2987 RMK AO2 SLP115 T01610033 $",
+    "lat": 40.6828,
+    "lon": -74.1692,
+    "elev": 2,
+    "name": "Newark Intl, NJ, US",
+    "cover": "FEW",
+    "clouds": [
+     {
+      "cover": "FEW",
+      "base": 20000
+     }
+    ],
+    "fltCat": "VFR",
+    "id": "KEWR",
+    "stationId": "KEWR"
+   },
+   {
+    "icaoId": "KIAH",
+    "receiptTime": "2026-11-10T22:56:28.016Z",
+    "obsTime": 1794351180,
+    "reportTime": "2026-11-10T23:00:00.000Z",
+    "temp": 15.6,
+    "dewp": 15,
+    "wdir": 0,
+    "wspd": 0,
+    "visib": 8,
+    "altim": 1019.7,
+    "slp": 1019.6,
+    "qcField": 4,
+    "wxString": "-RA",
+    "precip": 0.01,
+    "metarType": "METAR",
+    "rawOb": "METAR KIAH 102253Z 00000KT 8SM -RA SCT050 BKN120 BKN250 16/15 A3011 RMK AO2 RAB19 SLP196 P0001 T01560150",
+    "lat": 29.9844,
+    "lon": -95.3607,
+    "elev": 27,
+    "name": "Houston/Bush Intl, TX, US",
+    "cover": "BKN",
+    "clouds": [
+     {
+      "cover": "SCT",
+      "base": 5000
+     },
+     {
+      "cover": "BKN",
+      "base": 12000
+     },
+     {
+      "cover": "BKN",
+      "base": 25000
+     }
+    ],
+    "fltCat": "VFR",
+    "id": "KIAH",
+    "stationId": "KIAH"
+   },
+   {
+    "icaoId": "KORD",
+    "receiptTime": "2026-11-10T22:54:15.064Z",
+    "obsTime": 1794351060,
+    "reportTime": "2026-11-10T23:00:00.000Z",
+    "temp": 15.6,
+    "dewp": 1.7,
+    "wdir": 290,
+    "wspd": 5,
+    "visib": "10+",
+    "altim": 1016.7,
+    "slp": 1016.7,
+    "qcField": 12,
+    "metarType": "METAR",
+    "rawOb": "METAR KORD 102251Z 29005KT 10SM FEW250 16/02 A3002 RMK AO2 SLP167 T01560017 $",
+    "lat": 41.9602,
+    "lon": -87.9316,
+    "elev": 202,
+    "name": "Chicago/O'Hare Intl, IL, US",
+    "cover": "FEW",
+    "clouds": [
+     {
+      "cover": "FEW",
+      "base": 25000
+     }
+    ],
+    "fltCat": "VFR",
+    "id": "KORD",
+    "stationId": "KORD"
+   },
+   {
+    "icaoId": "KDEN",
+    "receiptTime": "2026-11-10T22:56:29.496Z",
+    "obsTime": 1794351180,
+    "reportTime": "2026-11-10T23:00:00.000Z",
+    "temp": 18.3,
+    "dewp": -6.1,
+    "wdir": 0,
+    "wspd": 0,
+    "visib": "10+",
+    "altim": 1021.1,
+    "slp": 1017,
+    "qcField": 4,
+    "metarType": "METAR",
+    "rawOb": "METAR KDEN 102253Z 00000KT 10SM FEW160 BKN220 18/M06 A3015 RMK AO2 SLP170 T01831061",
+    "lat": 39.8466,
+    "lon": -104.6562,
+    "elev": 1656,
+    "name": "Denver Intl, CO, US",
+    "cover": "BKN",
+    "clouds": [
+     {
+      "cover": "FEW",
+      "base": 16000
+     },
+     {
+      "cover": "BKN",
+      "base": 22000
+     }
+    ],
+    "fltCat": "VFR",
+    "id": "KDEN",
+    "stationId": "KDEN"
+   },
+   {
+    "icaoId": "KSFO",
+    "receiptTime": "2026-11-10T23:00:14.846Z",
+    "obsTime": 1794351360,
+    "reportTime": "2026-11-10T23:00:00.000Z",
+    "temp": 22.2,
+    "dewp": 14.4,
+    "wdir": 310,
+    "wspd": 11,
+    "visib": "10+",
+    "altim": 1020.1,
+    "slp": 1019.8,
+    "qcField": 4,
+    "metarType": "METAR",
+    "rawOb": "METAR KSFO 102256Z 31011KT 10SM CLR 22/14 A3012 RMK AO2 SLP198 T02220144",
+    "lat": 37.6196,
+    "lon": -122.3656,
+    "elev": 2,
+    "name": "San Francisco Intl, CA, US",
+    "cover": "CLR",
+    "clouds": [],
+    "fltCat": "VFR",
+    "id": "KSFO",
+    "stationId": "KSFO"
+   },
+   {
+    "icaoId": "KLAX",
+    "receiptTime": "2026-11-10T22:56:28.390Z",
+    "obsTime": 1794351180,
+    "reportTime": "2026-11-10T23:00:00.000Z",
+    "temp": 25,
+    "dewp": 17.8,
+    "wdir": 270,
+    "wspd": 10,
+    "visib": "10+",
+    "altim": 1017,
+    "slp": 1016.8,
+    "qcField": 12,
+    "metarType": "METAR",
+    "rawOb": "METAR KLAX 102253Z 27010KT 10SM CLR 25/18 A3003 RMK AO2 SLP168 T02500178 $",
+    "lat": 33.9382,
+    "lon": -118.3866,
+    "elev": 30,
+    "name": "Los Angeles Intl, CA, US",
+    "cover": "CLR",
+    "clouds": [],
+    "fltCat": "VFR",
+    "id": "KLAX",
+    "stationId": "KLAX"
+   },
+   {
+    "icaoId": "KIAD",
+    "receiptTime": "2026-11-10T22:56:09.325Z",
+    "obsTime": 1794351120,
+    "reportTime": "2026-11-10T23:00:00.000Z",
+    "temp": 12.8,
+    "dewp": 5,
+    "wdir": 150,
+    "wspd": 4,
+    "visib": "10+",
+    "altim": 1014.6,
+    "slp": 1014.6,
+    "qcField": 4,
+    "metarType": "METAR",
+    "rawOb": "METAR KIAD 102252Z 15004KT 10SM CLR 13/05 A2996 RMK AO2 SLP146 T01280050",
+    "lat": 38.9348,
+    "lon": -77.4473,
+    "elev": 90,
+    "name": "Washington/Dulles Intl, VA, US",
+    "cover": "CLR",
+    "clouds": [],
+    "fltCat": "VFR",
+    "id": "KIAD",
+    "stationId": "KIAD"
+   },
+   {
+    "icaoId": "RJAA",
+    "receiptTime": "2026-11-10T22:38:17.119Z",
+    "obsTime": 1794349800,
+    "reportTime": "2026-11-10T22:30:00.000Z",
+    "temp": 6,
+    "dewp": 4,
+    "wdir": 330,
+    "wspd": 3,
+    "visib": "6+",
+    "altim": 1024,
+    "qcField": 16,
+    "metarType": "METAR",
+    "rawOb": "METAR RJAA 102230Z 33003KT 9999 FEW030 06/04 Q1024 NOSIG",
+    "lat": 35.765,
+    "lon": 140.386,
+    "elev": 36,
+    "name": "Narita Intl, 12, JP",
+    "cover": "FEW",
+    "clouds": [
+     {
+      "cover": "FEW",
+      "base": 3000
+     }
+    ],
+    "fltCat": "VFR",
+    "id": "RJAA",
+    "stationId": "RJAA"
+   },
+   {
+    "icaoId": "PGUM",
+    "receiptTime": "2026-11-10T22:58:27.174Z",
+    "obsTime": 1794351240,
+    "reportTime": "2026-11-10T23:00:00.000Z",
+    "temp": 30,
+    "dewp": 24.4,
+    "wdir": 80,
+    "wspd": 8,
+    "visib": "10+",
+    "altim": 1014.6,
+    "slp": 1013.8,
+    "qcField": 12,
+    "metarType": "METAR",
+    "rawOb": "METAR PGUM 102254Z 08008KT 10SM SCT018 SCT023 30/24 A2996 RMK AO2 SLP138 T03000244 $",
+    "lat": 13.4796,
+    "lon": 144.7958,
+    "elev": 74,
+    "name": "Guam/Pat Intl, , GU",
+    "cover": "SCT",
+    "clouds": [
+     {
+      "cover": "SCT",
+      "base": 1800
+     },
+     {
+      "cover": "SCT",
+      "base": 2300
+     }
+    ],
+    "fltCat": "VFR",
+    "id": "PGUM",
+    "stationId": "PGUM"
+   }
+  ],
+  "air": {
+   "airborne": 647,
+   "express": 156,
+   "starlink": null
+  },
+  "airNormal": null,
+  "asOf": {
+   "irops": 1794351909000,
+   "faa": 1794352208000,
+   "nas": 1794352208000,
+   "metar": 1794351907000,
+   "air": 1794352200000
+  }
+ },
+ "expect": {
+  "tone": "watch"
+ }
+}

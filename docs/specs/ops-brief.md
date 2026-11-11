@@ -22,7 +22,7 @@ Written from 21 live facts and checked against them.
 | timer | `api/cron/brief.ts` (`*/10 * * * *`) | One generation serves every visitor. Nothing is generated per request. |
 | collect | `api/_brief-collect.ts` | The site's own CDN-cached endpoints and one `airborne_samples` read. See [Zero new upstream spend](#zero-new-upstream-spend). |
 | facts | `src/lib/brief-facts.js` | Payloads in, facts out. Pure; `nowMs` is passed in. |
-| gate | cron | Nothing is published unless **both** `/api/irops` and `/api/faa` answered. A calm brief written without the FAA picture would be a lie. |
+| gate | cron | Nothing is published unless **both** `/api/irops` and `/api/faa` answered **and** at least 3 hubs carry an on-time reading (`BRIEF_MIN_HUB_READINGS`). A calm brief written without the FAA picture, or without on-time evidence, would be a lie. |
 | skip | cron | sha256 of the jitter-rounded material facts. Same hash as the latest brief **and** that brief is under 60 min old → no new brief; the run stamps `checked_at` and stops. |
 | generate | `api/_brief-model.ts` + `src/lib/brief-prompt.js` | Claude Haiku 5.5 through the Vercel AI Gateway, after the brief's own daily spend cap says yes. |
 | verify | `src/lib/brief-verify.js` | Every claim checked against the cited facts. Failing items dropped. |
@@ -70,8 +70,8 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `cxl.confirmed` | cancellations | `cancellations − cancellationsLikely` | 6 departures on United's current hub boards are confirmed canceled. | calm |
 | `cxl.unconfirmed` | cancellations | `cancellationsLikely`, `likelyCanceledSeenFlying` | The schedule provider marks 162 more hub departures as "likely canceled" without confirming them. That label is often wrong: 131 … were seen flying. | calm, severity 2 |
 | `cxl.<HUB>` | cancellations | per hub, when ≥ 3 confirmed | Houston (IAH) has 12 confirmed cancellations among 447 departures on its current board. | ≥10% watch |
-| `faa.active.<CODE>.gs` / `.gdp` | faa | `/api/faa` programs, any US airport | The FAA has a ground stop in effect at Newark (EWR) until 8:30 PM ET, because of thunderstorms. … | hub: disrupted; elsewhere: watch |
-| `faa.active.<HUB>.closure` | faa | hubs only (non-hub closures are mostly nightly NOTAM closures) | The FAA lists Newark (EWR) as closed. | disrupted |
+| `faa.active.<CODE>.gs` / `.gdp` | faa | `/api/faa` programs: hubs, plus other airports we can name and put on a clock (`AIRPORT_TZ`) | The FAA has a ground stop in effect at Newark (EWR) until 8:30 PM ET, because of thunderstorms. … | hub: disrupted; elsewhere: watch |
+| `faa.active.<HUB>.closure` | faa | hubs only, and only a whole-airport closure: nightly curfews (`DLY`, `HHMM-HHMM`), PPR/transient-GA restrictions and runway/taxiway-only NOTAMs are screened out (`isWholeAirportClosure`), also from the FAA index `networkStatus()` reads | The FAA lists Newark (EWR) as closed. | disrupted |
 | `faa.active.<HUB>.dep` / `.arr` | faa | hubs only | The FAA reports departure delays of 31 to 45 minutes at Houston (IAH), because of thunderstorms. | watch |
 | `faa.active.count` | faa | hub GS/GDP/closures | No FAA ground stop or ground delay program is in effect at any United hub. | disrupted when > 0 |
 | `faa.active.other` | faa | non-hub GS/GDP | The FAA also has 1 program in effect at other airports: a ground stop at Boston. | calm |
@@ -155,12 +155,17 @@ error if it ever fails.
 
 ## Change detection and staleness
 
-`material` per fact rounds away jitter: on-time to 5 points, airborne to 50, Starlink to 25,
+`material` per fact rounds away jitter: on-time to 5 points, airborne to 100, Starlink to 50,
 unconfirmed cancellations to 25, confirmed counts exact under 10 then to 5/10, FAA programs by type,
 end time to 15 min and cause, planned programs by window, weather by level and conditions, the
 index by band plus 5 points. A run whose hash equals the latest brief's, with that brief under 60
 minutes old, writes nothing but `checked_at`. Exception: when the latest is a template caused by a
 transient model failure (`model_error`, `model_timeout`, `model_rate_limited`), the next run retries.
+
+Measured on the real Nov 9–10 2026 `airborne_samples` day (144 ten-minute runs, 151 to 726 in the
+air): the airborne count alone would start 35 new briefs a day at 100-flight buckets (44 at 50),
+against the 24 a day the hourly refresh guarantees anyway. On-time crossing a 5-point bucket adds
+more on a moving day, so expect roughly 35–70 model calls a day.
 
 **`stale` comes from `checked_at`, not `generated_at`** (a deviation from the original design, which
 said "older than 30 minutes"): with a 60-minute reuse window, a calm brief that the cron re-confirms
@@ -200,7 +205,7 @@ A request is ~1.7–3.2K input tokens (the fixtures: 19–34 facts); `max_tokens
 low`. Worst case per call ≈ $0.0013; a typical call (~2.5K in, ~400 out) ≈ $0.0005.
 At most 144 runs a day, so the hard worst case is ≈ $0.19/day, under the $0.50 cap and well under the
 project's $3/day gateway ceiling; realistic volume (a new brief when a band moves, at least hourly) is
-roughly 30–80 calls, $0.02–0.05/day. Collection costs nothing upstream (above). Supabase: one insert
+roughly 35–70 calls (measured above), $0.02–0.04/day. Collection costs nothing upstream (above). Supabase: one insert
 per new brief (~20–40 KB of facts JSONB), one tiny update per unchanged run, 7 small reads.
 
 ## Switches and env
@@ -218,13 +223,18 @@ per new brief (~20–40 KB of facts JSONB), one tiny update per unchanged run, 7
 gateway's Anthropic-compatible endpoint; the gateway's docs and model catalog use `provider/model`
 (`anthropic/claude-haiku-5.5`, verified in `GET https://ai-gateway.vercel.sh/v1/models` on Nov 10
 2026). The constant is the catalog form. Neither form has been sent live for Haiku 5.5 from this code;
-`BRIEF_MODEL_ID=claude-haiku-5-5` is the fallback if the catalog form is rejected.
+`BRIEF_MODEL_ID=claude-haiku-5-5` is the fallback if the catalog form is rejected. Two other parts of
+the request were not sent live either: the nullable `traveler_note` (`anyOf: [object, null]`; the
+gateway's structured-output page lists only string/number/boolean/array/object/enum) and
+`output_config.effort`. A rejection of any of the three surfaces in the eval as `model_rejected`
+with the gateway's message on the detail line, and in production as that template reason.
 
 ## Failure modes
 
 | what fails | what visitors get | `template_reason` / status |
 |---|---|---|
 | `/api/irops` or `/api/faa` unreachable | the previous brief, going `stale` after 30 min | run `skipped`, nothing written |
+| fewer than 3 hubs with an on-time reading (empty or thin boards) | the previous brief, going `stale` | run `skipped`, nothing written, nothing optional or paid runs |
 | `/api/nas`, `/api/metar`, the feed, the roster or the history | a brief without those facts (named in `collection.errors`) | — |
 | Supabase unconfigured / `sql/022` not applied | "no brief yet" | run `unconfigured`; one loud log line |
 | `BRIEF_GENERATION=off`, no key, cap reached, counter unreadable | template | `generation_disabled`, `no_api_key`, `spend_cap`, `spend_unreadable` |

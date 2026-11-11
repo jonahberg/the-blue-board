@@ -4,8 +4,9 @@
 // One generation serves every visitor; nothing is generated per request. Each run:
 //   1. Collects the facts from what the site already has (api/_brief-collect.ts: the site's own
 //      CDN-cached endpoints plus one airborne_samples read — zero new upstream spend).
-//   2. Publishes nothing unless BOTH /api/irops and /api/faa answered: a calm brief written without
-//      the FAA picture would be a lie.
+//   2. Publishes nothing unless BOTH /api/irops and /api/faa answered and at least three hubs carry
+//      an on-time reading: a calm brief written without the FAA picture, or without on-time
+//      evidence, would be a lie.
 //   3. Hashes the material facts (jitter-rounded). Same hash as the latest brief, and that brief is
 //      under 60 minutes old → no new brief; the run only stamps `checked_at` so the read endpoint can
 //      tell "re-confirmed" from "stale".
@@ -27,9 +28,9 @@ import { isAuthorizedCronRequest } from '../_cron-auth.js';
 import { getSupabaseAdmin } from '../_schedule-snapshots.js';
 import { collectBriefSources, type CollectedSources } from '../_brief-collect.js';
 import { cleanupOldBriefs, insertBrief, loadLatestBrief, touchBriefChecked, type BriefRow, type LatestBriefMeta } from '../_brief-store.js';
-import { getFeatureSpendForDay, readUsdCap, recordFeatureSpend } from '../_feature-spend.js';
+import { getFeatureSpendForDay, readUsdCap, recordFeatureSpend, utcDay } from '../_feature-spend.js';
 import { generateBriefWithModel, type BriefModelResult } from '../_brief-model.js';
-import { buildBriefFacts, materialKey } from '../../src/lib/brief-facts.js';
+import { BRIEF_MIN_HUB_READINGS, buildBriefFacts, hubReadingCount, materialKey } from '../../src/lib/brief-facts.js';
 import { buildTemplateBrief } from '../../src/lib/brief-template.js';
 import { verifyBrief } from '../../src/lib/brief-verify.js';
 import { briefWorstCaseCostUsd, buildBriefRequest } from '../../src/lib/brief-prompt.js';
@@ -66,12 +67,12 @@ export type BriefCronDeps = {
 export type BriefCronSummary = Record<string, unknown> & { status: string };
 
 /** Why the model may not be asked this run, or null when it may. */
-async function generationBlock(request: ReturnType<typeof buildBriefRequest>): Promise<string | null> {
+async function generationBlock(request: ReturnType<typeof buildBriefRequest>, nowMs: number): Promise<string | null> {
   if (!briefGenerationEnabled()) return 'generation_disabled';
   if (!process.env.AI_GATEWAY_API_KEY) return 'no_api_key';
   const cap = briefDailyCapUsd();
   if (cap <= 0) return 'spend_cap';
-  const spent = await getFeatureSpendForDay(BRIEF_FEATURE);
+  const spent = await getFeatureSpendForDay(BRIEF_FEATURE, utcDay(nowMs));
   if (!spent.ok) return 'spend_unreadable';
   // Leave headroom for this call's worst case, so the cap is a ceiling and not a target.
   if (spent.usd + briefWorstCaseCostUsd(request) > cap) return 'spend_cap';
@@ -91,6 +92,11 @@ export async function runBriefCron(deps: BriefCronDeps = {}): Promise<BriefCronS
   }
 
   let { facts, collection } = buildBriefFacts({ ...collected }, { nowMs });
+  // Before anything optional (or paid) runs: no on-time evidence, no brief.
+  const readings = hubReadingCount(facts);
+  if (readings < BRIEF_MIN_HUB_READINGS) {
+    return { status: 'skipped', reason: `${readings} hub on-time reading(s); ${BRIEF_MIN_HUB_READINGS} are needed`, skipped: collection.skipped, errors: collected.errors };
+  }
   if (deps.extraFacts) {
     const extra = await deps.extraFacts(collected, facts, nowMs).catch((e: any) => {
       console.warn('brief extra facts failed:', e?.message || e);
@@ -117,14 +123,14 @@ export async function runBriefCron(deps: BriefCronDeps = {}): Promise<BriefCronS
   const request = buildBriefRequest(facts, nowMs);
   let modelResult: BriefModelResult | null = null;
   let verification: ReturnType<typeof verifyBrief> | null = null;
-  let templateReason: string | null = await generationBlock(request);
+  let templateReason: string | null = await generationBlock(request, nowMs);
 
   if (!templateReason) {
     modelResult = await (deps.generate ?? generateBriefWithModel)(facts, nowMs);
     if (modelResult.costUsd > 0) {
       await recordFeatureSpend(BRIEF_FEATURE, {
         usd: modelResult.costUsd, calls: 1, inputTokens: modelResult.inputTokens ?? 0, outputTokens: modelResult.outputTokens ?? 0,
-      });
+      }, utcDay(nowMs));
     }
     if (modelResult.failure) templateReason = modelResult.failure;
     else {

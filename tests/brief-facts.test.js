@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   airborneNormal, buildBriefFacts, computeTone, countAirborneAndStarlink, faaCausePhrase,
-  formatAirportClock, materialKey, parseIsoMs, publicFact, resolveZuluHhmm,
+  formatAirportClock, isWholeAirportClosure, materialKey, parseIsoMs, publicFact, resolveZuluHhmm,
 } from '../src/lib/brief-facts.js';
 
 const FIXTURE_DIR = new URL('./fixtures/brief/', import.meta.url);
@@ -49,14 +49,35 @@ describe('FAA causes', () => {
     expect(faaCausePhrase('!SNA 11/008 SNA AD AP CLSD DLY 0730-1415 PPR 702-261-7775')).toBeNull();
   });
 
-  it('a hub closure statement carries no NOTAM text or phone number', () => {
+  it('a hub closure statement carries no NOTAM text', () => {
     const fx = fixture('calm-afternoon');
-    const faa = [{ airportCode: 'EWR', programs: [{ type: 'closure', reason: '!EWR 11/001 AD AP CLSD PPR 973-961-6000' }], closure: true, delays: [] }];
+    const faa = [{ airportCode: 'EWR', programs: [{ type: 'closure', reason: '!EWR 11/001 EWR AD AP CLSD SNOW AND ICE REMOVAL' }], closure: true, delays: [] }];
     const { facts } = build(fx, { faa });
     const closure = byId(facts)['faa.active.EWR.closure'];
     expect(closure.statement).toBe('The FAA lists Newark (EWR) as closed.');
-    expect(JSON.stringify(closure.values)).not.toMatch(/973|CLSD/);
+    expect(JSON.stringify(closure.values)).not.toMatch(/CLSD|11\/001/);
     expect(closure.toneFloor).toBe('disrupted');
+  });
+
+  it('screens out routine closures: nightly curfews, PPR/GA restrictions, runway-only closures', () => {
+    expect(isWholeAirportClosure('!SNA 11/008 SNA AD AP CLSD DLY 0730-1415 2611100730-2611211415')).toBe(false);
+    expect(isWholeAirportClosure('TO NON SKED TRANSIENT GA ACFT EXC 24HR PPR 702-261-7775')).toBe(false);
+    expect(isWholeAirportClosure('!ORD 11/120 ORD RWY 10L/28R CLSD')).toBe(false);
+    expect(isWholeAirportClosure('snow and ice removal')).toBe(true);
+    const fx = fixture('calm-afternoon');
+    const faa = [{ airportCode: 'EWR', programs: [{ type: 'closure', reason: '!EWR 11/002 EWR AD AP CLSD DLY 0400-0500' }], closure: true, delays: [] }];
+    const { facts, collection } = build(fx, { faa });
+    expect(byId(facts)['faa.active.EWR.closure']).toBeUndefined();
+    expect(computeTone(facts)).toBe('calm');
+    expect(collection.skipped).toContain('faa.active.EWR.closure: a scheduled or partial closure, not an outage');
+  });
+
+  it('ignores programs at airports we cannot name or put on a clock', () => {
+    const fx = fixture('calm-afternoon');
+    const faa = [{ airportCode: 'BFI', programs: [{ type: 'ground_stop', reason: 'wind' }], groundStop: true, delays: [] }, ...fx.sources.faa];
+    const { facts } = build(fx, { faa });
+    expect(facts.some((f) => f.id.startsWith('faa.active.BFI'))).toBe(false);
+    expect(computeTone(facts)).toBe('calm');
   });
 });
 
