@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
 import { waitUntil } from '@vercel/functions';
@@ -101,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // and a bare `?airline` can arrive as ''/true depending on the parser. Since this block now sits
   // OUTSIDE the try (see below), a non-string reaching .test()/.toUpperCase() would surface as an
   // unhandled 500 instead of the intended 400 — a crafted query must not be able to crash the route.
-  const rawAirline = req.query?.airline as unknown;
+  const rawAirline = getQuery(req)?.airline as unknown;
   const airlineParam = Array.isArray(rawAirline) ? rawAirline[0] : rawAirline;
   const airline = typeof airlineParam === 'string' && airlineParam ? airlineParam : 'UAL';
   // Validate airline: 2-4 letter ICAO code. Validation + cacheKey live ABOVE the try so the catch

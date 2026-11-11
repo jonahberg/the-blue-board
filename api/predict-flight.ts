@@ -2,6 +2,7 @@
 // Calls upstream unitedstarlinktracker.com/api/predict-flight
 
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 
 const UPSTREAM_URL = 'https://unitedstarlinktracker.com/api/predict-flight';
@@ -34,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const flightNumber = (req.query.flight_number as string || '').trim();
+  const flightNumber = (getQuery(req).flight_number as string || '').trim();
   if (!flightNumber) {
     return res.status(400).json({ error: 'Missing flight_number parameter' });
   }

@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { normalizeMetarPayload } from '../src/lib/metar.js';
 
@@ -81,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: 'Rate limited — try again shortly' });
   }
 
-  const ids = (req.query.ids as string) || 'KORD';
+  const ids = (getQuery(req).ids as string) || 'KORD';
   // Validate: comma-separated ICAO codes, max 200 chars
   if (!/^[A-Z0-9,]{1,200}$/i.test(ids)) {
     return res.status(400).json({ error: 'Invalid airport IDs' });

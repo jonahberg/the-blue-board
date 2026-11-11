@@ -29,6 +29,7 @@
 // are rewritten every 30 min – 3 h, so a 5-minute memo costs nothing in freshness).
 
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { UNITED_HUB_SET } from './_hubs.js';
 import { getSnapshotCompleteness, loadScheduleSnapshot, type PersistedScheduleSnapshot } from './_schedule-snapshots.js';
@@ -150,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: 'Rate limited — try again shortly' });
   }
 
-  const raw = req.query?.hub as unknown;
+  const raw = getQuery(req)?.hub as unknown;
   const hubParam = Array.isArray(raw) ? raw[0] : raw;
   const hub = typeof hubParam === 'string' ? hubParam.trim().toUpperCase() : '';
   if (!UNITED_HUB_SET.has(hub)) {

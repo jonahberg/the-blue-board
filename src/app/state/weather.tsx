@@ -10,13 +10,21 @@
  * Every decision about what a station's observation MEANS (the worst-of category, the ops
  * impact, the colours) belongs to `src/lib/weather-cards.js`; this file is fetch policy and
  * nothing else.
+ *
+ * FAA programs are held with the moment they describe (Nov 2026). The last good answer is kept
+ * through a failed refresh, as before, but `faaIndex` is the CURRENT picture worked out from the
+ * clock (src/lib/faa-freshness.js): a program past its own end time drops out, and once the answer
+ * is older than FAA_STALE_AFTER_MS the index is empty and `faaStale` is set, so the hub strip, the
+ * ticker and the delay risk never present an old program as a live one, and the NAS panel prints
+ * "FAA status as of HH:MMZ" instead. A one-minute clock re-checks this between fetches (and on
+ * returning to the tab), changing state only when the picture actually changes.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { getMetarStationForIata } from '@/lib/airport-metadata.js';
-import { buildFaaIndex } from '@/lib/faa-context.js';
+import { currentFaaPicture, FAA_STALE_AFTER_MS } from '@/lib/faa-freshness.js';
 import { hasRenderableMetarData } from '@/lib/metar-explain.js';
 import {
   collectMetarStations,
@@ -25,7 +33,7 @@ import {
   resolveWeather,
 } from '@/lib/weather-cards.js';
 import { fetchFaa, fetchMetarBatch, fetchNas } from '../data/api';
-import type { FaaIndex, MetarRecord, NasData } from '../data/types';
+import type { FaaAirport, FaaIndex, MetarRecord, NasData } from '../data/types';
 import { useLatest } from './hooks';
 import { useSchedule } from './schedule';
 import { STORAGE_KEYS, readString } from './storage';
@@ -33,6 +41,9 @@ import { useWatch } from './watch';
 
 /** The Weather tab's own refresh cadence (inventory §30). */
 export const WEATHER_REFRESH_MS = 5 * 60 * 1000;
+
+/** How often the held FAA/NAS answers are re-checked against the clock between fetches. */
+const FAA_CLOCK_TICK_MS = 60 * 1000;
 
 /**
  * What `computeOpsImpact()` decided about one airport, in the exact shape
@@ -53,9 +64,20 @@ export type WeatherOps = {
 export type WeatherValue = {
   /** Keyed by hub code, plus the non-hub IATA codes pulled off watches and boards. */
   metarByHub: Record<string, MetarRecord>;
-  /** Airport code → its raw FAA record, as `buildFaaIndex()` shapes it. */
+  /**
+   * Airport code → its FAA record, as `buildFaaIndex()` shapes it — the programs CURRENT now:
+   * none past their own end time, and empty once the answer is stale (`faaStale`).
+   */
   faaIndex: FaaIndex;
+  /** The moment the held FAA answer describes (epoch ms); null before the first answer. */
+  faaAsOf: number | null;
+  /** The held FAA answer is older than FAA_STALE_AFTER_MS: nothing from it is shown as current. */
+  faaStale: boolean;
   nas: NasData | null;
+  /** When the held NAS answer arrived (epoch ms); null before the first. */
+  nasAsOf: number | null;
+  /** The held NAS answer is older than FAA_STALE_AFTER_MS. */
+  nasStale: boolean;
   weatherOpsByHub: Record<string, WeatherOps>;
   updatedAt: number | null;
   loading: boolean;
@@ -76,10 +98,23 @@ export function useWeather(): WeatherValue {
   return ctx;
 }
 
+/** useWeather() for a panel that also renders on its own (tests): null outside the provider. */
+export function useWeatherOptional(): WeatherValue | null {
+  return useContext(WeatherContext);
+}
+
 type WeatherState = {
   metarByHub: Record<string, MetarRecord>;
   faaIndex: FaaIndex;
+  /** The last FAA answer obtained, as received; `faaIndex` is derived from it and the clock. */
+  faaAirports: FaaAirport[] | null;
+  faaAsOf: number | null;
+  faaStale: boolean;
+  /** currentFaaPicture()'s key for `faaIndex`, so a clock tick can tell when nothing changed. */
+  faaKey: string;
   nas: NasData | null;
+  nasAsOf: number | null;
+  nasStale: boolean;
   weatherOpsByHub: Record<string, WeatherOps>;
   updatedAt: number | null;
   loading: boolean;
@@ -89,7 +124,13 @@ type WeatherState = {
 const EMPTY: WeatherState = {
   metarByHub: {},
   faaIndex: {},
+  faaAirports: null,
+  faaAsOf: null,
+  faaStale: false,
+  faaKey: 'none',
   nas: null,
+  nasAsOf: null,
+  nasStale: false,
   weatherOpsByHub: {},
   updatedAt: null,
   loading: true,
@@ -117,6 +158,48 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
     }, WEATHER_REFRESH_MS);
     return () => clearInterval(timer);
   }, []);
+
+  // The clock half of the FAA/NAS freshness rule: between fetches a held answer ages, a program
+  // passes its end time, and the picture must follow. Returns the same state object when nothing a
+  // reader would see changed, so consumers do not re-render.
+  //
+  // Not while the tab is hidden (the refresh loop is paused then, so the held answer would only
+  // age into "stale"). On coming back, a refresh that is due runs at once and decides the picture
+  // from a fresh answer; re-checking first would blank a still-active program for the second the
+  // fetch takes and then bring it back, and the hub strip (a polite live region) would announce
+  // it as new.
+  const lastFetchAt = useLatest(state.updatedAt);
+  useEffect(() => {
+    const recheck = () =>
+      setState((prev) => {
+        const now = Date.now();
+        const picture = currentFaaPicture(prev.faaAirports, prev.faaAsOf, now);
+        const nasStale = prev.nasAsOf !== null && now - prev.nasAsOf > FAA_STALE_AFTER_MS;
+        if (picture.key === prev.faaKey && nasStale === prev.nasStale) return prev;
+        return {
+          ...prev,
+          faaIndex: picture.index as FaaIndex,
+          faaStale: picture.stale,
+          faaKey: picture.key,
+          nasStale,
+        };
+      });
+    const onTick = () => {
+      if (!document.hidden) recheck();
+    };
+    const onVisibility = () => {
+      if (document.hidden) return;
+      const last = lastFetchAt.current;
+      if (last === null || Date.now() - last >= WEATHER_REFRESH_MS) setTick((n) => n + 1);
+      else recheck();
+    };
+    const timer = setInterval(onTick, FAA_CLOCK_TICK_MS);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [lastFetchAt]);
 
   const cycle = useRef(0);
   useEffect(() => {
@@ -157,13 +240,26 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
           for (const [key, record] of Object.entries(keptMetar)) {
             weatherOpsByHub[key] = resolveWeather(record).weatherOps as WeatherOps;
           }
+          // A failed refresh keeps the last answer, but with its own age, never as a new one. An
+          // answer OLDER than the one held (another edge, another server's last good) is not
+          // taken: the newest information wins.
+          const now = Date.now();
+          const answer = faaResult.status === 'fulfilled' ? faaResult.value : null;
+          const takeFaa = answer !== null && (prev.faaAsOf === null || answer.asOfMs >= prev.faaAsOf);
+          const faaAirports = takeFaa ? answer.airports : prev.faaAirports;
+          const faaAsOf = takeFaa ? answer.asOfMs : prev.faaAsOf;
+          const picture = currentFaaPicture(faaAirports, faaAsOf, now);
+          const nasAsOf = nasResult.status === 'fulfilled' ? now : prev.nasAsOf;
           return {
             metarByHub: keptMetar,
-            faaIndex:
-              faaResult.status === 'fulfilled'
-                ? (buildFaaIndex(faaResult.value) as FaaIndex)
-                : prev.faaIndex,
+            faaIndex: picture.index as FaaIndex,
+            faaAirports,
+            faaAsOf,
+            faaStale: picture.stale,
+            faaKey: picture.key,
             nas: nasResult.status === 'fulfilled' ? nasResult.value : prev.nas,
+            nasAsOf,
+            nasStale: nasAsOf !== null && now - nasAsOf > FAA_STALE_AFTER_MS,
             weatherOpsByHub,
             updatedAt: Date.now(),
             loading: false,
@@ -180,7 +276,23 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
-  const value = useMemo<WeatherValue>(() => ({ ...state, refresh }), [state, refresh]);
+  const value = useMemo<WeatherValue>(
+    () => ({
+      metarByHub: state.metarByHub,
+      faaIndex: state.faaIndex,
+      faaAsOf: state.faaAsOf,
+      faaStale: state.faaStale,
+      nas: state.nas,
+      nasAsOf: state.nasAsOf,
+      nasStale: state.nasStale,
+      weatherOpsByHub: state.weatherOpsByHub,
+      updatedAt: state.updatedAt,
+      loading: state.loading,
+      metarFailed: state.metarFailed,
+      refresh,
+    }),
+    [state, refresh],
+  );
 
   return <WeatherContext.Provider value={value}>{children}</WeatherContext.Provider>;
 }

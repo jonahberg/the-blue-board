@@ -15,9 +15,17 @@
 // prior per-instance guard.
 
 import { getSupabaseAdmin } from './_schedule-snapshots.js';
+import { boundedQuery } from './_bounded.js';
 
 const COST_KEY = 'official_quota_block';
 const HYDRATE_TTL_MS = 10_000;
+
+// Time limits for every Supabase call in this file (api/_bounded.ts). The reads sit in front of a
+// board serve (hydrateQuotaBlock) or a provider call (hydrateAdbSpend), so they are short: a read
+// that runs out of time keeps the in-memory value, exactly as a failed read always has. The writes
+// run in waitUntil and only need to finish well inside the calling function's limit.
+export const COST_STATE_READ_TIMEOUT_MS = 1500;
+const COST_STATE_WRITE_TIMEOUT_MS = 3000;
 
 let mirroredBlockedUntil = 0; // global block (epoch ms) as last read from / written to Supabase
 let lastHydratedAt = 0;
@@ -39,7 +47,7 @@ export function resetMirroredQuotaBlock(): void {
  * HYDRATE_TTL_MS. Returns the (possibly updated) mirrored value. Never throws; on any failure it
  * returns the current in-memory value so callers degrade to per-instance behaviour.
  */
-export async function hydrateQuotaBlock(): Promise<number> {
+export async function hydrateQuotaBlock(timeoutMs = COST_STATE_READ_TIMEOUT_MS): Promise<number> {
   const now = Date.now();
   if (now - lastHydratedAt < HYDRATE_TTL_MS) return mirroredBlockedUntil;
   lastHydratedAt = now;
@@ -48,11 +56,14 @@ export async function hydrateQuotaBlock(): Promise<number> {
     const supabase = typeof getSupabaseAdmin === 'function' ? await getSupabaseAdmin() : null;
     if (!supabase) return mirroredBlockedUntil;
 
-    const { data, error } = await supabase
-      .from('schedule_cost_state')
-      .select('blocked_until')
-      .eq('key', COST_KEY)
-      .limit(1);
+    const { data, error } = await boundedQuery<any>(
+      supabase
+        .from('schedule_cost_state')
+        .select('blocked_until')
+        .eq('key', COST_KEY)
+        .limit(1),
+      timeoutMs,
+    );
     if (error) {
       console.error('cost-state read failed:', error.message);
       return mirroredBlockedUntil;
@@ -260,7 +271,10 @@ export async function recordAdbUnits(units: number): Promise<void> {
     const supabase = typeof getSupabaseAdmin === 'function' ? await getSupabaseAdmin() : null;
     if (!supabase || typeof supabase.rpc !== 'function') return;
 
-    const { data, error } = await supabase.rpc('increment_adb_units', { p_day: issuedForDay, p_units: n });
+    const { data, error } = await boundedQuery<any>(
+      supabase.rpc('increment_adb_units', { p_day: issuedForDay, p_units: n }),
+      COST_STATE_WRITE_TIMEOUT_MS,
+    );
     if (error) {
       logAdbPersistError('increment', error);
       return;
@@ -291,11 +305,14 @@ export async function hydrateAdbSpend(): Promise<number> {
     const supabase = typeof getSupabaseAdmin === 'function' ? await getSupabaseAdmin() : null;
     if (!supabase || typeof supabase.from !== 'function') return adbUnits;
 
-    const { data, error } = await supabase
-      .from('schedule_provider_spend')
-      .select('units')
-      .eq('day', issuedForDay)
-      .limit(1);
+    const { data, error } = await boundedQuery<any>(
+      supabase
+        .from('schedule_provider_spend')
+        .select('units')
+        .eq('day', issuedForDay)
+        .limit(1),
+      COST_STATE_READ_TIMEOUT_MS,
+    );
     if (error) {
       logAdbPersistError('read', error);
       return adbUnits;
@@ -386,14 +403,17 @@ export async function persistQuotaBlock(blockedUntilMs: number, reason: string):
     const supabase = typeof getSupabaseAdmin === 'function' ? await getSupabaseAdmin() : null;
     if (!supabase) return;
 
-    const { error } = await supabase
-      .from('schedule_cost_state')
-      .upsert({
-        key: COST_KEY,
-        blocked_until: new Date(blockedUntilMs).toISOString(),
-        reason: String(reason || '').slice(0, 500),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'key' });
+    const { error } = await boundedQuery<any>(
+      supabase
+        .from('schedule_cost_state')
+        .upsert({
+          key: COST_KEY,
+          blocked_until: new Date(blockedUntilMs).toISOString(),
+          reason: String(reason || '').slice(0, 500),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'key' }),
+      COST_STATE_WRITE_TIMEOUT_MS,
+    );
     if (error) console.error('cost-state write failed:', error.message);
   } catch (error: any) {
     console.error('cost-state write threw:', error?.message || error);

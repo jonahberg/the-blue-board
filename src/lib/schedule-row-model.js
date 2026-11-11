@@ -401,7 +401,17 @@ export function delayCell({ statusKey, presumed, schedTimeSec, actualTimeSec, ha
     bound === 'lower' ? minutes !== null && minutes > ACTUAL_LINE_THRESHOLD_MINUTES
       : bound === 'upper' ? minutes !== null && hasOperated
         : true;
-  const isFact = minutes !== null && ((hasOperated && !presumed) || minutes > ACTUAL_LINE_THRESHOLD_MINUTES);
+  // A row that has operated ON THIS BOARD'S SIDE (left, on a departures board; landed, on an
+  // arrivals board) has a delay fact only when it is measured to a real time. A departure the live
+  // feed proved, with no provider departure time, measures to the provider's ESTIMATE, and "+0m"
+  // there was the estimate restating the schedule, not a measurement (Nov 2026). Such a row now
+  // shows a delay only when the estimate alone is big enough to be one (the line a not-yet-operated
+  // row uses), titled as an estimate; below it, nothing (an operated row gets no risk prediction).
+  // An arrival still in the air keeps its estimated arrival as before: that is a forecast of the
+  // side this board is about, not a stand-in for a measurement.
+  const operatedOnBoardSide = dir === 'arrivals' ? statusKey === 'landed' : hasOperated;
+  const measuredIfOperated = hasRealTime || !operatedOnBoardSide;
+  const isFact = minutes !== null && ((hasOperated && !presumed && measuredIfOperated) || minutes > ACTUAL_LINE_THRESHOLD_MINUTES);
   if (isFact && boundSays) {
     const prefix = bound === 'lower' ? '≥' : bound === 'upper' ? '≤' : '';
     return {
