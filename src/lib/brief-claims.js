@@ -35,6 +35,8 @@ const EXTRA_NAMES = {
   LHR: ['Heathrow'],
   SJC: ['San Jose'],
   DFW: ['Dallas-Fort Worth'],
+  MDW: ['Midway'],
+  HOU: ['Hobby'],
 };
 
 // Names that stand for more than one airport. A sentence using one passes when ANY airport it can
@@ -273,7 +275,7 @@ export function extractClaims(text) {
  * @typedef {{
  *   times: Array<{minutes: number, zone: string|null}>,
  *   percents: Set<string>, numbers: Set<string>, fractions: Set<string>, flights: Set<string>,
- *   runways: Set<string>, airports: Set<string>, causes: Set<string>,
+ *   runways: Set<string>, airports: Set<string>, sharedNames: Set<string>, causes: Set<string>,
  * }} Allowance
  */
 
@@ -281,7 +283,7 @@ export function extractClaims(text) {
 export function emptyAllowance() {
   return {
     times: [], percents: new Set(), numbers: new Set(), fractions: new Set(), flights: new Set(),
-    runways: new Set(), airports: new Set(), causes: new Set(),
+    runways: new Set(), airports: new Set(), sharedNames: new Set(), causes: new Set(),
   };
 }
 
@@ -301,7 +303,13 @@ export function allowanceFromValues(values, into = emptyAllowance()) {
         case 'fraction': into.fractions.add(claim.value); break;
         case 'flight': into.flights.add(claim.value); break;
         case 'runway': into.runways.add(claim.value); break;
-        case 'airport': for (const c of claim.codes) into.airports.add(c); break;
+        // A name that stands for ONE airport allows that airport. A shared name ("New York",
+        // "Chicago") in a fact's values allows only that name: it must not let an EWR fact vouch
+        // for LGA, or an ORD fact for Midway.
+        case 'airport':
+          if (claim.codes.length === 1) into.airports.add(claim.codes[0]);
+          else into.sharedNames.add(normalizeQuotes(claim.raw).replace(/\s+/g, ' '));
+          break;
         case 'cause': into.causes.add(claim.value); break;
         default: break;
       }
@@ -337,6 +345,7 @@ export function claimFailure(claim, allowed) {
     case 'runway':
       return allowed.runways.has(claim.value) ? null : `runway_not_in_facts:${claim.raw}`;
     case 'airport':
+      if (claim.codes.length > 1 && allowed.sharedNames.has(normalizeQuotes(claim.raw).replace(/\s+/g, ' '))) return null;
       return claim.codes.some((c) => allowed.airports.has(c)) ? null : `uncited_airport:${claim.raw}`;
     case 'cause': {
       if (allowed.causes.has(claim.value)) return null;

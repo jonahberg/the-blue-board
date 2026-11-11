@@ -135,6 +135,18 @@ describe('verifyBrief: items', () => {
     expect(out.report.itemsKept).toBe(2);
   });
 
+  it('a shared city name in a fact\u2019s values does not vouch for that city\u2019s other airports', () => {
+    const index = new Map([
+      ['faa.planned.EWR', fact('faa.planned.EWR', ['EWR', 'Newark', 'New York', '9:00 PM ET'], { kind: 'faa_planned' })],
+      ['otp.ORD', FACTS.find((f) => f.id === 'otp.ORD')],
+    ]);
+    expect(checkSentence('A ground stop is possible at New York\u2019s Newark until 9:00 PM ET.', ['faa.planned.EWR'], index)).toEqual([]);
+    expect(checkSentence('A ground stop is possible at LGA until 9:00 PM ET.', ['faa.planned.EWR'], index)).toEqual(['uncited_airport:LGA']);
+    expect(checkSentence('A ground stop is possible at LaGuardia until 9:00 PM ET.', ['faa.planned.EWR'], index)).toEqual(['uncited_airport:LaGuardia']);
+    expect(checkSentence('Midway is at 91%.', ['otp.ORD'], index)).toEqual(['uncited_airport:Midway']);
+    expect(checkSentence('Chicago is at 91%.', ['otp.ORD'], index)).toEqual([]);
+  });
+
   it('rejects a synonym that cannot mean any cited airport', () => {
     const out = verifyBrief(brief([item('New York is calm at 91%.', ['otp.ORD']), item('630 United flights are in the air.', ['air.total'])]), FACTS);
     expect(out.report.dropped[0].reasons).toEqual(['uncited_airport:New York']);
