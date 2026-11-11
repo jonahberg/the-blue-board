@@ -95,6 +95,10 @@ These are the only places headline numbers are hardcoded. When live counts / clu
    which emits the tags. The shorter `twitterDescription` on the same page repeats the two
    figures, so edit both. The ATC page's `ogDescription` derives from data automatically.
 3. `unitedHubsMeta.stats` — the ~119k sq ft / 36 gates / 54k figures and their notes.
+4. The "Club math" sidebar in `src/pages/trackers/united-hubs.astro` is hand-written, except the
+   Dulles seat figure: it is read out of the `iad-club-concourse-e` entry's own words ("seating
+   for more than 600"), and the build stops if that entry stops saying "seating for more than N".
+   Reword that phrase and you edit the sidebar's pattern in the same change.
 
 ## Annual / occasional
 

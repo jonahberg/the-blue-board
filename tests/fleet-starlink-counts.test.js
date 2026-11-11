@@ -182,6 +182,8 @@ describe.skipIf(!hasDist)('fleet type pages: the registry clause counts its own 
     const table = registry.slice(registry.indexOf('<table'), registry.indexOf('</table>'));
     const marked = (table.match(/class="starlink-on"/g) ?? []).length;
     const clause = /Its WiFi column marks (\d+) with Starlink as of that date; the Starlink tracker(?:'|&#39;|&#x27;)s roster listed (\d+)/.exec(registry);
+    // A clause the pattern cannot read would make this test pass on nothing.
+    if (registry.includes('Its WiFi column marks')) expect(clause, 'the clause, as rendered').toBeTruthy();
     if (clause) {
       expect(Number(clause[1])).toBe(marked);
       expect(Number(clause[2])).not.toBe(marked);
