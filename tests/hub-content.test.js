@@ -81,3 +81,23 @@ describe('splitCompactLiveBar', () => {
     expect(splitCompactLiveBar('<div class="live-bar"><div>')).toBeNull();
   });
 });
+
+// Nov 10 2026: a hub page's board is the stored schedule snapshot (src/components/site/HubBoard.astro)
+// — it refreshes every two minutes and its data can be a couple of hours old. Only the dashboard's
+// live map updates every 30 seconds, so hub copy may promise that rate for the map and nothing else.
+describe('hub copy promises no refresh rate the page does not have', () => {
+  for (const [key, data] of Object.entries(hubs)) {
+    it(`${key}: share copy, subtitle and FAQ`, () => {
+      for (const field of ['description', 'ogDescription', 'twitterDescription', 'subtitle']) {
+        expect(data[field] ?? '', `${key}.${field}`).not.toMatch(/every 30|30s\b|30 seconds/i);
+      }
+      expect(data.contentHtml).not.toMatch(/Updated every 30|live status panel/i);
+      for (const { answer } of data.faqSchema) {
+        expect(answer).not.toMatch(/live status panel/i);
+        for (const m of answer.matchAll(/[^.]*\b30 seconds\b[^.]*\./g)) {
+          expect(m[0], `${key}: ${m[0]}`).toMatch(/live map/);
+        }
+      }
+    });
+  }
+});
