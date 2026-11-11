@@ -245,19 +245,24 @@ describe('vercel.json routing for flight pages', () => {
     expect(existsSync(join(ROOT, 'api/_flight-card/Geist-Medium.ttf'))).toBe(true);
   });
 
-  // REQUIRED INTEGRATION PATCH (middleware.ts is not this branch's file): the Markdown-negotiation
-  // middleware matches /flight/UA929/card.png and answers 406 to an image-only Accept, so an image
-  // proxy that asks for `image/png` or `image/*` gets no card. Excluding the card path from the
-  // matcher fixes it. This test is marked `fails` so the suite stays green and FLIPS (fails) the
-  // moment middleware.ts excludes the path — then drop `.fails`.
-  it.fails('the share card is not negotiated by the Markdown middleware (needs the middleware.ts matcher patch)', async () => {
+  // The Markdown-negotiation middleware used to match /flight/UA929/card.png and answer 406 to an
+  // image-only Accept, so an image proxy asking for `image/png` or `image/*` got no card. The
+  // matcher now excludes the card path; the page itself is still negotiated (and, being under the
+  // /flight route prefix, a Markdown client gets its HTML rather than a Markdown 404).
+  it('the share card is not negotiated by the Markdown middleware; the page still is', async () => {
     const { config } = await import('../middleware.ts');
     const { resolveAgentResponse } = await import('../src/lib/agent-negotiation.js');
-    const matched = config.matcher.some((m) => new RegExp(`^${m}$`).test('/flight/UA929/card.png'));
+    const matches = (path) => config.matcher.some((m) => new RegExp(`^${m}$`).test(path));
+    expect(matches('/flight/UA929/card.png')).toBe(false);
     for (const accept of ['image/png', 'image/*']) {
-      const decision = matched ? resolveAgentResponse({ pathname: '/flight/UA929/card.png', accept }).kind : 'not-matched';
+      const decision = matches('/flight/UA929/card.png') ? resolveAgentResponse({ pathname: '/flight/UA929/card.png', accept }).kind : 'not-matched';
       expect(decision, accept).not.toBe('not-acceptable');
     }
+    for (const page of ['/flight/UA929', '/flight', '/flight/UA929/']) expect(matches(page), page).toBe(true);
+    // Only the exact card file is excluded: a look-alike path is still a page path.
+    expect(matches('/flight/UA929/card.png.html')).toBe(true);
+    expect(resolveAgentResponse({ pathname: '/flight/UA929', accept: 'text/markdown' })).toEqual({ kind: 'html' });
+    expect(resolveAgentResponse({ pathname: '/flight', accept: 'text/markdown' })).toEqual({ kind: 'html' });
   });
 
   it('keeps flight pages out of the sitemap', () => {

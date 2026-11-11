@@ -193,8 +193,17 @@ describe('2b. the route surface stays in step with the sitemap', () => {
   });
 
   it('still calls obvious junk a 404', () => {
-    for (const path of ['/some-path-that-does-not-exist', '/wp-admin', '/fleetx', '/hub', '/.env']) {
+    for (const path of ['/some-path-that-does-not-exist', '/wp-admin', '/fleetx', '/hub', '/.env', '/flightx']) {
       expect(isKnownRoutePath(path), path).toBe(false);
+    }
+  });
+
+  it('knows the flight pages, which are served by a rewrite and never in the sitemap', () => {
+    // /flight/UA929 is api/flight-page.ts behind a vercel.json rewrite. Without the /flight
+    // prefix a Markdown client was told every flight page was a 404.
+    for (const path of ['/flight', '/flight/', '/flight/UA929', '/flight/ua929']) {
+      expect(isKnownRoutePath(path), path).toBe(true);
+      expect(resolveAgentResponse({ pathname: path, accept: 'text/markdown' }), path).toEqual({ kind: 'html' });
     }
   });
 
@@ -309,12 +318,12 @@ describe('3. Markdown content negotiation (acceptmarkdown.com)', () => {
     for (const skipped of ['/api/irops', '/data/fleet.json', '/icons/icon-192.png',
       '/og/og-news.jpg', '/sw.js', '/manifest.json', '/robots.txt', '/favicon.svg',
       '/og-image.png', '/_astro/x.js', '/_astro/index.BcD3f.css', '/_agent/home.md',
-      '/email/2026-10/hero-live-map.jpg']) {
+      '/email/2026-10/hero-live-map.jpg', '/flight/UA929/card.png']) {
       expect(re.test(skipped), `should skip ${skipped}`).toBe(false);
     }
     // The v1.7 bundle directories are gone, so their paths are ordinary dead URLs now and
     // must reach the middleware to be answered as the 404s they are.
-    for (const matched of ['/', '/hubs/ord', '/fleet', '/llms.txt', '/sitemap.xml',
+    for (const matched of ['/', '/hubs/ord', '/fleet', '/flight', '/flight/UA929', '/llms.txt', '/sitemap.xml',
       '/some-path-that-does-not-exist', '/js/dashboard.js', '/css/style.css',
       '/fonts/satoshi-latin.woff2']) {
       expect(re.test(matched), `should match ${matched}`).toBe(true);

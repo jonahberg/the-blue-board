@@ -13,8 +13,12 @@
 /** Exact top-level HTML routes (Astro pages + the dashboard shell at /). */
 export const HTML_ROUTE_PATHS = ['/', '/404', '/newark', '/privacy', '/thanks'];
 
-/** Route sections — both the index (/fleet) and everything under it (/fleet/737-800). */
-export const HTML_ROUTE_PREFIXES = ['/fleet', '/hubs', '/news', '/trackers'];
+/**
+ * Route sections — both the index (/fleet) and everything under it (/fleet/737-800).
+ * `/flight` is the lookup page and every per-flight page (/flight/UA929, served by
+ * api/flight-page.ts through a vercel.json rewrite, so it never appears in the sitemap).
+ */
+export const HTML_ROUTE_PREFIXES = ['/flight', '/fleet', '/hubs', '/news', '/trackers'];
 
 /**
  * Directories served verbatim out of dist/ (public/ assets + Astro's build output).
