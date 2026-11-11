@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 
 import { UNITED_HUBS } from '../api/_hubs.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
-import { applyRolloverPriority, buildWarmPlan, getWarmSlot, rolloverHubs } from '../api/cron/warm-schedules.js';
+import { applyRolloverPriority, buildWarmPlan, getWarmSlot, rolloverHubs, yesterdayFinalHubs } from '../api/cron/warm-schedules.js';
 
 const SLOT_MS = 30 * 60 * 1000;
 const EDT_MIDNIGHT = Date.UTC(2026, 8, 27, 4, 0, 0); // 00:00 EDT Sun Sep 27
@@ -146,5 +146,72 @@ describe('rollover covers every hub, GUM and NRT included (D4)', () => {
       }
     }
     expect(maxGapMin).toBeLessThanOrEqual(3 * 60 + 1);
+  });
+});
+
+// Nov 2026: /api/irops and the dashboard read YESTERDAY's departures board until 06:00 hub-local,
+// and nothing refreshed it after the ring's last pre-midnight pass (IAH 525 min old at 05:45 CST,
+// NRT 505 min at 05:55 JST on Nov 11). One final warm per hub, between 00:30 and 06:00 local.
+describe('the final warm of yesterday\'s departures board', () => {
+  const days = [
+    Date.UTC(2026, 10, 11, 0, 0, 5), // the live audit day
+    Date.UTC(2026, 8, 27, 0, 0, 5), // the other ring phase
+    Date.UTC(2026, 10, 1, 0, 0, 5), // US fall-back
+    Date.UTC(2026, 2, 8, 0, 0, 5), // US spring-forward
+    Date.UTC(2026, 11, 31, 0, 0, 5),
+  ];
+
+  it('the window is [00:30, 06:00) hub-local', () => {
+    const cst = Date.UTC(2026, 10, 11, 6, 0); // 00:00 CST
+    expect(yesterdayFinalHubs(cst + 29 * 60_000)).not.toContain('ORD');
+    expect(yesterdayFinalHubs(cst + 30 * 60_000)).toContain('ORD');
+    expect(yesterdayFinalHubs(cst + 359 * 60_000)).toContain('ORD');
+    expect(yesterdayFinalHubs(cst + 360 * 60_000)).not.toContain('ORD');
+  });
+
+  for (const start of days) {
+    it(`warms every hub's yesterday departures exactly once, inside its window (${new Date(start).toISOString().slice(0, 10)})`, () => {
+      const at = {};
+      for (let i = 0; i < 48; i++) {
+        const now = start + i * SLOT_MS;
+        const { plan, injected } = applyRolloverPriority(buildWarmPlan(now), now, getWarmSlot(now));
+        for (const name of injected.filter((k) => k.endsWith('-yesterday'))) {
+          const hub = name.split('-')[0];
+          (at[hub] ||= []).push(now);
+          expect(name).toBe(`${hub}-departures-yesterday`);
+          const task = plan.find((t) => t.hub === hub && t.dayOffset === -1);
+          expect(task).toEqual({ hub, dir: 'departures', dayOffset: -1, label: 'yesterday' });
+          const sinceMidnight = now - getStartOfHubDay(hub, 0, new Date(now)) * 1000;
+          expect(sinceMidnight).toBeGreaterThanOrEqual(30 * 60_000);
+          expect(sinceMidnight).toBeLessThan(6 * 3600_000);
+        }
+      }
+      expect(Object.keys(at).sort()).toEqual([...UNITED_HUBS].sort());
+      for (const hub of UNITED_HUBS) expect(at[hub]).toHaveLength(1);
+    });
+  }
+
+  it('a final displaces only tomorrow slots, never a today board, and never grows the run', () => {
+    for (const start of [days[0], days[1]]) {
+      for (let i = 0; i < 48; i++) {
+        const now = start + i * SLOT_MS;
+        const base = buildWarmPlan(now);
+        const { plan, displaced } = applyRolloverPriority(base, now, getWarmSlot(now));
+        expect(plan.length).toBe(base.length);
+        for (const d of displaced) expect(d.endsWith('-tomorrow')).toBe(true);
+        for (const t of base.filter((b) => b.dayOffset === 0)) expect(plan.map(key)).toContain(key(t));
+      }
+    }
+  }, 20_000);
+
+  it('the today rollover no longer re-warms a board the previous fire of its hour already warmed', () => {
+    // Eastern midnight Nov 11: the 05:00Z fire warmed IAD departures + arrivals; the 05:30Z fire
+    // used to warm IAD arrivals again. Its slot now goes to EWR, then to EWR's yesterday final.
+    const first = Date.UTC(2026, 10, 11, 5, 0, 5);
+    const second = first + SLOT_MS;
+    const a = applyRolloverPriority(buildWarmPlan(first), first, getWarmSlot(first)).injected;
+    const b = applyRolloverPriority(buildWarmPlan(second), second, getWarmSlot(second)).injected;
+    expect(a.sort()).toEqual(['IAD-arrivals-today', 'IAD-departures-today']);
+    expect(b.sort()).toEqual(['EWR-arrivals-today', 'EWR-departures-today', 'EWR-departures-yesterday']);
   });
 });
