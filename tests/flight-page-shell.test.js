@@ -13,7 +13,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getTransformedRoutes } from '@vercel/routing-utils';
+import { getTransformedRoutes, pathToRegexp } from '@vercel/routing-utils';
 
 import { inlineScripts, sha256 } from '../scripts/lib/csp-hashes.mjs';
 import { flightPageMeta, renderFlightShell, renderMissingFlightShell } from '../src/lib/flight-page-seo.js';
@@ -263,6 +263,15 @@ describe('vercel.json routing for flight pages', () => {
     expect(matches('/flight/UA929/card.png.html')).toBe(true);
     expect(resolveAgentResponse({ pathname: '/flight/UA929', accept: 'text/markdown' })).toEqual({ kind: 'html' });
     expect(resolveAgentResponse({ pathname: '/flight', accept: 'text/markdown' })).toEqual({ kind: 'html' });
+  });
+
+  it('…and Vercel compiles the matcher the same way (path-to-regexp, as @vercel/build-utils does)', async () => {
+    // getRegExpFromMatcher in @vercel/build-utils: pathToRegexp('316', matcher).source per entry.
+    const { config } = await import('../middleware.ts');
+    const compiled = new RegExp(config.matcher.map((m) => pathToRegexp('316', m).source).join('|'));
+    expect(compiled.test('/flight/UA929/card.png')).toBe(false);
+    for (const page of ['/flight/UA929', '/flight', '/', '/hubs/ord']) expect(compiled.test(page), page).toBe(true);
+    for (const skipped of ['/api/faa', '/og/og-news.jpg', '/_astro/x.js']) expect(compiled.test(skipped), skipped).toBe(false);
   });
 
   it('sizes the cards grid by the cards shown, so a hidden read card leaves no empty column', () => {
