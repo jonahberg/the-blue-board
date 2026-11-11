@@ -52,7 +52,6 @@ import { FR24_LOOKUP_AVAILABLE } from './Fr24LookupDialog';
 import { setAskResult } from '../state/ask';
 import type { AskResult, AskSource } from '../state/ask';
 import { useFeed } from '../state/feed';
-import { usePrefs } from '../state/prefs';
 import { useSchedule } from '../state/schedule';
 import { useUi } from '../state/ui';
 
@@ -78,7 +77,6 @@ export function SearchPalette() {
   const { searchOpen, setSearchOpen, select, openFr24, openAircraft, setTab, focusOn } = useUi();
   const { flights } = useFeed();
   const { boards, goto, preload, current: scheduleCurrent } = useSchedule();
-  const { homeAirport } = usePrefs();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [askUi, setAskUi] = useState<AskUi>({ status: 'idle' });
@@ -250,16 +248,17 @@ export function SearchPalette() {
       } else if (view === 'weather') {
         setTab('weather', filters.hub ? { scrollTo: `hub-card-${filters.hub}` } : undefined);
       } else {
-        // A board needs a hub: the one on screen, else the home hub. It is shown, never hidden.
+        // A board needs a hub: the board's current one (which starts as the home hub), else the
+        // board's own default. It is shown in the board's controls and sentence, never hidden.
         const next =
           view === 'schedule' && !filters.hub
-            ? { view, filters: { ...filters, hub: scheduleCurrent.hub || homeAirport || 'ORD' } }
+            ? { view, filters: { ...filters, hub: scheduleCurrent?.hub || 'ORD' } }
             : result;
         if (setAskResult(next, source)) setTab(view);
       }
       setSearchOpen(false);
     },
-    [flights, select, focusOn, openAircraft, setTab, setSearchOpen, scheduleCurrent.hub, homeAirport],
+    [flights, select, focusOn, openAircraft, setTab, setSearchOpen, scheduleCurrent?.hub],
   );
 
   const ask = useCallback(
