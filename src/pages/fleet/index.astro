@@ -74,7 +74,9 @@ const starlinkCombinedNote = `(${[STARLINK_EQUIPPED_SCOPE, STARLINK_EQUIPPED_AS_
   .filter(Boolean)
   .join(', ')})`;
 // The FAQ answer's shared opening: the visible FAQ links the tracker, the JSON-LD names it.
-const starlinkFaqLead = `${STARLINK_EQUIPPED_LABEL} United Airlines aircraft ${starlinkCombinedNote} are equipped with free SpaceX Starlink satellite internet — the majority of them United Express regional jets, which led the rollout, followed by mainline Boeing 737s and Airbus A321neos and, since June 2026, the first widebody Boeing 777s. United expects Starlink on 61% of its flights by the end of 2026 and fleet-wide by the end of 2027. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity.`;
+// "The majority of them United Express" only while the counts say so (355 of 681 at the Nov 11 build).
+const starlinkExpressMajority = STARLINK_EQUIPPED - STARLINK_MAINLINE_EQUIPPED > STARLINK_MAINLINE_EQUIPPED;
+const starlinkFaqLead = `${STARLINK_EQUIPPED_LABEL} United Airlines aircraft ${starlinkCombinedNote} are equipped with free SpaceX Starlink satellite internet — ${starlinkExpressMajority ? 'the majority of them United Express regional jets, which led the rollout,' : 'United Express regional jets led the rollout,'} followed by mainline Boeing 737s and Airbus A321neos and, since June 2026, the first widebody Boeing 777s. United expects Starlink on 61% of its flights by the end of 2026 and fleet-wide by the end of 2027. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity.`;
 
 // Seat config table order: widebody (Polaris) first, then narrowbody
 const seatConfigOrder = [
