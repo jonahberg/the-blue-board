@@ -26,12 +26,12 @@ import { radioFactsFromStatus } from '../src/lib/brief-radio.js';
 import { buildTemplateBrief } from '../src/lib/brief-template.js';
 import { verifyBrief } from '../src/lib/brief-verify.js';
 
-const ctl = vi.hoisted(() => ({ wide: false, setCurrent: vi.fn(), flights: [] as Array<Record<string, unknown>> }));
+const ctl = vi.hoisted(() => ({ wide: false, setCurrent: vi.fn(), flights: [] as Array<Record<string, unknown>>, faaUnknownSince: null as number | null }));
 
 vi.mock('../src/app/state/feed', () => ({ useFeed: () => ({ flights: ctl.flights }) }));
 vi.mock('../src/app/state/fleet', () => ({ useFleet: () => ({ fleetDb: [], starlink: { tails: new Set() } }) }));
 vi.mock('../src/app/state/irops', () => ({ useIrops: () => ({ score: null }) }));
-vi.mock('../src/app/state/weather', () => ({ useWeather: () => ({ faaIndex: {} }) }));
+vi.mock('../src/app/state/weather', () => ({ useWeather: () => ({ faaIndex: {}, faaUnknownSince: ctl.faaUnknownSince }) }));
 vi.mock('../src/app/state/schedule', () => ({
   HUB_ORDER: ['ORD', 'DEN'],
   useHubHealth: () => ({ hubs: [], byHub: {} }),
@@ -129,6 +129,7 @@ beforeEach(() => {
   ctl.wide = false;
   ctl.setCurrent.mockReset();
   ctl.flights = [];
+  ctl.faaUnknownSince = null;
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: query.includes('min-width: 1024px') ? ctl.wide : false,
     media: query, onchange: null,
@@ -193,6 +194,20 @@ describe('the header row', () => {
     expect(screen.queryByRole('button', { name: /full brief/i })).toBeNull();
     expect(container.querySelector('[aria-live="off"]')).not.toBeNull();
     expect(container.querySelector('#brief-panel')).toBeNull();
+  });
+
+  it('with no brief and a stale FAA answer, the ticker says "FAA status unknown since", neutral with an icon, never "All systems normal"', async () => {
+    ctl.faaUnknownSince = Date.now() - 40 * 60_000;
+    serve(briefResponseBody(null, Date.now()));
+    const { container } = mount();
+    await settle();
+    const ticker = container.querySelector('[aria-live="off"]')!;
+    expect(ticker.textContent).toMatch(/^FAA status unknown since \d\d:\d\d$/);
+    expect(ticker.textContent).not.toMatch(/All systems normal/);
+    const line = ticker.querySelector('p')!;
+    expect(line.className).toContain('text-muted-foreground');
+    expect(line.className).not.toMatch(/bb-ok|bb-warn|destructive/);
+    expect(line.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('a failed refresh keeps a brief that is still current, until it ages out', async () => {

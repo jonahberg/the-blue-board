@@ -9,7 +9,7 @@
  * The hub code links to its hub guide, which is also why this strip is worth crawling.
  */
 
-import { House } from 'lucide-react';
+import { History, House } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -20,6 +20,7 @@ import {
   hubReadingAge,
   networkLabel,
 } from '@/lib/hub-health.js';
+import { networkUnknownText } from '@/lib/faa-freshness.js';
 import { hubProgramMarker } from '@/lib/ops-health.js';
 import { cn } from '@/lib/utils';
 import { useIrops } from '../state/irops';
@@ -31,7 +32,7 @@ import type { Severity } from './Status';
 
 export function HubHealthStrip() {
   const { hubs } = useHubHealth();
-  const { faaIndex } = useWeather();
+  const { faaIndex, faaUnknownSince } = useWeather();
   const { homeAirport } = usePrefs();
   const irops = useIrops();
 
@@ -42,7 +43,12 @@ export function HubHealthStrip() {
     iropsScore: irops.score,
     faaIndex,
     hubCodes: HUB_ORDER,
-  }) as { avg: number; label: string; severity: Severity } | null;
+  }) as { avg: number; label: string; severity: Severity; level: string } | null;
+  // A stale FAA answer empties faaIndex, which reads exactly like a calm day. When nothing else
+  // says the network is disrupted, the chip says the FAA picture is unknown instead of "Smooth
+  // Ops". The time is held from the moment it went stale, so this polite region changes its words
+  // only when the state does.
+  const unknown = networkUnknownText(network, faaUnknownSince ?? null) as string | null;
   const loading = readings.length === 0 && irops.loading;
   const nowMs = Date.now();
 
@@ -129,7 +135,12 @@ export function HubHealthStrip() {
             );
           })}
 
-      {network ? (
+      {network && unknown ? (
+        <span className="ml-auto flex shrink-0 items-center gap-1 pl-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <History aria-hidden="true" className="size-3 shrink-0" />
+          <span>{unknown}</span>
+        </span>
+      ) : network ? (
         <span className="ml-auto shrink-0 pl-3 text-[11px] font-semibold uppercase tracking-wide">
           <SeverityGlyph severity={network.severity} />{' '}
           <span className={SEV_TEXT[network.severity]}>{network.label}</span>

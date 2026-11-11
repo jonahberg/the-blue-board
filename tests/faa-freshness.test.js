@@ -6,8 +6,12 @@ import {
   FAA_STALE_AFTER_MS,
   currentFaaPicture,
   faaAnswerAsOf,
+  FAA_UNKNOWN_SINCE_STEP_MS,
   faaStatusAsOfLine,
+  faaUnknownLine,
+  faaUnknownSince,
   isProgramPastEnd,
+  networkUnknownText,
   programEndMs,
   withoutExpiredPrograms,
   zuluClock,
@@ -123,5 +127,38 @@ describe('faaStatusAsOfLine', () => {
 
   it('formats the clock in UTC like the rest of the Weather tab', () => {
     expect(zuluClock(asOf)).toBe('14:05Z');
+  });
+});
+
+describe('"FAA status unknown since" (stale is not calm)', () => {
+  const asOf = Date.parse('2026-11-10T14:05:00Z');
+
+  it('holds the moment it went unknown while it stays unknown, so a re-served snapshot changes nothing', () => {
+    expect(faaUnknownSince(null, false, asOf)).toBeNull();
+    const first = faaUnknownSince(null, true, asOf);
+    expect(first).toBe(asOf);
+    // The same last-good answer re-served: its computed moment jitters by a second or so.
+    expect(faaUnknownSince(first, true, asOf + 1400)).toBe(asOf);
+    expect(faaUnknownSince(first, true, asOf + FAA_UNKNOWN_SINCE_STEP_MS - 1)).toBe(asOf);
+    // A materially newer (still old) answer is a new state.
+    expect(faaUnknownSince(first, true, asOf + FAA_UNKNOWN_SINCE_STEP_MS)).toBe(asOf + FAA_UNKNOWN_SINCE_STEP_MS);
+    // Current again: gone.
+    expect(faaUnknownSince(first, false, asOf + 40 * MIN)).toBeNull();
+    expect(faaUnknownSince(null, true, null)).toBeNull();
+  });
+
+  it('prints the viewer\'s local 24-hour clock', () => {
+    expect(faaUnknownLine(asOf, 'America/Chicago')).toBe('FAA status unknown since 08:05');
+    expect(faaUnknownLine(asOf, 'UTC')).toBe('FAA status unknown since 14:05');
+    expect(faaUnknownLine(Date.parse('2026-11-10T06:00:00Z'), 'America/Los_Angeles')).toBe('FAA status unknown since 22:00');
+    expect(faaUnknownLine(NaN)).toBe('FAA status unknown');
+  });
+
+  it('takes the network chip only when nothing else says the network is disrupted', () => {
+    expect(networkUnknownText({ level: 'normal' }, asOf, 'UTC')).toBe('FAA status unknown since 14:05');
+    expect(networkUnknownText({ level: 'minor' }, asOf, 'UTC')).toBeNull();
+    expect(networkUnknownText({ level: 'significant' }, asOf, 'UTC')).toBeNull();
+    expect(networkUnknownText({ level: 'normal' }, null, 'UTC')).toBeNull();
+    expect(networkUnknownText(null, asOf, 'UTC')).toBeNull();
   });
 });

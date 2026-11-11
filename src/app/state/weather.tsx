@@ -24,7 +24,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 
 import { getMetarStationForIata } from '@/lib/airport-metadata.js';
-import { currentFaaPicture, FAA_STALE_AFTER_MS } from '@/lib/faa-freshness.js';
+import { currentFaaPicture, FAA_STALE_AFTER_MS, faaUnknownSince } from '@/lib/faa-freshness.js';
 import { hasRenderableMetarData } from '@/lib/metar-explain.js';
 import {
   collectMetarStations,
@@ -73,6 +73,13 @@ export type WeatherValue = {
   faaAsOf: number | null;
   /** The held FAA answer is older than FAA_STALE_AFTER_MS: nothing from it is shown as current. */
   faaStale: boolean;
+  /**
+   * While `faaStale`: the moment the FAA picture became unknown, held steady across polls that
+   * bring the same old snapshot back (faa-freshness.js `faaUnknownSince`), so the ticker and the
+   * hub strip's network chip can say "FAA status unknown since 14:05" without the words moving
+   * on every poll. Null whenever the answer is current.
+   */
+  faaUnknownSince: number | null;
   nas: NasData | null;
   /** When the held NAS answer arrived (epoch ms); null before the first. */
   nasAsOf: number | null;
@@ -110,6 +117,7 @@ type WeatherState = {
   faaAirports: FaaAirport[] | null;
   faaAsOf: number | null;
   faaStale: boolean;
+  faaUnknownSince: number | null;
   /** currentFaaPicture()'s key for `faaIndex`, so a clock tick can tell when nothing changed. */
   faaKey: string;
   nas: NasData | null;
@@ -127,6 +135,7 @@ const EMPTY: WeatherState = {
   faaAirports: null,
   faaAsOf: null,
   faaStale: false,
+  faaUnknownSince: null,
   faaKey: 'none',
   nas: null,
   nasAsOf: null,
@@ -180,6 +189,7 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
           ...prev,
           faaIndex: picture.index as FaaIndex,
           faaStale: picture.stale,
+          faaUnknownSince: faaUnknownSince(prev.faaUnknownSince, picture.stale, prev.faaAsOf),
           faaKey: picture.key,
           nasStale,
         };
@@ -256,6 +266,7 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
             faaAirports,
             faaAsOf,
             faaStale: picture.stale,
+            faaUnknownSince: faaUnknownSince(prev.faaUnknownSince, picture.stale, faaAsOf),
             faaKey: picture.key,
             nas: nasResult.status === 'fulfilled' ? nasResult.value : prev.nas,
             nasAsOf,
@@ -282,6 +293,7 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
       faaIndex: state.faaIndex,
       faaAsOf: state.faaAsOf,
       faaStale: state.faaStale,
+      faaUnknownSince: state.faaUnknownSince,
       nas: state.nas,
       nasAsOf: state.nasAsOf,
       nasStale: state.nasStale,

@@ -83,6 +83,33 @@ describe('WeatherProvider: faaIndex is the CURRENT FAA picture', () => {
     expect(hubProgramMarker(seen!.faaIndex, 'EWR')).toBe(null);
   });
 
+  it('holds "unknown since" steady while the server keeps re-serving the same old snapshot, and clears it when current', async () => {
+    const takenAt = NOW - FAA_STALE_AFTER_MS - MIN;
+    api.fetchFaa.mockResolvedValueOnce({ airports: [], asOfMs: takenAt });
+    render(<WeatherProvider><Probe /></WeatherProvider>);
+    await flush();
+    expect(seen!.faaStale).toBe(true);
+    expect(seen!.faaUnknownSince).toBe(takenAt);
+
+    // The next poll brings the same last-good answer back; its computed moment moved by a second.
+    api.fetchFaa.mockResolvedValueOnce({ airports: [], asOfMs: takenAt + 1200 });
+    await act(async () => {
+      vi.advanceTimersByTime(5 * MIN);
+    });
+    await flush();
+    expect(seen!.faaAsOf).toBe(takenAt + 1200);
+    expect(seen!.faaUnknownSince).toBe(takenAt);
+
+    // The FAA answers again: current, and no longer unknown.
+    api.fetchFaa.mockResolvedValueOnce({ airports: [], asOfMs: Date.now() });
+    await act(async () => {
+      vi.advanceTimersByTime(5 * MIN);
+    });
+    await flush();
+    expect(seen!.faaStale).toBe(false);
+    expect(seen!.faaUnknownSince).toBeNull();
+  });
+
   it('an answer that is already old on arrival never enters the index, so nothing announces it', async () => {
     api.fetchFaa.mockResolvedValueOnce({
       airports: [ewrGroundStop(new Date(NOW + 4 * 3600_000).toISOString())],

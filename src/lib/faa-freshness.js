@@ -157,3 +157,62 @@ export function faaStatusAsOfLine({ faaAsOf, faaStale, nasAsOf, nasStale }) {
       : 'system-wide programs have not updated since and are not shown as current.';
   return `FAA status as of ${zuluClock(asOf)}: ${what}`;
 }
+
+// ═══ "UNKNOWN" IS NOT "CALM" ═══
+// A stale answer leaves `faaIndex` empty (currentFaaPicture), and an empty index is exactly what a
+// quiet day looks like: the ticker fell back to "All systems normal" and the hub strip's network
+// chip to "Smooth Ops" while the FAA had not answered for half an hour. When nothing else points at
+// a disruption, those two places now say what is true: we do not know.
+
+/**
+ * Past this, a newer (still stale) answer moves the "since" time; closer than this it is the same
+ * snapshot seen again (the server's last good answer re-served, its age rounded to whole seconds).
+ */
+export const FAA_UNKNOWN_SINCE_STEP_MS = 5 * 60 * 1000;
+
+/**
+ * The moment the FAA picture became unknown, held steady while it stays unknown. The hub strip is
+ * a polite live region, so its words may change only when the state does, never on a poll that
+ * brings the same old snapshot back with a slightly different computed age.
+ *
+ * @param {number|null} prevSince  what this returned last time.
+ * @param {boolean} faaStale
+ * @param {number|null} faaAsOf    the held answer's moment (faaAnswerAsOf).
+ * @returns {number|null}  null whenever the answer is not stale.
+ */
+export function faaUnknownSince(prevSince, faaStale, faaAsOf) {
+  if (!faaStale || !Number.isFinite(faaAsOf)) return null;
+  if (Number.isFinite(prevSince) && faaAsOf - prevSince < FAA_UNKNOWN_SINCE_STEP_MS) return prevSince;
+  return faaAsOf;
+}
+
+/**
+ * "FAA status unknown since 14:05", on the viewer's own clock (24-hour, like the "Z" clock the
+ * Weather tab prints, but local). `timeZone` is for tests.
+ * @param {number} sinceMs
+ * @param {string} [timeZone]
+ */
+export function faaUnknownLine(sinceMs, timeZone) {
+  if (!Number.isFinite(sinceMs)) return 'FAA status unknown';
+  const clock = new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    ...(timeZone ? { timeZone } : {}),
+  }).format(new Date(sinceMs));
+  return `FAA status unknown since ${clock}`;
+}
+
+/**
+ * The network chip's words when the FAA picture is unknown, or null when the chip should read as
+ * usual: the FAA answer is current, or something else (on-time, IROPS) already says the network is
+ * not normal. Unknown never reads green.
+ * @param {{level?: string}|null} network  networkLabel() / networkStatus().
+ * @param {number|null} unknownSince       faaUnknownSince().
+ * @param {string} [timeZone]
+ * @returns {string|null}
+ */
+export function networkUnknownText(network, unknownSince, timeZone) {
+  if (!network || network.level !== 'normal' || !Number.isFinite(unknownSince)) return null;
+  return faaUnknownLine(unknownSince, timeZone);
+}

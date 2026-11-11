@@ -27,9 +27,10 @@
  * when nothing above it is an advisory — lives in `src/lib/ticker.js`.
  */
 
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, History } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { faaUnknownLine } from '@/lib/faa-freshness.js';
 import { decodeSquawk, isOnGround } from '@/lib/flight-phase.js';
 import { deriveOpsHealth } from '@/lib/ops-health.js';
 import { buildTickerItems } from '@/lib/ticker.js';
@@ -101,8 +102,10 @@ function useTickerItems(): TickerItem[] {
       fleetCount: fleetDb.length,
       starlinkCount: starlink.tails.size,
       squawks,
+      // A stale FAA answer leaves faaIndex empty, which looks like a calm day: say "unknown".
+      faaUnknown: Number.isFinite(weather.faaUnknownSince) ? faaUnknownLine(weather.faaUnknownSince as number) : null,
     }) as TickerItem[];
-  }, [feed.flights, fleetDb.length, starlink.tails, byHub, weather.faaIndex, irops.score]);
+  }, [feed.flights, fleetDb.length, starlink.tails, byHub, weather.faaIndex, weather.faaUnknownSince, irops.score]);
 }
 
 function BriefRow({ view, alert }: { view: BriefReady; alert: string | null }) {
@@ -179,14 +182,16 @@ function RotatingTicker({ items }: { items: TickerItem[] }) {
     >
       <p
         className={cn(
-          'truncate text-[11px] transition-opacity duration-300 motion-reduce:transition-none',
+          'flex min-w-0 items-center gap-1.5 text-[11px] transition-opacity duration-300 motion-reduce:transition-none',
           fading ? 'opacity-0' : 'opacity-100',
           item.cls === 'advisory' && 'text-bb-warn',
           item.cls === 'critical' && 'font-medium text-destructive',
-          item.cls === 'disclaimer' && 'text-muted-foreground',
+          // "FAA status unknown since …": neutral, with an icon, never a status colour.
+          (item.cls === 'disclaimer' || item.cls === 'unknown') && 'text-muted-foreground',
         )}
       >
-        {item.text}
+        {item.cls === 'unknown' ? <History aria-hidden="true" className="size-3 shrink-0" /> : null}
+        <span className="truncate">{item.text}</span>
       </p>
     </div>
   );

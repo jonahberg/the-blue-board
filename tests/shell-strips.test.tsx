@@ -27,6 +27,7 @@ vi.mock('../src/app/data/api', () => ({
 const hubState = vi.hoisted(() => ({
   hubs: [] as { hub: string; otp: number | null; source: string | null; asOfMs: number | null }[],
   faaIndex: {} as Record<string, unknown>,
+  faaUnknownSince: null as number | null,
   iropsScore: null as number | null,
 }));
 function resetHubState() {
@@ -36,6 +37,7 @@ function resetHubState() {
     { hub: 'DEN', otp: 71, source: 'server', asOfMs: now - 5 * 60_000 },
   ];
   hubState.faaIndex = {};
+  hubState.faaUnknownSince = null;
   hubState.iropsScore = null;
 }
 vi.mock('../src/app/state/schedule', () => ({
@@ -45,7 +47,7 @@ vi.mock('../src/app/state/schedule', () => ({
   }),
 }));
 vi.mock('../src/app/state/weather', () => ({
-  useWeather: () => ({ faaIndex: hubState.faaIndex }),
+  useWeather: () => ({ faaIndex: hubState.faaIndex, faaUnknownSince: hubState.faaUnknownSince }),
 }));
 vi.mock('../src/app/state/irops', () => ({
   useIrops: () => ({ loading: false, score: hubState.iropsScore }),
@@ -177,6 +179,34 @@ describe('HubHealthStrip', () => {
     hubState.iropsScore = 90;
     renderStrip();
     expect(screen.queryByText('Smooth Ops')).toBeNull();
+  });
+
+  it('says the FAA status is unknown, not Smooth Ops, while the FAA answer is stale (neutral, with an icon)', () => {
+    const since = Date.now() - 40 * 60_000;
+    hubState.faaUnknownSince = since;
+    const { container, rerender } = renderStrip();
+    expect(screen.queryByText('Smooth Ops')).toBeNull();
+    const chip = screen.getByText(/^FAA status unknown since \d\d:\d\d$/);
+    const wrapper = chip.parentElement!;
+    expect(classesOf(wrapper)).toContain('text-muted-foreground');
+    expect(wrapper.className).not.toMatch(/bb-ok|bb-warn|destructive/);
+    expect(wrapper.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
+    // A poll that changes nothing about the state changes nothing in this live region.
+    const before = container.textContent;
+    rerender(
+      <TooltipProvider>
+        <HubHealthStrip />
+      </TooltipProvider>,
+    );
+    expect(container.textContent).toBe(before);
+  });
+
+  it('a disruption other signals show still wins over "unknown"', () => {
+    hubState.faaUnknownSince = Date.now() - 40 * 60_000;
+    hubState.iropsScore = 90;
+    renderStrip();
+    expect(screen.queryByText(/FAA status unknown/)).toBeNull();
+    expect(screen.getByText('Disrupted')).toBeTruthy();
   });
 
   it('dims a chip whose reading comes from an hours-old board (F91)', () => {
