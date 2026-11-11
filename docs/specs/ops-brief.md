@@ -411,9 +411,19 @@ bun scripts/brief-eval.mjs                       # every fixture in tests/fixtur
 bun scripts/brief-eval.mjs storm-day --facts     # one fixture, with every fact printed
 bun scripts/brief-eval.mjs --templates           # never call the model
 bun scripts/brief-eval.mjs --json                # one JSON object per fixture
+bun scripts/brief-eval.mjs --requests            # {fixture, system, user} per fixture, one JSON line each
+bun scripts/brief-eval.mjs --check sfo-gdp-morning response.json   # a saved response, offline
 ```
 
-With `AI_GATEWAY_API_KEY` in the environment it makes one call per fixture (seven today, ≈ $0.004 in
+`--requests` and `--check` never call the network, whatever the environment holds (Bun loads `.env`).
+`--requests` prints exactly what production would send for each fixture (the system prompt and the
+user message from `buildBriefRequest`), so the requests can be run elsewhere. `--check <fixture>
+<file>` takes a saved response, either a Messages API body (`{ content, stop_reason }`) or the brief
+JSON itself, and runs it through production's path (`briefFromSavedResponse` in
+`src/lib/brief-verify.js`: `readBriefResponse`, `verifyBrief`, else the template with the cron's
+reason), printing the verifier report and the brief that would be published (`--json` for one object).
+
+With `AI_GATEWAY_API_KEY` in the environment the default mode makes one call per fixture (nine today, ≈ $0.005 in
 all), sending the production request (`buildBriefRequest`, `generateBriefWithModel`) and running the
 production verifier; it prints the model brief, every dropped item with its reasons, the headline and
 tone decisions, warnings, tokens and cost, then the template. Without a key it prints the templates.

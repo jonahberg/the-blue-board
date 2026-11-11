@@ -29,7 +29,8 @@
 
 import { allowanceFromValues, claimFailure, emptyAllowance, extractClaims, normalizeText } from './brief-claims.js';
 import { computeTone, travelerNoteAllowed } from './brief-facts.js';
-import { templateHeadline } from './brief-template.js';
+import { buildTemplateBrief, templateHeadline } from './brief-template.js';
+import { readBriefResponse } from './brief-prompt.js';
 
 export const BRIEF_MAX_ITEMS = 4;
 const MAX_TEXT_CHARS = 400;
@@ -263,6 +264,36 @@ export function verifyBrief(candidate, facts) {
     ok: true,
     brief: { headline, headline_fact_ids: headlineFactIds, tone, items: kept, traveler_note },
     report,
+  };
+}
+
+/**
+ * What the cron would publish for one saved model response, offline (the eval harness's --check;
+ * the cron itself does not call this). The same steps as production: read the response as
+ * api/_brief-model.ts does (readBriefResponse: stop reason, the text block, JSON), verify it, and
+ * otherwise publish the template with api/cron/brief.ts's reason.
+ * @param {string} raw  a Messages API response body ({ content, stop_reason }), or the brief JSON
+ *   itself, which is read as the text of an end_turn response
+ * @param {Array<import('./brief-facts.js').BriefFact>} facts
+ * @returns {{read: ReturnType<typeof readBriefResponse>, report: VerifierReport|null,
+ *   source: 'model'|'template', templateReason: string|null, brief: import('./brief-template.js').Brief}}
+ */
+export function briefFromSavedResponse(raw, facts) {
+  let parsed = null;
+  try { parsed = JSON.parse(String(raw)); } catch { /* not JSON: the read reports invalid_json */ }
+  const message = parsed && typeof parsed === 'object' && Array.isArray(parsed.content)
+    ? parsed
+    : { content: [{ type: 'text', text: String(raw) }], stop_reason: 'end_turn' };
+  const read = readBriefResponse(message);
+  const verified = read.ok ? verifyBrief(read.json, facts) : null;
+  const templateReason = !read.ok ? read.reason
+    : !verified?.ok ? (verified?.report.shapeErrors ? 'invalid_shape' : 'no_items_survived') : null;
+  return {
+    read,
+    report: verified ? verified.report : null,
+    source: templateReason ? 'template' : 'model',
+    templateReason,
+    brief: templateReason || !verified?.brief ? buildTemplateBrief(facts) : verified.brief,
   };
 }
 

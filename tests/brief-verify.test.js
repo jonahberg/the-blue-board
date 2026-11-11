@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { allowanceFromValues, claimFailure, extractClaims } from '../src/lib/brief-claims.js';
-import { checkSentence, citedFactIds, validateBriefShape, verifyBrief } from '../src/lib/brief-verify.js';
+import { briefFromSavedResponse, checkSentence, citedFactIds, validateBriefShape, verifyBrief } from '../src/lib/brief-verify.js';
 
 const fact = (id, values, extra = {}) => ({
   id, kind: 'otp', statement: `${id} statement`, values, at: null, link: { tab: 'live' }, severity: 5, toneFloor: 'calm', material: id, ...extra,
@@ -273,6 +273,32 @@ describe('validateBriefShape', () => {
     const out = verifyBrief({ headline: 'x' }, FACTS);
     expect(out.ok).toBe(false);
     expect(out.report.shapeErrors).toEqual(expect.arrayContaining(['tone_invalid', 'items_not_an_array']));
+  });
+});
+
+describe('briefFromSavedResponse (the eval harness --check)', () => {
+  const good = brief([item('630 United flights are in the air, 280 of them with Starlink.', ['air.starlink'])]);
+  const calmFacts = FACTS.filter((f) => f.toneFloor === 'calm');
+
+  it('reads a bare brief and a Messages API body the same way, and publishes the verified brief', () => {
+    const bare = briefFromSavedResponse(JSON.stringify(good), calmFacts);
+    const message = briefFromSavedResponse(JSON.stringify({
+      content: [{ type: 'thinking', thinking: '…' }, { type: 'text', text: JSON.stringify(good) }], stop_reason: 'end_turn',
+    }), calmFacts);
+    for (const out of [bare, message]) {
+      expect(out).toEqual(expect.objectContaining({ source: 'model', templateReason: null }));
+      expect(out.report.itemsKept).toBe(1);
+      expect(out.brief.items[0].fact_ids).toEqual(['air.starlink']);
+    }
+  });
+
+  it('falls back to the template with the cron’s reasons', () => {
+    expect(briefFromSavedResponse('not json {', calmFacts)).toEqual(expect.objectContaining({ source: 'template', templateReason: 'invalid_json', report: null }));
+    expect(briefFromSavedResponse(JSON.stringify({ content: [], stop_reason: 'max_tokens' }), calmFacts).templateReason).toBe('model_truncated');
+    expect(briefFromSavedResponse(JSON.stringify({ headline: 'x' }), calmFacts).templateReason).toBe('invalid_shape');
+    const none = briefFromSavedResponse(JSON.stringify(brief([item('Los Angeles is at 12%.', ['otp.LAX'])])), calmFacts);
+    expect(none.templateReason).toBe('no_items_survived');
+    expect(none.brief.headline).toBe('United is running smoothly right now.');
   });
 });
 
