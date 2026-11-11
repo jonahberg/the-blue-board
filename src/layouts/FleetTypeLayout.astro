@@ -14,8 +14,10 @@ import ContentSection from '../components/site/ContentSection.astro';
 import FleetLive from '../components/site/FleetLive.astro';
 import JumpNav from '../components/site/JumpNav.astro';
 import PillNav from '../components/site/PillNav.astro';
+import ScrollRegion from '../components/site/ScrollRegion.astro';
 import StatTile from '../components/site/StatTile.astro';
 import SupportNote from '../components/site/SupportNote.astro';
+import { wrapTables } from '../components/site/table-regions';
 import fleetDb from '../../public/data/fleet.json';
 import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
 import { fleetSeo } from '../lib/page-seo.js';
@@ -147,27 +149,29 @@ function statusClass(status: string | undefined): string {
     <JumpNav items={data.jumpNav} />
 
     <div class="bb-content mt-6">
-      <Fragment set:html={data.contentHtml} />
+      <Fragment set:html={wrapTables(data.contentHtml)} />
     </div>
 
     <ContentSection id="specs" heading="Specifications">
       <p>
         Key technical specifications for the {data.displayName} as operated by United Airlines.
       </p>
-      <table>
-        <tbody>
-          {
-            SPEC_ROWS.map(([label, value]) => (
-              <tr>
-                <th scope="row" class="w-[38%] normal-case">
-                  {label}
-                </th>
-                <td>{value}</td>
-              </tr>
-            ))
-          }
-        </tbody>
-      </table>
+      <ScrollRegion label="Specifications">
+        <table>
+          <tbody>
+            {
+              SPEC_ROWS.map(([label, value]) => (
+                <tr>
+                  <th scope="row" class="w-[38%] normal-case">
+                    {label}
+                  </th>
+                  <td>{value}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </ScrollRegion>
     </ContentSection>
 
     <ContentSection
@@ -179,41 +183,43 @@ function statusClass(status: string | undefined): string {
         seat configuration, WiFi, IFE, and current status, from public aviation records — as of
         <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>.
       </p>
-      <table class="tabular-nums">
-        <thead>
-          <tr>
-            <th>Reg</th>
-            <th>AC#</th>
-            <th>Config</th>
-            <th>WiFi</th>
-            <th>IFE</th>
-            <th>Power</th>
-            <th>Year</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {
-            typeAircraft.map((ac: any) => {
-              const isStarlink = ac.w && String(ac.w).toLowerCase().includes('starlink');
-              return (
-                <tr>
-                  <td class="font-mono font-bold text-foreground">{ac.r}</td>
-                  <td class="font-mono">{ac.a || '—'}</td>
-                  <td class="font-mono whitespace-nowrap">{ac.c || '—'}</td>
-                  {/* The database's raw codes are inconsistent ('Satl Ku' / 'Satl KU'); the
-                      dashboard's display names are not (F78). */}
-                  <td>{isStarlink ? <span class="starlink-on">{ac.w}</span> : ac.w ? normalizeWifi(ac.w) : '—'}</td>
-                  <td>{ac.i || '—'}</td>
-                  <td>{ac.p || '—'}</td>
-                  <td class="font-mono">{ac.d || '—'}</td>
-                  <td class={statusClass(ac.s)}>{ac.s || 'Active'}</td>
-                </tr>
-              );
-            })
-          }
-        </tbody>
-      </table>
+      <ScrollRegion label="Aircraft registry">
+        <table class="tabular-nums">
+          <thead>
+            <tr>
+              <th>Reg</th>
+              <th>AC#</th>
+              <th>Config</th>
+              <th>WiFi</th>
+              <th>IFE</th>
+              <th>Power</th>
+              <th>Year</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              typeAircraft.map((ac: any) => {
+                const isStarlink = ac.w && String(ac.w).toLowerCase().includes('starlink');
+                return (
+                  <tr>
+                    <td class="font-mono font-bold text-foreground">{ac.r}</td>
+                    <td class="font-mono">{ac.a || '—'}</td>
+                    <td class="font-mono whitespace-nowrap">{ac.c || '—'}</td>
+                    {/* The database's raw codes are inconsistent ('Satl Ku' / 'Satl KU'); the
+                        dashboard's display names are not (F78). */}
+                    <td>{isStarlink ? <span class="starlink-on">{ac.w}</span> : ac.w ? normalizeWifi(ac.w) : '—'}</td>
+                    <td>{ac.i || '—'}</td>
+                    <td>{ac.p || '—'}</td>
+                    <td class="font-mono">{ac.d || '—'}</td>
+                    <td class={statusClass(ac.s)}>{ac.s || 'Active'}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </ScrollRegion>
     </ContentSection>
 
     <ContentSection id="faq" heading="Frequently Asked Questions">

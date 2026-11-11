@@ -98,11 +98,24 @@
 
   /* ── Layout blocks ────────────────────────────────────────────────────── */
 
-  /* Every hub/fleet `contentHtml` is a stack of `<div class="section">`.
-     `overflow-x: auto` is the safety valve for a wide table inside: the raw
-     strings give us no wrapper element to scroll, so the section scrolls. */
+  /* Every hub/fleet `contentHtml` is a stack of `<div class="section">`. A
+     table inside one is wrapped at render time in its own scroll region
+     (`wrapTables`, src/components/site/table-regions.ts), so the section no
+     longer scrolls with it; `overflow-x: auto` stays as the safety valve for
+     anything else a data string might make too wide. */
   .bb-content .section {
     @apply mt-8 overflow-x-auto border-t border-border pt-6;
+  }
+
+  /* A table's own sideways-scrolling region (ScrollRegion.astro / wrapTables):
+     the region carries the table's vertical rhythm, so its focus ring hugs the
+     table rather than a band of margin. */
+  .bb-content .bb-scroll-region {
+    @apply my-3;
+  }
+
+  .bb-content .bb-scroll-region > table {
+    @apply my-0;
   }
 
   .bb-content .section:first-child {

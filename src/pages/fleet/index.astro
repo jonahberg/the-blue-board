@@ -4,6 +4,7 @@ import { STARLINK_EQUIPPED, STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../.
 import BaseLayout from '../../components/site/BaseLayout.astro';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
+import ScrollRegion from '../../components/site/ScrollRegion.astro';
 import StatTile from '../../components/site/StatTile.astro';
 import SupportNote from '../../components/site/SupportNote.astro';
 import { FLEET_DB_AS_OF, formatFleetAsOf, polarisAircraftCount } from '../../lib/fleet-utils.js';
@@ -255,27 +256,29 @@ const hubLinkClass =
         in the middle of its biggest fleet renewal in decades, taking 250+ new jets by 2028 while
         rolling out free Starlink WiFi and the new Polaris Studio suite.
       </p>
-      <table>
-        <thead>
-          <tr><th>Family</th><th>Types</th><th class="text-right">Aircraft</th><th>Role</th></tr>
-        </thead>
-        <tbody>
-          {
-            FAMILY_ROWS.map((fam) => (
-              <tr>
-                <td class="font-semibold text-primary">{fam.name}</td>
-                <td>
-                  {fam.types.map((t, i) => (
-                    <>{i > 0 ? ', ' : ''}<a href={`/fleet/${t.slug}`}>{t.label}</a></>
-                  ))}
-                </td>
-                <td class="text-right font-mono font-bold text-foreground tabular-nums">{fam.total}</td>
-                <td>{fam.role}</td>
-              </tr>
-            ))
-          }
-        </tbody>
-      </table>
+      <ScrollRegion label="Fleet by family">
+        <table>
+          <thead>
+            <tr><th>Family</th><th>Types</th><th class="text-right">Aircraft</th><th>Role</th></tr>
+          </thead>
+          <tbody>
+            {
+              FAMILY_ROWS.map((fam) => (
+                <tr>
+                  <td class="font-semibold text-primary">{fam.name}</td>
+                  <td>
+                    {fam.types.map((t, i) => (
+                      <>{i > 0 ? ', ' : ''}<a href={`/fleet/${t.slug}`}>{t.label}</a></>
+                    ))}
+                  </td>
+                  <td class="text-right font-mono font-bold text-foreground tabular-nums">{fam.total}</td>
+                  <td>{fam.role}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </ScrollRegion>
     </ContentSection>
 
     <ContentSection heading="What's New in United's Fleet — 2026">
@@ -377,33 +380,35 @@ const hubLinkClass =
         > and Economy. Polaris lie-flat seats are available on all widebody international aircraft. Select
         any type above for the full seat configuration guide.
       </p>
-      <table class="tabular-nums">
-        <thead>
-          <tr><th>Aircraft</th><th class="text-right">Count</th><th>Cabin Configuration</th><th class="text-right">Total</th></tr>
-        </thead>
-        <tbody>
-          {
-            seatConfigOrder.map((key) => {
-              const t = fleetTypes[key];
-              return (
-                <tr>
-                  <td class="font-bold"><a href={`/fleet/${t.slug}`}>{t.typeCode}</a></td>
-                  <td class="text-right font-mono">{t.count}</td>
-                  <td>
-                    {t.seatConfig.cabins.map((cab: { name: string; seats: string; cssClass: string }) => (
-                      <span class:list={['cabin-tag', cab.cssClass]}>
-                        {cabinShortLabel[cab.name] || cab.name}
-                        <span class="ml-0.5 font-mono text-[11px] font-semibold"> {cab.seats}</span>
-                      </span>
-                    ))}
-                  </td>
-                  <td class="text-right font-mono">{t.seatConfig.total}</td>
-                </tr>
-              );
-            })
-          }
-        </tbody>
-      </table>
+      <ScrollRegion label="Seat configurations">
+        <table class="tabular-nums">
+          <thead>
+            <tr><th>Aircraft</th><th class="text-right">Count</th><th>Cabin Configuration</th><th class="text-right">Total</th></tr>
+          </thead>
+          <tbody>
+            {
+              seatConfigOrder.map((key) => {
+                const t = fleetTypes[key];
+                return (
+                  <tr>
+                    <td class="font-bold"><a href={`/fleet/${t.slug}`}>{t.typeCode}</a></td>
+                    <td class="text-right font-mono">{t.count}</td>
+                    <td>
+                      {t.seatConfig.cabins.map((cab: { name: string; seats: string; cssClass: string }) => (
+                        <span class:list={['cabin-tag', cab.cssClass]}>
+                          {cabinShortLabel[cab.name] || cab.name}
+                          <span class="ml-0.5 font-mono text-[11px] font-semibold"> {cab.seats}</span>
+                        </span>
+                      ))}
+                    </td>
+                    <td class="text-right font-mono">{t.seatConfig.total}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </ScrollRegion>
     </ContentSection>
 
     <ContentSection id="faq" heading="Frequently Asked Questions">
