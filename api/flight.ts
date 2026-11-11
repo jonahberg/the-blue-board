@@ -32,6 +32,7 @@
 
 import { createRequire } from 'node:module';
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { getSupabaseAdmin, loadScheduleSnapshot, type PersistedScheduleSnapshot } from './_schedule-snapshots.js';
 import { awaitRegSightings, type SightingRecord } from './_reg-sightings.js';
@@ -343,7 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: 'Rate limited — try again shortly' });
   }
 
-  const parsed = parseFlightIdent(req.query?.ident as unknown);
+  const parsed = parseFlightIdent(getQuery(req).ident as unknown);
   if (!parsed) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(400).json({ error: 'ident must be a United flight number, like UA929' });

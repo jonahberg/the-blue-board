@@ -26,6 +26,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { flightPagePath, parseFlightIdent } from '../src/lib/flight-page.js';
 import { renderFlightShell, renderMissingFlightShell } from '../src/lib/flight-page-seo.js';
@@ -92,7 +93,7 @@ export async function loadShell(): Promise<string | null> {
 /** The query string the visitor came with, minus the rewrite's own `ident` (kept on a redirect). */
 function carriedQuery(req: VercelRequest): string {
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(req.query || {})) {
+  for (const [key, value] of Object.entries(getQuery(req))) {
     if (key === 'ident') continue;
     for (const v of Array.isArray(value) ? value : [value]) if (typeof v === 'string') params.append(key, v);
   }
@@ -111,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).send('Too many requests. Try again in a minute.');
   }
 
-  const raw = req.query?.ident as unknown;
+  const raw = getQuery(req).ident as unknown;
   const parsed = parseFlightIdent(raw);
 
   // ua929, UAL929, "UA 929" → one canonical address.

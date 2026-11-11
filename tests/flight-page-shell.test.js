@@ -147,6 +147,17 @@ describe.skipIf(!hasDist)('GET /flight/:ident on the built shell', () => {
     }
   });
 
+  it('reads the rewrite\'s ident and the visitor\'s query from req.url, never the lazy req.query getter', async () => {
+    // In production the rewrite's `?ident=` arrives in req.url (the platform's req.query getter
+    // is derived from it), so getQuery sees exactly what req.query would.
+    const req = { method: 'GET', headers: {}, url: '/api/flight-page?ident=ua929&utm_source=sms' };
+    Object.defineProperty(req, 'query', { get() { throw new Error('req.query was read'); } });
+    const res = createRes();
+    await handler(req, res);
+    expect(res.statusCode).toBe(308);
+    expect(res.headers.Location).toBe('/flight/UA929?utm_source=sms');
+  });
+
   it('a non-flight address is the lookup page as a noindex 404', async () => {
     const res = await call({ ident: 'hello' });
     expect(res.statusCode).toBe(404);

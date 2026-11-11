@@ -22,6 +22,7 @@ import { createRequire } from 'node:module';
 import satori from 'satori';
 import { Resvg, initWasm } from '@resvg/resvg-wasm';
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadFlightPayload } from './flight.js';
 import { parseFlightIdent } from '../src/lib/flight-page.js';
@@ -85,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(429).send('Too many requests');
   }
-  const parsed = parseFlightIdent(req.query?.ident as unknown);
+  const parsed = parseFlightIdent(getQuery(req).ident as unknown);
   if (!parsed) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(404).send('Not a flight number');
