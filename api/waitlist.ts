@@ -6,6 +6,7 @@ import { buildEmailFooterHtml, listUnsubscribeHeaders } from './_email-footer.js
 import { SOCIAL_PROOF_USERS, HUB_LINE_LONG } from '../src/data/facts.js';
 import { escapeHtml } from '../src/lib/escape.js';
 import { supportUrl } from '../src/lib/support-link.js';
+import { ANY_AMOUNT_LINE, CORE_LINE_FLYERS, HELP_COVER_LABEL, THIRTY_LINE, UNIT_LINE } from '../src/lib/cover-a-day.js';
 
 // 5 submissions per IP per hour. Each new address that passes here triggers a welcome email
 // (sendWelcomeEmail → Resend), so the ceiling is the backstop against welcome-email spam to
@@ -182,16 +183,16 @@ function buildWelcomeEmail(): string {
     </p>
 
     <p style="${p}">
-      This is free, ad-free, and open source. It costs real money to keep running — API calls, Vercel hosting, and the time to build and maintain it.
+      ${escapeHtml(`${CORE_LINE_FLYERS} ${UNIT_LINE}`)}
     </p>
 
     <p style="${p}">
-      <strong style="color:#e0e0e0;">A $5 donation covers a full day of live flights, API calls, and everything that keeps this running.</strong>
+      <strong style="color:#e0e0e0;">${escapeHtml(`${THIRTY_LINE} ${ANY_AMOUNT_LINE}`)}</strong>
     </p>
 
     <div style="text-align:center;margin:24px 0;">
       <a href="${escapeHtml(supportUrl('welcome-email', { medium: 'email' }))}" style="background-color:transparent;color:#4a90d9;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:600;display:inline-block;border:1.5px solid #4a90d9;">
-        Donate
+        ${escapeHtml(HELP_COVER_LABEL)}
       </a>
     </div>
 

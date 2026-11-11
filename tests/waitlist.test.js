@@ -346,7 +346,7 @@ describe('waitlist API', () => {
     expect(sent.html).not.toContain('RESEND_UNSUBSCRIBE_URL');
   });
 
-  it('welcome email Donate button goes to the Stripe link, tagged as the welcome email', async () => {
+  it('welcome email "Help cover a day" button goes to the Stripe link, tagged as the welcome email', async () => {
     process.env.RESEND_API_KEY = 're_test_key';
 
     const res = makeRes();
@@ -359,6 +359,11 @@ describe('waitlist API', () => {
     expect(sent.html).toContain(`href="${href}"`);
     expect(href).toContain('utm_medium=email');
     expect(sent.html).not.toContain('buymeacoffee');
+    // The site's one voice (src/lib/cover-a-day.js): the core line, $17 a day, "Help cover a day".
+    expect(sent.html).toContain('The Blue Board is free because flyers cover it, one day at a time. $17 pays for one day of live flight data, schedules and servers.');
+    expect(sent.html).toContain('It takes about 30 people a month, one for each day. Any amount counts toward a day.');
+    expect(sent.html).toMatch(/>\s*Help cover a day\s*<\/a>/);
+    expect(sent.html).not.toMatch(/Donate|donation|\$5 /);
   });
 
   it('welcome email send carries List-Unsubscribe headers (Gmail/Yahoo bulk-sender rules)', async () => {
