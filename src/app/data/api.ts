@@ -10,6 +10,7 @@
  * `astro.config.mjs` (production origin); on Vercel they are the project's own functions.
  */
 
+import { faaAnswerAsOf } from '@/lib/faa-freshness.js';
 import { parseFr24Feed, parseStaleHeader } from '@/lib/feed-health.js';
 import { chunkMetarStationIds, normalizeMetarPayload } from '@/lib/metar.js';
 import type {
@@ -197,8 +198,18 @@ export async function fetchMetarBatch(stations: string[]): Promise<MetarRecord[]
   return settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
 }
 
-export function fetchFaa(): Promise<FaaAirport[]> {
-  return getJson<FaaAirport[]>('/api/faa');
+/**
+ * FAA airport programs, with the moment they describe. `/api/faa` answers a failed FAA refresh
+ * with its last good answer and `X-BB-FAA-Stale` (seconds); the edge adds `Age` (seconds). The
+ * caller decides from `asOfMs` and the clock whether the programs are still current
+ * (src/lib/faa-freshness.js).
+ */
+export async function fetchFaa(): Promise<{ airports: FaaAirport[]; asOfMs: number }> {
+  const res = await fetch('/api/faa', { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new ApiError(res.status, `/api/faa → HTTP ${res.status}`);
+  const airports = (await res.json()) as FaaAirport[];
+  const asOfMs = faaAnswerAsOf(Date.now(), res.headers.get('X-BB-FAA-Stale'), res.headers.get('Age')) as number;
+  return { airports: Array.isArray(airports) ? airports : [], asOfMs };
 }
 
 export function fetchNas(): Promise<NasData> {

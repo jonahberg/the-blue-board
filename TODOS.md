@@ -18,7 +18,11 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
 
 ## Correctness
 
-- [ ] **Stale FAA programs on the dashboard.** After a failed `/api/faa` refresh,
+- [x] **Stale FAA programs on the dashboard.** Fixed Nov 10 2026 (`src/lib/faa-freshness.js`):
+  `fetchFaa` and the `/newark` widget read the header and `Age`; a program past its own end time
+  drops out; past 25 minutes nothing from the answer is current (`faaIndex` is empty, so the hub
+  strip, ticker and delay risk agree) and the NAS panel says "FAA status as of HH:MMZ". A stale
+  `/api/nas` answer's tiers are not drawn either. After a failed `/api/faa` refresh,
   `src/app/state/weather.tsx` keeps showing the last programs as current, indefinitely. Since
   Nov 2026 the endpoint answers a double upstream failure with its last good answer (up to
   30 minutes old) and an `X-BB-FAA-Stale: <age in seconds>` header. Both clients ignore the
