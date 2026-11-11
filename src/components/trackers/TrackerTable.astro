@@ -25,7 +25,7 @@ const { caption, columns, rows } = Astro.props;
 
 <!-- No tabindex on the scroll wrapper: it contains focusable sort buttons, so keyboard
      users can already reach and scroll it — a tabindex here trips axe nested-interactive. -->
-<div class="overflow-x-auto rounded-md border border-border">
+<div class="overflow-x-auto rounded-lg border border-border">
   <table class="trk-table w-full border-collapse text-[11px]">
     <caption class="sr-only">{caption}</caption>
     <thead>

@@ -201,8 +201,9 @@ const faqSchema = {
   ],
 };
 
+// The site's page-link pill (PillNav, the 404 page, news cross-links): bordered card, no tint.
 const hubLinkClass =
-  'inline-flex min-h-11 items-center rounded-md border border-primary/40 bg-primary/10 px-3 text-[11px] font-semibold text-foreground hover:bg-primary/20';
+  'inline-flex min-h-11 items-center rounded-md border border-border bg-card px-3.5 text-[11px] font-semibold text-muted-foreground no-underline hover:border-primary hover:text-foreground';
 ---
 
 <BaseLayout
@@ -216,26 +217,28 @@ const hubLinkClass =
   twitterDescription={`Complete United Airlines fleet. ${totalAircraftText} aircraft, ${fleetOrder.length} types. Seat maps, WiFi, Starlink status. Fleet data as of ${formatFleetAsOf()}.`}
   jsonLd={[datasetSchema, itemListSchema, faqSchema]}
 >
-  <div class="mx-auto max-w-5xl px-4 py-8">
+  <div class="mx-auto max-w-4xl px-4 py-8">
     <Breadcrumbs items={[{ label: 'Fleet Database' }]} />
 
-    <header class="mt-6 border-b border-border pb-7 text-center">
-      <h1 class="text-2xl font-bold tracking-tight text-balance text-foreground sm:text-3xl">
+    <header class="mt-6 border-b border-border pb-5">
+      <h1 class="text-2xl font-bold tracking-tight text-balance text-foreground">
         United Airlines Fleet Database
       </h1>
-      <p class="mt-2 text-sm text-muted-foreground">
+      <p class="mt-1.5 text-xs text-muted-foreground">
         {totalAircraftText} mainline aircraft · {fleetOrder.length} types · seat configs · WiFi · Starlink · as of
         <time datetime={FLEET_DB_AS_OF}>{formatFleetAsOf()}</time>
       </p>
       <SupportNote variant="inline" placement="fleet-index-top" />
-      <a
-        class="mt-5 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-7 text-sm font-bold text-primary-foreground hover:bg-primary-fill/90"
-        href="/?tab=fleet">Explore Interactive Fleet Database &rarr;</a
-      >
-      <p class="mx-auto mt-4 max-w-lg text-[11px] leading-relaxed text-muted-foreground">
-        Search by registration, filter by aircraft type, seat configuration, WiFi system, Starlink
-        status — all in one interactive dashboard.
-      </p>
+      <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <a
+          class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-6 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
+          href="/?tab=fleet">Explore Interactive Fleet Database &rarr;</a
+        >
+        <p class="max-w-sm text-[11px] leading-relaxed text-muted-foreground">
+          Search by registration, filter by aircraft type, seat configuration, WiFi system, Starlink
+          status — all in one interactive dashboard.
+        </p>
+      </div>
     </header>
 
     <div class="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -254,7 +257,7 @@ const hubLinkClass =
       </p>
       <table>
         <thead>
-          <tr><th>Family</th><th>Types</th><th>Aircraft</th><th>Role</th></tr>
+          <tr><th>Family</th><th>Types</th><th class="text-right">Aircraft</th><th>Role</th></tr>
         </thead>
         <tbody>
           {
@@ -266,7 +269,7 @@ const hubLinkClass =
                     <>{i > 0 ? ', ' : ''}<a href={`/fleet/${t.slug}`}>{t.label}</a></>
                   ))}
                 </td>
-                <td class="font-bold text-foreground tabular-nums">{fam.total}</td>
+                <td class="text-right font-mono font-bold text-foreground tabular-nums">{fam.total}</td>
                 <td>{fam.role}</td>
               </tr>
             ))
@@ -290,7 +293,7 @@ const hubLinkClass =
           jet arrived in June 2026 with 20 lie-flat Polaris suites and Premium Plus and debuted in
           domestic service in September. It is scheduled to start replacing the <a
             href="/fleet/757-200">Boeing 757-200</a
-          > on long, thin transatlantic routes; its first, Washington Dulles to Dublin and Amsterdam, are scheduled from December 1, 2026.
+          > on long, thin transatlantic routes; its first two, Washington Dulles to Dublin and Amsterdam, are scheduled from December 1, 2026.
         </li>
         <li>
           <strong>Free Starlink WiFi passes {STARLINK_EQUIPPED_LABEL} aircraft.</strong> United
@@ -321,7 +324,7 @@ const hubLinkClass =
       fleetFamilies.map((fam) => (
         <section class="mt-8">
           <div class="mb-3 flex flex-wrap items-baseline gap-2.5 border-b border-border pb-2">
-            <span class="font-mono text-xl font-bold tracking-wide text-bb-warn tabular-nums">
+            <span class="font-mono text-xl font-bold tracking-wide text-primary tabular-nums">
               {fam.count}
             </span>
             <h2 class="text-base font-bold tracking-tight text-foreground">{fam.name}</h2>
@@ -333,7 +336,7 @@ const hubLinkClass =
             {fam.types.map((key) => {
               const t = typeSummaries[key];
               return (
-                <li class="flex flex-col rounded-lg border border-border bg-card p-4 hover:border-primary">
+                <li class="relative flex flex-col rounded-lg border border-border bg-card p-4 hover:border-primary">
                   <p class="font-mono text-2xl font-bold tracking-wide text-primary tabular-nums">
                     {t.count}
                   </p>
@@ -349,10 +352,10 @@ const hubLinkClass =
                     >
                       {t.bodyType === 'widebody' ? 'Widebody' : 'Narrowbody'}
                     </span>
-                    {t.seatTotal} seats · {t.role}
+                    {t.seatTotal} seats · <span class="whitespace-nowrap">{t.role}</span>
                   </p>
                   <a
-                    class="mt-auto inline-flex min-h-11 w-fit items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90"
+                    class="mt-auto inline-flex min-h-11 w-fit items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground after:absolute after:inset-0 after:rounded-lg hover:bg-primary-fill/90"
                     href={`/fleet/${t.slug}`}
                   >
                     View {t.displayName} &rarr;
@@ -376,7 +379,7 @@ const hubLinkClass =
       </p>
       <table class="tabular-nums">
         <thead>
-          <tr><th>Aircraft</th><th>Count</th><th>Cabin Configuration</th><th>Total</th></tr>
+          <tr><th>Aircraft</th><th class="text-right">Count</th><th>Cabin Configuration</th><th class="text-right">Total</th></tr>
         </thead>
         <tbody>
           {
@@ -385,7 +388,7 @@ const hubLinkClass =
               return (
                 <tr>
                   <td class="font-bold"><a href={`/fleet/${t.slug}`}>{t.typeCode}</a></td>
-                  <td>{t.count}</td>
+                  <td class="text-right font-mono">{t.count}</td>
                   <td>
                     {t.seatConfig.cabins.map((cab: { name: string; seats: string; cssClass: string }) => (
                       <span class:list={['cabin-tag', cab.cssClass]}>
@@ -394,7 +397,7 @@ const hubLinkClass =
                       </span>
                     ))}
                   </td>
-                  <td>{t.seatConfig.total}</td>
+                  <td class="text-right font-mono">{t.seatConfig.total}</td>
                 </tr>
               );
             })

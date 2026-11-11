@@ -16,7 +16,7 @@
  * than not offering it.
  */
 
-import { Building2, ChevronDown, CloudRain, Earth, Globe, Zap } from 'lucide-react';
+import { Building2, ChevronDown, CloudRain, Earth, Globe, RefreshCw, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MAP_REGIONS, getRegion } from '@/lib/map-regions.js';
 import { cn } from '@/lib/utils';
+import { TOUCH_CONTROL } from '../../shell/touch-target';
 
 /** Map layers. The old 'pacific' key is gone — it is the Pacific region preset now. */
 export type LayerKey = 'hubs' | 'longhaul' | 'starlink' | 'wx';
@@ -39,13 +40,31 @@ export type LayerKey = 'hubs' | 'longhaul' | 'starlink' | 'wx';
 type Region = (typeof MAP_REGIONS)[number];
 
 /**
- * 44 px touch targets (WCAG 2.5.5) up to `md`, then back to the compact desktop toolbar.
+ * The map's floating controls (this toolbar, the Filters button, the Key and the airborne chip):
+ * a 36 px opaque surface with a 44 px hit box on touch (`TOUCH_CONTROL`), the compact desktop
+ * size for a mouse at `md`+. Opaque, because planes and the basemap run underneath.
  *
  * On every item rather than a `*:` variant on the group: the Starlink toggle is wrapped in a
  * span so its tooltip survives being disabled, which puts it out of reach of a direct-child
  * selector — measured at 28 px on a 400 px viewport while its five siblings were 44.
  */
-const TOUCH_TARGET = 'min-h-11 pointer-fine:md:min-h-8';
+export const MAP_CONTROL = cn(TOUCH_CONTROL, 'border border-input bg-background text-xs');
+
+/** The same, on an outline `Button`, whose own dark fill is a see-through 30% wash. */
+export const MAP_BUTTON = cn(MAP_CONTROL, 'dark:bg-background');
+
+/**
+ * Below `sm` the layer toggles and Refresh are icons with their names kept for assistive tech
+ * (`max-sm:sr-only`, not `hidden`, which would drop the name too): with the words, the row was
+ * 533 px wide on a 390 px map and the Starlink toggle sat half under the Filters button.
+ */
+const LABEL = 'max-sm:sr-only';
+
+/** A layer toggle: muted at rest, foreground on a raised surface while on. */
+const TOGGLE = cn(
+  MAP_CONTROL,
+  'gap-1.5 px-2 text-muted-foreground hover:bg-muted data-[state=on]:bg-muted data-[state=on]:text-foreground max-sm:w-9 max-sm:px-0 max-sm:data-[state=on]:border-primary/60 max-sm:data-[state=on]:text-primary',
+);
 
 /** Trailing-edge fade, on only while `data-overflow="right"`. */
 const OVERFLOW_FADE =
@@ -104,13 +123,16 @@ export function RegionMenu({
         }}
       >
         <Button
-          size="sm"
           variant="outline"
-          className={`shrink-0 gap-1.5 bg-background text-xs ${TOUCH_TARGET}`}
+          className={cn(MAP_BUTTON, 'shrink-0 gap-1.5 px-2.5 max-sm:gap-0.5 max-sm:px-1.5')}
         >
           <Earth aria-hidden="true" />
           <span className="sr-only">Map region: </span>
-          {current.short}
+          {/* Below `sm` a globe and a chevron, like the icon toggles beside it: a 375 px map has
+              room for "US" but not for "Caribbean" (124 px) or "Mexico & C. America" (162 px),
+              which pushed Refresh under the row's fade. The name stays for assistive tech, and
+              the menu checks it. */}
+          <span className={LABEL}>{current.short}</span>
           <ChevronDown aria-hidden="true" className="text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
@@ -123,7 +145,7 @@ export function RegionMenu({
               value={option.id}
               // onSelect fires on every pick, including the region already checked.
               onSelect={() => onRegion(option.id)}
-              className={`text-xs ${TOUCH_TARGET}`}
+              className="min-h-11 text-xs pointer-fine:md:min-h-8"
             >
               {option.label}
             </DropdownMenuRadioItem>
@@ -189,29 +211,23 @@ export function MapControls({
       <RegionMenu region={region} onRegion={onRegion} />
       <ToggleGroup
         type="multiple"
-        variant="outline"
-        size="sm"
         value={active}
         onValueChange={(next) => onChange(next as LayerKey[])}
         aria-label="Map layers"
-        className="bg-background"
+        className="shrink-0"
       >
-        <ToggleGroupItem value="hubs" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
-          <Building2 aria-hidden="true" /> Hubs
+        <ToggleGroupItem value="hubs" className={TOGGLE}>
+          <Building2 aria-hidden="true" /> <span className={LABEL}>Hubs</span>
         </ToggleGroupItem>
-        <ToggleGroupItem value="longhaul" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
-          <Globe aria-hidden="true" /> Long-haul
+        <ToggleGroupItem value="longhaul" className={TOGGLE}>
+          <Globe aria-hidden="true" /> <span className={LABEL}>Long-haul</span>
         </ToggleGroupItem>
         <Tooltip>
           <TooltipTrigger asChild>
             {/* A disabled trigger swallows pointer events, so the span carries the tooltip. */}
-            <span>
-              <ToggleGroupItem
-                value="starlink"
-                className={`gap-1.5 text-xs ${TOUCH_TARGET}`}
-                disabled={!starlinkAvailable}
-              >
-                <Zap aria-hidden="true" /> Starlink
+            <span className="flex">
+              <ToggleGroupItem value="starlink" className={TOGGLE} disabled={!starlinkAvailable}>
+                <Zap aria-hidden="true" /> <span className={LABEL}>Starlink</span>
               </ToggleGroupItem>
             </span>
           </TooltipTrigger>
@@ -219,18 +235,23 @@ export function MapControls({
             <TooltipContent side="bottom">Starlink data unavailable right now</TooltipContent>
           ) : null}
         </Tooltip>
-        <ToggleGroupItem value="wx" className={`gap-1.5 text-xs ${TOUCH_TARGET}`}>
-          <CloudRain aria-hidden="true" /> Radar
+        <ToggleGroupItem value="wx" className={TOGGLE}>
+          <CloudRain aria-hidden="true" /> <span className={LABEL}>Radar</span>
         </ToggleGroupItem>
       </ToggleGroup>
       <Button
-        size="sm"
         variant="outline"
-        className="min-h-11 bg-background text-xs md:h-8 pointer-fine:md:min-h-0"
+        className={cn(MAP_BUTTON, 'shrink-0 gap-1.5 px-2 text-muted-foreground max-sm:w-9 max-sm:px-0')}
         onClick={onRefresh}
         disabled={refreshing}
+        aria-busy={refreshing || undefined}
       >
-        {refreshing ? '⏳ Loading…' : '↻ Refresh'}
+        {/* A lucide icon, not the ↻ / ⏳ glyphs (DESIGN.md: chrome icons are lucide). */}
+        <RefreshCw
+          aria-hidden="true"
+          className={cn(refreshing && 'animate-spin motion-reduce:animate-none')}
+        />
+        <span className={LABEL}>{refreshing ? 'Loading…' : 'Refresh'}</span>
       </Button>
     </div>
   );

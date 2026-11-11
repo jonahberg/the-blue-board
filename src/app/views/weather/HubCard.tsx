@@ -17,6 +17,7 @@
  * out in text beside the colour, never signalled by it.
  */
 
+import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -151,9 +152,13 @@ export function HubCard({ model, highlighted }: { model: HubCardModel; highlight
               tap height below `md:` without the 10 px label growing. */}
           <summary
             aria-expanded={open}
-            className="flex min-h-11 cursor-pointer list-none items-center justify-center font-mono text-[10px] text-muted-foreground hover:text-foreground pointer-fine:md:min-h-0 md:py-1"
+            className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-1 text-[10px] text-muted-foreground hover:text-foreground pointer-fine:md:min-h-0 md:py-1"
           >
-            <span aria-hidden="true">{open ? '▴' : '▾'}</span> Details
+            <ChevronDown
+              aria-hidden="true"
+              className={cn('size-3 transition-transform duration-100 motion-reduce:transition-none', open && 'rotate-180')}
+            />
+            Details
           </summary>
           <div className="mt-2 space-y-2 text-[11px] leading-relaxed text-muted-foreground">
             {model.explainer ? <p>{model.explainer}</p> : null}

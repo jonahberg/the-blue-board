@@ -139,15 +139,14 @@ const hubNavItems = hubOrder.map((h) => ({
 
     {
       TRACKER_HUBS.includes(iataLower) && (
-        <HighlightBox tone="warn">
-          <strong>Construction &amp; Modernization</strong> — What's changing at United's {iata} hub
-          {STRIP_HUBS.includes(iataLower)
-            ? ', and whether its tower still runs on paper flight strips.'
-            : '.'}{' '}
+        <HighlightBox>
+          <strong>Construction &amp; Modernization</strong> — What's changing at United's {iata} hub{
+            STRIP_HUBS.includes(iataLower) ? ', and whether its tower still runs on paper flight strips.' : '.'
+          }{' '}
           <a href={`/trackers/united-hubs/${iataLower}`}>{iata} projects &rarr;</a>
           {STRIP_HUBS.includes(iataLower) && (
             <>
-              {' '}
+              {' · '}
               <a href={`/trackers/atc/${iataLower}`}>{iata} paper strips status &rarr;</a>
             </>
           )}
@@ -160,7 +159,7 @@ const hubNavItems = hubOrder.map((h) => ({
     <section class="mt-8 border-t border-border pt-6">
       <h2
         id="all-hubs"
-        class="mb-3 border-b border-border pb-1.5 text-base font-bold tracking-tight text-foreground"
+        class="mb-3 border-b border-border pb-1.5 text-base font-bold tracking-tight text-balance text-foreground"
       >
         All United Hubs
       </h2>

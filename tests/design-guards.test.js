@@ -52,6 +52,18 @@ describe('touch targets relax only for a fine pointer (audit F24)', () => {
   });
 });
 
+describe('the map zoom buttons on a touch screen (Nov 2026)', () => {
+  it('are not drawn for a coarse pointer on the Live map; the radar map and a mouse keep them', () => {
+    const css = readFileSync(resolve(ROOT, 'src/styles/global.css'), 'utf8');
+    const coarse = css.match(/@media \(pointer: coarse\)\s*\{([\s\S]*?)\n\}/);
+    expect(coarse).not.toBeNull();
+    expect(coarse[1]).toMatch(/\.leaflet-container\[data-map='live'\] \.leaflet-control-zoom\.leaflet-control\s*\{\s*display: none;/);
+    // Nothing outside the coarse-pointer block hides them.
+    const rest = css.replace(coarse[0], '');
+    expect(rest).not.toMatch(/leaflet-control-zoom[^{]*\{[^}]*display:\s*none/);
+  });
+});
+
 describe('phone inputs are 16px (iOS zooms below that; audit F23)', () => {
   it('every dashboard <Input> sizes below 16px only from md up', () => {
     const offenders = [];

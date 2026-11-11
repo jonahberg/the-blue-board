@@ -245,7 +245,8 @@ const datasetSchema = {
 };
 
 const jumpLinkClass =
-  'inline-flex min-h-11 items-center rounded-full border border-border bg-card px-3.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:bg-primary-fill hover:text-primary-foreground';
+  // The same pill as JumpNav (hub, fleet and Newark pages), so an in-page jump looks one way site-wide.
+  'inline-flex min-h-11 items-center rounded-full border border-border bg-card px-3.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:border-primary hover:bg-primary-fill hover:text-primary-foreground';
 const proseClass =
   'mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground last:mb-0 [&_a]:text-primary [&_a]:underline [&_a]:decoration-primary/40 [&_a]:underline-offset-2 [&_a:hover]:decoration-primary';
 const subheadClass = 'mt-4.5 mb-2 text-sm font-semibold text-primary';
@@ -271,7 +272,7 @@ const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-for
       <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
         Tracker &middot; FAA Modernization
       </div>
-      <h1 class="mt-0.5 mb-1.5 text-lg font-bold tracking-tight text-balance text-foreground sm:text-2xl">
+      <h1 class="mt-0.5 mb-1.5 text-2xl font-bold tracking-tight text-balance text-foreground">
         Is Your Airport Off Paper Yet?
       </h1>
       <p class="mb-2.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
@@ -414,7 +415,7 @@ const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-for
     </section>
 
     <section
-      class="mb-10 rounded-r-md border border-border border-l-[3px] border-l-primary bg-card px-5 py-4.5"
+      class="mb-10 rounded-r-md border border-border border-l-2 border-l-primary bg-card px-5 py-4"
       id="paper-strips"
       aria-label="Why paper strips existed"
     >

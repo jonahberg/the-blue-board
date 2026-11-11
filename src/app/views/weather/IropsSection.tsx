@@ -65,7 +65,9 @@ function Metric({ label, value, note }: { label: string; value: number | string;
   // Counts are facts, not verdicts: the score beside them carries the severity, so the
   // numbers stay in body colour instead of five decorative hues (audit F72).
   return (
-    <div className="flex flex-col items-center px-2">
+    // Top-aligned, so the Canceled figure (the one with a note under it) sits on the same line
+    // as the other four instead of riding higher.
+    <div className="flex flex-col items-center justify-start px-0.5 sm:px-2">
       <span className="font-mono text-sm font-semibold tabular-nums text-foreground">{value}</span>
       <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{label}</span>
       {note ? <span className="font-mono text-[9px] text-muted-foreground">{note}</span> : null}
@@ -174,15 +176,20 @@ export function IropsSection() {
         ) : (
           <div className="rounded-lg border bg-card/40">
             <div className="flex flex-wrap items-center gap-x-1 gap-y-2 px-3 py-2">
-              <span className="flex items-center gap-2 pr-2 text-[11px]">
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-2 text-[11px]">
                 <JargonTerm term="irops">IROPS</JargonTerm>
                 <span
                   className={cn(
-                    'rounded-md border px-2 py-0.5 font-mono text-[11px] font-semibold',
+                    'rounded-md border px-2 py-0.5 font-mono text-[11px] font-semibold whitespace-nowrap',
                     SCORE_TONE[scoreCls ?? 'low'],
                   )}
                 >
                   {scoreLabel}
+                </span>
+                {/* Names the measure: the brief row above can say DISRUPTED for an FAA program
+                    while United's own cancels and delays are still in the normal band. */}
+                <span className="font-mono text-[10px] text-muted-foreground max-sm:order-last max-sm:basis-full">
+                  index {Number(score).toFixed(1)} · United cancels + delays
                 </span>
                 {!usingServer ? (
                   <span className="font-mono text-[9px] text-muted-foreground">
@@ -213,7 +220,9 @@ export function IropsSection() {
                 </Tooltip>
               </span>
 
-              <div className="ml-auto flex flex-wrap items-center divide-x divide-border">
+              {/* A phone spreads the five figures across the card; from `sm` they sit right,
+                  ruled apart. */}
+              <div className="flex w-full items-start justify-between sm:ml-auto sm:w-auto sm:items-stretch sm:justify-end sm:divide-x sm:divide-border">
                 <Metric
                   label="Canceled"
                   value={cancellations.confirmed ?? '—'}

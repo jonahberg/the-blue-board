@@ -15,16 +15,18 @@
  *
  * A disclosure, not a Popover: on a tablet or desktop the key is simply open in the map's
  * bottom-left corner (the Leaflet controls live bottom-right). Below `md` it starts closed —
- * a 44 px "Key" button — so it never covers a phone's map until asked for.
+ * a "Key" button, 36 px with a 44 px hit box — so it never covers a phone's map until asked for.
  */
 
 import { Info } from 'lucide-react';
 import { useId, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { HUB_LEGEND_ROW, HUB_RING, PLANE_PATH, visibleLegendRows } from '@/lib/plane-icon.js';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '../../state/hooks';
+import { MAP_BUTTON } from './MapControls';
 
 type LegendRow = { id: string; label: string; fill: string; size: number };
 
@@ -32,8 +34,11 @@ export function MapLegend({
   longhaulLayer,
   starlinkLayer,
   hubsLayer = false,
+  aside,
   className,
 }: {
+  /** Rendered beside the Key button, bottom-aligned with it (LiveView's airborne chip). */
+  aside?: ReactNode;
   /** The Hubs layer is on, so the hub rings are on the map. */
   hubsLayer?: boolean;
   /** The Long-haul layer is on, so amber markers can appear. */
@@ -104,16 +109,21 @@ export function MapLegend({
           <p className="mt-1 text-muted-foreground">Smaller icon = United Express</p>
         ) : null}
       </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="pointer-events-auto min-h-11 bg-background text-xs pointer-fine:md:min-h-8"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setChoice(!open)}
-      >
-        <Info aria-hidden="true" /> {open ? 'Hide key' : 'Key'}
-      </Button>
+      {/* The key's button and whatever rides beside it share a row, so a wide open key
+          above never pushes the neighbour away from the button. */}
+      <div className="flex items-end gap-2">
+        <Button
+          variant="outline"
+          // A map control like the toolbar's: 36 px, 44 px to a finger (MapControls).
+          className={cn(MAP_BUTTON, 'pointer-events-auto gap-1.5 px-2.5')}
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setChoice(!open)}
+        >
+          <Info aria-hidden="true" /> {open ? 'Hide key' : 'Key'}
+        </Button>
+        {aside}
+      </div>
     </div>
   );
 }

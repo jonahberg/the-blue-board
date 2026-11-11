@@ -5,6 +5,7 @@ import {
   sevBadgeClass,
   tierNasEventsRaw,
   nasCountLine,
+  nasDisplayTitle,
   nasPanelEmpty,
 } from '../src/lib/nas-severity.js';
 
@@ -247,5 +248,117 @@ describe('nasPanelEmpty (the panel hides itself rather than showing a header alo
   it('is not empty as soon as either list has one entry', () => {
     expect(nasPanelEmpty({ active: [{ name: 'GDP-ORD' }], planned: [] })).toBe(false);
     expect(nasPanelEmpty({ active: [], planned: [{ event: 'MIT' }] })).toBe(false);
+  });
+});
+
+// The ATCSCC operations plan as /api/nas served it on Nov 11 2026 (decoded field).
+const NOV11_PLANNED = [
+  { time: '', event: 'AFTER 1800\t-MIA/FLL GROUND STOP POSSIBLE', decoded: 'AFTER 1800\t-MIA/FLL GROUND STOP POSSIBLE', affectedAirports: ['MIA', 'FLL'], type: 'terminal' },
+  { time: '', event: 'AFTER 2200\t-SEA/BFI GROUND STOP/DELAY PROGRAM POSSIBLE', decoded: 'AFTER 2200\t-SEA/BFI GROUND STOP/DELAY PROGRAM POSSIBLE', affectedAirports: ['SEA', 'BFI'], type: 'terminal' },
+  { time: '', event: 'AFTER 2100\t-OCEANIC/AR ROUTE CLOSURES POSSIBLE', decoded: 'AFTER 2100\t-OCEANIC/AR ROUTE CLOSURES POSSIBLE', affectedAirports: [], type: 'enroute' },
+  { time: '', event: 'AFTER 2100\t-ORD/MDW CDRS/SWAP/ARRIVAL ROUTES POSSIBLE', decoded: 'AFTER 2100\t-ORD/MDW Coded Departure Routes/Severe Weather Avoidance/ARRIVAL ROUTES POSSIBLE', affectedAirports: ['ORD', 'MDW'], type: 'enroute' },
+  { time: '', event: 'UNTIL 0000\t-MIA/FLL CDRS/SWAP POSSIBLE', decoded: 'UNTIL 0000\t-MIA/FLL Coded Departure Routes/Severe Weather Avoidance POSSIBLE', affectedAirports: ['MIA', 'FLL'], type: 'enroute' },
+];
+
+describe('tierNasEventsRaw — a closing window', () => {
+  it('moves a leading "UNTIL HHMM" out of the title into the detail, as it does "AFTER"', () => {
+    const { monitoring } = tierNasEventsRaw({ planned: NOV11_PLANNED }, HUBS);
+    const until = monitoring[monitoring.length - 1];
+    expect(until.title).toBe('MIA/FLL Coded Departure Routes/Severe Weather Avoidance POSSIBLE');
+    expect(until.detailParts).toEqual([{ kind: 'text', text: 'planned' }, { kind: 'text', text: 'until 0000Z' }]);
+  });
+});
+
+describe('tierNasEventsRaw — a window is never dropped', () => {
+  it('keeps "UNTIL HHMM" / "AFTER HHMM" in the title when the item carries its own time', () => {
+    const { monitoring } = tierNasEventsRaw({
+      planned: [
+        { time: '2000Z-0200Z', event: 'UNTIL 0000\t-MIA/FLL CDRS/SWAP POSSIBLE', decoded: 'UNTIL 0000\t-MIA/FLL CDRS/SWAP POSSIBLE', affectedAirports: ['MIA'] },
+        { time: '2000Z-0200Z', event: 'AFTER 2100\t-ORD/MDW CDRS POSSIBLE', decoded: 'AFTER 2100\t-ORD/MDW CDRS POSSIBLE', affectedAirports: ['ORD'] },
+      ],
+    }, HUBS);
+    expect(monitoring.map((item) => item.title)).toEqual([
+      'UNTIL 0000\t-MIA/FLL CDRS/SWAP POSSIBLE',
+      'AFTER 2100\t-ORD/MDW CDRS POSSIBLE',
+    ]);
+    expect(monitoring[0].detailParts).toEqual([{ kind: 'text', text: 'planned' }, { kind: 'text', text: '2000Z-0200Z' }]);
+  });
+});
+
+describe('nasDisplayTitle (the panel reads in sentence case, codes untouched)', () => {
+  it('turns the Nov 11 plan into calm lines and keeps every airport and acronym as sent', () => {
+    const tiers = tierNasEventsRaw({ planned: NOV11_PLANNED }, HUBS);
+    const all = [...tiers.critical, ...tiers.active, ...tiers.monitoring];
+    // No item dropped by tiering or formatting.
+    expect(all).toHaveLength(NOV11_PLANNED.length);
+    expect(all.map((item) => nasDisplayTitle(item.title))).toEqual([
+      'MIA/FLL ground stop possible',
+      'SEA/BFI ground stop/delay program possible',
+      'Oceanic/AR route closures possible',
+      'ORD/MDW coded departure routes/severe weather avoidance/arrival routes possible',
+      'MIA/FLL coded departure routes/severe weather avoidance possible',
+    ]);
+  });
+
+  it('only ever changes letter case: upper-casing the result gives back the input', () => {
+    const titles = [
+      ...NOV11_PLANNED.map((t) => t.decoded),
+      'EWR Ground Stop',
+      'ORD Ground Delay Program',
+      'GS-EWR',
+      'MIT-ZOB',
+      'Miles-in-trail "20" & <climbing>',
+      'J146/J149 CLOSED FOR VOLUME',
+      'ZNY/ZDC ESCAPE ROUTES PROBABLE',
+      '<img src=x onerror=alert(1)> & co',
+      '',
+    ];
+    for (const title of titles) expect(nasDisplayTitle(title).toUpperCase()).toBe(title.toUpperCase());
+  });
+
+  it('sentence-cases the active programs too (built from SEV_LABELS)', () => {
+    const nas = {
+      active: [
+        { name: 'GS-EWR', reason: 'WX', affectedFacilities: ['EWR'] },
+        { name: 'GDP-ORD', avgDelay: 62, affectedFacilities: ['ORD'] },
+      ],
+    };
+    const { critical, active } = tierNasEventsRaw(nas, HUBS);
+    expect(nasDisplayTitle(critical[0].title)).toBe('EWR ground stop');
+    expect(nasDisplayTitle(active[0].title)).toBe('ORD ground delay program');
+  });
+
+  it('never lowers a short word in the leading facility list, where it may be an airport', () => {
+    expect(nasDisplayTitle('AND/FOR GROUND STOP AND DELAY PROGRAM POSSIBLE')).toBe(
+      'AND/FOR ground stop and delay program possible',
+    );
+  });
+
+  it('leaves codes, routes and unknown words alone', () => {
+    expect(nasDisplayTitle('J146/J149 CLOSED FOR VOLUME')).toBe('J146/J149 closed for volume');
+    expect(nasDisplayTitle('ZNY/ZDC ESCAPE ROUTES PROBABLE')).toBe('ZNY/ZDC escape routes probable');
+    expect(nasDisplayTitle('GS-EWR')).toBe('GS-EWR');
+    expect(nasDisplayTitle(null)).toBe('');
+  });
+});
+
+describe('a plan window in the time field', () => {
+  it('reads "until 0000Z" / "after 2200Z" like a moved prefix, and other times print as sent', () => {
+    const tiers = tierNasEventsRaw(
+      {
+        planned: [
+          { time: 'UNTIL 0000', event: 'MIA/FLL GROUND STOP POSSIBLE', decoded: 'MIA/FLL GROUND STOP POSSIBLE', affectedAirports: [], type: 'terminal' },
+          { time: 'AFTER 2200', event: 'SEA GROUND STOP POSSIBLE', decoded: 'SEA GROUND STOP POSSIBLE', affectedAirports: [], type: 'terminal' },
+          { time: '18Z-22Z', event: 'MIT', decoded: 'Miles-in-trail', affectedAirports: [] },
+        ],
+      },
+      [],
+    );
+    const details = Object.values(tiers)
+      .flat()
+      .map((i) => i.detailParts.map((p) => p.text).join(' · '));
+    expect(details).toContain('planned · until 0000Z');
+    expect(details).toContain('planned · after 2200Z');
+    expect(details).toContain('planned · 18Z-22Z');
   });
 });

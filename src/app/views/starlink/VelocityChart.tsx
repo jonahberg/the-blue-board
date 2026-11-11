@@ -73,9 +73,50 @@ export const VelocityChart = memo(function VelocityChart({
   const last = model.bars[model.bars.length - 1];
   const scrollerRef = useRef<HTMLDivElement>(null);
   // Keyed on the month count: a new month re-pins the view, a poll does not undo a manual scroll.
+  //
+  // Pinned to the right edge, the scrollport's LEFT edge lands wherever the phone's width puts
+  // it, and at 393 px that was through the capped bar, so its "162*" read "62*". The view
+  // backs off to the gap before whichever bar (or count label) the edge would cut, so the first
+  // month on screen is always whole.
   useLayoutEffect(() => {
     const el = scrollerRef.current;
-    if (el) el.scrollLeft = el.scrollWidth - el.clientWidth;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    let target = max;
+    const svg = el.querySelector('svg');
+    const scale = svg && model.width > 0 ? svg.getBoundingClientRect().width / model.width : 0;
+    if (max > 0 && scale > 0) {
+      // Each month's painted extent: the bar, its count label (centred, and wider than the bar
+      // for "162*") and, on a capped bar, the zig-zag that overhangs it (read off the path: an
+      // absolute M, then relative l steps).
+      const spans = model.bars.map((bar) => {
+        const labelHalf = bar.countLabel ? (bar.countLabel.text.length * (bar.capped ? 10 : 9) * 0.62) / 2 : 0;
+        let lo = bar.x;
+        let hi = bar.x + bar.width;
+        if (bar.countLabel) {
+          lo = Math.min(lo, bar.countLabel.x - labelHalf);
+          hi = Math.max(hi, bar.countLabel.x + labelHalf);
+        }
+        if (bar.zigzag) {
+          let x = Number(/^M\s*(-?[\d.]+)/.exec(bar.zigzag)?.[1] ?? bar.x);
+          lo = Math.min(lo, x);
+          for (const step of bar.zigzag.matchAll(/l\s*(-?[\d.]+)/g)) x += Number(step[1]);
+          hi = Math.max(hi, x);
+        }
+        // Two units of slack each side for the zig-zag's stroke and the label's anti-aliasing.
+        return [(lo - 2) * scale, (hi + 2) * scale] as const;
+      });
+      // Back off until the edge cuts nothing (a step left can land under the month before).
+      for (let guard = 0; guard < spans.length; guard++) {
+        const hit = spans.find(([lo, hi]) => lo < target && target < hi);
+        if (!hit) break;
+        target = Math.max(0, Math.floor(hit[0]) - 4);
+      }
+    }
+    el.scrollLeft = target;
+    // Keyed on the month count alone (see above): the model is rebuilt on every poll, and
+    // depending on it would re-pin the view and undo a reader's own scroll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model.bars.length]);
   return (
     <Card className="gap-0 p-4" id="sl-chart-card">

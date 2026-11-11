@@ -133,7 +133,7 @@ function statusClass(status: string | undefined): string {
 
     <div class="mt-6 text-center">
       <a
-        class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-6 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
+        class="inline-flex min-h-11 items-center justify-center rounded-md bg-primary-fill px-6 py-2 text-center text-sm leading-snug font-semibold text-balance text-primary-foreground hover:bg-primary-fill/90"
         href={`/?tab=fleet&type=${encodeURIComponent(typeCode)}`}
       >
         Explore {data.displayName} in Interactive Database &rarr;
@@ -199,14 +199,14 @@ function statusClass(status: string | undefined): string {
               return (
                 <tr>
                   <td class="font-mono font-bold text-foreground">{ac.r}</td>
-                  <td>{ac.a || '—'}</td>
-                  <td>{ac.c || '—'}</td>
+                  <td class="font-mono">{ac.a || '—'}</td>
+                  <td class="font-mono whitespace-nowrap">{ac.c || '—'}</td>
                   {/* The database's raw codes are inconsistent ('Satl Ku' / 'Satl KU'); the
                       dashboard's display names are not (F78). */}
                   <td>{isStarlink ? <span class="starlink-on">{ac.w}</span> : ac.w ? normalizeWifi(ac.w) : '—'}</td>
                   <td>{ac.i || '—'}</td>
                   <td>{ac.p || '—'}</td>
-                  <td>{ac.d || '—'}</td>
+                  <td class="font-mono">{ac.d || '—'}</td>
                   <td class={statusClass(ac.s)}>{ac.s || 'Active'}</td>
                 </tr>
               );
@@ -236,7 +236,7 @@ function statusClass(status: string | undefined): string {
     <ContentSection id="all-types" heading="All United Fleet Types">
       <p>Explore every aircraft type in United Airlines' mainline fleet.</p>
       <PillNav items={fleetNavItems} label="United fleet types" />
-      <p><a href="/fleet">&larr; Back to Fleet Overview</a></p>
+      <p><a href="/fleet" class="inline-flex min-h-11 items-center">&larr; Back to Fleet Overview</a></p>
     </ContentSection>
   </div>
 

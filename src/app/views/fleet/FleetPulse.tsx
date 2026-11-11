@@ -57,7 +57,9 @@ export function FleetPulse({
         >
           {loading && !airborne ? <Skeleton className="inline-block h-10 w-24 align-middle" /> : airborne}
         </span>
-        <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        {/* The label style of "Total Mainline Aircraft" beside it, so the card's two headline
+            figures are labelled alike. */}
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           Airborne
         </span>
       </div>

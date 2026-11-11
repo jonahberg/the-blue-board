@@ -32,13 +32,18 @@ const schema = {
   })),
 };
 ---
+{/* Each link is 44 px tall on touch without moving the row: the negative margin gives back the
+    extra height, so the hit area reaches into the space above and below the trail. */}
 <nav aria-label="Breadcrumb" class="text-xs text-muted-foreground">
   <ol class="flex flex-wrap items-center gap-1.5">
     {
       trail.map((crumb, index) => (
         <li class="flex items-center gap-1.5">
           {crumb.href ? (
-            <a href={crumb.href} class="underline underline-offset-2 hover:text-foreground">
+            <a
+              href={crumb.href}
+              class="-my-3.5 inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground pointer-fine:md:my-0 pointer-fine:md:min-h-0"
+            >
               {crumb.label}
             </a>
           ) : (

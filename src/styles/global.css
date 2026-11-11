@@ -282,6 +282,14 @@
     height: 44px;
     line-height: 44px;
   }
+  /* …and then they are not drawn at all (Nov 2026): a finger pinches or double-taps to zoom, and
+     the region menu frames a whole region in one tap, so on a phone the 88 px +/− stack only
+     covered map. A mouse keeps them. Live map only: the Weather tab's radar map has no region
+     menu, so its buttons stay as the one-finger way to zoom out (WCAG 2.5.1), at the 44 px
+     floor above. */
+  .leaflet-container[data-map='live'] .leaflet-control-zoom.leaflet-control {
+    display: none;
+  }
 }
 
 /* Leaflet's base tooltip rule is `white-space:nowrap` with no max-width, so a
@@ -298,6 +306,25 @@
 }
 .leaflet-container .leaflet-tooltip-top:before {
   border-top-color: var(--border);
+}
+.leaflet-container .leaflet-tooltip-bottom:before {
+  border-bottom-color: var(--border);
+}
+.leaflet-container .leaflet-tooltip-left:before {
+  border-left-color: var(--border);
+}
+.leaflet-container .leaflet-tooltip-right:before {
+  border-right-color: var(--border);
+}
+
+/* A hub's permanent label is an IATA code, so it is mono (DESIGN.md: mono is semantic) and
+   compact: Leaflet's 6 px tooltip padding made each label a 36×24 box that hid the traffic at
+   the hub it names. Doubled class to beat `.leaflet-tooltip`'s padding at equal specificity. */
+.leaflet-container .leaflet-tooltip.hub-tooltip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 1px 4px;
 }
 
 /* The flight detail panel is a NON-MODAL sheet pinned to the VIEWPORT, so the map stays

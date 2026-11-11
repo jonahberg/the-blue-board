@@ -49,7 +49,8 @@ export function TrackerBriefing() {
       aria-labelledby="tracker-briefing-title"
       className="rounded-lg border bg-card/40 p-3"
     >
-      <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {/* The NAS panel's eyebrow size, so the right column's panel labels match. */}
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Infrastructure watch
       </p>
       <h3 id="tracker-briefing-title" className="mt-0.5 text-sm font-semibold">

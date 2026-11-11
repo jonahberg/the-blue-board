@@ -1,6 +1,6 @@
 ---
 /**
- * The thirteen news articles (`/news/{slug}`), driven by
+ * The news articles (`/news/{slug}`), driven by
  * `src/data/news/index.js`. Tags resolve to hub and fleet cross-links.
  */
 import BaseLayout from '../components/site/BaseLayout.astro';
@@ -68,10 +68,12 @@ const newsArticleSchema = {
     <meta property="article:section" content={article.category} />
   </Fragment>
 
-  <div class="mx-auto max-w-3xl px-4 py-8">
+  <div class="mx-auto max-w-4xl px-4 py-8">
     <Breadcrumbs items={[{ label: 'News', href: '/news' }, { label: article.title }]} />
 
-    <article>
+    {/* The page sits on the site's 4xl grid like every other page; the article keeps its
+        narrower reading column inside it. */}
+    <article class="max-w-3xl">
       <header class="mt-6 border-b border-border pb-5">
         <p class="font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
           <span class="font-semibold text-primary">{article.category}</span> &middot; {displayDate}
@@ -125,7 +127,7 @@ const newsArticleSchema = {
               {crossLinks.map((link: { label: string; url: string }) => (
                 <a
                   href={link.url}
-                  class="inline-flex min-h-11 items-center rounded-full border border-border bg-card px-4 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:bg-primary-fill hover:text-primary-foreground"
+                  class="inline-flex min-h-11 items-center rounded-md border border-border bg-card px-3.5 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:text-foreground"
                 >
                   {link.label} &rarr;
                 </a>
@@ -136,7 +138,7 @@ const newsArticleSchema = {
       }
 
       <div class="mt-8">
-        <HighlightBox tone="warn">
+        <HighlightBox>
           The Blue Board is free, ad-free, and independent. If you find this useful, consider <a
             href={supportUrl('news-article')}
             target="_blank"
@@ -147,7 +149,7 @@ const newsArticleSchema = {
       </div>
 
       <div class="bb-content mt-4 rounded-lg border border-border bg-card px-4 py-3 text-xs">
-        <p class="mb-0">
+        <p class="mb-0 text-xs">
           <strong>Coming Soon: Blue Board Pro</strong> &mdash; Personalized delay predictions for
           your flights, push notifications when risk spikes, and more. <a href="/?waitlist=1"
             >Join the waitlist &rarr;</a

@@ -34,11 +34,13 @@ import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 import { BriefSidebarPanel } from '../features/BriefPanel';
 import { AskChips } from '../features/AskChips';
+import { cn } from '@/lib/utils';
+import { AirborneHistoryDialog, useAirborneHistory } from './live/AirborneHistory';
 import { LiveSidebar } from './live/LiveSidebar';
-import { MapControls } from './live/MapControls';
+import { MAP_BUTTON, MapControls } from './live/MapControls';
 import type { LayerKey } from './live/MapControls';
 import { MapLegend } from './live/MapLegend';
-import { StatsBar } from './live/StatsBar';
+import { AirborneChip, StatsBar } from './live/StatsBar';
 import type { LiveStats } from './live/stats';
 import { makeIsStarlinkFlight } from './live/starlink-match';
 import { useAskLive } from './live/useAskLive';
@@ -75,6 +77,9 @@ export default function LiveView() {
   const [phaseFilter, setPhaseFilter] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const desktop = useMediaQuery('(min-width: 1024px)');
+  // The 24-hour airborne graph: one poll and one dialog, behind the map chip and the stat bar.
+  const airborneHistory = useAirborneHistory();
+  const [graphOpen, setGraphOpen] = useState(false);
 
   const starlinkAvailable = starlink.tails.size > 0 && !starlink.degraded;
   const isStarlinkFlight = useMemo(
@@ -238,9 +243,11 @@ export default function LiveView() {
 
           <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] flex items-start justify-between gap-2 p-2">
             <MapControls
-              // One scrollable row rather than a wrapping block: at 400 px a second row of
-              // controls costs ~45 px of map, and the map is the point of this tab.
-              className="pointer-events-auto flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]"
+              // One row rather than a wrapping block: at 400 px a second row of controls costs
+              // ~45 px of map, and the map is the point of this tab. It scrolls only if a long
+              // region name overflows it; `p-1 -m-1` keeps the 44 px hit boxes inside the
+              // scroller's clip (shell/touch-target).
+              className="pointer-events-auto -m-1 flex min-w-0 items-center gap-2 overflow-x-auto p-1 [scrollbar-width:none]"
               active={activeLayers}
               onChange={onLayersChange}
               region={regionRequest?.id ?? DEFAULT_REGION_ID}
@@ -249,25 +256,38 @@ export default function LiveView() {
               refreshing={feed.refreshing}
               onRefresh={feed.refresh}
             />
+            {/* Pinned outside the scroller, so nothing can slide under it. An icon below `sm`,
+                like the layer toggles, with its name kept for assistive tech. */}
             {!desktop ? (
               <Button
-                size="sm"
                 variant="outline"
-                className="pointer-events-auto min-h-11 bg-background text-xs"
+                className={cn(MAP_BUTTON, 'pointer-events-auto shrink-0 gap-1.5 px-2.5 max-sm:w-9 max-sm:px-0')}
                 onClick={() => setSidebarOpen(true)}
               >
-                <SlidersHorizontal aria-hidden="true" /> Filters
+                <SlidersHorizontal aria-hidden="true" /> <span className="max-sm:sr-only">Filters</span>
               </Button>
             ) : null}
           </div>
 
-          {/* The map key replaces the old desktop-only "Starlink-equipped" chip. Bottom-left:
-              Leaflet's zoom and attribution controls own the bottom-right corner. */}
+          {/* Bottom-left: the map key and, below 1081 px, the airborne count with its 24-hour
+              sparkline (Nov 2026: it was a 45 px row under the map). Leaflet's attribution owns
+              the bottom-right corner, and its zoom buttons too wherever the pointer is fine.
+              Below `sm` the pair sits one attribution line higher: on a 375 px map the chip
+              reached the start of the OpenStreetMap/CARTO credit, which must stay legible. */}
+          {/* The map key replaces the old desktop-only "Starlink-equipped" chip. */}
           <MapLegend
-            className="pointer-events-none absolute bottom-2 left-2 z-[500]"
+            className="pointer-events-none absolute bottom-2 left-2 z-[500] max-sm:bottom-6"
             longhaulLayer={layers.includes('longhaul')}
             starlinkLayer={starlinkHighlight}
             hubsLayer={layers.includes('hubs')}
+            aside={
+              <AirborneChip
+                className="pointer-events-auto min-[1081px]:hidden"
+                airborne={stats.airborneAll}
+                history={airborneHistory.data}
+                onOpen={() => setGraphOpen(true)}
+              />
+            }
           />
 
           {/* The overlay appears only when the feed has NEVER produced flights: one failed
@@ -309,7 +329,15 @@ export default function LiveView() {
         )}
       </div>
 
-      <StatsBar stats={stats} />
+      <StatsBar stats={stats} history={airborneHistory.data} onOpenGraph={() => setGraphOpen(true)} />
+      {/* One graph, opened from the map chip below 1081 px or the stat bar's "24h" above it. */}
+      <AirborneHistoryDialog
+        open={graphOpen}
+        onOpenChange={setGraphOpen}
+        history={airborneHistory}
+        liveAirborne={stats.airborneAll}
+        liveFresh={feed.freshness === 'live' && feed.flights.length > 0}
+      />
     </div>
   );
 }

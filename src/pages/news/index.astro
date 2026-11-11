@@ -24,7 +24,10 @@ const shareDescription =
 const metaClass =
   'font-mono text-[11px] tracking-wider text-muted-foreground uppercase';
 const readMoreClass =
-  'mt-auto inline-flex min-h-11 w-fit items-center text-xs font-semibold text-foreground underline underline-offset-2';
+  'relative mt-auto inline-flex min-h-11 w-fit items-center text-xs font-semibold text-foreground underline underline-offset-2';
+// The headline link is stretched over its card (`after:inset-0`), so the whole card — which
+// already lights its border on hover — opens the article; "Read" sits above it (`relative`).
+const cardLinkClass = 'after:absolute after:inset-0 hover:underline hover:underline-offset-4';
 ---
 
 <BaseLayout
@@ -77,13 +80,13 @@ const readMoreClass =
       ) : (
         <>
           {featured && (
-            <article class="mt-7 rounded-lg border border-border border-l-2 border-l-bb-warn bg-card p-5">
+            <article class="relative mt-7 rounded-lg border border-border bg-card p-4 hover:border-primary sm:p-5">
               <p class={metaClass}>
                 <span class="font-semibold text-primary">{featured.category}</span> &middot;{' '}
                 {formatDate(featured.date)}
               </p>
               <h2 class="mt-1.5 text-lg font-bold tracking-tight text-balance text-foreground">
-                <a href={`/news/${featured.slug}`} class="hover:underline hover:underline-offset-4">
+                <a href={`/news/${featured.slug}`} class={cardLinkClass}>
                   {featured.title}
                 </a>
               </h2>
@@ -97,13 +100,13 @@ const readMoreClass =
           {rest.length > 0 && (
             <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
               {rest.map((a) => (
-                <article class="flex flex-col rounded-lg border border-border bg-card p-4 hover:border-primary">
+                <article class="relative flex flex-col rounded-lg border border-border bg-card p-4 hover:border-primary sm:p-5">
                   <p class={metaClass}>
                     <span class="font-semibold text-primary">{a.category}</span> &middot;{' '}
                     {formatDate(a.date)}
                   </p>
                   <h3 class="mt-1.5 text-sm leading-snug font-semibold text-balance text-foreground">
-                    <a href={`/news/${a.slug}`} class="hover:underline hover:underline-offset-4">
+                    <a href={`/news/${a.slug}`} class={cardLinkClass}>
                       {a.title}
                     </a>
                   </h3>

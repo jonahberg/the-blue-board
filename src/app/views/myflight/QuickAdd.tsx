@@ -64,7 +64,7 @@ export function QuickAdd({
       value={value}
       aria-label="Add a flight to track"
       placeholder={(MY_FLIGHTS_PLACEHOLDERS as string[])[index]}
-      className={`min-h-11 text-center font-mono transition-opacity duration-300 md:min-h-10 ${
+      className={`min-h-11 text-center font-mono transition-opacity duration-300 pointer-fine:md:min-h-10 ${
         fading ? 'opacity-40' : 'opacity-100'
       }`}
       onChange={(event) => setValue(event.target.value)}
@@ -87,9 +87,12 @@ export function QuickAdd({
     // `#myflight-empty` is the shipped id (inventory §19). Nothing in the rebuild
     // addresses it, but it is a published hook — a bookmarklet, a test, or the next port
     // may look for it, and it costs nothing to keep the name.
-    <div id="myflight-empty" className="px-4 py-12 text-center md:py-16">
+    // No bottom padding: the line below points at the connection card, which follows at the
+    // page's own 16 px rhythm instead of after a 64 px gap (on a phone that gap pushed the card
+    // under the fold).
+    <div id="myflight-empty" className="px-4 pt-6 text-center md:pt-16">
       {/* A boarding pass, not 🎫 — Apple renders that emoji as a concert ticket (F78). */}
-      <TicketsPlane aria-hidden="true" className="mx-auto mb-4 size-12 text-muted-foreground" />
+      <TicketsPlane aria-hidden="true" className="mx-auto mb-3 size-10 text-muted-foreground md:mb-4 md:size-12" />
       <h2 className="mb-2 text-sm font-medium">No Flights Tracked Yet</h2>
       <p className="mx-auto mb-4 max-w-sm text-[11px] leading-relaxed text-muted-foreground">
         Search for a flight and tap{' '}

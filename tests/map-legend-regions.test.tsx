@@ -36,12 +36,15 @@ afterEach(() => {
 });
 
 describe('MapLegend', () => {
-  it('starts closed on a phone: only the 44 px Key button shows', () => {
+  it('starts closed on a phone: only the Key button shows, 36 px with a 44 px hit box', () => {
     stubWidth(390);
     render(<MapLegend longhaulLayer={false} starlinkLayer />);
     const button = screen.getByRole('button', { name: 'Key' });
     expect(button.getAttribute('aria-expanded')).toBe('false');
-    expect(button.className).toMatch(/\bmin-h-11\b/);
+    // 36 px drawn, and an `after:` box 4 px past the border on every side: 44 × 44 to a finger.
+    const classes = button.className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(['relative', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-[5px]']));
+    expect(classes).toContain('pointer-fine:md:after:hidden');
     const panel = document.getElementById(button.getAttribute('aria-controls')!);
     expect(panel).not.toBeNull();
     expect(panel!.hidden).toBe(true);

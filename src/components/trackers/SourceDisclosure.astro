@@ -53,9 +53,11 @@ const sourceLabel = (source: string) => {
 };
 
 // 44 px tall per the touch-target rule, so the label is centred and set a size up from the
-// old 8 px chip — at 8 px it read as an empty box rather than a button.
+// old 8 px chip — at 8 px it read as an empty box rather than a button. A mouse at md+ gets a
+// 28 px button, the same height as the Sources summary beside it, so a table row is not
+// stretched by controls sized for a thumb.
 const actionClass =
-  'inline-flex min-h-11 flex-1 items-center justify-center rounded-sm border border-border px-2.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:border-primary hover:text-primary aria-pressed:border-bb-ok/55 aria-pressed:text-bb-ok';
+  'inline-flex min-h-11 flex-1 items-center justify-center rounded-sm border border-border px-2.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:border-primary hover:text-primary aria-pressed:border-bb-ok/55 aria-pressed:text-bb-ok pointer-fine:md:min-h-7';
 ---
 
 <div
@@ -63,15 +65,16 @@ const actionClass =
     'flex gap-2',
     compact
       ? 'min-w-42 flex-col'
-      : 'mt-2.5 flex-col items-start justify-between border-t border-border pt-2 sm:flex-row',
+      : // Wraps: in a narrow card the actions drop under the summary instead of overlapping it.
+        'mt-2.5 flex-col items-start justify-between border-t border-border pt-2 sm:flex-row sm:flex-wrap',
   ]}
 >
   <details class="min-w-0">
     <summary
-      class="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-primary marker:text-muted-foreground"
+      class="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-primary marker:text-muted-foreground pointer-fine:md:min-h-7"
     >
-      <span>Sources ({sources.length})</span>
-      <span class="font-medium text-muted-foreground">verified {fmt(verified)}</span>
+      <span class="whitespace-nowrap">Sources ({sources.length})</span>
+      <span class="font-medium whitespace-nowrap text-muted-foreground">verified {fmt(verified)}</span>
     </summary>
     <ol class="mt-1.5 ml-4 list-decimal">
       {
@@ -81,7 +84,7 @@ const actionClass =
               href={source}
               target="_blank"
               rel="noopener noreferrer"
-              class="underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+              class="inline-flex min-h-11 items-center underline decoration-primary/35 underline-offset-2 hover:decoration-primary pointer-fine:md:min-h-0"
             >
               {sourceLabel(source)}
             </a>

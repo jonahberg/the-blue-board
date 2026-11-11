@@ -7,39 +7,60 @@
  * hidden until then. The track's position is either the live feed's (distance flown) or, without a
  * live position, the clock's (time elapsed of the expected block) — and the note under it says
  * which, so an estimate never reads as a measurement.
+ *
+ * The track is a dashed route between two end caps. While the flight is in the air the script
+ * shows the plane marker (`track-dot`) at its position over a solid flown segment; at any other
+ * time the marker is hidden and a muted plane sits mid-route, so the line never reads as a bare
+ * rule. That swap is CSS only (`peer`), keyed off the marker's own `hidden`.
+ *
+ * The timeline gives every step one equal column from `md` (`grid-flow-col` + `auto-cols-fr`), so
+ * two steps or six always span the content width. Each step's rail colour is set by the script
+ * (`classList.replace('border-border', …)`); the dot at its start inherits that colour.
  */
+import { Plane } from 'lucide-react';
 ---
 
 <section class="mt-8" aria-labelledby="fp-trip-title" data-fp-trip hidden>
   <h2 id="fp-trip-title" class="sr-only">Route and timeline</h2>
   <!-- Phone: the two airports side by side and the track full width under them; from sm one row. -->
-  <div class="grid grid-cols-2 items-center gap-x-3 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-5">
+  <div class="grid grid-cols-2 items-center gap-x-3 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-6">
     <div class="min-w-0 sm:col-start-1 sm:row-start-1">
-      <p class="font-mono text-xl font-semibold text-foreground" data-f="origin"></p>
-      <p class="text-[11px] leading-4 text-muted-foreground" data-f="origin-city"></p>
+      <p class="font-mono text-2xl leading-none font-semibold text-foreground" data-f="origin"></p>
+      <p class="mt-1.5 text-xs leading-4 text-muted-foreground" data-f="origin-city"></p>
       <p class="font-mono text-[11px] leading-4 text-muted-foreground tabular-nums" data-f="origin-time"></p>
     </div>
-    <div class="relative col-span-2 row-start-2 h-0.5 rounded-full bg-border sm:col-span-1 sm:col-start-2 sm:row-start-1" data-f="track">
-      <div class="absolute inset-y-0 left-0 rounded-full bg-primary" data-f="track-fill"></div>
+    <div class="relative col-span-2 row-start-2 h-5 sm:col-span-1 sm:col-start-2 sm:row-start-1" data-f="track">
+      <span class="absolute inset-x-1 top-1/2 -translate-y-1/2 border-t border-dashed border-muted-foreground/60" aria-hidden="true"></span>
+      <span class="absolute top-1/2 left-0 size-2 -translate-y-1/2 rounded-full bg-muted-foreground" aria-hidden="true"></span>
+      <span class="absolute top-1/2 right-0 size-2 -translate-y-1/2 rounded-full border-[1.5px] border-muted-foreground bg-background" aria-hidden="true"></span>
+      <div class="absolute top-1/2 left-0 h-0.5 -translate-y-1/2 rounded-full bg-primary" data-f="track-fill"></div>
       <div
-        class="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-4 ring-primary/25"
+        class="peer absolute top-1/2 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-background text-primary"
         data-f="track-dot"
-      ></div>
+      >
+        <Plane aria-hidden="true" className="size-4 rotate-45" strokeWidth={2.25} />
+      </div>
+      <span
+        class="absolute top-1/2 left-1/2 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center bg-background text-muted-foreground peer-[:not([hidden])]:hidden"
+        aria-hidden="true"
+      >
+        <Plane className="size-3.5 rotate-45" />
+      </span>
     </div>
     <div class="col-start-2 row-start-1 min-w-0 text-right sm:col-start-3">
-      <p class="font-mono text-xl font-semibold text-foreground" data-f="dest"></p>
-      <p class="text-[11px] leading-4 text-muted-foreground" data-f="dest-city"></p>
+      <p class="font-mono text-2xl leading-none font-semibold text-foreground" data-f="dest"></p>
+      <p class="mt-1.5 text-xs leading-4 text-muted-foreground" data-f="dest-city"></p>
       <p class="font-mono text-[11px] leading-4 text-muted-foreground tabular-nums" data-f="dest-time"></p>
     </div>
   </div>
-  <p class="mt-3 text-center font-mono text-[11px] text-muted-foreground tabular-nums" data-f="track-note"></p>
+  <p class="mt-2 text-center font-mono text-[11px] text-muted-foreground tabular-nums empty:hidden" data-f="track-note"></p>
 
-  <ol class="mt-6 grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-3 md:grid-cols-6" aria-label="Timeline" data-f="timeline"></ol>
+  <ol class="mt-7 grid grid-cols-2 gap-x-3 gap-y-5 md:grid-flow-col md:auto-cols-fr md:grid-cols-none" aria-label="Timeline" data-f="timeline"></ol>
 
   <template data-fp-step>
-    <li class="flex min-w-0 flex-col gap-0.5 border-t-2 border-border pt-2">
+    <li class="relative flex min-w-0 flex-col gap-0.5 border-t-2 border-border pt-3 before:absolute before:-top-1.5 before:left-0 before:size-2.5 before:rounded-full before:border-2 before:border-inherit before:bg-background">
       <span class="font-mono text-xs font-medium text-foreground tabular-nums" data-f="time"></span>
-      <span class="text-xs leading-snug text-muted-foreground" data-f="label"></span>
+      <span class="text-xs leading-snug text-pretty text-muted-foreground" data-f="label"></span>
     </li>
   </template>
 </section>

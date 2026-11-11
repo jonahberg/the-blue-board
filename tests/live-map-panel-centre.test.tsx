@@ -6,7 +6,10 @@
 import L from 'leaflet';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { panelAwareCentre, viewZoom } from '../src/app/map/LiveMap';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+import { PHONE_ZOOM_SNAP, US_VIEW, panelAwareCentre, phoneUsView, viewZoom } from '../src/app/map/LiveMap';
 
 function stubWide(wide: boolean) {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -79,5 +82,35 @@ describe('viewZoom (F78: the phone map cropped SFO and LAX)', () => {
 
   it('does not guess for a map that has no width yet', () => {
     expect(viewZoom(4, 0)).toBe(4);
+  });
+});
+
+describe('phoneUsView (Nov 2026: the phone map opened with its top third on Canada)', () => {
+  it('opens a phone map on the lower 48, north-anchored, at a snapped zoom', () => {
+    for (const size of [{ x: 393, y: 509 }, { x: 375, y: 517 }, { x: 430, y: 782 }]) {
+      const view = phoneUsView(size)!;
+      expect(view).not.toBeNull();
+      // North-anchored: the centre sits south of the box's own middle (~38°N) and of US_VIEW.
+      expect(view.center[0]).toBeLessThan(US_VIEW.center[0]);
+      expect(view.center[1]).toBeCloseTo(-95.75, 5);
+      expect(Math.abs(view.zoom / PHONE_ZOOM_SNAP - Math.round(view.zoom / PHONE_ZOOM_SNAP))).toBeLessThan(1e-6);
+      // Tighter than the old whole-level phone view (zoom 3).
+      expect(view.zoom).toBeGreaterThan(3);
+    }
+  });
+
+  it('leaves tablets, desktops and a map with no size on the old view', () => {
+    expect(phoneUsView({ x: 820, y: 950 })).toBeNull();
+    expect(phoneUsView({ x: 1120, y: 660 })).toBeNull();
+    expect(phoneUsView({ x: 0, y: 0 })).toBeNull();
+    expect(phoneUsView({ x: 390, y: 0 })).toBeNull();
+  });
+});
+
+describe('Live map hub labels', () => {
+  it('turn close pairs apart with the radar map\'s own table, not a second one', () => {
+    const src = readFileSync(resolve(__dirname, '../src/app/map/LiveMap.tsx'), 'utf8');
+    expect(src).toMatch(/radarLabelPlacement\(hub\.iata\)/);
+    expect(src).not.toMatch(/direction: 'top',\s*className: 'hub-tooltip'/);
   });
 });

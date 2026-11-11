@@ -487,7 +487,9 @@ export default function FleetView() {
               32 px height and TabsTrigger sets `h-[calc(100%-1px)]`, both of which assume a
               single row. Four labels carrying counts wrap below ~500 px, and without these
               the wrapped row overflows the list and lands on top of the search box. */}
-          <TabsList aria-label="Aircraft lookup views" className="h-auto! flex-wrap gap-1">
+          {/* `justify-start`: wrapped onto three rows on a phone, centred labels read as a
+              ragged block. */}
+          <TabsList aria-label="Aircraft lookup views" className="h-auto! flex-wrap justify-start gap-1">
             <TabsTrigger value="all" className="h-full! min-h-11 grow-0 pointer-fine:md:min-h-0">
               All Aircraft <span className="text-muted-foreground">({subTabCounts.all})</span>
             </TabsTrigger>

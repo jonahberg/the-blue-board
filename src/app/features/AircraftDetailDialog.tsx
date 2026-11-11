@@ -79,16 +79,23 @@ function Fact({
   value,
   tone,
   className,
+  mono = false,
 }: {
   label: string;
   value: string;
   tone?: string;
   className?: string;
+  /** A figure or code read character by character (DESIGN.md: mono is semantic). */
+  mono?: boolean;
 }) {
   return (
     <div className={`min-w-0 ${className ?? ''}`}>
       <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className={`mt-0.5 text-sm font-medium [overflow-wrap:anywhere] ${tone ?? ''}`}>{value}</dd>
+      <dd
+        className={`mt-0.5 text-sm font-medium [overflow-wrap:anywhere] ${mono ? 'font-mono tabular-nums' : ''} ${tone ?? ''}`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
@@ -307,14 +314,14 @@ export default function AircraftDetailDialog() {
                   <Fact
                     label="Starlink"
                     value={expressStarlink ? 'Yes ⚡' : 'Not on the roster'}
-                    tone={expressStarlink ? 'text-bb-ok' : 'text-muted-foreground'}
+                    tone={expressStarlink ? 'text-bb-starlink' : 'text-muted-foreground'}
                   />
                   {/* "No Wi-Fi" only for a type verified to have none; unknown is a dash. */}
                   <Fact label="WiFi" value={(expressWifiLabel(express, expressStarlink) as string) || '—'} />
                   {/* A cabin only when one is verified for this type and operator. */}
-                  {express.c ? <Fact label="Config" value={express.c} className="col-span-2" /> : null}
-                  {express.c && express.tot ? <Fact label="Total Seats" value={String(express.tot)} /> : null}
-                  <Fact label="Last United flight" value={express.lf || '—'} tone="font-mono" />
+                  {express.c ? <Fact label="Config" value={express.c} className="col-span-2" mono /> : null}
+                  {express.c && express.tot ? <Fact label="Total Seats" value={String(express.tot)} mono /> : null}
+                  <Fact label="Last United flight" value={express.lf || '—'} mono />
                   <Fact label="First seen" value={expressDateLabel(express.fs) || '—'} />
                   <Fact label="Last seen" value={expressLastSeenLabel(express.ls) || '—'} />
                 </dl>
@@ -355,7 +362,7 @@ export default function AircraftDetailDialog() {
                   <Fact
                     label="Starlink"
                     value={fallback.starlink ? 'Yes ⚡' : 'Not on the roster'}
-                    tone={fallback.starlink ? 'text-bb-ok' : 'text-muted-foreground'}
+                    tone={fallback.starlink ? 'text-bb-starlink' : 'text-muted-foreground'}
                   />
                 </dl>
                 {fallback.flight ? (
@@ -410,24 +417,26 @@ export default function AircraftDetailDialog() {
                   <Fact
                     label="Delivered"
                     value={`${aircraft.d || '—'}${age !== null && !Number.isNaN(age) ? ` (${age} yrs)` : ''}`}
+                    mono
                   />
-                  <Fact label="Total Seats" value={aircraft.tot ? String(aircraft.tot) : '—'} />
+                  <Fact label="Total Seats" value={aircraft.tot ? String(aircraft.tot) : '—'} mono />
                   <Fact label="WiFi" value={(normalizeWifi(aircraft.w) as string) || '—'} />
                   <Fact label="IFE" value={aircraft.i || '—'} />
                   <Fact label="Power" value={aircraft.p || '—'} />
                   <Fact
                     label="Engine"
                     value={(ENGINE_BY_TYPE as Record<string, string>)[aircraft.t] || 'Unknown'}
+                    mono={Boolean((ENGINE_BY_TYPE as Record<string, string>)[aircraft.t])}
                   />
                   <Fact
                     label="Starlink"
                     value={isStarlink ? 'Yes ⚡' : 'No'}
-                    tone={isStarlink ? 'text-bb-ok' : 'text-muted-foreground'}
+                    tone={isStarlink ? 'text-bb-starlink' : 'text-muted-foreground'}
                   />
                   {/* The cabin string is the longest value here: it gets two columns so it
                       reads on one line at desktop width. */}
                   {aircraft.c ? (
-                    <Fact label="Config" value={aircraft.c} className="col-span-2" />
+                    <Fact label="Config" value={aircraft.c} className="col-span-2" mono />
                   ) : null}
                 </dl>
               </section>
@@ -492,14 +501,17 @@ export default function AircraftDetailDialog() {
                             ? `${Math.round(liveFlight.alt * 3.28084).toLocaleString()} ft`
                             : '—'
                         }
+                        mono
                       />
                       <Fact
                         label="Speed"
                         value={liveFlight.spd ? `${Math.round(liveFlight.spd * 1.944)} kts` : '—'}
+                        mono
                       />
                       <Fact
                         label="Heading"
                         value={liveFlight.hdg ? `${Math.round(liveFlight.hdg)}°` : '—'}
+                        mono
                       />
                       <Fact label="Phase" value={phase.phase} />
                     </dl>

@@ -75,6 +75,15 @@ describe('MobileNav More sheet', () => {
     expect(credit.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
   });
 
+  it('links the news, which the phone Live tab no longer shows as a strip (Nov 2026)', () => {
+    mount();
+    const sheet = openMore();
+    const news = within(sheet).getByRole('link', { name: 'News' });
+    expect(news.getAttribute('href')).toBe('/news');
+    expect(news.className).toMatch(/\bmin-h-11\b/);
+    expect(news.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it('About closes the sheet and opens the About dialog with the safety line', async () => {
     mount();
     const sheet = openMore();

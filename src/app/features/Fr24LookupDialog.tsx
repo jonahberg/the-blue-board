@@ -92,7 +92,8 @@ function fr24PreviousLegDate(iso: string | undefined): string {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[10px] text-muted-foreground">{label}</dt>
+      {/* The aircraft dialog's label style, so the two dialogs a tail link moves between match. */}
+      <dt className="text-[9px] uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="font-mono tabular-nums">{value}</dd>
     </div>
   );
@@ -273,7 +274,7 @@ export default function Fr24LookupDialog() {
                   {flight.aircraft?.type || '?'}
                   {flight.aircraft?.reg ? (
                     <>
-                      {' • '}
+                      {' · '}
                       <button
                         type="button"
                         className="inline-flex min-h-11 items-center font-mono underline decoration-dotted underline-offset-2 hover:text-primary pointer-fine:md:min-h-0"
@@ -303,8 +304,8 @@ export default function Fr24LookupDialog() {
               {fleetMatch ? (
                 <p className="rounded bg-primary/10 p-2 text-[10px]">
                   <span className="text-primary">Fleet Match:</span> {fleetMatch.t}
-                  {fleetMatch.c ? ` • ${fleetMatch.c}` : ''}
-                  {fleetMatch.w ? ` • WiFi: ${normalizeWifi(fleetMatch.w)}` : ''}
+                  {fleetMatch.c ? ` · ${fleetMatch.c}` : ''}
+                  {fleetMatch.w ? ` · WiFi: ${normalizeWifi(fleetMatch.w)}` : ''}
                 </p>
               ) : null}
 
@@ -312,9 +313,9 @@ export default function Fr24LookupDialog() {
                 <p className="rounded bg-muted/40 p-2 font-mono text-[10px] tabular-nums">
                   <span className="text-muted-foreground">Position: </span>
                   {Number(flight.position.lat).toFixed(2)}°, {Number(flight.position.lon).toFixed(2)}°
-                  {flight.position.alt != null ? ` • ${flight.position.alt.toLocaleString()} ft` : ''}
-                  {flight.position.speed != null ? ` • ${flight.position.speed} kts` : ''}
-                  {flight.position.heading != null ? ` • hdg ${flight.position.heading}°` : ''}
+                  {flight.position.alt != null ? ` · ${flight.position.alt.toLocaleString()} ft` : ''}
+                  {flight.position.speed != null ? ` · ${flight.position.speed} kts` : ''}
+                  {flight.position.heading != null ? ` · hdg ${flight.position.heading}°` : ''}
                 </p>
               ) : null}
             </div>

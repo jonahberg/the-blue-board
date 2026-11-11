@@ -8,15 +8,17 @@ const description =
 ---
 
 <BaseLayout title={title} description={description} canonical="/privacy">
-  <div class="mx-auto max-w-2xl px-4 py-8">
+  <div class="mx-auto max-w-4xl px-4 py-8">
     <Breadcrumbs items={[{ label: 'Privacy' }]} />
 
-    <h1 class="mt-6 text-2xl font-bold tracking-tight text-foreground">Privacy Policy</h1>
-    <p class="mt-1 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-      Effective November 10, 2026
-    </p>
+    <header class="mt-6 border-b border-border pb-5">
+      <h1 class="text-2xl font-bold tracking-tight text-foreground">Privacy Policy</h1>
+      <p class="mt-1.5 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        Effective November 10, 2026
+      </p>
+    </header>
 
-    <div class="mt-7 space-y-4 text-sm leading-relaxed text-muted-foreground">
+    <div class="mt-6 max-w-2xl space-y-4 text-sm leading-relaxed text-muted-foreground">
       <p>
         The Blue Board is a free, ad-free United Airlines ops dashboard built by one person. The
         short version: the only personal data we collect ourselves is what you give us when you

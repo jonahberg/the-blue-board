@@ -254,7 +254,8 @@ const datasetSchema = {
 };
 
 const jumpLinkClass =
-  'inline-flex min-h-11 items-center rounded-full border border-border bg-card px-3.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:bg-primary-fill hover:text-primary-foreground';
+  // The same pill as JumpNav (hub, fleet and Newark pages), so an in-page jump looks one way site-wide.
+  'inline-flex min-h-11 items-center rounded-full border border-border bg-card px-3.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:border-primary hover:bg-primary-fill hover:text-primary-foreground';
 const proseClass =
   'mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground last:mb-0 [&_a]:text-primary [&_a]:underline [&_a]:decoration-primary/40 [&_a]:underline-offset-2 [&_a:hover]:decoration-primary';
 const subheadClass = 'mt-4.5 mb-2 text-sm font-semibold text-primary';
@@ -283,7 +284,7 @@ const chipClass =
       <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
         Tracker &middot; United Ground Buildout
       </div>
-      <h1 class="mt-0.5 mb-1.5 text-lg font-bold tracking-tight text-balance text-foreground sm:text-2xl">
+      <h1 class="mt-0.5 mb-1.5 text-2xl font-bold tracking-tight text-balance text-foreground">
         What's Changing at United's Hubs?
       </h1>
       <p class="mb-2.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
@@ -353,9 +354,9 @@ const chipClass =
           return (
             <div class="mb-7" id={`hub-${code.toLowerCase()}`} data-trk-group>
               <div class="mb-3 flex flex-wrap items-baseline gap-2.5 border-b border-border pb-1.5">
-                <span class="font-mono text-[15px] font-bold text-primary">{code}</span>
+                <span class="font-mono text-base font-bold text-primary">{code}</span>
                 <a
-                  class="text-sm font-semibold text-foreground underline-offset-2 hover:underline"
+                  class="-my-3 inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline-offset-2 hover:underline pointer-fine:md:my-0 pointer-fine:md:min-h-0"
                   href={`/trackers/united-hubs/${code.toLowerCase()}`}
                 >
                   {h.name}
@@ -380,7 +381,7 @@ const chipClass =
                   const s = STATUS[p.status];
                   return (
                     <article
-                      class="rounded-md border border-border bg-card px-4 py-3.5 transition-colors hover:border-primary"
+                      class="rounded-lg border border-border bg-card px-4 py-3.5 transition-colors hover:border-primary"
                       data-trk-row
                       data-trk-count-item
                       data-trk-search-text={`${p.hub} ${h.city} ${h.state} ${h.searchAlias ?? ''} ${h.name} ${p.name} ${typeLabelFor(p)} ${s.label}`.toLowerCase()}
@@ -491,7 +492,7 @@ const chipClass =
     </section>
 
     <section
-      class="mb-10 rounded-r-md border border-border border-l-[3px] border-l-primary bg-card px-5 py-4.5"
+      class="mb-10 rounded-r-md border border-border border-l-2 border-l-primary bg-card px-5 py-4"
       id="club-math"
       aria-label="Club math"
     >

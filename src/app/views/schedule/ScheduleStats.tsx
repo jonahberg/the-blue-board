@@ -24,6 +24,8 @@
  * every number still on screen, nothing behind a tap, and room left for the flights.
  */
 
+import { Plane, TriangleAlert } from 'lucide-react';
+
 import { Card } from '@/components/ui/card';
 import { statStripCopy } from '@/lib/board-stats.js';
 import { boardCanceledTitle, splitCancellations, unconfirmedFigure } from '@/lib/cancellation-display.js';
@@ -55,7 +57,7 @@ function MiniMetric({
     <div className={cn('flex flex-col items-center justify-center gap-0.5 bg-card px-1 py-1.5', className)} title={title}>
       <dt className="order-2 text-center text-[9px] leading-tight uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className={cn('order-1 font-mono text-base leading-none font-semibold tabular-nums', valueClass)}>{value}</dd>
-      {note ? <dd className="order-3 text-center text-[9px] leading-tight text-muted-foreground">{note}</dd> : null}
+      {note ? <dd className="order-3 text-center font-mono text-[9px] leading-tight text-muted-foreground">{note}</dd> : null}
     </div>
   );
 }
@@ -79,10 +81,17 @@ function Metric({
 }) {
   return (
     <Card className="flex min-w-24 flex-1 flex-col items-center gap-0.5 rounded-md px-2 py-1.5" title={title}>
-      <span className={cn('font-mono text-lg leading-none font-semibold', valueClass)}>{value}</span>
-      <span className="text-center text-[9px] uppercase tracking-wide text-muted-foreground">
+      <span className={cn('font-mono text-lg leading-none font-semibold tabular-nums', valueClass)}>{value}</span>
+      {/* `text-balance` and the unbreakable note: on a tablet the seven cards are ~105 px wide
+          and the labels wrap, which left "11" or "TIMED" alone on a line. */}
+      <span className="text-center text-[9px] text-balance uppercase tracking-wide text-muted-foreground">
         {label}
-        {note ? <span className="font-mono normal-case tracking-normal"> · {note}</span> : null}
+        {note ? (
+          <span className="font-mono normal-case tracking-normal">
+            {'\u00a0· '}
+            <span className="whitespace-nowrap">{note}</span>
+          </span>
+        ) : null}
       </span>
     </Card>
   );
@@ -98,7 +107,7 @@ export function ScheduleStats({
   footnote,
 }: {
   compact?: boolean;
-  /** Phone only: a one-line note (the cache line) folded into the notes row to save a line. */
+  /** The board's own footnote (data age, cache line), folded into the one meta line under the strip. */
   footnote?: React.ReactNode;
   stats: BoardModel['stats'];
   dir: 'departures' | 'arrivals';
@@ -125,25 +134,34 @@ export function ScheduleStats({
   const canceledNote = unconfirmedFigure(cancellations);
   const canceledTitle = boardCanceledTitle(cancellations);
 
-  // The phone grid's note line (the desktop strip keeps its own markup below).
-  const phoneNotes = [
+  // ONE meta line under the strip at every width: the presumed chip, the FAA program note and
+  // the board's own footnote (data age, cache), wrapping as a unit on a phone. Desktop used to
+  // stack three of these lines between the cards and the table.
+  const notes = [
     stats.presumed > 0 ? (
       <span
         key="presumed"
-        className="rounded-sm border bg-muted/50 px-1.5 py-0.5 text-muted-foreground"
+        className="mr-2 inline-flex items-center gap-1 rounded-sm border bg-muted/50 px-1.5 py-0.5 align-middle"
         title={copy.presumed.title}
       >
-        ✈ {stats.presumed} {copy.presumed.label}
+        <Plane aria-hidden="true" className="size-3" />
+        {stats.presumed} {copy.presumed.label}
       </span>
     ) : null,
     showDisruption ? (
-      <span key="faa" className="text-bb-warn">
-        ⚠ {hub} under FAA delay program (avg {Math.round(hubDisruptionMinutes as number)}min) —
-        statuses may lag.
+      <span key="faa" className="mr-2 text-bb-warn">
+        <TriangleAlert aria-hidden="true" className="mr-1 inline size-3 align-[-2px]" />
+        {hub} under FAA delay program (avg {Math.round(hubDisruptionMinutes as number)}min) — statuses may
+        lag.
       </span>
     ) : null,
     footnote ? <span key="footnote">{footnote}</span> : null,
   ].filter(Boolean);
+  const notesLine = notes.length ? (
+    // Running text, not a flex row: the words flow on after the chip and wrap like a sentence,
+    // where a flex item dropped whole onto a second line and left the chip alone on the first.
+    <p className="mt-1.5 px-1 text-[10px] leading-5 text-muted-foreground">{notes}</p>
+  ) : null;
 
   if (compact) {
     // 4 columns: the total, the on-time cell (2 wide), then every count in reading order —
@@ -194,24 +212,26 @@ export function ScheduleStats({
           className="grid grid-cols-4 gap-px overflow-hidden rounded-md border bg-border"
         >
           <MiniMetric value={stats.total} label={`UA ${dirLabel}`} />
-          {/* Side by side rather than stacked: the glossary term is a 44 px tap target on a
-              phone, and stacking it under the value made this one cell set the whole row's
-              height. */}
+          {/* Stacked like every other cell (figure, label, note) so the grid reads as one
+              grid. The glossary term is a 44 px tap target on a phone; its wrapper's negative
+              margin takes that height back out of the flow (the SlHero pattern), so this cell
+              is no taller than Canceled beside it. */}
           <div
-            className="col-span-2 flex flex-row-reverse items-center justify-center gap-2 bg-card px-1"
+            className="col-span-2 flex flex-col items-center justify-center gap-0.5 bg-card px-1 py-1.5"
             title={otpTitle}
           >
-            <dt className="text-[9px] leading-tight uppercase tracking-wide text-muted-foreground">
-              <JargonTerm term="otp">On-Time</JargonTerm>{' '}
-              <span className={tone.className}>{otp === null ? '' : tone.label}</span>
+            <dt className="order-2 -my-4 flex items-center justify-center gap-1 text-[9px] leading-tight uppercase tracking-wide text-muted-foreground">
+              <JargonTerm term="otp">
+                {/* A <button> resets text-transform, so the term carries its own. */}
+                <span className="uppercase">On-Time</span>
+              </JargonTerm>
+              {otp === null ? null : <span className={tone.className}>{tone.label}</span>}
             </dt>
-            <dd className="flex flex-col items-end">
-              <span className={cn('font-mono text-base leading-none font-semibold tabular-nums', tone.className)}>
-                {otp === null || otp === undefined ? '—' : `${otp}%`}
-              </span>
-              <span className="text-[9px] leading-tight uppercase tracking-wide text-muted-foreground">
-                {stats.operated} operated
-              </span>
+            <dd className={cn('order-1 font-mono text-base leading-none font-semibold tabular-nums', tone.className)}>
+              {otp === null || otp === undefined ? '—' : `${otp}%`}
+            </dd>
+            <dd className="order-3 font-mono text-[9px] leading-tight text-muted-foreground">
+              {stats.operated} operated
             </dd>
           </div>
           {cells}
@@ -219,9 +239,7 @@ export function ScheduleStats({
             <div key={`filler-${i}`} aria-hidden="true" className="bg-card" />
           ))}
         </dl>
-        {phoneNotes.length ? (
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px]">{phoneNotes}</p>
-        ) : null}
+        {notesLine}
       </div>
     );
   }
@@ -229,7 +247,16 @@ export function ScheduleStats({
   return (
     <div>
       <div className="flex flex-wrap gap-1.5">
-        <Metric value={stats.total} label={`UA ${dirLabel} · ${dayLabel}`} />
+        <Metric
+          value={stats.total}
+          label={
+            <>
+              {/* A no-break space before the dot: a wrap falls after it, never before. */}
+              UA {dirLabel}{'\u00a0· '}
+              <span className="whitespace-nowrap">{dayLabel}</span>
+            </>
+          }
+        />
         <Metric
           value={otp === null || otp === undefined ? '—' : `${otp}%`}
           valueClass={tone.className}
@@ -238,11 +265,18 @@ export function ScheduleStats({
           title={otpTitle}
           label={
             <>
-              <JargonTerm term="otp">On-Time</JargonTerm>{' '}
-              <span className={tone.className}>{otp === null ? '' : tone.label}</span> (
-              {stats.operated} operated)
+              {/* On a touch tablet the term is a 44 px target; the wrapper's negative margin keeps
+                  that height out of the label's line, so the card does not grow a gap. */}
+              <span className="-my-4 inline-flex align-middle pointer-fine:my-0">
+                <JargonTerm term="otp">
+                  {/* A <button> resets text-transform, so the term carries its own. */}
+                  <span className="uppercase">On-Time</span>
+                </JargonTerm>
+              </span>
+              {otp === null ? null : <span className={tone.className}> {tone.label}</span>}
             </>
           }
+          note={`${stats.operated} operated`}
         />
         <Metric value={stats.onTime} valueClass="text-bb-ok" label="On Time" />
         <Metric value={stats.late} valueClass="text-bb-warn" label="Late" />
@@ -275,24 +309,7 @@ export function ScheduleStats({
         ) : null}
       </div>
 
-      {stats.presumed > 0 || showDisruption ? (
-        <p className="mt-1 flex flex-wrap items-center gap-2 text-[10px]">
-          {stats.presumed > 0 ? (
-            <span
-              className="rounded-sm border bg-muted/50 px-1.5 py-0.5 text-muted-foreground"
-              title={copy.presumed.title}
-            >
-              ✈ {stats.presumed} {copy.presumed.label}
-            </span>
-          ) : null}
-          {showDisruption ? (
-            <span className="text-bb-warn">
-              ⚠ {hub} under FAA delay program (avg {Math.round(hubDisruptionMinutes as number)}min) —
-              statuses may lag.
-            </span>
-          ) : null}
-        </p>
-      ) : null}
+      {notesLine}
     </div>
   );
 }
