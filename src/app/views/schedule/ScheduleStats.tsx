@@ -82,9 +82,16 @@ function Metric({
   return (
     <Card className="flex min-w-24 flex-1 flex-col items-center gap-0.5 rounded-md px-2 py-1.5" title={title}>
       <span className={cn('font-mono text-lg leading-none font-semibold tabular-nums', valueClass)}>{value}</span>
-      <span className="text-center text-[9px] uppercase tracking-wide text-muted-foreground">
+      {/* `text-balance` and the unbreakable note: on a tablet the seven cards are ~105 px wide
+          and the labels wrap, which left "11" or "TIMED" alone on a line. */}
+      <span className="text-center text-[9px] text-balance uppercase tracking-wide text-muted-foreground">
         {label}
-        {note ? <span className="font-mono normal-case tracking-normal"> · {note}</span> : null}
+        {note ? (
+          <span className="font-mono normal-case tracking-normal">
+            {' · '}
+            <span className="whitespace-nowrap">{note}</span>
+          </span>
+        ) : null}
       </span>
     </Card>
   );
@@ -240,7 +247,14 @@ export function ScheduleStats({
   return (
     <div>
       <div className="flex flex-wrap gap-1.5">
-        <Metric value={stats.total} label={`UA ${dirLabel} · ${dayLabel}`} />
+        <Metric
+          value={stats.total}
+          label={
+            <>
+              UA {dirLabel} · <span className="whitespace-nowrap">{dayLabel}</span>
+            </>
+          }
+        />
         <Metric
           value={otp === null || otp === undefined ? '—' : `${otp}%`}
           valueClass={tone.className}
@@ -249,10 +263,14 @@ export function ScheduleStats({
           title={otpTitle}
           label={
             <>
-              <JargonTerm term="otp">
-                {/* A <button> resets text-transform, so the term carries its own. */}
-                <span className="uppercase">On-Time</span>
-              </JargonTerm>
+              {/* On a touch tablet the term is a 44 px target; the wrapper's negative margin keeps
+                  that height out of the label's line, so the card does not grow a gap. */}
+              <span className="-my-4 inline-flex align-middle pointer-fine:my-0">
+                <JargonTerm term="otp">
+                  {/* A <button> resets text-transform, so the term carries its own. */}
+                  <span className="uppercase">On-Time</span>
+                </JargonTerm>
+              </span>
               {otp === null ? null : <span className={tone.className}> {tone.label}</span>}
             </>
           }
