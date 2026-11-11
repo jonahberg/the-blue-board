@@ -24,7 +24,7 @@
 
 import { FLEET_DB_AS_OF, FLEET_DB_COUNT, HUB_LINE_LONG } from '../data/facts.js';
 import { fleetOrder, fleetTypes } from '../data/fleet/index.js';
-import { STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../data/starlink-facts.js';
+import { STARLINK_EQUIPPED_LABEL, STARLINK_EQUIPPED_SCOPE, STARLINK_AS_OF } from '../data/starlink-facts.js';
 import { SITE_URL } from './site.js';
 
 /** "1,139" — the same rendering the Markdown twins and the agent-readiness pins use. */
@@ -205,8 +205,10 @@ export const FLEET_SUMMARY = {
     `Complete searchable database of all ${FLEET_COUNT_TEXT} United Airlines mainline aircraft `
     + `across ${fleetOrder.length} types: ${fleetTypeBreakdown()}. Includes registration, seat `
     + `configuration, WiFi type, IFE system, delivery date, and operational status, as of ${FLEET_DB_AS_OF}. `
-    + `${STARLINK_EQUIPPED_LABEL} aircraft now equipped with free SpaceX Starlink satellite WiFi `
-    + `(as of ${STARLINK_AS_OF}). Live fleet utilization updated every 30 seconds.`,
+    // The Starlink count is the tracker's whole United fleet, not the mainline database the
+    // sentence before it counts, so it says so (STARLINK_EQUIPPED_SCOPE, "mainline + Express").
+    + `${STARLINK_EQUIPPED_LABEL} United aircraft now equipped with free SpaceX Starlink satellite WiFi `
+    + `(${STARLINK_EQUIPPED_SCOPE}, as of ${STARLINK_AS_OF}). Live fleet utilization updated every 30 seconds.`,
   linkHref: '/fleet',
   linkLabel: 'View full fleet database',
 };
