@@ -350,13 +350,16 @@ describe('the sheet and the sidebar panel', () => {
   });
 
   it('a chip to the tab already showing is text, not a dead link', async () => {
-    serve(body('live-2026-11-10-evening'));
-    mount(<TabSwitch to="schedule" />);
+    // A disrupted or watch template no longer carries the airborne line, so the calm one: on the
+    // Starlink tab, "280 Starlink" would go nowhere.
+    serve(body('calm-afternoon'));
+    mount(<TabSwitch to="starlink" />);
     await settle();
-    // On Live (the default tab), "647 airborne" would go nowhere.
+    fireEvent.click(screen.getByRole('button', { name: 'switch-starlink' }));
+    await settle();
     fireEvent.click(screen.getByRole('button', { name: /full brief/i }));
     await settle();
-    expect(within(screen.getByRole('dialog')).getByText('647 airborne').closest('a')).toBeNull();
+    expect(within(screen.getByRole('dialog')).getByText('280 Starlink').closest('a')).toBeNull();
   });
 
   it('at lg on Live the panel is open in the sidebar and the row reveals it instead of opening a sheet', async () => {

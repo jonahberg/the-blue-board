@@ -47,6 +47,7 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
   const top = sorted[0];
   const name = (f) => airportDisplayName(f.hub || '');
   const find = (re) => sorted.find((f) => re.test(f.id));
+  const gdps = sorted.filter((f) => f.hub && /^faa\.active\.[A-Z]{3}\.gdp$/.test(f.id));
 
   // A ground stop or delay program holds flights INTO the airport, so the headline says "into".
   if (tone === 'disrupted') {
@@ -54,44 +55,50 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
     if (gs?.hub) return { headline: `A ground stop is holding flights into ${name(gs)}.`, fact_ids: [gs.id] };
     const closure = find(/^faa\.active\.[A-Z]{3}\.closure$/);
     if (closure?.hub) return { headline: `The FAA lists ${name(closure)} as closed.`, fact_ids: [closure.id] };
-    // Delay programs at two or more hubs at once are what make a day without a stop disrupted.
-    const gdps = sorted.filter((f) => f.hub && /^faa\.active\.[A-Z]{3}\.gdp$/.test(f.id));
-    if (gdps.length >= 2) {
-      const many = `Ground delay programs are holding flights into ${joinNames(gdps.map(name))}.`;
-      return {
-        headline: wordCount(many) <= HEADLINE_WORDS ? many : 'Ground delay programs are holding flights into several United hubs.',
-        fact_ids: gdps.map((f) => f.id),
-      };
-    }
-    if (gdps[0]) return { headline: `A ground delay program is holding flights into ${name(gdps[0])}.`, fact_ids: [gdps[0].id] };
+    if (gdps.length) return delayProgramHeadline(gdps, name);
     const otp = sorted.find((f) => /^otp\.[A-Z]{3}$/.test(f.id) && f.toneFloor === 'disrupted');
     if (otp?.hub) return { headline: `Delays are heavy at ${name(otp)}.`, fact_ids: [otp.id] };
     return { headline: "United's operation is disrupted right now.", fact_ids: top ? [top.id] : [] };
   }
 
   if (tone === 'watch') {
-    // One hub's delay program is a watch, and the most concrete thing happening.
-    const gdp = find(/^faa\.active\.[A-Z]{3}\.gdp$/);
-    if (gdp?.hub) return { headline: `A ground delay program is holding flights into ${name(gdp)}.`, fact_ids: [gdp.id] };
+    // Delay programs at hubs are a watch however many there are, and the most concrete news.
+    if (gdps.length) return delayProgramHeadline(gdps, name);
     const lead = sorted.find((f) => f.toneFloor === 'watch');
     const planned = sorted.find((f) => f.kind === 'faa_planned' && f.hub);
-    if (lead?.kind === 'faa_planned' && lead.hub) return { headline: `Running normally, with FAA action possible at ${name(lead)}.`, fact_ids: [lead.id] };
+    // No "calm", "smooth" or "running normally" in a watch headline: the verifier replaces those
+    // when the tone is not calm (headline:calm_when_not_calm), and this is the replacement.
+    if (lead?.kind === 'faa_planned' && lead.hub) return { headline: `FAA action is possible at ${name(lead)}; none is in effect.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'otp') return { headline: `Mostly normal, with delays at ${name(lead)}.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'weather') return { headline: `Weather is slowing ${name(lead)}.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'faa') return { headline: `Mostly normal, with FAA delays at ${name(lead)}.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'cancellations') return { headline: `Mostly normal, with cancellations at ${name(lead)}.`, fact_ids: [lead.id] };
     const elsewhere = lead && lead.id.match(/^faa\.active\.([A-Z]{3})\.(gs|gdp)$/);
     if (elsewhere) {
-      const what = `${elsewhere[2] === 'gs' ? 'Ground stop' : 'Ground delay program'} for flights into ${airportDisplayName(elsewhere[1])}`;
-      const long = `${what}; United's hubs are running normally.`;
-      // A long airport name ("New York LaGuardia") would push it past the 12-word headline limit.
-      return { headline: wordCount(long) <= HEADLINE_WORDS ? long : `${what}.`, fact_ids: [lead.id] };
+      const what = elsewhere[2] === 'gs' ? 'Ground stop' : 'Ground delay program';
+      return { headline: `${what} for flights into ${airportDisplayName(elsewhere[1])}.`, fact_ids: [lead.id] };
     }
-    if (planned) return { headline: `Running normally, with FAA action possible at ${name(planned)}.`, fact_ids: [planned.id] };
-    return { headline: 'United is mostly running normally right now.', fact_ids: lead ? [lead.id] : [] };
+    if (planned) return { headline: `FAA action is possible at ${name(planned)}; none is in effect.`, fact_ids: [planned.id] };
+    return { headline: 'United is mostly normal right now.', fact_ids: lead ? [lead.id] : [] };
   }
 
   return { headline: 'United is running smoothly right now.', fact_ids: [] };
+}
+
+/**
+ * The headline for delay programs at hubs: one names its hub, several name theirs (or, past the
+ * 12-word limit, say "several United hubs").
+ * @param {BriefFact[]} gdps
+ * @param {(f: BriefFact) => string} name
+ * @returns {{headline: string, fact_ids: string[]}}
+ */
+function delayProgramHeadline(gdps, name) {
+  if (gdps.length === 1) return { headline: `A ground delay program is holding flights into ${name(gdps[0])}.`, fact_ids: [gdps[0].id] };
+  const many = `Ground delay programs are holding flights into ${joinNames(gdps.map(name))}.`;
+  return {
+    headline: wordCount(many) <= HEADLINE_WORDS ? many : 'Ground delay programs are holding flights into several United hubs.',
+    fact_ids: gdps.map((f) => f.id),
+  };
 }
 
 /**
@@ -137,15 +144,10 @@ function pickItems(facts, limit, tone) {
   // day of unconfirmed cancellations), with the cancellation split that explains IT.
   if (tone !== 'calm' && !picked.some((f) => f.toneFloor === tone)) {
     const setter = sorted.find((f) => f.toneFloor === tone);
-    // Delay programs at two hubs make the day disrupted through the hub-programs count; the
-    // programs themselves, already listed, say it better than the count would.
-    const explained = setter?.id === 'faa.active.count' && picked.some(isHubProgramFact);
-    if (!explained) {
-      add(setter);
-      if (setter?.kind === 'network') {
-        add(index.get('cxl.confirmed'));
-        add(index.get('cxl.unconfirmed'));
-      }
+    add(setter);
+    if (setter?.kind === 'network') {
+      add(index.get('cxl.confirmed'));
+      add(index.get('cxl.unconfirmed'));
     }
   }
 
@@ -153,22 +155,33 @@ function pickItems(facts, limit, tone) {
   add(index.get('otp.floor') || index.get('otp.soft') || index.get('otp.min'));
   const plannedHub = sorted.find((f) => f.kind === 'faa_planned' && f.hub);
   if (!picked.some((f) => f.kind === 'faa' || f.kind === 'faa_planned')) add(plannedHub || index.get('faa.active.count'));
-  add(index.get('air.starlink') || index.get('air.total'));
-  add(index.get('wx.summary'));
+  // What is in the air, and the hub-weather tally, are a calm day's background; when something is
+  // wrong they are padding (the tally would repeat a program's weather), and a shorter brief is better.
+  if (tone === 'calm') {
+    add(index.get('air.starlink') || index.get('air.total'));
+    add(index.get('wx.summary'));
+  }
   return picked;
 }
 
 /**
  * Who the traveler note speaks to. A ground stop or delay program holds flights INTO the airport;
- * a closure stops both directions; a hub's on-time figure is about its departures.
- * @param {BriefFact} anchor
+ * a closure stops both directions; a hub's on-time figure is about its departures. Two airports
+ * are both named; three or more are "those airports" (the items above name them).
+ * @param {BriefFact[]} anchors  one per hub, most severe first
  */
-function travelerWho(anchor) {
-  const name = airportDisplayName(anchor.hub || '');
-  if (/^faa\.active\.[A-Z]{3}\.(gs|gdp)$/.test(anchor.id)) return `flying to ${name}`;
-  if (/^faa\.active\.[A-Z]{3}\.closure$/.test(anchor.id)) return `flying to or from ${name}`;
-  if (anchor.kind === 'otp') return `flying out of ${name}`;
-  return `flying through ${name}`;
+function travelerWho(anchors) {
+  const [anchor] = anchors;
+  const name = (f) => airportDisplayName(f.hub || '');
+  const isProgram = (f) => /^faa\.active\.[A-Z]{3}\.(gs|gdp|closure)$/.test(f.id);
+  if (anchors.length > 1) {
+    const verb = anchors.some((f) => /\.closure$/.test(f.id)) ? 'flying to or from' : 'flying to';
+    return anchors.length === 2 ? `${verb} ${name(anchors[0])} or ${name(anchors[1])}` : `${verb} one of those airports`;
+  }
+  if (isProgram(anchor) && !/\.closure$/.test(anchor.id)) return `flying to ${name(anchor)}`;
+  if (/\.closure$/.test(anchor.id)) return `flying to or from ${name(anchor)}`;
+  if (anchor.kind === 'otp') return `flying out of ${name(anchor)}`;
+  return `flying through ${name(anchor)}`;
 }
 
 /**
@@ -185,14 +198,19 @@ export function buildTemplateBrief(facts) {
 
   let traveler_note = null;
   if (travelerNoteAllowed(tone, list)) {
-    // Anchored on the program travelers are held by, else the hub fact that makes the day disrupted.
-    const bySeverity = [...list].sort((a, b) => b.severity - a.severity);
-    const anchor = bySeverity.find((f) => f.hub && /^faa\.active\.[A-Z]{3}\.(gs|gdp|closure)$/.test(f.id))
-      || bySeverity.find((f) => f.hub && f.toneFloor === 'disrupted');
-    if (anchor) {
+    // Anchored on every hub's program travelers are held by (one per hub, most severe first, at
+    // most 8 citations), else the hub fact that makes the day disrupted.
+    const bySeverity = [...list].sort((a, b) => b.severity - a.severity || a.id.localeCompare(b.id));
+    const programs = [];
+    for (const f of bySeverity) {
+      if (f.hub && /^faa\.active\.[A-Z]{3}\.(gs|gdp|closure)$/.test(f.id) && !programs.some((p) => p.hub === f.hub)) programs.push(f);
+    }
+    const fallback = bySeverity.find((f) => f.hub && f.toneFloor === 'disrupted');
+    const anchors = programs.length ? programs.slice(0, 8) : fallback ? [fallback] : [];
+    if (anchors.length) {
       traveler_note = {
-        text: `If you are ${travelerWho(anchor)}, check your flight's status before you leave for the airport.`,
-        fact_ids: [anchor.id],
+        text: `If you are ${travelerWho(anchors)}, check your flight's status before you leave for the airport.`,
+        fact_ids: anchors.map((f) => f.id),
       };
     }
   }

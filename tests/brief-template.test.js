@@ -48,6 +48,17 @@ describe('possible FAA programs away from the hubs', () => {
   }
 });
 
+describe('no padding when something is wrong', () => {
+  for (const name of names) {
+    it(`${name}: a watch or disrupted template has no airborne, Starlink or weather-tally line`, () => {
+      const t = buildTemplateBrief(factsFor(name));
+      if (t.tone === 'calm') return;
+      for (const id of ['air.total', 'air.starlink', 'air.normal', 'wx.summary']) expect(t.items.map((i) => i.fact_ids[0])).not.toContain(id);
+      expect(t.items.length).toBeGreaterThanOrEqual(1);
+    });
+  }
+});
+
 describe('the unconfirmed "likely canceled" count', () => {
   for (const name of names) {
     it(`${name}: ranks below every program and planned hub program, and never leads the template`, () => {
@@ -87,7 +98,8 @@ describe('buildTemplateBrief', () => {
     expect(t.tone).toBe('watch');
     expect(t.headline).toBe('A ground delay program is holding flights into San Francisco.');
     // The low clouds are already in the program item: no separate San Francisco weather item.
-    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.SFO.gdp', 'faa.active.BOS.gdp', 'otp.floor', 'air.starlink']);
+    // No padding on a day something is wrong: no Starlink count, no weather tally.
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.SFO.gdp', 'faa.active.BOS.gdp', 'otp.floor']);
     expect(t.items[0].text).toBe('The FAA has a ground delay program in effect for flights heading to San Francisco (SFO) until 12:59 PM PT, because of low clouds. Those flights are held at their departure airport; delays average 62 minutes, up to 132 minutes.');
     expect(t.items[2].text).toBe('All 6 hubs with an on-time reading are at 86% or better.');
     expect(t.traveler_note).toEqual({ text: "If you are flying to San Francisco, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.SFO.gdp'] });
@@ -106,26 +118,48 @@ describe('buildTemplateBrief', () => {
     expect(buildTemplateBrief(facts).items.map((i) => i.fact_ids[0])).toContain('wx.SFO');
   });
 
-  it('delay programs at two hubs: disrupted, both named in the headline, no count item beside them', () => {
+  it('delay programs at two hubs: still a watch, both named in the headline and in the traveler note', () => {
     const fx = JSON.parse(readFileSync(new URL('sfo-gdp-morning.json', FIXTURE_DIR), 'utf8'));
     const faa = fx.sources.faa.map((a) => (a.airportCode === 'EWR'
       ? { ...a, groundDelay: true, programs: [{ type: 'ground_delay', reason: 'VOL:Volume', avgDelay: 41, maxDelay: 88, endTime: '2026-11-11T23:59:00Z' }] }
       : a));
     const facts = buildBriefFacts({ ...fx.sources, faa }, { nowMs: Date.parse(fx.nowIso) }).facts;
     const t = buildTemplateBrief(facts);
-    expect(t.tone).toBe('disrupted');
+    expect(t.tone).toBe('watch');
     expect(t.headline).toBe('Ground delay programs are holding flights into Newark and San Francisco.');
     expect(t.headline_fact_ids).toEqual(['faa.active.EWR.gdp', 'faa.active.SFO.gdp']);
     expect(t.items.map((i) => i.fact_ids[0])).not.toContain('faa.active.count');
-    expect(t.traveler_note?.fact_ids).toEqual(['faa.active.EWR.gdp']);
+    expect(t.traveler_note).toEqual({
+      text: "If you are flying to Newark or San Francisco, check your flight's status before you leave for the airport.",
+      fact_ids: ['faa.active.EWR.gdp', 'faa.active.SFO.gdp'],
+    });
     const out = verifyBrief({ headline: t.headline, tone: t.tone, items: t.items, traveler_note: t.traveler_note }, facts);
     expect(out.report.dropped).toEqual([]);
     expect(out.report.headline.status).toBe('kept');
   });
 
+  it('a stop or delay program at two hubs names both in the note; three or more say "one of those airports"', () => {
+    const storm = buildTemplateBrief(factsFor('storm-day'));
+    expect(storm.traveler_note).toEqual({
+      text: "If you are flying to Newark or Chicago O'Hare, check your flight's status before you leave for the airport.",
+      fact_ids: ['faa.active.EWR.gs', 'faa.active.ORD.gdp'],
+    });
+    const fx = JSON.parse(readFileSync(new URL('sfo-gdp-morning.json', FIXTURE_DIR), 'utf8'));
+    const gdp = (a) => ({ ...a, groundDelay: true, programs: [{ type: 'ground_delay', reason: 'VOL:Volume', avgDelay: 30, endTime: '2026-11-11T23:59:00Z' }] });
+    const faa = fx.sources.faa.map((a) => (a.airportCode === 'EWR' || a.airportCode === 'ORD' ? gdp(a) : a));
+    const facts = buildBriefFacts({ ...fx.sources, faa }, { nowMs: Date.parse(fx.nowIso) }).facts;
+    const t = buildTemplateBrief(facts);
+    expect(t.tone).toBe('watch');
+    expect(t.traveler_note.text).toBe("If you are flying to one of those airports, check your flight's status before you leave for the airport.");
+    expect(t.traveler_note.fact_ids.sort()).toEqual(['faa.active.EWR.gdp', 'faa.active.ORD.gdp', 'faa.active.SFO.gdp']);
+    const out = verifyBrief({ headline: t.headline, tone: t.tone, items: t.items, traveler_note: t.traveler_note }, facts);
+    expect(out.report.travelerNote.status).toBe('kept');
+    expect(out.report.headline.status).toBe('kept');
+  });
+
   it('planned only: a watch headline that names the hub, items that say "not in effect"', () => {
     const t = buildTemplateBrief(factsFor('planned-only-watch'));
-    expect(t.headline).toBe('Running normally, with FAA action possible at Newark.');
+    expect(t.headline).toBe('FAA action is possible at Newark; none is in effect.');
     expect(t.items[0].text).toMatch(/possible for flights into Newark \(EWR\) until 9:00 PM ET\. It is not in effect\.$/);
   });
 
@@ -133,11 +167,11 @@ describe('buildTemplateBrief', () => {
     const t = buildTemplateBrief(factsFor('unconfirmed-cancellations'));
     expect(t.tone).toBe('watch');
     expect(t.items.map((i) => i.fact_ids[0]).slice(0, 3)).toEqual(['net.index', 'cxl.confirmed', 'cxl.unconfirmed']);
-    expect(t.headline).toBe('United is mostly running normally right now.');
+    expect(t.headline).toBe('United is mostly normal right now.');
   });
 
   it('templateHeadline grounds a non-hub program without claiming it is at a hub', () => {
     const facts = [{ id: 'faa.active.BOS.gs', kind: 'faa', statement: '', values: ['BOS', 'Boston'], severity: 45, toneFloor: 'watch', link: { tab: 'weather' }, material: '' }];
-    expect(templateHeadline(facts)).toEqual({ headline: "Ground stop for flights into Boston; United's hubs are running normally.", fact_ids: ['faa.active.BOS.gs'] });
+    expect(templateHeadline(facts)).toEqual({ headline: 'Ground stop for flights into Boston.', fact_ids: ['faa.active.BOS.gs'] });
   });
 });

@@ -264,15 +264,17 @@ describe('tone: FAA programs at United hubs', () => {
     expect(travelerNoteAllowed('watch', facts)).toBe(true);
   });
 
-  it('a ground stop or closure at a hub, or delay programs at two hubs at once, is disrupted', () => {
+  it('a ground stop or closure at a hub is disrupted; delay programs at any number of hubs stay a watch', () => {
     const gs = withFaa((a) => (a.airportCode === 'EWR' ? program('ground_stop')(a) : null));
     expect(computeTone(gs)).toBe('disrupted');
     expect(byId(gs)['faa.active.EWR.gs'].toneFloor).toBe('disrupted');
     const closure = withFaa((a) => (a.airportCode === 'EWR' ? program('closure', { reason: 'snow and ice removal' })(a) : null));
     expect(computeTone(closure)).toBe('disrupted');
+    // Two hubs' delay programs read "Some Delays" in the header, and "watch" here.
     const twoGdps = withFaa((a) => (a.airportCode === 'EWR' ? program('ground_delay', { avgDelay: 41 })(a) : null));
-    expect(byId(twoGdps)['faa.active.count'].toneFloor).toBe('disrupted');
-    expect(computeTone(twoGdps)).toBe('disrupted');
+    expect(byId(twoGdps)['faa.active.count'].toneFloor).toBe('watch');
+    expect(byId(twoGdps)['net.status'].statement).toContain('"Some Delays"');
+    expect(computeTone(twoGdps)).toBe('watch');
     // A second program at the SAME hub is still one hub.
     const sameHub = withFaa((a) => (a.airportCode === 'SFO' ? { ...a, programs: [...a.programs, { type: 'ground_delay', reason: 'wind' }] } : null));
     expect(byId(sameHub)['faa.active.count'].toneFloor).toBe('watch');

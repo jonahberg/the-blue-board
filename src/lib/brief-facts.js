@@ -79,9 +79,8 @@ export function maxTone(...tones) {
 /**
  * The brief's tone, from the facts alone (prompt rule 6, made deterministic): the most alarming
  * `toneFloor` of any fact. The model proposes a tone; this decides it. For FAA programs at United
- * hubs: a ground delay program at one hub is "watch" (the header's network chip reads "Some
- * Delays" for it too); a ground stop or closure at a hub, or delay programs at two or more hubs at
- * once, is "disrupted" (the `faa.active.count` fact carries that rule).
+ * hubs it follows the header's own levels (src/lib/ops-health.js): ground delay programs at any
+ * number of hubs are "watch" ("Some Delays"); a ground stop or closure at a hub is "disrupted".
  * @param {Array<{toneFloor?: string}>} facts
  * @returns {'calm'|'watch'|'disrupted'}
  */
@@ -500,11 +499,9 @@ export function buildBriefFacts(sources, { nowMs }) {
     const describe = (list) => joinNames(list.map(({ code, type }) =>
       `${type === 'ground_stop' ? 'a ground stop for flights into' : type === 'ground_delay' ? 'a ground delay program for flights into' : 'a closure at'} ${airportDisplayName(code)}`));
     const n = hubPrograms.length;
-    // A ground stop or closure at a hub, or delay programs at two or more hubs at once, disrupts the
-    // network; one hub's delay program is a watch (computeTone).
-    const gdpHubs = new Set(hubPrograms.filter((p) => p.type === 'ground_delay').map((p) => p.code));
-    const countTone = n === 0 ? 'calm'
-      : hubPrograms.some((p) => p.type !== 'ground_delay') || gdpHubs.size >= 2 ? 'disrupted' : 'watch';
+    // A ground stop or closure at a hub disrupts the network; delay programs, at however many hubs,
+    // are a watch, as the header's network status treats them (computeTone).
+    const countTone = n === 0 ? 'calm' : hubPrograms.some((p) => p.type !== 'ground_delay') ? 'disrupted' : 'watch';
     facts.push({
       id: 'faa.active.count',
       kind: 'faa',
@@ -705,7 +702,7 @@ function faaActiveFact(code, p, { isHub, nowMs, asOfMs }) {
     else if (max) { statement += `; delays run up to ${max} minutes.`; values.push(`${max} minutes`); }
     else statement += '.';
     severity = isHub ? 85 : 35;
-    // One hub's delay program alone is a watch; faa.active.count raises two or more to disrupted.
+    // A delay program is a watch (and so is the hub-programs count when it lists only those).
     toneFloor = 'watch';
   } else if (type === 'closure') {
     suffix = 'closure';
