@@ -93,6 +93,221 @@ export function resolveTag(tag) {
 
 export const articles = [
   {
+    slug: 'united-restricts-third-party-ai-agents',
+    title: 'Leave the Bot at Home: United Restricts Third-Party AI Agents',
+    seoTitle: 'United Restricts Third-Party AI Agents',
+    date: '2026-11-11',
+    category: 'Policy',
+    sources: [
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/news-releases?item=125496' },
+    ],
+    summary: 'On November 11 United said it is restricting unauthorized third-party personal AI agents and assistants, both on its own digital platforms and through travel agencies and aggregators. It cites exposed account credentials, unintended purchases or miles redemptions, and FAA and DOT rules such as the human acknowledgment required at check-in.',
+    seoDescription: 'United is restricting unauthorized third-party AI agents on its digital platforms and via agencies, citing account security, stray purchases and FAA rules.',
+    body: `<p>If you have been letting an AI assistant into your MileagePlus account to shop for flights, spend miles or check you in, United wants that to stop. On November 11 the airline said it is "taking steps to restrict access" both "directly within our digital platforms" and "indirectly via travel agencies and aggregators." The stated aim is "to prohibit use by unauthorized, third-party personal AI agents or assistants." United says the work includes updates to its booking, ticketing and distribution policies.</p>
+
+<p>The airline gives three reasons. The first is security: "sharing account credentials with personal, third-party, AI assistants can expose sensitive information." The second is control: "actions taken by these tools may result in unintended purchases, account changes, or use of MileagePlus miles." The third is regulatory. United says these automated actions "have the potential to violate FAA and DOT regulations," and offers a concrete example: "flight check-in requires human acknowledgment that bags do not contain banned substances like explosives."</p>
+
+<p>That check-in example is the most useful line in the release. The banned-substances acknowledgment is meant to come from the traveler, and our read is that an assistant clicking through it on your behalf is exactly the kind of automated action United is worried about. The miles point matters for anyone sitting on a large MileagePlus balance, too: a tool that can redeem miles for you can also redeem them by mistake.</p>
+
+<p>The release gives no effective date. United says it will update its Digital Trust Center "so customers can better understand what these new restrictions mean for them," notes that companies in banking and retail have taken similar steps, and adds: "As personal AI assistants evolve, United will continue to evaluate how these tools interact with our services." Until those details are published, the safe course is the obvious one: book, check in and redeem miles yourself.</p>`,
+    tags: [],
+    ogImage: null,
+  },
+  {
+    slug: 'united-dulles-concourse-e-14-gates-new-club',
+    title: 'Dulles Finally Gets a Real Concourse: United Unveils Concourse E and a Giant New Club',
+    seoTitle: 'United Unveils Dulles Concourse E',
+    date: '2026-11-09',
+    category: 'Operations',
+    sources: [
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-11-09-United-Airlines-and-the-Metropolitan-Washington-Airports-Authority-Unveil-First-New-Concourse-in-Two-Decades-at-Washington-Dulles-International-Airport' },
+      { name: 'The Points Guy', url: 'https://thepointsguy.com/news/washington-dulles-international-airport-united-airlines-concourse-e-club/' },
+      { name: 'One Mile at a Time', url: 'https://onemileatatime.com/news/washington-dulles-concourse-e-united-club/' },
+      { name: 'AirlineGeeks', url: 'https://airlinegeeks.com/2026/11/09/united-unveils-14-gate-concourse-at-dulles/' },
+    ],
+    summary: 'On November 9 United and the Airports Authority unveiled Concourse E at Washington Dulles: 14 new United gates, direct AeroTrain access and a nearly 40,000-square-foot United Club, set to open to travelers November 10. It is the first of four phases and the first step toward retiring the old C and D concourses.',
+    seoDescription: 'United unveiled Dulles Concourse E on Nov. 9: 14 new gates, AeroTrain access and a nearly 40,000-sq-ft United Club. It is the first of four planned phases.',
+    body: `<p>United primarily operates its Washington hub out of Concourses C and D, which, as One Mile at a Time puts it, "were built as temporary facilities in 1985." On November 9, United and the Metropolitan Washington Airports Authority unveiled the first piece of their replacement. Concourse E is a 435,000-square-foot building with 14 new United gates, and United said it would open to travelers on November 10. It is the first new concourse at Dulles in two decades.</p>
+
+<p>The gates are the point. United says Concourse E "will allow the airline to fly more than 300 daily departures" at Dulles, and AirlineGeeks reports the airline expects to top 300 daily departures from the hub next summer, after its departures there rose 30% since 2022. Each gate can take one widebody or two narrowbodies, every gate has a jet bridge, and the concourse connects directly to the AeroTrain. The Points Guy notes the new gates sit directly above the AeroTrain station for Concourse C, and Chief Commercial Officer Andrew Nocella told TPG that United will fly both international and domestic flights from them.</p>
+
+<p>The club is the other reason to route through E. It is nearly 40,000 square feet with seating for more than 600 customers, which United calls "one of the largest airline clubs in the Western Hemisphere" and One Mile at a Time calls the carrier's second-largest United Club in the system. It sits across from gates E14 and E16 and, per OMAAT, is open daily from 5:30 a.m. to 10 p.m. The concourse also brings new dining, beverage and retail options, including a food court.</p>
+
+<p>This is only phase one. Concourse E's opening is the first of four planned construction phases, and later phases are expected to add up to 36 more United gates. TPG reports that United plans to grow Dulles to around 400 daily departures with all the new gates, calls this "the first step to retiring Concourse C-D," and says the aim is to open all of it by the mid-2030s. The whole Dulles program is a separate, larger number: United and the Airports Authority describe more than $20 billion of investment to modernize the airport over the next decade, so don't read that figure as the price of this building.</p>
+
+<p>The timing lines up with the fleet, too. United says it plans to launch its first international A321XLR service from Dulles, to Amsterdam and Dublin, in December. Scott Kirby called Dulles "a critical part of United's global network and growth strategy," and for a hub whose main concourses were built as temporary facilities, our read is that Concourse E is the first building that looks the part. OMAAT's verdict was simpler: "it looks like a real terminal, and not like a temporary facility."</p>`,
+    tags: ['iad', 'a321neo'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-first-coastliner-delivered-early-2027-debut',
+    title: 'The Coastliner Is Here, but Its Debut Slips to Early 2027',
+    seoTitle: 'United Coastliner Debut Slips to Early 2027',
+    date: '2026-11-06',
+    category: 'Fleet',
+    sources: [
+      { name: 'The Points Guy', url: 'https://thepointsguy.com/news/united-airlines-delivery-first-airbus-a321-coastliner/' },
+      { name: 'The Points Party', url: 'https://thepointsparty.com/articles/united-a321neo-coastliner-early-2027' },
+      { name: 'United Airlines Newsroom (Q3 results)', url: 'https://united.mediaroom.com/2026-10-20-United-Delivers-Record-17-Revenue-Growth-in-Q3,-and-Expects-Record-Q4-Revenue-Growth,-Underpinned-by-Accelerating-Customer-Investments' },
+      { name: 'United Airlines Newsroom (Dulles)', url: 'https://united.mediaroom.com/2026-11-09-United-Airlines-and-the-Metropolitan-Washington-Airports-Authority-Unveil-First-New-Concourse-in-Two-Decades-at-Washington-Dulles-International-Airport' },
+    ],
+    summary: 'United has taken delivery of its first A321neo Coastliner, the premium transcon jet with 20 Polaris suites and 12 Premium Plus seats, but now says its inaugural flight is slated for early 2027 after delays at Airbus. When it flies, it will be on Newark–Los Angeles and Newark–San Francisco.',
+    seoDescription: 'United took delivery of its first A321neo Coastliner, with 20 Polaris suites, but its inaugural flight is now slated for early 2027 after Airbus delays.',
+    body: `<p>United's premium transcon jet has arrived, just later than planned. On November 6 The Points Guy reported that United had taken delivery of its first Airbus A321neo "Coastliner" and shared a sneak peek of the jet on social media. The same report carried the catch: United said the Coastliner is now slated to make its inaugural flight in early 2027. United had hoped to launch service this past summer, and TPG says delays at Airbus pushed the debut back a few months.</p>
+
+<p>When it does fly, you'll find it on Newark–Los Angeles and Newark–San Francisco. The cabin is what transcon regulars have been waiting for: 20 Polaris suites with sliding privacy doors across 10 rows, 12 Premium Plus recliners in three rows of two-by-two, and a walk-up snack bar in economy. It also has Starlink Wi-Fi. And passengers in those suites get access to United's Polaris lounges.</p>
+
+<p>The Coastliner is one half of United's new premium narrowbody pair. United has 50 Coastliners on order alongside 50 A321XLRs, both from Airbus, and the XLR is further along: it debuted with domestic service in September, and United says it starts its first international flights, from Dulles to Amsterdam and Dublin, in December. Our read: for anyone booking a premium transcon between now and early 2027, nothing changes yet. The suites and the lounge access arrive only when the jet enters service, so check the aircraft type before you pay for the experience.</p>`,
+    tags: ['ewr', 'lax', 'sfo', 'a321neo'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-summer-2027-sfo-bermuda-canada-routes',
+    title: 'Charleston, Hartford, Bermuda, St. John\'s: United Fills In Its Summer 2027 Map',
+    seoTitle: 'United Summer 2027: New SFO, Bermuda and Canada Routes',
+    date: '2026-10-26',
+    category: 'Routes',
+    sources: [
+      { name: 'Airways', url: 'https://airwaysmag.com/new-post/air-canada-united-six-transborder-routes-2027' },
+      { name: 'The Points Guy (Canada)', url: 'https://thepointsguy.com/news/united-airlines-air-canada-expansion-summer-2027/' },
+      { name: 'AeroRoutes (Canada)', url: 'https://www.aeroroutes.com/eng/261022-uans27ca' },
+      { name: 'The Points Guy (SFO and Bermuda)', url: 'https://thepointsguy.com/news/united-airlines-summer-2027-expansion-bermuda-san-francisco-hub/' },
+      { name: 'AeroRoutes (SFO)', url: 'https://www.aeroroutes.com/eng/261027-uans27sfo' },
+      { name: 'AirlineGeeks', url: 'https://airlinegeeks.com/2026/10/29/united-adds-new-route-to-bermuda/' },
+    ],
+    summary: 'In October United filled in the rest of its summer 2027 map: Denver–Ottawa, Denver–Québec City and a returning Newark–St. John\'s alongside Air Canada, three new or returning San Francisco routes to Charleston, Hartford and Oklahoma City, and a Saturday Chicago–Bermuda flight.',
+    seoDescription: 'United\'s summer 2027 additions: Denver–Ottawa, Denver–Québec City, Newark–St. John\'s, SFO to Charleston, Hartford and Oklahoma City, and Chicago–Bermuda.',
+    body: `<p>October filled in the edges of United's summer 2027 map. None of these routes will make headlines on its own, but together they show where United is looking for the next round of connecting traffic.</p>
+
+<p>Canada came first. On October 16, United and Air Canada announced six new transborder routes for summer 2027 and said they had agreed to renew and expand their joint business agreement, subject to regulatory approval. United's three are Denver–Ottawa, Denver–Québec City and a seasonal Newark–St. John's, Newfoundland, which Airways notes is returning after more than a decade; the other three are Air Canada's. United's filed schedule, as tracked by AeroRoutes, has Denver–Ottawa starting April 29 with a daily SkyWest Embraer E175, Denver–Québec City from May 29 once a week on a 737-800, and Newark–St. John's from June 24 with a daily Republic Airways E175. United's chief network planner, Patrick Quayle, said the new routes "further underscore our commitment to investing in Canada."</p>
+
+<p>San Francisco got the domestic attention. The Points Guy reported on October 26 that United is adding three new or returning SFO routes, and AeroRoutes' summary of the filing lists all three from March 28, 2027: Charleston, South Carolina, four times weekly on a 737 MAX 8; Hartford daily on a 737 MAX 9, a route United last served until September 2018; and Oklahoma City daily on a SkyWest E175, last served until April 2020.</p>
+
+<p>Then there's Bermuda. Starting April 3, 2027, United will fly Chicago O'Hare to Bermuda on Saturdays only with Boeing 737s, its second nonstop to the island; today it serves Bermuda from Newark. Our read on the batch: the Canada routes lean on the Air Canada partnership to feed Denver and Newark, the SFO additions are classic hub-filling, and Bermuda gives Chicago a Saturday island option. These are plans, and filed schedules can still change before next spring.</p>`,
+    tags: ['sfo', 'den', 'ord', 'ewr', '737-max-8', '737-max-9'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-houston-terminal-b-north-largest-club',
+    title: 'Houston\'s New Front Door: United Opens Terminal B North and the Largest Airline Club in the Americas',
+    seoTitle: 'United Opens IAH Terminal B North Concourse',
+    date: '2026-10-22',
+    category: 'Lounges',
+    sources: [
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-10-21-United-Opens-New-Concourse-at-George-Bush-Intercontinental-Airport-with-More-Gates,-Local-Restaurants-and-the-Largest-Airline-Club-in-the-Americas' },
+      { name: 'Airways', url: 'https://airwaysmag.com/new-post/united-houston-terminal-b-north-concourse' },
+      { name: 'AirlineGeeks', url: 'https://airlinegeeks.com/2026/10/21/united-gives-first-look-at-new-houston-concourse/' },
+    ],
+    summary: 'United opened its new Terminal B North Concourse at Houston Bush on October 22: 22 mainline gates where every United flight boards by jet bridge, replacing facilities that date to 1969, plus a 54,000-square-foot United Club with seating for 800 that United calls the largest airline club in the Americas. Terminal B check-in is still at Terminal C.',
+    seoDescription: 'United opened IAH Terminal B North on Oct. 22: 22 jet-bridge gates and a 54,000-sq-ft United Club it calls the largest in the Americas. Check-in is still at C.',
+    body: `<p>Houston's Terminal B has been running in facilities that date back to 1969. On October 22 United opened its replacement: the Terminal B North Concourse, a three-level, 765,000-square-foot building with 22 mainline gates. Every United flight from the new concourse boards through a jet bridge. It is the centerpiece of United's $2.6 billion Terminal B Transformation Program, and with renovations also under way in the 26-gate South Concourse, United will have 48 gates in Terminal B. As Airways points out, 48 is the total for the whole terminal, not the number of gates the North Concourse adds.</p>
+
+<p>The club is the headline. It covers 54,000 square feet on the mezzanine level, seats 800 and has a 1,350-square-foot outdoor terrace, and United calls it the largest airline club in the Americas. The concourse around it leans local, with Houston favorites like B&amp;B Butchers &amp; Restaurant, Rosie Cannonball and Pizaro's Pizza next to national chains and a Be Relax spa, and Terminal B now has a dedicated sensory room for travelers with autism and sensory sensitivities.</p>
+
+<p>One catch if your trip starts in Houston: the Terminal B ticketing lobby is still closed. Airways reports that Terminal B passengers are being directed to Terminal C to check in, drop bags and clear security, and then take the Skyway to Terminal B. Our read: connecting passengers get the full upgrade right away, while local travelers still have a walk.</p>
+
+<p>United says the new concourse increases the overall number of customers who can fly on peak travel dates in 2026 by 40%, and it has more planned for Houston: food delivery through the United app at IAH later this year, nonstop service to Cartagena that will make it the first U.S. airline on that route, and plans to restart flights to Chihuahua, Mexico. Scott Kirby framed the whole project around the start of a trip: "I want our customers to start their vacation the minute they show up at the airport."</p>`,
+    tags: ['iah'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-q3-2026-earnings-record-growth-fuel',
+    title: 'Record Growth, Pricier Fuel: United\'s Third Quarter and a Weaker Year-End Outlook',
+    seoTitle: 'United Q3 2026 Earnings: Record Growth, Weaker Outlook',
+    date: '2026-10-20',
+    category: 'Operations',
+    sources: [
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-10-20-United-Delivers-Record-17-Revenue-Growth-in-Q3,-and-Expects-Record-Q4-Revenue-Growth,-Underpinned-by-Accelerating-Customer-Investments' },
+      { name: 'Skift', url: 'https://skift.com/2026/10/20/united-airlines-forecasts-weaker-profits-on-high-fuel-costs/' },
+      { name: 'View from the Wing', url: 'https://viewfromthewing.com/united-airlines-reports-earnings-record-revenue-but-delta-made-35-more-profit-on-lower-sales/' },
+      { name: 'Reuters via Honolulu Star-Advertiser', url: 'https://www.staradvertiser.com/2026/09/16/breaking-news/american-and-united-prepare-capacity-cuts-over-fuel-costs/' },
+      { name: 'United via PR Newswire (Q2)', url: 'https://www.prnewswire.com/news-releases/united-posts-q2-results-above-wall-street-expectations-and-raises-full-year-2026-adjusted-eps-guidance-despite-a-nearly-6-billion-increase-in-anticipated-fuel-costs-302826793.html' },
+    ],
+    summary: 'United grew third-quarter revenue 17.4% to $17.9 billion on just 1.3% more capacity, a growth rate it calls a record, but fuel expense rose $1.8 billion and adjusted EPS was $2.54. Its fourth-quarter guide of $0.50 to $1.50 a share, on $4.80-a-gallon fuel, came in short of the $1.76 analysts expected.',
+    seoDescription: 'United Q3 2026: revenue up a record 17.4% to $17.9B, adjusted EPS $2.54. Its Q4 guide of $0.50 to $1.50 assumes $4.80 fuel, short of analyst estimates.',
+    body: `<p>In July, United raised its full-year 2026 adjusted EPS guidance to $9.00 to $11.00. The third-quarter results, released October 20, tell two stories at once: demand is excellent, and fuel is eating the profit.</p>
+
+<p>Start with demand. Total operating revenue was $17.9 billion, up 17.4% from the third quarter of 2025, on capacity that grew just 1.3%; United calls the 17% growth a record. Premium revenue rose 17%, loyalty 17%, Basic Economy 16% and cargo 23%. The operation held up too: United reports its highest third-quarter customer satisfaction, by net promoter score, since 2022, the best July on-time departure rate among the seven largest U.S. carriers, and the lowest seat cancellation rate among the three largest U.S. airlines this summer. Net income was $1.0 billion, or $3.14 per diluted share; adjusted, it was $833 million, or $2.54.</p>
+
+<p>Now fuel. Fuel expense was up $1.8 billion from a year earlier, and the average price was $3.90 a gallon. Skift reports that United guided fourth-quarter adjusted EPS to $0.50 to $1.50, short of the $1.76 analysts expected, and expects fuel to average $4.80 a gallon, about $0.45 more than consensus assumed. The high end of that range would bring 2026 adjusted earnings to no more than $7.22 a share, Skift adds, citing CNBC, which is below the bottom of July's range. View from the Wing notes the midpoint of the fourth-quarter forecast is 43% below what analysts expected. Revenue still isn't the problem: United expects fourth-quarter revenue growth to accelerate to more than 20% year over year, another record.</p>
+
+<p>What it means for your trips: in a Reuters report on September 16, CFO Mike Leskinen told a Morgan Stanley conference that some flights planned for December would no longer operate because higher fuel costs had made marginal routes less attractive, and that further adjustments could follow in the first quarter and into 2027 if fuel stays high. "We are not flying to maximize market share. We're flying to maximize profitability and free cash generation," he said. He also said United expected to recover the higher fuel expense through pricing, though with a lag. Our read: expect fares to keep climbing, and marginal routes to be the first trimmed, for as long as fuel stays here.</p>
+
+<p>Scott Kirby's argument is that the investment strategy is working anyway. In the release he said United is winning new customers "because they are trying us for Starlink" but "staying with us for the industry-leading app, great service, on-board product and technology." The revenue line supports that. The profit line is the reminder that the bet still runs through the price of jet fuel, and that Delta, per View from the Wing, made about 35% more adjusted pretax profit on lower sales.</p>`,
+    tags: [],
+    ogImage: null,
+  },
+  {
+    slug: 'faa-certifies-boeing-737-max-10-united',
+    title: 'Finally Certified: The 737 MAX 10, and Why United Flyers Should Care',
+    seoTitle: 'FAA Certifies the Boeing 737 MAX 10',
+    date: '2026-10-20',
+    category: 'Fleet',
+    sources: [
+      { name: 'Boeing', url: 'https://www.boeing.com/features/2026/10/faa-certifies-boeing-737-10' },
+      { name: 'AP via WUNC', url: 'https://www.wunc.org/2026-10-21/faa-clears-the-way-for-airlines-to-put-boeings-long-delayed-737-max-10-into-service' },
+      { name: 'AirData News', url: 'https://www.airdatanews.com/boeing-737-max-10-is-finally-certified-who-ordered-the-1-555-aircraft' },
+    ],
+    summary: 'Boeing\'s 737-10 was certified and cleared for commercial service on October 20 after years of delays, and Boeing expects to begin deliveries in 2027. United, one of the original customers when Boeing launched the variant in 2017, holds the largest identified MAX 10 order, according to AirData News.',
+    seoDescription: 'The FAA certified the Boeing 737 MAX 10 on Oct. 20 after years of delays, with deliveries expected from 2027. United holds the largest identified order.',
+    body: `<p>On October 20, Boeing's 737-10, better known as the MAX 10, was certified and cleared for commercial service. The Associated Press called the FAA's approval the end of "years of delays," after "technical and regulatory hurdles repeatedly delayed certification." Transportation Secretary Sean Duffy summed it up: "To think that it took us almost 10 years to get here."</p>
+
+<p>Few airlines have more riding on this airplane than United. It was one of the original customers announced when Boeing launched the variant in 2017, AirData News notes that Boeing described it as a launch customer, and AirData counts United's as the largest identified MAX 10 order. The AP names United among the type's major customers, along with Delta, American and Ryanair. In all, Boeing says it has 1,555 MAX 10 orders from more than 30 customers.</p>
+
+<p>Boeing says the MAX 10 typically seats 185 to 210 passengers, with a range of up to 3,100 nautical miles, and that its enhanced Angle of Attack system will become standard across the 737 MAX family. The AP reports that Boeing expects to begin deliveries in 2027. When United gets its first one is the open question, and the one that matters for flyers. Our read: certification turns the MAX 10 from a perennial asterisk in United's fleet plan into an airplane that can actually show up, and with it more seats per departure at hubs where gates and slots are the constraint.</p>`,
+    tags: ['737-max-9', '737-max-8'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-starlink-tracker-half-of-flights',
+    title: 'Will My Flight Have Starlink? United Now Has a Tracker for That',
+    seoTitle: 'United Launches a Starlink Flight Tracker',
+    date: '2026-10-15',
+    category: 'Fleet',
+    sources: [
+      { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/2026-10-15-United-Now-Offers-Starlink-Wi-Fi-on-Nearly-Half-its-Daily-Flights,-Launches-New-Starlink-Tracker-Tool-Extends-Starlink-Status-Match-Offer' },
+      { name: 'United Airlines Newsroom (Guam)', url: 'https://united.mediaroom.com/United-Continues-Starlink-Rollout-with-Installations-Underway-on-Boeing-737-MAX-8-Fleet-on-Guam' },
+      { name: 'United Airlines Newsroom (Q3 results)', url: 'https://united.mediaroom.com/2026-10-20-United-Delivers-Record-17-Revenue-Growth-in-Q3,-and-Expects-Record-Q4-Revenue-Growth,-Underpinned-by-Accelerating-Customer-Investments' },
+      { name: 'United Airlines Newsroom (Spotify)', url: 'https://united.mediaroom.com/2026-11-05-United-Customers-Can-Now-Stream-Their-Favorite-Music,-Podcasts-and-Videos-from-Their-Spotify-Accounts-on-Starlink-Enabled-Seatback-Screens' },
+    ],
+    summary: 'United launched StarlinkTracker.United.com on October 15 so you can check, within three days of departure, whether your flight has Starlink. At the time Starlink was live on more than 635 aircraft and nearly half of daily departures; by November 5 United said it was on more than half of its daily flights.',
+    seoDescription: 'United\'s new Starlink tracker checks your flight within three days of departure, as Starlink passes 635 aircraft and reaches about half of daily flights.',
+    body: `<p>On October 15 United launched a tool for the question every Starlink-chasing flyer has: will my flight have it? StarlinkTracker.United.com, which United says it built in response to customer demand, takes your travel dates and flight numbers within three days of departure, with updates in real time for last-minute aircraft changes. It also shows the percentage of Starlink flights at United's hubs, including Chicago, Newark, Washington and San Francisco.</p>
+
+<p>The numbers behind it are moving quickly. In the October 15 release, Starlink was live on more than 635 United mainline and United Express aircraft and nearly half of daily departures, with installations running at about 20 aircraft per week. United says more than 250,000 customers a day, on average, fly on a Starlink-equipped plane, and it counts more than 37.7 million passengers across more than 538,000 flights so far. On October 20 the third-quarter release put the count at more than 640 aircraft, adding approximately three more per day, and said availability is expected to reach "61% by the end of 2026, 87% by June 1," and fleet-wide by the end of 2027. By November 5 United was describing Starlink as available on more than half of its daily flights. It is free for MileagePlus members in every class of service.</p>
+
+<p>United is also using Starlink to win customers. Customer service scores on Starlink-equipped planes were nearly double those with other Wi-Fi, according to the earnings release, and the "Switch to Better Wi-Fi" status match for eligible Delta SkyMiles and American AAdvantage members was extended by a week, to October 22. That offer gave a path to United Premier status through January 2028, with thresholds from $1,500 for Premier Silver to $7,000 for Premier 1K. Chief Commercial Officer Andrew Nocella's pitch: "Starlink gives customers even more reasons to choose United and keep coming back."</p>
+
+<p>The rollout keeps reaching new corners of the network. On October 13 United said installations were under way on its Guam-based 737 MAX 8 fleet, with two aircraft already done; from Guam, United serves 15 destinations, including the Island Hopper. And on November 5 the airline added Spotify: on Starlink-enabled seatback screens you can scan a QR code to log in to your own Spotify account, which United says makes it the first airline to let customers do that from a seatback screen. United says the Spotify rollout will reach half of its fleet by next spring.</p>
+
+<p>The tracker answers the question by flight number. The Blue Board's fleet database tracks Starlink status by tail, so between the two you can check a specific booking and see how far along each aircraft type is.</p>`,
+    tags: ['gum', '737-max-8'],
+    ogImage: null,
+  },
+  {
+    slug: 'united-mileageplus-2027-pqp-only-premier-status',
+    title: 'Flights No Longer Count: United Makes Premier Status PQP-Only in 2027, and 1K Gets Harder',
+    seoTitle: 'United MileagePlus 2027: Premier Status Goes PQP-Only',
+    date: '2026-10-13',
+    category: 'Policy',
+    sources: [
+      { name: 'The Points Guy', url: 'https://thepointsguy.com/news/united-airlines-premier-elite-status-shakeup/' },
+      { name: 'Frequent Miler', url: 'https://frequentmiler.com/united-is-making-it-harder-to-earn-elite-status-from-2027/' },
+      { name: 'InsideFlyer', url: 'https://www.insideflyer.com/posts/united-ends-flight-based-status-qualification-in-2027/' },
+    ],
+    summary: 'From January 1, 2027, United will award Premier status on Premier Qualifying Points alone. The flight-segment path goes away, Premier 1K rises from 28,000 to 32,000 PQP, members still need four United flights a year, and the annual starter PQP deposit is now tied to an eligible United credit card.',
+    seoDescription: 'From 2027 United awards Premier status on PQP alone: the flight-segment path ends, 1K rises to 32,000 PQP and the starter PQP deposit needs a United card.',
+    body: `<p>In a memo to MileagePlus members, reported by The Points Guy on October 13, United said it is ending the flight-segment path to Premier status. From January 1, 2027, Premier Qualifying Points become the only way to qualify, and the option of reaching each tier with a mix of Premier Qualifying Flights and a smaller PQP total goes away. These rules apply to the 2027 earning year, which determines the status members hold in 2028.</p>
+
+<p>For most tiers the bar doesn't move. Silver stays at 6,000 PQP, Gold at 12,000 and Platinum at 18,000. Premier 1K is the exception, rising from 28,000 PQP to 32,000. You will still need at least four United flights in a year to be Premier-eligible; United Express flights count toward that minimum, and partner flights don't. The old segments-plus-points option, which for 1K meant 60 PQFs plus 22,000 PQPs, is the part that disappears.</p>
+
+<p>The other change is about credit cards. United will tie its annual starter PQP deposit to an eligible United credit card. TPG reports that card holders get a deposit equal to 5%: a member entering 2027 with Premier Silver gets 300 PQP, which is 5% of the 6,000 threshold. Members who open an eligible United card by December 31 will also receive the deposit for next year. Frequent Miler notes that the Premier 1K boost rises from 1,400 to 1,600 PQP, and that the annual PQP earning caps on the United Club Card and United Club Business Card rise from 28,000 to 32,000 from 2027.</p>
+
+<p>MileagePlus president Jarad Fisher told TPG the change is "basically doubling down on the way most people were earning status," and called segment-based qualification "an old relic." For most members that's true, and Frequent Miler agrees that for those who only earn Silver, Gold or Platinum via PQP, "this shouldn't really make any difference." Our read: the people who lose are high-frequency, low-fare flyers who reached status on segments without the spend to clear the PQP bar, plus anyone chasing 1K, who now needs 4,000 more PQP. If you were planning a 2027 segment run, re-plan it around spend, and if you count on the starter deposit, make sure you hold an eligible United card by December 31.</p>`,
+    tags: [],
+    ogImage: null,
+  },
+  {
     slug: 'united-dish-live-football-starlink-seatback',
     title: 'Live Football at 35,000 Feet: Starlink Turns United\'s Seatbacks Into Live TV',
     date: '2026-09-17',
