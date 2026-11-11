@@ -8,18 +8,26 @@
  * quiet line under the header, one card after the content — never a popup (DESIGN.md:
  * "Engagement surfaces stay quiet").
  *
- * Wording follows the owner's donation-prompt line (Oct 6 2026): "donate to support costs and
- * keep the blue board going" — no coffee.
+ * Wording (Nov 11 2026) is the site's one "cover a day" voice, and every sentence comes from
+ * src/lib/cover-a-day.js: readers cover the cost, one day at a time; $17 pays for a day; the
+ * owner speaks as "I" and signs as Jonah. A content page cannot know which day is open, so its
+ * asks say "Help cover a day" and go to the any-amount link. The card offers the amount ladder
+ * ($5, $10, $17 · one day, $100 · nearly six days, then "Other amount"; `supportLadder`) in
+ * place of its button whenever at least one fixed-amount link is set, and the single
+ * "Help cover a day" button when none is.
  *
  * `placement` becomes the link's `data-support` label, so the delegated listener in
  * src/lib/support-tracking.js (installed on every page by VercelAnalytics.astro) reports a
  * `support_click` per placement, e.g. `fleet-top` vs `fleet-end`, and the Stripe link's
- * `utm_content` (src/lib/support-link.js), so the payment records the same label. Labels are
- * pinned unique and ≤40 chars by tests/support-note.test.js.
+ * `utm_content` (src/lib/support-link.js), so the payment records the same label. The ladder's
+ * buttons carry `<placement>-<amount>` (`fleet-end-17`); its "Other amount" link keeps the
+ * card's own label, the one its single button had. Labels are pinned unique and ≤40 chars by
+ * tests/support-note.test.js.
  *
  * Pure markup — no inline <script>/<style>; the CSP is hash-locked at build.
  */
 import { SUPPORTERS } from '../../data/supporters.js';
+import { HELP_COVER_LABEL, READER_NOTE_LINE, supportCardCopy, supportLadder } from '../../lib/cover-a-day.js';
 import { supportUrl } from '../../lib/support-link.js';
 
 interface Props {
@@ -32,13 +40,14 @@ interface Props {
 }
 
 const { variant, placement, checkedAgainst, class: className = '' } = Astro.props;
-const supporterCount = SUPPORTERS.length;
 const href = supportUrl(placement);
+const card = supportCardCopy({ checkedAgainst, supporterCount: SUPPORTERS.length });
+const ladder = variant === 'card' ? supportLadder(placement, { other: placement }) : null;
 ---
 {
   variant === 'inline' ? (
     <p class:list={['mt-2 text-xs text-muted-foreground', className]} data-support-note="inline">
-      Researched and kept current by one person — no ads, no paywall.{' '}
+      {READER_NOTE_LINE}{' '}
       <a
         href={href}
         target="_blank"
@@ -46,7 +55,7 @@ const href = supportUrl(placement);
         data-support={placement}
         class="font-medium text-foreground underline underline-offset-2 hover:text-primary"
       >
-        Donate to support costs
+        {HELP_COVER_LABEL}
       </a>
     </p>
   ) : (
@@ -56,29 +65,49 @@ const href = supportUrl(placement);
       data-support-note="card"
     >
       <h2 id={`support-${placement}`} class="text-base font-bold tracking-tight text-foreground">
-        Did this page help?
+        {card.heading}
       </h2>
-      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-        The Blue Board is a one-person project: no ads, no paywall, no login.
-        {checkedAgainst && <> {checkedAgainst}</>} I pay the server and flight-data costs
-        myself, and donations from readers are what keep it going.
-      </p>
-      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {supporterCount} readers are on the Supporters Wall so far. If this page saved you a
-        search, consider joining them.
-      </p>
-      <div class="mt-4 flex flex-wrap items-center gap-3">
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-support={placement}
-          class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-5 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
-        >
-          Donate to keep it going
-        </a>
-        <span class="text-xs text-muted-foreground">— Jonah</span>
-      </div>
+      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{card.intro}</p>
+      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{card.count}</p>
+      {
+        ladder ? (
+          <div class="mt-4 flex flex-wrap items-center gap-2" data-support-ladder>
+            {ladder.amounts.map((step) => (
+              <a
+                href={step.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-support={step.placement}
+                class="inline-flex min-h-11 items-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
+              >
+                {step.text}
+              </a>
+            ))}
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-support={placement}
+              class="inline-flex min-h-11 items-center px-1 text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary"
+            >
+              {ladder.other.text}
+            </a>
+          </div>
+        ) : (
+          <div class="mt-4">
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-support={placement}
+              class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-5 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
+            >
+              {card.button}
+            </a>
+          </div>
+        )
+      }
+      <p class="mt-2 text-xs text-muted-foreground">{card.note}</p>
     </aside>
   )
 }

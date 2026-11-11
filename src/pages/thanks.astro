@@ -10,9 +10,13 @@
  * a display name CAN appear (only after src/lib/supporter-name.js, never on a hidden row or
  * with SUPPORTER_NAMES=off; a pooled day shows a count). Point Stripe's redirect here only
  * once the webhook is live.
+ *
+ * Since Nov 11 2026 it speaks in the owner's voice ("I", signed "— Jonah"), and its first two
+ * paragraphs come from src/lib/cover-a-day.js (THANKS_*), dollar figures built from the
+ * constants. The display-name and Stripe paragraphs are not asks and stay here as they were.
  */
 import BaseLayout from '../components/site/BaseLayout.astro';
-import { DAILY_COST_USD, MONTHLY_COST_USD } from '../lib/cover-a-day.js';
+import { THANKS_COST_LINE, THANKS_COUNT_LINE, THANKS_WHERE_LINE } from '../lib/cover-a-day.js';
 
 const title = 'Thank you | The Blue Board';
 const description = 'Thank you for supporting The Blue Board, the free, fan-built United Airlines operations dashboard.';
@@ -23,23 +27,15 @@ const description = 'Thank you for supporting The Blue Board, the free, fan-buil
     <h1 class="text-2xl font-bold tracking-tight text-foreground">Thank you.</h1>
 
     <div class="mt-5 max-w-2xl space-y-4 text-sm leading-relaxed text-muted-foreground">
-      <p>
-        Your donation keeps The Blue Board free, with no ads. It costs about ${MONTHLY_COST_USD} a month to
-        run, about ${DAILY_COST_USD} a day: the live flight and schedule data, the servers, and the AI
-        delay explanations.
-      </p>
-      <p>
-        We count donations in days: every ${DAILY_COST_USD} covers one day of the site's costs, the day it
-        is given or, if that day is already covered, the next open day after it. Smaller amounts pool
-        with other donations until they make a day. The dashboard's About section (ⓘ → About on a
-        computer, More → About on a phone) shows this month's days.
-      </p>
+      <p>{THANKS_COST_LINE}</p>
+      <p>{THANKS_COUNT_LINE} {THANKS_WHERE_LINE}</p>
       <p>
         If you gave a display name, it can appear beside the day your donation covered, after a basic
         check. Otherwise, or if several donations covered that day together, the day is credited to
         &ldquo;a supporter&rdquo; or to the number of supporters who covered it.
       </p>
       <p>Stripe handled your payment. Your card details stay with Stripe.</p>
+      <p>— Jonah</p>
     </div>
 
     <a

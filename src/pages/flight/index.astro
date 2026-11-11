@@ -24,6 +24,9 @@ import FlightHistoryCard from '../../components/site/FlightHistoryCard.astro';
 import FlightReadCard from '../../components/site/FlightReadCard.astro';
 import FlightTrip from '../../components/site/FlightTrip.astro';
 import { supportUrl } from '../../lib/support-link.js';
+import { UNCONFIGURED_STATUS, flightPageSupportCopy } from '../../lib/cover-a-day.js';
+
+const supportLine = flightPageSupportCopy(UNCONFIGURED_STATUS);
 
 const title = 'Look up a United flight | The Blue Board';
 const description =
@@ -114,17 +117,18 @@ const description =
       <FlightReadCard />
     </div>
 
-    <!-- When /api/support-status says today is not covered, the script swaps the words for the
-         site's day framing (src/lib/cover-a-day.js flightPageSupportCopy); the link stays the same. -->
+    <!-- The words with no support status (src/lib/cover-a-day.js flightPageSupportCopy). Once
+         /api/support-status answers, the script swaps in the words for today's state and points the
+         link at the day it names (coverButtonHref); its data-support label never changes. -->
     <p class="mt-10 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground" data-fp-support hidden>
-      <span data-f="support-text">The Blue Board is free and run by one person. If it helped you today,</span>
+      <span data-f="support-text">{supportLine.text}</span>
       <a
         href={supportUrl('flight-page')}
         target="_blank"
         rel="noopener noreferrer"
         data-support="flight-page"
         class="font-medium text-foreground underline underline-offset-2 hover:text-primary"
-      ><span data-f="support-link">you can chip in toward the data bill</span></a><span data-f="support-end">.</span>
+      ><span data-f="support-link">{supportLine.link}</span></a><span data-f="support-end"></span>
     </p>
   </div>
 </BaseLayout>

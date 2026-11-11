@@ -9,8 +9,9 @@
  * Three optional reads, all of endpoints the dashboard already shares through the CDN:
  *   - `/api/fr24-feed?airline=UAL` (the dashboard's own URL, so the same cached object) ONLY while
  *     this flight is in the air, for its live position on the progress track;
- *   - `/api/support-status` (CDN-cached for a minute), once, when the support line first shows: if
- *     today is not covered the line takes the site's "cover a day" framing; any failure leaves it;
+ *   - `/api/support-status` (CDN-cached for a minute), once, when the support line first shows: the
+ *     line then says whether today is covered and its link names the day $17 would cover; any
+ *     failure leaves the page's own words;
  *   - the AI read's inputs and `/api/delay-explain`, ONLY when the reader presses that button.
  *
  * "Watch this flight" is a link to the dashboard's `?watch=UA929` deep link (src/lib/watch-link.js):
@@ -306,31 +307,33 @@ if (root) {
   };
 
   /**
-   * The support line in the site's day framing ("Today isn't covered yet. $17 keeps The Blue Board
-   * running for a day." + "Cover today · $17"), once per page view. The link (its href and its
-   * `data-support` label) is untouched; only words change, and only when the status says today is
-   * open. A failed or unconfigured status leaves the page's own sentence.
+   * The support line for today's state (src/lib/cover-a-day.js flightPageSupportCopy), once per
+   * page view: "No one has covered today yet. …" + "Cover today · $17", or "Today is covered,
+   * thanks to Dana R." + "Cover tomorrow · $17". A link that names a day goes to the fixed $17
+   * link (coverButtonHref, for the link's own `data-support` label, which never changes). A failed
+   * or unconfigured status leaves the page's own words and link.
    */
   let supportFramed = false;
   const frameSupport = async () => {
     if (supportFramed || !support) return;
     supportFramed = true;
     try {
-      const [{ parseSupportStatus, flightPageSupportCopy }, json] = await Promise.all([
+      const [{ parseSupportStatus, flightPageSupportCopy, coverButtonHref }, json] = await Promise.all([
         import('../lib/cover-a-day.js'),
         getJson('/api/support-status').catch(() => null),
       ]);
-      const copy = flightPageSupportCopy(parseSupportStatus(json, Date.now()));
-      if (!copy) return;
+      const status = parseSupportStatus(json, Date.now());
+      if (!status.configured) return;
+      const copy = flightPageSupportCopy(status);
       const text = q<HTMLElement>(support, '[data-f="support-text"]');
       const link = q<HTMLElement>(support, '[data-f="support-link"]');
-      const end = q<HTMLElement>(support, '[data-f="support-end"]');
-      if (!text || !link || !end) return;
+      const anchor = link?.closest<HTMLAnchorElement>('a[data-support]');
+      if (!text || !link || !anchor) return;
       text.textContent = copy.text;
       link.textContent = copy.link;
-      end.textContent = '';
+      anchor.href = coverButtonHref(status, anchor.getAttribute('data-support') || 'flight-page');
     } catch {
-      /* the page's own sentence stays */
+      /* the page's own words stay */
     }
   };
 
