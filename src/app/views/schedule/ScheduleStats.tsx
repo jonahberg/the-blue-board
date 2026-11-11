@@ -109,7 +109,6 @@ export function ScheduleStats({
   const otp = stats.otp;
   const tone = otpTone(otp === null || otp === undefined ? null : otp);
   const dirLabel = dir === 'departures' ? 'DEP' : 'ARR';
-  const presumedVerb = dir === 'arrivals' ? 'landed' : 'departed';
   const copy = statStripCopy(dir);
   const showDisruption =
     hubDisruptionMinutes !== null && Number.isFinite(hubDisruptionMinutes) && hubDisruptionMinutes > 60;
@@ -130,9 +129,9 @@ export function ScheduleStats({
       <span
         key="presumed"
         className="rounded-sm border bg-muted/50 px-1.5 py-0.5 text-muted-foreground"
-        title={`Presumed ${presumedVerb} — scheduled time passed without a live update`}
+        title={copy.presumed.title}
       >
-        ✈ {stats.presumed} presumed {presumedVerb}
+        ✈ {stats.presumed} {copy.presumed.label}
       </span>
     ) : null,
     showDisruption ? (
@@ -279,9 +278,9 @@ export function ScheduleStats({
           {stats.presumed > 0 ? (
             <span
               className="rounded-sm border bg-muted/50 px-1.5 py-0.5 text-muted-foreground"
-              title={`Presumed ${presumedVerb} — scheduled time passed without a live update`}
+              title={copy.presumed.title}
             >
-              ✈ {stats.presumed} presumed {presumedVerb}
+              ✈ {stats.presumed} {copy.presumed.label}
             </span>
           ) : null}
           {showDisruption ? (
