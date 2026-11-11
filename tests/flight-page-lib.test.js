@@ -133,7 +133,7 @@ describe('the 30-day record (flight_history → squares)', () => {
     const words = historyWords(s);
     expect(words.typical).toBe('When it runs late, it is usually about 40 minutes.');
     expect(words.count).toBe('On time 1 of 4 days with a recorded departure, since Nov 6, when our record starts. 1 canceled, 1 listed as likely canceled (unconfirmed).');
-    expect(words.note).toContain('3 of these times are takeoff times, which include taxiing.');
+    expect(words.note).toContain('3 of these 4 departure times are takeoff times, which include taxiing.');
 
     const two = summarizeHistory(historyRows(dates.slice(0, 2), () => 'late'), { origin: 'ORD', dest: 'LHR', today: '2026-11-08' });
     expect(historyWords(two).typical).toBe('');

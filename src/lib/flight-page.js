@@ -247,7 +247,10 @@ export function historyWords(summary) {
   const typical = typicalLateMin ? `When it runs late, it is usually about ${typicalLateMin} minutes.` : '';
   const notes = [`On time means it left within ${ON_TIME_GRACE_MIN} minutes of schedule, the rule the board's on-time figures use.`];
   if (runwayDays > 0) {
-    notes.push(`${runwayDays === withTime ? 'All' : `${runwayDays} of`} ${withTime === 1 ? 'that time is a takeoff time' : 'these times are takeoff times'}, which include taxiing.`);
+    if (withTime === 1) notes.push('That departure time is a takeoff time, which includes taxiing.');
+    else if (runwayDays === withTime) notes.push('These departure times are takeoff times, which include taxiing.');
+    else if (runwayDays === 1) notes.push(`1 of these ${withTime} departure times is a takeoff time, which includes taxiing.`);
+    else notes.push(`${runwayDays} of these ${withTime} departure times are takeoff times, which include taxiing.`);
   }
   if (counts['no-data']) notes.push(`${dayWord(counts['no-data'])} with no departure time on record.`);
   return { count, typical, note: notes.join(' '), empty: false };

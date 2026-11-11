@@ -45,7 +45,7 @@ export const STEP_CLASSES = Object.freeze({
 });
 
 /** States in which the board would still show a delay PREDICTION (useBoardModel computeRisk). */
-const PREDICTABLE_STATES = new Set(['scheduled', 'delayed', 'boarding', 'overdue']);
+const PREDICTABLE_STATES = new Set(['scheduled', 'delayed', 'boarding']);
 
 const REAL = new Set(['gate', 'actual', 'runway']);
 
@@ -322,6 +322,9 @@ export function flightPageView(payload, nowSec, { live = null, stableDays = fals
       routeLine: payload?.lastSeen ? `${payload.lastSeen.origin} → ${payload.lastSeen.dest}` : '',
       verdict: { ...verdict, parts: [{ text, tone: null }], text },
       stamp: '',
+      note: status === 'unavailable'
+        ? ''
+        : "We see flights that touch one of United's nine hubs, from yesterday through tomorrow. A number that is not flying then, or flies between two other airports, will not show here.",
       trip: null,
       history: historyView,
       aircraft: null,
@@ -358,6 +361,7 @@ export function flightPageView(payload, nowSec, { live = null, stableDays = fals
     verdict,
     state: leg.state,
     stamp,
+    note: '',
     trip: {
       origin: { code: oCode, city: placeName(row.airport?.origin), time: sideTime(leg.depEv, Number(sched.departure) || 0, oTz, true) },
       dest: { code: dCode, city: placeName(row.airport?.destination), time: sideTime(leg.arrEv, Number(sched.arrival) || 0, dTz, false) },
@@ -368,7 +372,7 @@ export function flightPageView(payload, nowSec, { live = null, stableDays = fals
     aircraft: aircraftView(payload?.aircraft || null, payload?.tail || null, { ident, schedDepMin, origin: oCode, dest: dCode }),
     read: PREDICTABLE_STATES.has(leg.state)
       ? { eligible: true, intro: `Ask for a short explanation of ${ident}'s delay risk, scored the way the board scores it: FAA programs, weather at both ends and how the hub is running right now.` }
-      : { eligible: false, intro: `The read explains the delay risk of a flight that has not left yet, the same prediction the board shows. ${ident} has ${leg.state === 'landed' ? 'landed' : leg.state === 'in-air' ? 'already left' : leg.state === 'diverted' ? 'been diverted' : 'no departure to predict'}, so there is nothing to predict.` },
+      : { eligible: false, intro: `The read explains a flight's delay risk before it leaves, as the board does. ${ident} ${leg.state === 'landed' ? 'has landed' : leg.state === 'in-air' || leg.state === 'departed-presumed' ? 'has left' : leg.state === 'diverted' ? 'was diverted' : 'has no departure to predict'}.` },
     watch: { flight: ident, route: oCode && dCode ? `${oCode}→${dCode}` : '' },
     hubForRead: payload?.leg?.hub || null,
     dirForRead: payload?.leg?.dir || 'departures',

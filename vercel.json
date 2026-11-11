@@ -60,8 +60,15 @@
         "api/metar.ts": { "maxDuration": 15 },
         "api/support-stats.ts": { "maxDuration": 15 },
         "api/cron/refresh-metar.ts": { "maxDuration": 30 },
-        "api/cron/watch-alerts.ts": { "maxDuration": 120 }
+        "api/cron/watch-alerts.ts": { "maxDuration": 120 },
+        "api/flight.ts": { "maxDuration": 10 },
+        "api/flight-page.ts": { "maxDuration": 10, "includeFiles": "dist/flight.html" },
+        "api/flight-card.ts": { "maxDuration": 15, "includeFiles": "api/_flight-card/*.ttf" }
     },
+    "rewrites": [
+        { "source": "/flight/:ident/card.png", "destination": "/api/flight-card?ident=:ident" },
+        { "source": "/flight/:ident", "destination": "/api/flight-page?ident=:ident" }
+    ],
     "crons": [
         { "path": "/api/cron/warm-schedules", "schedule": "*/30 * * * *" },
         { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" },
