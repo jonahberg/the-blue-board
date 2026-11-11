@@ -29,6 +29,7 @@ import { getFAADelayContext } from '@/lib/faa-context.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
 import { withFleetType } from '@/lib/aircraft-type.js';
 import { applySightingsToBoard, sightingsFromLiveFeed } from '@/lib/reg-overlay.js';
+import { withholdOtpWhenStatusFiltered } from '@/lib/ask-apply.js';
 import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
 import { hubTzAbbrev } from '@/lib/schedule-load.js';
 import { regMatchesModel } from '@/lib/schedule-reg-guard.js';
@@ -191,6 +192,11 @@ export type BoardModel = {
     upcoming: number;
     presumed: number;
     uncategorized: number;
+    /**
+     * A status filter (the Status select, or an ask for late / on time) is narrowing the rows, so
+     * `otp` is null: a percentage of rows picked by outcome is no verdict on the hub.
+     */
+    otpWithheld?: boolean;
   };
   hubTz: string;
   tzAbbrev: string;
@@ -237,6 +243,8 @@ export type BoardModelInput = {
    * the stat strip all count the same set.
    */
   askFilter?: ((row: ScheduleRow, ctx: { classify: (row: ScheduleRow) => StatusModel }) => boolean) | null;
+  /** The ask filter picks rows by status (late / on time), so the on-time verdict is withheld. */
+  askNarrowsStatus?: boolean;
 };
 
 
@@ -286,6 +294,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     hubOtp,
     iropsHubRates,
     askFilter,
+    askNarrowsStatus,
   } = input;
 
   const hubTz = (HUB_TZ as Record<string, string>)[hub] || 'America/Chicago';
@@ -567,11 +576,14 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       }
     }
 
-    const counts = computeScheduleStatCounts(filtered, {
-      dir,
-      nowSec,
-      classify: (flight: object) => classify(flight as ScheduleRow),
-    }) as BoardModel['stats'];
+    const counts = withholdOtpWhenStatusFiltered(
+      computeScheduleStatCounts(filtered, {
+        dir,
+        nowSec,
+        classify: (flight: object) => classify(flight as ScheduleRow),
+      }) as BoardModel['stats'],
+      { statusFilter: filters.status, askStatus: Boolean(askNarrowsStatus) },
+    ) as BoardModel['stats'];
 
     const tzAbbrev = hubTzAbbrev(hubTz) as string;
 
@@ -611,6 +623,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
     iropsHubRates,
     hubTz,
     askFilter,
+    askNarrowsStatus,
   ]);
 }
 

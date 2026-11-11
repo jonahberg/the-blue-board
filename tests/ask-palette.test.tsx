@@ -5,7 +5,7 @@
  *    a flight number, a tail or a strong live match does not;
  *  - a question the rules read is applied with NO network call: the answer is published to the
  *    ask store, the view's tab opens, the palette closes, one `ask` event with source 'rules' and
- *    no query text;
+ *    no query text ('model', 'unsupported' and 'unavailable' for the other outcomes);
  *  - a question outside the vocabulary stays in the palette with the plain line and three example
  *    questions; a capped/unavailable server (or the preview's 404) says "simple searches";
  *  - a late answer for a query the visitor has since changed is dropped.
@@ -167,6 +167,9 @@ describe('asking', () => {
     await enter();
     expect(screen.getByTestId('ask-help').textContent).toMatch(/^I can only do simple searches right now\./);
     expect(__peekAskStateForTests().result).toBeNull();
+    // Counted apart from questions outside the vocabulary.
+    expect(ctl.track).toHaveBeenCalledTimes(1);
+    expect(ctl.track).toHaveBeenCalledWith('ask', { source: 'unavailable' });
   });
 
   it('a late answer for a query that has since changed is dropped', async () => {

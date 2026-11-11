@@ -154,6 +154,7 @@ export default function ScheduleView() {
     hubOtp: hubHealth.byHub,
     iropsHubRates: irops.hubRates,
     askFilter: ask.predicate,
+    askNarrowsStatus: ask.narrowsStatus,
   });
 
   const asOf = useMemo(

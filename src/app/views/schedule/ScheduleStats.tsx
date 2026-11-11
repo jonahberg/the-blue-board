@@ -114,7 +114,9 @@ export function ScheduleStats({
   const showDisruption =
     hubDisruptionMinutes !== null && Number.isFinite(hubDisruptionMinutes) && hubDisruptionMinutes > 60;
 
-  const otpTitle = `Operated: flights with a recorded ${dir === 'arrivals' ? 'arrival' : 'departure'} time (estimates don't count), the same count the hub strip uses. On time = within 30 min of schedule.`;
+  const otpTitle = stats.otpWithheld
+    ? 'No on-time percentage while the board is filtered by status: a percentage of the rows the filter picked says nothing about the hub. Clear the status filter to see it.'
+    : `Operated: flights with a recorded ${dir === 'arrivals' ? 'arrival' : 'departure'} time (estimates don't count), the same count the hub strip uses. On time = within 30 min of schedule.`;
 
   // Confirmed in the headline, unconfirmed ("Likely Canceled") as the quiet line under it.
   const cancellations = splitCancellations(stats.canceled, stats.canceledUncertain);

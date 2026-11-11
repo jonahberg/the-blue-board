@@ -115,9 +115,11 @@ export function useAskSchedule({ hub, dir, day, setCurrent, filters, setFilters 
   }, [controlled, setFilters]);
 
   const active = Boolean(ask);
+  // Late / on time / canceled pick rows by outcome: the stat strip withholds its on-time verdict.
+  const narrowsStatus = Boolean(onBoard && f?.status);
   return useMemo(
-    () => ({ active, applied: active && applied.current === ask?.key, predicate, onRemove, onClear, clear: clearAsk }),
+    () => ({ active, applied: active && applied.current === ask?.key, predicate, narrowsStatus, onRemove, onClear, clear: clearAsk }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `applied` is read at render
-    [active, ask?.key, predicate, onRemove, onClear, filters],
+    [active, ask?.key, predicate, narrowsStatus, onRemove, onClear, filters],
   );
 }

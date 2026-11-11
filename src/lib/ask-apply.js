@@ -217,3 +217,21 @@ export function fleetAskPatch(filters) {
 
 /** The families the Fleet tab (mainline only) can show. */
 export const FLEET_FAMILIES = Object.freeze(Object.keys(FLEET_SEARCH_BY_FAMILY));
+
+/**
+ * The stat strip's on-time percentage and its verdict word ("ROUGH", "GOOD") describe the HUB. A
+ * status filter — the board's own Status select, or an ask for late / on time / canceled — picks
+ * rows by what happened to them, so a percentage over what is left is circular: "Late" arrivals
+ * at DEN read "0% On-Time ROUGH", true of the late rows and false of Denver. While one is on, the
+ * percentage (and so the word) is withheld; every count stays, because the counts are facts about
+ * the rows on screen. Filters that pick by aircraft, route or time are not outcomes and keep it.
+ *
+ * @template {{otp: number|null}} S
+ * @param {S} stats  computeScheduleStatCounts() over the filtered rows.
+ * @param {{statusFilter?: string, askStatus?: string|boolean|null}} active
+ * @returns {S & {otpWithheld: boolean}}
+ */
+export function withholdOtpWhenStatusFiltered(stats, { statusFilter, askStatus } = {}) {
+  if (!statusFilter && !askStatus) return { ...stats, otpWithheld: false };
+  return { ...stats, otp: null, otpWithheld: true };
+}

@@ -279,8 +279,9 @@ export function SearchPalette() {
         applyAnswer(outcome.result, outcome.source);
         return;
       }
-      // One event per question; the query text never goes to analytics.
-      track('ask', { source: 'unsupported' });
+      // One event per question; the query text never goes to analytics. `unavailable` is a capped,
+      // switched-off or failed model (or no network), kept apart from questions outside the vocabulary.
+      track('ask', { source: outcome.kind });
       setAskUi({ status: outcome.kind, query: text });
     },
     [applyAnswer],
