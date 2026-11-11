@@ -104,7 +104,10 @@ const description =
 
     <FlightTrip />
 
-    <div class="mt-8 grid gap-4 lg:grid-cols-3" data-fp-cards hidden>
+    <!-- One equal column per card that is shown (the read is absent once a flight has left, the
+         aircraft card when the tail is not known): `auto-cols-fr` on a column flow never leaves the
+         empty third column a fixed `grid-cols-3` would. Below lg the cards stack. -->
+    <div class="mt-8 grid gap-4 lg:auto-cols-fr lg:grid-flow-col" data-fp-cards hidden>
       <FlightHistoryCard />
       <FlightAircraftCard />
       <FlightReadCard />

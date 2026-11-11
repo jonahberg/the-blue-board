@@ -7,7 +7,8 @@
  * On press, the script scores the leg with the board's own delay-risk model from the dashboard's
  * shared, CDN-cached inputs (/api/faa, /api/nas, /api/irops, /api/metar) and sends the same request
  * body the board's explain dialog sends (src/lib/flight-page-read.js). Only a flight that has not
- * left gets a prediction, exactly as on the board, so the button is offered only then.
+ * left gets a prediction, exactly as on the board, so the card is shown only then (hidden, and its
+ * grid column gone, once the flight has left: src/pages/flight/index.astro).
  */
 import { Sparkles } from 'lucide-react';
 ---

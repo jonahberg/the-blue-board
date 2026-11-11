@@ -265,6 +265,13 @@ describe('vercel.json routing for flight pages', () => {
     expect(resolveAgentResponse({ pathname: '/flight', accept: 'text/markdown' })).toEqual({ kind: 'html' });
   });
 
+  it('sizes the cards grid by the cards shown, so a hidden read card leaves no empty column', () => {
+    const page = readFileSync(join(ROOT, 'src/pages/flight/index.astro'), 'utf8');
+    const grid = page.match(/<div class="([^"]*)" data-fp-cards hidden>/)?.[1] || '';
+    expect(grid.split(' ')).toEqual(expect.arrayContaining(['grid', 'lg:grid-flow-col', 'lg:auto-cols-fr']));
+    expect(grid).not.toMatch(/grid-cols-\d/);
+  });
+
   it('keeps flight pages out of the sitemap', () => {
     const sitemap = readFileSync(join(ROOT, 'src/pages/sitemap.xml.ts'), 'utf8');
     expect(sitemap).not.toMatch(/flight/i);

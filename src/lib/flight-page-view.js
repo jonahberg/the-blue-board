@@ -370,9 +370,12 @@ export function flightPageView(payload, nowSec, { live = null, stableDays = fals
     },
     history: historyView,
     aircraft: aircraftView(payload?.aircraft || null, payload?.tail || null, { ident, schedDepMin, origin: oCode, dest: dCode }),
+    // The read explains a delay risk, and the board predicts only a flight that has not left. Once
+    // it has, there is nothing to ask for, so the card is not shown at all (an empty box saying
+    // "has left" told the reader nothing the verdict had not).
     read: PREDICTABLE_STATES.has(leg.state)
       ? { eligible: true, intro: `Ask for a short explanation of ${ident}'s delay risk, scored the way the board scores it: FAA programs, weather at both ends and how the hub is running right now.` }
-      : { eligible: false, intro: `The read explains a flight's delay risk before it leaves, as the board does. ${ident} ${leg.state === 'landed' ? 'has landed' : leg.state === 'in-air' || leg.state === 'departed-presumed' ? 'has left' : leg.state === 'diverted' ? 'was diverted' : 'has no departure to predict'}.` },
+      : null,
     // `dep` pins the dashboard's watch to THIS leg (src/lib/watch-link.js), but only before it
     // leaves: a leg already flying or flown is left for the dashboard's own first answer to pin.
     watch: {

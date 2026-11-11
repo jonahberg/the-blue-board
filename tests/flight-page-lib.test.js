@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   A,
   D,
+  canceledCase,
+  delayedCase,
+  divertedCase,
   historyRows,
   inAirCase,
   landedCase,
@@ -278,11 +281,13 @@ describe('the page view (flight-page-view.js)', () => {
     expect(aircraftView(null, null, {}).summary).toMatch(/not named the aircraft/);
   });
 
-  it('offers the AI read only for a flight that has not left (the board predicts only those)', () => {
-    const before = scheduledCase();
-    expect(flightPageView(payloadFor(before.row), before.nowSec).read.eligible).toBe(true);
-    const flying = inAirCase();
-    expect(flightPageView(payloadFor(flying.row), flying.nowSec).read.eligible).toBe(false);
+  it('offers the AI read only for a flight that has not left (the board predicts only those), and no card at all after', () => {
+    for (const { row, nowSec } of [scheduledCase(), delayedCase()]) {
+      expect(flightPageView(payloadFor(row), nowSec).read?.eligible).toBe(true);
+    }
+    for (const { row, nowSec } of [inAirCase(), landedCase(), canceledCase(), divertedCase()]) {
+      expect(flightPageView(payloadFor(row), nowSec).read).toBeNull();
+    }
   });
 
   it('not found and unavailable are said plainly, with the last flight when the archive has one', () => {
