@@ -73,10 +73,32 @@ export const VelocityChart = memo(function VelocityChart({
   const last = model.bars[model.bars.length - 1];
   const scrollerRef = useRef<HTMLDivElement>(null);
   // Keyed on the month count: a new month re-pins the view, a poll does not undo a manual scroll.
+  //
+  // Pinned to the right edge, the scrollport's LEFT edge lands wherever the phone's width puts
+  // it, and at 393 px that was through the capped bar, so its "162*" read "62*". The view
+  // backs off to the gap before whichever bar (or count label) the edge would cut, so the first
+  // month on screen is always whole.
   useLayoutEffect(() => {
     const el = scrollerRef.current;
-    if (el) el.scrollLeft = el.scrollWidth - el.clientWidth;
-  }, [model.bars.length]);
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    let target = max;
+    const svg = el.querySelector('svg');
+    const scale = svg && model.width > 0 ? svg.getBoundingClientRect().width / model.width : 0;
+    if (max > 0 && scale > 0) {
+      for (const bar of model.bars) {
+        // A count label is centred on its bar and can be wider than it ("162*").
+        const labelHalf = bar.countLabel ? (bar.countLabel.text.length * (bar.capped ? 10 : 9) * 0.62) / 2 : 0;
+        const left = Math.min(bar.x, bar.countLabel ? bar.countLabel.x - labelHalf : bar.x) * scale;
+        const right = (bar.x + bar.width) * scale;
+        if (left < target && target < right) {
+          target = Math.max(0, Math.floor(left) - 4);
+          break;
+        }
+      }
+    }
+    el.scrollLeft = target;
+  }, [model.bars.length, model.bars, model.width]);
   return (
     <Card className="gap-0 p-4" id="sl-chart-card">
       <h3 className="text-sm font-semibold">Installation Velocity</h3>

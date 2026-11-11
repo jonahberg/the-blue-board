@@ -104,4 +104,48 @@ describe('VelocityChart', () => {
     expect(line.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(label.getAttribute('paint-order')).toBe('stroke');
   });
+
+  it('never opens with its left edge through a bar or its count label (Nov 2026: "162*" read "62*")', async () => {
+    const { buildVelocityChart } = await import('../src/lib/starlink-chart.js');
+    const { VelocityChart } = await import('../src/app/views/starlink/VelocityChart');
+    const months = Array.from({ length: 18 }, (_, i) => ({
+      ym: `2025-${String((i % 12) + 1).padStart(2, '0')}`,
+      label: i % 12 === 0 ? `JAN ${25 + i / 12}` : 'MON',
+      express: i === 9 ? 160 : 3,
+      mainline: 10,
+      total: i === 9 ? 170 : 13,
+      cumulative: 13 * (i + 1),
+    }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const model = buildVelocityChart(months, 0) as any;
+    const svgWidth = 620;
+    const scale = svgWidth / model.width;
+    const sw = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth');
+    const cw = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    const rect = Element.prototype.getBoundingClientRect;
+    // Every right-pinned offset a phone could land on, from 300 px to 430 px wide.
+    for (let client = 300; client <= 430; client += 7) {
+      Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => svgWidth });
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => client });
+      Element.prototype.getBoundingClientRect = function () {
+        return { width: this.tagName.toLowerCase() === 'svg' ? svgWidth : 0 } as DOMRect;
+      };
+      try {
+        const { unmount } = render(<VelocityChart model={model} pace={null} />);
+        const left = screen.getByTestId('sl-chart-scroller').scrollLeft;
+        expect(left).toBeLessThanOrEqual(svgWidth - client);
+        for (const bar of model.bars) {
+          const half = bar.countLabel ? (bar.countLabel.text.length * (bar.capped ? 10 : 9) * 0.62) / 2 : 0;
+          const from = Math.min(bar.x, bar.countLabel ? bar.countLabel.x - half : bar.x) * scale;
+          const to = (bar.x + bar.width) * scale;
+          expect(left > from && left < to).toBe(false);
+        }
+        unmount();
+      } finally {
+        Element.prototype.getBoundingClientRect = rect;
+        if (sw) Object.defineProperty(HTMLElement.prototype, 'scrollWidth', sw);
+        if (cw) Object.defineProperty(HTMLElement.prototype, 'clientWidth', cw);
+      }
+    }
+  });
 });
