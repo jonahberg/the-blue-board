@@ -48,6 +48,23 @@ describe('possible FAA programs away from the hubs', () => {
   }
 });
 
+describe('the unconfirmed "likely canceled" count', () => {
+  for (const name of names) {
+    it(`${name}: ranks below every program and planned hub program, and never leads the template`, () => {
+      const facts = factsFor(name);
+      const unconfirmed = facts.find((f) => f.id === 'cxl.unconfirmed');
+      if (unconfirmed) {
+        for (const f of facts.filter((x) => x.kind === 'faa' && /^faa\.active\.[A-Z]{3}\./.test(x.id) || (x.kind === 'faa_planned' && x.hub))) {
+          expect(unconfirmed.severity, f.id).toBeLessThan(f.severity);
+        }
+      }
+      const t = buildTemplateBrief(facts);
+      expect(t.items[0].fact_ids).not.toContain('cxl.unconfirmed');
+      expect(t.headline_fact_ids).not.toContain('cxl.unconfirmed');
+    });
+  }
+});
+
 describe('buildTemplateBrief', () => {
   it('calm: says it is calm and gives the background', () => {
     const t = buildTemplateBrief(factsFor('calm-afternoon'));

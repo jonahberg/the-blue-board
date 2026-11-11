@@ -436,7 +436,9 @@ export function buildBriefFacts(sources, { nowMs }) {
         values: uniq([String(likely), numberWord(likely), seenFlying > 0 ? String(seenFlying) : null]),
         at: iso(asOf.irops ?? nowMs),
         link: { tab: 'schedule' },
-        severity: 2,
+        // A caveat, not news (prompt rule 4): below every program, planned hub program and the
+        // confirmed count, so neither the model's list nor the template leads with it.
+        severity: 1,
         toneFloor: 'calm',
         material: `likely:${round(likely, 25)}`,
       });
