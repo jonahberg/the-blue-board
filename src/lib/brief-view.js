@@ -145,17 +145,40 @@ export function briefFreshnessLine({ generatedAtMs, checkedAtMs, nextUpdateAtMs 
 }
 
 /**
+ * The ticker's emergency-squawk lines, which a brief must never hide. `buildTickerItems()`
+ * (src/lib/ticker.js) marks exactly those as `critical` (from `decodeSquawk`'s `squawk-alert`);
+ * several are joined for the one row. Null when there is none.
+ * @param {Array<{text: string, cls: string}>} tickerItems
+ * @returns {string|null}
+ */
+export function briefAlertLine(tickerItems) {
+  const lines = (Array.isArray(tickerItems) ? tickerItems : [])
+    .filter((item) => item && item.cls === 'critical' && typeof item.text === 'string')
+    .map((item) => item.text.trim())
+    .filter(Boolean);
+  return lines.length ? lines.join(' · ') : null;
+}
+
+const PICTOGRAPH_RE = /[\p{Extended_Pictographic}\uFE0F]/gu;
+
+/**
  * The header row's accessible name: the tone word, the headline (both visible in the row), then
  * what pressing it does. Explicit because inline sr-only separators collapse in the computed name.
+ * While an emergency squawk takes the row's text, the name says the squawk first (it is what the
+ * row shows) and the brief's headline after it.
  * @param {BriefTone} tone
  * @param {string} headline
  * @param {'open'|'reveal'} action  'reveal' when the full brief is already open in the sidebar
+ * @param {string|null} [alert]  the squawk line from `briefAlertLine`
  */
-export function briefRowLabel(tone, headline, action) {
+export function briefRowLabel(tone, headline, action, alert = null) {
   const word = BRIEF_TONE_WORD[tone] ?? 'Brief';
   const text = String(headline ?? '').trim();
   const end = /[.!?]$/.test(text) ? '' : '.';
-  return `${word}: ${text}${end} ${action === 'reveal' ? 'Go to the full brief.' : 'Open the full brief.'}`;
+  const act = action === 'reveal' ? 'Go to the full brief.' : 'Open the full brief.';
+  const spoken = alert ? String(alert).replace(PICTOGRAPH_RE, '').replace(/\s+/g, ' ').trim() : '';
+  if (spoken) return `${word}. ${spoken}. Brief: ${text}${end} ${act}`;
+  return `${word}: ${text}${end} ${act}`;
 }
 
 /** Shown under a brief that cites anything heard on ATC frequencies. */

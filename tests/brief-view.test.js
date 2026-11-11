@@ -10,10 +10,12 @@ import { BRIEF_STALE_AFTER_MS as SERVER_STALE_AFTER_MS, briefResponseBody } from
 import { buildBriefFacts } from '../src/lib/brief-facts.js';
 import { radioFactsFromStatus } from '../src/lib/brief-radio.js';
 import { buildTemplateBrief } from '../src/lib/brief-template.js';
+import { buildTickerItems } from '../src/lib/ticker.js';
 import {
   BRIEF_HOW_STEPS,
   BRIEF_STALE_AFTER_MS,
   BRIEF_TONE_WORD,
+  briefAlertLine,
   briefFreshnessLine,
   briefSourceLine,
   briefRowLabel,
@@ -158,6 +160,24 @@ describe('copy', () => {
     expect(briefRowLabel('watch', 'Running normally, with FAA action possible at Newark.', 'open'))
       .toBe('Watch: Running normally, with FAA action possible at Newark. Open the full brief.');
     expect(briefRowLabel('calm', 'Smooth so far', 'reveal')).toBe('Calm: Smooth so far. Go to the full brief.');
+  });
+
+  it('finds the ticker\'s emergency-squawk lines (the items buildTickerItems marks critical), and only those', () => {
+    const base = { opsHealth: { level: 'disrupted', text: 'Disrupted — ground stop at EWR' }, airborne: 380, total: 412, fleetCount: 1078, starlinkCount: 550 };
+    expect(briefAlertLine(buildTickerItems({ ...base, squawks: [] }))).toBeNull();
+    const one = buildTickerItems({ ...base, squawks: [{ text: '⚠️ EMERGENCY', callsign: 'UAL123', squawk: '7700' }] });
+    expect(briefAlertLine(one)).toBe('⚠️ EMERGENCY: UAL123 (7700)');
+    const two = buildTickerItems({ ...base, squawks: [
+      { text: '⚠️ EMERGENCY', callsign: 'UAL123', squawk: '7700' },
+      { text: '⚠️ RADIO FAILURE', callsign: 'UAL9', squawk: '7600' },
+    ] });
+    expect(briefAlertLine(two)).toBe('⚠️ EMERGENCY: UAL123 (7700) · ⚠️ RADIO FAILURE: UAL9 (7600)');
+  });
+
+  it('names the row with the squawk first and the headline after it, emoji left out', () => {
+    expect(briefRowLabel('watch', 'Running normally.', 'open', '⚠️ EMERGENCY: UAL123 (7700)'))
+      .toBe('Watch. EMERGENCY: UAL123 (7700). Brief: Running normally. Open the full brief.');
+    expect(briefRowLabel('calm', 'Calm day', 'reveal', null)).toBe('Calm: Calm day. Go to the full brief.');
   });
 
   it('formats clock times in the viewer zone with its abbreviation', () => {

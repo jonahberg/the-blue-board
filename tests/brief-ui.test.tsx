@@ -26,9 +26,9 @@ import { radioFactsFromStatus } from '../src/lib/brief-radio.js';
 import { buildTemplateBrief } from '../src/lib/brief-template.js';
 import { verifyBrief } from '../src/lib/brief-verify.js';
 
-const ctl = vi.hoisted(() => ({ wide: false, setCurrent: vi.fn() }));
+const ctl = vi.hoisted(() => ({ wide: false, setCurrent: vi.fn(), flights: [] as Array<Record<string, unknown>> }));
 
-vi.mock('../src/app/state/feed', () => ({ useFeed: () => ({ flights: [] }) }));
+vi.mock('../src/app/state/feed', () => ({ useFeed: () => ({ flights: ctl.flights }) }));
 vi.mock('../src/app/state/fleet', () => ({ useFleet: () => ({ fleetDb: [], starlink: { tails: new Set() } }) }));
 vi.mock('../src/app/state/irops', () => ({ useIrops: () => ({ score: null }) }));
 vi.mock('../src/app/state/weather', () => ({ useWeather: () => ({ faaIndex: {} }) }));
@@ -100,8 +100,8 @@ function TabSwitch({ to }: { to: string }) {
   return <button type="button" onClick={() => setTab(to as never)}>switch-{to}</button>;
 }
 
-function mount(extra: React.ReactNode = null) {
-  return render(
+function tree(extra: React.ReactNode = null) {
+  return (
     <UiProvider>
       <BriefProvider>
         <Ticker />
@@ -109,8 +109,12 @@ function mount(extra: React.ReactNode = null) {
         <BriefSheet />
         {extra}
       </BriefProvider>
-    </UiProvider>,
+    </UiProvider>
   );
+}
+
+function mount(extra: React.ReactNode = null) {
+  return render(tree(extra));
 }
 
 async function settle() {
@@ -124,6 +128,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/');
   ctl.wide = false;
   ctl.setCurrent.mockReset();
+  ctl.flights = [];
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: query.includes('min-width: 1024px') ? ctl.wide : false,
     media: query, onchange: null,
@@ -222,6 +227,38 @@ describe('the header row', () => {
       await vi.advanceTimersByTimeAsync(2 * 60_000 + 10);
     });
     expect(screen.queryByRole('button', { name: /full brief/i })).toBeNull();
+  });
+});
+
+describe('an emergency squawk', () => {
+  const squawking = { fr24id: 'x1', squawk: '7700', callsign: 'UAL123', flightIATA: 'UA123', onGround: false, alt: 35000, vr: 0, spd: 450 };
+
+  it('takes the row\'s text while it lasts, keeps the tone word and the button, and the name says both', async () => {
+    ctl.flights = [squawking];
+    serve(body('calm-afternoon'));
+    const view = mount();
+    await settle();
+    const row = screen.getByRole('button', {
+      name: 'Calm. EMERGENCY: UAL123 (7700). Brief: United is running smoothly right now. Open the full brief.',
+    });
+    const text = row.querySelector('.truncate')!;
+    expect(text.textContent).toBe('⚠️ EMERGENCY: UAL123 (7700)');
+    expect(text.className).toContain('text-destructive');
+    expect(within(row).getByText('Calm')).toBeTruthy();
+    expect(row.closest('[aria-live]')).toBeNull();
+    // Still the button that opens the brief.
+    fireEvent.click(row);
+    await settle();
+    expect(screen.getByRole('dialog', { name: 'United is running smoothly right now.' })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    await settle();
+
+    // The squawk clears: the headline returns.
+    ctl.flights = [{ ...squawking, squawk: '2341' }];
+    view.rerender(tree());
+    await settle();
+    const back = screen.getByRole('button', { name: 'Calm: United is running smoothly right now. Open the full brief.' });
+    expect(back.querySelector('.truncate')?.textContent).toBe('United is running smoothly right now.');
   });
 });
 
