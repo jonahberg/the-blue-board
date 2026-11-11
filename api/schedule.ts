@@ -76,11 +76,18 @@ const FUNCTION_DEADLINE_MS = 57000;
 // The cross-instance quota read in front of every serve (one row; api/_cost-state.ts).
 const QUOTA_HYDRATE_BUDGET_MS = 1500;
 // The persisted-snapshot read: before the fetch, after a partial fetch, and on the error path.
-const SNAPSHOT_READ_BUDGET_MS = 2500;
+// 6 s, up from 2.5 s: the read before the fetch decides whether a metered provider is called at all,
+// so a slow database must cost seconds, not provider units. (A read that still runs out of time
+// serves a copy already in memory rather than fetching: see `snapshotReadTimedOut` below.)
+const SNAPSHOT_READ_BUDGET_MS = 6000;
 // The snapshot write after a fetch: read-before-write + upsert of a board-sized JSON payload.
 const SNAPSHOT_WRITE_BUDGET_MS = 4000;
 // A fetch stops this long before the function deadline, leaving room for the snapshot write and,
-// on a partial board, the second snapshot read (~50 s of fetching, up from an unbounded tail).
+// on a partial board, the second snapshot read. The arithmetic, from the request's start T:
+//   before the fetch   quota read ≤ 1.5 s + snapshot read ≤ 6 s           → fetch starts by T+7.5 s
+//   the fetch          stops at T + 57 − 10.5 = T+46.5 s (was T+50 s)     → ≥ 39 s of fetching
+//   after the fetch    write ≤ 4 s (T+50.5) + second read ≤ 6 s (T+56.5)  = deadline − 0.5 s margin
+// and a request joining another's in-flight fetch waits until T + 57 − 10.5 − 8 = T+38.5 s.
 const POST_FETCH_RESERVE_MS = SNAPSHOT_WRITE_BUDGET_MS + SNAPSHOT_READ_BUDGET_MS + DEADLINE_SAFETY_MARGIN_MS;
 // A background refresh's own ceiling, still cut to the triggering request's deadline.
 const BACKGROUND_FETCH_MS = 55000;
@@ -88,9 +95,10 @@ const BACKGROUND_FETCH_MS = 55000;
 // timeouts are 5 s and 8 s; this is the outer bound).
 const BACKGROUND_KICK_BUDGET_MS = 10000;
 // Slack on top of the budget fetchViaAeroDataBox is given, for the work it does around its timed
-// requests (the spend hydrate, the 2 s per-window floor). The call is raced against budget + slack,
-// capped at the fetch deadline, because its body read is not inside its own timer
-// (api/_schedule-aerodatabox.ts fetchWindow clears the timer before resp.json()).
+// requests (the spend hydrate, the queue wait, the 2 s per-window floor that can outrun a small
+// budget). The call is raced against budget + slack, capped at the fetch deadline. (Each window's
+// own timer now covers its body read too — api/_schedule-aerodatabox.ts fetchWindow — so this race
+// is the outer bound, not the only one.)
 const PROVIDER_CALL_GRACE_MS = 3000;
 
 /** fetchViaAeroDataBox, bounded from this side (see PROVIDER_CALL_GRACE_MS). Null when cut off. */
@@ -224,10 +232,13 @@ function getLastCompleteByHubDir(hub: string, dir: string, ts: number) {
   return entry;
 }
 
-async function getPersistentFallback(key: string, timeoutMs: number) {
+async function getPersistentFallback(key: string, timeoutMs: number, onTimeout?: () => void) {
   // Nothing left to read with: no snapshot, the same answer a failed read gives.
-  if (timeoutMs <= 0) return null;
-  const snapshot = await loadScheduleSnapshot(key, { timeoutMs });
+  if (timeoutMs <= 0) {
+    onTimeout?.();
+    return null;
+  }
+  const snapshot = await loadScheduleSnapshot(key, { timeoutMs, onTimeout });
   if (!snapshot) return null;
   if (!snapshot.data?.partial) {
     saveComplete(key, snapshot.data, snapshot.refreshedAt);
@@ -2050,8 +2061,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let partialPersistentFallback: Awaited<ReturnType<typeof getPersistentFallback>> | null = null;
+    let snapshotReadTimedOut = false;
     const persistentFallback = forceRefresh ? null : await getPersistentFallback(
       currentAggKey, budgetWithin(SNAPSHOT_READ_BUDGET_MS, functionDeadline),
+      () => { snapshotReadTimedOut = true; },
     );
     if (persistentFallback) {
       const canAttemptRecoveryNow = persistentFallback.fallbackScope === 'persistent_partial' && hasImmediateScheduleRecovery;
@@ -2079,6 +2092,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
         return res.status(200).json(withDisruption(buildDegradedResponse(persistentFallback, persistentFallback.fallbackScope)));
       }
+    }
+
+    // The read ran out of time, so it is not known whether a better copy is stored. A slow database
+    // must not cost money: a copy already in memory is served rather than fetching from the metered
+    // sources. Every complete copy was served above, so what can be in hand here is the hot cache's
+    // own entry, a partial; an empty one is not a board (the existing rule above) and the fetch
+    // proceeds as before, as it does when nothing at all is in hand. The background refresh it kicks
+    // runs with both metered sources off; the next request reads the snapshot again.
+    if (snapshotReadTimedOut && !persistentFallback && stale && Number(stale.data?.total || 0) > 0) {
+      console.warn(`Schedule snapshot read timed out for ${currentAggKey}; serving the in-memory copy instead of fetching`);
+      if (!pendingAggs.has(currentAggKey)) {
+        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, functionDeadline, {
+          allowTargetedOfficialRescue: false,
+          disableOfficialSource: true,
+          disableProviderFallback: true,
+          disableScraperFallback: true,
+        });
+      }
+      const inHandDataAge = Math.max(0, Math.round((Date.now() - stale.time) / 1000));
+      const inHandGeneratedAt = Number(stale.data?.meta?.generatedAt) || Math.floor(stale.time / 1000);
+      res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
+      return res.status(200).json(withDisruption({
+        ...stale.data,
+        cached: true,
+        stale: !isFreshComplete(stale),
+        meta: { ...(stale.data?.meta || {}), dataAge: inHandDataAge, generatedAt: inHandGeneratedAt },
+      }));
     }
 
     // A force warm must run its own fetch: the in-flight refresh it would join is often

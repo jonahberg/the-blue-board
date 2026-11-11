@@ -1,4 +1,4 @@
-import { boundedQuery, budgetWithin } from './_bounded.js';
+import { boundedQuery, budgetWithin, isDbTimeout } from './_bounded.js';
 
 const SNAPSHOT_TABLE = 'schedule_snapshots';
 const SNAPSHOT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -35,8 +35,9 @@ interface SaveScheduleSnapshotArgs {
 // Every query here carries a time limit (api/_bounded.ts). Without one a slow Supabase held
 // /api/schedule open until its 60-second maxDuration (Nov 7 2026). The defaults fit every caller:
 // /api/hub-board (10 s limit) reads at most two snapshots, /api/flight-times (15 s) one per leg, and
-// /api/schedule passes its own, smaller budgets cut to its request deadline. A query that runs out
-// of time is answered like any failed query: no snapshot, or no write, logged once.
+// /api/schedule passes its own budgets cut to its request deadline. A query that runs out of time is
+// answered like any failed query: no snapshot, or no write, logged once. A caller that must tell "ran
+// out of time" from "there is no snapshot" (/api/schedule, before a metered fetch) passes onTimeout.
 export const SNAPSHOT_READ_TIMEOUT_MS = 3000;
 export const SNAPSHOT_WRITE_TIMEOUT_MS = 4000;
 // The hourly cleanup runs inside the warm cron (300 s limit): each statement gets its own budget.
@@ -156,7 +157,7 @@ export async function getSupabaseAdmin(): Promise<any | null> {
 
 export async function loadScheduleSnapshot(
   cacheKey: string,
-  { timeoutMs = SNAPSHOT_READ_TIMEOUT_MS }: { timeoutMs?: number } = {},
+  { timeoutMs = SNAPSHOT_READ_TIMEOUT_MS, onTimeout }: { timeoutMs?: number; onTimeout?: () => void } = {},
 ): Promise<PersistedScheduleSnapshot | null> {
   const supabase = await getSupabaseAdmin();
   if (!supabase) return null;
@@ -174,6 +175,7 @@ export async function loadScheduleSnapshot(
 
     if (error) {
       console.error(`Schedule snapshot read failed for ${cacheKey}:`, error.message);
+      if (isDbTimeout(error)) onTimeout?.();
       return null;
     }
 
