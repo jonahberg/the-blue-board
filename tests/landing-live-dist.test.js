@@ -15,7 +15,16 @@ const read = (rel) => readFileSync(join(DIST, rel), 'utf8');
 const jsonLdTypes = (html) =>
   [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])['@type']);
 const EMOJI = /\p{Extended_Pictographic}/u;
-const linkTexts = (html) => [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((m) => m[1].replace(/<[^>]+>/g, '').trim());
+// Strip tags until nothing changes: one pass can leave a tag behind when tags are nested in text.
+const stripTags = (text) => {
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]+>/g, '');
+  } while (text !== previous);
+  return text;
+};
+const linkTexts = (html) => [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((m) => stripTags(m[1]).trim());
 
 describe.skipIf(!hasDist)('built hub pages', () => {
   for (const key of hubOrder) {
