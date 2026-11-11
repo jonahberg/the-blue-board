@@ -5,6 +5,8 @@
  * the query string for itself:
  *   #live #myflight #schedule #fleet #starlink #weather #stats #sources
  *   ?tab=…            including the `irops` alias → Weather, scrolled to the IROPS section
+ *   ?tab=weather&hub= Weather, scrolled to that hub's card (the brief's FAA/weather chips)
+ *   ?tab=weather&section=nas   Weather, scrolled to the NAS status panel (FAA plan chips)
  *   ?flight= / ?q=    open the flight sheet, or offer a schedule lookup when not airborne
  *   ?hub=             selects that schedule board; with no ?tab (or ?tab=live) it is ALSO the
  *                     Live map's hub filter — `readLiveHubDeepLink()`, read by the Live view
@@ -21,8 +23,10 @@
 
 import { useEffect, useRef } from 'react';
 
+import { weatherScrollTarget } from '@/lib/tab-hash.js';
 import { FR24_LOOKUP_AVAILABLE } from '../features/Fr24LookupDialog';
 import { resolveTabParam } from '../tabs';
+import type { TabId } from '../tabs';
 import type { Flight } from '../data/types';
 
 type DeepLinkDeps = {
@@ -81,7 +85,7 @@ export function readLiveHubDeepLink(knownHubs: readonly string[]): string | null
 }
 
 /** Query parameters that name a specific destination inside the dashboard. */
-const DEEP_LINK_PARAMS = ['tab', 'hub', 'flight', 'q', 'aircraft', 'view', 'filter', 'type', 'waitlist'];
+const DEEP_LINK_PARAMS = ['tab', 'hub', 'section', 'flight', 'q', 'aircraft', 'view', 'filter', 'type', 'waitlist'];
 
 /**
  * True when the visitor arrived on a deep link. The first-visit welcome overlay should not
@@ -91,6 +95,27 @@ export function isDeepLinkArrival(): boolean {
   if (typeof window === 'undefined') return false;
   const params = new URLSearchParams(window.location.search);
   return DEEP_LINK_PARAMS.some((key) => params.has(key));
+}
+
+/** Where an in-dashboard link goes: the tab, the element to scroll to, the board's hub. */
+export type DeepLinkIntent = { tab: TabId; scrollTo: string | null; scheduleHub: string | null };
+
+/**
+ * Resolve a dashboard href (`/?tab=schedule&hub=ORD`, `/?tab=weather&hub=EWR`, `/#live`) the way a
+ * cold load of that URL would, so a chip clicked in place and the same link opened in a new tab
+ * land in the same spot. Null when the href names no tab.
+ */
+export function resolveDeepLink(href: string): DeepLinkIntent | null {
+  let url: URL;
+  try {
+    url = new URL(href, 'https://theblueboard.co');
+  } catch {
+    return null;
+  }
+  const tab = resolveTabParam(url.searchParams.get('tab')) ?? resolveTabParam(url.hash);
+  if (!tab) return null;
+  const hub = url.searchParams.get('hub')?.trim().toUpperCase() || null;
+  return { tab, scrollTo: weatherScrollTarget(url.searchParams), scheduleHub: tab === 'schedule' ? hub : null };
 }
 
 /** 'UAL123' / 'ua 123' / '123' → 'UA123'. */
@@ -114,14 +139,13 @@ export function useDeepLinks(deps: DeepLinkDeps) {
     onceApplied.current = true;
     const params = new URLSearchParams(window.location.search);
 
-    const tabParam = params.get('tab');
-    const resolved = resolveTabParam(tabParam);
+    const resolved = resolveTabParam(params.get('tab'));
     if (resolved) {
-      // `?tab=irops` means the Weather tab scrolled to its IROPS section.
-      depsRef.current.setTab(
-        resolved,
-        tabParam?.toLowerCase() === 'irops' ? { scrollTo: 'irops-section' } : undefined,
-      );
+      // `?tab=irops` means the Weather tab scrolled to its IROPS section; `?tab=weather&hub=` to
+      // that hub's card; `?tab=weather&section=nas` to the NAS panel (one resolver, shared with
+      // the brief's chips: `resolveDeepLink` below).
+      const scrollTo = weatherScrollTarget(params);
+      depsRef.current.setTab(resolved, scrollTo ? { scrollTo } : undefined);
     }
 
     const hub = params.get('hub');

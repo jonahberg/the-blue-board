@@ -12,7 +12,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Flight } from '../src/app/data/types';
-import { readFleetDeepLinks, useDeepLinks } from '../src/app/state/deep-links';
+import { readFleetDeepLinks, resolveDeepLink, useDeepLinks } from '../src/app/state/deep-links';
 import { resolveTabParam } from '../src/app/tabs';
 
 /** A parseFr24Feed-shaped flight. */
@@ -68,6 +68,25 @@ describe('?tab= and #hash', () => {
   it('?tab=irops lands on Weather scrolled to the IROPS section', () => {
     const { deps } = mountAt('/?tab=irops');
     expect(deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'irops-section' });
+  });
+
+  it('?tab=irops&hub= still lands on the IROPS section (the hub only picks the board)', () => {
+    const { deps } = mountAt('/?tab=irops&hub=den');
+    expect(deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'irops-section' });
+    expect(deps.setScheduleHub).toHaveBeenCalledWith('DEN');
+  });
+
+  it('?tab=weather&hub= lands on that hub\'s card; a hub without a card just opens the tab', () => {
+    expect(mountAt('/?tab=weather&hub=ewr').deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'hub-card-EWR' });
+    cleanup();
+    expect(mountAt('/?tab=weather&hub=bos').deps.setTab).toHaveBeenCalledWith('weather', undefined);
+    cleanup();
+    expect(mountAt('/?tab=weather').deps.setTab).toHaveBeenCalledWith('weather', undefined);
+  });
+
+  it('?tab=weather&section=nas lands on the NAS status panel', () => {
+    const { deps } = mountAt('/?tab=weather&section=nas');
+    expect(deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'nas-section' });
   });
 
   it('an unknown ?tab= is ignored', () => {
@@ -189,5 +208,17 @@ describe('readFleetDeepLinks', () => {
     window.history.replaceState(null, '', '/?tab=fleet&view=Express');
     expect(readFleetDeepLinks()).toEqual({ filter: null, view: 'express' });
     expect(mountAt('/?view=express').deps.setTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveDeepLink (the brief chips follow the same resolver a cold load uses)', () => {
+  it('resolves every chip href shape', () => {
+    expect(resolveDeepLink('/?tab=schedule&hub=ord')).toEqual({ tab: 'schedule', scrollTo: null, scheduleHub: 'ORD' });
+    expect(resolveDeepLink('/?tab=irops')).toEqual({ tab: 'weather', scrollTo: 'irops-section', scheduleHub: null });
+    expect(resolveDeepLink('/?tab=weather&hub=EWR')).toEqual({ tab: 'weather', scrollTo: 'hub-card-EWR', scheduleHub: null });
+    expect(resolveDeepLink('/?tab=weather&section=nas')).toEqual({ tab: 'weather', scrollTo: 'nas-section', scheduleHub: null });
+    expect(resolveDeepLink('/#live')).toEqual({ tab: 'live', scrollTo: null, scheduleHub: null });
+    expect(resolveDeepLink('/#starlink')).toEqual({ tab: 'starlink', scrollTo: null, scheduleHub: null });
+    expect(resolveDeepLink('/?nothing=1')).toBeNull();
   });
 });
