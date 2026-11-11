@@ -17,12 +17,21 @@ src/data/trackers/index.js        ← validate() — bad data fails the build on
 
 ## The ritual (both trackers)
 
-1. Skim the sources below for anything new since `lastVerified`.
+1. Skim the sources below for anything new since `lastVerified` (and since any entry's own
+   `verified`).
 2. Edit the data file: flip statuses, add entries, adjust dates. **Every change needs a source
    URL in the entry's `sources`, and dates only get precision the source supports.**
-3. Add a `changelog` entry (top of the array — it's reverse-chronological and validated).
-4. Always bump `lastVerified`. Bump `lastUpdated` and add a changelog entry only when a
-   published fact changes. A clean verification pass is not a content update.
+3. If a published fact changed, bump `lastUpdated` and add a `changelog` entry (top of the
+   array — it's reverse-chronological and validated). A clean verification pass is not a
+   content update: no changelog entry, no `lastUpdated`.
+4. Record what you checked, and only that (`src/data/trackers/verified.js`):
+   - **Full pass** (every entry's sources re-checked): bump the meta's `lastVerified` and delete
+     every per-entry `verified` — the validator rejects one older than the file's date.
+   - **Partial pass** (only some entries re-checked): leave `lastVerified` alone and set
+     `verified: "YYYY-MM-DD"` on the entries you re-checked. The pages print each entry's own
+     date, and the header names the entries checked later than the rest, so no source panel
+     claims a check that did not happen. The validator needs the newest check — file or
+     entry — to be on or after `lastUpdated`.
 5. `bun run test && bun run typecheck && bun run build` — the validators catch shape mistakes,
    ordering mistakes, and status/date incoherence.
 6. If a **headline stat** changed (see "Stats that live outside the data files" below), refresh
@@ -44,7 +53,8 @@ src/data/trackers/index.js        ← validate() — bad data fails the build on
 **When an airport goes live:** status → `"live"`, add `goLiveDate` ONLY if a source states the
 date (else omit it — eight live airports legitimately have none), delete its `plannedIoc`, add
 the event source URL, write a one-line `note` if the story earns one, changelog, `lastUpdated`,
-and `lastVerified`.
+and either `lastVerified` (if you re-checked every airport) or that airport's own `verified`
+(if you checked only it — step 4).
 
 **What NOT to do:** don't backfill `goLiveDate` from `plannedIoc`; don't sharpen "this summer"
 into a month; don't trust a Leidos airport-count (they've contradicted the FAA's own count in

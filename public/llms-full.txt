@@ -130,7 +130,7 @@ Dedicated pages for each of the 9 airports The Blue Board tracks (United's 8 hub
 - **https://theblueboard.co/hubs/iah** — Houston Intercontinental: ~500 daily departures, Terminals B, C & E. Primary Latin America gateway.
 - **https://theblueboard.co/hubs/ewr** — Newark Liberty: ~350-400 daily departures under FAA caps, Terminal C + new Terminal A. East Coast transatlantic gateway. Operates under FAA flight caps (72 operations per hour) extended through October 2027.
 - **https://theblueboard.co/hubs/sfo** — San Francisco: ~310 daily departures, Terminal 3 & International G. Asia-Pacific gateway.
-- **https://theblueboard.co/hubs/iad** — Washington Dulles: ~265 daily departures, Concourses C & D. D.C. hub with transatlantic service.
+- **https://theblueboard.co/hubs/iad** — Washington Dulles: ~265 daily departures, Concourses C, D & E. D.C. hub with transatlantic service.
 - **https://theblueboard.co/hubs/lax** — Los Angeles: ~145 daily departures, Terminals 7 & 8. Pacific gateway hub.
 - **https://theblueboard.co/hubs/nrt** — Tokyo Narita: Asia-Pacific connecting point; United splits its mainland-US Tokyo service between Narita and Haneda (HND). Daily widebody service to SFO, DEN, IAH, LAX, EWR and ORD (ORD–NRT launched October 24, 2026), plus a 737 MAX 8 operation to Guam and other Pacific/Asia points.
 - **https://theblueboard.co/hubs/gum** — Guam: Pacific island hub connecting Micronesia and Pacific routes.

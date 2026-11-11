@@ -365,6 +365,21 @@ describe('4. agent instruction / when-to-use', () => {
     }
   });
 
+  // v1.28.0: llms-full still said Dulles "Concourses C & D" after Concourse E opened. Each hub line
+  // names its terminals; they must be the hub page's own (its subtitle).
+  it('names each hub\'s terminals as the hub page does', async () => {
+    const { hubs } = await import('../src/data/hubs/index.js');
+    for (const [key, hub] of Object.entries(hubs)) {
+      const terminals = /(?:Concourses?|Terminals?) [^·]+/.exec(hub.subtitle ?? '')?.[0]?.trim();
+      if (!terminals) continue;
+      const line = llmsFullTxt.split('\n').find((l) => l.includes(`theblueboard.co/hubs/${key}**`));
+      expect(line, `llms-full.txt line for /hubs/${key}`).toBeTruthy();
+      // A line that names terminals at all names the page's (NRT's names none).
+      if (/Terminal|Concourse/.test(line ?? '')) expect(line, key).toContain(terminals);
+    }
+    expect(llmsFullTxt).not.toContain('Concourses C & D');
+  });
+
   it('robots.txt: the AI-crawler group repeats the site-wide disallows (RFC 9309)', () => {
     const robots = readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
     const aiGroup = robots.slice(robots.indexOf('User-agent: ChatGPT-User'));
