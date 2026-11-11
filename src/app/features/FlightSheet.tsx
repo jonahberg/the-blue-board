@@ -37,6 +37,7 @@ import { expressDateLabel, expressOperatorLine, expressWifiLabel } from '@/lib/e
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
 import { matchAircraft, unmatchedAircraftNote } from '@/lib/fleet-match.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
+import { modalityOf, openFocusOptions } from '@/lib/input-modality.js';
 import { flightPagePath, parseFlightIdent } from '@/lib/flight-page.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { resolveFlightRoute } from '../data/route';
@@ -155,6 +156,31 @@ export function FlightSheet() {
   const watch = useWatch();
 
   const open = selection !== null;
+
+  // Where focus lands when the panel opens. Radix would focus the first button ("More details" /
+  // "Center map"), and after a click or tap on a map marker that button showed a focus ring the
+  // visitor never asked for. The panel's heading takes focus instead (`tabIndex={-1}`: reachable
+  // by script, not a Tab stop), so a keyboard or screen-reader user lands on the flight's name and
+  // the first Tab reaches the same controls as before. Opened by a pointer, the focus is asked to
+  // show no ring (`focusVisible: false`, src/lib/input-modality.js); opened from the keyboard, the
+  // heading shows the global ring. No outline is removed anywhere.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const lastInput = useRef<'keyboard' | 'pointer' | null>(null);
+  useEffect(() => {
+    const note = (event: Event) => {
+      lastInput.current = modalityOf(event.type) ?? lastInput.current;
+    };
+    document.addEventListener('pointerdown', note, true);
+    document.addEventListener('keydown', note, true);
+    return () => {
+      document.removeEventListener('pointerdown', note, true);
+      document.removeEventListener('keydown', note, true);
+    };
+  }, []);
+  const focusTitleOnOpen = useCallback((event: Event) => {
+    event.preventDefault();
+    titleRef.current?.focus(openFocusOptions(lastInput.current));
+  }, []);
 
   // F20: a right-hand panel covers the map centre below ~1024px (and the whole screen on a
   // phone), so every "View on map" landed on a sheet hiding the plane it had just centred.
@@ -309,6 +335,7 @@ export function FlightSheet() {
         side={wide ? 'right' : 'bottom'}
         data-peek={!wide && !expanded ? 'true' : undefined}
         showOverlay={false}
+        onOpenAutoFocus={focusTitleOnOpen}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
         className={
@@ -320,7 +347,9 @@ export function FlightSheet() {
         <SheetHeader>
           {/* pr-12 keeps the row clear of the sheet's absolutely-placed close button. */}
           <div className="flex flex-wrap items-center gap-2 pr-12">
-            <SheetTitle className="font-mono text-xl">{ident ?? 'Flight'}</SheetTitle>
+            <SheetTitle ref={titleRef} tabIndex={-1} className="font-mono text-xl">
+              {ident ?? 'Flight'}
+            </SheetTitle>
             {phase ? (
               <Badge variant="secondary">
                 <span aria-hidden="true">{phase.icon}</span> {phase.phase}
