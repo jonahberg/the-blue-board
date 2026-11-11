@@ -4,6 +4,36 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.0] - 2026-11-10
+
+**The map is the first thing a new visitor sees, hub and fleet pages show the live product, cancellation counts mean what they say, and the site starts keeping its own flight history.** One release from a Nov 10 audit of the live site.
+
+### Added
+- **Flight history** (`sql/021_flight_history.sql`, `api/_flight-history.ts`, `src/lib/flight-history.js`): the warm cron now keeps one lean row per United leg from the boards it already fetches, so the data no longer disappears when a board expires after about three days. No new provider calls. Rows only move forward: a real time is never replaced by an estimate, and an outcome never weakens. Kill switch `FLIGHT_HISTORY_ENABLED=0`. Nothing reads it yet; flight pages, hub report cards and the ops brief will. Spec: `docs/specs/flight-history.md`.
+- **Risk predictions are logged** (`sql/021_flight_history_predictions.sql`, `api/_delay-predictions.ts`): once per hub departure, about two hours out, the server records the delay-risk score with the same model the board uses, plus which inputs it did not have. This starts the clock for a public accuracy scorecard.
+- **Hub pages: a departures board** (`/api/hub-board`, `HubBoard.astro`): the next eight United departures with status and delay, the day's totals, and a "data as of" stamp, in place of a box with one number. It reads only the stored schedule snapshot and never calls the schedule provider.
+- **Fleet type pages: the type in the air now** (`FleetLive.astro`): how many of that type are airborne, matched by tail number, with a few of them listed.
+- **Donations go to Stripe** (`src/lib/support-link.js`): every one-time support link opens the Stripe payment page and carries the placement it was clicked from, so a payment can be traced to where it was asked for. Monthly memberships stay on Buy Me a Coffee for now. The privacy page names both processors.
+
+### Changed
+- **First visit** (`Onboarding.tsx`): the welcome dialog no longer opens by itself over the map. It opens from the header "?" and the phone More sheet, and reads as a short orientation with the home-hub picker.
+- **One strip at a time** under the board at every width, not a stack of news, tip and attribution.
+- **Canceled means confirmed** (`src/lib/cancellation-display.js`): the Delays tab and the schedule board headline confirmed cancellations and show the provider's unconfirmed "Likely Canceled" flights beside them as "+N unconfirmed". The disruption score and its bands are unchanged.
+- **Low delay risk is quiet text**; the pill is kept for moderate risk and above. The badge is still the button to the explanation.
+- **The AI explanation says less** (`api/delay-explain.ts`): one sentence of verdict, then at most two facts from the data, 70 words at most. The grounding rules are unchanged.
+- **Stats tab**: cards are paired by height, so no card is mostly empty.
+- **Copy**: the delay-risk score is described as rule-based with an AI-written explanation, everywhere it was called "AI-powered delay prediction". Hub pages no longer promise a 30-second refresh they do not have.
+
+### Fixed
+- **Schedule stat strip** (`src/lib/board-stats.js`): flights the board itself showed as Departed on live-feed evidence were counted as "Uncategorized" (88 at O'Hare on Nov 10). They now count as "Departed · not timed" and, on arrivals boards, "In the air", and the strip adds up to the total.
+- **FAA feed** (`api/faa.ts`): when both FAA sources fail, the last good answer is served for up to 30 minutes with an `X-BB-FAA-Stale` header, in place of a 502. The dashboard does not read that header yet.
+
+### Removed
+- **The FlightAware scrape** in `api/flight-times.ts`. A production probe found it answered none of 24 live flights; the schedule cache answered all of them.
+
+### Docs
+- `TODOS.md` rewritten against the current code; README claims checked against the code; `.env.example` brought up to date.
+
 ## [1.22.1] - 2026-11-10
 
 **The author credit links to jonahberg.com again, on the homepage too.** v1.7.18 (#244) pointed "Built by Jonah Berg" at jonahberg.com. The v1.8.0 rebuild then lost it on the homepage in two ways. The dashboard's only credit moved into the ⓘ menu, and that menu's content is only in the page while it is open, so the rendered homepage had no credit link at all. The homepage's static byline and its structured data were also carried over with the GitHub profile URL. The content pages' shared footer already linked jonahberg.com and is unchanged.

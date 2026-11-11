@@ -192,7 +192,7 @@ Living, data-driven pages that follow aviation's long-running stories with a map
 | Data | Source | Update Frequency |
 |------|--------|-----------------|
 | Flight positions & routes | Flightradar24 ADS-B network | Every 30 seconds |
-| Delays & schedule comparison | Flightradar24 schedule data | Every 30 seconds |
+| Delays & schedule comparison | AeroDataBox schedule boards | About every 30 minutes |
 | Ground stops & NAS alerts | FAA National Airspace System Status | Every 60 seconds |
 | Weather (METAR) | Aviation Weather Center (AWC) | Each observation cycle (~hourly) |
 | Weather (radar) | Iowa State NEXRAD | Every 5 minutes |

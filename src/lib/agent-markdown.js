@@ -91,7 +91,7 @@ are not a public API, so please read the pages rather than scraping \`/api/\`.
 | Feed | Refresh |
 | --- | --- |
 | Flight positions (ADS-B via Flightradar24) | every 30 seconds |
-| Delays and cancellations | every 30 seconds |
+| Delays and cancellations (hub schedule boards) | about every 30 minutes |
 | FAA NAS status and ground stops | every 60 seconds |
 | Schedules (AeroDataBox) | hourly, warmed on a cron |
 | METAR weather observations | every 5 minutes |
