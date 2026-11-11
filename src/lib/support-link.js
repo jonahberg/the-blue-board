@@ -1,9 +1,10 @@
 /**
  * The one place the site's donation link is written down.
  *
- * Since Nov 10 2026 one-time donations go through a Stripe Payment Link (owner: "I am switching
- * to Stripe FULLY"). Every one-time support link a visitor can follow (the dashboard, the content
- * pages, the welcome email) is built here, so the URL is never typed twice;
+ * Since Nov 10 2026 one-time donations go through Stripe Payment Links (owner: "I am switching
+ * to Stripe FULLY"): one any-amount link, and since Nov 11 2026 one fixed link per offered amount
+ * ($5, $10, $17, $100). Every one-time support link a visitor can follow (the dashboard, the
+ * content pages, the welcome email) is built here, so no URL is ever typed twice;
  * tests/support-link.test.js fails on a `buy.stripe.com` literal anywhere else, and on a
  * one-time Buy Me a Coffee link. Monthly memberships still live on Buy Me a Coffee (there is no
  * Stripe monthly link yet) and are linked directly where they appear.
@@ -23,7 +24,11 @@
  * DOM-free and import-free, because api/waitlist.ts and api/stripe-webhook.ts import it.
  */
 
-/** The Stripe Payment Link ("Support The Blue Board", choose what to pay). The path is case-sensitive. */
+/**
+ * The any-amount Stripe Payment Link ("Support The Blue Board", choose what to pay). Every ask
+ * that cannot name a day goes here ("Help cover a day", "Other amount"). The path is
+ * case-sensitive.
+ */
 export const STRIPE_SUPPORT_URL = 'https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00';
 
 export const SUPPORT_UTM_SOURCE = 'theblueboard';
@@ -50,6 +55,46 @@ export function supportUrl(placement, { medium = 'site' } = {}) {
   // throwing inside a render.
   const label = typeof placement === 'string' && placement.trim() ? placement.trim().slice(0, 40) : 'other';
   const url = new URL(STRIPE_SUPPORT_URL);
+  url.searchParams.set('utm_source', SUPPORT_UTM_SOURCE);
+  url.searchParams.set('utm_medium', SUPPORT_MEDIA.includes(medium) ? medium : 'site');
+  url.searchParams.set('utm_content', label);
+  if (PLACEMENT_LABEL_RE.test(label)) url.searchParams.set('client_reference_id', label);
+  return url.toString();
+}
+
+/**
+ * Fixed-amount Stripe Payment Links (Nov 11 2026: the owner asked for a choice of amounts and a
+ * lower default; the any-amount link above keeps its own preset). Keyed by whole US dollars. A
+ * null or empty entry is an amount with no link yet: `supportAmountUrl` returns null for it and
+ * the surfaces that list amounts (src/lib/cover-a-day.js `supportLadder`) leave it out. The $17
+ * link (the daily cost, DAILY_COST_USD) is where a button naming a day goes when it is set.
+ * @type {Readonly<Record<number, string|null>>}
+ */
+export const SUPPORT_AMOUNT_LINKS = Object.freeze({
+  5: 'https://buy.stripe.com/fZu4gy6Xxd7d9Ca288gEg01',
+  10: 'https://buy.stripe.com/28EcN495F8QXaGe8wwgEg02',
+  17: 'https://buy.stripe.com/28EeVc2Hh6IPbKiaEEgEg03',
+  100: 'https://buy.stripe.com/8x228q81BaZ58y69AAgEg04',
+});
+
+/** The amounts offered, smallest first. */
+export const SUPPORT_AMOUNTS = Object.freeze([5, 10, 17, 100]);
+
+/**
+ * The fixed-amount link for one placement, tagged exactly like `supportUrl`, or null when that
+ * amount has no link.
+ *
+ * @param {number} amount whole US dollars, one of SUPPORT_AMOUNTS
+ * @param {string} placement the link's `data-support` / `support_click` label, e.g. "fleet-end-17"
+ * @param {{ medium?: 'site' | 'email' | 'github', links?: Record<number, string|null> }} [options]
+ *   `links` is a test seam (defaults to SUPPORT_AMOUNT_LINKS).
+ * @returns {string|null}
+ */
+export function supportAmountUrl(amount, placement, { medium = 'site', links = SUPPORT_AMOUNT_LINKS } = {}) {
+  const base = links?.[amount];
+  if (typeof base !== 'string' || !base.startsWith('https://')) return null;
+  const label = typeof placement === 'string' && placement.trim() ? placement.trim().slice(0, 40) : 'other';
+  const url = new URL(base);
   url.searchParams.set('utm_source', SUPPORT_UTM_SOURCE);
   url.searchParams.set('utm_medium', SUPPORT_MEDIA.includes(medium) ? medium : 'site');
   url.searchParams.set('utm_content', label);
