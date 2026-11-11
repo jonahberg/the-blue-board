@@ -152,6 +152,25 @@ describe('the words in src/lib/cover-a-day.js', () => {
   });
 });
 
+describe('the README', () => {
+  // Markdown cannot import the lib, so its copy of the words is pinned to the lib's.
+  const readme = readFileSync(join(process.cwd(), 'README.md'), 'utf8');
+
+  it('carries the lib\'s sentences word for word, and "Help cover a day" on both links', () => {
+    for (const name of ['CORE_LINE_FLYERS', 'UNIT_LINE', 'THIRTY_LINE', 'ANY_AMOUNT_LINE', 'NAME_LINE']) {
+      expect(readme, name).toContain(words[name]);
+    }
+    expect(readme.match(/\[(?:→ )?Help cover a day\]\(https:\/\/buy\.stripe\.com\//g)).toHaveLength(2);
+  });
+
+  it('promises no place on the Supporters Wall and uses none of the retired ask words', () => {
+    const section = readme.slice(readme.indexOf('## Cover a day'), readme.indexOf('## 💡'));
+    expect(section.length).toBeGreaterThan(100);
+    expect(section).not.toMatch(/Supporters Wall|on the wall/i);
+    expect(section.replace(/\(https:[^)]+\)/g, '')).not.toMatch(BANNED);
+  });
+});
+
 // ── The source around every donation link ──
 
 const ROOT = process.cwd();

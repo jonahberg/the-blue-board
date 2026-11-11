@@ -260,7 +260,7 @@ The Blue Board is free because flyers cover it, one day at a time. $17 pays for 
 
 ### **[→ Help cover a day](https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00?utm_source=theblueboard&utm_medium=github&utm_content=readme-end&client_reference_id=readme-end)** · **[→ Become a member](https://buymeacoffee.com/notjbg/membership)**
 
-Any amount counts toward a day. You can add a name at checkout to show on the day you cover; the dashboard's About section shows this month's days. Monthly memberships start at $3: First Class members get *The Ops Brief*, a monthly behind-the-scenes note, and Captain's Circle feature requests go to the front of the line. If you have an idea, [suggest a feature](https://github.com/jonahberg/the-blue-board/issues). I read every one.
+Any amount counts toward a day. You can add a name at checkout to show on the day you cover. The dashboard's About section shows this month's days. Monthly memberships start at $3: First Class members get *The Ops Brief*, a monthly behind-the-scenes note, and Captain's Circle feature requests go to the front of the line. If you have an idea, [suggest a feature](https://github.com/jonahberg/the-blue-board/issues). I read every one.
 
 ---
 
