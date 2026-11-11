@@ -341,3 +341,24 @@ describe('nasDisplayTitle (the panel reads in sentence case, codes untouched)', 
     expect(nasDisplayTitle(null)).toBe('');
   });
 });
+
+describe('a plan window in the time field', () => {
+  it('reads "until 0000Z" / "after 2200Z" like a moved prefix, and other times print as sent', () => {
+    const tiers = tierNasEventsRaw(
+      {
+        planned: [
+          { time: 'UNTIL 0000', event: 'MIA/FLL GROUND STOP POSSIBLE', decoded: 'MIA/FLL GROUND STOP POSSIBLE', affectedAirports: [], type: 'terminal' },
+          { time: 'AFTER 2200', event: 'SEA GROUND STOP POSSIBLE', decoded: 'SEA GROUND STOP POSSIBLE', affectedAirports: [], type: 'terminal' },
+          { time: '18Z-22Z', event: 'MIT', decoded: 'Miles-in-trail', affectedAirports: [] },
+        ],
+      },
+      [],
+    );
+    const details = Object.values(tiers)
+      .flat()
+      .map((i) => i.detailParts.map((p) => p.text).join(' · '));
+    expect(details).toContain('planned · until 0000Z');
+    expect(details).toContain('planned · after 2200Z');
+    expect(details).toContain('planned · 18Z-22Z');
+  });
+});

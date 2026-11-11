@@ -135,7 +135,11 @@ export function tierNasEventsRaw(nas, hubCodes) {
     const after = tmi.time ? null : lead;
     /** @type {NasDetailPart[]} */
     const detailParts = [{ kind: 'text', text: 'planned' }];
-    if (tmi.time) detailParts.push({ kind: 'text', text: tmi.time });
+    // A `time` that is itself a plan window ("UNTIL 0000") reads like the moved prefix does:
+    // "until 0000Z". Any other time string prints as sent.
+    const window = typeof tmi.time === 'string' ? tmi.time.match(/^\s*(AFTER|UNTIL)\s+(\d{4})Z?\s*$/i) : null;
+    if (window) detailParts.push({ kind: 'text', text: `${window[1].toLowerCase()} ${window[2]}Z` });
+    else if (tmi.time) detailParts.push({ kind: 'text', text: tmi.time });
     else if (after) detailParts.push({ kind: 'text', text: `${after[1].toLowerCase()} ${after[2]}Z` });
 
     items.push({
