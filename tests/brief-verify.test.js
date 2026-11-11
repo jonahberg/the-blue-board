@@ -227,6 +227,19 @@ describe('verifyBrief: headline, tone, traveler note', () => {
     expect(disrupted.brief.traveler_note.fact_ids).toEqual(['faa.active.EWR.gs']);
   });
 
+  it('keeps a traveler note on a "watch" brief while a ground delay program is in effect at a hub', () => {
+    const gdp = fact('faa.active.SFO.gdp', ['SFO', 'San Francisco', '12:59 PM PT', 'low clouds', 'weather', '62 minutes', '132 minutes'], { kind: 'faa', hub: 'SFO', toneFloor: 'watch', severity: 85 });
+    const facts = [...FACTS.filter((f) => f.toneFloor !== 'disrupted'), gdp];
+    const note = item('Flying into San Francisco? Check your flight before you leave.', ['faa.active.SFO.gdp']);
+    const out = verifyBrief(brief([item('A ground delay program is holding flights into San Francisco until 12:59 PM PT.', ['faa.active.SFO.gdp'])], { tone: 'watch', traveler_note: note }), facts);
+    expect(out.brief.tone).toBe('watch');
+    expect(out.report.travelerNote.status).toBe('kept');
+    // The same program away from the hubs (no `hub`) does not allow one.
+    const away = [...FACTS.filter((f) => f.toneFloor !== 'disrupted'), { ...gdp, id: 'faa.active.BOS.gdp', hub: undefined, values: ['BOS', 'Boston'] }];
+    const out2 = verifyBrief(brief([item('630 United flights are in the air.', ['air.total'])], { traveler_note: item('Flying into Boston? Check your flight.', ['faa.active.BOS.gdp']) }), away);
+    expect(out2.report.travelerNote).toEqual({ status: 'dropped', reasons: ['tone_is_watch'] });
+  });
+
   it('records style warnings (jargon, exclamation) without dropping', () => {
     const out = verifyBrief(brief([item('No GDP anywhere! 630 United flights are in the air.', ['air.total'])]), FACTS);
     expect(out.report.itemsKept).toBe(1);

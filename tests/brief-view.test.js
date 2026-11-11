@@ -133,6 +133,18 @@ describe('briefViewState', () => {
     expect(calm.status === 'ready' && calm.travelerNote).toBeNull();
   });
 
+  it('shows a traveler note on a "watch" brief that cites a hub ground delay program, never on another watch', () => {
+    const watch = briefViewState(briefResponseBody(rowFor('sfo-gdp-morning', { generatedMs: NOW - 60_000 }), NOW), { nowMs: NOW });
+    expect(watch.status === 'ready' && watch.tone).toBe('watch');
+    expect(watch.status === 'ready' && watch.travelerNote?.text).toBe("If you are flying to San Francisco, check your flight's status before you leave for the airport.");
+
+    const planned = rowFor('planned-only-watch', { generatedMs: NOW - 60_000 });
+    planned.traveler_note = { text: 'Should not show.', fact_ids: ['faa.planned.EWR'] };
+    const view = briefViewState(briefResponseBody(planned, NOW), { nowMs: NOW });
+    expect(view.status === 'ready' && view.tone).toBe('watch');
+    expect(view.status === 'ready' && view.travelerNote).toBeNull();
+  });
+
   it('drops a "next check" time that has already passed', () => {
     const body = briefResponseBody(rowFor('calm-afternoon', { generatedMs: NOW - 2 * 60_000 }), NOW);
     const next = Date.parse(body.nextUpdateAt);

@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   airborneNormal, buildBriefFacts, computeTone, countAirborneAndStarlink, faaCausePhrase,
   formatAirportClock, isWholeAirportClosure, materialKey, parseIsoMs, publicFact, resolveZuluHhmm,
+  travelerNoteAllowed,
 } from '../src/lib/brief-facts.js';
 
 const FIXTURE_DIR = new URL('./fixtures/brief/', import.meta.url);
@@ -246,6 +247,49 @@ describe('buildBriefFacts: the catalogue', () => {
   it('serves only the public fields', () => {
     const f = build(fixture('calm-afternoon')).facts[0];
     expect(Object.keys(publicFact(f)).sort()).toEqual(['at', 'id', 'kind', 'link', 'statement', 'values', ...(f.hub ? ['hub'] : [])].sort());
+  });
+});
+
+describe('tone: FAA programs at United hubs', () => {
+  const fx = fixture('sfo-gdp-morning');
+  const withFaa = (edit) => build(fx, { faa: fx.sources.faa.map((a) => edit(a) ?? a) }).facts;
+  const program = (type, extra = {}) => (a) => ({ ...a, programs: [{ type, reason: 'WX:Thunderstorms', endTime: '2026-11-11T23:59:00Z', ...extra }] });
+
+  it('a ground delay program at one hub is a watch, as the header’s "Some Delays" chip says', () => {
+    const facts = build(fx).facts;
+    expect(computeTone(facts)).toBe('watch');
+    expect(byId(facts)['faa.active.SFO.gdp'].toneFloor).toBe('watch');
+    expect(byId(facts)['faa.active.count'].toneFloor).toBe('watch');
+    expect(byId(facts)['net.status'].statement).toContain('"Some Delays"');
+    expect(travelerNoteAllowed('watch', facts)).toBe(true);
+  });
+
+  it('a ground stop or closure at a hub, or delay programs at two hubs at once, is disrupted', () => {
+    const gs = withFaa((a) => (a.airportCode === 'EWR' ? program('ground_stop')(a) : null));
+    expect(computeTone(gs)).toBe('disrupted');
+    expect(byId(gs)['faa.active.EWR.gs'].toneFloor).toBe('disrupted');
+    const closure = withFaa((a) => (a.airportCode === 'EWR' ? program('closure', { reason: 'snow and ice removal' })(a) : null));
+    expect(computeTone(closure)).toBe('disrupted');
+    const twoGdps = withFaa((a) => (a.airportCode === 'EWR' ? program('ground_delay', { avgDelay: 41 })(a) : null));
+    expect(byId(twoGdps)['faa.active.count'].toneFloor).toBe('disrupted');
+    expect(computeTone(twoGdps)).toBe('disrupted');
+    // A second program at the SAME hub is still one hub.
+    const sameHub = withFaa((a) => (a.airportCode === 'SFO' ? { ...a, programs: [...a.programs, { type: 'ground_delay', reason: 'wind' }] } : null));
+    expect(byId(sameHub)['faa.active.count'].toneFloor).toBe('watch');
+  });
+
+  it('a ground delay program away from the hubs is a watch, and allows no traveler note on its own', () => {
+    const facts = withFaa((a) => (a.airportCode === 'SFO' ? { ...a, programs: [] } : null));
+    expect(byId(facts)['faa.active.BOS.gdp'].toneFloor).toBe('watch');
+    expect(computeTone(facts)).toBe('watch');
+    expect(travelerNoteAllowed('watch', facts)).toBe(false);
+  });
+
+  it('the network status at its most severe level is disrupted', () => {
+    const facts = build(fx, { irops: { ...fx.sources.irops, score: 45 } }).facts;
+    expect(byId(facts)['net.status'].statement).toContain('"Disrupted"');
+    expect(byId(facts)['net.status'].toneFloor).toBe('disrupted');
+    expect(computeTone(facts)).toBe('disrupted');
   });
 });
 

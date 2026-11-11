@@ -19,14 +19,15 @@
 //      or altered quote, or an unattributed one drops the item. Markup or a URL drops any item.
 //   5. The headline is checked against the union of the SURVIVING items' facts. A headline that
 //      fails (or runs past 20 words) is replaced with the template headline, never published.
-//   6. The traveler note is checked like an item, and only survives when the final tone is
-//      "disrupted".
+//   6. The traveler note is checked like an item, and only survives when an FAA ground stop or
+//      ground delay program is in effect at a United hub, or the final tone is "disrupted"
+//      (travelerNoteAllowed).
 //   7. Tone is computed from the facts (computeTone) and overrides the model's when they differ.
 //
 // If no item survives, the result is not ok and the caller publishes the template brief.
 
 import { allowanceFromValues, claimFailure, emptyAllowance, extractClaims, normalizeText } from './brief-claims.js';
-import { computeTone } from './brief-facts.js';
+import { computeTone, travelerNoteAllowed } from './brief-facts.js';
 import { templateHeadline } from './brief-template.js';
 
 export const BRIEF_MAX_ITEMS = 4;
@@ -244,12 +245,12 @@ export function verifyBrief(candidate, facts) {
     report.warnings.push(...styleWarnings(headline, 'headline'));
   }
 
-  // Traveler note: verified like an item; only when the brief is disrupted.
+  // Traveler note: verified like an item; only with a hub program in effect, or a disrupted brief.
   let traveler_note = null;
   if (input.traveler_note) {
     const ids = [...new Set(input.traveler_note.fact_ids)];
     const reasons = checkSentence(input.traveler_note.text, ids, factIndex);
-    if (tone !== 'disrupted') reasons.push(`tone_is_${tone}`);
+    if (!travelerNoteAllowed(tone, factList)) reasons.push(`tone_is_${tone}`);
     if (reasons.length) report.travelerNote = { status: 'dropped', reasons };
     else {
       report.travelerNote = { status: 'kept', reasons: [] };

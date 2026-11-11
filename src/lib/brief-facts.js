@@ -78,12 +78,32 @@ export function maxTone(...tones) {
 
 /**
  * The brief's tone, from the facts alone (prompt rule 6, made deterministic): the most alarming
- * `toneFloor` of any fact. The model proposes a tone; this decides it.
+ * `toneFloor` of any fact. The model proposes a tone; this decides it. For FAA programs at United
+ * hubs: a ground delay program at one hub is "watch" (the header's network chip reads "Some
+ * Delays" for it too); a ground stop or closure at a hub, or delay programs at two or more hubs at
+ * once, is "disrupted" (the `faa.active.count` fact carries that rule).
  * @param {Array<{toneFloor?: string}>} facts
  * @returns {'calm'|'watch'|'disrupted'}
  */
 export function computeTone(facts) {
   return /** @type {'calm'|'watch'|'disrupted'} */ (maxTone(...(facts || []).map((f) => f.toneFloor)));
+}
+
+/** A ground stop or ground delay program in effect at a United hub (only hub facts carry `hub`). */
+const HUB_PROGRAM_ID_RE = /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/;
+export function isHubProgramFact(fact) {
+  return HUB_PROGRAM_ID_RE.test(String(fact?.id ?? '')) && typeof fact?.hub === 'string' && fact.hub !== '';
+}
+
+/**
+ * Whether a brief may carry a traveler note: when an FAA ground stop or ground delay program is in
+ * effect at a United hub (travelers bound there are held), or the tone is "disrupted". The
+ * verifier, the template and the dashboard (src/lib/brief-view.js mirrors it) apply the same rule.
+ * @param {string} tone
+ * @param {Array<{id: string, hub?: string}>} facts
+ */
+export function travelerNoteAllowed(tone, facts) {
+  return tone === 'disrupted' || (facts || []).some(isHubProgramFact);
 }
 
 // ── Clock formatting ──
@@ -478,6 +498,11 @@ export function buildBriefFacts(sources, { nowMs }) {
     const describe = (list) => joinNames(list.map(({ code, type }) =>
       `${type === 'ground_stop' ? 'a ground stop for flights into' : type === 'ground_delay' ? 'a ground delay program for flights into' : 'a closure at'} ${airportDisplayName(code)}`));
     const n = hubPrograms.length;
+    // A ground stop or closure at a hub, or delay programs at two or more hubs at once, disrupts the
+    // network; one hub's delay program is a watch (computeTone).
+    const gdpHubs = new Set(hubPrograms.filter((p) => p.type === 'ground_delay').map((p) => p.code));
+    const countTone = n === 0 ? 'calm'
+      : hubPrograms.some((p) => p.type !== 'ground_delay') || gdpHubs.size >= 2 ? 'disrupted' : 'watch';
     facts.push({
       id: 'faa.active.count',
       kind: 'faa',
@@ -488,7 +513,7 @@ export function buildBriefFacts(sources, { nowMs }) {
       at: iso(asOf.faa ?? nowMs),
       link: { tab: 'weather' },
       severity: n === 0 ? 1 : 70,
-      toneFloor: n === 0 ? 'calm' : 'disrupted',
+      toneFloor: countTone,
       material: `hubprog:${hubPrograms.map((p) => `${p.code}.${p.type}`).sort().join(',')}`,
     });
     if (otherPrograms.length > 0) {
@@ -670,7 +695,8 @@ function faaActiveFact(code, p, { isHub, nowMs, asOfMs }) {
     else if (max) { statement += `; delays run up to ${max} minutes.`; values.push(`${max} minutes`); }
     else statement += '.';
     severity = isHub ? 85 : 35;
-    toneFloor = isHub ? 'disrupted' : 'watch';
+    // One hub's delay program alone is a watch; faa.active.count raises two or more to disrupted.
+    toneFloor = 'watch';
   } else if (type === 'closure') {
     suffix = 'closure';
     statement = `The FAA lists ${name} as closed${until}.`;

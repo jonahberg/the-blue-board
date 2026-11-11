@@ -4,7 +4,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { buildBriefFacts } from '../src/lib/brief-facts.js';
+import { buildBriefFacts, travelerNoteAllowed } from '../src/lib/brief-facts.js';
 import { buildTemplateBrief, templateHeadline } from '../src/lib/brief-template.js';
 import { verifyBrief } from '../src/lib/brief-verify.js';
 import { radioFactsFromStatus } from '../src/lib/brief-radio.js';
@@ -30,7 +30,7 @@ describe('every fixture’s template brief passes the verifier', () => {
       expect(out.report.warnings).toEqual([]);
       expect(t.items.length).toBeGreaterThanOrEqual(1);
       expect(t.items.length).toBeLessThanOrEqual(t.tone === 'calm' ? 3 : 4);
-      expect(t.traveler_note === null).toBe(t.tone !== 'disrupted');
+      expect(t.traveler_note === null).toBe(!travelerNoteAllowed(t.tone, facts));
       for (const id of t.headline_fact_ids) expect(facts.some((f) => f.id === id)).toBe(true);
     });
   }
@@ -63,6 +63,33 @@ describe('buildTemplateBrief', () => {
     // Specific facts, not the "1 FAA program is in effect" summary.
     expect(t.items.some((i) => i.fact_ids[0] === 'faa.active.count')).toBe(false);
     expect(t.traveler_note).toEqual({ text: "If you are flying to Newark, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.EWR.gs'] });
+  });
+
+  it('one hub ground delay program (the morning of Nov 11): watch, the program first, a note for travelers bound there', () => {
+    const t = buildTemplateBrief(factsFor('sfo-gdp-morning'));
+    expect(t.tone).toBe('watch');
+    expect(t.headline).toBe('A ground delay program is holding flights into San Francisco.');
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.SFO.gdp', 'wx.SFO', 'faa.active.BOS.gdp', 'otp.floor']);
+    expect(t.items[0].text).toBe('The FAA has a ground delay program in effect for flights heading to San Francisco (SFO) until 12:59 PM PT, because of low clouds. Those flights are held at their departure airport; delays average 62 minutes, up to 132 minutes.');
+    expect(t.items[3].text).toBe('All 6 hubs with an on-time reading are at 86% or better.');
+    expect(t.traveler_note).toEqual({ text: "If you are flying to San Francisco, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.SFO.gdp'] });
+  });
+
+  it('delay programs at two hubs: disrupted, both named in the headline, no count item beside them', () => {
+    const fx = JSON.parse(readFileSync(new URL('sfo-gdp-morning.json', FIXTURE_DIR), 'utf8'));
+    const faa = fx.sources.faa.map((a) => (a.airportCode === 'EWR'
+      ? { ...a, groundDelay: true, programs: [{ type: 'ground_delay', reason: 'VOL:Volume', avgDelay: 41, maxDelay: 88, endTime: '2026-11-11T23:59:00Z' }] }
+      : a));
+    const facts = buildBriefFacts({ ...fx.sources, faa }, { nowMs: Date.parse(fx.nowIso) }).facts;
+    const t = buildTemplateBrief(facts);
+    expect(t.tone).toBe('disrupted');
+    expect(t.headline).toBe('Ground delay programs are holding flights into Newark and San Francisco.');
+    expect(t.headline_fact_ids).toEqual(['faa.active.EWR.gdp', 'faa.active.SFO.gdp']);
+    expect(t.items.map((i) => i.fact_ids[0])).not.toContain('faa.active.count');
+    expect(t.traveler_note?.fact_ids).toEqual(['faa.active.EWR.gdp']);
+    const out = verifyBrief({ headline: t.headline, tone: t.tone, items: t.items, traveler_note: t.traveler_note }, facts);
+    expect(out.report.dropped).toEqual([]);
+    expect(out.report.headline.status).toBe('kept');
   });
 
   it('planned only: a watch headline that names the hub, items that say "not in effect"', () => {

@@ -6,7 +6,7 @@
 // this is what every visitor sees whenever the model is not available.
 
 import { airportDisplayName } from './brief-claims.js';
-import { computeTone } from './brief-facts.js';
+import { computeTone, isHubProgramFact, travelerNoteAllowed } from './brief-facts.js';
 
 /**
  * @typedef {import('./brief-facts.js').BriefFact} BriefFact
@@ -29,6 +29,7 @@ const byId = (facts) => new Map((facts || []).map((f) => [f.id, f]));
 /** A template headline stays within the prompt's own limit (rule 3), so the verifier never warns on it. */
 const HEADLINE_WORDS = 12;
 const wordCount = (s) => String(s).trim().split(/\s+/).filter(Boolean).length;
+const joinNames = (names) => (names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 
 /**
  * The headline for these facts at this tone, and the facts it rests on.
@@ -48,14 +49,25 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
     if (gs?.hub) return { headline: `A ground stop is holding flights into ${name(gs)}.`, fact_ids: [gs.id] };
     const closure = find(/^faa\.active\.[A-Z]{3}\.closure$/);
     if (closure?.hub) return { headline: `The FAA lists ${name(closure)} as closed.`, fact_ids: [closure.id] };
-    const gdp = find(/^faa\.active\.[A-Z]{3}\.gdp$/);
-    if (gdp?.hub) return { headline: `A ground delay program is holding flights into ${name(gdp)}.`, fact_ids: [gdp.id] };
+    // Delay programs at two or more hubs at once are what make a day without a stop disrupted.
+    const gdps = sorted.filter((f) => f.hub && /^faa\.active\.[A-Z]{3}\.gdp$/.test(f.id));
+    if (gdps.length >= 2) {
+      const many = `Ground delay programs are holding flights into ${joinNames(gdps.map(name))}.`;
+      return {
+        headline: wordCount(many) <= HEADLINE_WORDS ? many : 'Ground delay programs are holding flights into several United hubs.',
+        fact_ids: gdps.map((f) => f.id),
+      };
+    }
+    if (gdps[0]) return { headline: `A ground delay program is holding flights into ${name(gdps[0])}.`, fact_ids: [gdps[0].id] };
     const otp = sorted.find((f) => /^otp\.[A-Z]{3}$/.test(f.id) && f.toneFloor === 'disrupted');
     if (otp?.hub) return { headline: `Delays are heavy at ${name(otp)}.`, fact_ids: [otp.id] };
     return { headline: "United's operation is disrupted right now.", fact_ids: top ? [top.id] : [] };
   }
 
   if (tone === 'watch') {
+    // One hub's delay program is a watch, and the most concrete thing happening.
+    const gdp = find(/^faa\.active\.[A-Z]{3}\.gdp$/);
+    if (gdp?.hub) return { headline: `A ground delay program is holding flights into ${name(gdp)}.`, fact_ids: [gdp.id] };
     const lead = sorted.find((f) => f.toneFloor === 'watch');
     const planned = sorted.find((f) => f.kind === 'faa_planned' && f.hub);
     if (lead?.kind === 'faa_planned' && lead.hub) return { headline: `Running normally, with FAA action possible at ${name(lead)}.`, fact_ids: [lead.id] };
@@ -99,10 +111,15 @@ function pickItems(facts, limit, tone) {
   // day of unconfirmed cancellations), with the cancellation split that explains IT.
   if (tone !== 'calm' && !picked.some((f) => f.toneFloor === tone)) {
     const setter = sorted.find((f) => f.toneFloor === tone);
-    add(setter);
-    if (setter?.kind === 'network') {
-      add(index.get('cxl.confirmed'));
-      add(index.get('cxl.unconfirmed'));
+    // Delay programs at two hubs make the day disrupted through the hub-programs count; the
+    // programs themselves, already listed, say it better than the count would.
+    const explained = setter?.id === 'faa.active.count' && picked.some(isHubProgramFact);
+    if (!explained) {
+      add(setter);
+      if (setter?.kind === 'network') {
+        add(index.get('cxl.confirmed'));
+        add(index.get('cxl.unconfirmed'));
+      }
     }
   }
 
@@ -141,8 +158,11 @@ export function buildTemplateBrief(facts) {
   const { headline, fact_ids } = templateHeadline(list, tone);
 
   let traveler_note = null;
-  if (tone === 'disrupted') {
-    const anchor = [...list].sort((a, b) => b.severity - a.severity).find((f) => f.hub && f.toneFloor === 'disrupted');
+  if (travelerNoteAllowed(tone, list)) {
+    // Anchored on the program travelers are held by, else the hub fact that makes the day disrupted.
+    const bySeverity = [...list].sort((a, b) => b.severity - a.severity);
+    const anchor = bySeverity.find((f) => f.hub && /^faa\.active\.[A-Z]{3}\.(gs|gdp|closure)$/.test(f.id))
+      || bySeverity.find((f) => f.hub && f.toneFloor === 'disrupted');
     if (anchor) {
       traveler_note = {
         text: `If you are ${travelerWho(anchor)}, check your flight's status before you leave for the airport.`,

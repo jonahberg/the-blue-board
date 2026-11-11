@@ -1,6 +1,7 @@
 /**
  * The full brief: "Right now" + when it was written, the headline, the items with their chips,
- * the traveler note on a disrupted day, and a footer that says how it was written.
+ * the traveler note (a hub ground stop or delay program, or a disrupted day), and a footer that says
+ * how it was written.
  *
  * One body, two homes: the top of the Live sidebar at `lg`+ (`BriefSidebarPanel`, below) and the
  * brief sheet everywhere else (`BriefSheet.tsx`). Everything it decides comes from

@@ -1,6 +1,6 @@
 {
  "name": "sfo-gdp-morning",
- "description": "Mirrors the morning of Nov 11 2026: an FAA ground delay program for flights into San Francisco until 12:59 PM PT for low clouds (average 62 minutes, up to 132), one for flights into Boston (not a hub) for runway construction (average 20, up to 64), a possible ground stop at Miami after 1:00 PM ET and a possible ground stop or delay program at Seattle after 2:00 PM PT (neither a hub), six hubs between 86% and 100% on time (Washington Dulles has aged out), San Francisco under very low clouds, no confirmed cancellations. Expected tone: disrupted (a ground delay program at any United hub sets it).",
+ "description": "Mirrors the morning of Nov 11 2026: an FAA ground delay program for flights into San Francisco until 12:59 PM PT for low clouds (average 62 minutes, up to 132), one for flights into Boston (not a hub) for runway construction (average 20, up to 64), a possible ground stop at Miami after 1:00 PM ET and a possible ground stop or delay program at Seattle after 2:00 PM PT (neither a hub), six hubs between 86% and 100% on time (Washington Dulles has aged out), San Francisco under very low clouds, no confirmed cancellations. Expected tone: watch (one hub ground delay program; the header reads \"Some Delays\").",
  "nowIso": "2026-11-11T17:30:00Z",
  "sources": {
   "irops": {
@@ -459,6 +459,6 @@
   }
  },
  "expect": {
-  "tone": "disrupted"
+  "tone": "watch"
  }
 }
