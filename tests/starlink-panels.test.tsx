@@ -103,6 +103,30 @@ describe('DeparturesBoard flight numbers (Nov 2026)', () => {
   });
 });
 
+describe('SlHero airborne chip (Nov 2026)', () => {
+  it('is named by its visible words plus sr-only ones, not an aria-label over different text', () => {
+    const onShowOnMap = vi.fn();
+    render(
+      <SlHero
+        equipped={598}
+        bars={null}
+        newThisWeek={0}
+        airborneCount={298}
+        canFilterMap
+        verified={594}
+        checked={606}
+        disputed={5}
+        onJumpToLedger={() => {}}
+        onShowOnMap={onShowOnMap}
+      />,
+    );
+    const chip = screen.getByRole('button', { name: 'Show 298 Airborne now Starlink aircraft on the live map' });
+    expect(chip.getAttribute('aria-label')).toBeNull();
+    fireEvent.click(chip);
+    expect(onShowOnMap).toHaveBeenCalled();
+  });
+});
+
 describe('SlHero verification sub-line (F99)', () => {
   it('names its own denominator, which is not the headline count', () => {
     render(

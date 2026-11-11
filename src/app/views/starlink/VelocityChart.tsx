@@ -129,7 +129,16 @@ export const VelocityChart = memo(function VelocityChart({
           eighteen month labels into an unreadable smear. */}
       {/* ...and it opens scrolled to the NEWEST months (F29): on a phone the left edge is
           March 2025, and the months a reader came for were off-screen with no affordance. */}
-      <div ref={scrollerRef} className="mt-3 -mx-1 overflow-x-auto px-1" data-testid="sl-chart-scroller">
+      {/* A scroller a keyboard can reach (axe scrollable-region-focusable): Tab to it, then the
+          arrow keys scroll the months. Named for what it holds. */}
+      <div
+        ref={scrollerRef}
+        tabIndex={0}
+        role="region"
+        aria-label="Starlink installs by month, scrollable"
+        className="mt-3 -mx-1 overflow-x-auto px-1"
+        data-testid="sl-chart-scroller"
+      >
         <svg
           id="sl-chart"
           viewBox={`0 0 ${model.width} ${model.height}`}

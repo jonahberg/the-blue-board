@@ -36,9 +36,17 @@ const PAGES = [
   { name: '404',      path: '/this-page-does-not-exist' },
 ];
 
-// Dashboard tabs, by their accessible tab name (src/app/tabs.ts labels).
+// Dashboard tabs (src/app/tabs.ts): `label` names the desktop tab and the phone More-sheet row,
+// `short` the phone bottom-bar button, `hash` is what the URL reads once the tab is showing.
 const DASHBOARD_TABS = [
-  'My Flights', 'Live Ops', 'Schedule', 'Fleet', 'Starlink', 'Delays · Weather · Hubs', 'Stats', 'Sources',
+  { label: 'My Flights', short: 'My Flights', hash: '#myflight' },
+  { label: 'Live Ops', short: 'Live', hash: '#live' },
+  { label: 'Schedule', short: 'Schedule', hash: '#schedule' },
+  { label: 'Fleet', short: null, hash: '#fleet' },
+  { label: 'Starlink', short: null, hash: '#starlink' },
+  { label: 'Delays · Weather · Hubs', short: 'Weather', hash: '#weather' },
+  { label: 'Stats', short: null, hash: '#stats' },
+  { label: 'Sources', short: null, hash: '#sources' },
 ];
 
 const VIEWPORTS = [
@@ -50,45 +58,64 @@ const VIEWPORTS = [
 
 const OUT_DIR = 'audit-output';
 
+// Optional narrowing for a quick run: AUDIT_PAGES=index AUDIT_VIEWPORTS=mobile-390,tablet-768.
+const only = (env) => (process.env[env] ? new Set(process.env[env].split(',').map((x) => x.trim())) : null);
+const ONLY_PAGES = only('AUDIT_PAGES');
+const ONLY_VIEWPORTS = only('AUDIT_VIEWPORTS');
+
 /**
- * Dismiss the welcome dialog, then select every dashboard tab and run axe on each. A tab that
- * cannot be selected, or an island that renders nothing, is recorded as an error.
+ * Show one dashboard tab the way a visitor would. From `lg` that is the tab bar (`role=tab`).
+ * Below `lg` there is no tab bar: the four primary tabs are bottom-bar buttons named by their
+ * short label, and the other four are rows in the bottom bar's "More" sheet, named by their full
+ * label. The switch is confirmed by the URL hash, which every tab writes, and a More sheet is
+ * closed again before axe runs, so its overlay is never what gets audited.
+ */
+async function showTab(page, { label, short, hash }) {
+  const tab = page.getByRole('tab', { name: label, exact: true });
+  if (await tab.isVisible().catch(() => false)) {
+    await tab.click({ timeout: 5000 });
+  } else {
+    const nav = page.getByRole('navigation', { name: 'Dashboard navigation' });
+    if (short) {
+      await nav.getByRole('button', { name: short, exact: true }).click({ timeout: 5000 });
+    } else {
+      await nav.getByRole('button', { name: 'More', exact: true }).click({ timeout: 5000 });
+      const sheet = page.getByRole('dialog', { name: 'More' });
+      await sheet.getByRole('button', { name: label, exact: true }).click({ timeout: 5000 });
+      await sheet.waitFor({ state: 'hidden', timeout: 5000 });
+    }
+  }
+  await page.waitForFunction((want) => window.location.hash === want, hash, { timeout: 5000 });
+}
+
+/**
+ * Dismiss any dialog open on load, then show every dashboard tab and run axe on each. A tab that
+ * cannot be shown, or an island that renders nothing, is recorded as an error.
  */
 async function auditDashboardTabs(page, dir, viewportName) {
   const results = [];
-  // Welcome dialog: its primary button text uses a curly apostrophe, so match loosely.
-  const welcome = page.getByRole('dialog');
-  if (await welcome.isVisible().catch(() => false)) {
-    await welcome.getByRole('button').first().click().catch(() => {});
+  // Against `astro dev`, the dev toolbar sits over the phone bottom bar and takes its clicks.
+  await page.addStyleTag({ content: 'astro-dev-toolbar{display:none!important}' }).catch(() => {});
+  const dialog = page.getByRole('dialog');
+  if (await dialog.isVisible().catch(() => false)) {
     await page.keyboard.press('Escape').catch(() => {});
   }
-  for (const name of DASHBOARD_TABS) {
-    const entry = { tab: name };
+  for (const entry of DASHBOARD_TABS) {
+    const result = { tab: entry.label };
     try {
-      const tab = page.getByRole('tab', { name, exact: true });
-      if (!(await tab.isVisible().catch(() => false))) {
-        // Phones: overflow tabs live behind the bottom nav's "More".
-        await page.getByRole('button', { name: /more/i }).first().click({ timeout: 2000 }).catch(() => {});
-      }
-      await tab.click({ timeout: 5000 });
-      await page.waitForFunction(
-        (label) => [...document.querySelectorAll('[role=tab]')]
-          .some((t) => t.textContent?.trim() === label && t.getAttribute('aria-selected') === 'true'),
-        name,
-        { timeout: 5000 },
-      );
+      await showTab(page, entry);
       await page.waitForTimeout(1500);
       const islandChildren = await page.evaluate(() => document.querySelector('astro-island')?.childElementCount ?? 0);
       if (islandChildren === 0) throw new Error('astro-island is empty (the app crashed)');
-      const slug = name.toLowerCase().replace(/[^a-z]+/g, '-');
+      const slug = entry.label.toLowerCase().replace(/[^a-z]+/g, '-');
       await page.screenshot({ path: join(dir, `index-tab-${slug}.png`) });
       const axeResults = await new AxeBuilder({ page }).analyze();
-      entry.violations = axeResults.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }));
+      result.violations = axeResults.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }));
     } catch (err) {
-      entry.error = err.message;
-      console.log(`    ⚠ ${viewportName} tab "${name}": ${err.message}`);
+      result.error = err.message;
+      console.log(`    ⚠ ${viewportName} tab "${entry.label}": ${err.message}`);
     }
-    results.push(entry);
+    results.push(result);
   }
   return results;
 }
@@ -112,19 +139,21 @@ async function run() {
 
   const violationCounts = {};
 
-  for (const vp of VIEWPORTS) {
+  for (const vp of VIEWPORTS.filter((v) => !ONLY_VIEWPORTS || ONLY_VIEWPORTS.has(v.name))) {
     const dir = join(OUT_DIR, 'screenshots', vp.name);
     await mkdir(dir, { recursive: true });
 
     const context = await browser.newContext({
       viewport: { width: vp.width, height: vp.height },
       isMobile: vp.mobile,
+      // Touch emulation changes chrome heights and every `pointer-coarse:` rule.
+      hasTouch: vp.mobile,
       userAgent: vp.mobile
         ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
         : undefined,
     });
 
-    for (const pg of PAGES) {
+    for (const pg of PAGES.filter((p) => !ONLY_PAGES || ONLY_PAGES.has(p.name))) {
       const page = await context.newPage();
       const pageErrors = [];
       page.on('pageerror', (err) => pageErrors.push(err.message));
@@ -165,6 +194,14 @@ async function run() {
           report.pages.push(pageEntry);
         }
         const tabs = pg.name === 'index' ? await auditDashboardTabs(page, dir, vp.name) : [];
+        // Tab-level findings count in the summary too: below `lg` they were never collected.
+        for (const tab of tabs) {
+          for (const v of tab.violations ?? []) {
+            report.summary.totalViolations += 1;
+            report.summary.bySeverity[v.impact] = (report.summary.bySeverity[v.impact] || 0) + 1;
+            violationCounts[v.id] = (violationCounts[v.id] || 0) + 1;
+          }
+        }
         if (pageErrors.length) {
           console.log(`    ⚠ uncaught page errors: ${pageErrors.join(' | ')}`);
           report.summary.pageErrors = (report.summary.pageErrors || 0) + pageErrors.length;

@@ -223,7 +223,8 @@ export const DeparturesBoard = memo(function DeparturesBoard({
               <div key={bucket.label}>
                 <p className="mt-3 mb-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase first:mt-0">
                   {bucket.label}{' '}
-                  <span className="ml-1 font-mono tabular-nums opacity-70">
+                  {/* No opacity: on the muted label it measured 4.0:1 (axe color-contrast). */}
+                  <span className="ml-1 font-mono tabular-nums">
                     {bucket.rows.length}
                   </span>
                 </p>

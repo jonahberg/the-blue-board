@@ -131,11 +131,15 @@ export const SlHero = memo(function SlHero({
                 onClick={onShowOnMap}
                 className={`${CHIP} hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
                 title="Show these on the live map"
-                aria-label={`Show ${airborneCount} airborne Starlink aircraft on the live map`}
               >
+                {/* Named by its own words plus sr-only ones (WCAG 2.5.3): the aria-label it had
+                    ("Show 298 airborne Starlink aircraft…") did not contain "airborne now". The
+                    capitals are CSS, so the name reads as words. */}
                 <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
-                <span className="font-mono tabular-nums">{airborneCount}</span>
-                <span>AIRBORNE NOW</span>
+                <span className="sr-only">Show</span>{' '}
+                <span className="font-mono tabular-nums">{airborneCount}</span>{' '}
+                <span className="uppercase">Airborne now</span>{' '}
+                <span className="sr-only">Starlink aircraft on the live map</span>
               </button>
             ) : (
               // Degraded tier: the Live map's Starlink toggle is disabled, so a click-through
