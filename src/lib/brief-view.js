@@ -30,6 +30,17 @@ export const BRIEF_REFRESH_MS = 2 * 60 * 1000;
 
 const TONES = new Set(['calm', 'watch', 'disrupted']);
 
+/**
+ * Mirrors travelerNoteAllowed in src/lib/brief-facts.js (pinned by tests/brief-view.test.js), kept
+ * here so the header row's chunk does not import the fact builder: a traveler note shows on a
+ * disrupted brief, or when the brief cites an FAA ground stop or ground delay program at a hub.
+ * Only cited facts are served, and the template's note cites the program itself.
+ */
+function travelerNoteShown(tone, facts) {
+  return tone === 'disrupted'
+    || facts.some((f) => /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/.test(f.id) && typeof f.hub === 'string' && f.hub !== '');
+}
+
 const ms = (iso) => {
   if (typeof iso !== 'string' || !iso) return null;
   const t = Date.parse(iso);
@@ -72,7 +83,7 @@ export function briefViewState(payload, { error = false, nowMs }) {
   }
 
   const facts = (Array.isArray(payload.facts) ? payload.facts : []).filter((f) => f && typeof f.id === 'string');
-  const travelerNote = tone === 'disrupted' ? readItem(brief.traveler_note) : null;
+  const travelerNote = travelerNoteShown(tone, facts) ? readItem(brief.traveler_note) : null;
   const cited = new Set([...items, ...(travelerNote ? [travelerNote] : [])].flatMap((i) => i.factIds));
   const factCount = Number.isFinite(payload.factCount) && payload.factCount > 0 ? payload.factCount : facts.length;
   return {

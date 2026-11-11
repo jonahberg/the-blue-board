@@ -17,7 +17,9 @@
 //                lists which of these resolve to a deep link today)
 //   - severity   0–100, what a traveler should hear first (template ordering, fact ordering)
 //   - toneFloor  the least alarming tone the brief may take while this fact holds
-//   - material   the jitter-rounded part of the fact that, when it changes, warrants a new brief
+//   - material   the part of the fact that, when it changes, warrants a new brief: the story, not the
+//                reading (bands, not counts). `null` means the fact is never part of the change key,
+//                id included, so it appearing or disappearing is not a change either (materialKey).
 //
 // The numbers come from the site's own definitions, so a chip can never disagree with the hub strip:
 // on-time is serverOtpFromMetrics() (src/lib/hub-health.js), network status is networkStatus()
@@ -54,6 +56,12 @@ export const BRIEF_MAX_BOARD_AGE_MS = 3 * 60 * 60 * 1000;
 export const BRIEF_MAX_METAR_AGE_MS = 3 * 60 * 60 * 1000;
 /** A soft hub: below this on-time percentage the tone is at least "watch". */
 export const BRIEF_SOFT_HUB_OTP = 70;
+/**
+ * A healthy hub: at or above this on-time percentage its reading is not news. When every hub with a
+ * reading is here, no "lowest hub" fact is built, and a reading moving, appearing or disappearing
+ * does not count as a change (materialKey).
+ */
+export const BRIEF_HEALTHY_HUB_OTP = 80;
 /** "About the usual" band for the airborne comparison, in percent either side of the median. */
 export const BRIEF_AIRBORNE_USUAL_BAND_PCT = 10;
 
@@ -70,12 +78,31 @@ export function maxTone(...tones) {
 
 /**
  * The brief's tone, from the facts alone (prompt rule 6, made deterministic): the most alarming
- * `toneFloor` of any fact. The model proposes a tone; this decides it.
+ * `toneFloor` of any fact. The model proposes a tone; this decides it. For FAA programs at United
+ * hubs it follows the header's own levels (src/lib/ops-health.js): ground delay programs at any
+ * number of hubs are "watch" ("Some Delays"); a ground stop or closure at a hub is "disrupted".
  * @param {Array<{toneFloor?: string}>} facts
  * @returns {'calm'|'watch'|'disrupted'}
  */
 export function computeTone(facts) {
   return /** @type {'calm'|'watch'|'disrupted'} */ (maxTone(...(facts || []).map((f) => f.toneFloor)));
+}
+
+/** A ground stop or ground delay program in effect at a United hub (only hub facts carry `hub`). */
+const HUB_PROGRAM_ID_RE = /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/;
+export function isHubProgramFact(fact) {
+  return HUB_PROGRAM_ID_RE.test(String(fact?.id ?? '')) && typeof fact?.hub === 'string' && fact.hub !== '';
+}
+
+/**
+ * Whether a brief may carry a traveler note: when an FAA ground stop or ground delay program is in
+ * effect at a United hub (travelers bound there are held), or the tone is "disrupted". The
+ * verifier, the template and the dashboard (src/lib/brief-view.js mirrors it) apply the same rule.
+ * @param {string} tone
+ * @param {Array<{id: string, hub?: string}>} facts
+ */
+export function travelerNoteAllowed(tone, facts) {
+  return tone === 'disrupted' || (facts || []).some(isHubProgramFact);
 }
 
 // ── Clock formatting ──
@@ -208,7 +235,7 @@ function hubLabel(code) {
  * @property {{tab: string, hub?: string, section?: string}} link
  * @property {number} severity
  * @property {'calm'|'watch'|'disrupted'} toneFloor
- * @property {string} material
+ * @property {string|null} material
  */
 
 /**
@@ -267,7 +294,7 @@ export function buildBriefFacts(sources, { nowMs }) {
     for (const [hub, r] of Object.entries(readings)) {
       const yesterday = defaultSchedDayOffset(hub, new Date(nowMs)) !== 0;
       const when = yesterday ? 'yesterday (its board has not rolled over to today yet)' : 'so far today';
-      const severity = r.otp < 50 ? 70 : r.otp < BRIEF_SOFT_HUB_OTP ? 45 : r.otp < 80 ? 20 : 5;
+      const severity = r.otp < 50 ? 70 : r.otp < BRIEF_SOFT_HUB_OTP ? 45 : r.otp < BRIEF_HEALTHY_HUB_OTP ? 20 : 5;
       facts.push({
         id: `otp.${hub}`,
         kind: 'otp',
@@ -278,7 +305,8 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'schedule', hub },
         severity,
         toneFloor: r.otp < 50 ? 'disrupted' : r.otp < BRIEF_SOFT_HUB_OTP ? 'watch' : 'calm',
-        material: `otp:${round(r.otp, 5)}`,
+        // A healthy hub is not news: its reading moving, appearing or aging out is not a change.
+        material: r.otp >= BRIEF_HEALTHY_HUB_OTP ? null : `otp:${round(r.otp, 5)}`,
       });
     }
 
@@ -286,32 +314,24 @@ export function buildBriefFacts(sources, { nowMs }) {
     if (hubs.length >= 2) {
       const sorted = [...hubs].sort((a, b) => readings[a].otp - readings[b].otp || a.localeCompare(b));
       const low = sorted[0];
-      const high = sorted[sorted.length - 1];
       const n = hubs.length;
-      facts.push({
-        id: 'otp.min',
-        kind: 'otp',
-        hub: low,
-        statement: `Of the ${n} hubs with an on-time reading, ${hubLabel(low)} is lowest at ${readings[low].otp}%.`,
-        values: uniq([`${readings[low].otp}%`, String(n), numberWord(n), ...airportForms(low)]),
-        at: iso(readings[low].at),
-        link: { tab: 'schedule', hub: low },
-        severity: readings[low].otp < BRIEF_SOFT_HUB_OTP ? 40 : 6,
-        toneFloor: 'calm',
-        material: `min:${low}:${round(readings[low].otp, 5)}`,
-      });
-      facts.push({
-        id: 'otp.max',
-        kind: 'otp',
-        hub: high,
-        statement: `Of the ${n} hubs with an on-time reading, ${hubLabel(high)} is highest at ${readings[high].otp}%.`,
-        values: uniq([`${readings[high].otp}%`, String(n), numberWord(n), ...airportForms(high)]),
-        at: iso(readings[high].at),
-        link: { tab: 'schedule', hub: high },
-        severity: 3,
-        toneFloor: 'calm',
-        material: `max:${high}:${round(readings[high].otp, 5)}`,
-      });
+      // When every hub reads healthy, which one is lowest is not news: no "lowest" fact, and the
+      // floor does not name it (so a sentence cannot either). The best hub is never news.
+      const allHealthy = readings[low].otp >= BRIEF_HEALTHY_HUB_OTP;
+      if (!allHealthy) {
+        facts.push({
+          id: 'otp.min',
+          kind: 'otp',
+          hub: low,
+          statement: `Of the ${n} hubs with an on-time reading, ${hubLabel(low)} is lowest at ${readings[low].otp}%.`,
+          values: uniq([`${readings[low].otp}%`, String(n), numberWord(n), ...airportForms(low)]),
+          at: iso(readings[low].at),
+          link: { tab: 'schedule', hub: low },
+          severity: readings[low].otp < BRIEF_SOFT_HUB_OTP ? 40 : 6,
+          toneFloor: 'calm',
+          material: `min:${low}:${round(readings[low].otp, 5)}`,
+        });
+      }
 
       const soft = sorted.filter((h) => readings[h].otp < BRIEF_SOFT_HUB_OTP);
       if (soft.length === 0) {
@@ -319,13 +339,17 @@ export function buildBriefFacts(sources, { nowMs }) {
         facts.push({
           id: 'otp.floor',
           kind: 'otp',
-          statement: `All ${n} hubs with an on-time reading are at ${floorPct}% or better; ${airportDisplayName(low)} is the lowest.`,
-          values: uniq([String(n), numberWord(n), `${floorPct}%`, ...airportForms(low)]),
+          statement: allHealthy
+            ? `All ${n} hubs with an on-time reading are at ${floorPct}% or better.`
+            : `All ${n} hubs with an on-time reading are at ${floorPct}% or better; ${airportDisplayName(low)} is the lowest.`,
+          values: uniq([String(n), numberWord(n), `${floorPct}%`, ...(allHealthy ? [] : airportForms(low))]),
           at: iso(Math.min(...hubs.map((h) => readings[h].at ?? nowMs))),
-          link: { tab: 'weather', section: 'irops' },
+          // The chip proves the floor with the lowest hub's board (the IROPS bar shows no on-time).
+          link: { tab: 'schedule', hub: low },
           severity: 8,
           toneFloor: 'calm',
-          material: `floor:${n}:${round(floorPct, 5)}`,
+          // How many hubs have a reading is not material; nor is the floor while every hub is healthy.
+          material: allHealthy ? null : `floor:${round(floorPct, 5)}`,
         });
       } else {
         const names = soft.map((h) => `${airportDisplayName(h)} (${readings[h].otp}%)`);
@@ -362,7 +386,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'weather', section: 'irops' },
         severity: band === 'significant' ? 60 : band === 'minor' ? 30 : 4,
         toneFloor: band === 'significant' ? 'disrupted' : band === 'minor' ? 'watch' : 'calm',
-        material: `index:${band}:${round(score, 5)}`,
+        material: `index:${band}`,
       });
     }
 
@@ -411,7 +435,9 @@ export function buildBriefFacts(sources, { nowMs }) {
         values: uniq([String(likely), numberWord(likely), seenFlying > 0 ? String(seenFlying) : null]),
         at: iso(asOf.irops ?? nowMs),
         link: { tab: 'schedule' },
-        severity: 2,
+        // A caveat, not news (prompt rule 4): below every program, planned hub program and the
+        // confirmed count, so neither the model's list nor the template leads with it.
+        severity: 1,
         toneFloor: 'calm',
         material: `likely:${round(likely, 25)}`,
       });
@@ -469,20 +495,24 @@ export function buildBriefFacts(sources, { nowMs }) {
       }
     }
 
+    // Stops and delay programs hold flights INTO the airport (faaActiveFact); a closure is at it.
     const describe = (list) => joinNames(list.map(({ code, type }) =>
-      `${type === 'ground_stop' ? 'a ground stop' : type === 'ground_delay' ? 'a ground delay program' : 'a closure'} at ${airportDisplayName(code)}`));
+      `${type === 'ground_stop' ? 'a ground stop for flights into' : type === 'ground_delay' ? 'a ground delay program for flights into' : 'a closure at'} ${airportDisplayName(code)}`));
     const n = hubPrograms.length;
+    // A ground stop or closure at a hub disrupts the network; delay programs, at however many hubs,
+    // are a watch, as the header's network status treats them (computeTone).
+    const countTone = n === 0 ? 'calm' : hubPrograms.some((p) => p.type !== 'ground_delay') ? 'disrupted' : 'watch';
     facts.push({
       id: 'faa.active.count',
       kind: 'faa',
       statement: n === 0
         ? 'No FAA ground stop or ground delay program is in effect at any United hub.'
-        : `${n} FAA ${plural(n, 'program is', 'programs are')} in effect at United hubs: ${describe(hubPrograms)}.`,
+        : `${n} FAA ${plural(n, 'program affects a United hub', 'programs affect United hubs')}: ${describe(hubPrograms)}.`,
       values: uniq([String(n), numberWord(n), ...hubPrograms.flatMap((p) => airportForms(p.code))]),
       at: iso(asOf.faa ?? nowMs),
       link: { tab: 'weather' },
       severity: n === 0 ? 1 : 70,
-      toneFloor: n === 0 ? 'calm' : 'disrupted',
+      toneFloor: countTone,
       material: `hubprog:${hubPrograms.map((p) => `${p.code}.${p.type}`).sort().join(',')}`,
     });
     if (otherPrograms.length > 0) {
@@ -506,6 +536,7 @@ export function buildBriefFacts(sources, { nowMs }) {
     const planned = Array.isArray(sources.nas.planned) ? sources.nas.planned : [];
     const usedIds = new Set();
     let plannedCount = 0;
+    let plannedAtHub = 0;
     for (const tmi of planned) {
       const fact = plannedFact(tmi, { nowMs, activeAt, asOfMs: asOf.nas ?? nowMs, skipped });
       if (!fact) continue;
@@ -514,6 +545,7 @@ export function buildBriefFacts(sources, { nowMs }) {
       usedIds.add(id);
       facts.push({ ...fact, id });
       plannedCount++;
+      if (fact.hub) plannedAtHub++;
     }
     if (plannedCount > 0) {
       facts.push({
@@ -523,9 +555,11 @@ export function buildBriefFacts(sources, { nowMs }) {
         values: uniq([String(plannedCount), numberWord(plannedCount)]),
         at: iso(asOf.nas ?? nowMs),
         link: { tab: 'weather' },
-        severity: 3,
+        // Only possible programs away from the hubs: last, with them (plannedFact).
+        severity: plannedAtHub ? 3 : 0,
         toneFloor: 'calm',
-        material: `planned:${plannedCount}`,
+        // Only planned programs at hubs count as a change (plannedFact).
+        material: plannedAtHub > 0 ? `planned:${plannedAtHub}` : null,
       });
     }
   }
@@ -533,6 +567,8 @@ export function buildBriefFacts(sources, { nowMs }) {
   // ── Hub weather (/api/metar, src/lib/metar-category.js) ──
   if (status.metar === 'ok') {
     const affected = [];
+    /** Hubs whose weather is at warning level or worse: the only ones the change key lists. */
+    const significant = [];
     let reporting = 0;
     for (const rec of sources.metar) {
       const icao = String(rec?.icaoId || rec?.stationId || rec?.id || '').toUpperCase();
@@ -543,8 +579,12 @@ export function buildBriefFacts(sources, { nowMs }) {
       const obsMs = Number(rec?.obsTime) > 0 ? Number(rec.obsTime) * 1000 : null;
       if (obsMs !== null && nowMs - obsMs > BRIEF_MAX_METAR_AGE_MS) { skipped.push(`wx.${hub}: observation ${Math.round((nowMs - obsMs) / 60000)} min old`); continue; }
       reporting++;
-      const fact = weatherFact(hub, raw, obsMs ?? nowMs);
-      if (fact) { facts.push(fact); affected.push(hub); }
+      const fact = weatherFact(hub, raw, obsMs ?? nowMs, skipped);
+      if (fact) {
+        facts.push(fact);
+        affected.push(hub);
+        if (fact.toneFloor === 'watch') significant.push(hub); // warning or severe (weatherFact)
+      }
     }
     if (reporting > 0) {
       const a = affected.length;
@@ -559,7 +599,8 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'weather' },
         severity: a === 0 ? 1 : 8,
         toneFloor: 'calm',
-        material: `wx:${affected.join(',')}`,
+        // Caution-level weather (light rain, mist) coming and going is not a change.
+        material: `wx:${significant.join(',')}`,
       });
     }
   }
@@ -577,7 +618,8 @@ export function buildBriefFacts(sources, { nowMs }) {
       link: { tab: 'live' },
       severity: 4,
       toneFloor: 'calm',
-      material: `air:${round(airborne, 100)}`,
+      // The count moves all day; how it compares with the usual (air.normal) is what can be news.
+      material: null,
     });
     const starlink = Number(sources.air.starlink);
     if (Number.isFinite(starlink) && starlink > 0) {
@@ -590,7 +632,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'starlink' },
         severity: 3,
         toneFloor: 'calm',
-        material: `starlink:${round(starlink, 50)}`,
+        material: null,
       });
     }
     if (status.airNormal === 'ok' && sources.airNormal.median > 0) {
@@ -608,7 +650,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'live' },
         severity: !usual && Math.abs(pct) >= 25 ? 20 : 2,
         toneFloor: 'calm',
-        material: `airnorm:${usual ? 'usual' : `${pct < 0 ? '-' : '+'}${round(Math.abs(pct), 10)}`}`,
+        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}`,
       });
     }
   }
@@ -638,23 +680,30 @@ function faaActiveFact(code, p, { isHub, nowMs, asOfMs }) {
   let severity;
   let toneFloor;
 
+  // A ground stop or ground delay program holds flights BOUND FOR the named airport, at the airports
+  // they depart from; that airport's own departures are not what it holds. The statements say so,
+  // because "a ground delay program at San Francisco" reads as "San Francisco departures are held".
+  const held = 'Those flights are held at their departure airport';
   if (type === 'ground_stop') {
     suffix = 'gs';
-    statement = `The FAA has a ground stop in effect at ${name}${until}${because}.`;
-    if (avg) { statement += ` The FAA expects average delays of ${avg} minutes.`; values.push(`${avg} minutes`); }
+    statement = `The FAA has a ground stop in effect for flights heading to ${name}${until}${because}. ${held}`;
+    if (avg) { statement += `; the FAA expects average delays of ${avg} minutes`; values.push(`${avg} minutes`); }
+    statement += '.';
     const ext = String(p.probabilityOfExtension || '').trim().toLowerCase();
     if (/^(low|medium|high)$/.test(ext)) statement += ` It rates the chance of an extension as ${ext}.`;
     severity = isHub ? 100 : 45;
     toneFloor = isHub ? 'disrupted' : 'watch';
   } else if (type === 'ground_delay') {
     suffix = 'gdp';
-    statement = `The FAA has a ground delay program in effect at ${name}${until}${because}.`;
-    if (avg) { statement += ` Delays average ${avg} minutes`; values.push(`${avg} minutes`); }
+    statement = `The FAA has a ground delay program in effect for flights heading to ${name}${until}${because}. ${held}`;
+    if (avg) { statement += `; delays average ${avg} minutes`; values.push(`${avg} minutes`); }
     if (avg && max) { statement += `, up to ${max} minutes.`; values.push(`${max} minutes`); }
     else if (avg) statement += '.';
-    else if (max) { statement += ` Delays run up to ${max} minutes.`; values.push(`${max} minutes`); }
+    else if (max) { statement += `; delays run up to ${max} minutes.`; values.push(`${max} minutes`); }
+    else statement += '.';
     severity = isHub ? 85 : 35;
-    toneFloor = isHub ? 'disrupted' : 'watch';
+    // A delay program is a watch (and so is the hub-programs count when it lists only those).
+    toneFloor = 'watch';
   } else if (type === 'closure') {
     suffix = 'closure';
     statement = `The FAA lists ${name} as closed${until}.`;
@@ -736,9 +785,12 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
   const where = airports.length > 1
     ? `${hubLabel(primary)} (also ${joinNames(airports.filter((c) => c !== primary).map(airportDisplayName))})`
     : hubLabel(primary);
+  // A stop or delay program would hold flights into the airport (faaActiveFact); an airspace flow
+  // program meters an airspace, so it keeps "at".
+  const target = afp && !gs && !gdp ? `at ${where}` : `for flights into ${where}`;
   const statement = tentative
-    ? `The FAA's operations plan says ${program} is possible at ${where}${window}. It is not in effect.`
-    : `The FAA's operations plan expects ${program} at ${where}${window}. It is not in effect yet.`;
+    ? `The FAA's operations plan says ${program} is possible ${target}${window}. It is not in effect.`
+    : `The FAA's operations plan expects ${program} ${target}${window}. It is not in effect yet.`;
   const isHub = hubs.length > 0;
   return {
     id: `faa.planned.${primary}`,
@@ -748,14 +800,33 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
     values: uniq(values),
     at: iso(asOfMs),
     link: { tab: 'weather', hub: primary },
-    severity: isHub ? (tentative ? 22 : 30) : 6,
+    // Something that may happen at an airport that is not a United hub ranks below every other
+    // fact: it orders the model's list last, and the template never picks or leads with it.
+    severity: isHub ? (tentative ? 22 : 30) : 0,
     toneFloor: isHub ? 'watch' : 'calm',
-    material: `planned:${program}:${window}`,
+    // Something possible at an airport that is not a hub coming, going or moving its window is
+    // not worth a new brief; at a hub it is.
+    material: isHub ? `planned:${program}:${window}` : null,
   };
 }
 
-/** One fact for a hub whose weather is affecting operations, or null when it is not. */
-function weatherFact(hub, raw, atMs) {
+/**
+ * What each impact level (computeOpsImpact) means for the operation, in words a brief can reuse
+ * without naming the site's own rating. "caution" is marginal weather: it CAN cause delays.
+ */
+const WEATHER_EFFECT = {
+  caution: 'which can cause minor delays',
+  warning: 'enough to slow arrivals and departures',
+  severe: 'enough to slow arrivals and departures significantly',
+};
+
+/**
+ * One fact for a hub whose weather is affecting operations, or null when it is not, or when there
+ * is no condition to name: a "caution" from low clouds over mist or haze alone has no plain name,
+ * and "weather that can slow operations" said nothing. A warning or severe level always names one
+ * (low clouds or visibility, thunderstorms, freezing rain, heavy rain or snow, strong wind).
+ */
+function weatherFact(hub, raw, atMs, skipped) {
   const cat = computeFlightCategory(raw);
   const impact = computeOpsImpact(raw, cat);
   if (impact.level === 'normal') return null;
@@ -779,21 +850,35 @@ function weatherFact(hub, raw, atMs) {
   if (impact.reasons.includes('heavy precipitation')) conditions.push(impact.hasSnow ? 'heavy snow' : 'heavy rain');
   else if (impact.reasons.includes('precipitation') && !impact.hasSnow) conditions.push('rain');
   if (impact.hasFog) conditions.push('fog');
+  // computeOpsImpact reports a steady wind of 30 knots or more without a gust group as "gusts Nkt".
+  const steady = impact.gustKt >= 30 ? null : impact.reasons.map((r) => r.match(/^gusts (\d+)kt$/)).find(Boolean);
+  const windKt = impact.gustKt >= 30 ? impact.gustKt : steady ? Number(steady[1]) : 0;
   if (impact.gustKt >= 30) { conditions.push(`wind gusting to ${impact.gustKt} knots`); values.push(`${impact.gustKt} knots`); }
-  if (conditions.length === 0) conditions.push('weather that can slow operations');
+  else if (steady) { conditions.push(`wind of ${steady[1]} knots`); values.push(`${steady[1]} knots`); }
+  if (conditions.length === 0) {
+    skipped.push(`wx.${hub}: ${impact.level} with no condition to name (${impact.reasons.join(', ') || 'none'})`);
+    return null;
+  }
   values.push(...conditions);
-  const level = impact.level === 'caution' ? 'minor' : impact.level === 'warning' ? 'significant' : 'severe';
   return {
     id: `wx.${hub}`,
     kind: 'weather',
     hub,
-    statement: `${hubLabel(hub)} weather: ${joinNames(uniq(conditions))}. The Blue Board rates the effect on operations as ${level}.`,
+    statement: `${hubLabel(hub)} weather: ${joinNames(uniq(conditions))}, ${WEATHER_EFFECT[impact.level]}.`,
     values: uniq(values),
     at: iso(atMs),
     link: { tab: 'weather', hub },
     severity: impact.level === 'caution' ? 12 : impact.level === 'warning' ? 35 : 50,
     toneFloor: impact.level === 'caution' ? 'calm' : 'watch',
-    material: `wx:${impact.level}:${uniq(conditions).map((c) => c.replace(/\d+/g, (d) => String(round(Number(d), 10)))).join(',')}`,
+    // The level plus the hazards that matter on their own. Which of low clouds, low visibility and
+    // fog a METAR reports flickers from one observation to the next; the level already carries it.
+    // Caution-level weather (light rain or snow, mist, 30-knot gusts) is never a change on its own.
+    material: impact.level === 'caution' ? null : `wx:${impact.level}:${[
+      impact.hasThunderstorms ? 'thunderstorms' : null,
+      impact.hasSnow ? 'snow' : null,
+      impact.hasFreezingPrecip ? 'freezing' : null,
+      windKt >= 40 ? 'wind40' : windKt >= 30 ? 'wind30' : null,
+    ].filter(Boolean).join(',')}`,
   };
 }
 
@@ -853,14 +938,20 @@ export function hubReadingCount(facts) {
 }
 
 /**
- * The string the facts hash is taken over: every fact's id and its jitter-rounded `material`, in
- * id order. Two runs whose facts differ only by noise (630 vs 640 airborne, 86% vs 87% on time)
- * produce the same key; a new ground stop, a hub crossing a band or a new radio observation does not.
- * @param {Array<{id: string, material?: string}>} facts
+ * The string the facts hash is taken over: the id and `material` of every fact whose material is
+ * not null, in id order. A fact with `material: null` is left out entirely, id included, so it
+ * appearing or disappearing is not a change. Two runs whose facts differ only by readings (700 vs
+ * 600 in the air, a healthy hub at 100% or 95% or aging out, the disruption index inside its band,
+ * the low-cloud/fog wording of the same weather level) produce the same key; a new ground stop, a
+ * hub dropping under 80%, a weather level or hazard change or a new radio observation does not.
+ * @param {Array<{id: string, material?: string|null}>} facts
  * @returns {string}
  */
 export function materialKey(facts) {
-  return JSON.stringify([...(facts || [])].map((f) => [f.id, f.material ?? '']).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
+  return JSON.stringify([...(facts || [])]
+    .filter((f) => f.material !== null)
+    .map((f) => [f.id, f.material ?? ''])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 }
 
 /**

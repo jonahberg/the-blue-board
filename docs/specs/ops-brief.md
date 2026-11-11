@@ -1,6 +1,6 @@
 # The ops brief ("Right now")
 
-**Status:** built, server (v1.24.0) and UI (v1.25.0) · **Date:** 2026-11-10 · **UI:** the row under the header on every tab, open in the Live sidebar at `lg`+, the brief sheet everywhere else (`shell/Ticker.tsx`, `features/BriefPanel.tsx`, `features/BriefSheet.tsx`; reads `GET /api/brief`)
+**Status:** built, server (v1.24.0) and UI (v1.25.0), tuned after its first live morning (v1.25.1) · **Date:** 2026-11-10 · **UI:** the row under the header on every tab, open in the Live sidebar at `lg`+, the brief sheet everywhere else (`shell/Ticker.tsx`, `features/BriefPanel.tsx`, `features/BriefSheet.tsx`; reads `GET /api/brief`)
 
 A short written read of United's operation right now, shown to every visitor in the row under the
 header (and open in full in the Live sidebar on a wide screen). Every sentence carries the facts it came from, so the UI can show each one as a chip that links
@@ -9,7 +9,7 @@ what it said, and writes the brief itself whenever the model can't.
 
 ```
 United is running smoothly this afternoon.
-- Every hub is at 85% on time or better. Los Angeles is the low mark and Houston is at 100%.  [otp.floor] [otp.max]
+- Every hub is at 85% on time or better.  [otp.floor]
 - The FAA says ground stops are possible tonight at Newark until 9:00 PM ET and Boston until 7:30 PM ET. Neither is in effect.  [faa.planned.EWR] [faa.planned.BOS]
 - 630 United flights are in the air, 280 of them with Starlink.  [air.starlink]
 Written from 21 live facts and checked against them.
@@ -62,22 +62,22 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | id | kind | from | statement (example) | tone floor |
 |---|---|---|---|---|
 | `otp.<HUB>` | otp | `/api/irops` `hubMetrics`, `serverOtpFromMetrics()` (the hub strip's number) | Chicago O'Hare (ORD): 91% of departures so far today left within 30 minutes of schedule (410 departed). | <50% disrupted, <70% watch |
-| `otp.min`, `otp.max` | otp | same | Of the 7 hubs with an on-time reading, Los Angeles (LAX) is lowest at 85%. | calm |
-| `otp.floor` | otp | same, when no hub is under 70% | All 7 hubs with an on-time reading are at 85% or better; Los Angeles is the lowest. | calm |
+| `otp.min` | otp | same, only when the lowest hub is under 80% (`BRIEF_HEALTHY_HUB_OTP`): which healthy hub is lowest is not news | Of the 7 hubs with an on-time reading, Los Angeles (LAX) is lowest at 75%. | calm |
+| `otp.floor` | otp | same, when no hub is under 70%; names the lowest hub only when it is under 80% (its `link` is that hub's board either way) | All 7 hubs with an on-time reading are at 85% or better. / … at 75% or better; Los Angeles is the lowest. | calm |
 | `otp.soft` | otp | same, when some are | 2 of the 7 hubs with an on-time reading are under 70%: Houston (62%) and Newark (55%). | watch |
 | `net.index` | network | `/api/irops` `score`, `IROPS_MINOR_AT`/`IROPS_SIGNIFICANT_AT` | The Blue Board's disruption index … is 17.3, in the normal range (under 20). | minor → watch, significant → disrupted |
 | `net.status` | network | `networkStatus()` (`src/lib/ops-health.js`, the strip's chip) | … reads "Smooth Ops". | minor → watch, significant → disrupted |
 | `cxl.confirmed` | cancellations | `cancellations − cancellationsLikely` | 6 departures on United's current hub boards are confirmed canceled. | calm |
-| `cxl.unconfirmed` | cancellations | `cancellationsLikely`, `likelyCanceledSeenFlying` | The schedule provider marks 162 more hub departures as "likely canceled" without confirming them. That label is often wrong: 131 … were seen flying. | calm, severity 2 |
+| `cxl.unconfirmed` | cancellations | `cancellationsLikely`, `likelyCanceledSeenFlying` | The schedule provider marks 162 more hub departures as "likely canceled" without confirming them. That label is often wrong: 131 … were seen flying. | calm, severity 1: a caveat, below every program and planned hub program, never the template's lead (prompt rule 4: mention it only when cancellations are the story) |
 | `cxl.<HUB>` | cancellations | per hub, when ≥ 3 confirmed | Houston (IAH) has 12 confirmed cancellations among 447 departures on its current board. | ≥10% watch |
-| `faa.active.<CODE>.gs` / `.gdp` | faa | `/api/faa` programs: hubs, plus other airports we can name and put on a clock (`AIRPORT_TZ`) | The FAA has a ground stop in effect at Newark (EWR) until 8:30 PM ET, because of thunderstorms. … | hub: disrupted; elsewhere: watch |
+| `faa.active.<CODE>.gs` / `.gdp` | faa | `/api/faa` programs: hubs, plus other airports we can name and put on a clock (`AIRPORT_TZ`) | The FAA has a ground stop in effect for flights heading to Newark (EWR) until 8:30 PM ET, because of thunderstorms. Those flights are held at their departure airport. … (a stop or delay program holds flights **bound for** the airport, at the airports they leave from; that airport's own departures are not what it holds) | ground stop at a hub: disrupted; ground delay program at a hub: watch; elsewhere: watch |
 | `faa.active.<HUB>.closure` | faa | hubs only, and only a whole-airport closure: nightly curfews (`DLY`, `HHMM-HHMM`), PPR/transient-GA restrictions and runway/taxiway-only NOTAMs are screened out (`isWholeAirportClosure`), also from the FAA index `networkStatus()` reads | The FAA lists Newark (EWR) as closed. | disrupted |
 | `faa.active.<HUB>.dep` / `.arr` | faa | hubs only | The FAA reports departure delays of 31 to 45 minutes at Houston (IAH), because of thunderstorms. | watch |
-| `faa.active.count` | faa | hub GS/GDP/closures | No FAA ground stop or ground delay program is in effect at any United hub. | disrupted when > 0 |
-| `faa.active.other` | faa | non-hub GS/GDP | The FAA also has 1 program in effect at other airports: a ground stop at Boston. | calm |
-| `faa.planned.<CODE>` | faa_planned | `/api/nas` operations plan (`UNTIL`/`AFTER`/`HHMM-HHMM` Zulu, resolved to the nearest occurrence) | The FAA's operations plan says a ground stop or ground delay program is possible at Newark (EWR) until 9:00 PM ET. It is not in effect. | hub: watch |
+| `faa.active.count` | faa | hub GS/GDP/closures | No FAA ground stop or ground delay program is in effect at any United hub. / 1 FAA program affects a United hub: a ground stop for flights into Newark. | a ground stop or closure at a hub: disrupted; ground delay programs only (any number of hubs): watch |
+| `faa.active.other` | faa | non-hub GS/GDP | The FAA also has 1 program in effect at other airports: a ground stop for flights into Boston. | calm |
+| `faa.planned.<CODE>` | faa_planned | `/api/nas` operations plan (`UNTIL`/`AFTER`/`HHMM-HHMM` Zulu, resolved to the nearest occurrence) | The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) until 9:00 PM ET. It is not in effect. | hub: watch |
 | `faa.planned.count` | faa_planned | same | The FAA's operations plan lists 2 possible or planned programs for later. None of them is in effect now. | calm |
-| `wx.<HUB>` | weather | `/api/metar`, `computeOpsImpact()`; only hubs whose impact is not normal | Newark (EWR) weather: low visibility, thunderstorms, heavy rain and wind gusting to 34 knots. … significant. | warning/severe → watch |
+| `wx.<HUB>` | weather | `/api/metar`, `computeOpsImpact()`; only hubs whose impact is not normal and that have a condition to name (a caution from low cloud over mist or haze alone has none, and is skipped) | Newark (EWR) weather: low visibility, thunderstorms, heavy rain and wind gusting to 34 knots, enough to slow arrivals and departures. (caution: "which can cause minor delays"; severe: "enough to slow arrivals and departures significantly") | warning/severe → watch |
 | `wx.summary` | weather | same | Weather is not affecting operations at any of the 9 United hubs with a current report. | calm |
 | `air.total` | airborne | live feed, `isOnGround()` complement (the Live stat bar) | 630 United flights, including United Express, are in the air right now. | calm |
 | `air.starlink` | airborne | live feed × Starlink roster × fleet match (`makeIsStarlinkFlight`'s rule) | 280 of the 630 United flights in the air have Starlink Wi-Fi. | calm |
@@ -85,6 +85,8 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `flow.<HUB>.arrivals` / `.departures` | flow | Enhanced Radar `operations.flow` (from FAA data); [radio](#air-traffic-control-radio-enhanced-radar), off by default | Enhanced Radar, from FAA data, reports Newark (EWR) arrivals: a planned rate of 36 an hour, 26 landed in the last hour and 39 scheduled in the next hour, more than the planned rate allows. | calm |
 | `flow.<HUB>.runways` | flow | Enhanced Radar `operations.runways` | Enhanced Radar reports Newark (EWR) landing on runway 22L and taking off from runway 22R. | calm |
 | `radio.<HUB>.<id>` | radio | each Enhanced Radar `critical` / `notable` observation under 2 h old (max 3 per hub): time, the API's tags and runways as values; the **sanitized** title as `quote` only | Heard on Newark (EWR) air traffic control frequencies at 5:29 PM ET, in Enhanced Radar's model-written summary, which can contain mistakes: "GLS approach out of service". | calm (never sets the tone) |
+
+A planned program at an airport that is **not** a United hub (and the count, when every planned program is one) has severity 0: it is the last fact the model reads and the template never picks it. Prompt rule 4 has the model put them last, in one item, or leave them out.
 
 **Floors and freshness.** A hub needs ≥ 25 operated departures (`BRIEF_MIN_OPERATED`, the client's
 own floor) for any on-time fact, and its board must be under 3 h old; live boards run 1–2 h old, so the
@@ -132,11 +134,21 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    partial quote (`radio_quote_mismatch`), an unattributed one (`radio_quote_unattributed`) or an
    unbalanced quote mark drops the item. Markup or a URL drops any item (`markup_or_url`).
 5. **Limits.** At most 4 items; the rest are dropped (`over_item_limit`).
-6. **Headline.** Checked against the union of the **surviving** items' facts. Fails, or runs past 20
-   words → replaced by the template headline (the report keeps the original). Over 12 words is a warning.
-7. **Traveler note.** Checked like an item; kept only when the final tone is `disrupted`.
+6. **Headline.** Checked against the union of the **surviving** items' facts. Fails, runs past 14
+   words, or calls the operation calm, smooth, quiet or "running normally" (word match) while the
+   computed tone is not calm (`headline:calm_when_not_calm`) → replaced by the template headline
+   (the report keeps the original). Over 12 words is a warning. The template's own watch headlines
+   avoid those words, so a replacement never trips the rule.
+7. **Traveler note.** Checked like an item; kept only when an FAA ground stop or ground delay
+   program is in effect at a United hub, or the final tone is `disrupted` (`travelerNoteAllowed` in
+   `brief-facts.js`; the dashboard applies the same rule to the facts the brief cites, in
+   `brief-view.js`). Otherwise dropped as `tone_is_<tone>`.
 8. **Tone.** Computed from the facts: the most alarming `toneFloor`. It overrides the model's tone, and
-   the report says so (`tone.overridden`).
+   the report says so (`tone.overridden`). FAA programs at United hubs (since v1.25.1) follow the
+   header's own levels (`src/lib/ops-health.js`): ground delay programs, at however many hubs, are
+   `watch` ("Some Delays"); a ground stop or closure at a hub is `disrupted`, as is the network
+   status at its worst level ("Disrupted"). A soft hub, a minor index, hub weather at
+   warning or worse and a program away from the hubs stay `watch`.
 9. **Style warnings** (not drops): jargon (`GDP`, `IFR`, …), exclamation marks, emoji.
 
 If no item survives → template (`no_items_survived`). The report (items in, items dropped with
@@ -158,26 +170,59 @@ Text it rejects, from `tests/brief-verify.test.js`:
 `buildTemplateBrief(facts)`: the tone from `computeTone`, then up to 3 items (calm) or 4: every
 specific problem (severity ≥ 20, not an aggregate), then the fact that sets the tone when nothing
 specific does (the disruption index on a day of unconfirmed cancellations, with the cancellation
-split), then background (on-time spread, the FAA picture or a planned program, Starlink, weather).
-Items are fact statements verbatim; headlines are fixed per tone and lead fact ("A ground stop is in
-effect at Newark.", "Running normally, with FAA action possible at Newark.", "United is running
-smoothly right now."). A disrupted template adds a traveler note. Every fixture's template passes the
+split), then background: the on-time spread and the FAA picture or a planned program, plus, on a
+calm day only, what is in the air and the hub-weather tally (on any other day they are padding, and
+a shorter brief is better; at least one item always remains).
+A hub's own weather item is left out while a ground stop or delay program for a weather cause is in
+effect there (the program's item already says "because of low clouds"); its slot goes to the next
+specific fact by severity worth a line (severity ≥ 10, such as that hub's cancellations), else to the
+background.
+Items are fact statements verbatim; headlines are fixed per tone and lead fact ("A ground stop is
+holding flights into Newark.", "Ground delay programs are holding flights into Newark and San
+Francisco.", "FAA action is possible at Newark; none is in effect.", "United is running smoothly right
+now."), never over 12 words. A template adds a traveler note whenever one is allowed (rule 7)
+addressed by direction: "flying to" an airport under a stop or delay program, "to or from" a closed
+one, "out of" a hub with a heavy on-time problem. It cites every hub's stop, delay program or
+closure: two are named ("flying to Newark or Chicago O'Hare"), three or more are "one of those
+airports". Every fixture's template passes the
 verifier (`tests/brief-template.test.js`); the cron re-checks the template it publishes and logs an
 error if it ever fails.
 
 ## Change detection and staleness
 
-`material` per fact rounds away jitter: on-time to 5 points, airborne to 100, Starlink to 50,
-unconfirmed cancellations to 25, confirmed counts exact under 10 then to 5/10, FAA programs by type,
-end time to 15 min and cause, planned programs by window, weather by level and conditions, the
-index by band plus 5 points. A run whose hash equals the latest brief's, with that brief under 60
-minutes old, writes nothing but `checked_at`. Exception: when the latest is a template caused by a
-transient model failure (`model_error`, `model_timeout`, `model_rate_limited`), the next run retries.
+`material` per fact is the story, not the reading (v1.25.1). A fact with `material: null` is left
+out of the key entirely, id included, so it appearing or disappearing is not a change either:
 
-Measured on the real Nov 9–10 2026 `airborne_samples` day (144 ten-minute runs, 151 to 726 in the
-air): the airborne count alone would start 35 new briefs a day at 100-flight buckets (44 at 50),
-against the 24 a day the hourly refresh guarantees anyway. On-time crossing a 5-point bucket adds
-more on a moving day, so expect roughly 35–70 model calls a day.
+| fact | material |
+|---|---|
+| `air.total`, `air.starlink` | none (`null`): the count moves all day |
+| `air.normal` | usual / above / below (±10% of the 7-day median) |
+| `net.index` | its band (normal / minor / significant), not the score |
+| `otp.<HUB>` | none while at or above 80% (`BRIEF_HEALTHY_HUB_OTP`), so a healthy hub's reading moving, appearing or aging out is not a change; below 80%, rounded to 5 points |
+| `otp.floor` | none while every hub is healthy; otherwise the floor rounded to 5. The hub count is never material |
+| `otp.min` | the lowest hub and its reading rounded to 5 (built only below 80%) |
+| `wx.<HUB>` | none at caution level (light rain or snow, mist, 30-knot gusts); at warning or severe, the level plus thunderstorms, snow, freezing precipitation and a wind band (30+, 40+ knots); which of low clouds, low visibility and fog a METAR names is not |
+| `wx.summary` | the hubs at warning level or worse, not every hub with caution-level weather |
+| `faa.planned.<CODE>` | at a hub, the program and its window; away from the hubs, none |
+| `faa.planned.count` | the number of planned programs at hubs; none when there are none |
+| everything else | unchanged: FAA programs in effect by type, end time to 15 min, cause and average delay to 15 min; cancellation bands (unconfirmed to 25, confirmed exact under 10 then 5/10); soft hubs; network status; radio and flow facts |
+
+`tests/brief-facts.test.js` replays every difference that rewrote the ten briefs of the morning of
+Nov 11 2026 (airborne 700 → 600, Starlink 300 → 250, the index 4 → 11, a healthy hub 100% → 95%, a
+hub appearing at 100%, another aging out, the SFO fog wording) against that scenario
+(`sfo-gdp-morning`) and pins the key unchanged, as it does for possible programs away from the hubs
+coming, going or moving and for caution-level hub weather; a new ground stop, a hub under 80%, a
+possible program at a hub, hub weather reaching warning, a weather level or hazard change and a band
+crossing still change it.
+
+A run whose hash equals the latest brief's, with that brief under 60 minutes old, writes nothing but
+`checked_at`. Exception: when the latest is a template caused by a transient model failure
+(`model_error`, `model_timeout`, `model_rate_limited`), the next run retries.
+
+Measured before v1.25.1 on the real Nov 9–10 2026 `airborne_samples` day (144 ten-minute runs, 151
+to 726 in the air): the airborne count alone would have started 35 new briefs a day at 100-flight
+buckets, against the 24 a day the hourly refresh guarantees anyway. With the count and healthy hubs
+no longer material, a quiet day should run close to that hourly floor, plus one brief per real change.
 
 **`stale` comes from `checked_at`, not `generated_at`** (a deviation from the original design, which
 said "older than 30 minutes"): with a 60-minute reuse window, a calm brief that the cron re-confirms
@@ -213,11 +258,11 @@ dropped after it may have been billed; 4xx refusals book nothing. An unreadable 
 ## Costs
 
 Claude Haiku 5.5 on the gateway: $0.10 / $0.50 per million input / output tokens (prompts ≤ 100K).
-A request is ~1.7–3.2K input tokens (the fixtures: 19–34 facts); `max_tokens` is 2,000 at `effort:
+A request is ~1.9–3.4K input tokens at four characters a token (the fixtures: 17–33 facts, v1.25.1); `max_tokens` is 2,000 at `effort:
 low`. Worst case per call ≈ $0.0013; a typical call (~2.5K in, ~400 out) ≈ $0.0005.
 At most 144 runs a day, so the hard worst case is ≈ $0.19/day, under the $0.50 cap and well under the
 project's $3/day gateway ceiling; realistic volume (a new brief when a band moves, at least hourly) is
-roughly 35–70 calls (measured above), $0.02–0.04/day. Collection costs nothing upstream (above). Supabase: one insert
+close to the 24-a-day hourly floor plus one per real change since v1.25.1 (above), about $0.01–0.04/day. Collection costs nothing upstream (above). Supabase: one insert
 per new brief (~20–40 KB of facts JSONB), one tiny update per unchanged run, 7 small reads.
 
 ## Switches and env
@@ -328,12 +373,24 @@ already showing. Every chip href is a real deep link that resolves on a cold loa
 (`src/app/state/deep-links.ts`), through the same resolver a chip click uses
 (`weatherScrollTarget` in `src/lib/tab-hash.js`).
 
+With no current brief the row is the rotating ticker, whose advisory line (`deriveOpsHealth` in
+`src/lib/ops-health.js`) words hub programs the same way and with the header pill's own level:
+"Some delays: ground delay program for flights into SFO (avg 62 min)" ("Disrupted:" only when the
+network level is), "Disrupted: ground stop for flights into EWR".
+
+Chip colour (`chipTone`): a ground stop or closure at a hub is red (`alert`, `text-destructive`);
+a ground delay program at a hub is amber (`warn`, `text-bb-warn` / `border-bb-warn/40`), as the
+hub strip marks it and as a brief with only that program reads ("Watch"); radio is `bb-info` with an
+antenna icon; everything else is plain. The label names the program, so colour is never the only
+signal.
+
 | `link` | resolves today? | the chip goes to |
 |---|---|---|
 | `{ tab: 'schedule', hub }` (on-time, cancellations at a hub) | **yes**: `?tab=schedule&hub=ORD` | that hub's board |
 | `{ tab: 'live' }`, `{ tab: 'starlink' }` | **yes**: `#live`, `#starlink` | the tab (`air.normal` included: the Live tab shows the count, not the 7-day median) |
 | `{ tab: 'weather', section: 'irops' }` (index, network status) | **yes**: `?tab=irops` (Weather, scrolled to the IROPS section) | the IROPS bar |
-| `{ tab: 'weather', section: 'irops' }` on `otp.floor` / `otp.soft` | yes, but the IROPS bar does not show on-time | **override**: the lowest hub's board, `?tab=schedule&hub=LAX` |
+| `{ tab: 'schedule', hub }` on `otp.floor` (the lowest hub, not named in the text while every hub is healthy) | **yes** | that hub's board |
+| `{ tab: 'weather', section: 'irops' }` on `otp.soft` | yes, but the IROPS bar does not show on-time | **override**: the first soft hub's board, `?tab=schedule&hub=EWR` |
 | `{ tab: 'weather', hub }` (FAA programs at a hub, hub weather) | **yes since the brief UI**: `?tab=weather&hub=EWR` (Weather, scrolled to that hub's card, ringed like a radar click) | that hub's card |
 | `{ tab: 'weather', hub }` on `faa_planned` facts | yes, but the hub card shows only programs in effect | **override**: the NAS status panel, `?tab=weather&section=nas` **(new)**, which lists planned programs |
 | `{ tab: 'weather', hub }` for an airport without a card (BOS, LGA), `faa.active.other` | **no**: the NAS panel lists en-route programs only, so `/api/faa` programs at other airports appear nowhere | no target (plain text) |
@@ -382,9 +439,20 @@ bun scripts/brief-eval.mjs                       # every fixture in tests/fixtur
 bun scripts/brief-eval.mjs storm-day --facts     # one fixture, with every fact printed
 bun scripts/brief-eval.mjs --templates           # never call the model
 bun scripts/brief-eval.mjs --json                # one JSON object per fixture
+bun scripts/brief-eval.mjs --requests            # {fixture, system, user, schema} per fixture, one JSON line each
+bun scripts/brief-eval.mjs --check sfo-gdp-morning response.json   # a saved response, offline
 ```
 
-With `AI_GATEWAY_API_KEY` in the environment it makes one call per fixture (seven today, ≈ $0.004 in
+`--requests` and `--check` never call the network, whatever the environment holds (Bun loads `.env`).
+`--requests` prints exactly what production would send for each fixture (the system prompt, the user
+message and the output JSON schema from `buildBriefRequest`), so the requests can be run elsewhere
+and a stand-in model knows the exact reply shape (`fact_ids`, a nullable `traveler_note` object). `--check <fixture>
+<file>` takes a saved response, either a Messages API body (`{ content, stop_reason }`) or the brief
+JSON itself, and runs it through production's path (`briefFromSavedResponse` in
+`src/lib/brief-verify.js`: `readBriefResponse`, `verifyBrief`, else the template with the cron's
+reason), printing the verifier report and the brief that would be published (`--json` for one object).
+
+With `AI_GATEWAY_API_KEY` in the environment the default mode makes one call per fixture (nine today, ≈ $0.005 in
 all), sending the production request (`buildBriefRequest`, `generateBriefWithModel`) and running the
 production verifier; it prints the model brief, every dropped item with its reasons, the headline and
 tone decisions, warnings, tokens and cost, then the template. Without a key it prints the templates.

@@ -41,7 +41,6 @@ describe('chip labels', () => {
   it('reads the mockup examples off the calm afternoon', () => {
     const f = byId(fixture('calm-afternoon'));
     expect(chipLabel(f.get('otp.LAX'))).toBe('LAX 85%');
-    expect(chipLabel(f.get('otp.min'))).toBe('Lowest LAX 85%');
     expect(chipLabel(f.get('otp.floor'))).toBe('7 hubs ≥ 85%');
     expect(chipLabel(f.get('faa.planned.BOS'))).toBe('FAA plan · BOS');
     expect(chipLabel(f.get('air.total'))).toBe('630 airborne');
@@ -66,6 +65,7 @@ describe('chip labels', () => {
     const storm = byId(fixture('storm-day'));
     expect(chipLabel(storm.get('faa.active.ORD.gdp'))).toBe('FAA delay program · ORD');
     expect(chipLabel(storm.get('otp.ORD'))).toBe('ORD 48%');
+    expect(chipLabel(storm.get('otp.min'))).toBe('Lowest EWR 41%');
     const cx = byId(fixture('unconfirmed-cancellations'));
     expect(chipLabel(cx.get('cxl.confirmed'))).toBe('6 canceled');
     expect(chipLabel(cx.get('cxl.unconfirmed'))).toBe('162 unconfirmed');
@@ -84,11 +84,16 @@ describe('chip labels', () => {
 });
 
 describe('chip tone', () => {
-  it('radio is its own tone; a hub ground stop, delay program or closure is the alert tone; the rest are plain', () => {
+  it('radio is its own tone; a hub ground stop or closure is the alert tone, a hub delay program the warn tone; the rest are plain', () => {
     const f = byId(fixture('ground-stop-with-radio'));
     expect(chipTone([...f.values()].find((x) => x.kind === 'radio'))).toBe('radio');
     expect(chipTone(f.get('faa.active.EWR.gs'))).toBe('alert');
+    expect(chipTone({ id: 'faa.active.EWR.closure', kind: 'faa', hub: 'EWR' })).toBe('alert');
     expect(chipTone(f.get('otp.EWR'))).toBe('plain');
+    // A delay program at a hub is amber, like the hub strip's marker and a "Watch" brief.
+    const morning = byId(fixture('sfo-gdp-morning'));
+    expect(chipTone(morning.get('faa.active.SFO.gdp'))).toBe('warn');
+    expect(chipTone(morning.get('faa.active.BOS.gdp'))).toBe('plain');
     const live = byId(fixture('live-2026-11-10-evening'));
     // A ground stop at Boston is not a United hub: no alarm colour for it.
     expect(chipTone(live.get('faa.active.BOS.gs'))).toBe('plain');
@@ -99,7 +104,7 @@ describe('chip targets', () => {
   it('links only where the destination shows the fact', () => {
     const calm = byId(fixture('calm-afternoon'));
     expect(chipTarget(calm.get('otp.LAX'))).toEqual({ tab: 'schedule', href: '/?tab=schedule&hub=LAX' });
-    // The on-time spread rests on its lowest hub, whose board shows it (the IROPS bar does not).
+    // The on-time floor links its lowest hub, whose board shows it (the IROPS bar does not).
     expect(chipTarget(calm.get('otp.floor'))).toEqual({ tab: 'schedule', href: '/?tab=schedule&hub=LAX' });
     const soft = byId(fixture('storm-day')).get('otp.soft');
     expect(chipTarget(soft)).toEqual({ tab: 'schedule', href: `/?tab=schedule&hub=${soft.values.find((v) => /^[A-Z]{3}$/.test(v))}` });

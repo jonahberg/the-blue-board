@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   airborneNormal, buildBriefFacts, computeTone, countAirborneAndStarlink, faaCausePhrase,
   formatAirportClock, isWholeAirportClosure, materialKey, parseIsoMs, publicFact, resolveZuluHhmm,
+  travelerNoteAllowed,
 } from '../src/lib/brief-facts.js';
 
 const FIXTURE_DIR = new URL('./fixtures/brief/', import.meta.url);
@@ -87,7 +88,7 @@ describe('buildBriefFacts: the catalogue', () => {
     expect(facts.map((f) => f.id).sort()).toEqual([
       'air.normal', 'air.starlink', 'air.total', 'cxl.confirmed', 'cxl.unconfirmed', 'faa.active.count',
       'faa.planned.BOS', 'faa.planned.count', 'net.index', 'net.status', 'otp.DEN', 'otp.EWR', 'otp.IAD',
-      'otp.IAH', 'otp.LAX', 'otp.ORD', 'otp.SFO', 'otp.floor', 'otp.max', 'otp.min', 'wx.summary',
+      'otp.IAH', 'otp.LAX', 'otp.ORD', 'otp.SFO', 'otp.floor', 'wx.summary',
     ]);
     expect(collection.sources).toEqual({ irops: 'ok', faa: 'ok', nas: 'ok', metar: 'ok', air: 'ok', airNormal: 'ok' });
     expect(computeTone(facts)).toBe('calm');
@@ -103,20 +104,48 @@ describe('buildBriefFacts: the catalogue', () => {
     expect(ord.statement).toBe("Chicago O'Hare (ORD): 91% of departures so far today left within 30 minutes of schedule (410 departed).");
     expect(ord.values).toEqual(['91%', '410', '30 minutes', 'ORD', "Chicago O'Hare", "O'Hare", 'Chicago']);
     expect(ord.link).toEqual({ tab: 'schedule', hub: 'ORD' });
-    expect(byId(facts)['otp.floor'].statement).toBe('All 7 hubs with an on-time reading are at 85% or better; Los Angeles is the lowest.');
-    expect(byId(facts)['otp.min'].values).toEqual(expect.arrayContaining(['85%', 'LAX', 'Los Angeles']));
+  });
+
+  it('does not single out the lowest hub while every hub is at 80% or better, and never the highest', () => {
+    const fx = fixture('calm-afternoon');
+    const calm = byId(build(fx).facts);
+    expect(calm['otp.min']).toBeUndefined();
+    expect(calm['otp.max']).toBeUndefined();
+    expect(calm['otp.floor'].statement).toBe('All 7 hubs with an on-time reading are at 85% or better.');
+    // The floor's values cannot vouch for naming the lowest hub; its chip still proves it there.
+    expect(calm['otp.floor'].values).toEqual(['7', 'seven', '85%']);
+    expect(calm['otp.floor'].link).toEqual({ tab: 'schedule', hub: 'LAX' });
+
+    // Los Angeles at 75%: below 80, so the lowest hub is worth naming again.
+    const metrics = { ...fx.sources.irops.hubMetrics, LAX: { ...fx.sources.irops.hubMetrics.LAX, onTime: 59 } };
+    const low = byId(build(fx, { irops: { ...fx.sources.irops, hubMetrics: metrics } }).facts);
+    expect(low['otp.min'].statement).toBe('Of the 7 hubs with an on-time reading, Los Angeles (LAX) is lowest at 75%.');
+    expect(low['otp.min'].values).toEqual(expect.arrayContaining(['75%', 'LAX', 'Los Angeles']));
+    expect(low['otp.floor'].statement).toBe('All 7 hubs with an on-time reading are at 75% or better; Los Angeles is the lowest.');
+    expect(low['otp.max']).toBeUndefined();
   });
 
   it('converts planned FAA windows to the airport’s local clock and says they are not in effect', () => {
     const { facts } = build(fixture('planned-only-watch'));
     const ewr = byId(facts)['faa.planned.EWR'];
-    expect(ewr.statement).toBe("The FAA's operations plan says a ground stop or ground delay program is possible at Newark (EWR) until 9:00 PM ET. It is not in effect.");
+    expect(ewr.statement).toBe("The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) until 9:00 PM ET. It is not in effect.");
     expect(ewr.values).toContain('9:00 PM ET');
     expect(byId(facts)['faa.planned.SFO'].values).toContain('4:00 PM PT');
     expect(ewr.toneFloor).toBe('watch');
     // The en-route CDRS/SWAP line names no airport and is not a stop or delay program.
     expect(facts.some((f) => /FLORIDA/i.test(f.statement))).toBe(false);
     expect(computeTone(facts)).toBe('watch');
+  });
+
+  it('ranks possible programs at airports that are not hubs last, below every other fact', () => {
+    const { facts } = build(fixture('calm-afternoon'));
+    expect(facts.slice(-2).map((f) => f.id)).toEqual(['faa.planned.BOS', 'faa.planned.count']);
+    expect(facts.slice(-2).every((f) => f.severity === 0)).toBe(true);
+    expect(facts.slice(0, -2).every((f) => f.severity > 0)).toBe(true);
+    // A possible program at a hub still ranks as a watch, and so does the count beside it.
+    const watch = byId(build(fixture('planned-only-watch')).facts);
+    expect(watch['faa.planned.EWR'].severity).toBe(22);
+    expect(watch['faa.planned.count'].severity).toBe(3);
   });
 
   it('drops a planned program where one is already in effect, instead of contradicting it', () => {
@@ -129,10 +158,10 @@ describe('buildBriefFacts: the catalogue', () => {
   it('describes an active ground stop with its local end time, cause and extension odds', () => {
     const { facts } = build(fixture('hub-ground-stop'));
     const gs = byId(facts)['faa.active.EWR.gs'];
-    expect(gs.statement).toBe('The FAA has a ground stop in effect at Newark (EWR) until 8:30 PM ET, because of thunderstorms. It rates the chance of an extension as high.');
+    expect(gs.statement).toBe('The FAA has a ground stop in effect for flights heading to Newark (EWR) until 8:30 PM ET, because of thunderstorms. Those flights are held at their departure airport. It rates the chance of an extension as high.');
     expect(gs.values).toEqual(expect.arrayContaining(['EWR', 'Newark', '8:30 PM ET', 'thunderstorms']));
     expect(gs).toEqual(expect.objectContaining({ hub: 'EWR', severity: 100, toneFloor: 'disrupted', link: { tab: 'weather', hub: 'EWR' } }));
-    expect(byId(facts)['faa.active.count'].statement).toBe('1 FAA program is in effect at United hubs: a ground stop at Newark.');
+    expect(byId(facts)['faa.active.count'].statement).toBe('1 FAA program affects a United hub: a ground stop for flights into Newark.');
     expect(byId(facts)['net.status'].statement).toContain('"Disrupted"');
   });
 
@@ -140,7 +169,7 @@ describe('buildBriefFacts: the catalogue', () => {
     const fx = fixture('hub-ground-stop');
     const faa = fx.sources.faa.map((a) => (a.airportCode === 'EWR' ? { ...a, programs: [{ type: 'ground_stop', reason: 'thunderstorms', endTime: '2345' }] } : a));
     const gs = byId(build(fx, { faa }).facts)['faa.active.EWR.gs'];
-    expect(gs.statement).toBe('The FAA has a ground stop in effect at Newark (EWR), because of thunderstorms.');
+    expect(gs.statement).toBe('The FAA has a ground stop in effect for flights heading to Newark (EWR), because of thunderstorms. Those flights are held at their departure airport.');
   });
 
   it('keeps confirmed and unconfirmed cancellations as separate facts', () => {
@@ -174,9 +203,31 @@ describe('buildBriefFacts: the catalogue', () => {
   it('reports hub weather that affects operations in plain words, with gusts as printed', () => {
     const { facts } = build(fixture('hub-ground-stop'));
     const wx = byId(facts)['wx.EWR'];
-    expect(wx.statement).toBe('Newark (EWR) weather: low visibility, thunderstorms, heavy rain and wind gusting to 34 knots. The Blue Board rates the effect on operations as significant.');
+    expect(wx.statement).toBe('Newark (EWR) weather: low visibility, thunderstorms, heavy rain and wind gusting to 34 knots, enough to slow arrivals and departures.');
     expect(wx.values).toEqual(expect.arrayContaining(['34 knots', 'thunderstorms', 'weather']));
     expect(byId(facts)['wx.summary'].statement).toBe('Weather is affecting operations at 1 of the 9 United hubs with a current report: Newark.');
+  });
+
+  it('says what each weather level does to the operation, never the site’s own rating', () => {
+    const fx = fixture('overnight-low-traffic');
+    const at = (raw) => {
+      const metar = fx.sources.metar.map((m) => (m.icaoId === 'KDEN' ? { ...m, rawOb: raw } : m));
+      return build(fx, { metar });
+    };
+    expect(byId(build(fx).facts)['wx.SFO'].statement)
+      .toBe('San Francisco (SFO) weather: very low clouds, very low visibility and fog, enough to slow arrivals and departures significantly.');
+    // A steady 42-knot wind with no gust group is a warning, and it is named.
+    const wind = byId(at('METAR KDEN 110853Z 27042KT 10SM CLR 07/M08 A3021 RMK AO2').facts)['wx.DEN'];
+    expect(wind.statement).toBe('Denver (DEN) weather: wind of 42 knots, enough to slow arrivals and departures.');
+    expect(wind.values).toContain('42 knots');
+    // Light rain is a caution: it can cause delays.
+    expect(byId(at('METAR KDEN 110853Z 18006KT 10SM -RA BKN040 07/05 A3021 RMK AO2').facts)['wx.DEN'].statement)
+      .toBe('Denver (DEN) weather: rain, which can cause minor delays.');
+    // Low scattered cloud over mist is a caution with nothing to name: no fact, and the reason why.
+    const mist = at('METAR KDEN 110853Z 18006KT 6SM BR FEW008 07/05 A3021 RMK AO2');
+    expect(byId(mist.facts)['wx.DEN']).toBeUndefined();
+    expect(mist.collection.skipped).toContain('wx.DEN: caution with no condition to name (low clouds with active weather)');
+    expect(mist.facts.every((f) => !/weather that can slow|rates the effect/.test(f.statement))).toBe(true);
   });
 
   it('compares the airborne count with the median for this time of day', () => {
@@ -199,6 +250,51 @@ describe('buildBriefFacts: the catalogue', () => {
   });
 });
 
+describe('tone: FAA programs at United hubs', () => {
+  const fx = fixture('sfo-gdp-morning');
+  const withFaa = (edit) => build(fx, { faa: fx.sources.faa.map((a) => edit(a) ?? a) }).facts;
+  const program = (type, extra = {}) => (a) => ({ ...a, programs: [{ type, reason: 'WX:Thunderstorms', endTime: '2026-11-11T23:59:00Z', ...extra }] });
+
+  it('a ground delay program at one hub is a watch, as the header’s "Some Delays" chip says', () => {
+    const facts = build(fx).facts;
+    expect(computeTone(facts)).toBe('watch');
+    expect(byId(facts)['faa.active.SFO.gdp'].toneFloor).toBe('watch');
+    expect(byId(facts)['faa.active.count'].toneFloor).toBe('watch');
+    expect(byId(facts)['net.status'].statement).toContain('"Some Delays"');
+    expect(travelerNoteAllowed('watch', facts)).toBe(true);
+  });
+
+  it('a ground stop or closure at a hub is disrupted; delay programs at any number of hubs stay a watch', () => {
+    const gs = withFaa((a) => (a.airportCode === 'EWR' ? program('ground_stop')(a) : null));
+    expect(computeTone(gs)).toBe('disrupted');
+    expect(byId(gs)['faa.active.EWR.gs'].toneFloor).toBe('disrupted');
+    const closure = withFaa((a) => (a.airportCode === 'EWR' ? program('closure', { reason: 'snow and ice removal' })(a) : null));
+    expect(computeTone(closure)).toBe('disrupted');
+    // Two hubs' delay programs read "Some Delays" in the header, and "watch" here.
+    const twoGdps = withFaa((a) => (a.airportCode === 'EWR' ? program('ground_delay', { avgDelay: 41 })(a) : null));
+    expect(byId(twoGdps)['faa.active.count'].toneFloor).toBe('watch');
+    expect(byId(twoGdps)['net.status'].statement).toContain('"Some Delays"');
+    expect(computeTone(twoGdps)).toBe('watch');
+    // A second program at the SAME hub is still one hub.
+    const sameHub = withFaa((a) => (a.airportCode === 'SFO' ? { ...a, programs: [...a.programs, { type: 'ground_delay', reason: 'wind' }] } : null));
+    expect(byId(sameHub)['faa.active.count'].toneFloor).toBe('watch');
+  });
+
+  it('a ground delay program away from the hubs is a watch, and allows no traveler note on its own', () => {
+    const facts = withFaa((a) => (a.airportCode === 'SFO' ? { ...a, programs: [] } : null));
+    expect(byId(facts)['faa.active.BOS.gdp'].toneFloor).toBe('watch');
+    expect(computeTone(facts)).toBe('watch');
+    expect(travelerNoteAllowed('watch', facts)).toBe(false);
+  });
+
+  it('the network status at its most severe level is disrupted', () => {
+    const facts = build(fx, { irops: { ...fx.sources.irops, score: 45 } }).facts;
+    expect(byId(facts)['net.status'].statement).toContain('"Disrupted"');
+    expect(byId(facts)['net.status'].toneFloor).toBe('disrupted');
+    expect(computeTone(facts)).toBe('disrupted');
+  });
+});
+
 describe('materialKey (change detection)', () => {
   it('ignores jitter: a few flights more in the air and a point of on-time', () => {
     const fx = fixture('calm-afternoon');
@@ -208,12 +304,94 @@ describe('materialKey (change detection)', () => {
     expect(materialKey(b)).toBe(materialKey(a));
   });
 
-  it('changes when something material does: a new ground stop, a band crossing', () => {
-    const fx = fixture('calm-afternoon');
-    const base = materialKey(build(fx).facts);
-    const gs = [{ airportCode: 'SFO', programs: [{ type: 'ground_stop', reason: 'wind', endTime: '2026-11-10T23:00:00Z' }], groundStop: true, delays: [{ type: 'ground_stop' }] }];
-    expect(materialKey(build(fx, { faa: gs }).facts)).not.toBe(base);
-    expect(materialKey(build(fx, { air: { airborne: 720, starlink: 280 } }).facts)).not.toBe(base);
+  it('leaves a fact with material null out entirely, id included', () => {
+    const fact = (id, material) => ({ id, material });
+    expect(materialKey([fact('otp.SFO', null), fact('net.status', 'status:minor')])).toBe(materialKey([fact('net.status', 'status:minor')]));
+    expect(materialKey([fact('x', '')])).not.toBe(materialKey([]));
+  });
+
+  // The ten briefs of Nov 11 2026 were all rewritten for noise. Each case below is one of the
+  // fact-by-fact differences that triggered a rewrite, replayed against that morning's scenario.
+  const MORNING = fixture('sfo-gdp-morning');
+  const NOW_S = Date.parse(MORNING.nowIso) / 1000;
+  const morning = (edit = () => {}) => {
+    const sources = structuredClone(MORNING.sources);
+    // A median the noise below stays inside the "usual" band of (700 and 600 in the air).
+    sources.airNormal = { median: 650, days: 7 };
+    edit(sources);
+    return materialKey(buildBriefFacts(sources, { nowMs: Date.parse(MORNING.nowIso) }).facts);
+  };
+  const hub = (s, code) => s.irops.hubMetrics[code];
+  const sfoMetar = (s, raw) => { s.metar = s.metar.map((m) => (m.icaoId === 'KSFO' ? { ...m, rawOb: raw } : m)); };
+  const NOISE = {
+    'air.total 700 → 600 and air.starlink 300 → 250': [(s) => { s.air = { airborne: 700, starlink: 300 }; }, (s) => { s.air = { airborne: 600, starlink: 250 }; }],
+    'net.index 4.0 → 11.0, both in the normal band': [(s) => { s.irops.score = 4; }, (s) => { s.irops.score = 11; }],
+    'otp.EWR 100% → 95%': [(s) => { hub(s, 'EWR').onTime = 110; }, (s) => { hub(s, 'EWR').onTime = 104; }],
+    'otp.SFO absent → 100% (and the best hub and the hub count with it)': [(s) => { delete s.irops.hubMetrics.SFO; }, () => {}],
+    'otp.IAD 95% → aged out': [(s) => { hub(s, 'IAD').generatedAt = NOW_S - 3000; hub(s, 'IAD').onTime = 67; }, () => {}],
+    'wx.SFO "very low clouds, very low visibility, fog" → "very low clouds"': [
+      (s) => sfoMetar(s, 'METAR KSFO 111556Z 00000KT 1/4SM FG VV002 11/11 A3011 RMK AO2'),
+      (s) => sfoMetar(s, 'METAR KSFO 111656Z 00000KT 2SM BR OVC003 12/11 A3012 RMK AO2'),
+    ],
+  };
+
+  for (const [label, [before, after]] of Object.entries(NOISE)) {
+    it(`is unchanged by ${label}`, () => {
+      expect(morning(after)).toBe(morning(before));
+    });
+  }
+
+  it('is unchanged by all of that morning’s noise at once', () => {
+    const all = (which) => (s) => { for (const pair of Object.values(NOISE)) pair[which](s); };
+    expect(morning(all(1))).toBe(morning(all(0)));
+  });
+
+  // Three more sources of rewrites, left after the first pass: possible programs away from the hubs,
+  // caution-level hub weather, and the weather summary's list of hubs.
+  const iahMetar = (s, raw) => { s.metar = s.metar.map((m) => (m.icaoId === 'KIAH' ? { ...m, rawOb: raw } : m)); };
+  const planned = (event, airports) => ({ time: '', event, decoded: event, affectedAirports: airports, type: 'terminal' });
+  const MORE_NOISE = {
+    'the possible ground stop at Miami dropping off the plan': [() => {}, (s) => { s.nas.planned = s.nas.planned.filter((t) => !t.affectedAirports.includes('MIA')); }],
+    'a possible program away from the hubs appearing (Las Vegas)': [() => {}, (s) => { s.nas.planned.push(planned('AFTER 2000\t-LAS GROUND STOP POSSIBLE', ['LAS'])); }],
+    "Seattle's possible program moving its window": [() => {}, (s) => {
+      s.nas.planned = s.nas.planned.map((t) => (t.affectedAirports.includes('SEA') ? planned('AFTER 2300\t-SEA GROUND STOP/DELAY PROGRAM POSSIBLE', ['SEA']) : t));
+    }],
+    'light rain coming to Houston (caution)': [() => {}, (s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM -RA BKN040 23/15 A3008 RMK AO2')],
+    'Houston going from light rain to light snow (both caution)': [
+      (s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM -RA BKN040 23/15 A3008 RMK AO2'),
+      (s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM -SN BKN040 01/M01 A3008 RMK AO2'),
+    ],
+  };
+  for (const [label, [before, after]] of Object.entries(MORE_NOISE)) {
+    it(`is unchanged by ${label}`, () => {
+      expect(morning(after)).toBe(morning(before));
+    });
+  }
+
+  it('still changes for a possible program at a hub, or hub weather at warning level', () => {
+    const base = morning();
+    expect(morning((s) => { s.nas.planned.push(planned('UNTIL 0200\t-EWR GROUND STOP POSSIBLE', ['EWR'])); })).not.toBe(base);
+    // Thunderstorms at Houston: a warning, in both the hub's weather and the summary.
+    const storms = (s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM TSRA BKN040 23/15 A3008 RMK AO2');
+    expect(morning(storms)).not.toBe(base);
+    expect(morning(storms)).not.toBe(morning((s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM -RA BKN040 23/15 A3008 RMK AO2')));
+  });
+
+  it('changes when the story does: a new ground stop, a hub under 80%, a weather level or hazard, a band', () => {
+    const base = morning();
+    const changes = {
+      'a ground stop at Newark': (s) => {
+        s.faa = s.faa.map((a) => (a.airportCode === 'EWR'
+          ? { ...a, groundStop: true, programs: [{ type: 'ground_stop', reason: 'WX:Thunderstorms', endTime: '2026-11-11T19:30:00Z' }] }
+          : a));
+      },
+      'Chicago O’Hare dropping to 75%': (s) => { hub(s, 'ORD').onTime = 120; },
+      'San Francisco weather easing from severe to a warning': (s) => sfoMetar(s, 'METAR KSFO 111656Z 00000KT 3SM BR OVC008 12/11 A3012 RMK AO2'),
+      'thunderstorms at San Francisco at the same level': (s) => sfoMetar(s, 'METAR KSFO 111656Z 00000KT 2SM TSRA OVC003 12/11 A3012 RMK AO2'),
+      'far more flights in the air than usual': (s) => { s.air = { airborne: 760, starlink: 300 }; },
+      'the disruption index entering the minor band': (s) => { s.irops.score = 24; },
+    };
+    for (const [label, edit] of Object.entries(changes)) expect(morning(edit), label).not.toBe(base);
   });
 });
 

@@ -76,14 +76,14 @@ function disruptedWithRadio() {
   const radio = factsOf('ground-stop-with-radio').find((f) => f.kind === 'radio') as unknown as { id: string; quote: string };
   return body('ground-stop-with-radio', {
     candidate: {
-      headline: 'A ground stop is holding Newark until 8:00 PM ET.',
+      headline: 'A ground stop is holding flights into Newark until 8:00 PM ET.',
       tone: 'disrupted',
       items: [
-        { text: 'The FAA has a ground stop in effect at Newark until 8:00 PM ET because of heavy traffic.', fact_ids: ['faa.active.EWR.gs'] },
+        { text: 'The FAA has a ground stop in effect for flights into Newark until 8:00 PM ET because of heavy traffic.', fact_ids: ['faa.active.EWR.gs'] },
         { text: `On Newark approach frequencies, controllers were heard reporting "${radio.quote}".`, fact_ids: [radio.id] },
         { text: '39 arrivals are scheduled at Newark in the next hour against a planned rate of 36.', fact_ids: ['flow.EWR.arrivals'] },
       ],
-      traveler_note: { text: "If you are flying through Newark, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.EWR.gs'] },
+      traveler_note: { text: "If you are flying to Newark, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.EWR.gs'] },
     },
   });
 }
@@ -156,11 +156,11 @@ describe('the header row', () => {
     serve(body('storm-day'));
     mount();
     await settle();
-    const row = screen.getByRole('button', { name: 'Disrupted: A ground stop is in effect at Newark. Open the full brief.' });
+    const row = screen.getByRole('button', { name: 'Disrupted: A ground stop is holding flights into Newark. Open the full brief.' });
     expect(row.closest('[aria-live]')).toBeNull();
     expect(row.getAttribute('aria-live')).toBeNull();
     expect(row.parentElement?.className.split(/\s+/)).toEqual(expect.arrayContaining(['h-7', 'shrink-0']));
-    expect(row.querySelector('.truncate')?.textContent).toBe('A ground stop is in effect at Newark.');
+    expect(row.querySelector('.truncate')?.textContent).toBe('A ground stop is holding flights into Newark.');
     expect(row.getAttribute('aria-haspopup')).toBe('dialog');
   });
 
@@ -285,10 +285,10 @@ describe('the sheet and the sidebar panel', () => {
     // Below lg there is no sidebar panel: the sheet is the full brief.
     fireEvent.click(screen.getByRole('button', { name: /full brief/i }));
     await settle();
-    const dialog = screen.getByRole('dialog', { name: 'A ground stop is holding Newark until 8:00 PM ET.' });
-    expect(within(dialog).getByText(/Written from 25 live facts and checked against them\./)).toBeTruthy();
+    const dialog = screen.getByRole('dialog', { name: 'A ground stop is holding flights into Newark until 8:00 PM ET.' });
+    expect(within(dialog).getByText(/Written from 24 live facts and checked against them\./)).toBeTruthy();
     expect(within(dialog).getByText(/model-written summaries/)).toBeTruthy();
-    expect(within(dialog).getByText(/If you are flying through Newark/)).toBeTruthy();
+    expect(within(dialog).getByText(/If you are flying to Newark/)).toBeTruthy();
     expect(within(dialog).getByText('How this was written')).toBeTruthy();
   });
 
@@ -307,7 +307,19 @@ describe('the sheet and the sidebar panel', () => {
     expect(radio.querySelector('svg.lucide-radio-tower')).not.toBeNull();
     expect(within(dialog).getByText('EWR arrivals').closest('a, button')).toBeNull();
     // Every chip carries the fact it stands for.
-    expect(gs[0].getAttribute('title')).toMatch(/^The FAA has a ground stop in effect at Newark/);
+    expect(gs[0].getAttribute('title')).toMatch(/^The FAA has a ground stop in effect for flights heading to Newark/);
+  });
+
+  it('a hub delay program chip is amber under a "Watch" brief; a ground stop chip stays red', async () => {
+    serve(body('sfo-gdp-morning'));
+    mount();
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: /^Watch: A ground delay program is holding flights into San Francisco\./ }));
+    await settle();
+    const gdp = within(screen.getByRole('dialog')).getAllByRole('link', { name: 'FAA delay program · SFO' });
+    expect(gdp[0].className).toContain('text-bb-warn');
+    expect(gdp[0].className).toContain('border-bb-warn/40');
+    expect(gdp[0].className).not.toContain('destructive');
   });
 
   it('following a chip closes the sheet and lands on the hub card', async () => {
@@ -338,13 +350,16 @@ describe('the sheet and the sidebar panel', () => {
   });
 
   it('a chip to the tab already showing is text, not a dead link', async () => {
-    serve(body('live-2026-11-10-evening'));
-    mount(<TabSwitch to="schedule" />);
+    // A disrupted or watch template no longer carries the airborne line, so the calm one: on the
+    // Starlink tab, "280 Starlink" would go nowhere.
+    serve(body('calm-afternoon'));
+    mount(<TabSwitch to="starlink" />);
     await settle();
-    // On Live (the default tab), "647 airborne" would go nowhere.
+    fireEvent.click(screen.getByRole('button', { name: 'switch-starlink' }));
+    await settle();
     fireEvent.click(screen.getByRole('button', { name: /full brief/i }));
     await settle();
-    expect(within(screen.getByRole('dialog')).getByText('647 airborne').closest('a')).toBeNull();
+    expect(within(screen.getByRole('dialog')).getByText('280 Starlink').closest('a')).toBeNull();
   });
 
   it('at lg on Live the panel is open in the sidebar and the row reveals it instead of opening a sheet', async () => {

@@ -11,8 +11,8 @@ describe('buildTickerItems', () => {
   });
 
   it('leads with an ops-health advisory when the network is not normal', () => {
-    const items = buildTickerItems({ ...base, opsHealth: { level: 'disrupted', text: 'Disrupted — ground stop at EWR' }, total: 400, airborne: 380 });
-    expect(items[0]).toEqual({ text: '⚠️ Disrupted — ground stop at EWR', cls: 'advisory' });
+    const items = buildTickerItems({ ...base, opsHealth: { level: 'advisory', text: 'Disrupted: ground stop for flights into EWR' }, total: 400, airborne: 380 });
+    expect(items[0]).toEqual({ text: '⚠️ Disrupted: ground stop for flights into EWR', cls: 'advisory' });
   });
 
   it('reports airborne and fleet counts once data has loaded', () => {

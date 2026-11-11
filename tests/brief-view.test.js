@@ -49,12 +49,12 @@ describe('briefViewState', () => {
     expect(view.status).toBe('ready');
     if (view.status !== 'ready') return;
     expect(view.tone).toBe('disrupted');
-    expect(view.headline).toBe('A ground stop is in effect at Newark.');
+    expect(view.headline).toBe('A ground stop is holding flights into Newark.');
     expect(view.items).toHaveLength(4);
     for (const item of view.items) for (const id of item.factIds) expect(view.factsById.has(id)).toBe(true);
-    expect(view.travelerNote?.text).toMatch(/^If you are flying through Newark/);
+    expect(view.travelerNote?.text).toMatch(/^If you are flying to Newark/);
     // "Written from N live facts" counts every fact the brief was written from, not the cited ones.
-    expect(view.factCount).toBe(34);
+    expect(view.factCount).toBe(33);
     expect(view.facts.length).toBeLessThan(view.factCount);
     expect(view.source).toBe('template');
     expect(view.hasRadio).toBe(false);
@@ -116,9 +116,9 @@ describe('briefViewState', () => {
       generatedMs: NOW - 60_000,
       source: 'model',
       brief: {
-        headline: 'A ground stop is in effect at Newark.', tone: 'disrupted', headline_fact_ids: [],
+        headline: 'A ground stop is holding flights into Newark.', tone: 'disrupted', headline_fact_ids: [],
         items: [{ text: `Controllers on Newark frequencies were heard saying "${r.quote}".`, fact_ids: [r.id] }],
-        traveler_note: { text: 'If you are flying through Newark, check your flight.', fact_ids: ['faa.active.EWR.gs'] },
+        traveler_note: { text: 'If you are flying to Newark, check your flight.', fact_ids: ['faa.active.EWR.gs'] },
       },
     });
     const view = briefViewState(briefResponseBody(row, NOW), { nowMs: NOW });
@@ -131,6 +131,18 @@ describe('briefViewState', () => {
     calmRow.traveler_note = { text: 'Should not show.', fact_ids: [] };
     const calm = briefViewState(briefResponseBody(calmRow, NOW), { nowMs: NOW });
     expect(calm.status === 'ready' && calm.travelerNote).toBeNull();
+  });
+
+  it('shows a traveler note on a "watch" brief that cites a hub ground delay program, never on another watch', () => {
+    const watch = briefViewState(briefResponseBody(rowFor('sfo-gdp-morning', { generatedMs: NOW - 60_000 }), NOW), { nowMs: NOW });
+    expect(watch.status === 'ready' && watch.tone).toBe('watch');
+    expect(watch.status === 'ready' && watch.travelerNote?.text).toBe("If you are flying to San Francisco, check your flight's status before you leave for the airport.");
+
+    const planned = rowFor('planned-only-watch', { generatedMs: NOW - 60_000 });
+    planned.traveler_note = { text: 'Should not show.', fact_ids: ['faa.planned.EWR'] };
+    const view = briefViewState(briefResponseBody(planned, NOW), { nowMs: NOW });
+    expect(view.status === 'ready' && view.tone).toBe('watch');
+    expect(view.status === 'ready' && view.travelerNote).toBeNull();
   });
 
   it('drops a "next check" time that has already passed', () => {
@@ -163,7 +175,7 @@ describe('copy', () => {
   });
 
   it('finds the ticker\'s emergency-squawk lines (the items buildTickerItems marks critical), and only those', () => {
-    const base = { opsHealth: { level: 'disrupted', text: 'Disrupted — ground stop at EWR' }, airborne: 380, total: 412, fleetCount: 1078, starlinkCount: 550 };
+    const base = { opsHealth: { level: 'advisory', text: 'Disrupted: ground stop for flights into EWR' }, airborne: 380, total: 412, fleetCount: 1078, starlinkCount: 550 };
     expect(briefAlertLine(buildTickerItems({ ...base, squawks: [] }))).toBeNull();
     const one = buildTickerItems({ ...base, squawks: [{ text: '⚠️ EMERGENCY', callsign: 'UAL123', squawk: '7700' }] });
     expect(briefAlertLine(one)).toBe('⚠️ EMERGENCY: UAL123 (7700)');

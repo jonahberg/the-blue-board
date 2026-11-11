@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { allowanceFromValues, claimFailure, extractClaims } from '../src/lib/brief-claims.js';
-import { checkSentence, citedFactIds, validateBriefShape, verifyBrief } from '../src/lib/brief-verify.js';
+import { briefFromSavedResponse, checkSentence, citedFactIds, validateBriefShape, verifyBrief } from '../src/lib/brief-verify.js';
 
 const fact = (id, values, extra = {}) => ({
   id, kind: 'otp', statement: `${id} statement`, values, at: null, link: { tab: 'live' }, severity: 5, toneFloor: 'calm', material: id, ...extra,
@@ -93,13 +93,13 @@ describe('verifyBrief: items', () => {
       item('Every hub is at 85% on time or better; Los Angeles is the low mark and Houston is at 100%.', ['otp.floor', 'otp.IAH']),
       item('The FAA says a ground stop is possible at Newark until 9:00 PM ET and at Boston until 7:30 PM ET. Neither is in effect.', ['faa.planned.EWR', 'faa.planned.BOS']),
       item('630 United flights are in the air, 280 of them with Starlink.', ['air.starlink']),
-    ], { tone: 'watch' }), FACTS.filter((f) => f.id !== 'faa.active.EWR.gs'));
+    ], { tone: 'watch', headline: 'Ground stops at Newark and Boston.' }), FACTS.filter((f) => f.id !== 'faa.active.EWR.gs'));
     expect(out.ok).toBe(true);
     expect(out.report.itemsKept).toBe(3);
     expect(out.report.dropped).toEqual([]);
     // The headline rests on the items' facts but need not repeat their "possible": item-only rules.
     expect(out.report.headline.status).toBe('kept');
-    expect(out.brief.headline).toBe('Calm across the network.');
+    expect(out.brief.headline).toBe('Ground stops at Newark and Boston.');
   });
 
   it('drops an item whose number is not in the facts it cites (wrong number)', () => {
@@ -163,11 +163,11 @@ describe('verifyBrief: items', () => {
     const index = new Map(FACTS.map((f) => [f.id, f]));
     expect(checkSentence('Newark has a ground stop until 9:00 PM ET.', ['faa.planned.EWR'], index)).toEqual(['planned_not_hedged']);
     expect(checkSentence('A ground stop is possible at Newark until 9:00 PM ET.', ['faa.planned.EWR'], index)).toEqual([]);
-    expect(checkSentence('The FAA may stop Newark departures until 9:00 PM ET; nothing is in effect yet.', ['faa.planned.EWR'], index)).toEqual([]);
+    expect(checkSentence('The FAA may stop flights into Newark until 9:00 PM ET; nothing is in effect yet.', ['faa.planned.EWR'], index)).toEqual([]);
   });
 
   it('lets "weather" stand for any weather cause a cited fact carries', () => {
-    expect(checkSentence('Weather has stopped Newark departures until 8:30 PM ET.', ['faa.active.EWR.gs'], new Map(FACTS.map((f) => [f.id, f])))).toEqual([]);
+    expect(checkSentence('Weather has stopped arrivals at Newark until 8:30 PM ET.', ['faa.active.EWR.gs'], new Map(FACTS.map((f) => [f.id, f])))).toEqual([]);
   });
 
   it('caps items at four and drops the rest', () => {
@@ -211,6 +211,29 @@ describe('verifyBrief: headline, tone, traveler note', () => {
     expect(out.report.warnings).toContain('headline:over_12_words');
   });
 
+  it('replaces a headline that calls a non-calm operation calm, smooth, quiet or "running normally"', () => {
+    const watchFacts = FACTS.filter((f) => f.id !== 'faa.active.EWR.gs'); // computed tone: watch
+    for (const headline of ['United operations look calm.', 'Flights are running smoothly.', 'A smooth day so far.', 'A quiet afternoon at the hubs.', 'Hubs are running normally.', 'Calmly through the evening.']) {
+      const out = verifyBrief(brief(items, { headline }), watchFacts);
+      expect(out.brief.tone, headline).toBe('watch');
+      expect(out.report.headline, headline).toEqual({ status: 'replaced', reasons: ['headline:calm_when_not_calm'], original: headline });
+      expect(out.brief.headline).toBe('FAA action is possible at Newark; none is in effect.');
+    }
+    // Calm words in a calm brief, and words that merely contain them, are fine.
+    expect(verifyBrief(brief(items, { headline: 'United operations look calm.' }), FACTS.filter((f) => f.toneFloor === 'calm')).report.headline.status).toBe('kept');
+    expect(verifyBrief(brief(items, { headline: 'Smoother than yesterday at the hubs.' }), watchFacts).report.headline.status).toBe('kept');
+  });
+
+  it('replaces a headline past fourteen words with the template headline', () => {
+    // 16 words, the length of a real Nov 11 headline that shipped with only a warning.
+    const long = 'United is calm right now, with lots of Starlink flights in the air across the country.';
+    const out = verifyBrief(brief(items, { headline: long }), FACTS.filter((f) => f.toneFloor === 'calm'));
+    expect(out.report.headline).toEqual({ status: 'replaced', reasons: ['headline_too_long'], original: long });
+    expect(out.brief.headline).toBe('United is running smoothly right now.');
+    const fourteen = 'United is calm right now, with lots of Starlink flights in the air today.';
+    expect(verifyBrief(brief(items, { headline: fourteen }), FACTS.filter((f) => f.toneFloor === 'calm')).report.headline.status).toBe('kept');
+  });
+
   it('computes the tone from the facts and overrides the model', () => {
     const out = verifyBrief(brief(items, { tone: 'calm' }), FACTS);
     expect(out.report.tone).toEqual({ model: 'calm', computed: 'disrupted', final: 'disrupted', overridden: true });
@@ -225,6 +248,19 @@ describe('verifyBrief: headline, tone, traveler note', () => {
     const disrupted = verifyBrief(brief(items, { traveler_note: item('Flying through Newark? Check your flight before 8:30 PM ET.', ['faa.active.EWR.gs']) }), FACTS);
     expect(disrupted.report.travelerNote.status).toBe('kept');
     expect(disrupted.brief.traveler_note.fact_ids).toEqual(['faa.active.EWR.gs']);
+  });
+
+  it('keeps a traveler note on a "watch" brief while a ground delay program is in effect at a hub', () => {
+    const gdp = fact('faa.active.SFO.gdp', ['SFO', 'San Francisco', '12:59 PM PT', 'low clouds', 'weather', '62 minutes', '132 minutes'], { kind: 'faa', hub: 'SFO', toneFloor: 'watch', severity: 85 });
+    const facts = [...FACTS.filter((f) => f.toneFloor !== 'disrupted'), gdp];
+    const note = item('Flying into San Francisco? Check your flight before you leave.', ['faa.active.SFO.gdp']);
+    const out = verifyBrief(brief([item('A ground delay program is holding flights into San Francisco until 12:59 PM PT.', ['faa.active.SFO.gdp'])], { tone: 'watch', traveler_note: note }), facts);
+    expect(out.brief.tone).toBe('watch');
+    expect(out.report.travelerNote.status).toBe('kept');
+    // The same program away from the hubs (no `hub`) does not allow one.
+    const away = [...FACTS.filter((f) => f.toneFloor !== 'disrupted'), { ...gdp, id: 'faa.active.BOS.gdp', hub: undefined, values: ['BOS', 'Boston'] }];
+    const out2 = verifyBrief(brief([item('630 United flights are in the air.', ['air.total'])], { traveler_note: item('Flying into Boston? Check your flight.', ['faa.active.BOS.gdp']) }), away);
+    expect(out2.report.travelerNote).toEqual({ status: 'dropped', reasons: ['tone_is_watch'] });
   });
 
   it('records style warnings (jargon, exclamation) without dropping', () => {
@@ -250,6 +286,32 @@ describe('validateBriefShape', () => {
     const out = verifyBrief({ headline: 'x' }, FACTS);
     expect(out.ok).toBe(false);
     expect(out.report.shapeErrors).toEqual(expect.arrayContaining(['tone_invalid', 'items_not_an_array']));
+  });
+});
+
+describe('briefFromSavedResponse (the eval harness --check)', () => {
+  const good = brief([item('630 United flights are in the air, 280 of them with Starlink.', ['air.starlink'])]);
+  const calmFacts = FACTS.filter((f) => f.toneFloor === 'calm');
+
+  it('reads a bare brief and a Messages API body the same way, and publishes the verified brief', () => {
+    const bare = briefFromSavedResponse(JSON.stringify(good), calmFacts);
+    const message = briefFromSavedResponse(JSON.stringify({
+      content: [{ type: 'thinking', thinking: '…' }, { type: 'text', text: JSON.stringify(good) }], stop_reason: 'end_turn',
+    }), calmFacts);
+    for (const out of [bare, message]) {
+      expect(out).toEqual(expect.objectContaining({ source: 'model', templateReason: null }));
+      expect(out.report.itemsKept).toBe(1);
+      expect(out.brief.items[0].fact_ids).toEqual(['air.starlink']);
+    }
+  });
+
+  it('falls back to the template with the cron’s reasons', () => {
+    expect(briefFromSavedResponse('not json {', calmFacts)).toEqual(expect.objectContaining({ source: 'template', templateReason: 'invalid_json', report: null }));
+    expect(briefFromSavedResponse(JSON.stringify({ content: [], stop_reason: 'max_tokens' }), calmFacts).templateReason).toBe('model_truncated');
+    expect(briefFromSavedResponse(JSON.stringify({ headline: 'x' }), calmFacts).templateReason).toBe('invalid_shape');
+    const none = briefFromSavedResponse(JSON.stringify(brief([item('Los Angeles is at 12%.', ['otp.LAX'])])), calmFacts);
+    expect(none.templateReason).toBe('no_items_survived');
+    expect(none.brief.headline).toBe('United is running smoothly right now.');
   });
 });
 

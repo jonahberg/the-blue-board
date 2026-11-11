@@ -18,21 +18,25 @@
 //      "approach", "ATC", "heard on frequency"…). Any other quoted text in a radio item, a partial
 //      or altered quote, or an unattributed one drops the item. Markup or a URL drops any item.
 //   5. The headline is checked against the union of the SURVIVING items' facts. A headline that
-//      fails (or runs past 20 words) is replaced with the template headline, never published.
-//   6. The traveler note is checked like an item, and only survives when the final tone is
-//      "disrupted".
+//      fails (or runs past 14 words, or says the operation is calm, smooth, quiet or "running
+//      normally" while the computed tone is not calm) is replaced with the template headline,
+//      never published. Past 12 words (prompt rule 3) it is kept with a warning.
+//   6. The traveler note is checked like an item, and only survives when an FAA ground stop or
+//      ground delay program is in effect at a United hub, or the final tone is "disrupted"
+//      (travelerNoteAllowed).
 //   7. Tone is computed from the facts (computeTone) and overrides the model's when they differ.
 //
 // If no item survives, the result is not ok and the caller publishes the template brief.
 
 import { allowanceFromValues, claimFailure, emptyAllowance, extractClaims, normalizeText } from './brief-claims.js';
-import { computeTone } from './brief-facts.js';
-import { templateHeadline } from './brief-template.js';
+import { computeTone, travelerNoteAllowed } from './brief-facts.js';
+import { buildTemplateBrief, templateHeadline } from './brief-template.js';
+import { readBriefResponse } from './brief-prompt.js';
 
 export const BRIEF_MAX_ITEMS = 4;
 const MAX_TEXT_CHARS = 400;
 const MAX_HEADLINE_CHARS = 160;
-const MAX_HEADLINE_WORDS = 20;
+const MAX_HEADLINE_WORDS = 14;
 const SOFT_HEADLINE_WORDS = 12;
 const MAX_FACT_IDS = 8;
 const TONES = new Set(['calm', 'watch', 'disrupted']);
@@ -46,6 +50,8 @@ const RADIO_ATTRIBUTION_RE = /\b(?:heard|radio|frequenc(?:y|ies)|tower|controlle
 const QUOTE_ATTRIBUTION_RE = /\b(?:heard|radio|frequenc(?:y|ies)|tower|controllers?|approach(?:\s+control)?|ground\s+control|air\s+traffic\s+control|ATC|transmissions?)\b/i;
 /** Markup or a link in model text: never published. */
 const MARKUP_RE = /<[^>]{0,200}>|<\/?[a-z]|[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
+/** A headline saying the operation is calm: replaced whenever the computed tone is not calm. */
+const CALM_HEADLINE_RE = /\b(?:calm|calmly|smooth|smoothly|quiet|quietly)\b|\brunning\s+normally\b/i;
 /** Words that mark an FAA program as not (yet) in effect. */
 const HEDGE_RE = /\b(?:possible|possibly|could|may|might|planned|plans?|expects?|expected|watch(?:ing)?|later|if|not\s+(?:yet\s+)?in\s+effect|isn't\s+in\s+effect|neither\s+is\s+in\s+effect|none\s+(?:of\s+them\s+)?(?:is|are)\s+in\s+effect)\b/i;
 
@@ -234,6 +240,8 @@ export function verifyBrief(candidate, facts) {
   let headlineFactIds = [];
   const headlineReasons = checkSentence(headline, union, factIndex, { itemRules: false }).filter((r) => r !== 'too_many_fact_ids');
   if (headline.length > MAX_HEADLINE_CHARS || wordCount(headline) > MAX_HEADLINE_WORDS) headlineReasons.push('headline_too_long');
+  // "Operations look calm" under a computed "watch" contradicts the tone word beside it.
+  if (tone !== 'calm' && CALM_HEADLINE_RE.test(headline)) headlineReasons.push('headline:calm_when_not_calm');
   if (headlineReasons.length) {
     const replacement = templateHeadline(factList, tone);
     report.headline = { status: 'replaced', reasons: headlineReasons, original: headline };
@@ -244,12 +252,12 @@ export function verifyBrief(candidate, facts) {
     report.warnings.push(...styleWarnings(headline, 'headline'));
   }
 
-  // Traveler note: verified like an item; only when the brief is disrupted.
+  // Traveler note: verified like an item; only with a hub program in effect, or a disrupted brief.
   let traveler_note = null;
   if (input.traveler_note) {
     const ids = [...new Set(input.traveler_note.fact_ids)];
     const reasons = checkSentence(input.traveler_note.text, ids, factIndex);
-    if (tone !== 'disrupted') reasons.push(`tone_is_${tone}`);
+    if (!travelerNoteAllowed(tone, factList)) reasons.push(`tone_is_${tone}`);
     if (reasons.length) report.travelerNote = { status: 'dropped', reasons };
     else {
       report.travelerNote = { status: 'kept', reasons: [] };
@@ -261,6 +269,36 @@ export function verifyBrief(candidate, facts) {
     ok: true,
     brief: { headline, headline_fact_ids: headlineFactIds, tone, items: kept, traveler_note },
     report,
+  };
+}
+
+/**
+ * What the cron would publish for one saved model response, offline (the eval harness's --check;
+ * the cron itself does not call this). The same steps as production: read the response as
+ * api/_brief-model.ts does (readBriefResponse: stop reason, the text block, JSON), verify it, and
+ * otherwise publish the template with api/cron/brief.ts's reason.
+ * @param {string} raw  a Messages API response body ({ content, stop_reason }), or the brief JSON
+ *   itself, which is read as the text of an end_turn response
+ * @param {Array<import('./brief-facts.js').BriefFact>} facts
+ * @returns {{read: ReturnType<typeof readBriefResponse>, report: VerifierReport|null,
+ *   source: 'model'|'template', templateReason: string|null, brief: import('./brief-template.js').Brief}}
+ */
+export function briefFromSavedResponse(raw, facts) {
+  let parsed = null;
+  try { parsed = JSON.parse(String(raw)); } catch { /* not JSON: the read reports invalid_json */ }
+  const message = parsed && typeof parsed === 'object' && Array.isArray(parsed.content)
+    ? parsed
+    : { content: [{ type: 'text', text: String(raw) }], stop_reason: 'end_turn' };
+  const read = readBriefResponse(message);
+  const verified = read.ok ? verifyBrief(read.json, facts) : null;
+  const templateReason = !read.ok ? read.reason
+    : !verified?.ok ? (verified?.report.shapeErrors ? 'invalid_shape' : 'no_items_survived') : null;
+  return {
+    read,
+    report: verified ? verified.report : null,
+    source: templateReason ? 'template' : 'model',
+    templateReason,
+    brief: templateReason || !verified?.brief ? buildTemplateBrief(facts) : verified.brief,
   };
 }
 

@@ -58,18 +58,33 @@ describe('deriveOpsHealth', () => {
       iropsScore: 2,
     });
     expect(h.level).toBe('advisory');
-    expect(h.text).toBe('Disrupted: EWR ground stop');
+    expect(h.text).toBe('Disrupted: ground stop for flights into EWR');
   });
 
-  it('a GDP at a UA hub disrupts with the avg delay fact', () => {
-    const h = deriveOpsHealth({
+  it('a GDP at a UA hub is advisory with the avg delay, worded as the header pill ("Some Delays") and the right way round', () => {
+    const opts = {
       hubOtps: {},
       faaIndex: { SFO: { delays: [{ type: 'ground_delay', avgDelay: 72 }] } },
       hubCodes: HUBS,
       iropsScore: null,
-    });
+    };
+    const h = deriveOpsHealth(opts);
     expect(h.level).toBe('advisory');
-    expect(h.text).toBe('Disrupted: SFO ground delay program (avg 72m)');
+    expect(networkStatus(opts).label).toBe('Some Delays');
+    expect(h.text).toBe('Some delays: ground delay program for flights into SFO (avg 72 min)');
+  });
+
+  it('a GDP says "Disrupted:" only when the network level is (the level logic is unchanged)', () => {
+    const opts = { hubOtps: { ORD: 88 }, faaIndex: { SFO: { groundDelay: true } }, hubCodes: HUBS, iropsScore: 56.7 };
+    expect(networkStatus(opts).label).toBe('Disrupted');
+    expect(deriveOpsHealth(opts).text).toBe('Disrupted: ground delay program for flights into SFO');
+  });
+
+  it('a stop or delay program listed only under programs[] is worded the same way', () => {
+    const gs = deriveOpsHealth({ hubOtps: { ORD: 90 }, faaIndex: { EWR: { programs: [{ type: 'ground_stop' }] } }, hubCodes: HUBS, iropsScore: 2 });
+    expect(gs.text).toBe('Disrupted: ground stop for flights into EWR');
+    const gdp = deriveOpsHealth({ hubOtps: { ORD: 90 }, faaIndex: { SFO: { programs: [{ type: 'ground_delay' }] } }, hubCodes: HUBS, iropsScore: 2 });
+    expect(gdp.text).toBe('Some delays: ground delay program for flights into SFO');
   });
 
   it('never reports normal when the IROPS index is red (>= 40)', () => {
@@ -209,7 +224,7 @@ describe('networkStatus — the one definition behind the strip chip, the ticker
     expect(networkStatus({ hubOtps: { ORD: 92 }, faaIndex: { SFO: { closure: true } }, hubCodes: HUBS, iropsScore: 0 }).level)
       .toBe('significant');
     expect(deriveOpsHealth({ hubOtps: { ORD: 92 }, faaIndex: { EWR: { groundStop: true } }, hubCodes: HUBS, iropsScore: 10 }).text)
-      .toBe('Disrupted: EWR ground stop');
+      .toBe('Disrupted: ground stop for flights into EWR');
     // …and so is any hub under 50% on-time, and a GDP is at least minor.
     expect(networkStatus({ hubOtps: { ORD: 92, IAH: 49 }, hubCodes: HUBS, iropsScore: 10 }).level).toBe('significant');
     expect(networkStatus({ hubOtps: { ORD: 92 }, faaIndex: { SFO: { groundDelay: true } }, hubCodes: HUBS, iropsScore: 10 }).level)
