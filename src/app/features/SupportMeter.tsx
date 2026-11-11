@@ -9,7 +9,7 @@
  * Defensive by design, and the failure mode is the point — a network error, a non-200, an
  * unexpected shape or a `configured:false` live feed all render NOTHING. This widget may
  * only ever add to the popover; a broken cost meter must never be why the About links
- * stop working. The same goes for the coverage line ("Today isn't covered yet. $17 covers
+ * stop working. The same goes for the coverage line ("No one has covered today yet. $17 covers
  * today."): it appears only when the support status is configured and for today
  * (src/lib/cover-a-day.js), and otherwise is simply absent. The
  * shaping rules live in `src/lib/support-meter.js` and `src/lib/cover-a-day.js` with tests.

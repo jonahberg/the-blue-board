@@ -4,6 +4,22 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.27.0] - 2026-11-11
+
+**One way of asking.** Every place the site asks for money now says the same thing in the same words: The Blue Board is free because flyers cover it, one day at a time.
+
+### Changed
+- **One verb, one unit.** A day costs $17, and people "cover" it. A button that can name the day says so ("Cover today · $17", "Cover tomorrow · $17", "Cover Nov 15 · $17"). Everywhere else the ask is "Help cover a day", with no price. The old labels ("Donate to support costs", "Support Server Costs", "supporting the project", "chip in toward the data bill", "Donate to keep it going") are gone.
+- **A choice of amounts.** The card at the end of fleet, hub and tracker pages and the About section now offer $5, $10, $17 (one day) and $100 (nearly six days), plus any other amount. Smaller amounts add up toward a day.
+- **In the first person.** "I'm Jonah, and I build The Blue Board on my own." The thank-you page says "I", not "we".
+- **What it takes.** "It takes about 30 people a month, one for each day."
+- **An empty month is an opening**, not a zero: "No one has covered a day in November yet. Be the first."
+- **Your name goes on your day.** The site no longer promises a place on the Supporters Wall, which is a list from before days were counted.
+
+### Fixed
+- The welcome email told new subscribers that $5 covers a full day. A day is $17.
+- The README promised every supporter a place on the wall.
+
 ## [1.26.0] - 2026-11-11
 
 **A polish pass over every screen, with the phone first.** On an iPhone the Live map now gets 509 px of a 659 px screen instead of 398.

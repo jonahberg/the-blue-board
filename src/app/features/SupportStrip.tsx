@@ -3,7 +3,7 @@
  *
  * It replaced the donation MODAL (`DonatePrompt.tsx`, Oct 2026). From Oct 6 that popup was shown
  * 417 times, tapped 7 times, and produced at most one donation. The owner approved retiring it.
- * The bets now are a concrete, finishable unit ($17 keeps the site running for a day) and the
+ * The bets now are a concrete, finishable unit ($17 covers a day) and the
  * truth about today, at the moment the site has just been useful. So this is a quiet,
  * dismissible line below the board (DESIGN.md "Engagement surfaces stay quiet"). It never
  * covers the data and never waits to pounce. It just appears in the slot when the moment
@@ -21,10 +21,10 @@
  * What it says comes from src/lib/cover-a-day.js and is true or absent. A payment covers the day
  * it is given, or the next open day after it, so the button names that day: "Cover today · $17"
  * when /api/support-status says today is open (for today's Central date), "Cover tomorrow · $17"
- * with a thank-you when today is covered and tomorrow is not, "Cover the next open day · $17"
- * further out. "Cover a day · $17" and the plain $17-a-day line when the status is unknown. No
- * strip at all while today and the next 14 days are covered. It may lead with the visitor's own
- * count of flights looked up this month (src/lib/usage-count.js), only from five up, never sent
+ * with a thank-you when today is covered and tomorrow is not, "Cover Nov 15 · $17" further out,
+ * each to the fixed $17 link. "Help cover a day" (the any-amount link) and the core line when the
+ * status is unknown. No strip at all while today and the next 14 days are covered. It may lead
+ * with the visitor's own count of flights looked up this month (src/lib/usage-count.js), only from five up, never sent
  * anywhere, and never in an analytics property; on a phone that sentence then stands alone beside
  * the button, so the strip stays two lines. The dismiss control is a plain "Dismiss".
  *
@@ -39,9 +39,8 @@ import { HandHeart, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { supportStripCopy } from '@/lib/cover-a-day.js';
+import { coverButtonHref, supportStripCopy } from '@/lib/cover-a-day.js';
 import { donatePromptRecord } from '@/lib/donate-prompt.js';
-import { supportUrl } from '@/lib/support-link.js';
 import { track } from '@/lib/track.js';
 import { readFlightCount, recordFlightOpen } from '@/lib/usage-count.js';
 import { deepUseAskThisVisit, useDeepUseTrigger } from '../state/deep-use';
@@ -116,7 +115,7 @@ export default function SupportStrip() {
         className="relative h-8 shrink-0 px-3 text-xs after:absolute after:inset-x-0 after:-inset-y-1.5"
       >
         <a
-          href={supportUrl('deep-use-prompt')}
+          href={coverButtonHref(status, 'deep-use-prompt')}
           target="_blank"
           rel="noopener noreferrer"
           data-support="deep-use-prompt"

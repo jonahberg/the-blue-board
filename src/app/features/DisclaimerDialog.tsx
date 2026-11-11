@@ -21,6 +21,10 @@
  * ("Cover today · $17", "Cover tomorrow · $17", …). Once
  * `STRIPE_MONTHLY_URL` is set it offers "Cover a day every month" and the Buy Me a Coffee
  * membership link here steps aside.
+ *
+ * The wall is a static list from before Stripe, so its caption says so and promises no place on
+ * it: "These readers backed The Blue Board before days were counted." Its link offers the day
+ * instead (src/lib/cover-a-day.js WALL_CAPTION_LINE / WALL_LINK_LABEL).
  */
 
 import { Button } from '@/components/ui/button';
@@ -31,6 +35,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SUPPORTERS } from '@/data/supporters.js';
+import { WALL_CAPTION_LINE, WALL_LINK_LABEL } from '@/lib/cover-a-day.js';
 import { hasMonthlySupport, supportUrl } from '@/lib/support-link.js';
 import { useUi } from '../state/ui';
 import { CoverADay } from './CoverADay';
@@ -170,8 +175,8 @@ export default function DisclaimerDialog() {
               ))}
             </ul>
             <p className="mt-2.5 text-[10px] text-muted-foreground">
-              Want to see your name here?{' '}
-              <Ext href={supportUrl('about-wall')} support="about-wall">Support the project</Ext>
+              {WALL_CAPTION_LINE}{' '}
+              <Ext href={supportUrl('about-wall')} support="about-wall">{WALL_LINK_LABEL}</Ext>
             </p>
           </div>
         </div>
