@@ -11,7 +11,8 @@
  *
  * The freshness pill is the one fix to the shipped panel: the Starlink tracker card read
  * "LIVE" while carrying the `fresh-daily` class (`legacy/index.html:888`), so the label and
- * the styling disagreed about the same fact. It is a once-a-day community sync — DAILY.
+ * the styling disagreed about the same fact. It is a community tracker we copy every 4 hours,
+ * so it is not LIVE; the pill says DAILY (refreshed at least daily).
  */
 
 import {
@@ -86,7 +87,9 @@ const SOURCES: Source[] = [
     icon: Zap,
     name: 'Starlink Tracker — @martinamps',
     freshness: 'DAILY',
-    desc: 'Starlink-equipped United aircraft with fleet stats & predictions. Community-maintained tracker, synced once a day.',
+    // Our sync runs every 4 hours (vercel.json, api/cron/sync-starlink.ts), and since v1.28.0 the
+    // Starlink tab prints its age ("schedule synced 2h ago"); "synced once a day" contradicted it.
+    desc: 'Starlink-equipped United aircraft with fleet stats & predictions. Community-maintained tracker; The Blue Board copies it every 4 hours, and the Starlink tab says how old its copy is.',
     links: [
       {
         label: 'github.com/martinamps/ua-starlink-tracker →',
