@@ -42,3 +42,34 @@ export function supportUrl(placement, { medium = 'site' } = {}) {
   url.searchParams.set('utm_content', label);
   return url.toString();
 }
+
+/**
+ * The Stripe Payment Link for "cover a day every month" (a $17 monthly subscription). EMPTY until
+ * the owner creates one: while it is empty no monthly option is shown anywhere, and the About
+ * section keeps its Buy Me a Coffee membership link. Paste the `https://buy.stripe.com/…` URL
+ * here to turn the option on. Monthly renewals reach api/stripe-webhook.ts as invoice events,
+ * which it does not count yet: wire `invoice.paid` before setting this.
+ */
+export const STRIPE_MONTHLY_URL = '';
+
+/** Is there a monthly Stripe link to offer? */
+export function hasMonthlySupport() {
+  return typeof STRIPE_MONTHLY_URL === 'string' && STRIPE_MONTHLY_URL.startsWith('https://');
+}
+
+/**
+ * The monthly link for one placement, tagged like `supportUrl`, or null while there is none.
+ *
+ * @param {string} placement the placement's `data-support` label
+ * @param {{ medium?: 'site' | 'email' | 'github' }} [options]
+ * @returns {string|null}
+ */
+export function monthlySupportUrl(placement, { medium = 'site' } = {}) {
+  if (!hasMonthlySupport()) return null;
+  const label = typeof placement === 'string' && placement.trim() ? placement.trim().slice(0, 40) : 'other';
+  const url = new URL(STRIPE_MONTHLY_URL);
+  url.searchParams.set('utm_source', SUPPORT_UTM_SOURCE);
+  url.searchParams.set('utm_medium', SUPPORT_MEDIA.includes(medium) ? medium : 'site');
+  url.searchParams.set('utm_content', label);
+  return url.toString();
+}
