@@ -128,10 +128,12 @@ export function FlightCard({
     <Card className="gap-0 overflow-hidden py-0">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b bg-muted/30 px-3 py-2.5">
         <div className="min-w-0">
-          {/* The flight number is a link to its flight page (src/lib/flight-link.js). */}
-          <div className="font-mono text-base font-bold">
+          {/* The flight number is a link to its flight page (src/lib/flight-link.js), and the
+              card's heading: its "Where's My Plane?" and journey headings are h3 under it (axe
+              heading-order found them as h4 with nothing above). */}
+          <h2 className="font-mono text-base font-bold">
             <FlightLink ident={entry.flight} />
-          </div>
+          </h2>
           {/* Until the route is known (a watch added by flight number, times still loading)
               the line printed "() → ()"; it waits as a skeleton instead, and says nothing once
               the lookup has given up. */}
@@ -292,9 +294,9 @@ export function FlightCard({
             />
           ) : inbound ? (
             <div className="rounded-md border border-primary/40 bg-primary/5 p-2.5 text-[11px] leading-relaxed">
-              <h4 className="mb-1 text-[10px] font-medium uppercase tracking-wide text-primary">
+              <h3 className="mb-1 text-[10px] font-medium uppercase tracking-wide text-primary">
                 Where&rsquo;s My Plane?
-              </h4>
+              </h3>
               Your aircraft is currently operating <strong>{inbound.flightIATA}</strong> from{' '}
               {inbound.origin} → {origCode} at{' '}
               {Math.round(inbound.alt * 3.28084).toLocaleString()} ft

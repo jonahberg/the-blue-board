@@ -56,9 +56,9 @@ export function JourneyChain({
 
   return (
     <div className="rounded-md border p-2.5">
-      <h4 className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <h3 className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         Aircraft Journey ({reg})
-      </h4>
+      </h3>
       <ol className="space-y-1">
         {prior.map((segment, index) => {
           const delay = segment.delayMin;
@@ -95,7 +95,8 @@ export function JourneyChain({
               {origCode || '?'} → {destCode || '?'}
             </span>
           ) : null}
-          <span className="ml-auto text-[10px] text-primary">Your flight</span>
+          {/* Not link colour: nothing here links, and blue words read as one (Nov 2026). */}
+          <span className="ml-auto text-[10px] font-medium text-foreground">Your flight</span>
         </li>
       </ol>
     </div>
