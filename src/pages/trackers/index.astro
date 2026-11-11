@@ -75,7 +75,9 @@ const itemListSchema = {
                   {t.metric}
                 </div>
                 <div class="flex h-2 min-w-0 gap-0.5" aria-hidden="true">
-                  {t.segments.map((segment) => (
+                  {/* A count of zero draws nothing: at min-w-0.5 it was a 2 px sliver claiming a
+                      share. The legend under the bar still lists it ("0 rumored"). */}
+                  {t.segments.filter((segment) => segment.count > 0).map((segment) => (
                     <span
                       class:list={['min-w-0.5 rounded-xs', toneClass(TONE_BAR, segment.tone)]}
                       style={`flex:${segment.count}`}

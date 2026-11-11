@@ -264,9 +264,12 @@
     @apply font-normal text-muted-foreground;
   }
 
-  /* Paired with the word "Starlink", so colour is never the only signal. */
+  /* Paired with the word "Starlink", so colour is never the only signal. Starlink
+     as a fact is bb-starlink violet everywhere (DESIGN.md, 2026-11-11): the fleet
+     registry's Wi-Fi cells and the hub pages' "Equipped aircraft show ● Starlink"
+     sample now match the dashboard they describe. */
   .bb-content .starlink-on {
     @apply font-semibold;
-    color: var(--color-bb-ok);
+    color: var(--color-bb-starlink);
   }
 }
