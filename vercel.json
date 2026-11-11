@@ -53,6 +53,8 @@
         "api/airborne-history.ts": { "maxDuration": 10 },
         "api/express-fleet.ts": { "maxDuration": 10 },
         "api/hub-board.ts": { "maxDuration": 10 },
+        "api/brief.ts": { "maxDuration": 10 },
+        "api/cron/brief.ts": { "maxDuration": 90 },
         "api/starlink-mismatches.ts": { "maxDuration": 15 },
         "api/news-notify.ts": { "maxDuration": 15 },
         "api/metar.ts": { "maxDuration": 15 },
@@ -64,7 +66,8 @@
         { "path": "/api/cron/warm-schedules", "schedule": "*/30 * * * *" },
         { "path": "/api/cron/sync-starlink", "schedule": "0 */4 * * *" },
         { "path": "/api/cron/refresh-metar", "schedule": "*/5 * * * *" },
-        { "path": "/api/cron/watch-alerts", "schedule": "*/5 * * * *" }
+        { "path": "/api/cron/watch-alerts", "schedule": "*/5 * * * *" },
+        { "path": "/api/cron/brief", "schedule": "*/10 * * * *" }
     ],
   "buildCommand": "bun run build",
   "outputDirectory": "dist",
