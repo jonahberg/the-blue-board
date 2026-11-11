@@ -310,6 +310,18 @@ describe('the sheet and the sidebar panel', () => {
     expect(gs[0].getAttribute('title')).toMatch(/^The FAA has a ground stop in effect for flights heading to Newark/);
   });
 
+  it('a hub delay program chip is amber under a "Watch" brief; a ground stop chip stays red', async () => {
+    serve(body('sfo-gdp-morning'));
+    mount();
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: /^Watch: A ground delay program is holding flights into San Francisco\./ }));
+    await settle();
+    const gdp = within(screen.getByRole('dialog')).getAllByRole('link', { name: 'FAA delay program · SFO' });
+    expect(gdp[0].className).toContain('text-bb-warn');
+    expect(gdp[0].className).toContain('border-bb-warn/40');
+    expect(gdp[0].className).not.toContain('destructive');
+  });
+
   it('following a chip closes the sheet and lands on the hub card', async () => {
     serve(disruptedWithRadio());
     function TabProbe() {

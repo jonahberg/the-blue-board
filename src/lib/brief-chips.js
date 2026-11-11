@@ -18,7 +18,7 @@ import { WEATHER_CARD_HUBS } from './tab-hash.js';
  * @typedef {{id: string, kind: string, hub?: string, statement: string, values: string[],
  *   quote?: string, at: string|null, link?: {tab: string, hub?: string, section?: string}|null}} PublicFact
  * @typedef {{href: string, tab: string}} ChipTarget
- * @typedef {'radio'|'alert'|'plain'} ChipTone
+ * @typedef {'radio'|'alert'|'warn'|'plain'} ChipTone
  * @typedef {{id: string, label: string, tone: ChipTone, target: ChipTarget|null, title: string}} Chip
  */
 
@@ -149,8 +149,9 @@ export function chipLabel(fact) {
 
 /**
  * How the chip is coloured. Radio is info-blue with an antenna icon (never Starlink violet: that
- * token means Starlink). A program in effect at a hub that stops or meters traffic (ground stop,
- * ground delay program, closure) is red; its label already says which, so colour is never the
+ * token means Starlink). A ground stop or closure at a hub is red ('alert'); a ground delay
+ * program at a hub is amber ('warn'), as the hub strip marks it and as the brief's own tone reads
+ * ("Watch") when it is the only one. The label already says which program, so colour is never the
  * only signal. Everything else is plain.
  * @param {PublicFact} fact
  * @returns {ChipTone}
@@ -158,7 +159,7 @@ export function chipLabel(fact) {
 export function chipTone(fact) {
   if (fact?.kind === 'radio') return 'radio';
   const m = String(fact?.id ?? '').match(/^faa\.active\.([A-Z]{3})\.(gs|gdp|closure)$/);
-  if (m && WEATHER_CARD_HUBS.includes(m[1])) return 'alert';
+  if (m && WEATHER_CARD_HUBS.includes(m[1])) return m[2] === 'gdp' ? 'warn' : 'alert';
   return 'plain';
 }
 

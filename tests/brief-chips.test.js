@@ -84,11 +84,16 @@ describe('chip labels', () => {
 });
 
 describe('chip tone', () => {
-  it('radio is its own tone; a hub ground stop, delay program or closure is the alert tone; the rest are plain', () => {
+  it('radio is its own tone; a hub ground stop or closure is the alert tone, a hub delay program the warn tone; the rest are plain', () => {
     const f = byId(fixture('ground-stop-with-radio'));
     expect(chipTone([...f.values()].find((x) => x.kind === 'radio'))).toBe('radio');
     expect(chipTone(f.get('faa.active.EWR.gs'))).toBe('alert');
+    expect(chipTone({ id: 'faa.active.EWR.closure', kind: 'faa', hub: 'EWR' })).toBe('alert');
     expect(chipTone(f.get('otp.EWR'))).toBe('plain');
+    // A delay program at a hub is amber, like the hub strip's marker and a "Watch" brief.
+    const morning = byId(fixture('sfo-gdp-morning'));
+    expect(chipTone(morning.get('faa.active.SFO.gdp'))).toBe('warn');
+    expect(chipTone(morning.get('faa.active.BOS.gdp'))).toBe('plain');
     const live = byId(fixture('live-2026-11-10-evening'));
     // A ground stop at Boston is not a United hub: no alarm colour for it.
     expect(chipTone(live.get('faa.active.BOS.gs'))).toBe('plain');

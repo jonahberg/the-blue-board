@@ -360,6 +360,12 @@ already showing. Every chip href is a real deep link that resolves on a cold loa
 (`src/app/state/deep-links.ts`), through the same resolver a chip click uses
 (`weatherScrollTarget` in `src/lib/tab-hash.js`).
 
+Chip colour (`chipTone`): a ground stop or closure at a hub is red (`alert`, `text-destructive`);
+a ground delay program at a hub is amber (`warn`, `text-bb-warn` / `border-bb-warn/40`), as the
+hub strip marks it and as a brief with only that program reads ("Watch"); radio is `bb-info` with an
+antenna icon; everything else is plain. The label names the program, so colour is never the only
+signal.
+
 | `link` | resolves today? | the chip goes to |
 |---|---|---|
 | `{ tab: 'schedule', hub }` (on-time, cancellations at a hub) | **yes**: `?tab=schedule&hub=ORD` | that hub's board |

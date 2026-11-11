@@ -37,7 +37,7 @@ import { ToneMark } from './BriefTone';
 type Chip = {
   id: string;
   label: string;
-  tone: 'radio' | 'alert' | 'plain';
+  tone: 'radio' | 'alert' | 'warn' | 'plain';
   target: { href: string; tab: string } | null;
   title: string;
 };
@@ -69,7 +69,10 @@ function BriefChip({ chip, currentTab, onFollow }: { chip: Chip; currentTab: str
         className={cn(
           CHIP_BASE,
           'py-1',
-          chip.tone === 'radio' ? 'text-bb-info' : chip.tone === 'alert' ? 'text-destructive' : 'text-muted-foreground',
+          chip.tone === 'radio' ? 'text-bb-info'
+            : chip.tone === 'alert' ? 'text-destructive'
+            : chip.tone === 'warn' ? 'text-bb-warn'
+            : 'text-muted-foreground',
         )}
       >
         {chip.tone === 'radio' ? <RadioTower aria-hidden="true" className="size-3" /> : null}
@@ -95,7 +98,9 @@ function BriefChip({ chip, currentTab, onFollow }: { chip: Chip; currentTab: str
         // 28 px on touch (the hub strip's chip links clear 24 px; WCAG 2.5.8), dense with a mouse.
         'min-h-7 rounded-md border bg-card px-1.5 no-underline transition-colors duration-100 pointer-fine:md:min-h-5',
         'hover:border-primary hover:text-foreground',
-        chip.tone === 'alert' ? 'border-destructive/40 text-destructive' : 'text-muted-foreground',
+        chip.tone === 'alert' ? 'border-destructive/40 text-destructive'
+          : chip.tone === 'warn' ? 'border-bb-warn/40 text-bb-warn'
+          : 'text-muted-foreground',
       )}
     >
       {chip.label}
