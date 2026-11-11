@@ -570,6 +570,7 @@ export function LiveMap({
   return (
     <div
       ref={hostRef}
+      data-map="live"
       className={className}
       role="application"
       aria-label="Live map of United Airlines flights"

@@ -10,7 +10,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ### Changed
 - **More map on a phone.** The header is 44 px instead of 61, with plain icons in place of boxed buttons (tap areas are still 44 px). The hub strip is 28 px instead of 45. The "United airborne" row is now a small chip on the map beside the Key button; it opens the same 24-hour graph. The news line no longer shows on the phone Live tab (it is on every other tab, and News is in the More menu).
-- **The phone map opens on the lower 48** instead of spending its top third on Canada, the hub labels no longer sit on top of each other, the layer buttons are icons that all fit, and the zoom buttons are gone on touch screens (pinch).
+- **The phone map opens on the lower 48** instead of spending its top third on Canada, the hub labels no longer sit on top of each other, the layer buttons are icons that all fit, and the Live map's zoom buttons are gone on touch screens (pinch, or the region menu).
 - **One "DISRUPTED" per screen.** The hub strip's status chip steps aside when the brief line above it already says the same thing.
 - **The IROPS card says what it measures**: "index 14.8 · United cancels + delays". It can read NORMAL OPERATIONS while the brief reads DISRUPTED for an FAA ground stop, because flights a ground stop is still holding have not been delayed or canceled yet.
 - **Schedule.** One line of notes under the figures instead of three. The Reg column says Starlink once. The phone figures sit in an even grid. Refresh is a quiet outline button.
@@ -29,7 +29,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 - The Sources tab called the fleet database "daily"; it is a snapshot.
 - Several controls were 32–42 px tall on an iPad; they are 44.
 - The header wrapped to two rows on an upright iPad.
-- The page jumped 8 px on a phone when the dashboard replaced its loading placeholder.
 - Emoji in the Guam and Tokyo hub page headings, and in the radar panel title.
 
 ## [1.25.1] - 2026-11-11

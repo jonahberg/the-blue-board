@@ -43,16 +43,20 @@ export function AirborneChip({
       variant="outline"
       onClick={onOpen}
       aria-haspopup="dialog"
-      aria-label={
-        count
-          ? `United airborne: ${count}. Open the 24-hour graph`
-          : 'United airborne: open the 24-hour graph'
-      }
       data-testid="airborne-graph-row"
       className={cn(MAP_BUTTON, 'gap-1.5 px-2.5 font-normal', className)}
     >
-      <span className="font-mono font-medium tabular-nums">{count ?? '—'}</span>
-      <span className="text-muted-foreground">airborne</span>
+      {/* The name is the visible words plus the rest for a screen reader, so what is seen is
+          what is announced (WCAG 2.5.3); no aria-label to drift from the text. */}
+      <span className="font-mono font-medium tabular-nums">
+        {count ?? <span aria-hidden="true">—</span>}
+      </span>{' '}
+      <span className="text-muted-foreground">
+        {count ? 'airborne' : 'Airborne'}{' '}
+        <span className="sr-only">
+          {count ? 'United flights. Open the 24-hour graph' : 'United flights: open the 24-hour graph'}
+        </span>
+      </span>
       <AirborneSparkline history={history} width={40} height={14} />
     </Button>
   );

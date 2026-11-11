@@ -284,9 +284,10 @@
   }
   /* …and then they are not drawn at all (Nov 2026): a finger pinches or double-taps to zoom, and
      the region menu frames a whole region in one tap, so on a phone the 88 px +/− stack only
-     covered map. The rule above stays as the floor should a touch map ever show them. A mouse
-     keeps them. Covers the Live map and the Weather tab's radar map alike. */
-  .leaflet-container .leaflet-control-zoom.leaflet-control {
+     covered map. A mouse keeps them. Live map only: the Weather tab's radar map has no region
+     menu, so its buttons stay as the one-finger way to zoom out (WCAG 2.5.1), at the 44 px
+     floor above. */
+  .leaflet-container[data-map='live'] .leaflet-control-zoom.leaflet-control {
     display: none;
   }
 }

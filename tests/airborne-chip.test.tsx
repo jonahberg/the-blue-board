@@ -16,7 +16,7 @@ describe('AirborneChip', () => {
   it('names the count and what it opens, and opens the graph', () => {
     let opened = 0;
     render(<AirborneChip airborne={645} history={null} onOpen={() => (opened += 1)} />);
-    const chip = screen.getByRole('button', { name: 'United airborne: 645. Open the 24-hour graph' });
+    const chip = screen.getByRole('button', { name: '645 airborne United flights. Open the 24-hour graph' });
     expect(chip.getAttribute('aria-haspopup')).toBe('dialog');
     expect(chip.textContent).toContain('645');
     expect(chip.textContent).toContain('airborne');
@@ -26,7 +26,7 @@ describe('AirborneChip', () => {
 
   it('is a map control like the Key button: 36 px, a 44 px hit box, opaque', () => {
     render(<AirborneChip airborne={0} history={null} onOpen={() => {}} />);
-    const chip = screen.getByRole('button', { name: 'United airborne: open the 24-hour graph' });
+    const chip = screen.getByRole('button', { name: 'Airborne United flights: open the 24-hour graph' });
     expect(chip.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['relative', 'h-9', 'after:absolute', 'after:-inset-[5px]', 'bg-background', 'dark:bg-background']),
     );
