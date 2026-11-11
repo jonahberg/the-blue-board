@@ -1,0 +1,49 @@
+---
+/**
+ * /thanks — where Stripe sends a supporter after paying (the Payment Link's after-payment
+ * redirect, set by the owner in Stripe). Static, `noindex`, no script.
+ *
+ * Every sentence is true whether or not the payment has reached the site yet: it says what the
+ * money does, how "cover a day" works (src/lib/cover-a-day.js), and how a display name may
+ * appear. A name shows only after the check in src/lib/supporter-name.js, and a day that
+ * several donations covered shows a count instead of names. It makes no claim about which
+ * day this payment covered, because it cannot know.
+ */
+import BaseLayout from '../components/site/BaseLayout.astro';
+import { DAILY_COST_USD, MONTHLY_COST_USD } from '../lib/cover-a-day.js';
+
+const title = 'Thank you | The Blue Board';
+const description = 'Thank you for supporting The Blue Board, the free, fan-built United Airlines operations dashboard.';
+---
+
+<BaseLayout title={title} description={description} canonical="/thanks" noindex>
+  <div class="mx-auto max-w-2xl px-4 py-12">
+    <h1 class="text-2xl font-bold tracking-tight text-foreground">Thank you.</h1>
+
+    <div class="mt-5 space-y-4 text-sm leading-relaxed text-muted-foreground">
+      <p>
+        Your donation keeps The Blue Board free, with no ads. It costs about ${MONTHLY_COST_USD} a month to
+        run, about ${DAILY_COST_USD} a day: the live flight and schedule data, the servers, and the AI
+        delay explanations.
+      </p>
+      <p>
+        Every ${DAILY_COST_USD} covers one day of this month, and donations fill the month in order from
+        the 1st. You can see the month in the dashboard's About section (ⓘ → About on a computer,
+        More → About on a phone). It can take a minute or two to show your donation.
+      </p>
+      <p>
+        If you gave a display name, it appears beside the day (or days) your donation covered, once it has
+        passed a basic check; otherwise that day says &ldquo;a supporter&rdquo;. A day that several
+        donations covered together shows how many supporters covered it.
+      </p>
+      <p>Stripe handled your payment. Your card details stay with Stripe.</p>
+    </div>
+
+    <a
+      href="/"
+      class="mt-8 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-6 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90"
+    >
+      ← Back to the dashboard
+    </a>
+  </div>
+</BaseLayout>

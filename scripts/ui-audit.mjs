@@ -31,6 +31,7 @@ const PAGES = [
   { name: 'news-article', path: '/news/united-first-transatlantic-starlink-777' },
   { name: 'newark',     path: '/newark' },
   { name: 'privacy',    path: '/privacy' },
+  { name: 'thanks',     path: '/thanks' },
   { name: '404',      path: '/this-page-does-not-exist' },
 ];
 
