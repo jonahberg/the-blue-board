@@ -24,6 +24,9 @@
  * card's own label, the one its single button had. Labels are pinned unique and ≤40 chars by
  * tests/support-note.test.js.
  *
+ * The ladder's buttons wear shadcn's `outline` Button classes (src/components/ui/button.tsx), so
+ * they match the About section's ladder, which is that Button.
+ *
  * Pure markup — no inline <script>/<style>; the CSP is hash-locked at build.
  */
 import { SUPPORTERS } from '../../data/supporters.js';
@@ -78,7 +81,7 @@ const ladder = variant === 'card' ? supportLadder(placement, { other: placement 
                 target="_blank"
                 rel="noopener noreferrer"
                 data-support={step.placement}
-                class="inline-flex min-h-11 items-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
+                class="inline-flex min-h-11 items-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground hover:bg-muted dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
               >
                 {step.text}
               </a>
