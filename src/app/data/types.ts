@@ -200,6 +200,14 @@ export type IropsHubMetrics = Record<
     generatedAt?: number | null;
     /** Seconds between that board and the irops run. */
     dataAgeSec?: number | null;
+    /** The same age, under the disclosure name (Nov 2026). */
+    ageSec?: number | null;
+    /** Seconds of the board's own day unseen since it was built; 0 for a final yesterday board. */
+    coverageGapSec?: number | null;
+    /** 0 = today's board, -1 = yesterday's (before 06:00 hub-local). */
+    boardDayOffset?: number | null;
+    /** Unix seconds at which the board's hub-local day ends. */
+    boardDayEndSec?: number | null;
   }
 >;
 
@@ -218,6 +226,10 @@ export type IropsData = {
   hubMetrics: IropsHubMetrics;
   /** Age of the oldest hub board behind these metrics, seconds (F91). */
   oldestHubAgeSec?: number | null;
+  /** Hub boards whose day is no more than 3 h unseen. Absent before Nov 2026. */
+  hubsCurrent?: number;
+  /** Hub boards behind the score. Absent before Nov 2026. */
+  hubsTotal?: number;
 };
 
 export type FaaAirport = {

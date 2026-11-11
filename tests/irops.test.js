@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler, {
-  __resetIropsForTests, computeMetrics, getStartOfDayForHub, HUB_TZ, OVERDUE_CLOCK_GRACE_SEC, overdueClockSec, overlayHubBoards,
+  __resetIropsForTests, computeMetrics, getHubBoardDay, getStartOfDayForHub, HUB_TZ, OVERDUE_CLOCK_GRACE_SEC, overdueClockSec,
+  overlayHubBoards,
 } from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 import { IROPS_MINOR_AT, IROPS_SIGNIFICANT_AT } from '../src/lib/irops-score.js';
@@ -686,6 +687,67 @@ describe('IROPS API handler', () => {
     expect(res.body.hubMetrics.ORD.dataAgeSec).toBeLessThan(600);
     expect(res.body.oldestHubAgeSec).toBe(res.body.hubMetrics.IAH.dataAgeSec);
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('IAH board is 600m old'));
+  });
+
+  it('discloses board coverage: hubsCurrent/hubsTotal and per-hub ageSec, coverageGapSec, board day', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-11T21:28:25Z')); // 1:28 PM PT: every hub on today's board
+    const nowSec = Math.floor(Date.now() / 1000);
+    const flight = {
+      status: { generic: { status: { text: 'departed' } } },
+      time: { scheduled: { departure: nowSec - 7200 }, real: { departure: nowSec - 7000 } },
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const hub = new URL(String(url)).searchParams.get('hub');
+      const generatedAt = hub === 'LAX' ? nowSec - (3 * 3600 + 600) : nowSec - 1700;
+      return { ok: true, json: async () => ({ flights: [flight], meta: { generatedAt } }) };
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.body.hubsTotal).toBe(9);
+    expect(res.body.hubsCurrent).toBe(8);
+    expect(res.body.hubMetrics.LAX).toMatchObject({
+      ageSec: 3 * 3600 + 600,
+      coverageGapSec: 3 * 3600 + 600,
+      boardDayOffset: 0,
+      boardDayEndSec: Date.UTC(2026, 10, 12, 8, 0) / 1000, // Pacific midnight
+    });
+    expect(res.body.hubMetrics.ORD.ageSec).toBe(1700);
+  });
+
+  it("counts a yesterday board built after local midnight as current, however old (06:00 rule)", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-11T11:45:00Z')); // 05:45 CST: IAH still reads yesterday
+    const nowSec = Math.floor(Date.now() / 1000);
+    const centralMidnight = Date.UTC(2026, 10, 11, 6, 0) / 1000;
+    const flight = {
+      status: { generic: { status: { text: 'landed' } } },
+      time: { scheduled: { departure: centralMidnight - 7200 }, real: { departure: centralMidnight - 7000 } },
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const hub = new URL(String(url)).searchParams.get('hub');
+      // IAH final (built 00:30 CST, 5h15m ago); ORD's board stopped at 21:00 CST yesterday.
+      const generatedAt = hub === 'IAH' ? centralMidnight + 1800 : hub === 'ORD' ? centralMidnight - 3 * 3600 - 1200 : nowSec - 600;
+      return { ok: true, json: async () => ({ flights: [flight], meta: { generatedAt } }) };
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.body.hubMetrics.IAH).toMatchObject({ boardDayOffset: -1, boardDayEndSec: centralMidnight, coverageGapSec: 0 });
+    expect(res.body.hubMetrics.IAH.ageSec).toBeGreaterThan(5 * 3600);
+    expect(res.body.hubMetrics.ORD).toMatchObject({ boardDayOffset: -1, coverageGapSec: 3 * 3600 + 1200 });
+    expect(res.body.hubsCurrent).toBe(8); // only ORD is not current
+  });
+
+  it('getHubBoardDay: yesterday before 06:00 local, today after, with DST-exact ends', () => {
+    expect(getHubBoardDay('NRT', new Date('2026-11-11T20:08:00Z'))).toEqual({
+      dayOffset: -1, startSec: Date.UTC(2026, 10, 10, 15, 0) / 1000, endSec: Date.UTC(2026, 10, 11, 15, 0) / 1000,
+    });
+    expect(getHubBoardDay('NRT', new Date('2026-11-11T21:28:00Z')).dayOffset).toBe(0);
+    // US fall-back day (Nov 1 2026): the Eastern day is 25 hours long.
+    const ewr = getHubBoardDay('EWR', new Date('2026-11-01T18:00:00Z'));
+    expect(ewr.endSec - ewr.startSec).toBe(25 * 3600);
   });
 
   it('rejects non-GET requests with 405', async () => {

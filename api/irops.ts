@@ -6,7 +6,7 @@ import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
 import { getStartOfHubDay, defaultSchedDayOffset } from '../src/lib/hubTz.js';
-import { HUB_READING_STALE_MS, boardAsOfMs, operatedOutcome } from '../src/lib/hub-health.js';
+import { HUB_READING_STALE_MS, boardAsOfMs, boardCoverageGapSec, hubBoardCoverage, operatedOutcome } from '../src/lib/hub-health.js';
 import { cancellationKind } from '../src/lib/cancellation.js';
 import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
 import { awaitRegSightings, type SightingRecord } from './_reg-sightings.js';
@@ -18,7 +18,7 @@ export const HUB_TZ: Record<string, string> = {ORD:'America/Chicago',DEN:'Americ
 const iropsCache = new CacheStore<Record<string, unknown>>('irops', { maxSize: 1, defaultTTL: 15 * 60 * 1000 });
 let fetching: Promise<any> | null = null;
 // Persistent per-hub cache — survives full refresh failures
-let hubCache: Record<string, { flights: any[]; fetchedAt: number; generatedAt: number | null }> = {};
+let hubCache: Record<string, { flights: any[]; fetchedAt: number; generatedAt: number | null; day: HubBoardDay }> = {};
 
 /** Test helper: drop the response cache, the per-hub cache and any in-flight build. */
 export function __resetIropsForTests(): void {
@@ -31,6 +31,13 @@ export function __resetIropsForTests(): void {
 interface HubBoard {
   flights: any[];
   generatedAt: number | null;
+}
+
+/** Which hub-local day a board covers: 0 today, -1 yesterday (before 06:00 local), and when it ends. */
+export interface HubBoardDay {
+  dayOffset: number;
+  startSec: number;
+  endSec: number;
 }
 
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
@@ -95,6 +102,17 @@ interface HubMetric {
   generatedAt: number | null;
   /** Age of that board when these metrics were computed, in seconds; null when unknown. */
   dataAgeSec: number | null;
+  /** The same age under the name the disclosure fields use (Nov 2026); `dataAgeSec` stays for old readers. */
+  ageSec: number | null;
+  /**
+   * How much of the board's own day has passed since it was built (src/lib/hub-health.js
+   * boardCoverageGapSec): its age for today's board, 0 for a yesterday board built after midnight.
+   */
+  coverageGapSec: number | null;
+  /** 0 when the board is today's, -1 when it is yesterday's (before 06:00 hub-local). Null when unknown. */
+  boardDayOffset: number | null;
+  /** Unix seconds at which the board's hub-local day ends; null when unknown. */
+  boardDayEndSec: number | null;
 }
 
 interface WorstDelay {
@@ -209,6 +227,7 @@ export function computeMetrics(
   flightsByHub: Record<string, any[]>,
   nowSec: number = Math.floor(Date.now() / 1000),
   generatedAtByHub: Record<string, number | null> = {},
+  boardDayByHub: Record<string, HubBoardDay | null> = {},
 ) {
   // Every row with the overdue clock of the board it came from (see overdueClockSec).
   const allRows: Array<{ fl: any; clockSec: number }> = [];
@@ -221,9 +240,12 @@ export function computeMetrics(
     for (const fl of flights) allRows.push({ fl, clockSec });
     const dataAgeSec = generatedAt === null ? null : Math.max(0, nowSec - generatedAt);
     if (dataAgeSec !== null && (oldestHubAgeSec === null || dataAgeSec > oldestHubAgeSec)) oldestHubAgeSec = dataAgeSec;
+    const day = boardDayByHub[hub] ?? null;
+    const coverageGapSec = boardCoverageGapSec({ generatedAtSec: generatedAt, dayEndSec: day?.endSec ?? null, nowSec });
     hubMetrics[hub] = {
       total: flights.length, cancellations: 0, cancellationsLikely: 0, likelyCanceledSeenFlying: 0,
       delayed30: 0, delayed60: 0, diversions: 0, operated: 0, onTime: 0, generatedAt, dataAgeSec,
+      ageSec: dataAgeSec, coverageGapSec, boardDayOffset: day ? day.dayOffset : null, boardDayEndSec: day ? day.endSec : null,
     };
 
     for (const fl of flights) {
@@ -324,6 +346,10 @@ export function computeMetrics(
     ? ((cancellations * 3 + delayed60 * 2 + delayed30to60 + diversions * 2) / totalFlights * 100)
     : 0;
 
+  // Disclosure (Nov 2026): how many of the boards behind the score are current — the same
+  // definition the IROPS card's line (iropsCoverageNote) and the brief use. Nothing is excluded.
+  const coverage = hubBoardCoverage(hubMetrics);
+
   return {
     score: parseFloat(score.toFixed(1)),
     totalFlights,
@@ -337,6 +363,10 @@ export function computeMetrics(
     hubMetrics,
     /** The oldest hub board behind these numbers, in seconds; null when no board said. */
     oldestHubAgeSec,
+    /** Hub boards whose day is no more than 3 h unseen (HUB_BOARD_CURRENT_MAX_SEC). */
+    hubsCurrent: coverage.current.length,
+    /** Hub boards behind the score, current or not. */
+    hubsTotal: coverage.total,
     generatedAt: new Date().toISOString()
   };
 }
@@ -350,6 +380,16 @@ export function getStartOfDayForHub(hub: string): number {
   // defaultSchedDayOffset encodes the same "before 6 AM local -> yesterday" rule
   // (BOARD_ROLLOVER_HOUR) this function has always applied.
   return getStartOfHubDay(hub, defaultSchedDayOffset(hub));
+}
+
+/** The hub-local day /api/irops reads for `hub` at `now`, with its start and end (DST-exact). */
+export function getHubBoardDay(hub: string, now: Date = new Date()): HubBoardDay {
+  const dayOffset = defaultSchedDayOffset(hub, now);
+  return {
+    dayOffset,
+    startSec: getStartOfHubDay(hub, dayOffset, now),
+    endSec: getStartOfHubDay(hub, dayOffset + 1, now),
+  };
 }
 
 /**
@@ -376,13 +416,16 @@ export function overlayHubBoards(
 async function buildIropsData() {
   const flightsByHub: Record<string, any[]> = {};
   const generatedAtByHub: Record<string, number | null> = {};
+  const boardDayByHub: Record<string, HubBoardDay | null> = {};
+  const now = new Date();
+  const dayByHub = Object.fromEntries(HUBS.map((hub) => [hub, getHubBoardDay(hub, now)]));
 
   // Fetch all hubs in parallel via the internal schedule API (cached by cron), and the reg
   // sightings beside them (bounded; never throws — an empty map just means no override).
   const sightingsPromise = awaitRegSightings(5000);
   const results = await Promise.allSettled(
     HUBS.map(async (hub) => {
-      const board = await fetchHubFromScheduleAPI(hub, getStartOfDayForHub(hub));
+      const board = await fetchHubFromScheduleAPI(hub, dayByHub[hub].startSec);
       return { hub, ...board };
     })
   );
@@ -391,6 +434,7 @@ async function buildIropsData() {
   const useHubCache = (hub: string) => {
     flightsByHub[hub] = hubCache[hub].flights;
     generatedAtByHub[hub] = hubCache[hub].generatedAt;
+    boardDayByHub[hub] = hubCache[hub].day;
   };
 
   for (const result of results) {
@@ -399,7 +443,8 @@ async function buildIropsData() {
       if (flights && flights.length > 0) {
         flightsByHub[hub] = flights;
         generatedAtByHub[hub] = generatedAt;
-        hubCache[hub] = { flights, fetchedAt: Date.now(), generatedAt };
+        boardDayByHub[hub] = dayByHub[hub];
+        hubCache[hub] = { flights, fetchedAt: Date.now(), generatedAt, day: dayByHub[hub] };
         if (generatedAt !== null && Date.now() - generatedAt * 1000 > HUB_READING_STALE_MS) {
           console.warn(`IROPS: ${hub} board is ${Math.round((Date.now() - generatedAt * 1000) / 60000)}m old`);
         }
@@ -420,7 +465,7 @@ async function buildIropsData() {
     }
   }
 
-  return computeMetrics(overlayHubBoards(flightsByHub, sightings), Math.floor(Date.now() / 1000), generatedAtByHub);
+  return computeMetrics(overlayHubBoards(flightsByHub, sightings), Math.floor(Date.now() / 1000), generatedAtByHub, boardDayByHub);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

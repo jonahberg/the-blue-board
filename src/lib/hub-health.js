@@ -76,6 +76,99 @@ export function hubOtpDescription(otp) {
 /** A hub reading built from a board older than this is stale (F91). */
 export const HUB_READING_STALE_MS = 60 * 60 * 1000;
 
+// ── Board coverage (Nov 11 2026) ──
+// How much of a board's own day has happened since the board was built. For today's board that
+// is its age. For YESTERDAY's board — what /api/irops and the dashboard read before 06:00 hub-local
+// — only the part of yesterday after the build counts: a board built after local midnight saw the
+// whole day, so it is final (gap 0) however old it gets, and one built at 21:00 is missing three
+// hours. Age alone called every final yesterday board stale and dropped it from the brief.
+
+/**
+ * A hub board is current when no more than this much of its day has gone unseen. The brief's
+ * 3-hour board rule (BRIEF_MAX_BOARD_AGE_MS); the warm ring rebuilds a today board about every 3 h.
+ */
+export const HUB_BOARD_CURRENT_MAX_SEC = 3 * 60 * 60;
+
+/**
+ * Seconds of the board's day that have passed since it was built: max(0, min(now, dayEnd) − built).
+ * Without a day end it is the board's age. Null when the build time is unknown.
+ * @param {{generatedAtSec: unknown, dayEndSec?: unknown, nowSec: number}} input
+ * @returns {number|null}
+ */
+export function boardCoverageGapSec({ generatedAtSec, dayEndSec = null, nowSec }) {
+  const builtMs = boardAsOfMs(generatedAtSec);
+  if (builtMs === null) return null;
+  const end = Number(dayEndSec);
+  const until = dayEndSec !== null && dayEndSec !== undefined && Number.isFinite(end) && end > 0 ? Math.min(nowSec, end) : nowSec;
+  return Math.max(0, Math.round(until - builtMs / 1000));
+}
+
+/**
+ * Which hub boards behind an /api/irops payload are current. Recomputed at `nowSec` when the
+ * payload carries the build time and day end (it can be ~35 min old by the time it is read);
+ * otherwise the payload's own `coverageGapSec`, then `dataAgeSec` on payloads older than both.
+ * A hub with no flights on its board is not current ("missing").
+ * @param {Record<string, any>|null|undefined} hubMetrics  /api/irops `hubMetrics`.
+ * @param {number} [nowSec]
+ * @returns {{total: number, current: string[], notCurrent: Array<{hub: string, gapSec: number|null, ageSec: number|null, dayOffset: number, missing: boolean}>}}
+ */
+export function hubBoardCoverage(hubMetrics, nowSec) {
+  const current = [];
+  const notCurrent = [];
+  const entries = Object.entries(hubMetrics || {});
+  for (const [hub, m] of entries) {
+    const missing = !m || !(Number(m.total) > 0);
+    const builtMs = boardAsOfMs(m?.generatedAt);
+    const live = nowSec !== undefined && builtMs !== null;
+    const gapSec = live
+      ? boardCoverageGapSec({ generatedAtSec: m.generatedAt, dayEndSec: m.boardDayEndSec ?? null, nowSec })
+      : finiteOrNull(m?.coverageGapSec) ?? finiteOrNull(m?.dataAgeSec);
+    const ageSec = live
+      ? Math.max(0, Math.round(nowSec - builtMs / 1000))
+      : finiteOrNull(m?.ageSec) ?? finiteOrNull(m?.dataAgeSec);
+    const dayOffset = Number(m?.boardDayOffset) === -1 ? -1 : 0;
+    if (!missing && gapSec !== null && gapSec <= HUB_BOARD_CURRENT_MAX_SEC) current.push(hub);
+    else notCurrent.push({ hub, gapSec, ageSec, dayOffset, missing });
+  }
+  notCurrent.sort((a, b) => Number(b.missing) - Number(a.missing) || (b.gapSec ?? Infinity) - (a.gapSec ?? Infinity) || a.hub.localeCompare(b.hub));
+  return { total: entries.length, current, notCurrent };
+}
+
+/** A finite number, or null (null/undefined/'' are null, not 0). */
+function finiteOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Whole hours: '3 h'. Only a board more than 3 h behind is ever named, so minutes never show. */
+function spanText(sec) {
+  return `${Math.max(1, Math.round(sec / 3600))} h`;
+}
+
+/** One not-current board in words. */
+function notCurrentText({ hub, gapSec, dayOffset, missing }) {
+  if (missing) return `${hub} board missing`;
+  if (gapSec === null) return `${hub} board age unknown`;
+  if (dayOffset === -1) return `${hub} board missing the last ${spanText(gapSec)} of yesterday`;
+  return `${hub} board ${spanText(gapSec)} old`;
+}
+
+/**
+ * The IROPS card's coverage line: "8 of 9 hub boards current · LAX board 3 h old", or null when
+ * every board is current. Names the two worst boards, then "and N more".
+ * @param {Record<string, any>|null|undefined} hubMetrics  /api/irops `hubMetrics`.
+ * @param {number} [nowSec]  render time; omit to use the payload's own figures.
+ * @returns {string|null}
+ */
+export function iropsCoverageNote(hubMetrics, nowSec) {
+  const { total, current, notCurrent } = hubBoardCoverage(hubMetrics, nowSec);
+  if (total === 0 || notCurrent.length === 0) return null;
+  const named = notCurrent.slice(0, 2).map(notCurrentText).join(', ');
+  const more = notCurrent.length > 2 ? ` and ${notCurrent.length - 2} more` : '';
+  return `${current.length} of ${total} hub boards current · ${named}${more}`;
+}
+
 /**
  * A client board must be at least this much newer than the server's before it replaces the
  * server's reading — close in age, the server (full-day, authoritative) keeps winning, so

@@ -11,7 +11,12 @@ import {
   hubOtpDescription,
   hubReadingAge,
   ON_TIME_GRACE_MIN,
+  HUB_BOARD_CURRENT_MAX_SEC,
+  boardCoverageGapSec,
+  hubBoardCoverage,
+  iropsCoverageNote,
 } from '../src/lib/hub-health.js';
+import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
 const SCHED = 1_800_000_000;
 
@@ -300,5 +305,92 @@ describe('arbitrateHubHealth', () => {
     const out = arbitrateHubHealth({ serverOtp: { ORD: 80 }, clientOtp: { GUM: 75 } });
     expect(out.ORD.source).toBe('server');
     expect(out.GUM).toEqual({ otp: 75, source: 'client', asOfMs: null });
+  });
+});
+
+// ── Board coverage (Nov 11 2026) ──
+describe('boardCoverageGapSec', () => {
+  const now = 1_794_430_800; // 2026-11-11 21:00Z
+
+  it("is a today board's age", () => {
+    expect(boardCoverageGapSec({ generatedAtSec: now - 3 * 3600, dayEndSec: now + 6 * 3600, nowSec: now })).toBe(3 * 3600);
+    expect(boardCoverageGapSec({ generatedAtSec: now - 600, nowSec: now })).toBe(600); // no day end: the age
+  });
+
+  it('is 0 for a yesterday board built after local midnight, however old it is (final)', () => {
+    const midnight = now - 5 * 3600;
+    expect(boardCoverageGapSec({ generatedAtSec: midnight + 1800, dayEndSec: midnight, nowSec: now })).toBe(0);
+  });
+
+  it("is the unseen tail of yesterday for a yesterday board built before midnight (IAH, 21:00 CST)", () => {
+    // IAH's Nov 10 board was built 2026-11-11 03:00Z (21:00 CST); Central midnight is 06:00Z.
+    const built = Date.UTC(2026, 10, 11, 3, 0) / 1000;
+    const midnight = getStartOfHubDay('IAH', 0, new Date(Date.UTC(2026, 10, 11, 10, 0)));
+    expect(midnight).toBe(Date.UTC(2026, 10, 11, 6, 0) / 1000);
+    const at1045Z = Date.UTC(2026, 10, 11, 10, 45) / 1000;
+    expect(boardCoverageGapSec({ generatedAtSec: built, dayEndSec: midnight, nowSec: at1045Z })).toBe(3 * 3600);
+  });
+
+  it('accepts epoch ms and ISO build times, and is null when the build time is unknown', () => {
+    expect(boardCoverageGapSec({ generatedAtSec: (now - 60) * 1000, nowSec: now })).toBe(60);
+    expect(boardCoverageGapSec({ generatedAtSec: new Date((now - 60) * 1000).toISOString(), nowSec: now })).toBe(60);
+    expect(boardCoverageGapSec({ generatedAtSec: null, nowSec: now })).toBeNull();
+    expect(boardCoverageGapSec({ generatedAtSec: undefined, nowSec: now })).toBeNull();
+  });
+
+  it('never goes negative for a board stamped a moment in the future', () => {
+    expect(boardCoverageGapSec({ generatedAtSec: now + 5, nowSec: now })).toBe(0);
+  });
+});
+
+describe('hubBoardCoverage / iropsCoverageNote', () => {
+  const now = 1_794_430_800;
+  const today = (ageSec, extra = {}) => ({ total: 100, generatedAt: now - ageSec, coverageGapSec: ageSec, boardDayOffset: 0, boardDayEndSec: now + 3 * 3600, ...extra });
+
+  it('says nothing when every board is current (3 h is current, the brief rule)', () => {
+    expect(HUB_BOARD_CURRENT_MAX_SEC).toBe(3 * 3600);
+    const metrics = { ORD: today(600), LAX: today(3 * 3600) };
+    expect(hubBoardCoverage(metrics, now).current).toEqual(['ORD', 'LAX']);
+    expect(iropsCoverageNote(metrics, now)).toBeNull();
+    expect(iropsCoverageNote({}, now)).toBeNull();
+  });
+
+  it('names the stale board: "8 of 9 hub boards current · LAX board 3 h old"', () => {
+    const metrics = {
+      ORD: today(1700), DEN: today(1700), IAH: today(1700), EWR: today(1700), SFO: today(950),
+      IAD: today(950), NRT: today(950), GUM: today(9955), LAX: today(3 * 3600 + 600),
+    };
+    expect(iropsCoverageNote(metrics, now)).toBe('8 of 9 hub boards current · LAX board 3 h old');
+  });
+
+  it('worst first, two named, then "and N more"; a missing board leads', () => {
+    const metrics = {
+      ORD: today(600), NRT: today(8 * 3600), LAX: today(4 * 3600), IAD: today(5 * 3600), GUM: { total: 0, generatedAt: null },
+    };
+    expect(iropsCoverageNote(metrics, now)).toBe('1 of 5 hub boards current · GUM board missing, NRT board 8 h old and 2 more');
+  });
+
+  it("words a yesterday board by the part of yesterday it missed, and counts a final one as current", () => {
+    const midnight = now - 4 * 3600;
+    const metrics = {
+      IAH: { total: 448, generatedAt: midnight - 3 * 3600 - 1200, boardDayOffset: -1, boardDayEndSec: midnight },
+      DEN: { total: 485, generatedAt: midnight + 600, boardDayOffset: -1, boardDayEndSec: midnight },
+    };
+    expect(hubBoardCoverage(metrics, now).current).toEqual(['DEN']);
+    expect(iropsCoverageNote(metrics, now)).toBe('1 of 2 hub boards current · IAH board missing the last 3 h of yesterday');
+  });
+
+  it('recomputes at render time, and falls back to the payload figures without a clock', () => {
+    const metrics = { LAX: today(2 * 3600) };
+    expect(iropsCoverageNote(metrics)).toBeNull(); // payload says 2 h
+    expect(iropsCoverageNote(metrics, now + 2 * 3600)).toBe('0 of 1 hub boards current · LAX board 4 h old');
+    // A payload from before the disclosure fields: dataAgeSec is the gap.
+    expect(iropsCoverageNote({ LAX: { total: 10, dataAgeSec: 5 * 3600 } })).toBe('0 of 1 hub boards current · LAX board 5 h old');
+    expect(iropsCoverageNote({ LAX: { total: 10 } })).toBe('0 of 1 hub boards current · LAX board age unknown');
+  });
+
+  it('rounds to whole hours', () => {
+    expect(iropsCoverageNote({ LAX: { total: 10, coverageGapSec: 3 * 3600 + 1 } })).toBe('0 of 1 hub boards current · LAX board 3 h old');
+    expect(iropsCoverageNote({ LAX: { total: 10, coverageGapSec: 3.6 * 3600 } })).toBe('0 of 1 hub boards current · LAX board 4 h old');
   });
 });
