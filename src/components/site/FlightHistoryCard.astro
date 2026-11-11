@@ -14,7 +14,9 @@
     <h2 id="fp-history-title" class="text-sm font-semibold text-foreground" data-f="title">This flight, last 30 days</h2>
     <span class="font-mono text-[11px] text-muted-foreground" data-f="route"></span>
   </div>
-  <ol class="mt-3 grid grid-cols-10 gap-1" data-f="strip"></ol>
+  <!-- Capped width: a full-width card (a phone, or a tablet where the cards stack) would
+       otherwise blow each day square up to ~70 px. -->
+  <ol class="mt-3 grid max-w-sm grid-cols-10 gap-1" data-f="strip"></ol>
   <ul class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground" aria-hidden="true" data-f="key"></ul>
   <p class="mt-3 text-sm leading-relaxed text-foreground" data-f="count"></p>
   <p class="mt-1 text-sm leading-relaxed text-foreground" data-f="typical" hidden></p>

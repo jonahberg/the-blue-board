@@ -28,7 +28,7 @@ export const SUMMARY_GRID = 'grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-
 export const STAT = 'rounded-lg border border-border bg-card px-4 py-3.5';
 export const STAT_VALUE = 'block font-mono text-lg font-bold leading-tight text-primary';
 export const STAT_LABEL =
-  'font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
+  'mt-1 block font-mono text-[11px] leading-snug font-semibold uppercase tracking-wider text-muted-foreground';
 
 /** An entry card (an airport, a construction project). */
 export const CARD = 'mb-3 rounded-lg border border-border bg-card px-4 py-3.5 last:mb-0';

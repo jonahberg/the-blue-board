@@ -124,7 +124,7 @@ const itemListSchema = {
       <h2
         class="mb-3 border-b border-border pb-1.5 text-base font-bold tracking-tight text-balance text-foreground"
       >
-        Airports The Blue Board Tracks — 8 Hubs + NRT Gateway
+        Airports The Blue Board Tracks&nbsp;— 8 Hubs + NRT Gateway
       </h2>
       {/* Three across from md: the nine airports fill a 3×3 grid with no stranded last card. */}
       <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
@@ -138,25 +138,24 @@ const itemListSchema = {
                 <p class="mt-0.5 mb-3 text-[11px] leading-relaxed text-muted-foreground">
                   {hub.subtitle}
                 </p>
-                {/* One bottom-anchored ROW, so every card's primary CTA sits on the same
-                    baseline — EWR's second link goes beside it, not under it (stacked, it
-                    lifted EWR's button 36 px above IAH's in the same grid row). */}
-                <div class="mt-auto flex flex-wrap items-center gap-x-3">
+                {/* EWR's second link rides with the text, above the button: in a three-up grid a
+                    card is too narrow to keep it beside the button, and stacked under it, it lifted
+                    EWR's button 36 px above its neighbours'. Every card's button stays
+                    bottom-anchored on one line. `relative` keeps it above the stretched card link. */}
+                {key === 'ewr' && (
                   <a
-                    class="inline-flex min-h-11 w-fit items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground after:absolute after:inset-0 after:rounded-lg hover:bg-primary-fill/90"
-                    href={`/hubs/${key}`}
+                    href="/newark"
+                    class="relative -mt-2.5 mb-1 inline-flex min-h-11 w-fit items-center text-[11px] text-foreground underline underline-offset-2"
                   >
-                    View {hub.iata} Hub Status &#8594;
+                    FAA cap explained →
                   </a>
-                  {key === 'ewr' && (
-                    <a
-                      href="/newark"
-                      class="relative inline-flex min-h-11 w-fit items-center text-[11px] text-foreground underline underline-offset-2"
-                    >
-                      FAA cap explained →
-                    </a>
-                  )}
-                </div>
+                )}
+                <a
+                  class="mt-auto inline-flex min-h-11 w-fit items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground after:absolute after:inset-0 after:rounded-lg hover:bg-primary-fill/90"
+                  href={`/hubs/${key}`}
+                >
+                  View {hub.iata} Hub Status &#8594;
+                </a>
               </li>
             );
           })
