@@ -67,12 +67,18 @@ export function useJson<T>(
   return { ...state, refresh };
 }
 
-/** `true` while the media query matches. Initial value is read synchronously to avoid a flash. */
+/**
+ * `true` while the media query matches. Initial value is read synchronously to avoid a flash.
+ * Where there is no `matchMedia` (jsdom), nothing matches.
+ */
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() =>
-    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
+    typeof window === 'undefined' || typeof window.matchMedia !== 'function'
+      ? false
+      : window.matchMedia(query).matches,
   );
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
     const mq = window.matchMedia(query);
     const onChange = () => setMatches(mq.matches);
     onChange();

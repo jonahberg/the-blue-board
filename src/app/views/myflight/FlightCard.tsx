@@ -30,6 +30,7 @@ import {
 } from '@/lib/my-flights.js';
 import type { FleetAircraft, Flight, FlightTimes, WatchedFlight } from '../../data/types';
 import { FlightLink } from '../../features/FlightLink';
+import { JargonTerm } from '../../features/JargonTerm';
 import { JourneyChain } from './JourneyChain';
 import { StarlinkBadge } from './StarlinkBadge';
 import type { JourneySegment } from './useAircraftJourney';
@@ -189,13 +190,12 @@ export function FlightCard({
               </button>
             ) : null}
             {showRisk && riskNA ? (
-              <Badge
-                variant="outline"
-                className="text-[9px] font-semibold text-muted-foreground"
-                title="Not enough live data to score this flight"
-              >
-                RISK N/A
-              </Badge>
+              // A term, not a title=: a touch screen never shows a title (Nov 2026).
+              <JargonTerm description="Not enough live data to score this flight" className="text-muted-foreground">
+                <Badge variant="outline" className="text-[9px] font-semibold text-muted-foreground">
+                  RISK N/A
+                </Badge>
+              </JargonTerm>
             ) : null}
           </div>
         </div>

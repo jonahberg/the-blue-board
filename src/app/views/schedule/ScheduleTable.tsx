@@ -57,6 +57,7 @@ import { cn } from '@/lib/utils';
 import type { RowModel, SortColumn } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
 import { FlightLink } from '../../features/FlightLink';
+import { JargonTerm } from '../../features/JargonTerm';
 import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
 import { SchedulePhoneRow } from './SchedulePhoneRow';
 import { STATUS_TONE, SWAP_TONE, riskControlClass } from './tone';
@@ -604,12 +605,13 @@ export const ScheduleTable = forwardRef<
                         </button>
                       )
                     ) : row.regPending ? (
-                      <span
+                      // A term, not a title=: a touch screen never shows a title (Nov 2026).
+                      <JargonTerm
+                        description="United usually assigns the aircraft about a day ahead, but our schedule feed only names it 1–2 hours before departure. It shows here then, or as soon as the plane appears on live tracking. United's own flight status may already have it."
                         className="font-sans text-muted-foreground"
-                        title="United usually assigns the aircraft about a day ahead, but our schedule feed only names it 1–2 hours before departure. It shows here then, or as soon as the plane appears on live tracking. United's own flight status may already have it."
                       >
                         Not in our feed yet
-                      </span>
+                      </JargonTerm>
                     ) : (
                       '—'
                     )}

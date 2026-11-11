@@ -8,14 +8,48 @@
  * provider time). The counts below are that board's, through the fixed `board-stats.js`.
  */
 
-import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ScheduleStats } from '@/app/views/schedule/ScheduleStats';
 import type { BoardModel } from '@/app/views/schedule/useBoardModel';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+beforeAll(() => {
+  // Radix positions popovers and tooltips with floating-ui, which needs a ResizeObserver.
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+});
+
+/** A touch screen, as `(pointer: coarse)` sees it. */
+function touchScreen() {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: /pointer:\s*coarse/.test(query),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
+
+/** Tap a term and return the explanation it opened (a popover on touch). */
+async function explanationOf(name: string | RegExp): Promise<string> {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name }));
+  });
+  return screen.getByRole('dialog').textContent ?? '';
+}
 
 const ORD_DEP: BoardModel['stats'] = {
   total: 633,
@@ -70,16 +104,35 @@ describe('ScheduleStats — desktop', () => {
     expect(within(canceled).getByText('0')).toBeTruthy();
     // On the label's line, so the card row keeps its height.
     expect(within(canceled).getByText(/\+14 unconfirmed/)).toBeTruthy();
-    // A calm zero is not painted as an alarm; the tooltip bridges to the rows' wording.
+    // A calm zero is not painted as an alarm.
     expect(within(canceled).getByText('0').className).toMatch(/\btext-muted-foreground\b/);
-    expect(canceled.getAttribute('title')).toContain('“Likely Canceled”');
+    // The explanation that bridges to the rows' wording is the label's own (a title= never shows
+    // on a touch screen): a dotted term, here on a touch screen, opened by a tap.
+    expect(canceled.getAttribute('title')).toBeNull();
+  });
+
+  it('on a touch screen a tap on a card label opens its explanation (title= never showed there)', async () => {
+    touchScreen();
+    renderStrip(ORD_DEP, 'departures');
+    expect(await explanationOf('Canceled')).toContain('“Likely Canceled”');
+    cleanup();
+    renderStrip(ORD_DEP, 'departures');
+    expect(await explanationOf('Departed · not timed')).toMatch(/not scored on time or late/);
+    cleanup();
+    renderStrip(ORD_DEP, 'departures');
+    // The on-time rule, in full, behind the On-Time term.
+    expect(await explanationOf('On-Time')).toMatch(/within 30 min of schedule/);
+    cleanup();
+    renderStrip(ORD_DEP, 'departures');
+    // The presumed chip is itself the term.
+    expect(await explanationOf(/175 presumed departed/)).toMatch(/scheduled time passed without a live update/);
   });
 
   it('calls a departed-but-untimed row what the board calls it, and shows no Uncategorized card', () => {
     renderStrip(ORD_DEP, 'departures');
     const untimed = cardFor('Departed · not timed');
     expect(within(untimed).getByText('88')).toBeTruthy();
-    expect(untimed.getAttribute('title')).toMatch(/not scored on time or late/);
+    expect(untimed.getAttribute('title')).toBeNull();
     expect(screen.queryByText('Uncategorized')).toBeNull();
   });
 
