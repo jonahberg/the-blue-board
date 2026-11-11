@@ -4,6 +4,21 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.24.0] - 2026-11-10
+
+**The server side of "the brief": a short written read of United's operation, regenerated on a timer, where every sentence must cite the facts it came from.** Nothing on the site shows it yet; this release lets it start writing so the output can be reviewed before a visitor sees one.
+
+### Added
+- **Brief pipeline** (`api/cron/brief.ts`, every 10 minutes): collects facts from the site's own cached endpoints (hub on-time, FAA programs active and planned, weather that affects operations, airborne and Starlink counts), skips when nothing material changed, asks Claude Haiku 5.5 through the AI Gateway for a headline and up to four items as JSON, then verifies it. No schedule-provider or paid Flightradar24 calls. Spec: `docs/specs/ops-brief.md`.
+- **Deterministic verifier** (`src/lib/brief-verify.js`): each item may only use numbers, times, airports and causes present in the facts that item cites. Items that fail are dropped; the headline is checked against the surviving items; tone is computed from the facts, not taken from the model. If the JSON is invalid, the model fails, the spend cap is reached or nothing survives, a template brief built by code is published and marked as such. Every brief stores what the verifier did.
+- **`GET /api/brief`**: the latest brief with only the facts it cites, a `stale` flag past 30 minutes, CDN-cached for 60 seconds.
+- **Per-feature AI spend cap** (`feature_spend_daily`, `sql/022_ops_brief.sql`): the brief has its own daily cap (default $0.50) inside the project's shared gateway budget, checked before every generation. Kill switches: `BRIEF_GENERATION=off` (templates continue) and `BRIEF_CRON=off`.
+- **Air traffic control radio as a source, off by default** (`ENHANCED_RADAR_ENABLED`): when a hub has an active ground stop or ground delay program, one Enhanced Radar airport status may be pulled (at most once per hub per 90 minutes, with daily and monthly caps booked before each call). Observation titles are treated as untrusted text: sanitized, quoted as data, and never allowed to vouch for a number or an airport.
+- `scripts/brief-eval.mjs`: runs eight saved scenarios through the production request and verifier.
+
+### Notes
+- Needs `sql/022_ops_brief.sql` applied. Until it is, the cron no-ops and the endpoint answers "no brief yet".
+
 ## [1.23.0] - 2026-11-10
 
 **The map is the first thing a new visitor sees, hub and fleet pages show the live product, cancellation counts mean what they say, and the site starts keeping its own flight history.** One release from a Nov 10 audit of the live site.
