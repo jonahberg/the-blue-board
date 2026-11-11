@@ -193,14 +193,19 @@ out of the key entirely, id included, so it appearing or disappearing is not a c
 | `otp.<HUB>` | none while at or above 80% (`BRIEF_HEALTHY_HUB_OTP`), so a healthy hub's reading moving, appearing or aging out is not a change; below 80%, rounded to 5 points |
 | `otp.floor` | none while every hub is healthy; otherwise the floor rounded to 5. The hub count is never material |
 | `otp.min` | the lowest hub and its reading rounded to 5 (built only below 80%) |
-| `wx.<HUB>` | the level plus thunderstorms, snow, freezing precipitation and a wind band (30+, 40+ knots); which of low clouds, low visibility and fog a METAR names is not |
-| everything else | unchanged: FAA programs by type, end time to 15 min, cause and average delay to 15 min; planned programs by window; cancellation bands (unconfirmed to 25, confirmed exact under 10 then 5/10); soft hubs; network status; radio and flow facts |
+| `wx.<HUB>` | none at caution level (light rain or snow, mist, 30-knot gusts); at warning or severe, the level plus thunderstorms, snow, freezing precipitation and a wind band (30+, 40+ knots); which of low clouds, low visibility and fog a METAR names is not |
+| `wx.summary` | the hubs at warning level or worse, not every hub with caution-level weather |
+| `faa.planned.<CODE>` | at a hub, the program and its window; away from the hubs, none |
+| `faa.planned.count` | the number of planned programs at hubs; none when there are none |
+| everything else | unchanged: FAA programs in effect by type, end time to 15 min, cause and average delay to 15 min; cancellation bands (unconfirmed to 25, confirmed exact under 10 then 5/10); soft hubs; network status; radio and flow facts |
 
 `tests/brief-facts.test.js` replays every difference that rewrote the ten briefs of the morning of
 Nov 11 2026 (airborne 700 → 600, Starlink 300 → 250, the index 4 → 11, a healthy hub 100% → 95%, a
 hub appearing at 100%, another aging out, the SFO fog wording) against that scenario
-(`sfo-gdp-morning`) and pins the key unchanged; a new ground stop, a hub under 80%, a weather level
-or hazard change and a band crossing still change it.
+(`sfo-gdp-morning`) and pins the key unchanged, as it does for possible programs away from the hubs
+coming, going or moving and for caution-level hub weather; a new ground stop, a hub under 80%, a
+possible program at a hub, hub weather reaching warning, a weather level or hazard change and a band
+crossing still change it.
 
 A run whose hash equals the latest brief's, with that brief under 60 minutes old, writes nothing but
 `checked_at`. Exception: when the latest is a template caused by a transient model failure

@@ -344,6 +344,37 @@ describe('materialKey (change detection)', () => {
     expect(morning(all(1))).toBe(morning(all(0)));
   });
 
+  // Three more sources of rewrites, left after the first pass: possible programs away from the hubs,
+  // caution-level hub weather, and the weather summary's list of hubs.
+  const iahMetar = (s, raw) => { s.metar = s.metar.map((m) => (m.icaoId === 'KIAH' ? { ...m, rawOb: raw } : m)); };
+  const planned = (event, airports) => ({ time: '', event, decoded: event, affectedAirports: airports, type: 'terminal' });
+  const MORE_NOISE = {
+    'the possible ground stop at Miami dropping off the plan': [() => {}, (s) => { s.nas.planned = s.nas.planned.filter((t) => !t.affectedAirports.includes('MIA')); }],
+    'a possible program away from the hubs appearing (Las Vegas)': [() => {}, (s) => { s.nas.planned.push(planned('AFTER 2000\t-LAS GROUND STOP POSSIBLE', ['LAS'])); }],
+    "Seattle's possible program moving its window": [() => {}, (s) => {
+      s.nas.planned = s.nas.planned.map((t) => (t.affectedAirports.includes('SEA') ? planned('AFTER 2300\t-SEA GROUND STOP/DELAY PROGRAM POSSIBLE', ['SEA']) : t));
+    }],
+    'light rain coming to Houston (caution)': [() => {}, (s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM -RA BKN040 23/15 A3008 RMK AO2')],
+    'Houston going from light rain to light snow (both caution)': [
+      (s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM -RA BKN040 23/15 A3008 RMK AO2'),
+      (s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM -SN BKN040 01/M01 A3008 RMK AO2'),
+    ],
+  };
+  for (const [label, [before, after]] of Object.entries(MORE_NOISE)) {
+    it(`is unchanged by ${label}`, () => {
+      expect(morning(after)).toBe(morning(before));
+    });
+  }
+
+  it('still changes for a possible program at a hub, or hub weather at warning level', () => {
+    const base = morning();
+    expect(morning((s) => { s.nas.planned.push(planned('UNTIL 0200\t-EWR GROUND STOP POSSIBLE', ['EWR'])); })).not.toBe(base);
+    // Thunderstorms at Houston: a warning, in both the hub's weather and the summary.
+    const storms = (s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM TSRA BKN040 23/15 A3008 RMK AO2');
+    expect(morning(storms)).not.toBe(base);
+    expect(morning(storms)).not.toBe(morning((s) => iahMetar(s, 'METAR KIAH 111653Z 16007KT 10SM -RA BKN040 23/15 A3008 RMK AO2')));
+  });
+
   it('changes when the story does: a new ground stop, a hub under 80%, a weather level or hazard, a band', () => {
     const base = morning();
     const changes = {

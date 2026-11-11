@@ -539,7 +539,7 @@ export function buildBriefFacts(sources, { nowMs }) {
     const planned = Array.isArray(sources.nas.planned) ? sources.nas.planned : [];
     const usedIds = new Set();
     let plannedCount = 0;
-    let plannedAtHub = false;
+    let plannedAtHub = 0;
     for (const tmi of planned) {
       const fact = plannedFact(tmi, { nowMs, activeAt, asOfMs: asOf.nas ?? nowMs, skipped });
       if (!fact) continue;
@@ -548,7 +548,7 @@ export function buildBriefFacts(sources, { nowMs }) {
       usedIds.add(id);
       facts.push({ ...fact, id });
       plannedCount++;
-      if (fact.hub) plannedAtHub = true;
+      if (fact.hub) plannedAtHub++;
     }
     if (plannedCount > 0) {
       facts.push({
@@ -561,7 +561,8 @@ export function buildBriefFacts(sources, { nowMs }) {
         // Only possible programs away from the hubs: last, with them (plannedFact).
         severity: plannedAtHub ? 3 : 0,
         toneFloor: 'calm',
-        material: `planned:${plannedCount}`,
+        // Only planned programs at hubs count as a change (plannedFact).
+        material: plannedAtHub > 0 ? `planned:${plannedAtHub}` : null,
       });
     }
   }
@@ -569,6 +570,8 @@ export function buildBriefFacts(sources, { nowMs }) {
   // ── Hub weather (/api/metar, src/lib/metar-category.js) ──
   if (status.metar === 'ok') {
     const affected = [];
+    /** Hubs whose weather is at warning level or worse: the only ones the change key lists. */
+    const significant = [];
     let reporting = 0;
     for (const rec of sources.metar) {
       const icao = String(rec?.icaoId || rec?.stationId || rec?.id || '').toUpperCase();
@@ -580,7 +583,11 @@ export function buildBriefFacts(sources, { nowMs }) {
       if (obsMs !== null && nowMs - obsMs > BRIEF_MAX_METAR_AGE_MS) { skipped.push(`wx.${hub}: observation ${Math.round((nowMs - obsMs) / 60000)} min old`); continue; }
       reporting++;
       const fact = weatherFact(hub, raw, obsMs ?? nowMs, skipped);
-      if (fact) { facts.push(fact); affected.push(hub); }
+      if (fact) {
+        facts.push(fact);
+        affected.push(hub);
+        if (fact.toneFloor === 'watch') significant.push(hub); // warning or severe (weatherFact)
+      }
     }
     if (reporting > 0) {
       const a = affected.length;
@@ -595,7 +602,8 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'weather' },
         severity: a === 0 ? 1 : 8,
         toneFloor: 'calm',
-        material: `wx:${affected.join(',')}`,
+        // Caution-level weather (light rain, mist) coming and going is not a change.
+        material: `wx:${significant.join(',')}`,
       });
     }
   }
@@ -799,7 +807,9 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
     // fact: it orders the model's list last, and the template never picks or leads with it.
     severity: isHub ? (tentative ? 22 : 30) : 0,
     toneFloor: isHub ? 'watch' : 'calm',
-    material: `planned:${program}:${window}`,
+    // Something possible at an airport that is not a hub coming, going or moving its window is
+    // not worth a new brief; at a hub it is.
+    material: isHub ? `planned:${program}:${window}` : null,
   };
 }
 
@@ -865,7 +875,8 @@ function weatherFact(hub, raw, atMs, skipped) {
     toneFloor: impact.level === 'caution' ? 'calm' : 'watch',
     // The level plus the hazards that matter on their own. Which of low clouds, low visibility and
     // fog a METAR reports flickers from one observation to the next; the level already carries it.
-    material: `wx:${impact.level}:${[
+    // Caution-level weather (light rain or snow, mist, 30-knot gusts) is never a change on its own.
+    material: impact.level === 'caution' ? null : `wx:${impact.level}:${[
       impact.hasThunderstorms ? 'thunderstorms' : null,
       impact.hasSnow ? 'snow' : null,
       impact.hasFreezingPrecip ? 'freezing' : null,
