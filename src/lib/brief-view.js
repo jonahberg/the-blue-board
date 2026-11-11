@@ -84,7 +84,8 @@ export function briefViewState(payload, { error = false, nowMs }) {
     factCount,
     generatedAtMs,
     checkedAtMs,
-    nextUpdateAtMs: ms(payload.nextUpdateAt),
+    // A body can sit in the CDN and between polls: a "next check" already past is not shown.
+    nextUpdateAtMs: (() => { const t = ms(payload.nextUpdateAt); return t !== null && t > nowMs ? t : null; })(),
     hasRadio: facts.some((f) => f.kind === 'radio' && cited.has(f.id)),
   };
 }

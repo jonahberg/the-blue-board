@@ -123,6 +123,15 @@ describe('briefViewState', () => {
     expect(calm.status === 'ready' && calm.travelerNote).toBeNull();
   });
 
+  it('drops a "next check" time that has already passed', () => {
+    const body = briefResponseBody(rowFor('calm-afternoon', { generatedMs: NOW - 2 * 60_000 }), NOW);
+    const next = Date.parse(body.nextUpdateAt);
+    const before = briefViewState(body, { nowMs: NOW });
+    expect(before.status === 'ready' && before.nextUpdateAtMs).toBe(next);
+    const after = briefViewState(body, { nowMs: next + 1000 });
+    expect(after.status === 'ready' && after.nextUpdateAtMs).toBeNull();
+  });
+
   it('mirrors the server staleness window', () => {
     expect(BRIEF_STALE_AFTER_MS).toBe(SERVER_STALE_AFTER_MS);
   });
