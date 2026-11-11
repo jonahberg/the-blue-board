@@ -9,6 +9,7 @@ import HighlightBox from '../components/site/HighlightBox.astro';
 import { resolveTag } from '../data/news/index.js';
 import { newsSeo } from '../lib/page-seo.js';
 import { supportUrl } from '../lib/support-link.js';
+import { HELP_COVER_LABEL, NEWS_SUPPORT_LINE } from '../lib/cover-a-day.js';
 
 const { article } = Astro.props;
 const slug: string = article.slug;
@@ -139,11 +140,11 @@ const newsArticleSchema = {
 
       <div class="mt-8">
         <HighlightBox>
-          The Blue Board is free, ad-free, and independent. If you find this useful, consider <a
+          {NEWS_SUPPORT_LINE}{' '}<a
             href={supportUrl('news-article')}
             target="_blank"
             rel="noopener noreferrer"
-            data-support="news-article">supporting the project</a
+            data-support="news-article">{HELP_COVER_LABEL}</a
           >.
         </HighlightBox>
       </div>

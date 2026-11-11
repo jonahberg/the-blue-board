@@ -12,6 +12,7 @@
  * (`pointer-fine:md:` relaxes them for a mouse).
  */
 import { supportUrl } from '../../lib/support-link.js';
+import { HELP_COVER_LABEL } from '../../lib/cover-a-day.js';
 
 const linkClass =
   'inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground pointer-fine:md:min-h-0';
@@ -58,7 +59,7 @@ const linkClass =
         data-support="footer"
         class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-3 font-medium text-primary-foreground hover:bg-primary-fill/90 pointer-fine:md:min-h-0 md:px-2.5 md:py-1"
       >
-        Support Server Costs
+        {HELP_COVER_LABEL}
       </a>
       <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
         Built by <a

@@ -10,9 +10,12 @@
  * The cooldown (`bmacEligible`) and the three-second delay live in `state/ui.tsx` behind
  * `showBmacToast()`, so `state/schedule.tsx` can call it with just an ident.
  *
- * Since Nov 2026 it speaks in the site's "cover a day" unit ($17 keeps it running for a day,
- * src/lib/cover-a-day.js). It makes no claim about whether today is covered: it has not
- * fetched the status, and a thank-you for a landing does not need one.
+ * Since Nov 2026 it speaks in the site's "cover a day" voice (src/lib/cover-a-day.js): the core
+ * line, and a button. Its sentence makes no claim about whether today is covered: a thank-you for
+ * a landing does not need one. Its button reads the shared support status once the toast shows
+ * (`useSupportStatus`, one CDN-cached GET shared with the strip, the menu and About) and names the
+ * day $17 would cover ("Cover today · $17", to the fixed $17 link) when it is known; until then,
+ * or when it cannot be known, it says "Help cover a day" and goes to the any-amount link.
  *
  * Positioned bottom-LEFT. The legacy toast sat at `bottom:16px; right:16px`, directly on
  * top of Leaflet's zoom-out button — the same corner that swallowed the About popover and
@@ -22,13 +25,14 @@
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { DAILY_COST_USD } from '@/lib/cover-a-day.js';
-import { supportUrl } from '@/lib/support-link.js';
+import { LANDED_TOAST_LINE, coverButtonHref, coverButtonLabel } from '@/lib/cover-a-day.js';
 import { STORAGE_KEYS, writeString } from '../state/storage';
+import { useSupportStatus } from '../state/support-status';
 import { useUi } from '../state/ui';
 
 export default function BmacToast() {
   const { bmacToast, dismissBmacToast } = useUi();
+  const status = useSupportStatus(Boolean(bmacToast));
   if (!bmacToast) return null;
 
   const dismiss = () => {
@@ -50,17 +54,15 @@ export default function BmacToast() {
       >
         <X aria-hidden="true" />
       </Button>
-      <p className="text-xs leading-relaxed">
-        Glad you landed ✈️ If The Blue Board helped today, ${DAILY_COST_USD} keeps it running for a day.
-      </p>
+      <p className="text-xs leading-relaxed">{LANDED_TOAST_LINE}</p>
       <a
-        href={supportUrl('landed-toast')}
+        href={coverButtonHref(status, 'landed-toast')}
         target="_blank"
         rel="noopener noreferrer"
         data-support="landed-toast"
         className="mt-2.5 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground pointer-fine:md:min-h-9"
       >
-        Cover a day · ${DAILY_COST_USD}
+        {coverButtonLabel(status)}
       </a>
     </div>
   );

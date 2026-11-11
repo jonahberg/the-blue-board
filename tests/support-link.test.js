@@ -6,10 +6,13 @@ import {
   PLACEMENT_LABEL_RE,
   STRIPE_MONTHLY_URL,
   STRIPE_SUPPORT_URL,
+  SUPPORT_AMOUNTS,
+  SUPPORT_AMOUNT_LINKS,
   SUPPORT_MEDIA,
   SUPPORT_UTM_SOURCE,
   hasMonthlySupport,
   monthlySupportUrl,
+  supportAmountUrl,
   supportUrl,
 } from '../src/lib/support-link.js';
 import { isSupportUrl, supportPlacement } from '../src/lib/support-tracking.js';
@@ -20,7 +23,7 @@ import { isSupportUrl, supportPlacement } from '../src/lib/support-tracking.js';
 // reports. These tests pin the URL, the parameters, and that nothing outside the helper types
 // either URL by hand.
 
-const STRIPE = 'https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00';
+const STRIPE = 'https://buy.stripe.com/cNidR80z90krbKi4gggEg05';
 
 describe('supportUrl', () => {
   it('is the owner\'s Stripe Payment Link, character for character (the path is case-sensitive)', () => {
@@ -90,6 +93,49 @@ describe('supportUrl', () => {
   });
 });
 
+describe('the fixed-amount links ($5, $10, $17, $100; Nov 11 2026)', () => {
+  // The owner's four live Payment Links, character for character (paths are case-sensitive).
+  const FIXED = {
+    5: 'https://buy.stripe.com/fZu4gy6Xxd7d9Ca288gEg01',
+    10: 'https://buy.stripe.com/28EcN495F8QXaGe8wwgEg02',
+    17: 'https://buy.stripe.com/28EeVc2Hh6IPbKiaEEgEg03',
+    100: 'https://buy.stripe.com/8x228q81BaZ58y69AAgEg04',
+  };
+
+  it('are the four amounts, each its own link, none of them the any-amount link', () => {
+    expect(SUPPORT_AMOUNTS).toEqual([5, 10, 17, 100]);
+    expect({ ...SUPPORT_AMOUNT_LINKS }).toEqual(FIXED);
+    expect(new Set(Object.values(SUPPORT_AMOUNT_LINKS)).size).toBe(4);
+    expect(Object.values(SUPPORT_AMOUNT_LINKS)).not.toContain(STRIPE);
+    expect(Object.isFrozen(SUPPORT_AMOUNT_LINKS)).toBe(true);
+  });
+
+  it('are tagged exactly like supportUrl: source, medium, utm_content and client_reference_id', () => {
+    expect(supportAmountUrl(17, 'about-17')).toBe(
+      `${FIXED[17]}?utm_source=theblueboard&utm_medium=site&utm_content=about-17&client_reference_id=about-17`,
+    );
+    expect(supportAmountUrl(5, 'welcome-email', { medium: 'email' })).toBe(
+      `${FIXED[5]}?utm_source=theblueboard&utm_medium=email&utm_content=welcome-email&client_reference_id=welcome-email`,
+    );
+    expect(new URL(supportAmountUrl(100, '  ')).searchParams.get('utm_content')).toBe('other');
+    expect(new URL(supportAmountUrl(10, 'a b&c')).searchParams.has('client_reference_id')).toBe(false);
+    expect(new URL(supportAmountUrl(10, 'fleet-end-10', { medium: 'carrier-pigeon' })).searchParams.get('utm_medium')).toBe('site');
+  });
+
+  it('return null for an amount with no link (not offered, null, empty, or not https)', () => {
+    expect(supportAmountUrl(25, 'about-25')).toBeNull();
+    const links = { 5: null, 10: '', 17: 'http://buy.stripe.com/x', 100: 'https://buy.stripe.com/test100' };
+    expect(supportAmountUrl(5, 'x', { links })).toBeNull();
+    expect(supportAmountUrl(10, 'x', { links })).toBeNull();
+    expect(supportAmountUrl(17, 'x', { links })).toBeNull();
+    expect(supportAmountUrl(100, 'x', { links })).toBe('https://buy.stripe.com/test100?utm_source=theblueboard&utm_medium=site&utm_content=x&client_reference_id=x');
+  });
+
+  it('are links the support_click tracker counts', () => {
+    for (const amount of SUPPORT_AMOUNTS) expect(isSupportUrl(supportAmountUrl(amount, `about-${amount}`))).toBe(true);
+  });
+});
+
 describe('the monthly link ("cover a day every month")', () => {
   it('is empty for now, so no monthly option is offered', () => {
     expect(STRIPE_MONTHLY_URL).toBe('');
@@ -153,13 +199,13 @@ describe('donation links in the repo', () => {
     const labels = [];
     for (const { path, src } of files) {
       if (!/\.(astro|tsx)$/.test(path)) continue;
-      for (const m of src.matchAll(/supportUrl\(\s*'([^']+)'\s*\)/g)) {
+      for (const m of src.matchAll(/(?:supportUrl\(|coverButtonHref\([^,()]+,)\s*'([^']+)'\s*\)/g)) {
         const label = m[1];
         // The opening tag around the call: from its "<" to the first ">" that is not an arrow.
         const start = src.lastIndexOf('<', m.index);
         const end = src.slice(m.index).search(/(?<!=)>/);
         const tag = src.slice(start, m.index + end);
-        expect(tag, `${path}: supportUrl('${label}')`).toMatch(new RegExp(`\\b(data-)?support="${label}"`));
+        expect(tag, `${path}: '${label}'`).toMatch(new RegExp(`\\b(data-)?support="${label}"`));
         // …and it is a label Stripe keeps as client_reference_id, so the payment records it.
         expect(label, `${path}: supportUrl('${label}')`).toMatch(PLACEMENT_LABEL_RE);
         labels.push(label);

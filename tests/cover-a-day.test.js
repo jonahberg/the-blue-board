@@ -1,5 +1,5 @@
 /**
- * "Cover a day" (Nov 2026): $17 keeps the site running for a day. A payment covers the day it is
+ * "Cover a day" (Nov 2026): $17 covers a day. A payment covers the day it is
  * made (its US Central date) or, if that day is taken, the next open day after it, never a day
  * before it; leftovers pool across payments, oldest money first, and carry across month ends.
  * These pin the allocation, the time-zone edges, refunds, and every sentence and button label the
@@ -18,25 +18,32 @@ import {
   addDays,
   allocateDays,
   calendarCells,
+  aboutCoverLines,
+  aboutLadder,
+  amountDaysPhrase,
+  amountLabel,
+  coverButtonHref,
   coverButtonLabel,
   coverSentence,
   coverTarget,
   coverageRuns,
   coveredByLabel,
-  coveredCountLine,
   daysInMonth,
   flightPageSupportCopy,
   monthBoundsUtc,
   monthFullyCovered,
+  monthLine,
   netCents,
   parseSupportStatus,
   supportStatusFromRows,
+  supportLadder,
   supportStripCopy,
   todayLine,
   zonedDate,
   zonedDateKey,
   zonedMidnightUtcMs,
 } from '../src/lib/cover-a-day.js';
+import { SUPPORT_AMOUNT_LINKS, supportAmountUrl, supportUrl } from '../src/lib/support-link.js';
 
 let nextId = 1;
 /** A stored payment row as sql/023 returns it. */
@@ -67,7 +74,7 @@ describe('the unit', () => {
     expect(DAILY_COST_CENTS).toBe(1700);
     expect(DAILY_COST_USD).toBe(17);
     expect(COVER_TIME_ZONE).toBe('America/Chicago');
-    expect(COVER_RULE_LINE).toBe('Each $17 covers the day it is given, or the next open day after it.');
+    expect(COVER_RULE_LINE).toBe('Each $17 covers the day it is given, or the next open day after it. Smaller amounts add up toward a day.');
   });
 });
 
@@ -343,21 +350,51 @@ describe('parseSupportStatus (what the page will believe)', () => {
 });
 
 describe('the sentences and the button', () => {
-  it('todayLine: covered by a name, by a pool, not yet, or nothing to say', () => {
+  it('todayLine: covered by a name, by a pool, nobody yet, or nothing to say', () => {
     expect(todayLine(status([pay(17, at(10), { display_name: 'Dana R.' })]))).toBe('Today is covered by Dana R.');
     expect(todayLine(status([pay(17, at(10), { display_name: 'Lee' })]))).toBe('Today is covered by Lee.');
     expect(todayLine(status([pay(10, at(9)), pay(7, at(10))]))).toBe('Today is covered by 2 supporters.');
-    expect(todayLine(status([]))).toBe("Today isn't covered yet.");
+    expect(todayLine(status([pay(5, at(10)), pay(5, at(10)), pay(7, at(10))]))).toBe('Today is covered by 3 supporters.');
+    expect(todayLine(status([]))).toBe('No one has covered today yet.');
     expect(todayLine(UNCONFIGURED_STATUS)).toBeNull();
-    expect(coveredCountLine(status([pay(17, at(2)), pay(34, at(10))]))).toBe('3 of 30 days covered');
   });
 
-  it('the button names the day $17 would cover right now', () => {
-    expect(coverButtonLabel(UNCONFIGURED_STATUS)).toBe('Cover a day · $17');
+  it('monthLine: an empty month is an opening, not a score; one day is singular; a full month says thank you', () => {
+    expect(monthLine(status([]))).toBe('No one has covered a day in November yet. Be the first.');
+    expect(monthLine(status([pay(17, at(2))]))).toBe('1 of 30 days in November is covered.');
+    expect(monthLine(status([pay(17, at(2)), pay(34, at(10))]))).toBe('3 of 30 days in November are covered.');
+    expect(monthLine(status([pay(17 * 30, at(1))]))).toBe('Every day in November is covered. Thank you.');
+    expect(monthLine(status([], Date.parse('2026-10-15T18:00:00Z')))).toBe('No one has covered a day in October yet. Be the first.');
+    expect(monthLine(status([pay(17, at(3, 12))], Date.parse('2026-12-05T18:00:00Z')))).toBe('1 of 31 days in December is covered.');
+    expect(monthLine(UNCONFIGURED_STATUS)).toBeNull();
+  });
+
+  it('the button names the day $17 would cover right now, or says "Help cover a day"', () => {
+    expect(coverButtonLabel(UNCONFIGURED_STATUS)).toBe('Help cover a day');
+    expect(coverButtonLabel(null)).toBe('Help cover a day');
     expect(coverButtonLabel(status([]))).toBe('Cover today · $17');
     expect(coverButtonLabel(status([pay(17, at(10))]))).toBe('Cover tomorrow · $17');
-    expect(coverButtonLabel(status([pay(34, at(10))]))).toBe('Cover the next open day · $17');
-    expect(coverButtonLabel(status([pay(17 * 400, at(10))]))).toBe('Support The Blue Board');
+    expect(coverButtonLabel(status([pay(34, at(10))]))).toBe('Cover Nov 12 · $17');
+    expect(coverButtonLabel(status([pay(17 * 5, at(10))]))).toBe('Cover Nov 15 · $17');
+    // Into next month and next year.
+    expect(coverButtonLabel(status([pay(17 * 25, at(10))]))).toBe('Cover Dec 5 · $17');
+    expect(coverButtonLabel(status([pay(17 * 3, at(30, 12))], Date.parse('2026-12-30T18:00:00Z')))).toBe('Cover Jan 2 · $17');
+    // Nothing open within the search window: the old fallback, in the new words.
+    expect(coverButtonLabel(status([pay(17 * 400, at(10))]))).toBe('Help cover a day');
+  });
+
+  it('the button goes to the $17 link when it names a day, otherwise to the any-amount link', () => {
+    const day = new URL(coverButtonHref(status([]), 'about'));
+    expect(day.origin + day.pathname).toBe(SUPPORT_AMOUNT_LINKS[17]);
+    expect(day.searchParams.get('utm_content')).toBe('about');
+    expect(day.searchParams.get('client_reference_id')).toBe('about');
+    expect(coverButtonHref(status([]), 'about')).toBe(supportAmountUrl(17, 'about'));
+    expect(coverButtonHref(status([pay(17 * 5, at(10))]), 'deep-use-prompt')).toBe(supportAmountUrl(17, 'deep-use-prompt'));
+    expect(coverButtonHref(UNCONFIGURED_STATUS, 'about')).toBe(supportUrl('about'));
+    expect(coverButtonHref(null, 'landed-toast')).toBe(supportUrl('landed-toast'));
+    expect(coverButtonHref(status([pay(17 * 400, at(10))]), 'about')).toBe(supportUrl('about'));
+    // No $17 link: a day button falls back to the any-amount link.
+    expect(coverButtonHref(status([]), 'about', { links: { ...SUPPORT_AMOUNT_LINKS, 17: null } })).toBe(supportUrl('about'));
   });
 
   it('coverTarget and the menu sentence agree with the button', () => {
@@ -369,57 +406,46 @@ describe('the sentences and the button', () => {
     expect(coverSentence(UNCONFIGURED_STATUS)).toBeNull();
   });
 
-  it('strip, not configured: the plain ask and "Cover a day", no coverage claim', () => {
+  it('strip, not configured: the core line and "Help cover a day", no coverage claim', () => {
     expect(supportStripCopy(UNCONFIGURED_STATUS)).toEqual({
       lead: null,
-      text: '$17 keeps The Blue Board running for a day.',
-      short: '$17 keeps it running for a day.',
-      button: 'Cover a day · $17',
+      text: 'The Blue Board is free because flyers cover it, one day at a time. $17 covers a full day.',
+      short: 'Free because flyers cover it, a day at a time.',
+      button: 'Help cover a day',
     });
   });
 
   it('strip, today not covered (even with earlier days covered): "Cover today"', () => {
     expect(supportStripCopy(status([pay(17, at(2))]))).toEqual({
       lead: null,
-      text: "Today isn't covered yet. $17 keeps The Blue Board running for a day.",
-      short: "Today isn't covered yet.",
+      text: 'The Blue Board is free because flyers cover it, one day at a time. No one has covered today yet.',
+      short: 'No one has covered today yet.',
       button: 'Cover today · $17',
     });
-  });
-
-  it('flight page: the day framing only while today is open; otherwise the page keeps its own sentence', () => {
-    expect(flightPageSupportCopy(status([pay(17, at(2))]))).toEqual({
-      text: "Today isn't covered yet. $17 keeps The Blue Board running for a day.",
-      link: 'Cover today · $17',
-    });
-    expect(flightPageSupportCopy(status([]))).toEqual({
-      text: "Today isn't covered yet. $17 keeps The Blue Board running for a day.",
-      link: 'Cover today · $17',
-    });
-    expect(flightPageSupportCopy(status([pay(17, at(10), { display_name: 'Dana R.' })]))).toBeNull();
-    expect(flightPageSupportCopy(status([pay(17 * 20, at(10))]))).toBeNull();
-    expect(flightPageSupportCopy(UNCONFIGURED_STATUS)).toBeNull();
-    expect(flightPageSupportCopy(parseSupportStatus(null, NOV10))).toBeNull();
-    expect(flightPageSupportCopy(null)).toBeNull();
   });
 
   it('strip, today covered and tomorrow open: a thank-you, then tomorrow', () => {
     expect(supportStripCopy(status([pay(17, at(10), { display_name: 'Dana R.' })]))).toEqual({
       lead: null,
-      text: 'Today is covered, thanks to Dana R. $17 keeps The Blue Board running tomorrow.',
-      short: "Today is covered. Tomorrow isn't yet.",
+      text: 'Today is covered, thanks to Dana R. Tomorrow is still open.',
+      short: 'Today is covered. Tomorrow is still open.',
       button: 'Cover tomorrow · $17',
     });
   });
 
+  it('strip, a pooled today: thanks the number of supporters', () => {
+    const copy = supportStripCopy(status([pay(5, at(10)), pay(5, at(10)), pay(7, at(10))]));
+    expect(copy.text).toBe('Today is covered, thanks to 3 supporters. Tomorrow is still open.');
+  });
+
   it('strip, covered past tomorrow: never says "tomorrow", names the next open day', () => {
-    const copy = supportStripCopy(status([pay(17 * 6, at(10))]));
-    expect(copy).toEqual({
+    expect(supportStripCopy(status([pay(17 * 5, at(10), { display_name: 'Dana R.' })]))).toEqual({
       lead: null,
-      text: 'Today is covered, thanks to a supporter. $17 covers the next open day, Nov 16.',
-      short: 'Covered through Nov 15.',
-      button: 'Cover the next open day · $17',
+      text: 'Today is covered, thanks to Dana R. The next open day is Nov 15.',
+      short: 'Covered through Nov 14.',
+      button: 'Cover Nov 15 · $17',
     });
+    expect(supportStripCopy(status([pay(17 * 6, at(10))])).text).toBe('Today is covered, thanks to a supporter. The next open day is Nov 16.');
   });
 
   it(`strip stays down while today and the next ${STRIP_COVERED_HORIZON_DAYS} days are covered`, () => {
@@ -427,12 +453,15 @@ describe('the sentences and the button', () => {
     // Today + 14 more days covered → the next open day is 15 days out → no strip.
     expect(supportStripCopy(status([pay(17 * 15, at(10))]))).toBeNull();
     // Today + 13 covered → the next open day is the 14th day out → still asks.
-    expect(supportStripCopy(status([pay(17 * 14, at(10))])).text).toContain('the next open day, Nov 24.');
+    expect(supportStripCopy(status([pay(17 * 14, at(10))])).text).toContain('The next open day is Nov 24.');
+    // Nothing open within a year: no strip.
+    expect(supportStripCopy(status([pay(17 * 400, at(10))]))).toBeNull();
   });
 
   it('crosses the month end in its words', () => {
     const nov30 = Date.parse('2026-11-30T18:00:00Z');
     expect(supportStripCopy(status([pay(34, at(30))], nov30), {}).short).toBe('Covered through Dec 1.');
+    expect(supportStripCopy(status([pay(34, at(30))], nov30), {}).button).toBe('Cover Dec 2 · $17');
     expect(supportStripCopy(status([pay(17, at(30))], nov30), {}).button).toBe('Cover tomorrow · $17');
   });
 
@@ -443,9 +472,96 @@ describe('the sentences and the button', () => {
     expect(supportStripCopy(UNCONFIGURED_STATUS, { flightsThisMonth: 5 }).lead).toBe("You've looked up 5 flights here this month.");
   });
 
+  it('flight page: words for every state', () => {
+    const plain = { text: 'This page is free because flyers cover The Blue Board, one day at a time.', link: 'Help cover a day' };
+    expect(flightPageSupportCopy(UNCONFIGURED_STATUS)).toEqual(plain);
+    expect(flightPageSupportCopy(parseSupportStatus(null, NOV10))).toEqual(plain);
+    expect(flightPageSupportCopy(null)).toEqual(plain);
+    const open = { text: "No one has covered today yet. $17 pays for the day's flight data and servers.", link: 'Cover today · $17' };
+    expect(flightPageSupportCopy(status([]))).toEqual(open);
+    expect(flightPageSupportCopy(status([pay(17, at(2))]))).toEqual(open);
+    expect(flightPageSupportCopy(status([pay(17, at(10), { display_name: 'Dana R.' })]))).toEqual({
+      text: 'Today is covered, thanks to Dana R.',
+      link: 'Cover tomorrow · $17',
+    });
+    expect(flightPageSupportCopy(status([pay(17 * 5, at(10), { display_name: 'Dana R.' })]))).toEqual({
+      text: 'Today is covered, thanks to Dana R.',
+      link: 'Cover Nov 15 · $17',
+    });
+    expect(flightPageSupportCopy(status([pay(17 * 400, at(10))]))).toEqual({
+      text: 'Today is covered, thanks to a supporter.',
+      link: 'Help cover a day',
+    });
+  });
+
+  it('About: the month line alone takes the bold slot while no day this month is covered', () => {
+    expect(aboutCoverLines(UNCONFIGURED_STATUS)).toEqual({ lead: null, follow: null });
+    expect(aboutCoverLines(status([]))).toEqual({ lead: 'No one has covered a day in November yet. Be the first.', follow: null });
+    expect(aboutCoverLines(status([pay(17, at(2))]))).toEqual({ lead: 'No one has covered today yet.', follow: '1 of 30 days in November is covered.' });
+    expect(aboutCoverLines(status([pay(17, at(10), { display_name: 'Dana R.' })]))).toEqual({ lead: 'Today is covered by Dana R.', follow: '1 of 30 days in November is covered.' });
+    expect(aboutCoverLines(status([pay(17 * 30, at(1))]))).toEqual({ lead: 'Today is covered by a supporter.', follow: 'Every day in November is covered. Thank you.' });
+  });
+
   it('monthFullyCovered only when every day of the month is', () => {
     expect(monthFullyCovered(status([pay(17 * 30, at(1))], NOV10))).toBe(true);
     expect(monthFullyCovered(status([pay(17 * 29, at(2))], NOV10))).toBe(false);
+  });
+});
+
+describe('the amount ladder', () => {
+  it('words each amount from the daily cost', () => {
+    expect(amountLabel(5)).toBe('$5');
+    expect(amountLabel(10)).toBe('$10');
+    expect(amountLabel(DAILY_COST_USD)).toBe('$17 · one day');
+    expect(amountLabel(DAILY_COST_USD * 2)).toBe('$34 · two days');
+    expect(amountLabel(100)).toBe('$100 · nearly six days');
+    expect(amountLabel(50)).toBe('$50 · nearly three days');
+    // Nowhere near a whole number of days: just the price.
+    expect(amountLabel(40)).toBe('$40');
+    expect(amountDaysPhrase(16)).toBe('');
+  });
+
+  it('lists every amount that has a link, smallest first, each with its own label, then "Other amount"', () => {
+    const ladder = supportLadder('fleet-end', { other: 'fleet-end' });
+    expect(ladder.amounts.map((a) => [a.text, a.placement])).toEqual([
+      ['$5', 'fleet-end-5'],
+      ['$10', 'fleet-end-10'],
+      ['$17 · one day', 'fleet-end-17'],
+      ['$100 · nearly six days', 'fleet-end-100'],
+    ]);
+    for (const step of ladder.amounts) {
+      expect(step.href).toBe(supportAmountUrl(step.amount, step.placement));
+      const url = new URL(step.href);
+      expect(url.origin + url.pathname).toBe(SUPPORT_AMOUNT_LINKS[step.amount]);
+      expect(url.searchParams.get('utm_content')).toBe(step.placement);
+      expect(url.searchParams.get('client_reference_id')).toBe(step.placement);
+    }
+    expect(ladder.other).toEqual({ text: 'Other amount', placement: 'fleet-end', href: supportUrl('fleet-end') });
+    expect(supportLadder('about').other.placement).toBe('about-other');
+  });
+
+  it('marks the day amount primary, and leaves out what it is told to', () => {
+    const ladder = supportLadder('fleet-end', { other: 'fleet-end' });
+    expect(ladder.amounts.filter((a) => a.primary).map((a) => a.amount)).toEqual([DAILY_COST_USD]);
+    expect(supportLadder('about', { without: [17] }).amounts.map((a) => a.text)).toEqual(['$5', '$10', '$100 · nearly six days']);
+  });
+
+  it('About: drops the $17 under a button that names a day at $17, keeps all four under "Help cover a day"', () => {
+    const texts = (s) => aboutLadder(s).amounts.map((a) => a.text);
+    expect(texts(UNCONFIGURED_STATUS)).toEqual(['$5', '$10', '$17 · one day', '$100 · nearly six days']);
+    expect(texts(status([pay(17 * 400, at(10))]))).toEqual(['$5', '$10', '$17 · one day', '$100 · nearly six days']);
+    for (const s of [status([]), status([pay(17, at(10))]), status([pay(17 * 5, at(10))])]) {
+      expect(texts(s)).toEqual(['$5', '$10', '$100 · nearly six days']);
+    }
+    expect(aboutLadder(status([])).other.placement).toBe('about-other');
+    expect(aboutLadder(status([]), { links: { 5: null, 10: null, 17: 'https://buy.stripe.com/x', 100: null } })).toBeNull();
+  });
+
+  it('leaves out an amount with no link, and is null when none has one', () => {
+    const some = supportLadder('about', { links: { 5: null, 10: null, 17: 'https://buy.stripe.com/test17', 100: '' } });
+    expect(some.amounts.map((a) => a.text)).toEqual(['$17 · one day']);
+    expect(supportLadder('about', { links: { 5: null, 10: null, 17: null, 100: null } })).toBeNull();
+    expect(supportLadder('about', { links: {} })).toBeNull();
   });
 });
 

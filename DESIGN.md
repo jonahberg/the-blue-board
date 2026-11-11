@@ -187,6 +187,7 @@ the ticker, tooltips and screen-reader text; and emoji inside **copy** (toasts, 
 | Waitlist signup | `Dialog` + `Input`/`Textarea`/`Label`, opened on request (`?waitlist=1` or the strip's button) or as the deep-use email ask, after a pause | `features/WaitlistDialog.tsx`, `features/WaitlistStrip.tsx`, `features/EmailPrompt.tsx` |
 | "Cover a day" support ask for heavy users | inline strip, first in the engagement slot, on the deep-use trigger | `features/SupportStrip.tsx`, `state/deep-use.ts` |
 | "Cover a day" month calendar | `<ol>` grid of day cells in the About `Dialog`: covered = filled `bg-primary-fill`, open = dashed outline, today = ring, legend + per-cell sr text | `features/CoverADay.tsx` |
+| Amount ladder | outline `Button` links (the $17 chip filled on the content card) + an "Other amount" text link, 44 px on touch | `src/lib/cover-a-day.js` `supportLadder`, `features/CoverADay.tsx`, `components/site/SupportNote.astro` |
 | The ops brief, one line | `<button>` in the `Ticker` row: tone word (plus icon and status colour for watch/disrupted) and the truncated headline. Opens the brief sheet, or on Live at `lg`+ focuses the open sidebar panel | `shell/Ticker.tsx`, `features/BriefTone.tsx` |
 | The ops brief, in full | `Sheet` (modal): bottom sheet below `lg`, right panel at `lg`+ on tabs without the sidebar panel; open in the Live sidebar at `lg`+ | `features/BriefSheet.tsx`, `features/BriefPanel.tsx` |
 | Brief evidence chips | `<a>` with a real deep link (`src/lib/brief-chips.js`) where the dashboard shows the fact; plain text where it does not. Never a button | `features/BriefPanel.tsx` |
@@ -223,10 +224,18 @@ fires: the "cover a day" support strip (`features/SupportStrip.tsx`, rules in
 are eligible the choice is weighted 60/40 towards the support strip (`DEEP_USE_DONATE_WEIGHT`); when
 neither is, the quiet waitlist strip is the fallback. The support strip leads the engagement slot, so
 on its visits it is the one line shown, and it never covers the board. A payment covers the day it is
-given (US Central), or the next open day after it, so the strip's button names that day: "Cover today
-· $17", "Cover tomorrow · $17" (with a thank-you naming today's supporter) or "Cover the next open
-day · $17", and "Cover a day · $17" with the plain $17-a-day line when `/api/support-status` cannot
-vouch for today. It stays down while today and the next 14 days are covered. It may lead with the
+given (US Central), or the next open day after it, so the strip's button names that day and
+goes to the fixed $17 Payment Link: "Cover today · $17", "Cover tomorrow · $17" (with a thank-you
+naming today's supporter) or "Cover Nov 15 · $17"; when `/api/support-status` cannot vouch for
+today it says "Help cover a day", with no price, on the any-amount link. Every word comes from
+`src/lib/cover-a-day.js`, in one voice: one verb (cover), one unit (a day, $17 from
+`DAILY_COST_USD`), one reason ("The Blue Board is free because flyers cover it, one day at a
+time"; "readers" on news, fleet, hub and tracker pages), "I" wherever a person speaks, no promise
+of a place on the Supporters Wall, and no ask says donate, donation, support the project, server
+costs, consider, chip in or coffee (`tests/support-voice.test.js`). Where there is room (the
+content-page card, the About section) an amount ladder ($5, $10, $17 · one day, $100 · nearly six
+days, Other amount; `supportLadder`) offers one fixed link per amount, each with its own
+`<placement>-<amount>` label; it disappears when no amount has a link. It stays down while today and the next 14 days are covered. It may lead with the
 visitor's own count of flights looked up this month, from five up, kept in localStorage and never
 sent; on a phone that sentence then stands alone beside the button. Everything it says is true or
 absent: no invented urgency or counters, and its dismiss control is a plain "Dismiss". It goes quiet
@@ -379,3 +388,4 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-11-11 | Amber is status only on content pages too; card surfaces are `rounded-lg`, callout rails 2 px; in-page jumps are `rounded-full` uppercase pills and links to other pages are `rounded-md` bordered pills; news, hub and fleet cards are clickable whole through a stretched primary link | The news featured rail, two callouts, fleet family counts and Newark dates used amber as decoration; three radii and two rail widths were in use; the cards' hover border already promised the click. |
 | 2026-11-11 | Content chrome: footer, breadcrumb, header nav and source links are 44 px on touch (`pointer-fine:md:` relaxes them); the footer is three rows and the body a `min-h-dvh` column when it shows; `html` has `scroll-pt-16` | The footer floated mid-screen on short pages and anchor targets landed under the sticky header. |
 | 2026-11-11 | Flight page: one equal timeline column per step from `md`, the rail dot takes the step's colour; the route is dashed between end caps with the plane at its position in the air; card footnotes follow their content under a hairline and cards stay equal height | Four steps stopped at 60% of the width, the route was a bare hairline, and `mt-auto` opened a band mid-card. |
+| 2026-11-11 | Every ask speaks one "cover a day" voice: a button that names a day carries the price and the $17 link, every other ask says "Help cover a day" on the any-amount link (preset $10), and an amount ladder shows only where there is room | Owner: the donation language "doesn't feel the strongest". There were seven different asks ("Donate to support costs", "Support Server Costs", "chip in toward the data bill", …), the reason given was the site's bills, the copy hedged ("consider"), "we" sat beside "I", "0 of 30 days covered" read as failure, and the card promised a Supporters Wall place a Stripe payment never gets. He also asked for a lower default and a choice of amounts ("$5, 10, $17, $100"); Stripe's hosted page shows one preset, so four fixed Payment Links back the ladder and the day buttons. An empty month reads "No one has covered a day in November yet. Be the first." The landed toast now reads the shared support status when it shows. |
