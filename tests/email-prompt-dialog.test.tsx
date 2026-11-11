@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The deep-use EMAIL ask (Oct 28 2026), with the real store, the real trigger, the real
- * latch, the real donation prompt, strip and Radix waitlist dialog, and a stubbed `fetch`
+ * latch, the real support strip (Nov 2026; it replaced the donation modal), the email strip
+ * and the Radix waitlist dialog, and a stubbed `fetch`
  * so the signup's POST body is the one the browser would send:
  *   1. on an email visit the "Stay in the loop" dialog opens by itself after a pause —
  *      and only when `donatePromptMayOpen` allows: never mid-scroll, never over another
@@ -19,13 +20,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const track = vi.hoisted(() => vi.fn());
 vi.mock('../src/lib/track.js', () => ({ track }));
 
-import DonatePrompt from '../src/app/features/DonatePrompt';
+import SupportStrip from '../src/app/features/SupportStrip';
 import EmailPrompt from '../src/app/features/EmailPrompt';
 import WaitlistDialog from '../src/app/features/WaitlistDialog';
 import WaitlistStrip from '../src/app/features/WaitlistStrip';
 import { T2_SETTLE_MS, deepUseAskThisVisit, resetDeepUseAsk } from '../src/app/state/deep-use';
 import { markWaitlistSubmitted, resetEngagement, useEngagement } from '../src/app/state/engagement';
 import { STORAGE_KEYS } from '../src/app/state/storage';
+import { resetSupportStatus } from '../src/app/state/support-status';
 import { UiProvider, useUi } from '../src/app/state/ui';
 import { DONATE_PROMPT_STORAGE_KEY, DONATE_QUIET_MS, donatePromptRecord } from '../src/lib/donate-prompt.js';
 import { EMAIL_PROMPT_STORAGE_KEY, parseEmailPromptRecord } from '../src/lib/email-prompt.js';
@@ -54,9 +56,9 @@ function tree(extra: React.ReactNode = null) {
       </button>
       {extra}
       <Probe />
+      <SupportStrip />
       <WaitlistStrip />
       <WaitlistDialog />
-      <DonatePrompt />
       <EmailPrompt />
     </UiProvider>
   );
@@ -65,7 +67,9 @@ function tree(extra: React.ReactNode = null) {
 const mount = (extra: React.ReactNode = null) => render(tree(extra));
 
 const emailDialog = () => screen.queryByRole('dialog', { name: /Stay in the loop/ });
-const donateDialog = () => screen.queryByRole('dialog', { name: 'Keep The Blue Board going' });
+/** The support ask: since Nov 2026 a strip in the engagement slot, not a dialog. */
+const supportAsk = () => screen.queryByRole('link', { name: /Cover a day/ });
+const waitlistPosts = () => fetchMock.mock.calls.filter(([url]) => url === '/api/waitlist');
 const strip = () => screen.queryByRole('button', { name: 'Get updates' });
 const emailEvents = () => track.mock.calls.filter(([name]) => name === 'email_prompt').map(([, data]) => data.action);
 
@@ -97,6 +101,7 @@ beforeEach(() => {
   localStorage.clear();
   resetDeepUseAsk(() => EMAIL);
   resetEngagement();
+  resetSupportStatus();
   track.mockClear();
   fetchMock.mockClear();
 });
@@ -125,7 +130,7 @@ describe('EmailPrompt — when it opens', () => {
     expect(emailDialog()).toBeNull();
     pause();
     expect(emailDialog()).not.toBeNull();
-    expect(donateDialog()).toBeNull();
+    expect(supportAsk()).toBeNull();
     expect(strip()).toBeNull();
     expect(source).toBe('deep-use');
     expect(emailEvents()).toEqual(['shown']);
@@ -268,7 +273,7 @@ describe('one deep-use ask per visit (the latch)', () => {
     expect(dice).toHaveBeenCalledTimes(1);
   });
 
-  it('after the email ask is answered, neither the donate prompt nor the strip follows this visit', () => {
+  it('after the email ask is answered, neither the support strip nor the email strip follows this visit', () => {
     mount();
     reachDeepUse();
     pause();
@@ -278,25 +283,27 @@ describe('one deep-use ask per visit (the latch)', () => {
     act(() => vi.advanceTimersByTime(TRIGGER_TIME_MS as number));
     pause();
     expect(emailDialog()).toBeNull();
-    expect(donateDialog()).toBeNull();
+    expect(supportAsk()).toBeNull();
     expect(strip()).toBeNull();
     expect(emailEvents()).toEqual(['shown', 'later']);
   });
 
-  it('on a donate visit (0.59) the donation prompt opens and the email dialog never follows', () => {
+  it('on a donate visit (0.59) the support strip shows and the email dialog never follows', async () => {
     resetDeepUseAsk(() => DONATE);
     mount();
     reachDeepUse();
+    await flush();
     pause();
-    expect(donateDialog()).not.toBeNull();
+    expect(supportAsk()).not.toBeNull();
     expect(emailDialog()).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Maybe later' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     act(() => vi.advanceTimersByTime(TRIGGER_TIME_MS as number));
     pause();
+    expect(supportAsk()).toBeNull();
     expect(emailDialog()).toBeNull();
     expect(strip()).toBeNull();
     expect(emailEvents()).toEqual([]);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(waitlistPosts()).toEqual([]);
   });
 
   it('with the donate prompt cooling down, email is the ask whatever the dice say', () => {
@@ -306,29 +313,31 @@ describe('one deep-use ask per visit (the latch)', () => {
     reachDeepUse();
     pause();
     expect(emailDialog()).not.toBeNull();
-    expect(donateDialog()).toBeNull();
+    expect(supportAsk()).toBeNull();
   });
 
-  it('with the email ask cooling down, donate is the ask whatever the dice say', () => {
+  it('with the email ask cooling down, donate is the ask whatever the dice say', async () => {
     resetDeepUseAsk(() => 0.99);
     localStorage.setItem(EMAIL_PROMPT_STORAGE_KEY, `later:${Date.now() - 3 * DAY}`);
     mount();
     reachDeepUse();
+    await flush();
     pause();
-    expect(donateDialog()).not.toBeNull();
+    expect(supportAsk()).not.toBeNull();
     expect(emailDialog()).toBeNull();
   });
 });
 
 describe('who never gets the email ask', () => {
-  it('a visitor who already gave an email (stored): donate if it is eligible, otherwise nothing', () => {
+  it('a visitor who already gave an email (stored): donate if it is eligible, otherwise nothing', async () => {
     localStorage.setItem('bb_waitlist_submitted', 'true');
     resetDeepUseAsk(() => 0.99);
     mount();
     reachDeepUse();
+    await flush();
     pause();
     expect(emailDialog()).toBeNull();
-    expect(donateDialog()).not.toBeNull();
+    expect(supportAsk()).not.toBeNull();
 
     cleanup();
     resetDeepUseAsk(() => 0.99);
@@ -339,7 +348,7 @@ describe('who never gets the email ask', () => {
     pause();
     act(() => vi.advanceTimersByTime(60_000));
     expect(emailDialog()).toBeNull();
-    expect(donateDialog()).toBeNull();
+    expect(supportAsk()).toBeNull();
     expect(strip()).toBeNull();
     expect(emailEvents()).toEqual([]);
   });
@@ -403,7 +412,7 @@ describe('who never gets the email ask', () => {
     pause();
     act(() => vi.advanceTimersByTime(60_000));
     expect(emailDialog()).toBeNull();
-    expect(donateDialog()).toBeNull();
+    expect(supportAsk()).toBeNull();
     expect(strip()).toBeNull();
   });
 });

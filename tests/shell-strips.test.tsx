@@ -87,14 +87,19 @@ describe('Dashboard layout', () => {
     expect(tip).toBeLessThan(attribution);
   });
 
-  it('shows ONE engagement line at a time at every width: waitlist strip, then news, then tip (Oct 2026 phones; Nov 2026 everywhere)', () => {
+  it('shows ONE engagement line at a time at every width: support strip, waitlist strip, news, tip (Oct 2026 phones; Nov 2026 everywhere)', () => {
+    const support = jsx.indexOf('<SupportStrip');
     const waitlist = jsx.indexOf('<WaitlistStrip');
     const news = jsx.indexOf('<NewsBanner');
     const tip = jsx.indexOf('<TipStrip');
-    expect(waitlist).toBeGreaterThan(jsx.indexOf('</Tabs>'));
+    // The deep-use support ask (Nov 2026) leads the slot: on the visits it is the ask it must be
+    // the line that shows, not one hidden behind the news (it reports `shown` when it renders).
+    expect(support).toBeGreaterThan(jsx.indexOf('</Tabs>'));
+    expect(support).toBeLessThan(waitlist);
+    expect(jsx.lastIndexOf('<div', support)).toBe(jsx.lastIndexOf('<div', waitlist));
     expect(waitlist).toBeLessThan(news);
     expect(news).toBeLessThan(tip);
-    // The three share one wrapper whose rule hides every child after the first present. It is
+    // The four share one wrapper whose rule hides every child after the first present. It is
     // unprefixed: a breakpoint variant (the old `max-md:`) would let a desktop stack all three.
     const slotOpen = jsx.lastIndexOf('<div', waitlist);
     const slotTag = jsx.slice(slotOpen, waitlist);
