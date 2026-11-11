@@ -21,7 +21,7 @@
  * that is set, so picking it is an instruction, not a default left untouched.
  */
 
-import { BadgeInfo, CircleHelp, Ellipsis, HandHeart, House, UserRound } from 'lucide-react';
+import { BadgeInfo, CircleHelp, Ellipsis, HandHeart, House, Newspaper, UserRound } from 'lucide-react';
 import { useState } from 'react';
 
 import {
@@ -127,7 +127,7 @@ export function MobileNav({
           <SheetHeader>
             <SheetTitle>More</SheetTitle>
           </SheetHeader>
-          <ul className="px-4 pb-8">
+          <ul className="px-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
             {overflow.map((entry) => (
               <li key={entry.id}>
                 <button
@@ -143,6 +143,14 @@ export function MobileNav({
                 </button>
               </li>
             ))}
+            {/* The news strip is not shown on the phone Live tab (Nov 2026), so the stories are
+                one tap from the More sheet instead. A page, not a tab: a plain link. */}
+            <li>
+              <a href="/news" className={cn(ROW, 'text-foreground')}>
+                <Newspaper aria-hidden="true" className="size-4" />
+                News
+              </a>
+            </li>
             <li className="mt-2 border-t pt-2">
               <HomeHubRow />
             </li>

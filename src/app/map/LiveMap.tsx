@@ -26,9 +26,11 @@ import { centreForOcclusion, flightPanelOcclusion } from '@/lib/flight-panel-occ
 import { getPhase } from '@/lib/flight-phase.js';
 import { operatorFromCallsign } from '@/lib/express-operators.js';
 import { greatCirclePoints, isLonghaul, normalizeLonContinuity, wrapLonNear } from '@/lib/geo.js';
-import { regionBounds } from '@/lib/map-regions.js';
+import { northAnchoredView } from '@/lib/map-fit.js';
+import { getRegion, regionBounds } from '@/lib/map-regions.js';
 import { prefersReducedMotion } from '@/lib/motion.js';
 import { HUB_RING, planeIconSpec } from '@/lib/plane-icon.js';
+import { radarLabelPlacement } from '@/lib/weather-cards.js';
 import type { Flight } from '../data/types';
 import { makeBasemapLayer, makeRadarLayer } from './basemap';
 
@@ -43,10 +45,46 @@ export type RegionRequest = { id: string; key: number };
 
 /**
  * A preset view's zoom for a map this wide. Zoom 4 spans the lower 48 in ~660px, so on a
- * phone it cropped SFO and LAX off the left edge (F78); one step out fits them.
+ * phone it cropped SFO and LAX off the left edge (F78); one step out fits them. Now only the
+ * fallback for a phone map that has no height yet: a sized one opens on `portraitUsView`.
  */
 export function viewZoom(zoom: number, widthPx: number): number {
-  return widthPx > 0 && widthPx < 640 ? zoom - 1 : zoom;
+  return isNarrow(widthPx) ? zoom - 1 : zoom;
+}
+
+/** A phone-width map (the F78 threshold). */
+function isNarrow(widthPx: number): boolean {
+  return widthPx > 0 && widthPx < 640;
+}
+
+/**
+ * The zoom step of a phone map. Whole zoom levels are a factor of two apart, so the lower 48
+ * fitted to a 390 px map at zoom 3 used 85% of its width; a tenth of a level lets the fit fill it
+ * and lets a pinch stop where the fingers do. Wider maps keep whole levels (sharp tiles, the
+ * wheel's familiar steps).
+ */
+export const PHONE_ZOOM_SNAP = 0.1;
+
+/** px kept clear of the toolbar above the US box: the overlay's 8 px pad, a 36 px row, 8 px air. */
+const TOOLBAR_CLEARANCE = 52;
+
+/**
+ * The opening view of a phone map with no home hub: the lower 48 — the "US" region preset —
+ * fitted to the map's width with its north edge just under the toolbar, the spare height falling
+ * south over Mexico, the Gulf and the Caribbean rather than over southern Canada
+ * (src/lib/map-fit.js; Nov 2026, "the first paint spends the top third on Canada"). Null for a
+ * map 640 px or wider, which keeps `US_VIEW`, or a map with no height yet.
+ */
+export function phoneUsView(size: { x: number; y: number }): { center: [number, number]; zoom: number } | null {
+  if (!isNarrow(size.x) || !(size.y > 0)) return null;
+  const region = getRegion('us') as { box: { south: number; west: number; north: number; east: number } };
+  const view = northAnchoredView(region.box, size, {
+    top: TOOLBAR_CLEARANCE,
+    bottom: 8,
+    side: 4,
+    snap: PHONE_ZOOM_SNAP,
+  }) as { center: [number, number]; zoom: number } | null;
+  return view ? { center: view.center, zoom: view.zoom } : null;
 }
 
 type Airport = { iata: string; lat: number; lon: number; hub?: boolean };
@@ -249,10 +287,13 @@ export function LiveMap({
     const home = homeAirportRef.current
       ? (AIRPORTS as Airport[]).find((a) => a.iata === homeAirportRef.current)
       : undefined;
+    const size = { x: hostRef.current.clientWidth, y: hostRef.current.clientHeight };
+    const phoneUs = home ? null : phoneUsView(size);
     const map = L.map(hostRef.current, {
-      center: home ? [home.lat, home.lon] : US_VIEW.center,
-      zoom: home ? 5 : viewZoom(US_VIEW.zoom, hostRef.current.clientWidth),
+      center: home ? [home.lat, home.lon] : (phoneUs?.center ?? US_VIEW.center),
+      zoom: home ? 5 : (phoneUs?.zoom ?? viewZoom(US_VIEW.zoom, size.x)),
       zoomControl: false,
+      zoomSnap: isNarrow(size.x) ? PHONE_ZOOM_SNAP : 1,
       // A flight crossing the antimeridian has to stay reachable by panning either way.
       worldCopyJump: true,
     });
@@ -326,12 +367,19 @@ export function LiveMap({
     for (const hub of HUBS) {
       const lon = wrapLonNear(hub.lon, centerLng);
       // HUB_RING is also the map key's swatch (MapLegend), so the two cannot drift.
+      // Close pairs turn their labels apart, as the Weather radar's already do (one table,
+      // weather-cards.js RADAR_LABEL_PLACEMENT: LAX and IAD below, EWR to the right). At the
+      // phone's zoom EWR's label sat on IAD's ring (Nov 2026). The gap is this map's own: its
+      // rings are larger than the radar's dots.
+      const direction = (radarLabelPlacement(hub.iata) as { direction: L.Direction }).direction;
+      const offset: [number, number] =
+        direction === 'bottom' ? [0, 10] : direction === 'right' ? [10, 0] : direction === 'left' ? [-10, 0] : [0, -10];
       L.circleMarker([hub.lat, lon], { ...HUB_RING })
         .bindTooltip(hub.iata, {
           permanent: true,
-          direction: 'top',
+          direction,
           className: 'hub-tooltip',
-          offset: [0, -10],
+          offset,
         })
         .addTo(group);
       L.circleMarker([hub.lat, lon], {
@@ -510,7 +558,12 @@ export function LiveMap({
   useEffect(() => {
     if (!regionRequest) return;
     const bounds = L.latLngBounds(regionBounds(regionRequest.id) as L.LatLngTuple[]);
-    requestMove((m) => flyOrJumpToBounds(m, bounds, 1.2));
+    requestMove((m) => {
+      // "US" on a phone returns to the phone's own opening framing, not a centred fit.
+      const phone = regionRequest.id === 'us' ? phoneUsView(m.getSize()) : null;
+      if (phone) flyOrJump(m, phone.center, phone.zoom, 1.2);
+      else flyOrJumpToBounds(m, bounds, 1.2);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionRequest?.key]);
 

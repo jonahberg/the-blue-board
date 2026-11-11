@@ -6,7 +6,7 @@
  * `data-overflow="right"` and a trailing fade mask.
  */
 
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -72,5 +72,28 @@ describe('MapControls overflow cue', () => {
       fireEvent.scroll(row);
     });
     expect(row.dataset.overflow).toBeUndefined();
+  });
+});
+
+describe('MapControls on a phone (Nov 2026)', () => {
+  it('keeps every toggle\'s name for assistive tech while the words are visually hidden below sm', () => {
+    mount();
+    for (const name of ['Hubs', 'Long-haul', 'Starlink', 'Radar']) {
+      const toggle = screen.getByRole('button', { name });
+      const label = [...toggle.querySelectorAll('span')].find((el) => el.textContent === name);
+      // sr-only, not hidden: `hidden` would drop the accessible name with the word.
+      expect(label?.className).toBe('max-sm:sr-only');
+      expect(toggle.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+      expect(toggle.className.split(/\s+/)).toEqual(
+        expect.arrayContaining(['relative', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-[5px]']),
+      );
+    }
+  });
+
+  it('draws Refresh with a lucide icon, not the ↻ / ⏳ glyphs', () => {
+    mount();
+    const refresh = screen.getByRole('button', { name: 'Refresh' });
+    expect(refresh.textContent).not.toMatch(/[↻⏳]/);
+    expect(refresh.querySelector('svg')?.getAttribute('class')).toContain('lucide-refresh-cw');
   });
 });

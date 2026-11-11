@@ -21,8 +21,10 @@ import {
   networkLabel,
 } from '@/lib/hub-health.js';
 import { networkUnknownText } from '@/lib/faa-freshness.js';
+import { networkChipRepeatsBrief } from '@/lib/network-chip.js';
 import { hubProgramMarker } from '@/lib/ops-health.js';
 import { cn } from '@/lib/utils';
+import { useBrief } from '../state/brief';
 import { useIrops } from '../state/irops';
 import { usePrefs } from '../state/prefs';
 import { useHubHealth } from '../state/schedule';
@@ -49,6 +51,14 @@ export function HubHealthStrip() {
   // Ops". The time is held from the moment it went stale, so this polite region changes its words
   // only when the state does.
   const unknown = networkUnknownText(network, faaUnknownSince ?? null) as string | null;
+  // While a current brief holds the row above and agrees with this chip, the chip only repeats it
+  // (src/lib/network-chip.js). It returns the moment the two disagree or the brief goes.
+  const { view: brief } = useBrief();
+  const repeatsBrief = networkChipRepeatsBrief({
+    briefTone: brief.status === 'ready' ? brief.tone : null,
+    networkLevel: network?.level ?? null,
+    unknown: Boolean(unknown),
+  });
   const loading = readings.length === 0 && irops.loading;
   const nowMs = Date.now();
 
@@ -56,8 +66,9 @@ export function HubHealthStrip() {
     <div
       aria-live="polite"
       aria-label="Hub on-time performance"
-      // No vertical padding on a touch screen: the 44 px chips already give the row its height.
-      className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-card/40 px-3 py-1 text-xs [scrollbar-width:none] pointer-coarse:py-0 md:px-4"
+      // 28 px at every width and pointer, the brief row's height (Nov 2026: the 44 px touch
+      // chips made this row 45 px on a phone). On a touch screen the chips fill the row.
+      className="flex h-7 shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-card/40 px-3 text-xs [scrollbar-width:none] md:px-4"
     >
       <span className="mr-1 hidden shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground sm:inline">
         Hub on-time
@@ -94,11 +105,13 @@ export function HubHealthStrip() {
                   <a
                     href={`/hubs/${entry.hub.toLowerCase()}`}
                     className={cn(
-                      // 24 px for a mouse (WCAG 2.5.8) keeps the desktop strip at ~33 px; a
-                      // finger gets the full 44 px (audit Oct 3 2026 — the chips are links to
-                      // the hub guides, and 24 px was a miss-tap on a phone). Keyed to the
-                      // POINTER, not the width: an iPad at desktop width is a touch screen too.
-                      'flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent pointer-coarse:min-h-11',
+                      // 24 px for a mouse (WCAG 2.5.8). A finger gets the whole row's height
+                      // (27 px inside its border) and a wider pad: the 44 px chips of Oct 3 2026
+                      // made this a 45 px row on a phone, and the row is 28 px now, like the
+                      // brief row above it (Nov 2026). The row scrolls sideways, which clips any
+                      // hit box that pokes outside it, so the chip itself is the target. Keyed
+                      // to the POINTER, not the width: an iPad at desktop width is a touch screen.
+                      'flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent pointer-coarse:self-stretch pointer-coarse:px-2',
                       isHome && 'border border-primary/40',
                       // An hours-old board still shows its number, but visibly receded (F91).
                       stale && 'opacity-60',
@@ -140,7 +153,7 @@ export function HubHealthStrip() {
           <History aria-hidden="true" className="size-3 shrink-0" />
           <span>{unknown}</span>
         </span>
-      ) : network ? (
+      ) : network && !repeatsBrief ? (
         <span className="ml-auto shrink-0 pl-3 text-[11px] font-semibold uppercase tracking-wide">
           <SeverityGlyph severity={network.severity} />{' '}
           <span className={SEV_TEXT[network.severity]}>{network.label}</span>
