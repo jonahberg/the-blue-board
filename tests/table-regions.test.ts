@@ -43,9 +43,10 @@ describe('wrapTables', () => {
   });
 
   it('wraps every fleet type page\'s seat table, each with a unique name', () => {
+    const types = fleetTypes as Record<string, { contentHtml: string }>;
     for (const key of fleetOrder) {
-      const html = wrapTables(fleetTypes[key].contentHtml);
-      const tables = (fleetTypes[key].contentHtml.match(/<table[\s>]/g) || []).length;
+      const html = wrapTables(types[key].contentHtml);
+      const tables = (types[key].contentHtml.match(/<table[\s>]/g) || []).length;
       const regions = html.match(/data-scroll-region/g) || [];
       expect(regions.length, key).toBe(tables);
       expect(html, key).not.toMatch(/aria-label="Table"/);

@@ -45,7 +45,9 @@ describe.skipIf(!hasDist)('flight page: flight numbers are links', () => {
     };
     vi.useFakeTimers({ toFake: ['Date'], now: (D - 5 * 3600) * 1000 });
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (String(url).startsWith('/api/flight?')) return Response.json(payloadFor(row, { tail, aircraft: ua929Aircraft }));
+      // payloadFor's JSDoc defaults type `tail` and `aircraft` as null; the endpoint sends objects.
+      const extra: any = { tail, aircraft: ua929Aircraft };
+      if (String(url).startsWith('/api/flight?')) return Response.json(payloadFor(row, extra));
       return new Response('{}', { status: 404 });
     }));
   });
