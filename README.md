@@ -2,7 +2,7 @@
 
 **An unofficial, real-time operations dashboard for United Airlines — built by flyers, for flyers.**
 
-**[→ Live Dashboard](https://theblueboard.co)** · **[📋 Changelog](CHANGELOG.md)** · **[🎨 Design System](DESIGN.md)** · **[Help cover a day](https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00?utm_source=theblueboard&utm_medium=github&utm_content=readme-top&client_reference_id=readme-top)** · **[💡 Suggest a Feature](https://github.com/jonahberg/the-blue-board/issues)** · **[𝕏 Follow @theblueboard](https://x.com/theblueboard)**
+**[→ Live Dashboard](https://theblueboard.co)** · **[📋 Changelog](CHANGELOG.md)** · **[🎨 Design System](DESIGN.md)** · **[Help cover a day](https://buy.stripe.com/cNidR80z90krbKi4gggEg05?utm_source=theblueboard&utm_medium=github&utm_content=readme-top&client_reference_id=readme-top)** · **[💡 Suggest a Feature](https://github.com/jonahberg/the-blue-board/issues)** · **[𝕏 Follow @theblueboard](https://x.com/theblueboard)**
 
 ![The Blue Board — Live Ops: every United flight in the air, with on-time performance for every hub](docs/screenshots/live-ops.jpg)
 
@@ -258,7 +258,7 @@ asset prefix.
 
 The Blue Board is free because flyers cover it, one day at a time. $17 pays for one day of live flight data, schedules and servers. It takes about 30 people a month, one for each day.
 
-### **[→ Help cover a day](https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00?utm_source=theblueboard&utm_medium=github&utm_content=readme-end&client_reference_id=readme-end)** · **[→ Become a member](https://buymeacoffee.com/notjbg/membership)**
+### **[→ Help cover a day](https://buy.stripe.com/cNidR80z90krbKi4gggEg05?utm_source=theblueboard&utm_medium=github&utm_content=readme-end&client_reference_id=readme-end)** · **[→ Become a member](https://buymeacoffee.com/notjbg/membership)**
 
 Any amount counts toward a day. You can add a name at checkout to show on the day you cover. The dashboard's About section shows this month's days. Monthly memberships start at $3: First Class members get *The Ops Brief*, a monthly behind-the-scenes note, and Captain's Circle feature requests go to the front of the line. If you have an idea, [suggest a feature](https://github.com/jonahberg/the-blue-board/issues). I read every one.
 

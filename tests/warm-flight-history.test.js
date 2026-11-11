@@ -97,6 +97,12 @@ function mockFetch() {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  // Pin the clock (Date only; timers stay real). The fixture's one flight per board leaves at
+  // 10:00 hub-local, and the prediction step picks up flights 90–155 minutes out, so on the real
+  // clock this file failed for about an hour a day per hub ("due: 2", Nov 11 2026 22:30Z, when
+  // 10:00 in Guam and Tokyo was two hours away). At 08:00Z no hub's 10:00 is inside that window.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-10T08:00:00Z'));
   db.rows.clear();
   db.upserts = 0;
   db.throwOnArchive = false;
@@ -119,6 +125,7 @@ afterEach(() => {
   delete process.env.SCHEDULE_WARM_TASKS_PER_RUN;
   delete process.env.SCHEDULE_WARM_EXTRA_ARRIVALS;
   delete process.env.FLIGHT_HISTORY_ENABLED;
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
