@@ -20,6 +20,7 @@ import { hubTraffic } from '@/lib/live-filters.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { cn } from '@/lib/utils';
 import type { Flight } from '../../data/types';
+import { FlightLink } from '../../features/FlightLink';
 import { SpecialLiveryMarker } from '../../features/SpecialLiveryBadge';
 
 /** The five buckets `getPhaseGroup()` collapses the seven phases into. */
@@ -130,24 +131,31 @@ export function LiveSidebar({
                     : ''}
                 </p>
                 <ul className="max-h-56 overflow-y-auto">
-                  {search.matches.slice(0, MAX_SEARCH_ROWS).map((f) => (
-                    <li key={f.fr24id}>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-accent"
-                        onClick={() => onSelect(f)}
-                      >
-                        <span className="w-16 font-mono font-medium">
-                          {f.flightIATA || f.callsign}
+                  {search.matches.slice(0, MAX_SEARCH_ROWS).map((f) => {
+                    const ident = f.flightIATA || f.callsign;
+                    return (
+                      // The flight number links to its flight page; the rest of the row is the
+                      // button that shows the flight on the map (stretched over the row, under
+                      // the link). A link cannot sit inside a button.
+                      <li key={f.fr24id} className="relative flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-accent">
+                        <span className="w-16 shrink-0 font-mono font-medium">
+                          <FlightLink ident={ident} linkClassName="z-10" />
                         </span>
-                        <span className="font-mono text-muted-foreground">
-                          {f.origin || '?'}→{f.dest || '?'}
-                        </span>
-                        <span className="ml-auto truncate text-muted-foreground">{f.reg}</span>
-                        <SpecialLiveryMarker livery={liveryForTail(f.reg)} className="text-muted-foreground" />
-                      </button>
-                    </li>
-                  ))}
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left after:absolute after:inset-0"
+                          onClick={() => onSelect(f)}
+                        >
+                          <span className="sr-only">Show {ident} on the map:</span>{' '}
+                          <span className="font-mono text-muted-foreground">
+                            {f.origin || '?'}→{f.dest || '?'}
+                          </span>
+                          <span className="ml-auto truncate text-muted-foreground">{f.reg}</span>
+                          <SpecialLiveryMarker livery={liveryForTail(f.reg)} className="text-muted-foreground" />
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </>
             )}

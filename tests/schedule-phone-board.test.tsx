@@ -143,6 +143,25 @@ describe('SchedulePhoneRow', () => {
     expect(props.onOpenFlight).toHaveBeenCalledWith(departedLate);
   });
 
+  it('the flight number is a link to its flight page above the row button; the rest of the row still opens the sheet', () => {
+    const props = renderRow(departedLate);
+    const link = screen.getByRole('link', { name: 'UA2059' });
+    expect(link.getAttribute('href')).toBe('/flight/UA2059');
+    // Above the stretched row button, with a 44 px box of its own on touch.
+    expect(link.className).toMatch(/\bz-10\b/);
+    expect(link.className).toMatch(/\brelative\b/);
+    expect(link.className).toMatch(/after:h-11/);
+    fireEvent.click(link);
+    expect(props.onOpenFlight).not.toHaveBeenCalled();
+    // The sheet button is named by its own words, not an aria-label over different text (WCAG 2.5.3).
+    const open = screen.getByRole('button', { name: 'UA2059 flight details' });
+    expect(open.getAttribute('aria-label')).toBeNull();
+    // It has no visible box of its own, so its keyboard ring is drawn on the row-sized box.
+    expect(open.className).toMatch(/focus-visible:after:outline-2/);
+    fireEvent.click(open);
+    expect(props.onOpenFlight).toHaveBeenCalledWith(departedLate);
+  });
+
   it('a prediction reads RISK and opens the delay explanation, not the sheet', () => {
     const context = { flight: 'UA1002' };
     const props = renderRow(

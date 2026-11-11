@@ -12,8 +12,12 @@
  *
  * The whole row opens the flight sheet. That is a STRETCHED button (its `after:` box covers
  * the row) rather than an onClick on the `<li>`: the row stays a list item to a screen reader,
- * the button has a real name and keyboard focus, and the watch eye and the risk badge — which
- * do something else — sit above it (`relative z-10`) instead of being illegally nested inside.
+ * the button has a real name and keyboard focus, and the controls that do something else sit
+ * above it (`relative z-10`) instead of being illegally nested inside: the watch eye, the risk
+ * badge, and the flight number, which is a link to its flight page (Nov 2026). Until then the
+ * number WAS the sheet button; the sheet is still one tap away on the rest of the row. The
+ * button is named by its own `sr-only` words ("UA2059 flight details"), and since it has no
+ * visible box its keyboard focus ring is drawn on the row-sized `after:` box instead.
  *
  * Every text field comes from the row model as built; the wording decisions live in
  * `src/lib/schedule-phone-row.js` with a test. Nothing here re-derives a status or a delay.
@@ -32,6 +36,7 @@ import {
 import { riskControl } from '@/lib/schedule-row-display.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { cn } from '@/lib/utils';
+import { FlightLink } from '../../features/FlightLink';
 import { SpecialLiveryMarker } from '../../features/SpecialLiveryBadge';
 import type { RowModel } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
@@ -106,14 +111,20 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
           {/* Line 1 — flight, route, then the status and the delay where the eye lands. */}
           <div className="flex min-w-0 items-center gap-1.5 leading-5">
             {hasIdent ? (
-              <button
-                type="button"
-                onClick={() => onOpenFlight(row)}
-                aria-label={`${row.identDisplay} flight details`}
-                className="shrink-0 font-mono text-xs font-semibold text-primary after:absolute after:inset-0"
-              >
-                {row.identDisplay}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => onOpenFlight(row)}
+                  className="after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:rounded-sm focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring"
+                >
+                  <span className="sr-only">{row.identDisplay} flight details</span>
+                </button>
+                <FlightLink
+                  ident={row.identDisplay}
+                  className="z-10 shrink-0 font-mono text-xs font-semibold"
+                  linkClassName="relative"
+                />
+              </>
             ) : (
               <span className="shrink-0 font-mono text-xs text-muted-foreground">—</span>
             )}

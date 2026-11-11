@@ -29,6 +29,7 @@ import {
   seatConfigString,
 } from '@/lib/my-flights.js';
 import type { FleetAircraft, Flight, FlightTimes, WatchedFlight } from '../../data/types';
+import { FlightLink } from '../../features/FlightLink';
 import { JourneyChain } from './JourneyChain';
 import { StarlinkBadge } from './StarlinkBadge';
 import type { JourneySegment } from './useAircraftJourney';
@@ -126,7 +127,10 @@ export function FlightCard({
     <Card className="gap-0 overflow-hidden py-0">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b bg-muted/30 px-3 py-2.5">
         <div className="min-w-0">
-          <div className="font-mono text-base font-bold text-primary">{entry.flight}</div>
+          {/* The flight number is a link to its flight page (src/lib/flight-link.js). */}
+          <div className="font-mono text-base font-bold">
+            <FlightLink ident={entry.flight} />
+          </div>
           {/* Until the route is known (a watch added by flight number, times still loading)
               the line printed "() → ()"; it waits as a skeleton instead, and says nothing once
               the lookup has given up. */}

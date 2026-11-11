@@ -87,7 +87,8 @@ export function JourneyChain({
           );
         })}
         <li className="flex flex-wrap items-baseline gap-x-2 border-t pt-1 text-[11px]">
-          <span className="font-mono font-medium text-primary">{flight}</span>
+          {/* Body colour: the card's header above is this flight's link to its page. */}
+          <span className="font-mono font-semibold">{flight}</span>
           {/* Its route only once known: before that the line read "UA318 →". */}
           {origCode || destCode ? (
             <span className="font-mono text-muted-foreground">

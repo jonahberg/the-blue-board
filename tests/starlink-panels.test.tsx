@@ -51,6 +51,58 @@ describe('DeparturesBoard', () => {
   });
 });
 
+describe('DeparturesBoard flight numbers (Nov 2026)', () => {
+  function renderBoard(onOpenAircraft = vi.fn()) {
+    const board = buildDeparturesBoard(
+      {
+        N34562: [{ flight_number: 'UAL2278', origin: 'SFO', destination: 'ORD', departure_ts: NOW + 60 * 60 }],
+        N801SK: [{ flight_number: 'SKW5408', origin: 'SFO', destination: 'BOI', departure_ts: NOW + 90 * 60 }],
+      },
+      {
+        N34562: { type: 'A321neo', fleet: 'Mainline', operator: 'United Airlines' },
+        N801SK: { type: 'E175', fleet: 'Express', operator: 'SkyWest' },
+      },
+      {},
+      ['SFO'],
+      { now: NOW },
+    ) as BoardModel;
+    render(
+      <DeparturesBoard
+        board={board}
+        hubCodes={['SFO']}
+        hub={null}
+        onHub={() => {}}
+        windowH={12}
+        onWindow={() => {}}
+        onShowAll={() => {}}
+        freshness="updated 5m ago"
+        tzAbbrev={() => 'PDT'}
+        onOpenAircraft={onOpenAircraft}
+        onTrack={() => {}}
+      />,
+    );
+    return onOpenAircraft;
+  }
+
+  it('a United number links to its flight page; an operating callsign is plain text', () => {
+    renderBoard();
+    const link = screen.getByRole('link', { name: 'UAL2278' });
+    expect(link.getAttribute('href')).toBe('/flight/UA2278');
+    expect(screen.queryByRole('link', { name: 'SKW5408' })).toBeNull();
+    const plain = screen.getByText('SKW5408');
+    expect(plain.tagName).toBe('SPAN');
+    expect(plain.className).not.toMatch(/text-primary/);
+  });
+
+  it('the aircraft details button is separate from the link and still opens the aircraft', () => {
+    const onOpenAircraft = renderBoard();
+    const button = screen.getByRole('button', { name: /Aircraft details: .*N34562/ });
+    expect(button.contains(screen.getByRole('link', { name: 'UAL2278' }))).toBe(false);
+    fireEvent.click(button);
+    expect(onOpenAircraft).toHaveBeenCalledWith('N34562');
+  });
+});
+
 describe('SlHero verification sub-line (F99)', () => {
   it('names its own denominator, which is not the headline count', () => {
     render(

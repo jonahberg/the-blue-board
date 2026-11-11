@@ -22,6 +22,7 @@ import { memo } from 'react';
 import { Card } from '@/components/ui/card';
 import { formatFlightTime } from '@/lib/starlink-view.js';
 import { operatorLabel, relativeDeparture } from '@/lib/starlink-roster.js';
+import { FlightLink } from '../../features/FlightLink';
 import type { BoardModel, BoardRow } from './types';
 
 export type WindowHours = 12 | 48;
@@ -51,25 +52,32 @@ function Row({
     // On a phone the route shares the second line with the status instead of taking a third.
     // From `sm` the type takes a fixed column beside the route as well: as an `auto` column after
     // the flexible one it was pushed around by each row's status, so no two types lined up.
-    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,11rem)_6rem_5.5rem_minmax(0,1fr)]">
+    <div className="relative grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,11rem)_6rem_5.5rem_minmax(0,1fr)]">
       <span className="font-mono text-[11px] tabular-nums">
         {time}
         <span className="ml-1.5 text-muted-foreground">{relativeDeparture(row.deltaSec)}</span>
       </span>
 
-      <button
-        type="button"
-        onClick={() => onOpenAircraft(row.tail)}
-        className="min-h-11 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
-        title={`Aircraft details · ${row.tail}`}
-      >
-        <span className="block truncate font-mono text-xs font-semibold">
-          {row.flight_number || '—'}
+      {/* The flight number links to its flight page when it is a United number (UA/UAL); an
+          operating callsign (SKW5408) has no page and is plain text (src/lib/flight-link.js).
+          The aircraft button is stretched over this column with a mouse, as the whole column
+          was the button before; on a touch screen over the whole row, so it keeps a finger-sized
+          target beside the number's own 44 px box. A link cannot sit inside a button. */}
+      <div className="relative min-w-0 pointer-coarse:static">
+        {/* Not `truncate`: its overflow clip would cut the link's touch box (a number is ≤ 7 characters). */}
+        <span className="block font-mono text-xs font-semibold">
+          <FlightLink ident={row.flight_number || '—'} linkClassName="z-10" />
         </span>
-        <span className="block truncate text-[10px] text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => onOpenAircraft(row.tail)}
+          className="block w-full min-w-0 truncate text-left text-[10px] text-muted-foreground after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          title={`Aircraft details · ${row.tail}`}
+        >
+          <span className="sr-only">Aircraft details:</span>{' '}
           {operatorLabel(row.operator)} · {row.tail}
-        </span>
-      </button>
+        </button>
+      </div>
 
       <span className="font-mono text-[11px]">
         {row.origin}
@@ -105,7 +113,7 @@ function Row({
           <button
             type="button"
             onClick={() => onTrack(row)}
-            className="inline-flex min-h-11 shrink-0 items-center rounded-md border px-2 text-[10px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-7"
+            className="relative z-10 inline-flex min-h-11 shrink-0 items-center rounded-md border px-2 text-[10px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-7"
             title={
               row.airborne
                 ? `Track ${row.tail} on the live map`
