@@ -31,8 +31,8 @@ function clampPct(value) {
  * The line under the bars is the site's one reason, `CORE_LINE_FLYERS` from
  * src/lib/cover-a-day.js ("The Blue Board is free because flyers cover it, one day at a time."),
  * not the API's `monthlyCostNote` ("Data feeds, hosting, and AI explanations cost real money
- * every month"), which predates the one voice every ask speaks (Nov 2026). The API still sends
- * it; it is no longer printed.
+ * every month"), which predates the one voice every ask speaks (Nov 2026). The API stopped sending
+ * it in v1.28.0; an older answer still cached at the CDN may carry it, and it is ignored.
  *
  * @param {{boards?: {used: number, budget: number},
  *   liveFeed?: {configured: boolean, usedPct?: number},

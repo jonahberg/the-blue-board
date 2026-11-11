@@ -377,7 +377,6 @@ export function fetchFr24Flight(flight: string): Promise<Fr24FlightLookup> {
 export type SupportStats = {
   boards?: { used: number; budget: number };
   liveFeed?: { configured: boolean; usedPct?: number };
-  monthlyCostNote?: string;
 };
 
 export function fetchSupportStats(): Promise<SupportStats> {
