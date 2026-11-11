@@ -23,6 +23,14 @@ import { Card } from '@/components/ui/card';
 
 export type RolloutBar = { label: string; installed: number; total: number; pct: number };
 
+/**
+ * One shape for all three chips. The airborne chip is a button and takes the 44 px touch floor,
+ * so the plain chips take it too: a static span beside it stretched to the row's height with its
+ * text pinned to the top (Nov 2026).
+ */
+const CHIP =
+  'inline-flex min-h-11 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold pointer-fine:md:min-h-0';
+
 export const SlHero = memo(function SlHero({
   equipped,
   bars,
@@ -108,10 +116,11 @@ export const SlHero = memo(function SlHero({
       </div>
 
       {newThisWeek > 0 || airborneCount > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-2" id="sl-hero-chips">
+        <div className="mt-3 flex flex-wrap items-center gap-2" id="sl-hero-chips">
           {newThisWeek > 0 ? (
-            <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold">
-              +{newThisWeek} NEW THIS WEEK
+            <span className={CHIP}>
+              <span className="font-mono tabular-nums">+{newThisWeek}</span>
+              <span>NEW THIS WEEK</span>
             </span>
           ) : null}
           {airborneCount > 0 ? (
@@ -120,19 +129,21 @@ export const SlHero = memo(function SlHero({
                 type="button"
                 data-action="view-starlink-on-map"
                 onClick={onShowOnMap}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
+                className={`${CHIP} hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
                 title="Show these on the live map"
                 aria-label={`Show ${airborneCount} airborne Starlink aircraft on the live map`}
               >
                 <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
-                {airborneCount} AIRBORNE NOW
+                <span className="font-mono tabular-nums">{airborneCount}</span>
+                <span>AIRBORNE NOW</span>
               </button>
             ) : (
               // Degraded tier: the Live map's Starlink toggle is disabled, so a click-through
               // would land on a map with nothing filtered. State the count, offer no journey.
-              <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold">
+              <span className={CHIP}>
                 <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
-                {airborneCount} AIRBORNE NOW
+                <span className="font-mono tabular-nums">{airborneCount}</span>
+                <span>AIRBORNE NOW</span>
               </span>
             )
           ) : null}
