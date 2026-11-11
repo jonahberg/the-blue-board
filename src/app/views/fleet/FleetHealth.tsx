@@ -11,6 +11,8 @@
  * arrive, so the panel says which of the two happened (F035).
  */
 
+import { RotateCw } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,7 +46,8 @@ export function FleetLoadError({ onRetry }: { onRetry: () => void }) {
         right now. <strong className="font-medium text-foreground">This is a load error — not zero aircraft.</strong>
       </p>
       <Button size="lg" className="mt-3 min-h-11 pointer-fine:md:min-h-0" onClick={onRetry}>
-        ↻ Retry
+        <RotateCw aria-hidden="true" />
+        Retry
       </Button>
     </div>
   );

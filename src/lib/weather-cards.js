@@ -436,7 +436,8 @@ export function faaAlertLines(faaIndex) {
 }
 
 /**
- * The radar panel's heading: `🌧 NEXRAD Radar — HH:MM:SSZ`, refreshed each cycle.
+ * The radar panel's heading: `NEXRAD Radar — HH:MM:SSZ`, refreshed each cycle. No rain emoji: the
+ * panel draws a lucide icon beside the words (DESIGN.md Components), and an emoji renders per OS.
  *
  * UTC, and SAID to be UTC by the trailing Z: aviation weather is quoted in Zulu everywhere
  * else on the page, and a radar frame stamped in the viewer's local time is unusable next
@@ -448,10 +449,10 @@ export function faaAlertLines(faaIndex) {
  * @returns {string}
  */
 export function radarTitle(at) {
-  if (!at && at !== 0) return '🌧 NEXRAD Radar';
+  if (!at && at !== 0) return 'NEXRAD Radar';
   const date = at instanceof Date ? at : new Date(at);
-  if (Number.isNaN(date.getTime())) return '🌧 NEXRAD Radar';
+  if (Number.isNaN(date.getTime())) return 'NEXRAD Radar';
   const pad = (n) => String(n).padStart(2, '0');
   const hms = `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
-  return `🌧 NEXRAD Radar — ${hms}Z`;
+  return `NEXRAD Radar — ${hms}Z`;
 }

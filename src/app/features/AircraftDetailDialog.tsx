@@ -23,7 +23,7 @@
  * whatever opened it — the row in the table you were reading, not the top of the page.
  */
 
-import { Eye, Share2, Star, Zap } from 'lucide-react';
+import { Eye, RotateCw, Share2, Star, Zap } from 'lucide-react';
 import { useCallback, useMemo, useRef } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -295,7 +295,8 @@ export default function AircraftDetailDialog() {
             </div>
             <DialogFooter className="mx-0 mb-0 flex-row flex-wrap justify-center gap-2 sm:justify-center">
               <Button size="lg" className="min-h-11 pointer-fine:md:min-h-0" onClick={retry}>
-                ↻ Retry
+                <RotateCw aria-hidden="true" />
+                Retry
               </Button>
               <Button variant="outline" size="lg" className="min-h-11 pointer-fine:md:min-h-0" asChild>
                 <a href={planespottersUrl(reg)} target="_blank" rel="noopener noreferrer">
