@@ -26,7 +26,9 @@ import { centreForOcclusion, flightPanelOcclusion } from '@/lib/flight-panel-occ
 import { getPhase } from '@/lib/flight-phase.js';
 import { operatorFromCallsign } from '@/lib/express-operators.js';
 import { greatCirclePoints, isLonghaul, normalizeLonContinuity, wrapLonNear } from '@/lib/geo.js';
-import { regionBounds } from '@/lib/map-regions.js';
+import { hubLabelPlacement } from '@/lib/hub-labels.js';
+import { northAnchoredView } from '@/lib/map-fit.js';
+import { getRegion, regionBounds } from '@/lib/map-regions.js';
 import { prefersReducedMotion } from '@/lib/motion.js';
 import { HUB_RING, planeIconSpec } from '@/lib/plane-icon.js';
 import type { Flight } from '../data/types';
@@ -43,10 +45,54 @@ export type RegionRequest = { id: string; key: number };
 
 /**
  * A preset view's zoom for a map this wide. Zoom 4 spans the lower 48 in ~660px, so on a
- * phone it cropped SFO and LAX off the left edge (F78); one step out fits them.
+ * phone it cropped SFO and LAX off the left edge (F78); one step out fits them. Now only the
+ * fallback for a phone map that has no height yet: a sized one opens on `portraitUsView`.
  */
 export function viewZoom(zoom: number, widthPx: number): number {
-  return widthPx > 0 && widthPx < 640 ? zoom - 1 : zoom;
+  return isNarrow(widthPx) ? zoom - 1 : zoom;
+}
+
+/** A phone-width map (the F78 threshold). */
+function isNarrow(widthPx: number): boolean {
+  return widthPx > 0 && widthPx < 640;
+}
+
+/**
+ * A phone map, or any map taller than it is wide (a tablet held upright): width binds the lower
+ * 48, so these open on `portraitUsView`.
+ */
+function isPortrait(size: { x: number; y: number }): boolean {
+  return size.x > 0 && size.y > 0 && (isNarrow(size.x) || size.y > size.x);
+}
+
+/**
+ * The zoom step of a portrait map. Whole zoom levels are a factor of two apart, so the lower 48
+ * fitted to a 390 px map at zoom 3 used 85% of its width; a tenth of a level lets the fit fill it
+ * and lets a pinch stop where the fingers do. A landscape desktop keeps whole levels (sharp
+ * tiles, the wheel's familiar steps).
+ */
+export const PORTRAIT_ZOOM_SNAP = 0.1;
+
+/** px kept clear of the toolbar above the US box: the overlay's 8 px pad, a 36 px row, 8 px air. */
+const TOOLBAR_CLEARANCE = 52;
+
+/**
+ * The opening view of a portrait map with no home hub: the lower 48 — the "US" region preset —
+ * fitted to the map's width with its north edge just under the toolbar, the spare height falling
+ * south over Mexico, the Gulf and the Caribbean rather than over southern Canada
+ * (src/lib/map-fit.js; Nov 2026, "the first paint spends the top third on Canada"). Null for a
+ * landscape map, which keeps `US_VIEW`, or a map with no size.
+ */
+export function portraitUsView(size: { x: number; y: number }): { center: [number, number]; zoom: number } | null {
+  if (!isPortrait(size)) return null;
+  const region = getRegion('us') as { box: { south: number; west: number; north: number; east: number } };
+  const view = northAnchoredView(region.box, size, {
+    top: TOOLBAR_CLEARANCE,
+    bottom: 8,
+    side: 4,
+    snap: PORTRAIT_ZOOM_SNAP,
+  }) as { center: [number, number]; zoom: number } | null;
+  return view ? { center: view.center, zoom: view.zoom } : null;
 }
 
 type Airport = { iata: string; lat: number; lon: number; hub?: boolean };
@@ -249,10 +295,13 @@ export function LiveMap({
     const home = homeAirportRef.current
       ? (AIRPORTS as Airport[]).find((a) => a.iata === homeAirportRef.current)
       : undefined;
+    const size = { x: hostRef.current.clientWidth, y: hostRef.current.clientHeight };
+    const portraitUs = home ? null : portraitUsView(size);
     const map = L.map(hostRef.current, {
-      center: home ? [home.lat, home.lon] : US_VIEW.center,
-      zoom: home ? 5 : viewZoom(US_VIEW.zoom, hostRef.current.clientWidth),
+      center: home ? [home.lat, home.lon] : (portraitUs?.center ?? US_VIEW.center),
+      zoom: home ? 5 : (portraitUs?.zoom ?? viewZoom(US_VIEW.zoom, size.x)),
       zoomControl: false,
+      zoomSnap: isPortrait(size) ? PORTRAIT_ZOOM_SNAP : 1,
       // A flight crossing the antimeridian has to stay reachable by panning either way.
       worldCopyJump: true,
     });
@@ -326,12 +375,14 @@ export function LiveMap({
     for (const hub of HUBS) {
       const lon = wrapLonNear(hub.lon, centerLng);
       // HUB_RING is also the map key's swatch (MapLegend), so the two cannot drift.
+      // Close pairs (SFO/LAX, IAD/EWR) turn their labels apart (src/lib/hub-labels.js).
+      const { direction, offset } = hubLabelPlacement(hub.iata);
       L.circleMarker([hub.lat, lon], { ...HUB_RING })
         .bindTooltip(hub.iata, {
           permanent: true,
-          direction: 'top',
+          direction,
           className: 'hub-tooltip',
-          offset: [0, -10],
+          offset,
         })
         .addTo(group);
       L.circleMarker([hub.lat, lon], {
@@ -510,7 +561,12 @@ export function LiveMap({
   useEffect(() => {
     if (!regionRequest) return;
     const bounds = L.latLngBounds(regionBounds(regionRequest.id) as L.LatLngTuple[]);
-    requestMove((m) => flyOrJumpToBounds(m, bounds, 1.2));
+    requestMove((m) => {
+      // "US" on a portrait map returns to its own opening framing, not a centred fit.
+      const portrait = regionRequest.id === 'us' ? portraitUsView(m.getSize()) : null;
+      if (portrait) flyOrJump(m, portrait.center, portrait.zoom, 1.2);
+      else flyOrJumpToBounds(m, bounds, 1.2);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionRequest?.key]);
 

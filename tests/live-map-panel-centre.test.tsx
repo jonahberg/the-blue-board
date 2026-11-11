@@ -6,7 +6,7 @@
 import L from 'leaflet';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { panelAwareCentre, viewZoom } from '../src/app/map/LiveMap';
+import { PORTRAIT_ZOOM_SNAP, US_VIEW, panelAwareCentre, portraitUsView, viewZoom } from '../src/app/map/LiveMap';
 
 function stubWide(wide: boolean) {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -79,5 +79,25 @@ describe('viewZoom (F78: the phone map cropped SFO and LAX)', () => {
 
   it('does not guess for a map that has no width yet', () => {
     expect(viewZoom(4, 0)).toBe(4);
+  });
+});
+
+describe('portraitUsView (Nov 2026: the phone map opened with its top third on Canada)', () => {
+  it('opens a phone or upright-tablet map on the lower 48, north-anchored, at a snapped zoom', () => {
+    for (const size of [{ x: 393, y: 509 }, { x: 375, y: 517 }, { x: 820, y: 950 }]) {
+      const view = portraitUsView(size)!;
+      expect(view).not.toBeNull();
+      // North-anchored: the centre sits south of the box's own middle (~38°N) and of US_VIEW.
+      expect(view.center[0]).toBeLessThan(US_VIEW.center[0]);
+      expect(view.center[1]).toBeCloseTo(-95.75, 5);
+      expect(Math.abs(view.zoom / PORTRAIT_ZOOM_SNAP - Math.round(view.zoom / PORTRAIT_ZOOM_SNAP))).toBeLessThan(1e-6);
+      // Tighter than the old whole-level phone view (zoom 3) on a phone.
+      if (size.x < 640) expect(view.zoom).toBeGreaterThan(3);
+    }
+  });
+
+  it('leaves a landscape desktop map, and a map with no size, on the old view', () => {
+    expect(portraitUsView({ x: 1120, y: 660 })).toBeNull();
+    expect(portraitUsView({ x: 0, y: 0 })).toBeNull();
   });
 });
