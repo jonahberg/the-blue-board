@@ -46,7 +46,12 @@ function Row({
 }) {
   const time = formatFlightTime(row.departure_ts, row.origin, tzAbbrev) as string;
   return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,11rem)_minmax(0,1fr)_auto_auto]">
+    // Every row is its own grid, so the time column is a fixed width at every size: an `auto`
+    // column sized itself per row and the callsigns under each other started at different x.
+    // On a phone the route shares the second line with the status instead of taking a third.
+    // From `sm` the type takes a fixed column beside the route as well: as an `auto` column after
+    // the flexible one it was pushed around by each row's status, so no two types lined up.
+    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,11rem)_6rem_5.5rem_minmax(0,1fr)]">
       <span className="font-mono text-[11px] tabular-nums">
         {time}
         <span className="ml-1.5 text-muted-foreground">{relativeDeparture(row.deltaSec)}</span>
@@ -66,7 +71,7 @@ function Row({
         </span>
       </button>
 
-      <span className="col-span-3 font-mono text-[11px] sm:col-span-1">
+      <span className="font-mono text-[11px]">
         {row.origin}
         <span aria-hidden="true" className="mx-1 text-muted-foreground">
           →
@@ -74,9 +79,9 @@ function Row({
         {row.destination || '???'}
       </span>
 
-      <span className="hidden text-[11px] text-muted-foreground sm:inline">{row.type}</span>
+      <span className="hidden truncate text-[11px] text-muted-foreground sm:inline">{row.type}</span>
 
-      <span className="col-span-3 flex items-center justify-end gap-2 sm:col-span-1">
+      <span className="flex min-w-0 items-center justify-end gap-2 text-right">
         {row.airborne ? (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-bb-ok" />
@@ -94,7 +99,7 @@ function Row({
           <button
             type="button"
             onClick={() => onTrack(row)}
-            className="inline-flex min-h-11 items-center rounded-md border px-2 text-[10px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-7"
+            className="inline-flex min-h-11 shrink-0 items-center rounded-md border px-2 text-[10px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-7"
             title={
               row.airborne
                 ? `Track ${row.tail} on the live map`
