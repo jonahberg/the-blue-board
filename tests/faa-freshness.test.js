@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 
 import {
+  FAA_PROGRAM_END_GRACE_MS,
   FAA_STALE_AFTER_MS,
   currentFaaPicture,
   faaAnswerAsOf,
@@ -46,18 +47,24 @@ describe('program end times', () => {
     expect(programEndMs(null)).toBe(null);
   });
 
-  it('a program that ended after the answer was taken is past its end; one the FAA still listed after its end is not', () => {
-    const asOf = NOW - 20 * MIN;
-    expect(isProgramPastEnd({ endTime: new Date(NOW - 5 * MIN).toISOString() }, asOf, NOW)).toBe(true);
-    // Ended 30 min ago, but the answer 20 min ago still listed it: not lifted yet.
+  it('a program that ended after the answer was taken, longer ago than the grace, is past its end', () => {
+    const asOf = NOW - 24 * MIN;
+    expect(FAA_PROGRAM_END_GRACE_MS).toBe(15 * MIN);
+    expect(isProgramPastEnd({ endTime: new Date(NOW - 16 * MIN).toISOString() }, asOf, NOW)).toBe(true);
+    // Ended 30 min ago, but the answer 24 min ago still listed it: not lifted yet.
     expect(isProgramPastEnd({ endTime: new Date(NOW - 30 * MIN).toISOString() }, asOf, NOW)).toBe(false);
     expect(isProgramPastEnd({ endTime: new Date(NOW + 30 * MIN).toISOString() }, asOf, NOW)).toBe(false);
     expect(isProgramPastEnd({ endTime: '1500' }, asOf, NOW)).toBe(false);
   });
 
+  it('a stop that ended minutes ago is kept: news of an extension can take that long to arrive', () => {
+    // Extended a minute before its end; the answers that say so are still in the edge cache.
+    expect(isProgramPastEnd({ endTime: new Date(NOW - 5 * MIN).toISOString() }, NOW - 10 * MIN, NOW)).toBe(false);
+  });
+
   it('clears an expired program from programs and delays and recomputes the flags', () => {
-    const airport = ewrGroundStop(new Date(NOW - 5 * MIN).toISOString());
-    const { airports, expired } = withoutExpiredPrograms([airport], NOW - 20 * MIN, NOW);
+    const airport = ewrGroundStop(new Date(NOW - 16 * MIN).toISOString());
+    const { airports, expired } = withoutExpiredPrograms([airport], NOW - 24 * MIN, NOW);
     expect(expired).toEqual(['EWR:ground_stop']);
     expect(airports[0]).toMatchObject({ programs: [], delays: [], groundStop: false });
     expect(hubProgramMarker({ EWR: airports[0] }, 'EWR')).toBe(null);
@@ -91,8 +98,8 @@ describe('currentFaaPicture', () => {
     const b = currentFaaPicture(live, NOW - 10 * MIN, NOW + MIN);
     expect(b.key).toBe(a.key);
     const expiring = [ewrGroundStop(new Date(NOW + 2 * MIN).toISOString())];
-    const before = currentFaaPicture(expiring, NOW, NOW + MIN);
-    const after = currentFaaPicture(expiring, NOW, NOW + 3 * MIN);
+    const before = currentFaaPicture(expiring, NOW, NOW + 16 * MIN);
+    const after = currentFaaPicture(expiring, NOW, NOW + 18 * MIN);
     expect(after.key).not.toBe(before.key);
     expect(currentFaaPicture(live, NOW, NOW + FAA_STALE_AFTER_MS + MIN).key).not.toBe(a.key);
   });

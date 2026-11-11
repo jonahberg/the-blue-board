@@ -4,10 +4,13 @@
 // last good answer (up to 30 min old) and an `X-BB-FAA-Stale: <age in seconds>` header. So every
 // FAA answer now carries the moment it describes (`asOf`), and the clients decide from the clock:
 //
-//   - a program whose own end time fell between `asOf` and now has probably ended: it is cleared.
-//     (One that ended BEFORE `asOf` was still listed by the FAA after its end time — not lifted
-//     yet, e.g. an extension pending — so it stays.) Only an unambiguous ISO end time counts; the
-//     XML fallback's bare "1500" says nothing about the day.
+//   - a program whose own end time fell after `asOf`, and more than FAA_PROGRAM_END_GRACE_MS ago,
+//     has probably ended: it is cleared. (One that ended BEFORE `asOf` was still listed by the FAA
+//     after its end time — not lifted yet, e.g. an extension pending — so it stays.) The grace is
+//     how late news of an extension can reach the page: a ground stop extended a minute before its
+//     end would otherwise vanish and come back, re-announced by the hub strip, once a fresh answer
+//     got through the edge cache. Only an unambiguous ISO end time counts; the XML fallback's bare
+//     "1500" says nothing about the day.
 //   - past FAA_STALE_AFTER_MS the whole answer is stale: no program from it is shown as current,
 //     and the panel says "FAA status as of HH:MMZ" instead.
 //
@@ -23,6 +26,14 @@ import { parseStaleHeader } from './feed-health.js';
  * more), and the dashboard refreshes every 5 min, so anything under ~20 min is normal operation.
  */
 export const FAA_STALE_AFTER_MS = 25 * 60 * 1000;
+
+/**
+ * How long past its end time a program is still given the benefit of the doubt. An extension can
+ * take this long to reach the page: up to a 5-minute dashboard refresh, plus an edge copy served
+ * up to 15 minutes old while it revalidates (s-maxage=300, stale-while-revalidate=600) — in
+ * practice the next refresh after that brings it, so ~15 minutes covers it.
+ */
+export const FAA_PROGRAM_END_GRACE_MS = 15 * 60 * 1000;
 
 /**
  * The moment an /api/faa answer describes: when it arrived, less the server's own staleness
@@ -50,11 +61,14 @@ export function programEndMs(endTime) {
   return Number.isFinite(ms) ? ms : null;
 }
 
-/** True when the program's end time fell after the answer was taken and before now. */
+/**
+ * True when the program's end time fell after the answer was taken, and more than the grace
+ * (FAA_PROGRAM_END_GRACE_MS) before now.
+ */
 export function isProgramPastEnd(program, asOfMs, nowMs) {
   const end = programEndMs(program?.endTime);
   if (end === null) return false;
-  return end >= asOfMs && end < nowMs;
+  return end >= asOfMs && end + FAA_PROGRAM_END_GRACE_MS < nowMs;
 }
 
 const TYPE_FLAGS = {

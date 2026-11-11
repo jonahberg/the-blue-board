@@ -94,16 +94,54 @@ describe('WeatherProvider: faaIndex is the CURRENT FAA picture', () => {
     expect(seen!.faaIndex).toEqual({});
   });
 
-  it('a program past its own end time drops out between refreshes', async () => {
+  it('a program past its own end time (plus the extension grace) drops out between refreshes', async () => {
+    // Every refresh returns the same answer, taken at NOW: the FAA is not being re-read.
     api.fetchFaa.mockResolvedValue({ airports: [ewrGroundStop(new Date(NOW + 3 * MIN).toISOString())], asOfMs: NOW });
     render(<WeatherProvider><Probe /></WeatherProvider>);
     await flush();
     expect(hubProgramMarker(seen!.faaIndex, 'EWR')).toMatchObject({ label: 'Ground stop' });
+    // Ended 5 min ago: still shown (an extension may be on its way).
     await act(async () => {
-      vi.advanceTimersByTime(4 * MIN); // the one-minute clock, before the next 5-minute refresh
+      vi.advanceTimersByTime(8 * MIN);
     });
+    await flush();
+    expect(hubProgramMarker(seen!.faaIndex, 'EWR')).toMatchObject({ label: 'Ground stop' });
+    // Ended 16 min ago, answer 19 min old (not yet stale): cleared.
+    await act(async () => {
+      vi.advanceTimersByTime(11 * MIN);
+    });
+    await flush();
     expect(seen!.faaStale).toBe(false);
     expect(hubProgramMarker(seen!.faaIndex, 'EWR')).toBe(null);
+  });
+
+  it('coming back to a long-hidden tab refreshes first, so a live program is never blanked and re-announced', async () => {
+    api.fetchFaa.mockResolvedValue({ airports: [ewrGroundStop(new Date(NOW + 4 * 3600_000).toISOString())], asOfMs: NOW });
+    render(<WeatherProvider><Probe /></WeatherProvider>);
+    await flush();
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    await act(async () => {
+      vi.advanceTimersByTime(40 * MIN); // hidden: no refreshes, and no re-check either
+    });
+    expect(hubProgramMarker(seen!.faaIndex, 'EWR')).toMatchObject({ label: 'Ground stop' });
+
+    const calls = api.fetchFaa.mock.calls.length;
+    const freshAt = Date.now();
+    api.fetchFaa.mockResolvedValue({ airports: [ewrGroundStop(new Date(freshAt + 3600_000).toISOString())], asOfMs: freshAt });
+    const indexes: unknown[] = [];
+    hidden.mockReturnValue(false);
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      indexes.push(seen!.faaIndex);
+    });
+    await flush();
+    expect(api.fetchFaa.mock.calls.length).toBe(calls + 1);
+    // The ground stop never left the index on the way back.
+    expect(indexes.every((index) => hubProgramMarker(index as never, 'EWR') !== null)).toBe(true);
+    expect(seen!.faaStale).toBe(false);
+    expect(seen!.faaAsOf).toBe(freshAt);
+    expect(hubProgramMarker(seen!.faaIndex, 'EWR')).toMatchObject({ label: 'Ground stop' });
+    hidden.mockRestore();
   });
 
   it('an answer older than the one held does not replace it', async () => {
@@ -190,15 +228,15 @@ describe('/newark widget', () => {
 
   it('a current answer lists the program; one past its end time is dropped', async () => {
     const live = ewrGroundStop(new Date(NOW + 3600_000).toISOString());
-    const ended = { ...ewrGroundStop(new Date(NOW - 5 * MIN).toISOString()), airportCode: 'EWR' };
+    const ended = { ...ewrGroundStop(new Date(NOW - 17 * MIN).toISOString()), airportCode: 'EWR' };
     vi.stubGlobal('fetch', route(() => faaResponse([live])));
     await import('../src/scripts/newark-live.ts');
     const status = document.getElementById('newark-program-status')!;
     await vi.waitFor(() => expect(status.textContent).toMatch(/^Ground Stop/));
 
     vi.resetModules();
-    // Served 10 minutes stale: the stop ended 5 minutes ago, after that answer was taken.
-    vi.stubGlobal('fetch', route(() => faaResponse([ended], 10 * 60)));
+    // Served 20 minutes stale: the stop ended 17 minutes ago, after that answer was taken.
+    vi.stubGlobal('fetch', route(() => faaResponse([ended], 20 * 60)));
     await import('../src/scripts/newark-live.ts');
     await vi.waitFor(() => expect(status.textContent).toBe('No active FAA ground stop or delay program reported for EWR.'));
   });

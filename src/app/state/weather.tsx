@@ -159,9 +159,16 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, []);
 
-  // The clock half of the FAA/NAS freshness rule: between fetches (and while a hidden tab skips
-  // them) a held answer ages, a program passes its end time, and the picture must follow. Returns
-  // the same state object when nothing a reader would see changed, so consumers do not re-render.
+  // The clock half of the FAA/NAS freshness rule: between fetches a held answer ages, a program
+  // passes its end time, and the picture must follow. Returns the same state object when nothing a
+  // reader would see changed, so consumers do not re-render.
+  //
+  // Not while the tab is hidden (the refresh loop is paused then, so the held answer would only
+  // age into "stale"). On coming back, a refresh that is due runs at once and decides the picture
+  // from a fresh answer; re-checking first would blank a still-active program for the second the
+  // fetch takes and then bring it back, and the hub strip (a polite live region) would announce
+  // it as new.
+  const lastFetchAt = useLatest(state.updatedAt);
   useEffect(() => {
     const recheck = () =>
       setState((prev) => {
@@ -177,13 +184,22 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
           nasStale,
         };
       });
-    const timer = setInterval(recheck, FAA_CLOCK_TICK_MS);
-    document.addEventListener('visibilitychange', recheck);
+    const onTick = () => {
+      if (!document.hidden) recheck();
+    };
+    const onVisibility = () => {
+      if (document.hidden) return;
+      const last = lastFetchAt.current;
+      if (last === null || Date.now() - last >= WEATHER_REFRESH_MS) setTick((n) => n + 1);
+      else recheck();
+    };
+    const timer = setInterval(onTick, FAA_CLOCK_TICK_MS);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       clearInterval(timer);
-      document.removeEventListener('visibilitychange', recheck);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
+  }, [lastFetchAt]);
 
   const cycle = useRef(0);
   useEffect(() => {
