@@ -1,7 +1,6 @@
 // ═══ THE HOME-HUB PICKER'S OPTIONS ═══
-// One list for every home-hub picker: the phone More sheet (src/app/shell/MobileNav.tsx) reads it
-// here. The "What is this dashboard?" dialog (src/app/features/Onboarding.tsx) still carries its own
-// copy of the same nine rows (`legacy/index.html:113-125`); it should import this one. The codes
+// One list for every home-hub picker: the phone More sheet (src/app/shell/MobileNav.tsx) and the
+// "What is this dashboard?" dialog (src/app/features/Onboarding.tsx) both read it here. The codes
 // follow HOME_HUB_CYCLE (src/lib/home-airport.js), minus its "no preference" slot.
 
 /** @type {ReadonlyArray<{code: string, name: string}>} */
