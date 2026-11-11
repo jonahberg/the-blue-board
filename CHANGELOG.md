@@ -10,7 +10,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ### Fixed
 - **Which flights a ground stop or delay program holds.** A program at San Francisco holds flights heading *to* San Francisco, at the airports they leave from; San Francisco's own departures were running on time. The brief said "flights out of San Francisco" and told departing travelers to check their flights. It now says "flights into", and the note for travelers is addressed to people flying to that airport.
-- **The brief's tone matches the header.** A ground delay program at one United hub now reads "Watch", like the header's "Some Delays". A ground stop or closure at a hub, or delay programs at two or more hubs at once, reads "Disrupted". The brief can now carry its note for travelers whenever a hub has a ground stop or delay program, at either tone.
+- **The brief's tone matches the header.** Ground delay programs at United hubs now read "Watch", however many hubs have one, like the header's "Some Delays". A ground stop or closure at a hub reads "Disrupted". The brief can now carry its note for travelers whenever a hub has a ground stop or delay program, at either tone.
 - **The colors agree too.** The small source tag under a sentence about a hub's ground delay program is now amber, like the hub's marker in the header, instead of red; ground stops and closures stay red.
 - **The ticker says the same thing when there is no brief.** The line that read "Disrupted: SFO ground delay program (avg 62m)" while the header said "Some Delays" now reads "Some delays: ground delay program for flights into SFO (avg 62 min)". It says "Disrupted" only when the header does, and a ground stop reads "Disrupted: ground stop for flights into EWR".
 - **Fewer rewrites for nothing.** A new brief is written when the story changes: a new FAA program, a hub falling below 80% on time, weather getting better or worse, the disruption index moving into a new range. It is no longer rewritten because the number of flights in the air moved, a hub at 95% on time reached 100%, a hub's reading came and went, a weather report described the same fog differently, light rain came and went at a hub, or a possible FAA action at an airport that is not a hub appeared or moved. The brief is still refreshed at least once an hour.
@@ -20,7 +20,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 - **No repeated weather.** When a hub's ground stop or delay program is for weather, the program's own line already says so ("because of low clouds"), so the brief no longer adds a separate weather line for that hub.
 - **Weather in plain words**, such as "very low clouds and fog, enough to slow arrivals and departures significantly", instead of a rating from the site. Weather with nothing specific to name is left out.
 - **Possible FAA actions at airports that are not United hubs** (Miami and Seattle that morning) come last, in one line at most.
-- **Shorter headlines.** A headline over 14 words is replaced with a short one written from the data.
+- **Shorter, honest headlines.** A headline over 14 words is replaced with a short one written from the data, and so is one that calls the operation calm or smooth while the brief itself reads "Watch" or "Disrupted".
+- **Shorter briefs on bad days.** When something is wrong, the brief no longer pads itself with the number of flights in the air or with Starlink; fewer lines is fine.
+- **The note for travelers names every affected hub**: "If you are flying to Newark or Chicago O'Hare, …", or "one of those airports" when there are three or more.
 - **Claude's instructions** say the same things: write "flights into", keep the headline to what is happening and where, and write about the operation, not about the brief or which airports are hubs.
 
 ## [1.25.0] - 2026-11-11

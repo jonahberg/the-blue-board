@@ -93,13 +93,13 @@ describe('verifyBrief: items', () => {
       item('Every hub is at 85% on time or better; Los Angeles is the low mark and Houston is at 100%.', ['otp.floor', 'otp.IAH']),
       item('The FAA says a ground stop is possible at Newark until 9:00 PM ET and at Boston until 7:30 PM ET. Neither is in effect.', ['faa.planned.EWR', 'faa.planned.BOS']),
       item('630 United flights are in the air, 280 of them with Starlink.', ['air.starlink']),
-    ], { tone: 'watch' }), FACTS.filter((f) => f.id !== 'faa.active.EWR.gs'));
+    ], { tone: 'watch', headline: 'Ground stops at Newark and Boston.' }), FACTS.filter((f) => f.id !== 'faa.active.EWR.gs'));
     expect(out.ok).toBe(true);
     expect(out.report.itemsKept).toBe(3);
     expect(out.report.dropped).toEqual([]);
     // The headline rests on the items' facts but need not repeat their "possible": item-only rules.
     expect(out.report.headline.status).toBe('kept');
-    expect(out.brief.headline).toBe('Calm across the network.');
+    expect(out.brief.headline).toBe('Ground stops at Newark and Boston.');
   });
 
   it('drops an item whose number is not in the facts it cites (wrong number)', () => {
@@ -209,6 +209,19 @@ describe('verifyBrief: headline, tone, traveler note', () => {
     const out = verifyBrief(brief(items, { headline: 'United is calm right now, with lots of Starlink flights in the air tonight.' }), FACTS.filter((f) => f.toneFloor === 'calm'));
     expect(out.report.headline.status).toBe('kept');
     expect(out.report.warnings).toContain('headline:over_12_words');
+  });
+
+  it('replaces a headline that calls a non-calm operation calm, smooth, quiet or "running normally"', () => {
+    const watchFacts = FACTS.filter((f) => f.id !== 'faa.active.EWR.gs'); // computed tone: watch
+    for (const headline of ['United operations look calm.', 'Flights are running smoothly.', 'A smooth day so far.', 'A quiet afternoon at the hubs.', 'Hubs are running normally.', 'Calmly through the evening.']) {
+      const out = verifyBrief(brief(items, { headline }), watchFacts);
+      expect(out.brief.tone, headline).toBe('watch');
+      expect(out.report.headline, headline).toEqual({ status: 'replaced', reasons: ['headline:calm_when_not_calm'], original: headline });
+      expect(out.brief.headline).toBe('FAA action is possible at Newark; none is in effect.');
+    }
+    // Calm words in a calm brief, and words that merely contain them, are fine.
+    expect(verifyBrief(brief(items, { headline: 'United operations look calm.' }), FACTS.filter((f) => f.toneFloor === 'calm')).report.headline.status).toBe('kept');
+    expect(verifyBrief(brief(items, { headline: 'Smoother than yesterday at the hubs.' }), watchFacts).report.headline.status).toBe('kept');
   });
 
   it('replaces a headline past fourteen words with the template headline', () => {

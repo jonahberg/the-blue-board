@@ -73,7 +73,7 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `faa.active.<CODE>.gs` / `.gdp` | faa | `/api/faa` programs: hubs, plus other airports we can name and put on a clock (`AIRPORT_TZ`) | The FAA has a ground stop in effect for flights heading to Newark (EWR) until 8:30 PM ET, because of thunderstorms. Those flights are held at their departure airport. … (a stop or delay program holds flights **bound for** the airport, at the airports they leave from; that airport's own departures are not what it holds) | ground stop at a hub: disrupted; ground delay program at a hub: watch; elsewhere: watch |
 | `faa.active.<HUB>.closure` | faa | hubs only, and only a whole-airport closure: nightly curfews (`DLY`, `HHMM-HHMM`), PPR/transient-GA restrictions and runway/taxiway-only NOTAMs are screened out (`isWholeAirportClosure`), also from the FAA index `networkStatus()` reads | The FAA lists Newark (EWR) as closed. | disrupted |
 | `faa.active.<HUB>.dep` / `.arr` | faa | hubs only | The FAA reports departure delays of 31 to 45 minutes at Houston (IAH), because of thunderstorms. | watch |
-| `faa.active.count` | faa | hub GS/GDP/closures | No FAA ground stop or ground delay program is in effect at any United hub. / 1 FAA program affects a United hub: a ground stop for flights into Newark. | a ground stop or closure at a hub, or ground delay programs at two or more hubs at once: disrupted; one hub's ground delay program: watch |
+| `faa.active.count` | faa | hub GS/GDP/closures | No FAA ground stop or ground delay program is in effect at any United hub. / 1 FAA program affects a United hub: a ground stop for flights into Newark. | a ground stop or closure at a hub: disrupted; ground delay programs only (any number of hubs): watch |
 | `faa.active.other` | faa | non-hub GS/GDP | The FAA also has 1 program in effect at other airports: a ground stop for flights into Boston. | calm |
 | `faa.planned.<CODE>` | faa_planned | `/api/nas` operations plan (`UNTIL`/`AFTER`/`HHMM-HHMM` Zulu, resolved to the nearest occurrence) | The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) until 9:00 PM ET. It is not in effect. | hub: watch |
 | `faa.planned.count` | faa_planned | same | The FAA's operations plan lists 2 possible or planned programs for later. None of them is in effect now. | calm |
@@ -134,17 +134,20 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    partial quote (`radio_quote_mismatch`), an unattributed one (`radio_quote_unattributed`) or an
    unbalanced quote mark drops the item. Markup or a URL drops any item (`markup_or_url`).
 5. **Limits.** At most 4 items; the rest are dropped (`over_item_limit`).
-6. **Headline.** Checked against the union of the **surviving** items' facts. Fails, or runs past 14
-   words → replaced by the template headline (the report keeps the original). Over 12 words is a warning.
+6. **Headline.** Checked against the union of the **surviving** items' facts. Fails, runs past 14
+   words, or calls the operation calm, smooth, quiet or "running normally" (word match) while the
+   computed tone is not calm (`headline:calm_when_not_calm`) → replaced by the template headline
+   (the report keeps the original). Over 12 words is a warning. The template's own watch headlines
+   avoid those words, so a replacement never trips the rule.
 7. **Traveler note.** Checked like an item; kept only when an FAA ground stop or ground delay
    program is in effect at a United hub, or the final tone is `disrupted` (`travelerNoteAllowed` in
    `brief-facts.js`; the dashboard applies the same rule to the facts the brief cites, in
    `brief-view.js`). Otherwise dropped as `tone_is_<tone>`.
 8. **Tone.** Computed from the facts: the most alarming `toneFloor`. It overrides the model's tone, and
-   the report says so (`tone.overridden`). FAA programs at United hubs (since v1.25.1): a ground
-   delay program at one hub is `watch`, matching the header's network chip ("Some Delays"); a ground
-   stop or closure at a hub, or ground delay programs at two or more hubs at once, is `disrupted`, as
-   is the network status at its worst level ("Disrupted"). A soft hub, a minor index, hub weather at
+   the report says so (`tone.overridden`). FAA programs at United hubs (since v1.25.1) follow the
+   header's own levels (`src/lib/ops-health.js`): ground delay programs, at however many hubs, are
+   `watch` ("Some Delays"); a ground stop or closure at a hub is `disrupted`, as is the network
+   status at its worst level ("Disrupted"). A soft hub, a minor index, hub weather at
    warning or worse and a program away from the hubs stay `watch`.
 9. **Style warnings** (not drops): jargon (`GDP`, `IFR`, …), exclamation marks, emoji.
 
@@ -167,16 +170,21 @@ Text it rejects, from `tests/brief-verify.test.js`:
 `buildTemplateBrief(facts)`: the tone from `computeTone`, then up to 3 items (calm) or 4: every
 specific problem (severity ≥ 20, not an aggregate), then the fact that sets the tone when nothing
 specific does (the disruption index on a day of unconfirmed cancellations, with the cancellation
-split), then background (on-time spread, the FAA picture or a planned program, Starlink, weather).
+split), then background: the on-time spread and the FAA picture or a planned program, plus, on a
+calm day only, what is in the air and the hub-weather tally (on any other day they are padding, and
+a shorter brief is better; at least one item always remains).
 A hub's own weather item is left out while a ground stop or delay program for a weather cause is in
 effect there (the program's item already says "because of low clouds"); its slot goes to the next
 specific fact by severity worth a line (severity ≥ 10, such as that hub's cancellations), else to the
 background.
 Items are fact statements verbatim; headlines are fixed per tone and lead fact ("A ground stop is
-holding flights into Newark.", "Running normally, with FAA action possible at Newark.", "United is
-running smoothly right now."), never over 12 words. A template adds a traveler note whenever one is allowed (rule 7)
+holding flights into Newark.", "Ground delay programs are holding flights into Newark and San
+Francisco.", "FAA action is possible at Newark; none is in effect.", "United is running smoothly right
+now."), never over 12 words. A template adds a traveler note whenever one is allowed (rule 7)
 addressed by direction: "flying to" an airport under a stop or delay program, "to or from" a closed
-one, "out of" a hub with a heavy on-time problem. Every fixture's template passes the
+one, "out of" a hub with a heavy on-time problem. It cites every hub's stop, delay program or
+closure: two are named ("flying to Newark or Chicago O'Hare"), three or more are "one of those
+airports". Every fixture's template passes the
 verifier (`tests/brief-template.test.js`); the cron re-checks the template it publishes and logs an
 error if it ever fails.
 

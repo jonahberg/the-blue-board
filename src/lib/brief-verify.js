@@ -18,8 +18,9 @@
 //      "approach", "ATC", "heard on frequency"…). Any other quoted text in a radio item, a partial
 //      or altered quote, or an unattributed one drops the item. Markup or a URL drops any item.
 //   5. The headline is checked against the union of the SURVIVING items' facts. A headline that
-//      fails (or runs past 14 words) is replaced with the template headline, never published.
-//      Past 12 words (prompt rule 3) it is kept with a warning.
+//      fails (or runs past 14 words, or says the operation is calm, smooth, quiet or "running
+//      normally" while the computed tone is not calm) is replaced with the template headline,
+//      never published. Past 12 words (prompt rule 3) it is kept with a warning.
 //   6. The traveler note is checked like an item, and only survives when an FAA ground stop or
 //      ground delay program is in effect at a United hub, or the final tone is "disrupted"
 //      (travelerNoteAllowed).
@@ -49,6 +50,8 @@ const RADIO_ATTRIBUTION_RE = /\b(?:heard|radio|frequenc(?:y|ies)|tower|controlle
 const QUOTE_ATTRIBUTION_RE = /\b(?:heard|radio|frequenc(?:y|ies)|tower|controllers?|approach(?:\s+control)?|ground\s+control|air\s+traffic\s+control|ATC|transmissions?)\b/i;
 /** Markup or a link in model text: never published. */
 const MARKUP_RE = /<[^>]{0,200}>|<\/?[a-z]|[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
+/** A headline saying the operation is calm: replaced whenever the computed tone is not calm. */
+const CALM_HEADLINE_RE = /\b(?:calm|calmly|smooth|smoothly|quiet|quietly)\b|\brunning\s+normally\b/i;
 /** Words that mark an FAA program as not (yet) in effect. */
 const HEDGE_RE = /\b(?:possible|possibly|could|may|might|planned|plans?|expects?|expected|watch(?:ing)?|later|if|not\s+(?:yet\s+)?in\s+effect|isn't\s+in\s+effect|neither\s+is\s+in\s+effect|none\s+(?:of\s+them\s+)?(?:is|are)\s+in\s+effect)\b/i;
 
@@ -237,6 +240,8 @@ export function verifyBrief(candidate, facts) {
   let headlineFactIds = [];
   const headlineReasons = checkSentence(headline, union, factIndex, { itemRules: false }).filter((r) => r !== 'too_many_fact_ids');
   if (headline.length > MAX_HEADLINE_CHARS || wordCount(headline) > MAX_HEADLINE_WORDS) headlineReasons.push('headline_too_long');
+  // "Operations look calm" under a computed "watch" contradicts the tone word beside it.
+  if (tone !== 'calm' && CALM_HEADLINE_RE.test(headline)) headlineReasons.push('headline:calm_when_not_calm');
   if (headlineReasons.length) {
     const replacement = templateHeadline(factList, tone);
     report.headline = { status: 'replaced', reasons: headlineReasons, original: headline };
