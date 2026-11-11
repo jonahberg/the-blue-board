@@ -77,7 +77,9 @@ export function retryDelayMs(attempt) {
  */
 export function boardLoadMessage({ fromCache, count } = {}) {
   if (!fromCache) return '';
-  return `⚡ Served from cache · ${Number(count) || 0} UA flights`;
+  // No ⚡: on this site ⚡ means Starlink (DESIGN.md), and under a board full of Starlink rows the
+  // cache line read as one more of them. The words carry it.
+  return `Served from cache · ${Number(count) || 0} UA flights`;
 }
 
 /**

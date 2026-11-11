@@ -118,6 +118,43 @@ describe('FlightSheet on a phone (F20)', () => {
   });
 });
 
+describe('FlightSheet focus on open (Nov 2026)', () => {
+  // Radix focused the first button, so a click on a map marker opened the panel with "Center map"
+  // (or "More details") ringed. The heading takes focus now, and after a pointer it asks for no
+  // ring; no outline is removed anywhere.
+  it('lands on the heading, which is not a Tab stop, never on a control', async () => {
+    viewport(1280);
+    await open(flight());
+    const title = screen.getByRole('heading', { name: 'UA2106' });
+    expect(document.activeElement).toBe(title);
+    expect(title.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement?.tagName).not.toBe('BUTTON');
+  });
+
+  it('asks for no focus ring when a pointer opened it, and leaves a key-opened panel to the browser', async () => {
+    viewport(390);
+    const f = flight();
+    feed.flights = [f];
+    Object.assign(ui, { selection: null, select: () => {}, focusOn: h.focusOn, openAircraft: () => {}, announce: () => {} });
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    // Mounted closed first, as on the page; then the opening input, then the selection.
+    const view = render(<FlightSheet />);
+    const openWith = async (input: () => void) => {
+      Object.assign(ui, { selection: null });
+      await act(async () => view.rerender(<FlightSheet />));
+      focus.mockClear();
+      input();
+      Object.assign(ui, { selection: { kind: 'flight', flight: f } });
+      await act(async () => view.rerender(<FlightSheet />));
+      const title = screen.getByRole('heading', { name: 'UA2106' });
+      return focus.mock.calls.find((_, i) => focus.mock.contexts[i] === title)?.[0];
+    };
+    expect(await openWith(() => fireEvent.pointerDown(document.body))).toEqual({ preventScroll: true, focusVisible: false });
+    expect(await openWith(() => fireEvent.keyDown(document.body, { key: 'Enter' }))).toEqual({ preventScroll: true });
+    focus.mockRestore();
+  });
+});
+
 describe('FlightSheet aircraft line for a tail missing from the fleet DB (F10/F71)', () => {
   it('a 787-9 is a recent delivery, never "United Express"', async () => {
     viewport(1280);

@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 /**
- * The dashboard header's search button is the only search entry point on a phone. Below `sm`
- * its visible label is `display:none`, which also removes it from the accessibility tree —
- * v1.8.0 shipped it announcing as a bare "button" (axe button-name, critical).
+ * The dashboard header's search button is the only search entry point on a phone. v1.8.0 hid
+ * its visible label with `display:none` below `sm`, which also removed it from the accessibility
+ * tree, and it announced as a bare "button" (axe button-name, critical). An aria-label fixed
+ * that, but over the visible "Find a flight ⌘K" it announced different words from the ones on
+ * screen (axe label-content-name-mismatch, WCAG 2.5.3, Nov 2026). The name now comes from the
+ * label itself, which is `sr-only` below `sm` — never `hidden`.
  *
- * jsdom does not apply Tailwind, so `getByRole(..., { name })` would pass even with the bug
- * (the `hidden sm:inline` span still counts as text here). The name therefore has to come
- * from an attribute that does not depend on layout, and that is what is asserted.
+ * jsdom does not apply Tailwind, so `getByRole(..., { name })` would pass even with a `hidden`
+ * label. The class that keeps the label in the tree at every width is what is asserted.
  */
 
 import { cleanup, render, screen } from '@testing-library/react';
@@ -18,8 +20,9 @@ import { supportUrl } from '@/lib/support-link.js';
 vi.mock('../src/app/state/feed', () => ({
   useFeed: () => ({ flights: [], freshness: 'live', countdown: 30 }),
 }));
+const watch = vi.hoisted(() => ({ watched: [] as { flight: string }[] }));
 vi.mock('../src/app/state/watch', () => ({
-  useWatch: () => ({ watched: [] }),
+  useWatch: () => watch,
 }));
 
 const { Header } = await import('../src/app/shell/Header');
@@ -38,13 +41,22 @@ function renderHeader() {
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  watch.watched = [];
+});
 
 describe('Header search button', () => {
-  it('carries its accessible name as an attribute, independent of the hidden label', () => {
+  it('is named by its own label, kept in the accessibility tree at every width', () => {
     renderHeader();
     const button = screen.getByRole('button', { name: 'Find a flight' });
-    expect(button.getAttribute('aria-label')).toBe('Find a flight');
+    // No aria-label to drift from the visible words (WCAG 2.5.3).
+    expect(button.getAttribute('aria-label')).toBeNull();
+    const label = [...button.querySelectorAll('span')].find((el) => el.textContent === 'Find a flight')!;
+    const classes = label.className.split(/\s+/);
+    // Below `sm` the label is visually hidden but still read: sr-only, never display:none.
+    expect(classes).toContain('max-sm:sr-only');
+    expect(classes.some((c) => /^(max-sm:)?hidden$/.test(c))).toBe(false);
     expect(button.getAttribute('aria-haspopup')).toBe('dialog');
   });
 
@@ -63,7 +75,7 @@ describe('Header search button', () => {
 
   it('keeps a 44px hit area on coarse pointers at every width (only a fine pointer relaxes it)', () => {
     renderHeader();
-    for (const name of ['Find a flight', 'Watched flights (0)', 'What is this dashboard?']) {
+    for (const name of ['Find a flight', 'Watched flights', 'What is this dashboard?']) {
       const classes = screen.getByRole('button', { name }).className.split(/\s+/);
       expect(classes).toEqual(expect.arrayContaining(HIT_BOX_44));
       // Width is not input type: the box only comes off for a mouse at md+.
@@ -74,7 +86,9 @@ describe('Header search button', () => {
 
   it('on phones swaps the "?" for a labelled support link; the "?" returns from md: up', () => {
     renderHeader();
-    const support = screen.getByRole('link', { name: 'Support The Blue Board' });
+    // The site-wide "cover a day" wording (Nov 2026); an icon-only link, so the name is its label.
+    const support = screen.getByRole('link', { name: 'Cover a day of The Blue Board' });
+    expect(support.getAttribute('title')).toBe('Cover a day of The Blue Board');
     expect(support.getAttribute('href')).toBe(supportUrl('mobile-header'));
     // A neutral "support" icon, not the old coffee cup; the name comes from aria-label.
     expect(support.querySelector('svg')?.getAttribute('class')).toContain('lucide-hand-heart');
@@ -88,5 +102,27 @@ describe('Header search button', () => {
     const help = screen.getByRole('button', { name: 'What is this dashboard?' }).className.split(/\s+/);
     expect(help).toContain('hidden');
     expect(help).toContain('md:inline-flex');
+  });
+});
+
+describe('Header wordmark', () => {
+  it('is named by its own words plus its purpose, with no aria-label over different text (WCAG 2.5.3)', () => {
+    renderHeader();
+    const home = screen.getByRole('link', { name: /^The Blue Board\b.*back to the live map$/ });
+    expect(home.getAttribute('href')).toBe('#live');
+    expect(home.getAttribute('aria-label')).toBeNull();
+    // The capitals are CSS: a screen reader reads a name, not an acronym.
+    const word = [...home.querySelectorAll('span')].find((el) => el.textContent === 'The Blue Board')!;
+    expect(word.className.split(/\s+/)).toContain('uppercase');
+  });
+});
+
+describe('Header watch button', () => {
+  it('is named by its words with the count it shows among them, not an aria-label over the count (WCAG 2.5.3)', () => {
+    watch.watched = [{ flight: 'UA1' }, { flight: 'UA2' }];
+    renderHeader();
+    const button = screen.getByRole('button', { name: 'Watched flights 2' });
+    expect(button.getAttribute('aria-label')).toBeNull();
+    expect(button.getAttribute('aria-controls')).toBe('watch-panel');
   });
 });

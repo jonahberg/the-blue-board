@@ -175,6 +175,24 @@ describe('ScheduleTable evidence markers (v1.13.0)', () => {
     expect(onToggleWatch.mock.calls[0][0].ident).toBe('UA526H');
   });
 
+  it('the flight number is a real link to its flight page (Nov 2026: it was blue and did nothing)', () => {
+    const row = rowModel(0, { ident: 'UA526H', identDisplay: 'UA526' });
+    renderTable({ rows: [row, rowModel(1, { ident: '—', identDisplay: '—' })], dividerIndex: -1 });
+    const link = screen.getByRole('link', { name: 'UA526' });
+    expect(link.getAttribute('href')).toBe('/flight/UA526');
+    // Same tab: no target, so middle-click and copy-link behave like any link.
+    expect(link.getAttribute('target')).toBeNull();
+    expect(link.className).toMatch(/\btext-primary\b/);
+    expect(link.className).toMatch(/\bhover:underline\b/);
+    // 44 px on touch, relaxed only for a mouse at md+.
+    expect(link.className).toMatch(/\bmin-h-11\b/);
+    expect(link.className).toMatch(/pointer-fine:md:min-h-0/);
+    // A row without a number prints a plain dash, not a link-coloured one.
+    const dashRow = document.querySelectorAll('[data-flight-row]')[1];
+    expect(dashRow.querySelector('a')).toBeNull();
+    expect(dashRow.querySelector('.text-primary')).toBeNull();
+  });
+
   it('a landing the live feed proved: Landed* with "seen landing", never "presumed (no live update)"', () => {
     renderTable({
       rows: [

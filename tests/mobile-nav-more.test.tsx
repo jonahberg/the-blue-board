@@ -38,13 +38,13 @@ function openMore() {
 }
 
 describe('MobileNav More sheet', () => {
-  it('lists About and a Support link next to the overflow tabs', () => {
+  it('lists About and the "Help cover a day" support link next to the overflow tabs', () => {
     mount();
     const sheet = openMore();
     expect(within(sheet).getByRole('button', { name: 'Sources' })).toBeTruthy();
     expect(within(sheet).getByRole('button', { name: 'About' })).toBeTruthy();
 
-    const support = within(sheet).getByRole('link', { name: /Support The Blue Board/ });
+    const support = within(sheet).getByRole('link', { name: 'Help cover a day' });
     expect(support.getAttribute('href')).toBe(supportUrl('mobile-more'));
     expect(support.getAttribute('target')).toBe('_blank');
     expect(support.getAttribute('rel')).toBe('noopener noreferrer');
@@ -57,7 +57,7 @@ describe('MobileNav More sheet', () => {
     const sheet = openMore();
     for (const el of [
       within(sheet).getByRole('button', { name: 'About' }),
-      within(sheet).getByRole('link', { name: /Support The Blue Board/ }),
+      within(sheet).getByRole('link', { name: 'Help cover a day' }),
     ]) {
       expect(el.className).toMatch(/\bmin-h-11\b/);
       expect(el.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');

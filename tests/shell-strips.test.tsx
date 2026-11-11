@@ -284,10 +284,24 @@ describe('HubHealthStrip', () => {
     expect(screen.getByText(/^FAA status unknown since \d\d:\d\d$/)).toBeTruthy();
   });
 
-  it('dims a chip whose reading comes from an hours-old board (F91)', () => {
+  it('marks a chip whose reading comes from an hours-old board, without dimming its number (F91)', () => {
     hubState.hubs[1] = { ...hubState.hubs[1], asOfMs: Date.now() - 3 * 60 * 60_000 };
     renderStrip();
-    expect(classesOf(screen.getByRole('link', { name: /DEN/ }))).toContain('opacity-60');
-    expect(classesOf(screen.getByRole('link', { name: /ORD/ }))).not.toContain('opacity-60');
-  });
-});
+    const den = screen.getByRole('link', { name: /DEN/ });
+    const ord = screen.getByRole('link', { name: /ORD/ });
+    // A word and an icon, not only a fainter chip (DESIGN.md: never a visual-only signal).
+    expect(den.textContent).toContain('(stale reading)');
+    expect(den.querySelector('svg[data-stale-reading]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(ord.textContent).not.toContain('stale');
+    expect(ord.querySelector('svg[data-stale-reading]')).toBeNull();
+    // The percentage keeps full contrast: neither the chip nor the number is dimmed (axe
+    // color-contrast measured 3.82:1 for the 60% chip). Only the glyph recedes.
+    expect(classesOf(den)).not.toContain('opacity-60');
+    const pct = [...den.querySelectorAll('span')].find((el) => /%$/.test(el.textContent ?? ''))!;
+    expect(classesOf(pct)).not.toContain('opacity-60');
+    expect(den.querySelector('[aria-hidden="true"].opacity-60')).not.toBeNull();
+    // The sr-only words are absolutely positioned: a positioned chip keeps them inside the
+    // sideways scroller (unpositioned, they widened a 390 px phone page to 585 px).
+    expect(classesOf(den)).toContain('relative');
+    expect(ord.querySelector('.opacity-60')).toBeNull();
+  });});

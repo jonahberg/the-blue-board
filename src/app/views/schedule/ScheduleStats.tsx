@@ -43,18 +43,16 @@ function MiniMetric({
   label,
   note,
   valueClass,
-  title,
   className,
 }: {
   value: React.ReactNode;
   label: React.ReactNode;
   note?: string | null;
   valueClass?: string;
-  title?: string;
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-0.5 bg-card px-1 py-1.5', className)} title={title}>
+    <div className={cn('flex flex-col items-center justify-center gap-0.5 bg-card px-1 py-1.5', className)}>
       <dt className="order-2 text-center text-[9px] leading-tight uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className={cn('order-1 font-mono text-base leading-none font-semibold tabular-nums', valueClass)}>{value}</dd>
       {note ? <dd className="order-3 text-center font-mono text-[9px] leading-tight text-muted-foreground">{note}</dd> : null}
@@ -67,7 +65,6 @@ function Metric({
   label,
   note,
   valueClass,
-  title,
 }: {
   value: React.ReactNode;
   label: React.ReactNode;
@@ -77,10 +74,9 @@ function Metric({
    */
   note?: string | null;
   valueClass?: string;
-  title?: string;
 }) {
   return (
-    <Card className="flex min-w-24 flex-1 flex-col items-center gap-0.5 rounded-md px-2 py-1.5" title={title}>
+    <Card className="flex min-w-24 flex-1 flex-col items-center gap-0.5 rounded-md px-2 py-1.5">
       <span className={cn('font-mono text-lg leading-none font-semibold tabular-nums', valueClass)}>{value}</span>
       {/* `text-balance` and the unbreakable note: on a tablet the seven cards are ~105 px wide
           and the labels wrap, which left "11" or "TIMED" alone on a line. */}
@@ -94,6 +90,23 @@ function Metric({
         ) : null}
       </span>
     </Card>
+  );
+}
+
+/**
+ * A card label that explains itself: the dotted term opens its explanation on hover, focus or a
+ * tap (`JargonTerm`). These were `title=` attributes on the cards, which a touch screen never
+ * shows (Nov 2026). On touch the term is a 44 px target; the wrapper's negative margin takes that
+ * height back out of the label's line, so the card does not grow (the On-Time pattern).
+ */
+function Explained({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="-my-4 inline-flex align-middle pointer-fine:my-0">
+      <JargonTerm description={text}>
+        {/* A <button> resets text-transform, so the term carries its own. */}
+        <span className="uppercase">{children}</span>
+      </JargonTerm>
+    </span>
   );
 }
 
@@ -139,14 +152,16 @@ export function ScheduleStats({
   // stack three of these lines between the cards and the table.
   const notes = [
     stats.presumed > 0 ? (
-      <span
+      // The chip is the term: a tap, hover or focus says what "presumed" means. On touch its 44 px
+      // hit box is an `after:` box, so the running line keeps its height.
+      <JargonTerm
         key="presumed"
-        className="mr-2 inline-flex items-center gap-1 rounded-sm border bg-muted/50 px-1.5 py-0.5 align-middle"
-        title={copy.presumed.title}
+        description={copy.presumed.title}
+        className="relative mr-2 min-h-0 gap-1 rounded-sm border bg-muted/50 px-1.5 py-0.5 align-middle after:absolute after:inset-x-0 after:-inset-y-2.5 pointer-fine:md:after:hidden"
       >
         <Plane aria-hidden="true" className="size-3" />
         {stats.presumed} {copy.presumed.label}
-      </span>
+      </JargonTerm>
     ) : null,
     showDisruption ? (
       <span key="faa" className="mr-2 text-bb-warn">
@@ -175,20 +190,23 @@ export function ScheduleStats({
           key="untimed"
           value={stats.untimed}
           valueClass="text-muted-foreground"
-          label={copy.untimed.phoneLabel}
-          title={copy.untimed.title}
+          label={<Explained text={copy.untimed.title}>{copy.untimed.phoneLabel}</Explained>}
         />
       ) : null,
       <MiniMetric
         key="canceled"
         value={canceledValue}
         valueClass={canceledClass}
-        label="Canceled"
+        label={<Explained text={canceledTitle}>Canceled</Explained>}
         note={canceledNote}
-        title={canceledTitle}
       />,
       stats.inAir > 0 ? (
-        <MiniMetric key="inAir" value={stats.inAir} valueClass="text-muted-foreground" label={copy.inAir.label} title={copy.inAir.title} />
+        <MiniMetric
+          key="inAir"
+          value={stats.inAir}
+          valueClass="text-muted-foreground"
+          label={<Explained text={copy.inAir.title}>{copy.inAir.label}</Explained>}
+        />
       ) : null,
       <MiniMetric key="upcoming" value={stats.upcoming} valueClass="text-muted-foreground" label="Upcoming" />,
       stats.uncategorized > 0 ? (
@@ -196,8 +214,7 @@ export function ScheduleStats({
           key="uncategorized"
           value={stats.uncategorized}
           valueClass="text-muted-foreground"
-          label={copy.uncategorized.label}
-          title={copy.uncategorized.title}
+          label={<Explained text={copy.uncategorized.title}>{copy.uncategorized.label}</Explained>}
         />
       ) : null,
     ].filter(Boolean);
@@ -216,12 +233,9 @@ export function ScheduleStats({
               grid. The glossary term is a 44 px tap target on a phone; its wrapper's negative
               margin takes that height back out of the flow (the SlHero pattern), so this cell
               is no taller than Canceled beside it. */}
-          <div
-            className="col-span-2 flex flex-col items-center justify-center gap-0.5 bg-card px-1 py-1.5"
-            title={otpTitle}
-          >
+          <div className="col-span-2 flex flex-col items-center justify-center gap-0.5 bg-card px-1 py-1.5">
             <dt className="order-2 -my-4 flex items-center justify-center gap-1 text-[9px] leading-tight uppercase tracking-wide text-muted-foreground">
-              <JargonTerm term="otp">
+              <JargonTerm term="otp" description={otpTitle}>
                 {/* A <button> resets text-transform, so the term carries its own. */}
                 <span className="uppercase">On-Time</span>
               </JargonTerm>
@@ -261,14 +275,14 @@ export function ScheduleStats({
           value={otp === null || otp === undefined ? '—' : `${otp}%`}
           valueClass={tone.className}
           // D9: the one "operated" definition (hub-health.js operatedOutcome), shared with the
-          // hub strip — spelled out so the two counts are visibly the same thing.
-          title={otpTitle}
+          // hub strip — spelled out so the two counts are visibly the same thing. It is the
+          // term's explanation (a tap opens it on touch), no longer a card `title`.
           label={
             <>
               {/* On a touch tablet the term is a 44 px target; the wrapper's negative margin keeps
                   that height out of the label's line, so the card does not grow a gap. */}
               <span className="-my-4 inline-flex align-middle pointer-fine:my-0">
-                <JargonTerm term="otp">
+                <JargonTerm term="otp" description={otpTitle}>
                   {/* A <button> resets text-transform, so the term carries its own. */}
                   <span className="uppercase">On-Time</span>
                 </JargonTerm>
@@ -284,27 +298,28 @@ export function ScheduleStats({
           <Metric
             value={stats.untimed}
             valueClass="text-muted-foreground"
-            label={copy.untimed.label}
-            title={copy.untimed.title}
+            label={<Explained text={copy.untimed.title}>{copy.untimed.label}</Explained>}
           />
         ) : null}
         <Metric
           value={canceledValue}
           valueClass={canceledClass}
-          label="Canceled"
+          label={<Explained text={canceledTitle}>Canceled</Explained>}
           note={canceledNote}
-          title={canceledTitle}
         />
         {stats.inAir > 0 ? (
-          <Metric value={stats.inAir} valueClass="text-muted-foreground" label={copy.inAir.label} title={copy.inAir.title} />
+          <Metric
+            value={stats.inAir}
+            valueClass="text-muted-foreground"
+            label={<Explained text={copy.inAir.title}>{copy.inAir.label}</Explained>}
+          />
         ) : null}
         <Metric value={stats.upcoming} valueClass="text-muted-foreground" label="Upcoming" />
         {stats.uncategorized > 0 ? (
           <Metric
             value={stats.uncategorized}
             valueClass="text-muted-foreground"
-            label={copy.uncategorized.label}
-            title={copy.uncategorized.title}
+            label={<Explained text={copy.uncategorized.title}>{copy.uncategorized.label}</Explained>}
           />
         ) : null}
       </div>

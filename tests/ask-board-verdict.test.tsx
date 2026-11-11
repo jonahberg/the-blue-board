@@ -9,8 +9,17 @@
  * counts stay; a filter that picks by aircraft keeps the percentage (it is a fact about that fleet).
  */
 
-import { cleanup, render, renderHook, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+
+beforeAll(() => {
+  // Radix positions the explanation with floating-ui, which needs a ResizeObserver jsdom lacks.
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+});
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ScheduleStats } from '@/app/views/schedule/ScheduleStats';
@@ -111,7 +120,7 @@ describe('the strip', () => {
     canceledConfirmed: 0, presumed: 0, operated: 5, otp: null, uncategorized: 0, otpWithheld: true,
   };
   for (const compact of [false, true]) {
-    it(`${compact ? 'phone' : 'desktop'}: no percentage, no verdict word, and the reason on hover`, () => {
+    it(`${compact ? 'phone' : 'desktop'}: no percentage, no verdict word, and the reason behind the On-Time term`, async () => {
       const { container } = render(
         <TooltipProvider>
           <ScheduleStats stats={LATE_ONLY} dir="arrivals" dayLabel="Tue, Nov 10" hub="DEN" hubDisruptionMinutes={null} compact={compact} />
@@ -123,7 +132,12 @@ describe('the strip', () => {
       expect(text).not.toContain('%');
       expect(text).toContain('—');
       expect(text).toContain('5 operated');
-      expect(screen.getAllByTitle(/No on-time percentage while the board is filtered by status/).length).toBeGreaterThan(0);
+      // The reason is the On-Time term's explanation (hover, focus or a tap), no longer a card
+      // title= that a touch screen never shows (Nov 2026).
+      await act(async () => {
+        fireEvent.focus(screen.getByRole('button', { name: 'On-Time' }));
+      });
+      expect(screen.getByRole('tooltip').textContent).toMatch(/No on-time percentage while the board is filtered by status/);
     });
   }
 });

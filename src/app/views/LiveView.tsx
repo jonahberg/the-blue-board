@@ -37,7 +37,7 @@ import { AskChips } from '../features/AskChips';
 import { cn } from '@/lib/utils';
 import { AirborneHistoryDialog, useAirborneHistory } from './live/AirborneHistory';
 import { LiveSidebar } from './live/LiveSidebar';
-import { MAP_BUTTON, MapControls } from './live/MapControls';
+import { ICON_ONLY, LABEL, MAP_BUTTON, MapControls } from './live/MapControls';
 import type { LayerKey } from './live/MapControls';
 import { MapLegend } from './live/MapLegend';
 import { AirborneChip, StatsBar } from './live/StatsBar';
@@ -256,15 +256,16 @@ export default function LiveView() {
               refreshing={feed.refreshing}
               onRefresh={feed.refresh}
             />
-            {/* Pinned outside the scroller, so nothing can slide under it. An icon below `sm`,
-                like the layer toggles, with its name kept for assistive tech. */}
+            {/* Pinned outside the scroller, so nothing can slide under it. An icon on a phone
+                (below `sm`, or on its side), like the layer toggles, with its name kept for
+                assistive tech. */}
             {!desktop ? (
               <Button
                 variant="outline"
-                className={cn(MAP_BUTTON, 'pointer-events-auto shrink-0 gap-1.5 px-2.5 max-sm:w-9 max-sm:px-0')}
+                className={cn(MAP_BUTTON, 'pointer-events-auto shrink-0 gap-1.5 px-2.5', ICON_ONLY)}
                 onClick={() => setSidebarOpen(true)}
               >
-                <SlidersHorizontal aria-hidden="true" /> <span className="max-sm:sr-only">Filters</span>
+                <SlidersHorizontal aria-hidden="true" /> <span className={LABEL}>Filters</span>
               </Button>
             ) : null}
           </div>

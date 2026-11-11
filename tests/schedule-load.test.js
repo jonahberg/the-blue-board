@@ -278,9 +278,9 @@ describe('staleness / degradation ladder', () => {
 });
 
 describe('cache indicator (shown by src/app/views/ScheduleView.tsx)', () => {
-  it('names the cache and the raw UA flight count, verbatim', () => {
+  it('names the cache and the raw UA flight count, verbatim, with no ⚡ (the Starlink mark)', () => {
     expect(boardLoadMessage({ fromCache: true, count: 412 }))
-      .toBe('\u26a1 Served from cache \u00b7 412 UA flights');
+      .toBe('Served from cache \u00b7 412 UA flights');
   });
 
   it('says nothing for a board that was actually fetched', () => {
@@ -290,9 +290,9 @@ describe('cache indicator (shown by src/app/views/ScheduleView.tsx)', () => {
 
   it('still reports an empty cached board rather than a blank count', () => {
     expect(boardLoadMessage({ fromCache: true, count: 0 }))
-      .toBe('\u26a1 Served from cache \u00b7 0 UA flights');
+      .toBe('Served from cache \u00b7 0 UA flights');
     expect(boardLoadMessage({ fromCache: true }))
-      .toBe('\u26a1 Served from cache \u00b7 0 UA flights');
+      .toBe('Served from cache \u00b7 0 UA flights');
   });
 });
 

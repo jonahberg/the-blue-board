@@ -111,14 +111,20 @@ export function HubHealthStrip() {
                       // brief row above it (Nov 2026). The row scrolls sideways, which clips any
                       // hit box that pokes outside it, so the chip itself is the target. Keyed
                       // to the POINTER, not the width: an iPad at desktop width is a touch screen.
-                      'flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent pointer-coarse:self-stretch pointer-coarse:px-2',
+                      // `relative`: the stale chip's sr-only words are absolutely positioned, and
+                      // without a positioned chip they escape the sideways scroller and widen the
+                      // whole page (a 390 px phone laid out at 585 px).
+                      'relative flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent pointer-coarse:self-stretch pointer-coarse:px-2',
                       isHome && 'border border-primary/40',
-                      // An hours-old board still shows its number, but visibly receded (F91).
-                      stale && 'opacity-60',
                     )}
                   >
                     {isHome ? <House aria-hidden="true" className="size-3" /> : null}
-                    <SeverityGlyph severity={severity} program={program?.marker} />
+                    {/* An hours-old board still shows its number (F91). It used to recede as a
+                        whole chip at 60% opacity, which took the percentage to 3.8:1; now only the
+                        glyph recedes, the number keeps full contrast, and a History mark (the
+                        "FAA status unknown" icon) plus static sr-only words say "stale" without
+                        relying on the dimming. */}
+                    <SeverityGlyph severity={severity} program={program?.marker} className={stale ? 'opacity-60' : undefined} />
                     <span className="font-medium">{entry.hub}</span>
                     <span
                       className={cn(
@@ -128,6 +134,13 @@ export function HubHealthStrip() {
                     >
                       {entry.otp === null ? '—' : `${entry.otp}%`}
                     </span>
+                    {stale ? (
+                      <>
+                        <History aria-hidden="true" data-stale-reading="" className="size-3 shrink-0 text-muted-foreground" />
+                        {' '}
+                        <span className="sr-only">(stale reading)</span>
+                      </>
+                    ) : null}
                   </a>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">

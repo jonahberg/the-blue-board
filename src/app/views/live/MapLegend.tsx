@@ -30,6 +30,9 @@ import { MAP_BUTTON } from './MapControls';
 
 type LegendRow = { id: string; label: string; fill: string; size: number };
 
+/** A phone on its side (global.css `@custom-variant landscape-phone`). */
+export const LANDSCAPE_PHONE_QUERY = '(pointer: coarse) and (orientation: landscape) and (max-height: 500px)';
+
 export function MapLegend({
   longhaulLayer,
   starlinkLayer,
@@ -48,7 +51,11 @@ export function MapLegend({
   starlinkLayer: boolean;
   className?: string;
 }) {
-  const roomy = useMediaQuery('(min-width: 768px)');
+  // Open from `md`, except on a phone on its side (844 × 390 is past `md`), where the open key
+  // covered most of a 184 px map (Nov 2026). Keep in step with global.css `landscape-phone`.
+  const wide = useMediaQuery('(min-width: 768px)');
+  const landscapePhone = useMediaQuery(LANDSCAPE_PHONE_QUERY);
+  const roomy = wide && !landscapePhone;
   // Follows the breakpoint until the viewer chooses; their choice then sticks for the visit.
   const [choice, setChoice] = useState<boolean | null>(null);
   const open = choice ?? roomy;

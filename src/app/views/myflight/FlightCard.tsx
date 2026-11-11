@@ -29,6 +29,8 @@ import {
   seatConfigString,
 } from '@/lib/my-flights.js';
 import type { FleetAircraft, Flight, FlightTimes, WatchedFlight } from '../../data/types';
+import { FlightLink } from '../../features/FlightLink';
+import { JargonTerm } from '../../features/JargonTerm';
 import { JourneyChain } from './JourneyChain';
 import { StarlinkBadge } from './StarlinkBadge';
 import type { JourneySegment } from './useAircraftJourney';
@@ -126,7 +128,12 @@ export function FlightCard({
     <Card className="gap-0 overflow-hidden py-0">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b bg-muted/30 px-3 py-2.5">
         <div className="min-w-0">
-          <div className="font-mono text-base font-bold text-primary">{entry.flight}</div>
+          {/* The flight number is a link to its flight page (src/lib/flight-link.js), and the
+              card's heading: its "Where's My Plane?" and journey headings are h3 under it (axe
+              heading-order found them as h4 with nothing above). */}
+          <h2 className="font-mono text-base font-bold">
+            <FlightLink ident={entry.flight} />
+          </h2>
           {/* Until the route is known (a watch added by flight number, times still loading)
               the line printed "() → ()"; it waits as a skeleton instead, and says nothing once
               the lookup has given up. */}
@@ -185,13 +192,12 @@ export function FlightCard({
               </button>
             ) : null}
             {showRisk && riskNA ? (
-              <Badge
-                variant="outline"
-                className="text-[9px] font-semibold text-muted-foreground"
-                title="Not enough live data to score this flight"
-              >
-                RISK N/A
-              </Badge>
+              // A term, not a title=: a touch screen never shows a title (Nov 2026).
+              <JargonTerm description="Not enough live data to score this flight" className="text-muted-foreground">
+                <Badge variant="outline" className="text-[9px] font-semibold text-muted-foreground">
+                  RISK N/A
+                </Badge>
+              </JargonTerm>
             ) : null}
           </div>
         </div>
@@ -288,9 +294,9 @@ export function FlightCard({
             />
           ) : inbound ? (
             <div className="rounded-md border border-primary/40 bg-primary/5 p-2.5 text-[11px] leading-relaxed">
-              <h4 className="mb-1 text-[10px] font-medium uppercase tracking-wide text-primary">
+              <h3 className="mb-1 text-[10px] font-medium uppercase tracking-wide text-primary">
                 Where&rsquo;s My Plane?
-              </h4>
+              </h3>
               Your aircraft is currently operating <strong>{inbound.flightIATA}</strong> from{' '}
               {inbound.origin} → {origCode} at{' '}
               {Math.round(inbound.alt * 3.28084).toLocaleString()} ft
@@ -312,7 +318,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
+            className="min-h-11 text-xs pointer-fine:md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onViewOnMap(liveFlight)}
           >
             View on Map
@@ -322,7 +328,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
+            className="min-h-11 text-xs pointer-fine:md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onAircraftDetail(reg)}
           >
             Aircraft Details
@@ -332,7 +338,7 @@ export function FlightCard({
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
+            className="min-h-11 text-xs pointer-fine:md:h-8 pointer-fine:md:min-h-0"
             onClick={() => onExplain(explainContext)}
           >
             Explain Delay Risk
@@ -341,7 +347,7 @@ export function FlightCard({
         <Button
           size="sm"
           variant="ghost"
-          className="ml-auto min-h-11 text-xs md:h-8 pointer-fine:md:min-h-0"
+          className="ml-auto min-h-11 text-xs pointer-fine:md:h-8 pointer-fine:md:min-h-0"
           onClick={() => onUnwatch(entry.flight)}
         >
           Unwatch

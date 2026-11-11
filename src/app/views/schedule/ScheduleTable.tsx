@@ -56,6 +56,8 @@ import { clampWindow, expandWindow, initialWindow, windowIncluding } from '@/lib
 import { cn } from '@/lib/utils';
 import type { RowModel, SortColumn } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
+import { FlightLink } from '../../features/FlightLink';
+import { JargonTerm } from '../../features/JargonTerm';
 import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
 import { SchedulePhoneRow } from './SchedulePhoneRow';
 import { STATUS_TONE, SWAP_TONE, riskControlClass } from './tone';
@@ -505,8 +507,11 @@ export const ScheduleTable = forwardRef<
                   </TableCell>
 
                   {/* The printed number drops a provider suffix ("UA526H" → "UA526"); the row
-                      attributes, the watch toggle and the palette keep the raw `ident`. */}
-                  <TableCell className="font-mono font-semibold text-primary">{row.identDisplay}</TableCell>
+                      attributes, the watch toggle and the palette keep the raw `ident`. The
+                      number is a link to its flight page (Nov 2026: it was blue and did nothing). */}
+                  <TableCell className="font-mono font-semibold">
+                    <FlightLink ident={row.identDisplay} hit="inline" />
+                  </TableCell>
 
                   <TableCell>
                     <span className="font-mono">{row.routeLine}</span>
@@ -600,12 +605,13 @@ export const ScheduleTable = forwardRef<
                         </button>
                       )
                     ) : row.regPending ? (
-                      <span
+                      // A term, not a title=: a touch screen never shows a title (Nov 2026).
+                      <JargonTerm
+                        description="United usually assigns the aircraft about a day ahead, but our schedule feed only names it 1–2 hours before departure. It shows here then, or as soon as the plane appears on live tracking. United's own flight status may already have it."
                         className="font-sans text-muted-foreground"
-                        title="United usually assigns the aircraft about a day ahead, but our schedule feed only names it 1–2 hours before departure. It shows here then, or as soon as the plane appears on live tracking. United's own flight status may already have it."
                       >
                         Not in our feed yet
-                      </span>
+                      </JargonTerm>
                     ) : (
                       '—'
                     )}

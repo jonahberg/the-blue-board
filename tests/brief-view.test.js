@@ -19,6 +19,8 @@ import {
   briefFreshnessLine,
   briefSourceLine,
   briefRowLabel,
+  briefRowParts,
+  pictographRuns,
   briefViewState,
   formatBriefClock,
 } from '../src/lib/brief-view.js';
@@ -184,6 +186,36 @@ describe('copy', () => {
       { text: '⚠️ RADIO FAILURE', callsign: 'UAL9', squawk: '7600' },
     ] });
     expect(briefAlertLine(two)).toBe('⚠️ EMERGENCY: UAL123 (7700) · ⚠️ RADIO FAILURE: UAL9 (7600)');
+  });
+
+  it('splits the row into its printed words and the sr-only rest, which add up to the name', () => {
+    expect(briefRowParts('watch', 'Running normally', 'open')).toEqual({
+      word: 'Watch',
+      lead: ':',
+      shown: 'Running normally',
+      end: '.',
+      rest: 'Open the full brief.',
+    });
+    expect(briefRowParts('calm', 'Smooth so far.', 'reveal')).toMatchObject({ end: '', rest: 'Go to the full brief.' });
+    // The row shows the squawk as sent; the headline moves into the sr-only rest.
+    expect(briefRowParts('watch', 'Running normally.', 'open', '⚠️ EMERGENCY: UAL123 (7700)')).toEqual({
+      word: 'Watch',
+      lead: '.',
+      shown: '⚠️ EMERGENCY: UAL123 (7700)',
+      end: '.',
+      rest: 'Brief: Running normally. Open the full brief.',
+    });
+  });
+
+  it('marks the emoji runs in printed text so the row can hide them from a screen reader', () => {
+    expect(pictographRuns('⚠️ EMERGENCY: UAL123 (7700) · ⚠️ RADIO FAILURE: UAL9 (7600)')).toEqual([
+      { text: '⚠️ ', glyph: true },
+      { text: 'EMERGENCY: UAL123 (7700) · ', glyph: false },
+      { text: '⚠️ ', glyph: true },
+      { text: 'RADIO FAILURE: UAL9 (7600)', glyph: false },
+    ]);
+    expect(pictographRuns('Calm day')).toEqual([{ text: 'Calm day', glyph: false }]);
+    expect(pictographRuns('')).toEqual([]);
   });
 
   it('names the row with the squawk first and the headline after it, emoji left out', () => {

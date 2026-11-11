@@ -2,11 +2,11 @@
 /**
  * The header's "Find a flight" button must have an accessible name at every width (F34).
  *
- * Below `sm` the button collapses to the 🔍 alone: the "Find a flight" label is
- * `hidden sm:inline` and the magnifier is `aria-hidden`. On a phone that leaves the button
- * with NO accessible name — a screen reader announces just "button". jsdom does not apply
- * Tailwind breakpoints, so the visible-text name would still be computed here; the only
- * width-independent guarantee is an explicit `aria-label`, and that is what is asserted.
+ * Below `sm` the button collapses to the magnifier alone. While the "Find a flight" label was
+ * `hidden sm:inline` that left the button with NO accessible name on a phone. Since Nov 2026 the
+ * label is `max-sm:sr-only`: invisible below `sm` but still read, so the button is named by its
+ * own words at every width and carries no aria-label (which, over the visible "⌘K" hint, failed
+ * WCAG 2.5.3). jsdom does not apply Tailwind breakpoints, so the class is what is asserted.
  *
  * The feed and watch providers are stubbed (they poll and bootstrap push); prefs and ui are
  * the real ones.
@@ -80,17 +80,22 @@ describe('header search button', () => {
     expect(ui!.searchOpen).toBe(true);
   });
 
-  it('every other icon-only header control already carries an aria-label', () => {
+  it('every other icon-only header control has a name: its own sr-only words, or an aria-label where it shows no text', () => {
     renderHeader();
-    expect(screen.getByRole('button', { name: /Watched flights/ }).getAttribute('aria-label')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'What is this dashboard?' })).toBeTruthy();
+    // The watch button shows a count beside its eye, so it is named by words that include it.
+    expect(screen.getByRole('button', { name: 'Watched flights' }).getAttribute('aria-label')).toBeNull();
+    expect(screen.getByRole('button', { name: 'What is this dashboard?' }).getAttribute('aria-label')).toBe('What is this dashboard?');
   });
 
-  // Header.tsx's search <Button> once had no aria-label, so at phone width its only text was
-  // the aria-hidden icon. It now carries `aria-label="Find a flight"`.
-  it('has an explicit aria-label, so it is named even when the label text is hidden', () => {
+  // Header.tsx's search <Button> once had a `hidden` label and no aria-label, so at phone width
+  // its only text was the aria-hidden icon. Its label now stays in the tree at every width.
+  it('is named "Find a flight" by its own label text, never by an aria-label', () => {
     renderHeader();
-    const label = searchButton().getAttribute('aria-label');
-    expect(label).toMatch(/find a flight|search/i);
+    const button = searchButton();
+    expect(button.getAttribute('aria-label')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Find a flight' })).toBe(button);
+    const label = [...button.querySelectorAll('span')].find((el) => el.textContent === 'Find a flight');
+    expect(label?.className).toContain('max-sm:sr-only');
+    expect(label?.className.split(/\s+/)).not.toContain('hidden');
   });
 });

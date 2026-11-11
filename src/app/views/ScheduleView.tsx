@@ -18,7 +18,7 @@
  *    live aircraft positions only.
  */
 
-import { CalendarDays, Plane, TriangleAlert } from 'lucide-react';
+import { CalendarDays, Plane, RotateCw, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -171,18 +171,8 @@ export default function ScheduleView() {
   // The count is the board's RAW row total, not `model.rows.length`: the shipped line
   // reported what the cached response carried, and a filtered view must not make the
   // cached board look smaller than it is.
-  //
-  // The library's line opens with a ⚡, which is this product's Starlink mark (DESIGN.md); in a
-  // meta line under a board full of Starlink rows it read as one more of them, so it is dropped
-  // here and the words carry the line.
   const cacheNote = useMemo(
-    () =>
-      board
-        ? (boardLoadMessage({ fromCache: board.fromCache, count: board.rows.length }) as string).replace(
-            /^\u26a1\s*/,
-            '',
-          )
-        : '',
+    () => (board ? (boardLoadMessage({ fromCache: board.fromCache, count: board.rows.length }) as string) : ''),
     [board],
   );
 
@@ -338,7 +328,8 @@ export default function ScheduleView() {
           <p className="text-xs">Error loading schedule: {error}</p>
           <p className="text-[10px] text-muted-foreground">Try again in a moment</p>
           <Button size="sm" onClick={refresh}>
-            ↻ Retry
+            <RotateCw aria-hidden="true" />
+            Retry
           </Button>
         </div>
       ) : isLoading && !board ? (
