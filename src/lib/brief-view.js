@@ -173,23 +173,60 @@ export function briefAlertLine(tickerItems) {
 const PICTOGRAPH_RE = /[\p{Extended_Pictographic}\uFE0F]/gu;
 
 /**
- * The header row's accessible name: the tone word, the headline (both visible in the row), then
- * what pressing it does. Explicit because inline sr-only separators collapse in the computed name.
- * While an emergency squawk takes the row's text, the name says the squawk first (it is what the
- * row shows) and the brief's headline after it.
+ * The header row's words, in the order the row prints them. The row is a button named by its own
+ * content (WCAG 2.5.3: an aria-label over the visible tone and headline announced different words
+ * from the ones on screen, axe label-content-name-mismatch, Nov 2026), so the words a sighted
+ * visitor reads are visible and the rest is `sr-only`:
+ *
+ *   [word][lead, sr-only] [shown, visible; any emoji in it aria-hidden][end, sr-only] [rest, sr-only]
+ *
+ * with the two spaces as plain text between them (a space inside an sr-only span is trimmed out of
+ * the computed name). It reads "Watch: Running normally. Open the full brief." The visible "Full
+ * brief ›" hint is decorative (aria-hidden): `rest` already says what pressing the row does. While
+ * an emergency squawk takes the row's text, the row shows the squawk and `rest` carries the
+ * brief's headline.
+ *
  * @param {BriefTone} tone
  * @param {string} headline
  * @param {'open'|'reveal'} action  'reveal' when the full brief is already open in the sidebar
  * @param {string|null} [alert]  the squawk line from `briefAlertLine`
+ * @returns {{word: string, lead: string, shown: string, end: string, rest: string}}
  */
-export function briefRowLabel(tone, headline, action, alert = null) {
+export function briefRowParts(tone, headline, action, alert = null) {
   const word = BRIEF_TONE_WORD[tone] ?? 'Brief';
   const text = String(headline ?? '').trim();
-  const end = /[.!?]$/.test(text) ? '' : '.';
+  const stop = (value) => (/[.!?]$/.test(value) ? '' : '.');
   const act = action === 'reveal' ? 'Go to the full brief.' : 'Open the full brief.';
-  const spoken = alert ? String(alert).replace(PICTOGRAPH_RE, '').replace(/\s+/g, ' ').trim() : '';
-  if (spoken) return `${word}. ${spoken}. Brief: ${text}${end} ${act}`;
-  return `${word}: ${text}${end} ${act}`;
+  const raw = alert ? String(alert).trim() : '';
+  const spoken = raw ? raw.replace(PICTOGRAPH_RE, '').replace(/\s+/g, ' ').trim() : '';
+  if (spoken) return { word, lead: '.', shown: raw, end: stop(spoken), rest: `Brief: ${text}${stop(text)} ${act}` };
+  return { word, lead: ':', shown: text, end: stop(text), rest: act };
+}
+
+/**
+ * The row's accessible name: what its content adds up to (`briefRowParts`, with any emoji left
+ * out, since the row hides them from assistive tech).
+ * @param {BriefTone} tone
+ * @param {string} headline
+ * @param {'open'|'reveal'} action
+ * @param {string|null} [alert]
+ */
+export function briefRowLabel(tone, headline, action, alert = null) {
+  const { word, lead, shown, end, rest } = briefRowParts(tone, headline, action, alert);
+  return `${word}${lead} ${shown.replace(PICTOGRAPH_RE, '').replace(/\s+/g, ' ').trim()}${end} ${rest}`;
+}
+
+/**
+ * Split printed text into runs, marking the emoji runs so the row can hide them from assistive tech
+ * ("⚠️ EMERGENCY" reads "EMERGENCY", not "warning sign EMERGENCY").
+ * @param {string} text
+ * @returns {{text: string, glyph: boolean}[]}
+ */
+export function pictographRuns(text) {
+  return String(text ?? '')
+    .split(/([\p{Extended_Pictographic}\uFE0F]+\s*)/u)
+    .filter(Boolean)
+    .map((run) => ({ text: run, glyph: /^[\p{Extended_Pictographic}\uFE0F]/u.test(run) }));
 }
 
 /** Shown under a brief that cites anything heard on ATC frequencies. */

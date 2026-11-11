@@ -66,17 +66,18 @@ export function Header({
 
   return (
     <header className="flex h-11 shrink-0 items-center gap-x-3 border-b px-3 md:h-12 md:px-4">
-      <a
-        href="#live"
-        className="flex min-w-0 items-baseline gap-2 no-underline"
-        aria-label="The Blue Board — back to the live map"
-      >
-        <span className="whitespace-nowrap text-xs font-semibold tracking-tight sm:text-sm">
-          THE BLUE BOARD
+      {/* Named by its own words plus an sr-only purpose (WCAG 2.5.3): an aria-label over the
+          visible wordmark and tagline announced different words from the ones on screen. The
+          capitals are CSS, so a screen reader reads a name, not an acronym. */}
+      <a href="#live" className="flex min-w-0 items-baseline gap-2 no-underline">
+        <span className="whitespace-nowrap text-xs font-semibold tracking-tight uppercase sm:text-sm">
+          The Blue Board
         </span>
         <span className="hidden truncate text-[10px] uppercase tracking-widest text-muted-foreground xl:inline">
+          <span className="sr-only">: </span>
           For United flyers, by United flyers
         </span>
+        <span className="sr-only">, back to the live map</span>
       </a>
 
       <div className="ml-auto flex items-center gap-2 md:gap-1.5">
@@ -119,14 +120,15 @@ export function Header({
             'gap-2 px-0 text-xs text-muted-foreground max-sm:border-transparent max-sm:bg-transparent max-sm:dark:border-transparent max-sm:dark:bg-transparent sm:px-2.5',
           )}
           onClick={() => setSearchOpen(true)}
-          // The visible label is `hidden` below `sm`, which also drops it from the accessibility
-          // tree — without this the only search entry point on a phone announced as "button".
-          aria-label="Find a flight"
+          // Named by its own label, which is `sr-only` (never `hidden`, which would drop the name
+          // too) below `sm`. No aria-label: one over the visible "Find a flight ⌘K" announced
+          // different words from the ones on screen (WCAG 2.5.3). The ⌘K hint is aria-hidden and
+          // exposed as aria-keyshortcuts instead.
           aria-haspopup="dialog"
           aria-keyshortcuts="Meta+K Control+K"
         >
           <Search aria-hidden="true" />
-          <span className="hidden sm:inline">Find a flight</span>
+          <span className="max-sm:sr-only">Find a flight</span>
           <kbd
             aria-hidden="true"
             className="pointer-events-none hidden rounded border bg-muted px-1 font-mono text-[10px] sm:inline"
@@ -184,8 +186,8 @@ export function Header({
             target="_blank"
             rel="noopener noreferrer"
             data-support="mobile-header"
-            aria-label="Support The Blue Board"
-            title="Support The Blue Board"
+            aria-label="Cover a day of The Blue Board"
+            title="Cover a day of The Blue Board"
           >
             <HandHeart aria-hidden="true" />
           </a>

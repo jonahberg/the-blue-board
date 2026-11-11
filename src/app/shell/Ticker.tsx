@@ -12,7 +12,7 @@
  *
  * AN EMERGENCY SQUAWK IS NEVER HIDDEN BY THE BRIEF. The ticker's squawk lines (the items
  * `buildTickerItems` marks `critical`) take the row's text while they last — the tone word stays,
- * the row still opens the brief, and its name says both (`briefAlertLine`, `briefRowLabel`). The
+ * the row still opens the brief, and its name says both (`briefAlertLine`, `briefRowParts`). The
  * ops-health advisory line is not carried over: the brief covers it.
  *
  * THE FALLBACK. No brief yet, or one that is no longer current (src/lib/brief-view.js) → today's
@@ -35,7 +35,7 @@ import { decodeSquawk, isOnGround } from '@/lib/flight-phase.js';
 import { deriveOpsHealth } from '@/lib/ops-health.js';
 import { buildTickerItems } from '@/lib/ticker.js';
 import { cn } from '@/lib/utils';
-import { BRIEF_TONE_WORD, briefAlertLine, briefRowLabel } from '@/lib/brief-view.js';
+import { BRIEF_TONE_WORD, briefAlertLine, briefRowParts, pictographRuns } from '@/lib/brief-view.js';
 import { ToneMark } from '../features/BriefTone';
 import { useBrief } from '../state/brief';
 import type { BriefReady } from '../state/brief';
@@ -115,12 +115,25 @@ function BriefRow({ view, alert }: { view: BriefReady; alert: string | null }) {
   const desktop = useMediaQuery('(min-width: 1024px)');
   const panelShowing = desktop && tab === 'live';
 
+  // Named by its own content (WCAG 2.5.3): the tone word and the headline (or the squawk) it
+  // prints, plus sr-only words for the rest — "Watch: <headline>. Open the full brief." An
+  // aria-label over the printed words announced something different from what was on screen.
+  const parts = briefRowParts(view.tone, view.headline, panelShowing ? 'reveal' : 'open', alert);
+  const shown = pictographRuns(parts.shown).map((run, i) =>
+    run.glyph ? (
+      <span key={i} aria-hidden="true">
+        {run.text}
+      </span>
+    ) : (
+      run.text
+    ),
+  );
+
   return (
     <div className="flex h-7 shrink-0 border-b bg-card/40">
       <button
         type="button"
         onClick={() => (panelShowing ? revealPanel() : setSheetOpen(true))}
-        aria-label={briefRowLabel(view.tone, view.headline, panelShowing ? 'reveal' : 'open', alert)}
         aria-haspopup={panelShowing ? undefined : 'dialog'}
         aria-expanded={panelShowing ? undefined : sheetOpen}
         aria-controls={panelShowing ? 'brief-panel' : undefined}
@@ -136,12 +149,18 @@ function BriefRow({ view, alert }: { view: BriefReady; alert: string | null }) {
         ) : (
           <ToneMark tone={view.tone} className="font-mono text-[10px] uppercase tracking-wider" />
         )}
+        {/* The spaces are plain text between the spans: inside an sr-only span they would be
+            trimmed out of the computed name ("Watch:Running normally."). */}
+        <span className="sr-only">{parts.lead}</span>{' '}
         {alert ? (
           // The squawk wins the row's text while it lasts; the headline is one tap away.
-          <span className="min-w-0 flex-1 truncate font-medium text-destructive">{alert}</span>
+          <span className="min-w-0 flex-1 truncate font-medium text-destructive">{shown}</span>
         ) : (
-          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{view.headline}</span>
+          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{shown}</span>
         )}
+        {parts.end ? <span className="sr-only">{parts.end}</span> : null}{' '}
+        <span className="sr-only">{parts.rest}</span>
+        {/* Decorative: the sr-only tail already says what pressing the row does. */}
         <span aria-hidden="true" className="hidden shrink-0 text-muted-foreground sm:inline">
           {panelShowing ? 'In the sidebar' : 'Full brief'}
         </span>

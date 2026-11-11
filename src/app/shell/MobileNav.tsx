@@ -192,7 +192,7 @@ export function MobileNav({
                 className={cn(ROW, 'text-muted-foreground')}
               >
                 <HandHeart aria-hidden="true" className="size-4" />
-                Support The Blue Board
+                Help cover a day
               </a>
             </li>
             {/* The author credit the attribution strip carries on md: and up. */}
