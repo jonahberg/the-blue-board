@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
+import { CORE_LINE_FLYERS } from '../src/lib/cover-a-day.js';
 import { SUPPORT_WARN_PCT, supportMeterModel } from '../src/lib/support-meter.js';
 
 describe('supportMeterModel — the About popover cost meter (inventory §13)', () => {
@@ -70,11 +71,14 @@ describe('supportMeterModel — the About popover cost meter (inventory §13)', 
     expect(model.rows[0].valueLabel).toBe('900/700');
   });
 
-  it('passes the monthly cost note through, and empties a non-string one', () => {
-    expect(
-      supportMeterModel({ boards: { used: 1, budget: 10 }, monthlyCostNote: 'About $40/mo' }).note,
-    ).toBe('About $40/mo');
-    expect(supportMeterModel({ boards: { used: 1, budget: 10 }, monthlyCostNote: 7 }).note).toBe('');
-    expect(supportMeterModel({ boards: { used: 1, budget: 10 } }).note).toBe('');
+  it('says the site\'s one reason under the bars, never the API\'s older cost note (Nov 2026)', () => {
+    const older = 'Data feeds, hosting, and AI explanations cost real money every month';
+    expect(supportMeterModel({ boards: { used: 1, budget: 10 }, monthlyCostNote: older }).note).toBe(CORE_LINE_FLYERS);
+    expect(supportMeterModel({ boards: { used: 1, budget: 10 }, monthlyCostNote: 7 }).note).toBe(CORE_LINE_FLYERS);
+    expect(supportMeterModel({ boards: { used: 1, budget: 10 } }).note).toBe(
+      'The Blue Board is free because flyers cover it, one day at a time.',
+    );
+    // Still nothing at all when there are no bars to explain.
+    expect(supportMeterModel({ monthlyCostNote: older })).toBeNull();
   });
 });
