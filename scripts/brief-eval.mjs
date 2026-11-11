@@ -6,8 +6,9 @@
 //   bun scripts/brief-eval.mjs --templates          template briefs only, never calls the model
 //   bun scripts/brief-eval.mjs --facts              also print every fact the brief is written from
 //   bun scripts/brief-eval.mjs --json               one JSON object per fixture instead of text
-//   bun scripts/brief-eval.mjs --requests           one JSON line per fixture, {fixture, system, user}:
-//                                                   exactly what production would send; no model call
+//   bun scripts/brief-eval.mjs --requests           one JSON line per fixture, {fixture, system, user,
+//                                                   schema}: exactly what production would send, with
+//                                                   the JSON schema the reply must match; no model call
 //   bun scripts/brief-eval.mjs --check <fixture> <response.json>
 //                                                   run a saved model response through production's
 //                                                   read + verify path and print the verifier report
@@ -97,7 +98,8 @@ if (requestsOnly) {
   for (const fx of fixtures) {
     const nowMs = Date.parse(fx.nowIso);
     const request = buildBriefRequest(factsFor(fx, nowMs).facts, nowMs);
-    console.log(JSON.stringify({ fixture: fx.name, system: request.system, user: request.messages[0].content }));
+    // The output schema too (output_config.format.schema), so an offline run knows the exact shape.
+    console.log(JSON.stringify({ fixture: fx.name, system: request.system, user: request.messages[0].content, schema: request.output_config.format.schema }));
   }
   process.exit(0);
 }

@@ -421,13 +421,14 @@ bun scripts/brief-eval.mjs                       # every fixture in tests/fixtur
 bun scripts/brief-eval.mjs storm-day --facts     # one fixture, with every fact printed
 bun scripts/brief-eval.mjs --templates           # never call the model
 bun scripts/brief-eval.mjs --json                # one JSON object per fixture
-bun scripts/brief-eval.mjs --requests            # {fixture, system, user} per fixture, one JSON line each
+bun scripts/brief-eval.mjs --requests            # {fixture, system, user, schema} per fixture, one JSON line each
 bun scripts/brief-eval.mjs --check sfo-gdp-morning response.json   # a saved response, offline
 ```
 
 `--requests` and `--check` never call the network, whatever the environment holds (Bun loads `.env`).
-`--requests` prints exactly what production would send for each fixture (the system prompt and the
-user message from `buildBriefRequest`), so the requests can be run elsewhere. `--check <fixture>
+`--requests` prints exactly what production would send for each fixture (the system prompt, the user
+message and the output JSON schema from `buildBriefRequest`), so the requests can be run elsewhere
+and a stand-in model knows the exact reply shape (`fact_ids`, a nullable `traveler_note` object). `--check <fixture>
 <file>` takes a saved response, either a Messages API body (`{ content, stop_reason }`) or the brief
 JSON itself, and runs it through production's path (`briefFromSavedResponse` in
 `src/lib/brief-verify.js`: `readBriefResponse`, `verifyBrief`, else the template with the cron's

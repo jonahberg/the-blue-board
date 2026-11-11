@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { buildBriefFacts } from '../src/lib/brief-facts.js';
-import { BRIEF_SYSTEM_PROMPT, buildBriefUserMessage } from '../src/lib/brief-prompt.js';
+import { BRIEF_OUTPUT_SCHEMA, BRIEF_SYSTEM_PROMPT, buildBriefUserMessage } from '../src/lib/brief-prompt.js';
 import { radioFactsFromStatus } from '../src/lib/brief-radio.js';
 
 const ROOT = resolve(__dirname, '..');
@@ -20,7 +20,7 @@ const env = { ...process.env, AI_GATEWAY_API_KEY: 'offline-test-key', AI_GATEWAY
 const run = (...args) => execFileSync(process.execPath, [resolve(ROOT, 'scripts', 'brief-eval.mjs'), ...args], { cwd: ROOT, env, encoding: 'utf8', timeout: 30_000 });
 
 describe('brief-eval --requests', () => {
-  it('prints one {fixture, system, user} line per fixture, exactly as production builds it', () => {
+  it('prints one {fixture, system, user, schema} line per fixture, exactly as production builds it', () => {
     const lines = run('--requests').trim().split('\n');
     expect(lines).toHaveLength(FIXTURES.length);
     lines.forEach((line, i) => {
@@ -29,10 +29,11 @@ describe('brief-eval --requests', () => {
       const radio = Object.entries(fx.radio || {}).flatMap(([hub, s]) => radioFactsFromStatus(hub, s, { nowMs }));
       const { facts } = buildBriefFacts({ ...fx.sources, extraFacts: radio }, { nowMs });
       const req = JSON.parse(line);
-      expect(Object.keys(req)).toEqual(['fixture', 'system', 'user']);
+      expect(Object.keys(req)).toEqual(['fixture', 'system', 'user', 'schema']);
       expect(req.fixture).toBe(fx.name);
       expect(req.system).toBe(BRIEF_SYSTEM_PROMPT);
       expect(req.user).toBe(buildBriefUserMessage(facts, nowMs));
+      expect(req.schema).toEqual(BRIEF_OUTPUT_SCHEMA);
     });
   }, 30_000);
 });
