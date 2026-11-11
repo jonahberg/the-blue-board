@@ -313,14 +313,18 @@ export function FlightSheet() {
         // Focus the panel itself, as the phone Filters sheet does: Radix's default focused the
         // first button ("More details" / "Center map"), which a tap on a plane then showed
         // ringed as if it were selected. The title still announces the panel, and Tab goes on
-        // to the first control.
+        // to the first control, which shows the ring. The panel is a tabIndex=-1 container, not
+        // a control, so it draws no ring of its own (`focus-visible:outline-none` below): a
+        // marker is not focusable, so the browser counts the move as script focus and outlined
+        // the whole sheet.
         onOpenAutoFocus={focusContentOnOpen}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
         className={
-          wide
+          (wide
             ? 'w-full overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md'
-            : `gap-0 overflow-y-auto rounded-t-xl ${expanded ? 'max-h-[85dvh]' : 'max-h-[40dvh]'}`
+            : `gap-0 overflow-y-auto rounded-t-xl ${expanded ? 'max-h-[85dvh]' : 'max-h-[40dvh]'}`) +
+          ' focus-visible:outline-none'
         }
       >
         <SheetHeader>
