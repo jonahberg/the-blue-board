@@ -1,28 +1,46 @@
 ---
 /**
- * The in-page "jump to a section" pill row used by the hub, fleet-type and
- * Newark pages. Matches `.bb-content .jump-nav` in `content.css`, which styles
- * the same row when it arrives inside a raw `contentHtml` string.
+ * The in-page "jump to a section" pill row used by the hub, fleet-type, Newark and tracker pages.
+ * Matches `.bb-content .jump-nav` in `content.css`, which styles the same row when it arrives
+ * inside a raw `contentHtml` string (the compact hub pages).
+ *
+ * Below `md` the pills are ONE row that scrolls sideways (seven to nine pills wrapped to three
+ * rows on a phone): it bleeds to the screen edges so a pill slides out under the edge rather than
+ * being cut at the page gutter, and while more pills sit past an edge that edge fades
+ * (src/scripts/jump-nav.ts sets `data-overflow`), the dashboard map toolbar's treatment. The
+ * vertical padding keeps a pill's focus ring inside the scroller, which clips. From `md` the row
+ * wraps as before.
  */
 
 interface Props {
   items: ReadonlyArray<{ href: string; label: string }>;
   label?: string;
+  /** Spacing around the row (default `my-6`). */
+  class?: string;
 }
 
-const { items, label = 'Section navigation' } = Astro.props;
+const { items, label = 'Section navigation', class: className = 'my-6' } = Astro.props;
+
+const ROW =
+  '-mx-4 flex scroll-px-4 gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:py-0 ' +
+  'data-[overflow=right]:[mask-image:linear-gradient(to_right,black_calc(100%_-_2.5rem),transparent)] ' +
+  'data-[overflow=left]:[mask-image:linear-gradient(to_left,black_calc(100%_-_2.5rem),transparent)] ' +
+  'data-[overflow=both]:[mask-image:linear-gradient(to_right,transparent,black_2.5rem,black_calc(100%_-_2.5rem),transparent)]';
+const PILL =
+  'inline-flex min-h-11 shrink-0 items-center rounded-full border border-border bg-card px-3.5 text-[11px] font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase hover:border-primary hover:bg-primary-fill hover:text-primary-foreground';
 ---
 {
   items.length > 0 && (
-    <nav aria-label={label} class="my-6 flex flex-wrap gap-2">
-      {items.map((item) => (
-        <a
-          href={item.href}
-          class="inline-flex min-h-11 items-center rounded-full border border-border bg-card px-3.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:border-primary hover:bg-primary-fill hover:text-primary-foreground"
-        >
-          {item.label}
-        </a>
-      ))}
+    <nav aria-label={label} class={className}>
+      <div class={ROW} data-jump-nav>
+        {items.map((item) => (
+          <a href={item.href} class={PILL}>
+            {item.label}
+          </a>
+        ))}
+      </div>
     </nav>
   )
 }
+
+<script src="../../scripts/jump-nav.ts"></script>

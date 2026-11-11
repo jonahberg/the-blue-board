@@ -159,12 +159,28 @@
 
   /* ── Jump navigation (compact hub pages) ──────────────────────────────── */
 
+  /* The same row as JumpNav.astro: one sideways-scrolling row below md, bled
+     to the screen edges, its edges faded while pills sit past them
+     (src/scripts/jump-nav.ts sets `data-overflow`); wrapping from md. */
   .bb-content .jump-nav {
-    @apply my-6 flex flex-wrap gap-2;
+    @apply -mx-4 my-6 flex scroll-px-4 gap-2 overflow-x-auto px-4 py-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:py-0;
+    scrollbar-width: none;
+  }
+
+  .bb-content .jump-nav[data-overflow='right'] {
+    mask-image: linear-gradient(to right, black calc(100% - 2.5rem), transparent);
+  }
+
+  .bb-content .jump-nav[data-overflow='left'] {
+    mask-image: linear-gradient(to left, black calc(100% - 2.5rem), transparent);
+  }
+
+  .bb-content .jump-nav[data-overflow='both'] {
+    mask-image: linear-gradient(to right, transparent, black 2.5rem, black calc(100% - 2.5rem), transparent);
   }
 
   .bb-content .jump-nav a {
-    @apply inline-flex min-h-11 items-center rounded-full border border-border bg-card px-3.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase no-underline hover:border-primary hover:bg-primary-fill hover:text-primary-foreground;
+    @apply inline-flex min-h-11 shrink-0 items-center rounded-full border border-border bg-card px-3.5 text-[11px] font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase no-underline hover:border-primary hover:bg-primary-fill hover:text-primary-foreground;
   }
 
   .bb-content .scroll-hint {
