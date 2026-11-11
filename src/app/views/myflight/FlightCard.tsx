@@ -19,6 +19,7 @@ import { Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   myFlightCountdown,
   myFlightGateLabels,
@@ -126,9 +127,18 @@ export function FlightCard({
       <div className="flex flex-wrap items-start justify-between gap-2 border-b bg-muted/30 px-3 py-2.5">
         <div className="min-w-0">
           <div className="font-mono text-base font-bold text-primary">{entry.flight}</div>
-          <div className="truncate text-[11px] text-muted-foreground">
-            {origCity} ({origCode}) → {destCity} ({destCode})
-          </div>
+          {/* Until the route is known (a watch added by flight number, times still loading)
+              the line printed "() → ()"; it waits as a skeleton instead, and says nothing once
+              the lookup has given up. */}
+          {origCode || destCode ? (
+            <div className="truncate text-[11px] text-muted-foreground">
+              {/* A city we have no name for falls back to its code: "EUG", not "EUG (EUG)". */}
+              {origCity && origCity !== origCode ? `${origCity} (${origCode || '?'})` : origCode || '?'} →{' '}
+              {destCity && destCity !== destCode ? `${destCity} (${destCode || '?'})` : destCode || '?'}
+            </div>
+          ) : !hasPayload && !terminalFailure ? (
+            <Skeleton className="mt-1 h-3 w-36" />
+          ) : null}
         </div>
         <div className="text-right">
           {countdown.text ? (
@@ -230,7 +240,7 @@ export function FlightCard({
               {isStarlink ? (
                 <Badge
                   variant="outline"
-                  className="ml-1 border-bb-ok/40 bg-bb-ok/15 text-[9px] font-normal text-bb-ok"
+                  className="ml-1 border-bb-starlink/40 bg-bb-starlink/15 text-[9px] font-normal text-bb-starlink"
                 >
                   <Zap aria-hidden="true" /> Starlink Confirmed
                 </Badge>

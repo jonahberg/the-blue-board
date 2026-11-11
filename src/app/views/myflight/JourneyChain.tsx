@@ -88,9 +88,12 @@ export function JourneyChain({
         })}
         <li className="flex flex-wrap items-baseline gap-x-2 border-t pt-1 text-[11px]">
           <span className="font-mono font-medium text-primary">{flight}</span>
-          <span className="font-mono text-muted-foreground">
-            {origCode} → {destCode}
-          </span>
+          {/* Its route only once known: before that the line read "UA318 →". */}
+          {origCode || destCode ? (
+            <span className="font-mono text-muted-foreground">
+              {origCode || '?'} → {destCode || '?'}
+            </span>
+          ) : null}
           <span className="ml-auto text-[10px] text-primary">Your flight</span>
         </li>
       </ol>
