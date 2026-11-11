@@ -8,7 +8,7 @@
  * for the case where the feed has never produced flights at all.
  */
 
-import { Eye, HandHeart, House, Search } from 'lucide-react';
+import { CircleHelp, Eye, HandHeart, House, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,11 +20,20 @@ import { useNow } from '../state/hooks';
 import { usePrefs } from '../state/prefs';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
+import { TOUCH_CONTROL } from './touch-target';
 
 /** HH:MM:SS in UTC — the clock every ops room runs on. */
 function utcClock(now: number): string {
   return `${new Date(now).toISOString().slice(11, 19)}Z`;
 }
+
+/**
+ * The header's controls (Nov 2026: the header is 44 px on a phone, down from 61): a 36 px ghost
+ * surface with a 44 px hit box on touch (`TOUCH_CONTROL`). The box fills the header top to bottom,
+ * and `z-10` keeps it above the brief row's own hit area, which reaches 8 px up into the header
+ * from below (shell/Ticker) — under the controls the controls win, elsewhere the row does.
+ */
+const CONTROL = cn(TOUCH_CONTROL, 'z-10');
 
 export function Header({
   onOpenWatch,
@@ -44,25 +53,33 @@ export function Header({
   // The chip counts EVERY row in the feed, the way the shipped header did — the stat bar
   // below the map is where "airborne" (which excludes aircraft on the ground) is reported.
   const tracked = feed.flights.length;
-  const state: 'live' | 'stale' | 'none' =
-    feed.flights.length === 0 ? 'none' : feed.freshness === 'live' ? 'live' : 'stale';
+  // 'loading' until the first poll answers: the red NO DATA used to greet every visitor for the
+  // second before the feed landed. NO DATA is for a feed that answered (or failed) with nothing.
+  const state: 'live' | 'stale' | 'none' | 'loading' =
+    feed.flights.length > 0
+      ? feed.freshness === 'live'
+        ? 'live'
+        : 'stale'
+      : feed.failed || feed.lastGoodTs !== null
+        ? 'none'
+        : 'loading';
 
   return (
-    <header className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-3 py-2 md:px-4">
+    <header className="flex h-11 shrink-0 items-center gap-x-3 border-b px-3 md:h-12 md:px-4">
       <a
         href="#live"
-        className="flex items-baseline gap-2 no-underline"
+        className="flex min-w-0 items-baseline gap-2 no-underline"
         aria-label="The Blue Board — back to the live map"
       >
-        <span className="text-sm font-semibold tracking-tight">THE BLUE BOARD</span>
-        <span className="hidden text-[10px] uppercase tracking-widest text-muted-foreground sm:inline">
+        <span className="whitespace-nowrap text-xs font-semibold tracking-tight sm:text-sm">
+          THE BLUE BOARD
+        </span>
+        <span className="hidden truncate text-[10px] uppercase tracking-widest text-muted-foreground xl:inline">
           For United flyers, by United flyers
         </span>
       </a>
 
-      {/* Touch targets: `min-h-11` (44 px, WCAG 2.5.5) everywhere a finger is the pointer; the
-          desktop density comes back only at md AND a fine pointer, so an iPad keeps 44 px. */}
-      <div className="ml-auto flex flex-wrap items-center gap-1.5">
+      <div className="ml-auto flex items-center gap-2 md:gap-1.5">
         <Badge
           variant="outline"
           className={cn(
@@ -70,10 +87,13 @@ export function Header({
             state === 'live' && 'border-bb-ok/30 text-bb-ok',
             state === 'stale' && 'border-bb-warn/30 text-bb-warn',
             state === 'none' && 'border-destructive/30 text-destructive',
+            state === 'loading' && 'text-muted-foreground',
           )}
         >
-          <span aria-hidden="true">{state === 'live' ? '●' : state === 'stale' ? '▲' : '■'}</span>
-          {state === 'live' ? 'LIVE' : state === 'stale' ? 'STALE' : 'NO DATA'}
+          <span aria-hidden="true">
+            {state === 'live' ? '●' : state === 'stale' ? '▲' : state === 'none' ? '■' : '○'}
+          </span>
+          {state === 'live' ? 'LIVE' : state === 'stale' ? 'STALE' : state === 'none' ? 'NO DATA' : 'LOADING'}
           {feed.flights.length > 0 ? (
             <span className="hidden text-muted-foreground sm:inline">
               · {tracked.toLocaleString()} flights{state === 'stale' ? ' (stale)' : ''}
@@ -81,21 +101,23 @@ export function Header({
           ) : null}
         </Badge>
 
-        <span className="hidden text-[11px] text-muted-foreground lg:inline">
+        <span className="hidden whitespace-nowrap text-[11px] text-muted-foreground lg:inline">
           {feed.countdown === null
             ? 'Paused (tab hidden)'
             : `Next refresh: ${feed.countdown}s`}
         </span>
-        <span className="hidden font-mono text-[11px] text-muted-foreground lg:inline">
+        <span className="mr-1 hidden font-mono text-[11px] text-muted-foreground lg:inline">
           {utcClock(now)}
         </span>
 
         <Button
           variant="outline"
-          size="sm"
-          // min-w too: below `sm` the label and the ⌘K hint are hidden and the button
-          // collapses to the magnifier alone, which measured 38 px wide on a 400 px viewport.
-          className="min-h-11 min-w-11 gap-2 text-muted-foreground md:h-8 pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
+          // Below `sm` the label and the ⌘K hint are hidden and this is a ghost magnifier like the
+          // icons beside it; from `sm` it is the outlined search field.
+          className={cn(
+            CONTROL,
+            'gap-2 px-0 text-xs text-muted-foreground max-sm:border-transparent max-sm:bg-transparent max-sm:dark:border-transparent max-sm:dark:bg-transparent sm:px-2.5',
+          )}
           onClick={() => setSearchOpen(true)}
           // The visible label is `hidden` below `sm`, which also drops it from the accessibility
           // tree — without this the only search entry point on a phone announced as "button".
@@ -114,9 +136,8 @@ export function Header({
         </Button>
 
         <Button
-          variant="outline"
-          size="sm"
-          className="relative min-h-11 min-w-11 md:h-8 pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
+          variant="ghost"
+          className={cn(CONTROL, 'gap-1 px-2 text-muted-foreground')}
           onClick={onOpenWatch}
           aria-expanded={watchOpen}
           aria-controls="watch-panel"
@@ -124,7 +145,7 @@ export function Header({
         >
           <Eye aria-hidden="true" />
           {watch.watched.length > 0 ? (
-            <span className="ml-1 rounded-full bg-primary-fill px-1.5 font-mono text-[10px] text-primary-foreground">
+            <span className="rounded-full bg-primary-fill px-1.5 font-mono text-[10px] text-primary-foreground">
               {watch.watched.length}
             </span>
           ) : null}
@@ -133,13 +154,14 @@ export function Header({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="outline"
-              size="sm"
-              className="hidden h-8 font-mono text-xs md:inline-flex"
+              variant="ghost"
+              className={cn(CONTROL, 'hidden px-2 text-xs text-muted-foreground md:inline-flex')}
               onClick={cycleHomeAirport}
               aria-label={`Home hub: ${homeAirport || 'no preference'}. Change.`}
             >
-              <House aria-hidden="true" /> {homeAirport || '—'}
+              <House aria-hidden="true" />
+              {/* With no hub set this said "–", which named nothing. */}
+              {homeAirport ? <span className="font-mono">{homeAirport}</span> : 'Home hub'}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
@@ -155,8 +177,7 @@ export function Header({
         <Button
           asChild
           variant="ghost"
-          size="sm"
-          className="min-h-11 min-w-11 p-0 md:hidden"
+          className={cn(CONTROL, 'p-0 text-muted-foreground md:hidden')}
         >
           <a
             href={supportUrl('mobile-header')}
@@ -172,12 +193,11 @@ export function Header({
 
         <Button
           variant="ghost"
-          size="sm"
-          className="hidden min-h-11 min-w-11 p-0 md:inline-flex md:h-8 md:w-8 pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
+          className={cn(CONTROL, 'hidden p-0 text-muted-foreground md:inline-flex')}
           onClick={onOpenHelp}
           aria-label="What is this dashboard?"
         >
-          ?
+          <CircleHelp aria-hidden="true" />
         </Button>
       </div>
     </header>

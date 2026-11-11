@@ -55,13 +55,19 @@ describe('Header search button', () => {
     expect(button.getAttribute('aria-keyshortcuts')).toMatch(/Meta\+K/);
   });
 
-  it('keeps the 44px touch floor on coarse pointers at every width (only a fine pointer relaxes it)', () => {
+  // Nov 2026: the phone header is 44 px, so its controls are 36 px surfaces whose `after:` box
+  // reaches 4 px out on every side — a 44 × 44 hit area that does not make the header taller.
+  // `relative` anchors the box; `z-10` keeps it above the brief row's hit area from below.
+  const HIT_BOX_44 = ['relative', 'z-10', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-1'];
+
+  it('keeps a 44px hit area on coarse pointers at every width (only a fine pointer relaxes it)', () => {
     renderHeader();
     for (const name of ['Find a flight', 'Watched flights (0)', 'What is this dashboard?']) {
       const classes = screen.getByRole('button', { name }).className.split(/\s+/);
-      expect(classes).toContain('min-h-11');
-      expect(classes).not.toContain('md:min-h-0');
-      expect(classes).toContain('pointer-fine:md:min-h-0');
+      expect(classes).toEqual(expect.arrayContaining(HIT_BOX_44));
+      // Width is not input type: the box only comes off for a mouse at md+.
+      expect(classes).toContain('pointer-fine:md:after:hidden');
+      expect(classes.some((c) => /^md:(after:hidden|min-h-0|min-w-0)$/.test(c))).toBe(false);
     }
   });
 
@@ -77,8 +83,7 @@ describe('Header search button', () => {
     expect(support.getAttribute('data-support')).toBe('mobile-header');
     const supportClasses = support.className.split(/\s+/);
     expect(supportClasses).toContain('md:hidden');
-    expect(supportClasses).toContain('min-h-11');
-    expect(supportClasses).toContain('min-w-11');
+    expect(supportClasses).toEqual(expect.arrayContaining(HIT_BOX_44));
     const help = screen.getByRole('button', { name: 'What is this dashboard?' }).className.split(/\s+/);
     expect(help).toContain('hidden');
     expect(help).toContain('md:inline-flex');
