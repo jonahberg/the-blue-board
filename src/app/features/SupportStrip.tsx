@@ -18,12 +18,15 @@
  *   - the same analytics: `donate_prompt` shown / donate / later, and the link's
  *     `data-support="deep-use-prompt"` counted as a `support_click` like every placement.
  *
- * What it says comes from src/lib/cover-a-day.js and is true or absent. "Today isn't covered
- * yet" only when /api/support-status says so for today's Central date. A thank-you and an ask
- * for tomorrow when today is covered. The plain $17-a-day ask when the status is unknown. No
- * strip at all when every day of the month is covered. It may lead with the visitor's own count of
- * flights looked up this month (src/lib/usage-count.js), only from five up, never sent anywhere,
- * and never in an analytics property. The dismiss control is a plain "Dismiss".
+ * What it says comes from src/lib/cover-a-day.js and is true or absent. A payment covers the day
+ * it is given, or the next open day after it, so the button names that day: "Cover today · $17"
+ * when /api/support-status says today is open (for today's Central date), "Cover tomorrow · $17"
+ * with a thank-you when today is covered and tomorrow is not, "Cover the next open day · $17"
+ * further out. "Cover a day · $17" and the plain $17-a-day line when the status is unknown. No
+ * strip at all while today and the next 14 days are covered. It may lead with the visitor's own
+ * count of flights looked up this month (src/lib/usage-count.js), only from five up, never sent
+ * anywhere, and never in an analytics property; on a phone that sentence then stands alone beside
+ * the button, so the strip stays two lines. The dismiss control is a plain "Dismiss".
  *
  * This component also keeps that count: it is always mounted, so it watches the flight panel's
  * selection and adds one per new flight opened (the same flight twice in one page load is one).
@@ -98,9 +101,13 @@ export default function SupportStrip() {
     >
       <HandHeart aria-hidden="true" className="hidden size-4 shrink-0 text-primary sm:block" />
       <p className="min-w-0 flex-1 leading-snug">
-        {copy.lead ? <span className="font-semibold">{copy.lead} </span> : null}
-        <span className="sm:hidden">{copy.short}</span>
-        <span className="hidden sm:inline">{copy.text}</span>
+        {copy.lead ? <span className="font-semibold">{copy.lead}</span> : null}
+        {/* Phone: the count sentence alone when it leads, otherwise the short line. */}
+        {copy.lead ? null : <span className="sm:hidden">{copy.short}</span>}
+        <span className="hidden sm:inline">
+          {copy.lead ? ' ' : ''}
+          {copy.text}
+        </span>
       </p>
       {/* 32 px buttons in a 40 px band; each keeps a 44 px hit area through its `after:` box. */}
       <Button
@@ -115,7 +122,7 @@ export default function SupportStrip() {
           data-support="deep-use-prompt"
           onClick={() => answer('donate')}
         >
-          Cover a day · $17
+          {copy.button}
         </a>
       </Button>
       <Button

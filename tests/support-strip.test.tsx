@@ -98,9 +98,16 @@ async function reachDeepUse() {
   await flush();
 }
 
-const ask = () => screen.queryByRole('link', { name: 'Cover a day · $17' });
+/** The strip's button. Its words name the day it would cover, so find it by its placement. */
+const ask = () => document.querySelector<HTMLAnchorElement>('a[data-support="deep-use-prompt"]');
 const emailStrip = () => screen.queryByRole('button', { name: 'Get updates' });
 const stripText = () => ask()?.closest('[data-no-engagement]')?.querySelector('p')?.textContent ?? '';
+/** What a phone shows: the paragraph without its sm-only part. */
+const phoneText = () =>
+  [...(ask()?.closest('[data-no-engagement]')?.querySelector('p')?.children ?? [])]
+    .filter((el) => !el.classList.contains('hidden'))
+    .map((el) => el.textContent)
+    .join('');
 const donateEvents = () => track.mock.calls.filter(([name]) => name === 'donate_prompt').map(([, data]) => data.action);
 const stored = () => parseDonatePromptRecord(localStorage.getItem(DONATE_PROMPT_STORAGE_KEY));
 
@@ -204,30 +211,42 @@ describe('SupportStrip — the moment and the manners it kept', () => {
 });
 
 describe('SupportStrip — the words are true or absent', () => {
-  it('unknown status (no webhook yet, or the request fails): the plain ask, no coverage claim', async () => {
+  it('unknown status (no webhook yet, or the request fails): the plain ask, "Cover a day", no coverage claim', async () => {
     statusOk = false;
     render(tree());
     await reachDeepUse();
     expect(stripText()).toContain('$17 keeps The Blue Board running for a day.');
     expect(stripText()).not.toMatch(/covered/);
+    expect(ask()!.textContent).toBe('Cover a day · $17');
   });
 
-  it('today not covered', async () => {
+  it('today not covered (an earlier day covered is not today): "Cover today"', async () => {
     statusBody = supportStatusFromRows([pay(17)], NOW);
     render(tree());
     await reachDeepUse();
     expect(stripText()).toContain("Today isn't covered yet. $17 keeps The Blue Board running for a day.");
+    expect(phoneText()).toBe("Today isn't covered yet.");
+    expect(ask()!.textContent).toBe('Cover today · $17');
   });
 
-  it('today covered: a thank-you and tomorrow', async () => {
-    statusBody = supportStatusFromRows([pay(170, { display_name: 'Dana R.' })], NOW);
+  it('today covered: a thank-you and "Cover tomorrow"', async () => {
+    statusBody = supportStatusFromRows([pay(17, { display_name: 'Dana R.', paid_at: '2026-11-10T15:00:00Z' })], NOW);
     render(tree());
     await reachDeepUse();
     expect(stripText()).toContain('Today is covered, thanks to Dana R. $17 keeps The Blue Board running tomorrow.');
+    expect(ask()!.textContent).toBe('Cover tomorrow · $17');
   });
 
-  it('every day of the month covered: no strip, and no `shown`', async () => {
-    statusBody = supportStatusFromRows([pay(17 * 30)], NOW);
+  it('today and tomorrow covered: "Cover the next open day"', async () => {
+    statusBody = supportStatusFromRows([pay(17 * 3, { paid_at: '2026-11-10T15:00:00Z' })], NOW);
+    render(tree());
+    await reachDeepUse();
+    expect(stripText()).toContain('$17 covers the next open day, Nov 13.');
+    expect(ask()!.textContent).toBe('Cover the next open day · $17');
+  });
+
+  it('today and the next 14 days covered: no strip, and no `shown`', async () => {
+    statusBody = supportStatusFromRows([pay(17 * 15, { paid_at: '2026-11-10T15:00:00Z' })], NOW);
     render(tree());
     await reachDeepUse();
     expect(ask()).toBeNull();
@@ -257,12 +276,14 @@ describe('SupportStrip — the personal count', () => {
     expect(stripText()).not.toMatch(/looked up/);
   });
 
-  it('shows "You\'ve looked up N flights here this month." once it is at least five', async () => {
+  it('shows "You\'ve looked up N flights here this month." once it is at least five; on a phone, alone', async () => {
     localStorage.setItem(FLIGHT_COUNT_STORAGE_KEY, `${localMonthKey(new Date())}:22`);
     render(tree());
     act(() => selectFlight({ kind: 'ident', ident: 'UA9' }));
     await reachDeepUse();
     expect(stripText()).toMatch(/^You've looked up 23 flights here this month\. /);
+    // Phone: the count sentence and the button only, so the strip stays two lines.
+    expect(phoneText()).toBe("You've looked up 23 flights here this month.");
   });
 
   it('never sends the count anywhere', async () => {

@@ -5,7 +5,8 @@
  *
  * A static page cannot know whether this payment has reached the site, which day it covered,
  * or whether the calendar is switched on, so every sentence here is one that holds in all of
- * those cases: what the money does, how "cover a day" counts (src/lib/cover-a-day.js), and that
+ * those cases: what the money does, how "cover a day" counts (src/lib/cover-a-day.js: the day it
+ * is given, or the next open day after it; small amounts pool), and that
  * a display name CAN appear (only after src/lib/supporter-name.js, never on a hidden row or
  * with SUPPORTER_NAMES=off; a pooled day shows a count). Point Stripe's redirect here only
  * once the webhook is live.
@@ -28,9 +29,10 @@ const description = 'Thank you for supporting The Blue Board, the free, fan-buil
         delay explanations.
       </p>
       <p>
-        We count donations in days: every ${DAILY_COST_USD} covers one day of the site's costs, and a
-        month's donations fill its days in order from the 1st. The dashboard's About section (ⓘ →
-        About on a computer, More → About on a phone) shows this month's days.
+        We count donations in days: every ${DAILY_COST_USD} covers one day of the site's costs, the day it
+        is given or, if that day is already covered, the next open day after it. Smaller amounts pool
+        with other donations until they make a day. The dashboard's About section (ⓘ → About on a
+        computer, More → About on a phone) shows this month's days.
       </p>
       <p>
         If you gave a display name, it can appear beside the day your donation covered, after a basic

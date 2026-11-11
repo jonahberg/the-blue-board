@@ -1,5 +1,6 @@
 /**
- * GET /api/support-status: this Central month's covered days, today's coverer, the daily cost,
+ * GET /api/support-status: this Central month's covered days (from the full allocation over the
+ * last 400 days, so carry-over shows), today's coverer, the next open day and the daily cost,
  * and nothing else. `{configured:false}` whenever there is no truthful coverage to report (no
  * webhook secret, no table, a failed read). CDN-cached ~60 s, rate-limited, memoised.
  */
@@ -54,7 +55,7 @@ vi.mock('../api/_supabase.js', () => ({
   }),
 }));
 
-const { default: handler, STATUS_CACHE_CONTROL, __resetSupportStatusForTests } = await import('../api/support-status.js');
+const { default: handler, READ_WINDOW_DAYS, STATUS_CACHE_CONTROL, __resetSupportStatusForTests } = await import('../api/support-status.js');
 const { __resetRateLimitersForTests } = await import('../api/_rate-limit.js');
 
 // Nov 10 2026, noon Central.
@@ -123,8 +124,8 @@ afterEach(() => {
 });
 
 describe('GET /api/support-status', () => {
-  it('reports this month\'s coverage, today\'s coverer and the daily cost — nothing else', async () => {
-    db.rows = [row(17 * 9, '2026-11-02T15:00:00.000Z'), row(17, '2026-11-09T15:00:00.000Z', { display_name: 'Dana R.' })];
+  it('reports this month\'s coverage, today\'s coverer, the next open day and the daily cost — nothing else', async () => {
+    db.rows = [row(17 * 9, '2026-11-01T15:00:00.000Z'), row(17, '2026-11-10T15:00:00.000Z', { display_name: 'Dana R.' })];
     const res = await get();
     expect(res.statusCode).toBe(200);
     expect(res.headers['Cache-Control']).toBe(STATUS_CACHE_CONTROL);
@@ -138,24 +139,31 @@ describe('GET /api/support-status', () => {
       daysCovered: 10,
       todayCovered: true,
       todayBy: 'Dana R.',
+      nextOpenDate: '2026-11-11',
       dailyCostUsd: 17,
     });
     expect(JSON.stringify(res.body)).not.toMatch(/amount|cents|session|plink|153|cs_live/);
   });
 
-  it('reads one Central month (from 05:00Z on Nov 1 2026, the day DST ends), USD and live only', async () => {
+  it('reads the last 400 days of payments, USD and live only', async () => {
     await get();
     const [q] = db.queries;
+    expect(READ_WINDOW_DAYS).toBe(400);
     expect(q.table).toBe('supporter_payments');
     expect(q.columns).not.toMatch(/email|customer/);
-    expect(q.filters).toEqual(
-      expect.arrayContaining([
-        ['eq', 'currency', 'usd'],
-        ['gte', 'paid_at', '2026-11-01T05:00:00.000Z'],
-        ['lt', 'paid_at', '2026-12-01T06:00:00.000Z'],
-        ['eq', 'livemode', true],
-      ]),
-    );
+    expect(q.filters).toEqual([
+      ['eq', 'currency', 'usd'],
+      ['gte', 'paid_at', new Date(NOW - 400 * 86_400_000).toISOString()],
+      ['eq', 'livemode', true],
+    ]);
+  });
+
+  it('shows days carried over from an earlier month\'s money', async () => {
+    db.rows = [row(40, '2026-10-31T15:00:00.000Z', { display_name: 'Ana' })];
+    const res = await get();
+    expect(res.body.days).toEqual([{ day: 1, by: 'Ana' }]);
+    expect(res.body.todayCovered).toBe(false);
+    expect(res.body.nextOpenDate).toBe('2026-11-10');
   });
 
   it('counts test-mode rows outside production', async () => {

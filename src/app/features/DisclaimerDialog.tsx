@@ -17,7 +17,8 @@
  * misspelling one in a rewrite is not a cosmetic bug.
  *
  * Since Nov 2026 the support section is "cover a day" (`CoverADay.tsx`): this month's calendar
- * of covered days, the truth about today, and the "Cover a day · $17" button. Once
+ * of covered days, the truth about today, and a button naming the day $17 would cover
+ * ("Cover today · $17", "Cover tomorrow · $17", …). Once
  * `STRIPE_MONTHLY_URL` is set it offers "Cover a day every month" and the Buy Me a Coffee
  * membership link here steps aside.
  */

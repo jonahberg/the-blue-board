@@ -3,9 +3,10 @@
  * "Cover a day" in the About dialog (`CoverADay.tsx`) and the ⓘ menu's meter line
  * (`SupportMeter.tsx`), against a stubbed /api/support-status:
  *   - configured: a month calendar (covered filled, open dashed, today ringed, each cell with its
- *     own sentence), the line of truth, the order-from-the-1st note, and "Cover a day · $17";
- *   - unknown: the plain ask only — no calendar, no claim about today;
- *   - the whole month covered: says so and does not ask to "cover a day";
+ *     own sentence), the line of truth, the rule ("Each $17 covers the day it is given, or the
+ *     next open day after it."), and a button naming the day $17 would cover;
+ *   - unknown: the plain ask and "Cover a day · $17" only — no calendar, no claim about today;
+ *   - the whole month covered: says so;
  *   - nothing fetched until the surface is opened.
  */
 
@@ -60,7 +61,7 @@ afterEach(() => {
   resetSupportStatus();
 });
 
-const button = () => screen.getByRole('link', { name: /Cover a day · \$17|Support The Blue Board/ });
+const button = () => document.querySelector<HTMLAnchorElement>('a[data-support="about"]')!;
 
 describe('CoverADay (About)', () => {
   it('fetches nothing until the dialog is open', async () => {
@@ -80,8 +81,8 @@ describe('CoverADay (About)', () => {
     expect(button().getAttribute('data-support')).toBe('about');
   });
 
-  it('not covered: the calendar with three covered days, today ringed and open, and the line', async () => {
-    statusBody = supportStatusFromRows([pay(51, { display_name: 'Dana R.' })], NOW);
+  it('not covered: the calendar with three covered days, today ringed and open, the line, "Cover today"', async () => {
+    statusBody = supportStatusFromRows([pay(51, { display_name: 'Dana R.', paid_at: '2026-11-01T15:00:00Z' })], NOW);
     render(<CoverADay active />);
     await flush();
     const cal = screen.getByRole('list', { name: 'November 2026, day by day' });
@@ -94,26 +95,34 @@ describe('CoverADay (About)', () => {
     expect(cells[9].className).toContain('ring-2');
     expect(screen.getByText('3 of 30 days covered')).toBeTruthy();
     expect(screen.getByText("Today isn't covered yet.")).toBeTruthy();
-    expect(screen.getByText('Each $17 covers one day. Donations fill the month in order from the 1st.')).toBeTruthy();
-    expect(button().textContent).toBe('Cover a day · $17');
+    expect(screen.getByText('Each $17 covers the day it is given, or the next open day after it.')).toBeTruthy();
+    expect(button().textContent).toBe('Cover today · $17');
     // Who covered which day, for touch screens.
     expect(screen.getByText('Who covered which day')).toBeTruthy();
     expect(screen.getByText('Nov 1–3')).toBeTruthy();
   });
 
-  it('covered: names today\'s supporter', async () => {
-    statusBody = supportStatusFromRows([pay(170, { display_name: 'Dana R.' })], NOW);
+  it('covered: names today\'s supporter and offers tomorrow', async () => {
+    statusBody = supportStatusFromRows([pay(17, { display_name: 'Dana R.', paid_at: '2026-11-10T15:00:00Z' })], NOW);
     render(<CoverADay active />);
     await flush();
     expect(screen.getByText('Today is covered by Dana R.')).toBeTruthy();
+    expect(button().textContent).toBe('Cover tomorrow · $17');
   });
 
-  it('the whole month covered: says so, and the button no longer promises a day', async () => {
-    statusBody = supportStatusFromRows([pay(17 * 30)], NOW);
+  it('today and tomorrow covered: offers the next open day', async () => {
+    statusBody = supportStatusFromRows([pay(34, { paid_at: '2026-11-10T15:00:00Z' })], NOW);
+    render(<CoverADay active />);
+    await flush();
+    expect(button().textContent).toBe('Cover the next open day · $17');
+  });
+
+  it('the whole month covered: says so (the next open day is in December)', async () => {
+    statusBody = supportStatusFromRows([pay(17 * 30, { paid_at: '2026-11-01T15:00:00Z' })], NOW);
     render(<CoverADay active />);
     await flush();
     expect(screen.getByText('Every day in November is covered. Thank you.')).toBeTruthy();
-    expect(button().textContent).toBe('Support The Blue Board');
+    expect(button().textContent).toBe('Cover the next open day · $17');
   });
 
   it('offers no monthly option while STRIPE_MONTHLY_URL is empty', async () => {
@@ -136,6 +145,6 @@ describe('SupportMeter (ⓘ menu)', () => {
     render(<SupportMeter active />);
     await flush();
     expect(screen.getByText("Today isn't covered yet.")).toBeTruthy();
-    expect(screen.getByText('$17 keeps the site running for a day.')).toBeTruthy();
+    expect(screen.getByText('$17 covers today.', { exact: false })).toBeTruthy();
   });
 });

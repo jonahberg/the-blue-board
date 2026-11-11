@@ -5,10 +5,10 @@
  * Everything shown is true or absent. The calendar and the line come from /api/support-status
  * (`state/support-status.ts`), read only once the dialog opens. Until it answers, or if it
  * answers `{configured:false}` (no webhook yet, no table, a failed read, a stale date), this
- * shows only the plain ask: what the site costs and the button, with no coverage claim. Days
- * fill in order from the 1st (src/lib/cover-a-day.js), so a past day can be open and a $17
- * gift covers the first open day, which is often not today. The note under the calendar says
- * so.
+ * shows only the plain ask: what the site costs and "Cover a day · $17", with no coverage claim.
+ * A payment covers the day it is given, or the next open day after it (src/lib/cover-a-day.js),
+ * so the button names that day ("Cover today", "Cover tomorrow", "Cover the next open day") and
+ * the note under the calendar states the rule.
  *
  * Covered vs open is never colour alone: a covered cell is filled and an open one is a dashed
  * outline; today wears a ring; there is a legend with words; and each cell carries its own
@@ -21,9 +21,11 @@ import { ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
+  COVER_RULE_LINE,
   DAILY_COST_USD,
   MONTHLY_COST_USD,
   calendarCells,
+  coverButtonLabel,
   coverageRuns,
   coveredCountLine,
   monthFullyCovered,
@@ -109,16 +111,12 @@ export function CoverADay({ active }: { active: boolean }) {
       {full && status.configured ? (
         <p className="mt-1">Every day in {monthName(status.month)} is covered. Thank you.</p>
       ) : null}
-      {status.configured ? (
-        <p className="mt-1 text-muted-foreground">
-          Each ${DAILY_COST_USD} covers one day. Donations fill the month in order from the 1st.
-        </p>
-      ) : null}
+      {status.configured ? <p className="mt-1 text-muted-foreground">{COVER_RULE_LINE}</p> : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button asChild className="min-h-11 pointer-fine:md:min-h-9">
           <a href={supportUrl('about')} target="_blank" rel="noopener noreferrer" data-support="about">
-            {full ? 'Support The Blue Board' : `Cover a day · $${DAILY_COST_USD}`}
+            {coverButtonLabel(status)}
           </a>
         </Button>
         {monthly ? (

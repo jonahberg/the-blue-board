@@ -27,6 +27,8 @@ export type SupportStatus =
       daysCovered: number;
       todayCovered: boolean;
       todayBy: string | null;
+      /** The first open day on or after today ('YYYY-MM-DD'), or null if none within a year. */
+      nextOpenDate: string | null;
       days: CoveredDay[];
       dailyCostUsd: number;
     };

@@ -9,14 +9,15 @@
  * Defensive by design, and the failure mode is the point — a network error, a non-200, an
  * unexpected shape or a `configured:false` live feed all render NOTHING. This widget may
  * only ever add to the popover; a broken cost meter must never be why the About links
- * stop working. The same goes for the coverage line: it appears only when the support status
- * is configured and for today (src/lib/cover-a-day.js), and otherwise is simply absent. The
+ * stop working. The same goes for the coverage line ("Today isn't covered yet. $17 covers
+ * today."): it appears only when the support status is configured and for today
+ * (src/lib/cover-a-day.js), and otherwise is simply absent. The
  * shaping rules live in `src/lib/support-meter.js` and `src/lib/cover-a-day.js` with tests.
  */
 
 import { useEffect, useState } from 'react';
 
-import { DAILY_COST_USD, todayLine } from '@/lib/cover-a-day.js';
+import { coverSentence, todayLine } from '@/lib/cover-a-day.js';
 import { supportMeterModel } from '@/lib/support-meter.js';
 import { fetchSupportStats } from '../data/api';
 import { useSupportStatus } from '../state/support-status';
@@ -29,6 +30,7 @@ export function SupportMeter({ active }: { active: boolean }) {
   const [asked, setAsked] = useState(false);
   const status = useSupportStatus(active);
   const coverage = status ? todayLine(status) : null;
+  const cover = status ? coverSentence(status) : null;
 
   useEffect(() => {
     if (!active || asked) return;
@@ -46,8 +48,8 @@ export function SupportMeter({ active }: { active: boolean }) {
     <div className="mb-2.5 space-y-1.5 border-b pb-2.5">
       {coverage ? (
         <p className="text-[11px]">
-          <span className="font-semibold">{coverage}</span>{' '}
-          <span className="text-muted-foreground">${DAILY_COST_USD} keeps the site running for a day.</span>
+          <span className="font-semibold">{coverage}</span>
+          {cover ? <span className="text-muted-foreground"> {cover}</span> : null}
         </p>
       ) : null}
       {model?.rows.map((row) => (

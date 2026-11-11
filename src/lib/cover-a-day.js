@@ -2,21 +2,25 @@
 // The Blue Board costs about $500 a month to run, about $17 a day. A donation "covers a day":
 //
 //   - $17 keeps the site running for one day (DAILY_COST_CENTS).
-//   - Money received in a calendar month covers THAT month's days, in order from the 1st, in
-//     the order the payments arrived. $17 covers one day; $50 covers two and leaves $16 toward
-//     the next; small amounts pool until a day is whole. A day that more than one payment paid
-//     for is "covered by N supporters".
+//   - A payment covers THE DAY IT IS MADE (its US Central date), or, if that day is already
+//     covered, the first open day after it. Never a day before it: a later payment never claims
+//     a past day, and days before any payment, or gaps between them, simply stay open.
+//   - Payments are taken in paid-time order over everything on record (not month by month),
+//     with one running pool of leftovers. For each payment, available = pool + its net amount;
+//     while that is at least $17, the first open day on or after the payment's date is covered
+//     and $17 is taken, oldest money first (the pool before the new payment). What is left
+//     becomes the pool. So $17 today covers today; $50 today covers today and tomorrow and pools
+//     $16; a later $5 finishes the next day with that $16. A day paid for entirely by one payment
+//     is that supporter's; a day that used anyone else's pooled money is "N supporters".
+//   - Coverage runs forward across month ends: $40 on Nov 30 covers Nov 30 and Dec 1.
 //   - The calendar is US Central (`COVER_TIME_ZONE`, America/Chicago, the owner's and United's
-//     home zone). A payment's month is its paid time's month in Central, and "today" is
-//     Central's date. Money never carries into the next month, and a month's surplus beyond
-//     its last day covers nothing further.
-//   - Only US dollars count. A refund takes its amount back out (a full refund removes the
-//     payment), so coverage can go DOWN and later days shift.
+//     home zone): a payment's day is its Central date, and "today" is Central's date.
+//   - Only US dollars count. Refunds are recomputed from the remaining net amounts (a full refund
+//     removes the payment), so coverage can go DOWN and other days can move.
 //
-// So on the 10th, with three days' worth received, days 1-3 are covered and today is not:
-// "Today isn't covered yet" is the truth, and a $17 payment now covers the 4th, not today.
-// Every sentence a visitor reads is built here (and in the strip's lead, usage-count.js) so
-// that rule cannot drift between the API, the About section and the strip.
+// Every sentence a visitor reads about it is built here (and the strip's lead in
+// usage-count.js) so that the rule cannot drift between the API, the About section, the menu,
+// the strip and the button labels.
 //
 // DOM-free and import-light: api/support-status.ts builds its body with `supportStatusFromRows`,
 // and the dashboard reads it back with `parseSupportStatus`.
@@ -30,6 +34,15 @@ export const DAILY_COST_USD = DAILY_COST_CENTS / 100;
 /** The owner's figure for the whole site, per month. Copy only; the unit is the day. */
 export const MONTHLY_COST_USD = 500;
 export const COUNTED_CURRENCY = 'usd';
+/**
+ * The strip stays down while today and the next STRIP_COVERED_HORIZON_DAYS days are all covered:
+ * an ask for a day two weeks out is not an ask about now.
+ */
+export const STRIP_COVERED_HORIZON_DAYS = 14;
+/** How far ahead "the next open day" is looked for. Past this the answer is "none soon". */
+export const NEXT_OPEN_SEARCH_DAYS = 366;
+/** A ceiling on days one payment can cover (ten years), so a bad amount cannot spin the loop. */
+const MAX_DAYS_PER_PAYMENT = 3660;
 
 const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -81,10 +94,34 @@ export function monthKey(year, month) {
   return `${year}-${String(month).padStart(2, '0')}`;
 }
 
+/** 'YYYY-MM-DD' — sorts as text in date order. */
+export function dateKey(year, month, day) {
+  return `${monthKey(year, month)}-${String(day).padStart(2, '0')}`;
+}
+
+/** @param {string} key 'YYYY-MM-DD' */
+export function parseDateKey(key) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key ?? ''));
+  return m ? { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) } : null;
+}
+
+/** A calendar date plus n days (calendar arithmetic, no time zone involved). */
+export function addDays(key, n) {
+  const d = parseDateKey(key);
+  const t = new Date(Date.UTC(d.year, d.month - 1, d.day + n));
+  return dateKey(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate());
+}
+
+/** The Central date of an instant, as 'YYYY-MM-DD'. */
+export function zonedDateKey(ms, timeZone = COVER_TIME_ZONE) {
+  const d = zonedDate(ms, timeZone);
+  return dateKey(d.year, d.month, d.day);
+}
+
 /**
  * The UTC instant of local midnight at the start of a date in a zone. DST-safe: the offset is
- * measured at the guess and corrected once, so a month that starts the day DST ends (Central,
- * Nov 1 2026: midnight is 05:00Z, not 06:00Z) lands on the real midnight.
+ * measured at the guess and corrected, so a month that starts the day DST ends (Central, Nov 1
+ * 2026: midnight is 05:00Z, not 06:00Z) lands on the real midnight.
  */
 export function zonedMidnightUtcMs(year, month, day, timeZone = COVER_TIME_ZONE) {
   const wallAsUtc = Date.UTC(year, month - 1, day);
@@ -118,6 +155,12 @@ export function shortDate(month, day) {
   return `${MONTHS_SHORT[month - 1] ?? ''} ${day}`;
 }
 
+/** "Nov 16" from 'YYYY-MM-DD'. */
+export function shortDateKey(key) {
+  const d = parseDateKey(key);
+  return d ? shortDate(d.month, d.day) : '';
+}
+
 const isInt = (v) => Number.isInteger(v);
 
 /**
@@ -148,39 +191,50 @@ export function compareArrival(a, b) {
 }
 
 /**
- * Lay one month's payments over its days.
+ * Lay every payment over the calendar (the rule in the header).
  *
- * @param {Array<object>} rows this month's counted payments (any order)
- * @param {{days: number, dailyCostCents?: number}} opts
- * @returns {{daysCovered: number, towardNextCents: number,
- *   days: Array<{day: number, rows: object[]}>}} `days` lists the covered days only, each with
- *   every payment that put money into it.
+ * @param {Array<object>} rows payments that count (USD, live where it matters), any order
+ * @param {{timeZone?: string, dailyCostCents?: number}} [opts]
+ * @returns {{covered: Map<string, object[]>, poolCents: number}} `covered` maps each covered
+ *   Central date ('YYYY-MM-DD') to the payments whose money paid for it, oldest first.
  */
-export function allocateMonth(rows, { days, dailyCostCents = DAILY_COST_CENTS }) {
-  const ordered = (rows || []).filter((row) => netCents(row) > 0).sort(compareArrival);
-  const spans = [];
-  let total = 0;
+export function allocateDays(rows, { timeZone = COVER_TIME_ZONE, dailyCostCents = DAILY_COST_CENTS } = {}) {
+  const ordered = (rows || []).filter((row) => netCents(row) > 0 && Number.isFinite(paidMs(row))).sort(compareArrival);
+  const covered = new Map();
+  /** Unspent money, oldest first: [{row, cents}]. */
+  const pool = [];
+  let available = 0;
   for (const row of ordered) {
     const net = netCents(row);
-    spans.push({ row, from: total, to: total + net });
-    total += net;
+    pool.push({ row, cents: net });
+    available += net;
+    let cursor = zonedDateKey(paidMs(row), timeZone);
+    let days = 0;
+    while (available >= dailyCostCents && days < MAX_DAYS_PER_PAYMENT) {
+      while (covered.has(cursor)) cursor = addDays(cursor, 1);
+      const paidBy = [];
+      let need = dailyCostCents;
+      while (need > 0) {
+        const chunk = pool[0];
+        const take = Math.min(chunk.cents, need);
+        chunk.cents -= take;
+        need -= take;
+        if (!paidBy.includes(chunk.row)) paidBy.push(chunk.row);
+        if (chunk.cents === 0) pool.shift();
+      }
+      covered.set(cursor, paidBy);
+      available -= dailyCostCents;
+      cursor = addDays(cursor, 1);
+      days += 1;
+    }
   }
-  const daysCovered = Math.min(days, Math.floor(total / dailyCostCents));
-  const towardNextCents = daysCovered >= days ? 0 : total - daysCovered * dailyCostCents;
-
-  const covered = [];
-  for (let day = 1; day <= daysCovered; day += 1) {
-    const lo = (day - 1) * dailyCostCents;
-    const hi = day * dailyCostCents;
-    covered.push({ day, rows: spans.filter((s) => s.from < hi && s.to > lo).map((s) => s.row) });
-  }
-  return { daysCovered, towardNextCents, days: covered };
+  return { covered, poolCents: available };
 }
 
 /**
  * Who covered a day, worded for the page: one supporter's shown name, "a supporter", or
- * "N supporters" when several people's money pooled into it. The same typed name twice is
- * one person; payments with no name each count as one.
+ * "N supporters" when several people's money paid for it. The same typed name twice is one
+ * person; payments with no name each count as one.
  *
  * @param {object[]} rows the payments that paid into the day
  * @param {{namesOn?: boolean}} [opts]
@@ -206,8 +260,10 @@ export function coveredByLabel(rows, { namesOn = true } = {}) {
 }
 
 /**
- * The public body of GET /api/support-status for the month containing `nowMs`.
- * Nothing per person beyond the shown label, and no dollar figures except the daily cost.
+ * The public body of GET /api/support-status for the Central month containing `nowMs`,
+ * computed from the allocation over every payment given (so money carried over from an
+ * earlier month shows). Nothing per person beyond the shown label, and no dollar figures
+ * except the daily cost.
  *
  * @param {object[]} rows stored payments (supporter_payments)
  * @param {number} nowMs
@@ -215,26 +271,38 @@ export function coveredByLabel(rows, { namesOn = true } = {}) {
  */
 export function supportStatusFromRows(rows, nowMs, { timeZone = COVER_TIME_ZONE, namesOn = true, dailyCostCents = DAILY_COST_CENTS } = {}) {
   const today = zonedDate(nowMs, timeZone);
+  const todayKey = dateKey(today.year, today.month, today.day);
   const days = daysInMonth(today.year, today.month);
-  const inMonth = (rows || []).filter((row) => {
+  const counted = (rows || []).filter((row) => {
     if (String(row?.currency ?? '').toLowerCase() !== COUNTED_CURRENCY) return false;
     const ms = paidMs(row);
-    if (!Number.isFinite(ms) || ms > nowMs) return false;
-    const d = zonedDate(ms, timeZone);
-    return d.year === today.year && d.month === today.month;
+    return Number.isFinite(ms) && ms <= nowMs;
   });
-  const allocation = allocateMonth(inMonth, { days, dailyCostCents });
-  const labelled = allocation.days.map(({ day, rows: paidBy }) => ({ day, by: coveredByLabel(paidBy, { namesOn }) }));
-  const todayCovered = allocation.daysCovered >= today.day;
+  const { covered } = allocateDays(counted, { timeZone, dailyCostCents });
+
+  const labelled = [];
+  for (let day = 1; day <= days; day += 1) {
+    const paidBy = covered.get(dateKey(today.year, today.month, day));
+    if (paidBy) labelled.push({ day, by: coveredByLabel(paidBy, { namesOn }) });
+  }
+  let nextOpenDate = null;
+  for (let i = 0, key = todayKey; i <= NEXT_OPEN_SEARCH_DAYS; i += 1, key = addDays(key, 1)) {
+    if (!covered.has(key)) {
+      nextOpenDate = key;
+      break;
+    }
+  }
+  const todayCovered = covered.has(todayKey);
   return {
     configured: true,
     timeZone,
     month: monthKey(today.year, today.month),
     daysInMonth: days,
     today: today.day,
-    daysCovered: allocation.daysCovered,
+    daysCovered: labelled.length,
     todayCovered,
-    todayBy: todayCovered ? labelled[today.day - 1].by : null,
+    todayBy: todayCovered ? labelled.find((d) => d.day === today.day).by : null,
+    nextOpenDate,
     days: labelled,
     dailyCostUsd: dailyCostCents / 100,
   };
@@ -252,7 +320,7 @@ export const UNCONFIGURED_STATUS = Object.freeze({ configured: false });
  * @param {number} nowMs
  * @returns {{configured: false} | {configured: true, year: number, month: number, daysInMonth: number,
  *   today: number, daysCovered: number, todayCovered: boolean, todayBy: string|null,
- *   days: Array<{day: number, by: string}>, dailyCostUsd: number}}
+ *   nextOpenDate: string|null, days: Array<{day: number, by: string}>, dailyCostUsd: number}}
  */
 export function parseSupportStatus(json, nowMs) {
   if (!json || typeof json !== 'object' || json.configured !== true) return UNCONFIGURED_STATUS;
@@ -261,15 +329,35 @@ export function parseSupportStatus(json, nowMs) {
   const year = Number(match[1]);
   const month = Number(match[2]);
   const days = daysInMonth(year, month);
-  const { daysCovered, today, todayCovered, todayBy } = json;
+  const { daysCovered, today, todayCovered, todayBy, nextOpenDate } = json;
   if (json.daysInMonth !== days) return UNCONFIGURED_STATUS;
   if (!isInt(today) || today < 1 || today > days) return UNCONFIGURED_STATUS;
-  if (!isInt(daysCovered) || daysCovered < 0 || daysCovered > days) return UNCONFIGURED_STATUS;
-  if (todayCovered !== daysCovered >= today) return UNCONFIGURED_STATUS;
-  if (todayCovered ? typeof todayBy !== 'string' || !todayBy : todayBy !== null) return UNCONFIGURED_STATUS;
-  if (!Array.isArray(json.days) || json.days.length !== daysCovered) return UNCONFIGURED_STATUS;
-  const labelled = json.days.map((d, i) => (d && d.day === i + 1 && typeof d.by === 'string' && d.by ? { day: d.day, by: d.by } : null));
-  if (labelled.some((d) => d === null)) return UNCONFIGURED_STATUS;
+  if (!Array.isArray(json.days) || !isInt(daysCovered) || json.days.length !== daysCovered) return UNCONFIGURED_STATUS;
+  let previous = 0;
+  const labelled = [];
+  for (const d of json.days) {
+    if (!d || !isInt(d.day) || d.day <= previous || d.day > days || typeof d.by !== 'string' || !d.by) return UNCONFIGURED_STATUS;
+    previous = d.day;
+    labelled.push({ day: d.day, by: d.by });
+  }
+  const todayEntry = labelled.find((d) => d.day === today);
+  if (todayCovered !== Boolean(todayEntry)) return UNCONFIGURED_STATUS;
+  if (todayCovered ? todayBy !== todayEntry.by : todayBy !== null) return UNCONFIGURED_STATUS;
+  // The calendar must agree with the next open day: every day from today up to it is covered,
+  // and it (when it falls in this month) is not. null means nothing is open within a year, so
+  // the rest of this month must be covered.
+  const todayKey = dateKey(year, month, today);
+  const coveredDays = new Set(labelled.map((d) => d.day));
+  let lastCovered = days;
+  if (nextOpenDate !== null) {
+    const next = typeof nextOpenDate === 'string' ? parseDateKey(nextOpenDate) : null;
+    if (!next || nextOpenDate < todayKey) return UNCONFIGURED_STATUS;
+    if ((nextOpenDate === todayKey) === todayCovered) return UNCONFIGURED_STATUS;
+    const sameMonth = next.year === year && next.month === month;
+    if (sameMonth && coveredDays.has(next.day)) return UNCONFIGURED_STATUS;
+    if (sameMonth) lastCovered = next.day - 1;
+  }
+  for (let d = today; d <= lastCovered; d += 1) if (!coveredDays.has(d)) return UNCONFIGURED_STATUS;
 
   const tz = typeof json.timeZone === 'string' ? json.timeZone : COVER_TIME_ZONE;
   let now;
@@ -289,23 +377,49 @@ export function parseSupportStatus(json, nowMs) {
     daysCovered,
     todayCovered,
     todayBy: todayCovered ? todayBy : null,
-    days: /** @type {Array<{day: number, by: string}>} */ (labelled),
+    nextOpenDate,
+    days: labelled,
     dailyCostUsd: Number.isFinite(json.dailyCostUsd) && json.dailyCostUsd > 0 ? json.dailyCostUsd : DAILY_COST_USD,
   };
 }
+
+/**
+ * Which day a $17 given right now would cover: 'today', 'tomorrow', 'next' (a later open day,
+ * `date`), or null when it cannot be said (status unknown, or nothing open within a year).
+ * @returns {{kind: 'today'|'tomorrow'|'next', date: string}|null}
+ */
+export function coverTarget(status) {
+  if (!status?.configured || !status.nextOpenDate) return null;
+  const todayKey = dateKey(status.year, status.month, status.today);
+  if (status.nextOpenDate === todayKey) return { kind: 'today', date: todayKey };
+  if (status.nextOpenDate === addDays(todayKey, 1)) return { kind: 'tomorrow', date: status.nextOpenDate };
+  return { kind: 'next', date: status.nextOpenDate };
+}
+
+/**
+ * The button: "Cover today · $17" / "Cover tomorrow · $17" / "Cover the next open day · $17",
+ * "Cover a day · $17" while the status is unknown, "Support The Blue Board" when nothing is open
+ * within a year.
+ */
+export function coverButtonLabel(status) {
+  const cost = `$${DAILY_COST_USD}`;
+  if (!status?.configured) return `Cover a day · ${cost}`;
+  const target = coverTarget(status);
+  if (!target) return 'Support The Blue Board';
+  if (target.kind === 'today') return `Cover today · ${cost}`;
+  if (target.kind === 'tomorrow') return `Cover tomorrow · ${cost}`;
+  return `Cover the next open day · ${cost}`;
+}
+
+/** The rule in one line, for under the calendar. */
+export const COVER_RULE_LINE = `Each $${DAILY_COST_USD} covers the day it is given, or the next open day after it.`;
 
 /** End a sentence on a label without doubling an initial's period ("Dana R." not "Dana R.."). */
 export function sentenceEnd(label) {
   return /\.$/.test(label) ? label : `${label}.`;
 }
 
-/** The first day of the month not yet covered, or null when every day is. */
-export function nextOpenDay(status) {
-  if (!status?.configured) return null;
-  return status.daysCovered >= status.daysInMonth ? null : status.daysCovered + 1;
-}
-
-/** Every day of this month is covered. */
+/** Every day of the current month is covered. */
 export function monthFullyCovered(status) {
   return Boolean(status?.configured) && status.daysCovered >= status.daysInMonth;
 }
@@ -317,6 +431,19 @@ export function monthFullyCovered(status) {
 export function todayLine(status) {
   if (!status?.configured) return null;
   return status.todayCovered ? `Today is covered by ${sentenceEnd(status.todayBy)}` : "Today isn't covered yet.";
+}
+
+/**
+ * The ⓘ menu's second sentence: what $17 would do right now. "$17 covers today." /
+ * "$17 covers tomorrow." / "$17 covers the next open day, Nov 16." / null.
+ */
+export function coverSentence(status) {
+  const target = coverTarget(status);
+  if (!target) return null;
+  const cost = `$${DAILY_COST_USD}`;
+  if (target.kind === 'today') return `${cost} covers today.`;
+  if (target.kind === 'tomorrow') return `${cost} covers tomorrow.`;
+  return `${cost} covers the next open day, ${shortDateKey(target.date)}.`;
 }
 
 /** "3 of 30 days covered" */
@@ -332,16 +459,18 @@ export function coveredCountLine(status) {
 export function calendarCells(status) {
   if (!status?.configured) return null;
   const leadingBlanks = new Date(Date.UTC(status.year, status.month - 1, 1)).getUTCDay();
+  const byDay = new Map(status.days.map((d) => [d.day, d.by]));
   const cells = [];
   for (let day = 1; day <= status.daysInMonth; day += 1) {
-    const covered = day <= status.daysCovered;
+    const by = byDay.get(day) ?? null;
+    const covered = by !== null;
     cells.push({
       day,
       covered,
       today: day === status.today,
-      by: covered ? status.days[day - 1].by : null,
+      by,
       // The words a screen reader (and a hovering mouse) gets for the cell.
-      label: `${monthName(status.month)} ${day}${day === status.today ? ', today' : ''}: ${covered ? `covered by ${status.days[day - 1].by}` : 'open'}`,
+      label: `${monthName(status.month)} ${day}${day === status.today ? ', today' : ''}: ${covered ? `covered by ${by}` : 'open'}`,
     });
   }
   return { leadingBlanks, cells };
@@ -349,7 +478,7 @@ export function calendarCells(status) {
 
 /**
  * "Who covered which day", with consecutive days under the same shown NAME folded together:
- * [{from: 1, to: 2, by: 'Dana R.', text: 'Nov 1–2'}, …]. "a supporter" and "N supporters" are
+ * [{from: 10, to: 11, by: 'Dana R.', text: 'Nov 10–11'}, …]. "a supporter" and "N supporters" are
  * never folded: two anonymous days may be two different people.
  */
 export function coverageRuns(status) {
@@ -368,38 +497,43 @@ export function coverageRuns(status) {
 }
 
 /**
- * The deep-use strip's words, or null when there is nothing honest to ask for (every day of
- * the month is already covered).
+ * The deep-use strip's words and button, or null when there is nothing honest to ask about now
+ * (today and the next STRIP_COVERED_HORIZON_DAYS days all covered).
  *
- * `text` is the full sentence for a wide screen; `short` the phone version. `lead` is the
- * visitor's own count of flights looked up this month, only when it is true and at least
- * PERSONAL_COUNT_MIN (src/lib/usage-count.js), or null.
+ * `text` is the sentence for a wide screen; `short` the phone version. `lead` is the visitor's
+ * own count of flights looked up this month, only when it is true and at least
+ * PERSONAL_COUNT_MIN (src/lib/usage-count.js), or null; on a phone it replaces `short`.
  *
  * @param {ReturnType<typeof parseSupportStatus>} status
  * @param {{flightsThisMonth?: number}} [opts]
- * @returns {{lead: string|null, text: string, short: string}|null}
+ * @returns {{lead: string|null, text: string, short: string, button: string}|null}
  */
 export function supportStripCopy(status, { flightsThisMonth = 0 } = {}) {
   const lead = personalCountLine(flightsThisMonth);
   const cost = `$${DAILY_COST_USD}`;
+  const button = coverButtonLabel(status);
   if (!status?.configured) {
-    return { lead, text: `${cost} keeps The Blue Board running for a day.`, short: `${cost} keeps it running for a day.` };
+    return { lead, text: `${cost} keeps The Blue Board running for a day.`, short: `${cost} keeps it running for a day.`, button };
   }
-  const next = nextOpenDay(status);
-  if (next === null) return null;
-  if (!status.todayCovered) {
-    return { lead, text: `Today isn't covered yet. ${cost} keeps The Blue Board running for a day.`, short: "Today isn't covered yet." };
+  const target = coverTarget(status);
+  if (!target) return null;
+  const todayKey = dateKey(status.year, status.month, status.today);
+  if (target.date > addDays(todayKey, STRIP_COVERED_HORIZON_DAYS)) return null;
+  if (target.kind === 'today') {
+    return { lead, text: `Today isn't covered yet. ${cost} keeps The Blue Board running for a day.`, short: "Today isn't covered yet.", button };
   }
-  if (next === status.today + 1) {
+  if (target.kind === 'tomorrow') {
     return {
       lead,
       text: `Today is covered, thanks to ${sentenceEnd(status.todayBy)} ${cost} keeps The Blue Board running tomorrow.`,
       short: "Today is covered. Tomorrow isn't yet.",
+      button,
     };
   }
   return {
     lead,
-    text: `Today is covered, thanks to ${sentenceEnd(status.todayBy)} ${cost} covers the next open day, ${shortDate(status.month, next)}.`,
-    short: `Covered through ${shortDate(status.month, next - 1)}.`,
+    text: `Today is covered, thanks to ${sentenceEnd(status.todayBy)} ${cost} covers the next open day, ${shortDateKey(target.date)}.`,
+    short: `Covered through ${shortDateKey(addDays(target.date, -1))}.`,
+    button,
   };
 }
