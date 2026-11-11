@@ -23,6 +23,8 @@ describe('the Dashboard chunk that gates the map stays lean (F53)', () => {
     'Fr24LookupDialog',
     'Onboarding',
     'WaitlistDialog',
+    // The full ops brief (the header row that opens it is in the first-paint chunk).
+    'BriefSheet',
   ];
 
   it.each(LAZY)('%s is loaded with a dynamic import, never a static one', (name) => {

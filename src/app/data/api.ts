@@ -250,6 +250,44 @@ export function fetchIrops(): Promise<IropsData> {
   return getJson<IropsData>('/api/irops');
 }
 
+/** One fact the brief cites, as `GET /api/brief` serves it (src/lib/brief-facts.js publicFact). */
+export type BriefFact = {
+  id: string;
+  kind: string;
+  hub?: string;
+  statement: string;
+  values: string[];
+  /** Radio facts only: the sanitized observation title. Text, never markup. */
+  quote?: string;
+  at: string | null;
+  link: { tab: string; hub?: string; section?: string } | null;
+};
+
+export type BriefItem = { text: string; fact_ids: string[] };
+
+/** `GET /api/brief` (api/brief.ts). Never a 5xx: "no brief" is `brief: null` with a `note`. */
+export type BriefResponse = {
+  brief: {
+    headline: string;
+    tone: 'calm' | 'watch' | 'disrupted';
+    items: BriefItem[];
+    traveler_note: BriefItem | null;
+    source: 'model' | 'template';
+  } | null;
+  facts: BriefFact[];
+  factCount: number;
+  generatedAt: string | null;
+  checkedAt: string | null;
+  nextUpdateAt: string | null;
+  stale: boolean;
+  verified: { itemsIn: number; itemsKept: number } | null;
+  note?: string;
+};
+
+export function fetchBrief(signal?: AbortSignal): Promise<BriefResponse> {
+  return getJson<BriefResponse>('/api/brief', { signal });
+}
+
 export type AircraftHistory = {
   success: boolean;
   /**

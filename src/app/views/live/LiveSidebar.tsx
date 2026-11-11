@@ -8,6 +8,7 @@
 
 import { Building2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,8 @@ export type LiveSidebarProps = {
   onClearFilters: () => void;
   onSelect: (flight: Flight) => void;
   onGoToSchedule: () => void;
+  /** Rendered first inside the scroll region, under the search (the brief, at `lg`+ only). */
+  lead?: ReactNode;
 };
 
 export function LiveSidebar({
@@ -59,6 +62,7 @@ export function LiveSidebar({
   onClearFilters,
   onSelect,
   onGoToSchedule,
+  lead,
 }: LiveSidebarProps) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -153,6 +157,7 @@ export function LiveSidebar({
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-4 pr-3">
+          {lead}
           <section>
             <div className="mb-1.5 flex items-center justify-between">
               <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

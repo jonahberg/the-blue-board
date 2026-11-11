@@ -38,6 +38,7 @@ import { TabBar } from './shell/TabBar';
 import { WatchBanner } from './shell/WatchBanner';
 import { Ticker } from './shell/Ticker';
 import { WatchPanel } from './shell/WatchPanel';
+import { BriefProvider } from './state/brief';
 import { useDeepLinks } from './state/deep-links';
 import { FeedProvider, useFeed } from './state/feed';
 import { FleetProvider } from './state/fleet';
@@ -61,6 +62,8 @@ const DisclaimerDialog = lazy(() => import('./features/DisclaimerDialog'));
 const Fr24LookupDialog = lazy(() => import('./features/Fr24LookupDialog'));
 const Onboarding = lazy(() => import('./features/Onboarding'));
 const WaitlistDialog = lazy(() => import('./features/WaitlistDialog'));
+// The full brief as a sheet, opened from the header row (the row itself is in `shell/Ticker`).
+const BriefSheet = lazy(() => import('./features/BriefSheet'));
 const FlightSheet = lazy(() =>
   import('./features/FlightSheet').then((m) => ({ default: m.FlightSheet })),
 );
@@ -195,6 +198,7 @@ function DashboardShell() {
       <Suspense fallback={null}>
         <FlightSheet />
         <SearchPalette />
+        <BriefSheet />
       </Suspense>
       <WatchPanel open={watchOpen} onOpenChange={setWatchOpen} />
       <Suspense fallback={null}>
@@ -239,7 +243,11 @@ export default function Dashboard() {
                 <WatchProvider>
                   <WatchAlertsProvider>
                     <IropsProvider>
-                      <ShellWithPrefs />
+                      {/* The ops brief's one poll, read by the header row, the Live sidebar
+                          and the brief sheet. */}
+                      <BriefProvider>
+                        <ShellWithPrefs />
+                      </BriefProvider>
                     </IropsProvider>
                   </WatchAlertsProvider>
                 </WatchProvider>

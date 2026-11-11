@@ -136,7 +136,7 @@ export function NasPanel({ nas }: { nas: NasData | null }) {
   const count = showTiers ? (nasCountLine(payload, tiers) as string) : '';
 
   return (
-    <section aria-labelledby="nas-status-label" className="rounded-lg border bg-card/40 p-3">
+    <section id="nas-section" aria-labelledby="nas-status-label" className="scroll-mt-4 rounded-lg border bg-card/40 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <h3
           id="nas-status-label"
