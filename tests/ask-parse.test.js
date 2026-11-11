@@ -169,6 +169,21 @@ describe('Starlink, regions, air and ground, status', () => {
   });
 });
 
+describe('one typo', () => {
+  it('a single typo in a longer word is read as the one word it can be', () => {
+    expect(sure('late arivals into denvr')).toEqual({ view: 'schedule', filters: { hub: 'DEN', direction: 'arrivals', status: 'delayed' } });
+    expect(sure('whats wrong at newrk')).toEqual({ view: 'weather', filters: { hub: 'EWR' } });
+    expect(sure('cancelled deparures at o hare')).toEqual({ view: 'schedule', filters: { hub: 'ORD', direction: 'departures', status: 'canceled' } });
+    expect(sure('starlnk 787s')).toEqual({ view: 'live', filters: { family: '787', starlink: true } });
+    expect(sure('dreamliner flyng to narita')).toEqual({ view: 'live', filters: { family: '787', airborne: true, destination: 'NRT' } });
+  });
+  it('short words, two typos, and everyday words near a filter word are left alone', () => {
+    unsure('starlink ovr the atlantic'); // three letters: too short to guess
+    unsure('dnevr arivals'); // "dnevr" is two edits from denver
+    unsure('flights later today'); // "later" is not "late"
+  });
+});
+
 describe('out of scope and hostile text', () => {
   it.each([
     'book me a cheap ticket to denver',

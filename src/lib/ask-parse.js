@@ -116,7 +116,7 @@ add(['in the air', 'airborne', 'flying', 'in flight', 'inflight', 'en route', 'e
 add(['on the ground', 'on ground', 'parked', 'at the gate', 'at gate', 'at the gates', 'at gates', 'sitting on the ground', 'on the tarmac', 'grounded'], { kind: 'airborne', value: false });
 
 // Status buckets.
-add(['delayed', 'delay', 'delays', 'late', 'running late', 'behind schedule', 'tardy', 'lates'], { kind: 'status', value: 'delayed' });
+add(['delayed', 'delay', 'delays', 'late', 'running late', 'behind schedule', 'tardy'], { kind: 'status', value: 'delayed' });
 add(['canceled', 'cancelled', 'cancellation', 'cancellations', 'cancelation', 'cancelations', 'cancel', 'cancels', 'scrubbed'], { kind: 'status', value: 'canceled' });
 add(['on time', 'ontime', 'punctual', 'on schedule'], { kind: 'status', value: 'on-time' });
 
@@ -232,6 +232,47 @@ function tokenize(query) {
     .trim();
   if (!cleaned) return [];
   return cleaned.split(' ').map((raw) => ({ raw, low: raw.toLowerCase() }));
+}
+
+/**
+ * Single words the parser knows, for typo correction: the lexicon's one-word entries of five letters
+ * or more and the one-word airport names. Words that only steer (prepositions) and view hints are
+ * left out: a typo there is cheap to send to the server, a wrong guess is not.
+ */
+const TYPO_TARGETS = (() => {
+  const words = new Set();
+  for (const [phrase, facts] of LEXICON) {
+    if (!/^[a-z]{5,}$/.test(phrase)) continue;
+    if (facts.every((f) => f.kind === 'slot' || f.kind === 'view')) continue;
+    words.add(phrase);
+  }
+  for (const name of AIRPORT_NAMES.keys()) if (/^[a-z]{5,}$/.test(name)) words.add(name);
+  return [...words];
+})();
+
+/** Is `a` one insertion, deletion, substitution or adjacent swap away from `b`? */
+function oneEditApart(a, b) {
+  if (a === b) return false;
+  const la = a.length;
+  const lb = b.length;
+  if (Math.abs(la - lb) > 1) return false;
+  let i = 0;
+  while (i < la && i < lb && a[i] === b[i]) i += 1;
+  if (la === lb) {
+    if (a.slice(i + 1) === b.slice(i + 1)) return true; // substitution
+    return a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2); // swap
+  }
+  return la < lb ? a.slice(i) === b.slice(i + 1) : a.slice(i + 1) === b.slice(i);
+}
+
+/** The one known word a token is a single typo of, or null when there is none or more than one. */
+function correctTypo(word) {
+  if (STOPWORDS.has(word)) return null;
+  const hits = TYPO_TARGETS.filter((target) => oneEditApart(word, target));
+  if (!hits.length) return null;
+  // Plural and singular of the same entry ("arrival"/"arrivals") are one answer.
+  const answers = new Set(hits.map((h) => JSON.stringify(LEXICON.get(h) ?? AIRPORT_NAMES.get(h))));
+  return answers.size === 1 ? hits[0] : null;
 }
 
 const FAMILY_NUMBERS = new Set(['737', '747', '757', '767', '777', '787']);
@@ -364,6 +405,18 @@ export function parseAsk(rawQuery) {
         }
         continue;
       }
+    }
+
+    // 8. One typo in a longer word ("denvr", "arivals", "starlnk"): the single word it can only be.
+    const fixed = tok.low.length >= 5 && /^[a-z]+$/.test(tok.low) ? correctTypo(tok.low) : null;
+    if (fixed) {
+      const name = AIRPORT_NAMES.get(fixed);
+      if (name) { airportFact(name); continue; }
+      for (const fact of LEXICON.get(fixed) || []) {
+        if (fact.kind === 'slot') slot = /** @type {string} */ (fact.value);
+        else facts.push(fact);
+      }
+      continue;
     }
 
     leftovers.push(tok.raw);

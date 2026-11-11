@@ -92,8 +92,8 @@ export const ASK_AIRPORTS = Object.freeze(
 
 /** The order filters are listed in, and the only names a result may carry. */
 export const ASK_FILTER_NAMES = Object.freeze([
-  'flight', 'tail', 'hub', 'direction', 'origin', 'destination', 'family', 'type',
-  'starlink', 'region', 'airborne', 'status',
+  'flight', 'tail', 'family', 'type', 'starlink', 'hub', 'direction', 'origin', 'destination',
+  'region', 'airborne', 'status',
 ]);
 
 /**
