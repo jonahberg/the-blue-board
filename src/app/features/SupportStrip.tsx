@@ -100,7 +100,7 @@ export default function SupportStrip() {
       className="flex min-h-10 shrink-0 items-center gap-2 border-t border-primary/40 bg-primary/10 px-3 py-1 text-xs"
     >
       <HandHeart aria-hidden="true" className="hidden size-4 shrink-0 text-primary sm:block" />
-      <p className="min-w-0 flex-1 leading-snug">
+      <p className="min-w-0 flex-1 text-balance leading-snug">
         {copy.lead ? <span className="font-semibold">{copy.lead}</span> : null}
         {/* Phone: the count sentence alone when it leads, otherwise the short line. */}
         {copy.lead ? null : <span className="sm:hidden">{copy.short}</span>}
