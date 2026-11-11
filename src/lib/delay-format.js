@@ -2,7 +2,7 @@
 // Formats a known departure/arrival delay (minutes vs schedule) for the schedule
 // board's DELAY / RISK column. Audit Jul 3 2026: the column was blank on departed
 // rows while the real delta hid as tiny sub-text in the TIME cell — a flight with a
-// known +140m delay displayed an AI prediction instead of the fact.
+// known +140m delay displayed a risk estimate instead of the fact.
 //
 // Convention: "+Nm" under 90 minutes, "+XhYYm" at 90 minutes and above (a wall of
 // minutes like "+140m" is harder to read than "+2h20m"). Early departures render

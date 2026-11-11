@@ -127,7 +127,7 @@ function buildWelcomeEmail(): string {
       <tr>
         <td style="padding:8px 12px 8px 0;vertical-align:top;width:24px;font-size:15px;">&#x26A0;&#xFE0F;</td>
         <td style="padding:8px 0;font-size:15px;line-height:1.5;color:#b0b0b0;">
-          <strong style="color:#e0e0e0;">AI delay predictions</strong> — 8-signal risk scoring with plain-English explanations
+          <strong style="color:#e0e0e0;">Delay risk scores</strong> — a rule-based score for every flight, with an AI-written, plain-English explanation
         </td>
       </tr>
       <tr>
