@@ -58,10 +58,15 @@ const {
   hideSiteHeader = false,
   hideSiteFooter = false,
 } = Astro.props;
+
+// `scroll-pt-16` on <html>: an in-page jump (#faq, #all-hubs, a tracker section) lands below the
+// 48 px sticky header instead of under it. A page with the site footer is a full-height column
+// (`main` grows), so on a short page (/thanks, the flight lookup, 404) the footer sits at the
+// bottom of the window rather than mid-screen.
 ---
 
 <!doctype html>
-<html lang="en" class="dark" style="color-scheme:dark">
+<html lang="en" class="dark scroll-pt-16" style="color-scheme:dark">
   <head>
     <Seo
       title={title}
@@ -79,15 +84,15 @@ const {
     <link rel="preload" href={geistLatin} as="font" type="font/woff2" crossorigin />
     <slot name="head" />
   </head>
-  <body class={bodyClass} {...dataAttrs}>
+  <body class:list={[bodyClass, !hideSiteFooter && 'flex min-h-dvh flex-col']} {...dataAttrs}>
     <a
       href="#main"
-      class="absolute left-4 top-4 z-100 -translate-y-20 rounded-md bg-primary-fill px-3 py-2 text-sm font-medium text-primary-foreground focus:translate-y-0"
+      class="absolute left-4 top-2 z-100 inline-flex min-h-11 -translate-y-20 items-center rounded-md bg-primary-fill px-4 text-sm font-medium text-primary-foreground focus:translate-y-0"
     >
       Skip to main content
     </a>
     {!hideSiteHeader && <SiteHeader />}
-    <main id="main">
+    <main id="main" class:list={[!hideSiteFooter && 'flex-1']}>
       <slot />
     </main>
     {!hideSiteFooter && <SiteFooter />}

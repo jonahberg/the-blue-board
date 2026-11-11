@@ -5,22 +5,35 @@
  *
  * The unaffiliated-with-United disclaimer and the FR24 / AWC / FAA data credits
  * are a licensing and trust requirement — never drop them.
+ *
+ * Three rows: the site links, the disclaimer, then credits and the support button. Each group
+ * is one unbreakable unit, and a separator is glued to the words after it, so a phone wraps
+ * between groups and never strands a `·` at the end of a line. Links are 44 px tall on touch
+ * (`pointer-fine:md:` relaxes them for a mouse).
  */
 import { supportUrl } from '../../lib/support-link.js';
 
-const linkClass = 'underline underline-offset-2 hover:text-foreground';
+const linkClass =
+  'inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground pointer-fine:md:min-h-0';
 ---
 <footer class="mt-10 border-t border-border bg-background">
   <div
-    class="mx-auto flex max-w-5xl flex-col items-center gap-2 px-4 py-5 text-center text-xs text-muted-foreground"
+    class="mx-auto flex max-w-5xl flex-col items-center gap-1.5 px-4 py-5 text-center text-xs text-muted-foreground pointer-fine:md:gap-2"
   >
-    <p>
-      <a href="/" class={linkClass}>The Blue Board</a> · Unofficial · Not affiliated with United
-      Airlines, Inc. · Data may be delayed · <a href="/privacy" class={linkClass}>Privacy</a> ·
+    <nav aria-label="Footer" class="flex flex-wrap items-center justify-center gap-x-1.5">
+      <a href="/" class={linkClass}>The Blue Board</a>
+      <span aria-hidden="true">·</span>
+      <a href="/privacy" class={linkClass}>Privacy</a>
+      <span aria-hidden="true">·</span>
       <a href="/" class={linkClass}>Open Dashboard &rarr;</a>
+    </nav>
+    <p class="text-balance">
+      Unofficial <span class="whitespace-nowrap">· Not affiliated</span> with United Airlines, Inc. <span
+        class="whitespace-nowrap">· Data may be delayed</span
+      >
     </p>
-    <p class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-      <span>
+    <p class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+      <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
         Data: <a
           href="https://www.flightradar24.com"
           target="_blank"
@@ -43,11 +56,11 @@ const linkClass = 'underline underline-offset-2 hover:text-foreground';
         target="_blank"
         rel="noopener noreferrer"
         data-support="footer"
-        class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-3 font-medium text-primary-foreground pointer-fine:md:min-h-0 md:px-2.5 md:py-1"
+        class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-3 font-medium text-primary-foreground hover:bg-primary-fill/90 pointer-fine:md:min-h-0 md:px-2.5 md:py-1"
       >
         Support Server Costs
       </a>
-      <span class="whitespace-nowrap">
+      <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
         Built by <a
           href="https://jonahberg.com"
           target="_blank"

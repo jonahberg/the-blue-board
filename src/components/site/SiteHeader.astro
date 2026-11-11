@@ -27,12 +27,14 @@ function navKeyForPath(pathname: string): NavKey | undefined {
 
 const { current = navKeyForPath(Astro.url.pathname) } = Astro.props;
 
-const linkClass = 'rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground';
-const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground bg-accent';
+// 44 px tall on touch (an iPad at 768–1023 px shows this row); a mouse gets the compact pill.
+const linkBase = 'inline-flex min-h-11 items-center rounded-md px-2.5 text-sm pointer-fine:md:min-h-8';
+const linkClass = `${linkBase} text-muted-foreground hover:bg-accent hover:text-foreground`;
+const activeLinkClass = `${linkBase} font-medium text-foreground bg-accent`;
 ---
 <header class="sticky top-0 z-50 border-b border-border bg-background">
   <div class="mx-auto flex h-12 max-w-5xl items-center gap-3 px-4">
-    <a href="/" class="flex items-center gap-2 rounded-md">
+    <a href="/" class="flex min-h-11 items-center gap-2 rounded-md">
       <span
         class="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary-fill text-primary-foreground"
       >
@@ -76,7 +78,7 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
 
     <details class="group relative ml-auto md:hidden" data-site-menu>
       <summary
-        class="flex size-11 cursor-pointer list-none items-center justify-center rounded-md border border-border text-muted-foreground [&::-webkit-details-marker]:hidden"
+        class="flex size-11 cursor-pointer list-none items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-foreground group-open:bg-accent group-open:text-foreground [&::-webkit-details-marker]:hidden"
       >
         <span class="sr-only">Menu</span>
         <svg
@@ -87,17 +89,31 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
           stroke-width="2"
           stroke-linecap="round"
           stroke-linejoin="round"
-          class="size-4"
+          class="size-4 group-open:hidden"
           aria-hidden="true"
         >
           <path d="M4 6h16"></path>
           <path d="M4 12h16"></path>
           <path d="M4 18h16"></path>
         </svg>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="hidden size-4 group-open:block"
+          aria-hidden="true"
+        >
+          <path d="M18 6 6 18"></path>
+          <path d="m6 6 12 12"></path>
+        </svg>
       </summary>
       <nav
         aria-label="Primary mobile"
-        class="absolute right-0 top-12 z-50 w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+        class="absolute right-0 top-12 z-50 w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
       >
         {
           LINKS.map((link) => (
@@ -105,7 +121,7 @@ const activeLinkClass = 'rounded-md px-2.5 py-1.5 text-sm font-medium text-foreg
               href={link.href}
               aria-current={current === link.key ? 'page' : undefined}
               class={`flex min-h-11 items-center rounded-sm px-3 text-sm ${
-                current === link.key ? 'font-medium text-foreground bg-accent' : 'text-muted-foreground'
+                current === link.key ? 'font-medium text-foreground bg-accent' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
             >
               {link.label}
