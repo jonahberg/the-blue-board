@@ -6,6 +6,7 @@
 // never waits on Supabase, and every failure degrades to "no merge", never an error.
 
 import { getSupabase } from './_supabase.js';
+import { boundedQuery } from './_bounded.js';
 import { extractSightings } from '../src/lib/reg-overlay.js';
 
 /**
@@ -19,6 +20,12 @@ export type SightingRecord = { reg: string; origin: string; dest: string; seenAt
 const SIGHTINGS_CACHE_TTL_MS = 60_000;
 const SIGHTINGS_MAX_AGE_H = 36; // matches the Phase 1 client ledger prune horizon
 export const REG_SIGHTINGS_WRITE_MIN_INTERVAL_MS = 60_000;
+// Time limits on the Supabase calls (api/_bounded.ts). Both run in waitUntil on /api/schedule and
+// /api/fr24-feed, where an unbounded query kept the invocation alive to its maxDuration. The load
+// reads up to 36 h of rows, so it gets more room than the upserts; a load that runs out of time
+// caches an empty map for the usual 60 s, exactly like a failed load.
+export const REG_SIGHTINGS_READ_TIMEOUT_MS = 8000;
+export const REG_SIGHTINGS_WRITE_TIMEOUT_MS = 5000;
 
 let sightingsCache: { map: Map<string, SightingRecord>; expires: number; loadedAt: number } | null = null;
 let sightingsInFlight: Promise<Map<string, SightingRecord>> | null = null;
@@ -61,7 +68,10 @@ type SightingRow = ReturnType<typeof extractSightings>[number];
 
 async function upsertSightingRows(supabase: any, rows: SightingRow[]): Promise<number> {
   if (rows.length === 0) return 0;
-  const { error } = await supabase.from('reg_sightings').upsert(rows, { onConflict: 'flight_key' });
+  const { error } = await boundedQuery<any>(
+    supabase.from('reg_sightings').upsert(rows, { onConflict: 'flight_key' }),
+    REG_SIGHTINGS_WRITE_TIMEOUT_MS,
+  );
   if (error) {
     console.warn('reg-sightings upsert failed:', error.message);
     return 0;
@@ -93,7 +103,10 @@ export async function recordFeedSightings(parsedFlights: any[], nowMs = Date.now
       if (airborne.length === 0) return 0;
       const legacy = () => airborne.map(({ airborne_at: _drop, ...rest }) => rest);
       if (!airborneColumn) return upsertSightingRows(supabase, legacy());
-      const { error } = await supabase.from('reg_sightings').upsert(airborne, { onConflict: 'flight_key' });
+      const { error } = await boundedQuery<any>(
+        supabase.from('reg_sightings').upsert(airborne, { onConflict: 'flight_key' }),
+        REG_SIGHTINGS_WRITE_TIMEOUT_MS,
+      );
       if (!error) return airborne.length;
       if (!isMissingAirborneColumn(error)) {
         console.warn('reg-sightings upsert failed:', error.message);
@@ -118,7 +131,9 @@ async function fetchSightingsMap(): Promise<Map<string, SightingRecord>> {
   try {
     const supabase = getSupabase();
     const cutoff = new Date(Date.now() - SIGHTINGS_MAX_AGE_H * 3600e3).toISOString();
-    const select = (columns: string) => supabase.from('reg_sightings').select(columns).gt('seen_at', cutoff);
+    // A fresh time limit per query: the old-shape retry below is a second request.
+    const select = (columns: string) =>
+      boundedQuery<any>(supabase.from('reg_sightings').select(columns).gt('seen_at', cutoff), REG_SIGHTINGS_READ_TIMEOUT_MS);
     let { data, error } = await select(airborneColumn ? `${SIGHTINGS_COLUMNS}, airborne_at` : SIGHTINGS_COLUMNS);
     if (error && airborneColumn && isMissingAirborneColumn(error)) {
       // A database without sql/016: read the old shape (every airborneAtMs null → no override).

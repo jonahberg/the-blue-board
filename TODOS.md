@@ -25,7 +25,11 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
   header (`fetchFaa` in `src/app/data/api.ts`, and `src/scripts/newark-live.ts`). They should
   read it, track the time of the last good answer, and show programs past a limit as stale or
   unavailable, so an expired ground stop never reads as a live one.
-- [ ] **`/api/schedule` can run past its 60-second limit.** Two paths can:
+- [x] **`/api/schedule` can run past its 60-second limit.** Fixed Nov 10 2026: the handler derives
+  one deadline at the start of the request and every await is bounded by it (`api/_bounded.ts`);
+  every Supabase query in the three files below carries an abort signal; the FR24 body reads are
+  inside their request timeout; the FR24 slot wait has a deadline
+  (`tests/schedule-deadline.test.js`). Two paths could:
   - On a request, `fetchAllPages` runs to a deadline 57 seconds after the start. The handler then
     awaits `saveScheduleSnapshot`, and for a partial board a second `getPersistentFallback`.
     Neither has a bound.
@@ -40,6 +44,12 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
   else was logged, so the logs do not show which path it was. Fix: derive every deadline from
   the request's start, leave room for the snapshot write, and put timeouts on the Supabase reads
   and writes.
+- [ ] **Two body reads outside their timers.** `api/faa.ts` `fetchDisruptionMap` clears its
+  5-second timer before `upstream.json()`, and `api/_schedule-aerodatabox.ts` `fetchWindow` clears
+  its timer before `resp.json()` / `resp.text()`. `/api/schedule` now bounds both from its side
+  (the FAA kick and the provider call are raced against the request deadline), but a hung FAA body
+  still pins `disruptionInFlight` on that instance until it recycles, and every other caller of
+  either function is unbounded. Fix: clear the timer after the body read, as `getFaaUpstream` does.
 - [ ] **Hub proximity rule.** `HUB_PROXIMITY_NM = 93` (`src/lib/live-filters.js`) counts any
   grounded aircraft within the radius as at the hub, whatever its route. No single radius works
   (SFO–SJC is 26.5 NM, IAD–DCA 20.4 NM). Match on the route's hub first. For missing routes, use

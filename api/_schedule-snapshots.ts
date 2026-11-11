@@ -1,3 +1,5 @@
+import { boundedQuery, budgetWithin } from './_bounded.js';
+
 const SNAPSHOT_TABLE = 'schedule_snapshots';
 const SNAPSHOT_TTL_MS = 72 * 60 * 60 * 1000;
 const MIN_PARTIAL_SNAPSHOT_COMPLETENESS = 0.25;
@@ -26,7 +28,19 @@ interface SaveScheduleSnapshotArgs {
   dir: string;
   ts: number;
   data: any;
+  /** The whole write's budget (read-before-write + upsert). Default SNAPSHOT_WRITE_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
+
+// Every query here carries a time limit (api/_bounded.ts). Without one a slow Supabase held
+// /api/schedule open until its 60-second maxDuration (Nov 7 2026). The defaults fit every caller:
+// /api/hub-board (10 s limit) reads at most two snapshots, /api/flight-times (15 s) one per leg, and
+// /api/schedule passes its own, smaller budgets cut to its request deadline. A query that runs out
+// of time is answered like any failed query: no snapshot, or no write, logged once.
+export const SNAPSHOT_READ_TIMEOUT_MS = 3000;
+export const SNAPSHOT_WRITE_TIMEOUT_MS = 4000;
+// The hourly cleanup runs inside the warm cron (300 s limit): each statement gets its own budget.
+const CLEANUP_QUERY_TIMEOUT_MS = 15000;
 
 let warnedMissingConfig = false;
 let warnedInitFailure = false;
@@ -140,17 +154,23 @@ export async function getSupabaseAdmin(): Promise<any | null> {
   return supabaseClientPromise;
 }
 
-export async function loadScheduleSnapshot(cacheKey: string): Promise<PersistedScheduleSnapshot | null> {
+export async function loadScheduleSnapshot(
+  cacheKey: string,
+  { timeoutMs = SNAPSHOT_READ_TIMEOUT_MS }: { timeoutMs?: number } = {},
+): Promise<PersistedScheduleSnapshot | null> {
   const supabase = await getSupabaseAdmin();
   if (!supabase) return null;
 
   try {
-    const { data, error } = await supabase
-      .from(SNAPSHOT_TABLE)
-      .select('payload, refreshed_at')
-      .eq('cache_key', cacheKey)
-      .gt('expires_at', new Date().toISOString())
-      .limit(1);
+    const { data, error } = await boundedQuery<any>(
+      supabase
+        .from(SNAPSHOT_TABLE)
+        .select('payload, refreshed_at')
+        .eq('cache_key', cacheKey)
+        .gt('expires_at', new Date().toISOString())
+        .limit(1),
+      timeoutMs,
+    );
 
     if (error) {
       console.error(`Schedule snapshot read failed for ${cacheKey}:`, error.message);
@@ -171,7 +191,7 @@ export async function loadScheduleSnapshot(cacheKey: string): Promise<PersistedS
   }
 }
 
-export async function saveScheduleSnapshot({ cacheKey, hub, dir, ts, data }: SaveScheduleSnapshotArgs): Promise<void> {
+export async function saveScheduleSnapshot({ cacheKey, hub, dir, ts, data, timeoutMs = SNAPSHOT_WRITE_TIMEOUT_MS }: SaveScheduleSnapshotArgs): Promise<void> {
   if (!data) return;
 
   const isCompleteSnapshot = !data.partial;
@@ -189,13 +209,18 @@ export async function saveScheduleSnapshot({ cacheKey, hub, dir, ts, data }: Sav
 
   const nowIso = new Date().toISOString();
   const expiresAtIso = new Date(Math.max(Date.now() + SNAPSHOT_TTL_MS, (ts * 1000) + SNAPSHOT_TTL_MS)).toISOString();
+  // One budget for the whole write: the upsert gets whatever the read-before-write left.
+  const writeDeadline = Date.now() + Math.max(0, timeoutMs);
 
   try {
-    const { data: existingRows, error: existingError } = await supabase
-      .from(SNAPSHOT_TABLE)
-      .select('payload')
-      .eq('cache_key', cacheKey)
-      .limit(1);
+    const { data: existingRows, error: existingError } = await boundedQuery<any>(
+      supabase
+        .from(SNAPSHOT_TABLE)
+        .select('payload')
+        .eq('cache_key', cacheKey)
+        .limit(1),
+      budgetWithin(timeoutMs, writeDeadline, 0),
+    );
 
     if (existingError) {
       console.error(`Schedule snapshot read-before-write failed for ${cacheKey}:`, existingError.message);
@@ -214,22 +239,25 @@ export async function saveScheduleSnapshot({ cacheKey, hub, dir, ts, data }: Sav
       return;
     }
 
-    const { error } = await supabase
-      .from(SNAPSHOT_TABLE)
-      .upsert({
-        cache_key: cacheKey,
-        hub: hub.toUpperCase(),
-        direction: dir,
-        day_ts: ts,
-        payload: data,
-        total: Number(data.total || 0),
-        source: String(data?.meta?.source || 'unknown'),
-        refreshed_at: nowIso,
-        expires_at: expiresAtIso,
-        updated_at: nowIso,
-      }, {
-        onConflict: 'cache_key'
-      });
+    const { error } = await boundedQuery<any>(
+      supabase
+        .from(SNAPSHOT_TABLE)
+        .upsert({
+          cache_key: cacheKey,
+          hub: hub.toUpperCase(),
+          direction: dir,
+          day_ts: ts,
+          payload: data,
+          total: Number(data.total || 0),
+          source: String(data?.meta?.source || 'unknown'),
+          refreshed_at: nowIso,
+          expires_at: expiresAtIso,
+          updated_at: nowIso,
+        }, {
+          onConflict: 'cache_key'
+        }),
+      budgetWithin(timeoutMs, writeDeadline, 0),
+    );
 
     if (error) {
       console.error(`Schedule snapshot write failed for ${cacheKey}:`, error.message);
@@ -268,12 +296,15 @@ export async function cleanupExpiredSnapshots(): Promise<void> {
   let batchCapReached = false;
   try {
     for (let batch = 0; batch < CLEANUP_MAX_BATCHES; batch++) {
-      const { data, error } = await supabase
-        .from(SNAPSHOT_TABLE)
-        .select('cache_key')
-        .lt('expires_at', new Date().toISOString())
-        .order('expires_at', { ascending: true })
-        .limit(CLEANUP_BATCH_SIZE);
+      const { data, error } = await boundedQuery<any>(
+        supabase
+          .from(SNAPSHOT_TABLE)
+          .select('cache_key')
+          .lt('expires_at', new Date().toISOString())
+          .order('expires_at', { ascending: true })
+          .limit(CLEANUP_BATCH_SIZE),
+        CLEANUP_QUERY_TIMEOUT_MS,
+      );
       if (error) {
         console.error('Schedule snapshot cleanup select failed:', error.message);
         break;
@@ -281,10 +312,13 @@ export async function cleanupExpiredSnapshots(): Promise<void> {
       const keys = ((data || []) as Array<{ cache_key: string }>).map((r) => r.cache_key);
       if (!keys.length) break;
 
-      const { error: delError } = await supabase
-        .from(SNAPSHOT_TABLE)
-        .delete()
-        .in('cache_key', keys);
+      const { error: delError } = await boundedQuery<any>(
+        supabase
+          .from(SNAPSHOT_TABLE)
+          .delete()
+          .in('cache_key', keys),
+        CLEANUP_QUERY_TIMEOUT_MS,
+      );
       if (delError) {
         console.error('Schedule snapshot cleanup failed:', delError.message);
         break;
