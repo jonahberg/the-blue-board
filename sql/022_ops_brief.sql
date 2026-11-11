@@ -1,8 +1,9 @@
--- 022: the ops brief ("Right now" at the top of the Live tab) and a per-feature metered-spend counter.
+-- 022: the ops brief ("Right now" at the top of the Live tab), a per-feature metered-spend counter,
+-- and the Enhanced Radar radio cache + spend ledger.
 --
 -- APPLY MANUALLY via the Supabase dashboard SQL editor (this repo keeps migrations in sql/, not
--- supabase/migrations/). Additive only: two new tables, one new function, no change to anything that
--- exists. Idempotent: safe to re-run. Undo is at the bottom of docs/specs/ops-brief.md.
+-- supabase/migrations/). Additive only: three new tables, one new function, no change to anything
+-- that exists. Idempotent: safe to re-run. Undo is at the bottom of docs/specs/ops-brief.md.
 --
 -- Posture (sql/017, sql/018): RLS on with NO policies, no anon/authenticated grants. Only the
 -- service-role API reads or writes. The code deploys safely before this file is applied: the cron
@@ -11,6 +12,7 @@
 -- Verify after applying:
 --   select increment_feature_spend('brief', current_date, 0, 0, 0, 0);   -- returns 0
 --   select count(*) from ops_briefs;                                     -- returns 0
+--   select count(*) from radio_airport_status;                           -- returns 0
 
 -- ── ops_briefs: one row per published brief ──
 -- WRITER: api/cron/brief.ts (every 10 minutes; a run whose material facts match the latest brief
@@ -121,3 +123,36 @@ revoke execute on function public.increment_feature_spend(text, date, numeric, i
 revoke execute on function public.increment_feature_spend(text, date, numeric, integer, bigint, bigint) from anon;
 revoke execute on function public.increment_feature_spend(text, date, numeric, integer, bigint, bigint) from authenticated;
 grant execute on function public.increment_feature_spend(text, date, numeric, integer, bigint, bigint) to service_role;
+
+-- ── radio_airport_status: the Enhanced Radar cache AND spend ledger (OFF unless ENHANCED_RADAR_ENABLED=1) ──
+-- One row per PAID attempt at GET /api/v0/airports/status ($1.50 each), written by
+-- api/_radio-status.ts BEFORE the call with the full price booked (status 'pending'), then settled
+-- from the response's X-Charged-Usd header. So a timeout or a killed lambda still counts: the daily
+-- cap (ENHANCED_RADAR_DAILY_USD_CAP, default $12) and the monthly cap (ENHANCED_RADAR_MONTHLY_USD_CAP,
+-- default $100) are sums of charged_usd over today's / this month's rows (UTC), and any attempt in
+-- the last 90 minutes blocks another call for that hub. The latest 'ok' payload inside that window
+-- is reused across cron runs instead of being bought again.
+-- RETENTION: 90 days, deleted in bounded batches by the brief cron (only while the switch is on).
+create table if not exists public.radio_airport_status (
+  id            bigint generated always as identity primary key,
+  hub           text not null check (hub in ('ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX')),
+  facility_id   uuid not null,
+  requested_at  timestamptz not null default now(),
+  status        text not null default 'pending' check (status in ('pending', 'ok', 'error')),
+  http_status   integer,
+  -- Booked at the full price until the response says otherwise; never below zero.
+  charged_usd   numeric(8, 3) not null default 1.500 check (charged_usd >= 0),
+  balance_usd   numeric(12, 3),
+  request_id    text,
+  payload       jsonb,
+  error         text check (error is null or length(error) <= 300)
+);
+
+create index if not exists radio_airport_status_requested_at_idx on public.radio_airport_status (requested_at desc);
+create index if not exists radio_airport_status_hub_requested_at_idx on public.radio_airport_status (hub, requested_at desc);
+
+alter table public.radio_airport_status enable row level security;
+revoke all on table public.radio_airport_status from public, anon, authenticated;
+
+comment on table public.radio_airport_status is
+  'Enhanced Radar airport-status attempts: cache (payload) and spend ledger (charged_usd, booked before each call). Feeds the brief''s radio facts. Kept 90 days.';

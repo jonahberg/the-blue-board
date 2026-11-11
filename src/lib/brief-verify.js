@@ -11,6 +11,12 @@
 //      fails any check is dropped, and the report says why.
 //   4. Items may not speak as United ("we", "our"), and an item citing a PLANNED or POSSIBLE FAA
 //      program must say so ("possible", "not in effect", "could"…): prompt rule 2, made checkable.
+//      An item citing a "radio" fact must attribute it to what was heard ("tower", "controllers",
+//      "on frequency"…): prompt rule 7, made checkable. A radio observation's own words are
+//      untrusted and never in `values`: they may appear only as an EXACT double-quoted copy of the
+//      fact's sanitized `quote`, preceded in the same clause by a radio attribution ("tower",
+//      "approach", "ATC", "heard on frequency"…). Any other quoted text in a radio item, a partial
+//      or altered quote, or an unattributed one drops the item. Markup or a URL drops any item.
 //   5. The headline is checked against the union of the SURVIVING items' facts. A headline that
 //      fails (or runs past 20 words) is replaced with the template headline, never published.
 //   6. The traveler note is checked like an item, and only survives when the final tone is
@@ -34,6 +40,12 @@ const TONES = new Set(['calm', 'watch', 'disrupted']);
 const JARGON_RE = /\b(GDP|GS|IFR|LIFR|MVFR|VFR|IMC|VMC|TMI|AFP|EDCT|MIT|SWAP|IROPS|OTP|ATCSCC)\b/;
 const FIRST_PERSON_RE = /\b(?:[Ww]e|[Ww]e're|[Ww]e've|[Oo]ur|[Oo]urs|us)\b/;
 const EMOJI_RE = /\p{Extended_Pictographic}/u;
+/** Words that attribute a claim to air traffic control audio rather than to the FAA. */
+const RADIO_ATTRIBUTION_RE = /\b(?:heard|radio|frequenc(?:y|ies)|tower|controllers?|pilots?|crews?|approach\s+control|ground\s+control|air\s+traffic\s+control|ATC|Enhanced\s+Radar|transmissions?)\b/i;
+/** The stricter attribution a radio QUOTE must follow, in its own clause. */
+const QUOTE_ATTRIBUTION_RE = /\b(?:heard|radio|frequenc(?:y|ies)|tower|controllers?|approach(?:\s+control)?|ground\s+control|air\s+traffic\s+control|ATC|transmissions?)\b/i;
+/** Markup or a link in model text: never published. */
+const MARKUP_RE = /<[^>]{0,200}>|<\/?[a-z]|[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
 /** Words that mark an FAA program as not (yet) in effect. */
 const HEDGE_RE = /\b(?:possible|possibly|could|may|might|planned|plans?|expects?|expected|watch(?:ing)?|later|if|not\s+(?:yet\s+)?in\s+effect|isn't\s+in\s+effect|neither\s+is\s+in\s+effect|none\s+(?:of\s+them\s+)?(?:is|are)\s+in\s+effect)\b/i;
 
@@ -91,22 +103,58 @@ export function checkSentence(text, factIds, factIndex, { itemRules = true } = {
   if (ids.length > MAX_FACT_IDS) reasons.push('too_many_fact_ids');
   const allowance = emptyAllowance();
   let citesPlanned = false;
+  let citesRadio = false;
   for (const id of ids) {
     const fact = factIndex.get(id);
     if (!fact) reasons.push(`unknown_fact_id:${id}`);
     else {
       allowanceFromValues(fact.values, allowance);
       if (/** @type {any} */ (fact).kind === 'faa_planned') citesPlanned = true;
+      if (/** @type {any} */ (fact).kind === 'radio') citesRadio = true;
     }
   }
   if (itemRules && citesPlanned && !HEDGE_RE.test(normalizeText(text))) reasons.push('planned_not_hedged');
+  if (itemRules && citesRadio && !RADIO_ATTRIBUTION_RE.test(normalizeText(text))) reasons.push('radio_not_attributed');
   if (String(text).length > MAX_TEXT_CHARS) reasons.push('text_too_long');
   if (FIRST_PERSON_RE.test(normalizeText(text))) reasons.push('first_person');
-  for (const claim of extractClaims(text)) {
+  if (MARKUP_RE.test(normalizeText(text))) reasons.push('markup_or_url');
+
+  // Radio quotes: an exact, attributed copy of a cited radio fact's sanitized quote is the ONLY way
+  // an observation's words reach a visitor, and the only text exempt from the claim check below.
+  let claimText = normalizeText(text);
+  if (itemRules && citesRadio) {
+    const cited = ids.map((id) => /** @type {any} */ (factIndex.get(id))).filter(Boolean);
+    const quotes = new Set(cited.filter((f) => f.kind === 'radio' && f.quote).map((f) => normalizeText(f.quote).trim()));
+    const statements = cited.filter((f) => f.kind !== 'radio').map((f) => normalizeText(f.statement || ''));
+    for (const m of [...claimText.matchAll(/"([^"]*)"/g)]) {
+      const inner = m[1].trim();
+      if (quotes.has(inner)) {
+        if (!quoteIsAttributed(claimText, m.index ?? 0)) reasons.push('radio_quote_unattributed');
+        else claimText = claimText.slice(0, m.index) + ' '.repeat(m[0].length) + claimText.slice((m.index ?? 0) + m[0].length);
+      } else if (!statements.some((st) => inner && st.includes(inner))) {
+        reasons.push(`radio_quote_mismatch:${inner.slice(0, 40)}`);
+      }
+    }
+    if ((claimText.match(/"/g) || []).length % 2 === 1) reasons.push('radio_quote_unbalanced');
+  }
+
+  for (const claim of extractClaims(claimText)) {
     const why = claimFailure(claim, allowance);
     if (why) reasons.push(why);
   }
   return reasons;
+}
+
+/**
+ * True when the clause holding the quote at `index` attributes it to radio before the quote opens.
+ * The clause runs back to the last sentence or clause break (". ", "; ", "! ", "? "); the dots of
+ * "a.m."/"p.m." are not breaks.
+ */
+function quoteIsAttributed(text, index) {
+  const before = text.slice(0, index).replace(/\b([ap])\.m\./gi, '$1m');
+  const breaks = [...before.matchAll(/[.;!?]\s/g)].map((m) => (m.index ?? 0) + 1);
+  const clause = before.slice(breaks.length ? breaks[breaks.length - 1] : 0);
+  return QUOTE_ATTRIBUTION_RE.test(clause);
 }
 
 function styleWarnings(text, where) {

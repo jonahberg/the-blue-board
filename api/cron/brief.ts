@@ -1,5 +1,6 @@
 // Vercel Cron Job: the ops brief ("Right now" at the top of the Live tab).
-// Config in vercel.json: { "path": "/api/cron/brief", "schedule": "*/10 * * * *" }, maxDuration 60.
+// Config in vercel.json: { "path": "/api/cron/brief", "schedule": "*/10 * * * *" }, maxDuration 90
+// (worst case: /api/irops cold 25 s + two radio calls 16 s + the model 20 s + Supabase).
 //
 // One generation serves every visitor; nothing is generated per request. Each run:
 //   1. Collects the facts from what the site already has (api/_brief-collect.ts: the site's own
@@ -21,6 +22,8 @@
 //   BRIEF_CRON=off        the whole cron no-ops (200).
 //   BRIEF_GENERATION=off  no model calls; template briefs continue.
 //   BRIEF_DAILY_USD_CAP   the brief's own daily ceiling in USD (default 0.50; an explicit 0 = no model calls).
+//   ENHANCED_RADAR_ENABLED=1  adds air traffic control radio facts for hubs under a ground stop or
+//                         ground delay program (api/_radio-status.ts; paid, capped, OFF by default).
 
 import { createHash } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '../_types.js';
@@ -60,9 +63,24 @@ export type BriefCronDeps = {
   nowMs?: number;
   collect?: () => Promise<CollectedSources>;
   generate?: (facts: any[], nowMs: number) => Promise<BriefModelResult>;
-  /** Extra facts from optional sources (the Enhanced Radar commit plugs in here). */
-  extraFacts?: (collected: CollectedSources, facts: any[], nowMs: number) => Promise<any[]>;
+  /** Extra facts from optional sources; defaults to Enhanced Radar radio when ENHANCED_RADAR_ENABLED=1. */
+  extraFacts?: (collected: CollectedSources, facts: any[], nowMs: number) => Promise<{ facts: any[]; report?: unknown }>;
 };
+
+/** Enhanced Radar is OFF unless this is exactly "1". Checked here, before the module is even imported. */
+export function enhancedRadarSwitchOn(): boolean {
+  return process.env.ENHANCED_RADAR_ENABLED === '1';
+}
+
+/**
+ * Radio facts (api/_radio-status.ts), loaded by dynamic import only when the switch is on: with it
+ * off, the paid client's module is never loaded, let alone called.
+ */
+async function radioExtraFacts(collected: CollectedSources, _facts: any[], nowMs: number): Promise<{ facts: any[]; report?: unknown }> {
+  if (!enhancedRadarSwitchOn()) return { facts: [] };
+  const { collectRadioFacts } = await import('../_radio-status.js');
+  return collectRadioFacts(collected.faa, nowMs);
+}
 
 export type BriefCronSummary = Record<string, unknown> & { status: string };
 
@@ -97,13 +115,13 @@ export async function runBriefCron(deps: BriefCronDeps = {}): Promise<BriefCronS
   if (readings < BRIEF_MIN_HUB_READINGS) {
     return { status: 'skipped', reason: `${readings} hub on-time reading(s); ${BRIEF_MIN_HUB_READINGS} are needed`, skipped: collection.skipped, errors: collected.errors };
   }
-  if (deps.extraFacts) {
-    const extra = await deps.extraFacts(collected, facts, nowMs).catch((e: any) => {
-      console.warn('brief extra facts failed:', e?.message || e);
-      return [];
-    });
-    if (extra.length) ({ facts, collection } = buildBriefFacts({ ...collected, extraFacts: extra }, { nowMs }));
-  }
+  const extra = await (deps.extraFacts ?? radioExtraFacts)(collected, facts, nowMs).catch((e: any) => {
+    console.warn('brief extra facts failed:', e?.message || e);
+    return { facts: [] as any[], report: { error: String(e?.message || e).slice(0, 200) } };
+  });
+  if (extra.facts.length) ({ facts, collection } = buildBriefFacts({ ...collected, extraFacts: extra.facts }, { nowMs }));
+  const collectionReport: Record<string, unknown> = { ...collection, errors: collected.errors };
+  if (extra.report !== undefined) collectionReport.radio = extra.report;
   const hash = factsHash(facts);
 
   const latest = await loadLatestBrief<LatestBriefMeta>('id, generated_at, checked_at, facts_hash, source, template_reason');
@@ -173,14 +191,18 @@ export async function runBriefCron(deps: BriefCronDeps = {}): Promise<BriefCronS
     output_tokens: modelResult?.outputTokens ?? null,
     cost_usd: modelResult ? modelResult.costUsd : null,
     verifier: verifierReport,
-    collection: { ...collection, errors: collected.errors },
+    collection: collectionReport,
   };
   const stored = await insertBrief(row);
   if (!stored.ok) return { status: stored.reason === 'table missing' ? 'unconfigured' : 'error', reason: stored.reason };
 
   // Retention, once an hour (the first run after the top of the hour).
   let cleanup: { deleted: number; capReached: boolean } | null = null;
-  if (nowMs % (60 * 60 * 1000) < BRIEF_CRON_INTERVAL_MS) cleanup = await cleanupOldBriefs(nowMs);
+  let radioCleanup: { deleted: number; capReached: boolean } | null = null;
+  if (nowMs % (60 * 60 * 1000) < BRIEF_CRON_INTERVAL_MS) {
+    cleanup = await cleanupOldBriefs(nowMs);
+    if (enhancedRadarSwitchOn()) radioCleanup = await cleanupOldBriefs(nowMs, 'radio_airport_status', 'requested_at');
+  }
 
   return {
     status: 'published',
@@ -196,6 +218,8 @@ export async function runBriefCron(deps: BriefCronDeps = {}): Promise<BriefCronS
     model: modelResult ? modelResult.modelId : null,
     costUsd: row.cost_usd,
     cleanup,
+    ...(radioCleanup ? { radioCleanup } : {}),
+    ...(extra.report !== undefined ? { radio: extra.report } : {}),
     errors: collected.errors,
   };
 }

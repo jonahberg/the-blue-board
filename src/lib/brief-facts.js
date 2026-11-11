@@ -888,6 +888,7 @@ export function materialKey(facts) {
  * @param {BriefFact} fact
  */
 export function publicFact(fact) {
-  const { id, kind, hub, statement, values, at, link } = fact;
-  return { id, kind, ...(hub ? { hub } : {}), statement, values, at, link };
+  const { id, kind, hub, statement, values, at, link, quote } = fact;
+  // `quote` exists only on radio facts, already sanitized (src/lib/brief-radio.js sanitizeRadioTitle).
+  return { id, kind, ...(hub ? { hub } : {}), statement, values, ...(typeof quote === 'string' ? { quote } : {}), at, link };
 }

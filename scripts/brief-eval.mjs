@@ -14,7 +14,9 @@
 //
 // A fixture is { name, description, nowIso, sources | facts, expect? }: `sources` are the raw
 // payloads the cron collects (/api/irops, /api/faa, /api/nas, /api/metar, live-feed counts, the
-// airborne median) and go through the real fact builder; `facts` skips it.
+// airborne median) and go through the real fact builder; `facts` skips it. An optional
+// `radio: { EWR: <GET /api/v0/airports/status body> }` adds the Enhanced Radar facts exactly as the
+// cron would (no Enhanced Radar call is ever made from here).
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -24,6 +26,7 @@ import { buildBriefFacts, computeTone } from '../src/lib/brief-facts.js';
 import { buildTemplateBrief } from '../src/lib/brief-template.js';
 import { verifyBrief } from '../src/lib/brief-verify.js';
 import { BRIEF_SYSTEM_PROMPT, briefWorstCaseCostUsd, buildBriefRequest } from '../src/lib/brief-prompt.js';
+import { radioFactsFromStatus } from '../src/lib/brief-radio.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = join(here, '..', 'tests', 'fixtures', 'brief');
@@ -75,9 +78,10 @@ const totals = { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, itemsIn:
 
 for (const fx of fixtures) {
   const nowMs = Date.parse(fx.nowIso);
+  const radio = Object.entries(fx.radio || {}).flatMap(([hub, status]) => radioFactsFromStatus(hub, status, { nowMs }));
   const built = fx.facts
     ? { facts: fx.facts, collection: { sources: {}, skipped: [] } }
-    : buildBriefFacts(fx.sources || {}, { nowMs });
+    : buildBriefFacts({ ...(fx.sources || {}), extraFacts: radio }, { nowMs });
   const { facts, collection } = built;
   const template = buildTemplateBrief(facts);
   const templateCheck = verifyBrief({ headline: template.headline, tone: template.tone, items: template.items, traveler_note: template.traveler_note }, facts);

@@ -7,12 +7,15 @@ import { describe, expect, it } from 'vitest';
 import { buildBriefFacts } from '../src/lib/brief-facts.js';
 import { buildTemplateBrief, templateHeadline } from '../src/lib/brief-template.js';
 import { verifyBrief } from '../src/lib/brief-verify.js';
+import { radioFactsFromStatus } from '../src/lib/brief-radio.js';
 
 const FIXTURE_DIR = new URL('./fixtures/brief/', import.meta.url);
 const names = readdirSync(FIXTURE_DIR).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, ''));
 const factsFor = (name) => {
   const fx = JSON.parse(readFileSync(new URL(`${name}.json`, FIXTURE_DIR), 'utf8'));
-  return buildBriefFacts(fx.sources, { nowMs: Date.parse(fx.nowIso) }).facts;
+  const nowMs = Date.parse(fx.nowIso);
+  const radio = Object.entries(fx.radio || {}).flatMap(([hub, status]) => radioFactsFromStatus(hub, status, { nowMs }));
+  return buildBriefFacts({ ...fx.sources, extraFacts: radio }, { nowMs }).facts;
 };
 
 describe('every fixture’s template brief passes the verifier', () => {
