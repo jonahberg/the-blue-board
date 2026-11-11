@@ -139,7 +139,7 @@ export function ExpressFleetPanel({
         placeholder="Search reg, type, operator…"
         value={search}
         onChange={(event) => onSearchChange(event.target.value)}
-        className="h-11 w-full min-w-0 sm:w-64 md:h-8"
+        className="h-11 w-full min-w-0 sm:w-64 pointer-fine:md:h-8"
       />
 
       {rows.length === 0 && search.trim() ? (
