@@ -65,7 +65,8 @@ const actionClass =
     'flex gap-2',
     compact
       ? 'min-w-42 flex-col'
-      : 'mt-2.5 flex-col items-start justify-between border-t border-border pt-2 sm:flex-row',
+      : // Wraps: in a narrow card the actions drop under the summary instead of overlapping it.
+        'mt-2.5 flex-col items-start justify-between border-t border-border pt-2 sm:flex-row sm:flex-wrap',
   ]}
 >
   <details class="min-w-0">
