@@ -15,15 +15,17 @@
 //   no              | no             | 'waitlist' — the strip, whose own gate decides
 //   no store        |                | null
 //
-// 'donate' is the donation prompt (`DonatePrompt.tsx`, eligibility `donatePromptEligible`);
-// 'email' is the "Stay in the loop" dialog opened after a pause (`EmailPrompt.tsx`,
-// eligibility `emailPromptEligible`); 'waitlist' is today's quiet strip
-// (`WaitlistStrip.tsx`, `shouldShowWaitlistStrip`).
+// 'donate' is the support ask: since Nov 2026 the "cover a day" STRIP in the engagement slot
+// (`SupportStrip.tsx`), which replaced the Oct 2026 donation modal; eligibility is still
+// `donatePromptEligible` on the same key, so existing quiet periods carry over. 'email' is the
+// "Stay in the loop" dialog opened after a pause (`EmailPrompt.tsx`, eligibility
+// `emailPromptEligible`); 'waitlist' is the quiet email strip (`WaitlistStrip.tsx`,
+// `shouldShowWaitlistStrip`).
 
 import { donatePromptEligible } from './donate-prompt.js';
 import { emailPromptEligible } from './email-prompt.js';
 
-/** The share of two-way choices that go to the donation prompt; the rest go to email. */
+/** The share of two-way choices that go to the support ask (the strip); the rest go to email. */
 export const DEEP_USE_DONATE_WEIGHT = 0.6;
 
 /**

@@ -18,7 +18,8 @@
 //   inAir           arrivals boards only: left the origin, not yet here (En Route / Departed)
 //   upcoming        scheduled / estimated / delayed / unknown (unknown renders as
 //                   "Scheduled (as of …)" so it counts here, not as noise)
-//   presumed        time-inferred departures/landings (no live confirmation)
+//   presumed        asterisked departures/landings with no provider time: inferred from the
+//                   clock, or (arrivals) a landing the live feed saw (status.seenLanded)
 //   uncategorized   what is left: rows that carry an actual time the shared definition
 //                   refuses (live-feed rescue rows, derived-schedule rows, deltas no real
 //                   flight could have — F4: "+54h" cross-instance pairs), and diversions
@@ -49,7 +50,8 @@ function realTimeOnBoardSide(fl, isArr) {
  *
  * @param {('departures'|'arrivals')} dir
  * @returns {{untimed: {label: string, phoneLabel: string, title: string},
- *   inAir: {label: string, title: string}, uncategorized: {label: string, title: string}}}
+ *   inAir: {label: string, title: string}, uncategorized: {label: string, title: string},
+ *   presumed: {label: string, title: string}}}
  */
 export function statStripCopy(dir) {
   const isArr = dir === 'arrivals';
@@ -72,6 +74,17 @@ export function statStripCopy(dir) {
     uncategorized: {
       label: 'Uncategorized',
       title: `Rows that fit no card: ${side} time that cannot be trusted (a live-feed stand-in, a schedule derived from the actual, or a delay no real flight could have), or a diversion with no time.`,
+    },
+    // The "✈ N presumed …" chip: the asterisked rows (Departed* / Landed*). On a departures board
+    // every one is inferred from the clock. On an arrivals board the bucket also holds landings
+    // the live feed PROVED (seen airborne on the leg, then on the ground here — still asterisked,
+    // since no provider time came with them), so "without a live update" was untrue for those
+    // (Nov 10 2026); the words now cover both.
+    presumed: {
+      label: isArr ? 'presumed landed' : 'presumed departed',
+      title: isArr
+        ? 'Landed*, with no arrival time from the schedule provider: the live flight feed saw the landing, or the scheduled arrival passed with no landing report.'
+        : 'Departed*, with no departure time from the schedule provider: the scheduled time passed without a live update.',
     },
   };
 }

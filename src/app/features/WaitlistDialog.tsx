@@ -10,8 +10,10 @@
  * The passive triggers — T1 (five minutes of use) and T2 (the click threshold) — used to pop
  * this modal over the board the moment they fired, mid-scroll (phone QA, Oct 3 2026). From
  * Oct 4 they revealed the strip instead, and that took signups to zero; since Oct 28 they
- * open it again on about 40% of heavy-user visits, but only with the donation prompt's
- * manners: after a 3-second pause, never over another dialog, never into a hidden tab.
+ * open it again on about 40% of heavy-user visits, but only with the deep-use modal manners
+ * (`useDeepUsePause`, which the Oct 2026 donation modal set and which, since the support ask
+ * became a strip in Nov 2026, only this dialog uses): after a 3-second pause, never over another
+ * dialog, never into a hidden tab.
  * (T3, the flight-landing trigger, went earlier: that moment gets its own BMAC toast —
  * inventory §12.)
  *

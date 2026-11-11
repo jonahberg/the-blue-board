@@ -15,6 +15,12 @@
  * (`supportUrl`, src/lib/support-link.js); the monthly-membership link still goes to Buy Me a
  * Coffee, where the existing members are, until there is a Stripe monthly link. They are people who paid for this to exist; dropping or
  * misspelling one in a rewrite is not a cosmetic bug.
+ *
+ * Since Nov 2026 the support section is "cover a day" (`CoverADay.tsx`): this month's calendar
+ * of covered days, the truth about today, and a button naming the day $17 would cover
+ * ("Cover today · $17", "Cover tomorrow · $17", …). Once
+ * `STRIPE_MONTHLY_URL` is set it offers "Cover a day every month" and the Buy Me a Coffee
+ * membership link here steps aside.
  */
 
 import { Button } from '@/components/ui/button';
@@ -25,8 +31,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SUPPORTERS } from '@/data/supporters.js';
-import { supportUrl } from '@/lib/support-link.js';
+import { hasMonthlySupport, supportUrl } from '@/lib/support-link.js';
 import { useUi } from '../state/ui';
+import { CoverADay } from './CoverADay';
 
 
 const SOURCES: { href: string; label: string; rest: React.ReactNode }[] = [
@@ -136,12 +143,17 @@ export default function DisclaimerDialog() {
           </p>
 
           <p>
-            <strong>Support:</strong> Built by a United flyer, not a corporation. If Blue Board
-            saved you a headache today, consider{' '}
-            <Ext href={supportUrl('about')} support="about">supporting our site</Ext>,{' '}
-            <Ext href="https://buymeacoffee.com/notjbg/membership" support="about-membership">become a monthly supporter →</Ext>,
-            or <Ext href="https://github.com/jonahberg/the-blue-board/issues">suggest a feature →</Ext>
+            <strong>Support:</strong> Built by a United flyer, not a corporation.{' '}
+            {hasMonthlySupport() ? null : (
+              <>
+                <Ext href="https://buymeacoffee.com/notjbg/membership" support="about-membership">Become a monthly supporter →</Ext>{' '}
+                ·{' '}
+              </>
+            )}
+            <Ext href="https://github.com/jonahberg/the-blue-board/issues">Suggest a feature →</Ext>
           </p>
+
+          <CoverADay active={disclaimerOpen} />
 
           <div className="rounded-md border border-primary/15 bg-primary/5 p-3.5">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-bb-warn">

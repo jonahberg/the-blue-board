@@ -1,27 +1,28 @@
-// ═══ DEEP-USE DONATION PROMPT — WHEN IT MAY OPEN ═══
-// The one modal ask on the dashboard (Oct 2026). Owner, Oct 6 2026: "a pop up for
-// donations if someone really is going deep on the site." "Going deep" is the waitlist
-// strip's T1/T2 trigger (5 minutes of use, or 20/30 engagement clicks); from Oct 3 to Oct 6
-// it fired for 322 visitors, and the email strip it summoned got 5 opens from 376 showings
-// and no donations.
+// ═══ DEEP-USE SUPPORT ASK — WHEN IT MAY SHOW ═══
+// Oct 2026: the owner asked for "a pop up for donations if someone really is going deep on the
+// site", and heavy users got a donation MODAL. "Going deep" is the waitlist strip's T1/T2
+// trigger (5 minutes of use, or 20/30 engagement clicks). From Oct 6 that modal was shown 417
+// times, tapped 7 times and produced at most one donation. Nov 2026: the modal is gone. The
+// same moment now brings up the "cover a day" STRIP in the engagement slot
+// (`features/SupportStrip.tsx`), and these rules are its rules, unchanged:
 //
 // One ask per visit. The first time the trigger fires, `chooseDeepUseAsk`
-// (src/lib/deep-use-ask.js) picks the donation prompt, the email dialog or the email strip,
-// and the caller latches that choice for the page's life, so answering one ask does not
-// bring another up in the same visit. Since Oct 28 2026 the prompt is the ask about 60% of
-// the time it is eligible, not every time.
+// (src/lib/deep-use-ask.js) picks the support strip, the email dialog or the email strip, and
+// the caller latches that choice for the page's life. The support ask is chosen about 60% of
+// the time it is eligible (Oct 28 2026). It goes quiet for 30 days after a dismiss and 90 after
+// a tap on its button, stored under the same key as the modal's answers (`bb_donate_prompt`,
+// same `<outcome>:<epoch ms>` format), so every quiet period already running carries over.
 //
-// The popup still owes the data its manners (DESIGN.md "Engagement surfaces stay quiet"):
-// it opens only once the visitor has paused, never over another dialog or sheet, and
-// never into a hidden tab.
+// `donatePromptMayOpen` / `DONATE_QUIET_MS` are the pause rule the remaining modal ask, the
+// email dialog, still waits on (`useDeepUsePause` in `state/deep-use.ts`).
 
 /** Stored as `<outcome>:<epoch ms>`, e.g. `later:1791300000000`. */
 export const DONATE_PROMPT_STORAGE_KEY = 'bb_donate_prompt';
 
-/** "Maybe later" (or any close that isn't Donate) quiets the prompt for 30 days. */
+/** A dismiss (stored as `later`) quiets the support ask for 30 days. */
 export const DONATE_LATER_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** A Donate tap quiets it for 90: the dashboard cannot see whether they paid. */
+/** A tap on its button (`donate`) quiets it for 90: the dashboard cannot see whether they paid. */
 export const DONATE_TAPPED_COOLDOWN_MS = 90 * 24 * 60 * 60 * 1000;
 
 /** The visitor has paused when nothing was tapped, typed or scrolled for this long. */
@@ -50,7 +51,7 @@ export function donatePromptRecord(outcome, now = Date.now()) {
 
 /**
  * Is the prompt outside its cooldown? Fails CLOSED: without a working store there is
- * nowhere to remember a "Maybe later", and a prompt that can't remember would open on
+ * nowhere to remember a dismiss, and an ask that can't remember would show on
  * every visit.
  *
  * @param {{getItem: Function}|null|undefined} storage
@@ -71,8 +72,8 @@ export function donatePromptEligible(storage, now = Date.now()) {
 }
 
 /**
- * May the prompt open at this instant? The email dialog, when it is the deep-use ask, waits
- * on the same rule (`EmailPrompt.tsx`).
+ * May a deep-use MODAL open at this instant? Since the support ask became a strip (Nov 2026)
+ * only the email dialog waits on this (`EmailPrompt.tsx`).
  * @param {{now: number, lastActivity: number, otherDialogOpen: boolean, hidden: boolean}} s
  * @returns {boolean}
  */

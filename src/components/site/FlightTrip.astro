@@ -1,0 +1,45 @@
+---
+/**
+ * The flight page's trip block: the two airports with their local times, a progress track while
+ * the flight is in the air, and a timeline of only the steps the data supports.
+ *
+ * Filled by src/scripts/flight-page.ts from `flightPageView()` (src/lib/flight-page-view.js);
+ * hidden until then. The track's position is either the live feed's (distance flown) or, without a
+ * live position, the clock's (time elapsed of the expected block) — and the note under it says
+ * which, so an estimate never reads as a measurement.
+ */
+---
+
+<section class="mt-8" aria-labelledby="fp-trip-title" data-fp-trip hidden>
+  <h2 id="fp-trip-title" class="sr-only">Route and timeline</h2>
+  <!-- Phone: the two airports side by side and the track full width under them; from sm one row. -->
+  <div class="grid grid-cols-2 items-center gap-x-3 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-5">
+    <div class="min-w-0 sm:col-start-1 sm:row-start-1">
+      <p class="font-mono text-xl font-semibold text-foreground" data-f="origin"></p>
+      <p class="text-[11px] leading-4 text-muted-foreground" data-f="origin-city"></p>
+      <p class="font-mono text-[11px] leading-4 text-muted-foreground tabular-nums" data-f="origin-time"></p>
+    </div>
+    <div class="relative col-span-2 row-start-2 h-0.5 rounded-full bg-border sm:col-span-1 sm:col-start-2 sm:row-start-1" data-f="track">
+      <div class="absolute inset-y-0 left-0 rounded-full bg-primary" data-f="track-fill"></div>
+      <div
+        class="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-4 ring-primary/25"
+        data-f="track-dot"
+      ></div>
+    </div>
+    <div class="col-start-2 row-start-1 min-w-0 text-right sm:col-start-3">
+      <p class="font-mono text-xl font-semibold text-foreground" data-f="dest"></p>
+      <p class="text-[11px] leading-4 text-muted-foreground" data-f="dest-city"></p>
+      <p class="font-mono text-[11px] leading-4 text-muted-foreground tabular-nums" data-f="dest-time"></p>
+    </div>
+  </div>
+  <p class="mt-3 text-center font-mono text-[11px] text-muted-foreground tabular-nums" data-f="track-note"></p>
+
+  <ol class="mt-6 grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-3 md:grid-cols-6" aria-label="Timeline" data-f="timeline"></ol>
+
+  <template data-fp-step>
+    <li class="flex min-w-0 flex-col gap-0.5 border-t-2 border-border pt-2">
+      <span class="font-mono text-xs font-medium text-foreground tabular-nums" data-f="time"></span>
+      <span class="text-xs leading-snug text-muted-foreground" data-f="label"></span>
+    </li>
+  </template>
+</section>

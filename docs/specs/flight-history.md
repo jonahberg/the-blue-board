@@ -1,6 +1,6 @@
 # Flight history: every leg, kept
 
-**Status:** built, not deployed · **Date:** 2026-11-10
+**Status:** built, shipped in v1.23.0 (needs `sql/021` applied) · first reader: the flight page (`/flight/UA929`, `api/flight.ts`), v1.25.0 · **Date:** 2026-11-10
 **Files:** `sql/021_flight_history.sql` (table), `sql/021_flight_history_backfill.sql` (one-off),
 `src/lib/flight-history.js` (rules), `api/_flight-history.ts` (writer), hook in
 `api/cron/warm-schedules.ts`. Tests: `tests/flight-history.test.js`,

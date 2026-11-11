@@ -12,7 +12,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Flight } from '../src/app/data/types';
-import { readFleetDeepLinks, useDeepLinks } from '../src/app/state/deep-links';
+import { readFleetDeepLinks, resolveDeepLink, useDeepLinks } from '../src/app/state/deep-links';
 import { resolveTabParam } from '../src/app/tabs';
 
 /** A parseFr24Feed-shaped flight. */
@@ -34,6 +34,7 @@ function makeDeps() {
     setWaitlistOpen: vi.fn(),
     setScheduleHub: vi.fn(),
     announce: vi.fn(),
+    addWatch: vi.fn((..._args: [string, string, string, number]) => true),
   };
 }
 type Deps = ReturnType<typeof makeDeps>;
@@ -68,6 +69,25 @@ describe('?tab= and #hash', () => {
   it('?tab=irops lands on Weather scrolled to the IROPS section', () => {
     const { deps } = mountAt('/?tab=irops');
     expect(deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'irops-section' });
+  });
+
+  it('?tab=irops&hub= still lands on the IROPS section (the hub only picks the board)', () => {
+    const { deps } = mountAt('/?tab=irops&hub=den');
+    expect(deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'irops-section' });
+    expect(deps.setScheduleHub).toHaveBeenCalledWith('DEN');
+  });
+
+  it('?tab=weather&hub= lands on that hub\'s card; a hub without a card just opens the tab', () => {
+    expect(mountAt('/?tab=weather&hub=ewr').deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'hub-card-EWR' });
+    cleanup();
+    expect(mountAt('/?tab=weather&hub=bos').deps.setTab).toHaveBeenCalledWith('weather', undefined);
+    cleanup();
+    expect(mountAt('/?tab=weather').deps.setTab).toHaveBeenCalledWith('weather', undefined);
+  });
+
+  it('?tab=weather&section=nas lands on the NAS status panel', () => {
+    const { deps } = mountAt('/?tab=weather&section=nas');
+    expect(deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'nas-section' });
   });
 
   it('an unknown ?tab= is ignored', () => {
@@ -133,6 +153,46 @@ describe('?hub=, ?view=starlink, ?aircraft=, ?waitlist=1', () => {
   });
 });
 
+describe('?watch= (the flight page\'s "Watch this flight")', () => {
+  it('watches the flight through the store\'s add path, opens My Flights and strips the link', () => {
+    const dep = Math.floor(Date.now() / 1000) + 3 * 3600;
+    const { deps } = mountAt(`/?utm_source=flight-page&watch=UA929&route=ORD-LHR&dep=${dep}#myflight`);
+    expect(deps.addWatch).toHaveBeenCalledTimes(1);
+    expect(deps.addWatch).toHaveBeenCalledWith('UA929', 'ORD→LHR', '', dep);
+    expect(deps.setTab).toHaveBeenLastCalledWith('myflight');
+    expect(deps.announce).toHaveBeenCalledWith('Watching UA929');
+    expect(window.location.search).toBe('?utm_source=flight-page');
+    expect(window.location.hash).toBe('#myflight');
+  });
+
+  it('says so, and still opens My Flights, when the flight is already watched', () => {
+    window.history.replaceState(null, '', '/?watch=UA929');
+    const deps = makeDeps();
+    deps.addWatch.mockReturnValue(false);
+    render(<Harness flights={[]} deps={deps} />);
+    expect(deps.setTab).toHaveBeenCalledWith('myflight');
+    expect(deps.announce).toHaveBeenCalledWith('UA929 is already on your watch list');
+  });
+
+  it('ignores a value that is not a canonical flight number, and still clears it from the address', () => {
+    for (const bad of ['UAL929', '929', 'UA0929', 'AA100', '%3Cscript%3E', '']) {
+      const { deps } = mountAt(`/?watch=${bad}&route=ORD-LHR`);
+      expect(deps.addWatch, bad).not.toHaveBeenCalled();
+      expect(deps.setTab, bad).not.toHaveBeenCalled();
+      expect(deps.announce, bad).not.toHaveBeenCalled();
+      expect(window.location.search, bad).toBe('');
+      cleanup();
+    }
+  });
+
+  it('applies once: a later render with the same URL does not add again', () => {
+    const { deps, rerender } = mountAt('/?watch=UA1');
+    window.history.replaceState(null, '', '/?watch=UA1');
+    rerender(FEED);
+    expect(deps.addWatch).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('?flight= / ?q= (latched until the feed answers)', () => {
   it('waits for a non-empty feed, then selects the airborne flight', () => {
     const { deps, rerender } = mountAt('/?flight=UA123');
@@ -189,5 +249,17 @@ describe('readFleetDeepLinks', () => {
     window.history.replaceState(null, '', '/?tab=fleet&view=Express');
     expect(readFleetDeepLinks()).toEqual({ filter: null, view: 'express' });
     expect(mountAt('/?view=express').deps.setTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveDeepLink (the brief chips follow the same resolver a cold load uses)', () => {
+  it('resolves every chip href shape', () => {
+    expect(resolveDeepLink('/?tab=schedule&hub=ord')).toEqual({ tab: 'schedule', scrollTo: null, scheduleHub: 'ORD' });
+    expect(resolveDeepLink('/?tab=irops')).toEqual({ tab: 'weather', scrollTo: 'irops-section', scheduleHub: null });
+    expect(resolveDeepLink('/?tab=weather&hub=EWR')).toEqual({ tab: 'weather', scrollTo: 'hub-card-EWR', scheduleHub: null });
+    expect(resolveDeepLink('/?tab=weather&section=nas')).toEqual({ tab: 'weather', scrollTo: 'nas-section', scheduleHub: null });
+    expect(resolveDeepLink('/#live')).toEqual({ tab: 'live', scrollTo: null, scheduleHub: null });
+    expect(resolveDeepLink('/#starlink')).toEqual({ tab: 'starlink', scrollTo: null, scheduleHub: null });
+    expect(resolveDeepLink('/?nothing=1')).toBeNull();
   });
 });

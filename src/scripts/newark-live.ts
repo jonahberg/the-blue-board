@@ -8,7 +8,15 @@
  * (current FAA program status for EWR — ground stop / ground delay / departure
  * delay). Targets `#newark-active`, `#newark-program-status` and
  * `#newark-updated-time`.
+ *
+ * `/api/faa` can answer with its last good answer (`X-BB-FAA-Stale`, up to 30 min
+ * old). The same rules as the dashboard apply (src/lib/faa-freshness.js): a
+ * program past its own end time is dropped, and an answer past the age limit is
+ * reported as "FAA status as of …", never as a current program or as a confirmed
+ * "no program".
  */
+
+import { faaAnswerAsOf, FAA_STALE_AFTER_MS, withoutExpiredPrograms } from '../lib/faa-freshness.js';
 
 const IATA = 'EWR';
 
@@ -34,14 +42,17 @@ const PROGRAM_LABELS: Record<string, string> = {
   closure: 'Closure',
 };
 
+const clockLabel = (ms: number) =>
+  new Date(ms).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+
 const setUpdated = () => {
   const updated = document.getElementById('newark-updated-time');
   if (updated) {
-    updated.textContent = `Updated ${new Date().toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    })}`;
+    updated.textContent = `Updated ${clockLabel(Date.now())}`;
   }
 };
 
@@ -84,8 +95,15 @@ const loadProgram = async () => {
     const response = await fetch('/api/faa');
     if (!response.ok) throw new Error('FAA feed unavailable');
 
+    const now = Date.now();
+    const asOf = faaAnswerAsOf(now, response.headers.get('X-BB-FAA-Stale'), response.headers.get('Age'));
     const payload = await response.json();
-    const list: FaaAirport[] = Array.isArray(payload) ? payload : [];
+    if (now - asOf > FAA_STALE_AFTER_MS) {
+      // An old answer proves neither a program nor the absence of one.
+      statusEl.textContent = `FAA status as of ${clockLabel(asOf)}: not updated since, so no program is shown as current.`;
+      return;
+    }
+    const list = withoutExpiredPrograms(Array.isArray(payload) ? payload : [], asOf, now).airports as FaaAirport[];
     const ewr = list.find((entry) => String(entry?.airportCode).toUpperCase() === IATA);
 
     if (!ewr?.programs?.length) {

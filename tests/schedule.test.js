@@ -1300,7 +1300,12 @@ describe('schedule API', () => {
     expect(res.body.stale).toBe(false);
     expect(res.body.degraded).toBe(false);
     expect(res.body.meta.fallbackScope).toBe('persistent');
-    expect(scheduleSnapshotMocks.loadScheduleSnapshot).toHaveBeenCalledWith(`agg:ORD:departures:${tsSnapped}`);
+    // The read carries its time budget, cut to the request deadline (api/_bounded.ts): 6 s at the
+    // start of a request, and a way to tell "ran out of time" from "no snapshot".
+    expect(scheduleSnapshotMocks.loadScheduleSnapshot).toHaveBeenCalledWith(
+      `agg:ORD:departures:${tsSnapped}`,
+      { timeoutMs: 6000, onTimeout: expect.any(Function) },
+    );
     // No background refresh: a fresh+complete board has nothing to refresh.
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(vercelFunctionMocks.waitUntil).not.toHaveBeenCalled();

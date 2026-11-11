@@ -21,10 +21,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import BmacToast from './features/BmacToast';
-import DonatePrompt from './features/DonatePrompt';
 import EmailPrompt from './features/EmailPrompt';
 import LegalPopover from './features/LegalPopover';
 import NewsBanner from './features/NewsBanner';
+import SupportStrip from './features/SupportStrip';
 import TipStrip from './features/TipStrip';
 import WaitlistStrip from './features/WaitlistStrip';
 import { Attribution } from './shell/Attribution';
@@ -38,6 +38,7 @@ import { TabBar } from './shell/TabBar';
 import { WatchBanner } from './shell/WatchBanner';
 import { Ticker } from './shell/Ticker';
 import { WatchPanel } from './shell/WatchPanel';
+import { BriefProvider } from './state/brief';
 import { useDeepLinks } from './state/deep-links';
 import { FeedProvider, useFeed } from './state/feed';
 import { FleetProvider } from './state/fleet';
@@ -45,7 +46,7 @@ import { IropsProvider } from './state/irops';
 import { PrefsProvider, usePrefs } from './state/prefs';
 import { ScheduleProvider, useSchedule } from './state/schedule';
 import { UiProvider, useUi } from './state/ui';
-import { WatchProvider } from './state/watch';
+import { WatchProvider, useWatch } from './state/watch';
 import { WatchAlertsProvider, useWatchAlerts } from './state/watch-alerts';
 import { WeatherProvider } from './state/weather';
 import { TABS } from './tabs';
@@ -61,6 +62,8 @@ const DisclaimerDialog = lazy(() => import('./features/DisclaimerDialog'));
 const Fr24LookupDialog = lazy(() => import('./features/Fr24LookupDialog'));
 const Onboarding = lazy(() => import('./features/Onboarding'));
 const WaitlistDialog = lazy(() => import('./features/WaitlistDialog'));
+// The full brief as a sheet, opened from the header row (the row itself is in `shell/Ticker`).
+const BriefSheet = lazy(() => import('./features/BriefSheet'));
 const FlightSheet = lazy(() =>
   import('./features/FlightSheet').then((m) => ({ default: m.FlightSheet })),
 );
@@ -93,6 +96,7 @@ function DashboardShell() {
   const { flights } = useFeed();
   const { setCurrent } = useSchedule();
   const { alert: watchAlert, clearAlert: clearWatchAlert } = useWatchAlerts();
+  const { add: addWatch } = useWatch();
   const [watchOpen, setWatchOpen] = useState(false);
   // Views stay mounted once visited. Radix unmounts inactive TabsContent by default, which
   // would tear the Leaflet map down and rebuild it on every tab switch — losing the pan,
@@ -112,6 +116,7 @@ function DashboardShell() {
     setWaitlistOpen,
     setScheduleHub: useCallback((hub: string) => setCurrent({ hub }), [setCurrent]),
     announce,
+    addWatch,
   });
 
   // ⌘K / Ctrl-K from anywhere. This has to be a window listener, not a React onKeyDown on
@@ -177,14 +182,16 @@ function DashboardShell() {
           the ticker and the hub strip.
 
           The slot shows ONE line at a time, at every width, the first one present in this
-          order: the waitlist strip (once its triggers fire, on visits when neither deep-use
-          modal is the ask), the news, the tip. The others wait their turn and come back as the
-          one above is dismissed. Three stacked lines were ~100 px of a 780 px phone (audit
+          order: the "cover a day" support strip (the deep-use ask on the visits it is chosen),
+          the waitlist strip (once its triggers fire, on visits when neither the support strip
+          nor the email dialog is the ask), the news, the tip. The others wait their turn and
+          come back as the one above is dismissed. Three stacked lines were ~100 px of a 780 px phone (audit
           Oct 3 2026), so phones got the rule first; on a 900 px desktop the news, the tip and
           the attribution were ~110 px under the map (Nov 2026), so it now holds everywhere.
           Components that have nothing to say render null, so `*~*` only ever hides a strip
           that is actually there. */}
       <div className="flex shrink-0 flex-col [&>*~*]:hidden">
+        <SupportStrip />
         <WaitlistStrip />
         <NewsBanner />
         <TipStrip />
@@ -195,6 +202,7 @@ function DashboardShell() {
       <Suspense fallback={null}>
         <FlightSheet />
         <SearchPalette />
+        <BriefSheet />
       </Suspense>
       <WatchPanel open={watchOpen} onOpenChange={setWatchOpen} />
       <Suspense fallback={null}>
@@ -207,9 +215,8 @@ function DashboardShell() {
       </Suspense>
       <LegalPopover />
       <BmacToast />
-      {/* The deep-use asks: ONE per visit, on the email strip's trigger — the donation
-          prompt or (EmailPrompt) the waitlist dialog above, opened after a pause. */}
-      <DonatePrompt />
+      {/* The deep-use asks: ONE per visit, on the email strip's trigger — the support strip
+          in the slot above, or (EmailPrompt) the waitlist dialog, opened after a pause. */}
       <EmailPrompt />
       <IropsAnnouncer />
     </div>
@@ -239,7 +246,11 @@ export default function Dashboard() {
                 <WatchProvider>
                   <WatchAlertsProvider>
                     <IropsProvider>
-                      <ShellWithPrefs />
+                      {/* The ops brief's one poll, read by the header row, the Live sidebar
+                          and the brief sheet. */}
+                      <BriefProvider>
+                        <ShellWithPrefs />
+                      </BriefProvider>
                     </IropsProvider>
                   </WatchAlertsProvider>
                 </WatchProvider>

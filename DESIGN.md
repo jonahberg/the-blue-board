@@ -144,8 +144,8 @@ carries a `PHASE_ICONS` glyph in the legend. A new series goes through both.
 
 **Dashboard** (`src/app/Dashboard.tsx`) — a full-height column:
 `OfflineBanner` → `Header` → `Ticker` → `HubHealthStrip` → `WatchBanner` → `TabBar`
-(desktop) → active view → engagement slot (`WaitlistStrip` → `NewsBanner` → `TipStrip`) →
-`Attribution` → `MobileNav` (mobile). Only the view scrolls; the chrome is `shrink-0`. The
+(desktop) → active view → engagement slot (`SupportStrip` → `WaitlistStrip` → `NewsBanner` → `TipStrip`) →
+`Attribution` → `MobileNav` (mobile). Only the view scrolls; the chrome is `shrink-0`. The `Ticker` row is the ops brief's row whenever a current brief exists (`state/brief.tsx`, rules in `src/lib/brief-view.js`): its tone and its headline on one line, truncated; otherwise it is the rotating ticker. Both are the same 28 px, so a brief arriving, changing or going stale never moves the map. On the Live tab at `lg`+ the full brief sits open in the sidebar under the search box; everywhere else the row opens it as a sheet. The
 late-arriving strips mount **below** the panel, never above it, so their arrival never shoves
 the data the visitor is reading. The slot shows **one** strip at a time at every width — the first
 present, in that order — so the asks never stack under the data: three lines were ~100 px of a
@@ -185,7 +185,12 @@ the ticker, tooltips and screen-reader text; and emoji inside **copy** (toasts, 
 | Aircraft detail, delay explain, FR24 lookup, disclaimer, "What is this dashboard?" (opens on request only: the header "?", the phone More sheet) | `Dialog` (modal) | `features/*Dialog.tsx`, `features/Onboarding.tsx` |
 | Global search (⌘K) | `Command` | `features/SearchPalette.tsx` |
 | Waitlist signup | `Dialog` + `Input`/`Textarea`/`Label`, opened on request (`?waitlist=1` or the strip's button) or as the deep-use email ask, after a pause | `features/WaitlistDialog.tsx`, `features/WaitlistStrip.tsx`, `features/EmailPrompt.tsx` |
-| Donation prompt for heavy users | `Dialog` (modal) on the deep-use trigger, after a pause | `features/DonatePrompt.tsx`, `state/deep-use.ts` |
+| "Cover a day" support ask for heavy users | inline strip, first in the engagement slot, on the deep-use trigger | `features/SupportStrip.tsx`, `state/deep-use.ts` |
+| "Cover a day" month calendar | `<ol>` grid of day cells in the About `Dialog`: covered = filled `bg-primary-fill`, open = dashed outline, today = ring, legend + per-cell sr text | `features/CoverADay.tsx` |
+| The ops brief, one line | `<button>` in the `Ticker` row: tone word (plus icon and status colour for watch/disrupted) and the truncated headline. Opens the brief sheet, or on Live at `lg`+ focuses the open sidebar panel | `shell/Ticker.tsx`, `features/BriefTone.tsx` |
+| The ops brief, in full | `Sheet` (modal): bottom sheet below `lg`, right panel at `lg`+ on tabs without the sidebar panel; open in the Live sidebar at `lg`+ | `features/BriefSheet.tsx`, `features/BriefPanel.tsx` |
+| Brief evidence chips | `<a>` with a real deep link (`src/lib/brief-chips.js`) where the dashboard shows the fact; plain text where it does not. Never a button | `features/BriefPanel.tsx` |
+| "Ask the board": a plain question in ⌘K becomes the view's own filters, shown as removable chips with the real count | `Command` item ("Ask: …") + an inline chip row (`button` chips, 44 px on touch) — no new overlay | `features/SearchPalette.tsx`, `features/AskChips.tsx`, `state/ask.tsx`, `src/lib/ask-*.js` |
 | Legal / attribution disclosure | `Popover` | `features/LegalPopover.tsx` |
 | Jargon definitions | `Tooltip` | `features/JargonTerm.tsx` |
 | Tab navigation | `Tabs` | `shell/TabBar.tsx` |
@@ -210,17 +215,26 @@ elements, never modals, and their show/hide rules live in `src/lib/engagement.js
 asks the visitor for something may interrupt the data they came for. Nothing opens by itself on a
 first visit either: the "What is this dashboard?" dialog opens only when asked (Nov 2026).
 
-**One exception, on the owner's call (Oct 2026): the deep-use ask.** Heavy users (the
-waitlist strip's T1/T2 trigger, `state/deep-use.ts`) get ONE modal ask per visit: the
-donation prompt (`features/DonatePrompt.tsx`, rules in `src/lib/donate-prompt.js`) or, since
-Oct 28 2026, the "Stay in the loop" dialog (`features/EmailPrompt.tsx` opening
-`WaitlistDialog`, rules in `src/lib/email-prompt.js`). While both are eligible the choice is
-weighted 60/40 towards donate (`DEEP_USE_DONATE_WEIGHT`, `src/lib/deep-use-ask.js`); when
-neither is, the quiet strip is the fallback. Either modal waits for a 3-second pause, never
-opens over another dialog, sheet or popover or into a hidden tab, and keeps the soft keyboard
-down. The donation prompt goes quiet for 30 days after "Maybe later" (90 after Donate); the
-email ask for 30 days after any close without a signup (or a "no" to the strip), and never
-returns once an email is given. On a visit where a modal is the ask, the strip stays down.
+**The deep-use asks (Oct 2026; the support ask became a strip in Nov 2026).** Heavy users (the
+waitlist strip's T1/T2 trigger, `state/deep-use.ts`) get ONE ask per visit, latched when the trigger
+fires: the "cover a day" support strip (`features/SupportStrip.tsx`, rules in
+`src/lib/donate-prompt.js`, words in `src/lib/cover-a-day.js`) or the "Stay in the loop" dialog
+(`features/EmailPrompt.tsx` opening `WaitlistDialog`, rules in `src/lib/email-prompt.js`). While both
+are eligible the choice is weighted 60/40 towards the support strip (`DEEP_USE_DONATE_WEIGHT`); when
+neither is, the quiet waitlist strip is the fallback. The support strip leads the engagement slot, so
+on its visits it is the one line shown, and it never covers the board. A payment covers the day it is
+given (US Central), or the next open day after it, so the strip's button names that day: "Cover today
+· $17", "Cover tomorrow · $17" (with a thank-you naming today's supporter) or "Cover the next open
+day · $17", and "Cover a day · $17" with the plain $17-a-day line when `/api/support-status` cannot
+vouch for today. It stays down while today and the next 14 days are covered. It may lead with the
+visitor's own count of flights looked up this month, from five up, kept in localStorage and never
+sent; on a phone that sentence then stands alone beside the button. Everything it says is true or
+absent: no invented urgency or counters, and its dismiss control is a plain "Dismiss". It goes quiet
+for 30 days after a dismiss and 90 after a tap on its button (`bb_donate_prompt`, the retired modal's
+key). The email dialog is the one remaining modal ask: it waits for a 3-second pause, never opens
+over another dialog, sheet or popover or into a hidden tab, keeps the soft keyboard down, goes quiet
+for 30 days after any close without a signup (or a "no" to the strip), and never returns once an
+email is given.
 
 Astro-side building blocks live in `src/components/site/` (`StatTile`, `HighlightBox`,
 `JumpNav`, `PillNav`, `Breadcrumbs`, `ContentSection`, `Seo`, `JsonLd`, `HubBoard`, `FleetLive`) and
@@ -325,3 +339,18 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-11-10 | Stats cards are paired by height | "Flights by Phase" stretched beside the utilisation list and was two-thirds empty at 1440 px. |
 | 2026-11-10 | Hub pages show a slice of the Schedule board (next 8 departures, day truth, data-as-of stamp, one button into the board); fleet type pages show the type airborne now, matched by tail | Google sends ~1,000 visitors a month to these pages and they saw an article with one number. The board reads only the stored schedule snapshot (`/api/hub-board`), words rows with the board's own row model, reserves height only under `@media (scripting: enabled)`, and adds no `aria-live` region. |
 | 2026-11-10 | One-time donations go to a Stripe Payment Link built by `supportUrl()` (`src/lib/support-link.js`), tagged `utm_content=<data-support label>`; memberships stay on Buy Me a Coffee; the phone support icon is `HandHeart` | Owner, Nov 10 2026: "I am switching to Stripe FULLY." Stripe records UTM parameters on the payment, so a payment can be traced to its placement; the coffee cup named the old processor. |
+| 2026-11-10 | The ops brief takes the rotating ticker's row on every tab, sits open under the Live sidebar's search at `lg`+, and opens as a modal sheet everywhere else | Owner approved the mockup ("I LOVE THEM"). Taking the ticker's row adds no height (map top measured unchanged at 1440×900 and 390×844). Inside the sidebar's one scroll region, a four-item bad-day brief never hides hub traffic and the search box never moves. The row, panel and sheet are not live regions: the brief is read on request, and disruption news stays with `IropsAnnouncer`. |
+| 2026-11-10 | A brief is shown only while current: a successful answer of no-brief or stale, or a `checkedAt` over 30 min old by the visitor's clock, brings the ticker back and removes the panel; a failed refresh keeps a brief that is still current | Old text must never read as "right now"; a response can sit in the CDN and in a background tab. |
+| 2026-11-10 | An emergency squawk takes the brief row's text while it lasts; the tone word stays and the row still opens the brief | The brief replaced the ticker, and with it the only on-screen place a 7500/7600/7700 squawk was shown. |
+| 2026-11-10 | Brief chips link only where the dashboard shows the fact, otherwise they are plain text; ATC radio chips are `bb-info` with `RadioTower` | A chip is the proof of its sentence, and a link to a page that does not show the fact proves nothing. Violet means Starlink. |
+| 2026-11-10 | The brief row is 28 px with a 36 px touch area (8 px up into the header's padding); brief chips are 28 px on touch | Matching the ticker's height was a requirement, and growing the hit area down would take taps from the hub chips. A full-width row clears WCAG 2.5.8's 24 px; chips follow the hub strip's 24 px chip-link precedent. |
+| 2026-11-10 | Ask the board: ⌘K questions map to a fixed vocabulary (view + hub, direction, family/type, Starlink, region, air/ground, status, route end, flight, tail) applied through each view's own controls plus one generic predicate; the rules parser answers first and Claude Haiku 5.5 only when it is not sure; chips show what was understood | Owner approved the mockup ("fantastic"). Free text never reaches the page — the model's only output is validated enums — so a hostile question can at worst produce a wrong, visible, removable filter. "Late" is the stat strip's 30-minute rule, not the provider's "Delayed" word. No on-time percentage is shown while rows are picked by status. |
+| 2026-11-10 | The deep-use support ask is a strip, not a modal, first in the engagement slot, and its button names the day it covers | From Oct 6 the donation modal was shown 417 times, tapped 7 times and produced at most one donation. The owner approved retiring the popup. Trigger, latch, weighting, quiet periods, the `donate_prompt` event and the `deep-use-prompt` label are unchanged, except that `shown` now fires when the strip renders, without the modal's pause and hidden-tab guards, so `shown` counts from Nov 2026 run higher. |
+| 2026-11-10 | "Cover a day": a payment covers the day it is given (US Central) or the next open day after it, never an earlier one; leftovers pool and carry across month ends; only coverage from signed Stripe events is shown | Filling the month from the 1st made "Today isn't covered yet" followed by a payment that covered an earlier day. Data: `api/stripe-webhook.ts` → `sql/023` → `/api/support-status`; unconfigured means the plain ask and no claims. |
+| 2026-11-10 | Supporter names show only after a strict shape check, never while hidden, never with `SUPPORTER_NAMES=off`; otherwise "a supporter", and a pooled day "N supporters" | The owner's never-auto-publish rule for the Supporters Wall. |
+| 2026-11-10 | Flight pages (`/flight/UA929`): a code-written verdict sentence whose time words follow the evidence (gate "left the gate at", runway "took off at", estimate "about"), a history strip that is never padded, and the AI read on request only | A shared link must say what is happening in one sentence and be honest about what is measured. Crawlers will hit these pages, so nothing on load calls a model or a metered provider. |
+| 2026-11-10 | An FAA answer is current for 25 minutes: after that its programs leave `faaIndex` and the NAS panel prints "FAA status as of HH:MMZ" in `bb-warn` with a history icon; a program is cleared 15 minutes after its own end time | `/api/faa` serves its last good answer for up to 30 min when the FAA fails, and the dashboard kept old programs forever. An old ground stop must not read as live. |
+| 2026-11-10 | The phone More sheet carries a "Home hub" row | The header's hub button is hidden below `md`, so a phone could only set a hub through "What is this dashboard?". |
+| 2026-11-11 | On a flight page the read card shows only while the board predicts the leg (before it leaves); "Watch this flight" opens the dashboard's `?watch=UA929` deep link | After departure the card was an empty box. The deep link adds the flight through the eye buttons' own path (push mirror and first-watch prompt included) where a direct storage write skipped them. |
+| 2026-11-11 | With a stale FAA answer and nothing else showing a disruption, the ticker's fallback line and the hub strip's network chip say "FAA status unknown since HH:MM" in muted text with a `History` icon, never the green "All systems normal" / "Smooth Ops" | Clearing stale programs left nothing to report, which read as calm. The time is held from the moment it went stale, so the strip (a polite region) changes only with the state. |
+| 2026-11-11 | The flight page's support line takes the site's day framing when `/api/support-status` says today is open, otherwise its own sentence | One set of words for every support surface (`src/lib/cover-a-day.js`); the link and its `flight-page` label are unchanged. |

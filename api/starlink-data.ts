@@ -17,6 +17,7 @@
 
 import { createRequire } from 'node:module';
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import {
   applyVerifiedStarlinkOverrides,
@@ -111,7 +112,7 @@ async function fetchUpstream(previousTotal?: number): Promise<StarlinkPayload> {
 type Fields = 'roster' | 'flights' | null;
 
 function readFields(req: VercelRequest): Fields {
-  const raw = req.query?.fields;
+  const raw = getQuery(req)?.fields;
   const value = String(Array.isArray(raw) ? raw[0] : raw ?? '').toLowerCase();
   return value === 'roster' || value === 'flights' ? value : null;
 }

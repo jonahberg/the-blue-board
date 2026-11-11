@@ -200,3 +200,20 @@ describe('The hub picker is re-seeded from the live preference', () => {
     expect(localStorage.getItem('bb_home_airport')).toBe(null);
   });
 });
+
+describe('one list of home hubs', () => {
+  it('the dialog and the phone More sheet offer HOME_HUB_OPTIONS, which matches the header cycle', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const { HOME_HUB_OPTIONS } = await import('../src/lib/home-hub-options.js');
+    const { HOME_HUB_CYCLE } = await import('../src/lib/home-airport.js');
+    for (const file of ['src/app/features/Onboarding.tsx', 'src/app/shell/MobileNav.tsx']) {
+      const source = readFileSync(resolve(__dirname, '..', file), 'utf8');
+      expect(source, file).toMatch(/import \{ HOME_HUB_OPTIONS \} from '@\/lib\/home-hub-options\.js'/);
+      expect(source, file).toMatch(/HOME_HUB_OPTIONS\.map\(/);
+      // No second hand-written copy of the rows.
+      expect(source, file).not.toMatch(/name: 'Tokyo Narita'/);
+    }
+    expect(HOME_HUB_OPTIONS.map((o: { code: string }) => o.code)).toEqual(HOME_HUB_CYCLE.filter(Boolean));
+  });
+});

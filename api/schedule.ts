@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { loadScheduleSnapshot, saveScheduleSnapshot, isSnapshotCandidateBetter } from './_schedule-snapshots.js';
+import { budgetWithin, withinBudget, DEADLINE_SAFETY_MARGIN_MS } from './_bounded.js';
 import { hydrateQuotaBlock, getMirroredQuotaBlockedUntil, persistQuotaBlock, resetMirroredQuotaBlock, __resetAdbSpendForTests, isOfficialFr24DailyCapReached, recordOfficialFr24Call, getOfficialFr24CallsToday, getOfficialFr24DailyCap, isAdbOrganicRefreshGated, isAdbFirstLoadGated, isAdbBudgetExhausted } from './_cost-state.js';
 import { UNITED_HUB_SET, getHubTerminal } from './_hubs.js';
 import { isAuthorizedCronRequest } from './_cron-auth.js';
@@ -63,6 +65,57 @@ const MAX_RATE_LIMITED_PAGES_PER_SCRAPE = 6;
 const MAX_CONSECUTIVE_RATE_LIMIT_BATCHES = 2;
 const MIN_REMAINING_MS_TO_KEEP_PAGING = 8000;
 
+// ── The request deadline ──
+// maxDuration is 60 s (vercel.json), and the work handed to waitUntil dies with the invocation. Two
+// invocations ran into that limit on Nov 7 2026 because nothing on the request or background path
+// had a bound on its Supabase calls, and the deadlines that did exist were counted from the wrong
+// moment. Now the handler derives ONE deadline from the start of the request and every await is
+// bounded by min(its own budget, deadline − DEADLINE_SAFETY_MARGIN_MS) (api/_bounded.ts). A bound
+// that is hit takes the path a failure already took: serve what is cached, skip the write.
+const FUNCTION_DEADLINE_MS = 57000;
+// The cross-instance quota read in front of every serve (one row; api/_cost-state.ts).
+const QUOTA_HYDRATE_BUDGET_MS = 1500;
+// The persisted-snapshot read: before the fetch, after a partial fetch, and on the error path.
+// 6 s, up from 2.5 s: the read before the fetch decides whether a metered provider is called at all,
+// so a slow database must cost seconds, not provider units. (A read that still runs out of time
+// serves a copy already in memory rather than fetching: see `snapshotReadTimedOut` below.)
+const SNAPSHOT_READ_BUDGET_MS = 6000;
+// The snapshot write after a fetch: read-before-write + upsert of a board-sized JSON payload.
+const SNAPSHOT_WRITE_BUDGET_MS = 4000;
+// A fetch stops this long before the function deadline, leaving room for the snapshot write and,
+// on a partial board, the second snapshot read. The arithmetic, from the request's start T:
+//   before the fetch   quota read ≤ 1.5 s + snapshot read ≤ 6 s           → fetch starts by T+7.5 s
+//   the fetch          stops at T + 57 − 10.5 = T+46.5 s (was T+50 s)     → ≥ 39 s of fetching
+//   after the fetch    write ≤ 4 s (T+50.5) + second read ≤ 6 s (T+56.5)  = deadline − 0.5 s margin
+// and a request joining another's in-flight fetch waits until T + 57 − 10.5 − 8 = T+38.5 s.
+const POST_FETCH_RESERVE_MS = SNAPSHOT_WRITE_BUDGET_MS + SNAPSHOT_READ_BUDGET_MS + DEADLINE_SAFETY_MARGIN_MS;
+// A background refresh's own ceiling, still cut to the triggering request's deadline.
+const BACKGROUND_FETCH_MS = 55000;
+// The FAA-context and reg-sightings refreshes kicked into waitUntil on every serve (their own
+// timeouts are 5 s and 8 s; this is the outer bound).
+const BACKGROUND_KICK_BUDGET_MS = 10000;
+// Slack on top of the budget fetchViaAeroDataBox is given, for the work it does around its timed
+// requests (the spend hydrate, the queue wait, the 2 s per-window floor that can outrun a small
+// budget). The call is raced against budget + slack, capped at the fetch deadline. (Each window's
+// own timer now covers its body read too — api/_schedule-aerodatabox.ts fetchWindow — so this race
+// is the outer bound, not the only one.)
+const PROVIDER_CALL_GRACE_MS = 3000;
+
+/** fetchViaAeroDataBox, bounded from this side (see PROVIDER_CALL_GRACE_MS). Null when cut off. */
+function boundedProviderCall(
+  logHub: string,
+  dir: string,
+  ts: number,
+  timeoutMs: number,
+  deadlineMs: number,
+  opts: Parameters<typeof fetchViaAeroDataBox>[4],
+): ReturnType<typeof fetchViaAeroDataBox> {
+  const budget = Math.max(0, Math.min(timeoutMs + PROVIDER_CALL_GRACE_MS, deadlineMs - Date.now()));
+  return withinBudget(fetchViaAeroDataBox(logHub, dir, ts, timeoutMs, opts), budget, null, () => {
+    console.warn(`AeroDataBox call for ${logHub} ${dir} passed its ${budget}ms bound; serving without it`);
+  });
+}
+
 // Terminal assignments live in api/_hubs.ts (shared with _schedule-aerodatabox.ts).
 
 // Every retry / backoff / batch wait in this file goes through here. SCHEDULE_RETRY_DELAY_SCALE
@@ -80,12 +133,31 @@ const MAX_CONCURRENT_FR24 = 6;
 let activeFR24 = 0;
 const fr24Queue: (() => void)[] = [];
 
-function acquireFR24Slot(): Promise<void> {
+/**
+ * Wait for one of the MAX_CONCURRENT_FR24 slots. Resolves false when `deadlineMs` passes first: the
+ * waiter is taken out of the queue (so a later release cannot hand it a slot nobody will free) and
+ * the caller treats the page as failed, as it would a timed-out request.
+ */
+function acquireFR24Slot(deadlineMs?: number): Promise<boolean> {
   if (activeFR24 < MAX_CONCURRENT_FR24) {
     activeFR24++;
-    return Promise.resolve();
+    return Promise.resolve(true);
   }
-  return new Promise(resolve => fr24Queue.push(resolve));
+  return new Promise<boolean>((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const waiter = () => {
+      if (timer) clearTimeout(timer);
+      resolve(true);
+    };
+    fr24Queue.push(waiter);
+    if (deadlineMs) {
+      timer = setTimeout(() => {
+        const index = fr24Queue.indexOf(waiter);
+        if (index >= 0) fr24Queue.splice(index, 1);
+        resolve(false);
+      }, Math.max(0, deadlineMs - Date.now()));
+    }
+  });
 }
 
 function releaseFR24Slot(): void {
@@ -160,8 +232,13 @@ function getLastCompleteByHubDir(hub: string, dir: string, ts: number) {
   return entry;
 }
 
-async function getPersistentFallback(key: string) {
-  const snapshot = await loadScheduleSnapshot(key);
+async function getPersistentFallback(key: string, timeoutMs: number, onTimeout?: () => void) {
+  // Nothing left to read with: no snapshot, the same answer a failed read gives.
+  if (timeoutMs <= 0) {
+    onTimeout?.();
+    return null;
+  }
+  const snapshot = await loadScheduleSnapshot(key, { timeoutMs, onTimeout });
   if (!snapshot) return null;
   if (!snapshot.data?.partial) {
     saveComplete(key, snapshot.data, snapshot.refreshedAt);
@@ -278,19 +355,19 @@ function getSingleQueryValue(value: string | string[] | undefined): string {
 }
 
 function shouldDisableOfficialFallback(req: VercelRequest): boolean {
-  const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.officialFallback).toLowerCase();
+  const queryValue = getSingleQueryValue((getQuery(req) as Record<string, string | string[] | undefined>)?.officialFallback).toLowerCase();
   const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-official-fallback'] as string | string[] | undefined).toLowerCase();
   return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
 }
 
 function shouldDisableProviderFallback(req: VercelRequest): boolean {
-  const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.providerFallback).toLowerCase();
+  const queryValue = getSingleQueryValue((getQuery(req) as Record<string, string | string[] | undefined>)?.providerFallback).toLowerCase();
   const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-provider-fallback'] as string | string[] | undefined).toLowerCase();
   return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
 }
 
 function shouldDisableScraperFallback(req: VercelRequest): boolean {
-  const queryValue = getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.scraperFallback).toLowerCase();
+  const queryValue = getSingleQueryValue((getQuery(req) as Record<string, string | string[] | undefined>)?.scraperFallback).toLowerCase();
   const headerValue = getSingleQueryValue(req.headers?.['x-blueboard-scraper-fallback'] as string | string[] | undefined).toLowerCase();
   return ['0', 'false', 'off', 'no'].includes(queryValue) || ['0', 'false', 'off', 'no'].includes(headerValue);
 }
@@ -304,7 +381,7 @@ function shouldDisableScraperFallback(req: VercelRequest): boolean {
  */
 function hasForceRefreshParam(req: VercelRequest): boolean {
   return ['1', 'true', 'yes', 'on'].includes(
-    getSingleQueryValue((req.query as Record<string, string | string[] | undefined>)?.forceRefresh).toLowerCase()
+    getSingleQueryValue((getQuery(req) as Record<string, string | string[] | undefined>)?.forceRefresh).toLowerCase()
   );
 }
 
@@ -388,8 +465,41 @@ export function shouldEnableOfficialForBackgroundRefresh(
   return true;
 }
 
-async function fetchWithTimeout(url: string, deadlineMs?: number): Promise<Response> {
-  const remaining = deadlineMs ? Math.max(500, deadlineMs - Date.now()) : 45000;
+/**
+ * Reject with an AbortError when `signal` aborts first. The fetch runtime already fails a body read
+ * on an aborted signal; this makes the bound hold for any Response-like object as well.
+ */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  const abortError = () => Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+  if (signal.aborted) {
+    promise.catch(() => {});
+    return Promise.reject(abortError());
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      (error) => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
+}
+
+type TimedFetch = {
+  resp: Response;
+  /** The body as JSON, inside the same timeout as the request. */
+  json(): Promise<any>;
+  /** Stop the timer; call once the response is finished with. */
+  dispose(): void;
+};
+
+/**
+ * One timeout for the whole exchange: the timer stays armed until the caller disposes of the
+ * response, so the body read is bounded too. It used to be cleared as soon as the headers arrived,
+ * which left `resp.json()` free to hang past every deadline.
+ */
+async function fetchWithTimeout(url: string, deadlineMs?: number): Promise<TimedFetch> {
+  const remaining = deadlineMs ? Math.max(0, deadlineMs - Date.now()) : 45000;
   const fetchTimeout = Math.min(remaining, 45000);
 
   const controller = new AbortController();
@@ -399,8 +509,11 @@ async function fetchWithTimeout(url: string, deadlineMs?: number): Promise<Respo
       signal: controller.signal,
       headers: FR24_SCHEDULE_HEADERS
     });
-    clearTimeout(timeout);
-    return resp;
+    return {
+      resp,
+      json: () => untilAborted(Promise.resolve().then(() => resp.json()), controller.signal),
+      dispose: () => clearTimeout(timeout),
+    };
   } catch (e) {
     clearTimeout(timeout);
     throw e;
@@ -449,12 +562,19 @@ async function fetchOnePage(
   const MAX_RETRIES = 2;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (deadlineMs && Date.now() > deadlineMs - 500) return null;
-    await acquireFR24Slot();
+    // Bounded like everything else: a queue that does not move before the deadline is a failed
+    // page (returned before the try, so the finally never releases a slot this call never held).
+    if (!(await acquireFR24Slot(deadlineMs ? deadlineMs - 500 : undefined))) {
+      console.warn(`FR24 slot wait passed the deadline for ${hub} page ${page}`);
+      return null;
+    }
     let slotReleased = false;
+    let timed: TimedFetch | null = null;
     try {
-      const resp = await fetchWithTimeout(url, deadlineMs);
+      timed = await fetchWithTimeout(url, deadlineMs);
+      const resp = timed.resp;
       if (resp.ok) {
-        const data = await resp.json();
+        const data = await timed.json();
         const sched = extractFr24SchedulePayload(data, dir, page);
         return sched;
       }
@@ -499,6 +619,7 @@ async function fetchOnePage(
       }
       // fall through to retry
     } finally {
+      timed?.dispose();
       if (!slotReleased) releaseFR24Slot();
     }
     const baseDelay = 1000 * Math.pow(2, attempt);
@@ -740,10 +861,15 @@ async function fetchUnitedLiveFeed(deadlineMs?: number): Promise<any | null> {
   if (liveFeedCache && Date.now() < liveFeedCache.expires) {
     return liveFeedCache.data;
   }
-  if (liveFeedInFlight) return liveFeedInFlight;
+  if (liveFeedInFlight) {
+    // Another caller's fetch may run to ITS deadline; this caller waits only to its own.
+    return deadlineMs ? withinBudget(liveFeedInFlight, Math.max(0, deadlineMs - Date.now()), null) : liveFeedInFlight;
+  }
+  const remaining = deadlineMs ? deadlineMs - Date.now() : LIVE_FEED_TIMEOUT_MS;
+  // Not worth starting with under half a second left (it used to start anyway, past the deadline).
+  if (remaining < 500) return null;
 
   liveFeedInFlight = (async () => {
-    const remaining = deadlineMs ? Math.max(500, deadlineMs - Date.now()) : LIVE_FEED_TIMEOUT_MS;
     try {
       // The complete United feed: airline=UAL plus the United-numbered flights FR24 files under
       // their Express operator (api/_united-feed.ts).
@@ -1044,7 +1170,9 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
 
     const url = `${FR24_API_BASE}/api/flight-summary/light?${params}`;
     const controller = new AbortController();
-    const remaining = Math.max(2000, deadline - Date.now());
+    // The loop only gets here with more than a second left, and the timer now covers the body read
+    // too (it used to be cleared once the headers arrived): no floor that outlives the deadline.
+    const remaining = Math.max(0, deadline - Date.now());
     const timeout = setTimeout(() => controller.abort(), Math.min(remaining, 30000));
 
     try {
@@ -1057,10 +1185,10 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
           'User-Agent': 'TheBlueBoardDashboard/1.0 (https://theblueboard.co)',
         },
       });
-      clearTimeout(timeout);
 
       if (!resp.ok) {
-        const body = await resp.text().catch(() => '');
+        const body = await untilAborted(Promise.resolve().then(() => resp.text()), controller.signal).catch(() => '');
+        clearTimeout(timeout);
         console.error(`Official FR24 API returned ${resp.status} for ${logHub} (page ${page}): ${body.slice(0, 200)}`);
 
         if (resp.status === 402) {
@@ -1094,7 +1222,8 @@ async function fetchViaOfficialAPI(hub: string, dir: string, ts: number, timeout
         break;
       }
 
-      const data = await resp.json();
+      const data = await untilAborted(Promise.resolve().then(() => resp.json()), controller.signal);
+      clearTimeout(timeout);
       const flights = (data as any)?.data || [];
 
       if (page === 1) {
@@ -1269,12 +1398,16 @@ function triggerBackgroundRefresh(
   ts: number,
   aggKey: string,
   ttl: number,
+  functionDeadline: number,
   options: ScheduleFetchOptions = {}
 ): void {
   if (pendingAggs.has(aggKey)) return;
   const refreshHub = String(hub);
   const providerAttempted = options.disableProviderFallback === false;
-  const promise = fetchAllPages(refreshHub, dir, ts, undefined, Date.now() + 55000, { ...options, backgroundRefresh: true }).then(async result => {
+  // The refresh runs in waitUntil, which dies with the invocation: its deadline is the triggering
+  // request's (counted from the request's start, not from this call), less room for the write.
+  const fetchDeadline = Math.min(Date.now() + BACKGROUND_FETCH_MS, functionDeadline - SNAPSHOT_WRITE_BUDGET_MS - DEADLINE_SAFETY_MARGIN_MS);
+  const promise = fetchAllPages(refreshHub, dir, ts, undefined, fetchDeadline, { ...options, backgroundRefresh: true }).then(async result => {
     if (providerAttempted && (result?.partial || result?.meta?.source !== 'aerodatabox')) {
       noteProviderRefreshFailed(aggKey);
     }
@@ -1284,7 +1417,10 @@ function triggerBackgroundRefresh(
     result.meta = { ...(result.meta || {}), generatedAt: Math.floor(Date.now() / 1000) };
     cacheSetGuarded(aggKey, result, result.partial ? 60000 : ttl);
     saveComplete(aggKey, result);
-    await saveScheduleSnapshot({ cacheKey: aggKey, hub: refreshHub, dir, ts, data: result });
+    await saveScheduleSnapshot({
+      cacheKey: aggKey, hub: refreshHub, dir, ts, data: result,
+      timeoutMs: budgetWithin(SNAPSHOT_WRITE_BUDGET_MS, functionDeadline),
+    });
     return result;
   }).catch(e => {
     if (providerAttempted) noteProviderRefreshFailed(aggKey);
@@ -1351,9 +1487,12 @@ async function tryOfficialFallback(
   logHub: string, dir: string, ts: number, effectiveDeadline: number
 ): Promise<any | null> {
   if (!process.env.FR24_API_TOKEN || !isOfficialFr24Enabled() || !shouldAttemptOfficialFallback()) return null;
+  // No 2-second floor any more: with less than that left, the paid call would start past the
+  // deadline (and a background refresh past the function's limit).
+  const remaining = effectiveDeadline - Date.now() - 1000;
+  if (remaining < 2000) return null;
   recordFallback();
   try {
-    const remaining = Math.max(2000, effectiveDeadline - Date.now() - 1000);
     const result = await fetchViaOfficialAPI(logHub, dir, ts, Math.min(remaining, 30000));
     if (result && result.total > 0) {
       result.meta = { ...(result.meta as any), fallbackFrom: 'scraping' };
@@ -1372,7 +1511,7 @@ async function tryScheduleProviderFallback(
   try {
     const remaining = Math.max(0, effectiveDeadline - Date.now() - 1000);
     if (remaining < 2000) return null;
-    const result = await fetchViaAeroDataBox(logHub, dir, ts, Math.min(remaining, 12000), { bypassDailyBudget: budgetExempt });
+    const result = await boundedProviderCall(logHub, dir, ts, Math.min(remaining, 12000), effectiveDeadline, { bypassDailyBudget: budgetExempt });
     if (result && result.total > 0) {
       result.meta = { ...(result.meta as any), fallbackFrom: 'scraping' };
       return result;
@@ -1460,7 +1599,7 @@ async function fetchAllPages(
     if (allowProviderFallback && process.env.AERODATABOX_API_KEY) {
       try {
         const providerTimeout = Math.min(Math.floor((effectiveDeadline - Date.now()) * 0.7), 30000);
-        const providerResult = await fetchViaAeroDataBox(logHub, dir, ts, providerTimeout, {
+        const providerResult = await boundedProviderCall(logHub, dir, ts, providerTimeout, effectiveDeadline, {
           bypassDailyBudget: !!options.providerBudgetExempt,
           firstLoad: !!options.providerFirstLoad,
         });
@@ -1712,6 +1851,8 @@ async function fetchAllPages(
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // The one deadline every await below is measured against (see FUNCTION_DEADLINE_MS).
+  const functionDeadline = Date.now() + FUNCTION_DEADLINE_MS;
   let aggKey: string | null = null;
   let swr = 600;
   if (req.method !== 'GET') {
@@ -1728,14 +1869,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const functionDeadline = Date.now() + 57000;
-
     // Pull the latest cross-instance FR24 quota block (rate-limited to ~one read per 10s) so a 402
     // "credit limit reached" hit by ANY other lambda is honoured here before we decide to call the
-    // paid official API. (Audit P1: per-lambda cost guards do not bound global spend.)
-    await hydrateQuotaBlock();
+    // paid official API. (Audit P1: per-lambda cost guards do not bound global spend.) Bounded: a
+    // read that runs out of time keeps the in-memory block, as a failed read always has.
+    await hydrateQuotaBlock(budgetWithin(QUOTA_HYDRATE_BUDGET_MS, functionDeadline));
 
-    const { hub: hubParam, dir = 'departures', timestamp } = req.query as Record<string, string>;
+    const { hub: hubParam, dir = 'departures', timestamp } = getQuery(req) as Record<string, string>;
     if (!hubParam || !timestamp) {
       return res.status(400).json({ error: 'Missing required params: hub, timestamp' });
     }
@@ -1786,8 +1926,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // synchronously PEEKED cached value; a cold/expired FAA cache kicks a background refresh via
     // waitUntil instead of making the serve await the (up to 5s) FAA fetch. The first request
     // after a cold start reads 0 and the refresh warms the value for subsequent serves.
+    // Both kicks are handed to waitUntil, which keeps the invocation alive until they settle, so
+    // each is bounded by the request deadline from this side: the FAA lookup clears its timer
+    // before reading the body (api/faa.ts fetchDisruptionMap), and a hung read there would
+    // otherwise hold every serve on this instance open to the 60-second limit.
     const disruptionRefresh = kickDisruptionRefresh();
-    if (disruptionRefresh) enqueueBackgroundTask(disruptionRefresh);
+    if (disruptionRefresh) {
+      enqueueBackgroundTask(withinBudget(disruptionRefresh, budgetWithin(BACKGROUND_KICK_BUDGET_MS, functionDeadline), null));
+    }
     // Phase 2: reg-sightings merge, same non-blocking peek+kick contract as the FAA
     // disruption context above — a cold cache means "no merge this serve", never a wait.
     // applySightingsToBoard NEVER mutates its input (cache entries are shared objects);
@@ -1797,7 +1943,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // serve-time only: caches and snapshots keep the provider's row, so a later sighting still
     // applies and nothing stale is persisted.
     const sightingsRefresh = kickRegSightingsRefresh();
-    if (sightingsRefresh) enqueueBackgroundTask(sightingsRefresh);
+    if (sightingsRefresh) {
+      enqueueBackgroundTask(withinBudget(sightingsRefresh, budgetWithin(BACKGROUND_KICK_BUDGET_MS, functionDeadline), null));
+    }
     //
     // v1.11.3: every 200 path also re-asks "has this actual time happened yet?" against the
     // REQUEST clock. Boards are served from snapshots up to ~3h old, so a provider time that was
@@ -1865,7 +2013,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Skip the refresh for a fresh + complete board: there is nothing to refresh and the refresh
       // can only degrade it to a partial. (Audit: busy-hub board flapping.)
       if (!isFreshComplete(stale)) {
-        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
+        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, functionDeadline, {
           allowTargetedOfficialRescue: false,
           // F036: background refresh of the paid official API is age+cooldown gated, same shape as
           // the provider gate below — never enabled just because the on-demand param allows it.
@@ -1896,7 +2044,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Skip the refresh for a fresh + complete last-known board: refreshing it can only replace the
       // full board with a partial. Only refresh once it is genuinely old. (Audit: board flapping.)
       if (!isFreshComplete(fallbackComplete)) {
-        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
+        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, functionDeadline, {
           allowTargetedOfficialRescue: false,
           // F036: same age+cooldown gate as above — no bare allowOfficialFallback passthrough.
           disableOfficialSource: pendingAggs.has(currentAggKey) || !shouldEnableOfficialForBackgroundRefresh(
@@ -1913,7 +2061,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let partialPersistentFallback: Awaited<ReturnType<typeof getPersistentFallback>> | null = null;
-    const persistentFallback = forceRefresh ? null : await getPersistentFallback(currentAggKey);
+    let snapshotReadTimedOut = false;
+    const persistentFallback = forceRefresh ? null : await getPersistentFallback(
+      currentAggKey, budgetWithin(SNAPSHOT_READ_BUDGET_MS, functionDeadline),
+      () => { snapshotReadTimedOut = true; },
+    );
     if (persistentFallback) {
       const canAttemptRecoveryNow = persistentFallback.fallbackScope === 'persistent_partial' && hasImmediateScheduleRecovery;
       if (canAttemptRecoveryNow) {
@@ -1928,7 +2080,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const officialBackgroundRefreshAllowed = !pendingAggs.has(currentAggKey) && shouldEnableOfficialForBackgroundRefresh(
             currentAggKey, Date.now() - persistentFallback.time, allowOfficialFallback
           );
-          triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, {
+          triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, functionDeadline, {
             allowTargetedOfficialRescue: officialBackgroundRefreshAllowed && persistentFallback.fallbackScope === 'persistent_partial',
             disableOfficialSource: !officialBackgroundRefreshAllowed,
             disableProviderFallback: pendingAggs.has(currentAggKey) || !shouldEnableProviderForBackgroundRefresh(
@@ -1942,12 +2094,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // The read ran out of time, so it is not known whether a better copy is stored. A slow database
+    // must not cost money: a copy already in memory is served rather than fetching from the metered
+    // sources. Every complete copy was served above, so what can be in hand here is the hot cache's
+    // own entry, a partial; an empty one is not a board (the existing rule above) and the fetch
+    // proceeds as before, as it does when nothing at all is in hand. The background refresh it kicks
+    // runs with both metered sources off; the next request reads the snapshot again.
+    if (snapshotReadTimedOut && !persistentFallback && stale && Number(stale.data?.total || 0) > 0) {
+      console.warn(`Schedule snapshot read timed out for ${currentAggKey}; serving the in-memory copy instead of fetching`);
+      if (!pendingAggs.has(currentAggKey)) {
+        triggerBackgroundRefresh(hub, dir, ts, currentAggKey, ttl, functionDeadline, {
+          allowTargetedOfficialRescue: false,
+          disableOfficialSource: true,
+          disableProviderFallback: true,
+          disableScraperFallback: true,
+        });
+      }
+      const inHandDataAge = Math.max(0, Math.round((Date.now() - stale.time) / 1000));
+      const inHandGeneratedAt = Number(stale.data?.meta?.generatedAt) || Math.floor(stale.time / 1000);
+      res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
+      return res.status(200).json(withDisruption({
+        ...stale.data,
+        cached: true,
+        stale: !isFreshComplete(stale),
+        meta: { ...(stale.data?.meta || {}), dataAge: inHandDataAge, generatedAt: inHandGeneratedAt },
+      }));
+    }
+
     // A force warm must run its own fetch: the in-flight refresh it would join is often
     // provider-disabled (a user-triggered background refresh below the age gate), which would
     // silently swallow the cron's refetch for this hour. Concurrent user requests still
     // piggyback on the forced fetch via the pendingAggs entry it registers below.
     if (!forceRefresh && pendingAggs.has(currentAggKey)) {
-      const result = await pendingAggs.get(currentAggKey);
+      // The fetch being joined may have been started by another request, against that request's
+      // deadline. Wait only to this one's, leaving room for a fetch of its own; past that, this
+      // request falls through to the fetch below exactly as it does when the join yields nothing.
+      const joinBudget = budgetWithin(
+        FUNCTION_DEADLINE_MS,
+        functionDeadline - POST_FETCH_RESERVE_MS - MIN_REMAINING_MS_TO_KEEP_PAGING,
+      );
+      const result = await withinBudget(pendingAggs.get(currentAggKey)!, joinBudget, undefined);
       if (result) {
         setAggregateCacheHeader(res, result, cdnMaxAge, swr, wantsForce);
         return res.status(200).json(withDisruption({ ...result, cached: true }));
@@ -1959,8 +2145,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // run a little ahead of the paced line instead of serving an empty board — the new tomorrow
     // board after a hub's local midnight is the everyday case (isAdbFirstLoadGated). Any other day
     // stays fully paced, so the ±7-day timestamp range cannot be walked to drain the headroom.
+    // Not after a snapshot read that ran out of time: then a complete copy may well be stored and
+    // simply not read in time, so this is not known to be a first load, and the fetch stays on the
+    // paced line like any other refresh.
     const dayOffset = Math.round((ts - getStartOfHubDay(hub, 0)) / 86400);
-    const providerFirstLoad = !forceRefresh && dayOffset >= -1 && dayOffset <= 1;
+    const providerFirstLoad = !forceRefresh && !snapshotReadTimedOut && dayOffset >= -1 && dayOffset <= 1;
     // An empty board because the budget held the provider back is "not loaded yet", not "the
     // provider failed": meta.providerDeferred lets the page say so (src/lib/schedule-load.js).
     // Read after the fetch, which hydrated the cross-instance spend counter.
@@ -1971,7 +2160,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return heldBack ? { ...board, meta: { ...(board?.meta || {}), providerDeferred: true } } : board;
     };
 
-    const aggPromise = fetchAllPages(hub, dir, ts, undefined, functionDeadline, {
+    // The fetch stops POST_FETCH_RESERVE_MS before the function deadline: the snapshot write and
+    // a second snapshot read still fit after it.
+    const aggPromise = fetchAllPages(hub, dir, ts, undefined, functionDeadline - POST_FETCH_RESERVE_MS, {
       allowTargetedOfficialRescue: allowOfficialFallback,
       disableOfficialSource: !allowOfficialFallback,
       disableProviderFallback: !allowProviderFallback,
@@ -1983,7 +2174,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       result.meta = { ...(result.meta || {}), generatedAt: Math.floor(Date.now() / 1000) };
       cacheSetGuarded(currentAggKey, result, result.partial ? 60000 : ttl);
       saveComplete(currentAggKey, result);
-      await saveScheduleSnapshot({ cacheKey: currentAggKey, hub, dir, ts, data: result });
+      await saveScheduleSnapshot({
+        cacheKey: currentAggKey, hub, dir, ts, data: result,
+        timeoutMs: budgetWithin(SNAPSHOT_WRITE_BUDGET_MS, functionDeadline),
+      });
       return result;
     });
 
@@ -1998,7 +2192,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(200).json(withDisruption(buildDegradedResponse(lc, exactLc ? 'exact' : 'hub_dir')));
         }
 
-        const persistentResult = await getPersistentFallback(currentAggKey);
+        const persistentResult = await getPersistentFallback(
+          currentAggKey, budgetWithin(SNAPSHOT_READ_BUDGET_MS, functionDeadline),
+        );
         if (persistentResult && persistentResult.fallbackScope === 'persistent') {
           res.setHeader('Cache-Control', `s-maxage=60, stale-while-revalidate=${swr}`);
           return res.status(200).json(withDisruption(buildDegradedResponse(persistentResult, 'persistent')));
@@ -2025,7 +2221,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (e) {
     console.error('Schedule API error:', e);
     if (aggKey) {
-      const persistentFallback = await getPersistentFallback(aggKey);
+      const persistentFallback = await getPersistentFallback(
+        aggKey, budgetWithin(SNAPSHOT_READ_BUDGET_MS, functionDeadline),
+      );
       if (persistentFallback) {
         // Error-path serve: still attach the disruption context — peeked synchronously (cached
         // value or 0, never fetches, never throws), same non-blocking contract as the main path.

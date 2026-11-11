@@ -6,6 +6,7 @@
 //   Flight summary: GET /api/flight-summary/light?flights={iata}
 
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime, pickFr24SummaryLeg } from './_official-fr24.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
 
@@ -271,7 +272,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Flight lookup temporarily unavailable' });
   }
 
-  const rawFlight = req.query.flight as string;
+  const rawFlight = getQuery(req).flight as string;
   if (!rawFlight) return res.status(400).json({ success: false, error: 'Missing flight parameter' });
 
   const flight = normalizeFlightNumber(rawFlight);

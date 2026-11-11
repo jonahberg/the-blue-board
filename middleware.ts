@@ -31,9 +31,12 @@ export const config = {
   // `fonts/` went with the hand-written dashboard bundle in v1.8.0, and an exclusion for a
   // directory that no longer exists only hides a dead path from its 404. `email/` holds the
   // images that update emails embed (public/email/<yyyy-mm>/) — fetched by mail clients and
-  // image proxies, never negotiated.
+  // image proxies, never negotiated. `flight/<ident>/card.png` is the flight page's share card
+  // (rewritten to /api/flight-card): link unfurlers ask for it with `Accept: image/png` or
+  // `image/*`, which negotiation would answer 406. The flight page itself (/flight/UA929) stays
+  // matched, so a Markdown client is handed its HTML.
   matcher: [
-    '/((?!_agent/|_astro/|_vercel/|api/|data/|email/|icons/|og/|favicon\\.svg|favicon\\.ico|manifest\\.json|og-image\\.png|robots\\.txt|sw\\.js).*)',
+    '/((?!_agent/|_astro/|_vercel/|api/|data/|email/|icons/|og/|flight/[^/]+/card\\.png$|favicon\\.svg|favicon\\.ico|manifest\\.json|og-image\\.png|robots\\.txt|sw\\.js).*)',
   ],
 };
 

@@ -74,7 +74,7 @@ The primary interface with 8 tabs, each with its own URL hash (#myflight, #live,
 
 1. **My Flights**: Saved flights with live position, route, aircraft and times, plus a watch list that sends browser push notifications on status changes. Stored on the visitor's own device.
 
-2. **Live Ops**: Interactive map showing all 600+ airborne United flights. Click any flight for details (flight number, aircraft type, route, altitude, speed, delay status). Hub health bar at top shows on-time % across all 8 United hubs plus the Tokyo-Narita gateway. IROPS ticker shows real-time disruption alerts.
+2. **Live Ops**: Interactive map showing all 600+ airborne United flights. Click any flight for details (flight number, aircraft type, route, altitude, speed, delay status). Hub health bar at top shows on-time % across all 8 United hubs plus the Tokyo-Narita gateway. The row under the header carries the ops brief, a short written read of the network whose every sentence cites its data, whenever a current one exists; otherwise a rotating ticker of disruption alerts.
 
 3. **Schedule**: Departure and arrival schedules at any United hub. Shows flight number, destination/origin, scheduled time, actual time, delay status, aircraft type, and equipment swap alerts. Filterable by hub.
 
@@ -160,7 +160,7 @@ Living, data-driven pages that follow aviation's long-running stories with a map
 - Real-time on-time percentage for all 8 United hubs plus the Tokyo-Narita gateway displayed in a health bar
 - Color-coded: green (>70% on-time), yellow (50-70%), red (<50%)
 - Based on schedule comparison — flights departing within 30 minutes of schedule count as "on-time"
-- IROPS ticker scrolls real-time disruption alerts (delays, cancellations, ground stops)
+- The ops brief (or, when there is no current brief, a rotating ticker) sums up disruption: delays, cancellations, ground stops. When the FAA feed has gone stale, the ticker and the hub bar say "FAA status unknown since" a time rather than "all systems normal"
 
 ### Starlink WiFi Tracker
 - Tracks 425+ United Airlines aircraft (as of mid-2026) equipped with SpaceX Starlink satellite internet

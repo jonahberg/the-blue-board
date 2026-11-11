@@ -1,21 +1,26 @@
 /**
  * "What it costs to keep this free" — the cost-transparency bars inside the About popover
- * (inventory §13).
+ * (inventory §13), and since Nov 2026 one line of "cover a day" truth above them.
  *
- * Lazily fetched: `/api/support-stats` is requested the FIRST time the popover opens and
- * never on page load, because nobody has asked what the dashboard costs until they open
- * the menu that has the donate link in it.
+ * Lazily fetched: `/api/support-stats` (the bars) and `/api/support-status` (the line) are
+ * requested the FIRST time the popover opens and never on page load, because nobody has asked
+ * what the dashboard costs until they open the menu that has the donate link in it.
  *
  * Defensive by design, and the failure mode is the point — a network error, a non-200, an
  * unexpected shape or a `configured:false` live feed all render NOTHING. This widget may
  * only ever add to the popover; a broken cost meter must never be why the About links
- * stop working. The shaping rule lives in `src/lib/support-meter.js` with a test.
+ * stop working. The same goes for the coverage line ("Today isn't covered yet. $17 covers
+ * today."): it appears only when the support status is configured and for today
+ * (src/lib/cover-a-day.js), and otherwise is simply absent. The
+ * shaping rules live in `src/lib/support-meter.js` and `src/lib/cover-a-day.js` with tests.
  */
 
 import { useEffect, useState } from 'react';
 
+import { coverSentence, todayLine } from '@/lib/cover-a-day.js';
 import { supportMeterModel } from '@/lib/support-meter.js';
 import { fetchSupportStats } from '../data/api';
+import { useSupportStatus } from '../state/support-status';
 
 type Row = { key: string; label: string; valueLabel: string; pct: number; warn: boolean };
 type Model = { rows: Row[]; note: string } | null;
@@ -23,6 +28,9 @@ type Model = { rows: Row[]; note: string } | null;
 export function SupportMeter({ active }: { active: boolean }) {
   const [model, setModel] = useState<Model>(null);
   const [asked, setAsked] = useState(false);
+  const status = useSupportStatus(active);
+  const coverage = status ? todayLine(status) : null;
+  const cover = status ? coverSentence(status) : null;
 
   useEffect(() => {
     if (!active || asked) return;
@@ -34,11 +42,17 @@ export function SupportMeter({ active }: { active: boolean }) {
       });
   }, [active, asked]);
 
-  if (!model) return null;
+  if (!model && !coverage) return null;
 
   return (
     <div className="mb-2.5 space-y-1.5 border-b pb-2.5">
-      {model.rows.map((row) => (
+      {coverage ? (
+        <p className="text-[11px]">
+          <span className="font-semibold">{coverage}</span>
+          {cover ? <span className="text-muted-foreground"> {cover}</span> : null}
+        </p>
+      ) : null}
+      {model?.rows.map((row) => (
         <div key={row.key}>
           <div className="flex justify-between gap-2 font-mono text-[10px] text-muted-foreground">
             <span>{row.label}</span>
@@ -57,7 +71,7 @@ export function SupportMeter({ active }: { active: boolean }) {
           </div>
         </div>
       ))}
-      {model.note ? <p className="text-[10px] text-muted-foreground">{model.note}</p> : null}
+      {model?.note ? <p className="text-[10px] text-muted-foreground">{model.note}</p> : null}
     </div>
   );
 }

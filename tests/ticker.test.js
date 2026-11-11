@@ -80,3 +80,24 @@ describe('buildTickerItems', () => {
     expect(items.map((i) => i.cls)).toEqual(['advisory', 'info', 'info', 'info', 'critical', 'disclaimer']);
   });
 });
+
+describe('buildTickerItems: a stale FAA answer is "unknown", never "all systems normal"', () => {
+  const unknown = 'FAA status unknown since 14:05';
+
+  it('replaces the green line with a neutral unknown line, counts kept', () => {
+    const items = buildTickerItems({ ...base, airborne: 380, total: 412, faaUnknown: unknown });
+    expect(items[0]).toEqual({ text: 'FAA status unknown since 14:05 — tracking 412 United flights', cls: 'unknown' });
+    expect(items.some((i) => i.text.includes('All systems normal'))).toBe(false);
+    expect(items.some((i) => i.cls === 'info' && i.text.startsWith('✅'))).toBe(false);
+  });
+
+  it('an advisory from other signals still leads, with no unknown or green line', () => {
+    const items = buildTickerItems({ ...base, opsHealth: { level: 'advisory', text: 'Disrupted: ORD on-time 41%' }, total: 400, faaUnknown: unknown });
+    expect(items[0]).toEqual({ text: '⚠️ Disrupted: ORD on-time 41%', cls: 'advisory' });
+    expect(items.some((i) => i.cls === 'unknown')).toBe(false);
+  });
+
+  it('a current answer keeps the green line', () => {
+    expect(buildTickerItems({ ...base, faaUnknown: null })[0].text).toBe('✅ All systems normal');
+  });
+});

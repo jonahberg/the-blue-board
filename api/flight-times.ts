@@ -25,6 +25,7 @@
 // Only when every tier fails does the endpoint return success:false with a reason.
 
 import type { VercelRequest, VercelResponse } from './_types.js';
+import { getQuery } from './_query.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
 import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime, pickFr24SummaryLeg, FR24_LEG_EARLY_MS } from './_official-fr24.js';
 import { airportTz } from '../src/lib/time-format.js';
@@ -556,7 +557,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const rawFlight = req.query.flight as string;
+  const rawFlight = getQuery(req).flight as string;
   if (!rawFlight) return res.status(400).json({ success: false, error: 'Missing flight parameter' });
 
   const flight = normalizeFlightNumber(rawFlight);
@@ -567,16 +568,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Optional date dimension (F005/F013): YYYY-MM-DD (flight's local date). Lets a
   // caller resolve tomorrow's scheduled leg instead of today's completed one.
   // Anything malformed is ignored (treated as "today or next occurrence").
-  const rawDate = req.query.date;
+  const rawDate = getQuery(req).date;
   const dateParam = (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) ? rawDate : '';
 
   // officialFallback=0 skips the paid FR24 official-API tier (used by the watch-alerts cron so a
   // background diff never burns FR24 credits). Default on for interactive callers.
-  const allowOfficial = String(req.query.officialFallback ?? '1').toLowerCase() !== '0';
+  const allowOfficial = String(getQuery(req).officialFallback ?? '1').toLowerCase() !== '0';
 
   // Optional origin hint (D2): the leg departing this airport. Validated like the flight number
   // — it is part of the cache key.
-  const rawFrom = req.query.from;
+  const rawFrom = getQuery(req).from;
   const origin = typeof rawFrom === 'string' ? rawFrom.trim().toUpperCase() : '';
   if (origin && !/^[A-Z]{3}$/.test(origin)) {
     return res.status(400).json({ success: false, error: 'Invalid from parameter' });
@@ -584,7 +585,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Optional scheduled-departure pin: that leg or a 404. Anything malformed or more than four days
   // from now is ignored, like `date`.
-  const pinnedDep = parseDepParam(req.query.dep, Math.floor(Date.now() / 1000));
+  const pinnedDep = parseDepParam(getQuery(req).dep, Math.floor(Date.now() / 1000));
 
   // The official-tier flag is part of the key (F138): an officialFallback=0 caller (the watch cron)
   // must never be handed an answer the paid tier produced for somebody else.

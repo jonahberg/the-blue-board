@@ -4,16 +4,18 @@
  * T1 is five minutes of use; T2 is the click threshold (20 new / 30 returning), counted by
  * the engagement store's document-level listener with navigation clicks excluded. Equality
  * ARMS T2 once; it fires after the clicking stops for `T2_SETTLE_MS`. This was
- * `WaitlistStrip`'s own trigger until the donation prompt (`DonatePrompt.tsx`) needed the
- * same moment.
+ * `WaitlistStrip`'s own trigger until the donation prompt needed the same moment.
  *
- * `deepUseAskThisVisit()` latches which ask that moment brings up — the donation prompt, the
- * email dialog or the email strip (`chooseDeepUseAsk`, src/lib/deep-use-ask.js) — once per
- * page load, so answering one ask does not bring another up in the same visit. The dice for
- * the donate/email split are rolled inside the latch, once.
+ * `deepUseAskThisVisit()` latches which ask that moment brings up — 'donate' (since Nov 2026
+ * the "cover a day" support STRIP, `features/SupportStrip.tsx`, which replaced the Oct 2026
+ * donation modal), 'email' (the email dialog) or 'waitlist' (the email strip)
+ * (`chooseDeepUseAsk`, src/lib/deep-use-ask.js) — once per page load, so answering one ask
+ * does not bring another up in the same visit. The dice for the donate/email split are rolled
+ * inside the latch, once.
  *
- * `useDeepUsePause()` is the manners both modal asks share: wait for a pause, never open
- * over another dialog, sheet or popover, never into a hidden tab (`donatePromptMayOpen`).
+ * `useDeepUsePause()` is the manners the one remaining modal ask, the email dialog, keeps:
+ * wait for a pause, never open over another dialog, sheet or popover, never into a hidden tab
+ * (`donatePromptMayOpen`). The support strip does not need it: it sits below the board.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -49,7 +51,7 @@ export function deepUseAskThisVisit(now = Date.now()): DeepUseAsk {
 
 /**
  * Test seam: forget this visit's choice. `nextRandom` fixes the dice for the next choice
- * (a value below `DEEP_USE_DONATE_WEIGHT` picks the donation prompt when both are eligible).
+ * (a value below `DEEP_USE_DONATE_WEIGHT` picks the support strip when both are eligible).
  */
 export function resetDeepUseAsk(nextRandom: () => number = Math.random): void {
   latched = undefined;

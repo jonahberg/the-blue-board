@@ -2,12 +2,13 @@
 // Owner, Oct 28 2026: heavy users are asked to donate a bit more than half the time and to
 // sign up for email a bit less than half the time (`chooseDeepUseAsk`, deep-use-ask.js).
 // The email ask is the existing "Stay in the loop" dialog (`WaitlistDialog.tsx`), opened
-// with the donation prompt's manners: after a pause, never over another dialog, never into
-// a hidden tab (`donatePromptMayOpen`).
+// with the deep-use modal manners: after a pause, never over another dialog, never into a
+// hidden tab (`donatePromptMayOpen`). The Oct 2026 donation modal set them; since Nov 2026 the
+// support ask is a strip (`SupportStrip.tsx`) and this is the only modal that keeps them.
 //
 // Why it came back as a modal: the auto-opening dialog brought in 188 of the first 192
 // signups. From Oct 4 the passive triggers revealed a strip instead, and from Oct 6 the
-// donation prompt took the deep-use moment whenever it was eligible, so the strip almost
+// donation modal took the deep-use moment whenever it was eligible, so the strip almost
 // never showed (0 opens in 191 showings from Oct 7) and signups stopped at zero.
 
 import { WAITLIST_STRIP_COOLDOWN_MS } from './waitlist-gate.js';

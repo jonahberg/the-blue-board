@@ -14,17 +14,21 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import DisclaimerDialog from '../src/app/features/DisclaimerDialog';
 import { MobileNav } from '../src/app/shell/MobileNav';
+import { PrefsProvider } from '../src/app/state/prefs';
 import { UiProvider } from '../src/app/state/ui';
 import { supportUrl } from '../src/lib/support-link.js';
 
 afterEach(cleanup);
 
 function mount() {
+  // PrefsProvider: the sheet's Home hub row reads and sets the home hub (Nov 2026).
   return render(
-    <UiProvider>
-      <MobileNav tab="live" onSelect={() => {}} />
-      <DisclaimerDialog />
-    </UiProvider>,
+    <PrefsProvider>
+      <UiProvider>
+        <MobileNav tab="live" onSelect={() => {}} />
+        <DisclaimerDialog />
+      </UiProvider>
+    </PrefsProvider>,
   );
 }
 
@@ -90,9 +94,11 @@ describe('MobileNav More sheet', () => {
   it('carries "What is this dashboard?" (the header gives its phone slot to Support)', () => {
     let opened = 0;
     render(
-      <UiProvider>
-        <MobileNav tab="live" onSelect={() => {}} onOpenHelp={() => { opened += 1; }} />
-      </UiProvider>,
+      <PrefsProvider>
+        <UiProvider>
+          <MobileNav tab="live" onSelect={() => {}} onOpenHelp={() => { opened += 1; }} />
+        </UiProvider>
+      </PrefsProvider>,
     );
     const sheet = openMore();
     fireEvent.click(within(sheet).getByRole('button', { name: 'What is this dashboard?' }));

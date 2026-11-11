@@ -27,7 +27,7 @@ import {
   BRIEF_HUBS, airportDisplayName, airportForms, isKnownAirportCode, numberWord, normalizeText,
 } from './brief-claims.js';
 import { serverOtpFromMetrics, ON_TIME_GRACE_MIN } from './hub-health.js';
-import { networkStatus } from './ops-health.js';
+import { networkStatus, isWholeAirportClosure, withoutRoutineClosures } from './ops-health.js';
 import { IROPS_MINOR_AT, IROPS_SIGNIFICANT_AT } from './irops-score.js';
 import { buildFaaIndex } from './faa-context.js';
 import { computeFlightCategory, computeOpsImpact, parseCeiling, parseVisibilitySM } from './metar-category.js';
@@ -38,6 +38,8 @@ import { isExpressCallsign } from './airborne-count.js';
 import { matchAircraft } from './fleet-match.js';
 
 export { BRIEF_HUBS };
+// The routine-closure screen is shared with the hub strip; it lives in ops-health.js.
+export { isWholeAirportClosure };
 
 /** A hub reading below this many operated departures is too thin to call an outlier or set the tone. */
 export const BRIEF_MIN_OPERATED = 25;
@@ -163,28 +165,6 @@ export function faaCausePhrase(reason) {
   if (!text.trim()) return null;
   for (const [re, phrase] of FAA_CAUSES) if (re.test(text)) return phrase;
   return null;
-}
-
-/**
- * True when an FAA "closure" reads like the airport is actually shut (snow removal, an emergency),
- * false for the routine NOTAM closures the feed also carries: nightly curfews ("AD AP CLSD DLY
- * 0730-1415"), prior-permission and transient-GA restrictions, runway- or taxiway-only closures.
- * A false negative costs one fact; a false positive puts "closed" in front of every visitor.
- * @param {unknown} reason
- */
-export function isWholeAirportClosure(reason) {
-  const text = String(reason || '').toUpperCase();
-  if (/\b(DLY|DAILY|NIGHTLY|PPR|EXC|EXCEPT|NON[- ]?SKED|TRANSIENT|GA|RWY|TWY|RUNWAY|TAXIWAY|APRON|RAMP)\b/.test(text)) return false;
-  if (/\b\d{4}\s*-\s*\d{4}\b/.test(text)) return false; // a recurring local time window
-  return true;
-}
-
-/** An /api/faa airport entry without its routine closures (see isWholeAirportClosure). */
-function withoutRoutineClosures(airport) {
-  if (!airport || typeof airport !== 'object' || !airport.closure) return airport;
-  const programs = (Array.isArray(airport.programs) ? airport.programs : []).filter((p) => p?.type !== 'closure' || isWholeAirportClosure(p.reason));
-  const delays = (Array.isArray(airport.delays) ? airport.delays : []).filter((d) => d?.type !== 'closure' || isWholeAirportClosure(d.reason));
-  return { ...airport, programs, delays, closure: programs.some((p) => p?.type === 'closure') };
 }
 
 function isWeatherReason(reason) {

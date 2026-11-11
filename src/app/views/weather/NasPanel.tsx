@@ -8,13 +8,23 @@
  *
  * The panel hides itself entirely when both feeds are empty — a header over nothing reads
  * as a broken panel, and "no NAS programs" is the normal state on a good day.
+ *
+ * It is also where an OLD FAA picture is said out loud (Nov 2026, src/lib/faa-freshness.js):
+ * once the held FAA or NAS answer is past its age limit the panel shows, with or without NAS
+ * items, one plain line — "FAA status as of HH:MMZ: …" — and a stale NAS answer's tiers are not
+ * drawn, so nothing here reads as a confirmed live disruption. The stale airport programs are
+ * already out of `faaIndex` (state/weather.tsx), so the hub cards and the strip agree.
  */
 
+import { History } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
+import { faaStatusAsOfLine } from '@/lib/faa-freshness.js';
 import { nasCountLine, nasPanelEmpty, sevBadgeClass, tierNasEventsRaw } from '@/lib/nas-severity.js';
 import { WX_HUBS } from '@/lib/weather-cards.js';
 import { cn } from '@/lib/utils';
 import type { NasData } from '../../data/types';
+import { useWeatherOptional } from '../../state/weather';
 
 type DetailPart = { kind: 'text' | 'delay'; text: string };
 type NasItem = {
@@ -106,16 +116,27 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
 }
 
 export function NasPanel({ nas }: { nas: NasData | null }) {
+  // Outside the provider (the panel's own tests) there is no freshness to report.
+  const weather = useWeatherOptional();
+  const asOfLine = weather
+    ? (faaStatusAsOfLine({
+        faaAsOf: weather.faaAsOf,
+        faaStale: weather.faaStale,
+        nasAsOf: weather.nasAsOf,
+        nasStale: weather.nasStale,
+      }) as string | null)
+    : null;
   // `NasData` types the two feeds as `unknown[]` because nothing in the app reads a NAS
   // entry's fields directly — every one of them goes through the classifier, which is where
   // the real shape is documented.
   const payload = nas as { active?: object[]; planned?: object[]; advisoryUrl?: string } | null;
-  if (nasPanelEmpty(payload)) return null;
-  const tiers = tierNasEventsRaw(payload, WX_HUBS) as Tiers;
-  const count = nasCountLine(payload, tiers) as string;
+  const showTiers = !nasPanelEmpty(payload) && !weather?.nasStale;
+  if (!showTiers && !asOfLine) return null;
+  const tiers = (showTiers ? tierNasEventsRaw(payload, WX_HUBS) : { critical: [], active: [], monitoring: [] }) as Tiers;
+  const count = showTiers ? (nasCountLine(payload, tiers) as string) : '';
 
   return (
-    <section aria-labelledby="nas-status-label" className="rounded-lg border bg-card/40 p-3">
+    <section id="nas-section" aria-labelledby="nas-status-label" className="scroll-mt-4 rounded-lg border bg-card/40 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <h3
           id="nas-status-label"
@@ -125,6 +146,12 @@ export function NasPanel({ nas }: { nas: NasData | null }) {
         </h3>
         {count ? <span className="font-mono text-[10px] text-muted-foreground">{count}</span> : null}
       </div>
+      {asOfLine ? (
+        <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-bb-warn">
+          <History aria-hidden="true" className="mt-px size-3 shrink-0" />
+          <span>{asOfLine}</span>
+        </p>
+      ) : null}
       <Tier label="Critical" items={tiers.critical} />
       <Tier label="Active / Likely" items={tiers.active} />
       <Tier label="Monitoring" items={tiers.monitoring} />

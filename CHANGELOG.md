@@ -4,6 +4,34 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.25.0] - 2026-11-11
+
+**The brief on screen, a page for every flight, plain questions in the search box, and donations counted in days.** Five features built in parallel on top of v1.24.0, plus the follow-ups the Nov 10 audit deferred.
+
+### Added
+- **The brief, on screen** (`shell/Ticker.tsx`, `features/Brief*.tsx`): when a current brief exists, the row under the header shows its headline and tone and opens the full brief; on the Live tab at desktop width the brief also sits open in the sidebar. Each sentence carries chips that link to the hub board or weather card behind it, or stay plain text where the site has nothing to show. A brief is shown only while current; otherwise the rotating ticker is back. An emergency squawk takes the row's text while it lasts. Nothing appears until the brief pipeline (v1.24.0, `sql/022`) has written one.
+- **Flight pages** (`/flight/UA929`, `api/flight.ts`, `api/flight-page.ts`, `api/flight-card.ts`): a status sentence written by code whose wording follows the evidence, a progress track and timeline of only the steps the data supports, the flight's record since Nov 6 from the new history table, the aircraft and its recent flights, and the AI explanation on request before departure. Each flight has its own preview card at `/flight/UA929/card.png`. The page reads only stored data: no metered provider, no model call on load. New dependencies: `satori`, `@resvg/resvg-wasm` (preview image).
+- **Ask the board** (`api/ask.ts`, `src/lib/ask-*.js`): a plain question in ⌘K ("late arrivals into Denver") becomes the view's own filters, shown as removable chips with the real count. A rules parser in the browser answers most questions with no network call; only the rest reach Claude Haiku 5.5, whose output is limited to a fixed vocabulary and validated in code. Its own daily spend cap (`ASK_DAILY_USD_CAP`, default $0.50), rate limit and kill switch (`ASK_MODEL=off`).
+- **Cover a day** (`api/stripe-webhook.ts`, `api/support-status.ts`, `sql/023_supporters.sql`, `features/CoverADay.tsx`, `features/SupportStrip.tsx`): the site costs about $17 a day. A payment covers the day it is given, or the next open day after it. The About section shows the month as a calendar of covered and open days; the heavy-user ask is now a quiet strip whose button names the day it covers ("Cover today · $17"), replacing the donation modal. Payments arrive through a signature-checked Stripe webhook that stores no email or card details. Names show only after a strict check, otherwise "a supporter". Until the webhook and table are set up the site shows the plain ask and makes no coverage claims. New page: `/thanks`.
+- **`?watch=UA929`** deep link: adds a flight to the watch list through the same path as the eye button.
+- **Phones**: a "Home hub" row in the More sheet.
+
+### Changed
+- **No on-time percentage while the board is filtered by status**: a percentage of the rows a status filter picked says nothing about the hub.
+- **Stale FAA data is shown as unknown, not calm**: after 25 minutes without a fresh FAA answer no program is shown as live, the NAS panel says "FAA status as of HH:MM", and the ticker and network chip say "FAA status unknown since HH:MM" in place of "All systems normal".
+- **Routine closures** (nightly curfews, PPR/GA-only, runway-only notices) no longer mark a hub as disrupted; the strip, the ticker and the brief share one rule.
+- **Donate links** carry `client_reference_id=<placement>` so Stripe reports which link a payment came from.
+- Privacy page: names the AI provider and says what happens to a typed question and to a supporter's display name.
+
+### Fixed
+- **`/api/schedule` could run to its 60-second limit**: every database call and upstream body read in that path is now bounded by one request deadline, and a slow read of a stored board serves the copy in hand rather than falling through to a metered fetch. The FAA disruption fetch and the schedule provider fetch now time out during the body read too.
+- **Schedule board**: no "+0m" on a row whose departure was confirmed by the live feed but never timed.
+- **`[DEP0169]` log noise**: handlers read the query from `req.url` (`api/_query.ts`) and no longer touch the platform's `req.query`. To be confirmed in production logs.
+
+### Notes
+- Needs `sql/023_supporters.sql` and the Stripe webhook setup for cover-a-day to show coverage; everything else works without them.
+- The model requests for Ask and the brief have not been run against the gateway before this release.
+
 ## [1.24.0] - 2026-11-10
 
 **The server side of "the brief": a short written read of United's operation, regenerated on a timer, where every sentence must cite the facts it came from.** Nothing on the site shows it yet; this release lets it start writing so the output can be reviewed before a visitor sees one.

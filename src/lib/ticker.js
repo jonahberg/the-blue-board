@@ -7,7 +7,7 @@
 // now live in src/app/shell/Ticker.tsx, which renders `text` as a React text child — React
 // does the escaping, so these strings are plain text and must NOT be HTML-escaped here.
 
-/** @typedef {{text: string, cls: 'advisory'|'info'|'critical'|'disclaimer'}} TickerItem */
+/** @typedef {{text: string, cls: 'advisory'|'info'|'critical'|'disclaimer'|'unknown'}} TickerItem */
 
 /**
  * Build the ticker's item list, in render order.
@@ -20,9 +20,12 @@
  * @param {number} input.starlinkCount  Starlink-equipped tail count.
  * @param {Array<{text: string, callsign: string, squawk: string}>} input.squawks
  *   decoded emergency squawks (7500/7600/7700) — one critical item each.
+ * @param {string|null} [input.faaUnknown]  "FAA status unknown since 14:05" (faa-freshness.js
+ *   faaUnknownLine) while the FAA answer is stale. It replaces the green line: with no current
+ *   FAA picture, "all systems normal" is a claim nobody can make.
  * @returns {TickerItem[]}
  */
-export function buildTickerItems({ opsHealth, airborne, total, fleetCount, starlinkCount, squawks }) {
+export function buildTickerItems({ opsHealth, airborne, total, fleetCount, starlinkCount, squawks, faaUnknown = null }) {
   const items = [];
 
   // Ops health first: derived from the SAME inputs the IROPS panel uses (hub OTP,
@@ -47,10 +50,12 @@ export function buildTickerItems({ opsHealth, airborne, total, fleetCount, starl
   }
 
   // Default message only when nothing above is an advisory/critical item — an
-  // active disruption item suppresses the green "all systems normal" line.
+  // active disruption item suppresses the green "all systems normal" line. While the FAA
+  // picture is unknown the default line says so instead, in a neutral class (never green).
   if (items.length === 0 || items.every(i => i.cls === 'info')) {
     const countStr = total > 0 ? ` — tracking ${total} United flights` : '';
-    items.unshift({ text: `✅ All systems normal${countStr}`, cls: 'info' });
+    if (faaUnknown) items.unshift({ text: `${faaUnknown}${countStr}`, cls: 'unknown' });
+    else items.unshift({ text: `✅ All systems normal${countStr}`, cls: 'info' });
   }
 
   // Compact disclaimer/attribution in the rotation so it is visible in the mobile

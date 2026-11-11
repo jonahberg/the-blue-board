@@ -1,9 +1,9 @@
 # The ops brief ("Right now")
 
-**Status:** server side built, not deployed · **Date:** 2026-11-10 · **UI:** not built (reads `GET /api/brief`)
+**Status:** built, server (v1.24.0) and UI (v1.25.0) · **Date:** 2026-11-10 · **UI:** the row under the header on every tab, open in the Live sidebar at `lg`+, the brief sheet everywhere else (`shell/Ticker.tsx`, `features/BriefPanel.tsx`, `features/BriefSheet.tsx`; reads `GET /api/brief`)
 
-A short written read of United's operation right now, shown to every visitor at the top of the Live
-tab. Every sentence carries the facts it came from, so the UI can show each one as a chip that links
+A short written read of United's operation right now, shown to every visitor in the row under the
+header (and open in full in the Live sidebar on a wide screen). Every sentence carries the facts it came from, so the UI can show each one as a chip that links
 to the hub, row or filter behind it. The model writes the prose; code decides what it may say, checks
 what it said, and writes the brief itself whenever the model can't.
 
@@ -312,26 +312,35 @@ Tested in `tests/brief-radio-cron.test.js`.
   structured fields (the hub's names, the clock computed here, the API's `tags` as words, charted
   `runways`), so a title cannot whitelist a number, airport or runway it contains. The raw response
   stays in `radio_airport_status.payload` (service role only, never served); `ops_briefs.facts` and
-  `GET /api/brief` carry only the sanitized quote, as JSON strings. The future UI must render brief
-  text as text, never as HTML (React does by default); the verifier also drops any item with markup
-  or a URL.
+  `GET /api/brief` carry only the sanitized quote, as JSON strings. The UI renders brief text as
+  text, never as HTML (React does by default; `tests/brief-ui.test.tsx` pins it); the verifier also
+  drops any item with markup or a URL.
 
 Budget: at the default caps the $1,000 credit lasts at least 10 months even if every day were a
 ground-stop day; on ordinary weeks (a few hub programs) it is a few dollars.
 
 ## Deep links the chips need
 
-| `link` | resolves today? |
-|---|---|
-| `{ tab: 'schedule', hub }` (on-time, cancellations) | **yes**: `?tab=schedule&hub=ORD` |
-| `{ tab: 'live' }`, `{ tab: 'starlink' }` | **yes**: `#live`, `#starlink` |
-| `{ tab: 'weather', section: 'irops' }` (index, network status, on-time aggregates) | **yes**: `?tab=irops` (Weather, scrolled to the IROPS section) |
-| `{ tab: 'weather', hub }` (FAA programs, planned programs, hub weather) | **no**: `?hub=` with `tab=weather` only selects the schedule board; there is no scroll-to-hub-card on the Weather tab |
-| `{ tab: 'weather' }` for a non-hub airport's program | **partly**: the tab opens, but there is no NAS-panel anchor or airport filter |
-| `{ tab: 'schedule' }` filtered to cancellations | **no**: no `?status=canceled` board filter |
-| `{ tab: 'live' }` filtered to Starlink | **no**: the Live tab's Starlink-only filter is not deep-linkable (`#starlink` opens the Starlink tab instead) |
-| `{ tab: 'live' }` scrolled to the 24-hour airborne graph (`air.normal`) | **no**: no anchor |
-| `{ tab: 'weather', hub }` for `flow.*` and `radio.*` facts | **no**: there is no radio or airport-flow view anywhere in the dashboard yet |
+The server's `link` says where a fact belongs. The UI (`src/lib/brief-chips.js` `chipTarget`)
+links a chip only where the dashboard actually shows that fact, so it overrides a few of them; a
+chip with no target is plain text, never a dead button, and so is one whose target is the tab
+already showing. Every chip href is a real deep link that resolves on a cold load
+(`src/app/state/deep-links.ts`), through the same resolver a chip click uses
+(`weatherScrollTarget` in `src/lib/tab-hash.js`).
+
+| `link` | resolves today? | the chip goes to |
+|---|---|---|
+| `{ tab: 'schedule', hub }` (on-time, cancellations at a hub) | **yes**: `?tab=schedule&hub=ORD` | that hub's board |
+| `{ tab: 'live' }`, `{ tab: 'starlink' }` | **yes**: `#live`, `#starlink` | the tab (`air.normal` included: the Live tab shows the count, not the 7-day median) |
+| `{ tab: 'weather', section: 'irops' }` (index, network status) | **yes**: `?tab=irops` (Weather, scrolled to the IROPS section) | the IROPS bar |
+| `{ tab: 'weather', section: 'irops' }` on `otp.floor` / `otp.soft` | yes, but the IROPS bar does not show on-time | **override**: the lowest hub's board, `?tab=schedule&hub=LAX` |
+| `{ tab: 'weather', hub }` (FAA programs at a hub, hub weather) | **yes since the brief UI**: `?tab=weather&hub=EWR` (Weather, scrolled to that hub's card, ringed like a radar click) | that hub's card |
+| `{ tab: 'weather', hub }` on `faa_planned` facts | yes, but the hub card shows only programs in effect | **override**: the NAS status panel, `?tab=weather&section=nas` **(new)**, which lists planned programs |
+| `{ tab: 'weather', hub }` for an airport without a card (BOS, LGA), `faa.active.other` | **no**: the NAS panel lists en-route programs only, so `/api/faa` programs at other airports appear nowhere | no target (plain text) |
+| `{ tab: 'weather' }` (`faa.active.count`, `wx.summary`, `faa.planned.count`) | **yes**: `#weather` (`faa.planned.count`: the NAS panel) | the tab / the NAS panel |
+| `{ tab: 'schedule' }` with no hub (`cxl.confirmed`, `cxl.unconfirmed`) | **no**: no `?status=canceled` board filter, and one board shows one hub | **override**: the IROPS bar, `?tab=irops`, whose Canceled figure is the same `/api/irops` number |
+| `{ tab: 'live' }` filtered to Starlink | **no**: the Live tab's Starlink-only filter is not deep-linkable (`#starlink` opens the Starlink tab instead) | the Starlink tab |
+| `{ tab: 'weather', hub }` for `flow.*` and `radio.*` facts | **no**: there is no radio or airport-flow view anywhere in the dashboard yet | no target (plain text; radio is `bb-info` with an antenna icon) |
 
 ## Schema, apply order, undo
 

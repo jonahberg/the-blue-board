@@ -69,17 +69,27 @@ export default function WeatherView() {
 
   useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
 
-  // `?tab=irops` lands on this tab already scrolled to the disruption bar. Consumed once —
-  // leaving it set would yank the panel back on every later render.
+  // A link that names a spot on this tab lands there: `?tab=irops` on the disruption bar,
+  // `?tab=weather&hub=EWR` on that hub's card (ringed, as a radar click does), `section=nas` on
+  // the NAS panel (state/deep-links.ts, and the brief's chips). Consumed once — leaving it set
+  // would yank the panel back on every later render. Skeleton cards carry no id and the NAS panel
+  // renders nothing until /api/nas answers, so the request waits for its target while the data
+  // is still loading, and is dropped if the data settles without one.
   useEffect(() => {
-    if (pendingScroll !== 'irops-section') return;
-    const target = document.getElementById('irops-section');
-    if (target) {
-      // The panel has just been mounted by the tab switch; let it lay out before scrolling.
-      requestAnimationFrame(() => target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }));
+    if (!pendingScroll) return;
+    const target = document.getElementById(pendingScroll);
+    if (!target) {
+      if (!loading) clearPendingScroll();
+      return;
     }
+    const hubCard = pendingScroll.match(/^hub-card-([A-Z]{3})$/);
+    // The panel may have just been mounted by the tab switch; let it lay out before scrolling.
+    requestAnimationFrame(() => {
+      if (hubCard) selectHub(hubCard[1]);
+      else target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+    });
     clearPendingScroll();
-  }, [pendingScroll, clearPendingScroll]);
+  }, [pendingScroll, clearPendingScroll, loading, models, nas, selectHub]);
 
   // "Hub Stations ↓" — a hint that there is more below the fold, which removes itself the
   // moment the cards are actually in view rather than nagging about what you can already see.

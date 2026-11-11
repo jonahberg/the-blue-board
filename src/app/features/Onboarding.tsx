@@ -4,9 +4,10 @@
  * OPENED ON REQUEST ONLY (Nov 2026). This was the first-visit welcome: a modal over the live
  * map for every new visitor, six emoji feature rows and a hub picker. The map is the first
  * impression now, so the dialog opens only from the header's "?" (`md` and up) and the phone
- * "More" sheet's "What is this dashboard?" row — both call `setOnboardingOpen(true)`. On a
- * phone this is the ONLY home-hub picker (the header's hub button is `hidden md:inline-flex`),
- * so the picker stays here.
+ * "More" sheet's "What is this dashboard?" row — both call `setOnboardingOpen(true)`. The picker
+ * stays here as one of three ways to set a home hub: the header's hub button (`md` and up, which
+ * cycles through the same hubs) and the phone More sheet's "Home hub" row are the others. This
+ * picker and the More sheet's offer one list, `HOME_HUB_OPTIONS` (src/lib/home-hub-options.js).
  *
  * Every route out (the button, Escape, the backdrop) goes through the SAME dismiss — the
  * shipped version had three code paths and only one of them saved the hub the visitor had
@@ -37,6 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { onboardingHubSeed } from '@/lib/engagement.js';
+import { HOME_HUB_OPTIONS } from '@/lib/home-hub-options.js';
 import { STORAGE_KEYS, writeString } from '../state/storage';
 import { usePrefs } from '../state/prefs';
 import { useUi } from '../state/ui';
@@ -50,19 +52,6 @@ const ORIENTATION: { place: string; line: string }[] = [
   { place: 'Schedule', line: 'any hub’s departures and arrivals, with a delay-risk read on flights still to go.' },
   // The tab reads "Delays · Weather · Hubs" on a desktop and "Weather" in the phone bar.
   { place: 'Delays · Weather', line: 'what is disrupting the network today, and the weather at every hub.' },
-];
-
-/** The picker's options — `legacy/index.html:113-125`. */
-const HUBS: { code: string; name: string }[] = [
-  { code: 'ORD', name: "Chicago O'Hare" },
-  { code: 'DEN', name: 'Denver' },
-  { code: 'IAH', name: 'Houston' },
-  { code: 'EWR', name: 'Newark' },
-  { code: 'SFO', name: 'San Francisco' },
-  { code: 'IAD', name: 'Washington Dulles' },
-  { code: 'LAX', name: 'Los Angeles' },
-  { code: 'NRT', name: 'Tokyo Narita' },
-  { code: 'GUM', name: 'Guam' },
 ];
 
 /** Radix `Select` cannot hold "" as a value, so the no-preference slot needs a sentinel. */
@@ -141,7 +130,7 @@ export default function Onboarding() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_PREFERENCE}>No preference</SelectItem>
-                {HUBS.map((option) => (
+                {HOME_HUB_OPTIONS.map((option) => (
                   <SelectItem key={option.code} value={option.code}>
                     {option.code} — {option.name}
                   </SelectItem>
