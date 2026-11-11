@@ -1,6 +1,6 @@
 # The ops brief ("Right now")
 
-**Status:** built, server (v1.24.0) and UI (v1.25.0) · **Date:** 2026-11-10 · **UI:** the row under the header on every tab, open in the Live sidebar at `lg`+, the brief sheet everywhere else (`shell/Ticker.tsx`, `features/BriefPanel.tsx`, `features/BriefSheet.tsx`; reads `GET /api/brief`)
+**Status:** built, server (v1.24.0) and UI (v1.25.0), tuned after its first live morning (v1.25.1) · **Date:** 2026-11-10 · **UI:** the row under the header on every tab, open in the Live sidebar at `lg`+, the brief sheet everywhere else (`shell/Ticker.tsx`, `features/BriefPanel.tsx`, `features/BriefSheet.tsx`; reads `GET /api/brief`)
 
 A short written read of United's operation right now, shown to every visitor in the row under the
 header (and open in full in the Live sidebar on a wide screen). Every sentence carries the facts it came from, so the UI can show each one as a chip that links

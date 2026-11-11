@@ -4,6 +4,22 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.25.1] - 2026-11-11
+
+**The brief, tuned after its first morning live.** On the morning of Nov 11 the FAA ran a ground delay program at San Francisco for low clouds. The first briefs got the direction of that delay wrong, called it "Disrupted" while the header above them said "Some Delays", spent lines on on-time figures that were not news, and rewrote themselves ten times in two and a half hours although nothing had changed.
+
+### Fixed
+- **Which flights a ground stop or delay program holds.** A program at San Francisco holds flights heading *to* San Francisco, at the airports they leave from; San Francisco's own departures were running on time. The brief said "flights out of San Francisco" and told departing travelers to check their flights. It now says "flights into", and the note for travelers is addressed to people flying to that airport.
+- **The brief's tone matches the header.** A ground delay program at one United hub now reads "Watch", like the header's "Some Delays". A ground stop or closure at a hub, or delay programs at two or more hubs at once, reads "Disrupted". The brief can now carry its note for travelers whenever a hub has a ground stop or delay program, at either tone.
+- **Fewer rewrites for nothing.** A new brief is written when the story changes: a new FAA program, a hub falling below 80% on time, weather getting better or worse, the disruption index moving into a new range. It is no longer rewritten because the number of flights in the air moved, a hub at 95% on time reached 100%, a hub's reading came and went, or a weather report described the same fog differently. The brief is still refreshed at least once an hour.
+
+### Changed
+- **Less non-news.** When every hub is at 80% on time or better, the brief no longer names the "lowest" hub, and it never names the "highest".
+- **Weather in plain words**, such as "very low clouds and fog, enough to slow arrivals and departures significantly", instead of a rating from the site. Weather with nothing specific to name is left out.
+- **Possible FAA actions at airports that are not United hubs** (Miami and Seattle that morning) come last, in one line at most.
+- **Shorter headlines.** A headline over 14 words is replaced with a short one written from the data.
+- **Claude's instructions** say the same things: write "flights into", keep the headline to what is happening and where, and write about the operation, not about the brief or which airports are hubs.
+
 ## [1.25.0] - 2026-11-11
 
 **The brief on screen, a page for every flight, plain questions in the search box, and donations counted in days.** Five features built in parallel on top of v1.24.0, plus the follow-ups the Nov 10 audit deferred.
