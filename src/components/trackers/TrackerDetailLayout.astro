@@ -33,6 +33,8 @@ interface Props {
   subtitle: string;
   lastUpdated: string;
   lastVerified: string;
+  /** Entries on this page checked later than the rest (`verifiedNote()`); the ATC pages pass none. */
+  verifiedNote?: { label: string; iso: string } | null;
   schemas?: Record<string, unknown>[];
   dataSlug: 'atc' | 'united-hubs';
   pagePath: string;
@@ -55,6 +57,7 @@ const {
   subtitle,
   lastUpdated,
   lastVerified,
+  verifiedNote = null,
   schemas = [],
   dataSlug,
   pagePath,
@@ -97,7 +100,7 @@ const peerLinkClass =
       <p class="mb-2.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
       <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
         <LastUpdated iso={lastUpdated} />
-        <LastUpdated iso={lastVerified} prefix="Verified" />
+        <LastUpdated iso={lastVerified} prefix="Verified" note={verifiedNote} />
       </div>
       <a
         class="inline-flex min-h-11 items-center font-mono text-[11px] font-semibold uppercase tracking-wide text-primary underline underline-offset-2"

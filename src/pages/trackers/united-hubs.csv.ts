@@ -1,4 +1,5 @@
 import { unitedHubsMeta, unitedHubs, unitedProjects } from '../../data/trackers/united-hubs.js';
+import { entryVerified } from '../../data/trackers/verified.js';
 import { CSV_HEADERS, toCsv } from '../../lib/tracker-downloads.js';
 
 const columns = [
@@ -41,7 +42,8 @@ export function GET() {
       gates: project.gates ?? '',
       details: project.details,
       sources: project.sources,
-      last_verified: unitedHubsMeta.lastVerified,
+      // Each entry's own last check: a partial pass re-checks only some (verified.js).
+      last_verified: entryVerified(project, unitedHubsMeta),
     };
   });
 

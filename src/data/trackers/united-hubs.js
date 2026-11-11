@@ -22,11 +22,15 @@
  * MAINTENANCE (see MAINTENANCE.md):
  *  - United newsroom (united.mediaroom.com), The Points Guy's United coverage, airport-authority
  *    newsrooms (fly2houston, flydulles/MWAA, flychicago, flydenver, panynj, flysfo, lawa).
- *  - After every source pass: bump unitedHubsMeta.lastVerified. If facts changed, also bump
- *    unitedHubsMeta.lastUpdated and add a changelog entry. Then run `bun run test`.
+ *  - After a full source pass (every entry re-checked): bump unitedHubsMeta.lastVerified and
+ *    delete every per-entry `verified` (the validator rejects one older than the file's date).
+ *    After a partial pass: leave lastVerified alone and set `verified` on the entries you
+ *    re-checked. If facts changed, also bump unitedHubsMeta.lastUpdated and add a changelog
+ *    entry. Then run `bun run test`. The pages print each entry's own date
+ *    (src/data/trackers/verified.js), and the header names the entries checked later than the rest.
  *
- * Last verified: 2026-11-11 for the two IAD Concourse E entries only; every other entry was last
- * re-checked 2026-11-03 (the model has no per-entry verified date yet).
+ * Last verified: 2026-11-03 for every entry, and 2026-11-11 for the two IAD Concourse E entries
+ * (their `verified`), which the Nov 11 pass re-checked on their own.
  */
 
 /** @typedef {'club'|'polaris'|'club-fly'|'terminal'|'gates'|'other'} UnitedProjectType */
@@ -48,6 +52,9 @@
  * @property {number} [gates]       new gate count if applicable
  * @property {string} details       1–3 sentences, Blue Board voice
  * @property {string[]} sources
+ * @property {string} [verified]    YYYY-MM-DD: this entry's sources were re-checked on their own,
+ *                                  after unitedHubsMeta.lastVerified (a partial pass). Absent, the
+ *                                  entry was last checked on the file's lastVerified.
  */
 
 /**
@@ -178,6 +185,7 @@ export const unitedProjects = [
       "https://www.prnewswire.com/news-releases/more-than-half-a-billion-dollar-expansion--modernization-coming-to-uniteds-washington-dulles-hub-302320375.html",
       "https://www.ffxnow.com/2026/05/20/dulles-airport-lands-41m-federal-grant-for-concourse-e-construction/",
     ],
+    verified: "2026-11-11",
   },
   {
     id: "iad-club-concourse-e",
@@ -204,6 +212,7 @@ export const unitedProjects = [
       "https://thepointsguy.com/news/united-airlines-lounge-plans-2026/",
       "https://www.prnewswire.com/news-releases/more-than-half-a-billion-dollar-expansion--modernization-coming-to-uniteds-washington-dulles-hub-302320375.html",
     ],
+    verified: "2026-11-11",
   },
   {
     id: "iad-cd-club-renovations",
@@ -543,10 +552,11 @@ export const unitedHubsMeta = {
   slug: "united-hubs",
   name: "United Hub Tracker",
   lastUpdated: "2026-11-11",
-  // 2026-11-11 re-checked only iad-concourse-e and iad-club-concourse-e; the rest were last
-  // re-checked 2026-11-03. Kept at 11-11 because the validator (trackers/index.js) and
-  // tests/tracker-data.test.js require lastVerified >= lastUpdated.
-  lastVerified: "2026-11-11",
+  // The day EVERY entry was last re-checked. The 2026-11-11 pass re-checked only
+  // iad-concourse-e and iad-club-concourse-e, which carry `verified: "2026-11-11"`; the validator
+  // (trackers/index.js) accepts lastVerified older than lastUpdated as long as some entry was
+  // verified on or after it.
+  lastVerified: "2026-11-03",
   // Headline stats that can't be derived from the entries above. Counts of projects/clubs ARE
   // derived at build time — never hardcode them here (tests pin that).
   stats: {

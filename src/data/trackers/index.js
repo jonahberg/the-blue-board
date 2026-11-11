@@ -10,6 +10,7 @@
 
 import { atcMeta, atcAirports } from './atc.js';
 import { unitedHubsMeta, unitedHubs, unitedProjects } from './united-hubs.js';
+import { entryVerifiedProblems, newestVerified, utcToday, verifiedNote } from './verified.js';
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const IATA_RE = /^[A-Z]{3}$/;
@@ -37,11 +38,32 @@ function checkCommon(where, entry) {
   }
 }
 
-/** @param {string} where @param {{lastUpdated: string, lastVerified: string, changelog: {date: string, entry: string}[]}} meta */
-function checkMeta(where, meta) {
+/**
+ * The "not in the future" rule needs a clock we trust: the build's and the tests'. The dashboard
+ * imports this module in the visitor's browser, where a wrong device clock must not throw.
+ */
+const TODAY = typeof window === 'undefined' ? utcToday() : undefined;
+
+/**
+ * `lastVerified` is the day EVERY entry was last checked, so after a partial pass it may be older
+ * than `lastUpdated`; the entries that pass re-checked carry their own `verified`. What must hold
+ * is that the newest check, file-level or per-entry, is not older than the last update: an update
+ * is made from a check. With no per-entry dates (the ATC file) that is the old
+ * lastVerified >= lastUpdated rule unchanged.
+ * @param {string} where
+ * @param {{lastUpdated: string, lastVerified: string, changelog: {date: string, entry: string}[]}} meta
+ * @param {{id: string, verified?: string}[]} entries
+ */
+function checkMeta(where, meta, entries) {
   if (!ISO_DAY_RE.test(meta.lastUpdated)) fail(where, `lastUpdated "${meta.lastUpdated}" is not YYYY-MM-DD`);
   if (!ISO_DAY_RE.test(meta.lastVerified)) fail(where, `lastVerified "${meta.lastVerified}" is not YYYY-MM-DD`);
-  if (meta.lastVerified < meta.lastUpdated) fail(where, 'lastVerified cannot be older than lastUpdated');
+  for (const e of entries) {
+    const problems = entryVerifiedProblems(e, meta, TODAY);
+    if (problems.length) fail(where, `${e.id}: ${problems.join('; ')}`);
+  }
+  if (newestVerified(entries, meta) < meta.lastUpdated) {
+    fail(where, 'nothing was verified on or after lastUpdated — bump lastVerified, or the re-checked entries\' verified');
+  }
   if (!Array.isArray(meta.changelog) || meta.changelog.length === 0) fail(where, 'changelog is empty');
   let prev = '9999-99-99';
   for (const c of meta.changelog) {
@@ -55,7 +77,7 @@ function checkMeta(where, meta) {
 
 function validate() {
   // ── ATC ──
-  checkMeta('atc', atcMeta);
+  checkMeta('atc', atcMeta, atcAirports);
   const atcIds = new Set();
   for (const a of atcAirports) {
     checkCommon('atc', a);
@@ -74,7 +96,7 @@ function validate() {
   }
 
   // ── United ──
-  checkMeta('united-hubs', unitedHubsMeta);
+  checkMeta('united-hubs', unitedHubsMeta, unitedProjects);
   for (const [iata, h] of Object.entries(unitedHubs)) {
     if (!IATA_RE.test(iata)) fail('united-hubs', `bad hub key "${iata}"`);
     if (!h.name || !h.city || !/^[A-Z]{2}$/.test(h.state)) fail('united-hubs', `${iata}: name/city/state incomplete`);
@@ -123,6 +145,7 @@ export const trackers = {
       "The FAA is finally replacing paper flight strips at 89 airport towers. Airport-by-airport status of the rollout — who's live, who's next, who's still waiting.",
     lastUpdated: atcMeta.lastUpdated,
     lastVerified: atcMeta.lastVerified,
+    verifiedNote: verifiedNote(atcAirports, atcMeta),
     entryCount: atcAirports.length,
     // Singular: the index page counts it through countLabel() ("1 airport", "89 airports").
     entryNoun: 'airport',
@@ -143,6 +166,8 @@ export const trackers = {
       "United's biggest ground buildout ever: every club, terminal, and gate project across all eight hubs — with honest labels for what's real, what's dated, and what's just a Kirby tease.",
     lastUpdated: unitedHubsMeta.lastUpdated,
     lastVerified: unitedHubsMeta.lastVerified,
+    // The entries a partial pass re-checked after lastVerified, for "(… entries Nov 11)".
+    verifiedNote: verifiedNote(unitedProjects, unitedHubsMeta, unitedHubs),
     entryCount: unitedProjects.length,
     entryNoun: 'project',
     metric: `${unitedProjects.filter((p) => p.status === 'under-construction' || p.status === 'announced').length} active`,

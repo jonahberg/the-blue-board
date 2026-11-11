@@ -108,7 +108,7 @@ const itemListSchema = {
               <div class="mt-auto flex flex-wrap items-center justify-between gap-2.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>
                   {countLabel(t.entryCount, t.entryNoun)} ·{' '}
-                  <LastUpdated iso={t.lastVerified} prefix="verified" />
+                  <LastUpdated iso={t.lastVerified} prefix="verified" note={t.verifiedNote} />
                 </span>
                 <span class="text-primary">Open tracker &rarr;</span>
               </div>

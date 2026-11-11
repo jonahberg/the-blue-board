@@ -2,6 +2,7 @@
 import { unitedHubsMeta, unitedHubs } from '../../../data/trackers/united-hubs.js';
 import { getAtcAirport, getHubProjects, unitedHubDetailCodes, formatCompactNumber, formatTrackerDate, countLabel, unitedHubSeo } from '../../../lib/tracker-detail.js';
 import { countIs, plural } from '../../../lib/plural.js';
+import { contentModified, entryVerified, verificationSummary, verifiedNote } from '../../../data/trackers/verified.js';
 import TrackerDetailLayout from '../../../components/trackers/TrackerDetailLayout.astro';
 import StatusBadge from '../../../components/trackers/StatusBadge.astro';
 import SourceDisclosure from '../../../components/trackers/SourceDisclosure.astro';
@@ -45,6 +46,8 @@ const leadProject =
   projects.find((project) => project.status === 'announced') ??
   projects.find((project) => project.status === 'open') ??
   projects[0];
+// This hub's own verification: the oldest day its entries were checked, plus any checked later.
+const verified = verificationSummary(projects, unitedHubsMeta);
 const nextDatedProject = projects
   .find((project) => project.status !== 'open' && project.targetDate);
 
@@ -77,7 +80,8 @@ const schemas = [
     headline: heading,
     description,
     url: canonical,
-    dateModified: unitedHubsMeta.lastVerified,
+    // The latest day this hub's entries can have changed (verified.js), not the file-level date.
+    dateModified: contentModified(projects, unitedHubsMeta),
     author: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
     publisher: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
     about: [
@@ -130,7 +134,8 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
   heading={heading}
   subtitle={subtitle}
   lastUpdated={unitedHubsMeta.lastUpdated}
-  lastVerified={unitedHubsMeta.lastVerified}
+  lastVerified={verified.oldest}
+  verifiedNote={verifiedNote(projects, unitedHubsMeta, unitedHubs)}
   schemas={schemas}
   dataSlug="united-hubs"
   pagePath={`/trackers/united-hubs/${code.toLowerCase()}`}
@@ -171,7 +176,7 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
           <p class={CARD_P}>{project.details}</p>
           <SourceDisclosure
             sources={project.sources}
-            verified={unitedHubsMeta.lastVerified}
+            verified={entryVerified(project, unitedHubsMeta)}
             entryId={project.id}
             entryLabel={`${code} · ${project.name}`}
             shareHref={`/trackers/united-hubs/${code.toLowerCase()}#${project.id}`}

@@ -9,6 +9,7 @@ import {
   trackerNavLabels,
   trackers,
 } from '../src/data/trackers/index.js';
+import { entryVerifiedProblems, isIsoDay, newestVerified, utcToday } from '../src/data/trackers/verified.js';
 
 // Structural invariants only — monthly data updates must not require touching this file.
 // The one deliberate content pin is the 89-airport program scope: if that changes, the FAA
@@ -111,11 +112,13 @@ describe('united hub data', () => {
 });
 
 describe('changelogs', () => {
-  for (const [name, meta] of [['atc', atcMeta], ['united-hubs', unitedHubsMeta]]) {
+  for (const [name, meta, entries] of [['atc', atcMeta, atcAirports], ['united-hubs', unitedHubsMeta, unitedProjects]]) {
     it(`${name}: reverse-chronological, ISO-dated, and verification is current`, () => {
       expect(meta.lastUpdated).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(meta.lastVerified).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(meta.lastVerified >= meta.lastUpdated).toBe(true);
+      // lastVerified is the day EVERY entry was checked, so after a partial pass it may be older
+      // than lastUpdated; the newest check (file-level or an entry's own `verified`) may not be.
+      expect(newestVerified(entries, meta) >= meta.lastUpdated).toBe(true);
       let prev = '9999-99-99';
       for (const c of meta.changelog) {
         expect(c.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -123,6 +126,21 @@ describe('changelogs', () => {
         prev = c.date;
       }
       expect(meta.changelog[0].date <= meta.lastUpdated).toBe(true);
+    });
+  }
+});
+
+describe('per-entry verified dates', () => {
+  for (const [name, meta, entries] of [['atc', atcMeta, atcAirports], ['united-hubs', unitedHubsMeta, unitedProjects]]) {
+    it(`${name}: every entry's verified is a real past day, no older than the file's lastVerified`, () => {
+      const today = utcToday();
+      for (const e of entries) {
+        if (e.verified === undefined) continue;
+        expect(isIsoDay(e.verified), e.id).toBe(true);
+        expect(e.verified <= today, `${e.id} verified in the future`).toBe(true);
+        expect(e.verified >= meta.lastVerified, `${e.id} verified before the file's lastVerified`).toBe(true);
+        expect(entryVerifiedProblems(e, meta, today), e.id).toEqual([]);
+      }
     });
   }
 });

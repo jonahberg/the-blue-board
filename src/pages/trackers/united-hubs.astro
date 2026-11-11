@@ -2,6 +2,7 @@
 import outline from '../../data/trackers/us-outline.json';
 import { unitedHubsMeta, unitedHubs, unitedProjects } from '../../data/trackers/united-hubs.js';
 import { atcAirports } from '../../data/trackers/atc.js';
+import { contentModified, entryVerified, verificationSummary, verifiedNote } from '../../data/trackers/verified.js';
 import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
 import { trackerParentSeo } from '../../lib/tracker-detail.js';
 import { countLabel } from '../../lib/plural.js';
@@ -106,6 +107,9 @@ const legend = [
   { label: 'Quiet right now', shape: 'ring', tone: 'dim' },
 ];
 
+// ---- verification: each entry's own date; the header names the entries checked later ----
+const verified = verificationSummary(unitedProjects, unitedHubsMeta);
+
 // ---- formatting ----
 const fmtDate = (d) => {
   if (!d) return '';
@@ -156,7 +160,7 @@ const tableRows = sortedProjects.map((p) => {
       sources: {
         evidence: {
           sources: p.sources,
-          verified: unitedHubsMeta.lastVerified,
+          verified: entryVerified(p, unitedHubsMeta),
           entryId: p.id,
           entryLabel: `${p.hub} · ${p.name}`,
           shareHref: `/trackers/united-hubs#${p.id}`,
@@ -239,7 +243,9 @@ const datasetSchema = {
   description:
     'Every tracked United Airlines ground-infrastructure project across its eight hubs, with status (open / under construction / announced / rumored), dates, sizes, costs, and sources.',
   url: canonical,
-  dateModified: unitedHubsMeta.lastVerified,
+  // The day the data last changed (the earlier of its last update and its newest check), never
+  // the file-level verified date, which a partial pass leaves behind.
+  dateModified: contentModified(unitedProjects, unitedHubsMeta),
   creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
   spatialCoverage: 'United States and Guam',
   keywords: ['United Airlines hubs', 'United Club construction', 'airport terminals', 'airport gates'],
@@ -296,7 +302,7 @@ const chipClass =
       </p>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
         <LastUpdated iso={unitedHubsMeta.lastUpdated} />
-        <LastUpdated iso={unitedHubsMeta.lastVerified} prefix="Verified" />
+        <LastUpdated iso={verified.oldest} prefix="Verified" note={verifiedNote(unitedProjects, unitedHubsMeta, unitedHubs)} />
       </div>
       <JumpNav
         class="mt-4.5 mb-1.5"
@@ -409,7 +415,7 @@ const chipClass =
                       <p class="text-xs leading-relaxed text-muted-foreground">{p.details}</p>
                       <SourceDisclosure
                         sources={p.sources}
-                        verified={unitedHubsMeta.lastVerified}
+                        verified={entryVerified(p, unitedHubsMeta)}
                         entryId={p.id}
                         entryLabel={`${p.hub} · ${p.name}`}
                         shareHref={`/trackers/united-hubs#${p.id}`}
