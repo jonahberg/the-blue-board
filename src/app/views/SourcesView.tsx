@@ -33,7 +33,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
-type Freshness = 'LIVE' | 'DAILY' | 'TILES' | 'COMPUTED';
+type Freshness = 'LIVE' | 'DAILY' | 'SNAPSHOT' | 'TILES' | 'COMPUTED';
 
 type Source = {
   icon: LucideIcon;
@@ -47,6 +47,7 @@ type Source = {
 const FRESHNESS_TONE: Record<Freshness, string> = {
   LIVE: 'border-bb-ok/40 bg-bb-ok/15 text-bb-ok',
   DAILY: 'border-bb-info/40 bg-bb-info/15 text-bb-info',
+  SNAPSHOT: 'border-border bg-muted/60 text-muted-foreground',
   TILES: 'border-border bg-muted/60 text-muted-foreground',
   COMPUTED: 'border-border bg-muted/60 text-muted-foreground',
 };
@@ -69,7 +70,9 @@ const SOURCES: Source[] = [
   {
     icon: Plane,
     name: 'Fleet Database — United Fleet Site',
-    freshness: 'DAILY',
+    // A hand-maintained snapshot with no refresh job; the Fleet tab prints its "as of" date
+    // and never "updated daily" (F86, src/lib/fleet-utils.js). DAILY here said otherwise.
+    freshness: 'SNAPSHOT',
     desc: 'Comprehensive fleet data: mainline aircraft with type, config, WiFi, IFE, seats, delivery year.',
     links: [
       { label: 'United Fleet Site →', href: 'https://unitedfleetsite.com/' },

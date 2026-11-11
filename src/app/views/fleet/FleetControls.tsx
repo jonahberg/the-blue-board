@@ -13,6 +13,7 @@
  * fleet database.
  */
 
+import { RotateCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -80,11 +81,9 @@ export function FleetControls({
 
   // `h-11!` on the three triggers is deliberate: SelectTrigger sets its height through
   // `data-[size=default]:h-8`, which outranks a plain `h-11` and would leave the dropdowns
-  // at 32 px on touch. The `md:h-8!` half hands the compact height back on a pointer.
-  //
-  // The breakpoint is `md:` (768 px), not `sm:` — it is the one this task and the rest of
-  // the dashboard use to mean "pointer, not finger". A tablet in landscape sits between the
-  // two, and dropping to 32 px there is exactly where a touch target is still needed.
+  // at 32 px on touch. The `pointer-fine:md:h-8!` half hands the compact height back to a
+  // mouse at md+ only: width is not input type, and an iPad at 768/1024 px is a touch device
+  // that still needs the 44 px (DESIGN.md Responsive).
   // `sm:w-48` is unaffected: that is the search box's WIDTH, which is layout, not a target.
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -95,11 +94,11 @@ export function FleetControls({
         placeholder="Search reg, config…"
         value={draft}
         onChange={(event) => onInput(event.target.value)}
-        className="h-11 w-full min-w-0 sm:w-48 md:h-8"
+        className="h-11 w-full min-w-0 sm:w-48 pointer-fine:md:h-8"
       />
 
       <Select value={type || ALL} onValueChange={(value) => onTypeChange(value === ALL ? '' : value)}>
-        <SelectTrigger aria-label="Fleet type filter" className="h-11! min-w-36 md:h-8!">
+        <SelectTrigger aria-label="Fleet type filter" className="h-11! min-w-36 pointer-fine:md:h-8!">
           <SelectValue placeholder="All Types" />
         </SelectTrigger>
         <SelectContent>
@@ -113,7 +112,7 @@ export function FleetControls({
       </Select>
 
       <Select value={wifi || ALL} onValueChange={(value) => onWifiChange(value === ALL ? '' : value)}>
-        <SelectTrigger aria-label="Fleet WiFi filter" className="h-11! min-w-32 md:h-8!">
+        <SelectTrigger aria-label="Fleet WiFi filter" className="h-11! min-w-32 pointer-fine:md:h-8!">
           <SelectValue placeholder="All WiFi" />
         </SelectTrigger>
         <SelectContent>
@@ -130,7 +129,7 @@ export function FleetControls({
         value={status || ALL}
         onValueChange={(value) => onStatusChange(value === ALL ? '' : value)}
       >
-        <SelectTrigger aria-label="Fleet status filter" className="h-11! min-w-32 md:h-8!">
+        <SelectTrigger aria-label="Fleet status filter" className="h-11! min-w-32 pointer-fine:md:h-8!">
           <SelectValue placeholder="All Status" />
         </SelectTrigger>
         <SelectContent>
@@ -146,9 +145,10 @@ export function FleetControls({
       <Button
         variant="outline"
         size="lg"
-        className="h-11 md:h-8"
+        className="h-11 pointer-fine:md:h-8"
         onClick={() => window.location.reload()}
       >
+        <RotateCw aria-hidden="true" />
         Refresh
       </Button>
     </div>

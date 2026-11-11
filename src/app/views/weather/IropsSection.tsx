@@ -65,7 +65,9 @@ function Metric({ label, value, note }: { label: string; value: number | string;
   // Counts are facts, not verdicts: the score beside them carries the severity, so the
   // numbers stay in body colour instead of five decorative hues (audit F72).
   return (
-    <div className="flex flex-col items-center px-2">
+    // Top-aligned, so the Canceled figure (the one with a note under it) sits on the same line
+    // as the other four instead of riding higher.
+    <div className="flex flex-col items-center justify-start px-0.5 sm:px-2">
       <span className="font-mono text-sm font-semibold tabular-nums text-foreground">{value}</span>
       <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{label}</span>
       {note ? <span className="font-mono text-[9px] text-muted-foreground">{note}</span> : null}
@@ -213,7 +215,9 @@ export function IropsSection() {
                 </Tooltip>
               </span>
 
-              <div className="ml-auto flex flex-wrap items-center divide-x divide-border">
+              {/* A phone spreads the five figures across the card; from `sm` they sit right,
+                  ruled apart. */}
+              <div className="flex w-full items-start justify-between sm:ml-auto sm:w-auto sm:items-stretch sm:justify-end sm:divide-x sm:divide-border">
                 <Metric
                   label="Canceled"
                   value={cancellations.confirmed ?? '—'}

@@ -34,7 +34,7 @@
  * and swaps only the markup each row paints. Desktop and tablet keep the table untouched.
  */
 
-import { CalendarDays, Clock, Eye, SearchX, Star, TriangleAlert, Zap } from 'lucide-react';
+import { ArrowDown, ArrowUp, CalendarDays, Clock, Eye, SearchX, Star, TriangleAlert, Zap } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { scrollBehavior } from '@/lib/motion.js';
+import { regDetailParts, regDetailText } from '@/lib/schedule-reg-line.js';
 import { riskControl, statusEvidenceNote } from '@/lib/schedule-row-display.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { clampWindow, expandWindow, initialWindow, windowIncluding } from '@/lib/schedule-window.js';
@@ -529,12 +530,18 @@ export const ScheduleTable = forwardRef<
                             SWAP_TONE[row.swap.tone],
                           )}
                         >
-                          <span aria-hidden="true">
-                            {row.swap.tone === 'downgrade'
-                              ? '🔴'
-                              : row.swap.tone === 'upgrade'
-                                ? '🟢'
-                                : '⚠️'}
+                          {/* Lucide, not 🔴/🟢/⚠️ (DESIGN.md: badges are lucide). An arrow carries the
+                              direction in its shape as well as the pill's colour; the word is for
+                              screen readers, as the phone row prints it. */}
+                          {row.swap.tone === 'downgrade' ? (
+                            <ArrowDown aria-hidden="true" className="size-3" />
+                          ) : row.swap.tone === 'upgrade' ? (
+                            <ArrowUp aria-hidden="true" className="size-3" />
+                          ) : (
+                            <TriangleAlert aria-hidden="true" className="size-3" />
+                          )}
+                          <span className="sr-only">
+                            {row.swap.tone === 'downgrade' ? 'Downgrade:' : row.swap.tone === 'upgrade' ? 'Upgrade:' : 'Swap:'}
                           </span>
                           {row.swap.oldType} → {row.swap.newType}
                           {row.swap.reg ? (
@@ -610,14 +617,32 @@ export const ScheduleTable = forwardRef<
                         <Star aria-hidden="true" /> {row.special}
                       </Badge>
                     ) : null}
-                    {row.fleet?.enrich ? (
-                      <span
-                        className="block truncate text-[9px] text-muted-foreground"
-                        title={row.fleet.enrich}
-                      >
-                        {row.fleet.enrich}
-                      </span>
-                    ) : null}
+                    {row.fleet?.enrich
+                      ? (() => {
+                          // Starlink once, with the phone row's Zap mark (schedule-reg-line.js).
+                          const parts = regDetailParts(row.fleet.enrich);
+                          return (
+                            <span
+                              className="block truncate text-[9px] text-muted-foreground"
+                              title={regDetailText(parts)}
+                            >
+                              {parts.map((part, i) => (
+                                <span key={part.text}>
+                                  {i > 0 ? ' · ' : null}
+                                  {part.starlink ? (
+                                    <span className="text-bb-starlink">
+                                      <Zap aria-hidden="true" className="mr-0.5 inline size-2.5 align-[-1px]" />
+                                      {part.text}
+                                    </span>
+                                  ) : (
+                                    part.text
+                                  )}
+                                </span>
+                              ))}
+                            </span>
+                          );
+                        })()
+                      : null}
                   </TableCell>
 
                   <TableCell className="font-mono whitespace-nowrap">{row.gate}</TableCell>

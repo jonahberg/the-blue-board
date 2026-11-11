@@ -171,10 +171,17 @@ export default function ScheduleView() {
   // The count is the board's RAW row total, not `model.rows.length`: the shipped line
   // reported what the cached response carried, and a filtered view must not make the
   // cached board look smaller than it is.
+  //
+  // The library's line opens with a ⚡, which is this product's Starlink mark (DESIGN.md); in a
+  // meta line under a board full of Starlink rows it read as one more of them, so it is dropped
+  // here and the words carry the line.
   const cacheNote = useMemo(
     () =>
       board
-        ? (boardLoadMessage({ fromCache: board.fromCache, count: board.rows.length }) as string)
+        ? (boardLoadMessage({ fromCache: board.fromCache, count: board.rows.length }) as string).replace(
+            /^\u26a1\s*/,
+            '',
+          )
         : '',
     [board],
   );
@@ -348,11 +355,22 @@ export default function ScheduleView() {
           <SwapSummary swaps={swaps} impactsFor={impactsFor} onOpenFilters={() => setDrawerOpen(true)} />
           <ScheduleStats
             compact={!desktop}
+            // The board's age and the cache line ride on the strip's one meta line rather than
+            // stacking a line each under it. "data as of …" takes a capital when it opens the line.
             footnote={
-              !desktop && cacheNote ? (
-                <span className="text-muted-foreground" data-testid="sched-cache-note">
-                  {cacheNote}
-                </span>
+              cacheNote || condition.kind === 'age-chip' ? (
+                <>
+                  {cacheNote ? <span data-testid="sched-cache-note">{cacheNote}</span> : null}
+                  {cacheNote && condition.kind === 'age-chip' ? ' · ' : null}
+                  {condition.kind === 'age-chip' ? (
+                    // Unbroken, so a wrap never splits "1:59 PM CST" from "data as of".
+                    <span data-testid="sched-age-chip" className="whitespace-nowrap">
+                      {cacheNote
+                        ? condition.message
+                        : condition.message.charAt(0).toUpperCase() + condition.message.slice(1)}
+                    </span>
+                  ) : null}
+                </>
               ) : undefined
             }
             stats={model.stats}
@@ -363,12 +381,7 @@ export default function ScheduleView() {
               board?.meta?.hubDisruptionMinutes != null ? Number(board.meta.hubDisruptionMinutes) : null
             }
           />
-          <StalenessBanner condition={condition} onRetry={refresh} />
-          {cacheNote && desktop ? (
-            <p className="px-1 text-[10px] text-muted-foreground" data-testid="sched-cache-note">
-              {cacheNote}
-            </p>
-          ) : null}
+          {condition.kind === 'banner' ? <StalenessBanner condition={condition} onRetry={refresh} /> : null}
           <ScheduleTable
             ref={tableRef}
             rows={model.rows}
@@ -396,7 +409,8 @@ export default function ScheduleView() {
               href="https://aerodatabox.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-bb-ok underline"
+              // Primary like every other link; bb-ok green reads as a status (DESIGN.md Colour).
+              className="text-primary underline"
             >
               AeroDataBox
             </a>{' '}

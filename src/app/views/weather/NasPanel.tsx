@@ -20,7 +20,13 @@ import { History } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { faaStatusAsOfLine } from '@/lib/faa-freshness.js';
-import { nasCountLine, nasPanelEmpty, sevBadgeClass, tierNasEventsRaw } from '@/lib/nas-severity.js';
+import {
+  nasCountLine,
+  nasDisplayTitle,
+  nasPanelEmpty,
+  sevBadgeClass,
+  tierNasEventsRaw,
+} from '@/lib/nas-severity.js';
 import { WX_HUBS } from '@/lib/weather-cards.js';
 import { cn } from '@/lib/utils';
 import type { NasData } from '../../data/types';
@@ -72,8 +78,9 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
           <li key={`${item.sevType}-${item.title}-${i}`} className="flex gap-2">
             <Badge
               variant="outline"
+              // One width for GS, CDR and OTHER, so every title in a tier starts on the same line.
               className={cn(
-                'mt-0.5 h-fit shrink-0 px-1.5 py-0 font-mono text-[9px]',
+                'mt-0.5 h-fit w-11 shrink-0 justify-center px-1 py-0 font-mono text-[9px]',
                 badgeTone(item),
               )}
             >
@@ -81,7 +88,8 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
             </Badge>
             <div className="min-w-0">
               <p className="text-[11px]">
-                {item.title}
+                {/* Sentence case for reading; codes and acronyms stay as the FAA sent them. */}
+                {nasDisplayTitle(item.title) as string}
                 {item.hubs.map((hub) => (
                   <span
                     key={hub}

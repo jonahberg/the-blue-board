@@ -230,7 +230,10 @@ export function ScheduleControls({
             </Button>
           ) : null}
 
+          {/* Outline like its neighbours: a refresh is a secondary action, and the filled
+              primary made it the loudest thing on the phone's first screen. */}
           <Button
+            variant="outline"
             size="icon"
             className="size-11 shrink-0"
             onClick={onRefresh}
@@ -362,12 +365,24 @@ export function ScheduleControls({
               onClick={onJumpToNow}
               title="Scroll to the current time"
             >
-              ⌖ Jump to now
+              <Crosshair aria-hidden="true" className="size-3.5" />
+              Jump to now
             </Button>
           ) : null}
 
-          <Button size="sm" className="min-h-11 text-[10px] pointer-fine:md:min-h-0" onClick={onRefresh} disabled={loading}>
-            {loading ? '⏳ Loading…' : '↻ Refresh'}
+          <Button
+            variant="outline"
+            size="sm"
+            className="min-h-11 text-[10px] pointer-fine:md:min-h-0"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            {loading ? (
+              <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+            ) : (
+              <RotateCw aria-hidden="true" className="size-3.5" />
+            )}
+            {loading ? 'Loading…' : 'Refresh'}
           </Button>
 
           <Button
@@ -379,6 +394,7 @@ export function ScheduleControls({
             className={cn('min-h-11 text-[10px] pointer-fine:md:min-h-0', activeCount > 0 && 'text-primary')}
             onClick={() => onDrawerOpen(!drawerOpen)}
           >
+            <SlidersHorizontal aria-hidden="true" className="size-3.5" />
             {advFilterLabel(activeCount, drawerOpen) as string}
           </Button>
         </div>

@@ -126,12 +126,17 @@ export function tierNasEventsRaw(nas, hubCodes) {
     else if (sevType === 'GS' || sevType === 'GDP' || sevType === 'AFP') tier = 'active';
     else tier = 'monitoring';
 
-    // "AFTER 1500\t-EWR GROUND STOP…" → title "EWR GROUND STOP…", window "after 1500Z".
-    const after = text.match(/^\s*AFTER\s+(\d{4})Z?\s*-?\s*/i);
+    // "AFTER 1500\t-EWR GROUND STOP…" → title "EWR GROUND STOP…", window "after 1500Z". The
+    // plan words a closing window the same way ("UNTIL 0000\t-MIA/FLL CDRS/SWAP POSSIBLE"), so
+    // that one moves out of the title too, as "until 0000Z".
+    // The prefix leaves the title only when it moves into the detail: with a `time` of its own
+    // the item keeps its words as sent, so no window is dropped.
+    const lead = text.match(/^\s*(AFTER|UNTIL)\s+(\d{4})Z?\s*-?\s*/i);
+    const after = tmi.time ? null : lead;
     /** @type {NasDetailPart[]} */
     const detailParts = [{ kind: 'text', text: 'planned' }];
     if (tmi.time) detailParts.push({ kind: 'text', text: tmi.time });
-    else if (after) detailParts.push({ kind: 'text', text: `after ${after[1]}Z` });
+    else if (after) detailParts.push({ kind: 'text', text: `${after[1].toLowerCase()} ${after[2]}Z` });
 
     items.push({
       tier,
@@ -170,6 +175,60 @@ export function nasCountLine(nas, tiers) {
   if (plannedCount) parts.push(plannedCount + ' planned');
   if (hubCount) parts.push(hubCount + ' hub' + (hubCount !== 1 ? 's' : ''));
   return parts.join(' · ');
+}
+
+/**
+ * The plain English words the FAA's programs and outlooks are written in. Only these are ever
+ * lowered; every other token (an airport, a facility, an acronym like CDRS, SWAP, AR or TMI, a
+ * route like J146) is printed exactly as the FAA sent it.
+ */
+const NAS_PLAIN_WORDS = new Set([
+  'GROUND', 'STOP', 'STOPS', 'DELAY', 'DELAYS', 'PROGRAM', 'PROGRAMS', 'POSSIBLE', 'PROBABLE',
+  'LIKELY', 'EXPECTED', 'ROUTE', 'ROUTES', 'CLOSURE', 'CLOSURES', 'CLOSED', 'ARRIVAL', 'ARRIVALS',
+  'DEPARTURE', 'DEPARTURES', 'UNTIL', 'AFTER', 'BEFORE', 'CODED', 'SEVERE', 'WEATHER', 'AVOIDANCE',
+  'OCEANIC', 'AIRSPACE', 'FLOW', 'MILES', 'MINUTES', 'TRAIL', 'EXPECT', 'CLEARANCE', 'TIME',
+  'CONSTRAINED', 'AREA', 'AREAS', 'SPACING', 'METERING', 'REROUTE', 'REROUTES', 'VOLUME',
+  'CEILINGS', 'THUNDERSTORMS', 'WIND', 'WINDS', 'EQUIPMENT', 'OUTAGE', 'RUNWAY', 'RUNWAYS',
+  'CONSTRUCTION', 'PLAYBOOK', 'ESCAPE', 'CAPPING', 'TUNNELING', 'RESTRICTION', 'RESTRICTIONS',
+  'INITIATIVE', 'INITIATIVES', 'TRAFFIC', 'MANAGEMENT', 'OPERATIONS', 'STAFFING', 'VISIBILITY',
+  'SNOW', 'RAIN', 'DEICING', 'ENROUTE', 'TERMINAL', 'SPECIAL', 'STRATEGY', 'ADVISORY',
+  // Short words: lowered only once the sentence has begun (see below), because a three-letter
+  // word in the leading facility list may be an airport (AND, FOR and THE are all codes).
+  'AND', 'FOR', 'THE', 'WITH', 'FROM', 'INTO', 'OR', 'TO', 'OF', 'IN', 'ON', 'AT', 'VIA', 'LOW', 'FOG', 'ICE',
+]);
+
+/**
+ * A NAS item's title in calm sentence case for the panel: "MIA/FLL GROUND STOP POSSIBLE" reads
+ * "MIA/FLL ground stop possible", "OCEANIC/AR ROUTE CLOSURES POSSIBLE" reads "Oceanic/AR route
+ * closures possible".
+ *
+ * Display only, and case only: it never adds, drops or reorders a character, so
+ * `nasDisplayTitle(t).toUpperCase() === t.toUpperCase()` for every input. A word is lowered only
+ * when it is in `NAS_PLAIN_WORDS`; a short word (under four letters) only after the first long
+ * plain word, so the facility list that opens a planned item ("SEA/BFI …") is never touched.
+ * A first word that is lowered keeps its capital; text that arrived in lower case is left as is.
+ *
+ * @param {string|null|undefined} title  a `tierNasEventsRaw()` title (RAW).
+ * @returns {string}
+ */
+export function nasDisplayTitle(title) {
+  const tokens = String(title ?? '').split(/([A-Za-z]+)/);
+  let begun = false;
+  let out = '';
+  tokens.forEach((token, i) => {
+    // Odd indices are the captured letter runs; even ones the text between them.
+    if (i % 2 === 0) {
+      out += token;
+      return;
+    }
+    const upper = token.toUpperCase();
+    const plain = NAS_PLAIN_WORDS.has(upper);
+    if (plain && upper.length >= 4) begun = true;
+    const lowered = plain && begun;
+    // The sentence's first word, when lowered, keeps its capital.
+    out += lowered ? (i === 1 ? token[0].toUpperCase() + token.slice(1).toLowerCase() : token.toLowerCase()) : token;
+  });
+  return out;
 }
 
 /** True when the NAS panel has nothing to show and must stay hidden (`main.js:3096-3100`). */

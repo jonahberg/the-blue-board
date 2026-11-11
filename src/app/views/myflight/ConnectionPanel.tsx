@@ -169,7 +169,7 @@ export function ManualConnectionCheck({ flights = [] }: { flights?: Flight[] }) 
           aria-label="Inbound flight number"
           placeholder="Inbound UA#"
           // 16px below md: iOS Safari zooms into any focused input smaller than that (F63).
-          className="min-h-11 flex-1 basis-32 font-mono text-base pointer-fine:md:min-h-9 md:text-[11px]"
+          className="min-h-11 min-w-0 flex-1 basis-[calc(50%-0.25rem)] font-mono text-base pointer-fine:md:min-h-9 sm:basis-32 md:text-[11px]"
           value={inbound}
           onChange={(event) => setInbound(event.target.value)}
           onKeyDown={onEnter}
@@ -179,13 +179,15 @@ export function ManualConnectionCheck({ flights = [] }: { flights?: Flight[] }) 
           aria-label="Outbound flight number"
           placeholder="Outbound UA#"
           // 16px below md: iOS Safari zooms into any focused input smaller than that (F63).
-          className="min-h-11 flex-1 basis-32 font-mono text-base pointer-fine:md:min-h-9 md:text-[11px]"
+          className="min-h-11 min-w-0 flex-1 basis-[calc(50%-0.25rem)] font-mono text-base pointer-fine:md:min-h-9 sm:basis-32 md:text-[11px]"
           value={outbound}
           onChange={(event) => setOutbound(event.target.value)}
           onKeyDown={onEnter}
         />
+        {/* Below `sm` the two fields share a row and the button takes the next: three in one
+            row cut "Outbound UA#" to "Outbound UA" at 16 px mono. */}
         <Button
-          className="min-h-11 whitespace-nowrap text-[11px] pointer-fine:md:min-h-9"
+          className="min-h-11 w-full whitespace-nowrap text-xs pointer-fine:md:min-h-9 sm:w-auto md:text-[11px]"
           onClick={() => void check()}
           disabled={state.phase === 'checking'}
         >

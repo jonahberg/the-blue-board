@@ -65,7 +65,7 @@ export const RosterControls = memo(function RosterControls({
         onChange={(event) => onSearch(event.target.value)}
         aria-label="Search Starlink aircraft"
         placeholder="Search tail..."
-        className="h-11 w-full max-w-56 md:h-9"
+        className="h-11 w-full max-w-56 pointer-fine:md:h-9"
       />
 
       <Select
@@ -75,7 +75,7 @@ export const RosterControls = memo(function RosterControls({
         <SelectTrigger
           id="sl-filter-fleet"
           aria-label="Starlink fleet filter"
-          className="h-11! w-36 md:h-9!"
+          className="h-11! w-36 pointer-fine:md:h-9!"
         >
           <SelectValue placeholder="All Fleets" />
         </SelectTrigger>
@@ -90,7 +90,7 @@ export const RosterControls = memo(function RosterControls({
         <SelectTrigger
           id="sl-filter-type"
           aria-label="Starlink type filter"
-          className="h-11! w-36 md:h-9!"
+          className="h-11! w-36 pointer-fine:md:h-9!"
         >
           <SelectValue placeholder="All Types" />
         </SelectTrigger>
@@ -111,7 +111,7 @@ export const RosterControls = memo(function RosterControls({
         <SelectTrigger
           id="sl-filter-operator"
           aria-label="Starlink operator filter"
-          className="h-11! w-48 md:h-9!"
+          className="h-11! w-48 pointer-fine:md:h-9!"
         >
           <SelectValue placeholder="All Operators" />
         </SelectTrigger>
