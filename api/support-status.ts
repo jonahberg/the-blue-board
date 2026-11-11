@@ -13,7 +13,8 @@
 //   person, no dollar totals, no ids.
 // → 200 { configured: false }  when the webhook is not set up (no STRIPE_WEBHOOK_SECRET), the table
 //   is missing (sql/023 not applied yet), or the read fails. The dashboard then shows the plain
-//   $17-a-day ask and makes no coverage claim.
+//   $17-a-day ask and makes no coverage claim, and the flight page keeps its own support sentence
+//   (it reads this once per page view, src/scripts/flight-page.ts).
 //
 // READ WINDOW: the last 400 days of payments (READ_WINDOW_DAYS), allocated in full, so money carried
 // over from earlier months (a $40 gift on Oct 31 covers Nov 1) shows on this month's calendar. A

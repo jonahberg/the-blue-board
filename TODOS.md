@@ -21,7 +21,10 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
 - [x] **Stale FAA programs on the dashboard.** Fixed Nov 10 2026 (`src/lib/faa-freshness.js`):
   `fetchFaa` and the `/newark` widget read the header and `Age`; a program past its own end time
   (plus a 15-minute grace for extensions still in the edge cache) drops out; past 25 minutes nothing from the answer is current (`faaIndex` is empty, so the hub
-  strip, ticker and delay risk agree) and the NAS panel says "FAA status as of HH:MMZ". A stale
+  strip, ticker and delay risk agree) and the NAS panel says "FAA status as of HH:MMZ". Since
+  v1.25.0 an empty index from a stale answer no longer reads as calm: unless something else shows a
+  disruption, the ticker's fallback line and the hub strip's network chip say "FAA status unknown
+  since HH:MM" (local time) instead of "All systems normal" / "Smooth Ops". A stale
   `/api/nas` answer's tiers are not drawn either. After a failed `/api/faa` refresh,
   `src/app/state/weather.tsx` keeps showing the last programs as current, indefinitely. Since
   Nov 2026 the endpoint answers a double upstream failure with its last good answer (up to
@@ -48,7 +51,10 @@ Open work, checked against the code on 2026-11-10. Each entry names the file it 
   else was logged, so the logs do not show which path it was. Fix: derive every deadline from
   the request's start, leave room for the snapshot write, and put timeouts on the Supabase reads
   and writes.
-- [ ] **Two body reads outside their timers.** `api/faa.ts` `fetchDisruptionMap` clears its
+- [x] **Two body reads outside their timers.** Fixed in v1.25.0: both timers now cover the body
+  read (`tests/body-read-timeouts.test.js`), and `/api/schedule`'s stored-snapshot read gets 6 s
+  and serves a copy in memory rather than a metered fetch when it still runs out of time
+  (`tests/schedule-read-timeout.test.js`). Was: `api/faa.ts` `fetchDisruptionMap` clears its
   5-second timer before `upstream.json()`, and `api/_schedule-aerodatabox.ts` `fetchWindow` clears
   its timer before `resp.json()` / `resp.text()`. `/api/schedule` now bounds both from its side
   (the FAA kick and the provider call are raced against the request deadline), but a hung FAA body

@@ -1,9 +1,9 @@
 # The ops brief ("Right now")
 
-**Status:** server side built · **Date:** 2026-11-10 · **UI:** `feat/brief-ui` (the header row, the Live sidebar, the brief sheet; reads `GET /api/brief`)
+**Status:** built, server (v1.24.0) and UI (v1.25.0) · **Date:** 2026-11-10 · **UI:** the row under the header on every tab, open in the Live sidebar at `lg`+, the brief sheet everywhere else (`shell/Ticker.tsx`, `features/BriefPanel.tsx`, `features/BriefSheet.tsx`; reads `GET /api/brief`)
 
-A short written read of United's operation right now, shown to every visitor at the top of the Live
-tab. Every sentence carries the facts it came from, so the UI can show each one as a chip that links
+A short written read of United's operation right now, shown to every visitor in the row under the
+header (and open in full in the Live sidebar on a wide screen). Every sentence carries the facts it came from, so the UI can show each one as a chip that links
 to the hub, row or filter behind it. The model writes the prose; code decides what it may say, checks
 what it said, and writes the brief itself whenever the model can't.
 
@@ -312,9 +312,9 @@ Tested in `tests/brief-radio-cron.test.js`.
   structured fields (the hub's names, the clock computed here, the API's `tags` as words, charted
   `runways`), so a title cannot whitelist a number, airport or runway it contains. The raw response
   stays in `radio_airport_status.payload` (service role only, never served); `ops_briefs.facts` and
-  `GET /api/brief` carry only the sanitized quote, as JSON strings. The future UI must render brief
-  text as text, never as HTML (React does by default); the verifier also drops any item with markup
-  or a URL.
+  `GET /api/brief` carry only the sanitized quote, as JSON strings. The UI renders brief text as
+  text, never as HTML (React does by default; `tests/brief-ui.test.tsx` pins it); the verifier also
+  drops any item with markup or a URL.
 
 Budget: at the default caps the $1,000 credit lasts at least 10 months even if every day were a
 ground-stop day; on ordinary weeks (a few hub programs) it is a few dollars.
