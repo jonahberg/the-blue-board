@@ -544,7 +544,7 @@ export function buildBriefFacts(sources, { nowMs }) {
       const obsMs = Number(rec?.obsTime) > 0 ? Number(rec.obsTime) * 1000 : null;
       if (obsMs !== null && nowMs - obsMs > BRIEF_MAX_METAR_AGE_MS) { skipped.push(`wx.${hub}: observation ${Math.round((nowMs - obsMs) / 60000)} min old`); continue; }
       reporting++;
-      const fact = weatherFact(hub, raw, obsMs ?? nowMs);
+      const fact = weatherFact(hub, raw, obsMs ?? nowMs, skipped);
       if (fact) { facts.push(fact); affected.push(hub); }
     }
     if (reporting > 0) {
@@ -764,8 +764,23 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
   };
 }
 
-/** One fact for a hub whose weather is affecting operations, or null when it is not. */
-function weatherFact(hub, raw, atMs) {
+/**
+ * What each impact level (computeOpsImpact) means for the operation, in words a brief can reuse
+ * without naming the site's own rating. "caution" is marginal weather: it CAN cause delays.
+ */
+const WEATHER_EFFECT = {
+  caution: 'which can cause minor delays',
+  warning: 'enough to slow arrivals and departures',
+  severe: 'enough to slow arrivals and departures significantly',
+};
+
+/**
+ * One fact for a hub whose weather is affecting operations, or null when it is not, or when there
+ * is no condition to name: a "caution" from low clouds over mist or haze alone has no plain name,
+ * and "weather that can slow operations" said nothing. A warning or severe level always names one
+ * (low clouds or visibility, thunderstorms, freezing rain, heavy rain or snow, strong wind).
+ */
+function weatherFact(hub, raw, atMs, skipped) {
   const cat = computeFlightCategory(raw);
   const impact = computeOpsImpact(raw, cat);
   if (impact.level === 'normal') return null;
@@ -789,15 +804,20 @@ function weatherFact(hub, raw, atMs) {
   if (impact.reasons.includes('heavy precipitation')) conditions.push(impact.hasSnow ? 'heavy snow' : 'heavy rain');
   else if (impact.reasons.includes('precipitation') && !impact.hasSnow) conditions.push('rain');
   if (impact.hasFog) conditions.push('fog');
+  // computeOpsImpact reports a steady wind of 30 knots or more without a gust group as "gusts Nkt".
+  const steady = impact.gustKt >= 30 ? null : impact.reasons.map((r) => r.match(/^gusts (\d+)kt$/)).find(Boolean);
   if (impact.gustKt >= 30) { conditions.push(`wind gusting to ${impact.gustKt} knots`); values.push(`${impact.gustKt} knots`); }
-  if (conditions.length === 0) conditions.push('weather that can slow operations');
+  else if (steady) { conditions.push(`wind of ${steady[1]} knots`); values.push(`${steady[1]} knots`); }
+  if (conditions.length === 0) {
+    skipped.push(`wx.${hub}: ${impact.level} with no condition to name (${impact.reasons.join(', ') || 'none'})`);
+    return null;
+  }
   values.push(...conditions);
-  const level = impact.level === 'caution' ? 'minor' : impact.level === 'warning' ? 'significant' : 'severe';
   return {
     id: `wx.${hub}`,
     kind: 'weather',
     hub,
-    statement: `${hubLabel(hub)} weather: ${joinNames(uniq(conditions))}. The Blue Board rates the effect on operations as ${level}.`,
+    statement: `${hubLabel(hub)} weather: ${joinNames(uniq(conditions))}, ${WEATHER_EFFECT[impact.level]}.`,
     values: uniq(values),
     at: iso(atMs),
     link: { tab: 'weather', hub },

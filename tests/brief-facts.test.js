@@ -174,9 +174,31 @@ describe('buildBriefFacts: the catalogue', () => {
   it('reports hub weather that affects operations in plain words, with gusts as printed', () => {
     const { facts } = build(fixture('hub-ground-stop'));
     const wx = byId(facts)['wx.EWR'];
-    expect(wx.statement).toBe('Newark (EWR) weather: low visibility, thunderstorms, heavy rain and wind gusting to 34 knots. The Blue Board rates the effect on operations as significant.');
+    expect(wx.statement).toBe('Newark (EWR) weather: low visibility, thunderstorms, heavy rain and wind gusting to 34 knots, enough to slow arrivals and departures.');
     expect(wx.values).toEqual(expect.arrayContaining(['34 knots', 'thunderstorms', 'weather']));
     expect(byId(facts)['wx.summary'].statement).toBe('Weather is affecting operations at 1 of the 9 United hubs with a current report: Newark.');
+  });
+
+  it('says what each weather level does to the operation, never the site’s own rating', () => {
+    const fx = fixture('overnight-low-traffic');
+    const at = (raw) => {
+      const metar = fx.sources.metar.map((m) => (m.icaoId === 'KDEN' ? { ...m, rawOb: raw } : m));
+      return build(fx, { metar });
+    };
+    expect(byId(build(fx).facts)['wx.SFO'].statement)
+      .toBe('San Francisco (SFO) weather: very low clouds, very low visibility and fog, enough to slow arrivals and departures significantly.');
+    // A steady 42-knot wind with no gust group is a warning, and it is named.
+    const wind = byId(at('METAR KDEN 110853Z 27042KT 10SM CLR 07/M08 A3021 RMK AO2').facts)['wx.DEN'];
+    expect(wind.statement).toBe('Denver (DEN) weather: wind of 42 knots, enough to slow arrivals and departures.');
+    expect(wind.values).toContain('42 knots');
+    // Light rain is a caution: it can cause delays.
+    expect(byId(at('METAR KDEN 110853Z 18006KT 10SM -RA BKN040 07/05 A3021 RMK AO2').facts)['wx.DEN'].statement)
+      .toBe('Denver (DEN) weather: rain, which can cause minor delays.');
+    // Low scattered cloud over mist is a caution with nothing to name: no fact, and the reason why.
+    const mist = at('METAR KDEN 110853Z 18006KT 6SM BR FEW008 07/05 A3021 RMK AO2');
+    expect(byId(mist.facts)['wx.DEN']).toBeUndefined();
+    expect(mist.collection.skipped).toContain('wx.DEN: caution with no condition to name (low clouds with active weather)');
+    expect(mist.facts.every((f) => !/weather that can slow|rates the effect/.test(f.statement))).toBe(true);
   });
 
   it('compares the airborne count with the median for this time of day', () => {
