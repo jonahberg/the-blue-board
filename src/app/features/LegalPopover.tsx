@@ -1,5 +1,5 @@
 /**
- * The ⓘ menu: About, legal, donate, the hub pages and the cost meter (inventory §13).
+ * The ⓘ menu: About, legal, "Help cover a day", the hub pages and the cost meter (inventory §13).
  *
  * WHERE this lives is a bug fix, not a preference. The shipped `#legal-details` was
  * `position: fixed` in the map's bottom-right corner, which is where Leaflet mounts its
@@ -20,6 +20,7 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { HELP_COVER_LABEL } from '@/lib/cover-a-day.js';
 import { supportUrl } from '@/lib/support-link.js';
 import { useUi } from '../state/ui';
 import { SupportMeter } from './SupportMeter';
@@ -70,8 +71,8 @@ export function LegalMenu() {
           variant="ghost"
           size="sm"
           className="h-6 w-6 shrink-0 p-0 text-sm"
-          title="About · Legal · Donate"
-          aria-label="About, legal and donate links"
+          title={`About · Legal · ${HELP_COVER_LABEL}`}
+          aria-label={`About, legal and ${HELP_COVER_LABEL.toLowerCase()} links`}
         >
           ⓘ
         </Button>
@@ -99,7 +100,7 @@ export function LegalMenu() {
           </a>
           <Ext href="https://github.com/jonahberg/the-blue-board/issues">Support / Feedback</Ext>
           <Ext href={supportUrl('legal-menu')} support="legal-menu" className="font-semibold text-primary underline-offset-2 hover:underline">
-            Donate
+            {HELP_COVER_LABEL}
           </Ext>
           <Ext href="https://x.com/theblueboard">@theblueboard</Ext>
         </div>

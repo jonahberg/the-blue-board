@@ -1,14 +1,18 @@
 /**
  * "Cover a day" in the About dialog (Nov 2026): this month as a calendar of small day cells
- * (covered / open, today marked), one line of truth about today, and the button.
+ * (covered / open, today marked), the month in one sentence, one line of truth about today, the
+ * day button and the amount ladder.
  *
- * Everything shown is true or absent. The calendar and the line come from /api/support-status
+ * Everything shown is true or absent. The calendar and the lines come from /api/support-status
  * (`state/support-status.ts`), read only once the dialog opens. Until it answers, or if it
  * answers `{configured:false}` (no webhook yet, no table, a failed read, a stale date), this
- * shows only the plain ask: what the site costs and "Cover a day · $17", with no coverage claim.
- * A payment covers the day it is given, or the next open day after it (src/lib/cover-a-day.js),
- * so the button names that day ("Cover today", "Cover tomorrow", "Cover the next open day") and
- * the note under the calendar states the rule.
+ * shows only the plain ask: what the site costs and "Help cover a day" (the any-amount link), with
+ * no coverage claim. A payment covers the day it is given, or the next open day after it
+ * (src/lib/cover-a-day.js), so the button names that day ("Cover today · $17", "Cover tomorrow ·
+ * $17", "Cover Nov 15 · $17", to the fixed $17 link) and the note under the calendar states the
+ * rule. Under the button sits the amount ladder (`supportLadder`: one button per amount with a
+ * fixed link, then "Other amount"; absent when no amount has a link) and the line that a name can
+ * be added at checkout. Every word comes from src/lib/cover-a-day.js.
  *
  * Covered vs open is never colour alone: a covered cell is filled and an open one is a dashed
  * outline; today wears a ring; there is a legend with words; and each cell carries its own
@@ -21,18 +25,19 @@ import { ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
+  ABOUT_INTRO_LINE,
   COVER_RULE_LINE,
-  DAILY_COST_USD,
-  MONTHLY_COST_USD,
+  NAME_LINE,
   calendarCells,
+  coverButtonHref,
   coverButtonLabel,
   coverageRuns,
-  coveredCountLine,
-  monthFullyCovered,
+  monthLine,
   monthName,
+  supportLadder,
   todayLine,
 } from '@/lib/cover-a-day.js';
-import { hasMonthlySupport, monthlySupportUrl, supportUrl } from '@/lib/support-link.js';
+import { hasMonthlySupport, monthlySupportUrl } from '@/lib/support-link.js';
 import { useSupportStatus } from '../state/support-status';
 import type { SupportStatus } from '../state/support-status';
 
@@ -53,9 +58,10 @@ export function CoverADay({ active }: { active: boolean }) {
   const status = loaded ?? UNKNOWN;
   const calendar = status.configured ? calendarCells(status) : null;
   const line = todayLine(status);
-  const full = monthFullyCovered(status);
+  const month = monthLine(status);
   const runs = coverageRuns(status);
   const monthly = hasMonthlySupport() ? monthlySupportUrl('about-monthly') : null;
+  const ladder = supportLadder('about');
 
   return (
     <section aria-labelledby="cover-a-day-heading" className="rounded-md border p-3.5">
@@ -65,18 +71,13 @@ export function CoverADay({ active }: { active: boolean }) {
       >
         Cover a day
       </h3>
-      <p className="mt-1.5">
-        {`The Blue Board is free, with no ads. It costs about $${MONTHLY_COST_USD} a month to run, about $${DAILY_COST_USD} a day.`}
-      </p>
+      <p className="mt-1.5">{ABOUT_INTRO_LINE}</p>
 
       {status.configured && calendar ? (
         <div className="mt-3 max-w-[18rem]">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="font-semibold">
-              {monthName(status.month)} {status.year}
-            </p>
-            <p className="font-mono text-[10px] tabular-nums text-muted-foreground">{coveredCountLine(status)}</p>
-          </div>
+          <p className="font-semibold">
+            {monthName(status.month)} {status.year}
+          </p>
           <div aria-hidden="true" className="mt-1.5 grid grid-cols-7 gap-1 text-center font-mono text-[10px] text-muted-foreground">
             {WEEKDAYS.map((d, i) => (
               <span key={i}>{d}</span>
@@ -108,14 +109,12 @@ export function CoverADay({ active }: { active: boolean }) {
       ) : null}
 
       {line ? <p className="mt-3 text-xs font-semibold">{line}</p> : null}
-      {full && status.configured ? (
-        <p className="mt-1">Every day in {monthName(status.month)} is covered. Thank you.</p>
-      ) : null}
+      {month ? <p className="mt-1">{month}</p> : null}
       {status.configured ? <p className="mt-1 text-muted-foreground">{COVER_RULE_LINE}</p> : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button asChild className="min-h-11 pointer-fine:md:min-h-9">
-          <a href={supportUrl('about')} target="_blank" rel="noopener noreferrer" data-support="about">
+          <a href={coverButtonHref(status, 'about')} target="_blank" rel="noopener noreferrer" data-support="about">
             {coverButtonLabel(status)}
           </a>
         </Button>
@@ -127,6 +126,28 @@ export function CoverADay({ active }: { active: boolean }) {
           </Button>
         ) : null}
       </div>
+
+      {ladder ? (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5" data-support-ladder>
+          {ladder.amounts.map((step) => (
+            <Button key={step.amount} asChild variant="outline" size="sm" className="min-h-11 px-3 text-xs pointer-fine:md:min-h-8">
+              <a href={step.href} target="_blank" rel="noopener noreferrer" data-support={step.placement}>
+                {step.text}
+              </a>
+            </Button>
+          ))}
+          <a
+            href={ladder.other.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-support={ladder.other.placement}
+            className="inline-flex min-h-11 items-center px-1 text-xs text-primary underline underline-offset-2 pointer-fine:md:min-h-8"
+          >
+            {ladder.other.text}
+          </a>
+        </div>
+      ) : null}
+      <p className="mt-2 text-muted-foreground">{NAME_LINE}</p>
 
       {runs.length ? (
         <details className="group mt-3">

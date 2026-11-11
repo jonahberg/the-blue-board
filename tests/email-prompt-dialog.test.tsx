@@ -67,8 +67,11 @@ function tree(extra: React.ReactNode = null) {
 const mount = (extra: React.ReactNode = null) => render(tree(extra));
 
 const emailDialog = () => screen.queryByRole('dialog', { name: /Stay in the loop/ });
-/** The support ask: since Nov 2026 a strip in the engagement slot, not a dialog. */
-const supportAsk = () => screen.queryByRole('link', { name: /Cover a day/ });
+/**
+ * The support ask: since Nov 2026 a strip in the engagement slot, not a dialog. Its words name a
+ * day or say "Help cover a day", so it is found by its placement.
+ */
+const supportAsk = () => document.querySelector<HTMLAnchorElement>('a[data-support="deep-use-prompt"]');
 const waitlistPosts = () => fetchMock.mock.calls.filter(([url]) => url === '/api/waitlist');
 const strip = () => screen.queryByRole('button', { name: 'Get updates' });
 const emailEvents = () => track.mock.calls.filter(([name]) => name === 'email_prompt').map(([, data]) => data.action);

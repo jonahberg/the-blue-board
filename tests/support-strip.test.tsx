@@ -36,7 +36,7 @@ import {
 } from '../src/lib/donate-prompt.js';
 import { EMAIL_PROMPT_STORAGE_KEY, emailPromptRecord } from '../src/lib/email-prompt.js';
 import { TRIGGER_TIME_MS } from '../src/lib/engagement.js';
-import { supportUrl } from '../src/lib/support-link.js';
+import { supportAmountUrl, supportUrl } from '../src/lib/support-link.js';
 import { FLIGHT_COUNT_STORAGE_KEY, localMonthKey } from '../src/lib/usage-count.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -106,6 +106,12 @@ const stripText = () => ask()?.closest('[data-no-engagement]')?.querySelector('p
 const phoneText = () =>
   [...(ask()?.closest('[data-no-engagement]')?.querySelector('p')?.children ?? [])]
     .filter((el) => !el.classList.contains('hidden'))
+    .map((el) => el.textContent)
+    .join('');
+/** What a wide screen shows: the paragraph without its phone-only part. */
+const wideText = () =>
+  [...(ask()?.closest('[data-no-engagement]')?.querySelector('p')?.children ?? [])]
+    .filter((el) => !el.classList.contains('sm:hidden'))
     .map((el) => el.textContent)
     .join('');
 const donateEvents = () => track.mock.calls.filter(([name]) => name === 'donate_prompt').map(([, data]) => data.action);
@@ -211,38 +217,46 @@ describe('SupportStrip — the moment and the manners it kept', () => {
 });
 
 describe('SupportStrip — the words are true or absent', () => {
-  it('unknown status (no webhook yet, or the request fails): the plain ask, "Cover a day", no coverage claim', async () => {
+  it('unknown status (no webhook yet, or the request fails): the core line, "Help cover a day", no coverage claim', async () => {
     statusOk = false;
     render(tree());
     await reachDeepUse();
-    expect(stripText()).toContain('$17 keeps The Blue Board running for a day.');
+    expect(wideText()).toBe('The Blue Board is free because flyers cover it, one day at a time. $17 covers a full day; any amount helps.');
+    expect(phoneText()).toBe('Free because flyers cover it, a day at a time.');
     expect(stripText()).not.toMatch(/covered/);
-    expect(ask()!.textContent).toBe('Cover a day · $17');
+    expect(ask()!.textContent).toBe('Help cover a day');
+    expect(ask()!.getAttribute('href')).toBe(supportUrl('deep-use-prompt'));
   });
 
   it('today not covered (an earlier day covered is not today): "Cover today"', async () => {
     statusBody = supportStatusFromRows([pay(17)], NOW);
     render(tree());
     await reachDeepUse();
-    expect(stripText()).toContain("Today isn't covered yet. $17 keeps The Blue Board running for a day.");
-    expect(phoneText()).toBe("Today isn't covered yet.");
+    expect(wideText()).toBe('The Blue Board is free because flyers cover it, one day at a time. No one has covered today yet.');
+    expect(phoneText()).toBe('No one has covered today yet.');
     expect(ask()!.textContent).toBe('Cover today · $17');
+    expect(ask()!.getAttribute('href')).toBe(supportAmountUrl(17, 'deep-use-prompt'));
+    expect(ask()!.getAttribute('data-support')).toBe('deep-use-prompt');
   });
 
   it('today covered: a thank-you and "Cover tomorrow"', async () => {
     statusBody = supportStatusFromRows([pay(17, { display_name: 'Dana R.', paid_at: '2026-11-10T15:00:00Z' })], NOW);
     render(tree());
     await reachDeepUse();
-    expect(stripText()).toContain('Today is covered, thanks to Dana R. $17 keeps The Blue Board running tomorrow.');
+    expect(wideText()).toBe('Today is covered, thanks to Dana R. Tomorrow is still open.');
+    expect(phoneText()).toBe('Today is covered. Tomorrow is still open.');
     expect(ask()!.textContent).toBe('Cover tomorrow · $17');
+    expect(ask()!.getAttribute('href')).toBe(supportAmountUrl(17, 'deep-use-prompt'));
   });
 
-  it('today and tomorrow covered: "Cover the next open day"', async () => {
+  it('today and tomorrow covered: names the next open day, "Cover Nov 13"', async () => {
     statusBody = supportStatusFromRows([pay(17 * 3, { paid_at: '2026-11-10T15:00:00Z' })], NOW);
     render(tree());
     await reachDeepUse();
-    expect(stripText()).toContain('$17 covers the next open day, Nov 13.');
-    expect(ask()!.textContent).toBe('Cover the next open day · $17');
+    expect(wideText()).toBe('Today is covered, thanks to a supporter. The next open day is Nov 13.');
+    expect(phoneText()).toBe('Covered through Nov 12.');
+    expect(ask()!.textContent).toBe('Cover Nov 13 · $17');
+    expect(ask()!.getAttribute('href')).toBe(supportAmountUrl(17, 'deep-use-prompt'));
   });
 
   it('today and the next 14 days covered: no strip, and no `shown`', async () => {
@@ -257,7 +271,7 @@ describe('SupportStrip — the words are true or absent', () => {
     statusBody = supportStatusFromRows([pay(17 * 10)], NOW - DAY);
     render(tree());
     await reachDeepUse();
-    expect(stripText()).toContain('$17 keeps The Blue Board running for a day.');
+    expect(stripText()).toContain('$17 covers a full day; any amount helps.');
     expect(stripText()).not.toMatch(/covered/);
   });
 });
