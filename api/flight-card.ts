@@ -42,11 +42,22 @@ function loadFonts() {
   return fonts;
 }
 
+/** resvg's WebAssembly: read like the fonts (a literal path beside this file's tree, also named in
+ *  vercel.json `includeFiles`), with the package resolver as a fallback. */
+function readResvgWasm(): Buffer {
+  try {
+    return readFileSync(new URL('../node_modules/@resvg/resvg-wasm/index_bg.wasm', import.meta.url));
+  } catch {
+    const requireWasm = createRequire(import.meta.url);
+    return readFileSync(requireWasm.resolve('@resvg/resvg-wasm/index_bg.wasm'));
+  }
+}
+
 // resvg's WebAssembly is initialised once per instance (a second initWasm throws).
 let wasmReady: Promise<void> | null = null;
 function ensureWasm(): Promise<void> {
   if (!wasmReady) {
-    const wasm = readFileSync(createRequire(import.meta.url).resolve('@resvg/resvg-wasm/index_bg.wasm'));
+    const wasm = readResvgWasm();
     wasmReady = initWasm(wasm).catch((err) => {
       wasmReady = null;
       throw err;

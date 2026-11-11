@@ -83,12 +83,14 @@ export function __resetFlightForTests(): void {
   rosterMemo = null;
 }
 
-// Loaded lazily via createRequire, never a bare JSON import (api/starlink-data.ts explains why);
-// @vercel/nft traces the literal paths into the bundle.
+// Loaded lazily via createRequire, never a bare JSON import (api/starlink-data.ts explains why), in
+// the exact shape that file uses (a const-bound require, a literal path) so @vercel/nft traces it;
+// vercel.json `includeFiles` names both files as well, so a missed trace cannot drop them.
 function loadFleet(): any[] {
   if (fleetCache) return fleetCache;
   try {
-    const data = createRequire(import.meta.url)('../public/data/fleet.json');
+    const requireJson = createRequire(import.meta.url);
+    const data = requireJson('../public/data/fleet.json');
     fleetCache = Array.isArray(data) ? data : [];
   } catch (err: any) {
     console.error('flight: fleet data unavailable:', err?.message || err);
@@ -100,7 +102,8 @@ function loadFleet(): any[] {
 function loadStaticRoster(): any[] {
   if (staticRosterCache) return staticRosterCache;
   try {
-    const data = createRequire(import.meta.url)('../public/data/starlink.json');
+    const requireJson = createRequire(import.meta.url);
+    const data = requireJson('../public/data/starlink.json');
     staticRosterCache = Array.isArray(data) ? data : [];
   } catch {
     staticRosterCache = [];

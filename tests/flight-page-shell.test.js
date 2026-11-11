@@ -220,11 +220,33 @@ describe('vercel.json routing for flight pages', () => {
     expect(rewriteIndex).toBeGreaterThan(fsIndex);
   });
 
-  it('bundles the built shell and the card fonts into their functions', () => {
+  it('bundles the built shell, the fleet files, the card fonts and the resvg wasm into their functions', () => {
     expect(vercelJson.functions['api/flight-page.ts'].includeFiles).toBe('dist/flight.html');
-    expect(vercelJson.functions['api/flight-card.ts'].includeFiles).toBe('api/_flight-card/*.ttf');
+    expect(vercelJson.functions['api/flight.ts'].includeFiles).toBe('public/data/{fleet,starlink}.json');
+    // The card imports api/flight.ts (loadFlightPayload), so it needs the fleet files too.
+    expect(vercelJson.functions['api/flight-card.ts'].includeFiles).toBe(
+      '{api/_flight-card/*.ttf,node_modules/@resvg/resvg-wasm/index_bg.wasm,public/data/{fleet,starlink}.json}',
+    );
+    for (const file of ['public/data/fleet.json', 'public/data/starlink.json', 'node_modules/@resvg/resvg-wasm/index_bg.wasm']) {
+      expect(existsSync(join(ROOT, file)), file).toBe(true);
+    }
     expect(existsSync(join(ROOT, 'api/_flight-card/GeistMono-SemiBold.ttf'))).toBe(true);
     expect(existsSync(join(ROOT, 'api/_flight-card/Geist-Medium.ttf'))).toBe(true);
+  });
+
+  // REQUIRED INTEGRATION PATCH (middleware.ts is not this branch's file): the Markdown-negotiation
+  // middleware matches /flight/UA929/card.png and answers 406 to an image-only Accept, so an image
+  // proxy that asks for `image/png` or `image/*` gets no card. Excluding the card path from the
+  // matcher fixes it. This test is marked `fails` so the suite stays green and FLIPS (fails) the
+  // moment middleware.ts excludes the path — then drop `.fails`.
+  it.fails('the share card is not negotiated by the Markdown middleware (needs the middleware.ts matcher patch)', async () => {
+    const { config } = await import('../middleware.ts');
+    const { resolveAgentResponse } = await import('../src/lib/agent-negotiation.js');
+    const matched = config.matcher.some((m) => new RegExp(`^${m}$`).test('/flight/UA929/card.png'));
+    for (const accept of ['image/png', 'image/*']) {
+      const decision = matched ? resolveAgentResponse({ pathname: '/flight/UA929/card.png', accept }).kind : 'not-matched';
+      expect(decision, accept).not.toBe('not-acceptable');
+    }
   });
 
   it('keeps flight pages out of the sitemap', () => {
