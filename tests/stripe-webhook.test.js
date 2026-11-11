@@ -20,6 +20,8 @@ import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { supportUrl } from '../src/lib/support-link.js';
+
 const db = vi.hoisted(() => ({ rows: [], fail: null, calls: [] }));
 
 vi.mock('../api/_supabase.js', () => ({
@@ -97,7 +99,8 @@ function sessionEvent({ type = 'checkout.session.completed', livemode = true, id
         currency: 'usd',
         payment_intent: 'pi_3Cover',
         payment_link: 'plink_1Support',
-        client_reference_id: null,
+        // supportUrl() puts the placement label here (src/lib/support-link.js).
+        client_reference_id: 'deep-use-prompt',
         metadata: {},
         customer: 'cus_Secret',
         customer_email: 'dana@example.com',
@@ -374,7 +377,7 @@ describe('the handler', () => {
       currency: 'usd',
       paid_at: new Date(1_794_250_000 * 1000).toISOString(),
       livemode: true,
-      placement: null,
+      placement: 'deep-use-prompt',
       recurring: false,
       display_name: 'Dana R.',
     });
@@ -472,10 +475,15 @@ describe('fields read defensively', () => {
     expect(displayNameFromSession({ custom_fields: [{ key: 'displayname', type: 'text', text: { value: 'é'.repeat(150) } }] })).toHaveLength(100);
   });
 
-  it('takes a placement only from where Stripe documents one can arrive, and only label-shaped', () => {
+  it('stores the client_reference_id supportUrl() sets as the placement, only if it passes the helper\'s rule', () => {
     expect(placementFromSession({ client_reference_id: 'deep-use-prompt' })).toBe('deep-use-prompt');
-    expect(placementFromSession({ metadata: { utm_content: 'about' } })).toBe('about');
-    expect(placementFromSession({ client_reference_id: 'has spaces', metadata: { utm_content: '<b>' } })).toBeNull();
+    const fromLink = new URL(supportUrl('landed-toast')).searchParams.get('client_reference_id');
+    expect(placementFromSession({ client_reference_id: fromLink })).toBe('landed-toast');
+    for (const bad of ['has spaces', '<b>', 'x'.repeat(41), '', 42, null]) {
+      expect(placementFromSession({ client_reference_id: bad })).toBeNull();
+    }
+    // UTM codes are not on the session; nothing else is read.
+    expect(placementFromSession({ metadata: { utm_content: 'about' } })).toBeNull();
     expect(placementFromSession({})).toBeNull();
   });
 

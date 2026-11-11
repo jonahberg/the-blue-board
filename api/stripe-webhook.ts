@@ -24,7 +24,7 @@
 // installed @vercel/node `restoreBody` over a real HTTP request to prove it.
 //
 // STORED: event id, session id, payment intent id, Payment Link id, amount (cents), currency, paid
-// time (the event's `created`), live/test, placement (only if Stripe hands one back on the session),
+// time (the event's `created`), live/test, placement (the link's `client_reference_id`, src/lib/support-link.js),
 // recurring, refund state, and the display name from the Payment Link's custom text field
 // (STRIPE_NAME_FIELD_KEY, default `displayname`). NEVER stored or logged: the email address, the
 // customer, card or billing details, or the payload itself.
@@ -38,6 +38,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import type { VercelRequest, VercelResponse } from './_types.js';
 import { getSupabase } from './_supabase.js';
+import { PLACEMENT_LABEL_RE } from '../src/lib/support-link.js';
 import { collapseWhitespace } from '../src/lib/supporter-name.js';
 
 export const SIGNATURE_TOLERANCE_SEC = 5 * 60;
@@ -48,7 +49,6 @@ export const DEFAULT_NAME_FIELD_KEY = 'displayname';
 export const SUPPORTER_TABLE = 'supporter_payments';
 
 const SESSION_EVENTS = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded']);
-const PLACEMENT_RE = /^[A-Za-z0-9_-]{1,40}$/;
 const NAME_MAX = 100;
 
 export class BodyError extends Error {
@@ -160,16 +160,15 @@ export function displayNameFromSession(session: any, key: string = nameFieldKey(
 }
 
 /**
- * The placement label, ONLY if Stripe hands one back on the session. Stripe documents a Payment
- * Link's UTM codes on the after-payment redirect URL, not on the session, so this reads the two
- * places a label can legitimately arrive (`client_reference_id`, `metadata.utm_content`) and is
- * usually null.
+ * The placement label: the `client_reference_id` that `supportUrl()` (src/lib/support-link.js)
+ * puts on every donate link, kept only if it passes the same rule the helper applies
+ * (`PLACEMENT_LABEL_RE`). Stripe documents a Payment Link's UTM codes on the after-payment
+ * redirect URL, not on the session, which is why the label travels this way. Null for a link
+ * opened without one (an old bookmark, a bare link).
  */
 export function placementFromSession(session: any): string | null {
-  for (const candidate of [session?.client_reference_id, session?.metadata?.utm_content]) {
-    if (typeof candidate === 'string' && PLACEMENT_RE.test(candidate)) return candidate;
-  }
-  return null;
+  const candidate = session?.client_reference_id;
+  return typeof candidate === 'string' && PLACEMENT_LABEL_RE.test(candidate) ? candidate : null;
 }
 
 const idOf = (value: any, prefix: string): string | null => {

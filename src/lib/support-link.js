@@ -13,7 +13,14 @@
  * `utm_content=footer` on the payment, `from: footer` in Web Analytics. A payment can then be
  * traced to the placement that led to it. Pass the SAME label to both.
  *
- * DOM-free and import-free, because api/waitlist.ts imports it.
+ * Stripe documents UTM codes only on the after-payment redirect URL, not on the Checkout Session,
+ * so since Nov 10 2026 the label also rides as `client_reference_id`, which Stripe copies onto
+ * the session and sends in `checkout.session.completed`. api/stripe-webhook.ts stores it as the
+ * payment's `placement`. Stripe silently drops a client_reference_id that is not letters, digits,
+ * `-` or `_`, so it is added only when the label passes `PLACEMENT_LABEL_RE` (every label on the
+ * site does); the UTM parameters are unchanged either way.
+ *
+ * DOM-free and import-free, because api/waitlist.ts and api/stripe-webhook.ts import it.
  */
 
 /** The Stripe Payment Link ("Support The Blue Board", choose what to pay). The path is case-sensitive. */
@@ -23,6 +30,12 @@ export const SUPPORT_UTM_SOURCE = 'theblueboard';
 
 /** `site`: a link on theblueboard.co. `email`: a link in an email. `github`: the README. */
 export const SUPPORT_MEDIA = /** @type {const} */ (['site', 'email', 'github']);
+
+/**
+ * What a placement label must look like to travel as Stripe's `client_reference_id` (and to be
+ * stored as `placement`, sql/023): letters, digits, `-`, `_`, at most 40 characters.
+ */
+export const PLACEMENT_LABEL_RE = /^[A-Za-z0-9_-]{1,40}$/;
 
 /**
  * The donation link for one placement.
@@ -40,6 +53,7 @@ export function supportUrl(placement, { medium = 'site' } = {}) {
   url.searchParams.set('utm_source', SUPPORT_UTM_SOURCE);
   url.searchParams.set('utm_medium', SUPPORT_MEDIA.includes(medium) ? medium : 'site');
   url.searchParams.set('utm_content', label);
+  if (PLACEMENT_LABEL_RE.test(label)) url.searchParams.set('client_reference_id', label);
   return url.toString();
 }
 
@@ -71,5 +85,6 @@ export function monthlySupportUrl(placement, { medium = 'site' } = {}) {
   url.searchParams.set('utm_source', SUPPORT_UTM_SOURCE);
   url.searchParams.set('utm_medium', SUPPORT_MEDIA.includes(medium) ? medium : 'site');
   url.searchParams.set('utm_content', label);
+  if (PLACEMENT_LABEL_RE.test(label)) url.searchParams.set('client_reference_id', label);
   return url.toString();
 }

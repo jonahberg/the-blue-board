@@ -53,9 +53,9 @@ create table if not exists public.supporter_payments (
   -- When Stripe reported the payment (the event's `created`). Decides the month and the order.
   paid_at               timestamptz not null,
   livemode              boolean not null,
-  -- The placement label, when Stripe hands one back on the session (client_reference_id or
-  -- metadata.utm_content). Stripe documents UTM codes only on the after-payment redirect URL, so
-  -- this is usually null.
+  -- The placement label (the `data-support` label of the link that was followed), carried as the
+  -- session's client_reference_id by supportUrl() in src/lib/support-link.js. Null for a link
+  -- opened without one.
   placement             text check (placement is null or placement ~ '^[A-Za-z0-9_-]{1,40}$'),
   -- The session was a subscription (mode = 'subscription').
   recurring             boolean not null default false,
