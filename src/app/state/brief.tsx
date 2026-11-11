@@ -4,14 +4,16 @@
  *
  * Polling policy (rule: never show old text as current):
  *  - on mount, every 2 minutes while the tab is visible, and the moment it becomes visible again;
- *  - a failed fetch makes the brief unavailable until a later one succeeds. The header row then
- *    shows the rotating ticker, the sidebar panel goes away and an open sheet closes;
+ *  - a failed fetch keeps the last good response, which is still judged by the clock rule: a brief
+ *    stays up through a blip only while its `checkedAt` is under 30 minutes old. Only a successful
+ *    answer of no-brief or stale, or the brief ageing out, brings the ticker back (and takes the
+ *    sidebar panel away and closes an open sheet). A first load that fails shows the ticker;
  *  - staleness is re-checked against the clock on every tick and on return to the tab
  *    (`briefViewState`, src/lib/brief-view.js), BEFORE the refetch answers, so a brief left in a
  *    background tab for hours never flashes back as "right now".
  *
- * Not `useJson`: that hook keeps the last good data through a failure and does not refetch on
- * becoming visible, which are exactly the two things this feed must not do.
+ * Not `useJson`: it does not refetch on becoming visible, and it has no clock rule for the data
+ * it keeps through a failure.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';

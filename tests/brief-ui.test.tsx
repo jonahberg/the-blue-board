@@ -190,8 +190,31 @@ describe('the header row', () => {
     expect(container.querySelector('#brief-panel')).toBeNull();
   });
 
-  it('a later failed fetch takes a shown brief down rather than leaving old text up', async () => {
-    serve(body('calm-afternoon'), 'fail');
+  it('a failed refresh keeps a brief that is still current, until it ages out', async () => {
+    // Checked 2 minutes ago, then every poll fails.
+    serve(body('calm-afternoon', { agoMs: 2 * 60_000 }), 'fail');
+    mount();
+    await settle();
+    expect(screen.getByRole('button', { name: /full brief/i })).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * 60_000 + 10);
+    });
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole('button', { name: /full brief/i })).toBeTruthy();
+    // 26 minutes after the first load the brief is 28 minutes old: still current.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(24 * 60_000);
+    });
+    expect(screen.getByRole('button', { name: /full brief/i })).toBeTruthy();
+    // Past 30 minutes since checkedAt, with no good answer since: the ticker returns.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4 * 60_000);
+    });
+    expect(screen.queryByRole('button', { name: /full brief/i })).toBeNull();
+  });
+
+  it('a successful answer of no-brief or stale takes a shown brief down at once', async () => {
+    serve(body('calm-afternoon'), briefResponseBody(null, Date.now()));
     mount();
     await settle();
     expect(screen.getByRole('button', { name: /full brief/i })).toBeTruthy();

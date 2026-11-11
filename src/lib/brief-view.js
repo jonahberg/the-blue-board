@@ -3,11 +3,14 @@
 // around it. DOM-free (the components in src/app/features/Brief*.tsx only render this).
 //
 // The truthfulness rules live here, not in the components:
-//   - no brief, a failed fetch, a malformed body or a brief the server calls `stale` → nothing
-//     to show, and the header row falls back to the rotating ticker;
+//   - a successful response with no brief, a malformed body or a brief the server calls `stale`
+//     → nothing to show, and the header row falls back to the rotating ticker;
 //   - a brief whose `checkedAt` is more than 30 minutes old BY THE VISITOR'S CLOCK is stale too,
 //     whatever the response said: a body can sit in the CDN for minutes and in a backgrounded tab
-//     for hours, and it must not come back to the screen as "right now".
+//     for hours, and it must not come back to the screen as "right now";
+//   - a FAILED fetch changes nothing by itself: the last good response is judged by the same
+//     clock rule, so a brief that is still current stays up through a blip and ages out on time.
+//     A first load that fails has no response, and shows the ticker.
 // Brief text is only ever rendered as React text children (never as HTML).
 
 /** Mirrors BRIEF_STALE_AFTER_MS in api/brief.ts (pinned by tests/brief-view.test.js). */
@@ -44,13 +47,13 @@ function readItem(raw) {
 
 /**
  * What to show for this response at this moment.
- * @param {any} payload  the last /api/brief body, or null before the first answer
- * @param {{error?: boolean, nowMs: number}} options  `error`: the latest fetch failed
+ * @param {any} payload  the last SUCCESSFUL /api/brief body, or null before the first one
+ * @param {{error?: boolean, nowMs: number}} options  `error`: the latest fetch failed. It matters
+ *   only while there is no successful body yet; after that the body is judged on its own clock.
  * @returns {BriefReady|BriefUnavailable}
  */
 export function briefViewState(payload, { error = false, nowMs }) {
-  if (error) return { status: 'unavailable', reason: 'error' };
-  if (payload == null) return { status: 'unavailable', reason: 'loading' };
+  if (payload == null) return { status: 'unavailable', reason: error ? 'error' : 'loading' };
   if (typeof payload !== 'object') return { status: 'unavailable', reason: 'invalid' };
   const brief = payload.brief;
   if (brief == null) return { status: 'unavailable', reason: 'none' };

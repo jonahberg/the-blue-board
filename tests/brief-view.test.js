@@ -58,11 +58,19 @@ describe('briefViewState', () => {
     expect(view.hasRadio).toBe(false);
   });
 
-  it('no brief, a failed fetch and nothing-yet are each "unavailable", never a stale brief shown as current', () => {
+  it('no brief, nothing yet and a first load that failed are each "unavailable"', () => {
     expect(briefViewState(briefResponseBody(null, NOW), { nowMs: NOW })).toEqual({ status: 'unavailable', reason: 'none' });
     expect(briefViewState(null, { nowMs: NOW })).toEqual({ status: 'unavailable', reason: 'loading' });
+    expect(briefViewState(null, { error: true, nowMs: NOW })).toEqual({ status: 'unavailable', reason: 'error' });
+  });
+
+  it('a failed refresh keeps the last good brief only while it is still current by the visitor clock', () => {
     const fresh = briefResponseBody(rowFor('calm-afternoon', { generatedMs: NOW - 60_000 }), NOW);
-    expect(briefViewState(fresh, { error: true, nowMs: NOW })).toEqual({ status: 'unavailable', reason: 'error' });
+    expect(briefViewState(fresh, { error: true, nowMs: NOW }).status).toBe('ready');
+    expect(briefViewState(fresh, { error: true, nowMs: NOW + 28 * 60_000 }).status).toBe('ready');
+    expect(briefViewState(fresh, { error: true, nowMs: NOW + 30 * 60_000 })).toEqual({ status: 'unavailable', reason: 'stale' });
+    // The last SUCCESSFUL answer said no brief: a failure after it does not resurrect anything.
+    expect(briefViewState(briefResponseBody(null, NOW), { error: true, nowMs: NOW })).toEqual({ status: 'unavailable', reason: 'none' });
   });
 
   it('honours the server stale flag', () => {
