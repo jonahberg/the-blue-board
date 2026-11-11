@@ -96,12 +96,24 @@ describe('fleet-summary API', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('forwards upstream non-2xx status codes', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 503 });
+  // Nov 2026: the tracker answered Cloudflare 521 all day and this passed it through, re-asking
+  // upstream on every dashboard boot. A non-2xx is now a 502 (the header's contract) and arms the
+  // same negative cache as a connection failure; the upstream code stays in the error text.
+  it('maps an upstream non-2xx to 502 and keeps the upstream code in the message', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 521 });
     const res = createRes();
     await handler(makeReq(), res);
-    expect(res.statusCode).toBe(503);
-    expect(res.body.error).toMatch(/503/);
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error).toMatch(/521/);
+  });
+
+  it('a non-2xx upstream arms the negative cache: the next request does not re-fetch', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 521 });
+    await handler(makeReq(), createRes());
+    const res2 = createRes();
+    await handler(makeReq(), res2);
+    expect(res2.statusCode).toBe(502);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it('returns 502 on upstream connection failure (degraded — strip hides client-side)', async () => {
