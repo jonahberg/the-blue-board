@@ -37,8 +37,10 @@ export function SortableHeader<C extends string>({
         className="flex min-h-11 w-full items-center gap-1 px-2 text-left font-medium hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-8"
       >
         {label}
-        <span aria-hidden="true" className={active ? 'text-foreground' : 'opacity-30'}>
-          {active ? (sort.asc ? '▲' : '▼') : '↕'}
+        {/* The schedule board's marks (↑ ↓ in primary, a muted ↕), so every sortable table on
+            the dashboard says "sorted" the same way. */}
+        <span aria-hidden="true" className={active ? 'text-primary' : 'text-muted-foreground'}>
+          {active ? (sort.asc ? '↑' : '↓') : '↕'}
         </span>
       </button>
     </TableHead>
