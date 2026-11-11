@@ -19,12 +19,61 @@
 // 83–96% on-time, no programs, no confirmed cancellations — read "Disrupted". The constants live in
 // irops-score.js (IROPS_MINOR_AT / IROPS_SIGNIFICANT_AT); the FAA and on-time columns did not move.
 //
-// The FAA column is hubProgramMarker()'s amber/red — the same call the per-hub chips use.
+// The FAA column is hubProgramMarker()'s amber/red — the same call the per-hub chips use. A
+// "closure" there is a real one: routine NOTAM closures (curfews, PPR/GA, runway-only) are
+// screened inside hubProgramMarker() (withoutRoutineClosures, below).
 // The ticker is advisory whenever the level is not normal, so it can never claim "all
 // systems normal" while the strip or the IROPS badge says otherwise.
 
 import { iropsScoreCls } from './irops-score.js';
 import { normalizeFaaType } from './faa-context.js';
+
+// ── Routine closures ──
+// The FAA feed lists NOTAM closures that are part of an airport's normal week: nightly curfews
+// ("AD AP CLSD DLY 0730-1415"), prior-permission and transient-GA restrictions, runway- or
+// taxiway-only closures. Read as "Airport closure" they painted a working hub red and the network
+// "Disrupted". The brief screened them out (Nov 2026) and the hub strip did not, so the two could
+// disagree; the screen now lives here, inside hubProgramMarker(), which the strip's chips, the
+// network status, the ticker and the brief all go through.
+
+/**
+ * True when an FAA "closure" reads like the airport is actually shut (snow removal, an emergency),
+ * false for the routine NOTAM closures the feed also carries: nightly curfews ("AD AP CLSD DLY
+ * 0730-1415"), prior-permission and transient-GA restrictions, runway- or taxiway-only closures.
+ * A false negative costs one fact; a false positive puts "closed" in front of every visitor.
+ * @param {unknown} reason
+ */
+export function isWholeAirportClosure(reason) {
+  const text = String(reason || '').toUpperCase();
+  if (/\b(DLY|DAILY|NIGHTLY|PPR|EXC|EXCEPT|NON[- ]?SKED|TRANSIENT|GA|RWY|TWY|RUNWAY|TAXIWAY|APRON|RAMP)\b/.test(text)) return false;
+  if (/\b\d{4}\s*-\s*\d{4}\b/.test(text)) return false; // a recurring local time window
+  return true;
+}
+
+const isClosureType = (item) => normalizeFaaType(item?.type || item?.reason).includes('closure');
+
+/**
+ * An /api/faa airport entry without its routine closures (see isWholeAirportClosure). The server
+ * lists a closure twice, in `programs` and in the legacy `delays`; both are screened and `closure`
+ * is recomputed from what is left. An entry with no routine closure comes back unchanged (the same
+ * object), so a closure flag with no listed reason still reads as a closure.
+ * @param {any} airport
+ */
+export function withoutRoutineClosures(airport) {
+  if (!airport || typeof airport !== 'object') return airport;
+  const programs = Array.isArray(airport.programs) ? airport.programs : [];
+  const delays = Array.isArray(airport.delays) ? airport.delays : [];
+  const routine = (item) => isClosureType(item) && !isWholeAirportClosure(item?.reason);
+  if (!programs.some(routine) && !delays.some(routine)) return airport;
+  const keptPrograms = programs.filter((p) => !routine(p));
+  const keptDelays = delays.filter((d) => !routine(d));
+  return {
+    ...airport,
+    programs: keptPrograms,
+    delays: keptDelays,
+    closure: keptPrograms.some(isClosureType) || keptDelays.some(isClosureType),
+  };
+}
 
 /**
  * Extract active FAA traffic-management programs at UA hubs from the /api/faa
@@ -75,7 +124,8 @@ function numOrNull(v) {
  * @returns {{severity:'red'|'amber', marker:string, label:string}|null}
  */
 export function hubProgramMarker(faaIndex, hub) {
-  const entry = faaIndex?.[hub];
+  // A nightly curfew or a runway-only NOTAM is not an airport closure (withoutRoutineClosures).
+  const entry = withoutRoutineClosures(faaIndex?.[hub]);
   if (!entry || typeof entry !== 'object') return null;
   const programs = Array.isArray(entry.programs) ? entry.programs : [];
   const delays = Array.isArray(entry.delays) ? entry.delays : [];
