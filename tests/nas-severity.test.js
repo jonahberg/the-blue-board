@@ -269,6 +269,22 @@ describe('tierNasEventsRaw — a closing window', () => {
   });
 });
 
+describe('tierNasEventsRaw — a window is never dropped', () => {
+  it('keeps "UNTIL HHMM" / "AFTER HHMM" in the title when the item carries its own time', () => {
+    const { monitoring } = tierNasEventsRaw({
+      planned: [
+        { time: '2000Z-0200Z', event: 'UNTIL 0000\t-MIA/FLL CDRS/SWAP POSSIBLE', decoded: 'UNTIL 0000\t-MIA/FLL CDRS/SWAP POSSIBLE', affectedAirports: ['MIA'] },
+        { time: '2000Z-0200Z', event: 'AFTER 2100\t-ORD/MDW CDRS POSSIBLE', decoded: 'AFTER 2100\t-ORD/MDW CDRS POSSIBLE', affectedAirports: ['ORD'] },
+      ],
+    }, HUBS);
+    expect(monitoring.map((item) => item.title)).toEqual([
+      'UNTIL 0000\t-MIA/FLL CDRS/SWAP POSSIBLE',
+      'AFTER 2100\t-ORD/MDW CDRS POSSIBLE',
+    ]);
+    expect(monitoring[0].detailParts).toEqual([{ kind: 'text', text: 'planned' }, { kind: 'text', text: '2000Z-0200Z' }]);
+  });
+});
+
 describe('nasDisplayTitle (the panel reads in sentence case, codes untouched)', () => {
   it('turns the Nov 11 plan into calm lines and keeps every airport and acronym as sent', () => {
     const tiers = tierNasEventsRaw({ planned: NOV11_PLANNED }, HUBS);

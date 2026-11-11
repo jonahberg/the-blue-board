@@ -129,7 +129,10 @@ export function tierNasEventsRaw(nas, hubCodes) {
     // "AFTER 1500\t-EWR GROUND STOP…" → title "EWR GROUND STOP…", window "after 1500Z". The
     // plan words a closing window the same way ("UNTIL 0000\t-MIA/FLL CDRS/SWAP POSSIBLE"), so
     // that one moves out of the title too, as "until 0000Z".
-    const after = text.match(/^\s*(AFTER|UNTIL)\s+(\d{4})Z?\s*-?\s*/i);
+    // The prefix leaves the title only when it moves into the detail: with a `time` of its own
+    // the item keeps its words as sent, so no window is dropped.
+    const lead = text.match(/^\s*(AFTER|UNTIL)\s+(\d{4})Z?\s*-?\s*/i);
+    const after = tmi.time ? null : lead;
     /** @type {NasDetailPart[]} */
     const detailParts = [{ kind: 'text', text: 'planned' }];
     if (tmi.time) detailParts.push({ kind: 'text', text: tmi.time });

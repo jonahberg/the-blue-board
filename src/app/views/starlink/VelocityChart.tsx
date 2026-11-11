@@ -114,7 +114,10 @@ export const VelocityChart = memo(function VelocityChart({
       }
     }
     el.scrollLeft = target;
-  }, [model.bars.length, model.bars, model.width]);
+    // Keyed on the month count alone (see above): the model is rebuilt on every poll, and
+    // depending on it would re-pin the view and undo a reader's own scroll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.bars.length]);
   return (
     <Card className="gap-0 p-4" id="sl-chart-card">
       <h3 className="text-sm font-semibold">Installation Velocity</h3>
