@@ -41,10 +41,12 @@ export function RadarPanel({
           resolves against a parent's HEIGHT, and this box gets its size from `min-height`
           plus `flex-1`, so `h-full` collapsed the Leaflet container to 0 px and drew an
           empty black rectangle. `inset-0` needs no resolvable parent height at all. */}
-      {/* On a phone the attribution line runs the map's full width, so the zoom stack (bottom
-          left) sat on top of it. Scoped to this map, the stack is lifted clear of the line;
-          where the shell hides the zoom buttons for touch, this changes nothing. */}
-      <div className="relative isolate z-0 min-h-[240px] flex-1 overflow-hidden rounded-lg border [&_.leaflet-bottom.leaflet-left_.leaflet-control-zoom]:mb-9">
+      {/* On a phone the attribution line runs the map's full width (two lines at 375 px), so
+          the zoom stack (bottom left) sat on top of it. Below `sm`, and scoped to this map, the
+          stack is lifted clear of it; wider, the attribution sits right and nothing moves. `!`
+          because leaflet.css is unlayered and outranks a layered utility. Where the shell hides
+          the zoom buttons for touch, this changes nothing. */}
+      <div className="relative isolate z-0 min-h-[240px] flex-1 overflow-hidden rounded-lg border max-sm:[&_.leaflet-bottom.leaflet-left_.leaflet-control-zoom]:mb-10!">
         <RadarMap hubs={hubs} onSelectHub={onSelectHub} className="absolute inset-0" />
       </div>
       <ul className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
