@@ -18,6 +18,9 @@ import {
   HUB_OTP_MIN_OPERATED,
   boardLacksActualTimes,
   hubOtpUnavailableReason,
+  iropsCoverageLine,
+  hubChipNoFigure,
+  hubReadingDayOffset,
 } from '../src/lib/hub-health.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 
@@ -447,3 +450,73 @@ describe('boardLacksActualTimes / hubOtpUnavailableReason', () => {
     expect(serverOtpFromMetrics({ ...nrtMorning, operated: 6, onTime: 5 })).toBe(83);
   });
 });
+
+// v1.28.0: the dashboard renders the two disclosures above, but only from a payload that carries
+// their evidence. Production's /api/irops predates both; computed from what it does send, the
+// coverage line would call a final yesterday board "N h old" and the strip would say Guam's
+// "0 of 9 departures have left so far today".
+describe('iropsCoverageLine: only from a payload that discloses coverage', () => {
+  const now = 1_794_430_800;
+  it('is iropsCoverageNote when the hub entries carry coverageGapSec', () => {
+    const metrics = { ORD: { total: 9, generatedAt: now - 600, coverageGapSec: 600, boardDayOffset: 0, boardDayEndSec: now + 3600 }, LAX: { total: 9, generatedAt: now - 5 * 3600, coverageGapSec: 5 * 3600, boardDayOffset: 0, boardDayEndSec: now + 3600 } };
+    expect(iropsCoverageLine(metrics, now)).toBe(iropsCoverageNote(metrics, now));
+    expect(iropsCoverageLine(metrics, now)).toBe('1 of 2 hub boards current · LAX board 5 h old');
+    // null (unknown) still counts as disclosed: the field is there.
+    expect(iropsCoverageLine({ LAX: { total: 9, generatedAt: null, coverageGapSec: null } }, now)).toBe('0 of 1 hub boards current · LAX board age unknown');
+  });
+
+  it('is null on an older payload, however old its boards look', () => {
+    expect(iropsCoverageLine({ GUM: { total: 9, generatedAt: now - 10 * 3600, dataAgeSec: 10 * 3600 } }, now)).toBeNull();
+    expect(iropsCoverageLine({}, now)).toBeNull();
+    expect(iropsCoverageLine(undefined, now)).toBeNull();
+  });
+});
+
+describe('hubChipNoFigure: the strip\'s reason, only from a payload that carries the counts', () => {
+  const gum = { total: 9, operated: 0, onTime: 0, cancellations: 0, departureTimesSeen: 0, departedWithoutTime: 2, pastDueUntimed: 4, boardDayOffset: 0 };
+  const nrt = { total: 12, operated: 1, onTime: 1, cancellations: 0, departureTimesSeen: 1, departedWithoutTime: 0, pastDueUntimed: 0, boardDayOffset: 0 };
+
+  it('adds short, fixed sr-only words to the reason', () => {
+    expect(hubChipNoFigure({ GUM: gum, NRT: nrt }, 'GUM')).toEqual({
+      ...hubOtpUnavailableReason(gum, 'GUM'),
+      sr: 'no on-time figure: the feed sends no departure times',
+    });
+    expect(hubChipNoFigure({ GUM: gum, NRT: nrt }, 'NRT')?.sr).toBe('too few departures yet for an on-time figure');
+    expect(hubChipNoFigure({ GUM: gum, NRT: { ...nrt, boardDayOffset: -1 } }, 'NRT')?.sr).toBe('too few departures yesterday for an on-time figure');
+    expect(hubChipNoFigure({ GUM: gum, IAD: { total: 0, departureTimesSeen: 0 } }, 'IAD')).toMatchObject({ reason: 'no-board', label: '—', sr: 'no departures board' });
+    // The sr words do not move with the counts, so a poll that only moves a count announces nothing.
+    expect(hubChipNoFigure({ NRT: { ...nrt, operated: 3, onTime: 2 } }, 'NRT')?.sr).toBe(hubChipNoFigure({ NRT: nrt }, 'NRT')?.sr);
+  });
+
+  it('is null without a payload, or on one from before the counts', () => {
+    expect(hubChipNoFigure(null, 'GUM')).toBeNull();
+    expect(hubChipNoFigure(undefined, 'GUM')).toBeNull();
+    const { departureTimesSeen: _a, departedWithoutTime: _b, pastDueUntimed: _c, boardDayOffset: _d, ...oldGum } = gum;
+    expect(hubChipNoFigure({ GUM: oldGum }, 'GUM')).toBeNull();
+  });
+
+  it('a hub missing from a current payload has no board', () => {
+    expect(hubChipNoFigure({ GUM: gum }, 'LAX')).toMatchObject({ reason: 'no-board', text: 'No LAX departures board right now.' });
+  });
+
+  it('claims no day it does not know: a board with no day offset says "have left"', () => {
+    expect(hubOtpUnavailableReason({ ...nrt, boardDayOffset: null }, 'NRT')?.text).toBe('1 of 12 NRT departures have left; an on-time figure needs 5.');
+    expect(hubChipNoFigure({ NRT: { ...nrt, boardDayOffset: null } }, 'NRT')?.sr).toBe('too few departures for an on-time figure');
+  });
+});
+
+describe('a reading from yesterday\'s board', () => {
+  it('hubReadingDayOffset is -1 only for a yesterday board', () => {
+    expect(hubReadingDayOffset({ boardDayOffset: -1 })).toBe(-1);
+    expect(hubReadingDayOffset({ boardDayOffset: 0 })).toBe(0);
+    expect(hubReadingDayOffset({ boardDayOffset: null })).toBe(0);
+    expect(hubReadingDayOffset(undefined)).toBe(0);
+  });
+
+  it('hubOtpDescription says "yesterday\'s" for it', () => {
+    expect(hubOtpDescription(86, -1)).toBe("86% of yesterday's operated departures within 30 min of schedule");
+    expect(hubOtpDescription(86, 0)).toBe('86% of operated departures within 30 min of schedule');
+    expect(hubOtpDescription(null, -1)).toBe('No on-time reading yet');
+  });
+});
+

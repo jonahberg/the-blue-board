@@ -66,11 +66,22 @@ export function operatedOutcome(fl, dir = 'departures', statusKey) {
 /**
  * The hub chip's tooltip line, with the on-time rule spelled out.
  * @param {number|null|undefined} otp
+ * @param {number} [dayOffset]  -1 when the reading is yesterday's board (hubReadingDayOffset).
  * @returns {string}
  */
-export function hubOtpDescription(otp) {
+export function hubOtpDescription(otp, dayOffset = 0) {
   if (otp === null || otp === undefined) return 'No on-time reading yet';
-  return `${otp}% of operated departures within ${ON_TIME_GRACE_MIN} min of schedule`;
+  const whose = dayOffset === -1 ? "yesterday's operated departures" : 'operated departures';
+  return `${otp}% of ${whose} within ${ON_TIME_GRACE_MIN} min of schedule`;
+}
+
+/**
+ * -1 when an /api/irops hub reading comes from yesterday's board (before 06:00 hub-local), else 0.
+ * @param {{boardDayOffset?: number|null}|null|undefined} m  one hubMetrics entry
+ * @returns {-1|0}
+ */
+export function hubReadingDayOffset(m) {
+  return Number(m?.boardDayOffset) === -1 ? -1 : 0;
 }
 
 /** A hub reading built from a board older than this is stale (F91). */
@@ -167,6 +178,27 @@ export function iropsCoverageNote(hubMetrics, nowSec) {
   const named = notCurrent.slice(0, 2).map(notCurrentText).join(', ');
   const more = notCurrent.length > 2 ? ` and ${notCurrent.length - 2} more` : '';
   return `${current.length} of ${total} hub boards current · ${named}${more}`;
+}
+
+/**
+ * Whether an /api/irops `hubMetrics` discloses board coverage: some entry carries `coverageGapSec`
+ * (null counts — the field is there). Payloads from before Nov 2026 do not.
+ * @param {Record<string, any>|null|undefined} hubMetrics
+ */
+export function hubMetricsDiscloseCoverage(hubMetrics) {
+  return Object.values(hubMetrics || {}).some((m) => m && typeof m === 'object' && 'coverageGapSec' in m);
+}
+
+/**
+ * The IROPS card's coverage line, only from a payload that discloses coverage; null otherwise.
+ * `iropsCoverageNote` alone would fall back to `generatedAt` / `dataAgeSec` on an older payload and
+ * call a final yesterday board "N h old" — the misreading the coverage fields exist to prevent.
+ * @param {Record<string, any>|null|undefined} hubMetrics
+ * @param {number} [nowSec]  when the payload was fetched; omit to use its own figures.
+ * @returns {string|null}
+ */
+export function iropsCoverageLine(hubMetrics, nowSec) {
+  return hubMetricsDiscloseCoverage(hubMetrics) ? iropsCoverageNote(hubMetrics, nowSec) : null;
 }
 
 /**
@@ -381,12 +413,55 @@ export function hubOtpUnavailableReason(m, hub) {
     };
   }
   const operated = Number(m.operated) || 0;
-  const when = Number(m.boardDayOffset) === -1 ? 'left yesterday' : 'have left so far today';
+  // The day only when the payload says which: a board of unknown day claims neither.
+  const day = m.boardDayOffset === null || m.boardDayOffset === undefined ? null : Number(m.boardDayOffset);
+  const when = day === -1 ? 'left yesterday' : day === 0 ? 'have left so far today' : 'have left';
   return {
     reason: 'too-few',
     label: '—',
     text: `${operated} of ${total} ${hub} departures ${when}; an on-time figure needs ${HUB_OTP_MIN_OPERATED}.`,
   };
+}
+
+/**
+ * Whether an /api/irops `hubMetrics` carries the departure-time counts behind
+ * `hubOtpUnavailableReason` (Nov 2026). Without them Guam reads "0 of 9 departures have left so far
+ * today", which its feed cannot know.
+ * @param {Record<string, any>|null|undefined} hubMetrics
+ */
+export function hubMetricsExplainGaps(hubMetrics) {
+  return Object.values(hubMetrics || {}).some((m) => Number.isFinite(Number(m?.departureTimesSeen)) && m?.departureTimesSeen !== null);
+}
+
+/**
+ * The hub chip's sr-only words for each reason: short and fixed, so the strip (a polite live
+ * region) announces a change of reason and never a count ticking up on a poll. The counted
+ * sentence (`text`) lives in the tooltip.
+ */
+const NO_FIGURE_SR = {
+  'no-board': 'no departures board',
+  'no-actuals': 'no on-time figure: the feed sends no departure times',
+};
+
+/**
+ * What the hub strip says for a hub with NO on-time reading: `hubOtpUnavailableReason` plus its
+ * sr-only words, or null to keep the bare dash — before the server has answered, and on a payload
+ * from before the counts existed. Call it only for a chip without a reading.
+ * @param {Record<string, any>|null|undefined} hubMetrics  /api/irops `hubMetrics`
+ * @param {string} hub
+ * @returns {{reason: 'no-board'|'no-actuals'|'too-few', label: string, text: string, sr: string}|null}
+ */
+export function hubChipNoFigure(hubMetrics, hub) {
+  if (!hubMetrics || !hubMetricsExplainGaps(hubMetrics)) return null;
+  const m = hubMetrics[hub];
+  const why = hubOtpUnavailableReason(m, hub);
+  if (!why) return null;
+  let sr = NO_FIGURE_SR[why.reason];
+  if (why.reason === 'too-few') {
+    const day = m?.boardDayOffset === null || m?.boardDayOffset === undefined ? null : Number(m.boardDayOffset);
+    sr = `too few departures${day === -1 ? ' yesterday' : day === 0 ? ' yet' : ''} for an on-time figure`;
+  }
+  return { ...why, sr };
 }
 
 /**
