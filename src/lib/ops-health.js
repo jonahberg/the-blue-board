@@ -110,7 +110,7 @@ function numOrNull(v) {
  *
  * The chips were colored purely from backward-looking OTP-of-operated, so a hub under a
  * ground stop showed 🟢 while its held flights (excluded from the OTP ratio) sat two
- * inches from the ticker's "Disrupted: EWR ground stop". This returns the worst active
+ * inches from the ticker's "Disrupted: ground stop for flights into EWR". This returns the worst active
  * FAA program at a hub so the bar can take the WORSE of (OTP color, program color) — a
  * ground stop can never render green, a GDP/departure-delay program can never render
  * better than amber.
@@ -210,40 +210,59 @@ export function networkStatus({ hubOtps = {}, faaIndex = {}, hubCodes = [], irop
 }
 
 /**
+ * A hub program as the ticker words it. A ground stop or ground delay program holds flights BOUND
+ * FOR the hub, at the airports they leave from, so the text says "for flights into".
+ * @param {'GS'|'GDP'} kind
+ * @param {string} hub
+ * @param {number|null} [avgDelay]
+ */
+function programPhrase(kind, hub, avgDelay = null) {
+  if (kind === 'GS') return `ground stop for flights into ${hub}`;
+  const avg = avgDelay ? ` (avg ${Math.round(avgDelay)} min)` : '';
+  return `ground delay program for flights into ${hub}${avg}`;
+}
+
+/**
  * Derive the ticker's health state from `networkStatus()`: advisory whenever the network
- * is not normal, with the most specific fact as the text.
+ * is not normal, with the most specific fact as the text. A ground delay program's text leads
+ * with the network level's own word, so it says "Some delays:" while the header pill reads "Some
+ * Delays" and "Disrupted:" only when the network is ("Some delays: ground delay program for
+ * flights into SFO (avg 62 min)"); a ground stop is always "Disrupted:".
  * @param {object} opts  as networkStatus().
  * @returns {{level:'normal'|'advisory', text:string}}
  */
 export function deriveOpsHealth(opts = {}) {
   const status = networkStatus(opts);
   if (status.level === 'normal') return { level: 'normal', text: '' };
+  const prefix = status.level === 'significant' ? 'Disrupted' : 'Some delays';
 
   const { programs, worstHub, worstOtp, iropsScore, avg } = status;
   const gs = programs.find((p) => p.kind === 'GS');
-  if (gs) return { level: 'advisory', text: `Disrupted: ${gs.hub} ground stop` };
+  if (gs) return { level: 'advisory', text: `Disrupted: ${programPhrase('GS', gs.hub)}` };
 
   if (worstHub !== null && worstOtp < 50) {
     return { level: 'advisory', text: `Disrupted: ${worstHub} on-time ${Math.round(worstOtp)}%` };
   }
 
   const gdp = programs.find((p) => p.kind === 'GDP');
-  if (gdp) {
-    const avgDelay = gdp.avgDelay ? ` (avg ${Math.round(gdp.avgDelay)}m)` : '';
-    return { level: 'advisory', text: `Disrupted: ${gdp.hub} ground delay program${avgDelay}` };
-  }
+  if (gdp) return { level: 'advisory', text: `${prefix}: ${programPhrase('GDP', gdp.hub, gdp.avgDelay)}` };
 
-  // A closure or departure-delay program (red/amber chip) with no GS/GDP entry.
+  // A closure or departure-delay program (red/amber chip) with no GS/GDP entry, or a stop or delay
+  // program listed only under `programs`.
   const marked = (opts.hubCodes || [])
     .map((hub) => ({ hub, marker: hubProgramMarker(opts.faaIndex, hub) }))
     .find((m) => m.marker);
 
-  const programText = marked ? `${marked.marker.label} at ${marked.hub}` : '';
+  const label = marked?.marker.label;
+  const programText = !marked ? ''
+    : label === 'Ground stop' ? programPhrase('GS', marked.hub)
+      : label === 'Ground delay program' ? programPhrase('GDP', marked.hub)
+        : `${label} at ${marked.hub}`;
   if (marked && marked.marker.severity === 'red') return { level: 'advisory', text: `Disrupted: ${programText}` };
   if (iropsScore !== null && iropsScoreCls(iropsScore) === 'high') {
     return { level: 'advisory', text: `Elevated irregular ops — IROPS ${iropsScore}/100` };
   }
-  if (marked) return { level: 'advisory', text: programText };
+  if (marked) return { level: 'advisory', text: label === 'Ground delay program' ? `${prefix}: ${programText}` : programText };
   if (iropsScore !== null && iropsScoreCls(iropsScore) === 'med') {
     return { level: 'advisory', text: `Minor irregular ops — IROPS ${iropsScore}/100` };
   }

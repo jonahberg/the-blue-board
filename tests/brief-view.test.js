@@ -175,7 +175,7 @@ describe('copy', () => {
   });
 
   it('finds the ticker\'s emergency-squawk lines (the items buildTickerItems marks critical), and only those', () => {
-    const base = { opsHealth: { level: 'disrupted', text: 'Disrupted — ground stop at EWR' }, airborne: 380, total: 412, fleetCount: 1078, starlinkCount: 550 };
+    const base = { opsHealth: { level: 'advisory', text: 'Disrupted: ground stop for flights into EWR' }, airborne: 380, total: 412, fleetCount: 1078, starlinkCount: 550 };
     expect(briefAlertLine(buildTickerItems({ ...base, squawks: [] }))).toBeNull();
     const one = buildTickerItems({ ...base, squawks: [{ text: '⚠️ EMERGENCY', callsign: 'UAL123', squawk: '7700' }] });
     expect(briefAlertLine(one)).toBe('⚠️ EMERGENCY: UAL123 (7700)');
