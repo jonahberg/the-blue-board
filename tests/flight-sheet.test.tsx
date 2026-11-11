@@ -278,3 +278,22 @@ describe('FlightSheet times (F11)', () => {
     expect(dialog().textContent).toContain('Altitude scale');
   });
 });
+
+describe('FlightSheet links to the flight page', () => {
+  it('offers "Open flight page" at the canonical /flight/UA… address', async () => {
+    viewport(1280);
+    await open(flight({ flightIATA: 'UA2106', callsign: 'UAL2106' }));
+    const link = screen.getByRole('link', { name: 'Open flight page' });
+    expect(link.getAttribute('href')).toBe('/flight/UA2106');
+    expect(link.getAttribute('target')).toBeNull();
+  });
+
+  it('a callsign-only row (UAL…) maps to the same page; a non-United ident gets no link', async () => {
+    viewport(1280);
+    await open(flight({ flightIATA: '', callsign: 'UAL929' }));
+    expect(screen.getByRole('link', { name: 'Open flight page' }).getAttribute('href')).toBe('/flight/UA929');
+    cleanup();
+    await open(flight({ flightIATA: '', callsign: 'SKW5123' }));
+    expect(screen.queryByRole('link', { name: 'Open flight page' })).toBeNull();
+  });
+});
