@@ -32,6 +32,7 @@ const PAGES = [
   { name: 'newark',     path: '/newark' },
   { name: 'privacy',    path: '/privacy' },
   { name: 'flight',     path: '/flight' },
+  { name: 'thanks',     path: '/thanks' },
   { name: '404',      path: '/this-page-does-not-exist' },
 ];
 

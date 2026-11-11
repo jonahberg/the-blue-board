@@ -10,6 +10,10 @@
  * The cooldown (`bmacEligible`) and the three-second delay live in `state/ui.tsx` behind
  * `showBmacToast()`, so `state/schedule.tsx` can call it with just an ident.
  *
+ * Since Nov 2026 it speaks in the site's "cover a day" unit ($17 keeps it running for a day,
+ * src/lib/cover-a-day.js). It makes no claim about whether today is covered: it has not
+ * fetched the status, and a thank-you for a landing does not need one.
+ *
  * Positioned bottom-LEFT. The legacy toast sat at `bottom:16px; right:16px`, directly on
  * top of Leaflet's zoom-out button — the same corner that swallowed the About popover and
  * that `tests/leaflet-required-styles.test.js` now guards.
@@ -18,6 +22,7 @@
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { DAILY_COST_USD } from '@/lib/cover-a-day.js';
 import { supportUrl } from '@/lib/support-link.js';
 import { STORAGE_KEYS, writeString } from '../state/storage';
 import { useUi } from '../state/ui';
@@ -46,7 +51,7 @@ export default function BmacToast() {
         <X aria-hidden="true" />
       </Button>
       <p className="text-xs leading-relaxed">
-        Glad you landed ✈️ — if The Blue Board helped today, you can support the server costs.
+        Glad you landed ✈️ If The Blue Board helped today, ${DAILY_COST_USD} keeps it running for a day.
       </p>
       <a
         href={supportUrl('landed-toast')}
@@ -55,7 +60,7 @@ export default function BmacToast() {
         data-support="landed-toast"
         className="mt-2.5 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground pointer-fine:md:min-h-9"
       >
-        Donate to support costs
+        Cover a day · ${DAILY_COST_USD}
       </a>
     </div>
   );

@@ -2,7 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { STRIPE_SUPPORT_URL, SUPPORT_MEDIA, SUPPORT_UTM_SOURCE, supportUrl } from '../src/lib/support-link.js';
+import {
+  PLACEMENT_LABEL_RE,
+  STRIPE_MONTHLY_URL,
+  STRIPE_SUPPORT_URL,
+  SUPPORT_MEDIA,
+  SUPPORT_UTM_SOURCE,
+  hasMonthlySupport,
+  monthlySupportUrl,
+  supportUrl,
+} from '../src/lib/support-link.js';
 import { isSupportUrl, supportPlacement } from '../src/lib/support-tracking.js';
 
 // The donation link (src/lib/support-link.js). One-time donations moved from Buy Me a Coffee to
@@ -19,12 +28,12 @@ describe('supportUrl', () => {
     expect(SUPPORT_UTM_SOURCE).toBe('theblueboard');
   });
 
-  it('appends source, medium and the placement as utm_content', () => {
+  it('appends source, medium and the placement as utm_content, and the placement as client_reference_id', () => {
     expect(supportUrl('footer')).toBe(
-      `${STRIPE}?utm_source=theblueboard&utm_medium=site&utm_content=footer`,
+      `${STRIPE}?utm_source=theblueboard&utm_medium=site&utm_content=footer&client_reference_id=footer`,
     );
     expect(supportUrl('deep-use-prompt')).toBe(
-      `${STRIPE}?utm_source=theblueboard&utm_medium=site&utm_content=deep-use-prompt`,
+      `${STRIPE}?utm_source=theblueboard&utm_medium=site&utm_content=deep-use-prompt&client_reference_id=deep-use-prompt`,
     );
   });
 
@@ -34,8 +43,18 @@ describe('supportUrl', () => {
       expect(href.split('?')).toHaveLength(2);
       const url = new URL(href);
       expect(`${url.origin}${url.pathname}`).toBe(STRIPE);
-      expect([...url.searchParams.keys()]).toEqual(['utm_source', 'utm_medium', 'utm_content']);
+      const utm = ['utm_source', 'utm_medium', 'utm_content'];
+      expect([...url.searchParams.keys()]).toEqual(PLACEMENT_LABEL_RE.test(label.slice(0, 40)) ? [...utm, 'client_reference_id'] : utm);
     }
+  });
+
+  it('sends client_reference_id only for a label Stripe will keep (letters, digits, - and _, up to 40)', () => {
+    // Stripe silently drops any other client_reference_id; the webhook stores what passes this rule.
+    expect(PLACEMENT_LABEL_RE.test('deep-use-prompt')).toBe(true);
+    expect(PLACEMENT_LABEL_RE.test('readme_top')).toBe(true);
+    expect(new URL(supportUrl('a b&c=d?e')).searchParams.has('client_reference_id')).toBe(false);
+    expect(new URL(supportUrl('x'.repeat(60))).searchParams.get('client_reference_id')).toBe('x'.repeat(40));
+    expect(new URL(supportUrl('')).searchParams.get('client_reference_id')).toBe('other');
   });
 
   it('encodes the placement, trimmed and capped at 40 characters like the click label', () => {
@@ -54,7 +73,7 @@ describe('supportUrl', () => {
   it('marks email links utm_medium=email and README links utm_medium=github', () => {
     expect(SUPPORT_MEDIA).toEqual(['site', 'email', 'github']);
     expect(supportUrl('welcome-email', { medium: 'email' })).toBe(
-      `${STRIPE}?utm_source=theblueboard&utm_medium=email&utm_content=welcome-email`,
+      `${STRIPE}?utm_source=theblueboard&utm_medium=email&utm_content=welcome-email&client_reference_id=welcome-email`,
     );
     expect(new URL(supportUrl('readme-top', { medium: 'github' })).searchParams.get('utm_medium')).toBe('github');
   });
@@ -68,6 +87,14 @@ describe('supportUrl', () => {
     expect(isSupportUrl(href)).toBe(true);
     const anchor = { href, getAttribute: (name) => (name === 'data-support' ? 'footer' : null) };
     expect(supportPlacement(anchor)).toBe('footer');
+  });
+});
+
+describe('the monthly link ("cover a day every month")', () => {
+  it('is empty for now, so no monthly option is offered', () => {
+    expect(STRIPE_MONTHLY_URL).toBe('');
+    expect(hasMonthlySupport()).toBe(false);
+    expect(monthlySupportUrl('about-monthly')).toBeNull();
   });
 });
 
@@ -133,6 +160,8 @@ describe('donation links in the repo', () => {
         const end = src.slice(m.index).search(/(?<!=)>/);
         const tag = src.slice(start, m.index + end);
         expect(tag, `${path}: supportUrl('${label}')`).toMatch(new RegExp(`\\b(data-)?support="${label}"`));
+        // …and it is a label Stripe keeps as client_reference_id, so the payment records it.
+        expect(label, `${path}: supportUrl('${label}')`).toMatch(PLACEMENT_LABEL_RE);
         labels.push(label);
       }
     }

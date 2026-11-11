@@ -65,7 +65,9 @@ const description =
           donations on its own checkout page. We see the donation as Stripe reports it (such as the
           amount and the email address you give Stripe), never your full card number. Each donate link
           tells Stripe which link on the site it was (for example, the footer), and Stripe records
-          that label with the payment.
+          that label with the payment. If you give a display name at checkout, it may be shown on the
+          site beside the day your donation covered, and we keep it with the donation's amount and
+          time in Supabase; your email address and payment details stay with Stripe.
         </li>
         <li>
           <strong class="font-semibold text-foreground">Buy Me a Coffee</strong> — handles monthly

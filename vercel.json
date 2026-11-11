@@ -60,6 +60,8 @@
         "api/news-notify.ts": { "maxDuration": 15 },
         "api/metar.ts": { "maxDuration": 15 },
         "api/support-stats.ts": { "maxDuration": 15 },
+        "api/support-status.ts": { "maxDuration": 10 },
+        "api/stripe-webhook.ts": { "maxDuration": 10 },
         "api/cron/refresh-metar.ts": { "maxDuration": 30 },
         "api/cron/watch-alerts.ts": { "maxDuration": 120 },
         "api/flight.ts": { "maxDuration": 10, "includeFiles": "public/data/{fleet,starlink}.json" },

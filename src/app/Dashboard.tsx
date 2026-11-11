@@ -21,10 +21,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import BmacToast from './features/BmacToast';
-import DonatePrompt from './features/DonatePrompt';
 import EmailPrompt from './features/EmailPrompt';
 import LegalPopover from './features/LegalPopover';
 import NewsBanner from './features/NewsBanner';
+import SupportStrip from './features/SupportStrip';
 import TipStrip from './features/TipStrip';
 import WaitlistStrip from './features/WaitlistStrip';
 import { Attribution } from './shell/Attribution';
@@ -180,14 +180,16 @@ function DashboardShell() {
           the ticker and the hub strip.
 
           The slot shows ONE line at a time, at every width, the first one present in this
-          order: the waitlist strip (once its triggers fire, on visits when neither deep-use
-          modal is the ask), the news, the tip. The others wait their turn and come back as the
-          one above is dismissed. Three stacked lines were ~100 px of a 780 px phone (audit
+          order: the "cover a day" support strip (the deep-use ask on the visits it is chosen),
+          the waitlist strip (once its triggers fire, on visits when neither the support strip
+          nor the email dialog is the ask), the news, the tip. The others wait their turn and
+          come back as the one above is dismissed. Three stacked lines were ~100 px of a 780 px phone (audit
           Oct 3 2026), so phones got the rule first; on a 900 px desktop the news, the tip and
           the attribution were ~110 px under the map (Nov 2026), so it now holds everywhere.
           Components that have nothing to say render null, so `*~*` only ever hides a strip
           that is actually there. */}
       <div className="flex shrink-0 flex-col [&>*~*]:hidden">
+        <SupportStrip />
         <WaitlistStrip />
         <NewsBanner />
         <TipStrip />
@@ -211,9 +213,8 @@ function DashboardShell() {
       </Suspense>
       <LegalPopover />
       <BmacToast />
-      {/* The deep-use asks: ONE per visit, on the email strip's trigger — the donation
-          prompt or (EmailPrompt) the waitlist dialog above, opened after a pause. */}
-      <DonatePrompt />
+      {/* The deep-use asks: ONE per visit, on the email strip's trigger — the support strip
+          in the slot above, or (EmailPrompt) the waitlist dialog, opened after a pause. */}
       <EmailPrompt />
       <IropsAnnouncer />
     </div>
