@@ -1,6 +1,12 @@
 ---
 import { fleetOrder, fleetTypes } from '../../data/fleet/index.js';
-import { STARLINK_EQUIPPED, STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../../data/starlink-facts.js';
+import {
+  STARLINK_EQUIPPED,
+  STARLINK_EQUIPPED_LABEL,
+  STARLINK_EQUIPPED_SCOPE,
+  STARLINK_EQUIPPED_AS_OF_DAY,
+  STARLINK_MAINLINE_EQUIPPED,
+} from '../../data/starlink-facts.js';
 import BaseLayout from '../../components/site/BaseLayout.astro';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
@@ -60,7 +66,15 @@ const widebodyAircraft = fleetOrder.reduce(
   (sum, key) => sum + (fleetTypes[key].bodyType === 'widebody' ? fleetTypes[key].count : 0),
   0,
 );
-const starlinkEquipped = STARLINK_EQUIPPED; // canonical value from src/data/facts.js (refreshed at build)
+// The combined Starlink count (STARLINK_EQUIPPED, "600+") is mainline + Express; this page's figures
+// are mainline. So the tile beside "Mainline Aircraft" is the mainline count, and wherever the
+// combined count appears it says what it counts and when: "(mainline + Express, as of 11 Nov 2026)",
+// built from the exports; the date drops when the count has none.
+const starlinkCombinedNote = `(${[STARLINK_EQUIPPED_SCOPE, STARLINK_EQUIPPED_AS_OF_DAY && `as of ${STARLINK_EQUIPPED_AS_OF_DAY}`]
+  .filter(Boolean)
+  .join(', ')})`;
+// The FAQ answer's shared opening: the visible FAQ links the tracker, the JSON-LD names it.
+const starlinkFaqLead = `${STARLINK_EQUIPPED_LABEL} United Airlines aircraft ${starlinkCombinedNote} are equipped with free SpaceX Starlink satellite internet — the majority of them United Express regional jets, which led the rollout, followed by mainline Boeing 737s and Airbus A321neos and, since June 2026, the first widebody Boeing 777s. United expects Starlink on 61% of its flights by the end of 2026 and fleet-wide by the end of 2027. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity.`;
 
 // Seat config table order: widebody (Polaris) first, then narrowbody
 const seatConfigOrder = [
@@ -137,7 +151,10 @@ const datasetSchema = {
   variableMeasured: [
     { '@type': 'PropertyValue', name: 'Aircraft Count', value: String(totalAircraft) },
     { '@type': 'PropertyValue', name: 'Aircraft Types', value: '19' },
-    { '@type': 'PropertyValue', name: 'Starlink Equipped', value: String(STARLINK_EQUIPPED) },
+    // This Dataset is the mainline fleet, so its Starlink measure is the mainline count; the
+    // combined figure stays only under a name that says it includes United Express.
+    { '@type': 'PropertyValue', name: 'Mainline Aircraft with Starlink', value: String(STARLINK_MAINLINE_EQUIPPED) },
+    { '@type': 'PropertyValue', name: `Starlink Equipped (${STARLINK_EQUIPPED_SCOPE})`, value: String(STARLINK_EQUIPPED) },
   ],
 };
 
@@ -180,7 +197,7 @@ const faqSchema = {
       name: 'Which United Airlines planes have Starlink WiFi?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: `As of ${STARLINK_AS_OF}, ${STARLINK_EQUIPPED_LABEL} United Airlines aircraft are equipped with free SpaceX Starlink satellite internet — the majority of them United Express regional jets, which led the rollout, followed by mainline Boeing 737s and Airbus A321neos and, since June 2026, the first widebody Boeing 777s. United expects Starlink on 61% of its flights by the end of 2026 and fleet-wide by the end of 2027. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed connectivity. Check if your specific plane has Starlink using The Blue Board's Starlink Tracker.`,
+        text: `${starlinkFaqLead} Check if your specific plane has Starlink using The Blue Board's Starlink Tracker.`,
       },
     },
     {
@@ -251,10 +268,10 @@ const hubLinkClass =
     </header>
 
     <div class="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-      <StatTile label="Mainline Aircraft" value={totalAircraft.toLocaleString()} />
-      <StatTile label="Polaris Aircraft" value={polarisAircraft} />
-      <StatTile label="Starlink Equipped" value={starlinkEquipped} />
-      <StatTile label="Widebody Aircraft" value={widebodyAircraft} />
+      <StatTile subgrid label="Mainline Aircraft" value={totalAircraft.toLocaleString()} />
+      <StatTile subgrid label="Polaris Aircraft" value={polarisAircraft} />
+      <StatTile subgrid label="Mainline with Starlink" value={STARLINK_MAINLINE_EQUIPPED} />
+      <StatTile subgrid label="Widebody Aircraft" value={widebodyAircraft} />
     </div>
 
     <ContentSection heading="Fleet Overview">
@@ -311,7 +328,7 @@ const hubLinkClass =
           > on long, thin transatlantic routes; its first two, Washington Dulles to Dublin and Amsterdam, are scheduled from December 1, 2026.
         </li>
         <li>
-          <strong>Free Starlink WiFi passes {STARLINK_EQUIPPED_LABEL} aircraft.</strong> United
+          <strong>Free Starlink WiFi passes {STARLINK_EQUIPPED_LABEL} aircraft</strong> {starlinkCombinedNote}. United
           Express regional jets led the rollout, mainline <a href="/fleet/737-800">737-800s</a>
           followed in October 2025, and the first widebody <a href="/fleet/777-200er"
             >Boeing 777</a
@@ -450,12 +467,7 @@ const hubLinkClass =
 
       <h3>Which United Airlines planes have Starlink WiFi?</h3>
       <p>
-        As of {STARLINK_AS_OF}, {STARLINK_EQUIPPED_LABEL} United Airlines aircraft are equipped with
-        free SpaceX Starlink satellite internet — the majority of them United Express regional jets,
-        which led the rollout, followed by mainline Boeing 737s and Airbus A321neos and, since June
-        2026, the first widebody Boeing 777s. United expects Starlink on 61% of its flights by the end
-        of 2026 and fleet-wide by the end of 2027. Starlink is free for all MileagePlus members and provides gate-to-gate high-speed
-        connectivity. Check if your specific plane has Starlink using the <a href="/?tab=fleet"
+        {starlinkFaqLead} Check if your specific plane has Starlink using the <a href="/?tab=fleet"
           >Starlink Tracker</a
         > — search by tail number or aircraft type.
       </p>

@@ -6,6 +6,11 @@
  *
  * `id` is passed through to the value element so a page script can update it
  * in place — the hub live panel writes the active-flight count into `#active`.
+ *
+ * `subgrid`: in a row of tiles whose labels may wrap differently (the fleet index's
+ * "Mainline with Starlink" takes two lines at 375 px beside a one-line neighbour), the tile
+ * spans two rows of the parent grid and lays its label and figure on them, as StatStrip does,
+ * so the figures sit level. The parent must be a grid of tiles only.
  */
 import { STAT_CARD, STAT_LABEL, STAT_VALUE } from './stat-tile';
 
@@ -14,12 +19,14 @@ interface Props {
   value: string | number;
   /** DOM id for the value element, for scripts that refresh it. */
   id?: string;
+  /** Align the figures across a grid row of tiles (see above). */
+  subgrid?: boolean;
   class?: string;
 }
 
-const { label, value, id, class: className = '' } = Astro.props;
+const { label, value, id, subgrid = false, class: className = '' } = Astro.props;
 ---
-<div class:list={[STAT_CARD, className]}>
-  <div class={STAT_LABEL}>{label}</div>
+<div class:list={[STAT_CARD, subgrid && 'row-span-2 grid grid-rows-subgrid gap-y-0', className]}>
+  <div class:list={[STAT_LABEL, subgrid && 'self-end']}>{label}</div>
   <div id={id} class:list={[STAT_VALUE, 'text-foreground']}>{value}</div>
 </div>
