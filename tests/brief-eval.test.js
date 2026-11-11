@@ -1,6 +1,7 @@
 // The offline modes of the brief eval harness (scripts/brief-eval.mjs): --requests prints exactly
 // the request production would send, one JSON line per fixture and nothing else, and neither it nor
-// --check calls the model even with a gateway key in the environment.
+// --check calls the model even with a gateway key in the environment. Each test spawns the script,
+// so each has its own 30-second timeout.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,7 +34,7 @@ describe('brief-eval --requests', () => {
       expect(req.system).toBe(BRIEF_SYSTEM_PROMPT);
       expect(req.user).toBe(buildBriefUserMessage(facts, nowMs));
     });
-  });
+  }, 30_000);
 });
 
 describe('brief-eval --check', () => {
@@ -54,5 +55,5 @@ describe('brief-eval --check', () => {
     expect(out.final.brief.tone).toBe('watch');
     expect(out.report.dropped).toEqual([expect.objectContaining({ index: 1, reasons: ["uncited_airport:Chicago O'Hare", 'number_not_in_facts:88%'] })]);
     expect(out.report.travelerNote.status).toBe('kept');
-  });
+  }, 30_000);
 });
