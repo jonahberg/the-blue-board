@@ -10,9 +10,10 @@
  * no coverage claim. A payment covers the day it is given, or the next open day after it
  * (src/lib/cover-a-day.js), so the button names that day ("Cover today · $17", "Cover tomorrow ·
  * $17", "Cover Nov 15 · $17", to the fixed $17 link) and the note under the calendar states the
- * rule. Under the button sits the amount ladder (`supportLadder`: one button per amount with a
- * fixed link, then "Other amount"; absent when no amount has a link) and the line that a name can
- * be added at checkout. Every word comes from src/lib/cover-a-day.js.
+ * rule. Under the button sits the amount ladder (`aboutLadder`: one button per amount with a
+ * fixed link, less the $17 when the button above already names a day at $17, then "Other
+ * amount"; absent when no amount has a link) and the line that a name can be added at checkout.
+ * In a month with no day covered yet, the month line alone takes the bold slot (`aboutCoverLines`). Every word comes from src/lib/cover-a-day.js.
  *
  * Covered vs open is never colour alone: a covered cell is filled and an open one is a dashed
  * outline; today wears a ring; there is a legend with words; and each cell carries its own
@@ -28,14 +29,13 @@ import {
   ABOUT_INTRO_LINE,
   COVER_RULE_LINE,
   NAME_LINE,
+  aboutCoverLines,
+  aboutLadder,
   calendarCells,
   coverButtonHref,
   coverButtonLabel,
   coverageRuns,
-  monthLine,
   monthName,
-  supportLadder,
-  todayLine,
 } from '@/lib/cover-a-day.js';
 import { hasMonthlySupport, monthlySupportUrl } from '@/lib/support-link.js';
 import { useSupportStatus } from '../state/support-status';
@@ -57,11 +57,10 @@ export function CoverADay({ active }: { active: boolean }) {
   const loaded = useSupportStatus(active);
   const status = loaded ?? UNKNOWN;
   const calendar = status.configured ? calendarCells(status) : null;
-  const line = todayLine(status);
-  const month = monthLine(status);
+  const lines = aboutCoverLines(status);
   const runs = coverageRuns(status);
   const monthly = hasMonthlySupport() ? monthlySupportUrl('about-monthly') : null;
-  const ladder = supportLadder('about');
+  const ladder = aboutLadder(status);
 
   return (
     <section aria-labelledby="cover-a-day-heading" className="rounded-md border p-3.5">
@@ -108,8 +107,8 @@ export function CoverADay({ active }: { active: boolean }) {
         </div>
       ) : null}
 
-      {line ? <p className="mt-3 text-xs font-semibold">{line}</p> : null}
-      {month ? <p className="mt-1">{month}</p> : null}
+      {lines.lead ? <p className="mt-3 text-xs font-semibold">{lines.lead}</p> : null}
+      {lines.follow ? <p className="mt-1">{lines.follow}</p> : null}
       {status.configured ? <p className="mt-1 text-muted-foreground">{COVER_RULE_LINE}</p> : null}
 
       <div className="mt-3 flex flex-wrap gap-2">

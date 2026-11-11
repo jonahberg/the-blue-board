@@ -76,12 +76,12 @@ describe('CoverADay (About)', () => {
   it('unknown status: the plain ask, no calendar, no claim about today', async () => {
     render(<CoverADay active />);
     await flush();
-    expect(screen.getByText('The Blue Board is free, with no ads. It costs about $500 a month to run, about $17 a day.')).toBeTruthy();
+    expect(screen.getByText('The Blue Board is free because flyers cover it, one day at a time. It costs about $500 a month to run, about $17 a day.')).toBeTruthy();
     expect(screen.queryByRole('list', { name: /day by day/ })).toBeNull();
     expect(screen.queryByText(/Today is|No one has covered/)).toBeNull();
     expect(button().textContent).toBe('Help cover a day');
     expect(button().getAttribute('href')).toBe(supportUrl('about'));
-    // The ladder and the name line show whatever the status.
+    // Under "Help cover a day" the ladder keeps all four amounts; the name line shows whatever the status.
     expect(ladderTexts()).toEqual(['$5', '$10', '$17 · one day', '$100 · nearly six days', 'Other amount']);
     expect(screen.getByText('You can add a name at checkout to show on the day you cover.')).toBeTruthy();
     expect(button().getAttribute('data-support')).toBe('about');
@@ -118,6 +118,8 @@ describe('CoverADay (About)', () => {
     expect(screen.getByText('1 of 30 days in November is covered.')).toBeTruthy();
     expect(button().textContent).toBe('Cover tomorrow · $17');
     expect(button().getAttribute('href')).toBe(supportAmountUrl(17, 'about'));
+    // The button is the $17, so the ladder under it leaves the $17 out.
+    expect(ladderTexts()).toEqual(['$5', '$10', '$100 · nearly six days', 'Other amount']);
   });
 
   it('today and tomorrow covered: offers the next open day', async () => {
@@ -135,15 +137,19 @@ describe('CoverADay (About)', () => {
     expect(button().textContent).toBe('Cover Dec 1 · $17');
   });
 
-  it('the month with nobody yet is an opening, not a score', async () => {
+  it('the month with nobody yet is an opening, not a score, said once in the bold slot', async () => {
     statusBody = supportStatusFromRows([], NOW);
     render(<CoverADay active />);
     await flush();
-    expect(screen.getByText('No one has covered a day in November yet. Be the first.')).toBeTruthy();
+    const month = screen.getByText('No one has covered a day in November yet. Be the first.');
+    expect(month.className).toContain('font-semibold');
+    expect(screen.queryByText('No one has covered today yet.')).toBeNull();
     expect(screen.queryByText(/0 of 30/)).toBeNull();
+    expect(button().textContent).toBe('Cover today · $17');
+    expect(ladderTexts()).toEqual(['$5', '$10', '$100 · nearly six days', 'Other amount']);
   });
 
-  it('the ladder: one button per amount with a link, each with its own label, then Other amount', async () => {
+  it('the ladder (status unknown): one button per amount with a link, each with its own label, then Other amount', async () => {
     render(<CoverADay active />);
     await flush();
     const links = [...document.querySelectorAll<HTMLAnchorElement>('[data-support-ladder] a')];

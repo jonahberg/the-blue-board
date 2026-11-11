@@ -438,8 +438,8 @@ export const HELP_COVER_LABEL = 'Help cover a day';
 /** The amount ladder's last item, the any-amount link. */
 export const OTHER_AMOUNT_LABEL = 'Other amount';
 
-/** The About section's opening line (the owner's figures; words unchanged from Nov 10 2026). */
-export const ABOUT_INTRO_LINE = `The Blue Board is free, with no ads. It costs about $${MONTHLY_COST_USD} a month to run, about ${COST} a day.`;
+/** The About section's opening line: the one reason, then the owner's figures. */
+export const ABOUT_INTRO_LINE = `${CORE_LINE_FLYERS} It costs about $${MONTHLY_COST_USD} a month to run, about ${COST} a day.`;
 
 /** The landed toast. It makes no claim about today; only its button may name a day. */
 export const LANDED_TOAST_LINE = `Glad you landed ✈️ ${CORE_LINE_FLYERS}`;
@@ -452,7 +452,7 @@ export const WALL_LINK_LABEL = 'Cover a day and you can put your name on it.';
 export const READER_NOTE_LINE = 'Kept current by one person, with no ads and no paywall. Readers cover the cost, one day at a time.';
 
 /** The box at the end of a news article; the link ("Help cover a day") and a period follow it. */
-export const NEWS_SUPPORT_LINE = 'The Blue Board has no ads and no paywall. Readers cover the cost, one day at a time.';
+export const NEWS_SUPPORT_LINE = `${CORE_LINE_READERS} There are no ads and no paywall.`;
 
 /** The flight page's line while there is no status to go on (the page's static markup). */
 export const FLIGHT_PAGE_DEFAULT_LINE = 'This page is free because flyers cover The Blue Board, one day at a time.';
@@ -519,21 +519,37 @@ export function amountLabel(amount) {
  * then "Other amount" on the any-amount link. null when no amount has a link: the surface then
  * shows its single "Help cover a day" button instead.
  *
+ * The day's own amount ($17, DAILY_COST_USD) is `primary`: where the ladder is a surface's only
+ * row of buttons (the content-page card) it is the filled one. `without` leaves amounts out: the
+ * About section drops the $17 when the button above it already names a day at $17.
+ *
  * @param {string} placement the surface's `data-support` label, e.g. "fleet-end" or "about"
- * @param {{other?: string, links?: Record<number, string|null>}} [opts] `other` is the "Other
- *   amount" link's label (default `<placement>-other`); `links` is a test seam
- * @returns {{amounts: Array<{amount: number, text: string, placement: string, href: string}>,
+ * @param {{other?: string, without?: number[], links?: Record<number, string|null>}} [opts] `other`
+ *   is the "Other amount" link's label (default `<placement>-other`); `links` is a test seam
+ * @returns {{amounts: Array<{amount: number, text: string, placement: string, href: string, primary: boolean}>,
  *   other: {text: string, placement: string, href: string}}|null}
  */
-export function supportLadder(placement, { other = `${placement}-other`, links } = {}) {
+export function supportLadder(placement, { other = `${placement}-other`, without = [], links } = {}) {
   const amounts = [];
   for (const amount of SUPPORT_AMOUNTS) {
+    if (without.includes(amount)) continue;
     const label = `${placement}-${amount}`;
     const href = supportAmountUrl(amount, label, { links });
-    if (href) amounts.push({ amount, text: amountLabel(amount), placement: label, href });
+    if (href) amounts.push({ amount, text: amountLabel(amount), placement: label, href, primary: amount === DAILY_COST_USD });
   }
   if (!amounts.length) return null;
   return { amounts, other: { text: OTHER_AMOUNT_LABEL, placement: other, href: supportUrl(other) } };
+}
+
+/**
+ * The About section's ladder, under its day button: every amount with a link, less the $17 when
+ * that button already names a day at $17 ("Cover today · $17" is the $17); all of them under
+ * "Help cover a day".
+ * @param {object|null|undefined} status
+ * @param {{links?: Record<number, string|null>}} [opts] test seam
+ */
+export function aboutLadder(status, { links } = {}) {
+  return supportLadder('about', { without: coverTarget(status) ? [DAILY_COST_USD] : [], links });
 }
 
 /** End a sentence on a label without doubling an initial's period ("Dana R." not "Dana R.."). */
@@ -580,6 +596,19 @@ export function monthLine(status) {
   if (n <= 0) return `No one has covered a day in ${month} yet. Be the first.`;
   if (n >= status.daysInMonth) return `Every day in ${month} is covered. Thank you.`;
   return `${n} of ${status.daysInMonth} days in ${month} ${n === 1 ? 'is' : 'are'} covered.`;
+}
+
+/**
+ * The About section's two lines under the calendar: `lead` in the bold slot, `follow` under it.
+ * Today's line leads and the month follows, except in a month with no day covered yet, when the
+ * month line alone leads ("No one has covered today yet." over "No one has covered a day in
+ * November yet." said the same thing twice). Both null when the status is unknown.
+ * @returns {{lead: string|null, follow: string|null}}
+ */
+export function aboutCoverLines(status) {
+  if (!status?.configured) return { lead: null, follow: null };
+  if (status.daysCovered <= 0) return { lead: monthLine(status), follow: null };
+  return { lead: todayLine(status), follow: monthLine(status) };
 }
 
 /**
@@ -645,7 +674,7 @@ export function supportStripCopy(status, { flightsThisMonth = 0 } = {}) {
   if (!status?.configured) {
     return {
       lead,
-      text: `${CORE_LINE_FLYERS} ${COST} covers a full day; any amount helps.`,
+      text: `${CORE_LINE_FLYERS} ${COST} covers a full day.`,
       short: 'Free because flyers cover it, a day at a time.',
       button,
     };

@@ -18,6 +18,8 @@ import {
   addDays,
   allocateDays,
   calendarCells,
+  aboutCoverLines,
+  aboutLadder,
   amountDaysPhrase,
   amountLabel,
   coverButtonHref,
@@ -407,7 +409,7 @@ describe('the sentences and the button', () => {
   it('strip, not configured: the core line and "Help cover a day", no coverage claim', () => {
     expect(supportStripCopy(UNCONFIGURED_STATUS)).toEqual({
       lead: null,
-      text: 'The Blue Board is free because flyers cover it, one day at a time. $17 covers a full day; any amount helps.',
+      text: 'The Blue Board is free because flyers cover it, one day at a time. $17 covers a full day.',
       short: 'Free because flyers cover it, a day at a time.',
       button: 'Help cover a day',
     });
@@ -492,6 +494,14 @@ describe('the sentences and the button', () => {
     });
   });
 
+  it('About: the month line alone takes the bold slot while no day this month is covered', () => {
+    expect(aboutCoverLines(UNCONFIGURED_STATUS)).toEqual({ lead: null, follow: null });
+    expect(aboutCoverLines(status([]))).toEqual({ lead: 'No one has covered a day in November yet. Be the first.', follow: null });
+    expect(aboutCoverLines(status([pay(17, at(2))]))).toEqual({ lead: 'No one has covered today yet.', follow: '1 of 30 days in November is covered.' });
+    expect(aboutCoverLines(status([pay(17, at(10), { display_name: 'Dana R.' })]))).toEqual({ lead: 'Today is covered by Dana R.', follow: '1 of 30 days in November is covered.' });
+    expect(aboutCoverLines(status([pay(17 * 30, at(1))]))).toEqual({ lead: 'Today is covered by a supporter.', follow: 'Every day in November is covered. Thank you.' });
+  });
+
   it('monthFullyCovered only when every day of the month is', () => {
     expect(monthFullyCovered(status([pay(17 * 30, at(1))], NOV10))).toBe(true);
     expect(monthFullyCovered(status([pay(17 * 29, at(2))], NOV10))).toBe(false);
@@ -528,6 +538,23 @@ describe('the amount ladder', () => {
     }
     expect(ladder.other).toEqual({ text: 'Other amount', placement: 'fleet-end', href: supportUrl('fleet-end') });
     expect(supportLadder('about').other.placement).toBe('about-other');
+  });
+
+  it('marks the day amount primary, and leaves out what it is told to', () => {
+    const ladder = supportLadder('fleet-end', { other: 'fleet-end' });
+    expect(ladder.amounts.filter((a) => a.primary).map((a) => a.amount)).toEqual([DAILY_COST_USD]);
+    expect(supportLadder('about', { without: [17] }).amounts.map((a) => a.text)).toEqual(['$5', '$10', '$100 · nearly six days']);
+  });
+
+  it('About: drops the $17 under a button that names a day at $17, keeps all four under "Help cover a day"', () => {
+    const texts = (s) => aboutLadder(s).amounts.map((a) => a.text);
+    expect(texts(UNCONFIGURED_STATUS)).toEqual(['$5', '$10', '$17 · one day', '$100 · nearly six days']);
+    expect(texts(status([pay(17 * 400, at(10))]))).toEqual(['$5', '$10', '$17 · one day', '$100 · nearly six days']);
+    for (const s of [status([]), status([pay(17, at(10))]), status([pay(17 * 5, at(10))])]) {
+      expect(texts(s)).toEqual(['$5', '$10', '$100 · nearly six days']);
+    }
+    expect(aboutLadder(status([])).other.placement).toBe('about-other');
+    expect(aboutLadder(status([]), { links: { 5: null, 10: null, 17: 'https://buy.stripe.com/x', 100: null } })).toBeNull();
   });
 
   it('leaves out an amount with no link, and is null when none has one', () => {
