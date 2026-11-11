@@ -258,12 +258,63 @@ describe('materialKey (change detection)', () => {
     expect(materialKey(b)).toBe(materialKey(a));
   });
 
-  it('changes when something material does: a new ground stop, a band crossing', () => {
-    const fx = fixture('calm-afternoon');
-    const base = materialKey(build(fx).facts);
-    const gs = [{ airportCode: 'SFO', programs: [{ type: 'ground_stop', reason: 'wind', endTime: '2026-11-10T23:00:00Z' }], groundStop: true, delays: [{ type: 'ground_stop' }] }];
-    expect(materialKey(build(fx, { faa: gs }).facts)).not.toBe(base);
-    expect(materialKey(build(fx, { air: { airborne: 720, starlink: 280 } }).facts)).not.toBe(base);
+  it('leaves a fact with material null out entirely, id included', () => {
+    const fact = (id, material) => ({ id, material });
+    expect(materialKey([fact('otp.SFO', null), fact('net.status', 'status:minor')])).toBe(materialKey([fact('net.status', 'status:minor')]));
+    expect(materialKey([fact('x', '')])).not.toBe(materialKey([]));
+  });
+
+  // The ten briefs of Nov 11 2026 were all rewritten for noise. Each case below is one of the
+  // fact-by-fact differences that triggered a rewrite, replayed against that morning's scenario.
+  const MORNING = fixture('sfo-gdp-morning');
+  const NOW_S = Date.parse(MORNING.nowIso) / 1000;
+  const morning = (edit = () => {}) => {
+    const sources = structuredClone(MORNING.sources);
+    // A median the noise below stays inside the "usual" band of (700 and 600 in the air).
+    sources.airNormal = { median: 650, days: 7 };
+    edit(sources);
+    return materialKey(buildBriefFacts(sources, { nowMs: Date.parse(MORNING.nowIso) }).facts);
+  };
+  const hub = (s, code) => s.irops.hubMetrics[code];
+  const sfoMetar = (s, raw) => { s.metar = s.metar.map((m) => (m.icaoId === 'KSFO' ? { ...m, rawOb: raw } : m)); };
+  const NOISE = {
+    'air.total 700 → 600 and air.starlink 300 → 250': [(s) => { s.air = { airborne: 700, starlink: 300 }; }, (s) => { s.air = { airborne: 600, starlink: 250 }; }],
+    'net.index 4.0 → 11.0, both in the normal band': [(s) => { s.irops.score = 4; }, (s) => { s.irops.score = 11; }],
+    'otp.EWR 100% → 95%': [(s) => { hub(s, 'EWR').onTime = 110; }, (s) => { hub(s, 'EWR').onTime = 104; }],
+    'otp.SFO absent → 100% (and the best hub and the hub count with it)': [(s) => { delete s.irops.hubMetrics.SFO; }, () => {}],
+    'otp.IAD 95% → aged out': [(s) => { hub(s, 'IAD').generatedAt = NOW_S - 3000; hub(s, 'IAD').onTime = 67; }, () => {}],
+    'wx.SFO "very low clouds, very low visibility, fog" → "very low clouds"': [
+      (s) => sfoMetar(s, 'METAR KSFO 111556Z 00000KT 1/4SM FG VV002 11/11 A3011 RMK AO2'),
+      (s) => sfoMetar(s, 'METAR KSFO 111656Z 00000KT 2SM BR OVC003 12/11 A3012 RMK AO2'),
+    ],
+  };
+
+  for (const [label, [before, after]] of Object.entries(NOISE)) {
+    it(`is unchanged by ${label}`, () => {
+      expect(morning(after)).toBe(morning(before));
+    });
+  }
+
+  it('is unchanged by all of that morning’s noise at once', () => {
+    const all = (which) => (s) => { for (const pair of Object.values(NOISE)) pair[which](s); };
+    expect(morning(all(1))).toBe(morning(all(0)));
+  });
+
+  it('changes when the story does: a new ground stop, a hub under 80%, a weather level or hazard, a band', () => {
+    const base = morning();
+    const changes = {
+      'a ground stop at Newark': (s) => {
+        s.faa = s.faa.map((a) => (a.airportCode === 'EWR'
+          ? { ...a, groundStop: true, programs: [{ type: 'ground_stop', reason: 'WX:Thunderstorms', endTime: '2026-11-11T19:30:00Z' }] }
+          : a));
+      },
+      'Chicago O’Hare dropping to 75%': (s) => { hub(s, 'ORD').onTime = 120; },
+      'San Francisco weather easing from severe to a warning': (s) => sfoMetar(s, 'METAR KSFO 111656Z 00000KT 3SM BR OVC008 12/11 A3012 RMK AO2'),
+      'thunderstorms at San Francisco at the same level': (s) => sfoMetar(s, 'METAR KSFO 111656Z 00000KT 2SM TSRA OVC003 12/11 A3012 RMK AO2'),
+      'far more flights in the air than usual': (s) => { s.air = { airborne: 760, starlink: 300 }; },
+      'the disruption index entering the minor band': (s) => { s.irops.score = 24; },
+    };
+    for (const [label, edit] of Object.entries(changes)) expect(morning(edit), label).not.toBe(base);
   });
 });
 

@@ -17,7 +17,9 @@
 //                lists which of these resolve to a deep link today)
 //   - severity   0–100, what a traveler should hear first (template ordering, fact ordering)
 //   - toneFloor  the least alarming tone the brief may take while this fact holds
-//   - material   the jitter-rounded part of the fact that, when it changes, warrants a new brief
+//   - material   the part of the fact that, when it changes, warrants a new brief: the story, not the
+//                reading (bands, not counts). `null` means the fact is never part of the change key,
+//                id included, so it appearing or disappearing is not a change either (materialKey).
 //
 // The numbers come from the site's own definitions, so a chip can never disagree with the hub strip:
 // on-time is serverOtpFromMetrics() (src/lib/hub-health.js), network status is networkStatus()
@@ -214,7 +216,7 @@ function hubLabel(code) {
  * @property {{tab: string, hub?: string, section?: string}} link
  * @property {number} severity
  * @property {'calm'|'watch'|'disrupted'} toneFloor
- * @property {string} material
+ * @property {string|null} material
  */
 
 /**
@@ -284,7 +286,8 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'schedule', hub },
         severity,
         toneFloor: r.otp < 50 ? 'disrupted' : r.otp < BRIEF_SOFT_HUB_OTP ? 'watch' : 'calm',
-        material: `otp:${round(r.otp, 5)}`,
+        // A healthy hub is not news: its reading moving, appearing or aging out is not a change.
+        material: r.otp >= BRIEF_HEALTHY_HUB_OTP ? null : `otp:${round(r.otp, 5)}`,
       });
     }
 
@@ -326,7 +329,8 @@ export function buildBriefFacts(sources, { nowMs }) {
           link: { tab: 'schedule', hub: low },
           severity: 8,
           toneFloor: 'calm',
-          material: `floor:${n}:${round(floorPct, 5)}`,
+          // How many hubs have a reading is not material; nor is the floor while every hub is healthy.
+          material: allHealthy ? null : `floor:${round(floorPct, 5)}`,
         });
       } else {
         const names = soft.map((h) => `${airportDisplayName(h)} (${readings[h].otp}%)`);
@@ -363,7 +367,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'weather', section: 'irops' },
         severity: band === 'significant' ? 60 : band === 'minor' ? 30 : 4,
         toneFloor: band === 'significant' ? 'disrupted' : band === 'minor' ? 'watch' : 'calm',
-        material: `index:${band}:${round(score, 5)}`,
+        material: `index:${band}`,
       });
     }
 
@@ -582,7 +586,8 @@ export function buildBriefFacts(sources, { nowMs }) {
       link: { tab: 'live' },
       severity: 4,
       toneFloor: 'calm',
-      material: `air:${round(airborne, 100)}`,
+      // The count moves all day; how it compares with the usual (air.normal) is what can be news.
+      material: null,
     });
     const starlink = Number(sources.air.starlink);
     if (Number.isFinite(starlink) && starlink > 0) {
@@ -595,7 +600,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'starlink' },
         severity: 3,
         toneFloor: 'calm',
-        material: `starlink:${round(starlink, 50)}`,
+        material: null,
       });
     }
     if (status.airNormal === 'ok' && sources.airNormal.median > 0) {
@@ -613,7 +618,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         link: { tab: 'live' },
         severity: !usual && Math.abs(pct) >= 25 ? 20 : 2,
         toneFloor: 'calm',
-        material: `airnorm:${usual ? 'usual' : `${pct < 0 ? '-' : '+'}${round(Math.abs(pct), 10)}`}`,
+        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}`,
       });
     }
   }
@@ -812,6 +817,7 @@ function weatherFact(hub, raw, atMs, skipped) {
   if (impact.hasFog) conditions.push('fog');
   // computeOpsImpact reports a steady wind of 30 knots or more without a gust group as "gusts Nkt".
   const steady = impact.gustKt >= 30 ? null : impact.reasons.map((r) => r.match(/^gusts (\d+)kt$/)).find(Boolean);
+  const windKt = impact.gustKt >= 30 ? impact.gustKt : steady ? Number(steady[1]) : 0;
   if (impact.gustKt >= 30) { conditions.push(`wind gusting to ${impact.gustKt} knots`); values.push(`${impact.gustKt} knots`); }
   else if (steady) { conditions.push(`wind of ${steady[1]} knots`); values.push(`${steady[1]} knots`); }
   if (conditions.length === 0) {
@@ -829,7 +835,14 @@ function weatherFact(hub, raw, atMs, skipped) {
     link: { tab: 'weather', hub },
     severity: impact.level === 'caution' ? 12 : impact.level === 'warning' ? 35 : 50,
     toneFloor: impact.level === 'caution' ? 'calm' : 'watch',
-    material: `wx:${impact.level}:${uniq(conditions).map((c) => c.replace(/\d+/g, (d) => String(round(Number(d), 10)))).join(',')}`,
+    // The level plus the hazards that matter on their own. Which of low clouds, low visibility and
+    // fog a METAR reports flickers from one observation to the next; the level already carries it.
+    material: `wx:${impact.level}:${[
+      impact.hasThunderstorms ? 'thunderstorms' : null,
+      impact.hasSnow ? 'snow' : null,
+      impact.hasFreezingPrecip ? 'freezing' : null,
+      windKt >= 40 ? 'wind40' : windKt >= 30 ? 'wind30' : null,
+    ].filter(Boolean).join(',')}`,
   };
 }
 
@@ -889,14 +902,20 @@ export function hubReadingCount(facts) {
 }
 
 /**
- * The string the facts hash is taken over: every fact's id and its jitter-rounded `material`, in
- * id order. Two runs whose facts differ only by noise (630 vs 640 airborne, 86% vs 87% on time)
- * produce the same key; a new ground stop, a hub crossing a band or a new radio observation does not.
- * @param {Array<{id: string, material?: string}>} facts
+ * The string the facts hash is taken over: the id and `material` of every fact whose material is
+ * not null, in id order. A fact with `material: null` is left out entirely, id included, so it
+ * appearing or disappearing is not a change. Two runs whose facts differ only by readings (700 vs
+ * 600 in the air, a healthy hub at 100% or 95% or aging out, the disruption index inside its band,
+ * the low-cloud/fog wording of the same weather level) produce the same key; a new ground stop, a
+ * hub dropping under 80%, a weather level or hazard change or a new radio observation does not.
+ * @param {Array<{id: string, material?: string|null}>} facts
  * @returns {string}
  */
 export function materialKey(facts) {
-  return JSON.stringify([...(facts || [])].map((f) => [f.id, f.material ?? '']).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
+  return JSON.stringify([...(facts || [])]
+    .filter((f) => f.material !== null)
+    .map((f) => [f.id, f.material ?? ''])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 }
 
 /**

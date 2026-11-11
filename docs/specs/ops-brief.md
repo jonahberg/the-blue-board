@@ -171,17 +171,34 @@ error if it ever fails.
 
 ## Change detection and staleness
 
-`material` per fact rounds away jitter: on-time to 5 points, airborne to 100, Starlink to 50,
-unconfirmed cancellations to 25, confirmed counts exact under 10 then to 5/10, FAA programs by type,
-end time to 15 min and cause, planned programs by window, weather by level and conditions, the
-index by band plus 5 points. A run whose hash equals the latest brief's, with that brief under 60
-minutes old, writes nothing but `checked_at`. Exception: when the latest is a template caused by a
-transient model failure (`model_error`, `model_timeout`, `model_rate_limited`), the next run retries.
+`material` per fact is the story, not the reading (v1.25.1). A fact with `material: null` is left
+out of the key entirely, id included, so it appearing or disappearing is not a change either:
 
-Measured on the real Nov 9–10 2026 `airborne_samples` day (144 ten-minute runs, 151 to 726 in the
-air): the airborne count alone would start 35 new briefs a day at 100-flight buckets (44 at 50),
-against the 24 a day the hourly refresh guarantees anyway. On-time crossing a 5-point bucket adds
-more on a moving day, so expect roughly 35–70 model calls a day.
+| fact | material |
+|---|---|
+| `air.total`, `air.starlink` | none (`null`): the count moves all day |
+| `air.normal` | usual / above / below (±10% of the 7-day median) |
+| `net.index` | its band (normal / minor / significant), not the score |
+| `otp.<HUB>` | none while at or above 80% (`BRIEF_HEALTHY_HUB_OTP`), so a healthy hub's reading moving, appearing or aging out is not a change; below 80%, rounded to 5 points |
+| `otp.floor` | none while every hub is healthy; otherwise the floor rounded to 5. The hub count is never material |
+| `otp.min` | the lowest hub and its reading rounded to 5 (built only below 80%) |
+| `wx.<HUB>` | the level plus thunderstorms, snow, freezing precipitation and a wind band (30+, 40+ knots); which of low clouds, low visibility and fog a METAR names is not |
+| everything else | unchanged: FAA programs by type, end time to 15 min, cause and average delay to 15 min; planned programs by window; cancellation bands (unconfirmed to 25, confirmed exact under 10 then 5/10); soft hubs; network status; radio and flow facts |
+
+`tests/brief-facts.test.js` replays every difference that rewrote the ten briefs of the morning of
+Nov 11 2026 (airborne 700 → 600, Starlink 300 → 250, the index 4 → 11, a healthy hub 100% → 95%, a
+hub appearing at 100%, another aging out, the SFO fog wording) against that scenario
+(`sfo-gdp-morning`) and pins the key unchanged; a new ground stop, a hub under 80%, a weather level
+or hazard change and a band crossing still change it.
+
+A run whose hash equals the latest brief's, with that brief under 60 minutes old, writes nothing but
+`checked_at`. Exception: when the latest is a template caused by a transient model failure
+(`model_error`, `model_timeout`, `model_rate_limited`), the next run retries.
+
+Measured before v1.25.1 on the real Nov 9–10 2026 `airborne_samples` day (144 ten-minute runs, 151
+to 726 in the air): the airborne count alone would have started 35 new briefs a day at 100-flight
+buckets, against the 24 a day the hourly refresh guarantees anyway. With the count and healthy hubs
+no longer material, a quiet day should run close to that hourly floor, plus one brief per real change.
 
 **`stale` comes from `checked_at`, not `generated_at`** (a deviation from the original design, which
 said "older than 30 minutes"): with a 60-minute reuse window, a calm brief that the cron re-confirms
@@ -221,7 +238,7 @@ A request is ~1.7–3.2K input tokens (the fixtures: 19–34 facts); `max_tokens
 low`. Worst case per call ≈ $0.0013; a typical call (~2.5K in, ~400 out) ≈ $0.0005.
 At most 144 runs a day, so the hard worst case is ≈ $0.19/day, under the $0.50 cap and well under the
 project's $3/day gateway ceiling; realistic volume (a new brief when a band moves, at least hourly) is
-roughly 35–70 calls (measured above), $0.02–0.04/day. Collection costs nothing upstream (above). Supabase: one insert
+close to the 24-a-day hourly floor plus one per real change since v1.25.1 (above), about $0.01–0.04/day. Collection costs nothing upstream (above). Supabase: one insert
 per new brief (~20–40 KB of facts JSONB), one tiny update per unchanged run, 7 small reads.
 
 ## Switches and env
