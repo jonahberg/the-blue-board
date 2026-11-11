@@ -22,7 +22,10 @@ export const STORAGE_KEYS = {
   waitlistSubmitted: 'bb_waitlist_submitted',
   waitlistDismissed: 'bb_waitlist_dismissed',
   bmacDismissed: 'bb-bmac-dismissed',
-  /** The deep-use donation prompt's answer (Oct 2026, new — not a legacy key). */
+  /**
+   * The deep-use support ask's answer (Oct 2026, new — not a legacy key): written by the donation
+   * modal until Nov 2026, by the "cover a day" strip since, same key and format.
+   */
   donatePrompt: 'bb_donate_prompt',
   /** The deep-use email ask's "not now" (Oct 28 2026, new — not a legacy key). */
   emailPrompt: 'bb_email_prompt',

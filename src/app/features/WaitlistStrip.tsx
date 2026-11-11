@@ -20,9 +20,11 @@
  * are sent with `source: 'dashboard'` (the dialog's link-driven ones keep `popup`), which is
  * how the two can be compared.
  *
- * Since Oct 2026 the T1/T2 trigger lives in `state/deep-use.ts` and is shared with the
- * deep-use modals: the first time it fires, ONE ask is latched for the visit. Heavy users get
- * the donation prompt or the email dialog (60/40 while both are eligible, Oct 28 2026), and
+ * Since Oct 2026 the T1/T2 trigger lives in `state/deep-use.ts` and is shared with the other
+ * deep-use asks: the first time it fires, ONE ask is latched for the visit. Heavy users get
+ * the support ask (a donation modal in Oct 2026; since Nov 2026 the "cover a day" strip,
+ * `SupportStrip.tsx`, ahead of this one in the slot) or the email dialog (60/40 while both are
+ * eligible, Oct 28 2026), and
  * this strip only when neither is (`chooseDeepUseAsk`, src/lib/deep-use-ask.js). Closing
  * the email dialog writes the dismissal this strip reads, so in practice the strip is now a
  * rare fallback rather than the deep-use ask.

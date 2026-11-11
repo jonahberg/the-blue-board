@@ -13,10 +13,11 @@
  *   4. dismissing or submitting keeps the strip away for 30 days, reusing the dialog's keys.
  *
  * Since the deep-use asks (Oct 2026) the same trigger brings up ONE ask per visit, and the
- * strip is it only while both the donation prompt and the email dialog cool down — so every
+ * strip is it only while both the support ask (`bb_donate_prompt`: the donation modal in Oct
+ * 2026, the "cover a day" strip since Nov 2026) and the email dialog cool down — so every
  * test here starts as a visitor who answered both "not now" just now (the email ask's own
  * record only, not the shared `bb_waitlist_dismissed`, which would hide the strip too). The
- * hand-offs are pinned in tests/donate-prompt-dialog.test.tsx and
+ * hand-offs are pinned in tests/support-strip.test.tsx and
  * tests/email-prompt-dialog.test.tsx.
  */
 
