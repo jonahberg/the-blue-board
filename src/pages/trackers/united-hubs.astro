@@ -164,13 +164,15 @@ const tableRows = sortedProjects.map((p) => {
     },
   };
 });
+// `phone`: where each cell sits in the stacked card below md (TrackerTable): the project and
+// its status badge, then its hub and type, then the date and scale, then the evidence.
 const columns = [
-  { key: 'project', label: 'Project', sortable: true },
-  { key: 'hub', label: 'Hub', sortable: true },
-  { key: 'type', label: 'Type', sortable: true },
-  { key: 'status', label: 'Status', sortable: true },
-  { key: 'date', label: 'Opened / target', sortable: true },
-  { key: 'scale', label: 'Scale' },
+  { key: 'project', label: 'Project', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-1' },
+  { key: 'hub', label: 'Hub', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-2 max-md:flex max-md:items-center max-md:gap-x-2' },
+  { key: 'type', label: 'Type', sortable: true, phone: 'max-md:col-start-2 max-md:row-start-2 max-md:self-center max-md:text-right' },
+  { key: 'status', label: 'Status', sortable: true, phone: 'max-md:col-start-2 max-md:row-start-1 max-md:justify-self-end' },
+  { key: 'date', label: 'Opened / target', sortable: true, phoneLabel: 'Opened / target' },
+  { key: 'scale', label: 'Scale', phoneLabel: 'Scale' },
   { key: 'sources', label: 'Evidence' },
 ];
 

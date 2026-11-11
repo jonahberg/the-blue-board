@@ -156,11 +156,13 @@ const tableRows = sortedAirports.map((a) => {
   };
 });
 
+// `phone`: where each cell sits in the stacked card below md (TrackerTable): the airport and
+// its status badge, then its city and date, then the note, then the evidence.
 const columns = [
-  { key: 'airport', label: 'Airport', sortable: true },
-  { key: 'location', label: 'Location', sortable: true },
-  { key: 'status', label: 'Status', sortable: true },
-  { key: 'date', label: 'Went digital', sortable: true },
+  { key: 'airport', label: 'Airport', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-1' },
+  { key: 'location', label: 'Location', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-2 max-md:self-baseline' },
+  { key: 'status', label: 'Status', sortable: true, phone: 'max-md:col-start-2 max-md:row-start-1 max-md:justify-self-end' },
+  { key: 'date', label: 'Went digital', sortable: true, phoneLabel: 'Went digital', phone: 'max-md:col-start-2 max-md:row-start-2 max-md:self-baseline max-md:text-right' },
   { key: 'notes', label: 'Notes' },
   { key: 'sources', label: 'Evidence' },
 ];

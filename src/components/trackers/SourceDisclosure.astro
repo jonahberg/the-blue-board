@@ -64,12 +64,14 @@ const actionClass =
   class:list={[
     'flex gap-2',
     compact
-      ? 'min-w-42 flex-col'
+      ? // A table cell: stacked from md (a narrow Evidence column), one line in a phone card
+        // (TrackerTable) with the sources on the left and Watch / Share on the right.
+        'flex-col max-md:flex-row max-md:items-start max-md:justify-between md:min-w-34'
       : // Wraps: in a narrow card the actions drop under the summary instead of overlapping it.
         'mt-2.5 flex-col items-start justify-between border-t border-border pt-2 sm:flex-row sm:flex-wrap',
   ]}
 >
-  <details class="min-w-0">
+  <details class:list={['min-w-0', compact && 'max-md:flex-1']}>
     <summary
       class="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-primary marker:text-muted-foreground pointer-fine:md:min-h-7"
     >

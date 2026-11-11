@@ -9,10 +9,33 @@ import SourceDisclosure from './SourceDisclosure.astro';
 //
 // Cell descriptor: { primary, secondary?, mono?, dim?, badge?: {label, tone, glyph}, link?,
 //                    evidence?, sortVal? }
+//
+// BELOW `md` THE SAME TABLE IS A STACK OF CARDS (the dashboard's phone schedule board solves the
+// same problem with a two-line row): six or seven columns scrolled sideways at 390 px and every
+// row was ~200 px tall. It stays ONE table, restyled — never a second list — because the search
+// filter counts `[data-trk-row]`, the sort reorders `<tr>`s by header index, and `#row-…` ids are
+// the targets of the briefing strip and Share. Each row becomes a two-column grid:
+//
+//   ORD  Chicago O'Hare International          [● LIVE]
+//   Chicago, IL                 Went digital Nov 2025
+//   Note text…                          United hub →
+//   Sources (3) verified …            [Watch] [Share]
+//
+// A column's `phone` classes place its cell in that grid (default: a full-width line) and
+// `phoneLabel` prints a visible label before a value that does not explain itself (a date, a
+// scale). That label is `aria-hidden`: the explicit table roles below keep every cell tied to its
+// column header for a screen reader, which a `display` change on a table can otherwise drop
+// (WebKit), so the header already names it. The sortable headers stay, as a row of sort pills;
+// the others are visually hidden but still head their columns. A "Sort by" caption leads that
+// row on screen only (`content: 'Sort by' / ''` gives it no spoken text).
 interface Column {
   key: string;
   label: string;
   sortable?: boolean;
+  /** Where the cell sits in the phone card (below md), as literal Tailwind classes. */
+  phone?: string;
+  /** A visible label before the value in the phone card. */
+  phoneLabel?: string;
 }
 
 interface Props {
@@ -22,38 +45,47 @@ interface Props {
 }
 
 const { caption, columns, rows } = Astro.props;
+
+/** "ORD status →": the arrow never wraps onto a line of its own. */
+const linkText = (text: string) => String(text).replace(/ (→|&rarr;)$/, ' →');
+
+// From md to lg the columns are tight (a 734 px table at 768): headers and link text may wrap
+// there, and keep to one line from lg.
+const TH_BASE =
+  'top-0 z-1 border-b-2 border-primary bg-card text-left font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:sticky lg:whitespace-nowrap';
 ---
 
 <!-- The table's own scroll container: a focusable region named by the caption, kept a tab stop
      only while the table is wider than it (ScrollRegion.astro). The sort buttons inside can be
      reached either way; the region is what lets a keyboard scroll to the Evidence column. -->
 <ScrollRegion label={caption} class="rounded-lg border border-border">
-  <table class="trk-table w-full border-collapse text-[11px]">
+  <table class="trk-table w-full border-collapse text-[11px] max-md:block" role="table">
     <caption class="sr-only">{caption}</caption>
-    <thead>
-      <tr>
+    <thead class="max-md:block" role="rowgroup">
+      <tr
+        class="max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1.5 max-md:border-b max-md:border-border max-md:p-2 max-md:before:mr-0.5 max-md:before:font-mono max-md:before:text-[11px] max-md:before:font-semibold max-md:before:tracking-wide max-md:before:text-muted-foreground max-md:before:uppercase max-md:before:content-['Sort_by'_/_'']"
+        role="row"
+      >
         {
           columns.map((c) =>
             c.sortable ? (
               <th
                 scope="col"
-                class="sticky top-0 z-1 whitespace-nowrap border-b-2 border-primary bg-card p-0 text-left font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                role="columnheader"
+                class:list={[TH_BASE, 'p-0 max-md:border-0 max-md:bg-transparent max-md:whitespace-nowrap']}
                 aria-sort="none"
                 data-trk-sort={c.key}
               >
                 <button
                   type="button"
-                  class="inline-flex min-h-11 cursor-pointer items-center gap-1 px-2 hover:text-primary"
+                  class="inline-flex min-h-11 cursor-pointer items-center gap-1 px-2 text-left hover:text-primary max-md:rounded-md max-md:border max-md:border-border max-md:px-2.5 max-md:hover:border-primary"
                 >
                   {c.label}
                   <span class="trk-th-arrow" aria-hidden="true" />
                 </button>
               </th>
             ) : (
-              <th
-                scope="col"
-                class="sticky top-0 z-1 whitespace-nowrap border-b-2 border-primary bg-card p-2 text-left font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
-              >
+              <th scope="col" role="columnheader" class:list={[TH_BASE, 'p-2 max-md:sr-only']}>
                 {c.label}
               </th>
             )
@@ -61,11 +93,12 @@ const { caption, columns, rows } = Astro.props;
         }
       </tr>
     </thead>
-    <tbody data-trk-tbody>
+    <tbody class="max-md:block" role="rowgroup" data-trk-tbody>
       {
         rows.map((row) => (
           <tr
-            class="border-b border-border last:border-b-0 hover:bg-muted/40"
+            class="border-b border-border last:border-b-0 hover:bg-muted/40 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:gap-x-3 max-md:gap-y-1.5 max-md:px-3 max-md:py-3"
+            role="row"
             data-trk-row
             data-trk-search-text={row.searchText}
             id={`row-${row.id}`}
@@ -73,7 +106,22 @@ const { caption, columns, rows } = Astro.props;
             {columns.map((c) => {
               const cell = row.cells[c.key] ?? {};
               return (
-                <td class="px-1.5 py-1.5 align-top sm:px-2" data-sort={cell.sortVal ?? ''}>
+                <td
+                  class:list={[
+                    'px-1.5 py-1.5 align-top sm:px-2 max-md:min-w-0 max-md:p-0 max-md:empty:hidden',
+                    c.phone ?? 'max-md:col-span-2',
+                  ]}
+                  role="cell"
+                  data-sort={cell.sortVal ?? ''}
+                >
+                  {c.phoneLabel ? (
+                    <span
+                      class="mr-1.5 font-mono text-[11px] font-semibold tracking-wide text-muted-foreground uppercase md:hidden"
+                      aria-hidden="true"
+                    >
+                      {c.phoneLabel}
+                    </span>
+                  ) : null}
                   {cell.badge ? (
                     <StatusBadge
                       label={cell.badge.label}
@@ -85,6 +133,7 @@ const { caption, columns, rows } = Astro.props;
                     <span
                       class:list={[
                         'block text-[11px] leading-snug sm:text-xs',
+                        c.phoneLabel && 'max-md:inline',
                         cell.badge && 'mt-1',
                         cell.mono && 'font-mono font-semibold',
                         cell.dim ? 'text-muted-foreground' : 'text-foreground',
@@ -94,16 +143,21 @@ const { caption, columns, rows } = Astro.props;
                     </span>
                   ) : null}
                   {cell.secondary ? (
-                    <span class="mt-px block text-[11px] leading-normal text-muted-foreground sm:text-[11px]">
+                    <span
+                      class:list={[
+                        'mt-px block text-[11px] leading-normal text-muted-foreground',
+                        c.phoneLabel && 'max-md:ml-1.5 max-md:inline',
+                      ]}
+                    >
                       {cell.secondary}
                     </span>
                   ) : null}
                   {cell.link ? (
                     <a
-                      class="mt-0.5 inline-flex min-h-11 items-center whitespace-nowrap font-mono text-[11px] font-semibold text-primary underline-offset-2 hover:underline"
+                      class="mt-0.5 inline-flex min-h-11 items-center font-mono text-[11px] font-semibold text-primary underline-offset-2 hover:underline max-md:mt-0 lg:whitespace-nowrap"
                       href={cell.link.href}
                     >
-                      {cell.link.text}
+                      {linkText(cell.link.text)}
                     </a>
                   ) : null}
                   {cell.evidence ? (
