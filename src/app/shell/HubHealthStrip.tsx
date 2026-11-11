@@ -15,9 +15,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   HUB_ORDER,
+  hubChipNoFigure,
   hubHealthSeverity,
   hubOtpDescription,
   hubReadingAge,
+  hubReadingDayOffset,
   networkLabel,
 } from '@/lib/hub-health.js';
 import { networkUnknownText } from '@/lib/faa-freshness.js';
@@ -61,6 +63,10 @@ export function HubHealthStrip() {
   });
   const loading = readings.length === 0 && irops.loading;
   const nowMs = Date.now();
+  // Why a hub has no figure, and whether a server reading is yesterday's board, come from the
+  // server's own metrics (v1.28.0). Before it answers, and on a payload without the counts, the
+  // chip keeps its bare dash (src/lib/hub-health.js hubChipNoFigure).
+  const hubMetrics = irops.data?.hubMetrics ?? null;
 
   return (
     <div
@@ -98,6 +104,15 @@ export function HubHealthStrip() {
               stale: boolean;
             } | null;
             const stale = entry.otp !== null && Boolean(age?.stale);
+            // A chip with no reading says why (Guam: "n/a", its feed sends no departure times). A
+            // tap goes to the hub page, so the reason lives in the link's name (fixed sr-only words,
+            // so a poll that only moves a count announces nothing) and in the tooltip (the count).
+            const noFigure =
+              entry.otp === null
+                ? (hubChipNoFigure(hubMetrics, entry.hub) as { label: string; text: string; sr: string } | null)
+                : null;
+            const dayOffset =
+              entry.otp !== null && entry.source === 'server' ? hubReadingDayOffset(hubMetrics?.[entry.hub]) : 0;
 
             return (
               <Tooltip key={entry.hub}>
@@ -132,8 +147,20 @@ export function HubHealthStrip() {
                         severity ? SEV_TEXT[severity] : 'text-muted-foreground',
                       )}
                     >
-                      {entry.otp === null ? '—' : `${entry.otp}%`}
+                      {entry.otp === null ? (noFigure?.label ?? '—') : `${entry.otp}%`}
                     </span>
+                    {noFigure ? (
+                      <>
+                        {' '}
+                        <span className="sr-only">({noFigure.sr})</span>
+                      </>
+                    ) : null}
+                    {dayOffset === -1 ? (
+                      <>
+                        {' '}
+                        <span className="sr-only">{"(yesterday's departures)"}</span>
+                      </>
+                    ) : null}
                     {stale ? (
                       <>
                         <History aria-hidden="true" data-stale-reading="" className="size-3 shrink-0 text-muted-foreground" />
@@ -146,7 +173,7 @@ export function HubHealthStrip() {
                 <TooltipContent side="bottom">
                   <p className="font-medium">United at {entry.hub} — hub guide</p>
                   <p className="text-xs">
-                    {hubOtpDescription(entry.otp)}
+                    {noFigure ? noFigure.text : hubOtpDescription(entry.otp, dayOffset)}
                     {entry.source === 'client' ? ' (from the loaded board)' : ''}
                   </p>
                   {entry.otp !== null && age ? (
