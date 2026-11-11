@@ -373,7 +373,13 @@ export function flightPageView(payload, nowSec, { live = null, stableDays = fals
     read: PREDICTABLE_STATES.has(leg.state)
       ? { eligible: true, intro: `Ask for a short explanation of ${ident}'s delay risk, scored the way the board scores it: FAA programs, weather at both ends and how the hub is running right now.` }
       : { eligible: false, intro: `The read explains a flight's delay risk before it leaves, as the board does. ${ident} ${leg.state === 'landed' ? 'has landed' : leg.state === 'in-air' || leg.state === 'departed-presumed' ? 'has left' : leg.state === 'diverted' ? 'was diverted' : 'has no departure to predict'}.` },
-    watch: { flight: ident, route: oCode && dCode ? `${oCode}→${dCode}` : '' },
+    // `dep` pins the dashboard's watch to THIS leg (src/lib/watch-link.js), but only before it
+    // leaves: a leg already flying or flown is left for the dashboard's own first answer to pin.
+    watch: {
+      flight: ident,
+      route: oCode && dCode ? `${oCode}→${dCode}` : '',
+      dep: PREDICTABLE_STATES.has(leg.state) ? Math.floor(Number(sched.departure) || 0) : 0,
+    },
     hubForRead: payload?.leg?.hub || null,
     dirForRead: payload?.leg?.dir || 'departures',
   };

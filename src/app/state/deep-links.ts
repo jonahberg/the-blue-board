@@ -14,6 +14,9 @@
  *   ?view=starlink    the Starlink tab (its airborne/special/express siblings are Fleet-tab sub-views)
  *   ?aircraft=        opens the aircraft dialog
  *   ?waitlist=1       opens the waitlist dialog
+ *   ?watch=UA929      watches that flight (the flight page's "Watch this flight"), through the
+ *                     eye buttons' own add path, opens My Flights and leaves the address bar
+ *                     without it (`&route=` / `&dep=` pin the leg; src/lib/watch-link.js)
  *
  * `?flight=` is LATCHED rather than applied once: on a cold load the feed has not answered
  * yet, so matching against an empty flight list would silently drop the link. The effect
@@ -24,6 +27,7 @@
 import { useEffect, useRef } from 'react';
 
 import { weatherScrollTarget } from '@/lib/tab-hash.js';
+import { parseWatchLink, withoutWatchParams } from '@/lib/watch-link.js';
 import { FR24_LOOKUP_AVAILABLE } from '../features/Fr24LookupDialog';
 import { resolveTabParam } from '../tabs';
 import type { TabId } from '../tabs';
@@ -38,6 +42,8 @@ type DeepLinkDeps = {
   setWaitlistOpen: (open: boolean) => void;
   setScheduleHub: (hub: string) => void;
   announce: (text: string) => void;
+  /** `WatchValue.add`: adds unless already watched; true when it added. */
+  addWatch: (flight: string, route: string, status: string, dep: number) => boolean;
 };
 
 /** The Fleet tab's slice of the query string. */
@@ -85,7 +91,7 @@ export function readLiveHubDeepLink(knownHubs: readonly string[]): string | null
 }
 
 /** Query parameters that name a specific destination inside the dashboard. */
-const DEEP_LINK_PARAMS = ['tab', 'hub', 'section', 'flight', 'q', 'aircraft', 'view', 'filter', 'type', 'waitlist'];
+const DEEP_LINK_PARAMS = ['tab', 'hub', 'section', 'flight', 'q', 'aircraft', 'view', 'filter', 'type', 'waitlist', 'watch'];
 
 /**
  * True when the visitor arrived on a deep link. The first-visit welcome overlay should not
@@ -163,6 +169,19 @@ export function useDeepLinks(deps: DeepLinkDeps) {
     if (aircraft) depsRef.current.openAircraft(aircraft.toUpperCase());
 
     if (params.get('waitlist') === '1') depsRef.current.setWaitlistOpen(true);
+
+    // ?watch=UA929 — last, so it decides the tab. The parameters leave the address bar either
+    // way: a reload or a copied link must not re-add a flight the visitor has since removed.
+    if (params.has('watch')) {
+      const watch = parseWatchLink(params, Math.floor(Date.now() / 1000));
+      const clean = withoutWatchParams(window.location);
+      if (clean) window.history.replaceState(window.history.state, '', clean);
+      if (watch) {
+        const added = depsRef.current.addWatch(watch.flight, watch.route, '', watch.dep);
+        depsRef.current.setTab('myflight');
+        depsRef.current.announce(added ? `Watching ${watch.flight}` : `${watch.flight} is already on your watch list`);
+      }
+    }
     // Deliberately mount-only: re-reading the URL later would fight the user's own tabbing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

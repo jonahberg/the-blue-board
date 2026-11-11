@@ -11,12 +11,14 @@
  *     this flight is in the air, for its live position on the progress track;
  *   - the AI read's inputs and `/api/delay-explain`, ONLY when the reader presses that button.
  *
- * "Watch this flight" hands off to the dashboard's watch list: the entry is added to the same
- * `bb_watched_flights` list the dashboard reads (src/lib/watch-utils.js, its compatibility
- * contract), and the link opens My Flights, where the dashboard's own watch feature takes over.
+ * "Watch this flight" is a link to the dashboard's `?watch=UA929` deep link (src/lib/watch-link.js):
+ * the dashboard adds the flight through its own watch store (so the push subscription and the
+ * first-watch alert prompt follow) and opens My Flights. This page only READS the watch list, to
+ * say "Watching" on the button; it never writes it.
  */
 
-import { readWatched, writeWatched } from '../lib/watch-utils.js';
+import { readWatched } from '../lib/watch-utils.js';
+import { watchLinkHref } from '../lib/watch-link.js';
 import { parseFlightIdent, flightPagePath } from '../lib/flight-page.js';
 import { flightPageView, STEP_CLASSES, TONE_TEXT } from '../lib/flight-page-view.js';
 import { findLiveFlight, liveFlightMatchesLeg } from '../lib/my-flights.js';
@@ -295,6 +297,7 @@ if (root) {
 
   const paintWatch = (view: View) => {
     if (!watchLink || !view.watch) return;
+    watchLink.href = watchLinkHref(view.watch);
     const watched = readWatched(storage() ?? { getItem: () => null }).some((e: { flight: string }) => e.flight === view.watch!.flight);
     const label = q<HTMLElement>(watchLink, '[data-f="watch-label"]');
     if (label) label.textContent = watched ? 'Watching: open My Flights' : 'Watch this flight';
@@ -367,17 +370,6 @@ if (root) {
   };
 
   // ── Actions ──
-  watchLink?.addEventListener('click', () => {
-    const view = currentView;
-    if (!view?.watch) return;
-    const store = storage();
-    if (!store) return; // the link still opens My Flights, where the box can add it
-    const list = readWatched(store);
-    if (!list.some((e: { flight: string }) => e.flight === view.watch!.flight)) {
-      writeWatched(store, [{ flight: view.watch.flight, route: view.watch.route, status: '', ts: Date.now() }, ...list]);
-    }
-  });
-
   shareBtn?.addEventListener('click', async () => {
     const url = `${window.location.origin}${flightPagePath(ident)}`;
     const text = currentView?.verdict?.text || `${ident} flight status`;

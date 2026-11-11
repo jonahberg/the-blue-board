@@ -46,7 +46,7 @@ import { IropsProvider } from './state/irops';
 import { PrefsProvider, usePrefs } from './state/prefs';
 import { ScheduleProvider, useSchedule } from './state/schedule';
 import { UiProvider, useUi } from './state/ui';
-import { WatchProvider } from './state/watch';
+import { WatchProvider, useWatch } from './state/watch';
 import { WatchAlertsProvider, useWatchAlerts } from './state/watch-alerts';
 import { WeatherProvider } from './state/weather';
 import { TABS } from './tabs';
@@ -96,6 +96,7 @@ function DashboardShell() {
   const { flights } = useFeed();
   const { setCurrent } = useSchedule();
   const { alert: watchAlert, clearAlert: clearWatchAlert } = useWatchAlerts();
+  const { add: addWatch } = useWatch();
   const [watchOpen, setWatchOpen] = useState(false);
   // Views stay mounted once visited. Radix unmounts inactive TabsContent by default, which
   // would tear the Leaflet map down and rebuild it on every tab switch — losing the pan,
@@ -115,6 +116,7 @@ function DashboardShell() {
     setWaitlistOpen,
     setScheduleHub: useCallback((hub: string) => setCurrent({ hub }), [setCurrent]),
     announce,
+    addWatch,
   });
 
   // ⌘K / Ctrl-K from anywhere. This has to be a window listener, not a React onKeyDown on

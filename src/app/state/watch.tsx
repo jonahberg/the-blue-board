@@ -66,6 +66,14 @@ export type WatchValue = {
   watched: WatchedFlight[];
   /** Adds or removes; returns true when the flight is now watched. */
   toggle: (flight: string, route?: string, status?: string) => boolean;
+  /**
+   * Adds the flight if it is not watched yet, through the same path as `toggle`'s add (push
+   * mirror, first-watch prompt); a flight already on the list is left exactly as it is. `dep`
+   * (epoch seconds) pins the entry to one leg. Returns true when it was added. The `?watch=`
+   * deep link uses this: it applies on mount, before this tab's render knows the stored list,
+   * so it checks storage rather than `isWatched`.
+   */
+  add: (flight: string, route?: string, status?: string, dep?: number) => boolean;
   clearAll: () => void;
   /**
    * Restamp a watched flight's last-seen status, without touching the list order.
@@ -182,13 +190,24 @@ export function WatchProvider({ children }: { children: ReactNode }) {
     return written;
   }, []);
 
+  /** A change made before `/api/push-subscribe` answered, still to be mirrored. */
+  const syncPending = useRef(false);
+
   /**
    * Mirror the current list to the server. Requires a service worker, PushManager,
    * Notification permission and a configured server; an empty list unsubscribes. Failures
    * are swallowed — a broken push sync must never surface as a dashboard error.
+   *
+   * Before the server has said whether it has keys, a change cannot be mirrored or skipped
+   * honestly: it is remembered and the latest list is mirrored once the answer arrives (the
+   * `?watch=` deep link adds a flight on mount, a few hundred ms before that).
    */
   const syncSubscription = useCallback(
     async (list: WatchedFlight[]) => {
+      if (!bootstrapped) {
+        syncPending.current = true;
+        return;
+      }
       if (!configured || !vapidKey) return;
       if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -220,7 +239,22 @@ export function WatchProvider({ children }: { children: ReactNode }) {
         /* push is best-effort */
       }
     },
-    [configured, vapidKey],
+    [bootstrapped, configured, vapidKey],
+  );
+
+  useEffect(() => {
+    if (!bootstrapped || !syncPending.current) return;
+    syncPending.current = false;
+    void syncSubscription(readLatest(safeLocalStorage()));
+  }, [bootstrapped, syncSubscription, readLatest]);
+
+  /** The one add path, shared by `toggle` (the eye buttons) and `add` (the `?watch=` link). */
+  const addTo = useCallback(
+    (storage: Storage | null, current: WatchedFlight[], entry: WatchedFlight) => {
+      if (current.length === 0) setJustAddedFirst(true);
+      void syncSubscription(commit(storage, [entry, ...current]));
+    },
+    [commit, syncSubscription],
   );
 
   const toggle = useCallback(
@@ -228,20 +262,25 @@ export function WatchProvider({ children }: { children: ReactNode }) {
       const storage = safeLocalStorage();
       const current = readLatest(storage);
       const existing = current.findIndex((entry) => entry.flight === flight);
-      let next: WatchedFlight[];
-      let nowWatched: boolean;
       if (existing >= 0) {
-        next = current.filter((_, i) => i !== existing);
-        nowWatched = false;
-      } else {
-        next = [{ flight, route, status, ts: Date.now() }, ...current];
-        nowWatched = true;
-        if (current.length === 0) setJustAddedFirst(true);
+        void syncSubscription(commit(storage, current.filter((_, i) => i !== existing)));
+        return false;
       }
-      void syncSubscription(commit(storage, next));
-      return nowWatched;
+      addTo(storage, current, { flight, route, status, ts: Date.now() });
+      return true;
     },
-    [commit, readLatest, syncSubscription],
+    [addTo, commit, readLatest, syncSubscription],
+  );
+
+  const add = useCallback(
+    (flight: string, route = '', status = '', dep = 0) => {
+      const storage = safeLocalStorage();
+      const current = readLatest(storage);
+      if (current.some((entry) => entry.flight === flight)) return false;
+      addTo(storage, current, { flight, route, status, ts: Date.now(), ...(dep > 0 ? { dep } : {}) });
+      return true;
+    },
+    [addTo, readLatest],
   );
 
   const clearAll = useCallback(() => {
@@ -317,6 +356,7 @@ export function WatchProvider({ children }: { children: ReactNode }) {
     () => ({
       watched,
       toggle,
+      add,
       clearAll,
       updateStatus,
       applyStatusChanges,
@@ -336,6 +376,7 @@ export function WatchProvider({ children }: { children: ReactNode }) {
     [
       watched,
       toggle,
+      add,
       clearAll,
       updateStatus,
       applyStatusChanges,

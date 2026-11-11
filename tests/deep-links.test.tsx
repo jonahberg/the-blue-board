@@ -34,6 +34,7 @@ function makeDeps() {
     setWaitlistOpen: vi.fn(),
     setScheduleHub: vi.fn(),
     announce: vi.fn(),
+    addWatch: vi.fn((..._args: [string, string, string, number]) => true),
   };
 }
 type Deps = ReturnType<typeof makeDeps>;
@@ -149,6 +150,46 @@ describe('?hub=, ?view=starlink, ?aircraft=, ?waitlist=1', () => {
     rerender(FEED);
     expect(deps.setTab).toHaveBeenCalledTimes(1);
     expect(deps.setTab).toHaveBeenCalledWith('stats', undefined);
+  });
+});
+
+describe('?watch= (the flight page\'s "Watch this flight")', () => {
+  it('watches the flight through the store\'s add path, opens My Flights and strips the link', () => {
+    const dep = Math.floor(Date.now() / 1000) + 3 * 3600;
+    const { deps } = mountAt(`/?utm_source=flight-page&watch=UA929&route=ORD-LHR&dep=${dep}#myflight`);
+    expect(deps.addWatch).toHaveBeenCalledTimes(1);
+    expect(deps.addWatch).toHaveBeenCalledWith('UA929', 'ORD→LHR', '', dep);
+    expect(deps.setTab).toHaveBeenLastCalledWith('myflight');
+    expect(deps.announce).toHaveBeenCalledWith('Watching UA929');
+    expect(window.location.search).toBe('?utm_source=flight-page');
+    expect(window.location.hash).toBe('#myflight');
+  });
+
+  it('says so, and still opens My Flights, when the flight is already watched', () => {
+    window.history.replaceState(null, '', '/?watch=UA929');
+    const deps = makeDeps();
+    deps.addWatch.mockReturnValue(false);
+    render(<Harness flights={[]} deps={deps} />);
+    expect(deps.setTab).toHaveBeenCalledWith('myflight');
+    expect(deps.announce).toHaveBeenCalledWith('UA929 is already on your watch list');
+  });
+
+  it('ignores a value that is not a canonical flight number, and still clears it from the address', () => {
+    for (const bad of ['UAL929', '929', 'UA0929', 'AA100', '%3Cscript%3E', '']) {
+      const { deps } = mountAt(`/?watch=${bad}&route=ORD-LHR`);
+      expect(deps.addWatch, bad).not.toHaveBeenCalled();
+      expect(deps.setTab, bad).not.toHaveBeenCalled();
+      expect(deps.announce, bad).not.toHaveBeenCalled();
+      expect(window.location.search, bad).toBe('');
+      cleanup();
+    }
+  });
+
+  it('applies once: a later render with the same URL does not add again', () => {
+    const { deps, rerender } = mountAt('/?watch=UA1');
+    window.history.replaceState(null, '', '/?watch=UA1');
+    rerender(FEED);
+    expect(deps.addWatch).toHaveBeenCalledTimes(1);
   });
 });
 
