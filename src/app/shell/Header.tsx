@@ -143,13 +143,18 @@ export function Header({
           onClick={onOpenWatch}
           aria-expanded={watchOpen}
           aria-controls="watch-panel"
-          aria-label={`Watched flights (${watch.watched.length})`}
         >
+          {/* Named by its words, the count it shows among them (WCAG 2.5.3): "Watched flights 2".
+              An aria-label of "Watched flights (2)" over the visible "2" failed axe. */}
           <Eye aria-hidden="true" />
+          <span className="sr-only">Watched flights</span>
           {watch.watched.length > 0 ? (
-            <span className="rounded-full bg-primary-fill px-1.5 font-mono text-[10px] text-primary-foreground">
-              {watch.watched.length}
-            </span>
+            <>
+              {' '}
+              <span className="rounded-full bg-primary-fill px-1.5 font-mono text-[10px] text-primary-foreground">
+                {watch.watched.length}
+              </span>
+            </>
           ) : null}
         </Button>
 

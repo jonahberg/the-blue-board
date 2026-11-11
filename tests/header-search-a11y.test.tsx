@@ -80,10 +80,11 @@ describe('header search button', () => {
     expect(ui!.searchOpen).toBe(true);
   });
 
-  it('every other icon-only header control already carries an aria-label', () => {
+  it('every other icon-only header control has a name: its own sr-only words, or an aria-label where it shows no text', () => {
     renderHeader();
-    expect(screen.getByRole('button', { name: /Watched flights/ }).getAttribute('aria-label')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'What is this dashboard?' })).toBeTruthy();
+    // The watch button shows a count beside its eye, so it is named by words that include it.
+    expect(screen.getByRole('button', { name: 'Watched flights' }).getAttribute('aria-label')).toBeNull();
+    expect(screen.getByRole('button', { name: 'What is this dashboard?' }).getAttribute('aria-label')).toBe('What is this dashboard?');
   });
 
   // Header.tsx's search <Button> once had a `hidden` label and no aria-label, so at phone width

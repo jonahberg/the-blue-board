@@ -20,8 +20,9 @@ import { supportUrl } from '@/lib/support-link.js';
 vi.mock('../src/app/state/feed', () => ({
   useFeed: () => ({ flights: [], freshness: 'live', countdown: 30 }),
 }));
+const watch = vi.hoisted(() => ({ watched: [] as { flight: string }[] }));
 vi.mock('../src/app/state/watch', () => ({
-  useWatch: () => ({ watched: [] }),
+  useWatch: () => watch,
 }));
 
 const { Header } = await import('../src/app/shell/Header');
@@ -40,7 +41,10 @@ function renderHeader() {
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  watch.watched = [];
+});
 
 describe('Header search button', () => {
   it('is named by its own label, kept in the accessibility tree at every width', () => {
@@ -71,7 +75,7 @@ describe('Header search button', () => {
 
   it('keeps a 44px hit area on coarse pointers at every width (only a fine pointer relaxes it)', () => {
     renderHeader();
-    for (const name of ['Find a flight', 'Watched flights (0)', 'What is this dashboard?']) {
+    for (const name of ['Find a flight', 'Watched flights', 'What is this dashboard?']) {
       const classes = screen.getByRole('button', { name }).className.split(/\s+/);
       expect(classes).toEqual(expect.arrayContaining(HIT_BOX_44));
       // Width is not input type: the box only comes off for a mouse at md+.
@@ -113,3 +117,12 @@ describe('Header wordmark', () => {
   });
 });
 
+describe('Header watch button', () => {
+  it('is named by its words with the count it shows among them, not an aria-label over the count (WCAG 2.5.3)', () => {
+    watch.watched = [{ flight: 'UA1' }, { flight: 'UA2' }];
+    renderHeader();
+    const button = screen.getByRole('button', { name: 'Watched flights 2' });
+    expect(button.getAttribute('aria-label')).toBeNull();
+    expect(button.getAttribute('aria-controls')).toBe('watch-panel');
+  });
+});
