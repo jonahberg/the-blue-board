@@ -171,18 +171,22 @@ export function HubHealthStrip() {
                   </a>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p className="font-medium">United at {entry.hub} — hub guide</p>
-                  <p className="text-xs">
-                    {noFigure ? noFigure.text : hubOtpDescription(entry.otp, dayOffset)}
-                    {entry.source === 'client' ? ' (from the loaded board)' : ''}
-                  </p>
-                  {entry.otp !== null && age ? (
+                  {/* One block: the content is an inline-flex row, so bare <p>s sat side by side
+                      as columns ("United at GUM — hub guide" squeezed beside the reason). */}
+                  <div className="space-y-0.5">
+                    <p className="font-medium">United at {entry.hub} — hub guide</p>
                     <p className="text-xs">
-                      {age.label}
-                      {age.stale ? ' — stale' : ''}
+                      {noFigure ? noFigure.text : hubOtpDescription(entry.otp, dayOffset)}
+                      {entry.source === 'client' ? ' (from the loaded board)' : ''}
                     </p>
-                  ) : null}
-                  {program ? <p className="text-xs">{program.label}</p> : null}
+                    {entry.otp !== null && age ? (
+                      <p className="text-xs">
+                        {age.label}
+                        {age.stale ? ' — stale' : ''}
+                      </p>
+                    ) : null}
+                    {program ? <p className="text-xs">{program.label}</p> : null}
+                  </div>
                 </TooltipContent>
               </Tooltip>
             );
