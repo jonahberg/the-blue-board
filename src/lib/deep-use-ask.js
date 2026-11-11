@@ -25,7 +25,7 @@
 import { donatePromptEligible } from './donate-prompt.js';
 import { emailPromptEligible } from './email-prompt.js';
 
-/** The share of two-way choices that go to the donation prompt; the rest go to email. */
+/** The share of two-way choices that go to the support ask (the strip); the rest go to email. */
 export const DEEP_USE_DONATE_WEIGHT = 0.6;
 
 /**

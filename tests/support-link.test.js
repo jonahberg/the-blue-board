@@ -2,7 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { STRIPE_SUPPORT_URL, SUPPORT_MEDIA, SUPPORT_UTM_SOURCE, supportUrl } from '../src/lib/support-link.js';
+import {
+  STRIPE_MONTHLY_URL,
+  STRIPE_SUPPORT_URL,
+  SUPPORT_MEDIA,
+  SUPPORT_UTM_SOURCE,
+  hasMonthlySupport,
+  monthlySupportUrl,
+  supportUrl,
+} from '../src/lib/support-link.js';
 import { isSupportUrl, supportPlacement } from '../src/lib/support-tracking.js';
 
 // The donation link (src/lib/support-link.js). One-time donations moved from Buy Me a Coffee to
@@ -68,6 +76,15 @@ describe('supportUrl', () => {
     expect(isSupportUrl(href)).toBe(true);
     const anchor = { href, getAttribute: (name) => (name === 'data-support' ? 'footer' : null) };
     expect(supportPlacement(anchor)).toBe('footer');
+  });
+});
+
+describe('the monthly link ("cover a day every month")', () => {
+  it('is empty for now, so no monthly option is offered and supportUrl is untouched', () => {
+    expect(STRIPE_MONTHLY_URL).toBe('');
+    expect(hasMonthlySupport()).toBe(false);
+    expect(monthlySupportUrl('about-monthly')).toBeNull();
+    expect(supportUrl('about')).toBe(`${STRIPE}?utm_source=theblueboard&utm_medium=site&utm_content=about`);
   });
 });
 

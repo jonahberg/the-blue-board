@@ -62,6 +62,14 @@ describe('cleanSupporterName', () => {
     }
   });
 
+  it('treats filler answers as no name, so a day never reads "covered by No."', () => {
+    for (const filler of ['No', 'none', 'N.A.', 'Anonymous', 'anon', 'Test', "Don't show", 'Private', 'a supporter', 'Me']) {
+      expect(cleanSupporterName(filler), filler).toBeNull();
+    }
+    // …while real names that merely contain those words still pass.
+    for (const name of ['Noah', 'Nora Anon-Smith', 'Tess', 'Mel']) expect(cleanSupporterName(name), name).toBe(name);
+  });
+
   it('rejects invisible formatting characters and non-strings', () => {
     expect(cleanSupporterName('Da​na')).toBeNull();
     expect(cleanSupporterName('Dana‮R')).toBeNull();

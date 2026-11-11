@@ -51,7 +51,7 @@ export function donatePromptRecord(outcome, now = Date.now()) {
 
 /**
  * Is the prompt outside its cooldown? Fails CLOSED: without a working store there is
- * nowhere to remember a "Maybe later", and a prompt that can't remember would open on
+ * nowhere to remember a dismiss, and an ask that can't remember would show on
  * every visit.
  *
  * @param {{getItem: Function}|null|undefined} storage

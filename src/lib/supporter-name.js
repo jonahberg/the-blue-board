@@ -7,9 +7,10 @@
 //
 // The check is about shape, not meaning: letters (any script), spaces, apostrophes, periods and
 // hyphens; 2-30 characters after whitespace is collapsed; must start with a letter and hold at
-// least two; no digits, no markup, no @, and nothing shaped like a domain ("dana.com"). It
-// cannot tell an offensive or impersonating name from a real one. That is what the owner's
-// `hidden` flag is for.
+// least two; no digits, no markup, no @, and nothing shaped like a domain ("dana.com"). Filler
+// answers that are not names ("No", "Anonymous", "Test") read as "a supporter" too. It cannot
+// tell an offensive or impersonating name from a real one. That is what the owner's `hidden`
+// flag is for.
 //
 // Not to be confused with src/lib/supporter-names.js, which keys names for the Buy Me a
 // Coffee wall diff.
@@ -27,6 +28,17 @@ const DOMAIN_SHAPE = /\p{L}\.\p{L}{2,}/u;
 /** "Dana..", "O''Neil", "a--b": punctuation that is not part of a name. */
 const PUNCT_RUN = /['’.-]{2,}/u;
 const URL_WORD = /(^|\s)(https?|www)(\s|$)/i;
+/**
+ * Answers to "what name should we show?" that are not names: "Today is covered by No." would
+ * be true to the letter and wrong. These read as "a supporter", which is what they meant.
+ * Compared on letters only, lowercased.
+ */
+const NOT_A_NAME = new Set([
+  'no', 'nope', 'none', 'nil', 'na', 'nothing', 'nobody', 'noname', 'anon', 'anonymous', 'anonymously',
+  'private', 'hidden', 'hide', 'skip', 'test', 'testing', 'asdf', 'idk', 'someone', 'somebody', 'me',
+  'myself', 'name', 'yourname', 'displayname', 'notapplicable', 'dontshow', 'donotshow', 'dontdisplay',
+  'pass', 'null', 'undefined', 'supporter', 'asupporter',
+]);
 
 /**
  * Collapse every run of whitespace (including no-break spaces) to one space and trim.
@@ -52,6 +64,7 @@ export function cleanSupporterName(raw) {
   if (DOMAIN_SHAPE.test(name) || PUNCT_RUN.test(name) || URL_WORD.test(name)) return null;
   // A name ends in a letter or an initial's period ("Dana R."), never a dangling ' or -.
   if (/['’-]$/u.test(name)) return null;
+  if (NOT_A_NAME.has(name.toLowerCase().replace(/[^\p{L}]/gu, ''))) return null;
   return name;
 }
 

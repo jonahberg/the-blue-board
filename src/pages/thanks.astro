@@ -3,11 +3,12 @@
  * /thanks — where Stripe sends a supporter after paying (the Payment Link's after-payment
  * redirect, set by the owner in Stripe). Static, `noindex`, no script.
  *
- * Every sentence is true whether or not the payment has reached the site yet: it says what the
- * money does, how "cover a day" works (src/lib/cover-a-day.js), and how a display name may
- * appear. A name shows only after the check in src/lib/supporter-name.js, and a day that
- * several donations covered shows a count instead of names. It makes no claim about which
- * day this payment covered, because it cannot know.
+ * A static page cannot know whether this payment has reached the site, which day it covered,
+ * or whether the calendar is switched on, so every sentence here is one that holds in all of
+ * those cases: what the money does, how "cover a day" counts (src/lib/cover-a-day.js), and that
+ * a display name CAN appear (only after src/lib/supporter-name.js, never on a hidden row or
+ * with SUPPORTER_NAMES=off; a pooled day shows a count). Point Stripe's redirect here only
+ * once the webhook is live.
  */
 import BaseLayout from '../components/site/BaseLayout.astro';
 import { DAILY_COST_USD, MONTHLY_COST_USD } from '../lib/cover-a-day.js';
@@ -27,14 +28,14 @@ const description = 'Thank you for supporting The Blue Board, the free, fan-buil
         delay explanations.
       </p>
       <p>
-        Every ${DAILY_COST_USD} covers one day of this month, and donations fill the month in order from
-        the 1st. You can see the month in the dashboard's About section (ⓘ → About on a computer,
-        More → About on a phone). It can take a minute or two to show your donation.
+        We count donations in days: every ${DAILY_COST_USD} covers one day of the site's costs, and a
+        month's donations fill its days in order from the 1st. The dashboard's About section (ⓘ →
+        About on a computer, More → About on a phone) shows this month's days.
       </p>
       <p>
-        If you gave a display name, it appears beside the day (or days) your donation covered, once it has
-        passed a basic check; otherwise that day says &ldquo;a supporter&rdquo;. A day that several
-        donations covered together shows how many supporters covered it.
+        If you gave a display name, it can appear beside the day your donation covered, after a basic
+        check. Otherwise, or if several donations covered that day together, the day is credited to
+        &ldquo;a supporter&rdquo; or to the number of supporters who covered it.
       </p>
       <p>Stripe handled your payment. Your card details stay with Stripe.</p>
     </div>

@@ -51,7 +51,7 @@ export function deepUseAskThisVisit(now = Date.now()): DeepUseAsk {
 
 /**
  * Test seam: forget this visit's choice. `nextRandom` fixes the dice for the next choice
- * (a value below `DEEP_USE_DONATE_WEIGHT` picks the donation prompt when both are eligible).
+ * (a value below `DEEP_USE_DONATE_WEIGHT` picks the support strip when both are eligible).
  */
 export function resetDeepUseAsk(nextRandom: () => number = Math.random): void {
   latched = undefined;
