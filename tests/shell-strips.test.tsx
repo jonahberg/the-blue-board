@@ -29,6 +29,8 @@ const hubState = vi.hoisted(() => ({
   faaIndex: {} as Record<string, unknown>,
   faaUnknownSince: null as number | null,
   iropsScore: null as number | null,
+  /** The current brief's tone, or null while the row is the ticker. */
+  briefTone: null as 'calm' | 'watch' | 'disrupted' | null,
 }));
 function resetHubState() {
   const now = Date.now();
@@ -39,6 +41,7 @@ function resetHubState() {
   hubState.faaIndex = {};
   hubState.faaUnknownSince = null;
   hubState.iropsScore = null;
+  hubState.briefTone = null;
 }
 vi.mock('../src/app/state/schedule', () => ({
   useHubHealth: () => ({
@@ -53,6 +56,11 @@ vi.mock('../src/app/state/irops', () => ({
   useIrops: () => ({ loading: false, score: hubState.iropsScore }),
 }));
 vi.mock('../src/app/state/prefs', () => ({ usePrefs: () => ({ homeAirport: '' }) }));
+vi.mock('../src/app/state/brief', () => ({
+  useBrief: () => ({
+    view: hubState.briefTone ? { status: 'ready', tone: hubState.briefTone } : { status: 'unavailable' },
+  }),
+}));
 
 const { default: NewsBanner } = await import('../src/app/features/NewsBanner');
 const { default: TipStrip } = await import('../src/app/features/TipStrip');
@@ -110,6 +118,19 @@ describe('Dashboard layout', () => {
     expect(classes.some((c) => c !== '[&>*~*]:hidden' && c.endsWith(':[&>*~*]:hidden'))).toBe(false);
     expect(jsx.indexOf('</div>', tip)).toBeLessThan(jsx.indexOf('<Attribution'));
   });
+
+  it('hides the news on the phone Live tab only, keeping it mounted so the tip still waits (Nov 2026)', () => {
+    const news = jsx.slice(jsx.indexOf('<NewsBanner'), jsx.indexOf('/>', jsx.indexOf('<NewsBanner')));
+    // Hidden by CSS below lg on Live, never unmounted: an unmounted news strip would make the tip
+    // the slot's first child and hand it the 32 px back.
+    expect(news).toMatch(/className=\{tab === 'live' \? 'max-lg:hidden' : undefined\}/);
+    expect(news).not.toMatch(/\{tab !== 'live'/);
+    // The support and waitlist strips take no such rule.
+    for (const tag of ['<SupportStrip', '<WaitlistStrip', '<TipStrip']) {
+      const el = jsx.slice(jsx.indexOf(tag), jsx.indexOf('/>', jsx.indexOf(tag)));
+      expect(el).not.toMatch(/hidden/);
+    }
+  });
 });
 
 describe('NewsBanner', () => {
@@ -132,6 +153,17 @@ describe('NewsBanner', () => {
   });
 });
 
+describe('NewsBanner hidden by the shell', () => {
+  it('takes the shell\'s class on its own row, beside its 32px height', async () => {
+    render(<NewsBanner className="max-lg:hidden" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    const row = screen.getByRole('link', { name: /new Pacific route/ }).parentElement;
+    expect(classesOf(row)).toEqual(expect.arrayContaining(['h-8', 'max-lg:hidden']));
+  });
+});
+
 describe('TipStrip', () => {
   it('is one 32px row once it appears', async () => {
     render(
@@ -149,7 +181,19 @@ describe('TipStrip', () => {
 });
 
 describe('HubHealthStrip', () => {
-  it('gives every hub chip 24px for a mouse and 44px for a finger (phone QA, Oct 3 2026)', () => {
+  it('is one 28px row at every width and pointer, like the brief row above it (Nov 2026)', () => {
+    const { container } = render(
+      <TooltipProvider>
+        <HubHealthStrip />
+      </TooltipProvider>,
+    );
+    const strip = container.querySelector('[aria-label="Hub on-time performance"]');
+    expect(classesOf(strip)).toContain('h-7');
+    // The 44 px touch chips made this a 45 px row on a phone; no variant may grow it back.
+    expect(classesOf(strip).some((c) => /:(h|min-h|py)-/.test(c))).toBe(false);
+  });
+
+  it('gives every hub chip 24px for a mouse and the full row for a finger (WCAG 2.5.8)', () => {
     render(
       <TooltipProvider>
         <HubHealthStrip />
@@ -157,7 +201,11 @@ describe('HubHealthStrip', () => {
     );
     for (const hub of ['ORD', 'DEN']) {
       const chip = screen.getByRole('link', { name: new RegExp(hub) });
-      expect(classesOf(chip)).toEqual(expect.arrayContaining(['min-h-6', 'pointer-coarse:min-h-11']));
+      // A finger gets the row's whole 27 px inside its border and a wider pad. The row scrolls
+      // sideways, which clips any hit box poking out of it, so the chip itself is the target.
+      expect(classesOf(chip)).toEqual(
+        expect.arrayContaining(['min-h-6', 'pointer-coarse:self-stretch', 'pointer-coarse:px-2']),
+      );
       // Keyed to the pointer, never to width: a tablet at md is still a touch screen.
       expect(classesOf(chip).some((c) => /^md:min-h/.test(c))).toBe(false);
     }
@@ -207,6 +255,31 @@ describe('HubHealthStrip', () => {
     renderStrip();
     expect(screen.queryByText(/FAA status unknown/)).toBeNull();
     expect(screen.getByText('Disrupted')).toBeTruthy();
+  });
+
+  it('drops the network chip while a current brief above says the same thing (Nov 2026)', () => {
+    hubState.iropsScore = 90; // Disrupted
+    hubState.briefTone = 'disrupted';
+    renderStrip();
+    expect(screen.queryByText('Disrupted')).toBeNull();
+  });
+
+  it('keeps the network chip when the brief disagrees with it, or when there is no brief', () => {
+    hubState.iropsScore = 90; // Disrupted, live
+    hubState.briefTone = 'watch'; // a snapshot written before it got worse
+    const { unmount } = renderStrip();
+    expect(screen.getByText('Disrupted')).toBeTruthy();
+    unmount();
+    hubState.briefTone = null;
+    renderStrip();
+    expect(screen.getByText('Disrupted')).toBeTruthy();
+  });
+
+  it('always keeps "FAA status unknown", which the brief does not say', () => {
+    hubState.faaUnknownSince = Date.now() - 40 * 60_000;
+    hubState.briefTone = 'calm';
+    renderStrip();
+    expect(screen.getByText(/^FAA status unknown since \d\d:\d\d$/)).toBeTruthy();
   });
 
   it('dims a chip whose reading comes from an hours-old board (F91)', () => {
