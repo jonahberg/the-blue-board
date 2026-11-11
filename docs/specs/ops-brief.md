@@ -365,6 +365,11 @@ already showing. Every chip href is a real deep link that resolves on a cold loa
 (`src/app/state/deep-links.ts`), through the same resolver a chip click uses
 (`weatherScrollTarget` in `src/lib/tab-hash.js`).
 
+With no current brief the row is the rotating ticker, whose advisory line (`deriveOpsHealth` in
+`src/lib/ops-health.js`) words hub programs the same way and with the header pill's own level:
+"Some delays: ground delay program for flights into SFO (avg 62 min)" ("Disrupted:" only when the
+network level is), "Disrupted: ground stop for flights into EWR".
+
 Chip colour (`chipTone`): a ground stop or closure at a hub is red (`alert`, `text-destructive`);
 a ground delay program at a hub is amber (`warn`, `text-bb-warn` / `border-bb-warn/40`), as the
 hub strip marks it and as a brief with only that program reads ("Watch"); radio is `bb-info` with an
