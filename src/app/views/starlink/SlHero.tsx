@@ -129,7 +129,8 @@ export const SlHero = memo(function SlHero({
                 type="button"
                 data-action="view-starlink-on-map"
                 onClick={onShowOnMap}
-                className={`${CHIP} hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
+                // `relative` holds its sr-only words inside it.
+                className={`${CHIP} relative hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
                 title="Show these on the live map"
               >
                 {/* Named by its own words plus sr-only ones (WCAG 2.5.3): the aria-label it had

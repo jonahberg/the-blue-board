@@ -69,7 +69,7 @@ export function Header({
       {/* Named by its own words plus an sr-only purpose (WCAG 2.5.3): an aria-label over the
           visible wordmark and tagline announced different words from the ones on screen. The
           capitals are CSS, so a screen reader reads a name, not an acronym. */}
-      <a href="#live" className="flex min-w-0 items-baseline gap-2 no-underline">
+      <a href="#live" className="relative flex min-w-0 items-baseline gap-2 no-underline">
         <span className="whitespace-nowrap text-xs font-semibold tracking-tight uppercase sm:text-sm">
           The Blue Board
         </span>

@@ -111,7 +111,10 @@ export function HubHealthStrip() {
                       // brief row above it (Nov 2026). The row scrolls sideways, which clips any
                       // hit box that pokes outside it, so the chip itself is the target. Keyed
                       // to the POINTER, not the width: an iPad at desktop width is a touch screen.
-                      'flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent pointer-coarse:self-stretch pointer-coarse:px-2',
+                      // `relative`: the stale chip's sr-only words are absolutely positioned, and
+                      // without a positioned chip they escape the sideways scroller and widen the
+                      // whole page (a 390 px phone laid out at 585 px).
+                      'relative flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent pointer-coarse:self-stretch pointer-coarse:px-2',
                       isHome && 'border border-primary/40',
                     )}
                   >

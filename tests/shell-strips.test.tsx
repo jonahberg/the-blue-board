@@ -300,5 +300,8 @@ describe('HubHealthStrip', () => {
     const pct = [...den.querySelectorAll('span')].find((el) => /%$/.test(el.textContent ?? ''))!;
     expect(classesOf(pct)).not.toContain('opacity-60');
     expect(den.querySelector('[aria-hidden="true"].opacity-60')).not.toBeNull();
+    // The sr-only words are absolutely positioned: a positioned chip keeps them inside the
+    // sideways scroller (unpositioned, they widened a 390 px phone page to 585 px).
+    expect(classesOf(den)).toContain('relative');
     expect(ord.querySelector('.opacity-60')).toBeNull();
   });});
