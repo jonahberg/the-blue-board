@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import DisclaimerDialog from '../src/app/features/DisclaimerDialog';
 import { MobileNav } from '../src/app/shell/MobileNav';
 import { UiProvider } from '../src/app/state/ui';
+import { supportUrl } from '../src/lib/support-link.js';
 
 afterEach(cleanup);
 
@@ -40,7 +41,7 @@ describe('MobileNav More sheet', () => {
     expect(within(sheet).getByRole('button', { name: 'About' })).toBeTruthy();
 
     const support = within(sheet).getByRole('link', { name: /Support The Blue Board/ });
-    expect(support.getAttribute('href')).toBe('https://buymeacoffee.com/notjbg');
+    expect(support.getAttribute('href')).toBe(supportUrl('mobile-more'));
     expect(support.getAttribute('target')).toBe('_blank');
     expect(support.getAttribute('rel')).toBe('noopener noreferrer');
     // The delegated support_click tracker labels the placement from this attribute.

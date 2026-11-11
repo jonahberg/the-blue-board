@@ -36,6 +36,7 @@ import {
 } from '../src/lib/donate-prompt.js';
 import { EMAIL_PROMPT_STORAGE_KEY, emailPromptRecord } from '../src/lib/email-prompt.js';
 import { TRIGGER_TIME_MS } from '../src/lib/engagement.js';
+import { supportUrl } from '../src/lib/support-link.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -93,7 +94,7 @@ describe('DonatePrompt', () => {
     expect(prompt()).not.toBeNull();
     expect(strip()).toBeNull();
     const link = screen.getByRole('link', { name: 'Donate to keep it going' });
-    expect(link.getAttribute('href')).toBe('https://buymeacoffee.com/notjbg');
+    expect(link.getAttribute('href')).toBe(supportUrl('deep-use-prompt'));
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('data-support')).toBe('deep-use-prompt');
     expect(track).toHaveBeenCalledWith('donate_prompt', { action: 'shown' });

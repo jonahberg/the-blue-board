@@ -8,6 +8,7 @@ import Breadcrumbs from '../components/site/Breadcrumbs.astro';
 import HighlightBox from '../components/site/HighlightBox.astro';
 import { resolveTag } from '../data/news/index.js';
 import { newsSeo } from '../lib/page-seo.js';
+import { supportUrl } from '../lib/support-link.js';
 
 const { article } = Astro.props;
 const slug: string = article.slug;
@@ -137,7 +138,7 @@ const newsArticleSchema = {
       <div class="mt-8">
         <HighlightBox tone="warn">
           The Blue Board is free, ad-free, and independent. If you find this useful, consider <a
-            href="https://buymeacoffee.com/notjbg"
+            href={supportUrl('news-article')}
             target="_blank"
             rel="noopener noreferrer"
             data-support="news-article">supporting the project</a

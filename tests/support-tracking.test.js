@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 
+import { supportUrl } from '../src/lib/support-link.js';
 import { track } from '../src/lib/track.js';
 import {
   SUPPORT_CLICK_EVENT,
@@ -47,7 +48,15 @@ describe('track — Vercel Web Analytics custom events via the script tag', () =
 });
 
 describe('support click tracking', () => {
-  it('recognises Buy Me a Coffee URLs and nothing that merely looks like one', () => {
+  it('recognises the Stripe donation link and nothing that merely looks like one', () => {
+    expect(isSupportUrl(supportUrl('footer'))).toBe(true);
+    expect(isSupportUrl('https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00')).toBe(true);
+    expect(isSupportUrl('https://buy.stripe.com.evil.example/14AaEW6Xx4AH9Ca7ssgEg00')).toBe(false);
+    expect(isSupportUrl('https://notbuy.stripe.com/x')).toBe(false);
+    expect(isSupportUrl('https://stripe.com/')).toBe(false);
+  });
+
+  it('still recognises Buy Me a Coffee URLs (monthly memberships stay there)', () => {
     expect(isSupportUrl('https://buymeacoffee.com/notjbg')).toBe(true);
     expect(isSupportUrl('https://www.buymeacoffee.com/notjbg/membership')).toBe(true);
     expect(isSupportUrl('https://buymeacoffee.com.evil.example/notjbg')).toBe(false);
@@ -58,7 +67,7 @@ describe('support click tracking', () => {
 
   it('labels a click by data-support, falling back to "other"', () => {
     const a = document.createElement('a');
-    a.href = 'https://buymeacoffee.com/notjbg';
+    a.href = supportUrl('footer');
     expect(supportPlacement(a)).toBe('other');
     a.setAttribute('data-support', 'footer');
     expect(supportPlacement(a)).toBe('footer');
@@ -69,9 +78,10 @@ describe('support click tracking', () => {
     expect(supportPlacement(null)).toBeNull();
   });
 
-  it('sends one event per BMC click, including clicks on a child of the link', () => {
+  it('sends one event per support click, including clicks on a child of the link', () => {
     document.body.innerHTML = `
-      <a id="bmc" href="https://buymeacoffee.com/notjbg" data-support="landed-toast"><span id="inner">☕</span></a>
+      <a id="donate" href="${supportUrl('landed-toast')}" data-support="landed-toast"><span id="inner">Donate</span></a>
+      <a id="member" href="https://buymeacoffee.com/notjbg/membership" data-support="about-membership">Member</a>
       <a id="gh" href="https://github.com/jonahberg/the-blue-board">GitHub</a>`;
     const send = vi.fn();
     installSupportClickTracking(document, send);
@@ -80,10 +90,12 @@ describe('support click tracking', () => {
     const prevent = (e) => e.preventDefault(); // jsdom would otherwise try to navigate
     document.addEventListener('click', prevent);
     document.getElementById('inner').click();
+    document.getElementById('member').click();
     document.getElementById('gh').click();
     document.removeEventListener('click', prevent);
 
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith(SUPPORT_CLICK_EVENT, { from: 'landed-toast' });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenNthCalledWith(1, SUPPORT_CLICK_EVENT, { from: 'landed-toast' });
+    expect(send).toHaveBeenNthCalledWith(2, SUPPORT_CLICK_EVENT, { from: 'about-membership' });
   });
 });

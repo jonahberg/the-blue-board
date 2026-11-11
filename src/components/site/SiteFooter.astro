@@ -6,6 +6,8 @@
  * The unaffiliated-with-United disclaimer and the FR24 / AWC / FAA data credits
  * are a licensing and trust requirement — never drop them.
  */
+import { supportUrl } from '../../lib/support-link.js';
+
 const linkClass = 'underline underline-offset-2 hover:text-foreground';
 ---
 <footer class="mt-10 border-t border-border bg-background">
@@ -37,13 +39,13 @@ const linkClass = 'underline underline-offset-2 hover:text-foreground';
         >
       </span>
       <a
-        href="https://buymeacoffee.com/notjbg"
+        href={supportUrl('footer')}
         target="_blank"
         rel="noopener noreferrer"
         data-support="footer"
         class="inline-flex min-h-11 items-center rounded-md bg-primary-fill px-3 font-medium text-primary-foreground pointer-fine:md:min-h-0 md:px-2.5 md:py-1"
       >
-        &#9749; Support Server Costs
+        Support Server Costs
       </a>
       <span class="whitespace-nowrap">
         Built by <a

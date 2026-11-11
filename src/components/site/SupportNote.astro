@@ -13,13 +13,14 @@
  *
  * `placement` becomes the link's `data-support` label, so the delegated listener in
  * src/lib/support-tracking.js (installed on every page by VercelAnalytics.astro) reports a
- * `support_click` per placement, e.g. `fleet-top` vs `fleet-end`. Labels are pinned unique and
- * ≤40 chars by tests/support-note.test.js.
+ * `support_click` per placement, e.g. `fleet-top` vs `fleet-end`, and the Stripe link's
+ * `utm_content` (src/lib/support-link.js), so the payment records the same label. Labels are
+ * pinned unique and ≤40 chars by tests/support-note.test.js.
  *
  * Pure markup — no inline <script>/<style>; the CSP is hash-locked at build.
  */
 import { SUPPORTERS } from '../../data/supporters.js';
-import { SUPPORT_URL } from '../../lib/support-tracking.js';
+import { supportUrl } from '../../lib/support-link.js';
 
 interface Props {
   variant: 'inline' | 'card';
@@ -32,13 +33,14 @@ interface Props {
 
 const { variant, placement, checkedAgainst, class: className = '' } = Astro.props;
 const supporterCount = SUPPORTERS.length;
+const href = supportUrl(placement);
 ---
 {
   variant === 'inline' ? (
     <p class:list={['mt-2 text-xs text-muted-foreground', className]} data-support-note="inline">
       Researched and kept current by one person — no ads, no paywall.{' '}
       <a
-        href={SUPPORT_URL}
+        href={href}
         target="_blank"
         rel="noopener noreferrer"
         data-support={placement}
@@ -67,7 +69,7 @@ const supporterCount = SUPPORTERS.length;
       </p>
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <a
-          href={SUPPORT_URL}
+          href={href}
           target="_blank"
           rel="noopener noreferrer"
           data-support={placement}

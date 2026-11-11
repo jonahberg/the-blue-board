@@ -4,6 +4,8 @@ import { createRateLimiter } from './_rate-limit.js';
 import { getSupabase } from './_supabase.js';
 import { buildEmailFooterHtml, listUnsubscribeHeaders } from './_email-footer.js';
 import { SOCIAL_PROOF_USERS, HUB_LINE_LONG } from '../src/data/facts.js';
+import { escapeHtml } from '../src/lib/escape.js';
+import { supportUrl } from '../src/lib/support-link.js';
 
 // 5 submissions per IP per hour. Each new address that passes here triggers a welcome email
 // (sendWelcomeEmail → Resend), so the ceiling is the backstop against welcome-email spam to
@@ -188,7 +190,7 @@ function buildWelcomeEmail(): string {
     </p>
 
     <div style="text-align:center;margin:24px 0;">
-      <a href="https://buymeacoffee.com/notjbg" style="background-color:transparent;color:#4a90d9;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:600;display:inline-block;border:1.5px solid #4a90d9;">
+      <a href="${escapeHtml(supportUrl('welcome-email', { medium: 'email' }))}" style="background-color:transparent;color:#4a90d9;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:600;display:inline-block;border:1.5px solid #4a90d9;">
         Donate
       </a>
     </div>

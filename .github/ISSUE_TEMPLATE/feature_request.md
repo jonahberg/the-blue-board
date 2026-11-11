@@ -16,4 +16,4 @@ assignees: ''
 <!-- Links to similar features on other sites, mockups, etc. -->
 
 ## Would you support this?
-- [ ] I'd buy a WiFi day pass ☕ for this feature
+- [ ] I'd buy a WiFi day pass for this feature
