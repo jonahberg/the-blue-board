@@ -65,8 +65,18 @@ export type StarlinkState = {
   flightsStatus: 'idle' | 'loading' | 'ready' | 'failed';
   stats: StarlinkFleetStats | null;
   aircraft: StarlinkAircraft[];
+  /** The tracker's own field — frozen since Oct 27 2026, so nothing reads it as freshness. */
   lastUpdated: string | null;
+  /** When our sync took the ROSTER (boot fetch); '' / null when unknown. */
   syncedAt: string | null;
+  /** The roster's serving tier ('supabase', 'supabase-stale', 'static', …); null before v1.28.0. */
+  servedFrom: string | null;
+  /**
+   * The same two for the SCHEDULES (`?fields=flights`, fetched when the tab opens), which can come
+   * from a different tier or a later sync. Null until they arrive, or when the server omits them.
+   */
+  flightsSyncedAt: string | null;
+  flightsServedFrom: string | null;
   /** True when the live endpoint failed and the static roster is standing in. */
   degraded: boolean;
 };
@@ -103,6 +113,9 @@ const EMPTY_STARLINK: StarlinkState = {
   aircraft: [],
   lastUpdated: null,
   syncedAt: null,
+  servedFrom: null,
+  flightsSyncedAt: null,
+  flightsServedFrom: null,
   degraded: false,
 };
 
@@ -174,6 +187,10 @@ export function FleetProvider({ children }: { children: ReactNode }) {
           aircraft,
           lastUpdated: data.lastUpdated ?? null,
           syncedAt: data.syncedAt ?? null,
+          servedFrom: data.servedFrom ?? null,
+          // Schedules sent inline came in this same response, so they share its sync.
+          flightsSyncedAt: inline ? (data.syncedAt ?? null) : current.flightsSyncedAt,
+          flightsServedFrom: inline ? (data.servedFrom ?? null) : current.flightsServedFrom,
           degraded: false,
         }));
       } else {
@@ -216,6 +233,8 @@ export function FleetProvider({ children }: { children: ReactNode }) {
           ...current,
           flightsByTail: data?.flightsByTail ?? {},
           flightsStatus: 'ready',
+          flightsSyncedAt: data?.syncedAt ?? null,
+          flightsServedFrom: data?.servedFrom ?? null,
         })),
       () => {
         flightsRequested.current = false;

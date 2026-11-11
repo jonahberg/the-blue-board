@@ -38,7 +38,9 @@ describe('DeparturesBoard', () => {
         windowH={12}
         onWindow={() => {}}
         onShowAll={() => {}}
-        freshness="updated 5m ago"
+        freshness="schedule synced 5m ago · airborne live"
+        emptyText="No United Starlink departures from the hubs in the next 12h."
+        footer="A NOC departures board, not a passenger FIDS."
         tzAbbrev={() => 'PDT'}
         onOpenAircraft={() => {}}
         onTrack={onTrack}
@@ -75,7 +77,9 @@ describe('DeparturesBoard flight numbers (Nov 2026)', () => {
         windowH={12}
         onWindow={() => {}}
         onShowAll={() => {}}
-        freshness="updated 5m ago"
+        freshness="schedule synced 5m ago · airborne live"
+        emptyText="No United Starlink departures from the hubs in the next 12h."
+        footer="A NOC departures board, not a passenger FIDS."
         tzAbbrev={() => 'PDT'}
         onOpenAircraft={onOpenAircraft}
         onTrack={() => {}}

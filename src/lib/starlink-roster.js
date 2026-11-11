@@ -168,6 +168,19 @@ export function starlinkScheduleFreshness({ syncedAt, servedFrom, nowMs = Date.n
 }
 
 /**
+ * The tab's source line freshness ("Starlink data via … · <this> · 681 aircraft"): the schedule
+ * freshness when there is a sync time, otherwise null and the line says nothing about freshness.
+ * It used to print the tracker's frozen `lastUpdated` ("Updated 16d ago"), and "live" when that was
+ * missing.
+ * @param {{syncedAt?: string|null, servedFrom?: string|null, nowMs?: number}} input
+ * @returns {string|null}
+ */
+export function starlinkSourceFreshness({ syncedAt, servedFrom, nowMs = Date.now() } = {}) {
+  if (!syncedAt || Number.isNaN(Date.parse(syncedAt))) return null;
+  return starlinkScheduleFreshness({ syncedAt, servedFrom, nowMs });
+}
+
+/**
  * The latest scheduled departure (UNIX seconds) in the served per-tail schedules, or null.
  * @param {Record<string, Array<{departure_ts?: number}>>|null|undefined} flightsByTail
  * @returns {number|null}

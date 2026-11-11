@@ -11,6 +11,7 @@ import {
   starlinkBoardFooter,
   starlinkScheduleAge,
   starlinkScheduleFreshness,
+  starlinkSourceFreshness,
   integrityAlertText,
   ledgerHasData,
   nextFlight,
@@ -366,3 +367,24 @@ describe('Starlink schedule freshness', () => {
     expect(starlinkBoardFooter({ syncedAt: '', nowMs: NOW_MS })).toContain('Times are scheduled. Airborne marks come from the live flight feed — not live ATC.');
   });
 });
+
+// v1.28.0: the tab's source line ("Starlink data via … · <freshness> · 681 aircraft") used to say
+// "Updated 16d ago" from the tracker's frozen field, and "live" when the field was missing.
+describe('starlinkSourceFreshness', () => {
+  const NOW = Date.UTC(2026, 10, 11, 22, 0, 0);
+  const ago = (h) => new Date(NOW - h * 3600_000).toISOString();
+
+  it('is the schedule freshness when there is a sync time', () => {
+    expect(starlinkSourceFreshness({ syncedAt: ago(2), servedFrom: 'supabase', nowMs: NOW })).toBe('schedule synced 2h ago · airborne live');
+    expect(starlinkSourceFreshness({ syncedAt: ago(22), servedFrom: 'supabase-stale', nowMs: NOW })).toBe('tracker offline, schedule from 22h ago');
+    // No servedFrom (production before v1.28.0): the age alone decides.
+    expect(starlinkSourceFreshness({ syncedAt: ago(22), nowMs: NOW })).toBe('tracker offline, schedule from 22h ago');
+  });
+
+  it('is null — the line says nothing about freshness — without one', () => {
+    expect(starlinkSourceFreshness({ syncedAt: null, servedFrom: 'static', nowMs: NOW })).toBeNull();
+    expect(starlinkSourceFreshness({ syncedAt: '', nowMs: NOW })).toBeNull();
+    expect(starlinkSourceFreshness({ nowMs: NOW })).toBeNull();
+  });
+});
+

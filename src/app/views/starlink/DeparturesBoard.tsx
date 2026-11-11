@@ -7,10 +7,13 @@
  * Three honesty rules are built into the chrome rather than the footer alone:
  *  - the callsigns are the OPERATING carrier's (SKW####, RPA####), not United marketing
  *    numbers, so the operator is printed next to every one of them;
- *  - the times are scheduled / last-seen out of a cache up to six hours old, so the panel
- *    states its own freshness inline instead of implying live ATC;
- *  - in the degraded tier the board does not appear at all — it is replaced by one line
- *    saying the schedule feed is offline, because an empty board reads as "no departures".
+ *  - the times are scheduled, from a stored schedule whose real age is stated inline and in the
+ *    footer (`freshness` / `footer`, from src/lib/starlink-roster.js: "schedule synced 2h ago",
+ *    "tracker offline, schedule from 22h ago"), never implying live ATC. The fixed "cache (up to
+ *    6h)" footer was false whenever the tracker was down (22 h on Nov 11 2026);
+ *  - an empty board must not read as "no departures" when it is the schedule that ran out:
+ *    `emptyText` says the feed is offline then, and in the degraded tier the board does not
+ *    appear at all — one line says the schedule feed is offline instead.
  *
  * The all-hubs view caps each hub to a tight slice (`boardCapPolicy`): the uncapped 12 h list
  * is ~180 rows, which buries the roster and the ledger below it. "Show all" lifts the cap.
@@ -26,10 +29,6 @@ import { FlightLink } from '../../features/FlightLink';
 import type { BoardModel, BoardRow } from './types';
 
 export type WindowHours = 12 | 48;
-
-/** Verbatim from the shipped panel — this line is the whole disclosure for the board. */
-export const BOARD_FOOTER =
-  "A NOC departures board, not a passenger FIDS. Callsigns are the operating carrier (SkyWest, Republic, Mesa…), not United marketing flight numbers. Times are scheduled / last-seen, served through The Blue Board's cache (up to 6h) — not live ATC.";
 
 export const BOARD_UNAVAILABLE_NOTE =
   'Live departures board unavailable — Starlink schedule feed is offline (showing the fleet roster only).';
@@ -138,6 +137,8 @@ export const DeparturesBoard = memo(function DeparturesBoard({
   onWindow,
   onShowAll,
   freshness,
+  emptyText,
+  footer,
   tzAbbrev,
   onOpenAircraft,
   onTrack,
@@ -149,8 +150,12 @@ export const DeparturesBoard = memo(function DeparturesBoard({
   windowH: WindowHours;
   onWindow: (hours: WindowHours) => void;
   onShowAll: () => void;
-  /** "updated 12m ago" / "scheduled times" — never a claim of liveness. */
+  /** `starlinkScheduleFreshness()`: "schedule synced 2h ago · airborne live" / "scheduled times". */
   freshness: string;
+  /** `starlinkBoardEmptyText()`: what an empty window says — "the feed is offline" once the stored schedule has run out. */
+  emptyText: string;
+  /** `starlinkBoardFooter()`: the board's whole disclosure, with the schedule's real age. */
+  footer: string;
   tzAbbrev: (hub: string) => string;
   onOpenAircraft: (reg: string) => void;
   onTrack: (row: BoardRow) => void;
@@ -214,9 +219,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
 
       <div className="mt-3" id="sl-board-body">
         {board.buckets.length === 0 ? (
-          <p className="py-6 text-center text-xs text-muted-foreground">
-            No United Starlink departures from {hub ?? 'the hubs'} in the next {windowH}h.
-          </p>
+          <p className="py-6 text-center text-xs text-balance text-muted-foreground">{emptyText}</p>
         ) : (
           <>
             {board.buckets.map((bucket) => (
@@ -254,7 +257,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
         )}
       </div>
 
-      <p className="mt-3 border-t pt-2 text-[10px] text-muted-foreground">{BOARD_FOOTER}</p>
+      <p className="mt-3 border-t pt-2 text-[10px] text-muted-foreground">{footer}</p>
     </Card>
   );
 });

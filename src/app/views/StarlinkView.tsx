@@ -39,12 +39,16 @@ import { buildVelocityChart } from '@/lib/starlink-chart.js';
 import {
   buildIndustryRows,
   filterRoster,
-  freshnessAgo,
+  latestScheduledDepartureTs,
   ledgerHasData,
   rolloutBars,
   rolloutBarsNote,
   rosterOptions,
   sortRoster,
+  starlinkBoardEmptyText,
+  starlinkBoardFooter,
+  starlinkScheduleFreshness,
+  starlinkSourceFreshness,
 } from '@/lib/starlink-roster.js';
 import {
   bucketInstallsByMonth,
@@ -319,10 +323,35 @@ export default function StarlinkView() {
     nowSec,
   ]);
 
-  const boardFreshness = useMemo(() => {
-    const ago = freshnessAgo(starlink.lastUpdated, nowMs) as string | null;
-    return ago ? `updated ${ago}` : 'scheduled times';
-  }, [starlink.lastUpdated, nowMs]);
+  // How old the board's rows really are (v1.28.0): OUR sync of the schedules and the tier they were
+  // served from — the schedules' own response first, the boot roster's when it did not say. Never
+  // the tracker's `lastUpdated`, frozen since Oct 27 2026 ("updated 16d ago" above live rows).
+  const boardSyncedAt = starlink.flightsSyncedAt ?? starlink.syncedAt;
+  const boardServedFrom = starlink.flightsServedFrom ?? starlink.servedFrom;
+  const latestDepartureTs = useMemo(
+    () => latestScheduledDepartureTs(flightsByTail) as number | null,
+    [flightsByTail],
+  );
+  const boardFreshness = useMemo(
+    () => starlinkScheduleFreshness({ syncedAt: boardSyncedAt, servedFrom: boardServedFrom, nowMs }) as string,
+    [boardSyncedAt, boardServedFrom, nowMs],
+  );
+  const boardFooter = useMemo(
+    () => starlinkBoardFooter({ syncedAt: boardSyncedAt, servedFrom: boardServedFrom, nowMs }) as string,
+    [boardSyncedAt, boardServedFrom, nowMs],
+  );
+  const boardEmptyText = useMemo(
+    () =>
+      starlinkBoardEmptyText({
+        hub: boardHub,
+        windowH: boardWindow,
+        latestDepartureTs,
+        nowSec,
+        syncedAt: boardSyncedAt,
+        servedFrom: boardServedFrom,
+      }) as string,
+    [boardHub, boardWindow, latestDepartureTs, nowSec, boardSyncedAt, boardServedFrom],
+  );
 
   // ── Roster ─────────────────────────────────────────────────────────────────────────────
   const options = useMemo(
@@ -438,10 +467,17 @@ export default function StarlinkView() {
     ledgerRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }, []);
 
-  const sourceUpdated = useMemo(() => {
-    const ago = freshnessAgo(starlink.lastUpdated, nowMs) as string | null;
-    return ago ? `Updated ${ago}` : 'live';
-  }, [starlink.lastUpdated, nowMs]);
+  // The source line is about the roster this tab's count comes from, so it reads the roster's sync.
+  // Without a sync time it states no freshness at all (it used to say "live").
+  const sourceFreshness = useMemo(
+    () =>
+      starlinkSourceFreshness({
+        syncedAt: starlink.syncedAt,
+        servedFrom: starlink.servedFrom,
+        nowMs,
+      }) as string | null,
+    [starlink.syncedAt, starlink.servedFrom, nowMs],
+  );
 
   const canFilterMap = starlink.tails.size > 0 && !starlink.degraded;
 
@@ -490,6 +526,8 @@ export default function StarlinkView() {
           onWindow={onBoardWindow}
           onShowAll={onBoardShowAll}
           freshness={boardFreshness}
+          emptyText={boardEmptyText}
+          footer={boardFooter}
           tzAbbrev={tzAbbrev}
           onOpenAircraft={openAircraft}
           onTrack={onBoardTrack}
@@ -573,8 +611,12 @@ export default function StarlinkView() {
           >
             unitedstarlinktracker.com
           </a>{' '}
-          · <span id="sl-updated">{sourceUpdated}</span> · <span id="sl-count">{aircraft.length}</span>{' '}
-          aircraft
+          {sourceFreshness ? (
+            <>
+              · <span id="sl-updated">{sourceFreshness}</span>{' '}
+            </>
+          ) : null}
+          · <span id="sl-count">{aircraft.length}</span> aircraft
         </p>
       </Card>
     </div>

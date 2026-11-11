@@ -135,7 +135,14 @@ export function fetchStarlinkRoster(): Promise<
   return getJson('/api/starlink-data?fields=roster');
 }
 
-export function fetchStarlinkFlights(): Promise<Pick<StarlinkData, 'flightsByTail'>> {
+/**
+ * The per-tail schedules. Every server since v1.12 also sends `lastUpdated` and `syncedAt` with
+ * them, and from v1.28.0 `servedFrom`: the sync and the tier THESE schedules came from, which can
+ * differ from the boot-time roster's.
+ */
+export function fetchStarlinkFlights(): Promise<
+  Pick<StarlinkData, 'flightsByTail'> & Partial<Pick<StarlinkData, 'lastUpdated' | 'syncedAt' | 'servedFrom'>>
+> {
   return getJson('/api/starlink-data?fields=flights');
 }
 
