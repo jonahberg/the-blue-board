@@ -163,11 +163,11 @@ describe('verifyBrief: items', () => {
     const index = new Map(FACTS.map((f) => [f.id, f]));
     expect(checkSentence('Newark has a ground stop until 9:00 PM ET.', ['faa.planned.EWR'], index)).toEqual(['planned_not_hedged']);
     expect(checkSentence('A ground stop is possible at Newark until 9:00 PM ET.', ['faa.planned.EWR'], index)).toEqual([]);
-    expect(checkSentence('The FAA may stop Newark departures until 9:00 PM ET; nothing is in effect yet.', ['faa.planned.EWR'], index)).toEqual([]);
+    expect(checkSentence('The FAA may stop flights into Newark until 9:00 PM ET; nothing is in effect yet.', ['faa.planned.EWR'], index)).toEqual([]);
   });
 
   it('lets "weather" stand for any weather cause a cited fact carries', () => {
-    expect(checkSentence('Weather has stopped Newark departures until 8:30 PM ET.', ['faa.active.EWR.gs'], new Map(FACTS.map((f) => [f.id, f])))).toEqual([]);
+    expect(checkSentence('Weather has stopped arrivals at Newark until 8:30 PM ET.', ['faa.active.EWR.gs'], new Map(FACTS.map((f) => [f.id, f])))).toEqual([]);
   });
 
   it('caps items at four and drops the rest', () => {

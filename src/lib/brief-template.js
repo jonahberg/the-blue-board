@@ -26,6 +26,9 @@ const SUMMARY_IDS = new Set([
 ]);
 
 const byId = (facts) => new Map((facts || []).map((f) => [f.id, f]));
+/** A template headline stays within the prompt's own limit (rule 3), so the verifier never warns on it. */
+const HEADLINE_WORDS = 12;
+const wordCount = (s) => String(s).trim().split(/\s+/).filter(Boolean).length;
 
 /**
  * The headline for these facts at this tone, and the facts it rests on.
@@ -39,13 +42,14 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
   const name = (f) => airportDisplayName(f.hub || '');
   const find = (re) => sorted.find((f) => re.test(f.id));
 
+  // A ground stop or delay program holds flights INTO the airport, so the headline says "into".
   if (tone === 'disrupted') {
     const gs = find(/^faa\.active\.[A-Z]{3}\.gs$/);
-    if (gs?.hub) return { headline: `A ground stop is in effect at ${name(gs)}.`, fact_ids: [gs.id] };
+    if (gs?.hub) return { headline: `A ground stop is holding flights into ${name(gs)}.`, fact_ids: [gs.id] };
     const closure = find(/^faa\.active\.[A-Z]{3}\.closure$/);
     if (closure?.hub) return { headline: `The FAA lists ${name(closure)} as closed.`, fact_ids: [closure.id] };
     const gdp = find(/^faa\.active\.[A-Z]{3}\.gdp$/);
-    if (gdp?.hub) return { headline: `${name(gdp)} is under a ground delay program.`, fact_ids: [gdp.id] };
+    if (gdp?.hub) return { headline: `A ground delay program is holding flights into ${name(gdp)}.`, fact_ids: [gdp.id] };
     const otp = sorted.find((f) => /^otp\.[A-Z]{3}$/.test(f.id) && f.toneFloor === 'disrupted');
     if (otp?.hub) return { headline: `Delays are heavy at ${name(otp)}.`, fact_ids: [otp.id] };
     return { headline: "United's operation is disrupted right now.", fact_ids: top ? [top.id] : [] };
@@ -61,8 +65,10 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
     if (lead?.hub && lead.kind === 'cancellations') return { headline: `Mostly normal, with cancellations at ${name(lead)}.`, fact_ids: [lead.id] };
     const elsewhere = lead && lead.id.match(/^faa\.active\.([A-Z]{3})\.(gs|gdp)$/);
     if (elsewhere) {
-      const what = elsewhere[2] === 'gs' ? 'Ground stop' : 'Ground delay program';
-      return { headline: `${what} at ${airportDisplayName(elsewhere[1])}; United's hubs are running normally.`, fact_ids: [lead.id] };
+      const what = `${elsewhere[2] === 'gs' ? 'Ground stop' : 'Ground delay program'} for flights into ${airportDisplayName(elsewhere[1])}`;
+      const long = `${what}; United's hubs are running normally.`;
+      // A long airport name ("New York LaGuardia") would push it past the 12-word headline limit.
+      return { headline: wordCount(long) <= HEADLINE_WORDS ? long : `${what}.`, fact_ids: [lead.id] };
     }
     if (planned) return { headline: `Running normally, with FAA action possible at ${name(planned)}.`, fact_ids: [planned.id] };
     return { headline: 'United is mostly running normally right now.', fact_ids: lead ? [lead.id] : [] };
@@ -110,6 +116,19 @@ function pickItems(facts, limit, tone) {
 }
 
 /**
+ * Who the traveler note speaks to. A ground stop or delay program holds flights INTO the airport;
+ * a closure stops both directions; a hub's on-time figure is about its departures.
+ * @param {BriefFact} anchor
+ */
+function travelerWho(anchor) {
+  const name = airportDisplayName(anchor.hub || '');
+  if (/^faa\.active\.[A-Z]{3}\.(gs|gdp)$/.test(anchor.id)) return `flying to ${name}`;
+  if (/^faa\.active\.[A-Z]{3}\.closure$/.test(anchor.id)) return `flying to or from ${name}`;
+  if (anchor.kind === 'otp') return `flying out of ${name}`;
+  return `flying through ${name}`;
+}
+
+/**
  * The template brief for these facts.
  * @param {BriefFact[]} facts
  * @returns {Brief}
@@ -126,7 +145,7 @@ export function buildTemplateBrief(facts) {
     const anchor = [...list].sort((a, b) => b.severity - a.severity).find((f) => f.hub && f.toneFloor === 'disrupted');
     if (anchor) {
       traveler_note = {
-        text: `If you are flying through ${airportDisplayName(anchor.hub)}, check your flight's status before you leave for the airport.`,
+        text: `If you are ${travelerWho(anchor)}, check your flight's status before you leave for the airport.`,
         fact_ids: [anchor.id],
       };
     }

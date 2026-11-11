@@ -49,10 +49,10 @@ describe('briefViewState', () => {
     expect(view.status).toBe('ready');
     if (view.status !== 'ready') return;
     expect(view.tone).toBe('disrupted');
-    expect(view.headline).toBe('A ground stop is in effect at Newark.');
+    expect(view.headline).toBe('A ground stop is holding flights into Newark.');
     expect(view.items).toHaveLength(4);
     for (const item of view.items) for (const id of item.factIds) expect(view.factsById.has(id)).toBe(true);
-    expect(view.travelerNote?.text).toMatch(/^If you are flying through Newark/);
+    expect(view.travelerNote?.text).toMatch(/^If you are flying to Newark/);
     // "Written from N live facts" counts every fact the brief was written from, not the cited ones.
     expect(view.factCount).toBe(34);
     expect(view.facts.length).toBeLessThan(view.factCount);
@@ -116,9 +116,9 @@ describe('briefViewState', () => {
       generatedMs: NOW - 60_000,
       source: 'model',
       brief: {
-        headline: 'A ground stop is in effect at Newark.', tone: 'disrupted', headline_fact_ids: [],
+        headline: 'A ground stop is holding flights into Newark.', tone: 'disrupted', headline_fact_ids: [],
         items: [{ text: `Controllers on Newark frequencies were heard saying "${r.quote}".`, fact_ids: [r.id] }],
-        traveler_note: { text: 'If you are flying through Newark, check your flight.', fact_ids: ['faa.active.EWR.gs'] },
+        traveler_note: { text: 'If you are flying to Newark, check your flight.', fact_ids: ['faa.active.EWR.gs'] },
       },
     });
     const view = briefViewState(briefResponseBody(row, NOW), { nowMs: NOW });

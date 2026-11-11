@@ -46,17 +46,17 @@ describe('buildTemplateBrief', () => {
   it('a hub ground stop: names the airport, leads with the program, adds a traveler note', () => {
     const t = buildTemplateBrief(factsFor('hub-ground-stop'));
     expect(t.tone).toBe('disrupted');
-    expect(t.headline).toBe('A ground stop is in effect at Newark.');
+    expect(t.headline).toBe('A ground stop is holding flights into Newark.');
     expect(t.items[0].fact_ids).toEqual(['faa.active.EWR.gs']);
     // Specific facts, not the "1 FAA program is in effect" summary.
     expect(t.items.some((i) => i.fact_ids[0] === 'faa.active.count')).toBe(false);
-    expect(t.traveler_note).toEqual({ text: "If you are flying through Newark, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.EWR.gs'] });
+    expect(t.traveler_note).toEqual({ text: "If you are flying to Newark, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.EWR.gs'] });
   });
 
   it('planned only: a watch headline that names the hub, items that say "not in effect"', () => {
     const t = buildTemplateBrief(factsFor('planned-only-watch'));
     expect(t.headline).toBe('Running normally, with FAA action possible at Newark.');
-    expect(t.items[0].text).toMatch(/possible at Newark \(EWR\) until 9:00 PM ET\. It is not in effect\.$/);
+    expect(t.items[0].text).toMatch(/possible for flights into Newark \(EWR\) until 9:00 PM ET\. It is not in effect\.$/);
   });
 
   it('unconfirmed cancellations: explains the index with the cancellation split, never calls them cancellations', () => {
@@ -68,6 +68,6 @@ describe('buildTemplateBrief', () => {
 
   it('templateHeadline grounds a non-hub program without claiming it is at a hub', () => {
     const facts = [{ id: 'faa.active.BOS.gs', kind: 'faa', statement: '', values: ['BOS', 'Boston'], severity: 45, toneFloor: 'watch', link: { tab: 'weather' }, material: '' }];
-    expect(templateHeadline(facts)).toEqual({ headline: "Ground stop at Boston; United's hubs are running normally.", fact_ids: ['faa.active.BOS.gs'] });
+    expect(templateHeadline(facts)).toEqual({ headline: "Ground stop for flights into Boston; United's hubs are running normally.", fact_ids: ['faa.active.BOS.gs'] });
   });
 });

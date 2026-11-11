@@ -469,15 +469,16 @@ export function buildBriefFacts(sources, { nowMs }) {
       }
     }
 
+    // Stops and delay programs hold flights INTO the airport (faaActiveFact); a closure is at it.
     const describe = (list) => joinNames(list.map(({ code, type }) =>
-      `${type === 'ground_stop' ? 'a ground stop' : type === 'ground_delay' ? 'a ground delay program' : 'a closure'} at ${airportDisplayName(code)}`));
+      `${type === 'ground_stop' ? 'a ground stop for flights into' : type === 'ground_delay' ? 'a ground delay program for flights into' : 'a closure at'} ${airportDisplayName(code)}`));
     const n = hubPrograms.length;
     facts.push({
       id: 'faa.active.count',
       kind: 'faa',
       statement: n === 0
         ? 'No FAA ground stop or ground delay program is in effect at any United hub.'
-        : `${n} FAA ${plural(n, 'program is', 'programs are')} in effect at United hubs: ${describe(hubPrograms)}.`,
+        : `${n} FAA ${plural(n, 'program affects a United hub', 'programs affect United hubs')}: ${describe(hubPrograms)}.`,
       values: uniq([String(n), numberWord(n), ...hubPrograms.flatMap((p) => airportForms(p.code))]),
       at: iso(asOf.faa ?? nowMs),
       link: { tab: 'weather' },
@@ -638,21 +639,27 @@ function faaActiveFact(code, p, { isHub, nowMs, asOfMs }) {
   let severity;
   let toneFloor;
 
+  // A ground stop or ground delay program holds flights BOUND FOR the named airport, at the airports
+  // they depart from; that airport's own departures are not what it holds. The statements say so,
+  // because "a ground delay program at San Francisco" reads as "San Francisco departures are held".
+  const held = 'Those flights are held at their departure airport';
   if (type === 'ground_stop') {
     suffix = 'gs';
-    statement = `The FAA has a ground stop in effect at ${name}${until}${because}.`;
-    if (avg) { statement += ` The FAA expects average delays of ${avg} minutes.`; values.push(`${avg} minutes`); }
+    statement = `The FAA has a ground stop in effect for flights heading to ${name}${until}${because}. ${held}`;
+    if (avg) { statement += `; the FAA expects average delays of ${avg} minutes`; values.push(`${avg} minutes`); }
+    statement += '.';
     const ext = String(p.probabilityOfExtension || '').trim().toLowerCase();
     if (/^(low|medium|high)$/.test(ext)) statement += ` It rates the chance of an extension as ${ext}.`;
     severity = isHub ? 100 : 45;
     toneFloor = isHub ? 'disrupted' : 'watch';
   } else if (type === 'ground_delay') {
     suffix = 'gdp';
-    statement = `The FAA has a ground delay program in effect at ${name}${until}${because}.`;
-    if (avg) { statement += ` Delays average ${avg} minutes`; values.push(`${avg} minutes`); }
+    statement = `The FAA has a ground delay program in effect for flights heading to ${name}${until}${because}. ${held}`;
+    if (avg) { statement += `; delays average ${avg} minutes`; values.push(`${avg} minutes`); }
     if (avg && max) { statement += `, up to ${max} minutes.`; values.push(`${max} minutes`); }
     else if (avg) statement += '.';
-    else if (max) { statement += ` Delays run up to ${max} minutes.`; values.push(`${max} minutes`); }
+    else if (max) { statement += `; delays run up to ${max} minutes.`; values.push(`${max} minutes`); }
+    else statement += '.';
     severity = isHub ? 85 : 35;
     toneFloor = isHub ? 'disrupted' : 'watch';
   } else if (type === 'closure') {
@@ -736,9 +743,12 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
   const where = airports.length > 1
     ? `${hubLabel(primary)} (also ${joinNames(airports.filter((c) => c !== primary).map(airportDisplayName))})`
     : hubLabel(primary);
+  // A stop or delay program would hold flights into the airport (faaActiveFact); an airspace flow
+  // program meters an airspace, so it keeps "at".
+  const target = afp && !gs && !gdp ? `at ${where}` : `for flights into ${where}`;
   const statement = tentative
-    ? `The FAA's operations plan says ${program} is possible at ${where}${window}. It is not in effect.`
-    : `The FAA's operations plan expects ${program} at ${where}${window}. It is not in effect yet.`;
+    ? `The FAA's operations plan says ${program} is possible ${target}${window}. It is not in effect.`
+    : `The FAA's operations plan expects ${program} ${target}${window}. It is not in effect yet.`;
   const isHub = hubs.length > 0;
   return {
     id: `faa.planned.${primary}`,

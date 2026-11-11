@@ -110,7 +110,7 @@ describe('buildBriefFacts: the catalogue', () => {
   it('converts planned FAA windows to the airport’s local clock and says they are not in effect', () => {
     const { facts } = build(fixture('planned-only-watch'));
     const ewr = byId(facts)['faa.planned.EWR'];
-    expect(ewr.statement).toBe("The FAA's operations plan says a ground stop or ground delay program is possible at Newark (EWR) until 9:00 PM ET. It is not in effect.");
+    expect(ewr.statement).toBe("The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) until 9:00 PM ET. It is not in effect.");
     expect(ewr.values).toContain('9:00 PM ET');
     expect(byId(facts)['faa.planned.SFO'].values).toContain('4:00 PM PT');
     expect(ewr.toneFloor).toBe('watch');
@@ -129,10 +129,10 @@ describe('buildBriefFacts: the catalogue', () => {
   it('describes an active ground stop with its local end time, cause and extension odds', () => {
     const { facts } = build(fixture('hub-ground-stop'));
     const gs = byId(facts)['faa.active.EWR.gs'];
-    expect(gs.statement).toBe('The FAA has a ground stop in effect at Newark (EWR) until 8:30 PM ET, because of thunderstorms. It rates the chance of an extension as high.');
+    expect(gs.statement).toBe('The FAA has a ground stop in effect for flights heading to Newark (EWR) until 8:30 PM ET, because of thunderstorms. Those flights are held at their departure airport. It rates the chance of an extension as high.');
     expect(gs.values).toEqual(expect.arrayContaining(['EWR', 'Newark', '8:30 PM ET', 'thunderstorms']));
     expect(gs).toEqual(expect.objectContaining({ hub: 'EWR', severity: 100, toneFloor: 'disrupted', link: { tab: 'weather', hub: 'EWR' } }));
-    expect(byId(facts)['faa.active.count'].statement).toBe('1 FAA program is in effect at United hubs: a ground stop at Newark.');
+    expect(byId(facts)['faa.active.count'].statement).toBe('1 FAA program affects a United hub: a ground stop for flights into Newark.');
     expect(byId(facts)['net.status'].statement).toContain('"Disrupted"');
   });
 
@@ -140,7 +140,7 @@ describe('buildBriefFacts: the catalogue', () => {
     const fx = fixture('hub-ground-stop');
     const faa = fx.sources.faa.map((a) => (a.airportCode === 'EWR' ? { ...a, programs: [{ type: 'ground_stop', reason: 'thunderstorms', endTime: '2345' }] } : a));
     const gs = byId(build(fx, { faa }).facts)['faa.active.EWR.gs'];
-    expect(gs.statement).toBe('The FAA has a ground stop in effect at Newark (EWR), because of thunderstorms.');
+    expect(gs.statement).toBe('The FAA has a ground stop in effect for flights heading to Newark (EWR), because of thunderstorms. Those flights are held at their departure airport.');
   });
 
   it('keeps confirmed and unconfirmed cancellations as separate facts', () => {
