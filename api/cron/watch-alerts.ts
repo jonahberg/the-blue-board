@@ -28,7 +28,7 @@
 // docs/setup-push-alerts.md for the owner setup).
 //
 // COST: never calls the paid FR24 official API — /api/flight-times is asked with officialFallback=0,
-// so it only touches the free FlightAware scrape + schedule-snapshot cache + the sightings ledger, and
+// so it only touches the free schedule-snapshot cache + the sightings ledger, and
 // the live-feed read is the free public feed, once per run (twice only when the first body is empty).
 // Upstream lookups are budget-capped at MAX_DISTINCT_FLIGHTS per run (soonest pinned legs first) and
 // sends at MAX_SENDS_PER_RUN.

@@ -76,7 +76,6 @@ describe('/api/flight-times ?from= origin hint (D2)', () => {
     resetMirroredQuotaBlock();
     snapshotMocks.loadScheduleSnapshot.mockReset();
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) return { ok: false, status: 403, text: async () => 'blocked' };
       throw new Error(`unexpected fetch: ${url}`);
     });
     serveBoards({
@@ -130,7 +129,6 @@ describe('/api/flight-times ?from= origin hint (D2)', () => {
       }],
     };
     globalThis.fetch.mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) return { ok: false, status: 403, text: async () => 'blocked' };
       if (String(url).includes('fr24api.flightradar24.com')) return { ok: true, status: 200, json: async () => ICT_LEG };
       throw new Error(`unexpected fetch: ${url}`);
     });

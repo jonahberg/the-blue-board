@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import handler, { __resetFaaHandlerForTests } from '../api/faa.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
@@ -308,5 +308,120 @@ describe('FAA handler', () => {
     expect(dca.programs[0].reason).toBe('Runway closed for snow and ice removal operations');
 
     warnSpy.mockRestore();
+  });
+});
+
+// Nov 7 2026: nasstatus.faa.gov answered 403 on BOTH endpoints for ~4 minutes and the handler
+// returned the site's only 502s of the week. A recent real answer is now served instead, flagged
+// with X-BB-FAA-Stale (the body is a bare array, so the flag cannot live in it).
+describe('FAA handler — last-known-good when both sources fail', () => {
+  const GOOD = [{ airportId: 'EWR', groundStop: { impactingCondition: 'Thunderstorms' } }];
+  const T0 = new Date('2026-11-07T05:36:58Z');
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetFaaHandlerForTests();
+    __resetRateLimitersForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => vi.useRealTimers());
+
+  async function serveOnce(fetchImpl) {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(fetchImpl);
+    const res = createRes();
+    await handler(makeReq(), res);
+    return res;
+  }
+  const good = async () => mockJsonResponse(GOOD);
+  const bothForbidden = async () => ({ ok: false, status: 403 });
+  const aborted = async () => { throw Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }); };
+  const later = (ms) => vi.setSystemTime(new Date(T0.getTime() + ms));
+
+  it('replays the Nov 7 burst: JSON 403 + XML 403, 23 minutes after a good answer → that answer, flagged stale', async () => {
+    const first = await serveOnce(good);
+    expect(first.statusCode).toBe(200);
+    expect(first.headers['X-BB-FAA-Stale']).toBeUndefined();
+
+    later(23 * 60_000);
+    const res = await serveOnce(bothForbidden);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(first.body);
+    expect(res.headers['X-BB-FAA-Stale']).toBe(String(23 * 60));
+    // Short CDN life so the next request asks FAA again — not the 300s a fresh answer gets.
+    expect(res.headers['Cache-Control']).toBe('s-maxage=60');
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it('a timeout on both sources also serves the last good answer instead of a 504', async () => {
+    await serveOnce(good);
+    later(60_000);
+    const res = await serveOnce(aborted);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['X-BB-FAA-Stale']).toBe('60');
+    expect(res.body[0].airportCode).toBe('EWR');
+  });
+
+  it('past 30 minutes the last good answer is too old: the error stands, and is logged as one', async () => {
+    await serveOnce(good);
+    later(30 * 60_000 + 1000);
+    const res = await serveOnce(bothForbidden);
+    expect(res.statusCode).toBe(502);
+    expect(res.headers['X-BB-FAA-Stale']).toBeUndefined();
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('XML fallback returned 403'));
+  });
+
+  it('never lets a stale serve outlive the age limit at the CDN', async () => {
+    await serveOnce(good);
+    later(30 * 60_000 - 20_000);
+    const res = await serveOnce(bothForbidden);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['Cache-Control']).toBe('s-maxage=20');
+  });
+
+  it('a fresh answer after a stale serve is served normally and becomes the new last good', async () => {
+    await serveOnce(good);
+    later(5 * 60_000);
+    await serveOnce(bothForbidden);
+    later(6 * 60_000);
+    const fresh = await serveOnce(async () => mockJsonResponse([]));
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.body).toEqual([]);
+    expect(fresh.headers['X-BB-FAA-Stale']).toBeUndefined();
+    expect(fresh.headers['Cache-Control']).toMatch(/s-maxage=300/);
+
+    later(7 * 60_000);
+    const stale = await serveOnce(bothForbidden);
+    expect(stale.body).toEqual([]); // "no programs" is a real answer, and the newest one
+    expect(stale.headers['X-BB-FAA-Stale']).toBe('60');
+  });
+
+  it('an empty or non-FAA XML body is never stored as the last good answer', async () => {
+    const xmlOnly = (xml) => async (url) => (
+      String(url).includes('airport-events') ? { ok: false, status: 403 } : mockXmlResponse(xml)
+    );
+    // No last good yet: answered as before, with no programs and a short cache.
+    for (const xml of ['', '<html><body>Access Denied</body></html>']) {
+      __resetFaaHandlerForTests();
+      const res = await serveOnce(xmlOnly(xml));
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual([]);
+      expect(res.headers['Cache-Control']).toBe('s-maxage=60');
+    }
+
+    // With a good answer on hand, the unreadable body is not believed over it…
+    __resetFaaHandlerForTests();
+    await serveOnce(good);
+    later(60_000);
+    const res = await serveOnce(xmlOnly('<html><body>Access Denied</body></html>'));
+    expect(res.body[0].airportCode).toBe('EWR');
+    expect(res.headers['X-BB-FAA-Stale']).toBe('60');
+    // …and it did not replace it.
+    later(120_000);
+    const again = await serveOnce(bothForbidden);
+    expect(again.body[0].airportCode).toBe('EWR');
+    expect(again.headers['X-BB-FAA-Stale']).toBe('120');
   });
 });

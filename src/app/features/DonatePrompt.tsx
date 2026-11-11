@@ -31,12 +31,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { donatePromptRecord } from '@/lib/donate-prompt.js';
+import { supportUrl } from '@/lib/support-link.js';
 import { track } from '@/lib/track.js';
 import { deepUseAskThisVisit, useDeepUsePause, useDeepUseTrigger } from '../state/deep-use';
 import { STORAGE_KEYS, writeString } from '../state/storage';
-
-/** Never "fix" this URL — the Buy Me a Coffee account is `notjbg`. */
-const DONATE_URL = 'https://buymeacoffee.com/notjbg';
 
 export default function DonatePrompt() {
   const triggered = useDeepUseTrigger();
@@ -81,7 +79,7 @@ export default function DonatePrompt() {
           </Button>
           <Button asChild className="min-h-11 pointer-fine:md:min-h-9">
             <a
-              href={DONATE_URL}
+              href={supportUrl('deep-use-prompt')}
               target="_blank"
               rel="noopener noreferrer"
               data-support="deep-use-prompt"

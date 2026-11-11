@@ -2,7 +2,7 @@
 
 **An unofficial, real-time operations dashboard for United Airlines — built by flyers, for flyers.**
 
-**[→ Live Dashboard](https://theblueboard.co)** · **[📋 Changelog](CHANGELOG.md)** · **[🎨 Design System](DESIGN.md)** · **[☕ Support the Project](https://buymeacoffee.com/notjbg)** · **[💡 Suggest a Feature](https://github.com/jonahberg/the-blue-board/issues)** · **[𝕏 Follow @theblueboard](https://x.com/theblueboard)**
+**[→ Live Dashboard](https://theblueboard.co)** · **[📋 Changelog](CHANGELOG.md)** · **[🎨 Design System](DESIGN.md)** · **[Support the Project](https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00?utm_source=theblueboard&utm_medium=github&utm_content=readme-top)** · **[💡 Suggest a Feature](https://github.com/jonahberg/the-blue-board/issues)** · **[𝕏 Follow @theblueboard](https://x.com/theblueboard)**
 
 ![The Blue Board — Live Ops: every United flight in the air, with on-time performance for every hub](docs/screenshots/live-ops.jpg)
 
@@ -35,11 +35,11 @@ The Blue Board is a fan-built operations dashboard that lets you see United Airl
 ### 📡 [Live Ops](https://theblueboard.co#live)
 Real-time map tracking 600+ United flights, updated every 30 seconds. Filter by hub, toggle longhaul routes, overlay NEXRAD weather radar. Hub status sidebar shows departure/arrival counts and identifies the busiest hub. Search any flight by number, tail, or route. Great circle route lines show flight paths with city names.
 
-### ⚠️ IROPS Monitor + AI Delay Prediction
-Server-side disruption scoring across all 8 United hubs plus the Tokyo-Narita gateway — cancellations, delays (30m/60m), diversions, and FAA ground stops. **AI-powered delay risk engine** uses 8 signals (actual delay, FAA programs, weather, hub OTP, time-of-day, inbound aircraft, hub risk profile) to score delay risk 0–100. Click any risk badge for a **natural language AI explanation** powered by Claude. Preloaded automatically on page load with 5-minute server-side caching.
+### ⚠️ IROPS Monitor + Delay Risk
+Server-side disruption scoring across all 8 United hubs plus the Tokyo-Narita gateway — cancellations, delays (30m/60m), diversions, and FAA ground stops. A **rule-based delay risk score** (0–100) weighs the actual delay, FAA programs, origin and destination weather, hub OTP, hub disruption, time of day, the inbound aircraft and the hub's risk profile. Click any risk badge for a **natural language AI explanation** powered by Claude, fetched when you open it and cached server-side for 5 minutes.
 
 ### 📅 [Schedule](https://theblueboard.co#schedule)
-Departure and arrival boards for all 9 UA hubs (ORD, DEN, IAH, EWR, SFO, IAD, LAX, NRT, GUM). Filter by status or aircraft type. Equipment swap detection flags when a plane type changes. On-time performance stats. All times in airport-local timezone.
+Departure and arrival boards for all 8 United hubs plus the Tokyo-Narita gateway (ORD, DEN, IAH, EWR, SFO, IAD, LAX, GUM, NRT). Filter by status or aircraft type. Equipment swap detection flags when a plane type changes. On-time performance stats. All times in airport-local timezone.
 
 ### ✈️ [Fleet](https://theblueboard.co#fleet)
 Database of 1,154 mainline aircraft (snapshot as of Nov 3, 2026) — searchable and sortable by type, registration, seat config, WiFi, and IFE. Live fleet status correlates airborne flights with the database, and a delivery timeline charts the fleet by family. **19 dedicated fleet type pages** ([737 MAX 9](https://theblueboard.co/fleet/737-max-9), [A321neo](https://theblueboard.co/fleet/a321neo), [787-9](https://theblueboard.co/fleet/787-9-dreamliner), etc.) with full aircraft registries, structured data, and cross-type navigation.
@@ -60,7 +60,7 @@ Live fleet utilization by aircraft type (airborne vs. total), flight phase distr
 Look up any UA flight number from the header search bar. Returns live position, route, aircraft details, and scheduled/actual times via the official Flightradar24 API.
 
 ### 🏢 [Hub Pages](https://theblueboard.co/hubs/ord)
-Dedicated SEO-rich pages for the 9 airports The Blue Board tracks — United's 8 hubs plus the Tokyo-Narita gateway ([ORD](https://theblueboard.co/hubs/ord) · [DEN](https://theblueboard.co/hubs/den) · [IAH](https://theblueboard.co/hubs/iah) · [EWR](https://theblueboard.co/hubs/ewr) · [SFO](https://theblueboard.co/hubs/sfo) · [IAD](https://theblueboard.co/hubs/iad) · [LAX](https://theblueboard.co/hubs/lax) · [NRT](https://theblueboard.co/hubs/nrt) · [GUM](https://theblueboard.co/hubs/gum)). Each page includes live flight counts, hub overview with terminal/concourse details, United Club and Polaris lounge locations, delay pattern analysis by season, Starlink WiFi info, construction alerts with links to official project pages, structured FAQ, and FAQPage + Airport schema markup for search engines. Jump navigation and scroll hints guide visitors through the content.
+Dedicated SEO-rich pages for the 9 airports The Blue Board tracks — United's 8 hubs plus the Tokyo-Narita gateway ([ORD](https://theblueboard.co/hubs/ord) · [DEN](https://theblueboard.co/hubs/den) · [IAH](https://theblueboard.co/hubs/iah) · [EWR](https://theblueboard.co/hubs/ewr) · [SFO](https://theblueboard.co/hubs/sfo) · [IAD](https://theblueboard.co/hubs/iad) · [LAX](https://theblueboard.co/hubs/lax) · [NRT](https://theblueboard.co/hubs/nrt) · [GUM](https://theblueboard.co/hubs/gum)). Each page includes a departures board with the next flights and the day's on-time share, hub overview with terminal/concourse details, United Club and Polaris lounge locations, delay pattern analysis by season, Starlink WiFi info, construction alerts with links to official project pages, structured FAQ, and FAQPage + Airport schema markup for search engines. Jump navigation and scroll hints guide visitors through the content.
 
 ### 📰 [News](https://theblueboard.co/news)
 Curated United Airlines news hub with individual article pages, source links, and cross-links to related hub and fleet pages via tags. Google News sitemap and dynamic RSS feed for indexing. "Latest News" banner on the dashboard links to the newest article (dismissible, and it stays dismissed). Optional email digest via Resend Broadcasts notifies waitlist subscribers of new articles.
@@ -69,7 +69,7 @@ Curated United Airlines news hub with individual article pages, source links, an
 Living, data-driven pages that follow aviation's long-running stories — each with a dependency-free SVG US map, headline stats, a searchable/sortable table, and a changelog. [Modern Skies Tracker](https://theblueboard.co/trackers/atc) covers the FAA's paper-to-digital flight strip rollout at all 89 program airports; [United Hub Tracker](https://theblueboard.co/trackers/united-hubs) covers every United club, terminal, and gate project across the 8 hubs with honest open/under-construction/announced/rumored labels. High-interest United hubs have focused, source-backed detail pages for construction and tower modernization, and both datasets are downloadable as CSV or JSON. Every entry cites a source; data lives in versioned files under `src/data/trackers/` with import-time validation (see `MAINTENANCE.md`).
 
 ### More
-- **AI delay risk scoring** — 8-signal algorithm considers weather, FAA programs, hub OTP, inbound aircraft, time-of-day cascade risk, and hub-specific profiles
+- **Delay risk scoring** — a rule-based score from weather, FAA programs, hub OTP, inbound aircraft, time-of-day cascade risk, and hub-specific profiles
 - **AI delay explanations** — Click any risk badge for a natural language briefing powered by Claude AI
 - **Inbound aircraft tracking** — "Where's My Plane?" shows your aircraft's current position operating its previous flight
 - **Deep-link hashes** — Share direct links to any tab (`#live`, `#myflight`, `#schedule`, `#fleet`, `#starlink`, `#weather`, `#stats`, `#sources`), or link straight to a flight with `/?flight=UA1234`
@@ -113,14 +113,16 @@ Living, data-driven pages that follow aviation's long-running stories — each w
     │  /api/fr24-flight     — flight lookup    │
     │  /api/flight-times    — per-flight times │
     │  /api/aircraft-history— tail history     │
-    │  /api/check-flight    — watch-list poll  │
-    │  /api/predict-flight  — delay prediction │
+    │  /api/airborne-history— airborne graph   │
+    │  /api/express-fleet   — Express tails    │
     │  /api/delay-explain   — AI briefings     │
     │  /api/metar           — AWC weather      │
     │  /api/faa  /api/nas   — FAA NAS status   │
-    │  /api/fleet /api/fleet-summary           │
-    │  /api/starlink-data                      │
+    │  /api/starlink-data   — Starlink roster  │
+    │  /api/check-flight  /api/predict-flight  │
+    │  /api/fleet-summary                      │
     │  /api/starlink-mismatches                │
+    │                       — Starlink proxies │
     │  /api/push-subscribe  — Web Push signup  │
     │  /api/waitlist        — waitlist signup  │
     │  /api/news-notify     — email digest     │
@@ -139,8 +141,10 @@ Living, data-driven pages that follow aviation's long-running stories — each w
     │  waitlist · schedule_snapshots           │
     │  reg_sightings · watch_subscriptions     │
     │  schedule_provider_spend                 │
-    │  news_notifications · starlink_snapshot  │
-    │  RLS policies on every table             │
+    │  schedule_cost_state · airborne_samples  │
+    │  express_tails · news_notifications      │
+    │  starlink_snapshot                       │
+    │  RLS enabled on every table              │
     └─────────────────────────────────────────┘
 ```
 
@@ -152,7 +156,7 @@ asset prefix.
 ### Why Server-Side Proxies?
 
 - **Rate limiting** — One server fetches data for all users, not 500 browsers hammering APIs independently
-- **Caching** — Schedule boards are served from the edge cache and Supabase snapshots and refreshed through the day (hourly while people are viewing them), IROPS cached 5min, reducing upstream load by 90%+
+- **Caching** — Schedule boards are served from the edge cache and Supabase snapshots and refreshed through the day (hourly while people are viewing them), IROPS cached 15min, reducing upstream load by 90%+
 - **UA filtering** — Server filters to United flights only, shrinking payloads dramatically
 - **CORS** — Some sources (AWC, FAA) don't allow direct browser requests
 - **Batching** — METAR data for all 9 tracked boards (United's 8 hubs plus the Tokyo-Narita gateway) fetched in a single request
@@ -163,12 +167,12 @@ asset prefix.
 
 | Source | Data | Freshness | Notes |
 |--------|------|-----------|-------|
-| [Flightradar24](https://flightradar24.com) | Live positions, flight lookup, aircraft history | ~15s–60s | Official FR24 API, server-side proxy with caching |
+| [Flightradar24](https://flightradar24.com) | Live positions, flight lookup, aircraft history | ~15s–60s | Live positions from FR24's public live feed; flight lookup and aircraft history from the official FR24 API; server-side proxy with caching |
 | [AeroDataBox](https://aerodatabox.com) | Hub schedule boards | Every 30 min + on-demand | Metered api.market (MagicAPI) gateway (RapidAPI-compatible); spend capped by a cross-instance daily unit budget |
 | [Aviation Weather Center](https://aviationweather.gov) | METAR observations | ~5min | NOAA/CORS proxy, batched |
-| [FAA NAS Status](https://nasstatus.faa.gov) | Delays & ground stops | ~5min | XML→JSON proxy |
+| [FAA NAS Status](https://nasstatus.faa.gov) | Delays & ground stops | ~5min | JSON API with an XML fallback |
 | [United Fleet Site](https://unitedfleetsite.com/) | Fleet database | Periodic snapshot (Nov 3, 2026) | Community-maintained; new tails confirmed in the FAA registry |
-| [Starlink Tracker](https://unitedstarlinktracker.com) | WiFi-equipped aircraft | Every 4 hours | [@martinamps](https://github.com/martinamps/ua-starlink-tracker) |
+| [Starlink Tracker](https://unitedstarlinktracker.com) | Starlink-equipped aircraft, per-flight Starlink checks and predictions | Roster every 4 hours; flight checks on demand | [@martinamps](https://github.com/martinamps/ua-starlink-tracker) |
 | [Iowa State NEXRAD](https://mesonet.agron.iastate.edu) | Radar imagery | ~5min | Direct tile server |
 | [Supabase](https://supabase.com) | Waitlist, schedule snapshots, tail sightings, watch alerts | Real-time | Postgres with RLS |
 | [Anthropic Claude](https://anthropic.com) | AI delay explanations | On-demand | Claude Haiku 4.5 via Vercel AI Gateway, cached 5min |
@@ -178,7 +182,7 @@ asset prefix.
 
 ## Tech Stack
 
-- **Framework:** [Astro](https://astro.build) 6, `output: 'static'` — every page prerendered
+- **Framework:** [Astro](https://astro.build) 7, `output: 'static'` — every page prerendered
 - **Dashboard:** one [React](https://react.dev) 19 island (`client:only`), tabs lazy-loaded per view
 - **Styling:** [Tailwind CSS](https://tailwindcss.com) v4 + [shadcn/ui](https://ui.shadcn.com) (`radix-nova`), CSS-variable tokens — see [DESIGN.md](DESIGN.md)
 - **Icons:** [lucide-react](https://lucide.dev)
@@ -197,8 +201,8 @@ asset prefix.
 
 ## Security
 
-- **Content Security Policy** — Strict CSP via Vercel headers: `default-src 'self'`, `frame-ancestors 'none'`, and no `'unsafe-inline'` or `'unsafe-eval'` in `script-src`. Astro's two inline island scripts are allowed by `'sha256-…'` hash, and `scripts/verify-csp-hashes.mjs` fails `bun run build` if any inline script in `dist/` is missing from the header — the failure mode it guards (an Astro upgrade changes one byte, the browser refuses the island, the page ships a skeleton) is invisible to every other check.
-- **No third-party origins** — Leaflet, the fonts and every stylesheet are bundled from npm and served from `'self'`. There is no CDN in the CSP.
+- **Content Security Policy** — CSP via Vercel headers: `default-src 'self'`, `frame-ancestors 'none'`, and no `'unsafe-inline'` or `'unsafe-eval'` in `script-src` (`style-src` still allows `'unsafe-inline'`). Astro's two inline island scripts are allowed by `'sha256-…'` hash, and `scripts/verify-csp-hashes.mjs` fails `bun run build` if any inline script in `dist/` is missing from the header — the failure mode it guards (an Astro upgrade changes one byte, the browser refuses the island, the page ships a skeleton) is invisible to every other check.
+- **One third-party script** — Leaflet, the fonts and every stylesheet are bundled from npm and served from `'self'`. The only third-party script is the Vercel Analytics beacon (`va.vercel-scripts.com`); map tiles (CARTO) and radar (Iowa State) load as images.
 - **Security headers** — `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (HSTS with preload)
 - **XSS protection** — React escapes by default; the few raw-HTML strings are authored content from `src/data/`, never user or API input.
 - **CORS** — API endpoints locked to `theblueboard.co` origin
@@ -228,13 +232,13 @@ asset prefix.
 │   │   └── trackers/             # tracker map, table, search, changelog, detail layout
 │   ├── layouts/                  # HubLayout, FleetTypeLayout, NewsLayout
 │   ├── lib/                      # all testable logic + colour encodings
-│   │   ├── delay-risk.js         #   8-signal delay risk scoring
+│   │   ├── delay-risk.js         #   rule-based delay risk scoring
 │   │   ├── metar.js              #   METAR parsing + weather classification
 │   │   ├── site.js               #   canonical origin
 │   │   └── buildMetadata.js      #   SEO metadata (lastmod, sitemap)
 │   ├── data/                     # hubs, fleet types, news, trackers, facts
 │   ├── pages/                    # Astro routes + sitemap.xml.ts, feed.xml.ts, news-sitemap.xml.ts
-│   ├── scripts/                  # page-level scripts bundled by Astro (sw-register, newark-live)
+│   ├── scripts/                  # page-level scripts bundled by Astro (sw-register, hub-live, newark-live, trackers)
 │   └── styles/                   # global.css (tokens, Leaflet overrides) + content.css
 ├── public/                       # data JSON, icons, og images, sw.js, manifest, llms*.txt
 ├── api/                          # Vercel serverless functions (+ api/cron/*)
@@ -250,13 +254,13 @@ asset prefix.
 
 ---
 
-## ☕ Support The Blue Board
+## Support The Blue Board
 
 This project is free, ad-free, and open source. It costs real money to keep running — API calls, Vercel hosting, and the time to build and maintain it.
 
 If The Blue Board has saved you a trip to the gate screen or helped you spot an equipment swap before boarding, consider supporting the project:
 
-### **[→ Buy the board a Wi-Fi pass](https://buymeacoffee.com/notjbg)** · **[→ Become a member](https://buymeacoffee.com/notjbg/membership)**
+### **[→ Buy the board a Wi-Fi pass](https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00?utm_source=theblueboard&utm_medium=github&utm_content=readme-end)** · **[→ Become a member](https://buymeacoffee.com/notjbg/membership)**
 
 Every supporter goes on the **Supporters Wall** (About, on the dashboard). Memberships start at $3/month: Crew Members get their name on the wall, First Class members also get *The Ops Brief* — a monthly behind-the-scenes note — and Captain's Circle feature requests go to the front of the line. You can also suggest a feature with your support — I read every one.
 

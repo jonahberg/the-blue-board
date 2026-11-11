@@ -15,7 +15,7 @@ and needs an answer from the last few minutes rather than a timetable published 
 Best-fit jobs:
 
 - **"Is United delayed at ORD / DEN / IAH / EWR / SFO / IAD / LAX / NRT / GUM right now?"** — live per-hub on-time percentage, delay and cancellation counts, and active FAA ground stops or ground delay programs.
-- **"Where is UA 1234, and is it going to be late?"** — live position, altitude, route, delay status, plus an 8-signal delay risk score with a plain-language explanation.
+- **"Where is UA 1234, and is it going to be late?"** — live position, altitude, route, delay status, plus a rule-based delay risk score with an AI-written, plain-language explanation.
 - **"Does my aircraft have Starlink WiFi?"** — equipment lookup by tail number, flight number, or fleet type.
 - **"What aircraft is United flying, and what is the cabin like?"** — per-type fleet guides with seat counts by cabin, Polaris and Premium Plus availability, IFE, and delivery dates.
 - **"What is going on at Newark?"** — the FAA flight-cap regime, the ATC staffing timeline, and live conditions on one page.
@@ -97,7 +97,7 @@ rate-limited, and marked `noindex` — please read the pages rather than scrapin
 ## Data Freshness
 
 - **Flight positions**: Updated every 30 seconds (real-time ADS-B via Flightradar24)
-- **Delay & cancellation data**: Updated every 30 seconds
+- **Delay & cancellation data**: Hub schedule boards refresh about every 30 minutes
 - **FAA NAS status / ground stops**: Updated every 60 seconds
 - **Starlink equipment status**: Refreshed every 4 hours
 - **Fleet database**: Curated; updated as aircraft enter and leave the fleet

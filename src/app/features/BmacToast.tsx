@@ -18,11 +18,9 @@
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { supportUrl } from '@/lib/support-link.js';
 import { STORAGE_KEYS, writeString } from '../state/storage';
 import { useUi } from '../state/ui';
-
-/** Never "fix" this URL — the Buy Me a Coffee account is `notjbg`. */
-const BMAC_URL = 'https://buymeacoffee.com/notjbg';
 
 export default function BmacToast() {
   const { bmacToast, dismissBmacToast } = useUi();
@@ -51,13 +49,13 @@ export default function BmacToast() {
         Glad you landed ✈️ — if The Blue Board helped today, you can support the server costs.
       </p>
       <a
-        href={BMAC_URL}
+        href={supportUrl('landed-toast')}
         target="_blank"
         rel="noopener noreferrer"
         data-support="landed-toast"
         className="mt-2.5 inline-flex min-h-11 items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground pointer-fine:md:min-h-9"
       >
-        ☕ Buy Me a Coffee
+        Donate to support costs
       </a>
     </div>
   );

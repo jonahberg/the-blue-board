@@ -13,6 +13,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { supportUrl } from '@/lib/support-link.js';
 
 vi.mock('../src/app/state/feed', () => ({
   useFeed: () => ({ flights: [], freshness: 'live', countdown: 30 }),
@@ -67,7 +68,10 @@ describe('Header search button', () => {
   it('on phones swaps the "?" for a labelled support link; the "?" returns from md: up', () => {
     renderHeader();
     const support = screen.getByRole('link', { name: 'Support The Blue Board' });
-    expect(support.getAttribute('href')).toBe('https://buymeacoffee.com/notjbg');
+    expect(support.getAttribute('href')).toBe(supportUrl('mobile-header'));
+    // A neutral "support" icon, not the old coffee cup; the name comes from aria-label.
+    expect(support.querySelector('svg')?.getAttribute('class')).toContain('lucide-hand-heart');
+    expect(support.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
     expect(support.getAttribute('target')).toBe('_blank');
     expect(support.getAttribute('rel')).toContain('noopener');
     expect(support.getAttribute('data-support')).toBe('mobile-header');

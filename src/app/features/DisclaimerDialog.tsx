@@ -11,7 +11,9 @@
  *    one sentence on this site that has to be unmissable.
  *
  * The supporter names live in `src/data/supporters.js` (verbatim from Buy Me a Coffee, pinned
- * by `tests/supporters.test.js`). They are people who paid for this to exist; dropping or
+ * by `tests/supporters.test.js`). One-time donations moved to Stripe on Nov 10 2026
+ * (`supportUrl`, src/lib/support-link.js); the monthly-membership link still goes to Buy Me a
+ * Coffee, where the existing members are, until there is a Stripe monthly link. They are people who paid for this to exist; dropping or
  * misspelling one in a rewrite is not a cosmetic bug.
  */
 
@@ -23,6 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SUPPORTERS } from '@/data/supporters.js';
+import { supportUrl } from '@/lib/support-link.js';
 import { useUi } from '../state/ui';
 
 
@@ -135,7 +138,7 @@ export default function DisclaimerDialog() {
           <p>
             <strong>Support:</strong> Built by a United flyer, not a corporation. If Blue Board
             saved you a headache today, consider{' '}
-            <Ext href="https://buymeacoffee.com/notjbg" support="about">supporting our site ☕</Ext>,{' '}
+            <Ext href={supportUrl('about')} support="about">supporting our site</Ext>,{' '}
             <Ext href="https://buymeacoffee.com/notjbg/membership" support="about-membership">become a monthly supporter →</Ext>,
             or <Ext href="https://github.com/jonahberg/the-blue-board/issues">suggest a feature →</Ext>
           </p>
@@ -156,7 +159,7 @@ export default function DisclaimerDialog() {
             </ul>
             <p className="mt-2.5 text-[10px] text-muted-foreground">
               Want to see your name here?{' '}
-              <Ext href="https://buymeacoffee.com/notjbg" support="about-wall">Support the project</Ext>
+              <Ext href={supportUrl('about-wall')} support="about-wall">Support the project</Ext>
             </p>
           </div>
         </div>

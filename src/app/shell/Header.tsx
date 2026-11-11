@@ -8,11 +8,12 @@
  * for the case where the feed has never produced flights at all.
  */
 
-import { Coffee, Eye, House, Search } from 'lucide-react';
+import { Eye, HandHeart, House, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { supportUrl } from '@/lib/support-link.js';
 import { cn } from '@/lib/utils';
 import { useFeed } from '../state/feed';
 import { useNow } from '../state/hooks';
@@ -158,14 +159,14 @@ export function Header({
           className="min-h-11 min-w-11 p-0 md:hidden"
         >
           <a
-            href="https://buymeacoffee.com/notjbg"
+            href={supportUrl('mobile-header')}
             target="_blank"
             rel="noopener noreferrer"
             data-support="mobile-header"
             aria-label="Support The Blue Board"
             title="Support The Blue Board"
           >
-            <Coffee aria-hidden="true" />
+            <HandHeart aria-hidden="true" />
           </a>
         </Button>
 

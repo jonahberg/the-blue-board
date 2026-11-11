@@ -19,6 +19,7 @@ import { parseFr24Feed } from '../../src/lib/feed-health.js';
 import { recordFeedSightings } from '../_reg-sightings.js';
 import { fetchUnitedFeed } from '../_united-feed.js';
 import { cleanupExpiredSnapshots } from '../_schedule-snapshots.js';
+import { startFlightHistoryRun } from '../_flight-history.js';
 
 const HUBS = UNITED_HUBS;
 // Serialized with INTER_TASK_DELAY_MS between tasks. Budget math: each task worst-case is ~58s
@@ -32,6 +33,8 @@ const HUBS = UNITED_HUBS;
 // 11.5h when IROPS priority displaced them — with ~900 units/day of budget unused; Sep 26 2026.)
 // Serial (not Promise.allSettled) respects the provider's per-second limit.
 // Plus a ≤10s reg-sightings backstop fetch (Phase 2), keeping the worst case ≈264s.
+// Flight history (api/_flight-history.ts) writes each fetched board BESIDE the remaining warms, not
+// in the loop; the run waits for it once, at most 15s, and never past FLIGHT_HISTORY_DEADLINE_MS.
 function envNumber(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) ? value : fallback;
@@ -44,6 +47,9 @@ const getInterTaskDelayMs = () => Math.max(0, envNumber('SCHEDULE_WARM_DELAY_MS'
 // fallback instead of refetching. Anything older than the clean today-board TTL (1h since v1.8.2)
 // counts as failed.
 const STALE_WARM_MAX_AGE_S = 3600;
+// No flight-history statement starts after this point of the run (maxDuration 300s): the alert
+// webhook and the response keep ≥20s, whatever the warms took.
+const FLIGHT_HISTORY_DEADLINE_MS = 280_000;
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : process.env.VERCEL_URL
@@ -333,7 +339,9 @@ export function buildScheduleWarmUrl(hub: string, dir: string, timestamp: number
   return `${BASE_URL}/api/schedule?${params}`;
 }
 
-async function warmOne(hub: string, dir: string, timestamp: number, label: string): Promise<{ key: string; result: any }> {
+// `board` is the response body itself (only on a 2xx): the flight-history archive reads it, so the
+// archive never fetches a board of its own.
+async function warmOne(hub: string, dir: string, timestamp: number, label: string): Promise<{ key: string; result: any; board?: any }> {
   const key = `${hub}-${dir}-${label}`;
   const url = buildScheduleWarmUrl(hub, dir, timestamp);
   try {
@@ -371,6 +379,7 @@ async function warmOne(hub: string, dir: string, timestamp: number, label: strin
             : 'ok';
       return {
         key,
+        board: data,
         result: {
           status,
           flights,
@@ -409,6 +418,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let warmPlan = buildWarmPlan();
 
+  // Every board this run fetches goes to the flight-history archive as it arrives; the archive works
+  // beside the remaining warms (never awaited in the loop) and is awaited once, capped, at the end.
+  const flightHistory = startFlightHistoryRun({ deadlineMs: startedAt + FLIGHT_HISTORY_DEADLINE_MS });
+
   // Rollover first (F81), then IROPS: a hub that just passed local midnight gets its new today
   // boards warmed in this run instead of whenever the UTC ring pointer reaches them.
   const rollover = applyRolloverPriority(warmPlan, Date.now(), getWarmSlot());
@@ -444,8 +457,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // before 6 AM hub-local and adds DST-naive +86400 for tomorrow, so ~25% of warm slots used to
     // spend their quota on mislabeled day keys no user-facing view ever reads.
     const ts = getStartOfHubDay(task.hub, task.dayOffset);
-    const { key, result } = await warmOne(task.hub, task.dir, ts, task.label);
+    const { key, result, board } = await warmOne(task.hub, task.dir, ts, task.label);
     results[key] = result;
+    flightHistory.ingest(board, task);
     if (result.status === 'ok') { scheduleWarmed++; warmed++; } else { scheduleFailed++; failed++; }
     if (i < warmPlan.length - 1) {
       await new Promise(r => setTimeout(r, getInterTaskDelayMs()));
@@ -463,8 +477,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
     if (extra) {
       await new Promise(r => setTimeout(r, getInterTaskDelayMs()));
-      const { key, result } = await warmOne(extra.hub, extra.dir, getStartOfHubDay(extra.hub, 0), extra.label);
+      const { key, result, board } = await warmOne(extra.hub, extra.dir, getStartOfHubDay(extra.hub, 0), extra.label);
       results[key] = { ...result, extra: true };
+      flightHistory.ingest(board, extra);
       if (result.status === 'ok') { scheduleWarmed++; warmed++; } else { scheduleFailed++; failed++; }
       warmPlan = [...warmPlan, extra];
     }
@@ -526,6 +541,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     results['starlink-data'] = { status: 'error', message: e.message };
     failed++;
   }
+
+  // The archive's last word: bounded wait for any board still being written (≤15s, never past
+  // FLIGHT_HISTORY_DEADLINE_MS), one summary log line. finish() never rejects.
+  const flightHistorySummary = await flightHistory.finish();
 
   // Estimate the metered AeroDataBox spend so the monthly budget is visible in the logs.
   // A freshly-fetched (non-cached) non-empty board = 2 FIDS calls × 2 units/call = 4 units.
@@ -591,6 +610,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     scheduleFailed,
     warmPlan,
     results,
+    flightHistory: flightHistorySummary,
     timestamp: new Date().toISOString()
   });
 }

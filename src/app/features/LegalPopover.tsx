@@ -20,6 +20,7 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { supportUrl } from '@/lib/support-link.js';
 import { useUi } from '../state/ui';
 import { SupportMeter } from './SupportMeter';
 
@@ -97,8 +98,8 @@ export function LegalMenu() {
             Fleet Database
           </a>
           <Ext href="https://github.com/jonahberg/the-blue-board/issues">Support / Feedback</Ext>
-          <Ext href="https://buymeacoffee.com/notjbg" support="legal-menu" className="font-semibold text-primary underline-offset-2 hover:underline">
-            ☕ Donate
+          <Ext href={supportUrl('legal-menu')} support="legal-menu" className="font-semibold text-primary underline-offset-2 hover:underline">
+            Donate
           </Ext>
           <Ext href="https://x.com/theblueboard">@theblueboard</Ext>
         </div>

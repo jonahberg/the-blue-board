@@ -5,8 +5,10 @@
  *
  * **DELAY / RISK is "facts beat predictions".** A row with a known actual-or-estimated delta
  * shows the REAL delay; only a future row without one shows a prediction, and that prediction
- * is worded "RISK: …" so it can never be read as a fact. The shipped board once displayed
- * "V.HIGH" next to a flight already running 140 minutes late.
+ * always carries the word "risk" so it can never be read as a fact. The shipped board once
+ * displayed "V.HIGH" next to a flight already running 140 minutes late. Since Nov 2026 LOW is
+ * quiet muted text ("low risk") and only MOD and up are pills (`riskControl()`), because a
+ * column of 96 identical green pills hid the one that mattered.
  *
  * **The NOW divider sits after the last resolved-past row**, placed on the EFFECTIVE row time
  * (`max(scheduled, estimated)` when there is no real time) so a held flight is never counted
@@ -47,7 +49,7 @@ import {
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { scrollBehavior } from '@/lib/motion.js';
-import { statusEvidenceNote } from '@/lib/schedule-row-display.js';
+import { riskControl, statusEvidenceNote } from '@/lib/schedule-row-display.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { clampWindow, expandWindow, initialWindow, windowIncluding } from '@/lib/schedule-window.js';
 import { cn } from '@/lib/utils';
@@ -55,7 +57,7 @@ import type { RowModel, SortColumn } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
 import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
 import { SchedulePhoneRow } from './SchedulePhoneRow';
-import { STATUS_TONE, SWAP_TONE, riskToneClass } from './tone';
+import { STATUS_TONE, SWAP_TONE, riskControlClass } from './tone';
 
 export type ScheduleTableHandle = {
   /** Scroll the container so the NOW divider (or the first future row) sits near the top. */
@@ -654,18 +656,27 @@ export const ScheduleTable = forwardRef<
                     {row.delay.kind === 'delta' ? (
                       <DelayFigure delay={row.delay} dir={dir} actualFromRunway={row.actualFromRunway} />
                     ) : row.delay.kind === 'risk' ? (
-                      <button
-                        type="button"
-                        onClick={() => onExplainDelay((row.delay as { context: Record<string, unknown> }).context)}
-                        className={cn(
-                          'rounded-sm border px-1 py-0.5 text-[9px]',
-                          TAP_TARGET,
-                          riskToneClass(row.delay.risk.label),
-                        )}
-                        title="Click for AI analysis"
-                      >
-                        RISK: {row.delay.risk.label}
-                      </button>
+                      (() => {
+                        // LOW is quiet text, MOD and up keep the pill (schedule-row-display.js).
+                        const control = riskControl(row.delay.risk.label, row.identDisplay);
+                        return (
+                          <button
+                            type="button"
+                            data-risk-explain={row.delay.risk.label}
+                            onClick={() => onExplainDelay((row.delay as { context: Record<string, unknown> }).context)}
+                            className={cn(
+                              'py-0.5',
+                              control.quiet ? 'text-[10px]' : 'text-[9px]',
+                              TAP_TARGET,
+                              riskControlClass(row.delay.risk.label, control.quiet),
+                            )}
+                            aria-label={control.ariaLabel}
+                            title="Click for AI analysis"
+                          >
+                            {control.text}
+                          </button>
+                        );
+                      })()
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}

@@ -39,7 +39,7 @@ and needs an answer from the last few minutes rather than a schedule published m
 - **"Is United delayed at ORD / DEN / EWR / IAH / SFO / IAD / LAX / NRT / GUM right now?"**
   — live per-hub on-time percentage, cancellation counts, and active FAA ground stops.
 - **"Where is UA 1234 and will it be late?"** — live position, altitude, route, delay
-  status, and an 8-signal delay risk score with a plain-language explanation.
+  status, and a rule-based delay risk score with an AI-written, plain-language explanation.
 - **"Does my aircraft have Starlink WiFi?"** — equipment lookup by tail number, flight
   number, or fleet type, with the live equipped count.
 - **"What aircraft does United fly on this route, and what is the cabin like?"** — fleet
@@ -91,7 +91,7 @@ are not a public API, so please read the pages rather than scraping \`/api/\`.
 | Feed | Refresh |
 | --- | --- |
 | Flight positions (ADS-B via Flightradar24) | every 30 seconds |
-| Delays and cancellations | every 30 seconds |
+| Delays and cancellations (hub schedule boards) | about every 30 minutes |
 | FAA NAS status and ground stops | every 60 seconds |
 | Schedules (AeroDataBox) | hourly, warmed on a cron |
 | METAR weather observations | every 5 minutes |

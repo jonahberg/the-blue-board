@@ -14,10 +14,11 @@
  * "Built by Jonah Berg" credit, for the same reason (v1.22.1).
  */
 
-import { BadgeInfo, CircleHelp, Coffee, Ellipsis, UserRound } from 'lucide-react';
+import { BadgeInfo, CircleHelp, Ellipsis, HandHeart, UserRound } from 'lucide-react';
 import { useState } from 'react';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { supportUrl } from '@/lib/support-link.js';
 import { cn } from '@/lib/utils';
 import { useUi } from '../state/ui';
 import { TABS } from '../tabs';
@@ -123,13 +124,13 @@ export function MobileNav({
             </li>
             <li>
               <a
-                href="https://buymeacoffee.com/notjbg"
+                href={supportUrl('mobile-more')}
                 target="_blank"
                 rel="noopener noreferrer"
                 data-support="mobile-more"
                 className={cn(ROW, 'text-muted-foreground')}
               >
-                <Coffee aria-hidden="true" className="size-4" />
+                <HandHeart aria-hidden="true" className="size-4" />
                 Support The Blue Board
               </a>
             </li>

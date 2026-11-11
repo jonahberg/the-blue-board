@@ -28,7 +28,7 @@ and needs an answer from the last few minutes rather than a timetable published 
 Best-fit jobs:
 
 - **"Is United delayed at ORD / DEN / IAH / EWR / SFO / IAD / LAX / NRT / GUM right now?"** — live per-hub on-time percentage, delay and cancellation counts, and active FAA ground stops or ground delay programs.
-- **"Where is UA 1234, and is it going to be late?"** — live position, altitude, route, delay status, plus an 8-signal delay risk score with a plain-language explanation.
+- **"Where is UA 1234, and is it going to be late?"** — live position, altitude, route, delay status, plus a rule-based delay risk score with an AI-written, plain-language explanation.
 - **"Does my aircraft have Starlink WiFi?"** — equipment lookup by tail number, flight number, or fleet type.
 - **"What aircraft is United flying, and what is the cabin like?"** — per-type fleet guides with seat counts by cabin, Polaris and Premium Plus availability, IFE, and delivery dates.
 - **"What is going on at Newark?"** — the FAA flight-cap regime, the ATC staffing timeline, and live conditions on one page.
@@ -192,7 +192,7 @@ Living, data-driven pages that follow aviation's long-running stories with a map
 | Data | Source | Update Frequency |
 |------|--------|-----------------|
 | Flight positions & routes | Flightradar24 ADS-B network | Every 30 seconds |
-| Delays & schedule comparison | Flightradar24 schedule data | Every 30 seconds |
+| Delays & schedule comparison | AeroDataBox schedule boards | About every 30 minutes |
 | Ground stops & NAS alerts | FAA National Airspace System Status | Every 60 seconds |
 | Weather (METAR) | Aviation Weather Center (AWC) | Each observation cycle (~hourly) |
 | Weather (radar) | Iowa State NEXRAD | Every 5 minutes |

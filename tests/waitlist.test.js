@@ -43,6 +43,7 @@ vi.mock('resend', () => ({
 
 import handler, { WELCOME_EMAIL_DAILY_CAP } from '../api/waitlist.js';
 import { waitUntil } from '@vercel/functions';
+import { supportUrl } from '../src/lib/support-link.js';
 
 // Use unique IPs per test to avoid rate limiter collisions
 let ipCounter = 100;
@@ -343,6 +344,21 @@ describe('waitlist API', () => {
     // Broadcast-only placeholder must never appear in a transactional send —
     // Resend would deliver it as literal text.
     expect(sent.html).not.toContain('RESEND_UNSUBSCRIBE_URL');
+  });
+
+  it('welcome email Donate button goes to the Stripe link, tagged as the welcome email', async () => {
+    process.env.RESEND_API_KEY = 're_test_key';
+
+    const res = makeRes();
+    await handler(makeReq(), res);
+    await flushBackground();
+
+    const sent = mockEmailSend.mock.calls[0][0];
+    // The href sits in raw HTML, so its "&" separators are escaped.
+    const href = supportUrl('welcome-email', { medium: 'email' }).replaceAll('&', '&amp;');
+    expect(sent.html).toContain(`href="${href}"`);
+    expect(href).toContain('utm_medium=email');
+    expect(sent.html).not.toContain('buymeacoffee');
   });
 
   it('welcome email send carries List-Unsubscribe headers (Gmail/Yahoo bulk-sender rules)', async () => {

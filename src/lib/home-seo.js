@@ -76,8 +76,9 @@ export const HOME_BRIEF = {
     {
       term: 'Delay risk prediction.',
       text:
-        'An eight-signal risk score — inbound aircraft, turnaround pressure, hub congestion, '
-        + 'weather, and FAA programs — with a plain-language explanation of what is driving it.',
+        'A rule-based risk score — inbound aircraft, turnaround pressure, hub congestion, '
+        + 'weather, and FAA programs — with an AI-written, plain-language explanation of what '
+        + 'is driving it.',
     },
     {
       term: 'Starlink WiFi and fleet data.',
@@ -432,11 +433,11 @@ export function homeJsonLd({ lastmod }) {
           acceptedAnswer: {
             '@type': 'Answer',
             text:
-              'The Blue Board uses AI-powered delay prediction that analyzes 8 real-time signals '
-              + 'including inbound aircraft delays, turnaround time pressure, hub congestion, '
-              + 'weather conditions, and FAA ground stops. Each flight gets a delay risk score '
-              + 'from 0 to 100, with a plain-language explanation of contributing factors. This '
-              + "helps you anticipate delays before they're officially announced.",
+              'The Blue Board gives each flight a rule-based delay risk score from 0 to 100, '
+              + 'built from real-time signals including inbound aircraft delays, turnaround time '
+              + 'pressure, hub congestion, weather conditions, and FAA ground stops. Click any '
+              + 'risk badge for an AI-written, plain-language explanation of the contributing '
+              + "factors. This helps you anticipate delays before they're officially announced.",
           },
         },
       ],

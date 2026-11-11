@@ -1,5 +1,5 @@
-// Oct 4 2026 audit, finding 1 — /api/flight-times, as the watch cron calls it (officialFallback=0,
-// FlightAware bot-walled), must report the watched leg from the BEST evidence:
+// Oct 4 2026 audit, finding 1 — /api/flight-times, as the watch cron calls it (officialFallback=0),
+// must report the watched leg from the BEST evidence:
 //   - UA1630-style: a hub departure that LANDED at a hub answered "departed" — the departures row
 //     never advances, and the same leg's arrivals row only lent its gate;
 //   - UA1351-style: a flight the live feed saw AIRBORNE answered "scheduled";
@@ -73,7 +73,6 @@ beforeEach(() => {
   snapshotMocks.loadScheduleSnapshot.mockReset();
   snapshotMocks.loadScheduleSnapshot.mockResolvedValue(null);
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-    if (String(url).includes('flightaware.com')) return { ok: false, status: 403, text: async () => 'blocked' };
     throw new Error(`unexpected fetch: ${url}`);
   });
 });

@@ -15,9 +15,13 @@ import { Card } from '@/components/ui/card';
 
 export type Metric = { label: string; value: string; sub?: string };
 
+/**
+ * Always two columns: at `lg` the Stats tab pairs this 2×2 block with the phase donut beside it
+ * (`StatsView.tsx`), where a 1×4 row used to sit above a donut card that was two-thirds empty.
+ */
 export function MetricCards({ metrics }: { metrics: Metric[] }) {
   return (
-    <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <dl className="grid grid-cols-2 gap-3">
       {metrics.map((metric) => (
         <Card key={metric.label} size="sm" className="px-4">
           <dt className="order-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">

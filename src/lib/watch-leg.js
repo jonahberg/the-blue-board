@@ -104,7 +104,7 @@ export function mergeLegRows(depRow, arrRow) {
 
 /**
  * The epoch-ms times and route of a /api/flight-times payload. Gate times first; the takeoff/landing
- * fields (FR24/FlightAware) fill in when a gate time is missing. NaN = unknown.
+ * fields (FR24) fill in when a gate time is missing. NaN = unknown.
  * @param {any} payload
  */
 export function legFromPayload(payload) {

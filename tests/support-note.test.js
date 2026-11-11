@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { SUPPORT_URL, isSupportUrl, supportPlacement } from '../src/lib/support-tracking.js';
+import { supportUrl } from '../src/lib/support-link.js';
+import { isSupportUrl, supportPlacement } from '../src/lib/support-tracking.js';
 
 // The reader-supported ask on the content pages (src/components/site/SupportNote.astro).
 // Its whole point is attribution: each placement's `data-support` label is what tells
@@ -52,10 +53,16 @@ describe('SupportNote placements', () => {
     }
   });
 
-  it('links to the Buy Me a Coffee page the click tracker recognises', () => {
-    expect(isSupportUrl(SUPPORT_URL)).toBe(true);
+  it('links to the Stripe donation page, tagged with the placement the click tracker reports', () => {
+    const src = readFileSync(COMPONENT, 'utf8');
+    expect(src).toMatch(/const href = supportUrl\(placement\);/);
+    const markup = src.split('---').slice(2).join('---');
+    expect(markup.match(/href=\{href\}/g)).toHaveLength(2);
+    const href = supportUrl('fleet-top');
+    expect(new URL(href).searchParams.get('utm_content')).toBe('fleet-top');
+    expect(isSupportUrl(href)).toBe(true);
     const anchor = {
-      href: SUPPORT_URL,
+      href,
       getAttribute: (name) => (name === 'data-support' ? 'fleet-top' : null),
     };
     expect(supportPlacement(anchor)).toBe('fleet-top');

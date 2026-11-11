@@ -2,7 +2,7 @@
   "id": "/",
   "name": "The Blue Board",
   "short_name": "Blue Board",
-  "description": "Live United Airlines flight tracker with AI-powered delay prediction, live ops, and fleet dashboard",
+  "description": "Live United Airlines flight tracker with delay-risk scores and AI-written explanations, live ops, and fleet dashboard",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

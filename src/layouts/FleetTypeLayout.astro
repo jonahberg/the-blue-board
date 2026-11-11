@@ -3,11 +3,15 @@
  * The nineteen aircraft-type pages (`/fleet/{slug}`), driven by
  * `src/data/fleet/*.js` plus the registry rows filtered out of
  * `public/data/fleet.json` at build time.
+ *
+ * `FleetLive` shows this type in the air right now, matched by those same
+ * registry rows against the cached live feed (src/lib/fleet-live.js).
  */
 import { fleetOrder, fleetNavLabels } from '../data/fleet/index.js';
 import BaseLayout from '../components/site/BaseLayout.astro';
 import Breadcrumbs from '../components/site/Breadcrumbs.astro';
 import ContentSection from '../components/site/ContentSection.astro';
+import FleetLive from '../components/site/FleetLive.astro';
 import JumpNav from '../components/site/JumpNav.astro';
 import PillNav from '../components/site/PillNav.astro';
 import StatTile from '../components/site/StatTile.astro';
@@ -124,6 +128,8 @@ function statusClass(status: string | undefined): string {
       <StatTile label="Deliveries" value={data.deliveryRange} />
       <StatTile label="Body Type" value={data.bodyType === 'widebody' ? 'Wide' : 'Narrow'} />
     </div>
+
+    <FleetLive displayName={data.displayName} tails={typeAircraft.map((a: any) => String(a.r || '')).filter(Boolean)} />
 
     <div class="mt-6 text-center">
       <a

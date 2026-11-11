@@ -134,9 +134,26 @@ export default function StatsView() {
     ];
   }, [airborne, fleetDb.length, fleetByReg, starlink.tails, ages.fleetAvg]);
 
+  // Layout (Nov 2026): cards are paired by HEIGHT and by what they answer, so a grid row never
+  // stretches a short card beside a tall one. At 1440 px "Flights by Phase" (~190 px of content)
+  // sat beside the ~540 px utilisation list and was two-thirds empty; "Top Routes" was a third
+  // empty beside the fleet-age list. Now: the four headline numbers (2×2) beside the phase
+  // donut — both "right now"; utilisation beside fleet age — both one row per aircraft type, so
+  // the lists line up; the hub-to-hub matrix beside the top routes — both "where the traffic is".
+  // Below `lg` everything is one column and nothing stretches.
   return (
     <div className="mx-auto w-full max-w-6xl space-y-3 p-3 md:p-6">
-      <MetricCards metrics={metrics} />
+      <div className="grid gap-3 lg:grid-cols-2">
+        <MetricCards metrics={metrics} />
+
+        <Panel
+          title="Flights by Phase"
+          icon={PlaneTakeoff}
+          subtitle={`Current phase distribution · ${REFRESH_NOTE}`}
+        >
+          <PhaseDonut model={phase} />
+        </Panel>
+      </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <Panel
@@ -148,33 +165,25 @@ export default function StatsView() {
         </Panel>
 
         <Panel
-          title="Flights by Phase"
-          icon={PlaneTakeoff}
-          subtitle={`Current phase distribution · ${REFRESH_NOTE}`}
-        >
-          <PhaseDonut model={phase} />
-        </Panel>
-      </div>
-
-      <Panel
-        title="Hub-to-Hub Flow Matrix"
-        icon={Network}
-        subtitle="Active flights between UA hubs · darker = more traffic"
-      >
-        <HubMatrix hubs={HUBS} model={matrix} />
-      </Panel>
-
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Top Routes Right Now" icon={TrendingUp} subtitle={`Busiest city pairs in the air · ${REFRESH_NOTE}`}>
-          <RouteBars rows={routes} />
-        </Panel>
-
-        <Panel
           title="Average Fleet Age by Type"
           icon={CalendarDays}
           subtitle={`Mean years since delivery across ${TYPE_ORDER.length} mainline types`}
         >
           <AgeBars rows={ages.rows} />
+        </Panel>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Panel
+          title="Hub-to-Hub Flow Matrix"
+          icon={Network}
+          subtitle="Active flights between UA hubs · darker = more traffic"
+        >
+          <HubMatrix hubs={HUBS} model={matrix} />
+        </Panel>
+
+        <Panel title="Top Routes Right Now" icon={TrendingUp} subtitle={`Busiest city pairs in the air · ${REFRESH_NOTE}`}>
+          <RouteBars rows={routes} />
         </Panel>
       </div>
     </div>

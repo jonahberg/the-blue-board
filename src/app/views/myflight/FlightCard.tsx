@@ -254,8 +254,9 @@ export function FlightCard({
         ) : null}
 
         {hasPayload && td?.source?.startsWith('schedule-cache') ? (
-          // The three-tier fallback behind /api/flight-times is otherwise invisible: a
-          // snapshot-sourced card would look exactly as authoritative as a live one.
+          // The two-tier fallback behind /api/flight-times (schedule snapshot, then FR24) is
+          // otherwise invisible: a snapshot-sourced card would look exactly as authoritative as a
+          // live one.
           <p className="text-[10px] text-muted-foreground">
             {td.source === 'schedule-cache+fr24'
               ? 'via schedule snapshot + Flightradar24 live'

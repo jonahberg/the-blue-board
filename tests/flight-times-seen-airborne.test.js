@@ -1,8 +1,8 @@
-// v1.12.0 — /api/flight-times' snapshot tier (the watch-alerts cron's path: officialFallback=0 and
-// FlightAware bot-walled) reads schedule_snapshots directly, so /api/schedule's serve-time overlay
-// never touched it: a "Likely Canceled" flight the live feed saw fly resolved as
-// status "canceled_uncertain" and the cron pushed "UA2278: canceled_uncertain". It now resolves
-// departed; an unseen one still reads canceled_uncertain (the push engine treats that as unknown).
+// v1.12.0 — /api/flight-times' snapshot tier (the watch-alerts cron's path: officialFallback=0)
+// reads schedule_snapshots directly, so /api/schedule's serve-time overlay never touched it: a
+// "Likely Canceled" flight the live feed saw fly resolved as status "canceled_uncertain" and the
+// cron pushed "UA2278: canceled_uncertain". It now resolves departed; an unseen one still reads
+// canceled_uncertain (the push engine treats that as unknown).
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -67,7 +67,6 @@ describe('/api/flight-times snapshot tier — seen-airborne override', () => {
     snapshotMocks.loadScheduleSnapshot.mockImplementation(async (k) =>
       k === key('SFO', 'departures') ? { data: { dir: 'departures', flights: [likelyCanceledRow()] } } : null);
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('flightaware.com')) return { ok: false, status: 403, text: async () => 'blocked' };
       throw new Error(`unexpected fetch: ${url}`);
     });
   });

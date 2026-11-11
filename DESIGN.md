@@ -93,7 +93,9 @@ as custom properties (so `content.css` can reach them with `var(--color-bb-ok)` 
 any chromatic palette utility (`amber-400`, `emerald-500/40`, `violet-300` …) under `src/app`,
 `src/components`, `src/pages` or `src/layouts`, and on any `var(--x)` whose name is not
 declared. A count that is a fact rather than a verdict (the IROPS totals) stays in body
-colour: hue is for status.
+colour: hue is for status. A figure labelled canceled counts confirmed cancellations only; the
+provider's unconfirmed "Likely Canceled" flights ride beside it as a quieter "+N unconfirmed", and
+the IROPS score still counts them (`src/lib/cancellation-display.js`).
 
 ### Domain colour constants — `src/lib/*`
 
@@ -145,8 +147,9 @@ carries a `PHASE_ICONS` glyph in the legend. A new series goes through both.
 (desktop) → active view → engagement slot (`WaitlistStrip` → `NewsBanner` → `TipStrip`) →
 `Attribution` → `MobileNav` (mobile). Only the view scrolls; the chrome is `shrink-0`. The
 late-arriving strips mount **below** the panel, never above it, so their arrival never shoves
-the data the visitor is reading. Below `md` the slot shows **one** strip at a time — the first
-present, in that order — so three asks never stack ~100 px onto a phone's first screen
+the data the visitor is reading. The slot shows **one** strip at a time at every width — the first
+present, in that order — so the asks never stack under the data: three lines were ~100 px of a
+phone's first screen, and the news, the tip and the attribution ~110 px of a 900 px desktop
 (`tests/shell-strips.test.tsx`).
 
 **Content pages** — everything goes through `BaseLayout.astro`: skip link → `SiteHeader`
@@ -172,15 +175,14 @@ states and dismiss controls — always `aria-hidden` beside a text label or insi
 that has its own name. Starlink is `Zap` (⚡) everywhere. Two things stay text glyphs on
 purpose: the `src/lib` encodings (`PHASE_ICONS`, the ops-health `⛔`/`⚠` markers, the
 `✓`/`⚠` weather prefixes), because that layer is DOM-free and those strings also travel into
-the ticker, tooltips and screen-reader text; and emoji inside **copy** (the welcome dialog,
-toasts, the waitlist, news) where they are part of the sentence, not a control.
+the ticker, tooltips and screen-reader text; and emoji inside **copy** (toasts, the waitlist, news) where they are part of the sentence, not a control.
 `tests/design-guards.test.js` keeps pictographic emoji out of the navigation chrome.
 
 | Need | Primitive | Where |
 |---|---|---|
 | Flight detail panel | `Sheet` (non-modal): right panel ≥`lg`, bottom sheet peeking at 40dvh below it | `features/FlightSheet.tsx` |
 | Filter drawers, watch list, mobile "More" | `Sheet` | `views/LiveView`, `views/schedule/ScheduleControls`, `shell/WatchPanel`, `shell/MobileNav` |
-| Aircraft detail, delay explain, FR24 lookup, disclaimer, onboarding | `Dialog` (modal) | `features/*Dialog.tsx`, `features/Onboarding.tsx` |
+| Aircraft detail, delay explain, FR24 lookup, disclaimer, "What is this dashboard?" (opens on request only: the header "?", the phone More sheet) | `Dialog` (modal) | `features/*Dialog.tsx`, `features/Onboarding.tsx` |
 | Global search (⌘K) | `Command` | `features/SearchPalette.tsx` |
 | Waitlist signup | `Dialog` + `Input`/`Textarea`/`Label`, opened on request (`?waitlist=1` or the strip's button) or as the deep-use email ask, after a pause | `features/WaitlistDialog.tsx`, `features/WaitlistStrip.tsx`, `features/EmailPrompt.tsx` |
 | Donation prompt for heavy users | `Dialog` (modal) on the deep-use trigger, after a pause | `features/DonatePrompt.tsx`, `state/deep-use.ts` |
@@ -205,7 +207,8 @@ and BMAC toast (`features/WaitlistStrip`, `NewsBanner`, `TipStrip`, `SupportMete
 `BmacToast`) are dismissible inline
 elements, never modals, and their show/hide rules live in `src/lib/engagement.js`,
 `tips.js`, `support-meter.js` and `waitlist-gate.js` — not in the components. Nothing that
-asks the visitor for something may interrupt the data they came for.
+asks the visitor for something may interrupt the data they came for. Nothing opens by itself on a
+first visit either: the "What is this dashboard?" dialog opens only when asked (Nov 2026).
 
 **One exception, on the owner's call (Oct 2026): the deep-use ask.** Heavy users (the
 waitlist strip's T1/T2 trigger, `state/deep-use.ts`) get ONE modal ask per visit: the
@@ -220,7 +223,7 @@ email ask for 30 days after any close without a signup (or a "no" to the strip),
 returns once an email is given. On a visit where a modal is the ask, the strip stays down.
 
 Astro-side building blocks live in `src/components/site/` (`StatTile`, `HighlightBox`,
-`JumpNav`, `PillNav`, `Breadcrumbs`, `ContentSection`, `Seo`, `JsonLd`) and
+`JumpNav`, `PillNav`, `Breadcrumbs`, `ContentSection`, `Seo`, `JsonLd`, `HubBoard`, `FleetLive`) and
 `src/components/trackers/`.
 
 ## Responsive
@@ -314,3 +317,11 @@ Tailwind defaults: **`sm` 640 · `md` 768 · `lg` 1024**.
 | 2026-10 | The map's default is mainline vs United Express; Starlink and Long-haul are highlights you switch on | Owner, Oct 4 2026: "by default have mainline and Express colors different, with no other filters, and then people can click for Starlink or long haul." With Starlink violet always on, ~3 in 4 Express jets drew violet and Express looked missing. The Starlink control now highlights instead of filtering; the key lists only what the map is drawing. |
 | 2026-10 | Region presets replace the Pacific toggle: eleven bounding boxes in `src/lib/map-regions.js`, framed with `fitBounds` | One box serves every viewport. Oceania and Pacific cross the antimeridian through `normalizeLonContinuity`, and the map re-snaps markers, hub rings and the route to the visible world copy on every `moveend` (`wrapLonNear`). |
 | 2026-10 | Board evidence markers carry words: "Landed*" + "seen landing", "≥"/"≤" + "at least"/"at most", a takeoff/touchdown icon + "from takeoff time; includes taxi" | A feed-proven landing is not "no live update", a floor is not a measurement, and a wheels-up delay includes taxi-out. Each glyph is `aria-hidden` beside sr-only words, and the wording lives in `src/lib/schedule-row-display.js` so the table and the phone row agree. |
+| 2026-11-10 | The welcome dialog opens on request only and reads as a short orientation plus the home-hub picker | The live map is the first impression. The modal covered it for every new visitor with six emoji feature rows. `bb-visited` still sets the waitlist threshold; `bb-onboarded` / `bb_onboarding_dismissed` are still written, no longer read. On phones the picker is reached via More → "What is this dashboard?". |
+| 2026-11-10 | One engagement strip at a time at every width | Desktop stacked the news, the tip and the attribution: ~110 px of a 900 px screen. |
+| 2026-11-10 | "Canceled" headlines confirmed cancellations; unconfirmed ones are a quieter "+N unconfirmed"; scoring unchanged | The Delays tab read "53 CANCELLATIONS incl. 53 likely" beside NORMAL OPERATIONS; ORD's 14 Canceled were all unconfirmed. The Oct 3 calibration is untouched. |
+| 2026-11-10 | Stat strip gains "Departed · not timed" and (arrivals) "In the air"; "Uncategorized" is only rows whose actual time cannot be trusted | ORD's 88 "Uncategorized" were all rows the board printed as Departed (live-feed-confirmed, no provider time). `board-stats.js` predated the v1.13.0 tracked statuses. |
+| 2026-11-10 | LOW delay risk is quiet muted text; the pill is for MOD and up | On ORD 96 of 97 badges were identical green "RISK: LOW" pills. The badge is still the button to the AI explanation. |
+| 2026-11-10 | Stats cards are paired by height | "Flights by Phase" stretched beside the utilisation list and was two-thirds empty at 1440 px. |
+| 2026-11-10 | Hub pages show a slice of the Schedule board (next 8 departures, day truth, data-as-of stamp, one button into the board); fleet type pages show the type airborne now, matched by tail | Google sends ~1,000 visitors a month to these pages and they saw an article with one number. The board reads only the stored schedule snapshot (`/api/hub-board`), words rows with the board's own row model, reserves height only under `@media (scripting: enabled)`, and adds no `aria-live` region. |
+| 2026-11-10 | One-time donations go to a Stripe Payment Link built by `supportUrl()` (`src/lib/support-link.js`), tagged `utm_content=<data-support label>`; memberships stay on Buy Me a Coffee; the phone support icon is `HandHeart` | Owner, Nov 10 2026: "I am switching to Stripe FULLY." Stripe records UTM parameters on the payment, so a payment can be traced to its placement; the coffee cup named the old processor. |

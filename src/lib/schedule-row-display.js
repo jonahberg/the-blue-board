@@ -81,3 +81,27 @@ export function runwayDelayMarker(delay, dir, actualFromRunway = false) {
     ? { kind: 'touchdown', note: 'from touchdown time; before taxi-in' }
     : { kind: 'takeoff', note: 'from takeoff time; includes taxi' };
 }
+
+/**
+ * The delay-risk control in the Delay / Risk cell: what it prints and what it is called.
+ *
+ * Nov 2026: on ORD's board 96 of 97 predictions were LOW — a column of identical green pills
+ * that drowned the one that mattered. LOW is now quiet text ("low risk", muted, no pill) and
+ * the pill is kept for the exceptions, MOD and up. Every one stays a BUTTON — it is the only
+ * door to the AI explanation — and every one keeps the word "risk", so a prediction can never
+ * be read as a measured delay (schedule-row-model.js: "facts beat predictions").
+ *
+ * The accessible name starts with the visible words (WCAG 2.5.3, label in name) and then
+ * names the flight: a column of buttons all called "RISK: LOW" told a screen reader nothing.
+ *
+ * @param {string} label  a RISK_BANDS label: 'LOW' | 'MOD' | 'HIGH' | 'V.HIGH'.
+ * @param {string} [flight]  the flight as printed ("UA1677").
+ * @returns {{quiet: boolean, text: string, ariaLabel: string}}
+ */
+export function riskControl(label, flight) {
+  const band = String(label || 'LOW').toUpperCase();
+  const quiet = band === 'LOW';
+  const text = quiet ? 'low risk' : `RISK: ${band}`;
+  const who = flight ? ` for ${flight}` : '';
+  return { quiet, text, ariaLabel: `${text} — explain the delay risk${who}` };
+}

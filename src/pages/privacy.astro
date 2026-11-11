@@ -13,14 +13,16 @@ const description =
 
     <h1 class="mt-6 text-2xl font-bold tracking-tight text-foreground">Privacy Policy</h1>
     <p class="mt-1 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-      Effective June 10, 2026
+      Effective November 10, 2026
     </p>
 
     <div class="mt-7 space-y-4 text-sm leading-relaxed text-muted-foreground">
       <p>
         The Blue Board is a free, ad-free United Airlines ops dashboard built by one person. The
-        short version: the only personal data we collect is what you give us when you sign up for
-        email updates, we use it only to send you those updates, and we never sell it.
+        short version: the only personal data we collect ourselves is what you give us when you
+        sign up for email updates, we use it only to send you those updates, and we never sell it.
+        If you donate, the payment processor takes the payment on its own page and tells us about
+        the donation (see below).
       </p>
 
       <h2 class="pt-4 text-base font-bold text-foreground">What we collect</h2>
@@ -57,6 +59,17 @@ const description =
           <strong class="font-semibold text-foreground">Vercel</strong> — hosts the site and collects
           cookieless, anonymized usage data: page views and interaction events via Vercel Web
           Analytics, and performance metrics via Vercel Speed Insights.
+        </li>
+        <li>
+          <strong class="font-semibold text-foreground">Stripe</strong> — processes one-time
+          donations on its own checkout page. We see the donation as Stripe reports it (such as the
+          amount and the email address you give Stripe), never your full card number. Each donate link
+          tells Stripe which link on the site it was (for example, the footer), and Stripe records
+          that label with the payment.
+        </li>
+        <li>
+          <strong class="font-semibold text-foreground">Buy Me a Coffee</strong> — handles monthly
+          memberships.
         </li>
       </ul>
 

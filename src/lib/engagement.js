@@ -1,21 +1,22 @@
-// ═══ ONBOARDING / WAITLIST / BMAC FREQUENCY RULES ═══
-// When each of the three asks is allowed to appear. All three read the same pattern —
-// an epoch timestamp in localStorage plus a TTL.
+// ═══ VISIT / WAITLIST / BMAC FREQUENCY RULES ═══
+// When the asks are allowed to appear. They read the same pattern — an epoch timestamp
+// in localStorage plus a TTL. (The welcome dialog was the third ask until Nov 2026; it
+// now opens only on request, so all that is left of it here is the visit record.)
 //
 // Storage guarding is copied from main.js read for read, NOT normalised. The reads
 // main.js wrapped in try/catch (`bb_waitlist_submitted`, and the shared TTL check over
-// `bb_onboarding_dismissed` / `bb_waitlist_dismissed` / `bb-bmac-dismissed`) still
-// swallow; the reads and the write it left bare (`bb-visited`, `bb-onboarded`) still
-// throw. A throwing store therefore aborts the caller at exactly the point it always
-// did. Do NOT normalise this into uniform fail-open here — that is a behaviour change,
-// and it belongs to the React port, made deliberately and documented there.
+// `bb_waitlist_dismissed` / `bb-bmac-dismissed`) still swallow; the read and the write it
+// left bare (`bb-visited`) still throw. A throwing store therefore aborts the caller at
+// exactly the point it always did. Do NOT normalise this into uniform fail-open here —
+// that is a behaviour change, and it belongs to the React port, made deliberately and
+// documented there.
 //
 // Extracted verbatim from src/dashboard/main.js (:7979-7984 the suppression guards,
-// :8169-8249 the triggers, :8197-8205 the BMAC cooldown, :8243-8249 the onboarding
-// visit check). Modal construction, timers and the per-session "already shown" flag
-// stay in main.js — that flag is session state, not storage.
+// :8169-8249 the triggers, :8197-8205 the BMAC cooldown, :8243-8249 the visit check).
+// Modal construction, timers and the per-session "already shown" flag stay in the
+// components — that flag is session state, not storage.
 
-/** Dismissals of the onboarding overlay and the waitlist last 7 days. */
+/** Dismissals of the waitlist last 7 days. */
 export const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The landing thank-you toast is capped to once per 14 days. */
@@ -41,30 +42,33 @@ function isDismissedRecently(storage, key, now) {
 }
 
 /**
- * Should the onboarding overlay be shown — and record the visit.
+ * Record the visit: a first-time visitor is marked `bb-visited`.
  *
- * SIDE EFFECT: a first-time visitor is marked `bb-visited` here. That write is what
- * later decides the waitlist click threshold, so it must stay at this point in the
- * sequence (the waitlist reads bb-visited before this runs, on purpose).
+ * Until Nov 2026 this was `shouldShowOnboarding()`, which also decided whether the welcome
+ * dialog opened by itself. It no longer does — the live map is the first impression, and
+ * the dialog opens only from the header "?" or the phone "More" sheet — so only the visit
+ * record is left. That write is what later decides the waitlist click threshold, so it
+ * must stay at this point in the sequence (the waitlist reads `bb-visited` BEFORE this
+ * runs, on purpose: a first-timer gets 20 clicks, not 30).
+ *
+ * `bb-onboarded` and `bb_onboarding_dismissed` are still written when the dialog closes
+ * (`features/Onboarding.tsx`), so a returning visitor's storage reads exactly as before;
+ * nothing gates on them any more.
  *
  * @param {{getItem: Function, setItem: Function}} storage
- * @param {number} [now]  epoch ms.
- * @returns {boolean}
+ * @returns {boolean} true when this load was the visitor's first.
  */
-export function shouldShowOnboarding(storage, now = Date.now()) {
-  // Bare, like main.js :8243-8245 — a throwing store propagates out to the caller and
-  // aborts the onboarding block, which is what it has always done.
+export function recordVisit(storage) {
+  // Bare, like main.js :8243-8245 — a throwing store propagates out to the caller, which
+  // decides what that means (`state/engagement.tsx` fails closed).
   const visited = storage.getItem('bb-visited');
-  if (!visited) {
-    storage.setItem('bb-visited', '1');
-    return !isDismissedRecently(storage, 'bb_onboarding_dismissed', now);
-  }
-  const onboarded = storage.getItem('bb-onboarded');
-  return !(onboarded || isDismissedRecently(storage, 'bb_onboarding_dismissed', now));
+  if (visited) return false;
+  storage.setItem('bb-visited', '1');
+  return true;
 }
 
 /**
- * What the onboarding overlay's home-hub picker should show each time it OPENS.
+ * What the welcome dialog's home-hub picker should show each time it OPENS.
  *
  * NOT a main.js port — legacy rebuilt the overlay from scratch on every show, so the select
  * was always freshly seeded and could not go stale. The rebuilt overlay is mounted once for
