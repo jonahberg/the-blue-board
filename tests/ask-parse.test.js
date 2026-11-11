@@ -182,6 +182,29 @@ describe('one typo', () => {
     unsure('dnevr arivals'); // "dnevr" is two edits from denver
     unsure('flights later today'); // "later" is not "late"
   });
+  it('a place name is only guessed where a place is expected', () => {
+    unsure('midday flights from denver'); // "midday" is one letter from Midway
+    unsure('settle'); // one letter from Seattle
+    unsure('parts'); // one letter from Paris
+    expect(sure('flights to seatle')).toEqual({ view: 'live', filters: { destination: 'SEA' } });
+  });
+});
+
+describe('negation', () => {
+  it.each([
+    'flights not delayed at denver',
+    'no cancellations at newark',
+    'without delays',
+    'not in the air',
+    '787s not on the ground',
+  ])('%s → not sure (the vocabulary has no "not"; dropping it would invert the answer)', (q) => {
+    unsure(q);
+  });
+  it('the Starlink negations are phrases and still work', () => {
+    expect(sure('737s without starlink')).toEqual({ view: 'live', filters: { family: '737', starlink: false } });
+    expect(sure('no starlink 787s')).toEqual({ view: 'live', filters: { family: '787', starlink: false } });
+    expect(sure('not starlink')).toEqual({ view: 'live', filters: { starlink: false } });
+  });
 });
 
 describe('out of scope and hostile text', () => {

@@ -207,7 +207,7 @@ show shows showing me my mine i im we us our you your list find give get see vie
 please pls plz thanks just only also still yet now right currently current today presently moment
 flights flight plane planes aircraft aircrafts airplane airplanes jet jets airliner airliners
 united ua ual airline airlines united's uniteds
-with and or plus but not no without about like kind type types family families series model models
+with and or plus but about like kind type types family families series model models
 version versions variant variants equipped
 on up out over across within whole entire
 are there going operating operated operate operates running scheduled
@@ -265,10 +265,13 @@ function oneEditApart(a, b) {
   return la < lb ? a.slice(i) === b.slice(i + 1) : a.slice(i + 1) === b.slice(i);
 }
 
-/** The one known word a token is a single typo of, or null when there is none or more than one. */
-function correctTypo(word) {
+/**
+ * The one known word a token is a single typo of, or null when there is none or more than one.
+ * Airport names are candidates only when `placeExpected` (a preposition came just before).
+ */
+function correctTypo(word, placeExpected) {
   if (STOPWORDS.has(word)) return null;
-  const hits = TYPO_TARGETS.filter((target) => oneEditApart(word, target));
+  const hits = TYPO_TARGETS.filter((target) => oneEditApart(word, target) && (placeExpected || !AIRPORT_NAMES.has(target)));
   if (!hits.length) return null;
   // Plural and singular of the same entry ("arrival"/"arrivals") are one answer.
   const answers = new Set(hits.map((h) => JSON.stringify(LEXICON.get(h) ?? AIRPORT_NAMES.get(h))));
@@ -408,7 +411,9 @@ export function parseAsk(rawQuery) {
     }
 
     // 8. One typo in a longer word ("denvr", "arivals", "starlnk"): the single word it can only be.
-    const fixed = tok.low.length >= 5 && /^[a-z]+$/.test(tok.low) ? correctTypo(tok.low) : null;
+    // A place name is only guessed where a place is expected (after "to", "from", "at" …):
+    // "midday" is one letter from "midway", and an airport nobody asked for is a wrong filter.
+    const fixed = tok.low.length >= 5 && /^[a-z]+$/.test(tok.low) ? correctTypo(tok.low, slot !== null) : null;
     if (fixed) {
       const name = AIRPORT_NAMES.get(fixed);
       if (name) { airportFact(name); continue; }
