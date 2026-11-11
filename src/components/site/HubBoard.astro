@@ -83,15 +83,23 @@ const titleId = `hub-board-title-${hubLower}`;
     </a>
   </div>
 
+  <!-- The flight number links to its flight page (src/scripts/flight-link.ts). Its hit box is the
+       whole row height over the flight column (the `after:` box is placed on the `relative` row,
+       at the column's offset in each grid below, and takes in the row's 1 px rule), so a tap
+       anywhere in that column lands — 48 px on a phone row, 44 px from md — while the status pill and the delay keep their own titles.
+       A number the site has no page for stays text: the script leaves the `<a>` without an href. -->
   <template data-hb-row>
     <li
-      class="grid h-12 grid-cols-[2.75rem_3.25rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1rem] content-center gap-x-2 border-b border-border last:border-b-0 md:h-11 md:grid-cols-[3rem_4.5rem_3.5rem_minmax(0,1fr)_6rem_10rem] md:grid-rows-1 md:gap-x-3"
+      class="relative grid h-12 grid-cols-[2.75rem_3.25rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1rem] content-center gap-x-2 border-b border-border last:border-b-0 md:h-11 md:grid-cols-[3rem_4.5rem_3.5rem_minmax(0,1fr)_6rem_10rem] md:grid-rows-1 md:gap-x-3"
     >
       <span class="col-start-1 row-span-2 flex flex-col font-mono tabular-nums md:row-span-1 md:justify-center">
         <span class="text-xs leading-5 text-foreground" data-f="time"></span>
         <span class="text-[11px] leading-4 text-muted-foreground" data-f="under"></span>
       </span>
-      <span class="col-start-2 row-start-1 self-center font-mono text-xs font-semibold text-foreground" data-f="ident"></span>
+      <a
+        class="col-start-2 row-start-1 self-center justify-self-start font-mono text-xs font-semibold text-primary underline-offset-2 after:absolute after:top-0 after:-bottom-px after:left-12 after:w-15 hover:underline md:after:left-[3.375rem] md:after:w-21 [&:not([href])]:text-foreground [&:not([href])]:no-underline [&:not([href])]:after:hidden"
+        data-f="ident"></a
+      >
       <span class="col-start-3 row-start-1 min-w-0 self-center truncate font-mono text-xs text-foreground">
         <span class="sr-only">to </span><span data-f="dest"></span>
       </span>

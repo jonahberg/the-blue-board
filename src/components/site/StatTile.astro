@@ -1,11 +1,13 @@
 ---
 /**
  * One labelled figure in a stat row (hub live panel, fleet type header,
- * fleet index summary).
+ * fleet index summary). Same family as the trackers' StatStrip and detail
+ * tiles: the classes live in ./stat-tile.ts.
  *
  * `id` is passed through to the value element so a page script can update it
  * in place — the hub live panel writes the active-flight count into `#active`.
  */
+import { STAT_CARD, STAT_LABEL, STAT_VALUE } from './stat-tile';
 
 interface Props {
   label: string;
@@ -17,9 +19,7 @@ interface Props {
 
 const { label, value, id, class: className = '' } = Astro.props;
 ---
-<div class:list={['rounded-lg border border-border bg-card p-3 text-center', className]}>
-  <div class="font-mono text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-    {label}
-  </div>
-  <div id={id} class="mt-1 font-mono text-2xl font-bold tabular-nums text-foreground">{value}</div>
+<div class:list={[STAT_CARD, className]}>
+  <div class={STAT_LABEL}>{label}</div>
+  <div id={id} class:list={[STAT_VALUE, 'text-foreground']}>{value}</div>
 </div>

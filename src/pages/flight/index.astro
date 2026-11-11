@@ -43,8 +43,9 @@ const description =
     <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
       <div class="min-w-0">
         <p class="font-mono text-[11px] tracking-widest text-muted-foreground uppercase">United flight</p>
-        <!-- Mono only while it holds a flight number: the lookup's "Find a United flight" is prose. -->
-        <h1 class="mt-1 font-mono text-3xl font-semibold tracking-tight text-foreground md:text-4xl [[data-flight-ident='']:is([data-state=static],[data-state=lookup],[data-state=invalid])_&]:font-sans" data-fp-title>Find a United flight</h1>
+        <!-- Large mono only while it holds a flight number (DESIGN.md's one h1 exception): the
+             lookup's "Find a United flight" is prose, so it takes every content page's h1. -->
+        <h1 class="mt-1 font-mono text-3xl font-semibold tracking-tight text-foreground md:text-4xl [[data-flight-ident='']:is([data-state=static],[data-state=lookup],[data-state=invalid])_&]:font-sans [[data-flight-ident='']:is([data-state=static],[data-state=lookup],[data-state=invalid])_&]:text-2xl [[data-flight-ident='']:is([data-state=static],[data-state=lookup],[data-state=invalid])_&]:font-bold" data-fp-title>Find a United flight</h1>
         <p class="mt-1.5 text-sm text-muted-foreground [@media(scripting:enabled)]:min-h-5" data-fp-route></p>
       </div>
       <div class="flex flex-wrap items-center gap-2" data-fp-actions hidden>

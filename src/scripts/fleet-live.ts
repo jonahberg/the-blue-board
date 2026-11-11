@@ -14,6 +14,7 @@
 
 import { airborneOfType } from '../lib/fleet-live.js';
 import { parseStaleHeader } from '../lib/feed-health.js';
+import { replaceChildrenKeepingFocus, setFlightLink } from './flight-link';
 
 const REFRESH_MS = 120_000;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -52,8 +53,9 @@ if (root) {
       const link = li.querySelector<HTMLAnchorElement>('[data-f="link"]');
       if (link) link.href = flight.href;
       const field = (name: string) => li.querySelector<HTMLElement>(`[data-f="${name}"]`);
+      // The number links to its flight page; '—' (no number in the feed) stays text.
       const ident = field('ident');
-      if (ident) ident.textContent = flight.ident || '—';
+      if (ident) setFlightLink(ident, flight.ident || '—');
       const route = field('route');
       if (route) {
         if (flight.origin && flight.dest) {
@@ -71,13 +73,15 @@ if (root) {
       }
       const reg = field('reg');
       if (reg) reg.textContent = flight.reg;
+      // The map link's name carries the flight number too: "SFO to PVG N2331U, open UA857 on the live map".
       const hint = document.createElement('span');
       hint.className = 'sr-only';
-      hint.textContent = ', open on the live map';
+      hint.textContent = flight.ident ? `, open ${flight.ident} on the live map` : ', open on the live map';
       link?.append(hint);
       return li;
     });
-    list?.replaceChildren(...rows.filter((li): li is HTMLElement => li !== null));
+    // Refreshes every two minutes; a reader tabbing through the rows keeps their place.
+    if (list) replaceChildrenKeepingFocus(list, rows.filter((li): li is HTMLElement => li !== null));
 
     if (stamp) {
       stamp.textContent = `Live feed · ${new Date(asOfMs).toLocaleTimeString('en-US', {

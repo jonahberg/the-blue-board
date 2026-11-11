@@ -6,6 +6,10 @@
  *
  * The slot is wrapped in `.bb-content` so prose written here picks up the same
  * element defaults as the data-driven prose above and below it.
+ *
+ * The section itself never scrolls sideways (it used to, which slid the heading
+ * and the prose with a wide table): a table wider than a phone goes inside
+ * `ScrollRegion`, its own focusable, named scroll container.
  */
 
 interface Props {
@@ -21,7 +25,7 @@ const { id, heading, first = false, class: className = '' } = Astro.props;
 ---
 <section
   class:list={[
-    'overflow-x-auto',
+    'min-w-0',
     first ? '' : 'mt-8 border-t border-border pt-6',
     className,
   ]}

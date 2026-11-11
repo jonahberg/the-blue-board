@@ -4,6 +4,7 @@ import { STARLINK_EQUIPPED, STARLINK_EQUIPPED_LABEL, STARLINK_AS_OF } from '../.
 import BaseLayout from '../../components/site/BaseLayout.astro';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
+import ScrollRegion from '../../components/site/ScrollRegion.astro';
 import StatTile from '../../components/site/StatTile.astro';
 import SupportNote from '../../components/site/SupportNote.astro';
 import { FLEET_DB_AS_OF, formatFleetAsOf, polarisAircraftCount } from '../../lib/fleet-utils.js';
@@ -201,6 +202,14 @@ const faqSchema = {
   ],
 };
 
+// Data links inside the two tables are 44 px tall on touch and relax only for a mouse at md+
+// (DESIGN.md touch rule), so a phone or a tablet gets a real target and a desktop keeps the
+// tables' density. One link per row: the link reaches into the cell's padding (-my-1.5), so a
+// row is 44 px rather than 56, its text level with the row's other cells. Several per cell (the family's types): a 44 px line each, the
+// first one's text level with the family name beside it.
+const touchTypeLink = 'inline-flex min-h-11 items-start whitespace-nowrap pt-1.5 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
+const touchRowLink = 'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:my-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
+
 // The site's page-link pill (PillNav, the 404 page, news cross-links): bordered card, no tint.
 const hubLinkClass =
   'inline-flex min-h-11 items-center rounded-md border border-border bg-card px-3.5 text-[11px] font-semibold text-muted-foreground no-underline hover:border-primary hover:text-foreground';
@@ -255,27 +264,33 @@ const hubLinkClass =
         in the middle of its biggest fleet renewal in decades, taking 250+ new jets by 2028 while
         rolling out free Starlink WiFi and the new Polaris Studio suite.
       </p>
-      <table>
-        <thead>
-          <tr><th>Family</th><th>Types</th><th class="text-right">Aircraft</th><th>Role</th></tr>
-        </thead>
-        <tbody>
-          {
-            FAMILY_ROWS.map((fam) => (
-              <tr>
-                <td class="font-semibold text-primary">{fam.name}</td>
-                <td>
-                  {fam.types.map((t, i) => (
-                    <>{i > 0 ? ', ' : ''}<a href={`/fleet/${t.slug}`}>{t.label}</a></>
-                  ))}
-                </td>
-                <td class="text-right font-mono font-bold text-foreground tabular-nums">{fam.total}</td>
-                <td>{fam.role}</td>
-              </tr>
-            ))
-          }
-        </tbody>
-      </table>
+      <ScrollRegion label="Fleet by family">
+        <table>
+          <thead>
+            <tr><th>Family</th><th>Types</th><th class="text-right">Aircraft</th><th>Role</th></tr>
+          </thead>
+          <tbody>
+            {
+              FAMILY_ROWS.map((fam) => (
+                <tr>
+                  <td class="font-semibold text-primary">{fam.name}</td>
+                  <td>
+                    {/* On touch each type is a 44 px link, spaced apart instead of comma-run; a
+                        mouse at md+ keeps the compact comma list (touchTypeLink). */}
+                    <span class="-my-1.5 flex flex-wrap gap-x-3 pointer-fine:md:my-0 pointer-fine:md:block">
+                      {fam.types.map((t, i) => (
+                        <>{i > 0 ? <span class="hidden pointer-fine:md:inline">, </span> : null}<a class={touchTypeLink} href={`/fleet/${t.slug}`}>{t.label}</a></>
+                      ))}
+                    </span>
+                  </td>
+                  <td class="text-right font-mono font-bold text-foreground tabular-nums">{fam.total}</td>
+                  <td>{fam.role}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </ScrollRegion>
     </ContentSection>
 
     <ContentSection heading="What's New in United's Fleet — 2026">
@@ -377,33 +392,35 @@ const hubLinkClass =
         > and Economy. Polaris lie-flat seats are available on all widebody international aircraft. Select
         any type above for the full seat configuration guide.
       </p>
-      <table class="tabular-nums">
-        <thead>
-          <tr><th>Aircraft</th><th class="text-right">Count</th><th>Cabin Configuration</th><th class="text-right">Total</th></tr>
-        </thead>
-        <tbody>
-          {
-            seatConfigOrder.map((key) => {
-              const t = fleetTypes[key];
-              return (
-                <tr>
-                  <td class="font-bold"><a href={`/fleet/${t.slug}`}>{t.typeCode}</a></td>
-                  <td class="text-right font-mono">{t.count}</td>
-                  <td>
-                    {t.seatConfig.cabins.map((cab: { name: string; seats: string; cssClass: string }) => (
-                      <span class:list={['cabin-tag', cab.cssClass]}>
-                        {cabinShortLabel[cab.name] || cab.name}
-                        <span class="ml-0.5 font-mono text-[11px] font-semibold"> {cab.seats}</span>
-                      </span>
-                    ))}
-                  </td>
-                  <td class="text-right font-mono">{t.seatConfig.total}</td>
-                </tr>
-              );
-            })
-          }
-        </tbody>
-      </table>
+      <ScrollRegion label="Seat configurations">
+        <table class="tabular-nums">
+          <thead>
+            <tr><th>Aircraft</th><th class="text-right">Count</th><th>Cabin Configuration</th><th class="text-right">Total</th></tr>
+          </thead>
+          <tbody>
+            {
+              seatConfigOrder.map((key) => {
+                const t = fleetTypes[key];
+                return (
+                  <tr>
+                    <td class="font-bold"><a class={touchRowLink} href={`/fleet/${t.slug}`}>{t.typeCode}</a></td>
+                    <td class="text-right font-mono">{t.count}</td>
+                    <td>
+                      {t.seatConfig.cabins.map((cab: { name: string; seats: string; cssClass: string }) => (
+                        <span class:list={['cabin-tag', cab.cssClass]}>
+                          {cabinShortLabel[cab.name] || cab.name}
+                          <span class="ml-0.5 font-mono text-[11px] font-semibold"> {cab.seats}</span>
+                        </span>
+                      ))}
+                    </td>
+                    <td class="text-right font-mono">{t.seatConfig.total}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </ScrollRegion>
     </ContentSection>
 
     <ContentSection id="faq" heading="Frequently Asked Questions">

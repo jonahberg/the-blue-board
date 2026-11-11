@@ -1,0 +1,31 @@
+---
+/**
+ * A table's own sideways-scrolling container: a focusable, named region (see ./table-regions.ts
+ * for why, and for the twin that wraps tables inside raw `contentHtml` strings).
+ *
+ * `label` names the region for a screen reader and must be unique on the page ("Aircraft
+ * registry", "Seat configurations"). The script keeps the role, the name and the tab stop only
+ * while the content overflows.
+ */
+import { SCROLL_REGION_CLASS } from './table-regions';
+
+interface Props {
+  label: string;
+  class?: string;
+}
+
+const { label, class: className = '' } = Astro.props;
+---
+
+<div
+  class:list={[SCROLL_REGION_CLASS, className]}
+  role="region"
+  aria-label={label}
+  tabindex="0"
+  data-scroll-region
+  data-scroll-label={label}
+>
+  <slot />
+</div>
+
+<script src="../../scripts/scroll-regions.ts"></script>
