@@ -25,7 +25,7 @@
  *  - After every source pass: bump unitedHubsMeta.lastVerified. If facts changed, also bump
  *    unitedHubsMeta.lastUpdated and add a changelog entry. Then run `bun run test`.
  *
- * Last verified: 2026-11-03
+ * Last verified: 2026-11-11
  */
 
 /** @typedef {'club'|'polaris'|'club-fly'|'terminal'|'gates'|'other'} UnitedProjectType */
@@ -156,14 +156,17 @@ export const unitedProjects = [
     hub: "IAD",
     name: "Concourse E",
     projectType: "terminal",
-    status: "under-construction",
+    status: "open",
     builder: "airport-authority",
-    targetDate: "fall 2026",
+    openedDate: "2026-11-10",
     sizeSqFt: 435_000,
     gates: 14,
     details:
-      "A 435,000 sq ft midfield concourse built by MWAA and occupied entirely by United: 14 gates sized for both narrowbody and widebody aircraft, a food court and new concessions, and a direct AeroTrain connection. MWAA floated September in mid-July; on September 16 its board heard the opening slips into October, after operational testing turned up issues to fix. October came and went without an opening: MWAA's October 13 fact sheet just says 'fall 2026,' and as of early November neither MWAA nor United has announced a date. The published cost keeps drifting — United's 2024 announcement said 'more than $500 million', 2026 grant coverage put phase 1 near $900M, and September coverage says $700M — so we don't print a single number.",
+      "A 435,000 sq ft midfield concourse built by MWAA and occupied entirely by United: 14 gates sized for both narrowbody and widebody aircraft, a food court and new concessions, and a direct AeroTrain connection. United and MWAA unveiled it on November 9, 2026 and said it opens to travelers November 10; on November 10 Edward Russell's Airport Architecture newsletter reported it open, with a Tuesday-morning departure to Chicago and only three scheduled departures (Chicago, Tokyo, Frankfurt) on opening day. It got there late: MWAA floated September in mid-July, its board heard on September 16 that the opening would slip into October after operational testing turned up issues to fix, and October passed with MWAA's October 13 fact sheet saying only 'fall 2026.' United calls it the first of four planned Concourse E phases. The published cost keeps drifting — United's 2024 announcement said 'more than $500 million', 2026 grant coverage put phase 1 near $900M, and September coverage says $700M — so we don't print a single number.",
     sources: [
+      "https://united.mediaroom.com/2026-11-09-United-Airlines-and-the-Metropolitan-Washington-Airports-Authority-Unveil-First-New-Concourse-in-Two-Decades-at-Washington-Dulles-International-Airport",
+      "https://byerussell.substack.com/p/dispatch-dulles-tension",
+      "https://www.yahoo.com/news/slideshows/us-airport-just-opened-first-080102532.html",
       "https://www.flydulles.com/sites/flydulles.com/files/Dulles-T2-Fact-Sheet-10-13-2026.pdf",
       "https://www.ffxnow.com/2026/09/18/mwaa-now-expecting-october-opening-for-dulles-airports-concourse-e/",
       "https://www.flydulles.com/Next",
@@ -176,13 +179,16 @@ export const unitedProjects = [
     hub: "IAD",
     name: "United Club, Concourse E (flagship)",
     projectType: "club",
-    status: "under-construction",
+    status: "open",
     builder: "joint",
-    targetDate: "fall 2026",
+    openedDate: "2026-11-10",
     sizeSqFt: 40_000,
     details:
-      "United's new flagship Dulles club: ~40,000 sq ft above the AeroTrain escalators, seating around 650 — a ~70% jump in United Club space at IAD. The design riffs on L'Enfant's DC street grid ('there's no cul-de-sacs, there's no dead ends,' per United's club chief). Buffet and bar, no showers. Opens with the concourse — expected in October, but MWAA's latest word (October 13) is just 'fall 2026,' with no date announced yet.",
+      "United's new flagship Dulles club: nearly 40,000 sq ft above the AeroTrain escalators, across from gates E14 and E16, with seating for more than 600 — United's second-largest club after Houston's, and in United's words one of the largest airline clubs in the Western Hemisphere. United says it raises its club and lounge space at Dulles by about 70%. The design riffs on L'Enfant's DC street grid ('there's no cul-de-sacs, there's no dead ends anywhere,' per United's club chief). Buffet and bar, no showers; open daily 5:30 a.m. to 10 p.m. United said the club opens with Concourse E on November 10, 2026 — after the same slips, from late September into October and then past it — and reports on November 10 said the concourse opened that day; none we found describes the club's first day on its own.",
     sources: [
+      "https://united.mediaroom.com/2026-11-09-United-Airlines-and-the-Metropolitan-Washington-Airports-Authority-Unveil-First-New-Concourse-in-Two-Decades-at-Washington-Dulles-International-Airport",
+      "https://onemileatatime.com/news/washington-dulles-concourse-e-united-club/",
+      "https://byerussell.substack.com/p/dispatch-dulles-tension",
       "https://www.flydulles.com/sites/flydulles.com/files/Dulles-T2-Fact-Sheet-10-13-2026.pdf",
       "https://thepointsguy.com/news/united-club-washington-dulles-makeover-new-space/",
       "https://www.ffxnow.com/2026/09/18/mwaa-now-expecting-october-opening-for-dulles-airports-concourse-e/",
@@ -527,21 +533,21 @@ export const unitedProjects = [
 export const unitedHubsMeta = {
   slug: "united-hubs",
   name: "United Hub Tracker",
-  lastUpdated: "2026-11-03",
-  lastVerified: "2026-11-03",
+  lastUpdated: "2026-11-11",
+  lastVerified: "2026-11-11",
   // Headline stats that can't be derived from the entries above. Counts of projects/clubs ARE
   // derived at build time — never hardcode them here (tests pin that).
   stats: {
     newClubSqFt2026: {
       label: "new club space opening in 2026",
       value: "~119,000 sq ft",
-      note: "IAH 54,000 (open since October 22) + IAD 40,000 (MWAA's figure; TPG says 39,000) + SFO 25,000 — the three clubs United has publicly committed to opening by end of 2026.",
+      note: "IAH 54,000 (open since October 22) + IAD 40,000 (open since November 10; United says nearly 40,000) + SFO 25,000 (still to come) — the three clubs United has publicly committed to opening by end of 2026.",
       source: "https://thepointsguy.com/news/united-airlines-lounge-plans-2026/",
     },
     newGates2026: {
       label: "new gates targeted for fall 2026",
       value: "36",
-      note: "22 at IAH Terminal B North (opened October 22, 2026, phasing into service by Christmas) + 14 at IAD Concourse E (still awaiting an opening date).",
+      note: "22 at IAH Terminal B North (opened October 22, 2026, phasing into service by Christmas) + 14 at IAD Concourse E (opened November 10, 2026).",
       source: "https://simpleflying.com/36-new-gates-one-us-airline-wins-big-airport-expansions-2026/",
     },
     largestClub: {
@@ -552,6 +558,7 @@ export const unitedHubsMeta = {
     },
   },
   changelog: [
+    { date: "2026-11-10", entry: "Dulles Concourse E opens to travelers, after slipping from late September into October and then past it: 14 new United gates and a nearly 40,000 sq ft United Club, United's second-largest." },
     { date: "2026-10-29", entry: "LAX's people mover slips again: the contractor now targets February 5, 2027 for passengers, and LAWA won't confirm any date until final testing is done." },
     { date: "2026-10-22", entry: "Houston's Terminal B North Concourse opens: 22 gates and United's largest club anywhere — 54,000 sq ft, 800 seats. Denver's B-East hands over the crown." },
     { date: "2026-10-22", entry: "Denver announces an eight-lane North Checkpoint and a redesigned international arrivals area as the Great Hall program heads for its end-of-2027 finish." },
