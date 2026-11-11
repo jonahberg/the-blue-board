@@ -39,33 +39,33 @@ const itemListSchema = {
   <div class="mx-auto max-w-4xl px-4 py-8">
     <Breadcrumbs items={[{ label: 'Trackers' }]} />
 
-    <header class="mt-6">
+    <header class="mt-6 mb-7">
       <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
         Living Pages
       </div>
-      <h1 class="mt-0.5 mb-1.5 text-lg font-bold tracking-tight text-balance text-foreground sm:text-2xl">
+      <h1 class="mt-0.5 mb-1.5 text-2xl font-bold tracking-tight text-balance text-foreground">
         Trackers
       </h1>
-      <p class="mb-7 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+      <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
         Aviation's biggest stories don't happen in a news cycle — they happen over years, one
         airport at a time. Trackers are living pages that follow them: a map, the real numbers, a
         searchable table of every site, and a changelog. Updated monthly.
       </p>
     </header>
 
-    <div class="mb-10 grid gap-3.5 sm:grid-cols-[repeat(auto-fit,minmax(300px,1fr))]">
+    <div class="mb-10 grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(300px,1fr))]">
       {
         trackerOrder.map((slug) => {
           const t = trackers[slug];
           return (
             <a
-              class="block rounded-r-md border border-border border-l-[3px] border-l-primary bg-card px-5 py-4.5 text-foreground transition-colors hover:border-primary hover:border-l-primary"
+              class="flex flex-col rounded-lg border border-border bg-card p-5 text-foreground transition-colors hover:border-primary"
               href={t.href}
             >
               <div class="mb-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
                 {t.name}
               </div>
-              <div class="mb-1.5 text-[15px] font-bold text-foreground">{t.question}</div>
+              <div class="mb-1.5 text-base font-bold text-balance text-foreground">{t.question}</div>
               <p class="mb-3 text-xs leading-relaxed text-muted-foreground">{t.description}</p>
               <div
                 class="my-3.5 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 border-y border-border py-2.5"
@@ -102,7 +102,8 @@ const itemListSchema = {
                 <br />
                 {t.latestChange.entry}
               </div>
-              <div class="flex flex-wrap items-center justify-between gap-2.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {/* Pinned to the card's foot, so both cards' footers share a line. */}
+              <div class="mt-auto flex flex-wrap items-center justify-between gap-2.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>
                   {countLabel(t.entryCount, t.entryNoun)} ·{' '}
                   <LastUpdated iso={t.lastVerified} prefix="verified" />
@@ -119,7 +120,7 @@ const itemListSchema = {
       <h2 class="mb-3.5 border-b border-border pb-1.5 text-base font-bold tracking-tight text-foreground">
         What a tracker is
       </h2>
-      <p class="max-w-2xl text-xs leading-relaxed text-muted-foreground">
+      <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
         Every entry cites a source — an FAA audit, an airline press release, an airport
         authority's own numbers. Where an agency publishes no date, the tracker says so instead
         of guessing. Where a claim traces to one press release, it's attributed, not asserted.
