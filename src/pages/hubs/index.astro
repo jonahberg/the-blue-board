@@ -132,7 +132,7 @@ const itemListSchema = {
           hubOrder.map((key) => {
             const hub = hubSummaries[key];
             return (
-              <li class="flex flex-col rounded-lg border border-border bg-card p-4 hover:border-primary">
+              <li class="relative flex flex-col rounded-lg border border-border bg-card p-4 hover:border-primary">
                 <p class="font-mono text-2xl font-bold tracking-wide text-primary">{hub.iata}</p>
                 <p class="mt-1 text-sm font-semibold text-foreground">{hub.name}</p>
                 <p class="mt-0.5 mb-3 text-[11px] leading-relaxed text-muted-foreground">
@@ -143,7 +143,7 @@ const itemListSchema = {
                     lifted EWR's button 36 px above IAH's in the same grid row). */}
                 <div class="mt-auto flex flex-wrap items-center gap-x-3">
                   <a
-                    class="inline-flex min-h-11 w-fit items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90"
+                    class="inline-flex min-h-11 w-fit items-center rounded-md bg-primary-fill px-4 text-xs font-semibold text-primary-foreground after:absolute after:inset-0 after:rounded-lg hover:bg-primary-fill/90"
                     href={`/hubs/${key}`}
                   >
                     View {hub.iata} Hub Status &#8594;
@@ -151,7 +151,7 @@ const itemListSchema = {
                   {key === 'ewr' && (
                     <a
                       href="/newark"
-                      class="inline-flex min-h-11 w-fit items-center text-[11px] text-foreground underline underline-offset-2"
+                      class="relative inline-flex min-h-11 w-fit items-center text-[11px] text-foreground underline underline-offset-2"
                     >
                       FAA cap explained →
                     </a>

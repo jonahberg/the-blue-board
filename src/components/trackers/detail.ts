@@ -16,7 +16,7 @@ export const SECTION_H2 =
   'mb-3.5 border-b border-border pb-1.5 text-base font-bold tracking-tight text-foreground';
 
 /** Sub-heading inside a section (also the FAQ question). */
-export const SECTION_H3 = 'mb-1.5 text-sm font-semibold text-foreground';
+export const SECTION_H3 = 'mb-1.5 text-sm font-semibold text-balance text-foreground';
 
 /** Body copy: measured line length, muted. */
 export const SECTION_P = 'mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground last:mb-0';
