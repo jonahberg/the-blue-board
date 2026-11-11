@@ -436,10 +436,31 @@ if (root) {
     readAsk.disabled = true;
     if (label) label.textContent = 'Asking…';
     try {
-      const { buildFlightRead, readInputUrls, riskLine } = await import('../lib/flight-page-read.js');
+      const [{ buildFlightRead, readInputUrls, riskLine }, { currentFaaAirports, faaAnswerAsOf }] = await Promise.all([
+        import('../lib/flight-page-read.js'),
+        import('../lib/faa-freshness.js'),
+      ]);
       const urls = readInputUrls();
       const settle = (url: string) => getJson(url).catch(() => null);
-      const [faa, nas, irops, metar] = await Promise.all([settle(urls.faa), settle(urls.nas), settle(urls.irops), settle(urls.metar)]);
+      // /api/faa may serve its last good answer up to 30 min old (X-BB-FAA-Stale). The dashboard's
+      // rule applies here too: an old answer's programs are not current, so they never reach the
+      // score or the model (src/lib/faa-freshness.js).
+      const settleFaa = async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+        try {
+          const res = await fetch(urls.faa, { signal: controller.signal, headers: { Accept: 'application/json' } });
+          if (!res.ok) return null;
+          const now = Date.now();
+          const asOf = faaAnswerAsOf(now, res.headers.get('X-BB-FAA-Stale'), res.headers.get('Age'));
+          return currentFaaAirports(await res.json(), asOf, now);
+        } catch {
+          return null;
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      const [faa, nas, irops, metar] = await Promise.all([settleFaa(), settle(urls.nas), settle(urls.irops), settle(urls.metar)]);
       const { risk, body } = buildFlightRead(payload.leg.row, {
         hub: payload.leg.hub,
         dir: payload.leg.dir,

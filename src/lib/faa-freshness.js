@@ -131,6 +131,22 @@ export function currentFaaPicture(airports, asOfMs, nowMs) {
   return { index: buildFaaIndex(current), stale: false, key: `live:${asOfMs}:${expired.join(',')}` };
 }
 
+/**
+ * The /api/faa body cut to what is CURRENT at `nowMs`, for a reader that builds its own index from
+ * the raw body (the flight page's AI read, through delay-prediction.js): nothing once the answer is
+ * stale, and no program past its own end time. The same rule as currentFaaPicture, in the body's
+ * shape.
+ * @param {Array<object>|null} airports
+ * @param {number} asOfMs  faaAnswerAsOf()
+ * @param {number} nowMs
+ * @returns {Array<object>}
+ */
+export function currentFaaAirports(airports, asOfMs, nowMs) {
+  if (!Array.isArray(airports) || !Number.isFinite(asOfMs)) return [];
+  if (nowMs - asOfMs > FAA_STALE_AFTER_MS) return [];
+  return withoutExpiredPrograms(airports, asOfMs, nowMs).airports;
+}
+
 /** "14:05Z" — the clock the Weather tab already uses (radar title, hub reading ages). */
 export function zuluClock(ms) {
   const d = new Date(ms);

@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import {
   FAA_PROGRAM_END_GRACE_MS,
   FAA_STALE_AFTER_MS,
+  currentFaaAirports,
   currentFaaPicture,
   faaAnswerAsOf,
   FAA_UNKNOWN_SINCE_STEP_MS,
@@ -160,5 +161,22 @@ describe('"FAA status unknown since" (stale is not calm)', () => {
     expect(networkUnknownText({ level: 'significant' }, asOf, 'UTC')).toBeNull();
     expect(networkUnknownText({ level: 'normal' }, null, 'UTC')).toBeNull();
     expect(networkUnknownText(null, asOf, 'UTC')).toBeNull();
+  });
+});
+
+describe('currentFaaAirports (the flight page\'s read takes the same rule)', () => {
+  it('passes a current answer through, minus programs past their own end', () => {
+    const live = ewrGroundStop(new Date(NOW + 3600_000).toISOString());
+    expect(currentFaaAirports([live], NOW - 5 * MIN, NOW)).toEqual([live]);
+    const ended = ewrGroundStop(new Date(NOW - 20 * MIN).toISOString());
+    const [cleared] = currentFaaAirports([ended], NOW - 22 * MIN, NOW);
+    expect(cleared.programs).toEqual([]);
+    expect(cleared.groundStop).toBe(false);
+  });
+
+  it('gives nothing from a stale answer, so an old ground stop never reaches the score or the model', () => {
+    const live = ewrGroundStop(new Date(NOW + 3600_000).toISOString());
+    expect(currentFaaAirports([live], NOW - FAA_STALE_AFTER_MS - MIN, NOW)).toEqual([]);
+    expect(currentFaaAirports(null, NOW, NOW)).toEqual([]);
   });
 });
