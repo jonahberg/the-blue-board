@@ -24,7 +24,7 @@ vi.mock('@supabase/supabase-js', () => ({
 import handler, { __resetScheduleCachesForTests, resetFallbackBreaker } from '../api/schedule.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 import { __resetRegSightingsForTests } from '../api/_reg-sightings.js';
-import { __resetAdbSpendForTests, getAdbUnitsToday } from '../api/_cost-state.js';
+import { __resetAdbSpendForTests, getAdbPacedAllowance, getAdbUnitsToday, recordAdbUnits } from '../api/_cost-state.js';
 
 const SUPABASE_URL = 'https://bb-test.supabase.invalid';
 const abortError = () => Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
@@ -191,6 +191,31 @@ describe('/api/schedule: a slow snapshot read does not buy a metered fetch', () 
     // (The free FR24 path may refresh it in the background; on the old code this request itself
     // re-fetched FR24 and then called AeroDataBox twice, 4 units.)
     expect(net.fr24Calls - fr24Before).toBeLessThanOrEqual(2);
+  });
+
+  it('a read that runs out of time does not unlock the first-load headroom: the fetch stays on the paced line', async () => {
+    // Organic spend already at the paced line; the first-load headroom (10% of the budget) is left.
+    process.env.AERODATABOX_API_KEY = 'adb-test-key';
+    process.env.AERODATABOX_DAILY_UNIT_BUDGET = '100';
+    await recordAdbUnits(getAdbPacedAllowance());
+
+    // Control: the read answers "no snapshot" at once — a real first load, so the headroom is used.
+    const control = createRes();
+    await run(handler(scheduleRequest(), control));
+    expect(control.statusCode).toBe(200);
+    expect(net.adbCalls).toBeGreaterThan(0);
+
+    // Same board, a hung read: not known to be a first load, so no headroom and no provider call.
+    __resetScheduleCachesForTests();
+    __resetRateLimitersForTests();
+    net.adbCalls = 0;
+    net.snapshotRead = 'hang';
+    const res = createRes();
+    const { settled } = await run(handler(scheduleRequest(), res));
+    expect(settled).toBe(true);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.total).toBe(2);
+    expect(net.adbCalls).toBe(0);
   });
 
   it('with nothing in hand, a read that runs out of time still fetches (a board beats an error)', async () => {

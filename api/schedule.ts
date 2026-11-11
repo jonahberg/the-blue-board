@@ -2145,8 +2145,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // run a little ahead of the paced line instead of serving an empty board — the new tomorrow
     // board after a hub's local midnight is the everyday case (isAdbFirstLoadGated). Any other day
     // stays fully paced, so the ±7-day timestamp range cannot be walked to drain the headroom.
+    // Not after a snapshot read that ran out of time: then a complete copy may well be stored and
+    // simply not read in time, so this is not known to be a first load, and the fetch stays on the
+    // paced line like any other refresh.
     const dayOffset = Math.round((ts - getStartOfHubDay(hub, 0)) / 86400);
-    const providerFirstLoad = !forceRefresh && dayOffset >= -1 && dayOffset <= 1;
+    const providerFirstLoad = !forceRefresh && !snapshotReadTimedOut && dayOffset >= -1 && dayOffset <= 1;
     // An empty board because the budget held the provider back is "not loaded yet", not "the
     // provider failed": meta.providerDeferred lets the page say so (src/lib/schedule-load.js).
     // Read after the fetch, which hydrated the cross-instance spend counter.
