@@ -1,0 +1,135 @@
+// ═══ OPS BRIEF: TEMPLATE ═══
+// The brief code writes when the model does not: the model call failed, its JSON was invalid, the
+// spend cap was hit, generation is switched off, or no item survived verification. Built only from
+// fact statements and a handful of fixed headlines, so every word of it is grounded by construction
+// (tests run every fixture's template through the verifier). It must read acceptably on its own:
+// this is what every visitor sees whenever the model is not available.
+
+import { airportDisplayName } from './brief-claims.js';
+import { computeTone } from './brief-facts.js';
+
+/**
+ * @typedef {import('./brief-facts.js').BriefFact} BriefFact
+ * @typedef {{text: string, fact_ids: string[]}} BriefItem
+ * @typedef {{headline: string, headline_fact_ids: string[], tone: 'calm'|'watch'|'disrupted',
+ *   items: BriefItem[], traveler_note: BriefItem|null}} Brief
+ */
+
+/** Facts worth leading with: anything at or above this severity is a problem, not background. */
+const LEAD_SEVERITY = 20;
+
+/** Aggregates and meta facts: background for a calm brief, never the lead when a specific fact exists. */
+const SUMMARY_IDS = new Set([
+  'faa.active.count', 'faa.active.other', 'faa.planned.count', 'net.status', 'net.index', 'wx.summary',
+  'otp.floor', 'otp.soft', 'otp.min', 'otp.max', 'cxl.confirmed', 'cxl.unconfirmed', 'air.total',
+  'air.starlink', 'air.normal',
+]);
+
+const byId = (facts) => new Map((facts || []).map((f) => [f.id, f]));
+
+/**
+ * The headline for these facts at this tone, and the facts it rests on.
+ * @param {BriefFact[]} facts
+ * @param {'calm'|'watch'|'disrupted'} [tone]
+ * @returns {{headline: string, fact_ids: string[]}}
+ */
+export function templateHeadline(facts, tone = computeTone(facts)) {
+  const sorted = [...(facts || [])].sort((a, b) => b.severity - a.severity || a.id.localeCompare(b.id));
+  const top = sorted[0];
+  const name = (f) => airportDisplayName(f.hub || '');
+  const find = (re) => sorted.find((f) => re.test(f.id));
+
+  if (tone === 'disrupted') {
+    const gs = find(/^faa\.active\.[A-Z]{3}\.gs$/);
+    if (gs?.hub) return { headline: `A ground stop is in effect at ${name(gs)}.`, fact_ids: [gs.id] };
+    const closure = find(/^faa\.active\.[A-Z]{3}\.closure$/);
+    if (closure?.hub) return { headline: `The FAA lists ${name(closure)} as closed.`, fact_ids: [closure.id] };
+    const gdp = find(/^faa\.active\.[A-Z]{3}\.gdp$/);
+    if (gdp?.hub) return { headline: `${name(gdp)} is under a ground delay program.`, fact_ids: [gdp.id] };
+    const otp = sorted.find((f) => /^otp\.[A-Z]{3}$/.test(f.id) && f.toneFloor === 'disrupted');
+    if (otp?.hub) return { headline: `Delays are heavy at ${name(otp)}.`, fact_ids: [otp.id] };
+    return { headline: "United's operation is disrupted right now.", fact_ids: top ? [top.id] : [] };
+  }
+
+  if (tone === 'watch') {
+    const lead = sorted.find((f) => f.toneFloor === 'watch');
+    const planned = sorted.find((f) => f.kind === 'faa_planned' && f.hub);
+    if (lead?.kind === 'faa_planned' && lead.hub) return { headline: `Running normally, with FAA action possible at ${name(lead)}.`, fact_ids: [lead.id] };
+    if (lead?.hub && lead.kind === 'otp') return { headline: `Mostly normal, with delays at ${name(lead)}.`, fact_ids: [lead.id] };
+    if (lead?.hub && lead.kind === 'weather') return { headline: `Weather is slowing ${name(lead)}.`, fact_ids: [lead.id] };
+    if (lead?.hub && lead.kind === 'faa') return { headline: `Mostly normal, with FAA delays at ${name(lead)}.`, fact_ids: [lead.id] };
+    if (lead?.hub && lead.kind === 'cancellations') return { headline: `Mostly normal, with cancellations at ${name(lead)}.`, fact_ids: [lead.id] };
+    const elsewhere = lead && lead.id.match(/^faa\.active\.([A-Z]{3})\.(gs|gdp)$/);
+    if (elsewhere) {
+      const what = elsewhere[2] === 'gs' ? 'Ground stop' : 'Ground delay program';
+      return { headline: `${what} at ${airportDisplayName(elsewhere[1])}; United's hubs are running normally.`, fact_ids: [lead.id] };
+    }
+    if (planned) return { headline: `Running normally, with FAA action possible at ${name(planned)}.`, fact_ids: [planned.id] };
+    return { headline: 'United is mostly running normally right now.', fact_ids: lead ? [lead.id] : [] };
+  }
+
+  return { headline: 'United is running smoothly right now.', fact_ids: [] };
+}
+
+/**
+ * Pick the facts a template brief prints, most important first: every specific problem (severity at
+ * or above LEAD_SEVERITY), then — when none of those explains the tone — the fact that sets it, then
+ * the background a calm brief is made of: the on-time spread, the FAA picture, what is in the air.
+ * @param {BriefFact[]} facts
+ * @param {number} limit
+ * @param {'calm'|'watch'|'disrupted'} tone
+ * @returns {BriefFact[]}
+ */
+function pickItems(facts, limit, tone) {
+  const index = byId(facts);
+  const sorted = [...facts].sort((a, b) => b.severity - a.severity || a.id.localeCompare(b.id));
+  const picked = [];
+  const add = (f) => { if (f && !picked.includes(f) && picked.length < limit) picked.push(f); };
+
+  // Specific problems first: a ground stop at Newark, not "1 FAA program is in effect".
+  for (const f of sorted) if (f.severity >= LEAD_SEVERITY && !SUMMARY_IDS.has(f.id)) add(f);
+
+  // When nothing specific explains the tone, the fact that sets it does (the disruption index on a
+  // day of unconfirmed cancellations), with the cancellation split that explains IT.
+  if (tone !== 'calm' && !picked.some((f) => f.toneFloor === tone)) {
+    const setter = sorted.find((f) => f.toneFloor === tone);
+    add(setter);
+    if (setter?.kind === 'network') {
+      add(index.get('cxl.confirmed'));
+      add(index.get('cxl.unconfirmed'));
+    }
+  }
+
+  // Background, in reading order. A planned program at a hub beats the general FAA count.
+  add(index.get('otp.floor') || index.get('otp.soft') || index.get('otp.min'));
+  const plannedHub = sorted.find((f) => f.kind === 'faa_planned' && f.hub);
+  if (!picked.some((f) => f.kind === 'faa' || f.kind === 'faa_planned')) add(plannedHub || index.get('faa.active.count'));
+  add(index.get('air.starlink') || index.get('air.total'));
+  add(index.get('wx.summary'));
+  return picked;
+}
+
+/**
+ * The template brief for these facts.
+ * @param {BriefFact[]} facts
+ * @returns {Brief}
+ */
+export function buildTemplateBrief(facts) {
+  const list = Array.isArray(facts) ? facts : [];
+  const tone = computeTone(list);
+  const limit = tone === 'calm' ? 3 : 4;
+  const items = pickItems(list, limit, tone).map((f) => ({ text: f.statement, fact_ids: [f.id] }));
+  const { headline, fact_ids } = templateHeadline(list, tone);
+
+  let traveler_note = null;
+  if (tone === 'disrupted') {
+    const anchor = [...list].sort((a, b) => b.severity - a.severity).find((f) => f.hub && f.toneFloor === 'disrupted');
+    if (anchor) {
+      traveler_note = {
+        text: `If you are flying through ${airportDisplayName(anchor.hub)}, check your flight's status before you leave for the airport.`,
+        fact_ids: [anchor.id],
+      };
+    }
+  }
+  return { headline, headline_fact_ids: fact_ids, tone, items, traveler_note };
+}
