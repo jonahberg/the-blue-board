@@ -58,10 +58,10 @@ function isNarrow(widthPx: number): boolean {
 }
 
 /**
- * The zoom step of a phone map. Whole zoom levels are a factor of two apart, so the lower 48
- * fitted to a 390 px map at zoom 3 used 85% of its width; a tenth of a level lets the fit fill it
- * and lets a pinch stop where the fingers do. Wider maps keep whole levels (sharp tiles, the
- * wheel's familiar steps).
+ * The zoom step of a phone (or upright touch tablet) map. Whole zoom levels are a factor of two
+ * apart, so the lower 48 fitted to a 390 px map at zoom 3 used 85% of its width; a tenth of a
+ * level lets the fit fill it and lets a pinch stop where the fingers do. Other maps keep whole
+ * levels (sharp tiles, the wheel's familiar steps).
  */
 export const PHONE_ZOOM_SNAP = 0.1;
 
@@ -69,14 +69,29 @@ export const PHONE_ZOOM_SNAP = 0.1;
 const TOOLBAR_CLEARANCE = 52;
 
 /**
- * The opening view of a phone map with no home hub: the lower 48 — the "US" region preset —
- * fitted to the map's width with its north edge just under the toolbar, the spare height falling
- * south over Mexico, the Gulf and the Caribbean rather than over southern Canada
- * (src/lib/map-fit.js; Nov 2026, "the first paint spends the top third on Canada"). Null for a
- * map 640 px or wider, which keeps `US_VIEW`, or a map with no height yet.
+ * Does this map open on the lower-48 framing? A phone-width map, or a PORTRAIT map under a finger:
+ * an upright tablet (an iPad at 820 × 1180 has a 820 × 974 map) opened on `US_VIEW` with the
+ * country in a band across its middle and a large empty Canada above it, the phone's problem at a
+ * larger size (Nov 2026). A landscape tablet and every desktop keep `US_VIEW`; a mouse never gets
+ * fractional zoom.
  */
-export function phoneUsView(size: { x: number; y: number }): { center: [number, number]; zoom: number } | null {
-  if (!isNarrow(size.x) || !(size.y > 0)) return null;
+export function usesLower48Framing(size: { x: number; y: number }, coarse: boolean): boolean {
+  if (!(size.x > 0) || !(size.y > 0)) return false;
+  return isNarrow(size.x) || (coarse && size.y > size.x);
+}
+
+/**
+ * The opening view of a phone (or upright touch tablet) map with no home hub: the lower 48 — the
+ * "US" region preset — fitted to the map's width with its north edge just under the toolbar, the
+ * spare height falling south over Mexico, the Gulf and the Caribbean rather than over southern
+ * Canada (src/lib/map-fit.js; Nov 2026, "the first paint spends the top third on Canada"). Null for
+ * a map that keeps `US_VIEW` (see `usesLower48Framing`), or a map with no height yet.
+ */
+export function phoneUsView(
+  size: { x: number; y: number },
+  { coarse = false }: { coarse?: boolean } = {},
+): { center: [number, number]; zoom: number } | null {
+  if (!usesLower48Framing(size, coarse)) return null;
   const region = getRegion('us') as { box: { south: number; west: number; north: number; east: number } };
   const view = northAnchoredView(region.box, size, {
     top: TOOLBAR_CLEARANCE,
@@ -288,12 +303,14 @@ export function LiveMap({
       ? (AIRPORTS as Airport[]).find((a) => a.iata === homeAirportRef.current)
       : undefined;
     const size = { x: hostRef.current.clientWidth, y: hostRef.current.clientHeight };
-    const phoneUs = home ? null : phoneUsView(size);
+    // Pointer, not width, picks the upright-tablet framing: a narrow desktop window is not a tablet.
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    const phoneUs = home ? null : phoneUsView(size, { coarse });
     const map = L.map(hostRef.current, {
       center: home ? [home.lat, home.lon] : (phoneUs?.center ?? US_VIEW.center),
       zoom: home ? 5 : (phoneUs?.zoom ?? viewZoom(US_VIEW.zoom, size.x)),
       zoomControl: false,
-      zoomSnap: isNarrow(size.x) ? PHONE_ZOOM_SNAP : 1,
+      zoomSnap: usesLower48Framing(size, coarse) ? PHONE_ZOOM_SNAP : 1,
       // A flight crossing the antimeridian has to stay reachable by panning either way.
       worldCopyJump: true,
     });

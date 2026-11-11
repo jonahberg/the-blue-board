@@ -81,8 +81,12 @@ describe('MapControls on a phone (Nov 2026)', () => {
     for (const name of ['Hubs', 'Long-haul', 'Starlink', 'Radar']) {
       const toggle = screen.getByRole('button', { name });
       const label = [...toggle.querySelectorAll('span')].find((el) => el.textContent === name);
-      // sr-only, not hidden: `hidden` would drop the accessible name with the word.
-      expect(label?.className).toBe('max-sm:sr-only');
+      // sr-only, not hidden: `hidden` would drop the accessible name with the word. A phone on
+      // its side (past `sm` at 844 × 390) takes the same icon form (`landscape-phone`, Nov 2026).
+      expect(label?.className).toBe('max-sm:sr-only landscape-phone:sr-only');
+      expect(toggle.className.split(/\s+/)).toEqual(
+        expect.arrayContaining(['max-sm:w-9', 'landscape-phone:w-9', 'landscape-phone:px-0']),
+      );
       expect(toggle.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
       expect(toggle.className.split(/\s+/)).toEqual(
         expect.arrayContaining(['relative', 'h-9', 'min-w-9', 'after:absolute', 'after:-inset-[5px]']),

@@ -10,6 +10,12 @@
  * shipped `#legal-details` was pinned into the map's bottom-right corner and covered
  * Leaflet's zoom-out button (see `features/LegalPopover.tsx`). This strip is hidden below
  * `md:` exactly as `#legal-details` was, so the menu's visibility is unchanged.
+ *
+ * Two groups, so a narrow strip breaks in one deliberate place (Nov 2026): the data credits, then
+ * "Built by · Not affiliated" with the ⓘ menu. On an upright tablet (820 px) the strip wrapped
+ * mid-sentence, leaving "Not affiliated with United Airlines, Inc." alone under the credits. Now
+ * the second group moves down whole, and from about 1000 px both share one line. Nothing is
+ * hidden or truncated: these are licence credits.
  */
 
 import { LegalMenu } from '../features/LegalPopover';
@@ -22,90 +28,96 @@ export function Attribution() {
     // <footer> is correctly a generic element, named here for anyone navigating by it.
     <footer
       aria-label="Data attribution"
-      className="hidden shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-t px-4 py-1 text-[10px] text-muted-foreground md:flex"
+      // Hidden below `md` and on a phone on its side (`landscape-phone`, global.css), where it
+      // took two lines of a 236 px map column: the phone keeps About in the More sheet, the
+      // basemap credit on the map itself, and the schedule credit under the Schedule board.
+      className="hidden shrink-0 flex-wrap items-center gap-x-4 gap-y-0.5 border-t px-4 py-1 text-[10px] text-muted-foreground md:flex landscape-phone:hidden"
     >
-      <span>
-        Schedule data via{' '}
-        <a
-          className="underline-offset-2 hover:underline"
-          href="https://aerodatabox.com"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          AeroDataBox
-        </a>
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <span>
+          Schedule data via{' '}
+          <a
+            className="underline-offset-2 hover:underline"
+            href="https://aerodatabox.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            AeroDataBox
+          </a>
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
+          Positions via{' '}
+          <a
+            className="underline-offset-2 hover:underline"
+            href="https://www.flightradar24.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            FR24
+          </a>
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
+          Weather{' '}
+          <a
+            className="underline-offset-2 hover:underline"
+            href="https://aviationweather.gov"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            AWC
+          </a>{' '}
+          ·{' '}
+          <a
+            className="underline-offset-2 hover:underline"
+            href="https://nasstatus.faa.gov"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            FAA
+          </a>
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
+          Basemap ©{' '}
+          <a
+            className="underline-offset-2 hover:underline"
+            href="https://carto.com/attributions"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            CARTO
+          </a>
+          , ©{' '}
+          <a
+            className="underline-offset-2 hover:underline"
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            OpenStreetMap
+          </a>{' '}
+          contributors
+        </span>
       </span>
-      <span aria-hidden="true">·</span>
-      <span>
-        Positions via{' '}
-        <a
-          className="underline-offset-2 hover:underline"
-          href="https://www.flightradar24.com"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          FR24
-        </a>
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        {/* The dashboard's always-mounted author credit. The ⓘ menu repeats it, but Radix
+            mounts popover content only while open, so that copy is not in the rendered DOM. */}
+        <span>
+          Built by{' '}
+          <a
+            className="underline-offset-2 hover:underline"
+            href="https://jonahberg.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Jonah Berg
+          </a>
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>Not affiliated with United Airlines, Inc.</span>
       </span>
-      <span aria-hidden="true">·</span>
-      <span>
-        Weather{' '}
-        <a
-          className="underline-offset-2 hover:underline"
-          href="https://aviationweather.gov"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          AWC
-        </a>{' '}
-        ·{' '}
-        <a
-          className="underline-offset-2 hover:underline"
-          href="https://nasstatus.faa.gov"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          FAA
-        </a>
-      </span>
-      <span aria-hidden="true">·</span>
-      <span>
-        Basemap ©{' '}
-        <a
-          className="underline-offset-2 hover:underline"
-          href="https://carto.com/attributions"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          CARTO
-        </a>
-        , ©{' '}
-        <a
-          className="underline-offset-2 hover:underline"
-          href="https://www.openstreetmap.org/copyright"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          OpenStreetMap
-        </a>{' '}
-        contributors
-      </span>
-      <span aria-hidden="true">·</span>
-      {/* The dashboard's always-mounted author credit. The ⓘ menu repeats it, but Radix
-          mounts popover content only while open, so that copy is not in the rendered DOM. */}
-      <span>
-        Built by{' '}
-        <a
-          className="underline-offset-2 hover:underline"
-          href="https://jonahberg.com"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Jonah Berg
-        </a>
-      </span>
-      <span aria-hidden="true">·</span>
-      <span>Not affiliated with United Airlines, Inc.</span>
       <span className="ml-auto flex items-center">
         <LegalMenu />
       </span>

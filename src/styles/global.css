@@ -7,6 +7,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* A phone on its side: a touch screen in landscape no taller than 500 px (an iPhone is 320–440 px
+   tall that way; the smallest landscape iPad is 744). Width cannot find it — 844 × 390 is past
+   `md` — so the map chrome takes its phone form here too (Nov 2026): icon toolbar, key closed
+   until asked for, no attribution strip under the map. Keep the query in step with
+   `LANDSCAPE_PHONE_QUERY` in src/app/views/live/MapLegend.tsx. */
+@custom-variant landscape-phone (@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px));
+
 /* The hues the shadcn palette does not carry. Two are status: amber reads as "caution" and
    green as "clear" across the dashboard, the hub cards, fleet content and tracker badges
    (red is shadcn's own `--destructive`). `bb-info` is the neutral-informative blue of an
