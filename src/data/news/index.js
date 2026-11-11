@@ -212,8 +212,8 @@ export const articles = [
   },
   {
     slug: 'united-q3-2026-earnings-record-growth-fuel',
-    title: 'Record Growth, Pricier Fuel: United\'s Third Quarter and a Weaker Year-End Outlook',
-    seoTitle: 'United Q3 2026 Earnings: Record Growth, Weaker Outlook',
+    title: 'Record Revenue, Pricier Fuel: United\'s Third Quarter and a Weaker Year-End Outlook',
+    seoTitle: 'United Q3 2026 Earnings: Record Revenue, Weaker Outlook',
     date: '2026-10-20',
     category: 'Operations',
     sources: [
@@ -224,7 +224,7 @@ export const articles = [
       { name: 'United via PR Newswire (Q2)', url: 'https://www.prnewswire.com/news-releases/united-posts-q2-results-above-wall-street-expectations-and-raises-full-year-2026-adjusted-eps-guidance-despite-a-nearly-6-billion-increase-in-anticipated-fuel-costs-302826793.html' },
     ],
     summary: 'United grew third-quarter revenue 17.4% to $17.9 billion on just 1.3% more capacity, a growth rate it calls a record, but fuel expense rose $1.8 billion and adjusted EPS was $2.54. Its fourth-quarter guide of $0.50 to $1.50 a share, on $4.80-a-gallon fuel, came in short of the $1.76 analysts expected.',
-    seoDescription: 'United Q3 2026: revenue up a record 17.4% to $17.9B, adjusted EPS $2.54. Its Q4 guide of $0.50 to $1.50 assumes $4.80 fuel, short of analyst estimates.',
+    seoDescription: 'United Q3 2026: revenue up 17.4% to a record $17.9B, adjusted EPS $2.54. Its Q4 guide of $0.50 to $1.50 assumes $4.80 fuel, short of analyst estimates.',
     body: `<p>In July, United raised its full-year 2026 adjusted EPS guidance to $9.00 to $11.00. The third-quarter results, released October 20, tell two stories at once: demand is excellent, and fuel is eating the profit.</p>
 
 <p>Start with demand. Total operating revenue was $17.9 billion, up 17.4% from the third quarter of 2025, on capacity that grew just 1.3%; United calls the 17% growth a record. Premium revenue rose 17%, loyalty 17%, Basic Economy 16% and cargo 23%. The operation held up too: United reports its highest third-quarter customer satisfaction, by net promoter score, since 2022, the best July on-time departure rate among the seven largest U.S. carriers, and the lowest seat cancellation rate among the three largest U.S. airlines this summer. Net income was $1.0 billion, or $3.14 per diluted share; adjusted, it was $833 million, or $2.54.</p>
@@ -278,7 +278,7 @@ export const articles = [
 
 <p>United is also using Starlink to win customers. Customer service scores on Starlink-equipped planes were nearly double those with other Wi-Fi, according to the earnings release, and the "Switch to Better Wi-Fi" status match for eligible Delta SkyMiles and American AAdvantage members was extended by a week, to October 22. That offer gave a path to United Premier status through January 2028, with thresholds from $1,500 for Premier Silver to $7,000 for Premier 1K. Chief Commercial Officer Andrew Nocella's pitch: "Starlink gives customers even more reasons to choose United and keep coming back."</p>
 
-<p>The rollout keeps reaching new corners of the network. On October 13 United said installations were under way on its Guam-based 737 MAX 8 fleet, with two aircraft already done; from Guam, United serves 15 destinations, including the Island Hopper. And on November 5 the airline added Spotify: on Starlink-enabled seatback screens you can scan a QR code to log in to your own Spotify account, which United says makes it the first airline to let customers do that from a seatback screen. United says the Spotify rollout will reach half of its fleet by next spring.</p>
+<p>The rollout keeps reaching new corners of the network. On October 13 United said installations were under way on its Guam-based 737 MAX 8 fleet, with two aircraft already done; from Guam, United serves 15 destinations, including the Island Hopper. And on November 5 the airline added Spotify: on eligible flights with Starlink-enabled seatback screens you can scan a QR code to log in to your own Spotify account, which United says makes it the first airline to let customers do that from a seatback screen. United says the Spotify rollout will reach half of its fleet by next spring.</p>
 
 <p>The tracker answers the question by flight number. The Blue Board's fleet database tracks Starlink status by tail, so between the two you can check a specific booking and see how far along each aircraft type is.</p>`,
     tags: ['gum', '737-max-8'],
@@ -286,7 +286,7 @@ export const articles = [
   },
   {
     slug: 'united-mileageplus-2027-pqp-only-premier-status',
-    title: 'Flights No Longer Count: United Makes Premier Status PQP-Only in 2027, and 1K Gets Harder',
+    title: 'Segments No Longer Count: United Makes Premier Status PQP-Only in 2027, and 1K Gets Harder',
     seoTitle: 'United MileagePlus 2027: Premier Status Goes PQP-Only',
     date: '2026-10-13',
     category: 'Policy',
