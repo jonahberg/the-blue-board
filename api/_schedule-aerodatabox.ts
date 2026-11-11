@@ -778,6 +778,11 @@ async function fetchWindow(
       console.warn(`AeroDataBox queue wait exceeded the deadline for ${hub} ${dir}; skipping this window`);
       break;
     }
+    // One timer for the whole attempt: the request AND its body read. It used to be cleared as soon
+    // as fetch() resolved, so a response whose headers arrived and whose body then stalled left
+    // `resp.json()` unbounded, holding the invocation until the platform's maxDuration. Aborting
+    // the controller errors the body stream, so a stalled read now ends at the same timeout and
+    // takes the existing failure path. Cleared in the `finally` below (and before a retry sleep).
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Math.min(Math.max(deadline - Date.now(), 800), 15000));
     let resp: Response;
@@ -786,7 +791,6 @@ async function fetchWindow(
       // a 429 storm then exhausts the budget quickly, which is exactly the circuit we want.
       recordAdbUnitsDurable(ADB_UNITS_PER_REQUEST);
       resp = await fetch(url, { signal: controller.signal, headers });
-      clearTimeout(timer);
     } catch (e: any) {
       clearTimeout(timer);
       releaseAdbSlot();
@@ -805,6 +809,7 @@ async function fetchWindow(
       if (resp.status === 204) return { ok: true, flights: [] };
       if (resp.status === 429 || resp.status === 503) {
         const body = await resp.text().catch(() => '');
+        clearTimeout(timer);
         const backoff = adbRetryDelayMs(attempt, resp.headers.get('retry-after'));
         if (attempt < maxAttempts && deadline - Date.now() > backoff + 800) {
           console.warn(`AeroDataBox ${resp.status} for ${hub} ${dir} (attempt ${attempt}); retrying in ${backoff}ms`);
@@ -833,8 +838,14 @@ async function fetchWindow(
       const flights = dir === 'departures' ? (data?.departures || []) : (data?.arrivals || []);
       return { ok: true, flights: Array.isArray(flights) ? flights : [] };
     } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        console.error(`AeroDataBox schedule timeout for ${hub} ${dir} (reading the body)`);
+        return { ok: false };
+      }
       console.error(`AeroDataBox schedule error for ${hub} ${dir}:`, e.message);
       return { ok: false };
+    } finally {
+      clearTimeout(timer);
     }
   }
   return { ok: false };

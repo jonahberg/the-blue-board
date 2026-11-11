@@ -394,18 +394,22 @@ export function computeHubDisruptionMinutes(airport: FAAAirport | null | undefin
 async function fetchDisruptionMap(): Promise<Map<string, number>> {
   const byAirport = new Map<string, number>();
   try {
+    // The timer covers the BODY READ as well as the headers, as getFaaUpstream's does. It used to
+    // be cleared as soon as fetch() resolved, so an upstream that sent its headers and then stalled
+    // left `upstream.json()` unbounded — and this runs inside waitUntil on /api/schedule, so a
+    // stalled body held the invocation open until the platform killed it at maxDuration (the likely
+    // cause of the Nov 7 2026 function timeout). Aborting the controller errors the body stream.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FAA_DISRUPTION_FETCH_TIMEOUT_MS);
-    let upstream: Response;
+    let json: unknown;
     try {
-      upstream = await fetch('https://nasstatus.faa.gov/api/airport-events', { signal: controller.signal });
+      const upstream = await fetch('https://nasstatus.faa.gov/api/airport-events', { signal: controller.signal });
+      if (!upstream.ok) throw new Error(`HTTP ${upstream.status}`);
+      json = await upstream.json();
     } finally {
-      // finally, not the post-await pattern used elsewhere in this file: a rejected fetch would
-      // skip a trailing clearTimeout and leave the abort timer holding the controller up to 5s.
+      // finally: a rejected fetch or body read must not leave the abort timer holding the controller.
       clearTimeout(timeout);
     }
-    if (!upstream.ok) throw new Error(`HTTP ${upstream.status}`);
-    const json = await upstream.json();
     if (!validateJsonResponse(json)) throw new Error('schema validation failed');
     for (const airport of parseJsonResponse(json)) {
       const minutes = computeHubDisruptionMinutes(airport);
