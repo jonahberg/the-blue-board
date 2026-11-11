@@ -48,6 +48,17 @@ const TYPE_OVERRIDE = {
 const typeLabelFor = (p) => TYPE_OVERRIDE[p.id] ?? TYPE_LABEL[p.projectType];
 
 const hubOrder = ['IAH', 'IAD', 'SFO', 'DEN', 'ORD', 'EWR', 'LAX', 'GUM'];
+// The entries the stats, the map card and the FAQ quote, so their numbers and dates come from the
+// data rather than a second hand-typed copy.
+const projectById = (id) => {
+  const p = unitedProjects.find((x) => x.id === id);
+  if (!p) throw new Error(`united-hubs page: no project "${id}" in src/data/trackers/united-hubs.js`);
+  return p;
+};
+const iahTerminalB = projectById('iah-terminal-b');
+const iadConcourseE = projectById('iad-concourse-e');
+const iadClubE = projectById('iad-club-concourse-e');
+const dayOf = (iso, opts) => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', opts);
 const projectsByHub = Object.fromEntries(hubOrder.map((h) => [h, unitedProjects.filter((p) => p.hub === h)]));
 const atcCodes = new Set(atcAirports.map((a) => a.code));
 const hubPulseEntities = Object.fromEntries(
@@ -70,8 +81,9 @@ const hubPulseEntities = Object.fromEntries(
 const hubMapMeta = {
   IAH: { shape: 'diamond', tone: 'yellow', badge: { label: 'United building', tone: 'yellow', glyph: '◆' },
     line1: '4 projects — the 54,000 sq ft flagship club and the 22-gate concourse opened in October 2026.' },
-  IAD: { shape: 'diamond', tone: 'yellow', badge: { label: 'United building', tone: 'yellow', glyph: '◆' },
-    line1: "5 projects — a 14-gate concourse and United's new 40,000 sq ft club, due this fall but still undated." },
+  // Concourse E and its club opened Nov 10 2026; what is left at IAD is announced, not building.
+  IAD: { shape: 'dot', tone: 'green', badge: { label: 'Recently delivered', tone: 'green', glyph: '●' },
+    line1: `5 projects — the ${iadConcourseE.gates}-gate Concourse E opened ${dayOf(iadConcourseE.openedDate, { month: 'long', day: 'numeric', year: 'numeric' })}; United said its new nearly ${iadClubE.sizeSqFt.toLocaleString('en-US')} sq ft club opens with it.` },
   SFO: { shape: 'diamond', tone: 'accent', badge: { label: 'Club announced', tone: 'accent', glyph: '◇' },
     line1: '2 projects — a 25,000 sq ft club with an outdoor terrace, due by end of 2026.' },
   DEN: { shape: 'diamond', tone: 'accent', badge: { label: 'Polaris announced', tone: 'accent', glyph: '◇' },
@@ -186,7 +198,11 @@ const columns = [
 const stats = [
   { label: 'new flagship clubs in 2026', value: '3', sub: 'IAH · IAD · SFO' },
   { label: 'new club space this year', value: '~119k', sub: 'sq ft — IAH 54k + IAD 40k + SFO 25k' },
-  { label: 'new gates targeted fall 2026', value: '36', sub: '22 at IAH (concourse open Oct 22) · 14 due at IAD' },
+  {
+    label: unitedHubsMeta.stats.newGates2026.label,
+    value: String(iahTerminalB.gates + iadConcourseE.gates),
+    sub: `${iahTerminalB.gates} at IAH (concourse open Oct 22) · ${iadConcourseE.gates} at IAD (open ${dayOf(iadConcourseE.openedDate, { month: 'short', day: 'numeric' })})`,
+  },
   { label: 'largest club in the network', value: '54,000', sub: 'sq ft — IAH Terminal B North, open since Oct 22' },
 ];
 
@@ -205,7 +221,7 @@ const faq = [
   {
     question: 'What is United building at Washington Dulles?',
     answer:
-      'A new 14-gate, 435,000 sq ft Concourse E (built by the airports authority, occupied entirely by United) with a ~40,000 sq ft flagship United Club above the AeroTrain station. Both slipped from late September to an expected October opening, then October passed without one: MWAA’s October 13 fact sheet says only “fall 2026,” and no date has been announced. Behind it sits the $20B+ Dulles master plan unveiled in July 2026, a decade-long rebuild that includes plans for one of the largest United Polaris lounges in the world.',
+      `A new ${iadConcourseE.gates}-gate, ${fmtSqFt(iadConcourseE.sizeSqFt)} Concourse E, built by the airports authority and occupied entirely by United, and a nearly ${fmtSqFt(iadClubE.sizeSqFt)} flagship United Club above the AeroTrain escalators. After slipping from late September into October and then past it, United and the airports authority unveiled the concourse on November 9, 2026 and said it opens to travelers ${dayOf(iadConcourseE.openedDate, { month: 'long', day: 'numeric' })}; reports written that day and after confirm it opened. United said the club opens with it. Behind it sits the $20B+ Dulles master plan unveiled in July 2026, a decade-long rebuild that includes plans for one of the largest United Polaris lounges in the world.`,
   },
   {
     question: 'Is United building anything at LAX?',

@@ -567,7 +567,7 @@ export const unitedHubsMeta = {
       source: "https://thepointsguy.com/news/united-airlines-lounge-plans-2026/",
     },
     newGates2026: {
-      label: "new gates targeted for fall 2026",
+      label: "new gates in concourses opened fall 2026",
       value: "36",
       note: "22 at IAH Terminal B North (opened October 22, 2026, phasing into service by Christmas) + 14 at IAD Concourse E (opened November 10, 2026).",
       source: "https://simpleflying.com/36-new-gates-one-us-airline-wins-big-airport-expansions-2026/",
