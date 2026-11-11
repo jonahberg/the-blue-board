@@ -101,7 +101,7 @@ export const articles = [
     sources: [
       { name: 'United Airlines Newsroom', url: 'https://united.mediaroom.com/news-releases?item=125496' },
     ],
-    summary: 'On November 11 United said it is restricting unauthorized third-party personal AI agents and assistants, both on its own digital platforms and through travel agencies and aggregators. It cites exposed account credentials, unintended purchases or miles redemptions, and FAA and DOT rules such as the human acknowledgment required at check-in.',
+    summary: 'On November 11 United said it is restricting unauthorized third-party personal AI agents and assistants, both on its own digital platforms and through travel agencies and aggregators. It cites the risk that sharing account credentials exposes sensitive information, unintended purchases or miles redemptions, and FAA and DOT rules such as the human acknowledgment required at check-in.',
     seoDescription: 'United is restricting unauthorized third-party AI agents on its digital platforms and via agencies, citing account security, stray purchases and FAA rules.',
     body: `<p>If you have been letting an AI assistant into your MileagePlus account to shop for flights, spend miles or check you in, United wants that to stop. On November 11 the airline said it is "taking steps to restrict access" both "directly within our digital platforms" and "indirectly via travel agencies and aggregators." The stated aim is "to prohibit use by unauthorized, third-party personal AI agents or assistants." United says the work includes updates to its booking, ticketing and distribution policies.</p>
 
@@ -127,13 +127,13 @@ export const articles = [
     ],
     summary: 'On November 9 United and the Airports Authority unveiled Concourse E at Washington Dulles: 14 new United gates, direct AeroTrain access and a nearly 40,000-square-foot United Club, set to open to travelers November 10. It is the first of four phases, and the Airports Authority\'s CEO calls it the first step toward retiring the old C and D concourses.',
     seoDescription: 'United unveiled Dulles Concourse E on Nov. 9: 14 new gates, AeroTrain access and a nearly 40,000-sq-ft United Club. It is the first of four planned phases.',
-    body: `<p>United primarily operates its Washington hub out of Concourses C and D, which, as One Mile at a Time puts it, "were built as temporary facilities in 1985." On November 9, United and the Metropolitan Washington Airports Authority unveiled the first piece of their replacement. Concourse E is a 435,000-square-foot building with 14 new United gates, and United said it would open to travelers on November 10. It is the first new concourse at Dulles in two decades.</p>
+    body: `<p>United primarily operates its Washington hub out of Concourses C and D, which, as One Mile at a Time puts it, "were built as temporary facilities in 1985." On November 9, United and the Metropolitan Washington Airports Authority unveiled the first piece of their replacement. Concourse E is a 435,000-square-foot building with 14 new United gates, and United said it would open to travelers on November 10. It is the first new concourse at Dulles in nearly two decades.</p>
 
 <p>The gates are the point. United says Concourse E "will allow the airline to fly more than 300 daily departures" at Dulles, and AirlineGeeks reports the airline expects to top 300 daily departures from the hub next summer, after its departures there rose 30% since 2022. The gates come in configurations that can take one widebody or two narrowbodies, every gate has a jet bridge, and the concourse connects directly to the AeroTrain. The Points Guy notes the new gates sit directly above the AeroTrain station for Concourse C, and Chief Commercial Officer Andrew Nocella said United will fly both international and domestic flights from them.</p>
 
 <p>The club is the other reason to route through E. It is nearly 40,000 square feet with seating for more than 600 customers, which United calls "one of the largest airline clubs in the Western Hemisphere" and One Mile at a Time calls the carrier's second-largest United Club in the system. It sits across from gates E14 and E16 and, per OMAAT, is open daily from 5:30 a.m. to 10 p.m. The concourse also brings new dining, beverage and retail options, including a food court.</p>
 
-<p>This is only phase one. Concourse E's opening is the first of four planned construction phases, and later phases are expected to add up to 36 more United gates. TPG reports that United plans to grow Dulles to around 400 daily departures with all the new gates and that the aim is to open all of it by the mid-2030s. Jack Potter, CEO of the Airports Authority, called this "the first step to retiring Concourse C-D," along with eliminating the mobile lounges, "someday." The whole Dulles program is a separate, larger number: United and the Airports Authority describe more than $20 billion of investment to modernize the airport over the next decade, so don't read that figure as the price of this building.</p>
+<p>This is only phase one. Concourse E's opening is the first of four planned construction phases, and later phases are expected to add up to 36 more United gates. TPG reports that United plans to grow Dulles to around 400 daily departures with all the new gates. Potter told TPG the aim is to finish building out Concourse E by 2030, with the wider airport redevelopment open by the mid-2030s. Jack Potter, CEO of the Airports Authority, called this "the first step to retiring Concourse C-D," along with eliminating the mobile lounges, "someday." The whole Dulles program is a separate, larger number: United and the Airports Authority describe more than $20 billion of investment to modernize the airport over the next decade, so don't read that figure as the price of this building.</p>
 
 <p>The timing lines up with the fleet, too. United says it plans to launch its first international A321XLR service from Dulles, to Amsterdam and Dublin, in December. Scott Kirby called Dulles "a critical part of United's global network and growth strategy," and for a hub whose main concourses were built as temporary facilities, our read is that Concourse E is the first building that looks the part. OMAAT's verdict was simpler: "it looks like a real terminal, and not like a temporary facility."</p>`,
     tags: ['iad', 'a321neo'],
@@ -143,7 +143,7 @@ export const articles = [
     slug: 'united-first-coastliner-delivered-early-2027-debut',
     title: 'The Coastliner Is Here, but Its Debut Slips to Early 2027',
     seoTitle: 'United Coastliner Debut Slips to Early 2027',
-    date: '2026-11-06',
+    date: '2026-11-05',
     category: 'Fleet',
     sources: [
       { name: 'The Points Guy', url: 'https://thepointsguy.com/news/united-airlines-delivery-first-airbus-a321-coastliner/' },
@@ -151,13 +151,13 @@ export const articles = [
       { name: 'United Airlines Newsroom (Q3 results)', url: 'https://united.mediaroom.com/2026-10-20-United-Delivers-Record-17-Revenue-Growth-in-Q3,-and-Expects-Record-Q4-Revenue-Growth,-Underpinned-by-Accelerating-Customer-Investments' },
       { name: 'United Airlines Newsroom (Dulles)', url: 'https://united.mediaroom.com/2026-11-09-United-Airlines-and-the-Metropolitan-Washington-Airports-Authority-Unveil-First-New-Concourse-in-Two-Decades-at-Washington-Dulles-International-Airport' },
     ],
-    summary: 'United has taken delivery of its first A321neo Coastliner, the premium transcon jet with 20 Polaris suites and 12 Premium Plus seats, but now says its inaugural flight is slated for early 2027 after delays at Airbus. When it flies, it will be on Newark–Los Angeles and Newark–San Francisco.',
-    seoDescription: 'United took delivery of its first A321neo Coastliner, with 20 Polaris suites, but its inaugural flight is now slated for early 2027 after Airbus delays.',
+    summary: 'United has taken delivery of its first A321neo Coastliner, the premium transcon jet with 20 Polaris suites and 12 Premium Plus seats, but now says its inaugural flight is slated for early 2027; The Points Guy reports that delays at Airbus pushed the debut back. When it flies, it will be on Newark–Los Angeles and Newark–San Francisco.',
+    seoDescription: 'United took delivery of its first A321neo Coastliner, with 20 Polaris suites, but its inaugural flight is now slated for early 2027.',
     body: `<p>United's premium transcon jet has arrived, just later than planned. On November 6 The Points Guy reported that United had taken delivery of its first Airbus A321neo "Coastliner" and shared a sneak peek of the jet on social media. The same report carried the catch: United said the Coastliner is now slated to make its inaugural flight in early 2027. United had hoped to launch service this past summer, and TPG says delays at Airbus pushed the debut back a few months.</p>
 
 <p>When it does fly, you'll find it on Newark–Los Angeles and Newark–San Francisco. The cabin is what transcon regulars have been waiting for: 20 Polaris suites with sliding privacy doors across 10 rows, 12 Premium Plus recliners in three rows of two-by-two, and a walk-up snack bar in economy. It also has Starlink Wi-Fi. And passengers in those suites get access to United's Polaris lounges.</p>
 
-<p>The Coastliner is one half of United's new premium narrowbody pair. United has 50 Coastliners on order alongside 50 A321XLRs, both from Airbus, and the XLR is further along: it debuted with domestic service in September, and United says it starts its first international flights, from Dulles to Amsterdam and Dublin, in December. Our read: for anyone booking a premium transcon between now and early 2027, nothing changes yet. The suites and the lounge access arrive only when the jet enters service, so check the aircraft type before you pay for the experience.</p>`,
+<p>The Coastliner is one half of United's new premium narrowbody pair. United has 50 Coastliners on order alongside 50 A321XLRs, both from Airbus, and the XLR is further along: it debuted with domestic service in September, and United plans to start its first international flights, from Dulles to Amsterdam and Dublin, in December. Our read: for anyone booking a premium transcon between now and early 2027, nothing changes yet. The suites and the lounge access arrive only when the jet enters service, so check the aircraft type before you pay for the experience.</p>`,
     tags: ['ewr', 'lax', 'sfo', 'a321neo'],
     ogImage: null,
   },
@@ -175,7 +175,7 @@ export const articles = [
       { name: 'AeroRoutes (SFO)', url: 'https://www.aeroroutes.com/eng/261027-uans27sfo' },
       { name: 'AirlineGeeks', url: 'https://airlinegeeks.com/2026/10/29/united-adds-new-route-to-bermuda/' },
     ],
-    summary: 'In October United filled in the rest of its summer 2027 map: Denver–Ottawa, Denver–Québec City and a returning Newark–St. John\'s alongside Air Canada, three new or returning San Francisco routes to Charleston, Hartford and Oklahoma City, and a Saturday Chicago–Bermuda flight.',
+    summary: 'In October United added to its summer 2027 map: Denver–Ottawa, Denver–Québec City and a returning Newark–St. John\'s alongside Air Canada, three new or returning San Francisco routes to Charleston, Hartford and Oklahoma City, and a Saturday Chicago–Bermuda flight.',
     seoDescription: 'United\'s summer 2027 additions: Denver–Ottawa, Denver–Québec City, Newark–St. John\'s, SFO to Charleston, Hartford and Oklahoma City, and Chicago–Bermuda.',
     body: `<p>October filled in the edges of United's summer 2027 map. None of these routes will make headlines on its own, but together they show where United is looking for the next round of connecting traffic.</p>
 
@@ -189,7 +189,7 @@ export const articles = [
   },
   {
     slug: 'united-houston-terminal-b-north-largest-club',
-    title: 'Houston\'s New Front Door: United Opens Terminal B North and the Largest Airline Club in the Americas',
+    title: 'Houston\'s New Front Door: United Opens Terminal B North and What It Calls the Largest Airline Club in the Americas',
     seoTitle: 'United Opens IAH Terminal B North Concourse',
     date: '2026-10-22',
     category: 'Lounges',
@@ -206,7 +206,7 @@ export const articles = [
 
 <p>One catch if your trip starts in Houston: the Terminal B ticketing lobby is still closed. Airways reports that Terminal B passengers are being directed to Terminal C to check in, drop bags and clear security, and then take the Skyway to Terminal B. Our read: connecting passengers get the full upgrade right away, while local travelers still have a walk.</p>
 
-<p>United says the new concourse increases the overall number of customers who can fly on peak travel dates in 2026 by 40%, and it has more planned for Houston: food delivery through the United app at IAH later this year, nonstop service to Cartagena that will make it the first U.S. airline on that route, and plans to restart flights to Chihuahua, Mexico. Scott Kirby framed the whole project around the start of a trip: "I want our customers to start their vacation the minute they show up at the airport."</p>`,
+<p>United says the Terminal B transformation increases the overall number of customers who can fly on peak travel dates in 2026 by 40% compared with 2023, and it has more planned for Houston: food delivery through the United app at IAH later this year, nonstop service to Cartagena that will make it the first U.S. airline on that route, and plans, subject to government approval, to restart flights to Chihuahua, Mexico, next spring. Scott Kirby framed the whole project around the start of a trip: "I want our customers to start their vacation the minute they show up at the airport."</p>`,
     tags: ['iah'],
     ogImage: null,
   },
