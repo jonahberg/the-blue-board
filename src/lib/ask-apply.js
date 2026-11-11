@@ -16,7 +16,7 @@
 
 import { getScheduleFleetFamily } from './schedule-filters.js';
 import { getRegion } from './map-regions.js';
-import { operatedOutcome } from './hub-health.js';
+import { ON_TIME_GRACE_SECONDS, operatedOutcome } from './hub-health.js';
 import { ICAO_TO_FLEET_TYPE } from './equipment-swaps.js';
 
 /** The schedule board's own "Fleet family" values (views/schedule/AdvancedFilters.tsx). */
@@ -143,8 +143,9 @@ export function scheduleControlledFilters(filters) {
  * Late on the board's own terms: an operated row past the stat strip's on-time rule
  * (hub-health.js operatedOutcome, the same one the "Late" card counts), or a row that has not
  * operated and that the board prints as delayed (a provider "Delayed", or an estimate past
- * schedule). The board's own "Status: Delayed" matches only the provider's word, so it would miss a
- * flight that landed 50 minutes late.
+ * schedule), or one still on its way whose estimate is past that same 30-minute rule (an arrival
+ * in the air 46 minutes behind). The board's own "Status: Delayed" matches only the provider's
+ * word, so it would miss a flight that landed 50 minutes late.
  * @param {object} row
  * @param {'departures'|'arrivals'} dir
  * @param {{key?: string, cls?: string}} status  classifySchedStatus(row).
@@ -156,7 +157,11 @@ export function rowIsLate(row, dir, status) {
   if (outcome) return outcome === 'late';
   const operated = dir === 'arrivals' ? key === 'landed' : key === 'departed' || key === 'enroute' || key === 'landed';
   if (operated) return false;
-  return status?.cls === 'delayed' || key === 'delayed';
+  if (status?.cls === 'delayed' || key === 'delayed') return true;
+  const side = dir === 'arrivals' ? 'arrival' : 'departure';
+  const est = Number(row?.time?.estimated?.[side]);
+  const sched = Number(row?.time?.scheduled?.[side]);
+  return est > 0 && sched > 0 && est > sched + ON_TIME_GRACE_SECONDS;
 }
 
 /** On time on the board's own terms: operated within the stat strip's on-time rule. */

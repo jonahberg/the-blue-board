@@ -10,7 +10,7 @@
  * once per answer through `useUi().announce()`.
  */
 
-import { X, Zap } from 'lucide-react';
+import { TriangleAlert, X, Zap } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ export function AskChips({ view, count, singular, pluralNoun, where, onRemove, o
   const chips = useMemo(() => chipsFor(ask?.result ?? null), [ask?.result]);
   const line = askSummaryLine({ count, singular, pluralNoun, where }) as {
     text: string;
+    hint?: string;
     empty: boolean;
     loading: boolean;
   };
@@ -52,20 +53,28 @@ export function AskChips({ view, count, singular, pluralNoun, where, onRemove, o
     if (spokenKey.current === ask.key) return;
     spokenKey.current = ask.key;
     const labels = chips.map((chip) => chip.label).join(', ');
-    announce(labels ? `${line.text}. Filters: ${labels}.` : `${line.text}.`);
+    const sentence = line.hint ? `${line.text}. ${line.hint}` : `${line.text}.`;
+    announce(labels ? `${sentence} Filters: ${labels}.` : sentence);
   }, [ask, line.loading, line.text, chips, announce, tab, view]);
 
   if (!ask) return null;
 
   return (
+    // One scrollable row below `md` (a wrapped second row of 44 px chips costs a phone that much
+    // map or board), wrapping from `md` up. The clear button stays pinned at the row's end.
     <div
       role="group"
       aria-label="Filters from your question"
       data-testid={`ask-chips-${view}`}
-      className={cn('flex flex-wrap items-center gap-1.5 text-xs', className)}
+      className={cn(
+        'flex items-center gap-1.5 overflow-x-auto text-xs [scrollbar-width:none] md:flex-wrap md:overflow-visible',
+        className,
+      )}
     >
-      <span className={cn('mr-1', line.empty ? 'text-bb-warn' : 'text-muted-foreground')}>
+      <span className={cn('mr-1 shrink-0 whitespace-nowrap', line.empty ? 'text-bb-warn' : 'text-muted-foreground')}>
+        {line.empty ? <TriangleAlert aria-hidden="true" className="mr-1 inline size-3.5 align-[-2px]" /> : null}
         {line.text}
+        {line.hint ? <span className="hidden text-muted-foreground md:inline">. {line.hint}</span> : null}
       </span>
       {chips.map((chip) => (
         <button
@@ -77,7 +86,7 @@ export function AskChips({ view, count, singular, pluralNoun, where, onRemove, o
           }}
           aria-label={`Remove filter: ${chip.label}`}
           className={cn(
-            'inline-flex min-h-11 items-center gap-1 rounded-full border bg-secondary px-2.5 font-medium transition-colors duration-100 hover:bg-muted pointer-fine:md:min-h-7',
+            'inline-flex min-h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border bg-secondary px-2.5 font-medium transition-colors duration-100 hover:bg-muted pointer-fine:md:min-h-7',
             chip.kind === 'starlink' ? 'text-bb-starlink' : 'text-foreground',
           )}
         >
@@ -90,7 +99,7 @@ export function AskChips({ view, count, singular, pluralNoun, where, onRemove, o
         type="button"
         variant="ghost"
         size="icon-sm"
-        className="size-11 text-muted-foreground pointer-fine:md:size-7"
+        className="sticky right-0 ml-auto size-11 shrink-0 bg-background text-muted-foreground md:static md:ml-0 pointer-fine:md:size-7"
         aria-label="Clear the filters from your question"
         onClick={() => {
           onClear?.();

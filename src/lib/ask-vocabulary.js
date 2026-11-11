@@ -355,7 +355,7 @@ export const ASK_CITY_NAMES = IATA_CITIES;
  *
  * @param {{count: number|null, singular: string, pluralNoun?: string, where?: string}} input
  *   `where` is a fixed phrase from the view ("on the map", "at DEN"), never visitor text.
- * @returns {{text: string, empty: boolean, loading: boolean}}
+ * @returns {{text: string, hint?: string, empty: boolean, loading: boolean}}
  */
 export function askSummaryLine({ count, singular, pluralNoun, where = '' }) {
   const many = pluralNoun || `${singular}s`;
@@ -363,6 +363,6 @@ export function askSummaryLine({ count, singular, pluralNoun, where = '' }) {
   if (count === null || count === undefined || !Number.isFinite(count)) {
     return { text: `Finding ${many}${tail}…`, empty: false, loading: true };
   }
-  if (count === 0) return { text: `No ${many}${tail} match these filters. Remove one to widen the search.`, empty: true, loading: false };
+  if (count === 0) return { text: `No ${many}${tail} match these filters`, hint: 'Remove one to widen the search.', empty: true, loading: false };
   return { text: `Showing ${count} ${count === 1 ? singular : many}${tail}`, empty: false, loading: false };
 }

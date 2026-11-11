@@ -156,7 +156,7 @@ describe('the summary line', () => {
   it('says the real count, says plainly when nothing matches, and never claims "none" while loading', () => {
     expect(askSummaryLine({ count: 9, singular: 'flight', where: 'on the map' })).toEqual({ text: 'Showing 9 flights on the map', empty: false, loading: false });
     expect(askSummaryLine({ count: 1, singular: 'arrival', where: 'at DEN' }).text).toBe('Showing 1 arrival at DEN');
-    expect(askSummaryLine({ count: 0, singular: 'flight', where: 'on the map' })).toEqual({ text: 'No flights on the map match these filters. Remove one to widen the search.', empty: true, loading: false });
+    expect(askSummaryLine({ count: 0, singular: 'flight', where: 'on the map' })).toEqual({ text: 'No flights on the map match these filters', hint: 'Remove one to widen the search.', empty: true, loading: false });
     expect(askSummaryLine({ count: null, singular: 'flight' })).toEqual({ text: 'Finding flights…', empty: false, loading: true });
     expect(askSummaryLine({ count: 3, singular: 'aircraft', pluralNoun: 'aircraft' }).text).toBe('Showing 3 aircraft');
   });

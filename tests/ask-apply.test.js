@@ -114,6 +114,9 @@ describe('the schedule board', () => {
     expect(rowIsLate(row(), 'arrivals', { key: 'estimated', cls: 'delayed' })).toBe(true); // estimate past schedule
     expect(rowIsLate(row(), 'arrivals', { key: 'delayed', cls: 'delayed' })).toBe(true);
     expect(rowIsLate(row(), 'arrivals', { key: 'scheduled', cls: 'scheduled' })).toBe(false);
+    // Still in the air, estimated 46 minutes behind: late; 10 minutes behind: not.
+    expect(rowIsLate(row({ est: 1000 + 46 * 60 }), 'arrivals', { key: 'enroute', cls: 'enroute' })).toBe(true);
+    expect(rowIsLate(row({ est: 1000 + 10 * 60 }), 'arrivals', { key: 'enroute', cls: 'enroute' })).toBe(false);
     expect(rowIsLate(row(), 'arrivals', { key: 'canceled', cls: 'canceled' })).toBe(false);
     expect(rowIsOnTime(row({ real: 1000 + 5 * 60 }), 'arrivals', landed)).toBe(true);
     expect(rowIsOnTime(row(), 'arrivals', { key: 'scheduled' })).toBe(false);
