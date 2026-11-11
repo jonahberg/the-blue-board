@@ -122,3 +122,117 @@ export function starlinkRosterAsOf(syncedAt) {
   if (Number.isNaN(d.getTime())) return '';
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
+
+// ── Build-time sources, in order (Nov 2026) ──
+// On Nov 11 2026 unitedstarlinktracker.com answered Cloudflare 521 all day, every build kept the
+// committed starlink-live.json, and /fleet regressed to "602 Starlink equipped" — a count fetched
+// Sep 28 — while the dashboard said 681 from our own snapshot. The committed file never advances
+// (CLAUDE.md has every commit `git checkout` it), so the fallback was 44 days stale. The site's
+// own /api/starlink-data?fields=roster now stands between the tracker and the committed file: it is
+// our 4-hourly sync's Supabase snapshot of the same tracker data, carries its own `syncedAt`, and
+// keeps answering while the tracker is down. Every figure is dated by its SOURCE's time.
+
+/** What the equipped count counts: every United aircraft on the tracker, mainline and Express. */
+export const STARLINK_EQUIPPED_SCOPE = 'mainline + Express';
+
+/** A tracker `generatedAt` further than this from the fetch is not used to date the count. */
+const TRACKER_GENERATED_AT_MAX_SKEW_MS = 24 * 60 * 60 * 1000;
+
+/** Where each build-time figure came from. */
+export const STARLINK_SOURCE_TRACKER = 'unitedstarlinktracker.com';
+export const STARLINK_SOURCE_SNAPSHOT = 'theblueboard.co snapshot';
+
+/**
+ * The sync time of a served /api/starlink-data payload, or null when it is not usable as a
+ * source: the static fallback (servedFrom 'static', no sync time), or no parseable time.
+ * @param {any} served  /api/starlink-data?fields=roster body
+ * @returns {Date|null}
+ */
+export function servedStarlinkSyncedAt(served) {
+  if (!served || served.servedFrom === 'static') return null;
+  const d = new Date(served.syncedAt);
+  return served.syncedAt && !Number.isNaN(d.getTime()) ? d : null;
+}
+
+/** The equipped count from a served payload (fleetStats.total), or null. */
+export function starlinkCountFromServed(served) {
+  if (!servedStarlinkSyncedAt(served)) return null;
+  const total = Number(served?.fleetStats?.total);
+  return Number.isInteger(total) && total > 0 ? total : null;
+}
+
+/** Mainline tails from a served payload's `aircraft`, same rules as starlinkRosterTails. */
+export function starlinkRosterTailsFromServed(served, overrides = []) {
+  if (!servedStarlinkSyncedAt(served)) return [];
+  const planes = (Array.isArray(served?.aircraft) ? served.aircraft : []).map((a) => ({ TailNumber: a?.tail, fleet: a?.fleet }));
+  return starlinkRosterTails({ starlinkPlanes: planes }, overrides);
+}
+
+/** The Express counts from a served payload (fleetStats.express / expressTotal), same guards. */
+export function starlinkExpressCountsFromServed(served) {
+  if (!servedStarlinkSyncedAt(served)) return null;
+  const fs = served?.fleetStats;
+  return starlinkExpressCounts({ fleetStats: { express: { starlink: fs?.express, total: fs?.expressTotal } } });
+}
+
+/**
+ * The headline figure to publish: the tracker's fleet-summary when it answers plausibly, else the
+ * site's served snapshot, else null (keep the committed file). Dated by the source.
+ * @param {{summary?: any, served?: any, committedCount: number, now?: Date}} input
+ * @returns {{count: number, label: string, asOf: string, asOfDate: string, scope: string, source: string, fetchedAt: string}|null}
+ */
+export function chooseStarlinkLive({ summary = null, served = null, committedCount, now = new Date() }) {
+  const ua = (summary?.airlines ?? []).find((a) => a?.code === 'UA');
+  const trackerCount = ua?.installed;
+  if (summary && isPlausibleStarlinkCount(trackerCount, committedCount)) {
+    // The tracker's own timestamps are not trusted blindly: its /api/data `lastUpdated` has been
+    // frozen since Oct 27 2026 while its counts moved. Its fleet-summary `generatedAt` dates the
+    // count only when it is within a day of the fetch; otherwise the fetch time does.
+    const generated = new Date(summary.generatedAt);
+    const plausible = summary.generatedAt && !Number.isNaN(generated.getTime())
+      && Math.abs(now.getTime() - generated.getTime()) <= TRACKER_GENERATED_AT_MAX_SKEW_MS;
+    return liveFigure(trackerCount, plausible ? generated : now, STARLINK_SOURCE_TRACKER, now);
+  }
+  const servedCount = starlinkCountFromServed(served);
+  if (served && isPlausibleStarlinkCount(servedCount, committedCount)) {
+    return liveFigure(servedCount, servedStarlinkSyncedAt(served), STARLINK_SOURCE_SNAPSHOT, now);
+  }
+  return null;
+}
+
+function liveFigure(count, asOfDate, source, now) {
+  return {
+    count,
+    label: starlinkLabel(count),
+    asOf: starlinkAsOf(asOfDate),
+    asOfDate: asOfDate.toISOString(),
+    scope: STARLINK_EQUIPPED_SCOPE,
+    source,
+    fetchedAt: now.toISOString(),
+  };
+}
+
+/**
+ * The mainline roster + Express counts to publish: the tracker's /api/data when it answers
+ * plausibly, else the site's served snapshot, else null (keep the committed roster).
+ * @param {{upstream?: any, served?: any, committedLength: number, overrides?: ReadonlyArray<{tail: string, fleet?: string}>, now?: Date}} input
+ * @returns {{syncedAt: string, tails: string[], express: {installed: number, total: number}, source: string}|null}
+ */
+export function chooseStarlinkRoster({ upstream = null, served = null, committedLength, overrides = [], now = new Date() }) {
+  if (upstream) {
+    const tails = starlinkRosterTails(upstream, overrides);
+    const express = starlinkExpressCounts(upstream);
+    if (isPlausibleStarlinkRoster(tails, committedLength) && express) {
+      return { syncedAt: now.toISOString(), tails, express, source: STARLINK_SOURCE_TRACKER };
+    }
+  }
+  const syncedAt = servedStarlinkSyncedAt(served);
+  if (syncedAt) {
+    const tails = starlinkRosterTailsFromServed(served, overrides);
+    const express = starlinkExpressCountsFromServed(served);
+    if (isPlausibleStarlinkRoster(tails, committedLength) && express) {
+      return { syncedAt: syncedAt.toISOString(), tails, express, source: STARLINK_SOURCE_SNAPSHOT };
+    }
+  }
+  return null;
+}

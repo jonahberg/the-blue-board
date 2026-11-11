@@ -76,6 +76,99 @@ export function hubOtpDescription(otp) {
 /** A hub reading built from a board older than this is stale (F91). */
 export const HUB_READING_STALE_MS = 60 * 60 * 1000;
 
+// ── Board coverage (Nov 11 2026) ──
+// How much of a board's own day has happened since the board was built. For today's board that
+// is its age. For YESTERDAY's board — what /api/irops and the dashboard read before 06:00 hub-local
+// — only the part of yesterday after the build counts: a board built after local midnight saw the
+// whole day, so it is final (gap 0) however old it gets, and one built at 21:00 is missing three
+// hours. Age alone called every final yesterday board stale and dropped it from the brief.
+
+/**
+ * A hub board is current when no more than this much of its day has gone unseen. The brief's
+ * 3-hour board rule (BRIEF_MAX_BOARD_AGE_MS); the warm ring rebuilds a today board about every 3 h.
+ */
+export const HUB_BOARD_CURRENT_MAX_SEC = 3 * 60 * 60;
+
+/**
+ * Seconds of the board's day that have passed since it was built: max(0, min(now, dayEnd) − built).
+ * Without a day end it is the board's age. Null when the build time is unknown.
+ * @param {{generatedAtSec: unknown, dayEndSec?: unknown, nowSec: number}} input
+ * @returns {number|null}
+ */
+export function boardCoverageGapSec({ generatedAtSec, dayEndSec = null, nowSec }) {
+  const builtMs = boardAsOfMs(generatedAtSec);
+  if (builtMs === null) return null;
+  const end = Number(dayEndSec);
+  const until = dayEndSec !== null && dayEndSec !== undefined && Number.isFinite(end) && end > 0 ? Math.min(nowSec, end) : nowSec;
+  return Math.max(0, Math.round(until - builtMs / 1000));
+}
+
+/**
+ * Which hub boards behind an /api/irops payload are current. Recomputed at `nowSec` when the
+ * payload carries the build time and day end (it can be ~35 min old by the time it is read);
+ * otherwise the payload's own `coverageGapSec`, then `dataAgeSec` on payloads older than both.
+ * A hub with no flights on its board is not current ("missing").
+ * @param {Record<string, any>|null|undefined} hubMetrics  /api/irops `hubMetrics`.
+ * @param {number} [nowSec]
+ * @returns {{total: number, current: string[], notCurrent: Array<{hub: string, gapSec: number|null, ageSec: number|null, dayOffset: number, missing: boolean}>}}
+ */
+export function hubBoardCoverage(hubMetrics, nowSec) {
+  const current = [];
+  const notCurrent = [];
+  const entries = Object.entries(hubMetrics || {});
+  for (const [hub, m] of entries) {
+    const missing = !m || !(Number(m.total) > 0);
+    const builtMs = boardAsOfMs(m?.generatedAt);
+    const live = nowSec !== undefined && builtMs !== null;
+    const gapSec = live
+      ? boardCoverageGapSec({ generatedAtSec: m.generatedAt, dayEndSec: m.boardDayEndSec ?? null, nowSec })
+      : finiteOrNull(m?.coverageGapSec) ?? finiteOrNull(m?.dataAgeSec);
+    const ageSec = live
+      ? Math.max(0, Math.round(nowSec - builtMs / 1000))
+      : finiteOrNull(m?.ageSec) ?? finiteOrNull(m?.dataAgeSec);
+    const dayOffset = Number(m?.boardDayOffset) === -1 ? -1 : 0;
+    if (!missing && gapSec !== null && gapSec <= HUB_BOARD_CURRENT_MAX_SEC) current.push(hub);
+    else notCurrent.push({ hub, gapSec, ageSec, dayOffset, missing });
+  }
+  notCurrent.sort((a, b) => Number(b.missing) - Number(a.missing) || (b.gapSec ?? Infinity) - (a.gapSec ?? Infinity) || a.hub.localeCompare(b.hub));
+  return { total: entries.length, current, notCurrent };
+}
+
+/** A finite number, or null (null/undefined/'' are null, not 0). */
+function finiteOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Whole hours: '3 h'. Only a board more than 3 h behind is ever named, so minutes never show. */
+function spanText(sec) {
+  return `${Math.max(1, Math.round(sec / 3600))} h`;
+}
+
+/** One not-current board in words. */
+function notCurrentText({ hub, gapSec, dayOffset, missing }) {
+  if (missing) return `${hub} board missing`;
+  if (gapSec === null) return `${hub} board age unknown`;
+  if (dayOffset === -1) return `${hub} board missing the last ${spanText(gapSec)} of yesterday`;
+  return `${hub} board ${spanText(gapSec)} old`;
+}
+
+/**
+ * The IROPS card's coverage line: "8 of 9 hub boards current · LAX board 3 h old", or null when
+ * every board is current. Names the two worst boards, then "and N more".
+ * @param {Record<string, any>|null|undefined} hubMetrics  /api/irops `hubMetrics`.
+ * @param {number} [nowSec]  render time; omit to use the payload's own figures.
+ * @returns {string|null}
+ */
+export function iropsCoverageNote(hubMetrics, nowSec) {
+  const { total, current, notCurrent } = hubBoardCoverage(hubMetrics, nowSec);
+  if (total === 0 || notCurrent.length === 0) return null;
+  const named = notCurrent.slice(0, 2).map(notCurrentText).join(', ');
+  const more = notCurrent.length > 2 ? ` and ${notCurrent.length - 2} more` : '';
+  return `${current.length} of ${total} hub boards current · ${named}${more}`;
+}
+
 /**
  * A client board must be at least this much newer than the server's before it replaces the
  * server's reading — close in age, the server (full-day, authoritative) keeps winning, so
@@ -239,9 +332,61 @@ export function serverOtpFromMetrics(m) {
   const operated = Number(m.operated || 0);
   const onTime = Number(m.onTime || 0);
   const cancelRate = m.total > 10 ? Number(m.cancellations || 0) / m.total : 0;
-  if (operated < 5 && cancelRate >= 0.5) return 0; // mostly cancelled — show as critical
-  if (operated >= 5) return Math.round((onTime / operated) * 100);
+  if (operated < HUB_OTP_MIN_OPERATED && cancelRate >= 0.5) return 0; // mostly cancelled — show as critical
+  if (operated >= HUB_OTP_MIN_OPERATED) return Math.round((onTime / operated) * 100);
   return null; // operated < 5 and low cancel rate: no data yet
+}
+
+/** Operated departures a hub needs before the strip shows its on-time figure. */
+export const HUB_OTP_MIN_OPERATED = 5;
+
+/**
+ * True when a hub board cannot tell a departed flight from a held one: not one row carries an
+ * actual or estimated departure time, and at least 3 rows are either marked departed anyway or are
+ * over 30 minutes past due. Guam's board is like this every day (Nov 8–10 2026: 0 of 30 departure
+ * rows with an actual time; 18 never left "scheduled"); a normal hub has times on most rows, and a
+ * ground stop's held flights carry estimates. Data-driven, so a hub that starts sending times
+ * stops matching. False on payloads without the counts.
+ * @param {{departureTimesSeen?: number, departedWithoutTime?: number, pastDueUntimed?: number}|null|undefined} m
+ */
+export function boardLacksActualTimes(m) {
+  if (!m) return false;
+  const seen = Number(m.departureTimesSeen);
+  if (m.departureTimesSeen === undefined || m.departureTimesSeen === null || !Number.isFinite(seen) || seen > 0) return false;
+  return (Number(m.departedWithoutTime) || 0) + (Number(m.pastDueUntimed) || 0) >= 3;
+}
+
+/**
+ * Why a hub has no on-time figure, in the visitor's words, or null when it has one.
+ *  - 'no-board'    no departures board (empty or missing)
+ *  - 'no-actuals'  the feed sends no departure times for the hub (boardLacksActualTimes) — Guam
+ *  - 'too-few'     fewer than HUB_OTP_MIN_OPERATED departures have left so far (NRT's day starts
+ *                  with one flight and its bank leaves at 16:55–18:00 JST)
+ * `label` is what the chip shows instead of a percentage.
+ * @param {any} m  one /api/irops hubMetrics entry
+ * @param {string} hub
+ * @returns {{reason: 'no-board'|'no-actuals'|'too-few', label: string, text: string}|null}
+ */
+export function hubOtpUnavailableReason(m, hub) {
+  const total = Number(m?.total) || 0;
+  if (!m || total <= 0) {
+    return { reason: 'no-board', label: '—', text: `No ${hub} departures board right now.` };
+  }
+  if (serverOtpFromMetrics(m) !== null) return null;
+  if (boardLacksActualTimes(m)) {
+    return {
+      reason: 'no-actuals',
+      label: 'n/a',
+      text: `The schedule feed sends no actual departure times for ${hub}, so there is no on-time figure.`,
+    };
+  }
+  const operated = Number(m.operated) || 0;
+  const when = Number(m.boardDayOffset) === -1 ? 'left yesterday' : 'have left so far today';
+  return {
+    reason: 'too-few',
+    label: '—',
+    text: `${operated} of ${total} ${hub} departures ${when}; an on-time figure needs ${HUB_OTP_MIN_OPERATED}.`,
+  };
 }
 
 /**

@@ -195,6 +195,61 @@ describe('buildBriefFacts: the catalogue', () => {
     expect(stale.collection.skipped).toContain('otp.ORD: board 240 min old');
   });
 
+  // Nov 2026: boards are judged by their coverage gap, not their age (src/lib/hub-health.js).
+  describe('board coverage gates', () => {
+    const withHub = (fx, hub, patch) => ({
+      irops: { ...fx.sources.irops, hubMetrics: { ...fx.sources.irops.hubMetrics, [hub]: { ...fx.sources.irops.hubMetrics[hub], ...patch } } },
+    });
+    const centralMidnight = Date.UTC(2026, 10, 11, 6, 0) / 1000; // 00:00 CST Nov 11
+
+    it('keeps a final yesterday board however old it is (built after local midnight)', () => {
+      const fx = fixture('overnight-low-traffic'); // 09:30Z = 03:30 CST, ORD still on yesterday
+      const old = withHub(fx, 'ORD', { generatedAt: centralMidnight + 600 }); // 3 h 20 min old
+      // Without its day end the payload is judged by age, exactly as before.
+      expect(build(fx, old).collection.skipped).toContain('otp.ORD: board 200 min old');
+      const final = withHub(fx, 'ORD', { generatedAt: centralMidnight + 600, boardDayOffset: -1, boardDayEndSec: centralMidnight });
+      const { facts, collection } = build(fx, final);
+      expect(byId(facts)['otp.ORD'].statement).toContain('yesterday');
+      expect(collection.skipped.filter((r) => r.startsWith('otp.ORD'))).toEqual([]);
+    });
+
+    it('still drops a yesterday board that missed more than 3 h of its day, and says which part', () => {
+      const fx = fixture('overnight-low-traffic');
+      const tail = withHub(fx, 'ORD', { generatedAt: centralMidnight - 4 * 3600, boardDayOffset: -1, boardDayEndSec: centralMidnight });
+      const { facts, collection } = build(fx, tail);
+      expect(byId(facts)['otp.ORD']).toBeUndefined();
+      expect(collection.skipped).toContain('otp.ORD: board missing the last 240 min of yesterday');
+    });
+
+    it('drops a hub cancellation fact from a board more than 3 h behind', () => {
+      const fx = fixture('storm-day');
+      expect(byId(build(fx).facts)['cxl.ORD']).toBeDefined();
+      const nowSec = Date.parse(fx.nowIso) / 1000;
+      const { facts, collection } = build(fx, withHub(fx, 'ORD', { generatedAt: nowSec - 4 * 3600 }));
+      expect(byId(facts)['cxl.ORD']).toBeUndefined();
+      expect(collection.skipped).toContain('cxl.ORD: board 240 min old');
+      expect(byId(facts)['cxl.EWR']).toBeDefined();
+    });
+
+    it('drops the index fact when boards more than 3 h behind hold over a quarter of its departures', () => {
+      const fx = fixture('storm-day');
+      const nowSec = Date.parse(fx.nowIso) / 1000;
+      // NRT and GUM (22 of 2,609 departures) never silence it.
+      const pacific = { ...withHub(fx, 'NRT', { generatedAt: nowSec - 8 * 3600 }).irops };
+      pacific.hubMetrics = { ...pacific.hubMetrics, GUM: { ...pacific.hubMetrics.GUM, generatedAt: nowSec - 8 * 3600 } };
+      expect(byId(build(fx, { irops: pacific }).facts)['net.index']).toBeDefined();
+      // ORD alone is 24.9%: kept. ORD + EWR is 39.9%: dropped, and the reason names them.
+      expect(byId(build(fx, withHub(fx, 'ORD', { generatedAt: nowSec - 4 * 3600 })).facts)['net.index']).toBeDefined();
+      const two = withHub(fx, 'ORD', { generatedAt: nowSec - 4 * 3600 });
+      two.irops.hubMetrics = { ...two.irops.hubMetrics, EWR: { ...two.irops.hubMetrics.EWR, generatedAt: nowSec - 4 * 3600 } };
+      const { facts, collection } = build(fx, two);
+      expect(byId(facts)['net.index']).toBeUndefined();
+      expect(collection.skipped).toContain('net.index: boards more than 3 h behind hold 40% of its departures (ORD, EWR)');
+      // The tone rules did not move: net.status still reads the index.
+      expect(byId(facts)['net.status']).toBeDefined();
+    });
+  });
+
   it('says "yesterday" for a hub whose board has not rolled over yet', () => {
     const { facts } = build(fixture('overnight-low-traffic'));
     expect(byId(facts)['otp.EWR'].statement).toContain('yesterday (its board has not rolled over to today yet)');

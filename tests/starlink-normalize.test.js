@@ -163,7 +163,8 @@ describe('normalizeStarlinkPayload', () => {
 describe('validateStarlinkPayload', () => {
   // Builds the NORMALIZED payload shape (the validator's input) rather than raw upstream —
   // validation runs after normalizeStarlinkPayload at both call sites.
-  function makePayload({ count = 513, tail, fleetStats, lastUpdated = new Date().toISOString() } = {}) {
+  const inDays = (d) => Math.floor(Date.now() / 1000) + d * 86400;
+  function makePayload({ count = 513, tail, fleetStats, lastUpdated = new Date().toISOString(), flightsByTail } = {}) {
     const aircraft = Array.from({ length: count }, (_, i) => ({
       tail: tail ? tail(i) : `N${100 + i}`,
       fleet: i % 2 === 0 ? 'Mainline' : 'Express',
@@ -180,7 +181,7 @@ describe('validateStarlinkPayload', () => {
       fleetStats: fleetStats === undefined
         ? { mainline, express, total: count, mainlineTotal: 1122, expressTotal: 659, fleetTotal: 1781, mainlinePct: 15, expressPct: 52 }
         : fleetStats,
-      flightsByTail: {},
+      flightsByTail: flightsByTail ?? { N100: [{ flight_number: 'UA1', departure_ts: inDays(3) }] },
       lastUpdated,
       syncedAt: new Date().toISOString(),
     };
@@ -237,10 +238,20 @@ describe('validateStarlinkPayload', () => {
     expect(out.warnings.join('; ')).toMatch(/fleetStats/);
   });
 
-  it('warns but accepts a stale upstream lastUpdated', () => {
-    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
-    const out = validateStarlinkPayload(makePayload({ lastUpdated: twelveHoursAgo }));
+  // Nov 2026: the tracker's lastUpdated has been frozen at 2026-10-27T05:05Z while its data moved;
+  // warning on it fired on every sync. The schedule horizon is the freshness signal now.
+  it('does not warn about an old upstream lastUpdated', () => {
+    const out = validateStarlinkPayload(makePayload({ lastUpdated: '2026-10-27T05:05:51.855Z' }));
     expect(out.ok).toBe(true);
-    expect(out.warnings.join('; ')).toMatch(/6h old/);
+    expect(out.warnings).toEqual([]);
+  });
+
+  it('warns but accepts when the schedules end within 12 h, or are missing', () => {
+    const soon = validateStarlinkPayload(makePayload({ flightsByTail: { N100: [{ departure_ts: inDays(0.25) }] } }));
+    expect(soon.ok).toBe(true);
+    expect(soon.warnings.join('; ')).toMatch(/schedules end 6h from now/);
+    const none = validateStarlinkPayload(makePayload({ flightsByTail: {} }));
+    expect(none.ok).toBe(true);
+    expect(none.warnings.join('; ')).toMatch(/no flight schedules/);
   });
 });

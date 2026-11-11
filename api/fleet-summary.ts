@@ -66,7 +66,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     clearTimeout(timeout);
 
     if (!resp.ok) {
-      return res.status(resp.status).json({ error: `Upstream returned ${resp.status}` });
+      // 502 as this file's header says, and the same negative cache as a connection failure: the
+      // tracker answered Cloudflare 521 for a whole day (Nov 11 2026) and this passed the 521 through
+      // and asked upstream again on every dashboard boot. The upstream code stays in the body.
+      upstreamUnhealthyUntil = Date.now() + NEGATIVE_TTL;
+      return res.status(502).json({ error: `Upstream returned ${resp.status}` });
     }
 
     const data = await resp.json();

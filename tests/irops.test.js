@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import handler, { __resetIropsForTests, computeMetrics, getStartOfDayForHub, HUB_TZ, overlayHubBoards } from '../api/irops.js';
+import handler, {
+  __resetIropsForTests, computeMetrics, getHubBoardDay, getStartOfDayForHub, HUB_TZ, OVERDUE_CLOCK_GRACE_SEC, overdueClockSec,
+  overlayHubBoards,
+} from '../api/irops.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 import { IROPS_MINOR_AT, IROPS_SIGNIFICANT_AT } from '../src/lib/irops-score.js';
 
@@ -290,6 +293,140 @@ describe('computeMetrics', () => {
     const result = computeMetrics({ ORD: flights }, now);
     for (const w of result.worstDelays) expect(w.delay).toBeLessThanOrEqual(240);
     expect(result.score).toBe(0);
+  });
+
+  // ── The overdue clock (Nov 11 2026): overdue is measured at the board's build time + 30 min ──
+  describe('overdue clock', () => {
+    it('overdueClockSec is min(now, generatedAt + 30 min), and now when the build time is unknown', () => {
+      const now = 1_790_000_000;
+      expect(OVERDUE_CLOCK_GRACE_SEC).toBe(1800);
+      expect(overdueClockSec(now, now - 3 * 3600)).toBe(now - 3 * 3600 + 1800);
+      expect(overdueClockSec(now, now - 600)).toBe(now); // younger than the grace: the wall clock
+      expect(overdueClockSec(now, null)).toBe(now);
+      expect(overdueClockSec(now, undefined)).toBe(now);
+      expect(overdueClockSec(now, 0)).toBe(now);
+    });
+
+    it('does not turn departures scheduled after a 3-hour-old board was built into held flights', () => {
+      // The LAX case: a board built at T, read at T+3h. Every departure scheduled after T still
+      // says "scheduled" on it. On the wall clock they were all "held"; at the build clock none is.
+      const built = 1_790_000_000;
+      const now = built + 3 * 3600;
+      const flights = [];
+      for (let i = 0; i < 10; i++) {
+        // A real hub board carries the provider's estimate on rows that have not left.
+        flights.push(makeFlight('LAX', {
+          schedDep: built + i * 900, schedArr: built + 6 * 3600, realDep: null, estDep: built + i * 900, status: 'scheduled', flightNum: `UA${i}`,
+        }));
+      }
+      const wall = computeMetrics({ LAX: flights }, now); // no build time: the old behaviour
+      expect(wall.delayed30).toBeGreaterThan(0);
+      const clamped = computeMetrics({ LAX: flights }, now, { LAX: built });
+      // Only the departure due at T (the board's own build minute) is >0 min overdue at T+30m,
+      // and 30 minutes is not "more than 30".
+      expect(clamped.delayed30).toBe(0);
+      expect(clamped.delayed60).toBe(0);
+      expect(clamped.hubMetrics.LAX.delayed30).toBe(0);
+      expect(clamped.score).toBe(0);
+    });
+
+    it('a flight already overdue when the board was built counts, at its overdue minutes as of the build clock', () => {
+      const built = 1_790_000_000;
+      const now = built + 3 * 3600;
+      const held = makeFlight('EWR', { schedDep: built - 3600, schedArr: built + 4 * 3600, realDep: null, status: 'scheduled' });
+      const result = computeMetrics({ EWR: [held] }, now, { EWR: built });
+      expect(result.delayed30).toBe(1);
+      expect(result.delayed60).toBe(1);
+      // 60 min overdue at build + the 30-min grace = 90, not the 240 the wall clock would say.
+      expect(result.worstDelays[0].delay).toBe(90);
+    });
+
+    it('F073 still pushes a ground stop across SIGNIFICANT when the board is fresh', () => {
+      const t = 1700000000;
+      const now = t + 2 * 3600;
+      const flights = [];
+      for (let i = 0; i < 10; i++) {
+        flights.push(makeFlight('EWR', { schedDep: t, realDep: null, status: 'scheduled', flightNum: `UA${200 + i}` }));
+      }
+      for (let i = 0; i < 20; i++) {
+        flights.push(makeFlight('EWR', { schedDep: t, realDep: t, status: 'landed', flightNum: `UA${300 + i}` }));
+      }
+      // Built 5 minutes ago — the warm cron's IROPS priority keeps a disrupted hub's board this fresh.
+      const result = computeMetrics({ EWR: flights }, now, { EWR: now - 300 });
+      expect(result.delayed30).toBe(10);
+      expect(result.delayed60).toBe(10);
+      expect(result.score).toBeGreaterThanOrEqual(IROPS_SIGNIFICANT_AT);
+    });
+
+    it('each hub is measured on its own board clock', () => {
+      const now = 1_790_000_000;
+      const due = now - 2 * 3600; // scheduled 2h ago, never departed, lands in 2h
+      const row = (hub) => makeFlight(hub, { schedDep: due, schedArr: now + 2 * 3600, realDep: null, status: 'scheduled' });
+      const result = computeMetrics(
+        { ORD: [row('ORD')], DEN: [row('DEN')] },
+        now,
+        { ORD: now - 60, DEN: due - 3600 }, // ORD fresh; DEN built an hour before the flight was due
+      );
+      expect(result.hubMetrics.ORD.delayed60).toBe(1);
+      expect(result.hubMetrics.DEN.delayed30).toBe(0);
+      expect(result.delayed30).toBe(1);
+    });
+  });
+
+  it('counts what a board knows about departure times (GUM-shaped vs a normal board)', () => {
+    const built = 1_794_405_600 + 8 * 3600; // a Guam morning
+    const now = built + 600;
+    const gum = [
+      makeFlight('GUM', { schedDep: built - 7200, status: 'departed' }), // departed, no time
+      makeFlight('GUM', { schedDep: built - 7000, status: 'departed' }),
+      makeFlight('GUM', { schedDep: built - 6000, schedArr: built + 3 * 3600, status: 'scheduled' }), // never advances
+      makeFlight('GUM', { schedDep: built + 3600, status: 'scheduled' }), // not due yet
+      makeFlight('GUM', { schedDep: built - 7200, status: 'canceled' }),
+    ];
+    const ord = [
+      makeFlight('ORD', { schedDep: built - 7200, realDep: built - 7100, status: 'departed' }),
+      makeFlight('ORD', { schedDep: built - 3600, estDep: built + 600, status: 'scheduled' }),
+      makeFlight('ORD', { schedDep: built - 3600, status: 'scheduled' }),
+    ];
+    const result = computeMetrics({ GUM: gum, ORD: ord }, now, { GUM: built, ORD: built });
+    expect(result.hubMetrics.GUM).toMatchObject({ departedWithoutTime: 2, departureTimesSeen: 0, pastDueUntimed: 1, operated: 0 });
+    expect(result.hubMetrics.ORD).toMatchObject({ departedWithoutTime: 0, departureTimesSeen: 2, pastDueUntimed: 1, operated: 1 });
+  });
+
+  // SCORING (Nov 2026): a board with no departure times cannot tell held from gone.
+  describe('boards with no departure times (Guam)', () => {
+    const built = 1_794_405_600 + 8 * 3600;
+    const gumBoard = () => [
+      // The morning bank, 30–90 min past due, never advanced, no times anywhere — the 22:00Z GUM build of Nov 11.
+      makeFlight('GUM', { schedDep: built - 5400, schedArr: built + 6 * 3600, status: 'scheduled', flightNum: 'UA137' }),
+      makeFlight('GUM', { schedDep: built - 4500, schedArr: built + 7 * 3600, status: 'scheduled', flightNum: 'UA200' }),
+      makeFlight('GUM', { schedDep: built - 3900, schedArr: built + 3600, status: 'scheduled', flightNum: 'UA174' }),
+      makeFlight('GUM', { schedDep: built - 3900, schedArr: built + 3600, status: 'scheduled', flightNum: 'UA155' }),
+      makeFlight('GUM', { schedDep: built + 4 * 3600, status: 'scheduled', flightNum: 'UA196' }),
+    ];
+
+    it('infers no held flights from them', () => {
+      const result = computeMetrics({ GUM: gumBoard() }, built + 600, { GUM: built });
+      expect(result.hubMetrics.GUM).toMatchObject({ holdsInferred: false, pastDueUntimed: 4, departureTimesSeen: 0 });
+      expect(result.hubMetrics.GUM.delayed30).toBe(0);
+      expect(result.delayed30).toBe(0);
+      expect(result.worstDelays).toEqual([]);
+      expect(result.score).toBe(0);
+    });
+
+    it('still infers holds on a board that has times elsewhere (a ground stop keeps F073)', () => {
+      const board = gumBoard().map((f) => ({ ...f, airport: { ...f.airport, origin: { code: { iata: 'EWR' } } } }));
+      board.push(makeFlight('EWR', { schedDep: built - 7200, realDep: built - 7100, status: 'departed' }));
+      const result = computeMetrics({ EWR: board }, built + 600, { EWR: built });
+      expect(result.hubMetrics.EWR.holdsInferred).toBe(true);
+      expect(result.delayed30).toBe(4);
+    });
+
+    it('keeps inferring on a board with fewer than 3 untimed rows due (F073b single-row cases)', () => {
+      const result = computeMetrics({ GUM: gumBoard().slice(0, 2) }, built + 600, { GUM: built });
+      expect(result.hubMetrics.GUM.holdsInferred).toBe(true);
+      expect(result.delayed30).toBe(2);
+    });
   });
 
   it('F073: does not treat departed/landed/canceled flights as overdue', () => {
@@ -607,6 +744,67 @@ describe('IROPS API handler', () => {
     expect(res.body.hubMetrics.ORD.dataAgeSec).toBeLessThan(600);
     expect(res.body.oldestHubAgeSec).toBe(res.body.hubMetrics.IAH.dataAgeSec);
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('IAH board is 600m old'));
+  });
+
+  it('discloses board coverage: hubsCurrent/hubsTotal and per-hub ageSec, coverageGapSec, board day', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-11T21:28:25Z')); // 1:28 PM PT: every hub on today's board
+    const nowSec = Math.floor(Date.now() / 1000);
+    const flight = {
+      status: { generic: { status: { text: 'departed' } } },
+      time: { scheduled: { departure: nowSec - 7200 }, real: { departure: nowSec - 7000 } },
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const hub = new URL(String(url)).searchParams.get('hub');
+      const generatedAt = hub === 'LAX' ? nowSec - (3 * 3600 + 600) : nowSec - 1700;
+      return { ok: true, json: async () => ({ flights: [flight], meta: { generatedAt } }) };
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.body.hubsTotal).toBe(9);
+    expect(res.body.hubsCurrent).toBe(8);
+    expect(res.body.hubMetrics.LAX).toMatchObject({
+      ageSec: 3 * 3600 + 600,
+      coverageGapSec: 3 * 3600 + 600,
+      boardDayOffset: 0,
+      boardDayEndSec: Date.UTC(2026, 10, 12, 8, 0) / 1000, // Pacific midnight
+    });
+    expect(res.body.hubMetrics.ORD.ageSec).toBe(1700);
+  });
+
+  it("counts a yesterday board built after local midnight as current, however old (06:00 rule)", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-11T11:45:00Z')); // 05:45 CST: IAH still reads yesterday
+    const nowSec = Math.floor(Date.now() / 1000);
+    const centralMidnight = Date.UTC(2026, 10, 11, 6, 0) / 1000;
+    const flight = {
+      status: { generic: { status: { text: 'landed' } } },
+      time: { scheduled: { departure: centralMidnight - 7200 }, real: { departure: centralMidnight - 7000 } },
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const hub = new URL(String(url)).searchParams.get('hub');
+      // IAH final (built 00:30 CST, 5h15m ago); ORD's board stopped at 21:00 CST yesterday.
+      const generatedAt = hub === 'IAH' ? centralMidnight + 1800 : hub === 'ORD' ? centralMidnight - 3 * 3600 - 1200 : nowSec - 600;
+      return { ok: true, json: async () => ({ flights: [flight], meta: { generatedAt } }) };
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = createRes();
+    await handler(makeReq(), res);
+    expect(res.body.hubMetrics.IAH).toMatchObject({ boardDayOffset: -1, boardDayEndSec: centralMidnight, coverageGapSec: 0 });
+    expect(res.body.hubMetrics.IAH.ageSec).toBeGreaterThan(5 * 3600);
+    expect(res.body.hubMetrics.ORD).toMatchObject({ boardDayOffset: -1, coverageGapSec: 3 * 3600 + 1200 });
+    expect(res.body.hubsCurrent).toBe(8); // only ORD is not current
+  });
+
+  it('getHubBoardDay: yesterday before 06:00 local, today after, with DST-exact ends', () => {
+    expect(getHubBoardDay('NRT', new Date('2026-11-11T20:08:00Z'))).toEqual({
+      dayOffset: -1, startSec: Date.UTC(2026, 10, 10, 15, 0) / 1000, endSec: Date.UTC(2026, 10, 11, 15, 0) / 1000,
+    });
+    expect(getHubBoardDay('NRT', new Date('2026-11-11T21:28:00Z')).dayOffset).toBe(0);
+    // US fall-back day (Nov 1 2026): the Eastern day is 25 hours long.
+    const ewr = getHubBoardDay('EWR', new Date('2026-11-01T18:00:00Z'));
+    expect(ewr.endSec - ewr.startSec).toBe(25 * 3600);
   });
 
   it('rejects non-GET requests with 405', async () => {
