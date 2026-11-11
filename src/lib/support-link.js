@@ -25,11 +25,13 @@
  */
 
 /**
- * The any-amount Stripe Payment Link ("Support The Blue Board", choose what to pay). Every ask
- * that cannot name a day goes here ("Help cover a day", "Other amount"). The path is
- * case-sensitive.
+ * The any-amount Stripe Payment Link ("Cover a day of The Blue Board", choose what to pay, preset
+ * $10). Every ask that cannot name a day goes here ("Help cover a day", "Other amount"). The path
+ * is case-sensitive. A Payment Link's price cannot be edited, so moving the preset from $17 to $10
+ * (Nov 11 2026) meant a new link; the old one (…/14AaEW6Xx4AH9Ca7ssgEg00, preset $17) stays active
+ * for links already sent in email.
  */
-export const STRIPE_SUPPORT_URL = 'https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00';
+export const STRIPE_SUPPORT_URL = 'https://buy.stripe.com/cNidR80z90krbKi4gggEg05';
 
 export const SUPPORT_UTM_SOURCE = 'theblueboard';
 

@@ -4,6 +4,11 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.27.1] - 2026-11-11
+
+### Changed
+- **"Help cover a day" opens at $10, not $17.** The page where you choose your own amount now suggests $10. The day buttons ("Cover today · $17") still go to the $17 page.
+
 ## [1.27.0] - 2026-11-11
 
 **One way of asking.** Every place the site asks for money now says the same thing in the same words: The Blue Board is free because flyers cover it, one day at a time.

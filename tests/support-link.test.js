@@ -23,7 +23,7 @@ import { isSupportUrl, supportPlacement } from '../src/lib/support-tracking.js';
 // reports. These tests pin the URL, the parameters, and that nothing outside the helper types
 // either URL by hand.
 
-const STRIPE = 'https://buy.stripe.com/14AaEW6Xx4AH9Ca7ssgEg00';
+const STRIPE = 'https://buy.stripe.com/cNidR80z90krbKi4gggEg05';
 
 describe('supportUrl', () => {
   it('is the owner\'s Stripe Payment Link, character for character (the path is case-sensitive)', () => {
