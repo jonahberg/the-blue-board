@@ -356,17 +356,21 @@ export default function ScheduleView() {
           <ScheduleStats
             compact={!desktop}
             // The board's age and the cache line ride on the strip's one meta line rather than
-            // stacking a line each under it; `inline-block` lets the first letter take a capital
-            // when "data as of …" opens the sentence.
+            // stacking a line each under it. "data as of …" takes a capital when it opens the line.
             footnote={
               cacheNote || condition.kind === 'age-chip' ? (
-                <span className="inline-block first-letter:uppercase">
+                <>
                   {cacheNote ? <span data-testid="sched-cache-note">{cacheNote}</span> : null}
                   {cacheNote && condition.kind === 'age-chip' ? ' · ' : null}
                   {condition.kind === 'age-chip' ? (
-                    <span data-testid="sched-age-chip">{condition.message}</span>
+                    // Unbroken, so a wrap never splits "1:59 PM CST" from "data as of".
+                    <span data-testid="sched-age-chip" className="whitespace-nowrap">
+                      {cacheNote
+                        ? condition.message
+                        : condition.message.charAt(0).toUpperCase() + condition.message.slice(1)}
+                    </span>
                   ) : null}
-                </span>
+                </>
               ) : undefined
             }
             stats={model.stats}

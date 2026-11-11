@@ -88,7 +88,7 @@ function Metric({
         {label}
         {note ? (
           <span className="font-mono normal-case tracking-normal">
-            {' · '}
+            {'\u00a0· '}
             <span className="whitespace-nowrap">{note}</span>
           </span>
         ) : null}
@@ -141,7 +141,7 @@ export function ScheduleStats({
     stats.presumed > 0 ? (
       <span
         key="presumed"
-        className="inline-flex items-center gap-1 rounded-sm border bg-muted/50 px-1.5 py-0.5"
+        className="mr-2 inline-flex items-center gap-1 rounded-sm border bg-muted/50 px-1.5 py-0.5 align-middle"
         title={copy.presumed.title}
       >
         <Plane aria-hidden="true" className="size-3" />
@@ -149,18 +149,18 @@ export function ScheduleStats({
       </span>
     ) : null,
     showDisruption ? (
-      <span key="faa" className="inline-flex items-center gap-1 text-bb-warn">
-        <TriangleAlert aria-hidden="true" className="size-3 shrink-0" />
-        <span>
-          {hub} under FAA delay program (avg {Math.round(hubDisruptionMinutes as number)}min) — statuses
-          may lag.
-        </span>
+      <span key="faa" className="mr-2 text-bb-warn">
+        <TriangleAlert aria-hidden="true" className="mr-1 inline size-3 align-[-2px]" />
+        {hub} under FAA delay program (avg {Math.round(hubDisruptionMinutes as number)}min) — statuses may
+        lag.
       </span>
     ) : null,
     footnote ? <span key="footnote">{footnote}</span> : null,
   ].filter(Boolean);
   const notesLine = notes.length ? (
-    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[10px] text-muted-foreground">{notes}</p>
+    // Running text, not a flex row: the words flow on after the chip and wrap like a sentence,
+    // where a flex item dropped whole onto a second line and left the chip alone on the first.
+    <p className="mt-1.5 px-1 text-[10px] leading-5 text-muted-foreground">{notes}</p>
   ) : null;
 
   if (compact) {
@@ -251,7 +251,9 @@ export function ScheduleStats({
           value={stats.total}
           label={
             <>
-              UA {dirLabel} · <span className="whitespace-nowrap">{dayLabel}</span>
+              {/* A no-break space before the dot: a wrap falls after it, never before. */}
+              UA {dirLabel}{'\u00a0· '}
+              <span className="whitespace-nowrap">{dayLabel}</span>
             </>
           }
         />
