@@ -24,6 +24,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { track } from '@/lib/track.js';
+import { cn } from '@/lib/utils';
 import { fetchNewsLatest } from '../data/api';
 import { STORAGE_KEYS, readString, writeString } from '../state/storage';
 
@@ -39,7 +40,12 @@ function trackClick(slug: string) {
   track('news_banner_click', { slug });
 }
 
-export default function NewsBanner() {
+/**
+ * `className` lets the shell hide the strip where it costs too much (the phone Live tab, where
+ * every row is map) while it stays MOUNTED: the engagement slot shows only its first present
+ * child, so a strip that is there but hidden keeps the tip behind it waiting too.
+ */
+export default function NewsBanner({ className }: { className?: string } = {}) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [index, setIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -102,7 +108,7 @@ export default function NewsBanner() {
       // Rotates every 6 s: announcing each headline would interrupt a screen reader, so the
       // region is present for structure but silent (same rule as the Ticker — DESIGN.md).
       aria-live="off"
-      className="flex h-8 shrink-0 items-center gap-2 border-t bg-primary/10 px-3 text-[11px]"
+      className={cn('flex h-8 shrink-0 items-center gap-2 border-t bg-primary/10 px-3 text-[11px] md:px-4', className)}
       onMouseEnter={() => {
         paused.current = true;
       }}

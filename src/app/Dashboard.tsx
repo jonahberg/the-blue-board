@@ -134,7 +134,10 @@ function DashboardShell() {
   }, [setSearchOpen]);
 
   return (
-    <div className="flex h-[100svh] flex-col bg-background text-foreground">
+    // `viewport-fit=cover` (Seo.astro) lets the page run under a landscape iPhone's notch; the
+    // side insets keep the chrome and the map's controls out from under it. The bottom inset is
+    // the bottom nav's (MobileNav); `svh` is the height with Safari's toolbars showing.
+    <div className="flex h-[100svh] flex-col bg-background pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] text-foreground">
       <OfflineBanner />
       <Header
         onOpenWatch={() => setWatchOpen(true)}
@@ -189,11 +192,16 @@ function DashboardShell() {
           Oct 3 2026), so phones got the rule first; on a 900 px desktop the news, the tip and
           the attribution were ~110 px under the map (Nov 2026), so it now holds everywhere.
           Components that have nothing to say render null, so `*~*` only ever hides a strip
-          that is actually there. */}
+          that is actually there.
+
+          The news does not show on the phone Live tab (below `lg`, Nov 2026: "the amount of map
+          you see is kind of small"). It stays mounted and is hidden by CSS, so the tip behind it
+          keeps waiting rather than taking its 32 px; the support and waitlist strips, which
+          come first, are unaffected. More → News reaches the stories from a phone. */}
       <div className="flex shrink-0 flex-col [&>*~*]:hidden">
         <SupportStrip />
         <WaitlistStrip />
-        <NewsBanner />
+        <NewsBanner className={tab === 'live' ? 'max-lg:hidden' : undefined} />
         <TipStrip />
       </div>
       <Attribution />
