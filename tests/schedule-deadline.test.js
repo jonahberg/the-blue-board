@@ -31,6 +31,14 @@ import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 import { __resetRegSightingsForTests } from '../api/_reg-sightings.js';
 
 const SUPABASE_URL = 'https://bb-test.supabase.invalid';
+// Compare origins, not prefixes: a prefix check would also accept a longer look-alike host.
+const isSupabaseUrl = (href) => {
+  try {
+    return new URL(href).origin === new URL(SUPABASE_URL).origin;
+  } catch {
+    return false;
+  }
+};
 const FUNCTION_LIMIT_MS = 60_000;
 
 const abortError = () => Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
@@ -138,7 +146,7 @@ describe('/api/schedule answers inside its time limit when a dependency hangs', 
     const supabaseSignals = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href.startsWith(SUPABASE_URL)) {
+      if (isSupabaseUrl(href)) {
         supabaseSignals.push(init?.signal);
         return hangUntilAborted(init?.signal);
       }
@@ -197,7 +205,7 @@ describe('/api/schedule answers inside its time limit when a dependency hangs', 
     };
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href.startsWith(SUPABASE_URL)) {
+      if (isSupabaseUrl(href)) {
         // The serve path's snapshot read answers; every other Supabase call hangs.
         if (href.includes('schedule_snapshots') && href.includes('expires_at=gt.') && (init?.method || 'GET') === 'GET') {
           return new Response(JSON.stringify([snapshotRow]), { status: 200, headers: { 'Content-Type': 'application/json' } });

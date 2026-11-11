@@ -68,7 +68,7 @@ export function escapeHtml(value) {
  * @param {string} ident
  */
 function substitutions(meta, ident) {
-  const metaTag = (attr, key) => new RegExp(`(<meta\\s+${attr}="${key.replace(/[:.]/g, '\\$&')}"\\s+content=")([^"]*)(")`);
+  const metaTag = (attr, key) => new RegExp(`(<meta\\s+${attr}="${key.replace(/[.*+?^${}()|[\]\\:]/g, '\\$&')}"\\s+content=")([^"]*)(")`);
   return [
     ['title', /(<title>)([^<]*)(<\/title>)/, meta.title],
     ['description', metaTag('name', 'description'), meta.description],

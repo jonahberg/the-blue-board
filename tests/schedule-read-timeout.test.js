@@ -27,6 +27,14 @@ import { __resetRegSightingsForTests } from '../api/_reg-sightings.js';
 import { __resetAdbSpendForTests, getAdbPacedAllowance, getAdbUnitsToday, recordAdbUnits } from '../api/_cost-state.js';
 
 const SUPABASE_URL = 'https://bb-test.supabase.invalid';
+// Compare origins, not prefixes: a prefix check would also accept a longer look-alike host.
+const isSupabaseUrl = (href) => {
+  try {
+    return new URL(href).origin === new URL(SUPABASE_URL).origin;
+  } catch {
+    return false;
+  }
+};
 const abortError = () => Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
 function hangUntilAborted(signal) {
   return new Promise((_, reject) => {
@@ -76,7 +84,7 @@ function installNetwork() {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     const href = String(url);
     const method = init?.method || 'GET';
-    if (href.startsWith(SUPABASE_URL)) {
+    if (isSupabaseUrl(href)) {
       if (href.includes('schedule_snapshots') && href.includes('expires_at=gt.') && method === 'GET') {
         if (net.snapshotRead === 'hang') return hangUntilAborted(init?.signal);
         if (net.snapshotRead === 'slow') {
