@@ -137,6 +137,10 @@ describe('united-hubs: every surface prints each entry its own date', () => {
     new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   const jsonLd = (html) =>
     [...html.matchAll(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
+  // Astro escapes text (O'Hare → O&#39;Hare), so labels are compared on decoded text.
+  const decode = (html) =>
+    html.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+      .replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   // "verified Nov 3, 2026" inside the source panel of the element with this id.
   const panelDates = (html, id) => {
     const at = html.indexOf(`id="${id}"`);
@@ -152,7 +156,7 @@ describe('united-hubs: every surface prints each entry its own date', () => {
     }
     const note = verifiedNote(unitedProjects, unitedHubsMeta, unitedHubs);
     if (note) {
-      expect(html).toContain(`(${note.label} <time datetime="${note.iso}"`);
+      expect(decode(html)).toContain(`(${note.label} <time datetime="${note.iso}"`);
     }
     const dataset = jsonLd(html).find((n) => n['@type'] === 'Dataset');
     expect(dataset.dateModified).toBe(contentModified(unitedProjects, unitedHubsMeta));
@@ -166,7 +170,7 @@ describe('united-hubs: every surface prints each entry its own date', () => {
         expect(panelDates(html, p.id), `${code} ${p.id}`).toEqual([fmt(entryVerified(p, unitedHubsMeta))]);
       }
       const note = verifiedNote(projects, unitedHubsMeta, unitedHubs);
-      if (note) expect(html, code).toContain(`(${note.label} <time datetime="${note.iso}"`);
+      if (note) expect(decode(html), code).toContain(`(${note.label} <time datetime="${note.iso}"`);
       else expect(html, code).not.toMatch(/\([^()<]* <time datetime="\d{4}-\d{2}-\d{2}"/);
       const article = jsonLd(html).find((n) => n['@type'] === 'Article');
       expect(article.dateModified, code).toBe(contentModified(projects, unitedHubsMeta));

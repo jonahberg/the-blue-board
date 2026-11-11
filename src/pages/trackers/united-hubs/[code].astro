@@ -41,8 +41,18 @@ const activeCount = projects.filter((project) => project.status === 'under-const
 const openCount = projects.filter((project) => project.status === 'open').length;
 const totalGates = projects.reduce((sum, project) => sum + (project.gates ?? 0), 0);
 const unitedLedCount = projects.filter((project) => project.builder === 'united' || project.builder === 'joint').length;
+// The headline: what is being built; else what opened in the 90 days before the data's last
+// update (Dulles' Concourse E, Nov 2026), which is the news until it settles; else what is
+// announced; else what is open. Measured against the data's date, not the clock, so a build
+// months later does not change the sentence by itself.
+const daysBefore = (iso, ref) =>
+  (Date.parse(`${ref}T12:00:00Z`) - Date.parse(`${iso.length === 7 ? `${iso}-15` : iso}T12:00:00Z`)) / 86_400_000;
+const recentlyOpened = projects
+  .filter((project) => project.status === 'open' && project.openedDate && daysBefore(project.openedDate, unitedHubsMeta.lastUpdated) <= 90)
+  .sort((a, b) => (b.openedDate ?? '').localeCompare(a.openedDate ?? ''))[0];
 const leadProject =
   projects.find((project) => project.status === 'under-construction') ??
+  recentlyOpened ??
   projects.find((project) => project.status === 'announced') ??
   projects.find((project) => project.status === 'open') ??
   projects[0];
