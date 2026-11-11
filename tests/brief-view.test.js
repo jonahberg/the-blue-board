@@ -16,6 +16,7 @@ import {
   BRIEF_TONE_WORD,
   briefFreshnessLine,
   briefSourceLine,
+  briefRowLabel,
   briefViewState,
   formatBriefClock,
 } from '../src/lib/brief-view.js';
@@ -134,6 +135,12 @@ describe('copy', () => {
     expect(briefSourceLine('template', 21)).toBe('This brief was listed straight from the data, with no AI text.');
     expect(BRIEF_HOW_STEPS).toHaveLength(3);
     expect(BRIEF_TONE_WORD).toEqual({ calm: 'Calm', watch: 'Watch', disrupted: 'Disrupted' });
+  });
+
+  it('names the header row by tone, headline and action', () => {
+    expect(briefRowLabel('watch', 'Running normally, with FAA action possible at Newark.', 'open'))
+      .toBe('Watch: Running normally, with FAA action possible at Newark. Open the full brief.');
+    expect(briefRowLabel('calm', 'Smooth so far', 'reveal')).toBe('Calm: Smooth so far. Go to the full brief.');
   });
 
   it('formats clock times in the viewer zone with its abbreviation', () => {

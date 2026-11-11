@@ -32,6 +32,7 @@ import { useMediaQuery } from '../state/hooks';
 import { usePrefs } from '../state/prefs';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
+import { BriefSidebarPanel } from '../features/BriefPanel';
 import { LiveSidebar } from './live/LiveSidebar';
 import { MapControls } from './live/MapControls';
 import type { LayerKey } from './live/MapControls';
@@ -173,6 +174,9 @@ export default function LiveView() {
       onClearFilters={clearFilters}
       onSelect={onSelect}
       onGoToSchedule={() => setTab('schedule')}
+      // The brief sits open in the desktop sidebar only; below `lg` the header row opens it
+      // as a sheet, and the phone Filters sheet stays filters.
+      lead={desktop ? <BriefSidebarPanel /> : null}
     />
   );
 

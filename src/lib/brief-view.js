@@ -140,6 +140,20 @@ export function briefFreshnessLine({ generatedAtMs, checkedAtMs, nextUpdateAtMs 
   return parts.join(' ');
 }
 
+/**
+ * The header row's accessible name: the tone word, the headline (both visible in the row), then
+ * what pressing it does. Explicit because inline sr-only separators collapse in the computed name.
+ * @param {BriefTone} tone
+ * @param {string} headline
+ * @param {'open'|'reveal'} action  'reveal' when the full brief is already open in the sidebar
+ */
+export function briefRowLabel(tone, headline, action) {
+  const word = BRIEF_TONE_WORD[tone] ?? 'Brief';
+  const text = String(headline ?? '').trim();
+  const end = /[.!?]$/.test(text) ? '' : '.';
+  return `${word}: ${text}${end} ${action === 'reveal' ? 'Go to the full brief.' : 'Open the full brief.'}`;
+}
+
 /** Shown under a brief that cites anything heard on ATC frequencies. */
 export const BRIEF_RADIO_CAVEAT =
   "ATC radio items come from Enhanced Radar's model-written summaries of controller audio, which can contain mistakes.";
