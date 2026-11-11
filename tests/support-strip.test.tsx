@@ -221,7 +221,7 @@ describe('SupportStrip — the words are true or absent', () => {
     statusOk = false;
     render(tree());
     await reachDeepUse();
-    expect(wideText()).toBe('The Blue Board is free because flyers cover it, one day at a time. $17 covers a full day; any amount helps.');
+    expect(wideText()).toBe('The Blue Board is free because flyers cover it, one day at a time. $17 covers a full day.');
     expect(phoneText()).toBe('Free because flyers cover it, a day at a time.');
     expect(stripText()).not.toMatch(/covered/);
     expect(ask()!.textContent).toBe('Help cover a day');
@@ -271,7 +271,7 @@ describe('SupportStrip — the words are true or absent', () => {
     statusBody = supportStatusFromRows([pay(17 * 10)], NOW - DAY);
     render(tree());
     await reachDeepUse();
-    expect(stripText()).toContain('$17 covers a full day; any amount helps.');
+    expect(stripText()).toContain('$17 covers a full day.');
     expect(stripText()).not.toMatch(/covered/);
   });
 });

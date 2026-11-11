@@ -24,8 +24,9 @@
  * card's own label, the one its single button had. Labels are pinned unique and ≤40 chars by
  * tests/support-note.test.js.
  *
- * The ladder's buttons wear shadcn's `outline` Button classes (src/components/ui/button.tsx), so
- * they match the About section's ladder, which is that Button.
+ * The ladder is the card's only row of buttons, so its day amount ("$17 · one day", `primary`)
+ * is the filled one, as the single button was; the others wear shadcn's `outline` Button classes
+ * (src/components/ui/button.tsx), matching the About section's ladder.
  *
  * Pure markup — no inline <script>/<style>; the CSP is hash-locked at build.
  */
@@ -81,7 +82,12 @@ const ladder = variant === 'card' ? supportLadder(placement, { other: placement 
                 target="_blank"
                 rel="noopener noreferrer"
                 data-support={step.placement}
-                class="inline-flex min-h-11 items-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground hover:bg-muted dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+                class:list={[
+                  'inline-flex min-h-11 items-center rounded-md border px-3 text-sm font-semibold',
+                  step.primary
+                    ? 'border-transparent bg-primary-fill text-primary-foreground hover:bg-primary-fill/90'
+                    : 'border-border bg-background text-foreground hover:bg-muted dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
+                ]}
               >
                 {step.text}
               </a>

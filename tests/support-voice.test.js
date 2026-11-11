@@ -148,6 +148,8 @@ describe('the words in src/lib/cover-a-day.js', () => {
     expect(words.UNIT_LINE).toBe('$17 pays for one day of live flight data, schedules and servers.');
     expect(words.THIRTY_LINE).toBe('It takes about 30 people a month, one for each day.');
     expect(words.ANY_AMOUNT_LINE).toBe('Any amount counts toward a day.');
+    expect(words.ABOUT_INTRO_LINE).toBe('The Blue Board is free because flyers cover it, one day at a time. It costs about $500 a month to run, about $17 a day.');
+    expect(words.NEWS_SUPPORT_LINE).toBe('The Blue Board is free because readers cover it, one day at a time. There are no ads and no paywall.');
     expect(words.LANDED_TOAST_LINE).toBe('Glad you landed ✈️ The Blue Board is free because flyers cover it, one day at a time.');
   });
 });
@@ -309,13 +311,15 @@ describe.skipIf(!hasDist)('the built pages', () => {
       ['Other amount', 'fleet-index-end'],
     ]);
     expect(ladder[4].getAttribute('href')).toBe(supportUrl('fleet-index-end'));
+    // The ladder is the card's only row of buttons, so the day amount is the filled one.
+    expect(ladder.map((a) => a.className.includes('bg-primary-fill'))).toEqual([false, false, true, false, false]);
   });
 
   it('the news box: the sentence, a space, "Help cover a day", a period', () => {
     const doc = page(`news/${firstHtml('news')}`);
     const link = doc.querySelector('a[data-support="news-article"]');
     expect(squash(link.parentElement.textContent)).toBe(
-      'The Blue Board has no ads and no paywall. Readers cover the cost, one day at a time. Help cover a day.',
+      'The Blue Board is free because readers cover it, one day at a time. There are no ads and no paywall. Help cover a day.',
     );
   });
 
