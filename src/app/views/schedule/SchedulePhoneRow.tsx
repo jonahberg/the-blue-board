@@ -90,6 +90,18 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
       data-flight-row={row.ident}
       className="relative flex items-center border-b last:border-b-0 data-[highlight=on]:bg-primary/20"
     >
+      {/* The sheet button: no box of its own, so it is a direct child of the row (which has no
+          gap) and its `after:` box covers the row. First, so a keyboard reaches it before the
+          flight number's link. */}
+      {hasIdent ? (
+        <button
+          type="button"
+          onClick={() => onOpenFlight(row)}
+          className="after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:rounded-sm focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring"
+        >
+          <span className="sr-only">{row.identDisplay} flight details</span>
+        </button>
+      ) : null}
       <div className="flex min-w-0 flex-1 gap-2 py-1.5 pl-2">
         {/* Time column: scheduled on top, the changed time (or the carried-over date) under it. */}
         <div className="w-11 shrink-0 font-mono text-xs leading-5 tabular-nums">
@@ -111,20 +123,11 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
           {/* Line 1 — flight, route, then the status and the delay where the eye lands. */}
           <div className="flex min-w-0 items-center gap-1.5 leading-5">
             {hasIdent ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onOpenFlight(row)}
-                  className="after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:rounded-sm focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring"
-                >
-                  <span className="sr-only">{row.identDisplay} flight details</span>
-                </button>
-                <FlightLink
-                  ident={row.identDisplay}
-                  className="z-10 shrink-0 font-mono text-xs font-semibold"
-                  linkClassName="relative"
-                />
-              </>
+              <FlightLink
+                ident={row.identDisplay}
+                className="z-10 shrink-0 font-mono text-xs font-semibold"
+                linkClassName="relative"
+              />
             ) : (
               <span className="shrink-0 font-mono text-xs text-muted-foreground">—</span>
             )}
