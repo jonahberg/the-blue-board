@@ -25,13 +25,13 @@ export const SECTION_P = 'mb-3 max-w-2xl text-sm leading-relaxed text-muted-fore
 export const SUMMARY_GRID = 'grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]';
 
 /** One summary tile. */
-export const STAT = 'rounded-md border border-border bg-card px-4 py-3.5';
+export const STAT = 'rounded-lg border border-border bg-card px-4 py-3.5';
 export const STAT_VALUE = 'block font-mono text-lg font-bold leading-tight text-primary';
 export const STAT_LABEL =
   'font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
 
 /** An entry card (an airport, a construction project). */
-export const CARD = 'mb-3 rounded-md border border-border bg-card px-4 py-3.5 last:mb-0';
+export const CARD = 'mb-3 rounded-lg border border-border bg-card px-4 py-3.5 last:mb-0';
 export const CARD_HEAD =
   'mb-1.5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-start';
 export const CARD_BADGES = 'flex flex-wrap gap-1.5';
@@ -45,4 +45,4 @@ export const CARD_P = 'text-xs leading-relaxed text-muted-foreground';
 
 /** A pulled-out caveat, amber-railed like the sidebars on the parent pages. */
 export const NOTE =
-  'rounded-r-md border-l-[3px] border-primary bg-muted px-4 py-3 text-xs text-muted-foreground';
+  'rounded-r-md border-l-2 border-primary bg-muted px-4 py-3 text-xs text-muted-foreground';
