@@ -314,8 +314,9 @@ describe('computeMetrics', () => {
       const now = built + 3 * 3600;
       const flights = [];
       for (let i = 0; i < 10; i++) {
+        // A real hub board carries the provider's estimate on rows that have not left.
         flights.push(makeFlight('LAX', {
-          schedDep: built + i * 900, schedArr: built + 6 * 3600, realDep: null, status: 'scheduled', flightNum: `UA${i}`,
+          schedDep: built + i * 900, schedArr: built + 6 * 3600, realDep: null, estDep: built + i * 900, status: 'scheduled', flightNum: `UA${i}`,
         }));
       }
       const wall = computeMetrics({ LAX: flights }, now); // no build time: the old behaviour
@@ -390,6 +391,42 @@ describe('computeMetrics', () => {
     const result = computeMetrics({ GUM: gum, ORD: ord }, now, { GUM: built, ORD: built });
     expect(result.hubMetrics.GUM).toMatchObject({ departedWithoutTime: 2, departureTimesSeen: 0, pastDueUntimed: 1, operated: 0 });
     expect(result.hubMetrics.ORD).toMatchObject({ departedWithoutTime: 0, departureTimesSeen: 2, pastDueUntimed: 1, operated: 1 });
+  });
+
+  // SCORING (Nov 2026): a board with no departure times cannot tell held from gone.
+  describe('boards with no departure times (Guam)', () => {
+    const built = 1_794_405_600 + 8 * 3600;
+    const gumBoard = () => [
+      // The morning bank, 30–90 min past due, never advanced, no times anywhere — the 22:00Z GUM build of Nov 11.
+      makeFlight('GUM', { schedDep: built - 5400, schedArr: built + 6 * 3600, status: 'scheduled', flightNum: 'UA137' }),
+      makeFlight('GUM', { schedDep: built - 4500, schedArr: built + 7 * 3600, status: 'scheduled', flightNum: 'UA200' }),
+      makeFlight('GUM', { schedDep: built - 3900, schedArr: built + 3600, status: 'scheduled', flightNum: 'UA174' }),
+      makeFlight('GUM', { schedDep: built - 3900, schedArr: built + 3600, status: 'scheduled', flightNum: 'UA155' }),
+      makeFlight('GUM', { schedDep: built + 4 * 3600, status: 'scheduled', flightNum: 'UA196' }),
+    ];
+
+    it('infers no held flights from them', () => {
+      const result = computeMetrics({ GUM: gumBoard() }, built + 600, { GUM: built });
+      expect(result.hubMetrics.GUM).toMatchObject({ holdsInferred: false, pastDueUntimed: 4, departureTimesSeen: 0 });
+      expect(result.hubMetrics.GUM.delayed30).toBe(0);
+      expect(result.delayed30).toBe(0);
+      expect(result.worstDelays).toEqual([]);
+      expect(result.score).toBe(0);
+    });
+
+    it('still infers holds on a board that has times elsewhere (a ground stop keeps F073)', () => {
+      const board = gumBoard().map((f) => ({ ...f, airport: { ...f.airport, origin: { code: { iata: 'EWR' } } } }));
+      board.push(makeFlight('EWR', { schedDep: built - 7200, realDep: built - 7100, status: 'departed' }));
+      const result = computeMetrics({ EWR: board }, built + 600, { EWR: built });
+      expect(result.hubMetrics.EWR.holdsInferred).toBe(true);
+      expect(result.delayed30).toBe(4);
+    });
+
+    it('keeps inferring on a board with fewer than 3 untimed rows due (F073b single-row cases)', () => {
+      const result = computeMetrics({ GUM: gumBoard().slice(0, 2) }, built + 600, { GUM: built });
+      expect(result.hubMetrics.GUM.holdsInferred).toBe(true);
+      expect(result.delayed30).toBe(2);
+    });
   });
 
   it('F073: does not treat departed/landed/canceled flights as overdue', () => {

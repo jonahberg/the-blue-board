@@ -6,7 +6,9 @@ import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
 import { getStartOfHubDay, defaultSchedDayOffset } from '../src/lib/hubTz.js';
-import { HUB_READING_STALE_MS, boardAsOfMs, boardCoverageGapSec, hubBoardCoverage, operatedOutcome } from '../src/lib/hub-health.js';
+import {
+  HUB_READING_STALE_MS, boardAsOfMs, boardCoverageGapSec, boardLacksActualTimes, hubBoardCoverage, operatedOutcome,
+} from '../src/lib/hub-health.js';
 import { cancellationKind } from '../src/lib/cancellation.js';
 import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
 import { awaitRegSightings, type SightingRecord } from './_reg-sightings.js';
@@ -127,6 +129,8 @@ interface HubMetric {
   departureTimesSeen: number;
   /** Rows not marked departed or cancelled, with no departure time at all, over 30 min past due on the board's clock. */
   pastDueUntimed: number;
+  /** False when the board carries no departure times (boardLacksActualTimes): no held flights are inferred from it. */
+  holdsInferred: boolean;
 }
 
 interface WorstDelay {
@@ -226,6 +230,20 @@ export function overdueClockSec(nowSec: number, generatedAt: number | null | und
 /** Generic status words that say a flight left the gate. */
 const DEPARTED_STATUS: ReadonlySet<string> = new Set(['departed', 'en-route', 'landed', 'diverted']);
 
+/** What one hub board knows about departure times (see HubMetric and boardLacksActualTimes). */
+function boardTimeCounts(flights: any[], clockSec: number) {
+  let departedWithoutTime = 0, departureTimesSeen = 0, pastDueUntimed = 0;
+  for (const fl of flights) {
+    const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
+    const hasDepTime = Boolean(fl.time?.real?.departure || fl.time?.estimated?.departure);
+    if (hasDepTime) { departureTimesSeen++; continue; }
+    if (cancellationKind(fl)) continue;
+    if (DEPARTED_STATUS.has(status)) departedWithoutTime++;
+    else if (fl.time?.scheduled?.departure && clockSec - fl.time.scheduled.departure > 30 * 60) pastDueUntimed++;
+  }
+  return { departedWithoutTime, departureTimesSeen, pastDueUntimed };
+}
+
 function overdueDelayMinutes(fl: any, status: string, clockSec: number): number {
   if (cancellationKind(fl) !== null) return 0;
   if (status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted') return 0;
@@ -247,14 +265,19 @@ export function computeMetrics(
   boardDayByHub: Record<string, HubBoardDay | null> = {},
 ) {
   // Every row with the overdue clock of the board it came from (see overdueClockSec).
-  const allRows: Array<{ fl: any; clockSec: number }> = [];
+  const allRows: Array<{ fl: any; clockSec: number; holdsInferred: boolean }> = [];
   const hubMetrics: Record<string, HubMetric> = {};
   let oldestHubAgeSec: number | null = null;
 
   for (const [hub, flights] of Object.entries(flightsByHub)) {
     const generatedAt = generatedAtByHub[hub] ?? null;
     const clockSec = overdueClockSec(nowSec, generatedAt);
-    for (const fl of flights) allRows.push({ fl, clockSec });
+    // SCORING (Nov 2026): a board with no departure times cannot tell a held flight from one that
+    // left, so no holds are inferred from it. Guam's rows never get times, and the ones that never
+    // leave "scheduled" read as held for up to 4 hours a day.
+    const timeCounts = boardTimeCounts(flights, clockSec);
+    const holdsInferred = !boardLacksActualTimes(timeCounts);
+    for (const fl of flights) allRows.push({ fl, clockSec, holdsInferred });
     const dataAgeSec = generatedAt === null ? null : Math.max(0, nowSec - generatedAt);
     if (dataAgeSec !== null && (oldestHubAgeSec === null || dataAgeSec > oldestHubAgeSec)) oldestHubAgeSec = dataAgeSec;
     const day = boardDayByHub[hub] ?? null;
@@ -263,20 +286,13 @@ export function computeMetrics(
       total: flights.length, cancellations: 0, cancellationsLikely: 0, likelyCanceledSeenFlying: 0,
       delayed30: 0, delayed60: 0, diversions: 0, operated: 0, onTime: 0, generatedAt, dataAgeSec,
       ageSec: dataAgeSec, coverageGapSec, boardDayOffset: day ? day.dayOffset : null, boardDayEndSec: day ? day.endSec : null,
-      departedWithoutTime: 0, departureTimesSeen: 0, pastDueUntimed: 0,
+      ...timeCounts, holdsInferred,
     };
 
     for (const fl of flights) {
       const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
       if (fl._source?.seenAirborne) hubMetrics[hub].likelyCanceledSeenFlying++;
-      // What the board knows about departure times at all (hubOtpUnavailableReason).
-      const hasDepTime = Boolean(fl.time?.real?.departure || fl.time?.estimated?.departure);
-      if (hasDepTime) hubMetrics[hub].departureTimesSeen++;
       const cancelled = cancellationKind(fl);
-      if (!cancelled && !hasDepTime) {
-        if (DEPARTED_STATUS.has(status)) hubMetrics[hub].departedWithoutTime++;
-        else if (fl.time?.scheduled?.departure && clockSec - fl.time.scheduled.departure > 30 * 60) hubMetrics[hub].pastDueUntimed++;
-      }
       if (cancelled) {
         hubMetrics[hub].cancellations++;
         if (cancelled === 'likely') hubMetrics[hub].cancellationsLikely++;
@@ -287,7 +303,7 @@ export function computeMetrics(
       // F073: held/overdue flights count toward delayed30/60 (numerator only; total is
       // untouched so the denominator semantics are unchanged). overdueDelayMinutes returns
       // 0 for anything that has already departed, so operated flights are unaffected.
-      const overdueMin = overdueDelayMinutes(fl, status, clockSec);
+      const overdueMin = holdsInferred ? overdueDelayMinutes(fl, status, clockSec) : 0;
       if (overdueMin > 30) hubMetrics[hub].delayed30++;
       if (overdueMin > 60) hubMetrics[hub].delayed60++;
 
@@ -315,7 +331,7 @@ export function computeMetrics(
   let cancellations = 0, cancellationsLikely = 0, likelyCanceledSeenFlying = 0, delayed30 = 0, delayed60 = 0, diversions = 0;
   const worstDelays: WorstDelay[] = [];
 
-  for (const { fl, clockSec } of allRows) {
+  for (const { fl, clockSec, holdsInferred } of allRows) {
     const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
     if (fl._source?.seenAirborne) likelyCanceledSeenFlying++;
     const cancelled = cancellationKind(fl);
@@ -346,7 +362,7 @@ export function computeMetrics(
       // F073: held/overdue flights (past schedule, not yet departed) — the core of a
       // ground stop. overdueDelayMinutes is 0 for anything already departed, so this
       // never double-counts a flight already scored above.
-      const overdueMin = overdueDelayMinutes(fl, status, clockSec);
+      const overdueMin = holdsInferred ? overdueDelayMinutes(fl, status, clockSec) : 0;
       if (overdueMin > 30) delayed30++;
       if (overdueMin > 60) delayed60++;
       if (overdueMin > 15) {

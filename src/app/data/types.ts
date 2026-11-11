@@ -214,6 +214,8 @@ export type IropsHubMetrics = Record<
     departureTimesSeen?: number;
     /** Rows with no departure time at all, over 30 min past due, not marked departed or cancelled. */
     pastDueUntimed?: number;
+    /** False when the board carries no departure times: no held flights were inferred from it. */
+    holdsInferred?: boolean;
   }
 >;
 
