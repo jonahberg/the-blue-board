@@ -25,13 +25,19 @@ import { Zap } from 'lucide-react';
 
   <div data-f="legs-block" hidden>
     <h3 class="mt-4 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Its recent flights</h3>
-    <ol class="mt-1.5 flex flex-col gap-1" data-f="legs"></ol>
+    <ol class="mt-1.5 flex flex-col pointer-fine:md:gap-1" data-f="legs"></ol>
   </div>
   <p class="mt-4 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-foreground empty:hidden" data-f="note"></p>
 
+  <!-- Each flight number links to its own flight page (src/scripts/flight-link.ts). On touch a row
+       is 44 px and the number's hit box fills the row's height over the flight column; a mouse at
+       md+ keeps the compact list. A number the site has no page for stays text (no href). -->
   <template data-fp-leg>
-    <li class="grid grid-cols-[3.75rem_minmax(0,1fr)_auto] items-baseline gap-x-2 font-mono text-xs tabular-nums">
-      <span class="font-medium text-foreground" data-f="flight"></span>
+    <li class="relative grid min-h-11 grid-cols-[3.75rem_minmax(0,1fr)_auto] items-center gap-x-2 border-b border-border font-mono text-xs tabular-nums last:border-b-0 pointer-fine:md:min-h-0 pointer-fine:md:items-baseline pointer-fine:md:border-b-0">
+      <a
+        class="justify-self-start font-medium text-primary underline-offset-2 after:absolute after:inset-y-0 after:left-0 after:w-16 hover:underline [&:not([href])]:text-foreground [&:not([href])]:no-underline [&:not([href])]:after:hidden"
+        data-f="flight"></a
+      >
       <span class="truncate text-muted-foreground" data-f="route"></span>
       <span class="text-right" data-f="result"></span>
     </li>

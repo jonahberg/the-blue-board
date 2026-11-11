@@ -55,6 +55,11 @@ describe.skipIf(!hasDist)('src/scripts/hub-board.ts on /hubs/ord', () => {
     const first = rows[0];
     expect(first.querySelector('[data-f="time"]').textContent).toBe('14:40');
     expect(first.querySelector('[data-f="ident"]').textContent).toBe('UA104');
+    // Every flight number is a link to its flight page.
+    expect(first.querySelector('[data-f="ident"]').getAttribute('href')).toBe('/flight/UA104');
+    for (const a of board().querySelectorAll('[data-hb-list] [data-f="ident"]')) {
+      expect(a.getAttribute('href')).toBe(`/flight/${a.textContent}`);
+    }
     expect(first.querySelector('[data-f="dest"]').textContent).toBe('BOS');
     expect(first.querySelector('[data-f="gate"]').textContent).toBe('T1 · C18');
     expect(first.querySelector('[data-f="pill"]').textContent).toBe('Departed');
@@ -116,7 +121,7 @@ describe.skipIf(!hasDist)('src/scripts/fleet-live.ts on /fleet/787-9-dreamliner'
   const strip = () => document.querySelector('[data-fleet-live]');
   const FEED = JSON.parse(readFileSync(resolve(__dirname, 'fixtures', 'ual-feed-2026-10-04-trimmed.json'), 'utf8'));
 
-  it('counts this type airborne from the cached feed URL and links each flight to the live map', async () => {
+  it('counts this type airborne from the cached feed URL; each row opens the live map, its number the flight page', async () => {
     mountPage('fleet/787-9-dreamliner.html');
     const fetchMock = vi.fn(async () => jsonResponse(FEED));
     vi.stubGlobal('fetch', fetchMock);
@@ -126,11 +131,22 @@ describe.skipIf(!hasDist)('src/scripts/fleet-live.ts on /fleet/787-9-dreamliner'
     expect(String(fetchMock.mock.calls[0][0])).toBe('/api/fr24-feed?airline=UAL');
     const total = strip().dataset.tails.split(',').length;
     expect(strip().querySelector('[data-fl-count-label]').textContent).toBe(`of ${total} airborne`);
-    const links = [...strip().querySelectorAll('[data-fl-list] a')];
+    const links = [...strip().querySelectorAll('[data-fl-list] a[data-f="link"]')];
     expect(links.length).toBeGreaterThan(0);
     expect(links.length).toBeLessThanOrEqual(4);
     for (const a of links) expect(a.getAttribute('href')).toMatch(/^\/\?flight=/);
-    expect(links[0].textContent).toMatch(/open on the live map/);
+    expect(links[0].textContent).toMatch(/open (UA\d+ )?on the live map/);
+    // The flight number is its own link (never nested in the map link) to the flight page.
+    for (const li of strip().querySelectorAll('[data-fl-list] > li')) {
+      const ident = li.querySelector('[data-f="ident"]');
+      expect(ident.closest('[data-f="link"]')).toBeNull();
+      if (/^UA\d{1,4}$/.test(ident.textContent)) {
+        expect(ident.getAttribute('href')).toBe(`/flight/${ident.textContent}`);
+        expect(li.querySelector('[data-f="link"]').textContent).toContain(`open ${ident.textContent} on the live map`);
+      } else {
+        expect(ident.hasAttribute('href')).toBe(false);
+      }
+    }
     expect(strip().querySelector('[data-fl-fallback]').hidden).toBe(true);
   });
 
