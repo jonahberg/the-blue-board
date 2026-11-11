@@ -3,32 +3,32 @@
  *
  * Shared by the page scripts that print United flight numbers in a list or a timeline: the hub
  * pages' departures board (hub-board.ts), the fleet pages' airborne strip (fleet-live.ts) and the
- * flight page's "Its recent flights" list and inbound-aircraft step (flight-page.ts). A number
- * `parseFlightIdent` cannot read stays plain text, so a link never points at a page that would
- * only say "not a flight number".
+ * flight page's "Its recent flights" list and inbound-aircraft step (flight-page.ts).
+ *
+ * WHICH numbers link is the dashboard's rule, src/lib/flight-link.js `flightLink()` (v1.28.0), so a
+ * number links on a hub page exactly when it links on the dashboard: a United prefix is required (a
+ * bare "5789" does not say whose flight it is), a provider suffix ("UA526H") and an operating
+ * callsign (SKW5123) stay text. This file only puts that answer into the DOM.
  *
  * Text nodes only (never innerHTML), and same-tab: the flight page is part of this site.
  */
 
-import { flightPagePath, parseFlightIdent } from '../lib/flight-page.js';
+import { flightLink } from '../lib/flight-link.js';
 
-/** The flight page for a printed number ("UA5789", "UAL5789", "5789"), or null when it is not one. */
-export function flightHref(raw: string | null | undefined): string | null {
-  const parsed = parseFlightIdent(String(raw ?? ''));
-  return parsed ? flightPagePath(parsed.ident) : null;
-}
+/** The flight page for a printed number, or null: `flightLink()`'s answer, as an href. */
+const hrefFor = (raw: unknown): string | null => (flightLink(raw) as { href: string } | null)?.href ?? null;
 
 /**
  * A run of text split around the United flight numbers in it, for a sentence such as
- * "Aircraft arrived from Tulsa (UA5442)". Only `UA` + 1–4 digits that `parseFlightIdent`
- * accepts become a link part; everything else stays text, in order.
+ * "Aircraft arrived from Tulsa (UA5442)". Only `UA` + 1–4 digits that `flightLink()` links
+ * become a link part; everything else stays text, in order.
  */
 export function splitFlightIdents(text: string): Array<{ text: string; href?: string }> {
   const parts: Array<{ text: string; href?: string }> = [];
   const re = /\bUA\d{1,4}\b/g;
   let last = 0;
   for (let m = re.exec(text); m; m = re.exec(text)) {
-    const href = flightHref(m[0]);
+    const href = hrefFor(m[0]);
     if (!href) continue;
     if (m.index > last) parts.push({ text: text.slice(last, m.index) });
     parts.push({ text: m[0], href });
@@ -45,8 +45,8 @@ export function splitFlightIdents(text: string): Array<{ text: string; href?: st
  */
 export function setFlightLink(a: Element, raw: string, here = ''): void {
   a.textContent = raw;
-  const href = flightHref(raw);
-  if (href && href !== (here ? flightHref(here) : null)) a.setAttribute('href', href);
+  const href = hrefFor(raw);
+  if (href && href !== (here ? hrefFor(here) : null)) a.setAttribute('href', href);
   else a.removeAttribute('href');
 }
 

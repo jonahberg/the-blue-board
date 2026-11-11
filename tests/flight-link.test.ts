@@ -2,21 +2,48 @@
 // Flight numbers on content pages link to their flight page (src/scripts/flight-link.ts): the hub
 // board, the fleet pages' airborne strip, and the flight page's own lists. Anything that is not a
 // United flight number stays text, and a list that refreshes keeps a keyboard reader's place.
+//
+// ONE rule (v1.28.0): which printed numbers link is src/lib/flight-link.js `flightLink()`, the
+// dashboard's own, so a number links on a hub page exactly when it links on the dashboard. The
+// content pages had their own `flightHref()` that also linked a bare "5789" (and a number passed as
+// a number); the parity table below pins every case, including those two, to the library.
 import { describe, expect, it } from 'vitest';
 
-import { flightHref, replaceChildrenKeepingFocus, setFlightLink, splitFlightIdents } from '../src/scripts/flight-link';
+import { flightLink } from '../src/lib/flight-link.js';
+import { replaceChildrenKeepingFocus, setFlightLink, splitFlightIdents } from '../src/scripts/flight-link';
 
-describe('flightHref', () => {
-  it('points a United number at its page, in the canonical form', () => {
-    expect(flightHref('UA5789')).toBe('/flight/UA5789');
-    expect(flightHref('UAL929')).toBe('/flight/UA929');
-    expect(flightHref('UA0123')).toBe('/flight/UA123');
+/** Everything either rule has ever been asked about, links and non-links alike. */
+const CASES: unknown[] = [
+  'UA5789', 'UAL929', 'UA0123', 'ua 576', 'UA-576', ' UA576 ', 'UAL0576',
+  '5789', '0576', 576, '', '—', '?', 'DL1234', 'UA', 'UA0', 'UA12345', 'UA526H',
+  'SKW5123', 'RPA3508', 'OO4737', 'GJS4321', 'UAX9', null, undefined,
+];
+
+describe('content pages use the dashboard\'s flight-link rule', () => {
+  it('setFlightLink gives an href exactly when flightLink() does, and the same one', () => {
+    for (const raw of CASES) {
+      const a = document.createElement('a');
+      setFlightLink(a, raw as string);
+      expect(a.getAttribute('href'), String(raw)).toBe(flightLink(raw)?.href ?? null);
+    }
   });
 
-  it('is null for anything else', () => {
-    for (const raw of ['', '—', 'DL1234', 'UA', 'UA0', 'UA12345', 'UA526H', null, undefined]) {
-      expect(flightHref(raw as string), String(raw)).toBeNull();
-    }
+  it('a bare number does not link on a content page either: it does not say whose flight it is', () => {
+    const a = document.createElement('a');
+    setFlightLink(a, '5789');
+    expect(a.hasAttribute('href')).toBe(false);
+    expect(a.textContent).toBe('5789');
+  });
+
+  it('points a United number at its page, in the canonical form', () => {
+    const href = (raw: string) => {
+      const a = document.createElement('a');
+      setFlightLink(a, raw);
+      return a.getAttribute('href');
+    };
+    expect(href('UA5789')).toBe('/flight/UA5789');
+    expect(href('UAL929')).toBe('/flight/UA929');
+    expect(href('UA0123')).toBe('/flight/UA123');
   });
 });
 
