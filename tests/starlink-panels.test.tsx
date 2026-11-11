@@ -136,8 +136,10 @@ describe('VelocityChart', () => {
         expect(left).toBeLessThanOrEqual(svgWidth - client);
         for (const bar of model.bars) {
           const half = bar.countLabel ? (bar.countLabel.text.length * (bar.capped ? 10 : 9) * 0.62) / 2 : 0;
-          const from = Math.min(bar.x, bar.countLabel ? bar.countLabel.x - half : bar.x) * scale;
-          const to = (bar.x + bar.width) * scale;
+          // The lib's zig-zag runs from x - 2 in 8-unit teeth across the bar (starlink-chart.js).
+          const zigTo = bar.zigzag ? bar.x - 2 + 8 * Math.ceil((bar.width + 4) / 8) : bar.x + bar.width;
+          const from = Math.min(bar.x - (bar.zigzag ? 2 : 0), bar.countLabel ? bar.countLabel.x - half : bar.x) * scale;
+          const to = Math.max(bar.x + bar.width, zigTo, bar.countLabel ? bar.countLabel.x + half : 0) * scale;
           expect(left > from && left < to).toBe(false);
         }
         unmount();

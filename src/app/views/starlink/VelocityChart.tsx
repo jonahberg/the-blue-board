@@ -86,15 +86,31 @@ export const VelocityChart = memo(function VelocityChart({
     const svg = el.querySelector('svg');
     const scale = svg && model.width > 0 ? svg.getBoundingClientRect().width / model.width : 0;
     if (max > 0 && scale > 0) {
-      for (const bar of model.bars) {
-        // A count label is centred on its bar and can be wider than it ("162*").
+      // Each month's painted extent: the bar, its count label (centred, and wider than the bar
+      // for "162*") and, on a capped bar, the zig-zag that overhangs it (read off the path: an
+      // absolute M, then relative l steps).
+      const spans = model.bars.map((bar) => {
         const labelHalf = bar.countLabel ? (bar.countLabel.text.length * (bar.capped ? 10 : 9) * 0.62) / 2 : 0;
-        const left = Math.min(bar.x, bar.countLabel ? bar.countLabel.x - labelHalf : bar.x) * scale;
-        const right = (bar.x + bar.width) * scale;
-        if (left < target && target < right) {
-          target = Math.max(0, Math.floor(left) - 4);
-          break;
+        let lo = bar.x;
+        let hi = bar.x + bar.width;
+        if (bar.countLabel) {
+          lo = Math.min(lo, bar.countLabel.x - labelHalf);
+          hi = Math.max(hi, bar.countLabel.x + labelHalf);
         }
+        if (bar.zigzag) {
+          let x = Number(/^M\s*(-?[\d.]+)/.exec(bar.zigzag)?.[1] ?? bar.x);
+          lo = Math.min(lo, x);
+          for (const step of bar.zigzag.matchAll(/l\s*(-?[\d.]+)/g)) x += Number(step[1]);
+          hi = Math.max(hi, x);
+        }
+        // Two units of slack each side for the zig-zag's stroke and the label's anti-aliasing.
+        return [(lo - 2) * scale, (hi + 2) * scale] as const;
+      });
+      // Back off until the edge cuts nothing (a step left can land under the month before).
+      for (let guard = 0; guard < spans.length; guard++) {
+        const hit = spans.find(([lo, hi]) => lo < target && target < hi);
+        if (!hit) break;
+        target = Math.max(0, Math.floor(hit[0]) - 4);
       }
     }
     el.scrollLeft = target;
