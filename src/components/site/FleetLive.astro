@@ -68,16 +68,16 @@ const total = tails.length;
   <!-- Two links per row, side by side, never nested: the flight number opens its flight page
        (/flight/UA857, src/scripts/flight-link.ts) and the rest of the row (route and tail, stretched
        over the row by its `after:` box) opens it on the dashboard's live map. The number sits
-       above the stretched box (`z-10`); both are the row's full 44 px. A number the site has no
-       page for stays text (an `<a>` with no href). -->
+       above the stretched box (`z-10`); both take in the row's 1 px rule, so each is 44 px. A
+       number the site has no page for stays text (an `<a>` with no href). -->
   <template data-fl-row>
     <li class="relative grid h-11 grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 border-b border-border font-mono text-xs hover:bg-accent/40">
       <a
-        class="relative z-10 flex h-full items-center justify-self-start font-semibold text-primary underline-offset-2 hover:underline [&:not([href])]:text-foreground [&:not([href])]:no-underline"
+        class="relative z-10 flex h-[calc(100%+1px)] items-center self-start justify-self-start font-semibold text-primary underline-offset-2 hover:underline [&:not([href])]:text-foreground [&:not([href])]:no-underline"
         data-f="ident"></a
       >
       <a
-        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 no-underline after:absolute after:inset-0"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 no-underline after:absolute after:inset-x-0 after:top-0 after:-bottom-px"
         data-f="link"
       >
         <span class="min-w-0 truncate text-foreground" data-f="route"></span>
