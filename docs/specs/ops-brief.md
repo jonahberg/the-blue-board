@@ -168,6 +168,10 @@ Text it rejects, from `tests/brief-verify.test.js`:
 specific problem (severity ≥ 20, not an aggregate), then the fact that sets the tone when nothing
 specific does (the disruption index on a day of unconfirmed cancellations, with the cancellation
 split), then background (on-time spread, the FAA picture or a planned program, Starlink, weather).
+A hub's own weather item is left out while a ground stop or delay program for a weather cause is in
+effect there (the program's item already says "because of low clouds"); its slot goes to the next
+specific fact by severity worth a line (severity ≥ 10, such as that hub's cancellations), else to the
+background.
 Items are fact statements verbatim; headlines are fixed per tone and lead fact ("A ground stop is
 holding flights into Newark.", "Running normally, with FAA action possible at Newark.", "United is
 running smoothly right now."), never over 12 words. A template adds a traveler note whenever one is allowed (rule 7)

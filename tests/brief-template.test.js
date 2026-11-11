@@ -86,10 +86,24 @@ describe('buildTemplateBrief', () => {
     const t = buildTemplateBrief(factsFor('sfo-gdp-morning'));
     expect(t.tone).toBe('watch');
     expect(t.headline).toBe('A ground delay program is holding flights into San Francisco.');
-    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.SFO.gdp', 'wx.SFO', 'faa.active.BOS.gdp', 'otp.floor']);
+    // The low clouds are already in the program item: no separate San Francisco weather item.
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.SFO.gdp', 'faa.active.BOS.gdp', 'otp.floor', 'air.starlink']);
     expect(t.items[0].text).toBe('The FAA has a ground delay program in effect for flights heading to San Francisco (SFO) until 12:59 PM PT, because of low clouds. Those flights are held at their departure airport; delays average 62 minutes, up to 132 minutes.');
-    expect(t.items[3].text).toBe('All 6 hubs with an on-time reading are at 86% or better.');
+    expect(t.items[2].text).toBe('All 6 hubs with an on-time reading are at 86% or better.');
     expect(t.traveler_note).toEqual({ text: "If you are flying to San Francisco, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.SFO.gdp'] });
+  });
+
+  it('leaves out a hub’s weather item behind its own weather-caused program, and gives the slot to the next specific fact', () => {
+    const t = buildTemplateBrief(factsFor('hub-ground-stop'));
+    // The thunderstorm ground stop at Newark already says "because of thunderstorms".
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.EWR.gs', 'otp.EWR', 'faa.active.LGA.gdp', 'cxl.EWR']);
+    // A program for another cause leaves the hub's weather in.
+    const fx = JSON.parse(readFileSync(new URL('sfo-gdp-morning.json', FIXTURE_DIR), 'utf8'));
+    const faa = fx.sources.faa.map((a) => (a.airportCode === 'SFO'
+      ? { ...a, programs: a.programs.map((p) => ({ ...p, reason: 'VOL:Volume' })) }
+      : a));
+    const facts = buildBriefFacts({ ...fx.sources, faa }, { nowMs: Date.parse(fx.nowIso) }).facts;
+    expect(buildTemplateBrief(facts).items.map((i) => i.fact_ids[0])).toContain('wx.SFO');
   });
 
   it('delay programs at two hubs: disrupted, both named in the headline, no count item beside them', () => {

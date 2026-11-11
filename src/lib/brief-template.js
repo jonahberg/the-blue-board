@@ -17,6 +17,8 @@ import { computeTone, isHubProgramFact, travelerNoteAllowed } from './brief-fact
 
 /** Facts worth leading with: anything at or above this severity is a problem, not background. */
 const LEAD_SEVERITY = 20;
+/** A slot freed by a left-out weather item goes to a specific fact at or above this severity. */
+const FREED_SLOT_SEVERITY = 10;
 
 /** Aggregates and meta facts: background for a calm brief, never the lead when a specific fact exists. */
 const SUMMARY_IDS = new Set([
@@ -24,6 +26,9 @@ const SUMMARY_IDS = new Set([
   'otp.floor', 'otp.soft', 'otp.min', 'cxl.confirmed', 'cxl.unconfirmed', 'air.total',
   'air.starlink', 'air.normal',
 ]);
+
+/** The cause values an FAA program fact carries when its cause is weather (faaCausePhrase). */
+const WEATHER_CAUSE_VALUES = new Set(['weather', 'thunderstorms', 'snow', 'ice', 'wind', 'low clouds', 'low visibility', 'rain']);
 
 const byId = (facts) => new Map((facts || []).map((f) => [f.id, f]));
 /** A template headline stays within the prompt's own limit (rule 3), so the verifier never warns on it. */
@@ -104,8 +109,29 @@ function pickItems(facts, limit, tone) {
   const picked = [];
   const add = (f) => { if (f && !picked.includes(f) && picked.length < limit) picked.push(f); };
 
-  // Specific problems first: a ground stop at Newark, not "1 FAA program is in effect".
-  for (const f of sorted) if (f.severity >= LEAD_SEVERITY && !SUMMARY_IDS.has(f.id)) add(f);
+  // Specific problems first: a ground stop at Newark, not "1 FAA program is in effect". The
+  // weather behind a hub's ground stop or delay program is already in that program's item
+  // ("because of low clouds"), so the hub's own weather item is left out and its slot goes to the
+  // next specific fact (prompt rule 4). A program for another cause (traffic, construction)
+  // leaves it in.
+  const weatherInProgram = new Set(facts
+    .filter((f) => isHubProgramFact(f) && (f.values || []).some((v) => WEATHER_CAUSE_VALUES.has(v)))
+    .map((f) => `wx.${f.hub}`));
+  let freed = 0;
+  for (const f of sorted) {
+    if (f.severity < LEAD_SEVERITY || SUMMARY_IDS.has(f.id)) continue;
+    if (weatherInProgram.has(f.id)) freed++;
+    else add(f);
+  }
+  // A freed slot goes to the next specific fact by severity that is worth a line (a hub's
+  // cancellations, caution weather elsewhere), never a healthy hub's reading; with none, the
+  // background below fills it.
+  for (const f of sorted) {
+    if (freed === 0) break;
+    if (f.severity < FREED_SLOT_SEVERITY || SUMMARY_IDS.has(f.id) || weatherInProgram.has(f.id) || picked.includes(f)) continue;
+    add(f);
+    freed--;
+  }
 
   // When nothing specific explains the tone, the fact that sets it does (the disruption index on a
   // day of unconfirmed cancellations), with the cancellation split that explains IT.
