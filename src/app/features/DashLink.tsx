@@ -22,18 +22,21 @@ import type { LinkHit, LinkTone } from './link-style';
 
 /**
  * The click handler for a link to `href`. A plain function rather than a hook, so a list can
- * build one per item from one `useFollowDeepLink()` call.
+ * build one per item from one `useFollowDeepLink()` call. The handler returns true when it
+ * followed the link in place (and cancelled the page load), false when it left the click to the
+ * browser.
  */
 export function dashLinkClick(
   follow: (intent: DeepLinkIntent) => void,
   href: string,
-): (event: MouseEvent<HTMLAnchorElement>) => void {
+): (event: MouseEvent<HTMLAnchorElement>) => boolean {
   return (event) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
     const intent = resolveDeepLink(href);
-    if (!intent) return;
+    if (!intent) return false;
     event.preventDefault();
     follow(intent);
+    return true;
   };
 }
 

@@ -14,7 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -505,6 +505,47 @@ describe('HubHealthStrip: a chip opens that hub\'s schedule board, in place (Nov
     // Before 06:00 hub-local the board that opens is yesterday's, so the chip never says "today's".
     expect(tip).not.toMatch(/hub guide|today's/);
     expect(ord.textContent).not.toMatch(/today's/);
+  });
+
+  /** Focus the chip and let its tooltip open (the provider's delay), as a tab or a tap does. */
+  async function focusWithTooltip(chip: HTMLElement) {
+    await act(async () => {
+      chip.focus();
+      await vi.runAllTimersAsync();
+    });
+    expect(screen.getAllByRole('tooltip').map((t) => t.textContent).join(' ')).toContain('United at DEN');
+  }
+
+  it('after a tap or click the chip lets go of focus, so its tooltip does not sit over the board', async () => {
+    render(<Strip />);
+    const den = screen.getByRole('link', { name: /^DEN/ });
+    await focusWithTooltip(den);
+
+    // A pointer's click counts itself in `detail`.
+    await act(async () => {
+      fireEvent.click(den, { detail: 1 });
+      await vi.runAllTimersAsync();
+    });
+
+    expect(seenUi.tab).toBe('schedule');
+    expect(document.activeElement).not.toBe(den);
+    expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
+  });
+
+  it('Enter on a focused chip keeps focus, and its tooltip, on the chip', async () => {
+    render(<Strip />);
+    const den = screen.getByRole('link', { name: /^DEN/ });
+    await focusWithTooltip(den);
+
+    // A keyboard activation is a click with no pointer: `detail` 0.
+    await act(async () => {
+      fireEvent.click(den, { detail: 0 });
+      await vi.runAllTimersAsync();
+    });
+
+    expect(seenUi.tab).toBe('schedule');
+    expect(document.activeElement).toBe(den);
+    expect(screen.getAllByRole('tooltip').map((t) => t.textContent).join(' ')).toContain('United at DEN');
   });
 
   it('keeps every class and size of the chip (tuned Nov 11 2026)', () => {

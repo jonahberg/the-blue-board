@@ -9,9 +9,13 @@
  * A chip opens that hub's Schedule board in place (`/?tab=schedule&hub=ORD`), where the
  * dashboard lists the flights behind the figure: a hub code on a status goes where that status is
  * shown (owner decision, Nov 12 2026). The hub guide is one link further, in the board's header.
+ *
+ * The page no longer navigates away on a chip, so after a tap or a click the chip lets go of focus
+ * and its tooltip closes instead of sitting over the board it opened; Enter keeps focus on the chip.
  */
 
 import { History, House } from 'lucide-react';
+import type { MouseEvent } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -32,6 +36,7 @@ import { hubProgramMarker } from '@/lib/ops-health.js';
 import { cn } from '@/lib/utils';
 import { dashLinkClick } from '../features/DashLink';
 import { useBrief } from '../state/brief';
+import type { DeepLinkIntent } from '../state/deep-links';
 import { useFollowDeepLink } from '../state/follow-link';
 import { useIrops } from '../state/irops';
 import { usePrefs } from '../state/prefs';
@@ -39,6 +44,18 @@ import { useHubHealth } from '../state/schedule';
 import { useWeather } from '../state/weather';
 import { SEV_TEXT, SeverityGlyph } from './Status';
 import type { Severity } from './Status';
+
+/**
+ * A chip's click: followed in place as any dashboard link is (`dashLinkClick`). After a pointer's
+ * tap or click (`detail` counts clicks; a keyboard activation is 0) the chip blurs, which closes the
+ * tooltip its focus opened; a keyboard activation keeps focus, and its tooltip, on the chip.
+ */
+function chipClick(follow: (intent: DeepLinkIntent) => void, href: string) {
+  const click = dashLinkClick(follow, href);
+  return (event: MouseEvent<HTMLAnchorElement>) => {
+    if (click(event) && event.detail > 0) event.currentTarget.blur();
+  };
+}
 
 export function HubHealthStrip() {
   const follow = useFollowDeepLink();
@@ -130,7 +147,7 @@ export function HubHealthStrip() {
                 <TooltipTrigger asChild>
                   <a
                     href={href}
-                    onClick={href ? dashLinkClick(follow, href) : undefined}
+                    onClick={href ? chipClick(follow, href) : undefined}
                     className={cn(
                       // 24 px for a mouse (WCAG 2.5.8). A finger gets the whole row's height
                       // (27 px inside its border) and a wider pad: the 44 px chips of Oct 3 2026
