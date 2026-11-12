@@ -5,8 +5,8 @@
 // (tests run every fixture's template through the verifier). It must read acceptably on its own:
 // this is what every visitor sees whenever the model is not available.
 
-import { airportDisplayName } from './brief-claims.js';
-import { computeTone, isHubProgramFact, travelerNoteAllowed } from './brief-facts.js';
+import { airportDisplayName, airportOwnNames } from './brief-claims.js';
+import { computeTone, isHubProgramFact, isNonHubProgramFact, programAirport, travelerNoteAllowed } from './brief-facts.js';
 
 /**
  * @typedef {import('./brief-facts.js').BriefFact} BriefFact
@@ -19,6 +19,8 @@ import { computeTone, isHubProgramFact, travelerNoteAllowed } from './brief-fact
 const LEAD_SEVERITY = 20;
 /** A slot freed by a left-out weather item goes to a specific fact at or above this severity. */
 const FREED_SLOT_SEVERITY = 10;
+/** Programs away from the hubs a template prints, at most (the rest stay in the facts). */
+const NON_HUB_TEMPLATE_ITEMS = 2;
 
 /** Aggregates and meta facts: background for a calm brief, never the lead when a specific fact exists. */
 const SUMMARY_IDS = new Set([
@@ -35,6 +37,11 @@ const byId = (facts) => new Map((facts || []).map((f) => [f.id, f]));
 const HEADLINE_WORDS = 12;
 const wordCount = (s) => String(s).trim().split(/\s+/).filter(Boolean).length;
 const joinNames = (names) => (names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
+/** " tomorrow" (or " on Friday") when a planned program's time carries a day (brief-facts.js). */
+const plannedDay = (f) => {
+  const m = (f.values || []).map((v) => String(v).match(/^(tomorrow|on\s+[A-Z][a-z]+day)\s/)).find(Boolean);
+  return m ? ` ${m[1]}` : '';
+};
 
 /**
  * The headline for these facts at this tone, and the facts it rests on.
@@ -68,21 +75,52 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
     const planned = sorted.find((f) => f.kind === 'faa_planned' && f.hub);
     // No "calm", "smooth" or "running normally" in a watch headline: the verifier replaces those
     // when the tone is not calm (headline:calm_when_not_calm), and this is the replacement.
-    if (lead?.kind === 'faa_planned' && lead.hub) return { headline: `FAA action is possible at ${name(lead)}; none is in effect.`, fact_ids: [lead.id] };
+    if (lead?.kind === 'faa_planned' && lead.hub) return { headline: `FAA action is possible at ${name(lead)}${plannedDay(lead)}; none is in effect.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'otp') return { headline: `Mostly normal, with delays at ${name(lead)}.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'weather') return { headline: `Weather is slowing ${name(lead)}.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'faa') return { headline: `Mostly normal, with FAA delays at ${name(lead)}.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'cancellations') return { headline: `Mostly normal, with cancellations at ${name(lead)}.`, fact_ids: [lead.id] };
-    const elsewhere = lead && lead.id.match(/^faa\.active\.([A-Z]{3})\.(gs|gdp)$/);
-    if (elsewhere) {
-      const what = elsewhere[2] === 'gs' ? 'Ground stop' : 'Ground delay program';
-      return { headline: `${what} for flights into ${airportDisplayName(elsewhere[1])}.`, fact_ids: [lead.id] };
-    }
-    if (planned) return { headline: `FAA action is possible at ${name(planned)}; none is in effect.`, fact_ids: [planned.id] };
+    // A program away from the hubs never sets the tone (computeTone), so it is never the lead here.
+    if (planned) return { headline: `FAA action is possible at ${name(planned)}${plannedDay(planned)}; none is in effect.`, fact_ids: [planned.id] };
     return { headline: 'United is mostly normal right now.', fact_ids: lead ? [lead.id] : [] };
   }
 
+  // Calm, with a stop or delay program away from the hubs: the hubs first, then the program
+  // (Nov 2026), never the program alone (brief-verify.js headline:leads_with_non_hub_program).
+  const away = sorted.filter(isNonHubProgramFact);
+  if (away.length) return nonHubProgramHeadline(away);
   return { headline: 'United is running smoothly right now.', fact_ids: [] };
+}
+
+/**
+ * The calm headline when stop or delay programs are in effect only away from the hubs: the hubs'
+ * condition first, then the program, within the prompt's 12 words (rule 3). One program is named
+ * ("United's hubs are running normally; a delay program is slowing Seattle arrivals."), two are
+ * named when they fit, otherwise "elsewhere".
+ * @param {BriefFact[]} away  most severe first
+ * @returns {{headline: string, fact_ids: string[]}}
+ */
+function nonHubProgramHeadline(away) {
+  // The display name first, then any shorter name that stands for that airport alone
+  // ("New York LaGuardia", then "LaGuardia").
+  const nameSets = away.map((f) => {
+    const own = airportOwnNames(programAirport(f));
+    return own.length ? own : [airportDisplayName(programAirport(f))];
+  });
+  const stops = away.filter((f) => /\.gs$/.test(f.id)).length;
+  const phrases = [];
+  if (away.length === 1) {
+    for (const n of nameSets[0]) phrases.push(stops ? `a ground stop is holding ${n} arrivals` : `a delay program is slowing ${n} arrivals`);
+  } else if (away.length === 2) {
+    const what = stops === 2 ? 'ground stops are holding' : stops === 0 ? 'delay programs are slowing' : 'FAA programs are slowing';
+    for (const a of nameSets[0]) for (const b of nameSets[1]) phrases.push(`${what} ${a} and ${b} arrivals`);
+  }
+  const candidates = [
+    ...phrases.flatMap((p) => [`United's hubs are running normally; ${p}.`, `United's hubs are normal; ${p}.`]),
+    `United's hubs are running normally; ${away.length === 1 ? 'an FAA program is' : 'FAA programs are'} slowing flights elsewhere.`,
+  ];
+  const fits = candidates.find((h) => wordCount(h) <= HEADLINE_WORDS) ?? candidates[candidates.length - 1];
+  return { headline: fits, fact_ids: away.map((f) => f.id) };
 }
 
 /**
@@ -115,6 +153,9 @@ function pickItems(facts, limit, tone) {
   const sorted = [...facts].sort((a, b) => b.severity - a.severity || a.id.localeCompare(b.id));
   const picked = [];
   const add = (f) => { if (f && !picked.includes(f) && picked.length < limit) picked.push(f); };
+
+  // With nothing wrong at the hubs, the brief opens by saying so (Nov 2026).
+  if (tone === 'calm') add(index.get('otp.floor'));
 
   // Specific problems first: a ground stop at Newark, not "1 FAA program is in effect". The
   // weather behind a hub's ground stop or delay program is already in that program's item
@@ -151,8 +192,14 @@ function pickItems(facts, limit, tone) {
     }
   }
 
+  // A stop or delay program away from the hubs: after everything about the hubs, before the
+  // background (United flies there, so it is worth a line; it never sets the tone), at most
+  // NON_HUB_TEMPLATE_ITEMS of them.
+  const summary = index.get('otp.floor') || index.get('otp.soft') || index.get('otp.min');
+  for (const f of sorted.filter(isNonHubProgramFact).slice(0, NON_HUB_TEMPLATE_ITEMS)) add(f);
+
   // Background, in reading order. A planned program at a hub beats the general FAA count.
-  add(index.get('otp.floor') || index.get('otp.soft') || index.get('otp.min'));
+  add(summary);
   const plannedHub = sorted.find((f) => f.kind === 'faa_planned' && f.hub);
   if (!picked.some((f) => f.kind === 'faa' || f.kind === 'faa_planned')) add(plannedHub || index.get('faa.active.count'));
   // What is in the air, and the hub-weather tally, are a calm day's background; when something is
@@ -172,7 +219,7 @@ function pickItems(facts, limit, tone) {
  */
 function travelerWho(anchors) {
   const [anchor] = anchors;
-  const name = (f) => airportDisplayName(f.hub || '');
+  const name = (f) => airportDisplayName(f.kind === 'faa' ? programAirport(f) : f.hub || '');
   const isProgram = (f) => /^faa\.active\.[A-Z]{3}\.(gs|gdp|closure)$/.test(f.id);
   if (anchors.length > 1) {
     const verb = anchors.some((f) => /\.closure$/.test(f.id)) ? 'flying to or from' : 'flying to';
@@ -193,17 +240,24 @@ export function buildTemplateBrief(facts) {
   const list = Array.isArray(facts) ? facts : [];
   const tone = computeTone(list);
   const limit = tone === 'calm' ? 3 : 4;
-  const items = pickItems(list, limit, tone).map((f) => ({ text: f.statement, fact_ids: [f.id] }));
+  const picked = pickItems(list, limit, tone);
+  const items = picked.map((f) => ({ text: f.statement, fact_ids: [f.id] }));
   const { headline, fact_ids } = templateHeadline(list, tone);
 
   let traveler_note = null;
   if (travelerNoteAllowed(tone, list)) {
-    // Anchored on every hub's program travelers are held by (one per hub, most severe first, at
-    // most 8 citations), else the hub fact that makes the day disrupted.
+    // Anchored on every program travelers are held by (one per airport, hubs first and most severe
+    // first, at most 8 citations; Nov 2026: airports that are not hubs too), else the hub fact that
+    // makes the day disrupted.
     const bySeverity = [...list].sort((a, b) => b.severity - a.severity || a.id.localeCompare(b.id));
     const programs = [];
     for (const f of bySeverity) {
       if (f.hub && /^faa\.active\.[A-Z]{3}\.(gs|gdp|closure)$/.test(f.id) && !programs.some((p) => p.hub === f.hub)) programs.push(f);
+    }
+    // Away from the hubs, only the programs the items print: the note never names an airport the
+    // brief above it does not.
+    for (const f of bySeverity) {
+      if (isNonHubProgramFact(f) && picked.includes(f) && !programs.some((p) => programAirport(p) === programAirport(f))) programs.push(f);
     }
     const fallback = bySeverity.find((f) => f.hub && f.toneFloor === 'disrupted');
     const anchors = programs.length ? programs.slice(0, 8) : fallback ? [fallback] : [];

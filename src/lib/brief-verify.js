@@ -28,8 +28,9 @@
 //
 // If no item survives, the result is not ok and the caller publishes the template brief.
 
-import { allowanceFromValues, claimFailure, emptyAllowance, extractClaims, normalizeText } from './brief-claims.js';
-import { computeTone, travelerNoteAllowed } from './brief-facts.js';
+import { BRIEF_HUBS, airportForms, allowanceFromValues, claimFailure, emptyAllowance, extractClaims, normalizeText } from './brief-claims.js';
+import { allHubsHealthy, computeTone, isNonHubProgramFact, programAirport, travelerNoteAllowed } from './brief-facts.js';
+import { ON_TIME_GRACE_MIN } from './hub-health.js';
 import { buildTemplateBrief, templateHeadline } from './brief-template.js';
 import { readBriefResponse } from './brief-prompt.js';
 
@@ -52,6 +53,53 @@ const QUOTE_ATTRIBUTION_RE = /\b(?:heard|radio|frequenc(?:y|ies)|tower|controlle
 const MARKUP_RE = /<[^>]{0,200}>|<\/?[a-z]|[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
 /** A headline saying the operation is calm: replaced whenever the computed tone is not calm. */
 const CALM_HEADLINE_RE = /\b(?:calm|calmly|smooth|smoothly|quiet|quietly)\b|\brunning\s+normally\b/i;
+/** Words that say how United's operation is doing, which a headline must lead with (see below). */
+const CONDITION_RE = /\b(?:United|United's|hubs?|calm|calmly|smooth|smoothly|quiet|quietly|normal|normally)\b/i;
+/** Words naming a ground stop or delay program. On a calm day none is at a hub (computeTone). */
+const PROGRAM_WORDS_RE = /\b(?:ground\s+stops?|ground\s+delays?|delay\s+programs?|FAA\s+programs?|programs?|delays?|holding|held)\b/i;
+
+/**
+ * Why a headline leads with a stop or delay program at an airport that is not a United hub, or null
+ * (Nov 2026: "Ground delays are holding flights into Seattle; hubs look normal." on a day the
+ * header read "Smooth Ops"). It leads with one when the program's airport, or on a calm day any
+ * program wording (no hub has one then), comes before anything about United's own condition:
+ * "United", the hubs, a calm word or a hub's name. The mirror of headline:calm_when_not_calm.
+ * @param {string} headline  normalized
+ * @param {'calm'|'watch'|'disrupted'} tone
+ * @param {Array<import('./brief-facts.js').BriefFact>} facts
+ * @returns {string|null}
+ */
+export function nonHubLeadReason(headline, tone, facts) {
+  const away = facts.filter(isNonHubProgramFact);
+  if (away.length === 0) return null;
+  const firstIndex = (re) => { const m = headline.match(re); return m && m.index !== undefined ? m.index : Infinity; };
+  const nameRe = (names) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${names.map((n) => normalizeText(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}\\p{N}])`, 'u');
+  const awayNames = [...new Set(away.flatMap((f) => airportForms(programAirport(f))))];
+  const hubNames = [...new Set(BRIEF_HUBS.flatMap((h) => airportForms(h)))];
+  const programAt = Math.min(firstIndex(nameRe(awayNames)), tone === 'calm' ? firstIndex(PROGRAM_WORDS_RE) : Infinity);
+  if (programAt === Infinity) return null;
+  const conditionAt = Math.min(firstIndex(CONDITION_RE), firstIndex(nameRe(hubNames)));
+  return programAt < conditionAt ? 'headline:leads_with_non_hub_program' : null;
+}
+
+/**
+ * True when an item gives a single hub's on-time percentage on a day every hub is healthy, which the
+ * on-time summary covers (Nov 2026: "…at 84% or better, and Newark is at 96%.", citing otp.floor
+ * and otp.EWR): it cites an on-time fact (one that was sent, or a hub's on-time id that was not),
+ * states a percentage, and names a hub whose own on-time fact was not sent (only a hub with an FAA
+ * program in effect keeps one on such a day, brief-facts.js).
+ * @param {string} text
+ * @param {string[]} ids
+ * @param {Map<string, any>} factIndex
+ */
+function givesHealthyHubOnTime(text, ids, factIndex) {
+  const citesOnTime = ids.some((id) => factIndex.get(id)?.kind === 'otp' || (/^otp\.[A-Z]{3}$/.test(id) && !factIndex.has(id)));
+  if (!citesOnTime) return false;
+  const claims = extractClaims(normalizeText(text));
+  if (!claims.some((c) => c.type === 'percent')) return false;
+  return claims.some((c) => c.type === 'airport' && c.codes.some((code) => BRIEF_HUBS.includes(code) && !factIndex.has(`otp.${code}`)));
+}
+
 /** Words that mark an FAA program as not (yet) in effect. */
 const HEDGE_RE = /\b(?:possible|possibly|could|may|might|planned|plans?|expects?|expected|watch(?:ing)?|later|if|not\s+(?:yet\s+)?in\s+effect|isn't\s+in\s+effect|neither\s+is\s+in\s+effect|none\s+(?:of\s+them\s+)?(?:is|are)\s+in\s+effect)\b/i;
 
@@ -144,11 +192,59 @@ export function checkSentence(text, factIds, factIndex, { itemRules = true } = {
     if ((claimText.match(/"/g) || []).length % 2 === 1) reasons.push('radio_quote_unbalanced');
   }
 
-  for (const claim of extractClaims(claimText)) {
+  const claims = extractClaims(claimText);
+  for (const claim of claims) {
     const why = claimFailure(claim, allowance);
     if (why) reasons.push(why);
   }
+  // A time whose fact gives its day ("tomorrow 10:00 AM ET": not later today on that airport's
+  // clock) may only be used with that day: "after 10:00 AM ET" said at 8 PM reads as past.
+  for (const { day, minutes, zone, raw } of dayBoundTimes(ids, factIndex)) {
+    const used = claims.some((c) => c.type === 'time' && c.minutes === minutes && (!c.zone || !zone || c.zone === zone));
+    if (used && !new RegExp(`\\b${day}\\b`, 'i').test(claimText)) reasons.push(`time_without_day:${raw}`);
+  }
   return reasons;
+}
+
+/** The day-qualified times ("tomorrow 10:00 AM ET", "on Friday 2:00 PM CT") the cited facts carry. */
+function dayBoundTimes(ids, factIndex) {
+  const out = [];
+  for (const id of ids) {
+    for (const value of factIndex.get(id)?.values || []) {
+      const m = String(value).match(/^(tomorrow|on\s+[A-Z][a-z]+day)\s+(.+)$/);
+      if (!m) continue;
+      const time = extractClaims(m[2]).find((c) => c.type === 'time');
+      if (time && time.type === 'time') out.push({ day: m[1].replace(/^on\s+/, ''), minutes: time.minutes, zone: time.zone, raw: String(value) });
+    }
+  }
+  return out;
+}
+
+/** The on-time definition as the facts state it ("within 30 minutes of schedule"). */
+const ON_TIME_DEFINITION_RE = new RegExp(`\\bwithin\\s+${ON_TIME_GRACE_MIN}\\s+minutes\\s+of\\s+(?:their\\s+)?schedule(?:d\\s+times?)?\\b`, 'i');
+
+/**
+ * Prompt rule 4's "state the on-time definition once", as a trim: in every item after the first that
+ * states it, the definition becomes "on time" ("at 89% or better on departures within 30 minutes of
+ * schedule" → "at 89% or better on time"). Only those words change, so every claim left was already
+ * checked. Null when there is nothing to trim or the result would not read cleanly.
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function trimOnTimeDefinition(text) {
+  if (!ON_TIME_DEFINITION_RE.test(text)) return null;
+  const def = ON_TIME_DEFINITION_RE.source.replace(/^\\b/, '');
+  const out = text
+    // "on departures within 30 minutes of schedule" → "on time"
+    .replace(new RegExp(`\\bon\\s+departures\\s+(?:leaving\\s+|that\\s+left\\s+|left\\s+)?${def}`, 'gi'), 'on time')
+    // "of departures leaving within 30 minutes of schedule" → "of departures on time"
+    .replace(new RegExp(`\\b(?:leaving|that\\s+left|left|departing|leave)\\s+${def}`, 'gi'), 'on time')
+    // anything else: the bare definition
+    .replace(new RegExp(`\\b${def}`, 'gi'), 'on time')
+    .replace(/\bon time,?\s+on time\b/gi, 'on time')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return out === text || ON_TIME_DEFINITION_RE.test(out) ? null : out;
 }
 
 /**
@@ -184,6 +280,11 @@ const wordCount = (s) => normalizeText(s).trim().split(/\s+/).filter(Boolean).le
  * @property {{status: 'none'|'kept'|'dropped', reasons: string[]}} travelerNote
  * @property {{model: string|null, computed: string, final: string, overridden: boolean}} tone
  * @property {string[]} warnings
+ * @property {number} healthyHubOnTime  items that gave a single hub's on-time percentage on a day
+ *   every hub is healthy (dropped, reason hub_on_time_on_healthy_day)
+ * @property {boolean} summaryInserted  the on-time summary took the first such item's place
+ * @property {Array<{item: number, from: string, to: string, reason: string}>} trimmed  words taken
+ *   out of a kept item (the on-time definition repeated after the first item that states it)
  * @property {string[]} [shapeErrors]
  */
 
@@ -206,6 +307,9 @@ export function verifyBrief(candidate, facts) {
     travelerNote: { status: 'none', reasons: [] },
     tone: { model: null, computed, final: computed, overridden: false },
     warnings: [],
+    healthyHubOnTime: 0,
+    summaryInserted: false,
+    trimmed: [],
   };
 
   const shape = validateBriefShape(candidate);
@@ -220,15 +324,44 @@ export function verifyBrief(candidate, facts) {
   const tone = computed;
 
   const kept = [];
+  // On a day every hub is healthy, a single hub's on-time percentage is padding: the item is
+  // replaced by the on-time summary when no other item carries it, else dropped (Nov 2026).
+  const healthyDay = allHubsHealthy(factList);
+  const summary = factIndex.get('otp.floor');
+  /** @type {number[]} positions in `kept` where the summary may stand in for a dropped item */
+  const summarySlots = [];
   input.items.forEach((item, index) => {
     const ids = [...new Set(item.fact_ids)];
     const reasons = index >= BRIEF_MAX_ITEMS ? ['over_item_limit'] : checkSentence(item.text, ids, factIndex);
+    // Only a sentence that otherwise passes, or one whose only trouble is citing a hub's on-time
+    // fact that was not sent (the specimen: otp.floor + otp.EWR, "and Newark is at 96%").
+    const citesUnsentOnTime = reasons.some((r) => /^unknown_fact_id:otp\.[A-Z]{3}$/.test(r));
+    if (index < BRIEF_MAX_ITEMS && healthyDay && (reasons.length === 0 || citesUnsentOnTime) && givesHealthyHubOnTime(item.text, ids, factIndex)) {
+      reasons.push('hub_on_time_on_healthy_day');
+      report.healthyHubOnTime += 1;
+      summarySlots.push(kept.length);
+    }
     if (reasons.length) {
       report.dropped.push({ index, text: item.text, fact_ids: ids, reasons });
       return;
     }
     report.warnings.push(...styleWarnings(item.text, `items[${index}]`));
     kept.push({ text: normalizeText(item.text).trim(), fact_ids: ids });
+  });
+  if (summary && summarySlots.length && !kept.some((i) => i.fact_ids.includes('otp.floor'))) {
+    kept.splice(summarySlots[0], 0, { text: summary.statement, fact_ids: ['otp.floor'] });
+    report.summaryInserted = true;
+  }
+  // The on-time definition is stated once, in the first item that states it (prompt rule 4).
+  let definitionSeen = false;
+  kept.forEach((item, i) => {
+    if (!ON_TIME_DEFINITION_RE.test(item.text)) return;
+    if (!definitionSeen) { definitionSeen = true; return; }
+    const trimmed = trimOnTimeDefinition(item.text);
+    if (trimmed) {
+      report.trimmed.push({ item: i, from: item.text, to: trimmed, reason: 'on_time_definition_repeated' });
+      kept[i] = { ...item, text: trimmed };
+    }
   });
   report.itemsKept = kept.length;
 
@@ -242,6 +375,9 @@ export function verifyBrief(candidate, facts) {
   if (headline.length > MAX_HEADLINE_CHARS || wordCount(headline) > MAX_HEADLINE_WORDS) headlineReasons.push('headline_too_long');
   // "Operations look calm" under a computed "watch" contradicts the tone word beside it.
   if (tone !== 'calm' && CALM_HEADLINE_RE.test(headline)) headlineReasons.push('headline:calm_when_not_calm');
+  // Its mirror: United's condition comes first, never a program at an airport that is not a hub.
+  const awayLead = nonHubLeadReason(headline, tone, factList);
+  if (awayLead) headlineReasons.push(awayLead);
   if (headlineReasons.length) {
     const replacement = templateHeadline(factList, tone);
     report.headline = { status: 'replaced', reasons: headlineReasons, original: headline };
