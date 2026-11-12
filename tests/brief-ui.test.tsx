@@ -362,6 +362,37 @@ describe('the sheet and the sidebar panel', () => {
     expect(within(screen.getByRole('dialog')).getByText('280 Starlink').closest('a')).toBeNull();
   });
 
+  it('two plain-text tags side by side are two outlined boxes, not one run of words (Nov 2026)', async () => {
+    // The 5:20 PM PT specimen's item 3, read on the Weather tab: the hub-programs count links to the
+    // tab already showing (so it is text) and Seattle has no card (so it is text).
+    serve(body('nonhub-gdp-specimen', { candidate: {
+      headline: 'FAA action is possible at Newark tomorrow; none is in effect.',
+      tone: 'watch',
+      items: [{ text: 'No FAA ground stop or ground delay program is in effect at any United hub. A ground delay program is holding flights into Seattle until 9:59 PM PT.', fact_ids: ['faa.active.count', 'faa.active.SEA.gdp'] }],
+      traveler_note: null,
+    } }));
+    mount(<TabSwitch to="weather" />);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'switch-weather' }));
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: /full brief/i }));
+    await settle();
+    const dialog = screen.getByRole('dialog');
+    const count = within(dialog).getByText('FAA · no hub programs');
+    const sea = within(dialog).getByText('FAA delay program · SEA');
+    for (const tag of [count, sea]) {
+      expect(tag.closest('a, button')).toBeNull();
+      expect(tag.getAttribute('data-chip')).toBe('text');
+      // The link chips' box (radius, border, padding, height), outlined dashed, with no fill.
+      for (const cls of ['rounded-md', 'border', 'border-dashed', 'px-1.5', 'min-h-7']) expect(tag.className.split(/\s+/)).toContain(cls);
+      expect(tag.className).not.toContain('bg-card');
+    }
+    // Siblings in one row, separated by the row's gap, never one text node.
+    expect(count.parentElement).toBe(sea.parentElement);
+    expect(count.parentElement?.className).toContain('gap-x-1.5');
+    expect(count.nextElementSibling).toBe(sea);
+  });
+
   it('at lg on Live the panel is open in the sidebar and the row reveals it instead of opening a sheet', async () => {
     ctl.wide = true;
     serve(body('calm-afternoon'));

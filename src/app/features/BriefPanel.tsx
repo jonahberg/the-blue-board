@@ -55,6 +55,13 @@ function useFollow() {
 }
 
 const CHIP_BASE = 'inline-flex items-center gap-1 font-mono text-[11px] leading-none tabular-nums';
+/**
+ * The box every chip shares, link or not: 28 px on touch (the hub strip's chip links clear 24 px;
+ * WCAG 2.5.8), dense with a mouse. A plain-text tag keeps the box with a dashed outline and no
+ * fill (the design system's "not an action" mark, as the Cover a day calendar's open days), so two
+ * of them side by side no longer run together as one line of words (Nov 2026).
+ */
+const CHIP_BOX = 'min-h-7 rounded-md border px-1.5 pointer-fine:md:min-h-5';
 
 function BriefChip({ chip, currentTab, onFollow }: { chip: Chip; currentTab: string; onFollow: (i: DeepLinkIntent) => void }) {
   const intent = chip.target ? resolveDeepLink(chip.target.href) : null;
@@ -66,13 +73,15 @@ function BriefChip({ chip, currentTab, onFollow }: { chip: Chip; currentTab: str
     return (
       <span
         title={chip.title}
+        data-chip="text"
         className={cn(
           CHIP_BASE,
-          'py-1',
-          chip.tone === 'radio' ? 'text-bb-info'
-            : chip.tone === 'alert' ? 'text-destructive'
-            : chip.tone === 'warn' ? 'text-bb-warn'
-            : 'text-muted-foreground',
+          CHIP_BOX,
+          'border-dashed',
+          chip.tone === 'radio' ? 'border-bb-info/40 text-bb-info'
+            : chip.tone === 'alert' ? 'border-destructive/40 text-destructive'
+            : chip.tone === 'warn' ? 'border-bb-warn/40 text-bb-warn'
+            : 'border-border text-muted-foreground',
         )}
       >
         {chip.tone === 'radio' ? <RadioTower aria-hidden="true" className="size-3" /> : null}
@@ -93,10 +102,11 @@ function BriefChip({ chip, currentTab, onFollow }: { chip: Chip; currentTab: str
       href={chip.target.href}
       title={chip.title}
       onClick={onClick}
+      data-chip="link"
       className={cn(
         CHIP_BASE,
-        // 28 px on touch (the hub strip's chip links clear 24 px; WCAG 2.5.8), dense with a mouse.
-        'min-h-7 rounded-md border bg-card px-1.5 no-underline transition-colors duration-100 pointer-fine:md:min-h-5',
+        CHIP_BOX,
+        'bg-card no-underline transition-colors duration-100',
         'hover:border-primary hover:text-foreground',
         chip.tone === 'alert' ? 'border-destructive/40 text-destructive'
           : chip.tone === 'warn' ? 'border-bb-warn/40 text-bb-warn'
