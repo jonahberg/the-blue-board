@@ -32,8 +32,8 @@ export const EXPRESS_OPERATING_PREFIXES = Object.freeze(['SKW', 'OO', 'RPA', 'YX
 
 // The check against the site's flight history (flight_history), Nov 12 2026, in two parts that are
 // not equally strong:
-//   - 83 Starlink-feed Express flights matched to a United flight by route and departure time:
-//     82 matched, all 82 with the same number. This is the independent evidence.
+//   - 83 Starlink-feed Express flights checked against it by route and departure time: 82 matched
+//     a United flight, all 82 with the same number. This is the independent evidence.
 //   - 42 later-day flights in the feed's YV, G7 and YX forms, checked a weaker way: the same United
 //     number had flown the same route within the past week, 42 of 42. A match on the number cannot
 //     show a different number, so these do not add to "same number".
