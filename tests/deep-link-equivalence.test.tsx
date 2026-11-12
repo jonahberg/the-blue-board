@@ -4,7 +4,8 @@
  * end in the same state (docs/superpowers/specs/2026-11-12-links-everywhere-design.md, "Guards").
  *
  * Both arms run the dashboard's real stores and readers:
- *  - the real UiProvider and ScheduleProvider (tab, Schedule board, aircraft dialog, Fleet link);
+ *  - the real UiProvider and ScheduleProvider (tab, Schedule board, aircraft dialog, Fleet link),
+ *    and the real FollowProvider, which follows the link;
  *  - `useDeepLinks` wired exactly as Dashboard.tsx wires it (the cold load's reader);
  *  - the real FleetView, mounted on the first visit to the Fleet tab and kept mounted after, as
  *    Dashboard.tsx does (it reads `?type=` / `?filter=` / `?view=` itself, and the followed link);
@@ -27,6 +28,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { DashLink } from '../src/app/features/DashLink';
 import { useDeepLinks } from '../src/app/state/deep-links';
+import { FollowProvider } from '../src/app/state/follow-link';
 import type { FeedValue } from '../src/app/state/feed';
 import type { FleetValue } from '../src/app/state/fleet';
 import { ScheduleProvider, useSchedule } from '../src/app/state/schedule';
@@ -111,7 +113,9 @@ function mountAt(url: string, href: string) {
   render(
     <UiProvider>
       <ScheduleProvider defaultHub="ORD">
-        <Shell href={href} />
+        <FollowProvider>
+          <Shell href={href} />
+        </FollowProvider>
       </ScheduleProvider>
     </UiProvider>,
   );

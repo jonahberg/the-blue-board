@@ -7,7 +7,8 @@
  * page. A modified or middle click, and any address the resolver turns down, is left to the
  * browser with the address untouched (the plan's Review Focus 1 and 5).
  *
- * Mounted in the real UiProvider and ScheduleProvider, the two stores a link drives. The
+ * Mounted in the real UiProvider and ScheduleProvider, the two stores a link drives, and the
+ * FollowProvider that hands every link its `follow`. The
  * Schedule store's own collaborators are stubbed: a link never reaches the watch list or the
  * watched-flight alerts, and the real ones poll the network.
  */
@@ -16,6 +17,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashLink } from '../src/app/features/DashLink';
+import { FollowProvider } from '../src/app/state/follow-link';
 import { ScheduleProvider, useSchedule } from '../src/app/state/schedule';
 import type { ScheduleValue } from '../src/app/state/schedule';
 import { UiProvider, useUi } from '../src/app/state/ui';
@@ -38,8 +40,10 @@ function mount(href: string) {
   render(
     <UiProvider>
       <ScheduleProvider defaultHub="DEN">
-        <DashLink href={href}>go</DashLink>
-        <Probe />
+        <FollowProvider>
+          <DashLink href={href}>go</DashLink>
+          <Probe />
+        </FollowProvider>
       </ScheduleProvider>
     </UiProvider>,
   );

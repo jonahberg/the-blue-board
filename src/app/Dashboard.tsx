@@ -42,6 +42,7 @@ import { BriefProvider } from './state/brief';
 import { useDeepLinks } from './state/deep-links';
 import { FeedProvider, useFeed } from './state/feed';
 import { FleetProvider } from './state/fleet';
+import { FollowProvider } from './state/follow-link';
 import { IropsProvider } from './state/irops';
 import { PrefsProvider, usePrefs } from './state/prefs';
 import { ScheduleProvider, useSchedule } from './state/schedule';
@@ -231,14 +232,19 @@ function DashboardShell() {
   );
 }
 
-/** Seeds the Schedule tab's default board from the viewer's home hub. */
+/**
+ * Seeds the Schedule tab's default board from the viewer's home hub. `FollowProvider` (an
+ * in-place link's `follow`) reads the UI and Schedule stores, so it sits just inside the second.
+ */
 function ShellWithPrefs() {
   const { homeAirport } = usePrefs();
   return (
     <ScheduleProvider defaultHub={homeAirport || 'ORD'}>
-      <WeatherProvider>
-        <DashboardShell />
-      </WeatherProvider>
+      <FollowProvider>
+        <WeatherProvider>
+          <DashboardShell />
+        </WeatherProvider>
+      </FollowProvider>
     </ScheduleProvider>
   );
 }

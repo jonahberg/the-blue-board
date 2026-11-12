@@ -73,6 +73,7 @@ const { default: NewsBanner } = await import('../src/app/features/NewsBanner');
 const { default: TipStrip } = await import('../src/app/features/TipStrip');
 const { HubHealthStrip } = await import('../src/app/shell/HubHealthStrip');
 const { UiProvider, useUi } = await import('../src/app/state/ui');
+const { FollowProvider } = await import('../src/app/state/follow-link');
 
 const classesOf = (el: Element | null) => (el?.getAttribute('class') ?? '').split(/\s+/);
 
@@ -83,14 +84,16 @@ function TabProbe() {
   return null;
 }
 
-/** The strip as the shell mounts it: inside the UI store and the tooltip provider. */
+/** The strip as the shell mounts it: inside the UI store, the follow provider and the tooltip provider. */
 function Strip() {
   return (
     <UiProvider>
-      <TooltipProvider>
-        <HubHealthStrip />
-      </TooltipProvider>
-      <TabProbe />
+      <FollowProvider>
+        <TooltipProvider>
+          <HubHealthStrip />
+        </TooltipProvider>
+        <TabProbe />
+      </FollowProvider>
     </UiProvider>
   );
 }

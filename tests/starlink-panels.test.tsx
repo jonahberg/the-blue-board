@@ -4,7 +4,7 @@
  * print linked to its home (links everywhere, part 1, Nov 12 2026).
  *
  * The links follow in place through the dashboard's own state, so the panels are mounted in the
- * real UiProvider and ScheduleProvider (as tests/dash-link.test.tsx does), with the Schedule
+ * real UiProvider, ScheduleProvider and FollowProvider (as tests/dash-link.test.tsx does), with the Schedule
  * store's watch-list collaborators stubbed. The whole tab (`StarlinkView`) is rendered from a
  * stubbed fleet, feed and prefs store, so the hero's buttons are checked against the roster they
  * filter.
@@ -25,6 +25,7 @@ import type { StarlinkAircraft } from '../src/app/data/types';
 import type { FeedValue } from '../src/app/state/feed';
 import type { FleetValue } from '../src/app/state/fleet';
 import type { PrefsValue } from '../src/app/state/prefs';
+import { FollowProvider } from '../src/app/state/follow-link';
 import { ScheduleProvider } from '../src/app/state/schedule';
 import { UiProvider, useUi } from '../src/app/state/ui';
 import type { UiValue } from '../src/app/state/ui';
@@ -69,8 +70,10 @@ function mount(node: ReactNode) {
   return render(
     <UiProvider>
       <ScheduleProvider>
-        {node}
-        <Probe />
+        <FollowProvider>
+          {node}
+          <Probe />
+        </FollowProvider>
       </ScheduleProvider>
     </UiProvider>,
   );

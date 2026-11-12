@@ -7,7 +7,7 @@
  * the row is about (a tail, a flight number by default); a hub or a type is a quiet link, body
  * colour and underlined at rest, so it reads as a link without colour.
  *
- * Mounted in the real UiProvider and ScheduleProvider, which every in-place link needs; the
+ * Mounted in the real UiProvider, ScheduleProvider and FollowProvider, which every in-place link needs; the
  * Schedule store's watch-list collaborators are stubbed as in tests/dash-link.test.tsx.
  */
 
@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HubLink, TailLink, TypeLink } from '../src/app/features/EntityLinks';
 import { FlightLink } from '../src/app/features/FlightLink';
+import { FollowProvider } from '../src/app/state/follow-link';
 import { ScheduleProvider } from '../src/app/state/schedule';
 import { UiProvider, useUi } from '../src/app/state/ui';
 import type { UiValue } from '../src/app/state/ui';
@@ -34,8 +35,10 @@ function mount(node: ReactNode) {
   return render(
     <UiProvider>
       <ScheduleProvider>
-        {node}
-        <Probe />
+        <FollowProvider>
+          {node}
+          <Probe />
+        </FollowProvider>
       </ScheduleProvider>
     </UiProvider>,
   );

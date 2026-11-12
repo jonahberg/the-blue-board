@@ -43,6 +43,7 @@ const { BriefSidebarPanel } = await import('../src/app/features/BriefPanel');
 const { default: BriefSheet } = await import('../src/app/features/BriefSheet');
 const { BriefProvider } = await import('../src/app/state/brief');
 const { UiProvider, useUi } = await import('../src/app/state/ui');
+const { FollowProvider } = await import('../src/app/state/follow-link');
 
 const fixture = (name: string) => JSON.parse(readFileSync(resolve(__dirname, 'fixtures', 'brief', `${name}.json`), 'utf8'));
 
@@ -103,12 +104,14 @@ function TabSwitch({ to }: { to: string }) {
 function tree(extra: React.ReactNode = null) {
   return (
     <UiProvider>
-      <BriefProvider>
-        <Ticker />
-        <BriefSidebarPanel />
-        <BriefSheet />
-        {extra}
-      </BriefProvider>
+      <FollowProvider>
+        <BriefProvider>
+          <Ticker />
+          <BriefSidebarPanel />
+          <BriefSheet />
+          {extra}
+        </BriefProvider>
+      </FollowProvider>
     </UiProvider>
   );
 }
