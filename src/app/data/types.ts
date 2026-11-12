@@ -146,8 +146,24 @@ export type StarlinkData = {
   servedFrom?: string;
 };
 
+/** One aircraft family inside a carrier's fleet-summary row ('E175', body 'regional'). */
+export type FleetSummaryFamily = {
+  family: string;
+  body: string;
+  installed: number;
+  total: number;
+  percentage: number;
+};
+
 export type FleetSummary = {
-  airlines: { code: string; name: string; installed: number; total: number; percentage: number }[];
+  airlines: {
+    code: string;
+    name: string;
+    installed: number;
+    total: number;
+    percentage: number;
+    families?: FleetSummaryFamily[];
+  }[];
 };
 
 /** One of the four `{actual, estimated, scheduled}` triples in `/api/flight-times`. */

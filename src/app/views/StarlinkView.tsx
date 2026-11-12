@@ -2,7 +2,7 @@
  * Starlink — the rollout, in the order a reader actually asks about it (inventory §22).
  *
  *   Hero              how many are equipped, right now.
- *   Velocity + pace   how fast that number is moving, and when Express finishes at this rate.
+ *   Velocity + pace   how fast that number is moving, beside United's own stated target.
  *   Industry          how that compares to everyone else.
  *   Departures board  which of them you could get on today.
  *   Roster            the database itself, down to one tail.
@@ -13,8 +13,8 @@
  *
  * ── What this file owns ──────────────────────────────────────────────────────────────────
  * State and derivation only. Every number comes from a tested module in `src/lib`:
- * `bucketInstallsByMonth` / `computeInstallPace` / `computeExpressEta` / `buildDeparturesBoard`
- * (starlink-utils),
+ * `bucketInstallsByMonth` / `computeInstallPace` / `buildDeparturesBoard` (starlink-utils),
+ * `UNITED_STARLINK_TARGET` (starlink-facts), `expressStarlinkScope` (starlink-roster),
  * `isRecentlyFound` / `getServedConflictTails` / `airborneByTail` / `boardCapPolicy` /
  * `formatFlightTime` (starlink-view), `buildVelocityChart` (starlink-chart) and the roster,
  * board-label and ledger helpers (starlink-roster).
@@ -38,6 +38,7 @@ import { scrollBehavior } from '@/lib/motion.js';
 import { buildVelocityChart } from '@/lib/starlink-chart.js';
 import {
   buildIndustryRows,
+  expressStarlinkScope,
   filterRoster,
   latestScheduledDepartureTs,
   ledgerHasData,
@@ -50,10 +51,10 @@ import {
   starlinkScheduleFreshness,
   starlinkSourceFreshness,
 } from '@/lib/starlink-roster.js';
+import { UNITED_STARLINK_TARGET } from '@/lib/starlink-facts.js';
 import {
   bucketInstallsByMonth,
   buildDeparturesBoard,
-  computeExpressEta,
   computeInstallPace,
 } from '@/lib/starlink-utils.js';
 import {
@@ -95,7 +96,6 @@ import type {
 
 const HUB_CODES: string[] = HUB_ORDER as string[];
 const LEDGER_ID = 'sl-verification';
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 /** How often the board's clock advances. The feed polls at the same cadence. */
 const TICK_MS = 30000;
@@ -233,11 +233,28 @@ export default function StarlinkView() {
       } | null,
     [starlink.stats, fleetDb, starlink.tails],
   );
-  const bars = useMemo(
-    () => rolloutBars(starlink.stats, mainlineShare) as RolloutBar[] | null,
-    [starlink.stats, mainlineShare],
+  // The Express bar is the two-cabin regional fleet, both numbers from ONE fleet-summary snapshot
+  // (the payload the industry strip reads). Null while that endpoint is down: the row then shows
+  // the tracker's equipped count with no bar, never a share of the tracker's own Express total.
+  const expressScope = useMemo(
+    () =>
+      expressStarlinkScope(fleetSummary?.airlines ?? null) as {
+        installed: number;
+        total: number;
+        pct: number;
+        leftOut: number;
+        leftOutFamilies: string[];
+      } | null,
+    [fleetSummary],
   );
-  const barsNote = useMemo(() => rolloutBarsNote(mainlineShare) as string, [mainlineShare]);
+  const bars = useMemo(
+    () => rolloutBars(starlink.stats, mainlineShare, expressScope) as RolloutBar[] | null,
+    [starlink.stats, mainlineShare, expressScope],
+  );
+  const barsNote = useMemo(
+    () => rolloutBarsNote(mainlineShare, expressScope) as string,
+    [mainlineShare, expressScope],
+  );
   const newTails = useMemo(() => {
     const set = new Set<string>();
     for (const a of aircraft) if (isRecentlyFound(a.dateFound, nowMs)) set.add(a.tail);
@@ -251,38 +268,22 @@ export default function StarlinkView() {
   }, [aircraft, nowMs]);
 
   const pace = useMemo<PaceModel>(() => {
-    const stats = starlink.stats;
-    // Express remaining only. Much of the mainline widebody fleet is ageing out and may never
-    // be equipped, so counting it would produce a completion date nobody has committed to.
-    const expressRemaining =
-      stats && stats.expressTotal && stats.express != null
-        ? Math.max(0, stats.expressTotal - stats.express)
-        : null;
-    type Pace = { pace: number; paceWeeks: number; dated: number; etaDate: Date | null };
-    // The "~N/wk" tile is the whole fleet's pace. The ETA divides the EXPRESS backlog by the
-    // EXPRESS pace (F94): whole-fleet pace is mostly mainline, and 157 Express aircraft at
-    // ~13/wk said "Dec '26" when the Express rate (~1/wk) puts it years out.
+    type Pace = { pace: number; paceWeeks: number; dated: number };
+    // The "~N/wk" tile is the whole fleet's pace.
     const model = computeInstallPace(aircraft, new Date(nowMs)) as Pace;
     // The static fallback roster carries no dateFound at all — the same guard the chart uses.
     if (model.dated === 0) return null;
-    model.etaDate = (
-      computeExpressEta(aircraft, new Date(nowMs), expressRemaining) as { etaDate: Date | null }
-    ).etaDate;
     const paceStr =
       model.pace >= 10 ? String(Math.round(model.pace)) : String(Math.round(model.pace * 10) / 10);
     return {
       pace: model.pace > 0 ? `~${paceStr}` : '—',
       paceNote: model.paceWeeks > 0 ? `${model.paceWeeks}-wk trailing pace` : 'no complete weeks',
-      eta: model.etaDate
-        ? `~${MONTHS[model.etaDate.getUTCMonth()]} '${String(model.etaDate.getUTCFullYear()).slice(2)}`
-        : '—',
-      etaNote: model.etaDate
-        ? 'Express · at current pace'
-        : expressRemaining == null
-          ? 'Express fleet n/a'
-          : 'pace too low',
+      // United's own stated target, not a date of ours (Nov 12 2026). The tile used to divide the
+      // Express backlog by the Express pace and print "~Sep '31"; 145 of that backlog were
+      // single-cabin jets outside United's stated plan, and the date contradicted United's.
+      target: UNITED_STARLINK_TARGET,
     };
-  }, [aircraft, starlink.stats, nowMs]);
+  }, [aircraft, nowMs]);
 
   // ── Industry strip ─────────────────────────────────────────────────────────────────────
   const industry = useMemo(

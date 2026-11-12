@@ -11,7 +11,9 @@
  * The rollout bars are hidden whole in the degraded tier: the static fallback roster carries
  * no fleet denominators, so a percentage there would be a guess wearing a ruler. The Mainline
  * bar is the Fleet tab's `starlinkMainlineShare()`, and the line under the bars names each
- * bar's denominator (D15) — Mainline is our fleet database, Express the tracker's count.
+ * bar's denominator (D15) — Mainline is our fleet database, Express the two-cabin regional jets
+ * in the tracker's fleet-summary (`expressStarlinkScope()`). Without that summary the Express
+ * row prints its equipped count and draws no bar: it has no denominator it may use.
  *
  * "● N AIRBORNE NOW" is a real button, not a decorated span — it navigates to the Live tab
  * with the Starlink map filter enabled, and only when that filter can actually be enabled.
@@ -20,8 +22,10 @@
 import { memo } from 'react';
 
 import { Card } from '@/components/ui/card';
+import { rolloutBarFigure } from '@/lib/starlink-roster.js';
 
-export type RolloutBar = { label: string; installed: number; total: number; pct: number };
+/** `total` and `pct` are null on a row with no denominator: it prints its count and no bar. */
+export type RolloutBar = { label: string; installed: number; total: number | null; pct: number | null };
 
 /**
  * One shape for all three chips. The airborne chip is a button and takes the 44 px touch floor,
@@ -93,16 +97,21 @@ export const SlHero = memo(function SlHero({
         {bars ? (
           <div className="w-full max-w-md space-y-2 lg:max-w-2xl lg:flex-1" id="sl-bars">
             {bars.map((bar) => (
-              <div key={bar.label} className="flex items-center gap-2">
+              <div key={bar.label} className="flex items-center gap-2" data-bar={bar.label}>
                 <span className="w-16 shrink-0 text-[11px] text-muted-foreground">{bar.label}</span>
-                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={`h-full rounded-full ${bar.label === 'Express' ? 'bg-bb-ok' : 'bg-primary'}`}
-                    style={{ width: `${Math.max(0, Math.min(100, bar.pct))}%` }}
-                  />
-                </div>
+                {bar.pct != null && bar.total != null ? (
+                  <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full ${bar.label === 'Express' ? 'bg-bb-ok' : 'bg-primary'}`}
+                      style={{ width: `${Math.max(0, Math.min(100, bar.pct))}%` }}
+                    />
+                  </div>
+                ) : (
+                  // No denominator, no track: an empty track would read as 0%.
+                  <div aria-hidden="true" className="min-w-0 flex-1" />
+                )}
                 <span className="w-28 shrink-0 text-right font-mono text-[11px] tabular-nums">
-                  {bar.installed} / {bar.total} · {bar.pct}%
+                  {rolloutBarFigure(bar)}
                 </span>
               </div>
             ))}

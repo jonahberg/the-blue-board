@@ -1,13 +1,16 @@
 // Thin proxy for the upstream industry fleet-summary endpoint.
 // Wraps unitedstarlinktracker.com/api/fleet-summary and serves its
-// { airlines: [{ code, name, installed, total, percentage }], generatedAt }
-// payload to the dashboard's "Starlink coverage by airline" strip.
+// { airlines: [{ code, name, installed, total, percentage, families }], generatedAt }
+// payload to the dashboard. It feeds the Starlink tab's industry coverage strip and, since
+// Nov 12 2026, the Express share (the UA row's two-cabin regional families,
+// `expressStarlinkScope()`): the Starlink tab's Express bar and the Fleet tab's "Express Fleet" chip.
 //
 // Cloned from api/check-flight.ts minus the flight-number normalization: this
 // endpoint takes no parameters. GET-only, origin-locked to theblueboard.co /
 // localhost, IP rate-limited, ~4s upstream abort, and a single shared 5-minute
 // positive cache that matches upstream's max-age=300. On any failure it returns
-// 502 — the client treats a non-200 as "no data" and simply hides the strip.
+// 502 — the client treats a non-200 as "no data": the strip is hidden, the Express bar falls back
+// to the tracker's equipped count with no bar or percentage, and the "Express Fleet" chip is not shown.
 
 import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';

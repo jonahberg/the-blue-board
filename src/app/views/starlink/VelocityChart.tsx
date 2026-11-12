@@ -11,8 +11,9 @@
  *  - the OUTLIER CAP. `dateFound` is a detection date, and one 117-aircraft tracker catch-up
  *    batch on 2025-12-03 would otherwise flatten every real month into a sliver. The capped
  *    bar keeps a zig-zag break, an `N*` label and a footnote saying exactly what was cut.
- *  - the ETA's denominator is EXPRESS REMAINING ONLY. Much of the mainline widebody fleet is
- *    ageing out and may never be equipped; counting it would produce a date nobody means.
+ *  - NO COMPLETION DATE OF OURS. The second tile is United's own stated target
+ *    (`UNITED_STARLINK_TARGET` in `src/lib/starlink-facts.js`). It used to divide the Express
+ *    backlog by the Express pace and print "~Sep '31" against United's "end of 2027" (Nov 2026).
  *
  * A chart is an image to a screen reader, so `role="img"` carries the headline and the full
  * month-by-month series follows as a visually-hidden table — the same data, linearised.
@@ -59,8 +60,8 @@ export type PaceModel = {
   /** Trailing weekly pace, already rounded for display; null hides the caption. */
   pace: string;
   paceNote: string;
-  eta: string;
-  etaNote: string;
+  /** United's stated target (`UNITED_STARLINK_TARGET`), printed as given: no date of ours. */
+  target: { label: string; value: string; note: string };
 } | null;
 
 export const VelocityChart = memo(function VelocityChart({
@@ -344,17 +345,14 @@ export const VelocityChart = memo(function VelocityChart({
           </div>
           <div>
             <p className="text-[10px] tracking-wider text-muted-foreground uppercase">
-              Express · 100% ETA
+              {pace.target.label}
             </p>
-            <p
-              className="font-mono text-lg font-semibold tabular-nums"
-              id="sl-trend-eta"
-              style={{ color: STARLINK_CHART_COLORS.cumulative }}
-            >
-              {pace.eta}
+            {/* Body colour: a stated fact, not a status, and no longer read off the cumulative line. */}
+            <p className="font-mono text-lg font-semibold tabular-nums" id="sl-target">
+              {pace.target.value}
             </p>
-            <p className="text-[10px] text-muted-foreground" id="sl-trend-eta-note">
-              {pace.etaNote}
+            <p className="text-[10px] text-muted-foreground" id="sl-target-note">
+              {pace.target.note}
             </p>
           </div>
         </div>

@@ -54,6 +54,7 @@ import {
 import { isAirborne } from '@/lib/live-stats.js';
 import { scrollBehavior } from '@/lib/motion.js';
 import { listSpecialLiveries } from '@/lib/special-livery.js';
+import { expressStarlinkScope } from '@/lib/starlink-roster.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { ExpressAircraft, FleetAircraft } from '../data/types';
 import { readFleetDeepLinks } from '../state/deep-links';
@@ -87,8 +88,18 @@ type SubView = 'all' | 'airborne' | 'special' | 'express';
 const DEEP_LINK_TIMEOUT_MS = 10000;
 
 export default function FleetView() {
-  const { fleetDb, fleetByReg, starlink, special, loading, loadFailed, retry, expressDb, expressStatus } =
-    useFleet();
+  const {
+    fleetDb,
+    fleetByReg,
+    starlink,
+    fleetSummary,
+    special,
+    loading,
+    loadFailed,
+    retry,
+    expressDb,
+    expressStatus,
+  } = useFleet();
   const { flights, lastGoodTs } = useFeed();
   const { openAircraft, setTab } = useUi();
 
@@ -173,13 +184,20 @@ export default function FleetView() {
     [starlink.stats, fleetDb, starlink.tails],
   );
 
+  // ONE Express % for the "Express Fleet" chip and the Starlink tab's Express bar (Nov 12 2026):
+  // the two-cabin regional jets in the fleet-summary payload, see expressStarlinkScope. Without
+  // that payload there is no chip: the tracker's expressTotal / expressPct (69% of 513 on Nov 12,
+  // beside 96% on the Starlink tab) counts single-cabin jets and is never printed as a share.
+  const expressScope = useMemo(
+    () => expressStarlinkScope(fleetSummary?.airlines ?? null) as { pct: number } | null,
+    [fleetSummary],
+  );
+
   const chips = useMemo<StarlinkChip[]>(() => {
     const stats = starlink.stats;
     if (!stats) return [];
     const mainlinePct = starlinkShare ? starlinkShare.pct : null;
-    const expressPct =
-      stats.expressPct ??
-      (stats.expressTotal ? Math.round((stats.express / stats.expressTotal) * 100) : null);
+    const expressPct = expressScope ? expressScope.pct : null;
     const newThisWeek = starlink.aircraft.filter((a) => isRecentlyFound(a.dateFound)).length;
     const rows: StarlinkChip[] = [
       { label: 'Total', value: String(stats.total), tone: 'ok' },
@@ -194,7 +212,7 @@ export default function FleetView() {
     }
     if (newThisWeek > 0) rows.push({ label: 'New (7d)', value: `+${newThisWeek}`, tone: 'new' });
     return rows;
-  }, [starlink.stats, starlink.aircraft, starlinkShare]);
+  }, [starlink.stats, starlink.aircraft, starlinkShare, expressScope]);
 
   // ── Zone 3: the three panels ────────────────────────────────────────────────────────
   const filtersActive = Boolean(typeFilter || wifiFilter || statusFilter || search);
