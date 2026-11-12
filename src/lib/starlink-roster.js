@@ -257,14 +257,61 @@ export function formatVerifyDate(iso) {
   return new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// ── Alaska + Hawaiian, one row (Nov 12 2026) ──
+// The tracker lists Alaska (AS) and Hawaiian (HA) as two carriers. They are one airline now:
+// a single operating certificate since Oct 29 2025 (Alaska newsroom), and every flight has carried
+// the AS code since Apr 22 2026, while the Hawaiian brand continues. The strip prints them as one
+// row, summed from their counts.
+
+/** The merged row's printed code; it fits the strip's `w-10` code column. */
+export const ALASKA_HAWAIIAN_CODE = 'AS+HA';
+/** The merged row's accessible and hover name. */
+export const ALASKA_HAWAIIAN_NAME = 'Alaska Airlines + Hawaiian Airlines';
+/** The footnote sentence printed only while the merged row is on the strip. */
+export const INDUSTRY_ALASKA_HAWAIIAN_NOTE =
+  'Alaska includes Hawaiian, which flies under the Alaska code since April 2026.';
+/** The strip's title, and its title when it compares exactly United with the merged Alaska row. */
+export const INDUSTRY_TITLE = 'Industry · Starlink Coverage';
+export const INDUSTRY_TITLE_UNITED_VS_ALASKA = 'Starlink Coverage · United vs Alaska';
+
+const industryRow = (code, name, installed, total, p) => ({
+  code,
+  name,
+  isUA: code === 'UA',
+  pct: Math.round(p),
+  width: Math.max(0, Math.min(100, p)),
+  installed,
+  total,
+  raw: p,
+});
+
 /**
- * The industry coverage strip's rows, sorted best-covered first.
+ * One AS+HA row in place of the AS and HA rows: installed and total SUMMED and the percentage
+ * recomputed from them (never an average of two percentages). Left as two rows unless both carry
+ * a finite installed count and a total above zero; one of the two alone is left as it is.
+ */
+function mergeAlaskaHawaiian(rows) {
+  const as = rows.find((r) => r.code === 'AS');
+  const ha = rows.find((r) => r.code === 'HA');
+  const usable = (r) => r && r.installed != null && r.total != null && r.total > 0;
+  if (!usable(as) || !usable(ha)) return rows;
+  const installed = as.installed + ha.installed;
+  const total = as.total + ha.total;
+  const merged = industryRow(ALASKA_HAWAIIAN_CODE, ALASKA_HAWAIIAN_NAME, installed, total, (installed / total) * 100);
+  return [...rows.filter((r) => r !== as && r !== ha), merged];
+}
+
+/**
+ * The industry coverage strip's rows, sorted best-covered first, with Alaska and Hawaiian as one
+ * row (`mergeAlaskaHawaiian`).
  *
- * Returns null — meaning "render nothing" — unless EVERY row has a finite percentage. A
- * partial strip would rank carriers against each other on data we only have for some of them,
- * which is the one thing a comparison bar chart must never do.
+ * Returns null — meaning "render nothing" — unless EVERY row the tracker sent has a finite
+ * percentage, checked before any merge. A partial strip would rank carriers against each other
+ * on data we only have for some of them, which is the one thing a comparison bar chart must
+ * never do.
  *
  * @param {Array<{code?:string,name?:string,installed?:number,total?:number,percentage?:number|string}>|null|undefined} airlines
+ * @returns {Array<{code:string,name:string|null,isUA:boolean,pct:number,width:number,installed:number|null,total:number|null,raw:number}>|null}
  */
 export function buildIndustryRows(airlines) {
   if (!Array.isArray(airlines) || airlines.length === 0) return null;
@@ -272,19 +319,104 @@ export function buildIndustryRows(airlines) {
     if (!r || r.percentage == null || r.percentage === '') return null;
     const p = typeof r.percentage === 'string' ? parseFloat(r.percentage) : Number(r.percentage);
     if (!Number.isFinite(p)) return null;
-    const code = String(r.code || '').toUpperCase();
-    return {
-      code,
-      isUA: code === 'UA',
-      pct: Math.round(p),
-      width: Math.max(0, Math.min(100, p)),
-      installed: Number.isFinite(Number(r.installed)) ? Number(r.installed) : null,
-      total: Number.isFinite(Number(r.total)) ? Number(r.total) : null,
-      raw: p,
-    };
+    const count = (v) => (v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
+    const name = String(r.name || '').trim() || null;
+    return industryRow(String(r.code || '').toUpperCase(), name, count(r.installed), count(r.total), p);
   });
   if (parsed.some((r) => r === null)) return null;
-  return parsed.sort((a, b) => b.raw - a.raw);
+  return mergeAlaskaHawaiian(parsed).sort((a, b) => b.raw - a.raw);
+}
+
+/**
+ * The strip's title and the extra footnote sentence for these rows. The title names the two
+ * airlines only when the rows are exactly United and the merged Alaska row; the Hawaiian sentence
+ * appears only while the merged row does (it would be false beside a lone HA row).
+ * @param {Array<{code: string}>|null|undefined} rows  `buildIndustryRows()` output.
+ * @returns {{title: string, note: string|null}}
+ */
+export function industryStripCopy(rows) {
+  const codes = (rows || []).map((r) => r.code);
+  const merged = codes.includes(ALASKA_HAWAIIAN_CODE);
+  const unitedVsAlaska = codes.length === 2 && merged && codes.includes('UA');
+  return {
+    title: unitedVsAlaska ? INDUSTRY_TITLE_UNITED_VS_ALASKA : INDUSTRY_TITLE,
+    note: merged ? INDUSTRY_ALASKA_HAWAIIAN_NOTE : null,
+  };
+}
+
+// ── What the Express bar counts (Nov 12 2026) ──
+// The bar read "Express 355 / 513 · 69%", and the velocity card divided the 158 "remaining" by the
+// Express install pace to print "~Sep '31". 145 of those 158 were single-cabin 50-seaters: the
+// tracker's `fleetStats.expressTotal` (513) is every United Express airframe, and United's stated
+// plan is for its dual-cabin planes. The bar now counts the two-cabin regional fleet, and both of
+// its numbers come from one snapshot: the UA row's regional families in the tracker's
+// fleet-summary, the payload the industry strip already reads.
+
+/**
+ * United Express families the Express bar leaves out: the single-cabin 50-seat regional jets.
+ *
+ * Why: United's stated plan covers its dual-cabin planes. Its Mar 24 2026 release says Starlink
+ * is "expected… to be onboard all United dual-cabin planes by the end of 2027". United has NOT
+ * said the single-cabin jets will go without; the "not receiving" label for the CRJ-200 and
+ * E145 is The Points Guy's table (Mar 31 2025), not United's. On 2026-11-12 the tracker's
+ * fleet-summary listed none of them fitted (CRJ-200 0 of 90, ERJ-145 0 of 55). Checked 2026-11-12.
+ *
+ * Named on purpose, never inferred from "no installs yet": the two-cabin E170s and CRJ-700s (none
+ * fitted on that date) stay in the denominator, and a CRJ-200 converted to the two-cabin CRJ-450
+ * gets Starlink and counts as soon as the tracker lists it as a CRJ-450. Matched by name with
+ * case, spaces and hyphens ignored ('CRJ200').
+ */
+export const EXPRESS_FAMILIES_LEFT_OUT = Object.freeze(['CRJ-200', 'ERJ-145']);
+
+const familyKey = (name) => String(name ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const LEFT_OUT_KEYS = new Set(EXPRESS_FAMILIES_LEFT_OUT.map(familyKey));
+
+/** A whole, non-negative count from the payload, or NaN (null and '' are not zero). */
+const countOf = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
+
+/**
+ * The Express rollout from ONE snapshot: the UA row's `body: 'regional'` families in the
+ * tracker's fleet-summary, less the named single-cabin families.
+ *
+ * The percentage is computed from the summed counts, never from the families' own `percentage`
+ * fields. Null, and the Express row then shows its equipped count with no bar, when there is no
+ * UA row, no regional family, a regional family with an unusable count (a partial sum would print
+ * a wrong share), or no two-cabin aircraft at all.
+ *
+ * @param {Array<{code?: string, families?: Array<{family?: string, body?: string, installed?: number, total?: number}>}>|null|undefined} airlines
+ *   `/api/fleet-summary`'s `airlines`.
+ * @returns {{installed: number, total: number, pct: number, leftOut: number, leftOutFamilies: string[]}|null}
+ *   leftOut: aircraft in the named single-cabin families, from the same payload;
+ *   leftOutFamilies: those of the named families the payload lists with any aircraft, in the
+ *   constant's order and spelling.
+ */
+export function expressStarlinkScope(airlines) {
+  if (!Array.isArray(airlines)) return null;
+  const ua = airlines.find((a) => String(a?.code || '').toUpperCase() === 'UA');
+  const regional = (Array.isArray(ua?.families) ? ua.families : []).filter(
+    (f) => String(f?.body || '').toLowerCase() === 'regional',
+  );
+  if (regional.length === 0) return null;
+  let installed = 0;
+  let total = 0;
+  let leftOut = 0;
+  const listed = new Set();
+  for (const f of regional) {
+    const i = countOf(f.installed);
+    const t = countOf(f.total);
+    if (!Number.isInteger(i) || !Number.isInteger(t) || i < 0 || t < 0 || i > t) return null;
+    const key = familyKey(f.family);
+    if (LEFT_OUT_KEYS.has(key)) {
+      leftOut += t;
+      if (t > 0) listed.add(key);
+    } else {
+      installed += i;
+      total += t;
+    }
+  }
+  if (!(total > 0)) return null;
+  const leftOutFamilies = EXPRESS_FAMILIES_LEFT_OUT.filter((name) => listed.has(familyKey(name)));
+  return { installed, total, pct: Math.round((installed / total) * 100), leftOut, leftOutFamilies };
 }
 
 /**
@@ -292,26 +424,40 @@ export function buildIndustryRows(airlines) {
  *
  * The Mainline bar is `starlinkMainlineShare()` — the same count, denominator and percentage
  * the Fleet tab's ring prints — so the two tabs cannot quote different mainline totals (they
- * did: "Mainline 261 / 1161" here beside 1,139 on Fleet and Stats). Express is the tracker's
- * count: we keep no Express database.
+ * did: "Mainline 261 / 1161" here beside 1,139 on Fleet and Stats).
  *
- * Returns null in the degraded tier: the static fallback roster carries no fleet
- * denominators, and a percentage bar with a guessed denominator is a lie with a ruler on it.
+ * The Express bar is `expressStarlinkScope()`: the two-cabin regional fleet, numerator and
+ * denominator from one fleet-summary snapshot. Without it (the endpoint answers 502 while the
+ * tracker is down) the Express row is the tracker's equipped count alone, with `total` and `pct`
+ * null and no bar. The tracker's `expressTotal` / `expressPct` are not read at all: that
+ * denominator counts the single-cabin jets and must never make a percentage again.
  *
- * @param {{express?: number, expressTotal?: number, expressPct?: number}|null|undefined} stats
+ * Returns null in the degraded tier: the static fallback roster carries no fleet stats, and a
+ * percentage bar with a guessed denominator is a lie with a ruler on it.
+ *
+ * @param {{express?: number}|null|undefined} stats  the served `fleetStats`.
  * @param {{count: number, total: number, pct: number}|null|undefined} mainlineShare
+ * @param {{installed: number, total: number, pct: number}|null|undefined} [expressScope]
+ * @returns {Array<{label: string, installed: number, total: number|null, pct: number|null}>|null}
  */
-export function rolloutBars(stats, mainlineShare) {
-  if (!stats || !stats.expressTotal || !mainlineShare || !(mainlineShare.total > 0)) return null;
-  const pct = (value, total, given) =>
-    given != null ? given : Math.round((value / total) * 100);
-  return [
-    {
+export function rolloutBars(stats, mainlineShare, expressScope = null) {
+  if (!stats || !mainlineShare || !(mainlineShare.total > 0)) return null;
+  const equipped = countOf(stats.express);
+  let express;
+  if (expressScope && expressScope.total > 0) {
+    express = {
       label: 'Express',
-      installed: stats.express,
-      total: stats.expressTotal,
-      pct: pct(stats.express, stats.expressTotal, stats.expressPct),
-    },
+      installed: expressScope.installed,
+      total: expressScope.total,
+      pct: expressScope.pct,
+    };
+  } else if (Number.isFinite(equipped)) {
+    express = { label: 'Express', installed: equipped, total: null, pct: null };
+  } else {
+    return null;
+  }
+  return [
+    express,
     {
       label: 'Mainline',
       installed: mainlineShare.count,
@@ -322,15 +468,54 @@ export function rolloutBars(stats, mainlineShare) {
 }
 
 /**
- * The line under the rollout bars: whose denominator each bar is (D15, applied to this tab).
- *
- * @param {{count: number, total: number, source?: string}|null|undefined} mainlineShare
+ * The figure beside a rollout bar: "354 / 368 · 96%", or "355 equipped" when the row has no
+ * denominator (the Express row without a fleet-summary).
+ * @param {{installed: number, total: number|null, pct: number|null}} bar
  * @returns {string}
  */
-export function rolloutBarsNote(mainlineShare) {
+export function rolloutBarFigure(bar) {
+  if (bar.total == null || bar.pct == null) return `${bar.installed} equipped`;
+  return `${bar.installed} / ${bar.total} · ${bar.pct}%`;
+}
+
+/** "CRJ-200s and ERJ-145s": the left-out families the payload listed, so the sentence follows the data. */
+function leftOutNames(families) {
+  const names = (families && families.length ? families : EXPRESS_FAMILIES_LEFT_OUT).map((n) => `${n}s`);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+}
+
+/**
+ * The line under the rollout bars: whose denominator each bar is (D15, applied to this tab), and
+ * what the Express bar counts. It attributes to United only the dual-cabin plan United stated,
+ * and the number left out is the payload's, never a typed one.
+ *
+ *   "Mainline: 326 of 1,154 aircraft in our fleet database · Express: per the Starlink tracker.
+ *    Express counts two-cabin regional jets, the planes United has said will get Starlink. The 145
+ *    single-cabin CRJ-200s and ERJ-145s are left out."
+ *   "Mainline: 326 of 1,154 aircraft in our fleet database · Express: equipped count per the
+ *    Starlink tracker"                                                   (no fleet-summary)
+ *
+ * @param {{count: number, total: number, source?: string}|null|undefined} mainlineShare
+ * @param {{leftOut: number, leftOutFamilies?: string[]}|null|undefined} [expressScope]
+ * @returns {string}
+ */
+export function rolloutBarsNote(mainlineShare, expressScope = null) {
   if (!mainlineShare) return '';
-  if (mainlineShare.source === 'tracker') return 'Mainline and Express: per the Starlink tracker';
-  return `Mainline: ${starlinkShareCaption(mainlineShare)} · Express: per the Starlink tracker`;
+  const tracker = mainlineShare.source === 'tracker';
+  if (!expressScope) {
+    return tracker
+      ? 'Mainline and Express: per the Starlink tracker'
+      : `Mainline: ${starlinkShareCaption(mainlineShare)} · Express: equipped count per the Starlink tracker`;
+  }
+  const sources = tracker
+    ? 'Mainline and Express: per the Starlink tracker'
+    : `Mainline: ${starlinkShareCaption(mainlineShare)} · Express: per the Starlink tracker`;
+  const counts = 'Express counts two-cabin regional jets, the planes United has said will get Starlink.';
+  const left = Number(expressScope.leftOut) || 0;
+  const leftOut = left > 0
+    ? ` The ${left.toLocaleString('en-US')} single-cabin ${leftOutNames(expressScope.leftOutFamilies)} are left out.`
+    : '';
+  return `${sources}. ${counts}${leftOut}`;
 }
 
 /**

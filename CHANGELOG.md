@@ -4,6 +4,16 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.28.2] - 2026-11-12
+
+**The Starlink tab: what the Express bar counts, United's own target, and Alaska with Hawaiian.**
+
+### Fixed
+- **"Express 355 / 513 · 69%".** The Express bar counted every United Express jet, including 145 single-cabin CRJ-200s and ERJ-145s. United's stated plan is Starlink on its dual-cabin planes, so the bar now counts the two-cabin regional jets: 354 of 368, 96%, on November 12. Both numbers come from the same snapshot of the Starlink tracker, and the line under the bars says what Express counts and how many single-cabin jets are left out. When that snapshot is unavailable, the Express row shows how many aircraft are equipped, with no bar and no percentage.
+- **"Express Fleet 69%" on the Fleet tab** beside 96% on the Starlink tab. The chip now shows the same two-cabin share as the Starlink tab's Express bar, from the same snapshot, and is left out when that snapshot is unavailable.
+- **"Express · 100% ETA ~Sep '31".** The tile divided the Express jets still to be fitted by the Express install pace, and 145 of those 158 were the single-cabin jets. It now shows United's own target: "End of 2027", fleet-wide, as United stated on October 20. The site no longer works out a completion date of its own.
+- **Alaska and Hawaiian are one airline.** The coverage card listed them separately. They are now one row, "AS+HA", with their counts added together (147 of 418, 35%), and the card is titled "Starlink Coverage · United vs Alaska" when those are its only two rows. If the tracker sends only one of them, it is shown on its own as before.
+
 ## [1.28.1] - 2026-11-11
 
 **The "Right now" brief, after an evening of reading it.**

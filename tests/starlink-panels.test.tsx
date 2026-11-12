@@ -231,3 +231,26 @@ describe('VelocityChart', () => {
     }
   });
 });
+
+describe("VelocityChart target tile (Nov 12 2026: United's target, not a date of ours)", () => {
+  it("prints United's stated target from the constant beside the pace tile", async () => {
+    const { buildVelocityChart } = await import('../src/lib/starlink-chart.js');
+    const { UNITED_STARLINK_TARGET } = await import('../src/lib/starlink-facts.js');
+    const { VelocityChart } = await import('../src/app/views/starlink/VelocityChart');
+    const months = [{ ym: '2026-11', label: 'NOV 26', express: 1, mainline: 2, total: 3, cumulative: 3 }];
+    render(
+      <VelocityChart
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        model={buildVelocityChart(months, 0) as any}
+        pace={{ pace: '~13', paceNote: '8-wk trailing pace', target: UNITED_STARLINK_TARGET }}
+      />,
+    );
+    const stats = document.getElementById('sl-velo-stats') as HTMLElement;
+    expect(stats.textContent).toContain("United's target");
+    expect(document.getElementById('sl-target')?.textContent).toBe('End of 2027');
+    expect(document.getElementById('sl-target-note')?.textContent).toBe('fleet-wide · stated Oct 20, 2026');
+    expect(stats.textContent).not.toMatch(/ETA|at current pace/);
+    // The pace tile is unchanged.
+    expect(document.getElementById('sl-trend-pace')?.textContent).toBe('~13');
+  });
+});

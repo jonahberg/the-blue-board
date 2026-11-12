@@ -1,8 +1,19 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, it, expect } from 'vitest';
 
 import {
+  ALASKA_HAWAIIAN_CODE,
   buildIndustryRows,
+  INDUSTRY_ALASKA_HAWAIIAN_NOTE,
+  INDUSTRY_TITLE,
+  INDUSTRY_TITLE_UNITED_VS_ALASKA,
+  industryStripCopy,
   daysSinceFound,
+  EXPRESS_FAMILIES_LEFT_OUT,
+  expressStarlinkScope,
+  rolloutBarFigure,
   filterRoster,
   formatVerifyDate,
   freshnessAgo,
@@ -236,49 +247,265 @@ describe('buildIndustryRows', () => {
   });
 });
 
+describe('buildIndustryRows: Alaska + Hawaiian are one row (Nov 12 2026)', () => {
+  const UA = { code: 'UA', name: 'United Airlines', installed: 684, total: 1681, percentage: 40.7 };
+  const HA = { code: 'HA', name: 'Hawaiian Airlines', installed: 42, total: 64, percentage: 65.6 };
+  const AS = { code: 'AS', name: 'Alaska Airlines', installed: 105, total: 354, percentage: 29.7 };
+  const line = (r) => `${r.code} ${r.installed}/${r.total} ${r.pct}%`;
+
+  it('reads the live Nov 12 payload as UA 684/1681 and AS+HA 147/418 · 35%', () => {
+    const rows = buildIndustryRows(FLEET_SUMMARY_NOV12.airlines);
+    expect(rows.map(line)).toEqual(['UA 684/1681 41%', 'AS+HA 147/418 35%']);
+    expect(rows[1].name).toBe('Alaska Airlines + Hawaiian Airlines');
+    expect(rows[1].isUA).toBe(false);
+    expect(rows[0].name).toBe('United Airlines');
+  });
+
+  it('SUMS installed and total and recomputes the share, never averaging percentages', () => {
+    const merged = buildIndustryRows([UA, HA, AS]).find((r) => r.code === ALASKA_HAWAIIAN_CODE);
+    expect(merged.installed).toBe(147);
+    expect(merged.total).toBe(418);
+    expect(merged.raw).toBeCloseTo((147 / 418) * 100, 10);
+    expect(merged.pct).toBe(35);
+    // The average of 65.6 and 29.7 would print 48%.
+    expect(merged.pct).not.toBe(Math.round((65.6 + 29.7) / 2));
+    // ...and its own percentage, not the sent ones, decides where it sorts.
+    const rows = buildIndustryRows([{ code: 'XX', installed: 36, total: 100, percentage: 36 }, HA, AS]);
+    expect(rows.map((r) => r.code)).toEqual(['XX', 'AS+HA']);
+  });
+
+  it('prints one of the two alone as its own row, unchanged', () => {
+    expect(buildIndustryRows([UA, AS]).map(line)).toEqual(['UA 684/1681 41%', 'AS 105/354 30%']);
+    expect(buildIndustryRows([UA, HA]).map(line)).toEqual(['HA 42/64 66%', 'UA 684/1681 41%']);
+  });
+
+  it('leaves them as two rows when either has no counts to sum', () => {
+    const noCounts = { code: 'HA', name: 'Hawaiian Airlines', percentage: 65.6 };
+    expect(buildIndustryRows([UA, noCounts, AS]).map((r) => r.code)).toEqual(['HA', 'UA', 'AS']);
+    const zeroTotal = { ...HA, installed: 0, total: 0, percentage: 0 };
+    expect(buildIndustryRows([UA, zeroTotal, AS]).map((r) => r.code)).toEqual(['UA', 'AS', 'HA']);
+  });
+
+  it('still renders nothing when any carrier lacks a percentage, checked before the merge', () => {
+    expect(buildIndustryRows([UA, { ...HA, percentage: null }, AS])).toBeNull();
+    expect(buildIndustryRows([UA, HA, { ...AS, percentage: 'n/a' }])).toBeNull();
+  });
+});
+
+describe('industryStripCopy', () => {
+  const rows = (...codes) => codes.map((code) => ({ code }));
+
+  it('names United vs Alaska only when the rows are exactly United and the merged Alaska row', () => {
+    expect(industryStripCopy(buildIndustryRows(FLEET_SUMMARY_NOV12.airlines))).toEqual({
+      title: 'Starlink Coverage · United vs Alaska',
+      note: 'Alaska includes Hawaiian, which flies under the Alaska code since April 2026.',
+    });
+    expect(industryStripCopy(rows('AS+HA', 'UA')).title).toBe(INDUSTRY_TITLE_UNITED_VS_ALASKA);
+  });
+
+  it('keeps the industry title for any other set of rows', () => {
+    expect(industryStripCopy(rows('UA', 'AS')).title).toBe('Industry · Starlink Coverage');
+    expect(industryStripCopy(rows('UA', 'AS', 'HA')).title).toBe(INDUSTRY_TITLE);
+    expect(industryStripCopy(rows('UA', 'AS+HA', 'DL')).title).toBe(INDUSTRY_TITLE);
+    expect(industryStripCopy(rows('AS+HA', 'DL')).title).toBe(INDUSTRY_TITLE);
+    expect(industryStripCopy(rows('UA')).title).toBe(INDUSTRY_TITLE);
+    expect(industryStripCopy(null).title).toBe(INDUSTRY_TITLE);
+  });
+
+  it('adds the Hawaiian sentence only while the merged row is on the strip', () => {
+    expect(industryStripCopy(rows('UA', 'AS+HA', 'DL')).note).toBe(INDUSTRY_ALASKA_HAWAIIAN_NOTE);
+    expect(industryStripCopy(rows('UA', 'HA')).note).toBeNull();
+    expect(industryStripCopy(rows('UA', 'AS')).note).toBeNull();
+  });
+});
+
+// The tracker's /api/fleet-summary as it answered on 2026-11-12 (UA regional families: E175 252/252,
+// CRJ-550 102/104, CRJ-200 0/90, ERJ-145 0/55, E170 0/8, CRJ-700 0/4).
+const FLEET_SUMMARY_NOV12 = JSON.parse(
+  readFileSync(resolve(process.cwd(), 'tests/fixtures/fleet-summary-2026-11-12.json'), 'utf8'),
+);
+
+/** A fleet-summary with one UA row holding these families (regional unless `body` says otherwise). */
+const summaryWith = (families) => [
+  {
+    code: 'UA',
+    name: 'United Airlines',
+    installed: 0,
+    total: 0,
+    percentage: 0,
+    families: families.map(([family, installed, total, body = 'regional']) => ({
+      family, body, installed, total, percentage: 0,
+    })),
+  },
+];
+
+describe('EXPRESS_FAMILIES_LEFT_OUT', () => {
+  it('names exactly the two single-cabin 50-seaters', () => {
+    expect([...EXPRESS_FAMILIES_LEFT_OUT]).toEqual(['CRJ-200', 'ERJ-145']);
+    expect(Object.isFrozen(EXPRESS_FAMILIES_LEFT_OUT)).toBe(true);
+  });
+});
+
+describe('expressStarlinkScope (Nov 12 2026: Express counts two-cabin regional jets)', () => {
+  it("reads the live Nov 12 payload as 354 / 368 · 96%, with 145 single-cabin jets left out", () => {
+    expect(expressStarlinkScope(FLEET_SUMMARY_NOV12.airlines)).toEqual({
+      installed: 354, total: 368, pct: 96, leftOut: 145, leftOutFamilies: ['CRJ-200', 'ERJ-145'],
+    });
+  });
+
+  it('excludes by NAMED family, not by "no installs yet": E170 and CRJ-700 stay in', () => {
+    const scope = expressStarlinkScope(summaryWith([
+      ['E175', 10, 10], ['CRJ-200', 0, 90], ['ERJ-145', 0, 55], ['E170', 0, 8], ['CRJ-700', 0, 4],
+    ]));
+    expect(scope).toEqual({
+      installed: 10, total: 22, pct: 45, leftOut: 145, leftOutFamilies: ['CRJ-200', 'ERJ-145'],
+    });
+  });
+
+  it('counts a converted CRJ-450 if the tracker ever lists it', () => {
+    const scope = expressStarlinkScope(summaryWith([['E175', 10, 10], ['CRJ-450', 0, 10], ['CRJ-200', 0, 80]]));
+    expect(scope.total).toBe(20);
+    expect(scope.leftOut).toBe(80);
+  });
+
+  it('matches the named families whatever their spelling of case, spaces and hyphens', () => {
+    const scope = expressStarlinkScope(summaryWith([['E175', 5, 5], ['crj200', 0, 7], ['ERJ 145', 0, 3]]));
+    expect(scope).toEqual({
+      installed: 5, total: 5, pct: 100, leftOut: 10, leftOutFamilies: ['CRJ-200', 'ERJ-145'],
+    });
+  });
+
+  it('only reads the UA row\'s regional families', () => {
+    const airlines = [
+      { code: 'AS', families: [{ family: 'E175', body: 'regional', installed: 93, total: 93 }] },
+      ...summaryWith([['E175', 1, 4], ['B737-800', 100, 141, 'narrowbody']]),
+    ];
+    expect(expressStarlinkScope(airlines)).toEqual({
+      installed: 1, total: 4, pct: 25, leftOut: 0, leftOutFamilies: [],
+    });
+  });
+
+  it("computes the share from the summed counts, never from the families' own percentages", () => {
+    const airlines = summaryWith([['E175', 1, 4], ['CRJ-550', 1, 4]]);
+    airlines[0].families.forEach((f) => { f.percentage = 99; });
+    expect(expressStarlinkScope(airlines).pct).toBe(25);
+  });
+
+  it('is null when there is nothing usable to divide, so the bar is never a guess', () => {
+    expect(expressStarlinkScope(null)).toBeNull();
+    expect(expressStarlinkScope([])).toBeNull();
+    // No UA row, no families, no regional family.
+    expect(expressStarlinkScope([{ code: 'AS', families: [] }])).toBeNull();
+    expect(expressStarlinkScope([{ code: 'UA', installed: 684, total: 1681, percentage: 40.7 }])).toBeNull();
+    expect(expressStarlinkScope(summaryWith([['B787', 2, 97, 'widebody']]))).toBeNull();
+    // Only the single-cabin families: no two-cabin denominator.
+    expect(expressStarlinkScope(summaryWith([['CRJ-200', 0, 90], ['ERJ-145', 0, 55]]))).toBeNull();
+    // One unusable count poisons the sum rather than shrinking it.
+    expect(expressStarlinkScope(summaryWith([['E175', 252, 252], ['CRJ-550', null, 104]]))).toBeNull();
+    expect(expressStarlinkScope(summaryWith([['E175', 252, 252], ['CRJ-550', 102, '']]))).toBeNull();
+    expect(expressStarlinkScope(summaryWith([['E175', 253, 252]]))).toBeNull();
+    expect(expressStarlinkScope(summaryWith([['E175', 2.5, 252]]))).toBeNull();
+  });
+});
+
 describe('rolloutBars', () => {
   const SHARE = { count: 100, total: 1000, pct: 10, source: 'fleet-db' };
+  const SCOPE = { installed: 300, total: 400, pct: 75, leftOut: 145 };
+  const line = (b) => `${b.label} ${b.installed}/${b.total} ${b.pct}%`;
 
-  it("takes Express from the tracker and Mainline from the shared mainline share", () => {
-    const bars = rolloutBars(
-      { express: 300, expressTotal: 500, expressPct: 60, mainline: 100, mainlineTotal: 1161, mainlinePct: 9 },
-      SHARE,
-    );
-    expect(bars.map((b) => `${b.label} ${b.installed}/${b.total} ${b.pct}%`)).toEqual([
-      'Express 300/500 60%',
-      'Mainline 100/1000 10%',
-    ]);
+  it('takes BOTH Express numbers from the fleet-summary scope, never the stats count over its total', () => {
+    const bars = rolloutBars({ express: 355, expressTotal: 513, expressPct: 69 }, SHARE, SCOPE);
+    expect(bars.map(line)).toEqual(['Express 300/400 75%', 'Mainline 100/1000 10%']);
+  });
+
+  it('reads the live Nov 12 payload as Express 354 / 368 · 96%', () => {
+    const scope = expressStarlinkScope(FLEET_SUMMARY_NOV12.airlines);
+    const express = rolloutBars({ express: 355, expressTotal: 513, expressPct: 69 }, SHARE, scope)[0];
+    expect(rolloutBarFigure(express)).toBe('354 / 368 · 96%');
+  });
+
+  it("never reads the tracker's expressTotal or expressPct, with or without a scope", () => {
+    for (const scope of [SCOPE, null]) {
+      const base = rolloutBars({ express: 355 }, SHARE, scope);
+      expect(rolloutBars({ express: 355, expressTotal: 513, expressPct: 69 }, SHARE, scope)).toEqual(base);
+      expect(rolloutBars({ express: 355, expressTotal: 0, expressPct: null }, SHARE, scope)).toEqual(base);
+    }
+  });
+
+  it('without a fleet-summary, the Express row is the equipped count with no total and no percentage', () => {
+    const bars = rolloutBars({ express: 355, expressTotal: 513, expressPct: 69 }, SHARE, null);
+    expect(bars[0]).toEqual({ label: 'Express', installed: 355, total: null, pct: null });
+    expect(rolloutBarFigure(bars[0])).toBe('355 equipped');
+    expect(bars[1]).toEqual({ label: 'Mainline', installed: 100, total: 1000, pct: 10 });
   });
 
   it("never prints the tracker's mainline census when the share has a different one", () => {
-    const mainline = rolloutBars({ express: 1, expressTotal: 2, mainline: 263, mainlineTotal: 1161 }, {
+    const mainline = rolloutBars({ express: 1, mainline: 263, mainlineTotal: 1161 }, {
       count: 263, total: 1139, pct: 23, source: 'fleet-db',
-    }).find((b) => b.label === 'Mainline');
+    }, SCOPE).find((b) => b.label === 'Mainline');
     expect(mainline).toEqual({ label: 'Mainline', installed: 263, total: 1139, pct: 23 });
   });
 
-  it('derives a missing Express percentage from the counts', () => {
-    const bars = rolloutBars({ express: 250, expressTotal: 500 }, SHARE);
-    expect(bars[0].pct).toBe(50);
+  it('returns null in the degraded tier (no stats) and without a mainline denominator', () => {
+    expect(rolloutBars(null, SHARE, SCOPE)).toBeNull();
+    expect(rolloutBars({ express: 10 }, null, SCOPE)).toBeNull();
+    expect(rolloutBars({ express: 10 }, { count: 0, total: 0, pct: 0 }, SCOPE)).toBeNull();
+    // No scope and no equipped count: there is no Express row to print.
+    expect(rolloutBars({ mainline: 5 }, SHARE, null)).toBeNull();
   });
+});
 
-  it('returns null without fleet denominators, so the degraded tier shows no bars', () => {
-    expect(rolloutBars(null, SHARE)).toBeNull();
-    expect(rolloutBars({ express: 10, mainline: 5 }, SHARE)).toBeNull();
-    expect(rolloutBars({ express: 10, expressTotal: 0, mainline: 5, mainlineTotal: 9 }, SHARE)).toBeNull();
-    expect(rolloutBars({ express: 10, expressTotal: 20 }, null)).toBeNull();
+describe('rolloutBarFigure', () => {
+  it('prints a share only when the row has a denominator', () => {
+    expect(rolloutBarFigure({ installed: 354, total: 368, pct: 96 })).toBe('354 / 368 · 96%');
+    expect(rolloutBarFigure({ installed: 355, total: null, pct: null })).toBe('355 equipped');
   });
 });
 
 describe('rolloutBarsNote', () => {
-  it('names both denominators', () => {
-    expect(rolloutBarsNote({ count: 263, total: 1139, pct: 23, source: 'fleet-db' })).toBe(
-      'Mainline: 263 of 1,139 aircraft in our fleet database · Express: per the Starlink tracker',
+  const DB = { count: 263, total: 1139, pct: 23, source: 'fleet-db' };
+  const TRACKER = { count: 263, total: 1161, pct: 23, source: 'tracker' };
+
+  it('says what Express counts and how many single-cabin jets it leaves out, from the data', () => {
+    expect(rolloutBarsNote(DB, expressStarlinkScope(FLEET_SUMMARY_NOV12.airlines))).toBe(
+      'Mainline: 263 of 1,139 aircraft in our fleet database · Express: per the Starlink tracker. ' +
+        'Express counts two-cabin regional jets, the planes United has said will get Starlink. ' +
+        'The 145 single-cabin CRJ-200s and ERJ-145s are left out.',
     );
-    expect(rolloutBarsNote({ count: 263, total: 1161, pct: 23, source: 'tracker' })).toBe(
-      'Mainline and Express: per the Starlink tracker',
+    // The number is the payload's, not a typed 145.
+    const other = expressStarlinkScope(summaryWith([['E175', 1, 1], ['CRJ-200', 0, 1000], ['ERJ-145', 0, 234]]));
+    expect(rolloutBarsNote(DB, other)).toContain('The 1,234 single-cabin CRJ-200s and ERJ-145s are left out.');
+    expect(rolloutBarsNote(TRACKER, other)).toBe(
+      'Mainline and Express: per the Starlink tracker. ' +
+        'Express counts two-cabin regional jets, the planes United has said will get Starlink. ' +
+        'The 1,234 single-cabin CRJ-200s and ERJ-145s are left out.',
     );
-    expect(rolloutBarsNote(null)).toBe('');
+  });
+
+  it('never says United excluded the single-cabin jets', () => {
+    const note = rolloutBarsNote(DB, expressStarlinkScope(FLEET_SUMMARY_NOV12.airlines));
+    expect(note).not.toMatch(/not getting|will not|won't|never get/i);
+  });
+
+  it('names only the left-out families the payload lists', () => {
+    const crjOnly = expressStarlinkScope(summaryWith([['E175', 3, 4], ['CRJ-200', 0, 9], ['ERJ-145', 0, 0]]));
+    expect(crjOnly.leftOutFamilies).toEqual(['CRJ-200']);
+    expect(rolloutBarsNote(DB, crjOnly)).toContain('The 9 single-cabin CRJ-200s are left out.');
+  });
+
+  it('drops the left-out sentence when the payload lists none of those families', () => {
+    expect(rolloutBarsNote(DB, { installed: 1, total: 2, pct: 50, leftOut: 0 })).toBe(
+      'Mainline: 263 of 1,139 aircraft in our fleet database · Express: per the Starlink tracker. ' +
+        'Express counts two-cabin regional jets, the planes United has said will get Starlink.',
+    );
+  });
+
+  it('without a fleet-summary, names the Express figure as a count and says nothing about a share', () => {
+    expect(rolloutBarsNote(DB, null)).toBe(
+      'Mainline: 263 of 1,139 aircraft in our fleet database · Express: equipped count per the Starlink tracker',
+    );
+    expect(rolloutBarsNote(TRACKER, null)).toBe('Mainline and Express: per the Starlink tracker');
+    expect(rolloutBarsNote(null, null)).toBe('');
   });
 });
 
