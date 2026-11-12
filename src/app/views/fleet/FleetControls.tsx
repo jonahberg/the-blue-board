@@ -95,7 +95,8 @@ export function FleetControls({
   // The type filter holds one type at most, so a selected type is "exactly one".
   const guide = type ? fleetTypeLink(type, 'site') : null;
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    // `id`: a Fleet link that sets a filter brings this row to the top of the tab (FleetView).
+    <div id="fleet-controls" className="flex scroll-mt-2 flex-wrap items-center gap-2">
       <Input
         id="fleet-search"
         type="search"

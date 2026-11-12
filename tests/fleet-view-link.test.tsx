@@ -129,9 +129,31 @@ beforeAll(() => {
   window.HTMLElement.prototype.hasPointerCapture ??= () => false;
 });
 
+/**
+ * Every `scrollIntoView` (jsdom has none): which element, and how many rows the table showed at
+ * that moment, so a test can tell the scroll came after the filter.
+ */
+const scrolls: { target: string; rows: number }[] = [];
+
+/** A scrolled element, named the way a test reads it: `controls`, `panel:<sub-view>`, or its id. */
+function scrollName(element: Element): string {
+  if (element.id === 'fleet-controls') return 'controls';
+  if (element.getAttribute('role') === 'tabpanel') return `panel:${element.id.replace(/^.*-content-/, '')}`;
+  return element.id || element.tagName.toLowerCase();
+}
+
+/** Let the frame a scroll waits for go by. */
+async function nextFrame() {
+  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+}
+
 beforeEach(() => {
   ctl.fleet = fleetValue(FLEET_DB);
   window.history.replaceState(null, '', '/');
+  scrolls.length = 0;
+  Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+    scrolls.push({ target: scrollName(this), rows: rows().length });
+  };
 });
 
 afterEach(() => {
@@ -486,5 +508,73 @@ describe('"known type" is a type the type select offers', () => {
     mount();
     expect(rows()).toHaveLength(9);
     expect(typeSelect().textContent).toContain('All Types');
+  });
+});
+
+describe('a link brings the reader to what it set', () => {
+  it('a followed type: the controls row, once the table shows that type', async () => {
+    mount();
+    follow({ filter: 'A319', view: null });
+    await nextFrame();
+    expect(scrolls).toEqual([{ target: 'controls', rows: 6 }]);
+  });
+
+  it('a cold load of the same address: the same target, after the filter', async () => {
+    window.history.replaceState(null, '', '/?tab=fleet&type=A319');
+    mount();
+    await nextFrame();
+    expect(scrolls).toEqual([{ target: 'controls', rows: 6 }]);
+  });
+
+  it('a status filter lands on the controls row too; a view alone, on that sub-view\'s panel', async () => {
+    mount();
+    follow({ filter: 'starlink', view: null });
+    await nextFrame();
+    expect(scrolls.at(-1)).toEqual({ target: 'controls', rows: 2 });
+
+    follow({ filter: null, view: 'special' });
+    await nextFrame();
+    expect(scrolls.at(-1)?.target).toBe('panel:special');
+    expect(activeSubView()).toMatch(/^Special/);
+  });
+
+  it('the same link followed twice scrolls twice', async () => {
+    mount();
+    follow({ filter: 'A319', view: null });
+    await nextFrame();
+    follow({ filter: 'A319', view: null });
+    await nextFrame();
+    expect(scrolls.map((s) => s.target)).toEqual(['controls', 'controls']);
+  });
+
+  it('a link held until the fleet data loads scrolls when it is applied, not before', async () => {
+    ctl.fleet = fleetValue([], true);
+    const view = mount();
+    follow({ filter: 'A319', view: null });
+    await nextFrame();
+    expect(scrolls).toEqual([]);
+
+    ctl.fleet = fleetValue(FLEET_DB);
+    view.rerender(
+      <UiProvider>
+        <FleetView />
+        <Probe />
+      </UiProvider>,
+    );
+    await nextFrame();
+    expect(scrolls).toEqual([{ target: 'controls', rows: 6 }]);
+  });
+
+  it('an unknown value scrolls nowhere, followed or cold', async () => {
+    mount();
+    follow({ filter: 'B789', view: null });
+    await nextFrame();
+    expect(scrolls).toEqual([]);
+    cleanup();
+
+    window.history.replaceState(null, '', '/?tab=fleet&type=B789');
+    mount();
+    await nextFrame();
+    expect(scrolls).toEqual([]);
   });
 });

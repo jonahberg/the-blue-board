@@ -143,9 +143,24 @@ function openFleetSubView(name: RegExp) {
   expect(state().fleetSubView).toMatch(name);
 }
 
-/** `state()`, then the Express list's own search, read by opening that sub-view (the last step). */
-function finalState() {
-  const result = state();
+/**
+ * Every element scrolled into view since the address was opened or the link clicked (jsdom has no
+ * `scrollIntoView`): `controls` for the Fleet controls row, `panel:<sub-view>` for a sub-view.
+ */
+const scrolls: string[] = [];
+function recordScroll(this: Element) {
+  if (this.id === 'fleet-controls') scrolls.push('controls');
+  else if (this.getAttribute('role') === 'tabpanel') scrolls.push(`panel:${this.id.replace(/^.*-content-/, '')}`);
+  else scrolls.push(this.id || this.tagName.toLowerCase());
+}
+
+/**
+ * After the frame a scroll waits for: `state()`, where the tab scrolled, then the Express list's
+ * own search, read by opening that sub-view (the last step, after the scroll is recorded).
+ */
+async function finalState() {
+  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  const result = { ...state(), fleetScrolls: [...scrolls] };
   if (!document.getElementById('fleet-lookup-zone')) return { ...result, fleetExpressSearch: null };
   openFleetSubView(/^United Express/);
   const box = screen.getByRole('searchbox', { name: 'United Express search' }) as HTMLInputElement;
@@ -153,9 +168,10 @@ function finalState() {
 }
 
 /** Open `address` cold. */
-function cold(address: string) {
+async function cold(address: string) {
+  scrolls.length = 0;
   mountAt(address, '/#stats');
-  const result = finalState();
+  const result = await finalState();
   cleanup();
   return result;
 }
@@ -164,7 +180,7 @@ function cold(address: string) {
  * Start on Stats at `/`, then click a link to `address`. `fleetVisited` visits Fleet first, so the
  * view is already mounted; `fleetLeftOn` also leaves it on that sub-view tab before going to Stats.
  */
-function inPlace(address: string, { fleetVisited = false, fleetLeftOn = null as RegExp | null } = {}) {
+async function inPlace(address: string, { fleetVisited = false, fleetLeftOn = null as RegExp | null } = {}) {
   mountAt('/#stats', address);
   if (fleetVisited || fleetLeftOn) {
     act(() => seen.ui!.setTab('fleet'));
@@ -175,11 +191,12 @@ function inPlace(address: string, { fleetVisited = false, fleetLeftOn = null as 
 }
 
 /** From Stats, click the link, and read the end state. */
-function followAndRead() {
+async function followAndRead() {
   expect(seen.ui!.tab).toBe('stats');
+  scrolls.length = 0;
   fireEvent.click(screen.getByRole('link', { name: 'follow' }));
   expect(reachedDocumentPrevented, 'the click was followed in place').toBe(true);
-  const result = finalState();
+  const result = await finalState();
   cleanup();
   return result;
 }
@@ -231,6 +248,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  scrolls.length = 0;
+  Element.prototype.scrollIntoView = recordScroll;
   window.history.replaceState(null, '', '/');
   reachedDocumentPrevented = null;
   document.addEventListener('click', recordClick);
@@ -247,52 +266,68 @@ afterEach(() => {
 });
 
 describe('a cold load and an in-place click of the same address end in the same state', () => {
-  it('/?tab=schedule&hub=DEN: the Schedule tab on the DEN board', () => {
-    const coldState = cold('/?tab=schedule&hub=DEN');
-    expect(coldState).toMatchObject({ tab: 'schedule', scheduleHub: 'DEN', aircraft: null });
-    expect(inPlace('/?tab=schedule&hub=DEN')).toEqual(coldState);
+  it('/?tab=schedule&hub=DEN: the Schedule tab on the DEN board', async () => {
+    const coldState = await cold('/?tab=schedule&hub=DEN');
+    expect(coldState).toMatchObject({ tab: 'schedule', scheduleHub: 'DEN', aircraft: null, fleetScrolls: [] });
+    expect(await inPlace('/?tab=schedule&hub=DEN')).toEqual(coldState);
   });
 
-  it('/?tab=fleet&type=A319: the Fleet tab filtered to the A319', () => {
-    const coldState = cold('/?tab=fleet&type=A319');
+  it('/?tab=fleet&type=A319: the Fleet tab filtered to the A319, scrolled to its controls row', async () => {
+    const coldState = await cold('/?tab=fleet&type=A319');
     expect(coldState).toMatchObject({
       tab: 'fleet',
       fleetType: expect.stringContaining('A319'),
       fleetSubView: expect.stringMatching(/^All Aircraft/),
       fleetRows: 6,
+      // The tab brings the reader to the filter it set, not the pulse cards at its top.
+      fleetScrolls: ['controls'],
     });
     // Mounted by the click (first visit) and already mounted (an earlier visit).
-    expect(inPlace('/?tab=fleet&type=A319')).toEqual(coldState);
-    expect(inPlace('/?tab=fleet&type=A319', { fleetVisited: true })).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&type=A319')).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&type=A319', { fleetVisited: true })).toEqual(coldState);
     // Left on a sub-view that would not show the filter: the link opens All Aircraft, as cold.
-    expect(inPlace('/?tab=fleet&type=A319', { fleetLeftOn: /^United Express/ })).toEqual(coldState);
-    expect(inPlace('/?tab=fleet&type=A319', { fleetLeftOn: /^Special/ })).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&type=A319', { fleetLeftOn: /^United Express/ })).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&type=A319', { fleetLeftOn: /^Special/ })).toEqual(coldState);
   });
 
-  it('/?tab=fleet&view=special: the Fleet tab on the Special sub-view, unfiltered', () => {
-    const coldState = cold('/?tab=fleet&view=special');
+  it('/?tab=fleet&view=special: the Fleet tab on the Special sub-view, unfiltered, scrolled to that panel', async () => {
+    const coldState = await cold('/?tab=fleet&view=special');
     expect(coldState).toMatchObject({
       tab: 'fleet',
       fleetType: expect.stringContaining('All Types'),
       fleetSubView: expect.stringMatching(/^Special/),
+      fleetScrolls: ['panel:special'],
     });
-    expect(inPlace('/?tab=fleet&view=special')).toEqual(coldState);
-    expect(inPlace('/?tab=fleet&view=special', { fleetVisited: true })).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&view=special')).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&view=special', { fleetVisited: true })).toEqual(coldState);
   });
 
   it.each(['/?tab=fleet&type=737%20MAX%209', '/?tab=fleet&view=special', '/?tab=fleet&filter=starlink'])(
     '%s followed from a Fleet tab with every filter set lands where the cold load does',
     async (address) => {
-      const coldState = cold(address);
+      const coldState = await cold(address);
       expect(coldState).toMatchObject({ fleetWifi: 'All WiFi', fleetSearch: '', fleetExpressSearch: '' });
+      expect(coldState.fleetScrolls).toEqual([address.includes('view=') ? 'panel:special' : 'controls']);
       expect(await inPlaceFromDirtyFleet(address)).toEqual(coldState);
     },
   );
 
-  it('/?aircraft=N78501: both open the aircraft dialog; the tab is the one stated difference', () => {
-    const coldState = cold('/?aircraft=N78501');
-    const clicked = inPlace('/?aircraft=N78501');
+  it('/?tab=fleet&type=B789: a type the controls do not offer is ignored either way, and scrolls nowhere', async () => {
+    const coldState = await cold('/?tab=fleet&type=B789');
+    expect(coldState).toMatchObject({
+      tab: 'fleet',
+      fleetType: expect.stringContaining('All Types'),
+      fleetRows: 8,
+      fleetScrolls: [],
+    });
+    expect(await inPlace('/?tab=fleet&type=B789')).toEqual(coldState);
+  });
+
+  it('/?aircraft=N78501: both open the aircraft dialog; the tab is the one stated difference', async () => {
+    const coldState = await cold('/?aircraft=N78501');
+    const clicked = await inPlace('/?aircraft=N78501');
     expect(coldState.aircraft).toBe('N78501');
+    expect(coldState.fleetScrolls).toEqual([]);
     expect(clicked.aircraft).toBe('N78501');
     // Cold: the default tab. In place: the tab you were on (an aircraft link is an overlay).
     expect(coldState.tab).toBe('live');

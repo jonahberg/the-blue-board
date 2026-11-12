@@ -364,14 +364,21 @@ export function resolveFleetDeepLinkFilter(filter, { typeValues, statusValues })
  * `typeValues` are the types the type select offers, so an address can never select a type the
  * select cannot show.
  *
+ * `scrollTo` is where the tab brings the reader once the link is applied, so it does not open on
+ * the pulse cards with the filtered table a long scroll below: the controls row for a filter (the
+ * filter that was set, then the first rows), the sub-view's panel for a view alone. United Express
+ * has no controls row, so a link that opens it lands on its panel.
+ *
  * @param {{filter: string|null|undefined, view: 'airborne'|'special'|'express'|null|undefined}} link
  * @param {{typeValues: Iterable<string>, statusValues: Iterable<string>}} options
- * @returns {{filter: {status: string, type: string}|null, subView: 'all'|'airborne'|'special'|'express'}|null}
+ * @returns {{filter: {status: string, type: string}|null, subView: 'all'|'airborne'|'special'|'express',
+ *   scrollTo: 'controls'|'panel'}|null}
  */
 export function fleetDeepLinkTarget({ filter, view }, options) {
   const resolved = resolveFleetDeepLinkFilter(filter, options);
   if (!resolved && !view) return null;
-  return { filter: resolved, subView: view || 'all' };
+  const subView = view || 'all';
+  return { filter: resolved, subView, scrollTo: resolved && subView !== 'express' ? 'controls' : 'panel' };
 }
 
 /**

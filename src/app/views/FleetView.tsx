@@ -343,13 +343,18 @@ export default function FleetView() {
   // type filters, the Express search, and a Fleet "Ask the board" answer, through the store's own
   // clear — so the same address lands in the same place either way. The sort order is the
   // reader's and stays; it is not part of an address.
+  //
+  // Then it brings the reader to what it set (`target.scrollTo`, below): without that a link
+  // opened the tab on the pulse cards, with the filtered table a long scroll down, and read as if
+  // nothing had happened (owner, on the preview, Nov 12 2026).
   const { active: askActive, clear: clearAsk } = ask;
+  const [linkScroll, setLinkScroll] = useState<{ to: 'controls' | 'panel' } | null>(null);
   const applyFleetDeepLink = useCallback(
     (link: FleetDeepLinks, { followed }: { followed: boolean }) => {
       const target = fleetDeepLinkTarget(link, {
         statusValues: STATUS_OPTIONS.map((option) => option.value),
         typeValues: typeOptions.map((option) => option.value),
-      }) as { filter: { status: string; type: string } | null; subView: SubView } | null;
+      }) as { filter: { status: string; type: string } | null; subView: SubView; scrollTo: 'controls' | 'panel' } | null;
       if (!target) return;
       if (followed) {
         setSearch('');
@@ -364,9 +369,29 @@ export default function FleetView() {
         setTypeFilter(target.filter.type);
       }
       setSubView(target.subView);
+      // A new object each time, so the same link followed twice scrolls twice.
+      setLinkScroll({ to: target.scrollTo });
     },
     [typeOptions, askActive, clearAsk],
   );
+
+  // The scroll a link asked for, once the filter and sub-view it set have rendered: the controls
+  // row for a filter, the open sub-view's panel for a view alone, top of the tab's scroller (the
+  // header and tab bar sit outside it; `scroll-mt-2` keeps a little air). A frame later, as the
+  // Weather tab does, because a followed link may have just shown this panel. Respects reduced
+  // motion (`scrollBehavior`) and leaves focus where it is.
+  useEffect(() => {
+    if (!linkScroll) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const zone = lookupRef.current;
+      const element =
+        linkScroll.to === 'controls'
+          ? zone?.querySelector('#fleet-controls')
+          : zone?.querySelector('[role="tabpanel"][data-state="active"]');
+      element?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [linkScroll]);
 
   // A cold load. The shipped dashboard polled every 200 ms for up to 10 s because the fleet
   // database arrives after the URL is read. Here the same wait is an effect that latches the
@@ -593,7 +618,7 @@ export default function FleetView() {
             />
           ) : null}
 
-          <TabsContent value="all">
+          <TabsContent value="all" className="scroll-mt-2">
             <FleetTable
               rows={tableRows}
               sort={fleetSort}
@@ -612,7 +637,7 @@ export default function FleetView() {
             />
           </TabsContent>
 
-          <TabsContent value="airborne">
+          <TabsContent value="airborne" className="scroll-mt-2">
             <AirborneTable
               rows={airborneRows}
               sort={airborneSort}
@@ -626,11 +651,11 @@ export default function FleetView() {
             />
           </TabsContent>
 
-          <TabsContent value="special">
+          <TabsContent value="special" className="scroll-mt-2">
             <SpecialPanel rows={specialRows} loading={loading} onOpenAircraft={openAircraft} />
           </TabsContent>
 
-          <TabsContent value="express">
+          <TabsContent value="express" className="scroll-mt-2">
             <ExpressFleetPanel
               rows={expressRows}
               showCabin={expressHasCabin}
