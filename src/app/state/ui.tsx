@@ -146,8 +146,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
     (id: TabId, options?: { hash?: boolean; scrollTo?: string }) => {
       setTabState(id);
       if (options?.scrollTo) setPendingScroll(options.scrollTo);
-      // `replaceState`, never `pushState`: the tab bar is navigation within one page and must
-      // not fill the visitor's back button with eight entries.
+      // `replaceState`: the tab bar is navigation within one page and must not fill the visitor's
+      // back button with eight entries. A followed link that changes the tab pushes its one entry
+      // itself and calls this with `hash: false` (state/follow-link.tsx).
       if (options?.hash !== false && typeof window !== 'undefined') {
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${TAB_HASHES[id]}`);
       }

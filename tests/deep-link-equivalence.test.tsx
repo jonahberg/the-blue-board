@@ -18,8 +18,9 @@
  *
  * What this does NOT cover: the rest of Dashboard.tsx (the shell, the lazy tab registry, the other
  * views and providers), the Schedule board's own loading, and anything a real browser adds (the
- * address bar, history, a real page load). An in-place click does not rewrite the query
- * (Task 3 ruling), so the two arms differ in `location.search`; that is not compared.
+ * address bar, history, a real page load). The two arms' addresses differ by design and are not
+ * compared: a cold load keeps its query, and an in-place click that changes the tab leaves a new
+ * history entry without the dashboard's own parameters (tests/follow-link-tabs.test.tsx).
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';

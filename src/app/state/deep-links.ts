@@ -26,6 +26,7 @@
 
 import { useEffect, useRef } from 'react';
 
+import { DEEP_LINK_PARAMS } from '@/lib/followed-link.js';
 import { hubLink } from '@/lib/hub-link.js';
 import { hashTailParams, weatherScrollTarget } from '@/lib/tab-hash.js';
 import { parseWatchLink, withoutWatchParams } from '@/lib/watch-link.js';
@@ -94,9 +95,6 @@ export function readLiveHubDeepLink(knownHubs: readonly string[]): string | null
   const tab = resolveTabParam(params.get('tab'));
   return !tab || tab === 'live' ? hub : null;
 }
-
-/** Query parameters that name a specific destination inside the dashboard. */
-const DEEP_LINK_PARAMS = ['tab', 'hub', 'section', 'flight', 'q', 'aircraft', 'view', 'filter', 'type', 'waitlist', 'watch'];
 
 /**
  * True when the visitor arrived on a deep link. The first-visit welcome overlay should not
@@ -250,14 +248,21 @@ export function useDeepLinks(deps: DeepLinkDeps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The hash is the one deep link that can change under us (back button, in-page anchor).
+  // The hash is the one deep link that can change under us: an in-page anchor, and Back or Forward
+  // across the entry a followed link leaves (follow-link.tsx). Back between two entries of this page
+  // fires `popstate`, and `hashchange` as well when their hashes differ, which a followed link's
+  // always do; both are heard, and the second finds the tab already set.
   useEffect(() => {
     function onHashChange() {
       const resolved = resolveTabParam(window.location.hash);
       if (resolved) depsRef.current.setTab(resolved, { hash: false });
     }
     window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onHashChange);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('popstate', onHashChange);
+    };
   }, []);
 
   // ?flight= / ?q= — latched until the feed has actually answered.
