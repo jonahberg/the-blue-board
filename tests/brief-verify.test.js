@@ -366,6 +366,18 @@ describe('verifyBrief: Nov 12 2026 rules', () => {
     });
   });
 
+  it('a watch headline may say the OTHER hubs are running normally once it has named the problem (the 5:20 PM shape)', () => {
+    const ord = factsOf('ord-79-variant');
+    const lead = item("Chicago O'Hare is the lowest hub, at 79% on time so far today (460 departed).", ['otp.ORD']);
+    for (const headline of ["Chicago O'Hare is running behind; the other hubs are running normally.", 'Chicago O\'Hare lags; the remaining United hubs look normal.']) {
+      expect(verifyBrief(brief([lead], { tone: 'watch', headline }), ord).report.headline.status, headline).toBe('kept');
+    }
+    // Calling the whole operation calm on a watch day is still replaced, and so is a lead that does.
+    for (const headline of ["United's hubs are running normally; Chicago O'Hare is lowest.", 'Other hubs are running normally; Chicago O\'Hare lags.']) {
+      expect(verifyBrief(brief([lead], { tone: 'watch', headline }), ord).report.headline.reasons, headline).toEqual(['headline:calm_when_not_calm']);
+    }
+  });
+
   describe('a single hub’s on-time percentage on a day every hub is healthy', () => {
     const facts = factsOf('nonhub-gdp-specimen');
     it('the specimen’s item 4 (otp.floor + otp.EWR) is replaced by the summary, and counted', () => {
@@ -389,6 +401,18 @@ describe('verifyBrief: Nov 12 2026 rules', () => {
       expect(out.report.dropped).toEqual([expect.objectContaining({ index: 1, reasons: ['hub_on_time_on_healthy_day'] })]);
       expect(out.report.summaryInserted).toBe(false); // the summary is already there
       expect(out.brief.items).toHaveLength(1);
+    });
+    it('a hub named in another sentence than the percentage is not a hub’s figure (Haiku sample, Nov 12)', () => {
+      const text = 'The seven United hubs reporting so far today are at 84% on time or better, and no ground stop or ground delay program is in effect at any hub. The FAA\'s plan says one is possible for flights into Newark tomorrow after 10:00 AM ET and for San Francisco tomorrow after 7:00 AM PT; neither is in effect.';
+      const out = verifyBrief(brief([item(text, ['otp.floor', 'faa.active.count', 'faa.planned.EWR', 'faa.planned.SFO'])], { tone: 'watch', headline: 'FAA action is possible at Newark tomorrow; none is in effect.' }), facts);
+      expect(out.report.dropped).toEqual([]);
+      expect(out.report.healthyHubOnTime).toBe(0);
+    });
+    it('the on-time summary may carry the definition: any on-time fact grounds "within 30 minutes of schedule"', () => {
+      const index = new Map(facts.map((f) => [f.id, f]));
+      expect(checkSentence('All seven United hubs reporting so far today are at 84% on time or better, where on time means within 30 minutes of schedule.', ['otp.floor'], index)).toEqual([]);
+      // Not for a fact that is not about on-time.
+      expect(checkSentence('Seattle delays reach 30 minutes.', ['faa.active.SEA.gdp'], index)).toEqual(['number_not_in_facts:30']);
     });
     it('not on a day a hub is below 80%: naming the lowest hub is the news then', () => {
       const ord = factsOf('ord-79-variant');

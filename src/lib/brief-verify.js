@@ -53,6 +53,8 @@ const QUOTE_ATTRIBUTION_RE = /\b(?:heard|radio|frequenc(?:y|ies)|tower|controlle
 const MARKUP_RE = /<[^>]{0,200}>|<\/?[a-z]|[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
 /** A headline saying the operation is calm: replaced whenever the computed tone is not calm. */
 const CALM_HEADLINE_RE = /\b(?:calm|calmly|smooth|smoothly|quiet|quietly)\b|\brunning\s+normally\b/i;
+/** "the other hubs are running normally": the rest of the hubs, after the problem has been named. */
+const OTHER_HUBS_NORMAL_RE = /\b(?:the\s+)?(?:other|remaining)\s+(?:United\s+)?hubs\s+(?:are|look|remain|stay)\s+(?:running\s+)?(?:normally|normal|smoothly|calm)\b/gi;
 /** Words that say how United's operation is doing, which a headline must lead with (see below). */
 const CONDITION_RE = /\b(?:United|United's|hubs?|calm|calmly|smooth|smoothly|quiet|quietly|normal|normally)\b/i;
 /** Words naming a ground stop or delay program. On a calm day none is at a hub (computeTone). */
@@ -95,9 +97,14 @@ export function nonHubLeadReason(headline, tone, facts) {
 function givesHealthyHubOnTime(text, ids, factIndex) {
   const citesOnTime = ids.some((id) => factIndex.get(id)?.kind === 'otp' || (/^otp\.[A-Z]{3}$/.test(id) && !factIndex.has(id)));
   if (!citesOnTime) return false;
-  const claims = extractClaims(normalizeText(text));
-  if (!claims.some((c) => c.type === 'percent')) return false;
-  return claims.some((c) => c.type === 'airport' && c.codes.some((code) => BRIEF_HUBS.includes(code) && !factIndex.has(`otp.${code}`)));
+  // The percentage and the hub must share a clause: "…84% or better, and Newark is at 96%" gives
+  // Newark a figure; "…84% or better. A program is possible at Newark tomorrow." does not.
+  const clauses = normalizeText(text).split(/[.;:!?](?:\s+|$)|,\s+(?:and|but|while|with)\s+/);
+  return clauses.some((clause) => {
+    const claims = extractClaims(clause);
+    return claims.some((c) => c.type === 'percent')
+      && claims.some((c) => c.type === 'airport' && c.codes.some((code) => BRIEF_HUBS.includes(code) && !factIndex.has(`otp.${code}`)));
+  });
 }
 
 /** Words that mark an FAA program as not (yet) in effect. */
@@ -163,6 +170,10 @@ export function checkSentence(text, factIds, factIndex, { itemRules = true } = {
     if (!fact) reasons.push(`unknown_fact_id:${id}`);
     else {
       allowanceFromValues(fact.values, allowance);
+      // Every on-time figure means "within 30 minutes of schedule": an item citing one may say so
+      // (prompt rule 4 asks for the definition once, often beside the summary, whose values carry
+      // no "30 minutes").
+      if (/** @type {any} */ (fact).kind === 'otp') allowanceFromValues([`${ON_TIME_GRACE_MIN} minutes`], allowance);
       if (/** @type {any} */ (fact).kind === 'faa_planned') citesPlanned = true;
       if (/** @type {any} */ (fact).kind === 'radio') citesRadio = true;
     }
@@ -373,8 +384,13 @@ export function verifyBrief(candidate, facts) {
   let headlineFactIds = [];
   const headlineReasons = checkSentence(headline, union, factIndex, { itemRules: false }).filter((r) => r !== 'too_many_fact_ids');
   if (headline.length > MAX_HEADLINE_CHARS || wordCount(headline) > MAX_HEADLINE_WORDS) headlineReasons.push('headline_too_long');
-  // "Operations look calm" under a computed "watch" contradicts the tone word beside it.
-  if (tone !== 'calm' && CALM_HEADLINE_RE.test(headline)) headlineReasons.push('headline:calm_when_not_calm');
+  // "Operations look calm" under a computed "watch" contradicts the tone word beside it. "The other
+  // hubs are running normally" after a lead that names the problem does not call the operation calm
+  // (Nov 2026: "Chicago O'Hare is running behind; the other hubs are running normally.", the shape
+  // the owner liked), so that clause is not read.
+  if (tone !== 'calm' && CALM_HEADLINE_RE.test(headline.replace(OTHER_HUBS_NORMAL_RE, (m, offset) => (offset > 0 ? '' : m)))) {
+    headlineReasons.push('headline:calm_when_not_calm');
+  }
   // Its mirror: United's condition comes first, never a program at an airport that is not a hub.
   const awayLead = nonHubLeadReason(headline, tone, factList);
   if (awayLead) headlineReasons.push(awayLead);
