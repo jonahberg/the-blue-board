@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { allowanceFromValues, claimFailure, extractClaims } from '../src/lib/brief-claims.js';
 import { readFileSync } from 'node:fs';
 import { buildBriefFacts } from '../src/lib/brief-facts.js';
-import { briefFromSavedResponse, checkSentence, citedFactIds, fixDayWordOrder, nonHubLeadReason, trimOnTimeDefinition, validateBriefShape, verifyBrief } from '../src/lib/brief-verify.js';
+import { briefFromSavedResponse, checkSentence, citedFactIds, fixDayWordOrder, nonHubLeadReason, tomorrowLeadReason, trimOnTimeDefinition, validateBriefShape, verifyBrief, withoutHubStatus } from '../src/lib/brief-verify.js';
 
 const fact = (id, values, extra = {}) => ({
   id, kind: 'otp', statement: `${id} statement`, values, at: null, link: { tab: 'live' }, severity: 5, toneFloor: 'calm', material: id, ...extra,
@@ -492,5 +492,86 @@ describe('verifyBrief: Nov 12 2026 rules', () => {
       expect(trimOnTimeDefinition('Denver is at 91% on time, within 30 minutes of schedule.')).toBe('Denver is at 91% on time.');
       expect(trimOnTimeDefinition('Delays average 30 minutes at Seattle.')).toBeNull();
     });
+  });
+});
+
+describe('verifyBrief: Nov 12 2026, round 2', () => {
+  const fixture = (name) => JSON.parse(readFileSync(new URL(`./fixtures/brief/${name}.json`, import.meta.url), 'utf8'));
+  const factsOf = (name) => { const fx = fixture(name); return buildBriefFacts(fx.sources, { nowMs: Date.parse(fx.nowIso) }).facts; };
+  const specimen = factsOf('nonhub-gdp-specimen'); // calm since round 2
+  const sea = item('A ground delay program is holding flights into Seattle until 9:59 PM PT.', ['faa.active.SEA.gdp']);
+
+  it('a calm night\'s headline may not lead with something only possible tomorrow', () => {
+    for (const headline of [
+      'FAA action is possible at Newark tomorrow; none is in effect.',
+      'Newark and San Francisco could see ground delays tomorrow.',
+      'Possible ground stops at Newark and San Francisco after 10:00 AM ET.',
+    ]) {
+      const out = verifyBrief(brief([sea], { headline }), specimen);
+      expect(out.report.headline.reasons, headline).toContain('headline:leads_with_tomorrow');
+      expect(out.brief.headline).toBe("United's hubs are running normally; a delay program is slowing Seattle arrivals.");
+    }
+    for (const headline of [
+      "United's hubs are running normally; a delay program is slowing Seattle arrivals.",
+      'Hubs run normally; delay programs may hit Newark and San Francisco tomorrow.',
+      'A delay program is slowing Seattle arrivals; Newark may see one tomorrow.',
+    ]) expect(tomorrowLeadReason(headline, 'calm', specimen), headline).toBeNull();
+    // Not a calm night: the rule does not apply (the watch rules do).
+    expect(tomorrowLeadReason('FAA action is possible at Newark tomorrow; none is in effect.', 'watch', specimen)).toBeNull();
+  });
+
+  it('the calm-headline guard catches "run normally" and "hubs are steady / fine / normal" on a watch day', () => {
+    const ord = factsOf('ord-79-variant'); // watch (the index)
+    const lead = item("Chicago O'Hare is the lowest hub, at 79% on time so far today (460 departed).", ['otp.ORD']);
+    for (const headline of ['Hubs run normally; Seattle has a delay program.', 'Hubs are steady; possible ground delay programs at Newark and San Francisco.', "United's hubs are normal tonight.", 'The hubs look fine this evening.', 'Hubs are running normally.']) {
+      expect(verifyBrief(brief([lead], { tone: 'watch', headline }), ord).report.headline.reasons, headline).toContain('headline:calm_when_not_calm');
+    }
+    for (const headline of ["Chicago O'Hare is running behind; the other hubs are running normally.", "Chicago O'Hare trails; the other hubs are steady.", "Chicago O'Hare lags the other hubs, which run normally."]) {
+      expect(verifyBrief(brief([lead], { tone: 'watch', headline }), ord).report.headline.status, headline).toBe('kept');
+    }
+  });
+
+  describe('whether an airport is a United hub (prompt rule 9)', () => {
+    it('cuts the clause when the rest stands, keeps ours, drops what cannot be cut', () => {
+      expect(withoutHubStatus('A ground delay program holds flights into Boston until 7:59 PM ET; Boston is not counted among the United hubs.'))
+        .toBe('A ground delay program holds flights into Boston until 7:59 PM ET.');
+      expect(withoutHubStatus('The FAA has a ground delay program for flights into Boston until 7:59 PM ET. Boston is not a United hub.'))
+        .toBe('The FAA has a ground delay program for flights into Boston until 7:59 PM ET.');
+      expect(withoutHubStatus('Two more programs are in effect, into Philadelphia and Washington Reagan; none is at a United hub.'))
+        .toBe('Two more programs are in effect, into Philadelphia and Washington Reagan.');
+      expect(withoutHubStatus('Boston, which is not a United hub, has a ground stop until 9:30 PM ET.')).toBe('Boston has a ground stop until 9:30 PM ET.');
+      expect(withoutHubStatus('Boston is not a United hub but has a ground stop until 9:30 PM ET.')).toBeNull();
+      const ours = 'No FAA ground stop or ground delay program is in effect at any United hub.';
+      expect(withoutHubStatus(ours)).toBe(ours);
+      expect(withoutHubStatus('No FAA program is in effect at a United hub.')).toBe('No FAA program is in effect at a United hub.');
+    });
+    it('in a brief: the cut is recorded, an uncuttable item is dropped', () => {
+      const facts = factsOf('five-nonhub-storm');
+      const text = 'The FAA has ground stop and ground delay programs in effect for flights into Boston, New York JFK and LaGuardia; none is at a United hub.';
+      const out = verifyBrief(brief([item(text, ['faa.active.BOS.gs', 'faa.active.JFK.gdp', 'faa.active.LGA.gdp'])], { tone: 'watch', headline: 'Storms are slowing Newark.' }), facts);
+      expect(out.brief.items[0].text).toBe('The FAA has ground stop and ground delay programs in effect for flights into Boston, New York JFK and LaGuardia.');
+      expect(out.report.trimmed).toEqual([expect.objectContaining({ reason: 'says_whether_hub' })]);
+      const bad = verifyBrief(brief([item('Boston is not a United hub but has a ground stop until 9:30 PM ET.', ['faa.active.BOS.gs']), item('Storms are slowing Newark.', ['wx.EWR'])], { tone: 'watch', headline: 'Storms are slowing Newark.' }), facts);
+      expect(bad.report.dropped).toEqual([expect.objectContaining({ index: 0, reasons: ['says_whether_hub'] })]);
+    });
+  });
+
+  it('a note sending travelers out of an airport under a stop or delay program is replaced by the template\'s', () => {
+    for (const text of ['If you fly out of Seattle, check your flight status first.', 'If you are flying to or from Seattle, check your flight status.', 'Travelers flying from Seattle should check their flight status.']) {
+      const out = verifyBrief(brief([sea], { headline: "United's hubs are running normally; a delay program is slowing Seattle arrivals.", traveler_note: item(text, ['faa.active.SEA.gdp']) }), specimen);
+      expect(out.brief.traveler_note, text).toEqual({ text: "If you are flying to Seattle, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.SEA.gdp'] });
+      expect(out.report.trimmed, text).toEqual([expect.objectContaining({ item: 'traveler_note', reason: 'note_direction' })]);
+    }
+    const into = verifyBrief(brief([sea], { headline: "United's hubs are running normally; a delay program is slowing Seattle arrivals.", traveler_note: item('If you are flying into Seattle, check your flight status before leaving for the airport.', ['faa.active.SEA.gdp']) }), specimen);
+    expect(into.report.trimmed).toEqual([]);
+  });
+
+  it('a healthy day allows the trailing hub\'s own figure, and still no other hub\'s', () => {
+    const facts = factsOf('ord-80-specimen');
+    const ok = verifyBrief(brief([item("Chicago O'Hare is at 80% on time so far today (460 departed), behind the other hubs, which are at 89% or better.", ['otp.ORD'])], { tone: 'watch', headline: "Chicago O'Hare is running behind; the other hubs are running normally." }), facts);
+    expect(ok.report.dropped).toEqual([]);
+    expect(ok.report.headline.status).toBe('kept');
+    const no = verifyBrief(brief([item("Chicago O'Hare is at 80% on time so far today (460 departed), behind the other hubs, which are at 89% or better.", ['otp.ORD']), item('Newark is at 95% on time.', ['otp.floor', 'otp.EWR'])], { tone: 'watch', headline: "Chicago O'Hare is running behind." }), facts);
+    expect(no.report.dropped[0].reasons).toContain('hub_on_time_on_healthy_day');
   });
 });

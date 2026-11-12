@@ -90,6 +90,28 @@ export const BRIEF_SOFT_HUB_OTP = 70;
  * does not count as a change (materialKey).
  */
 export const BRIEF_HEALTHY_HUB_OTP = 80;
+/**
+ * On a day every hub is healthy, the lowest hub is still named when it is an outlier: at least this
+ * many points below the next-lowest hub (Nov 12 2026: O'Hare at 80% beside 89% or better, the brief
+ * the owner liked) ...
+ */
+export const BRIEF_OUTLIER_GAP_PTS = 8;
+/** ... and below this on-time percentage (88% beside 90% is not a story). */
+export const BRIEF_OUTLIER_UNDER_OTP = 85;
+
+/**
+ * The hub whose healthy on-time figure still trails the others enough to name, or null
+ * (BRIEF_OUTLIER_GAP_PTS, BRIEF_OUTLIER_UNDER_OTP). Only for a day every hub is healthy.
+ * @param {Record<string, {otp: number}>} readings
+ * @returns {string|null}
+ */
+export function healthyOutlier(readings) {
+  const hubs = Object.keys(readings || {});
+  if (hubs.length < 2) return null;
+  const sorted = [...hubs].sort((a, b) => readings[a].otp - readings[b].otp || a.localeCompare(b));
+  const [low, next] = sorted;
+  return readings[next].otp - readings[low].otp >= BRIEF_OUTLIER_GAP_PTS && readings[low].otp < BRIEF_OUTLIER_UNDER_OTP ? low : null;
+}
 /** "About the usual" band for the airborne comparison, in percent either side of the median. */
 export const BRIEF_AIRBORNE_USUAL_BAND_PCT = 10;
 /**
@@ -418,6 +440,8 @@ function hubsReporting(n, day) {
  * @property {number} severity
  * @property {'calm'|'watch'|'disrupted'} toneFloor
  * @property {string|null} material
+ * @property {boolean} [later]  a possible program whose window opens on a later local day (plannedFact)
+ * @property {boolean} [outlier]  a healthy hub's on-time fact sent because it trails the others
  */
 
 /**
@@ -569,7 +593,31 @@ export function buildBriefFacts(sources, { nowMs }) {
     // program in effect keeps its on-time fact (the summary, otp.floor, covers the rest; Nov 2026).
     const readingHubs = Object.keys(readings);
     const everyHubHealthy = readingHubs.length >= 2 && readingHubs.every((h) => readings[h].otp >= BRIEF_HEALTHY_HUB_OTP);
+    const outlier = everyHubHealthy ? healthyOutlier(readings) : null;
+    const byOtp = [...readingHubs].sort((a, b) => readings[a].otp - readings[b].otp || a.localeCompare(b));
+    const othersFloor = outlier ? readings[byOtp[1]].otp : null;
+    const readingsDay = boardsDay(readingHubs, nowMs);
     for (const [hub, r] of Object.entries(readings)) {
+      if (hub === outlier && othersFloor !== null) {
+        // Healthy, but trailing the others (Nov 12 2026: O'Hare at 80% beside 89% or better).
+        const past = readingsDay === 'yesterday';
+        facts.push({
+          id: `otp.${hub}`,
+          kind: 'otp',
+          hub,
+          statement: `${hubLabel(hub)} ${past ? 'was' : 'is'} at ${r.otp}% on time ${past ? 'yesterday' : 'so far today'} (${r.operated} departed), behind the other hubs, which ${past ? 'were' : 'are'} at ${othersFloor}% or better.`,
+          values: uniq([`${r.otp}%`, String(r.operated), `${othersFloor}%`, `${ON_TIME_GRACE_MIN} minutes`, ...airportForms(hub)]),
+          at: iso(r.at),
+          link: { tab: 'schedule', hub },
+          // Above calm filler and programs away from the hubs, below a hub problem that sets a tone.
+          severity: 15,
+          toneFloor: 'calm',
+          // Healthy: never the tone, and never a change on its own (it comes and goes with the gap).
+          material: null,
+          outlier: true,
+        });
+        continue;
+      }
       if (everyHubHealthy && !hubsWithProgram.has(hub)) {
         skipped.push(`otp.${hub}: ${r.otp}% and every hub is healthy (the on-time summary covers it)`);
         continue;
@@ -620,7 +668,22 @@ export function buildBriefFacts(sources, { nowMs }) {
       }
 
       const soft = sorted.filter((h) => readings[h].otp < BRIEF_SOFT_HUB_OTP);
-      if (soft.length === 0) {
+      if (soft.length === 0 && outlier) {
+        // The trailing hub has its own fact; the summary covers the others.
+        const others = sorted.slice(1);
+        const floorPct = readings[others[0]].otp;
+        facts.push({
+          id: 'otp.floor',
+          kind: 'otp',
+          statement: `The other ${hubsReporting(others.length, day)} ${are} at ${floorPct}% on time or better.`,
+          values: uniq([String(others.length), numberWord(others.length), `${floorPct}%`]),
+          at: iso(Math.min(...others.map((h) => readings[h].at ?? nowMs))),
+          link: { tab: 'schedule', hub: others[0] },
+          severity: 8,
+          toneFloor: 'calm',
+          material: null,
+        });
+      } else if (soft.length === 0) {
         const floorPct = readings[low].otp;
         facts.push({
           id: 'otp.floor',
@@ -801,7 +864,7 @@ export function buildBriefFacts(sources, { nowMs }) {
       usedIds.add(id);
       facts.push({ ...fact, id });
       plannedCount++;
-      if (fact.hub) plannedAtHub++;
+      if (fact.hub && !fact.later) plannedAtHub++;
     }
     if (plannedCount > 0) {
       facts.push({
@@ -811,7 +874,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         values: uniq([String(plannedCount), numberWord(plannedCount)]),
         at: iso(asOf.nas ?? nowMs),
         link: { tab: 'weather' },
-        // Only possible programs away from the hubs: last, with them (plannedFact).
+        // Only possible programs away from the hubs or not before tomorrow: last, with them.
         severity: plannedAtHub ? 3 : 0,
         toneFloor: 'calm',
         // Only planned programs at hubs count as a change (plannedFact).
@@ -926,9 +989,17 @@ export function buildBriefFacts(sources, { nowMs }) {
  */
 export function orderFacts(facts) {
   const sorted = [...(facts || [])].sort((a, b) => b.severity - a.severity || a.id.localeCompare(b.id));
-  if (computeTone(sorted) !== 'calm') return sorted;
-  const summary = sorted.findIndex((f) => f.id === 'otp.floor');
-  if (summary > 0) sorted.unshift(...sorted.splice(summary, 1));
+  const take = (pred) => { const i = sorted.findIndex(pred); return i >= 0 ? sorted.splice(i, 1)[0] : null; };
+  const summary = take((f) => f.id === 'otp.floor');
+  const outlier = take((f) => f.outlier === true);
+  // The on-time story reads as one: the hub that trails, then "the other hubs".
+  const story = [outlier, summary].filter(Boolean);
+  if (computeTone(facts) === 'calm') return [...story, ...sorted];
+  // Otherwise where the trailing hub (or, without one, the summary) ranks.
+  const anchor = story[0];
+  if (!anchor) return sorted;
+  const at = sorted.findIndex((f) => f.severity < anchor.severity || (f.severity === anchor.severity && f.id.localeCompare(anchor.id) > 0));
+  sorted.splice(at < 0 ? sorted.length : at, 0, ...story);
   return sorted;
 }
 
@@ -1044,6 +1115,8 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped, planDate = null })
   // "1800-2200", "BETWEEN 1800 AND 2200". Bare HHMM is Zulu.
   const windowText = `${String(tmi.time || '')} ${text}`.toUpperCase();
   let window = '';
+  /** The window opens on a later local day than now ("tomorrow after 10:00 AM ET"). */
+  let later = false;
   const values = airports.flatMap((c) => airportForms(c));
   // Each time on the airport's clock, with the day it falls on whenever that is not later today
   // ("tomorrow after 10:00 AM ET"). The day travels in the time's own value ("tomorrow 10:00 AM
@@ -1072,6 +1145,7 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped, planDate = null })
       const d = day(aMs);
       window = `${d ? ` ${d}` : ''} between ${a} and ${b}`;
       values.push(dayClock(d, a), b);
+      later = d !== '';
     }
   } else if ((m = windowText.match(/\bUNTIL\s+(\d{4})Z?\b/))) {
     const aMs = at(m[1]);
@@ -1093,6 +1167,7 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped, planDate = null })
       const d = day(aMs);
       window = `${d ? ` ${d}` : ''} after ${a}`;
       values.push(dayClock(d, a));
+      later = d !== '';
     }
   }
 
@@ -1107,6 +1182,10 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped, planDate = null })
     ? `The FAA's operations plan says ${program} is possible ${target}${window}. It is not in effect.`
     : `The FAA's operations plan expects ${program} ${target}${window}. It is not in effect yet.`;
   const isHub = hubs.length > 0;
+  // At a hub, a possible program later today is a watch; one whose window opens on a later day is
+  // not tonight's news (Nov 12 2026: the next day's plan, issued around 00Z, set the evening's brief
+  // to Watch). It ranks below every fact about now, above possible programs away from the hubs.
+  const watchNow = isHub && !later;
   return {
     id: `faa.planned.${primary}`,
     kind: 'faa_planned',
@@ -1117,11 +1196,13 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped, planDate = null })
     link: { tab: 'weather', hub: primary },
     // Something that may happen at an airport that is not a United hub ranks below every other
     // fact: it orders the model's list last, and the template never picks or leads with it.
-    severity: isHub ? (tentative ? 22 : 30) : 0,
-    toneFloor: isHub ? 'watch' : 'calm',
-    // Something possible at an airport that is not a hub coming, going or moving its window is
-    // not worth a new brief; at a hub it is.
-    material: isHub ? `planned:${program}:${window}` : null,
+    severity: watchNow ? (tentative ? 22 : 30) : isHub ? 0.5 : 0,
+    toneFloor: watchNow ? 'watch' : 'calm',
+    // Something possible at an airport that is not a hub, or not before tomorrow, coming, going or
+    // moving its window is not worth a new brief; later today at a hub it is. At local midnight a
+    // hub's "tomorrow" line becomes today's and joins the key.
+    material: watchNow ? `planned:${program}:${window}` : null,
+    ...(later ? { later: true } : {}),
   };
 }
 

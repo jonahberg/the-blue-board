@@ -52,13 +52,13 @@ const QUOTE_ATTRIBUTION_RE = /\b(?:heard|radio|frequenc(?:y|ies)|tower|controlle
 /** Markup or a link in model text: never published. */
 const MARKUP_RE = /<[^>]{0,200}>|<\/?[a-z]|[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
 /** A headline saying the operation is calm: replaced whenever the computed tone is not calm. */
-const CALM_HEADLINE_RE = /\b(?:calm|calmly|smooth|smoothly|quiet|quietly)\b|\brunning\s+normally\b/i;
+const CALM_HEADLINE_RE = /\b(?:calm|calmly|smooth|smoothly|quiet|quietly)\b|\b(?:running|run|runs|operating|operate|operates)\s+normally\b|\bhubs?,?\s+(?:which\s+)?(?:are|is|look|looks|remain|remains|stay|stays|seem|seems)\s+(?:running\s+|operating\s+)?(?:steady|fine|normal|ok|okay|on\s+track)\b/i;
 /** "the other hubs are running normally": the rest of the hubs, after the problem has been named. */
-const OTHER_HUBS_NORMAL_RE = /\b(?:the\s+)?(?:other|remaining)\s+(?:United\s+)?hubs\s+(?:are|look|remain|stay)\s+(?:running\s+)?(?:normally|normal|smoothly|calm)\b/gi;
+const OTHER_HUBS_NORMAL_RE = /\b(?:the\s+)?(?:other|remaining)\s+(?:United\s+)?hubs,?\s+(?:which\s+)?(?:are|look|remain|stay|run|seem)\s+(?:running\s+|operating\s+)?(?:normally|normal|smoothly|calm|steady|fine)\b/gi;
 /**
  * Hubs with a problem a headline must name before it may call the others normal: an on-time figure
- * under 80% (a hub's own fact with a material reading), an FAA program in effect there, or weather
- * at warning level or worse. A possible program is not one.
+ * under 80% (a hub's own fact with a material reading) or trailing the others (an outlier), an FAA
+ * program in effect there, or weather at warning level or worse. A possible program is not one.
  * @param {Array<import('./brief-facts.js').BriefFact>} facts
  * @returns {string[]}
  */
@@ -66,7 +66,7 @@ function hubsWithProblems(facts) {
   const hubs = new Set();
   for (const f of facts) {
     if (!f.hub) continue;
-    if (/^otp\.[A-Z]{3}$/.test(f.id) && f.material !== null) hubs.add(f.hub);
+    if (/^otp\.[A-Z]{3}$/.test(f.id) && (f.material !== null || f.outlier === true)) hubs.add(f.hub);
     if (/^faa\.active\.[A-Z]{3}\./.test(f.id)) hubs.add(f.hub);
     if (/^wx\.[A-Z]{3}$/.test(f.id) && f.toneFloor !== 'calm') hubs.add(f.hub);
   }
@@ -80,6 +80,74 @@ function namesAirport(text, code) {
 const CONDITION_RE = /\b(?:United|United's|hubs?|calm|calmly|smooth|smoothly|quiet|quietly|normal|normally)\b/i;
 /** Words naming a ground stop or delay program. On a calm day none is at a hub (computeTone). */
 const PROGRAM_WORDS_RE = /\b(?:ground\s+stops?|ground\s+delays?|delay\s+programs?|FAA\s+programs?|programs?|delays?|holding|held)\b/i;
+
+/** Words that put a headline in the future: a possible program, tomorrow. */
+const LATER_WORDS_RE = /\b(?:tomorrow|possible|possibly|may|might|could|planned|plans?|expects?|expected|likely)\b/i;
+
+/**
+ * Why a calm headline leads with something only possible tomorrow, or null (Nov 12 2026: "FAA
+ * action is possible at Newark tomorrow; none is in effect." on a night nothing was wrong). It does
+ * when a future word, or an airport only tomorrow's possible programs name, comes before anything
+ * about now: United's condition, or an airport a present fact names.
+ * @param {string} headline  normalized
+ * @param {'calm'|'watch'|'disrupted'} tone
+ * @param {Array<import('./brief-facts.js').BriefFact>} facts
+ * @returns {string|null}
+ */
+export function tomorrowLeadReason(headline, tone, facts) {
+  if (tone !== 'calm') return null;
+  const later = facts.filter((f) => f.later === true);
+  if (later.length === 0) return null;
+  const present = facts.filter((f) => f.kind !== 'faa_planned');
+  const presentCodes = new Set(present.flatMap((f) => (f.values || []).flatMap((v) => extractClaims(String(v)).filter((c) => c.type === 'airport').flatMap((c) => c.codes))));
+  let laterAt = Infinity;
+  let nowAt = Infinity;
+  const first = (re) => { const m = headline.match(re); return m && m.index !== undefined ? m.index : Infinity; };
+  laterAt = first(LATER_WORDS_RE);
+  nowAt = first(CONDITION_RE);
+  // Airports, by position: one a present fact names is "now"; one only tomorrow's names is not.
+  const state = { work: headline };
+  for (const claim of extractClaims(headline)) {
+    if (claim.type !== 'airport') continue;
+    const at = state.work.indexOf(claim.raw);
+    if (at < 0) continue;
+    if (claim.codes.some((c) => presentCodes.has(c))) nowAt = Math.min(nowAt, at);
+    else laterAt = Math.min(laterAt, at);
+  }
+  return laterAt < nowAt ? 'headline:leads_with_tomorrow' : null;
+}
+
+/** A sentence saying whether an airport is a United hub (prompt rule 9). Ours, "…in effect at any United hub", is not one. */
+const HUB_STATUS_RE = /\b(?:(?:is|are)\s+not\s+(?:counted\s+)?(?:among\s+(?:the\s+)?|one\s+of\s+)?(?:a\s+)?(?:United(?:'s)?\s+hubs?|hubs?\s+for\s+United)|none\s+(?:of\s+(?:them|these|those)\s+)?(?:is|are)\s+(?:at\s+)?(?:a|any)\s+United\s+hubs?|not\s+(?:a\s+)?United\s+hubs?)\b/i;
+/** The same as an aside: ", which is not a United hub," / "(not a United hub)". */
+const HUB_STATUS_ASIDE_RE = /\s*(?:,\s*(?:which\s+(?:is|are)\s+)?not\s+(?:a\s+)?United\s+hubs?\s*,|\(\s*(?:which\s+(?:is|are)\s+)?not\s+(?:a\s+)?United\s+hubs?\s*\))/gi;
+
+/**
+ * A sentence with its "X is not a United hub" taken out, when the rest stands on its own; null when
+ * the statement cannot be cut out cleanly (the item is dropped); the text unchanged when there is
+ * none. Only whole clauses go (split at sentence ends and semicolons), and only ones that claim
+ * nothing else (at most the airport they are about).
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function withoutHubStatus(text) {
+  let out = String(text).replace(HUB_STATUS_ASIDE_RE, '');
+  if (!HUB_STATUS_RE.test(out)) return out;
+  const parts = out.split(/(;\s*|(?<=[.!?])\s+)/);
+  const keep = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const clause = parts[i];
+    if (!HUB_STATUS_RE.test(clause)) { keep.push(clause); continue; }
+    const rest = extractClaims(clause.replace(HUB_STATUS_RE, ' '));
+    if (rest.some((c) => c.type !== 'airport') || rest.length > 1) return null;
+  }
+  out = keep.join('; ').replace(/;\s*(?=[A-Z])/g, (m, offset, str) => (/[.!?]$/.test(str.slice(0, offset).trim()) ? ' ' : m)).trim();
+  if (!out) return null;
+  return /[.!?]$/.test(out) ? out : `${out.replace(/[;,]\s*$/, '')}.`;
+}
+
+/** A note sending travelers OUT of an airport, or both ways: wrong for a stop or delay program. */
+const NOTE_WRONG_DIRECTION_RE = /\b(?:out\s+of|to\s+or\s+from|into\s+or\s+out\s+of|in\s+or\s+out\s+of|(?:flying|fly|flies|flights?|departing|leaving|traveling|travelling)\s+from)\b/i;
 
 /**
  * Why a headline leads with a stop or delay program at an airport that is not a United hub, or null
@@ -394,12 +462,23 @@ export function verifyBrief(candidate, facts) {
       report.healthyHubOnTime += 1;
       summarySlots.push(kept.length);
     }
+    // Prompt rule 9: whether an airport is a United hub is not the brief's to say. The clause goes
+    // when the rest stands; otherwise the item does.
+    let text = normalizeText(item.text).trim();
+    if (!reasons.length) {
+      const cut = withoutHubStatus(text);
+      if (cut === null) reasons.push('says_whether_hub');
+      else if (cut !== text) {
+        report.trimmed.push({ item: kept.length, from: text, to: cut, reason: 'says_whether_hub' });
+        text = cut;
+      }
+    }
     if (reasons.length) {
       report.dropped.push({ index, text: item.text, fact_ids: ids, reasons });
       return;
     }
     report.warnings.push(...styleWarnings(item.text, `items[${index}]`));
-    kept.push({ text: normalizeText(item.text).trim(), fact_ids: ids });
+    kept.push({ text, fact_ids: ids });
   });
   if (summary && summarySlots.length && !kept.some((i) => i.fact_ids.includes('otp.floor'))) {
     kept.splice(summarySlots[0], 0, { text: summary.statement, fact_ids: ['otp.floor'] });
@@ -445,6 +524,9 @@ export function verifyBrief(candidate, facts) {
   // Its mirror: United's condition comes first, never a program at an airport that is not a hub.
   const awayLead = nonHubLeadReason(headline, tone, factList);
   if (awayLead) headlineReasons.push(awayLead);
+  // Nor, on a calm night, something only possible tomorrow (Nov 12 2026).
+  const laterLead = tomorrowLeadReason(headline, tone, factList);
+  if (laterLead) headlineReasons.push(laterLead);
   if (headlineReasons.length) {
     const replacement = templateHeadline(factList, tone);
     report.headline = { status: 'replaced', reasons: headlineReasons, original: headline };
@@ -461,20 +543,40 @@ export function verifyBrief(candidate, facts) {
     const ids = [...new Set(input.traveler_note.fact_ids)];
     const reasons = checkSentence(input.traveler_note.text, ids, factIndex);
     if (!travelerNoteAllowed(tone, factList)) reasons.push(`tone_is_${tone}`);
+    let text = normalizeText(input.traveler_note.text).trim();
+    if (!reasons.length) {
+      const cut = withoutHubStatus(text);
+      if (cut === null) reasons.push('says_whether_hub');
+      else if (cut !== text) {
+        report.trimmed.push({ item: 'traveler_note', from: text, to: cut, reason: 'says_whether_hub' });
+        text = cut;
+      }
+    }
+    // A stop or delay program holds flights INTO the airport: a note sending travelers out of it, or
+    // both ways, is replaced by the template's (a closure is both ways, and keeps its note).
+    const cited = ids.map((id) => factIndex.get(id)).filter(Boolean);
+    let noteIds = ids;
+    if (!reasons.length && NOTE_WRONG_DIRECTION_RE.test(text)
+      && cited.some((f) => /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/.test(f.id)) && !cited.some((f) => /\.closure$/.test(f.id))) {
+      const template = buildTemplateBrief(factList).traveler_note;
+      if (template) {
+        report.trimmed.push({ item: 'traveler_note', from: text, to: template.text, reason: 'note_direction' });
+        text = template.text;
+        noteIds = template.fact_ids;
+      } else reasons.push('note_direction');
+    }
     if (reasons.length) report.travelerNote = { status: 'dropped', reasons };
     else {
       report.travelerNote = { status: 'kept', reasons: [] };
-      let text = normalizeText(input.traveler_note.text).trim();
       // Three or more airports are "one of those airports" (the items name them), as the template
       // writes it; the citations stay.
       if (noteAirportCount(text) >= 3) {
-        const cited = ids.map((id) => factIndex.get(id)).filter(Boolean);
         const verb = cited.some((f) => /\.closure$/.test(f.id)) ? 'flying to or from' : 'flying to';
         const to = `If you are ${verb} one of those airports, check your flight status before leaving for the airport.`;
         report.trimmed.push({ item: 'traveler_note', from: text, to, reason: 'note_three_or_more_airports' });
         text = to;
       }
-      traveler_note = { text, fact_ids: ids };
+      traveler_note = { text, fact_ids: noteIds };
     }
   }
 

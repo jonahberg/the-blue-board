@@ -72,7 +72,8 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
     // Delay programs at hubs are a watch however many there are, and the most concrete news.
     if (gdps.length) return delayProgramHeadline(gdps, name);
     const lead = sorted.find((f) => f.toneFloor === 'watch');
-    const planned = sorted.find((f) => f.kind === 'faa_planned' && f.hub);
+    // Only a possible hub program later today; tomorrow's never leads (brief-verify.js).
+    const planned = sorted.find((f) => f.kind === 'faa_planned' && f.hub && !f.later);
     // No "calm", "smooth" or "running normally" in a watch headline: the verifier replaces those
     // when the tone is not calm (headline:calm_when_not_calm), and this is the replacement.
     if (lead?.kind === 'faa_planned' && lead.hub) return { headline: `FAA action is possible at ${name(lead)}${plannedDay(lead)}; none is in effect.`, fact_ids: [lead.id] };
@@ -80,11 +81,18 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
     if (lead?.hub && lead.kind === 'weather') return { headline: `Weather is slowing ${name(lead)}.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'faa') return { headline: `Mostly normal, with FAA delays at ${name(lead)}.`, fact_ids: [lead.id] };
     if (lead?.hub && lead.kind === 'cancellations') return { headline: `Mostly normal, with cancellations at ${name(lead)}.`, fact_ids: [lead.id] };
+    // A hub trailing the others: a healthy outlier, or the lowest hub when it is under 80% but not soft.
+    const min = sorted.find((f) => f.id === 'otp.min' && f.toneFloor === 'calm' && f.severity < 40);
+    const behind = sorted.find((f) => f.outlier === true) || (min ? sorted.find((f) => f.id === `otp.${min.hub}`) : undefined);
+    if (behind) return { headline: `Mostly normal, with ${name(behind)} behind the other hubs.`, fact_ids: [behind.id] };
     // A program away from the hubs never sets the tone (computeTone), so it is never the lead here.
     if (planned) return { headline: `FAA action is possible at ${name(planned)}${plannedDay(planned)}; none is in effect.`, fact_ids: [planned.id] };
     return { headline: 'United is mostly normal right now.', fact_ids: lead ? [lead.id] : [] };
   }
 
+  // Calm, with a healthy hub trailing the others: that hub, then the rest (Nov 2026).
+  const trailing = sorted.find((f) => f.outlier === true);
+  if (trailing) return { headline: `${name(trailing)} trails the other hubs, which are running normally.`, fact_ids: [trailing.id] };
   // Calm, with a stop or delay program away from the hubs: the hubs first, then the program
   // (Nov 2026), never the program alone (brief-verify.js headline:leads_with_non_hub_program).
   const away = sorted.filter(isNonHubProgramFact);
@@ -154,8 +162,10 @@ function pickItems(facts, limit, tone) {
   const picked = [];
   const add = (f) => { if (f && !picked.includes(f) && picked.length < limit) picked.push(f); };
 
-  // With nothing wrong at the hubs, the brief opens by saying so (Nov 2026).
-  if (tone === 'calm') add(index.get('otp.floor'));
+  // With nothing wrong at the hubs, the brief opens by saying so (Nov 2026): the hub that trails
+  // the others when one does, then the summary of the rest.
+  const outlier = sorted.find((f) => f.outlier === true);
+  if (tone === 'calm') { add(outlier); add(index.get('otp.floor')); }
 
   // Specific problems first: a ground stop at Newark, not "1 FAA program is in effect". The
   // weather behind a hub's ground stop or delay program is already in that program's item
@@ -181,12 +191,16 @@ function pickItems(facts, limit, tone) {
     freed--;
   }
 
+  // The hub story: a healthy hub trailing the others, with the summary of the rest beside it.
+  if (outlier) { add(outlier); add(index.get('otp.floor')); }
+
   // When nothing specific explains the tone, the fact that sets it does (the disruption index on a
-  // day of unconfirmed cancellations), with the cancellation split that explains IT.
+  // day of unconfirmed cancellations), with the cancellation split that explains IT (only when
+  // the confirmed count is there to split: under 5 it is not sent).
   if (tone !== 'calm' && !picked.some((f) => f.toneFloor === tone)) {
     const setter = sorted.find((f) => f.toneFloor === tone);
     add(setter);
-    if (setter?.kind === 'network') {
+    if (setter?.kind === 'network' && index.get('cxl.confirmed')) {
       add(index.get('cxl.confirmed'));
       add(index.get('cxl.unconfirmed'));
     }
@@ -201,7 +215,9 @@ function pickItems(facts, limit, tone) {
   // Background, in reading order. A planned program at a hub beats the general FAA count.
   add(summary);
   const plannedHub = sorted.find((f) => f.kind === 'faa_planned' && f.hub);
-  if (!picked.some((f) => f.kind === 'faa' || f.kind === 'faa_planned')) add(plannedHub || index.get('faa.active.count'));
+  // On a calm night tomorrow's possible hub program closes the brief (Nov 2026).
+  if (tone === 'calm' && plannedHub) add(plannedHub);
+  else if (!picked.some((f) => f.kind === 'faa' || f.kind === 'faa_planned')) add(plannedHub || index.get('faa.active.count'));
   // What is in the air, and the hub-weather tally, are a calm day's background; when something is
   // wrong they are padding (the tally would repeat a program's weather), and a shorter brief is better.
   if (tone === 'calm') {

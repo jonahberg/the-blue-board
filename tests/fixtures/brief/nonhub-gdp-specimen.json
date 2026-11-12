@@ -1,6 +1,6 @@
 {
  "name": "nonhub-gdp-specimen",
- "description": "The production brief of Nov 11 2026, 5:00 PM PT (01:00Z Nov 12), rebuilt from the payloads captured at 01:07Z: every hub with a figure at 84% or better (Tokyo Narita and Guam have none), an FAA ground delay program for flights into Seattle (not a hub) until 9:59 PM PT averaging 32 and up to 82 minutes, 1 confirmed cancellation, the disruption index 18.8 (normal), and the FAA's Nov 12 operations plan listing possible programs at Newark and San Francisco (hubs) and LaGuardia, Boston, Miami and San Diego tomorrow. Expected tone: watch, from the possible programs at Newark and San Francisco (the plan's hub lines raise the tone; Seattle no longer does).",
+ "description": "The production brief of Nov 11 2026, 5:00 PM PT (01:00Z Nov 12), rebuilt from the payloads captured at 01:07Z: every hub with a figure at 84% or better (Tokyo Narita and Guam have none), an FAA ground delay program for flights into Seattle (not a hub) until 9:59 PM PT averaging 32 and up to 82 minutes, 1 confirmed cancellation, the disruption index 18.8 (normal), and the FAA's Nov 12 operations plan listing possible programs at Newark and San Francisco (hubs) and LaGuardia, Boston, Miami and San Diego, all tomorrow. Expected tone: calm: Seattle is not a hub, and a possible hub program for tomorrow does not set tonight's tone (Nov 12 2026).",
  "nowIso": "2026-11-12T01:00:00Z",
  "sources": {
   "irops": {
@@ -15,42 +15,42 @@
    "worstDelays": [
     {
      "ident": "UA4687",
-     "route": "DEN→CPR",
+     "route": "DEN\u2192CPR",
      "delay": 285
     },
     {
      "ident": "UA5826",
-     "route": "ORD→MCI",
+     "route": "ORD\u2192MCI",
      "delay": 246
     },
     {
      "ident": "UA4426",
-     "route": "IAD→HSV",
+     "route": "IAD\u2192HSV",
      "delay": 221
     },
     {
      "ident": "UA2662",
-     "route": "IAH→MCO",
+     "route": "IAH\u2192MCO",
      "delay": 215
     },
     {
      "ident": "UA1309",
-     "route": "ORD→LAX",
+     "route": "ORD\u2192LAX",
      "delay": 196
     },
     {
      "ident": "UA1522",
-     "route": "DEN→IND",
+     "route": "DEN\u2192IND",
      "delay": 181
     },
     {
      "ident": "UA1344",
-     "route": "EWR→DJT",
+     "route": "EWR\u2192DJT",
      "delay": 171
     },
     {
      "ident": "UA1632",
-     "route": "IAH→GUA",
+     "route": "IAH\u2192GUA",
      "delay": 163
     }
    ],
@@ -761,6 +761,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }

@@ -65,7 +65,8 @@ describe('the unconfirmed "likely canceled" count', () => {
       const facts = factsFor(name);
       const unconfirmed = facts.find((f) => f.id === 'cxl.unconfirmed');
       if (unconfirmed) {
-        for (const f of facts.filter((x) => x.kind === 'faa' && /^faa\.active\.[A-Z]{3}\./.test(x.id) || (x.kind === 'faa_planned' && x.hub))) {
+        // Tomorrow's possible hub programs rank below every fact about now, this one included.
+        for (const f of facts.filter((x) => x.kind === 'faa' && /^faa\.active\.[A-Z]{3}\./.test(x.id) || (x.kind === 'faa_planned' && x.hub && !x.later))) {
           expect(unconfirmed.severity, f.id).toBeLessThan(f.severity);
         }
       }
@@ -189,11 +190,37 @@ describe('buildTemplateBrief', () => {
     expect(t.traveler_note).toEqual({ text: "If you are flying to Seattle, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.SEA.gdp'] });
   });
 
-  it('the 5:00 PM specimen as it was: watch from the possible programs at Newark and San Francisco tomorrow', () => {
+  it('the 5:00 PM specimen: calm (tomorrow\'s possible hub programs do not set tonight\'s tone), rule D\'s shape', () => {
     const t = buildTemplateBrief(factsFor('nonhub-gdp-specimen'));
-    expect(t.tone).toBe('watch');
-    expect(t.headline).toBe('FAA action is possible at Newark tomorrow; none is in effect.');
-    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.planned.EWR', 'faa.planned.SFO', 'faa.active.SEA.gdp', 'otp.floor']);
+    expect(t.tone).toBe('calm');
+    expect(t.headline).toBe("United's hubs are running normally; a delay program is slowing Seattle arrivals.");
+    // Now first, tomorrow's possibles last.
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['otp.floor', 'faa.active.SEA.gdp', 'faa.planned.EWR']);
+    expect(t.items[2].text).toBe("The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) tomorrow after 10:00 AM ET. It is not in effect.");
+    expect(t.traveler_note).toEqual({ text: "If you are flying to Seattle, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.SEA.gdp'] });
+  });
+
+  it('a possible hub program later today keeps its watch; its tomorrow twin is calm and comes last', () => {
+    const today = buildTemplateBrief(factsFor('planned-only-watch'));
+    expect(today.tone).toBe('watch');
+    expect(today.headline).toBe('FAA action is possible at Newark; none is in effect.');
+    const tomorrow = buildTemplateBrief(factsFor('planned-only-tomorrow'));
+    expect(tomorrow.tone).toBe('calm');
+    expect(tomorrow.headline).toBe('United is running smoothly right now.');
+    expect(tomorrow.items.map((i) => i.fact_ids[0])).toEqual(['otp.floor', 'faa.planned.EWR', 'air.starlink']);
+  });
+
+  it('the 5:20 PM specimen: O\'Hare trails the others (an outlier at 80%), then the other hubs, then the index, then Seattle', () => {
+    const t = buildTemplateBrief(factsFor('ord-80-specimen'));
+    expect(t.tone).toBe('watch'); // the index at 20.3; O'Hare's floor is calm
+    expect(t.headline).toBe("Mostly normal, with Chicago O'Hare behind the other hubs.");
+    expect(t.items.map((i) => i.text)).toEqual([
+      "Chicago O'Hare (ORD) is at 80% on time so far today (460 departed), behind the other hubs, which are at 89% or better.",
+      'The other six United hubs reporting so far today are at 89% on time or better.',
+      "The network disruption index, which weighs cancellations, long delays and diversions across United's hub departures, is 20.3, in the minor-disruption range (20 to 40).",
+      'The FAA has a ground delay program in effect for flights heading to Seattle (SEA) until 9:59 PM PT. Those flights are held at their departure airport; delays average 32 minutes, up to 82 minutes.',
+    ]);
+    expect(buildTemplateBrief(factsFor('ord-79-variant')).headline).toBe("Mostly normal, with Chicago O'Hare behind the other hubs.");
   });
 
   it('a long name away from the hubs: the shorter name that stands for it alone, then "elsewhere"', () => {

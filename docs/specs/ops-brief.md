@@ -61,7 +61,7 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 
 | id | kind | from | statement (example) | tone floor |
 |---|---|---|---|---|
-| `otp.<HUB>` | otp | `/api/irops` `hubMetrics`, `serverOtpFromMetrics()` (the hub strip's number). **On a day every hub with a figure is at or above 80%, sent only for a hub with an FAA program in effect** (the others are in `collection.skipped`: "the on-time summary covers it") | Chicago O'Hare (ORD): 91% of departures so far today left within 30 minutes of schedule (410 departed). / … 75% of departures yesterday … (360 departed); today's figures are not in yet. | <50% disrupted, <70% watch |
+| `otp.<HUB>` | otp | `/api/irops` `hubMetrics`, `serverOtpFromMetrics()` (the hub strip's number). **On a day every hub with a figure is at or above 80%, sent only for a hub with an FAA program in effect, and for the lowest hub when it is an outlier**: at least 8 points below the next-lowest (`BRIEF_OUTLIER_GAP_PTS`) and under 85% (`BRIEF_OUTLIER_UNDER_OTP`); then it reads "Chicago O'Hare (ORD) is at 80% on time so far today (460 departed), behind the other hubs, which are at 89% or better.", is calm, severity 15, never material, and `otp.floor` reads "The other six United hubs reporting so far today are at 89% on time or better." (the others are in `collection.skipped`: "the on-time summary covers it") | Chicago O'Hare (ORD): 91% of departures so far today left within 30 minutes of schedule (410 departed). / … 75% of departures yesterday … (360 departed); today's figures are not in yet. | <50% disrupted, <70% watch |
 | `otp.min` | otp | same, only when the lowest hub is under 80% (`BRIEF_HEALTHY_HUB_OTP`): which healthy hub is lowest is not news | Of the seven United hubs reporting so far today, Los Angeles (LAX) is lowest at 75% on time. | calm |
 | `otp.floor` | otp | same, when no hub is under 70%; names the lowest hub only when it is under 80% (its `link` is that hub's board either way). "Reporting so far today" / "reporting yesterday" when every board agrees, plain "reporting" when they do not: true when Tokyo Narita and Guam have too few departures yet | All seven United hubs reporting so far today are at 85% on time or better. / … at 75% on time or better; Los Angeles is the lowest. | calm |
 | `otp.soft` | otp | same, when some are | Two of the seven United hubs reporting so far today are under 70% on time: Houston (62%) and Newark (55%). | watch |
@@ -75,7 +75,7 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `faa.active.<HUB>.dep` / `.arr` | faa | hubs only | The FAA reports departure delays of 31 to 45 minutes at Houston (IAH), because of thunderstorms. | watch |
 | `faa.active.count` | faa | hub GS/GDP/closures | No FAA ground stop or ground delay program is in effect at any United hub. / 1 FAA program affects a United hub: a ground stop for flights into Newark. | a ground stop or closure at a hub: disrupted; ground delay programs only (any number of hubs): watch |
 | `faa.active.other` | faa | only when more than 3 programs are in effect away from the hubs: the ones not sent one by one | The FAA also has 2 more programs in effect at other airports: a ground delay program for flights into Philadelphia and a ground delay program for flights into Washington Reagan. | calm |
-| `faa.planned.<CODE>` | faa_planned | `/api/nas` operations plan (`UNTIL`/`AFTER`/`HHMM-HHMM` Zulu). Resolved **forward from the plan's own date** (`adv_date` in its advisory link; `resolvePlanHhmm`), not to the nearest occurrence: the evening plan's "AFTER 1500" is tomorrow morning. A time not later today or tonight on the airport's clock carries its day in the statement **and in its value** ("tomorrow 10:00 AM ET"); a window that has ended is not sent; an `AFTER` already past reads "since" | The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) tomorrow after 10:00 AM ET. It is not in effect. | hub: watch |
+| `faa.planned.<CODE>` | faa_planned | `/api/nas` operations plan (`UNTIL`/`AFTER`/`HHMM-HHMM` Zulu). Resolved **forward from the plan's own date** (`adv_date` in its advisory link; `resolvePlanHhmm`), not to the nearest occurrence: the evening plan's "AFTER 1500" is tomorrow morning. A time not later today or tonight on the airport's clock carries its day in the statement **and in its value** ("tomorrow 10:00 AM ET"); a window that has ended is not sent; an `AFTER` already past reads "since". At a hub, a window that opens on a later local day (`later: true`) ranks below every fact about now (severity 0.5) | The FAA's operations plan says a ground stop or ground delay program is possible for flights into Newark (EWR) tomorrow after 10:00 AM ET. It is not in effect. | hub, later today (or tonight): watch; hub, tomorrow or later: **calm** (Nov 12 2026: the next day's plan set the evening to Watch); elsewhere: calm |
 | `faa.planned.count` | faa_planned | same | The FAA's operations plan lists 2 possible or planned programs for later. None of them is in effect now. | calm |
 | `wx.<HUB>` | weather | `/api/metar`, `computeOpsImpact()`; only hubs whose impact is not normal and that have a condition to name (a caution from low cloud over mist or haze alone has none, and is skipped) | Newark (EWR) weather: low visibility, thunderstorms, heavy rain and wind gusting to 34 knots, enough to slow arrivals and departures. (caution: "which can cause minor delays"; severe: "enough to slow arrivals and departures significantly") | warning/severe → watch |
 | `wx.summary` | weather | same | Weather is not affecting operations at any of the 9 United hubs with a current report. | calm |
@@ -172,9 +172,17 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    weather at warning or worse) is named before it. Its mirror (Nov 2026): a headline that names a stop or delay
    program away from the hubs (its airport, or on a calm day any program wording) before anything
    about United's own condition ("United", the hubs, a calm word, a hub's name) is replaced too
-   (`headline:leads_with_non_hub_program`). Over 12 words is a warning. The template's own watch
+   (`headline:leads_with_non_hub_program`). On a calm night, a headline that leads with something only
+   possible tomorrow (a future word, or an airport only tomorrow's possible programs name, before
+   anything about now) is replaced (`headline:leads_with_tomorrow`). The calm words include "run(s)
+   normally" and "hubs are/look steady, fine, normal". Over 12 words is a warning. The template's own watch
    headlines avoid those words, so a replacement never trips the rule.
-7. **Traveler note.** Checked like an item; kept only when an FAA ground stop or ground delay
+6a. **Whether an airport is a hub** (prompt rule 9): "Boston is not a United hub", "none is at a
+   United hub" and the like are cut out when the rest of the sentence stands (`report.trimmed`,
+   `says_whether_hub`), else the item or note is dropped (`says_whether_hub`). Our own "… is in
+   effect at any United hub" is not one.
+7. **Traveler note.** A note about a stop or delay program that sends travelers "out of", "from" or
+   "to or from" the airport is replaced by the template's note (`note_direction`). Checked like an item; kept only when an FAA ground stop or ground delay
    program is in effect at **any** airport in the facts (a hub or not, since Nov 2026: United flies
    there), or the final tone is `disrupted` (`travelerNoteAllowed` in `brief-facts.js`; the
    dashboard applies the same rule to the facts the brief cites, in `brief-view.js`). Otherwise
@@ -184,7 +192,8 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    (`src/lib/ops-health.js`, which counts programs at United hubs only): ground delay programs, at
    however many hubs, are `watch` ("Some Delays"); a ground stop or closure at a hub is `disrupted`,
    as is the network status at its worst level ("Disrupted"); **a program away from the hubs is
-   `calm`** (Nov 2026). `tests/brief-facts.test.js` checks, for every fixture, that the floor from
+   `calm`** (Nov 2026), and so is a possible hub program whose window opens tomorrow or later.
+   `tests/brief-facts.test.js` checks, for every fixture, that the floor from
    the FAA facts equals the header's FAA level from the same `/api/faa` input. One known divergence:
    arrival delays at a hub are `watch` here and nothing in the header (`hubProgramMarker` has no
    arrival branch). A soft hub, a minor index, hub weather at warning or worse and a possible
@@ -249,7 +258,8 @@ out of the key entirely, id included, so it appearing or disappearing is not a c
 | `otp.min` | the lowest hub and its reading rounded to 5 (built only below 80%) |
 | `wx.<HUB>` | none at caution level (light rain or snow, mist, 30-knot gusts); at warning or severe, the level plus thunderstorms, snow, freezing precipitation and a wind band (30+, 40+ knots); which of low clouds, low visibility and fog a METAR names is not |
 | `wx.summary` | the hubs at warning level or worse, not every hub with caution-level weather |
-| `faa.planned.<CODE>` | at a hub, the program and its window, day word included ("tomorrow after", "since"): the text must change at local midnight and when the window opens; away from the hubs, none |
+| `faa.planned.<CODE>` | at a hub later today, the program and its window, day word included ("since" once it opens); at a hub tomorrow or later, and away from the hubs, none: a hub's tomorrow line joins the key at local midnight, when it becomes today's |
+| `otp.<HUB>` as an outlier, `otp.floor` beside it | none: the trailing hub coming and going with the 8-point gap is not a change on its own |
 | `faa.planned.count` | the number of planned programs at hubs; none when there are none |
 | everything else | unchanged: FAA programs in effect by type, end time to 15 min, cause and average delay to 15 min (plus the end's day word when it has one); `faa.active.other` by the programs folded into it; unconfirmed cancellations to 25; soft hubs; network status; radio and flow facts |
 
