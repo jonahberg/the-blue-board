@@ -116,7 +116,20 @@ allowlist (`faaCausePhrase`), and anything not on it is left out.
 ## Verification
 
 `verifyBrief(candidate, facts)`, deterministic, in `src/lib/brief-verify.js`, with the claim extractor
-in `src/lib/brief-claims.js`. The same extractor reads both the sentence and the cited facts' `values`,
+in `src/lib/brief-claims.js`.
+
+**One path to published text (Nov 12 2026).** Every sentence that can reach a visitor, whether it is
+an item, the traveler note, the on-time summary standing in for a dropped item, or the template's
+note replacing one that points the wrong way, goes through `finalizeSentence`. It applies the
+verifier's rewrites in order (cutting "… is not a United hub", fixing day-word order, trimming a
+repeated on-time definition, writing "one of those airports"), then validates **only the final
+text**: claims against the facts that sentence cites, voice, markup, radio quotes, the hedge and
+day-word rules, and its shape (at least 3 words, no dangling "and." or "; ."). Markup anywhere in
+what the model sent drops the sentence even when a cut removed it. A rewrite that cannot be made
+cleanly drops the sentence, and so does final text that fails; both are counted in
+`report.rewritesRejected`. A replacement headline is checked by the same headline rules, and if even
+the template's fails, a fixed headline that claims nothing is used. Every round-2 Haiku sample in
+`tests/fixtures/brief-samples/` re-verifies unchanged. The same extractor reads both the sentence and the cited facts' `values`,
 so "what a fact allows" and "what a sentence claims" are measured with one ruler.
 
 1. **Shape.** Exactly `{ headline, tone, items, traveler_note }`, types checked, no extra keys. Fail →

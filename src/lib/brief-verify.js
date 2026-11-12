@@ -402,12 +402,63 @@ const wordCount = (s) => normalizeText(s).trim().split(/\s+/).filter(Boolean).le
  * @property {number} healthyHubOnTime  items that gave a single hub's on-time percentage on a day
  *   every hub is healthy (dropped, reason hub_on_time_on_healthy_day)
  * @property {boolean} summaryInserted  the on-time summary took the first such item's place
- * @property {Array<{item: number|string, from: string, to: string, reason: string}>} trimmed  words
- *   changed in a kept item or the note, never adding a claim: the on-time definition repeated after
- *   the first item that states it, "after tomorrow 1:00 PM" word order, a note naming three or more
- *   airports
+ * @property {Array<{item: number|string, from: string, to: string, reason: string}>} trimmed  every
+ *   rewrite the published text went through (finalizeSentence): a cut "is not a United hub" clause,
+ *   "after tomorrow 1:00 PM" word order, the on-time definition repeated, a note naming three or
+ *   more airports, a note pointing the wrong way replaced by the template's
+ * @property {number} rewritesRejected  sentences (or a summary, a note, a replacement headline) whose
+ *   text after a rewrite failed the checks, so it was not published
  * @property {string[]} [shapeErrors]
  */
+
+/** Fewest words a published item or note may have, whatever produced it. */
+const MIN_PUBLISHED_WORDS = 3;
+/** A clause left hanging by a cut: "… and.", "; .", a trailing comma, a sentence opening on punctuation. */
+const DANGLING_RE = /\b(?:and|or|but|with|while|because|plus)\s*(?:[.;:!?]|$)|[;,:]\s*(?:[.;!?]|$)|^\s*[;,.:]/i;
+
+/** The shape every published sentence must have. */
+function shapeReasons(text) {
+  const reasons = [];
+  if (wordCount(text) < MIN_PUBLISHED_WORDS) reasons.push('too_short');
+  if (DANGLING_RE.test(text)) reasons.push('dangling');
+  return reasons;
+}
+
+/**
+ * THE path from a sentence the model sent (or one the verifier substitutes: the on-time summary, the
+ * template's traveler note) to published text. The rewrites run first, in order, then the FINAL text
+ * alone is validated: its claims against the facts it cites, voice, markup, radio quotes, the
+ * planned-hedge and day-word rules (checkSentence), its shape, and the caller's extra checks.
+ * Nothing reaches a brief without passing through here, so no rewrite can publish text the checks
+ * would have refused. Markup anywhere in the original still drops the sentence even when a cut
+ * removed it.
+ * @param {string} original
+ * @param {string[]} ids
+ * @param {Map<string, any>} factIndex
+ * @param {{rewrites?: Array<{reason: string, apply: (t: string) => string|null}>,
+ *   extra?: (text: string) => string[], itemRules?: boolean}} [options]  a rewrite returning null
+ *   cannot be made cleanly, and the sentence is dropped with that rewrite's reason
+ * @returns {{text: string, reasons: string[], rewrites: Array<{from: string, to: string, reason: string}>}}
+ */
+export function finalizeSentence(original, ids, factIndex, { rewrites = [], extra = () => [], itemRules = true } = {}) {
+  let text = normalizeText(original).trim();
+  const done = [];
+  for (const { reason, apply } of rewrites) {
+    const next = apply(text);
+    if (next === null) return { text, reasons: [reason], rewrites: done };
+    if (next !== text) { done.push({ from: text, to: next, reason }); text = next; }
+  }
+  const reasons = [...checkSentence(text, ids, factIndex, { itemRules }), ...shapeReasons(text), ...extra(text)];
+  if (MARKUP_RE.test(normalizeText(original)) && !reasons.includes('markup_or_url')) reasons.push('markup_or_url');
+  return { text, reasons, rewrites: done };
+}
+
+/** Headlines that claim nothing, for when even the template's headline fails its checks. */
+const FALLBACK_HEADLINE = Object.freeze({
+  calm: 'United is running smoothly right now.',
+  watch: 'United is mostly normal right now.',
+  disrupted: "United's operation is disrupted right now.",
+});
 
 /**
  * Verify the model's brief against the facts.
@@ -431,6 +482,7 @@ export function verifyBrief(candidate, facts) {
     healthyHubOnTime: 0,
     summaryInserted: false,
     trimmed: [],
+    rewritesRejected: 0,
   };
 
   const shape = validateBriefShape(candidate);
@@ -451,132 +503,142 @@ export function verifyBrief(candidate, facts) {
   const summary = factIndex.get('otp.floor');
   /** @type {number[]} positions in `kept` where the summary may stand in for a dropped item */
   const summarySlots = [];
+  // The on-time definition is stated once, in the first kept item that states it (prompt rule 4).
+  let definitionSeen = false;
   input.items.forEach((item, index) => {
     const ids = [...new Set(item.fact_ids)];
-    const reasons = index >= BRIEF_MAX_ITEMS ? ['over_item_limit'] : checkSentence(item.text, ids, factIndex);
+    if (index >= BRIEF_MAX_ITEMS) {
+      report.dropped.push({ index, text: item.text, fact_ids: ids, reasons: ['over_item_limit'] });
+      return;
+    }
+    const result = finalizeSentence(item.text, ids, factIndex, {
+      rewrites: [
+        // Prompt rule 9: whether an airport is a United hub is not the brief's to say.
+        { reason: 'says_whether_hub', apply: withoutHubStatus },
+        // "after tomorrow 1:00 PM ET" reads as the day after tomorrow.
+        { reason: 'day_word_order', apply: fixDayWordOrder },
+        ...(definitionSeen ? [{ reason: 'on_time_definition_repeated', apply: (t) => trimOnTimeDefinition(t) ?? t }] : []),
+      ],
+    });
+    const reasons = result.reasons;
     // Only a sentence that otherwise passes, or one whose only trouble is citing a hub's on-time
     // fact that was not sent (the specimen: otp.floor + otp.EWR, "and Newark is at 96%").
     const citesUnsentOnTime = reasons.some((r) => /^unknown_fact_id:otp\.[A-Z]{3}$/.test(r));
-    if (index < BRIEF_MAX_ITEMS && healthyDay && (reasons.length === 0 || citesUnsentOnTime) && givesHealthyHubOnTime(item.text, ids, factIndex)) {
+    if (healthyDay && (reasons.length === 0 || citesUnsentOnTime) && givesHealthyHubOnTime(result.text, ids, factIndex)) {
       reasons.push('hub_on_time_on_healthy_day');
       report.healthyHubOnTime += 1;
       summarySlots.push(kept.length);
     }
-    // Prompt rule 9: whether an airport is a United hub is not the brief's to say. The clause goes
-    // when the rest stands; otherwise the item does.
-    let text = normalizeText(item.text).trim();
-    if (!reasons.length) {
-      const cut = withoutHubStatus(text);
-      if (cut === null) reasons.push('says_whether_hub');
-      else if (cut !== text) {
-        report.trimmed.push({ item: kept.length, from: text, to: cut, reason: 'says_whether_hub' });
-        text = cut;
-      }
-    }
     if (reasons.length) {
+      if (result.rewrites.length) report.rewritesRejected += 1;
       report.dropped.push({ index, text: item.text, fact_ids: ids, reasons });
       return;
     }
-    report.warnings.push(...styleWarnings(item.text, `items[${index}]`));
-    kept.push({ text, fact_ids: ids });
+    for (const r of result.rewrites) report.trimmed.push({ item: kept.length, ...r });
+    report.warnings.push(...styleWarnings(result.text, `items[${index}]`));
+    kept.push({ text: result.text, fact_ids: ids });
+    if (ON_TIME_DEFINITION_RE.test(result.text)) definitionSeen = true;
   });
   if (summary && summarySlots.length && !kept.some((i) => i.fact_ids.includes('otp.floor'))) {
-    kept.splice(summarySlots[0], 0, { text: summary.statement, fact_ids: ['otp.floor'] });
-    report.summaryInserted = true;
+    // The summary goes through the same path as any sentence.
+    const s = finalizeSentence(summary.statement, ['otp.floor'], factIndex);
+    if (s.reasons.length) report.rewritesRejected += 1;
+    else {
+      kept.splice(summarySlots[0], 0, { text: s.text, fact_ids: ['otp.floor'] });
+      report.summaryInserted = true;
+    }
   }
-  // "after tomorrow 1:00 PM ET" reads as the day after tomorrow: the day goes where a person puts it.
-  kept.forEach((item, i) => {
-    const fixed = fixDayWordOrder(item.text);
-    if (fixed !== item.text) {
-      report.trimmed.push({ item: i, from: item.text, to: fixed, reason: 'day_word_order' });
-      kept[i] = { ...item, text: fixed };
-    }
-  });
-  // The on-time definition is stated once, in the first item that states it (prompt rule 4).
-  let definitionSeen = false;
-  kept.forEach((item, i) => {
-    if (!ON_TIME_DEFINITION_RE.test(item.text)) return;
-    if (!definitionSeen) { definitionSeen = true; return; }
-    const trimmed = trimOnTimeDefinition(item.text);
-    if (trimmed) {
-      report.trimmed.push({ item: i, from: item.text, to: trimmed, reason: 'on_time_definition_repeated' });
-      kept[i] = { ...item, text: trimmed };
-    }
-  });
   report.itemsKept = kept.length;
 
   if (kept.length === 0) return { ok: false, brief: null, report };
 
-  // Headline: grounded in the surviving items' facts, and short.
+  // Headline: grounded in the surviving items' facts, and short. A replacement is checked the same way.
   const union = [...new Set(kept.flatMap((i) => i.fact_ids))];
+  const problemHubs = hubsWithProblems(factList);
+  const headlineReasons = (text, ids) => {
+    const reasons = checkSentence(text, ids, factIndex, { itemRules: false }).filter((r) => r !== 'too_many_fact_ids');
+    if (text.length > MAX_HEADLINE_CHARS || wordCount(text) > MAX_HEADLINE_WORDS) reasons.push('headline_too_long');
+    if (DANGLING_RE.test(text)) reasons.push('dangling');
+    // "Operations look calm" under a computed "watch" contradicts the tone word beside it. "The other
+    // hubs are running normally" does not call the operation calm when every hub with a problem is
+    // named before it (Nov 2026: "Chicago O'Hare is running behind; the other hubs are running
+    // normally.", the shape the owner liked), so that clause is not read then.
+    const calmRead = text.replace(OTHER_HUBS_NORMAL_RE, (m, offset) => (
+      offset > 0 && problemHubs.length > 0 && problemHubs.every((h) => namesAirport(text.slice(0, offset), h)) ? '' : m));
+    if (tone !== 'calm' && CALM_HEADLINE_RE.test(calmRead)) reasons.push('headline:calm_when_not_calm');
+    // Its mirror: United's condition comes first, never a program at an airport that is not a hub.
+    const awayLead = nonHubLeadReason(text, tone, factList);
+    if (awayLead) reasons.push(awayLead);
+    // Nor, on a calm night, something only possible tomorrow (Nov 12 2026).
+    const laterLead = tomorrowLeadReason(text, tone, factList);
+    if (laterLead) reasons.push(laterLead);
+    if (MARKUP_RE.test(text)) reasons.push('markup_or_url');
+    return reasons;
+  };
   let headline = normalizeText(input.headline).trim();
   let headlineFactIds = [];
-  const headlineReasons = checkSentence(headline, union, factIndex, { itemRules: false }).filter((r) => r !== 'too_many_fact_ids');
-  if (headline.length > MAX_HEADLINE_CHARS || wordCount(headline) > MAX_HEADLINE_WORDS) headlineReasons.push('headline_too_long');
-  // "Operations look calm" under a computed "watch" contradicts the tone word beside it. "The other
-  // hubs are running normally" does not call the operation calm when every hub with a problem is
-  // named before it (Nov 2026: "Chicago O'Hare is running behind; the other hubs are running
-  // normally.", the shape the owner liked), so that clause is not read then.
-  const problemHubs = hubsWithProblems(factList);
-  const calmRead = headline.replace(OTHER_HUBS_NORMAL_RE, (m, offset) => (
-    offset > 0 && problemHubs.length > 0 && problemHubs.every((h) => namesAirport(headline.slice(0, offset), h)) ? '' : m));
-  if (tone !== 'calm' && CALM_HEADLINE_RE.test(calmRead)) headlineReasons.push('headline:calm_when_not_calm');
-  // Its mirror: United's condition comes first, never a program at an airport that is not a hub.
-  const awayLead = nonHubLeadReason(headline, tone, factList);
-  if (awayLead) headlineReasons.push(awayLead);
-  // Nor, on a calm night, something only possible tomorrow (Nov 12 2026).
-  const laterLead = tomorrowLeadReason(headline, tone, factList);
-  if (laterLead) headlineReasons.push(laterLead);
-  if (headlineReasons.length) {
+  const reasonsNow = headlineReasons(headline, union);
+  if (reasonsNow.length) {
+    report.headline = { status: 'replaced', reasons: reasonsNow, original: headline };
     const replacement = templateHeadline(factList, tone);
-    report.headline = { status: 'replaced', reasons: headlineReasons, original: headline };
-    headline = replacement.headline;
-    headlineFactIds = replacement.fact_ids;
+    const replacementReasons = headlineReasons(replacement.headline, [...new Set([...union, ...replacement.fact_ids])]);
+    if (replacementReasons.length) {
+      report.headline.fallback = replacementReasons;
+      report.rewritesRejected += 1;
+      headline = FALLBACK_HEADLINE[tone];
+    } else {
+      headline = replacement.headline;
+      headlineFactIds = replacement.fact_ids;
+    }
   } else {
     if (wordCount(headline) > SOFT_HEADLINE_WORDS) report.warnings.push(`headline:over_${SOFT_HEADLINE_WORDS}_words`);
     report.warnings.push(...styleWarnings(headline, 'headline'));
   }
 
-  // Traveler note: verified like an item; only with a hub program in effect, or a disrupted brief.
+  // Traveler note: the same path as an item, plus who may get one (travelerNoteAllowed) and which
+  // way it points. A stop or delay program holds flights INTO the airport: a note sending
+  // travelers out of it, or both ways, is replaced by the template's note, which takes the same path.
   let traveler_note = null;
   if (input.traveler_note) {
+    const finalizeNote = (text, ids) => {
+      const cited = ids.map((id) => factIndex.get(id)).filter(Boolean);
+      const closure = cited.some((f) => /\.closure$/.test(f.id));
+      const program = cited.some((f) => /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/.test(f.id));
+      return finalizeSentence(text, ids, factIndex, {
+        rewrites: [
+          { reason: 'says_whether_hub', apply: withoutHubStatus },
+          { reason: 'day_word_order', apply: fixDayWordOrder },
+          // Three or more airports are "one of those airports" (the items name them), as the
+          // template writes it; the citations stay.
+          { reason: 'note_three_or_more_airports', apply: (t) => (noteAirportCount(t) >= 3
+            ? `If you are ${closure ? 'flying to or from' : 'flying to'} one of those airports, check your flight status before leaving for the airport.`
+            : t) },
+        ],
+        extra: (t) => [
+          ...(travelerNoteAllowed(tone, factList) ? [] : [`tone_is_${tone}`]),
+          ...(program && !closure && NOTE_WRONG_DIRECTION_RE.test(t) ? ['note_direction'] : []),
+        ],
+      });
+    };
     const ids = [...new Set(input.traveler_note.fact_ids)];
-    const reasons = checkSentence(input.traveler_note.text, ids, factIndex);
-    if (!travelerNoteAllowed(tone, factList)) reasons.push(`tone_is_${tone}`);
-    let text = normalizeText(input.traveler_note.text).trim();
-    if (!reasons.length) {
-      const cut = withoutHubStatus(text);
-      if (cut === null) reasons.push('says_whether_hub');
-      else if (cut !== text) {
-        report.trimmed.push({ item: 'traveler_note', from: text, to: cut, reason: 'says_whether_hub' });
-        text = cut;
-      }
-    }
-    // A stop or delay program holds flights INTO the airport: a note sending travelers out of it, or
-    // both ways, is replaced by the template's (a closure is both ways, and keeps its note).
-    const cited = ids.map((id) => factIndex.get(id)).filter(Boolean);
+    let note = finalizeNote(input.traveler_note.text, ids);
     let noteIds = ids;
-    if (!reasons.length && NOTE_WRONG_DIRECTION_RE.test(text)
-      && cited.some((f) => /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/.test(f.id)) && !cited.some((f) => /\.closure$/.test(f.id))) {
+    if (note.reasons.length === 1 && note.reasons[0] === 'note_direction') {
       const template = buildTemplateBrief(factList).traveler_note;
-      if (template) {
-        report.trimmed.push({ item: 'traveler_note', from: text, to: template.text, reason: 'note_direction' });
-        text = template.text;
+      const replaced = template ? finalizeNote(template.text, template.fact_ids) : null;
+      if (replaced && !replaced.reasons.length) {
+        replaced.rewrites.unshift({ from: note.text, to: replaced.text, reason: 'note_direction' });
+        note = replaced;
         noteIds = template.fact_ids;
-      } else reasons.push('note_direction');
+      } else if (replaced) report.rewritesRejected += 1;
     }
-    if (reasons.length) report.travelerNote = { status: 'dropped', reasons };
-    else {
+    if (note.reasons.length) {
+      if (note.rewrites.length) report.rewritesRejected += 1;
+      report.travelerNote = { status: 'dropped', reasons: note.reasons };
+    } else {
       report.travelerNote = { status: 'kept', reasons: [] };
-      // Three or more airports are "one of those airports" (the items name them), as the template
-      // writes it; the citations stay.
-      if (noteAirportCount(text) >= 3) {
-        const verb = cited.some((f) => /\.closure$/.test(f.id)) ? 'flying to or from' : 'flying to';
-        const to = `If you are ${verb} one of those airports, check your flight status before leaving for the airport.`;
-        report.trimmed.push({ item: 'traveler_note', from: text, to, reason: 'note_three_or_more_airports' });
-        text = to;
-      }
-      traveler_note = { text, fact_ids: noteIds };
+      for (const r of note.rewrites) report.trimmed.push({ item: 'traveler_note', ...r });
+      traveler_note = { text: note.text, fact_ids: noteIds };
     }
   }
 

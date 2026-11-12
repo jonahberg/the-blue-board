@@ -6,9 +6,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { allowanceFromValues, claimFailure, extractClaims } from '../src/lib/brief-claims.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { buildBriefFacts } from '../src/lib/brief-facts.js';
-import { briefFromSavedResponse, checkSentence, citedFactIds, fixDayWordOrder, nonHubLeadReason, tomorrowLeadReason, trimOnTimeDefinition, validateBriefShape, verifyBrief, withoutHubStatus } from '../src/lib/brief-verify.js';
+import { briefFromSavedResponse, checkSentence, citedFactIds, finalizeSentence, fixDayWordOrder, nonHubLeadReason, tomorrowLeadReason, trimOnTimeDefinition, validateBriefShape, verifyBrief, withoutHubStatus } from '../src/lib/brief-verify.js';
 
 const fact = (id, values, extra = {}) => ({
   id, kind: 'otp', statement: `${id} statement`, values, at: null, link: { tab: 'live' }, severity: 5, toneFloor: 'calm', material: id, ...extra,
@@ -574,4 +574,79 @@ describe('verifyBrief: Nov 12 2026, round 2', () => {
     const no = verifyBrief(brief([item("Chicago O'Hare is at 80% on time so far today (460 departed), behind the other hubs, which are at 89% or better.", ['otp.ORD']), item('Newark is at 95% on time.', ['otp.floor', 'otp.EWR'])], { tone: 'watch', headline: "Chicago O'Hare is running behind." }), facts);
     expect(no.report.dropped[0].reasons).toContain('hub_on_time_on_healthy_day');
   });
+});
+
+// Every rewrite goes through finalizeSentence: the transformation runs first, then the FINAL text
+// alone is validated, so no rewrite can publish text the checks would refuse (security review,
+// Nov 12 2026).
+describe('verifyBrief: one validation path for every rewrite', () => {
+  const fixture = (name) => JSON.parse(readFileSync(new URL(`./fixtures/brief/${name}.json`, import.meta.url), 'utf8'));
+  const factsOf = (name) => { const fx = fixture(name); return buildBriefFacts(fx.sources, { nowMs: Date.parse(fx.nowIso) }).facts; };
+  const facts = factsOf('five-nonhub-storm');
+  const index = new Map(facts.map((f) => [f.id, f]));
+  const cut = [{ reason: 'says_whether_hub', apply: withoutHubStatus }];
+  const ok = item('Thunderstorms are slowing Newark, with wind gusting to 32 knots.', ['wx.EWR']);
+  const run = (text, ids = ['faa.active.BOS.gs']) => verifyBrief(brief([item(text, ids), ok], { tone: 'watch', headline: 'Storms are slowing Newark.' }), facts);
+
+  it('a rewrite whose output carries markup is dropped, and so is one that cut the markup out', () => {
+    const kept = run('A ground stop holds flights into Boston until <b>9:30 PM ET</b>; Boston is not a United hub.');
+    expect(kept.report.dropped).toEqual([expect.objectContaining({ index: 0, reasons: expect.arrayContaining(['markup_or_url']) })]);
+    expect(kept.report.rewritesRejected).toBe(1);
+    const cutOut = finalizeSentence('A ground stop holds flights into Boston until 9:30 PM ET; <i>Boston is not a United hub</i>.', ['faa.active.BOS.gs'], index, { rewrites: cut });
+    expect(cutOut.text).toBe('A ground stop holds flights into Boston until 9:30 PM ET.');
+    expect(cutOut.reasons).toEqual(['markup_or_url']);
+  });
+
+  it('a cut that leaves a number the cited facts do not carry is dropped', () => {
+    const out = run('A ground stop holds flights into Boston until 9:30 PM ET for about 45 minutes; Boston is not a United hub.');
+    expect(out.report.dropped).toEqual([expect.objectContaining({ index: 0, reasons: ['number_not_in_facts:45'] })]);
+    expect(out.report.rewritesRejected).toBe(1);
+    expect(out.brief.items.map((i) => i.text)).toEqual([ok.text]);
+  });
+
+  it('a cut that leaves too few words or a dangling conjunction is dropped', () => {
+    const short = run('Boston held. Boston is not a United hub.');
+    expect(short.report.dropped[0].reasons).toEqual(['too_short']);
+    const dangling = run('A ground stop holds flights into Boston until 9:30 PM ET and; none is at a United hub.');
+    expect(dangling.report.dropped[0].reasons).toEqual(['dangling']);
+    for (const text of ['A ground stop holds flights into Boston; .', 'A ground stop holds flights into Boston,', '; A ground stop holds flights into Boston.']) {
+      expect(finalizeSentence(text, ['faa.active.BOS.gs'], index).reasons, text).toContain('dangling');
+    }
+    // A sentence a person would write is not "dangling".
+    expect(finalizeSentence('A ground stop holds flights into Boston, and, at LaGuardia, a delay program.', ['faa.active.BOS.gs', 'faa.active.LGA.gdp'], index).reasons).toEqual([]);
+  });
+
+  it('the summary, a replacement headline and a replacement note take the same path', () => {
+    // The on-time summary standing in for a dropped item is itself checked.
+    const specimen = factsOf('nonhub-gdp-specimen');
+    const out = verifyBrief(brief([item('All 7 hubs with an on-time reading are at 84% or better, and Newark is at 96%.', ['otp.floor', 'otp.EWR'])], { headline: 'United is running smoothly right now.' }), specimen);
+    expect(out.report.summaryInserted).toBe(true);
+    expect(finalizeSentence(out.brief.items[0].text, ['otp.floor'], new Map(specimen.map((f) => [f.id, f]))).reasons).toEqual([]);
+    // A replacement note is checked like the model's own.
+    const sea = verifyBrief(brief([item('A ground delay program is holding flights into Seattle until 9:59 PM PT.', ['faa.active.SEA.gdp'])], {
+      headline: "United's hubs are running normally; a delay program is slowing Seattle arrivals.",
+      traveler_note: item('If you fly out of Seattle, check your flight.', ['faa.active.SEA.gdp']),
+    }), specimen);
+    expect(sea.report.travelerNote.status).toBe('kept');
+    expect(sea.report.trimmed).toEqual([expect.objectContaining({ item: 'traveler_note', reason: 'note_direction' })]);
+  });
+
+  // Every Haiku sample of round 2 (tests/fixtures/brief-samples, copied from the eval evidence):
+  // what was published passes the verifier again, unchanged, on its own.
+  const SAMPLES = new URL('./fixtures/brief-samples/', import.meta.url);
+  for (const file of readdirSync(SAMPLES).filter((f) => f.endsWith('.json')).sort()) {
+    it(`${file}: the published brief re-verifies unchanged`, () => {
+      const facts2 = factsOf(file.replace(/\.\d+\.json$/, ''));
+      const first = briefFromSavedResponse(readFileSync(new URL(file, SAMPLES), 'utf8'), facts2);
+      expect(first.source).toBe('model');
+      const b = first.brief;
+      const again = verifyBrief({ headline: b.headline, tone: b.tone, items: b.items, traveler_note: b.traveler_note }, facts2);
+      expect(again.report.dropped).toEqual([]);
+      expect(again.report.headline.status).toBe('kept');
+      expect(again.report.trimmed).toEqual([]);
+      expect(again.brief.items).toEqual(b.items);
+      expect(again.brief.headline).toBe(b.headline);
+      expect(again.brief.traveler_note?.text ?? null).toBe(b.traveler_note?.text ?? null);
+    });
+  }
 });

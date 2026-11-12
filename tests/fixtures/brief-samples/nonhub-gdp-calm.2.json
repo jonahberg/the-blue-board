@@ -1,0 +1,22 @@
+{
+  "headline": "United's hubs run normally; a ground delay program slows Seattle arrivals.",
+  "tone": "calm",
+  "items": [
+    {
+      "text": "All seven United hubs reporting so far today are at 84% on time or better.",
+      "fact_ids": ["otp.floor"]
+    },
+    {
+      "text": "The FAA has a ground delay program in effect for flights into Seattle until 9:59 PM PT. Those flights are held at their departure airport, with delays averaging 32 minutes and up to 82 minutes.",
+      "fact_ids": ["faa.active.SEA.gdp"]
+    },
+    {
+      "text": "653 United flights, including United Express, are in the air, about the usual number for this time of day; the median at this hour over the past 7 days was 674.",
+      "fact_ids": ["air.total", "air.normal"]
+    }
+  ],
+  "traveler_note": {
+    "text": "If you are flying to Seattle, check your flight status before leaving for the airport.",
+    "fact_ids": ["faa.active.SEA.gdp"]
+  }
+}
