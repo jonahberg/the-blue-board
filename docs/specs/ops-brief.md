@@ -149,13 +149,14 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    unbalanced quote mark drops the item. Markup or a URL drops any item (`markup_or_url`).
    A time whose cited fact carries its day ("tomorrow 10:00 AM ET") must keep the day in the
    sentence, or the item is dropped (`time_without_day:tomorrow 10:00 AM ET`, Nov 2026: "after
-   10:00 AM ET" said at 8:20 PM ET read as past).
+   10:00 AM ET" said at 8:20 PM ET read as past). An item citing any on-time fact may give the
+   on-time definition ("within 30 minutes of schedule") even when that fact's values lack it.
 5. **Limits.** At most 4 items; the rest are dropped (`over_item_limit`).
 5a. **Healthy days (Nov 2026).** When every hub with a figure is healthy (`allHubsHealthy`: the
    on-time summary is there, the lowest-hub and soft-hub facts are not), an item that gives a single
    hub's on-time percentage (it cites an on-time fact, or a hub's on-time id that was not sent, states
    a percentage and names a hub whose own fact was not sent) is dropped
-   (`hub_on_time_on_healthy_day`, counted in `report.healthyHubOnTime`), and the on-time summary
+   in the same clause (`hub_on_time_on_healthy_day`, counted in `report.healthyHubOnTime`), and the on-time summary
    takes the first such item's place when no other item carries it (`report.summaryInserted`).
 5b. **The on-time definition once.** After the first kept item that says "within 30 minutes of
    schedule", a later one has those words trimmed to "on time" (`report.trimmed`); only those words
@@ -163,7 +164,8 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
 6. **Headline.** Checked against the union of the **surviving** items' facts. Fails, runs past 14
    words, or calls the operation calm, smooth, quiet or "running normally" (word match) while the
    computed tone is not calm (`headline:calm_when_not_calm`) → replaced by the template headline
-   (the report keeps the original). Its mirror (Nov 2026): a headline that names a stop or delay
+   (the report keeps the original); "the other hubs are running normally" after a lead that names
+   the problem is not read as calling the operation calm. Its mirror (Nov 2026): a headline that names a stop or delay
    program away from the hubs (its airport, or on a calm day any program wording) before anything
    about United's own condition ("United", the hubs, a calm word, a hub's name) is replaced too
    (`headline:leads_with_non_hub_program`). Over 12 words is a warning. The template's own watch
