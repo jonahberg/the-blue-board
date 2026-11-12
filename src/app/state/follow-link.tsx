@@ -13,6 +13,12 @@
  * tab the reader was on: the hash listener in `useDeepLinks` restores it. A link to the tab already
  * showing and an aircraft link (an overlay) leave none; the tab bar keeps replacing (`setTab`).
  *
+ * A link that changes the tab also says where it went ("Schedule, ORD") through the page's one
+ * polite region, and when the focused element was in the panel being hidden (a hub or type link
+ * inside the Starlink tab) or focus was already lost, it moves focus to the destination panel a
+ * frame later, without scrolling (`moveFocusToPanel`). Focus anywhere else stays: a hub chip in
+ * the header activated from the keyboard keeps it.
+ *
  * `follow` comes from a context of its own whose value never changes: `FollowProvider` reads the
  * UI and Schedule stores and keeps what it needs in a ref, so a link (there are over a thousand
  * once the Starlink roster has mounted) re-renders only when its own props change, not on every
@@ -26,8 +32,8 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 
-import { addressAfterFollow } from '@/lib/followed-link.js';
-import { TAB_HASHES, resolveTabParam } from '../tabs';
+import { addressAfterFollow, followAnnouncement } from '@/lib/followed-link.js';
+import { TAB_HASHES, resolveTabParam, tabById } from '../tabs';
 import type { TabId } from '../tabs';
 import type { DeepLinkIntent } from './deep-links';
 import { useSchedule } from './schedule';
@@ -45,21 +51,24 @@ type Latest = {
   setTab: UiValue['setTab'];
   openAircraft: UiValue['openAircraft'];
   followFleetLink: UiValue['followFleetLink'];
+  announce: UiValue['announce'];
   setCurrent: ScheduleValue['setCurrent'];
 };
 
 export function FollowProvider({ children }: { children: ReactNode }) {
-  const { tab, setTab, openAircraft, followFleetLink } = useUi();
+  const { tab, setTab, openAircraft, followFleetLink, announce } = useUi();
   const { setCurrent } = useSchedule();
-  const latest = useRef<Latest>({ tab, setTab, openAircraft, followFleetLink, setCurrent });
+  const latest = useRef<Latest>({ tab, setTab, openAircraft, followFleetLink, announce, setCurrent });
   // After commit, so a render React throws away never reaches a click.
   useLayoutEffect(() => {
-    latest.current = { tab, setTab, openAircraft, followFleetLink, setCurrent };
+    latest.current = { tab, setTab, openAircraft, followFleetLink, announce, setCurrent };
   });
 
   const follow = useCallback<FollowDeepLink>((intent) => {
-    const { tab: from, setTab, openAircraft, followFleetLink, setCurrent } = latest.current;
+    const { tab: from, setTab, openAircraft, followFleetLink, announce, setCurrent } = latest.current;
     const to = intent.tab && intent.tab !== from ? intent.tab : null;
+    // Read before anything moves: a caller may blur the link after this returns (the hub chip).
+    const refocus = to !== null && focusLeavesWith(from);
     // A board as a cold load opens it: Departures (the hub chip's figure is operated departures),
     // and, with no day given, the hub's useful day (`setCurrent` re-derives it).
     if (intent.scheduleHub) setCurrent({ hub: intent.scheduleHub, dir: 'departures' });
@@ -72,6 +81,10 @@ export function FollowProvider({ children }: { children: ReactNode }) {
       setTab(intent.tab, intent.scrollTo ? { scrollTo: intent.scrollTo } : undefined);
     }
     if (intent.aircraft) openAircraft(intent.aircraft);
+    if (to) {
+      announce(followAnnouncement(tabById(to)?.label ?? to, intent));
+      if (refocus) moveFocusToPanel(to, from);
+    }
   }, []);
 
   return <FollowContext.Provider value={follow}>{children}</FollowContext.Provider>;
@@ -93,6 +106,41 @@ function pushHistoryEntry(from: TabId, to: TabId) {
     window.history.replaceState(window.history.state, '', `${pathname}${search}${TAB_HASHES[from]}`);
   }
   window.history.pushState(null, '', addressAfterFollow(window.location, TAB_HASHES[to]));
+}
+
+/** The panel that holds a tab's view: Dashboard.tsx marks each `TabsContent` with its tab id. */
+function tabPanel(id: TabId): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+  return document.querySelector<HTMLElement>(`[data-tab-panel="${id}"]`);
+}
+
+/** True when focus is lost, or sits inside the panel of the tab a follow is about to hide. */
+function focusLeavesWith(from: TabId): boolean {
+  if (typeof document === 'undefined') return false;
+  const active = document.activeElement;
+  if (!active || active === document.body) return true;
+  return tabPanel(from)?.contains(active) ?? false;
+}
+
+/**
+ * Focus tab `to`'s panel once it shows (Radix gives a tab panel `tabIndex` 0), unless something
+ * else has taken focus by then. A frame later, because the panel is hidden until the tab change
+ * commits, and on a first visit it is only mounted after that (`visited` in Dashboard.tsx), so a
+ * missing or inactive panel is tried for two more frames. `preventScroll`: the view decides where
+ * the tab scrolls (the Fleet link's scroll to its controls, a Weather link's to its hub card).
+ */
+function moveFocusToPanel(to: TabId, from: TabId, framesLeft = 3) {
+  if (typeof requestAnimationFrame !== 'function') return;
+  requestAnimationFrame(() => {
+    const panel = tabPanel(to);
+    if (!panel || panel.getAttribute('data-state') !== 'active') {
+      if (framesLeft > 1) moveFocusToPanel(to, from, framesLeft - 1);
+      return;
+    }
+    const active = document.activeElement;
+    if (active && active !== document.body && !tabPanel(from)?.contains(active)) return;
+    panel.focus({ preventScroll: true });
+  });
 }
 
 /** The dashboard's in-place follow. The function is the same one for the life of the provider. */

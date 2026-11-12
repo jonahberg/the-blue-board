@@ -164,6 +164,9 @@ function DashboardShell() {
             key={id}
             value={id}
             forceMount
+            // A followed link that hides the panel holding focus moves focus to the panel it opens
+            // (state/follow-link.tsx), found by this; the Fleet view has tab panels of its own.
+            data-tab-panel={id}
             // `relative` makes the panel the containing block for absolutely positioned
             // descendants (Tailwind `sr-only` captions/cells in the Stats and Starlink tables);
             // without it they escaped the scroller and made the whole page scrollable.

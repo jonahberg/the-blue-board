@@ -7,6 +7,11 @@
  *  - Back: the link leaves ONE history entry, the path plus the new tab's hash with the dashboard's
  *    own deep-link parameters dropped, so Back returns to the tab the reader was on. An aircraft
  *    link and a link to the tab already showing leave none; the tab bar keeps replacing.
+ *  - Focus and words: a link inside the panel it hides moves focus to the panel it opens, a frame
+ *    later; a header link keeps focus; the polite region says where the link went.
+ *
+ * jsdom applies no stylesheet, so a hidden panel's link keeps focus here where a browser would drop
+ * it to <body>; the follow handles both (focus inside the panel being left, or lost).
  *
  * Back is jsdom's own `history.back()`, which fires `popstate` and `hashchange` as a browser does.
  * The Schedule store's watch-list collaborators are stubbed (the real ones poll).
@@ -67,6 +72,7 @@ function Shell() {
               <>
                 <DashLink href="/?tab=schedule&hub=ORD">ORD</DashLink>
                 <DashLink href="/?aircraft=N78501">N78501</DashLink>
+                <DashLink href="/?tab=fleet&type=737%20MAX%209">737 MAX 9</DashLink>
               </>
             ) : null}
           </TabsContent>
@@ -98,6 +104,13 @@ async function back() {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
 }
+
+/** After the frame a follow waits for before it moves focus. */
+async function nextFrame() {
+  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+}
+
+const panel = (id: TabId) => document.querySelector<HTMLElement>(`[data-tab-panel="${id}"]`)!;
 
 /** A primary mouse press on a tab, which is how Radix activates it. */
 function pickTab(name: string) {
@@ -216,5 +229,83 @@ describe('Back after a followed link', () => {
     expect(seen.schedule!.current.hub).toBe('DEN');
     expect(window.history.length).toBe(before);
     expect(address()).toBe('/#schedule');
+  });
+});
+
+describe('focus and the announcement after a followed link', () => {
+  it('a hub link inside the panel it hides: focus moves to the Schedule panel, and it says so', async () => {
+    mountAt('/#starlink');
+    const ord = screen.getByRole('link', { name: 'ORD' });
+    ord.focus();
+
+    fireEvent.click(ord);
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(document.activeElement).toBe(panel('schedule'));
+    expect(seen.ui!.announcement).toBe('Schedule, ORD');
+  });
+
+  it('a type link says the tab and the type', async () => {
+    mountAt('/#starlink');
+    const type = screen.getByRole('link', { name: '737 MAX 9' });
+    type.focus();
+
+    fireEvent.click(type);
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('fleet');
+    expect(document.activeElement).toBe(panel('fleet'));
+    expect(seen.ui!.announcement).toBe('Fleet, 737 MAX 9');
+  });
+
+  it('a header link activated from the keyboard keeps focus on itself', async () => {
+    mountAt('/#starlink');
+    const chip = screen.getByRole('link', { name: 'DEN chip' });
+    chip.focus();
+
+    // Enter on a focused link is a click with no pointer (detail 0).
+    fireEvent.click(chip, { detail: 0 });
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(document.activeElement).toBe(chip);
+    expect(seen.ui!.announcement).toBe('Schedule, DEN');
+  });
+
+  it('focus already lost (on <body>) goes to the panel the link opens', async () => {
+    mountAt('/#starlink');
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    fireEvent.click(screen.getByRole('link', { name: 'DEN chip' }));
+    await nextFrame();
+
+    expect(document.activeElement).toBe(panel('schedule'));
+  });
+
+  it('an aircraft link changes no tab: focus stays and nothing is said', async () => {
+    mountAt('/#starlink');
+    const tail = screen.getByRole('link', { name: 'N78501' });
+    tail.focus();
+
+    fireEvent.click(tail);
+    await nextFrame();
+
+    expect(document.activeElement).toBe(tail);
+    expect(seen.ui!.announcement).toBe('');
+  });
+
+  it('a link to the tab already showing moves nothing and says nothing', async () => {
+    mountAt('/#schedule');
+    const chip = screen.getByRole('link', { name: 'DEN chip' });
+    chip.focus();
+
+    fireEvent.click(chip);
+    await nextFrame();
+
+    expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(document.activeElement).toBe(chip);
+    expect(seen.ui!.announcement).toBe('');
   });
 });

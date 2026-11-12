@@ -145,6 +145,12 @@ describe('<Dashboard/> smoke', () => {
     for (const tab of TABS) {
       const { trigger, panel } = await openTab(tab.label);
       expect(trigger.getAttribute('aria-selected'), tab.id).toBe('true');
+      // A followed link finds the panel it opens by its mark (state/follow-link.tsx), to move focus
+      // there: one per tab, the tab panel itself, active while its tab shows.
+      const marked = document.querySelectorAll(`[data-tab-panel="${tab.id}"]`);
+      expect(marked, tab.id).toHaveLength(1);
+      expect(marked[0].getAttribute('role'), tab.id).toBe('tabpanel');
+      expect(marked[0].getAttribute('data-state'), tab.id).toBe('active');
       expect(panel.textContent, `${tab.id} fell into its error boundary`).not.toMatch(/hit an error/);
     }
 
