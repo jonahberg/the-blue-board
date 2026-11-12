@@ -4,6 +4,21 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.28.1] - 2026-11-11
+
+**The "Right now" brief, after an evening of reading it.**
+
+### Fixed
+- **"Watch" for things that are not happening at United's hubs.** A delay program or ground stop at an airport that is not a United hub, or an FAA program that is only possible tomorrow, no longer turns the brief to Watch. They are still mentioned, after the hubs: the program that is running now, with its own note for travelers heading there, and tomorrow's possibilities at the end.
+- **A quiet day opens with the hubs.** "All seven United hubs reporting so far today are at 84% on time or better." The brief gives one hub's figure only when that hub clearly trails the others (O'Hare at 80% while the rest are at 89% or better), and never the best one.
+- **One cancellation is not news.** Confirmed cancellations under five are left out.
+- **Plain words.** No more "on United's current hub boards" or "hubs with an on-time reading".
+- **"Tomorrow" when it means tomorrow.** At 8:20 PM Eastern the brief said a program was possible "after 10:00 AM ET". FAA plan times now carry their day, and a window that has ended is not shown.
+- **Said once.** The on-time definition (within 30 minutes of schedule) appears once per brief.
+- The brief no longer tells readers whether an airport is a United hub, and notes for travelers always point *to* the affected airport.
+- Source tags that are not links ran together as one line; they are now outlined like the others.
+- Every change the checker makes to a sentence is checked again before it is published.
+
 ## [1.28.0] - 2026-11-11
 
 **Flight numbers are links, the disruption index stops counting flights that already left, and the rest of the polish list.**
