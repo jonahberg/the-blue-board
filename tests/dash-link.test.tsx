@@ -13,7 +13,7 @@
  * watched-flight alerts, and the real ones poll the network.
  */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashLink } from '../src/app/features/DashLink';
@@ -102,6 +102,15 @@ describe('DashLink, an unmodified primary click', () => {
     expect(reachedDocumentPrevented).toBe(true);
     expect(seen.ui!.tab).toBe('schedule');
     expect(seen.schedule!.current.hub).toBe('ORD');
+  });
+
+  it('opens a hub\'s Departures whichever direction the board was left on', () => {
+    const link = mount('/?tab=schedule&hub=ORD');
+    act(() => seen.schedule!.setCurrent({ dir: 'arrivals' }));
+
+    fireEvent.click(link);
+
+    expect(seen.schedule!.current).toMatchObject({ hub: 'ORD', dir: 'departures' });
   });
 
   it('queues a Fleet link and bumps seq on a repeat click', () => {

@@ -349,7 +349,7 @@ describe('the sheet and the sidebar panel', () => {
     await settle();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('link', { name: 'EWR 41%' }));
     await settle();
-    expect(ctl.setCurrent).toHaveBeenCalledWith({ hub: 'EWR' });
+    expect(ctl.setCurrent).toHaveBeenCalledWith({ hub: 'EWR', dir: 'departures' });
   });
 
   it('a chip to the tab already showing is text, not a dead link', async () => {

@@ -51,7 +51,9 @@ export function FollowProvider({ children }: { children: ReactNode }) {
 
   const follow = useCallback<FollowDeepLink>((intent) => {
     const { setTab, openAircraft, followFleetLink, setCurrent } = latest.current;
-    if (intent.scheduleHub) setCurrent({ hub: intent.scheduleHub });
+    // A board as a cold load opens it: Departures (the hub chip's figure is operated departures),
+    // and, with no day given, the hub's useful day (`setCurrent` re-derives it).
+    if (intent.scheduleHub) setCurrent({ hub: intent.scheduleHub, dir: 'departures' });
     if (intent.fleet) followFleetLink(intent.fleet);
     if (intent.tab) setTab(intent.tab, intent.scrollTo ? { scrollTo: intent.scrollTo } : undefined);
     if (intent.aircraft) openAircraft(intent.aircraft);

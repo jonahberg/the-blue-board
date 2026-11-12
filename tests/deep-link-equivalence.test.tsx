@@ -37,6 +37,7 @@ import { UiProvider, useUi } from '../src/app/state/ui';
 import type { UiValue } from '../src/app/state/ui';
 import type { TabId } from '../src/app/tabs';
 import FleetView from '../src/app/views/FleetView';
+import { defaultSchedDayOffset } from '../src/lib/hubTz.js';
 
 vi.mock('../src/app/state/watch', () => ({ useWatch: () => ({ watched: [], add: () => true }) }));
 vi.mock('../src/app/state/watch-alerts', () => ({ useWatchAlerts: () => ({ observe: () => {} }) }));
@@ -128,6 +129,8 @@ function state() {
   return {
     tab: seen.ui!.tab,
     scheduleHub: seen.schedule!.current.hub,
+    scheduleDir: seen.schedule!.current.dir,
+    scheduleDay: seen.schedule!.current.day,
     aircraft: seen.ui!.aircraftReg,
     fleetType: lookup?.querySelector('[aria-label="Fleet type filter"]')?.textContent ?? null,
     fleetStatus: lookup?.querySelector('[aria-label="Fleet status filter"]')?.textContent ?? null,
@@ -235,6 +238,19 @@ async function inPlaceFromDirtyFleet(address: string) {
   return followAndRead();
 }
 
+/**
+ * Start on Stats at `/` after the reader has looked at the Schedule board on Arrivals for tomorrow
+ * (a day no hub defaults to), then click a link.
+ */
+async function inPlaceFromDirtySchedule(address: string) {
+  mountAt('/#stats', address);
+  act(() => seen.ui!.setTab('schedule'));
+  act(() => seen.schedule!.setCurrent({ dir: 'arrivals', day: 1 }));
+  expect(seen.schedule!.current).toMatchObject({ dir: 'arrivals', day: 1 });
+  act(() => seen.ui!.setTab('stats'));
+  return followAndRead();
+}
+
 let reachedDocumentPrevented: boolean | null = null;
 function recordClick(event: Event) {
   reachedDocumentPrevented = event.defaultPrevented;
@@ -270,10 +286,19 @@ afterEach(() => {
 });
 
 describe('a cold load and an in-place click of the same address end in the same state', () => {
-  it('/?tab=schedule&hub=DEN: the Schedule tab on the DEN board', async () => {
+  it('/?tab=schedule&hub=DEN: the Schedule tab on the DEN board, Departures, its default day', async () => {
     const coldState = await cold('/?tab=schedule&hub=DEN');
-    expect(coldState).toMatchObject({ tab: 'schedule', scheduleHub: 'DEN', aircraft: null, fleetScrolls: [] });
+    expect(coldState).toMatchObject({
+      tab: 'schedule',
+      scheduleHub: 'DEN',
+      scheduleDir: 'departures',
+      scheduleDay: defaultSchedDayOffset('DEN'),
+      aircraft: null,
+      fleetScrolls: [],
+    });
     expect(await inPlace('/?tab=schedule&hub=DEN')).toEqual(coldState);
+    // Left on Arrivals for tomorrow: the link still opens DEN's departures on its default day.
+    expect(await inPlaceFromDirtySchedule('/?tab=schedule&hub=DEN')).toEqual(coldState);
   });
 
   it('/?tab=fleet&type=A319: the Fleet tab filtered to the A319, scrolled to its controls row', async () => {

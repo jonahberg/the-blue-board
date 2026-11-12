@@ -473,7 +473,8 @@ describe('HubHealthStrip: a chip opens that hub\'s schedule board, in place (Nov
       screen.getByRole('link', { name: /^DEN/ }).click();
     });
     expect(reachedDocumentPrevented).toBe(true);
-    expect(setCurrent).toHaveBeenCalledWith({ hub: 'DEN' });
+    // Departures, as a cold load opens it: the chip's figure is operated departures.
+    expect(setCurrent).toHaveBeenCalledWith({ hub: 'DEN', dir: 'departures' });
     expect(seenUi.tab).toBe('schedule');
   });
 
