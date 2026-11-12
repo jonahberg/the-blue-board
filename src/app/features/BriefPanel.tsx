@@ -32,6 +32,7 @@ import { resolveDeepLink } from '../state/deep-links';
 import type { DeepLinkIntent } from '../state/deep-links';
 import { useSchedule } from '../state/schedule';
 import { useUi } from '../state/ui';
+import type { TabId } from '../tabs';
 import { ToneMark } from './BriefTone';
 
 type Chip = {
@@ -42,12 +43,15 @@ type Chip = {
   title: string;
 };
 
+/** A chip always switches tab; an overlay link that keeps the current tab is never one. */
+type ChipIntent = DeepLinkIntent & { tab: TabId };
+
 /** Follow a chip in place: close the sheet, pick the board, switch tab, scroll. */
 function useFollow() {
   const { setTab } = useUi();
   const { setCurrent } = useSchedule();
   const { setSheetOpen } = useBrief();
-  return (intent: DeepLinkIntent) => {
+  return (intent: ChipIntent) => {
     setSheetOpen(false);
     if (intent.scheduleHub) setCurrent({ hub: intent.scheduleHub });
     setTab(intent.tab, intent.scrollTo ? { scrollTo: intent.scrollTo } : undefined);
@@ -63,8 +67,10 @@ const CHIP_BASE = 'inline-flex items-center gap-1 font-mono text-[11px] leading-
  */
 const CHIP_BOX = 'min-h-7 rounded-md border px-1.5 pointer-fine:md:min-h-5';
 
-function BriefChip({ chip, currentTab, onFollow }: { chip: Chip; currentTab: string; onFollow: (i: DeepLinkIntent) => void }) {
-  const intent = chip.target ? resolveDeepLink(chip.target.href) : null;
+function BriefChip({ chip, currentTab, onFollow }: { chip: Chip; currentTab: string; onFollow: (i: ChipIntent) => void }) {
+  const resolved = chip.target ? resolveDeepLink(chip.target.href) : null;
+  // No tab to switch to (an overlay link) is not a chip's link: it renders as text, as before.
+  const intent: ChipIntent | null = resolved?.tab ? { ...resolved, tab: resolved.tab } : null;
   // A link to the tab already showing, with nothing to scroll to or select, would do nothing:
   // that is a dead button, so it renders as text instead.
   const live = intent && !(intent.tab === currentTab && !intent.scrollTo && !intent.scheduleHub);
@@ -122,7 +128,7 @@ function Chips({ ids, factsById, currentTab, onFollow }: {
   ids: string[];
   factsById: Map<string, BriefFact>;
   currentTab: string;
-  onFollow: (i: DeepLinkIntent) => void;
+  onFollow: (i: ChipIntent) => void;
 }) {
   const chips = useMemo(() => itemChips(ids, factsById) as Chip[], [ids, factsById]);
   if (!chips.length) return null;
