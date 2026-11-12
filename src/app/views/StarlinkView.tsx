@@ -44,6 +44,7 @@ import {
   ledgerHasData,
   rolloutBars,
   rolloutBarsNote,
+  rosterFiltersShowing,
   rosterOptions,
   sortRoster,
   starlinkBoardEmptyText,
@@ -469,22 +470,24 @@ export default function StarlinkView() {
     ledgerRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }, []);
 
-  // The hero's bars and "+N NEW THIS WEEK" set the roster's own filter and bring the roster into
-  // view, the way "N disputed" brings the ledger. They change only the filter they name.
-  const scrollToRoster = useCallback(() => {
+  // The hero's bars and "+N NEW THIS WEEK" set the roster to show what they name, every other
+  // filter back at rest (`rosterFiltersShowing`), and bring the roster into view the way
+  // "N disputed" brings the ledger. A type, operator or search left from before would otherwise
+  // land the click on "No aircraft match your filters".
+  const showInRoster = useCallback((filters: ReturnType<typeof rosterFiltersShowing>) => {
+    setSearch(filters.search);
+    setFleetFilter(filters.fleet);
+    setTypeFilter(filters.type);
+    setOperatorFilter(filters.operator);
+    setNewOnly(filters.newOnly);
+    setExpanded(null);
     rosterRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }, []);
   const onShowFleet = useCallback(
-    (fleet: RosterFleet) => {
-      onFleet(fleet);
-      scrollToRoster();
-    },
-    [onFleet, scrollToRoster],
+    (fleet: RosterFleet) => showInRoster(rosterFiltersShowing(fleet)),
+    [showInRoster],
   );
-  const onShowNew = useCallback(() => {
-    onNewOnly(true);
-    scrollToRoster();
-  }, [onNewOnly, scrollToRoster]);
+  const onShowNew = useCallback(() => showInRoster(rosterFiltersShowing('new')), [showInRoster]);
 
   // The source line is about the roster this tab's count comes from, so it reads the roster's sync.
   // Without a sync time it states no freshness at all (it used to say "live").

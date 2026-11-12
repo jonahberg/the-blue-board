@@ -10,7 +10,7 @@
  * filter.
  */
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -183,10 +183,11 @@ describe('DeparturesBoard flight numbers (Nov 2026)', () => {
     return onOpenAircraft;
   }
 
-  it('a United number links to its flight page; an operating callsign is plain text', () => {
+  it('a United number links to its flight page and prints as its ident (UAL2278 reads UA2278); an operating callsign is plain text', () => {
     renderBoard();
-    const link = screen.getByRole('link', { name: 'UAL2278' });
+    const link = screen.getByRole('link', { name: 'UA2278' });
     expect(link.getAttribute('href')).toBe('/flight/UA2278');
+    expect(screen.queryByText('UAL2278')).toBeNull();
     expect(screen.queryByRole('link', { name: 'SKW5408' })).toBeNull();
     const plain = screen.getByText('SKW5408');
     expect(plain.tagName).toBe('SPAN');
@@ -196,7 +197,7 @@ describe('DeparturesBoard flight numbers (Nov 2026)', () => {
   it('the aircraft details button is separate from the link and still opens the aircraft', () => {
     const onOpenAircraft = renderBoard();
     const button = screen.getByRole('button', { name: /Aircraft details: .*N34562/ });
-    expect(button.contains(screen.getByRole('link', { name: 'UAL2278' }))).toBe(false);
+    expect(button.contains(screen.getByRole('link', { name: 'UA2278' }))).toBe(false);
     fireEvent.click(button);
     expect(onOpenAircraft).toHaveBeenCalledWith('N34562');
   });
@@ -256,8 +257,8 @@ const AIRCRAFT_BY_TAIL = {
   N75436: { type: '737-900', fleet: 'Mainline', operator: 'United Airlines' },
   N37502: { type: '737 MAX 9', fleet: 'Mainline', operator: 'United Airlines' },
 };
-/** The board row (its own grid) a printed thing sits in. */
-const boardRow = (el: HTMLElement) => el.closest('div.grid') as HTMLElement;
+/** The board row a printed thing sits in (marked for the link audit). */
+const boardRow = (el: HTMLElement) => el.closest('[data-link-row]') as HTMLElement;
 const isLinked = (el: HTMLElement) => el.closest('a') !== null;
 
 describe('DeparturesBoard links (Nov 12 2026)', () => {
@@ -373,6 +374,23 @@ describe('DeparturesBoard links (Nov 12 2026)', () => {
     expect(inbound.className).toMatch(/(?:^|\s)z-10(?:\s|$)/);
   });
 
+  it("an inbound callsign prints in the tab's one form: UAL3508 reads UA3508; YX3568 stays as sent, plain", () => {
+    renderBoard(FLIGHTS, { airborne: { N75436: { icao24: 'a1b2c3', origin: 'SFO', dest: 'DEN', callsign: 'UAL3508' } } });
+    expect(screen.getByRole('link', { name: 'UA3508' }).getAttribute('href')).toBe('/flight/UA3508');
+    expect(screen.queryByText(/UAL3508/)).toBeNull();
+    cleanup();
+    renderBoard(FLIGHTS, { airborne: { N75436: { icao24: 'a1b2c3', origin: 'SFO', dest: 'DEN', callsign: 'YX3568' } } });
+    expect(screen.getByText(/^SCHED · inbound/).textContent).toBe('SCHED · inbound on YX3568');
+    expect(screen.queryByRole('link', { name: /3568/ })).toBeNull();
+  });
+
+  it('marks every row for the link audit', () => {
+    renderBoard();
+    const rows = document.querySelectorAll('#sl-board-body [data-link-row]');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row.querySelector('[data-flight-link]')).not.toBeNull();
+  });
+
   it('a tail the fleet database does not know prints its type plain and still opens the aircraft dialog', () => {
     const onOpenAircraft = renderBoard(FLIGHTS, { fleetByReg: null });
     expect(screen.queryByRole('link', { name: '737-900' })).toBeNull();
@@ -397,7 +415,8 @@ describe('RosterTable links (Nov 12 2026)', () => {
       { flight_number: 'SKW5415', airline: 'UA', origin: 'ORD', destination: 'DSM', departure_ts: NOW + 60 * 60 },
       { flight_number: 'SKW5416', airline: 'UA', origin: 'DSM', destination: 'ORD', departure_ts: NOW + 180 * 60 },
     ],
-    N75436: [{ flight_number: 'UA576', airline: 'UA', origin: 'DEN', destination: 'LHR', departure_ts: NOW + 90 * 60 }],
+    // The feed's mainline form; the tab prints its United number, UA576.
+    N75436: [{ flight_number: 'UAL576', airline: 'UA', origin: 'DEN', destination: 'LHR', departure_ts: NOW + 90 * 60 }],
   };
 
   function renderRoster(expanded: string | null = null, flightsByTail: FlightsByTail = FLIGHTS) {
@@ -427,7 +446,7 @@ describe('RosterTable links (Nov 12 2026)', () => {
   const rosterRow = (tail: string) => screen.getByRole('button', { name: tail }).closest('tr') as HTMLElement;
   const upcomingList = () => screen.getByText('Upcoming Flights').nextElementSibling as HTMLElement;
 
-  it('the next-flight number is a quiet link, the United number for an Express leg; its hub ends stay plain', () => {
+  it('the next-flight number is a quiet link in the one United form; its hub ends are quiet fine-pointer links', () => {
     renderRoster();
     const express = within(rosterRow('N638SY')).getByRole('link', { name: 'UA5415' });
     expect(express.getAttribute('href')).toBe('/flight/UA5415');
@@ -435,8 +454,17 @@ describe('RosterTable links (Nov 12 2026)', () => {
     expect(rosterRow('N638SY').textContent).not.toContain('SKW5415');
     const mainline = within(rosterRow('N75436')).getByRole('link', { name: 'UA576' });
     expect(mainline.className).not.toMatch(/(?:^|\s)text-primary(?:\s|$)/);
-    // The expansion links the hub ends; the row's muted next-flight run does not.
-    expect(within(rosterRow('N638SY')).queryByRole('link', { name: 'ORD' })).toBeNull();
+    expect(rosterRow('N75436').textContent).not.toContain('UAL576');
+    // Hub ends link as the board's route does; any other airport stays plain.
+    const ord = within(rosterRow('N638SY')).getByRole('link', { name: 'ORD' });
+    expect(ord.getAttribute('href')).toBe('/?tab=schedule&hub=ORD');
+    expect(ord.className).not.toMatch(/(?:^|\s)text-primary(?:\s|$)/);
+    expect(ord.className).toContain('pointer-coarse:pointer-events-none');
+    expect(within(rosterRow('N75436')).getByRole('link', { name: 'DEN' }).getAttribute('href')).toBe('/?tab=schedule&hub=DEN');
+    expect(within(rosterRow('N638SY')).queryByRole('link', { name: 'DSM' })).toBeNull();
+    expect(within(rosterRow('N75436')).queryByRole('link', { name: 'LHR' })).toBeNull();
+    // One link-coloured thing per row: none here, the row is about the tail (a disclosure).
+    expect(rosterRow('N638SY').querySelectorAll('.text-primary')).toHaveLength(0);
   });
 
   it('an Express leg the feed did not mark United prints as sent, plain', () => {
@@ -472,8 +500,11 @@ describe('RosterTable links (Nov 12 2026)', () => {
       expect(hub.className).not.toMatch(/(?:^|\s)text-primary(?:\s|$)/);
     }
     expect(within(list).queryByRole('link', { name: 'DSM' })).toBeNull();
-    // Each line is one flight: one link-coloured thing per line.
-    for (const line of list.querySelectorAll('li')) expect(line.querySelectorAll('.text-primary')).toHaveLength(1);
+    // Each line is one flight: one link-coloured thing per line, and each is marked for the audit.
+    for (const line of list.querySelectorAll('li')) {
+      expect(line.querySelectorAll('.text-primary')).toHaveLength(1);
+      expect(line.hasAttribute('data-link-row')).toBe(true);
+    }
   });
 
   it("the expansion's airframe links by tail", () => {
@@ -482,6 +513,8 @@ describe('RosterTable links (Nov 12 2026)', () => {
     const link = within(airframe).getByRole('link', { name: '737-900' });
     expect(link.getAttribute('href')).toBe('/?tab=fleet&type=737-900ER');
     expect(within(upcomingList()).getByRole('link', { name: 'DEN' })).toBeTruthy();
+    expect(within(upcomingList()).getByRole('link', { name: 'UA576' }).getAttribute('href')).toBe('/flight/UA576');
+    expect(upcomingList().textContent).not.toContain('UAL576');
     expect(within(upcomingList()).queryByRole('link', { name: 'LHR' })).toBeNull();
     expect(nestedControls()).toBe(0);
   });
@@ -659,6 +692,58 @@ describe('the Starlink tab: the hero filters the roster below, and nothing nests
     // A second click keeps it on: the chip shows the new aircraft, it does not toggle them.
     fireEvent.click(chip);
     expect(document.getElementById('sl-filter-new')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  /** Pick an option from one of the roster's Radix selects, as a mouse does. */
+  async function pick(name: string, option: string) {
+    await act(async () => {
+      fireEvent.pointerDown(screen.getByRole('combobox', { name }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    });
+    const item = await screen.findByRole('option', { name: option });
+    await act(async () => {
+      fireEvent.click(item);
+    });
+  }
+  const search = () => screen.getByRole('textbox', { name: 'Search Starlink aircraft' }) as HTMLInputElement;
+  const control = (name: string) => screen.getByRole('combobox', { name }).textContent;
+  const newOnly = () => document.getElementById('sl-filter-new')?.getAttribute('aria-pressed');
+
+  /** A roster left filtered to nothing a hero button names: a type, an operator, a search, New on. */
+  async function staleRoster() {
+    await pick('Starlink type filter', 'CRJ-550');
+    await pick('Starlink operator filter', 'SkyWest dba United Express');
+    fireEvent.change(search(), { target: { value: 'N801' } });
+  }
+
+  it.each([
+    ['Mainline', ['N75436']],
+    ['Express', ['N638SY', 'N801SK']],
+  ])('from a stale roster, the %s bar lands on its rows with every other control at rest', async (fleet, tails) => {
+    mount(<StarlinkView />);
+    await staleRoster();
+    expect(rosterTails()).toEqual(['N801SK']);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^Show ${fleet} aircraft in the roster below`) }));
+    expect(rosterTails()).toEqual(tails);
+    expect(screen.queryByText('No aircraft match your filters.')).toBeNull();
+    expect(control('Starlink fleet filter')).toBe(fleet);
+    expect(control('Starlink type filter')).toBe('All Types');
+    expect(control('Starlink operator filter')).toBe('All Operators');
+    expect(search().value).toBe('');
+    expect(newOnly()).toBe('false');
+  });
+
+  it('from a stale roster, "+1 NEW THIS WEEK" lands on the new aircraft with every other control at rest', async () => {
+    mount(<StarlinkView />);
+    await pick('Starlink fleet filter', 'Mainline');
+    await staleRoster();
+    expect(rosterTails()).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Show +1 New this week aircraft in the roster below' }));
+    expect(rosterTails()).toEqual(['N638SY']);
+    expect(control('Starlink fleet filter')).toBe('All Fleets');
+    expect(control('Starlink type filter')).toBe('All Types');
+    expect(control('Starlink operator filter')).toBe('All Operators');
+    expect(search().value).toBe('');
+    expect(newOnly()).toBe('true');
   });
 
   it('every kind of name on the tab links, and no link sits inside a button or a button inside a link', async () => {

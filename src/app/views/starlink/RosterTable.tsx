@@ -21,8 +21,10 @@
  *
  * Names with a home link to it (links everywhere, Nov 12 2026): the type by the fleet database's
  * type for the tail (`fleetTypeCodeForTail`, never the tracker's string), the next flight's number
- * (quiet: the row is about the tail), and in the expansion each upcoming number and its hub ends.
- * An Express leg the feed marks United prints its United number (`unitedNumber`).
+ * (quiet: the row is about the tail) and its hub ends, and in the expansion each upcoming number
+ * and its hub ends. Every United number prints as the ident of the page it links to
+ * (`starlinkFlightLabel`): UAL576 reads UA576, an Express leg the feed marks United its United
+ * number; a number with no page prints as sent.
  */
 
 import { Radio } from 'lucide-react';
@@ -38,8 +40,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { fleetTypeCodeForTail } from '@/lib/fleet-type-link.js';
-import { unitedNumber } from '@/lib/flight-link.js';
-import { nextFlight, starlinkSinceLabel, upcomingFlights } from '@/lib/starlink-roster.js';
+import { nextFlight, starlinkFlightLabel, starlinkSinceLabel, upcomingFlights } from '@/lib/starlink-roster.js';
 import { formatFlightTime } from '@/lib/starlink-view.js';
 import type { StarlinkAircraft } from '../../data/types';
 import { HubLink, TypeLink } from '../../features/EntityLinks';
@@ -69,9 +70,9 @@ function depTime(
   return formatFlightTime(ts, iata ?? '', tzAbbrev) as string;
 }
 
-/** The number a leg prints and links: UA5415 for an Express leg the feed marks United, else as sent. */
+/** The number a leg prints, which is what it links: UA576 for UAL576, UA5415 for a marked SKW5415. */
 function legNumber(flight: StarlinkFlight): string {
-  return unitedNumber(flight.flight_number, flight) ?? flight.flight_number ?? '';
+  return starlinkFlightLabel(flight.flight_number, flight).text;
 }
 
 /** A route end: its Schedule board when it is a hub, plain text otherwise. */
@@ -146,6 +147,7 @@ function Expansion({
               return (
                 <li
                   key={`${flight.flight_number ?? ''}-${flight.departure_ts ?? 0}-${index}`}
+                  data-link-row=""
                   className="flex min-h-11 flex-wrap items-center gap-x-2 text-[11px] pointer-fine:md:min-h-0 pointer-fine:md:items-baseline"
                 >
                   <FlightLink ident={legNumber(flight) || '—'} className="font-mono font-semibold" />
@@ -336,12 +338,13 @@ export const RosterTable = memo(function RosterTable({
                   ) : null}
                   {hasFlights ? (
                     <TableCell className="text-[10px] text-muted-foreground">
-                      {/* One muted run: only the number links (quiet; the row is about the tail).
-                          The hub ends link in the expansion. */}
+                      {/* One muted run: the number and the hub ends are quiet links (the row is about
+                          the tail); hubs as on the departures board, any other airport plain. */}
                       {nextLeg ? (
                         <>
                           <FlightLink ident={legNumber(nextLeg)} tone="quiet" className="font-mono" />{' '}
-                          {nextLeg.origin || ''}→{nextLeg.destination || ''}{' '}
+                          {nextLeg.origin ? <HubLink code={nextLeg.origin} finePointerOnly /> : null}→
+                          {nextLeg.destination ? <HubLink code={nextLeg.destination} finePointerOnly /> : null}{' '}
                           <span className="font-mono tabular-nums">
                             {depTime(nextLeg.departure_ts, nextLeg.origin, tzAbbrev)}
                           </span>
