@@ -3,12 +3,15 @@
  * The Fleet tab follows a link in place (`useUi().followFleetLink`, src/app/views/FleetView.tsx),
  * and links once to the selected type's fleet page (the second "door", FleetControls).
  *
- * A followed link goes through the same `resolveFleetDeepLinkFilter` path as a cold load of
+ * A followed link goes through the same `fleetDeepLinkTarget` path as a cold load of
  * `?type=` / `?filter=` / `?view=`: a known type sets the type filter and clears the status filter,
- * a known status sets the status filter, an unknown value changes nothing (filtering to nothing
- * would read as "United has none"), a view sets the sub-view. A link followed before the fleet
- * database has arrived is held and applied when it lands, and the same link followed twice
- * applies twice (the store counts follows in `seq`).
+ * a known status sets the status filter, either opens All Aircraft unless the link names a view,
+ * an unknown value changes nothing (filtering to nothing would read as "United has none"), a view
+ * sets the sub-view. Before applying itself a followed link puts the tab back where a cold load
+ * starts (search, Wi-Fi, status, type, the Express search, a Fleet "Ask the board" answer), so it
+ * lands where the same address opened cold does. A link followed before the fleet database has
+ * arrived is held and applied when it lands, and the same link followed twice applies twice (the
+ * store counts follows in `seq`).
  *
  * Mounted in the real UiProvider; the fleet and feed stores are stubbed with a small database.
  */
@@ -16,6 +19,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { __peekAskStateForTests, __resetAskStateForTests, setAskResult } from '../src/app/state/ask';
 import type { FeedValue } from '../src/app/state/feed';
 import type { FleetDeepLinks } from '../src/app/state/deep-links';
 import type { FleetValue } from '../src/app/state/fleet';
@@ -134,6 +138,7 @@ afterEach(() => {
   cleanup();
   seen.ui = null;
   window.history.replaceState(null, '', '/');
+  act(() => __resetAskStateForTests());
 });
 
 describe('FleetView follows a Fleet link in place', () => {
@@ -320,5 +325,166 @@ describe('the Fleet tab\'s one door to a type\'s fleet page', () => {
     follow({ filter: 'starlink', view: null });
     expect(rows()).toHaveLength(2);
     expect(door()).toBeNull();
+  });
+});
+
+describe('a followed link starts from where a cold load starts', () => {
+  /** Pick an option from one of the Fleet controls' Radix selects, as a mouse does. */
+  async function pick(name: string, option: RegExp | string) {
+    await act(async () => {
+      fireEvent.pointerDown(screen.getByRole('combobox', { name }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    });
+    const item = await screen.findByRole('option', { name: option });
+    await act(async () => {
+      fireEvent.click(item);
+    });
+  }
+
+  /** The search box reports upward after its 120 ms debounce. */
+  async function typeSearch(value: string) {
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Fleet search' }), { target: { value } });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  }
+
+  /** Every Fleet filter a visitor can set: type, Wi-Fi, search, the Express search; left on Express. */
+  async function dirty() {
+    await pick('Fleet type filter', /^A319/);
+    await pick('Fleet WiFi filter', 'Satellite Ku');
+    await typeSearch('N10');
+    openSubView(/^United Express/);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'United Express search' }), { target: { value: 'skywest' } });
+    expect(screen.getByRole('searchbox', { name: 'United Express search' })).toHaveProperty('value', 'skywest');
+  }
+
+  /** What the tab shows, then (switching to it) the Express search: everything a link can touch. */
+  function fleetState() {
+    const select = (name: string) => screen.queryByRole('combobox', { name })?.textContent ?? null;
+    const snapshot = {
+      subView: activeSubView(),
+      type: select('Fleet type filter'),
+      wifi: select('Fleet WiFi filter'),
+      status: select('Fleet status filter'),
+      search: (screen.queryByRole('searchbox', { name: 'Fleet search' }) as HTMLInputElement | null)?.value ?? null,
+      rows: rows(),
+      door: screen.queryByRole('link', { name: /^About the / })?.getAttribute('href') ?? null,
+    };
+    openSubView(/^United Express/);
+    const expressSearch = (screen.getByRole('searchbox', { name: 'United Express search' }) as HTMLInputElement).value;
+    return { ...snapshot, expressSearch };
+  }
+
+  function coldState(address: string) {
+    window.history.replaceState(null, '', address);
+    mount();
+    const result = fleetState();
+    cleanup();
+    window.history.replaceState(null, '', '/');
+    return result;
+  }
+
+  it.each([
+    ['a type', '/?tab=fleet&type=737%20MAX%209', { filter: '737 MAX 9', view: null }],
+    ['a view', '/?tab=fleet&view=special', { filter: null, view: 'special' }],
+    ['a status filter', '/?tab=fleet&filter=starlink', { filter: 'starlink', view: null }],
+  ] as const)('%s followed from a dirty Fleet tab lands where a cold load of %s does', async (_, address, link) => {
+    const cold = coldState(address);
+    expect(cold.search).toBe('');
+    expect(cold.expressSearch).toBe('');
+
+    mount();
+    await dirty();
+    follow(link);
+
+    expect(fleetState()).toEqual(cold);
+  });
+
+  it('a type followed from the dirty tab shows that type\'s rows and door, nothing else set', async () => {
+    mount();
+    await dirty();
+    follow({ filter: '737 MAX 9', view: null });
+    expect(activeSubView()).toMatch(/^All Aircraft/);
+    expect(rows()).toEqual(['N37502', 'N37503']);
+    expect(screen.getByRole('combobox', { name: 'Fleet WiFi filter' }).textContent).toContain('All WiFi');
+    expect((screen.getByRole('searchbox', { name: 'Fleet search' }) as HTMLInputElement).value).toBe('');
+    expect(screen.getByRole('link', { name: 'About the 737 MAX 9' })).toBeTruthy();
+  });
+
+  it('keeps the sort order the reader chose (a sort is not part of an address)', () => {
+    mount();
+    const reg = () => screen.getByRole('button', { name: /^Reg/ });
+    fireEvent.click(reg()); // Reg is the default column, ascending: a click makes it descending.
+    expect(reg().closest('th')?.getAttribute('aria-sort')).toBe('descending');
+    follow({ filter: 'A319', view: null });
+    expect(reg().closest('th')?.getAttribute('aria-sort')).toBe('descending');
+    expect(rows()[0]).toBe('N105UA');
+  });
+
+  it('an unknown value leaves every dirty filter as it was', async () => {
+    mount();
+    await dirty();
+    follow({ filter: 'B789', view: null });
+
+    // Still on Express, Express search kept.
+    expect(activeSubView()).toMatch(/^United Express/);
+    expect(screen.getByRole('searchbox', { name: 'United Express search' })).toHaveProperty('value', 'skywest');
+    openSubView(/^All Aircraft/);
+    expect(screen.getByRole('combobox', { name: 'Fleet type filter' }).textContent).toContain('A319');
+    expect(screen.getByRole('combobox', { name: 'Fleet WiFi filter' }).textContent).toContain('Satellite Ku');
+    expect((screen.getByRole('searchbox', { name: 'Fleet search' }) as HTMLInputElement).value).toBe('N10');
+    expect(rows()).toHaveLength(6);
+  });
+
+  it('clears a Fleet "Ask the board" answer through the store, so no chip describes a filter that is gone', () => {
+    mount();
+    // "Where is N37502": the answer's tail rides the search box (useAskFleet).
+    act(() => {
+      setAskResult({ view: 'fleet', filters: { tail: 'N37502' } }, 'rules');
+    });
+    expect(screen.getByTestId('ask-chips-fleet')).toBeTruthy();
+    expect(rows()).toEqual(['N37502']);
+
+    // An unknown value changes nothing, the answer included.
+    follow({ filter: 'B789', view: null });
+    expect(__peekAskStateForTests().result?.view).toBe('fleet');
+    expect(screen.getByTestId('ask-chips-fleet')).toBeTruthy();
+
+    // A view link keeps no filter of the answer's, so the answer goes (the chip row only shows on
+    // All Aircraft, so the store is what says it is gone).
+    follow({ filter: null, view: 'special' });
+    expect(__peekAskStateForTests().result).toBeNull();
+    openSubView(/^All Aircraft/);
+    expect(screen.queryByTestId('ask-chips-fleet')).toBeNull();
+    expect(rows()).toHaveLength(8);
+  });
+
+  it('leaves an answer meant for another tab alone', () => {
+    mount();
+    act(() => {
+      setAskResult({ view: 'live', filters: { family: '787' } }, 'rules');
+    });
+    follow({ filter: 'A319', view: null });
+    expect(__peekAskStateForTests().result?.view).toBe('live');
+  });
+});
+
+describe('"known type" is a type the type select offers', () => {
+  // A database type outside the select's list (TYPE_ORDER): the select could not show it, so an
+  // address naming it is ignored, cold or followed.
+  const WITH_UNLISTED = [...FLEET_DB, { r: 'N999XX', t: '737-600', w: '', s: '', d: '1998' }];
+
+  it('a followed link to it changes nothing', () => {
+    ctl.fleet = fleetValue(WITH_UNLISTED);
+    mount();
+    follow({ filter: '737-600', view: null });
+    expect(rows()).toHaveLength(9);
+    expect(typeSelect().textContent).toContain('All Types');
+  });
+
+  it('a cold load of it changes nothing', () => {
+    ctl.fleet = fleetValue(WITH_UNLISTED);
+    window.history.replaceState(null, '', '/?tab=fleet&type=737-600');
+    mount();
+    expect(rows()).toHaveLength(9);
+    expect(typeSelect().textContent).toContain('All Types');
   });
 });

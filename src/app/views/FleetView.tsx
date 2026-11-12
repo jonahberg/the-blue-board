@@ -45,8 +45,8 @@ import {
   buildDeliveryTimeline,
   buildSpecialRows,
   deliveryStats,
+  fleetDeepLinkTarget,
   fleetHealthCounts,
-  resolveFleetDeepLinkFilter,
   sortAirborneRows,
   typeCounts as countByType,
   wifiFilterOptions,
@@ -332,32 +332,40 @@ export default function FleetView() {
   }, []);
 
   // ── Deep links: ?type= / ?filter= / ?view=airborne|special|express ──────────────────
-  // One way in for an address, opened cold or followed in place: a known status or type sets
-  // that filter (a type clears the status), a sub-view opens, and an unmatched value
-  // (`?type=B789`, an ICAO code the controls never offered) is ignored rather than applied —
-  // filtering the table to nothing would read as "United has no 787-9s". It needs the fleet
-  // database, which is what says which types the controls offer.
+  // One way in for an address, opened cold or followed in place (`fleetDeepLinkTarget`): a known
+  // status or type sets that filter (a type clears the status) and, with no sub-view of its own,
+  // opens All Aircraft; a sub-view opens; an unmatched value (`?type=B789`, an ICAO code the
+  // controls never offered) is ignored rather than applied, and with no sub-view the address
+  // changes nothing — filtering the table to nothing would read as "United has no 787-9s".
+  // "Known" is what the type select offers, which needs the fleet database.
   //
-  // A known filter with no sub-view of its own opens All Aircraft, the list it filters. A cold
-  // load starts there anyway; a link followed in place finds the view where the visitor left it,
-  // and on United Express (no controls) or Special (not filtered by type) the filter would not
-  // show. An unmatched value changes nothing, the sub-view included.
+  // A followed link first puts the tab back where a cold load starts — search, Wi-Fi, status and
+  // type filters, the Express search, and a Fleet "Ask the board" answer, through the store's own
+  // clear — so the same address lands in the same place either way. The sort order is the
+  // reader's and stays; it is not part of an address.
+  const { active: askActive, clear: clearAsk } = ask;
   const applyFleetDeepLink = useCallback(
-    ({ filter, view }: FleetDeepLinks) => {
-      if (filter) {
-        const resolved = resolveFleetDeepLinkFilter(filter, {
-          statusValues: STATUS_OPTIONS.map((option) => option.value),
-          typeValues: Object.keys(counts),
-        }) as { status: string; type: string } | null;
-        if (resolved) {
-          setStatusFilter(resolved.status);
-          setTypeFilter(resolved.type);
-          if (!view) setSubView('all');
-        }
+    (link: FleetDeepLinks, { followed }: { followed: boolean }) => {
+      const target = fleetDeepLinkTarget(link, {
+        statusValues: STATUS_OPTIONS.map((option) => option.value),
+        typeValues: typeOptions.map((option) => option.value),
+      }) as { filter: { status: string; type: string } | null; subView: SubView } | null;
+      if (!target) return;
+      if (followed) {
+        setSearch('');
+        setWifiFilter('');
+        setStatusFilter('');
+        setTypeFilter('');
+        setExpressSearch('');
+        if (askActive) clearAsk();
       }
-      if (view) setSubView(view);
+      if (target.filter) {
+        setStatusFilter(target.filter.status);
+        setTypeFilter(target.filter.type);
+      }
+      setSubView(target.subView);
     },
-    [counts],
+    [typeOptions, askActive, clearAsk],
   );
 
   // A cold load. The shipped dashboard polled every 200 ms for up to 10 s because the fleet
@@ -374,7 +382,7 @@ export default function FleetView() {
     }
     if (!fleetDb.length) return;
     deepLinkDone.current = true;
-    applyFleetDeepLink(readFleetDeepLinks());
+    applyFleetDeepLink(readFleetDeepLinks(), { followed: false });
   }, [fleetDb.length, loadFailed, applyFleetDeepLink]);
 
   // A link followed in place (`useUi().followFleetLink`, from a DashLink anywhere in the
@@ -389,7 +397,7 @@ export default function FleetView() {
     if (!fleetLink || fleetLink.seq === appliedFleetLinkSeq.current) return;
     if (!fleetDb.length) return;
     appliedFleetLinkSeq.current = fleetLink.seq;
-    applyFleetDeepLink(fleetLink);
+    applyFleetDeepLink(fleetLink, { followed: true });
   }, [fleetLink, fleetDb.length, applyFleetDeepLink]);
 
   // ── Load failure ────────────────────────────────────────────────────────────────────

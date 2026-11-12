@@ -350,6 +350,31 @@ export function resolveFleetDeepLinkFilter(filter, { typeValues, statusValues })
 }
 
 /**
+ * What a Fleet address (`?type=` / `?filter=` / `?view=`) does to the Fleet tab, opened cold or
+ * followed in place: the filter it sets and the sub-view it opens, or null when it names nothing
+ * the controls offer and must change nothing at all.
+ *
+ *  - A known filter (`resolveFleetDeepLinkFilter`) sets status and type; with no `view` of its own
+ *    it opens All Aircraft, the list it filters (a cold load starts there; followed in place, the
+ *    tab may have been left on United Express, which has no controls, or Special, which the type
+ *    does not filter).
+ *  - A `view` opens that sub-view, with or without a known filter.
+ *  - An unknown filter is ignored; with no `view` the whole address is.
+ *
+ * `typeValues` are the types the type select offers, so an address can never select a type the
+ * select cannot show.
+ *
+ * @param {{filter: string|null|undefined, view: 'airborne'|'special'|'express'|null|undefined}} link
+ * @param {{typeValues: Iterable<string>, statusValues: Iterable<string>}} options
+ * @returns {{filter: {status: string, type: string}|null, subView: 'all'|'airborne'|'special'|'express'}|null}
+ */
+export function fleetDeepLinkTarget({ filter, view }, options) {
+  const resolved = resolveFleetDeepLinkFilter(filter, options);
+  if (!resolved && !view) return null;
+  return { filter: resolved, subView: view || 'all' };
+}
+
+/**
  * The special-aircraft panel's rows, cross-referenced against the live feed so a named
  * aircraft that is in the air right now says so.
  *

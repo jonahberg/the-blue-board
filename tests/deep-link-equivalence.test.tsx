@@ -9,6 +9,9 @@
  *  - the real FleetView, mounted on the first visit to the Fleet tab and kept mounted after, as
  *    Dashboard.tsx does (it reads `?type=` / `?filter=` / `?view=` itself, and the followed link);
  *  - a real DashLink for the in-place click.
+ * The Fleet cases also start from a Fleet tab the visitor has already filtered (type, Wi-Fi, search,
+ * the Express search, left on United Express): a followed link first puts the tab back where a cold
+ * load starts, so that history does not show.
  * What is stubbed: the fleet database and the live feed (a small fixed database), the watch list
  * and watched-flight alerts (the Schedule store's collaborators; the real ones poll), and fetch.
  *
@@ -125,14 +128,34 @@ function state() {
     fleetType: lookup?.querySelector('[aria-label="Fleet type filter"]')?.textContent ?? null,
     fleetStatus: lookup?.querySelector('[aria-label="Fleet status filter"]')?.textContent ?? null,
     fleetSubView: lookup?.querySelector('[role="tab"][data-state="active"]')?.textContent ?? null,
+    fleetWifi: lookup?.querySelector('[aria-label="Fleet WiFi filter"]')?.textContent ?? null,
+    fleetSearch: lookup?.querySelector<HTMLInputElement>('[aria-label="Fleet search"]')?.value ?? null,
     fleetRows: panel ? panel.querySelectorAll('tbody tr').length : null,
   };
+}
+
+/** Pick a Fleet sub-view tab, as a mouse does (Radix activates a trigger on a primary mouse-down). */
+function openFleetSubView(name: RegExp) {
+  const tab = [...document.querySelectorAll<HTMLElement>('#fleet-lookup-zone [role="tab"]')].find((el) =>
+    name.test(el.textContent ?? ''),
+  )!;
+  fireEvent.mouseDown(tab, { button: 0 });
+  expect(state().fleetSubView).toMatch(name);
+}
+
+/** `state()`, then the Express list's own search, read by opening that sub-view (the last step). */
+function finalState() {
+  const result = state();
+  if (!document.getElementById('fleet-lookup-zone')) return { ...result, fleetExpressSearch: null };
+  openFleetSubView(/^United Express/);
+  const box = screen.getByRole('searchbox', { name: 'United Express search' }) as HTMLInputElement;
+  return { ...result, fleetExpressSearch: box.value };
 }
 
 /** Open `address` cold. */
 function cold(address: string) {
   mountAt(address, '/#stats');
-  const result = state();
+  const result = finalState();
   cleanup();
   return result;
 }
@@ -145,21 +168,50 @@ function inPlace(address: string, { fleetVisited = false, fleetLeftOn = null as 
   mountAt('/#stats', address);
   if (fleetVisited || fleetLeftOn) {
     act(() => seen.ui!.setTab('fleet'));
-    if (fleetLeftOn) {
-      const tab = [...document.querySelectorAll<HTMLElement>('#fleet-lookup-zone [role="tab"]')].find((el) =>
-        fleetLeftOn.test(el.textContent ?? ''),
-      )!;
-      fireEvent.mouseDown(tab, { button: 0 });
-      expect(state().fleetSubView).toMatch(fleetLeftOn);
-    }
+    if (fleetLeftOn) openFleetSubView(fleetLeftOn);
     act(() => seen.ui!.setTab('stats'));
   }
+  return followAndRead();
+}
+
+/** From Stats, click the link, and read the end state. */
+function followAndRead() {
   expect(seen.ui!.tab).toBe('stats');
   fireEvent.click(screen.getByRole('link', { name: 'follow' }));
   expect(reachedDocumentPrevented, 'the click was followed in place').toBe(true);
-  const result = state();
+  const result = finalState();
   cleanup();
   return result;
+}
+
+/** Pick an option from one of the Fleet controls' Radix selects, as a mouse does. */
+async function pick(name: string, option: RegExp | string) {
+  await act(async () => {
+    fireEvent.pointerDown(screen.getByRole('combobox', { name }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  });
+  const item = await screen.findByRole('option', { name: option });
+  await act(async () => {
+    fireEvent.click(item);
+  });
+}
+
+/**
+ * Start on Stats at `/` after a visit to Fleet that set every filter a visitor can set (type A319,
+ * Wi-Fi, search text, the Express search) and left it on United Express, then click a link.
+ */
+async function inPlaceFromDirtyFleet(address: string) {
+  mountAt('/#stats', address);
+  act(() => seen.ui!.setTab('fleet'));
+  await pick('Fleet type filter', /^A319/);
+  await pick('Fleet WiFi filter', 'Satellite Ku');
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Fleet search' }), { target: { value: 'N10' } });
+  // The search box reports upward after its 120 ms debounce.
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(state()).toMatchObject({ fleetType: expect.stringContaining('A319'), fleetWifi: 'Satellite Ku', fleetSearch: 'N10' });
+  openFleetSubView(/^United Express/);
+  fireEvent.change(screen.getByRole('searchbox', { name: 'United Express search' }), { target: { value: 'skywest' } });
+  act(() => seen.ui!.setTab('stats'));
+  return followAndRead();
 }
 
 let reachedDocumentPrevented: boolean | null = null;
@@ -227,6 +279,15 @@ describe('a cold load and an in-place click of the same address end in the same 
     expect(inPlace('/?tab=fleet&view=special')).toEqual(coldState);
     expect(inPlace('/?tab=fleet&view=special', { fleetVisited: true })).toEqual(coldState);
   });
+
+  it.each(['/?tab=fleet&type=737%20MAX%209', '/?tab=fleet&view=special', '/?tab=fleet&filter=starlink'])(
+    '%s followed from a Fleet tab with every filter set lands where the cold load does',
+    async (address) => {
+      const coldState = cold(address);
+      expect(coldState).toMatchObject({ fleetWifi: 'All WiFi', fleetSearch: '', fleetExpressSearch: '' });
+      expect(await inPlaceFromDirtyFleet(address)).toEqual(coldState);
+    },
+  );
 
   it('/?aircraft=N78501: both open the aircraft dialog; the tab is the one stated difference', () => {
     const coldState = cold('/?aircraft=N78501');

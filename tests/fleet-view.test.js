@@ -7,6 +7,7 @@ import {
   buildSpecialRows,
   deliveryStats,
   FLEET_FAMILY_COLORS,
+  fleetDeepLinkTarget,
   fleetHealthCounts,
   resolveFleetDeepLinkFilter,
   sortAirborneRows,
@@ -305,6 +306,38 @@ describe('resolveFleetDeepLinkFilter', () => {
     expect(resolveFleetDeepLinkFilter('B789', options)).toBeNull();
     expect(resolveFleetDeepLinkFilter('', options)).toBeNull();
     expect(resolveFleetDeepLinkFilter(null, options)).toBeNull();
+  });
+});
+
+describe('fleetDeepLinkTarget: what a Fleet address does to the tab', () => {
+  const options = { statusValues: ['active', 'stored', 'starlink'], typeValues: ['A319', '737 MAX 9'] };
+
+  it('a known filter with no view sets it and opens All Aircraft, the list it filters', () => {
+    expect(fleetDeepLinkTarget({ filter: '737 MAX 9', view: null }, options)).toEqual({
+      filter: { status: '', type: '737 MAX 9' },
+      subView: 'all',
+    });
+    expect(fleetDeepLinkTarget({ filter: 'starlink', view: null }, options)).toEqual({
+      filter: { status: 'starlink', type: '' },
+      subView: 'all',
+    });
+  });
+
+  it('a view opens that view, with or without a known filter', () => {
+    expect(fleetDeepLinkTarget({ filter: null, view: 'special' }, options)).toEqual({ filter: null, subView: 'special' });
+    expect(fleetDeepLinkTarget({ filter: 'A319', view: 'airborne' }, options)).toEqual({
+      filter: { status: '', type: 'A319' },
+      subView: 'airborne',
+    });
+    // An unknown filter is dropped; the view still opens, as on a cold load.
+    expect(fleetDeepLinkTarget({ filter: 'B789', view: 'express' }, options)).toEqual({ filter: null, subView: 'express' });
+  });
+
+  it('an address that names nothing the controls offer changes nothing', () => {
+    expect(fleetDeepLinkTarget({ filter: 'B789', view: null }, options)).toBeNull();
+    expect(fleetDeepLinkTarget({ filter: null, view: null }, options)).toBeNull();
+    // A type in the database the type select does not offer is not a known type.
+    expect(fleetDeepLinkTarget({ filter: '737-600', view: null }, options)).toBeNull();
   });
 });
 
