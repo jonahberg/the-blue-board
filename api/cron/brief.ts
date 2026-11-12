@@ -111,7 +111,7 @@ export async function runBriefCron(deps: BriefCronDeps = {}): Promise<BriefCronS
 
   let { facts, collection } = buildBriefFacts({ ...collected }, { nowMs });
   // Before anything optional (or paid) runs: no on-time evidence, no brief.
-  const readings = hubReadingCount(facts);
+  const readings = hubReadingCount(collection);
   if (readings < BRIEF_MIN_HUB_READINGS) {
     return { status: 'skipped', reason: `${readings} hub on-time reading(s); ${BRIEF_MIN_HUB_READINGS} are needed`, skipped: collection.skipped, errors: collected.errors };
   }
