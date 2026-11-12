@@ -29,16 +29,28 @@ export const SCROLL_REGION_CLASS =
 const escapeAttr = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** Visible text of an HTML fragment: tags dropped, the common entities decoded, spaces collapsed. */
+/**
+ * Visible text of an HTML fragment: tags dropped, the common entities decoded, spaces collapsed.
+ *
+ * Tags are stripped until nothing changes and any stray angle bracket is dropped, so a nested
+ * fragment ("<scr<script>ipt>") cannot leave a tag behind; `&amp;` is decoded LAST, so the text
+ * "&amp;quot;" comes out as "&quot;" rather than being unescaped twice. The result is only ever
+ * re-escaped into an attribute (`escapeAttr`), but it should be right on its own.
+ */
 export function htmlText(fragment: string): string {
-  return fragment
-    .replace(/<[^>]*>/g, '')
+  let text = String(fragment ?? '');
+  for (let previous = ''; previous !== text; ) {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, '');
+  }
+  return text
+    .replace(/[<>]/g, '')
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;|&rsquo;|&lsquo;/g, "'")
     .replace(/&mdash;/g, '—')
     .replace(/&ndash;/g, '–')
+    .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
     .trim();
 }

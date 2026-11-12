@@ -104,3 +104,14 @@ describe('content sections no longer scroll as a whole', () => {
     }
   });
 });
+
+describe('htmlText leaves no markup and decodes once', () => {
+  it('strips nested tag fragments completely', () => {
+    expect(htmlText('<scr<script>ipt>alert(1)</scr</script>ipt>Seats')).not.toMatch(/[<>]/);
+    expect(htmlText('a <b>bold</b> < stray')).toBe('a bold stray');
+  });
+  it('does not unescape twice', () => {
+    expect(htmlText('Tom &amp;quot; Jerry')).toBe('Tom &quot; Jerry');
+    expect(htmlText('R&amp;D &quot;seats&quot;')).toBe('R&D "seats"');
+  });
+});
