@@ -1,6 +1,6 @@
 # Links everywhere: design
 
-Date: 2026-11-12. Status: **draft, awaiting the owner's approval.** Written against `origin/main` at v1.28.1 (`c168f26`).
+Date: 2026-11-12. Status: **approved by the owner Nov 12 2026** (decisions 1 and 2 as written below; his words: "1 a 2 a 3 a"). Written against `origin/main` at v1.28.1 (`c168f26`).
 
 ## Why
 
@@ -73,9 +73,9 @@ Two doors join the sides, so nothing is a dead end:
 - The Schedule board's header links once to that hub's page, and the Fleet tab's type filter, when one type is selected, links once to that type's page.
 - Hub pages already have "one button into the board". Fleet type pages get the matching link: the "Aircraft" tile and the seat-configuration counts go to `/?tab=fleet&type=<typeCode>`.
 
-**Owner decision 1 (default above is what gets built unless he says otherwise).** Earlier in the conversation he was shown "hub code → that hub's schedule board, the same wherever it prints". The table above changes that: on content pages a hub code goes to the hub's page, and only inside the dashboard to the Schedule board. The alternative is one destination everywhere (always the hub page, always the fleet page), which is simpler to state and leaves the dashboard on every click.
+**Owner decision 1: approved as the table above (Nov 12 2026).** Earlier in the conversation he was shown "hub code → that hub's schedule board, the same wherever it prints". The table above changes that: on content pages a hub code goes to the hub's page, and only inside the dashboard to the Schedule board. The alternative is one destination everywhere (always the hub page, always the fleet page), which is simpler to state and leaves the dashboard on every click.
 
-The hub strip under the header is part of this decision. Each chip ("● ORD 87%") links to `/hubs/<code>` today, with the tooltip "United at ORD — hub guide"; it is the link every dashboard visitor sees. Under the default it is a hub code on an on-time status, so it opens that hub's Schedule board, where the dashboard shows the flights behind the figure, and its tooltip, screen-reader words and DESIGN.md rows change with it. The hub guide is then one click further, through the Schedule board's header link. Under the alternative the strip stays exactly as it is.
+The hub strip under the header is part of this decision. Each chip ("● ORD 87%") links to `/hubs/<code>` today, with the tooltip "United at ORD — hub guide"; it is the link every dashboard visitor sees. Under the approved rule it is a hub code on an on-time status, so it opens that hub's Schedule board, where the dashboard shows the flights behind the figure, and its tooltip, screen-reader words and DESIGN.md rows change with it. The hub guide is then one click further, through the Schedule board's header link.
 
 ### Links versus buttons
 
@@ -106,11 +106,11 @@ Each is a DOM-free function with a test, beside `flight-link.js`. The React comp
   - ICAO codes are ambiguous (`B739` is the 737-900 and the 737-900ER, `B772` the 777-200 and 777-200ER). Without a tail those print plain.
   - Clipped provider text ("Boeing 737", "Canadair CRJ") and regional types print plain.
 
-**Owner decision 2: Express flight numbers.** The Starlink feed prints operating codes (SKW5415, OO5506, RPA3542, YX3506, GJS4541, G7…, ASH…, YV…), about 62% of its flights, and DESIGN.md (2026-11-11) says those never link. Checked Nov 12 against `flight_history`: 82 of 83 sampled flights matched a United flight by route and time, all 82 with the same number; a further 42 in the IATA forms (YV, G7, YX) matched 42 of 42 by number and route within the past week. `/api/flight?ident=UA5415` returns real history, so the pages are not empty. Default, unless he says otherwise:
+**Owner decision 2: Express flight numbers. Approved Nov 12 2026: print the United number and link it.** The Starlink feed prints operating codes (SKW5415, OO5506, RPA3542, YX3506, GJS4541, G7…, ASH…, YV…), about 62% of its flights, and DESIGN.md (2026-11-11) says those never link. Checked Nov 12 against `flight_history`: 82 of 83 sampled flights matched a United flight by route and time, all 82 with the same number; a further 42 in the IATA forms (YV, G7, YX) matched 42 of 42 by number and route within the past week. `/api/flight?ident=UA5415` returns real history, so the pages are not empty. What gets built:
 
 - On a row the feed marks as United (`airline: 'UA'`) and whose prefix is one of the tested operator codes, the board prints the United number (UA5415) and links it. The operator name already prints under it.
 - Everywhere else (the Live ticker, map callsigns) a callsign stays a callsign and stays plain.
-- This reverses a dated DESIGN.md decision, so it needs his explicit yes and a new Decisions row. The builder repeats the check on a larger sample before shipping and records the result in the test.
+- This reverses the 2026-11-11 DESIGN.md decision, with his explicit yes, and takes a new Decisions row. That rule was a caution (no one had checked that SKW5415 is UA5415), not a product choice. The builder repeats the check on a larger sample before shipping and records the result in the test.
 
 ### How a link looks
 
@@ -159,7 +159,7 @@ Three pull requests, each a preview he looks at before merging:
 
 Each adds its DESIGN.md Decisions rows and component-table rows, and passes `bun run build`, `bun run test` and `bun run typecheck`, in that order, plus `ui-audit`.
 
-The Starlink tab's two fact fixes (the Express completion figure, and Alaska and Hawaiian as one row) are separate and small. They are being agreed in conversation and ship on their own, not under this document.
+The Starlink tab's two fact fixes (the Express completion figure, and Alaska and Hawaiian as one row) are separate and small. He approved both in conversation on Nov 12 (Express bar on two-cabin regional jets, about 96%; one Alaska + Hawaiian row; the ETA tile replaced by United's stated end-of-2027 target). They ship on their own, not under this document.
 
 ## Left to the builder
 
