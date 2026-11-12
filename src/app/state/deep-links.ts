@@ -27,7 +27,7 @@
 import { useEffect, useRef } from 'react';
 
 import { hubLink } from '@/lib/hub-link.js';
-import { weatherScrollTarget } from '@/lib/tab-hash.js';
+import { hashTailParams, weatherScrollTarget } from '@/lib/tab-hash.js';
 import { parseWatchLink, withoutWatchParams } from '@/lib/watch-link.js';
 import { FR24_LOOKUP_AVAILABLE } from '../features/Fr24LookupDialog';
 import { resolveTabParam } from '../tabs';
@@ -129,9 +129,11 @@ const SITE_ORIGIN = 'https://theblueboard.co';
  * `/?aircraft=N78501`, `/?tab=fleet&type=737%20MAX%209`) the way a cold load of that URL would, so
  * a link clicked in place and the same link opened in a new tab land in the same spot.
  *
- * Null when the href is not the dashboard's (another origin, or a path other than `/`: a flight,
- * hub or fleet page is a page load), and when it names nothing an intent carries (`/`, a UTM-only
- * link, `?waitlist=`, `?flight=`, `?watch=`).
+ * Null — the link then loads like any other — when the href is not the dashboard's (another
+ * origin, or a path other than `/`: a flight, hub or fleet page is a page load), when it names
+ * nothing an intent carries (`/`, a UTM-only link), and when a cold load would apply more of it
+ * than an intent can carry (`carriesMoreThanAnIntent`), so following it in place never
+ * half-applies it.
  */
 export function resolveDeepLink(href: string): DeepLinkIntent | null {
   let url: URL;
@@ -141,7 +143,12 @@ export function resolveDeepLink(href: string): DeepLinkIntent | null {
     return null;
   }
   if (url.origin !== SITE_ORIGIN || url.pathname !== '/') return null;
-  const params = url.searchParams;
+  // A cold load first moves parameters trapped after the '#' into the query, existing keys
+  // winning (`canonicalizeHashParams`, called by `initialTab` in ui.tsx), so they count here too.
+  const params = new URLSearchParams(url.search);
+  for (const [key, value] of new URLSearchParams(hashTailParams(url.hash))) {
+    if (!params.has(key)) params.set(key, value);
+  }
 
   // Same precedence as `useDeepLinks`: ?view=starlink is applied after ?tab=, and both after the
   // hash the dashboard opened on.
@@ -151,6 +158,7 @@ export function resolveDeepLink(href: string): DeepLinkIntent | null {
     resolveTabParam(url.hash);
   const aircraft = params.get('aircraft')?.trim().toUpperCase() || null;
   if (!tab && !aircraft) return null;
+  if (carriesMoreThanAnIntent(params, tab)) return null;
 
   const fleet = tab === 'fleet' ? fleetDeepLinksFrom(params) : null;
   return {
@@ -161,6 +169,23 @@ export function resolveDeepLink(href: string): DeepLinkIntent | null {
     aircraft,
     fleet: fleet && (fleet.filter || fleet.view) ? fleet : null,
   };
+}
+
+/**
+ * True when the query names something a cold load acts on (`useDeepLinks`, the views' own reads)
+ * that an intent for `tab` cannot carry: the flight sheet, the watch list, the waitlist dialog, a
+ * Weather section off the Weather tab, a hub that is neither a Schedule board nor a Weather card
+ * (with no tab or on Live it is the Live map's hub filter, `readLiveHubDeepLink`), and the Fleet
+ * view's filter or sub-view off the Fleet tab (the Fleet view reads those whenever it mounts).
+ * Parameters that name nothing in the dashboard (`utm_*`) are ignored, as on a cold load.
+ */
+function carriesMoreThanAnIntent(params: URLSearchParams, tab: TabId | null): boolean {
+  if (['flight', 'q', 'watch', 'waitlist'].some((key) => params.has(key))) return true;
+  if (params.has('section') && tab !== 'weather') return true;
+  if (params.has('hub') && tab !== 'schedule' && tab !== 'weather') return true;
+  const view = params.get('view')?.toLowerCase();
+  const fleetParam = params.has('type') || params.has('filter') || (view !== undefined && view !== 'starlink');
+  return fleetParam && tab !== 'fleet';
 }
 
 /** 'UAL123' / 'ua 123' / '123' → 'UA123'. */
