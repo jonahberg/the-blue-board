@@ -4,7 +4,12 @@ import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 import {
+  ALASKA_HAWAIIAN_CODE,
   buildIndustryRows,
+  INDUSTRY_ALASKA_HAWAIIAN_NOTE,
+  INDUSTRY_TITLE,
+  INDUSTRY_TITLE_UNITED_VS_ALASKA,
+  industryStripCopy,
   daysSinceFound,
   EXPRESS_FAMILIES_LEFT_OUT,
   expressStarlinkScope,
@@ -239,6 +244,78 @@ describe('buildIndustryRows', () => {
     const rows = buildIndustryRows([{ code: 'XX', percentage: 5 }]);
     expect(rows[0].installed).toBeNull();
     expect(rows[0].total).toBeNull();
+  });
+});
+
+describe('buildIndustryRows: Alaska + Hawaiian are one row (Nov 12 2026)', () => {
+  const UA = { code: 'UA', name: 'United Airlines', installed: 684, total: 1681, percentage: 40.7 };
+  const HA = { code: 'HA', name: 'Hawaiian Airlines', installed: 42, total: 64, percentage: 65.6 };
+  const AS = { code: 'AS', name: 'Alaska Airlines', installed: 105, total: 354, percentage: 29.7 };
+  const line = (r) => `${r.code} ${r.installed}/${r.total} ${r.pct}%`;
+
+  it('reads the live Nov 12 payload as UA 684/1681 and AS+HA 147/418 · 35%', () => {
+    const rows = buildIndustryRows(FLEET_SUMMARY_NOV12.airlines);
+    expect(rows.map(line)).toEqual(['UA 684/1681 41%', 'AS+HA 147/418 35%']);
+    expect(rows[1].name).toBe('Alaska Airlines + Hawaiian Airlines');
+    expect(rows[1].isUA).toBe(false);
+    expect(rows[0].name).toBe('United Airlines');
+  });
+
+  it('SUMS installed and total and recomputes the share, never averaging percentages', () => {
+    const merged = buildIndustryRows([UA, HA, AS]).find((r) => r.code === ALASKA_HAWAIIAN_CODE);
+    expect(merged.installed).toBe(147);
+    expect(merged.total).toBe(418);
+    expect(merged.raw).toBeCloseTo((147 / 418) * 100, 10);
+    expect(merged.pct).toBe(35);
+    // The average of 65.6 and 29.7 would print 48%.
+    expect(merged.pct).not.toBe(Math.round((65.6 + 29.7) / 2));
+    // ...and its own percentage, not the sent ones, decides where it sorts.
+    const rows = buildIndustryRows([{ code: 'XX', installed: 36, total: 100, percentage: 36 }, HA, AS]);
+    expect(rows.map((r) => r.code)).toEqual(['XX', 'AS+HA']);
+  });
+
+  it('prints one of the two alone as its own row, unchanged', () => {
+    expect(buildIndustryRows([UA, AS]).map(line)).toEqual(['UA 684/1681 41%', 'AS 105/354 30%']);
+    expect(buildIndustryRows([UA, HA]).map(line)).toEqual(['HA 42/64 66%', 'UA 684/1681 41%']);
+  });
+
+  it('leaves them as two rows when either has no counts to sum', () => {
+    const noCounts = { code: 'HA', name: 'Hawaiian Airlines', percentage: 65.6 };
+    expect(buildIndustryRows([UA, noCounts, AS]).map((r) => r.code)).toEqual(['HA', 'UA', 'AS']);
+    const zeroTotal = { ...HA, installed: 0, total: 0, percentage: 0 };
+    expect(buildIndustryRows([UA, zeroTotal, AS]).map((r) => r.code)).toEqual(['UA', 'AS', 'HA']);
+  });
+
+  it('still renders nothing when any carrier lacks a percentage, checked before the merge', () => {
+    expect(buildIndustryRows([UA, { ...HA, percentage: null }, AS])).toBeNull();
+    expect(buildIndustryRows([UA, HA, { ...AS, percentage: 'n/a' }])).toBeNull();
+  });
+});
+
+describe('industryStripCopy', () => {
+  const rows = (...codes) => codes.map((code) => ({ code }));
+
+  it('names United vs Alaska only when the rows are exactly United and the merged Alaska row', () => {
+    expect(industryStripCopy(buildIndustryRows(FLEET_SUMMARY_NOV12.airlines))).toEqual({
+      title: 'Starlink Coverage · United vs Alaska',
+      note: 'Alaska includes Hawaiian, which flies under the Alaska code since April 2026.',
+    });
+    expect(industryStripCopy(rows('AS+HA', 'UA')).title).toBe(INDUSTRY_TITLE_UNITED_VS_ALASKA);
+  });
+
+  it('keeps the industry title for any other set of rows', () => {
+    expect(industryStripCopy(rows('UA', 'AS')).title).toBe('Industry · Starlink Coverage');
+    expect(industryStripCopy(rows('UA', 'AS', 'HA')).title).toBe(INDUSTRY_TITLE);
+    expect(industryStripCopy(rows('UA', 'AS+HA', 'DL')).title).toBe(INDUSTRY_TITLE);
+    expect(industryStripCopy(rows('AS+HA', 'DL')).title).toBe(INDUSTRY_TITLE);
+    expect(industryStripCopy(rows('UA')).title).toBe(INDUSTRY_TITLE);
+    expect(industryStripCopy(null).title).toBe(INDUSTRY_TITLE);
+  });
+
+  it('adds the Hawaiian sentence only while the merged row is on the strip', () => {
+    expect(industryStripCopy(rows('UA', 'AS+HA', 'DL')).note).toBe(INDUSTRY_ALASKA_HAWAIIAN_NOTE);
+    expect(industryStripCopy(rows('UA', 'HA')).note).toBeNull();
+    expect(industryStripCopy(rows('UA', 'AS')).note).toBeNull();
   });
 });
 

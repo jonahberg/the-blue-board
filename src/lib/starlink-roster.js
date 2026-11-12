@@ -257,14 +257,61 @@ export function formatVerifyDate(iso) {
   return new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// ── Alaska + Hawaiian, one row (Nov 12 2026) ──
+// The tracker lists Alaska (AS) and Hawaiian (HA) as two carriers. They are one airline now:
+// a single operating certificate since Oct 29 2025 (Alaska newsroom), and every flight has carried
+// the AS code since Apr 22 2026, while the Hawaiian brand continues. The strip prints them as one
+// row, summed from their counts.
+
+/** The merged row's printed code; it fits the strip's `w-10` code column. */
+export const ALASKA_HAWAIIAN_CODE = 'AS+HA';
+/** The merged row's accessible and hover name. */
+export const ALASKA_HAWAIIAN_NAME = 'Alaska Airlines + Hawaiian Airlines';
+/** The footnote sentence printed only while the merged row is on the strip. */
+export const INDUSTRY_ALASKA_HAWAIIAN_NOTE =
+  'Alaska includes Hawaiian, which flies under the Alaska code since April 2026.';
+/** The strip's title, and its title when it compares exactly United with the merged Alaska row. */
+export const INDUSTRY_TITLE = 'Industry · Starlink Coverage';
+export const INDUSTRY_TITLE_UNITED_VS_ALASKA = 'Starlink Coverage · United vs Alaska';
+
+const industryRow = (code, name, installed, total, p) => ({
+  code,
+  name,
+  isUA: code === 'UA',
+  pct: Math.round(p),
+  width: Math.max(0, Math.min(100, p)),
+  installed,
+  total,
+  raw: p,
+});
+
 /**
- * The industry coverage strip's rows, sorted best-covered first.
+ * One AS+HA row in place of the AS and HA rows: installed and total SUMMED and the percentage
+ * recomputed from them (never an average of two percentages). Left as two rows unless both carry
+ * a finite installed count and a total above zero; one of the two alone is left as it is.
+ */
+function mergeAlaskaHawaiian(rows) {
+  const as = rows.find((r) => r.code === 'AS');
+  const ha = rows.find((r) => r.code === 'HA');
+  const usable = (r) => r && r.installed != null && r.total != null && r.total > 0;
+  if (!usable(as) || !usable(ha)) return rows;
+  const installed = as.installed + ha.installed;
+  const total = as.total + ha.total;
+  const merged = industryRow(ALASKA_HAWAIIAN_CODE, ALASKA_HAWAIIAN_NAME, installed, total, (installed / total) * 100);
+  return [...rows.filter((r) => r !== as && r !== ha), merged];
+}
+
+/**
+ * The industry coverage strip's rows, sorted best-covered first, with Alaska and Hawaiian as one
+ * row (`mergeAlaskaHawaiian`).
  *
- * Returns null — meaning "render nothing" — unless EVERY row has a finite percentage. A
- * partial strip would rank carriers against each other on data we only have for some of them,
- * which is the one thing a comparison bar chart must never do.
+ * Returns null — meaning "render nothing" — unless EVERY row the tracker sent has a finite
+ * percentage, checked before any merge. A partial strip would rank carriers against each other
+ * on data we only have for some of them, which is the one thing a comparison bar chart must
+ * never do.
  *
  * @param {Array<{code?:string,name?:string,installed?:number,total?:number,percentage?:number|string}>|null|undefined} airlines
+ * @returns {Array<{code:string,name:string|null,isUA:boolean,pct:number,width:number,installed:number|null,total:number|null,raw:number}>|null}
  */
 export function buildIndustryRows(airlines) {
   if (!Array.isArray(airlines) || airlines.length === 0) return null;
@@ -272,19 +319,29 @@ export function buildIndustryRows(airlines) {
     if (!r || r.percentage == null || r.percentage === '') return null;
     const p = typeof r.percentage === 'string' ? parseFloat(r.percentage) : Number(r.percentage);
     if (!Number.isFinite(p)) return null;
-    const code = String(r.code || '').toUpperCase();
-    return {
-      code,
-      isUA: code === 'UA',
-      pct: Math.round(p),
-      width: Math.max(0, Math.min(100, p)),
-      installed: Number.isFinite(Number(r.installed)) ? Number(r.installed) : null,
-      total: Number.isFinite(Number(r.total)) ? Number(r.total) : null,
-      raw: p,
-    };
+    const count = (v) => (v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
+    const name = String(r.name || '').trim() || null;
+    return industryRow(String(r.code || '').toUpperCase(), name, count(r.installed), count(r.total), p);
   });
   if (parsed.some((r) => r === null)) return null;
-  return parsed.sort((a, b) => b.raw - a.raw);
+  return mergeAlaskaHawaiian(parsed).sort((a, b) => b.raw - a.raw);
+}
+
+/**
+ * The strip's title and the extra footnote sentence for these rows. The title names the two
+ * airlines only when the rows are exactly United and the merged Alaska row; the Hawaiian sentence
+ * appears only while the merged row does (it would be false beside a lone HA row).
+ * @param {Array<{code: string}>|null|undefined} rows  `buildIndustryRows()` output.
+ * @returns {{title: string, note: string|null}}
+ */
+export function industryStripCopy(rows) {
+  const codes = (rows || []).map((r) => r.code);
+  const merged = codes.includes(ALASKA_HAWAIIAN_CODE);
+  const unitedVsAlaska = codes.length === 2 && merged && codes.includes('UA');
+  return {
+    title: unitedVsAlaska ? INDUSTRY_TITLE_UNITED_VS_ALASKA : INDUSTRY_TITLE,
+    note: merged ? INDUSTRY_ALASKA_HAWAIIAN_NOTE : null,
+  };
 }
 
 // ── What the Express bar counts (Nov 12 2026) ──
