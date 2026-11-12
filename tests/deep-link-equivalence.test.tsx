@@ -137,11 +137,21 @@ function cold(address: string) {
   return result;
 }
 
-/** Start on Stats at `/` (optionally after a visit to Fleet), then click a link to `address`. */
-function inPlace(address: string, { fleetVisited = false } = {}) {
+/**
+ * Start on Stats at `/`, then click a link to `address`. `fleetVisited` visits Fleet first, so the
+ * view is already mounted; `fleetLeftOn` also leaves it on that sub-view tab before going to Stats.
+ */
+function inPlace(address: string, { fleetVisited = false, fleetLeftOn = null as RegExp | null } = {}) {
   mountAt('/#stats', address);
-  if (fleetVisited) {
+  if (fleetVisited || fleetLeftOn) {
     act(() => seen.ui!.setTab('fleet'));
+    if (fleetLeftOn) {
+      const tab = [...document.querySelectorAll<HTMLElement>('#fleet-lookup-zone [role="tab"]')].find((el) =>
+        fleetLeftOn.test(el.textContent ?? ''),
+      )!;
+      fireEvent.mouseDown(tab, { button: 0 });
+      expect(state().fleetSubView).toMatch(fleetLeftOn);
+    }
     act(() => seen.ui!.setTab('stats'));
   }
   expect(seen.ui!.tab).toBe('stats');
@@ -202,6 +212,9 @@ describe('a cold load and an in-place click of the same address end in the same 
     // Mounted by the click (first visit) and already mounted (an earlier visit).
     expect(inPlace('/?tab=fleet&type=A319')).toEqual(coldState);
     expect(inPlace('/?tab=fleet&type=A319', { fleetVisited: true })).toEqual(coldState);
+    // Left on a sub-view that would not show the filter: the link opens All Aircraft, as cold.
+    expect(inPlace('/?tab=fleet&type=A319', { fleetLeftOn: /^United Express/ })).toEqual(coldState);
+    expect(inPlace('/?tab=fleet&type=A319', { fleetLeftOn: /^Special/ })).toEqual(coldState);
   });
 
   it('/?tab=fleet&view=special: the Fleet tab on the Special sub-view, unfiltered', () => {

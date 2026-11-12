@@ -337,6 +337,11 @@ export default function FleetView() {
   // (`?type=B789`, an ICAO code the controls never offered) is ignored rather than applied —
   // filtering the table to nothing would read as "United has no 787-9s". It needs the fleet
   // database, which is what says which types the controls offer.
+  //
+  // A known filter with no sub-view of its own opens All Aircraft, the list it filters. A cold
+  // load starts there anyway; a link followed in place finds the view where the visitor left it,
+  // and on United Express (no controls) or Special (not filtered by type) the filter would not
+  // show. An unmatched value changes nothing, the sub-view included.
   const applyFleetDeepLink = useCallback(
     ({ filter, view }: FleetDeepLinks) => {
       if (filter) {
@@ -347,6 +352,7 @@ export default function FleetView() {
         if (resolved) {
           setStatusFilter(resolved.status);
           setTypeFilter(resolved.type);
+          if (!view) setSubView('all');
         }
       }
       if (view) setSubView(view);

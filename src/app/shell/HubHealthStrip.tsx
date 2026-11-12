@@ -189,7 +189,7 @@ export function HubHealthStrip() {
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   {/* One block: the content is an inline-flex row, so bare <p>s sat side by side
-                      as columns ("United at GUM · today's board" squeezed beside the reason). */}
+                      as columns ("United at GUM · schedule board" squeezed beside the reason). */}
                   <div className="space-y-0.5">
                     <p className="font-medium">{destination.tooltip}</p>
                     <p className="text-xs">

@@ -447,13 +447,14 @@ const NO_FIGURE_SR = {
  * Where a hub chip goes, in the words its tooltip and its link name use. The chip opens that
  * hub's Schedule board in place (`hubLink(hub, 'dashboard')`, owner decision Nov 12 2026), where
  * the dashboard lists the flights behind the figure; the hub guide is one link further, in the
- * board's header. `sr` is the same for every hub and every poll, so the strip (a polite live
- * region) never announces it as a change.
+ * board's header. "Schedule board", never "today's": before the 06:00 hub-local rollover the
+ * Schedule tab opens on yesterday's board (`defaultSchedDayOffset`). `sr` is the same for every
+ * hub and every poll, so the strip (a polite live region) never announces it as a change.
  * @param {string} hub
  * @returns {{tooltip: string, sr: string}}
  */
 export function hubChipDestination(hub) {
-  return { tooltip: `United at ${hub} · today's board`, sr: "today's board" };
+  return { tooltip: `United at ${hub} · schedule board`, sr: 'schedule board' };
 }
 
 /**

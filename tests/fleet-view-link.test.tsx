@@ -96,6 +96,16 @@ const statusSelect = () => screen.getByRole('combobox', { name: 'Fleet status fi
 const activeSubView = () =>
   document.querySelector('#fleet-lookup-zone [role="tab"][data-state="active"]')?.textContent ?? '';
 
+/** The visitor picks a Fleet sub-view tab (Radix activates a trigger on a primary mouse-down). */
+function openSubView(name: RegExp) {
+  const tab = [...document.querySelectorAll<HTMLElement>('#fleet-lookup-zone [role="tab"]')].find((el) =>
+    name.test(el.textContent ?? ''),
+  );
+  if (!tab) throw new Error(`no sub-view tab ${name}`);
+  fireEvent.mouseDown(tab, { button: 0 });
+  expect(activeSubView()).toMatch(name);
+}
+
 /** A Composition variant card: the button that IS the type filter. */
 function typeCard(type: string): HTMLElement {
   const card = [...document.querySelectorAll<HTMLElement>('button[aria-pressed]')].find(
@@ -161,6 +171,51 @@ describe('FleetView follows a Fleet link in place', () => {
     expect(activeSubView()).toMatch(/^All Aircraft/);
     follow({ filter: null, view: 'special' });
     expect(activeSubView()).toMatch(/^Special/);
+  });
+
+  it.each([
+    ['United Express', /^United Express/],
+    ['Special', /^Special/],
+  ])('a type followed from the %s sub-view opens All Aircraft filtered to that type, as a cold load does', (_, from) => {
+    mount();
+    openSubView(from);
+
+    follow({ filter: 'A319', view: null });
+
+    expect(activeSubView()).toMatch(/^All Aircraft/);
+    expect(rows()).toHaveLength(6);
+    expect(typeSelect().textContent).toContain('A319');
+    expect(screen.getByRole('link', { name: 'About the A319' })).toBeTruthy();
+  });
+
+  it('a status value followed from United Express opens All Aircraft too', () => {
+    mount();
+    openSubView(/^United Express/);
+    follow({ filter: 'starlink', view: null });
+    expect(activeSubView()).toMatch(/^All Aircraft/);
+    expect(rows()).toEqual(['N37502', 'N37503']);
+  });
+
+  it('a link that names its own sub-view keeps it: a filter with a view opens that view', () => {
+    mount();
+    openSubView(/^United Express/);
+    follow({ filter: 'A319', view: 'airborne' });
+    expect(activeSubView()).toMatch(/^Airborne Now/);
+    expect(typeSelect().textContent).toContain('A319');
+  });
+
+  it('an unknown value changes nothing, the sub-view included', () => {
+    mount();
+    openSubView(/^United Express/);
+    follow({ filter: 'B789', view: null });
+    expect(activeSubView()).toMatch(/^United Express/);
+    cleanup();
+
+    mount();
+    openSubView(/^Special/);
+    follow({ filter: 'B789', view: null });
+    expect(activeSubView()).toMatch(/^Special/);
+    expect(typeSelect().textContent).toContain('All Types');
   });
 
   it('the same link followed again, after the visitor cleared the filter, applies again', () => {

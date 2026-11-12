@@ -433,7 +433,7 @@ describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
   });
 });
 
-describe('HubHealthStrip: a chip opens that hub\'s board, in place (Nov 12 2026)', () => {
+describe('HubHealthStrip: a chip opens that hub\'s schedule board, in place (Nov 12 2026)', () => {
   /** Whether the last click still had its default when it reached the document (after React). */
   let reachedDocumentPrevented: boolean | null = null;
   function recordClick(event: Event) {
@@ -488,17 +488,19 @@ describe('HubHealthStrip: a chip opens that hub\'s board, in place (Nov 12 2026)
 
   it('its name carries the hub, its figure and where it goes; the tooltip says it too', async () => {
     render(<Strip />);
-    const ord = screen.getByRole('link', { name: /^ORD.*83%.*today's board/ });
+    const ord = screen.getByRole('link', { name: /^ORD.*83%.*\(schedule board\)$/ });
     // Visible words plus fixed sr-only words, never an aria-label over different text.
     expect(ord.hasAttribute('aria-label')).toBe(false);
-    expect(ord.querySelector('[data-chip-destination]')?.textContent).toBe("(today's board)");
+    expect(ord.querySelector('[data-chip-destination]')?.textContent).toBe('(schedule board)');
     await act(async () => {
       ord.focus();
       await vi.runAllTimersAsync();
     });
     const tip = screen.getAllByRole('tooltip').map((t) => t.textContent ?? '').join(' ');
-    expect(tip).toContain("United at ORD · today's board");
-    expect(tip).not.toMatch(/hub guide/);
+    expect(tip).toContain('United at ORD · schedule board');
+    // Before 06:00 hub-local the board that opens is yesterday's, so the chip never says "today's".
+    expect(tip).not.toMatch(/hub guide|today's/);
+    expect(ord.textContent).not.toMatch(/today's/);
   });
 
   it('keeps every class and size of the chip (tuned Nov 11 2026)', () => {

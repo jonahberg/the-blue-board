@@ -508,9 +508,11 @@ describe('hubChipNoFigure: the strip\'s reason, only from a payload that carries
 
 describe('hubChipDestination: where a hub chip goes, in its tooltip and its link name', () => {
   it('names that hub\'s board in the dashboard, not its guide page (owner decision, Nov 12 2026)', () => {
-    expect(hubChipDestination('ORD')).toEqual({ tooltip: "United at ORD · today's board", sr: "today's board" });
-    expect(hubChipDestination('GUM').tooltip).toBe("United at GUM · today's board");
+    expect(hubChipDestination('ORD')).toEqual({ tooltip: 'United at ORD · schedule board', sr: 'schedule board' });
+    expect(hubChipDestination('GUM').tooltip).toBe('United at GUM · schedule board');
     expect(JSON.stringify(hubChipDestination('ORD'))).not.toMatch(/guide/);
+    // Before the 06:00 hub-local rollover the Schedule tab opens on yesterday's board.
+    expect(JSON.stringify(hubChipDestination('ORD'))).not.toMatch(/today/);
   });
 
   it('is the same words for every hub and every poll: the strip is a polite live region', () => {
