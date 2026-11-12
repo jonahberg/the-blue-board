@@ -1,0 +1,256 @@
+{
+  "airlines": [
+    {
+      "code": "UA",
+      "name": "United Airlines",
+      "installed": 684,
+      "total": 1681,
+      "percentage": 40.7,
+      "families": [
+        {
+          "family": "E175",
+          "body": "regional",
+          "installed": 252,
+          "total": 252,
+          "percentage": 100
+        },
+        {
+          "family": "CRJ-550",
+          "body": "regional",
+          "installed": 102,
+          "total": 104,
+          "percentage": 98.1
+        },
+        {
+          "family": "A321",
+          "body": "narrowbody",
+          "installed": 69,
+          "total": 78,
+          "percentage": 88.5
+        },
+        {
+          "family": "B737-800",
+          "body": "narrowbody",
+          "installed": 105,
+          "total": 141,
+          "percentage": 74.5
+        },
+        {
+          "family": "B737-900",
+          "body": "narrowbody",
+          "installed": 94,
+          "total": 148,
+          "percentage": 63.5
+        },
+        {
+          "family": "B737-MAX9",
+          "body": "narrowbody",
+          "installed": 49,
+          "total": 188,
+          "percentage": 26.1
+        },
+        {
+          "family": "B777",
+          "body": "widebody",
+          "installed": 5,
+          "total": 96,
+          "percentage": 5.2
+        },
+        {
+          "family": "B737-MAX8",
+          "body": "narrowbody",
+          "installed": 5,
+          "total": 123,
+          "percentage": 4.1
+        },
+        {
+          "family": "B787",
+          "body": "widebody",
+          "installed": 2,
+          "total": 97,
+          "percentage": 2.1
+        },
+        {
+          "family": "CRJ-200",
+          "body": "regional",
+          "installed": 0,
+          "total": 90,
+          "percentage": 0
+        },
+        {
+          "family": "A319",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 76,
+          "percentage": 0
+        },
+        {
+          "family": "A320",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 71,
+          "percentage": 0
+        },
+        {
+          "family": "B757",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 61,
+          "percentage": 0
+        },
+        {
+          "family": "ERJ-145",
+          "body": "regional",
+          "installed": 0,
+          "total": 55,
+          "percentage": 0
+        },
+        {
+          "family": "B767",
+          "body": "widebody",
+          "installed": 0,
+          "total": 53,
+          "percentage": 0
+        },
+        {
+          "family": "B737-700",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 40,
+          "percentage": 0
+        },
+        {
+          "family": "E170",
+          "body": "regional",
+          "installed": 0,
+          "total": 8,
+          "percentage": 0
+        },
+        {
+          "family": "CRJ-700",
+          "body": "regional",
+          "installed": 0,
+          "total": 4,
+          "percentage": 0
+        },
+        {
+          "family": "B737-MAX10",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 1,
+          "percentage": 0
+        },
+        {
+          "family": "unknown",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 38,
+          "percentage": 0
+        }
+      ]
+    },
+    {
+      "code": "HA",
+      "name": "Hawaiian Airlines",
+      "installed": 42,
+      "total": 64,
+      "percentage": 65.6,
+      "families": [
+        {
+          "family": "A330",
+          "body": "widebody",
+          "installed": 24,
+          "total": 24,
+          "percentage": 100
+        },
+        {
+          "family": "A321",
+          "body": "narrowbody",
+          "installed": 18,
+          "total": 18,
+          "percentage": 100
+        },
+        {
+          "family": "B717",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 19,
+          "percentage": 0
+        },
+        {
+          "family": "unknown",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 3,
+          "percentage": 0
+        }
+      ]
+    },
+    {
+      "code": "AS",
+      "name": "Alaska Airlines",
+      "installed": 105,
+      "total": 354,
+      "percentage": 29.7,
+      "families": [
+        {
+          "family": "E175",
+          "body": "regional",
+          "installed": 93,
+          "total": 93,
+          "percentage": 100
+        },
+        {
+          "family": "B737-MAX8",
+          "body": "narrowbody",
+          "installed": 12,
+          "total": 20,
+          "percentage": 60
+        },
+        {
+          "family": "B737-MAX9",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 80,
+          "percentage": 0
+        },
+        {
+          "family": "B737-900",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 79,
+          "percentage": 0
+        },
+        {
+          "family": "B737-800",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 59,
+          "percentage": 0
+        },
+        {
+          "family": "B737-700",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 11,
+          "percentage": 0
+        },
+        {
+          "family": "B787",
+          "body": "widebody",
+          "installed": 0,
+          "total": 6,
+          "percentage": 0
+        },
+        {
+          "family": "unknown",
+          "body": "narrowbody",
+          "installed": 0,
+          "total": 6,
+          "percentage": 0
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-11-12T19:58:56.037Z"
+}

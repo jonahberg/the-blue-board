@@ -105,16 +105,57 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
+afterEach(() => {
+  (FLEET as { fleetSummary: unknown }).fleetSummary = null;
+});
+
+const expressRow = () => document.querySelector('#sl-bars [data-bar="Express"]') as HTMLElement;
+
 describe('one mainline total on the Fleet and Starlink tabs', () => {
   it("the Starlink tab's Mainline bar is the fleet database's count, not the tracker's", () => {
     render(<StarlinkView />);
     const bars = document.getElementById('sl-bars') as HTMLElement;
     expect(bars.textContent).toContain('2 / 8 · 25%');
     expect(bars.textContent).not.toContain('/ 12');
-    // Express has no database of ours; it stays the tracker's, and the note says so.
-    expect(bars.textContent).toContain('2 / 4 · 50%');
+  });
+
+  // Nov 12 2026: the tracker's Express total (4 here, 513 live) counts single-cabin jets, and
+  // with no fleet-summary there is no denominator the bar may use.
+  it('without a fleet-summary the Express row is the equipped count: no bar, no percentage', () => {
+    render(<StarlinkView />);
+    const row = expressRow();
+    expect(row.textContent).toBe('Express2 equipped');
+    expect(row.textContent).not.toContain('%');
+    expect(row.textContent).not.toContain('/ 4');
+    expect(row.querySelector('.bg-bb-ok')).toBeNull();
     expect(document.getElementById('sl-bars-note')?.textContent).toBe(
-      'Mainline: 2 of 8 aircraft in our fleet database · Express: per the Starlink tracker',
+      'Mainline: 2 of 8 aircraft in our fleet database · Express: equipped count per the Starlink tracker',
+    );
+  });
+
+  it("with a fleet-summary both Express numbers are its UA regional families'", () => {
+    (FLEET as { fleetSummary: unknown }).fleetSummary = {
+      airlines: [
+        {
+          code: 'UA', name: 'United Airlines', installed: 5, total: 20, percentage: 25,
+          families: [
+            { family: 'E175', body: 'regional', installed: 3, total: 4, percentage: 75 },
+            { family: 'E170', body: 'regional', installed: 0, total: 2, percentage: 0 },
+            { family: 'CRJ-200', body: 'regional', installed: 0, total: 9, percentage: 0 },
+            { family: 'B737-MAX9', body: 'narrowbody', installed: 2, total: 5, percentage: 40 },
+          ],
+        },
+      ],
+    };
+    render(<StarlinkView />);
+    const row = expressRow();
+    // 3 of the 6 two-cabin jets, never the tracker's 2 equipped over its 4.
+    expect(row.textContent).toBe('Express3 / 6 · 50%');
+    expect(row.querySelector('.bg-bb-ok')).not.toBeNull();
+    expect(document.getElementById('sl-bars-note')?.textContent).toBe(
+      'Mainline: 2 of 8 aircraft in our fleet database · Express: per the Starlink tracker. ' +
+        'Express counts two-cabin regional jets, the planes United has said will get Starlink. ' +
+        'The 9 single-cabin CRJ-200s are left out.',
     );
   });
 

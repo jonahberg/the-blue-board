@@ -38,6 +38,7 @@ import { scrollBehavior } from '@/lib/motion.js';
 import { buildVelocityChart } from '@/lib/starlink-chart.js';
 import {
   buildIndustryRows,
+  expressStarlinkScope,
   filterRoster,
   latestScheduledDepartureTs,
   ledgerHasData,
@@ -233,11 +234,28 @@ export default function StarlinkView() {
       } | null,
     [starlink.stats, fleetDb, starlink.tails],
   );
-  const bars = useMemo(
-    () => rolloutBars(starlink.stats, mainlineShare) as RolloutBar[] | null,
-    [starlink.stats, mainlineShare],
+  // The Express bar is the two-cabin regional fleet, both numbers from ONE fleet-summary snapshot
+  // (the payload the industry strip reads). Null while that endpoint is down: the row then shows
+  // the tracker's equipped count with no bar, never a share of the tracker's own Express total.
+  const expressScope = useMemo(
+    () =>
+      expressStarlinkScope(fleetSummary?.airlines ?? null) as {
+        installed: number;
+        total: number;
+        pct: number;
+        leftOut: number;
+        leftOutFamilies: string[];
+      } | null,
+    [fleetSummary],
   );
-  const barsNote = useMemo(() => rolloutBarsNote(mainlineShare) as string, [mainlineShare]);
+  const bars = useMemo(
+    () => rolloutBars(starlink.stats, mainlineShare, expressScope) as RolloutBar[] | null,
+    [starlink.stats, mainlineShare, expressScope],
+  );
+  const barsNote = useMemo(
+    () => rolloutBarsNote(mainlineShare, expressScope) as string,
+    [mainlineShare, expressScope],
+  );
   const newTails = useMemo(() => {
     const set = new Set<string>();
     for (const a of aircraft) if (isRecentlyFound(a.dateFound, nowMs)) set.add(a.tail);
