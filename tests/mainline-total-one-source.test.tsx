@@ -174,3 +174,69 @@ describe('one mainline total on the Fleet and Starlink tabs', () => {
     }
   });
 });
+
+/**
+ * ONE Express share across tabs (Nov 12 2026). The Fleet tab's "Express Fleet" chip printed the
+ * tracker's 69% (355 / 513, single-cabin jets included) while the Starlink tab's Express bar
+ * printed 96% of the two-cabin regional fleet. Both now come from `expressStarlinkScope()` over
+ * the same fleet-summary payload, and neither prints a share without it. The tracker stats here
+ * carry a deliberately different `expressPct` (50) and `expressTotal` (4).
+ */
+describe('one Express share on the Fleet and Starlink tabs', () => {
+  // 3 of 7 two-cabin regional jets (43%), plus 9 single-cabin jets the share leaves out.
+  const SUMMARY = {
+    airlines: [
+      {
+        code: 'UA', name: 'United Airlines', installed: 5, total: 25, percentage: 20,
+        families: [
+          { family: 'E175', body: 'regional', installed: 3, total: 5, percentage: 60 },
+          { family: 'CRJ-700', body: 'regional', installed: 0, total: 2, percentage: 0 },
+          { family: 'ERJ-145', body: 'regional', installed: 0, total: 9, percentage: 0 },
+          { family: 'B737-MAX9', body: 'narrowbody', installed: 2, total: 9, percentage: 22 },
+        ],
+      },
+    ],
+  };
+  const chipValue = (label: string) => {
+    const chip = [...document.querySelectorAll('li')].find(
+      (li) => li.lastElementChild?.textContent === label,
+    );
+    return chip ? chip.firstElementChild?.textContent ?? null : null;
+  };
+  const percents = (text: string) => [...text.matchAll(/(\d+)%/g)].map((m) => m[1]);
+
+  it('the Fleet chip and the Starlink bar print the same Express percentage', () => {
+    (FLEET as { fleetSummary: unknown }).fleetSummary = SUMMARY;
+    render(<StarlinkView />);
+    const barPct = percents(expressRow().textContent ?? '');
+    cleanup();
+    render(<FleetView />);
+    const chip = chipValue('Express Fleet');
+    expect(barPct).toEqual(['43']);
+    expect(chip).toBe('43%');
+    expect(chip).toBe(`${barPct[0]}%`);
+    // Never the tracker's own share.
+    expect(chip).not.toBe('50%');
+  });
+
+  it('without a fleet-summary neither tab prints an Express percentage', () => {
+    render(<StarlinkView />);
+    expect(percents(expressRow().textContent ?? '')).toEqual([]);
+    cleanup();
+    render(<FleetView />);
+    expect(chipValue('Express Fleet')).toBeNull();
+    // The Express COUNT chip and the Mainline share are still there.
+    expect(chipValue('Express')).toBe('2');
+    expect(chipValue('Mainline Fleet')).toBe('25%');
+    expect(document.body.textContent).not.toContain('50%');
+  });
+
+  it('both tabs get the Express share from the one function over the one payload', async () => {
+    const { readFileSync } = await import('node:fs');
+    for (const view of ['FleetView.tsx', 'StarlinkView.tsx']) {
+      const src = readFileSync(`src/app/views/${view}`, 'utf8');
+      expect(src, view).toMatch(/expressStarlinkScope\(fleetSummary\?\.airlines \?\? null\)/);
+      expect(src, view).not.toMatch(/stats\.expressPct|stats\.expressTotal/);
+    }
+  });
+});
