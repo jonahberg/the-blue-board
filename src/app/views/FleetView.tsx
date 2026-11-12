@@ -58,6 +58,7 @@ import { expressStarlinkScope } from '@/lib/starlink-roster.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { ExpressAircraft, FleetAircraft } from '../data/types';
 import { readFleetDeepLinks } from '../state/deep-links';
+import type { FleetDeepLinks } from '../state/deep-links';
 import { AskChips } from '../features/AskChips';
 import { useAskFleet } from './fleet/useAskFleet';
 import { useFeed } from '../state/feed';
@@ -101,7 +102,7 @@ export default function FleetView() {
     expressStatus,
   } = useFleet();
   const { flights, lastGoodTs } = useFeed();
-  const { openAircraft, setTab } = useUi();
+  const { openAircraft, setTab, fleetLink } = useUi();
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -330,11 +331,33 @@ export default function FleetView() {
     setStatusFilter('');
   }, []);
 
-  // ── Deep links: ?type= / ?filter= / ?view=airborne|special ──────────────────────────
-  // The shipped dashboard polled every 200 ms for up to 10 s because the fleet database
-  // arrives after the URL is read. Here the same wait is an effect that latches the first
-  // time `fleetDb` is non-empty — and gives up on the same 10 s budget so a failed load does
-  // not leave a filter pending forever.
+  // ── Deep links: ?type= / ?filter= / ?view=airborne|special|express ──────────────────
+  // One way in for an address, opened cold or followed in place: a known status or type sets
+  // that filter (a type clears the status), a sub-view opens, and an unmatched value
+  // (`?type=B789`, an ICAO code the controls never offered) is ignored rather than applied —
+  // filtering the table to nothing would read as "United has no 787-9s". It needs the fleet
+  // database, which is what says which types the controls offer.
+  const applyFleetDeepLink = useCallback(
+    ({ filter, view }: FleetDeepLinks) => {
+      if (filter) {
+        const resolved = resolveFleetDeepLinkFilter(filter, {
+          statusValues: STATUS_OPTIONS.map((option) => option.value),
+          typeValues: Object.keys(counts),
+        }) as { status: string; type: string } | null;
+        if (resolved) {
+          setStatusFilter(resolved.status);
+          setTypeFilter(resolved.type);
+        }
+      }
+      if (view) setSubView(view);
+    },
+    [counts],
+  );
+
+  // A cold load. The shipped dashboard polled every 200 ms for up to 10 s because the fleet
+  // database arrives after the URL is read. Here the same wait is an effect that latches the
+  // first time `fleetDb` is non-empty — and gives up on the same 10 s budget so a failed load
+  // does not leave a filter pending forever.
   const deepLinkDone = useRef(false);
   const deepLinkDeadline = useRef(Date.now() + DEEP_LINK_TIMEOUT_MS);
   useEffect(() => {
@@ -345,23 +368,23 @@ export default function FleetView() {
     }
     if (!fleetDb.length) return;
     deepLinkDone.current = true;
+    applyFleetDeepLink(readFleetDeepLinks());
+  }, [fleetDb.length, loadFailed, applyFleetDeepLink]);
 
-    const { filter, view } = readFleetDeepLinks();
-    if (filter) {
-      const resolved = resolveFleetDeepLinkFilter(filter, {
-        statusValues: STATUS_OPTIONS.map((option) => option.value),
-        typeValues: Object.keys(counts),
-      }) as { status: string; type: string } | null;
-      // An unmatched value (`?type=B789`, an ICAO code the controls never offered) is
-      // ignored rather than applied — filtering the table to nothing would read as
-      // "United has no 787-9s".
-      if (resolved) {
-        setStatusFilter(resolved.status);
-        setTypeFilter(resolved.type);
-      }
-    }
-    if (view) setSubView(view);
-  }, [fleetDb.length, loadFailed, counts]);
+  // A link followed in place (`useUi().followFleetLink`, from a DashLink anywhere in the
+  // dashboard). Each follow has a new `seq`, so the same link clicked again after the visitor
+  // cleared the filter applies again. The ref starts at 0, not at the current `seq`: this view
+  // mounts on the first visit to the tab, which is often the follow itself, so the link is
+  // already in the store. A link followed before the database arrives is held until it does.
+  // Declared after the cold load's effect so that, when both apply in one commit, the link the
+  // visitor just clicked wins over an address the page was opened on.
+  const appliedFleetLinkSeq = useRef(0);
+  useEffect(() => {
+    if (!fleetLink || fleetLink.seq === appliedFleetLinkSeq.current) return;
+    if (!fleetDb.length) return;
+    appliedFleetLinkSeq.current = fleetLink.seq;
+    applyFleetDeepLink(fleetLink);
+  }, [fleetLink, fleetDb.length, applyFleetDeepLink]);
 
   // ── Load failure ────────────────────────────────────────────────────────────────────
   // Only the panels that READ the fleet database go away. The airborne count, the

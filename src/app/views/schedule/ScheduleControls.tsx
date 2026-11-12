@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils';
 import type { BoardDirection } from '../../state/schedule';
 import { AdvancedFilters } from './AdvancedFilters';
 import type { FilterOption } from './AdvancedFilters';
+import { HubGuideLink } from './HubGuideLink';
 import type { BoardFilters } from './useBoardModel';
 
 /** All Hubs + the nine tracked airports, in the order the shipped select used. */
@@ -327,6 +328,10 @@ export function ScheduleControls({
               ))}
             </SelectContent>
           </Select>
+
+          {/* The board's one door to its hub's guide, beside the hub it names. On a phone it
+              rides the stat strip's meta line instead (ScheduleStats). */}
+          <HubGuideLink hub={hub} hit="inline" className="text-[11px]" />
 
           {/* A segmented control, not Tabs: the board is one table below, so there is no
               tab panel for a TabsTrigger's aria-controls to point at (F39). The `value &&`

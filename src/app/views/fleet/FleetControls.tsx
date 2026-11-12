@@ -11,6 +11,10 @@
  * Refresh reloads the page, which is not laziness: `/data/fleet.json` is a build artefact
  * fetched once on load, so a reload is genuinely the only way to pull a newer deployment's
  * fleet database.
+ *
+ * With one type selected the row ends in the Fleet tab's one link to that type's fleet page
+ * ("About the 737 MAX 9"). Inside the dashboard a printed type filters this tab, so this is the
+ * door across to the content page. A plain `<a>`: it leaves the dashboard.
  */
 
 import { RotateCw } from 'lucide-react';
@@ -25,6 +29,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { fleetTypeLink } from '@/lib/fleet-type-link.js';
+import { cn } from '@/lib/utils';
+import { LINK_HIT, LINK_TONE } from '../../features/link-style';
 
 /** Radix refuses `value=""`; this stands in for "no filter" inside the dropdowns only. */
 const ALL = '__all__';
@@ -85,6 +92,8 @@ export function FleetControls({
   // mouse at md+ only: width is not input type, and an iPad at 768/1024 px is a touch device
   // that still needs the 44 px (DESIGN.md Responsive).
   // `sm:w-48` is unaffected: that is the search box's WIDTH, which is layout, not a target.
+  // The type filter holds one type at most, so a selected type is "exactly one".
+  const guide = type ? fleetTypeLink(type, 'site') : null;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Input
@@ -151,6 +160,12 @@ export function FleetControls({
         <RotateCw aria-hidden="true" />
         Refresh
       </Button>
+
+      {guide ? (
+        <a href={guide.href} className={cn(LINK_TONE.quiet, LINK_HIT.inline, 'text-xs whitespace-nowrap')}>
+          About the {guide.typeCode}
+        </a>
+      ) : null}
     </div>
   );
 }

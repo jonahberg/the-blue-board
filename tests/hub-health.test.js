@@ -20,6 +20,7 @@ import {
   hubOtpUnavailableReason,
   iropsCoverageLine,
   hubChipNoFigure,
+  hubChipDestination,
   hubReadingDayOffset,
 } from '../src/lib/hub-health.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
@@ -502,6 +503,18 @@ describe('hubChipNoFigure: the strip\'s reason, only from a payload that carries
   it('claims no day it does not know: a board with no day offset says "have left"', () => {
     expect(hubOtpUnavailableReason({ ...nrt, boardDayOffset: null }, 'NRT')?.text).toBe('1 of 12 NRT departures have left; an on-time figure needs 5.');
     expect(hubChipNoFigure({ NRT: { ...nrt, boardDayOffset: null } }, 'NRT')?.sr).toBe('too few departures for an on-time figure');
+  });
+});
+
+describe('hubChipDestination: where a hub chip goes, in its tooltip and its link name', () => {
+  it('names that hub\'s board in the dashboard, not its guide page (owner decision, Nov 12 2026)', () => {
+    expect(hubChipDestination('ORD')).toEqual({ tooltip: "United at ORD · today's board", sr: "today's board" });
+    expect(hubChipDestination('GUM').tooltip).toBe("United at GUM · today's board");
+    expect(JSON.stringify(hubChipDestination('ORD'))).not.toMatch(/guide/);
+  });
+
+  it('is the same words for every hub and every poll: the strip is a polite live region', () => {
+    expect(new Set(HUB_ORDER.map((hub) => hubChipDestination(hub).sr)).size).toBe(1);
   });
 });
 

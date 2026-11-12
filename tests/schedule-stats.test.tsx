@@ -171,3 +171,25 @@ describe('ScheduleStats — phone grid', () => {
     expect(grid.querySelectorAll('[aria-hidden="true"].bg-card')).toHaveLength(3);
   });
 });
+
+describe('ScheduleStats — the phone\'s door to the hub guide', () => {
+  // On a phone the toolbar's two rows are full (hub, find and three 44 px buttons), so the
+  // Schedule header's hub-guide link rides the meta line under the strip. On desktop it sits in
+  // the toolbar beside the hub selector (ScheduleControls), so the strip carries none.
+  it('the phone strip carries one quiet "ORD hub guide" link to the hub page', () => {
+    renderStrip(ORD_DEP, 'departures', true);
+    const links = screen.getAllByRole('link', { name: /hub guide/ });
+    expect(links).toHaveLength(1);
+    expect(links[0].textContent).toBe('ORD hub guide');
+    expect(links[0].getAttribute('href')).toBe('/hubs/ord');
+    const classes = links[0].className.split(/\s+/);
+    expect(classes).not.toContain('text-primary');
+    // The running line keeps its height: the 44 px hit area is an after: box.
+    expect(classes).toEqual(expect.arrayContaining(['relative', 'after:h-11']));
+  });
+
+  it('the desktop strip carries none', () => {
+    renderStrip(ORD_DEP, 'departures');
+    expect(screen.queryByRole('link', { name: /hub guide/ })).toBeNull();
+  });
+});

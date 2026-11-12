@@ -25,12 +25,14 @@
  */
 
 import { Plane, TriangleAlert } from 'lucide-react';
+import { Fragment } from 'react';
 
 import { Card } from '@/components/ui/card';
 import { statStripCopy } from '@/lib/board-stats.js';
 import { boardCanceledTitle, splitCancellations, unconfirmedFigure } from '@/lib/cancellation-display.js';
 import { cn } from '@/lib/utils';
 import { JargonTerm } from '../../features/JargonTerm';
+import { HubGuideLink } from './HubGuideLink';
 import type { BoardModel } from './useBoardModel';
 import { otpTone } from './tone';
 
@@ -171,6 +173,15 @@ export function ScheduleStats({
       </span>
     ) : null,
     footnote ? <span key="footnote">{footnote}</span> : null,
+    // The board's one door to its hub's guide. On a phone the toolbar's two rows are full, so it
+    // ends this line; on desktop it sits beside the hub selector (ScheduleControls). The 44 px
+    // hit area is an `after:` box, so the running line keeps its height.
+    compact && hub ? (
+      <Fragment key="guide">
+        {footnote ? ' · ' : null}
+        <HubGuideLink hub={hub} hit="box" />
+      </Fragment>
+    ) : null,
   ].filter(Boolean);
   const notesLine = notes.length ? (
     // Running text, not a flex row: the words flow on after the chip and wrap like a sentence,
