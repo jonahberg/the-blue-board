@@ -286,7 +286,7 @@ describe('the sheet and the sidebar panel', () => {
     fireEvent.click(screen.getByRole('button', { name: /full brief/i }));
     await settle();
     const dialog = screen.getByRole('dialog', { name: 'A ground stop is holding flights into Newark until 8:00 PM ET.' });
-    expect(within(dialog).getByText(/Written from 24 live facts and checked against them\./)).toBeTruthy();
+    expect(within(dialog).getByText(/Written from 23 live facts and checked against them\./)).toBeTruthy();
     expect(within(dialog).getByText(/model-written summaries/)).toBeTruthy();
     expect(within(dialog).getByText(/If you are flying to Newark/)).toBeTruthy();
     expect(within(dialog).getByText('How this was written')).toBeTruthy();

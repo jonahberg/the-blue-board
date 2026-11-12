@@ -90,7 +90,8 @@ describe('buildTemplateBrief', () => {
     expect(t.items[0].fact_ids).toEqual(['faa.active.EWR.gs']);
     // Specific facts, not the "1 FAA program is in effect" summary.
     expect(t.items.some((i) => i.fact_ids[0] === 'faa.active.count')).toBe(false);
-    expect(t.traveler_note).toEqual({ text: "If you are flying to Newark, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.EWR.gs'] });
+    // The LaGuardia delay program (not a hub) is in the items, so the note names it too, after the hub.
+    expect(t.traveler_note).toEqual({ text: "If you are flying to Newark or New York LaGuardia, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.EWR.gs', 'faa.active.LGA.gdp'] });
   });
 
   it('one hub ground delay program (the morning of Nov 11): watch, the program first, a note for travelers bound there', () => {
@@ -101,14 +102,16 @@ describe('buildTemplateBrief', () => {
     // No padding on a day something is wrong: no Starlink count, no weather tally.
     expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.SFO.gdp', 'faa.active.BOS.gdp', 'otp.floor']);
     expect(t.items[0].text).toBe('The FAA has a ground delay program in effect for flights heading to San Francisco (SFO) until 12:59 PM PT, because of low clouds. Those flights are held at their departure airport; delays average 62 minutes, up to 132 minutes.');
-    expect(t.items[2].text).toBe('All 6 hubs with an on-time reading are at 86% or better.');
-    expect(t.traveler_note).toEqual({ text: "If you are flying to San Francisco, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.SFO.gdp'] });
+    expect(t.items[2].text).toBe('All six United hubs reporting so far today are at 86% on time or better.');
+    // Boston is not a hub, but United flies there: the note names it after the hub (Nov 2026).
+    expect(t.traveler_note).toEqual({ text: "If you are flying to San Francisco or Boston, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.SFO.gdp', 'faa.active.BOS.gdp'] });
   });
 
   it('leaves out a hub’s weather item behind its own weather-caused program, and gives the slot to the next specific fact', () => {
     const t = buildTemplateBrief(factsFor('hub-ground-stop'));
     // The thunderstorm ground stop at Newark already says "because of thunderstorms".
-    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.EWR.gs', 'otp.EWR', 'faa.active.LGA.gdp', 'cxl.EWR']);
+    // LaGuardia (not a hub) follows every fact about the hubs (Nov 2026).
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.EWR.gs', 'otp.EWR', 'cxl.EWR', 'faa.active.LGA.gdp']);
     // A program for another cause leaves the hub's weather in.
     const fx = JSON.parse(readFileSync(new URL('sfo-gdp-morning.json', FIXTURE_DIR), 'utf8'));
     const faa = fx.sources.faa.map((a) => (a.airportCode === 'SFO'
@@ -129,9 +132,10 @@ describe('buildTemplateBrief', () => {
     expect(t.headline).toBe('Ground delay programs are holding flights into Newark and San Francisco.');
     expect(t.headline_fact_ids).toEqual(['faa.active.EWR.gdp', 'faa.active.SFO.gdp']);
     expect(t.items.map((i) => i.fact_ids[0])).not.toContain('faa.active.count');
+    // With Boston's program in the items too, that is three airports: "one of those airports", hubs first.
     expect(t.traveler_note).toEqual({
-      text: "If you are flying to Newark or San Francisco, check your flight's status before you leave for the airport.",
-      fact_ids: ['faa.active.EWR.gdp', 'faa.active.SFO.gdp'],
+      text: "If you are flying to one of those airports, check your flight's status before you leave for the airport.",
+      fact_ids: ['faa.active.EWR.gdp', 'faa.active.SFO.gdp', 'faa.active.BOS.gdp'],
     });
     const out = verifyBrief({ headline: t.headline, tone: t.tone, items: t.items, traveler_note: t.traveler_note }, facts);
     expect(out.report.dropped).toEqual([]);
@@ -151,7 +155,7 @@ describe('buildTemplateBrief', () => {
     const t = buildTemplateBrief(facts);
     expect(t.tone).toBe('watch');
     expect(t.traveler_note.text).toBe("If you are flying to one of those airports, check your flight's status before you leave for the airport.");
-    expect(t.traveler_note.fact_ids.sort()).toEqual(['faa.active.EWR.gdp', 'faa.active.ORD.gdp', 'faa.active.SFO.gdp']);
+    expect(t.traveler_note.fact_ids).toEqual(['faa.active.EWR.gdp', 'faa.active.ORD.gdp', 'faa.active.SFO.gdp', 'faa.active.BOS.gdp']);
     const out = verifyBrief({ headline: t.headline, tone: t.tone, items: t.items, traveler_note: t.traveler_note }, facts);
     expect(out.report.travelerNote.status).toBe('kept');
     expect(out.report.headline.status).toBe('kept');
@@ -170,8 +174,41 @@ describe('buildTemplateBrief', () => {
     expect(t.headline).toBe('United is mostly normal right now.');
   });
 
-  it('templateHeadline grounds a non-hub program without claiming it is at a hub', () => {
-    const facts = [{ id: 'faa.active.BOS.gs', kind: 'faa', statement: '', values: ['BOS', 'Boston'], severity: 45, toneFloor: 'watch', link: { tab: 'weather' }, material: '' }];
-    expect(templateHeadline(facts)).toEqual({ headline: 'Ground stop for flights into Boston.', fact_ids: ['faa.active.BOS.gs'] });
+  it('templateHeadline: a program away from the hubs is calm, and the hubs come first', () => {
+    const facts = [{ id: 'faa.active.BOS.gs', kind: 'faa', statement: '', values: ['BOS', 'Boston'], severity: 9, toneFloor: 'calm', link: { tab: 'weather' }, material: '' }];
+    expect(templateHeadline(facts)).toEqual({ headline: "United's hubs are running normally; a ground stop is holding Boston arrivals.", fact_ids: ['faa.active.BOS.gs'] });
+  });
+
+  it('the 5:00 PM specimen without its possible hub programs: calm, the hubs first, then Seattle, and a note', () => {
+    const t = buildTemplateBrief(factsFor('nonhub-gdp-calm'));
+    expect(t.tone).toBe('calm');
+    expect(t.headline).toBe("United's hubs are running normally; a delay program is slowing Seattle arrivals.");
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['otp.floor', 'faa.active.SEA.gdp', 'air.starlink']);
+    expect(t.items[0].text).toBe('All seven United hubs reporting so far today are at 84% on time or better.');
+    expect(t.items.some((i) => i.fact_ids.includes('cxl.confirmed'))).toBe(false);
+    expect(t.traveler_note).toEqual({ text: "If you are flying to Seattle, check your flight's status before you leave for the airport.", fact_ids: ['faa.active.SEA.gdp'] });
+  });
+
+  it('the 5:00 PM specimen as it was: watch from the possible programs at Newark and San Francisco tomorrow', () => {
+    const t = buildTemplateBrief(factsFor('nonhub-gdp-specimen'));
+    expect(t.tone).toBe('watch');
+    expect(t.headline).toBe('FAA action is possible at Newark tomorrow; none is in effect.');
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['faa.planned.EWR', 'faa.planned.SFO', 'faa.active.SEA.gdp', 'otp.floor']);
+  });
+
+  it('a long name away from the hubs: the shorter name that stands for it alone, then "elsewhere"', () => {
+    expect(buildTemplateBrief(factsFor('nonhub-gs-calm')).headline).toBe("United's hubs are running normally; a ground stop is holding LaGuardia arrivals.");
+    const away = (code, sev = 8.6) => ({ id: `faa.active.${code}.gdp`, kind: 'faa', statement: '', values: [code], severity: sev, toneFloor: 'calm', link: { tab: 'weather' }, material: '' });
+    expect(templateHeadline([away('SEA'), away('BOS', 8.5)]).headline).toBe("United's hubs are normal; delay programs are slowing Seattle and Boston arrivals.");
+    expect(templateHeadline([away('SLC'), away('FLL', 8.5)]).headline).toBe("United's hubs are running normally; FAA programs are slowing flights elsewhere.");
+  });
+
+  it('five programs away from the hubs: the template prints at most two of them, after the hubs', () => {
+    const t = buildTemplateBrief(factsFor('five-nonhub-storm'));
+    const ids = t.items.map((i) => i.fact_ids[0]);
+    expect(ids[0]).toBe('wx.EWR');
+    expect(ids.filter((id) => /^faa\.active\.[A-Z]{3}\./.test(id)).length).toBeLessThanOrEqual(2);
+    // The note names only the airports the items print.
+    expect(t.traveler_note?.fact_ids.every((id) => ids.includes(id))).toBe(true);
   });
 });

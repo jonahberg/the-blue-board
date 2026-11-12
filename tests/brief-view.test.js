@@ -56,7 +56,7 @@ describe('briefViewState', () => {
     for (const item of view.items) for (const id of item.factIds) expect(view.factsById.has(id)).toBe(true);
     expect(view.travelerNote?.text).toMatch(/^If you are flying to Newark/);
     // "Written from N live facts" counts every fact the brief was written from, not the cited ones.
-    expect(view.factCount).toBe(33);
+    expect(view.factCount).toBe(32);
     expect(view.facts.length).toBeLessThan(view.factCount);
     expect(view.source).toBe('template');
     expect(view.hasRadio).toBe(false);
@@ -138,13 +138,19 @@ describe('briefViewState', () => {
   it('shows a traveler note on a "watch" brief that cites a hub ground delay program, never on another watch', () => {
     const watch = briefViewState(briefResponseBody(rowFor('sfo-gdp-morning', { generatedMs: NOW - 60_000 }), NOW), { nowMs: NOW });
     expect(watch.status === 'ready' && watch.tone).toBe('watch');
-    expect(watch.status === 'ready' && watch.travelerNote?.text).toBe("If you are flying to San Francisco, check your flight's status before you leave for the airport.");
+    expect(watch.status === 'ready' && watch.travelerNote?.text).toBe("If you are flying to San Francisco or Boston, check your flight's status before you leave for the airport.");
 
     const planned = rowFor('planned-only-watch', { generatedMs: NOW - 60_000 });
     planned.traveler_note = { text: 'Should not show.', fact_ids: ['faa.planned.EWR'] };
     const view = briefViewState(briefResponseBody(planned, NOW), { nowMs: NOW });
     expect(view.status === 'ready' && view.tone).toBe('watch');
     expect(view.status === 'ready' && view.travelerNote).toBeNull();
+  });
+
+  it('shows a traveler note on a calm brief that cites a program away from the hubs (Nov 2026)', () => {
+    const view = briefViewState(briefResponseBody(rowFor('nonhub-gdp-calm', { generatedMs: NOW - 60_000 }), NOW), { nowMs: NOW });
+    expect(view.status === 'ready' && view.tone).toBe('calm');
+    expect(view.status === 'ready' && view.travelerNote?.text).toBe("If you are flying to Seattle, check your flight's status before you leave for the airport.");
   });
 
   it('drops a "next check" time that has already passed', () => {

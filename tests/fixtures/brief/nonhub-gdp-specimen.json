@@ -1,0 +1,766 @@
+{
+ "name": "nonhub-gdp-specimen",
+ "description": "The production brief of Nov 11 2026, 5:00 PM PT (01:00Z Nov 12), rebuilt from the payloads captured at 01:07Z: every hub with a figure at 84% or better (Tokyo Narita and Guam have none), an FAA ground delay program for flights into Seattle (not a hub) until 9:59 PM PT averaging 32 and up to 82 minutes, 1 confirmed cancellation, the disruption index 18.8 (normal), and the FAA's Nov 12 operations plan listing possible programs at Newark and San Francisco (hubs) and LaGuardia, Boston, Miami and San Diego tomorrow. Expected tone: watch, from the possible programs at Newark and San Francisco (the plan's hub lines raise the tone; Seattle no longer does).",
+ "nowIso": "2026-11-12T01:00:00Z",
+ "sources": {
+  "irops": {
+   "score": 18.8,
+   "totalFlights": 2702,
+   "cancellations": 53,
+   "cancellationsLikely": 52,
+   "likelyCanceledSeenFlying": 18,
+   "delayed30": 250,
+   "delayed60": 100,
+   "diversions": 0,
+   "worstDelays": [
+    {
+     "ident": "UA4687",
+     "route": "DEN→CPR",
+     "delay": 285
+    },
+    {
+     "ident": "UA5826",
+     "route": "ORD→MCI",
+     "delay": 246
+    },
+    {
+     "ident": "UA4426",
+     "route": "IAD→HSV",
+     "delay": 221
+    },
+    {
+     "ident": "UA2662",
+     "route": "IAH→MCO",
+     "delay": 215
+    },
+    {
+     "ident": "UA1309",
+     "route": "ORD→LAX",
+     "delay": 196
+    },
+    {
+     "ident": "UA1522",
+     "route": "DEN→IND",
+     "delay": 181
+    },
+    {
+     "ident": "UA1344",
+     "route": "EWR→DJT",
+     "delay": 171
+    },
+    {
+     "ident": "UA1632",
+     "route": "IAH→GUA",
+     "delay": 163
+    }
+   ],
+   "hubMetrics": {
+    "ORD": {
+     "total": 641,
+     "cancellations": 11,
+     "cancellationsLikely": 11,
+     "likelyCanceledSeenFlying": 3,
+     "delayed30": 107,
+     "delayed60": 33,
+     "diversions": 0,
+     "operated": 407,
+     "onTime": 340,
+     "generatedAt": 1794441624,
+     "dataAgeSec": 3062,
+     "ageSec": 3062,
+     "coverageGapSec": 3062,
+     "boardDayOffset": 0,
+     "boardDayEndSec": 1794463200,
+     "departedWithoutTime": 4,
+     "departureTimesSeen": 569,
+     "pastDueUntimed": 12,
+     "holdsInferred": true
+    },
+    "DEN": {
+     "total": 517,
+     "cancellations": 14,
+     "cancellationsLikely": 14,
+     "likelyCanceledSeenFlying": 5,
+     "delayed30": 36,
+     "delayed60": 22,
+     "diversions": 0,
+     "operated": 287,
+     "onTime": 264,
+     "generatedAt": 1794441628,
+     "dataAgeSec": 3058,
+     "ageSec": 3058,
+     "coverageGapSec": 3058,
+     "boardDayOffset": 0,
+     "boardDayEndSec": 1794466800,
+     "departedWithoutTime": 5,
+     "departureTimesSeen": 458,
+     "pastDueUntimed": 15,
+     "holdsInferred": true
+    },
+    "IAH": {
+     "total": 482,
+     "cancellations": 17,
+     "cancellationsLikely": 17,
+     "likelyCanceledSeenFlying": 6,
+     "delayed30": 27,
+     "delayed60": 16,
+     "diversions": 0,
+     "operated": 301,
+     "onTime": 278,
+     "generatedAt": 1794441630,
+     "dataAgeSec": 3056,
+     "ageSec": 3056,
+     "coverageGapSec": 3056,
+     "boardDayOffset": 0,
+     "boardDayEndSec": 1794463200,
+     "departedWithoutTime": 8,
+     "departureTimesSeen": 436,
+     "pastDueUntimed": 7,
+     "holdsInferred": true
+    },
+    "EWR": {
+     "total": 391,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 27,
+     "delayed60": 9,
+     "diversions": 0,
+     "operated": 302,
+     "onTime": 289,
+     "generatedAt": 1794441633,
+     "dataAgeSec": 3053,
+     "ageSec": 3053,
+     "coverageGapSec": 3053,
+     "boardDayOffset": 0,
+     "boardDayEndSec": 1794459600,
+     "departedWithoutTime": 0,
+     "departureTimesSeen": 391,
+     "pastDueUntimed": 0,
+     "holdsInferred": true
+    },
+    "SFO": {
+     "total": 275,
+     "cancellations": 1,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 21,
+     "delayed60": 8,
+     "diversions": 0,
+     "operated": 171,
+     "onTime": 155,
+     "generatedAt": 1794443424,
+     "dataAgeSec": 1262,
+     "ageSec": 1262,
+     "coverageGapSec": 1262,
+     "boardDayOffset": 0,
+     "boardDayEndSec": 1794470400,
+     "departedWithoutTime": 0,
+     "departureTimesSeen": 275,
+     "pastDueUntimed": 0,
+     "holdsInferred": true
+    },
+    "IAD": {
+     "total": 248,
+     "cancellations": 8,
+     "cancellationsLikely": 8,
+     "likelyCanceledSeenFlying": 2,
+     "delayed30": 21,
+     "delayed60": 8,
+     "diversions": 0,
+     "operated": 194,
+     "onTime": 175,
+     "generatedAt": 1794443427,
+     "dataAgeSec": 1259,
+     "ageSec": 1259,
+     "coverageGapSec": 1259,
+     "boardDayOffset": 0,
+     "boardDayEndSec": 1794459600,
+     "departedWithoutTime": 2,
+     "departureTimesSeen": 230,
+     "pastDueUntimed": 5,
+     "holdsInferred": true
+    },
+    "LAX": {
+     "total": 127,
+     "cancellations": 2,
+     "cancellationsLikely": 2,
+     "likelyCanceledSeenFlying": 2,
+     "delayed30": 11,
+     "delayed60": 4,
+     "diversions": 0,
+     "operated": 75,
+     "onTime": 67,
+     "generatedAt": 1794443430,
+     "dataAgeSec": 1256,
+     "ageSec": 1256,
+     "coverageGapSec": 1256,
+     "boardDayOffset": 0,
+     "boardDayEndSec": 1794470400,
+     "departedWithoutTime": 2,
+     "departureTimesSeen": 106,
+     "pastDueUntimed": 2,
+     "holdsInferred": true
+    },
+    "NRT": {
+     "total": 12,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 0,
+     "delayed60": 0,
+     "diversions": 0,
+     "operated": 0,
+     "onTime": 0,
+     "generatedAt": 1794443432,
+     "dataAgeSec": 1254,
+     "ageSec": 1254,
+     "coverageGapSec": 1254,
+     "boardDayOffset": 0,
+     "boardDayEndSec": 1794495600,
+     "departedWithoutTime": 0,
+     "departureTimesSeen": 12,
+     "pastDueUntimed": 0,
+     "holdsInferred": true
+    },
+    "GUM": {
+     "total": 9,
+     "cancellations": 0,
+     "cancellationsLikely": 0,
+     "likelyCanceledSeenFlying": 0,
+     "delayed30": 0,
+     "delayed60": 0,
+     "diversions": 0,
+     "operated": 0,
+     "onTime": 0,
+     "generatedAt": 1794434424,
+     "dataAgeSec": 10262,
+     "ageSec": 10262,
+     "coverageGapSec": 10262,
+     "boardDayOffset": 0,
+     "boardDayEndSec": 1794492000,
+     "departedWithoutTime": 0,
+     "departureTimesSeen": 0,
+     "pastDueUntimed": 4,
+     "holdsInferred": false
+    }
+   },
+   "oldestHubAgeSec": 10262,
+   "hubsCurrent": 9,
+   "hubsTotal": 9,
+   "generatedAt": "2026-11-12T00:51:26.153Z",
+   "cached": true
+  },
+  "faa": [
+   {
+    "airportCode": "FLL",
+    "programs": [
+     {
+      "type": "departure_delay",
+      "reason": "TM Initiatives:MIT:WX",
+      "avgDelay": 15,
+      "minDelay": 16,
+      "maxDelay": 30,
+      "trend": "Increasing"
+     }
+    ],
+    "runwayConfig": {
+     "arrivalRunways": "28R/28L",
+     "departureRunways": "28R/28L",
+     "arrivalRate": 44
+    },
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": true,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": 15,
+    "minDelay": 16,
+    "maxDelay": 30,
+    "delays": [
+     {
+      "reason": "TM Initiatives:MIT:WX",
+      "type": "departure_delay",
+      "avgDelay": 15,
+      "minDelay": 16,
+      "maxDelay": 30,
+      "trend": "Increasing",
+      "endTime": null
+     }
+    ]
+   },
+   {
+    "airportCode": "LAS",
+    "programs": [],
+    "runwayConfig": {
+     "arrivalRunways": "19R/26L",
+     "departureRunways": "19L/26R",
+     "arrivalRate": 56
+    },
+    "deicing": false,
+    "notam": "TO NON SKED TRANSIENT GA ACFT EXC 24HR PPR 702-261-7775",
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "LAX",
+    "programs": [],
+    "runwayConfig": {
+     "arrivalRunways": "25L/24R",
+     "departureRunways": "25R/24L",
+     "arrivalRate": 68
+    },
+    "deicing": false,
+    "notam": "TO NON SKED TRANSIENT GA ACFT EXC 24HR PPR CTC ATLANTIC AVIATION 310-258-9884 OR SIGNATURE AVIATION 310-410-9605",
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "SAN",
+    "programs": [],
+    "runwayConfig": {
+     "arrivalRunways": "27",
+     "departureRunways": "27",
+     "arrivalRate": 24
+    },
+    "deicing": false,
+    "notam": "TO NON SKED TRANSIENT GA ACFT EXC PPR 619-298-7704",
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": []
+   },
+   {
+    "airportCode": "SEA",
+    "programs": [
+     {
+      "type": "ground_delay",
+      "reason": "other",
+      "avgDelay": 32,
+      "maxDelay": 82,
+      "endTime": "2026-11-12T05:59:00Z",
+      "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=1&adv_date=11122026&facId=SEA&title=ATCSCC ADVZY 001 SEA/ZSE 11/12/2026 CDM GROUND DELAY PROGRAM&titleDate=11/12/2026",
+      "center": "ZSE"
+     }
+    ],
+    "runwayConfig": {
+     "arrivalRunways": "16R/16L",
+     "departureRunways": "16L",
+     "arrivalRate": 36
+    },
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": true,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "avgDelay": 32,
+    "minDelay": null,
+    "maxDelay": 82,
+    "delays": [
+     {
+      "reason": "other",
+      "type": "ground_delay",
+      "avgDelay": 32,
+      "minDelay": null,
+      "maxDelay": 82,
+      "trend": null,
+      "endTime": "2026-11-12T05:59:00Z"
+     }
+    ]
+   },
+   {
+    "airportCode": "SNA",
+    "programs": [
+     {
+      "type": "closure",
+      "reason": "!SNA 11/008 SNA AD AP CLSD DLY 0730-1415 2611100730-2611211415"
+     }
+    ],
+    "runwayConfig": {
+     "arrivalRunways": "20R",
+     "departureRunways": "20R",
+     "arrivalRate": 24
+    },
+    "deicing": false,
+    "notam": null,
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": true,
+    "avgDelay": null,
+    "minDelay": null,
+    "maxDelay": null,
+    "delays": [
+     {
+      "reason": "!SNA 11/008 SNA AD AP CLSD DLY 0730-1415 2611100730-2611211415",
+      "type": "closure",
+      "avgDelay": null,
+      "minDelay": null,
+      "maxDelay": null,
+      "trend": null,
+      "endTime": null
+     }
+    ]
+   },
+   {
+    "airportCode": "ORD",
+    "programs": [],
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "delays": []
+   },
+   {
+    "airportCode": "DEN",
+    "programs": [],
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "delays": []
+   },
+   {
+    "airportCode": "IAH",
+    "programs": [],
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "delays": []
+   },
+   {
+    "airportCode": "EWR",
+    "programs": [],
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "delays": []
+   },
+   {
+    "airportCode": "SFO",
+    "programs": [],
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "delays": []
+   },
+   {
+    "airportCode": "IAD",
+    "programs": [],
+    "groundStop": false,
+    "groundDelay": false,
+    "departureDelay": false,
+    "arrivalDelay": false,
+    "closure": false,
+    "delays": []
+   }
+  ],
+  "nas": {
+   "active": [],
+   "planned": [
+    {
+     "time": "UNTIL 0500",
+     "event": "BFI GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "decoded": "BFI GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "affectedAirports": [
+      "BFI"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1400\t-SEA/BFI GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "decoded": "AFTER 1400\t-SEA/BFI GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "affectedAirports": [
+      "SEA",
+      "BFI"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1500\t-LGA/JFK GROUND STOP/DELAY PROGRAM PROBABLE",
+     "decoded": "AFTER 1500\t-LGA/JFK GROUND STOP/DELAY PROGRAM PROBABLE",
+     "affectedAirports": [
+      "LGA",
+      "JFK"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1500\t-EWR GROUND STOP/DELAY PROGRAM PROBABLE",
+     "decoded": "AFTER 1500\t-EWR GROUND STOP/DELAY PROGRAM PROBABLE",
+     "affectedAirports": [
+      "EWR"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1500\t-TEB GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "decoded": "AFTER 1500\t-TEB GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "affectedAirports": [
+      "TEB"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1500\t-SFO GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "decoded": "AFTER 1500\t-SFO GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "affectedAirports": [
+      "SFO"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1700\t-SAN GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "decoded": "AFTER 1700\t-SAN GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "affectedAirports": [
+      "SAN"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1800\t-BOS GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "decoded": "AFTER 1800\t-BOS GROUND STOP/DELAY PROGRAM POSSIBLE",
+     "affectedAirports": [
+      "BOS"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1800\t-MIA/FLL GROUND STOP POSSIBLE",
+     "decoded": "AFTER 1800\t-MIA/FLL GROUND STOP POSSIBLE",
+     "affectedAirports": [
+      "MIA",
+      "FLL"
+     ],
+     "type": "terminal"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1100\t-MIDWEST TO FLORIDA PARTIAL ROUTES POSSIBLE",
+     "decoded": "AFTER 1100\t-MIDWEST TO FLORIDA PARTIAL ROUTES POSSIBLE",
+     "affectedAirports": [],
+     "type": "enroute"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1100\t-LAKE ERIE WEST/EAST PARTIAL ROUTES POSSIBLE",
+     "decoded": "AFTER 1100\t-LAKE ERIE WEST/EAST PARTIAL ROUTES POSSIBLE",
+     "affectedAirports": [],
+     "type": "enroute"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1200\t-GULF ROUTE CLOSURES POSSIBLE",
+     "decoded": "AFTER 1200\t-GULF ROUTE CLOSURES POSSIBLE",
+     "affectedAirports": [],
+     "type": "enroute"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1200\t-OCEANIC ROUTE CLOSURES PROBABLE",
+     "decoded": "AFTER 1200\t-OCEANIC ROUTE CLOSURES PROBABLE",
+     "affectedAirports": [],
+     "type": "enroute"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1300\t-NO_Q34_FOR_TEB/MMU/CDW POSSIBLE",
+     "decoded": "AFTER 1300\t-NO_Q34_FOR_TEB/MMU/CDW POSSIBLE",
+     "affectedAirports": [
+      "MMU",
+      "CDW"
+     ],
+     "type": "enroute"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1500\t-N90/PHL CDR/SWAP/ESCAPE ROUTES PROBABLE",
+     "decoded": "AFTER 1500\t-N90/PHL CDR/Severe Weather Avoidance/ESCAPE ROUTES PROBABLE",
+     "affectedAirports": [
+      "PHL"
+     ],
+     "type": "enroute"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1500\t-REGIONAL ROUTES/CAPPING/TUNNELING POSSIBLE",
+     "decoded": "AFTER 1500\t-REGIONAL ROUTES/CAPPING/TUNNELING POSSIBLE",
+     "affectedAirports": [],
+     "type": "enroute"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1700\t-PCT SWA/CDRS POSSIBLE",
+     "decoded": "AFTER 1700\t-PCT SWA/Coded Departure Routes POSSIBLE",
+     "affectedAirports": [
+      "PCT",
+      "SWA"
+     ],
+     "type": "enroute"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1800\t-MIA/FLL CDRS/SWAP POSSIBLE",
+     "decoded": "AFTER 1800\t-MIA/FLL Coded Departure Routes/Severe Weather Avoidance POSSIBLE",
+     "affectedAirports": [
+      "MIA",
+      "FLL"
+     ],
+     "type": "enroute"
+    },
+    {
+     "time": "",
+     "event": "AFTER 1800\t-BOS CDRS/SWAP/ESCAPE ROUTES POSSIBLE",
+     "decoded": "AFTER 1800\t-BOS Coded Departure Routes/Severe Weather Avoidance/ESCAPE ROUTES POSSIBLE",
+     "affectedAirports": [
+      "BOS"
+     ],
+     "type": "enroute"
+    }
+   ],
+   "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=3&adv_date=11122026&facId=ATCSCC&title=ATCSCC ADVZY 003 DCC 11/12/2026 OPERATIONS PLAN&titleDate=11/12/2026"
+  },
+  "metar": [
+   {
+    "icaoId": "KEWR",
+    "stationId": "KEWR",
+    "id": "KEWR",
+    "rawOb": "METAR KEWR 120051Z 19006KT 10SM FEW065 SCT200 BKN250 13/05 A2984 RMK AO2 SLP103 T01280050 $",
+    "obsTime": 1794444660,
+    "fltCat": "VFR",
+    "reportTime": "2026-11-12T01:00:00.000Z"
+   },
+   {
+    "icaoId": "KIAH",
+    "stationId": "KIAH",
+    "id": "KIAH",
+    "rawOb": "METAR KIAH 120053Z 00000KT 10SM FEW030 BKN075 BKN250 19/18 A3004 RMK AO2 SLP173 T01940178",
+    "obsTime": 1794444780,
+    "fltCat": "VFR",
+    "reportTime": "2026-11-12T01:00:00.000Z"
+   },
+   {
+    "icaoId": "KORD",
+    "stationId": "KORD",
+    "id": "KORD",
+    "rawOb": "METAR KORD 120051Z 33011KT 10SM BKN085 OVC250 09/06 A2984 RMK AO2 SLP107 T00890061 $",
+    "obsTime": 1794444660,
+    "fltCat": "VFR",
+    "reportTime": "2026-11-12T01:00:00.000Z"
+   },
+   {
+    "icaoId": "KDEN",
+    "stationId": "KDEN",
+    "id": "KDEN",
+    "rawOb": "METAR KDEN 120053Z 11005KT 10SM CLR 11/M07 A3026 RMK AO2 SLP240 T01061067 $",
+    "obsTime": 1794444780,
+    "fltCat": "VFR",
+    "reportTime": "2026-11-12T01:00:00.000Z"
+   },
+   {
+    "icaoId": "KSFO",
+    "stationId": "KSFO",
+    "id": "KSFO",
+    "rawOb": "METAR KSFO 120056Z 00000KT 10SM CLR 18/13 A2996 RMK AO2 SLP144 T01780133",
+    "obsTime": 1794444960,
+    "fltCat": "VFR",
+    "reportTime": "2026-11-12T01:00:00.000Z"
+   },
+   {
+    "icaoId": "KLAX",
+    "stationId": "KLAX",
+    "id": "KLAX",
+    "rawOb": "METAR KLAX 120053Z 27010KT 10SM CLR 22/19 A2998 RMK AO2 SLP153 T02220189 $",
+    "obsTime": 1794444780,
+    "fltCat": "VFR",
+    "reportTime": "2026-11-12T01:00:00.000Z"
+   },
+   {
+    "icaoId": "KIAD",
+    "stationId": "KIAD",
+    "id": "KIAD",
+    "rawOb": "METAR KIAD 120052Z 15008KT 10SM BKN250 15/07 A2976 RMK AO2 SLP077 T01500072 $",
+    "obsTime": 1794444720,
+    "fltCat": "VFR",
+    "reportTime": "2026-11-12T01:00:00.000Z"
+   },
+   {
+    "icaoId": "RJAA",
+    "stationId": "RJAA",
+    "id": "RJAA",
+    "rawOb": "METAR RJAA 120100Z VRB02KT 9999 FEW030 15/08 Q1028 NOSIG",
+    "obsTime": 1794445200,
+    "fltCat": "VFR",
+    "reportTime": "2026-11-12T01:00:00.000Z"
+   },
+   {
+    "icaoId": "PGUM",
+    "stationId": "PGUM",
+    "id": "PGUM",
+    "rawOb": "METAR PGUM 120054Z 04015KT 10SM FEW027 32/24 A2997 RMK AO2 SLP140 T03170239",
+    "obsTime": 1794444840,
+    "fltCat": "VFR",
+    "reportTime": "2026-11-12T01:00:00.000Z"
+   }
+  ],
+  "air": {
+   "airborne": 653,
+   "express": 160,
+   "starlink": 271
+  },
+  "airNormal": {
+   "median": 674,
+   "days": 7
+  },
+  "asOf": {
+   "irops": 1794444686153,
+   "faa": 1794445140000,
+   "nas": 1794445140000,
+   "metar": 1794444660000,
+   "air": 1794445170000
+  }
+ },
+ "expect": {
+  "tone": "watch"
+ }
+}
