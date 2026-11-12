@@ -468,6 +468,9 @@ describe('RosterTable links (Nov 12 2026)', () => {
     expect(ord.getAttribute('href')).toBe('/?tab=schedule&hub=ORD');
     expect(ord.className).not.toMatch(/(?:^|\s)text-primary(?:\s|$)/);
     expect(ord.className).toContain('pointer-coarse:pointer-events-none');
+    // It takes no taps, so it has no touch box: with a mouse under 768 px one covered the end of the
+    // flight number beside it, and a click there opened the hub's board.
+    expect(ord.className).not.toMatch(/after:/);
     expect(within(rosterRow('N75436')).getByRole('link', { name: 'DEN' }).getAttribute('href')).toBe('/?tab=schedule&hub=DEN');
     expect(within(rosterRow('N638SY')).queryByRole('link', { name: 'DSM' })).toBeNull();
     expect(within(rosterRow('N75436')).queryByRole('link', { name: 'LHR' })).toBeNull();
@@ -508,10 +511,15 @@ describe('RosterTable links (Nov 12 2026)', () => {
       expect(hub.className).not.toMatch(/(?:^|\s)text-primary(?:\s|$)/);
     }
     expect(within(list).queryByRole('link', { name: 'DSM' })).toBeNull();
-    // On a touch screen the line's live targets (number, hub ends) sit far enough apart that their
-    // 44 px boxes never overlap (`pointer-coarse:` spacing; a mouse keeps the line as it was).
-    expect(list.querySelector('li')?.className).toMatch(/(?:^|\s)pointer-coarse:gap-x-7(?:\s|$)/);
-    expect(list.querySelector('li [aria-hidden="true"]')?.className).toMatch(/(?:^|\s)pointer-coarse:mx-3(?:\s|$)/);
+    // Wherever the 44 px boxes are drawn (every pointer below `md`, a coarse one at any width) the
+    // line's live targets (number, hub ends) sit far enough apart that the boxes never overlap; only a
+    // mouse at `md`+, where the boxes are gone, gets the tight line.
+    const line = list.querySelector('li')!.className.split(/\s+/);
+    expect(line).toEqual(expect.arrayContaining(['gap-x-7', 'pointer-fine:md:gap-x-2', 'min-h-11', 'pointer-fine:md:min-h-0']));
+    expect(line.filter((cls) => /^(?:pointer-coarse:|md:|sm:)gap-x-/.test(cls) || cls === 'gap-x-2')).toEqual([]);
+    const arrow = list.querySelector('li [aria-hidden="true"]')!.className.split(/\s+/);
+    expect(arrow).toEqual(expect.arrayContaining(['mx-3', 'pointer-fine:md:mx-1']));
+    expect(arrow.filter((cls) => /^(?:pointer-coarse:|md:|sm:)mx-/.test(cls) || cls === 'mx-1')).toEqual([]);
     // Each line is one flight: one link-coloured thing per line, and each is marked for the audit.
     for (const line of list.querySelectorAll('li')) {
       expect(line.querySelectorAll('.text-primary')).toHaveLength(1);

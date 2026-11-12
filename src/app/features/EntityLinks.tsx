@@ -17,7 +17,12 @@
  * `finePointerOnly`: on a touch row that is already one tap target, only the row's identity link
  * is split out (the plan's Global Constraints). With a coarse pointer this link takes no taps and
  * looks like the text around it; it stays in the tab order, so a keyboard on a touch device can
- * still follow it.
+ * still follow it. It has no touch box (`hit` is `none` whatever is passed): a link that takes no
+ * taps needs none, and with a mouse in a window under 768 px the box was still drawn and covered
+ * the end of the flight number beside it (the roster's Next Flight cell), so a click on the
+ * number's last digits opened the hub's board. It stays `relative`, so it paints over a
+ * neighbour's box earlier in the row and a caller's `z-10` still lifts it over a stretched row
+ * control.
  */
 
 import type { ReactNode } from 'react';
@@ -29,7 +34,7 @@ import { cn } from '@/lib/utils';
 import { DashLink } from './DashLink';
 import type { LinkHit, LinkTone } from './link-style';
 
-const FINE_POINTER_ONLY = 'pointer-coarse:pointer-events-none pointer-coarse:no-underline pointer-coarse:text-inherit';
+const FINE_POINTER_ONLY = 'relative pointer-coarse:pointer-events-none pointer-coarse:no-underline pointer-coarse:text-inherit';
 
 type EntityLinkProps = {
   tone?: LinkTone;
@@ -43,6 +48,11 @@ function linkClasses(finePointerOnly: boolean | undefined, className: string | u
   return cn(finePointerOnly && FINE_POINTER_ONLY, className);
 }
 
+/** A link that takes no taps has no touch box; any other keeps the one asked for. */
+function hitFor(finePointerOnly: boolean | undefined, hit: LinkHit | undefined): LinkHit | undefined {
+  return finePointerOnly ? 'none' : hit;
+}
+
 export function TailLink({
   reg,
   tone = 'identity',
@@ -54,7 +64,7 @@ export function TailLink({
   const link = tailLink(reg);
   if (!link) return <span className={className}>{children ?? reg}</span>;
   return (
-    <DashLink href={link.href} tone={tone} hit={hit} className={linkClasses(finePointerOnly, className)} data-tail-link={link.reg}>
+    <DashLink href={link.href} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-tail-link={link.reg}>
       {children ?? reg}
     </DashLink>
   );
@@ -64,7 +74,7 @@ export function HubLink({ code, tone = 'quiet', hit, className, finePointerOnly 
   const link = hubLink(code, 'dashboard');
   if (!link) return <span className={className}>{code}</span>;
   return (
-    <DashLink href={link.href} tone={tone} hit={hit} className={linkClasses(finePointerOnly, className)} data-hub-link={link.code}>
+    <DashLink href={link.href} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-hub-link={link.code}>
       {link.code}
     </DashLink>
   );
@@ -81,7 +91,7 @@ export function TypeLink({
   const link = fleetTypeLink(typeCode, 'dashboard');
   if (!link) return <span className={className}>{children ?? typeCode}</span>;
   return (
-    <DashLink href={link.href} tone={tone} hit={hit} className={linkClasses(finePointerOnly, className)} data-type-link={link.typeCode}>
+    <DashLink href={link.href} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-type-link={link.typeCode}>
       {children ?? typeCode}
     </DashLink>
   );

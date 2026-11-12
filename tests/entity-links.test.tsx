@@ -115,6 +115,30 @@ describe('HubLink', () => {
     }
     expect(link.hasAttribute('tabindex')).toBe(false);
   });
+
+  it('finePointerOnly: no touch box at any width or pointer, whatever hit is asked for; still positioned', () => {
+    // A link that takes no taps needs no box, and with a mouse under 768 px the box covered the end of
+    // the flight number beside it. `relative` keeps it over a neighbour's box and lets z-10 work.
+    mount(
+      <>
+        <HubLink code="ORD" finePointerOnly />
+        <HubLink code="DEN" finePointerOnly hit="box" />
+        <TypeLink typeCode="737-900ER" finePointerOnly>
+          737-900
+        </TypeLink>
+        <TailLink reg="N78501" finePointerOnly />
+      </>,
+    );
+    for (const name of ['ORD', 'DEN', '737-900', 'N78501']) {
+      const classes = screen.getByRole('link', { name }).className.split(/\s+/);
+      expect(classes.filter((cls) => cls.includes('after:')), name).toEqual([]);
+      expect(classes, name).toContain('relative');
+    }
+    // Without finePointerOnly the box is the default, as before.
+    cleanup();
+    mount(<HubLink code="ORD" />);
+    expect(screen.getByRole('link', { name: 'ORD' }).className).toContain('after:h-11');
+  });
 });
 
 describe('TypeLink', () => {
