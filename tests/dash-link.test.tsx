@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A dashboard link followed in place (src/app/features/DashLink.tsx, src/app/state/follow-link.ts).
+ * A dashboard link followed in place (src/app/features/DashLink.tsx, src/app/state/follow-link.tsx).
  *
  * An unmodified primary click on an address `resolveDeepLink` can apply goes through the
  * dashboard's own state (tab, Schedule board, Fleet link, aircraft dialog) and never reloads the
