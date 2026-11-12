@@ -346,7 +346,7 @@ export default function FleetView() {
   //
   // Then it brings the reader to what it set (`target.scrollTo`, below): without that a link
   // opened the tab on the pulse cards, with the filtered table a long scroll down, and read as if
-  // nothing had happened (owner, on the preview, Nov 12 2026).
+  // nothing had happened (found by the reviewer on the preview build, Nov 12 2026).
   const { active: askActive, clear: clearAsk } = ask;
   const [linkScroll, setLinkScroll] = useState<{ to: 'controls' | 'panel' } | null>(null);
   const applyFleetDeepLink = useCallback(

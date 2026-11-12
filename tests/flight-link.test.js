@@ -82,7 +82,9 @@ describe('unitedNumber: the United number behind an Express operating number on 
   });
 });
 
-// The check behind the rule, kept as data: 2026-11-12, flight_history joined on route and time.
+// The check behind the rule, kept as data: 2026-11-12, 82 of 83 matched on route and departure time
+// plus 42 of 42 later-day YV/G7/YX numbers seen on the same route within the week (the two parts
+// are explained beside EXPRESS_NUMBER_CHECK in src/lib/flight-link.js).
 it('records the sample that justified the rule', () => {
   expect(EXPRESS_NUMBER_CHECK).toMatchObject({ date: '2026-11-12', matched: 124, sameNumber: 124, sampled: 125 });
 });

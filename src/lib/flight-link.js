@@ -30,7 +30,15 @@ import { flightPagePath, parseFlightIdent } from './flight-page.js';
 /** The Express operating prefixes checked against United's own numbers (ICAO and IATA forms). */
 export const EXPRESS_OPERATING_PREFIXES = Object.freeze(['SKW', 'OO', 'RPA', 'YX', 'GJS', 'G7', 'ASH', 'YV']);
 
-// flight_history, Nov 12: 83 rows joined on route + time (82 matched, all same number) + 42 YV/G7/YX on number + route (42/42).
+// The check against the site's flight history (flight_history), Nov 12 2026, in two parts that are
+// not equally strong:
+//   - 83 Starlink-feed Express flights matched to a United flight by route and departure time:
+//     82 matched, all 82 with the same number. This is the independent evidence.
+//   - 42 later-day flights in the feed's YV, G7 and YX forms, checked a weaker way: the same United
+//     number had flown the same route within the past week, 42 of 42. A match on the number cannot
+//     show a different number, so these do not add to "same number".
+// The four values below are the two parts added together (125 sampled, 124 matched, 124 same
+// number); read them with the split above, never as 124 independent matches.
 export const EXPRESS_NUMBER_CHECK = Object.freeze({ date: '2026-11-12', sampled: 125, matched: 124, sameNumber: 124 });
 
 /** A tested prefix, then 1-4 digits and nothing else. Longest prefix first, so G74612 is G7 + 4612. */
