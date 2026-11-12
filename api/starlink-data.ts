@@ -13,6 +13,12 @@
 //   ?fields=roster   everything EXCEPT flightsByTail (~75 KB) — the boot fetch
 //   ?fields=flights  flightsByTail + lastUpdated/syncedAt — fetched when the Starlink tab opens
 //   (none)           the full payload, unchanged (cron warmers, older clients)
+// Every shape also carries `servedFrom` (Nov 2026): the same word as the X-Starlink-Source header
+// ('cron' | 'memory' | 'supabase' | 'upstream' | 'memory-stale' | 'supabase-stale' | 'static'), in
+// the body where the client's JSON fetch can read it. `syncedAt` is when OUR sync took the data;
+// the tracker's own `lastUpdated` has not moved since Oct 27 2026 while its roster and schedules
+// kept changing, so it is not a freshness signal (src/lib/starlink-roster.js
+// starlinkScheduleFreshness).
 // Same path, so the service worker's offline allowlist (`/api/starlink-data`) still matches.
 
 import { createRequire } from 'node:module';
@@ -79,7 +85,9 @@ function staticPayload(): StarlinkPayload | null {
     fleetStats: null,
     flightsByTail: {},
     lastUpdated: '',
-    syncedAt: new Date().toISOString(),
+    // Unknown, not "now": the committed file is as old as its last commit, and a fresh stamp made
+    // the fallback look like a sync that just happened.
+    syncedAt: '',
   };
 }
 
@@ -117,28 +125,28 @@ function readFields(req: VercelRequest): Fields {
   return value === 'roster' || value === 'flights' ? value : null;
 }
 
-function shape(payload: StarlinkPayload, fields: Fields) {
+function shape(payload: StarlinkPayload, fields: Fields, servedFrom: string) {
   const full = applyVerifiedStarlinkPayloadOverrides(payload);
   if (fields === 'roster') {
     const { flightsByTail: _omit, ...roster } = full;
-    return roster;
+    return { ...roster, servedFrom };
   }
   if (fields === 'flights') {
-    return { flightsByTail: full.flightsByTail, lastUpdated: full.lastUpdated, syncedAt: full.syncedAt };
+    return { flightsByTail: full.flightsByTail, lastUpdated: full.lastUpdated, syncedAt: full.syncedAt, servedFrom };
   }
-  return full;
+  return { ...full, servedFrom };
 }
 
 function serveFresh(res: VercelResponse, payload: StarlinkPayload, source: string, fields: Fields = null) {
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=600');
   res.setHeader('X-Starlink-Source', source);
-  return res.status(200).json(shape(payload, fields));
+  return res.status(200).json(shape(payload, fields, source));
 }
 
 function serveDegraded(res: VercelResponse, payload: StarlinkPayload, source: string, fields: Fields = null) {
   res.setHeader('Cache-Control', 'public, s-maxage=300');
   res.setHeader('X-Starlink-Source', source);
-  return res.status(200).json(shape(payload, fields));
+  return res.status(200).json(shape(payload, fields, source));
 }
 
 /** Test seam: forget this lambda's caches so each test starts cold, in any order. */

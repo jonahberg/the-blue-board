@@ -259,9 +259,12 @@ describe('support-stats API', () => {
     expect(limited.headers['Cache-Control']).toBe('no-store');
   });
 
-  it('includes the static monthlyCostNote', async () => {
+  it('sends only the figures: no cost sentence beside them (monthlyCostNote retired in v1.28.0)', async () => {
     const res = createRes();
     await handler(makeReq(), res);
-    expect(res.body.monthlyCostNote).toBe('Data feeds, hosting, and AI explanations cost real money every month');
+    // The meter prints the site's one reason (src/lib/cover-a-day.js), never a cost line, and
+    // nothing else read this field, so it is not sent at all.
+    expect(Object.keys(res.body).sort()).toEqual(['boards', 'liveFeed']);
+    expect(res.body).not.toHaveProperty('monthlyCostNote');
   });
 });

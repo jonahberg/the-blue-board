@@ -161,7 +161,8 @@ export default function DisclaimerDialog() {
           <CoverADay active={disclaimerOpen} />
 
           <div className="rounded-md border border-primary/15 bg-primary/5 p-3.5">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-bb-warn">
+            {/* The same quiet label as "Cover a day" above it: amber is status only (DESIGN.md). */}
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Supporters
             </p>
             <ul className="mt-2.5 flex flex-wrap gap-1.5">

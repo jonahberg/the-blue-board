@@ -57,13 +57,22 @@ export const MAP_BUTTON = cn(MAP_CONTROL, 'dark:bg-background');
  * Below `sm` the layer toggles and Refresh are icons with their names kept for assistive tech
  * (`max-sm:sr-only`, not `hidden`, which would drop the name too): with the words, the row was
  * 533 px wide on a 390 px map and the Starlink toggle sat half under the Filters button.
+ *
+ * A phone on its side is past `sm` (844 × 390) but is still a phone, so `landscape-phone:` (a
+ * coarse pointer, landscape, ≤ 500 px tall; global.css) takes the same icon form: with words, a
+ * long region name ("Mexico & C. America") pushed Refresh under the row's fade there (Nov 2026).
  */
-const LABEL = 'max-sm:sr-only';
+export const LABEL = 'max-sm:sr-only landscape-phone:sr-only';
+
+/** The icon-only form of a worded map button, on a phone either way up. */
+export const ICON_ONLY = 'max-sm:w-9 max-sm:px-0 landscape-phone:w-9 landscape-phone:px-0';
 
 /** A layer toggle: muted at rest, foreground on a raised surface while on. */
 const TOGGLE = cn(
   MAP_CONTROL,
-  'gap-1.5 px-2 text-muted-foreground hover:bg-muted data-[state=on]:bg-muted data-[state=on]:text-foreground max-sm:w-9 max-sm:px-0 max-sm:data-[state=on]:border-primary/60 max-sm:data-[state=on]:text-primary',
+  'gap-1.5 px-2 text-muted-foreground hover:bg-muted data-[state=on]:bg-muted data-[state=on]:text-foreground',
+  ICON_ONLY,
+  'max-sm:data-[state=on]:border-primary/60 max-sm:data-[state=on]:text-primary landscape-phone:data-[state=on]:border-primary/60 landscape-phone:data-[state=on]:text-primary',
 );
 
 /** Trailing-edge fade, on only while `data-overflow="right"`. */
@@ -124,14 +133,17 @@ export function RegionMenu({
       >
         <Button
           variant="outline"
-          className={cn(MAP_BUTTON, 'shrink-0 gap-1.5 px-2.5 max-sm:gap-0.5 max-sm:px-1.5')}
+          className={cn(
+            MAP_BUTTON,
+            'shrink-0 gap-1.5 px-2.5 max-sm:gap-0.5 max-sm:px-1.5 landscape-phone:gap-0.5 landscape-phone:px-1.5',
+          )}
         >
           <Earth aria-hidden="true" />
           <span className="sr-only">Map region: </span>
-          {/* Below `sm` a globe and a chevron, like the icon toggles beside it: a 375 px map has
-              room for "US" but not for "Caribbean" (124 px) or "Mexico & C. America" (162 px),
-              which pushed Refresh under the row's fade. The name stays for assistive tech, and
-              the menu checks it. */}
+          {/* On a phone (below `sm`, or on its side) a globe and a chevron, like the icon toggles
+              beside it: a 375 px map has room for "US" but not for "Caribbean" (124 px) or
+              "Mexico & C. America" (162 px), which pushed Refresh under the row's fade. The name
+              stays for assistive tech, and the menu checks it. */}
           <span className={LABEL}>{current.short}</span>
           <ChevronDown aria-hidden="true" className="text-muted-foreground" />
         </Button>
@@ -241,7 +253,7 @@ export function MapControls({
       </ToggleGroup>
       <Button
         variant="outline"
-        className={cn(MAP_BUTTON, 'shrink-0 gap-1.5 px-2 text-muted-foreground max-sm:w-9 max-sm:px-0')}
+        className={cn(MAP_BUTTON, 'shrink-0 gap-1.5 px-2 text-muted-foreground', ICON_ONLY)}
         onClick={onRefresh}
         disabled={refreshing}
         aria-busy={refreshing || undefined}

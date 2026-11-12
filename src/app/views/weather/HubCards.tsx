@@ -10,7 +10,7 @@
  * quiet is a broken feed, and the only useful control then is Retry.
  */
 
-import { CloudSun } from 'lucide-react';
+import { CloudSun, RotateCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -68,10 +68,11 @@ export function HubCards({
         <Button
           variant="outline"
           size="sm"
-          className="mt-3 min-h-11 md:h-8 pointer-fine:md:min-h-0"
+          className="mt-3 min-h-11 pointer-fine:md:h-8 pointer-fine:md:min-h-0"
           onClick={onRetry}
         >
-          ↻ Retry
+          <RotateCw aria-hidden="true" />
+          Retry
         </Button>
       </div>
     );

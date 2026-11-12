@@ -6,6 +6,12 @@ import {
   filterRoster,
   formatVerifyDate,
   freshnessAgo,
+  latestScheduledDepartureTs,
+  starlinkBoardEmptyText,
+  starlinkBoardFooter,
+  starlinkScheduleAge,
+  starlinkScheduleFreshness,
+  starlinkSourceFreshness,
   integrityAlertText,
   ledgerHasData,
   nextFlight,
@@ -306,3 +312,79 @@ describe('integrityAlertText', () => {
     expect(text).toContain('check the data pipeline');
   });
 });
+
+// Nov 2026: the board said "updated 16d ago" (the tracker's frozen lastUpdated) above rows whose
+// times count down live. These read OUR sync time and where the payload was served from.
+describe('Starlink schedule freshness', () => {
+  const NOW_MS = Date.parse('2026-11-11T21:48:00Z');
+  const synced22h = '2026-11-11T00:00:19.635Z';
+  const synced2h = '2026-11-11T19:48:00Z';
+
+  it('a fresh sync: "schedule synced 2h ago · airborne live"', () => {
+    expect(starlinkScheduleFreshness({ syncedAt: synced2h, servedFrom: 'supabase', nowMs: NOW_MS })).toBe('schedule synced 2h ago · airborne live');
+    expect(starlinkScheduleAge({ syncedAt: synced2h, servedFrom: 'memory', nowMs: NOW_MS })).toEqual({ ago: '2h ago', stale: false });
+  });
+
+  it('the tracker offline: "tracker offline, schedule from 22h ago" (stale source or older than 6 h)', () => {
+    expect(starlinkScheduleFreshness({ syncedAt: synced22h, servedFrom: 'supabase-stale', nowMs: NOW_MS })).toBe('tracker offline, schedule from 22h ago');
+    // Older than 6 h is stale whatever the source says.
+    expect(starlinkScheduleFreshness({ syncedAt: synced22h, servedFrom: 'supabase', nowMs: NOW_MS })).toBe('tracker offline, schedule from 22h ago');
+    // A stale source is stale even when the copy is young.
+    expect(starlinkScheduleFreshness({ syncedAt: synced2h, servedFrom: 'memory-stale', nowMs: NOW_MS })).toBe('tracker offline, schedule from 2h ago');
+  });
+
+  it('no sync time (the static roster, or an old payload) says only "scheduled times"', () => {
+    expect(starlinkScheduleFreshness({ syncedAt: '', servedFrom: 'static', nowMs: NOW_MS })).toBe('scheduled times');
+    expect(starlinkScheduleFreshness({ syncedAt: null, nowMs: NOW_MS })).toBe('scheduled times');
+    expect(starlinkScheduleAge({ syncedAt: '', servedFrom: 'static', nowMs: NOW_MS })).toEqual({ ago: null, stale: true });
+  });
+
+  it('latestScheduledDepartureTs finds the end of the stored schedule', () => {
+    expect(latestScheduledDepartureTs({ A: [{ departure_ts: 10 }, { departure_ts: 30 }], B: [{ departure_ts: 20 }], C: 'x' })).toBe(30);
+    expect(latestScheduledDepartureTs({})).toBeNull();
+    expect(latestScheduledDepartureTs(null)).toBeNull();
+  });
+
+  it('an empty window when the stored schedule has run out says the feed is offline, not "no departures"', () => {
+    const nowSec = NOW_MS / 1000;
+    const base = { hub: 'SFO', windowH: 12, nowSec, syncedAt: '2026-11-11T00:00:19Z', servedFrom: 'supabase-stale' };
+    expect(starlinkBoardEmptyText({ ...base, latestDepartureTs: nowSec - 60 }))
+      .toBe('The Starlink schedule feed is offline and the last schedule we have (synced 22h ago) has run out, so this board cannot show departures.');
+    expect(starlinkBoardEmptyText({ ...base, latestDepartureTs: null, syncedAt: '' }))
+      .toBe('The Starlink schedule feed is offline, so this board cannot show departures.');
+    expect(starlinkBoardEmptyText({ ...base, latestDepartureTs: nowSec + 86400 }))
+      .toBe('No United Starlink departures from SFO in the next 12h on the schedule synced 22h ago (the tracker is offline).');
+    expect(starlinkBoardEmptyText({ ...base, hub: null, servedFrom: 'supabase', syncedAt: '2026-11-11T20:00:00Z', latestDepartureTs: nowSec + 86400 }))
+      .toBe('No United Starlink departures from the hubs in the next 12h.');
+  });
+
+  it('the footer states the schedule age instead of "cache (up to 6h)"', () => {
+    const fresh = starlinkBoardFooter({ syncedAt: synced2h, servedFrom: 'supabase', nowMs: NOW_MS });
+    expect(fresh).toContain("from the tracker's schedule synced 2h ago");
+    expect(fresh).not.toMatch(/up to 6h/);
+    expect(starlinkBoardFooter({ syncedAt: synced22h, servedFrom: 'supabase-stale', nowMs: NOW_MS }))
+      .toContain('from the last schedule we have (synced 22h ago; the tracker is offline)');
+    expect(starlinkBoardFooter({ syncedAt: '', nowMs: NOW_MS })).toContain('Times are scheduled. Airborne marks come from the live flight feed — not live ATC.');
+  });
+});
+
+// v1.28.0: the tab's source line ("Starlink data via … · <freshness> · 681 aircraft") used to say
+// "Updated 16d ago" from the tracker's frozen field, and "live" when the field was missing.
+describe('starlinkSourceFreshness', () => {
+  const NOW = Date.UTC(2026, 10, 11, 22, 0, 0);
+  const ago = (h) => new Date(NOW - h * 3600_000).toISOString();
+
+  it('is the schedule freshness when there is a sync time', () => {
+    expect(starlinkSourceFreshness({ syncedAt: ago(2), servedFrom: 'supabase', nowMs: NOW })).toBe('schedule synced 2h ago · airborne live');
+    expect(starlinkSourceFreshness({ syncedAt: ago(22), servedFrom: 'supabase-stale', nowMs: NOW })).toBe('tracker offline, schedule from 22h ago');
+    // No servedFrom (production before v1.28.0): the age alone decides.
+    expect(starlinkSourceFreshness({ syncedAt: ago(22), nowMs: NOW })).toBe('tracker offline, schedule from 22h ago');
+  });
+
+  it('is null — the line says nothing about freshness — without one', () => {
+    expect(starlinkSourceFreshness({ syncedAt: null, servedFrom: 'static', nowMs: NOW })).toBeNull();
+    expect(starlinkSourceFreshness({ syncedAt: '', nowMs: NOW })).toBeNull();
+    expect(starlinkSourceFreshness({ nowMs: NOW })).toBeNull();
+  });
+});
+

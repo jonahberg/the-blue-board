@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 import { FLEET_DB_COUNT } from '../src/data/facts.js';
 import { fleetOrder, fleetTypes } from '../src/data/fleet/index.js';
-import { STARLINK_AS_OF, STARLINK_EQUIPPED_LABEL } from '../src/data/starlink-facts.js';
+import { STARLINK_AS_OF, STARLINK_EQUIPPED_LABEL, STARLINK_EQUIPPED_SCOPE } from '../src/data/starlink-facts.js';
 import {
   FLEET_SUMMARY,
   HOME_BRIEF,
@@ -123,6 +123,14 @@ describe('figures come from data, never from the copy', () => {
     expect(everything).not.toContain('mid-2026');
     expect(everything).toContain(STARLINK_EQUIPPED_LABEL);
     expect(everything).toContain(STARLINK_AS_OF);
+  });
+
+  it('says the Starlink count is mainline + Express, after a sentence about the mainline fleet (v1.28.0)', () => {
+    // "all 1,154 … mainline aircraft … 675+ aircraft now equipped" read as 675 of the 1,154.
+    expect(FLEET_SUMMARY.body).toContain(
+      `${STARLINK_EQUIPPED_LABEL} United aircraft now equipped with free SpaceX Starlink satellite WiFi (${STARLINK_EQUIPPED_SCOPE}, as of ${STARLINK_AS_OF}).`,
+    );
+    expect(STARLINK_EQUIPPED_SCOPE).toMatch(/Express/);
   });
 
   it('quotes the fleet database count from facts.js', () => {

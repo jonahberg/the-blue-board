@@ -23,6 +23,7 @@ import { liveryForTail } from '@/lib/special-livery.js';
 import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
 import { SortableHeader } from './SortableHeader';
 import type { SortState } from './SortableHeader';
+import { FlightLink } from '../../features/FlightLink';
 
 export type AirborneSortCol = 'reg' | 'type' | 'flight' | 'alt' | 'phase';
 
@@ -96,7 +97,9 @@ export function AirborneTable({
                   </button>
                 </TableCell>
                 <TableCell>{row.type}</TableCell>
-                <TableCell className="font-mono">{row.flight}</TableCell>
+                <TableCell className="font-mono">
+                  <FlightLink ident={row.flight} hit="inline" />
+                </TableCell>
                 <TableCell className="font-mono text-xs">{row.route}</TableCell>
                 <TableCell className="font-mono tabular-nums">{row.alt}</TableCell>
                 <TableCell className="text-xs">{row.phase}</TableCell>

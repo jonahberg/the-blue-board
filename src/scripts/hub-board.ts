@@ -7,13 +7,15 @@
  * an uncached board can spend metered provider units.
  *
  * Every word in a row comes from src/lib/hub-board-view.js, which runs the dashboard's own row
- * model; this file only clones the `<template>` and sets `textContent` (never innerHTML).
+ * model; this file only clones the `<template>` and sets `textContent` (never innerHTML). Each
+ * flight number links to its flight page (/flight/UA5789) through ./flight-link.ts.
  *
  * Failure is quiet by design: a failed or empty first load leaves the static line and releases the
  * reserved height; a failed refresh keeps the board it already has, re-cut to this clock.
  */
 
 import { hubBoardRows, hubBoardStamp, hubBoardTruth } from '../lib/hub-board-view.js';
+import { replaceChildrenKeepingFocus, setFlightLink } from './flight-link';
 
 type ViewRow = ReturnType<typeof hubBoardRows>[number];
 type Payload = { status?: string; generatedAt?: number | null; timeZone: string; hub: string } & Record<string, unknown>;
@@ -127,8 +129,10 @@ if (root) {
         under.remove();
       }
     }
+    // A number the site has a page for links to it; anything else stays an href-less `<a>`,
+    // which is plain text to every reader (src/scripts/flight-link.ts).
     const ident = f('ident');
-    if (ident) ident.textContent = row.ident;
+    if (ident) setFlightLink(ident, row.ident);
     const dest = f('dest');
     if (dest) dest.textContent = row.dest;
     const city = f('city');
@@ -183,7 +187,8 @@ if (root) {
       return;
     }
     const items = rows.map(fillRow).filter((li): li is HTMLElement => li !== null);
-    list?.replaceChildren(...items);
+    // The board refreshes every two minutes; a reader tabbing through its links keeps their place.
+    if (list) replaceChildrenKeepingFocus(list, items);
     renderStamp(payload, nowSec);
     renderTruth(payload);
     if (fallback) fallback.hidden = true;

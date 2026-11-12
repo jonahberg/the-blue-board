@@ -4,7 +4,8 @@
  * Bundled by Astro into `_astro/` from the page's relative `<script src>`, so the CSP keeps
  * `script-src 'self'` with no inline script. Reads `/api/flight?ident=…` — stored data only,
  * CDN-cached for a minute — and paints what `flightPageView()` (src/lib/flight-page-view.js) says,
- * with `textContent` only (never innerHTML).
+ * with `textContent` only (never innerHTML). Other flights' numbers (the tail's recent legs, the
+ * inbound aircraft's flight in the timeline) link to their own flight pages (./flight-link.ts).
  *
  * Three optional reads, all of endpoints the dashboard already shares through the CDN:
  *   - `/api/fr24-feed?airline=UAL` (the dashboard's own URL, so the same cached object) ONLY while
@@ -26,12 +27,21 @@ import { parseFlightIdent, flightPagePath } from '../lib/flight-page.js';
 import { flightPageView, STEP_CLASSES, TONE_TEXT } from '../lib/flight-page-view.js';
 import { findLiveFlight, liveFlightMatchesLeg } from '../lib/my-flights.js';
 import { parseFr24Feed } from '../lib/feed-health.js';
+import { replaceChildrenKeepingFocus, setFlightLink, splitFlightIdents } from './flight-link';
 
 type Payload = Record<string, any> & { status?: string; ident?: string };
 type View = ReturnType<typeof flightPageView>;
 
 const REFRESH_MS = 60_000;
 const FETCH_TIMEOUT_MS = 8_000;
+
+/**
+ * A flight number inside a timeline sentence. Inline in running text, so the 44 px touch target is
+ * an `after:` box (16 px line + 14 px above and below); the timeline has no other control for it
+ * to cover.
+ */
+const STEP_FLIGHT_LINK =
+  'relative font-medium text-primary underline-offset-2 after:absolute after:-inset-x-1 after:-inset-y-3.5 hover:underline';
 
 const root = document.querySelector<HTMLElement>('[data-flight-page]');
 
@@ -176,13 +186,22 @@ if (root) {
     const list = f('timeline');
     const template = q<HTMLTemplateElement>(trip, 'template[data-fp-step]');
     if (list && template) {
-      list.replaceChildren(
-        ...t.steps.map((step) => {
+      replaceChildrenKeepingFocus(
+        list,
+        t.steps.map((step) => {
           const li = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
           li.classList.replace('border-border', STEP_CLASSES[step.state]);
           q<HTMLElement>(li, '[data-f="time"]')!.textContent = step.time;
           const label = q<HTMLElement>(li, '[data-f="label"]')!;
-          label.textContent = step.label;
+          // "Aircraft arrived from Tulsa (UA5442)": the inbound flight's number links to its page.
+          label.replaceChildren(
+            ...splitFlightIdents(step.label).map((part) => {
+              if (!part.href || part.href === flightPagePath(ident)) return document.createTextNode(part.text);
+              const a = el('a', STEP_FLIGHT_LINK, part.text) as HTMLAnchorElement;
+              a.href = part.href;
+              return a;
+            }),
+          );
           if (step.state === 'now') label.prepend(srOnly('Now: '));
           return li;
         }),
@@ -269,10 +288,12 @@ if (root) {
     const legs = f('legs')!;
     const template = q<HTMLTemplateElement>(aircraftCard, 'template[data-fp-leg]');
     if (template) {
-      legs.replaceChildren(
-        ...a.legs.map((leg) => {
+      replaceChildrenKeepingFocus(
+        legs,
+        a.legs.map((leg) => {
           const li = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
-          q<HTMLElement>(li, '[data-f="flight"]')!.textContent = leg.flight;
+          // The aircraft's other flights link to their pages; this page's own number stays text.
+          setFlightLink(q<HTMLElement>(li, '[data-f="flight"]')!, leg.flight, ident);
           q<HTMLElement>(li, '[data-f="route"]')!.textContent = `${leg.origin} → ${leg.dest}`;
           const result = q<HTMLElement>(li, '[data-f="result"]')!;
           result.textContent = leg.result;

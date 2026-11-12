@@ -7,10 +7,13 @@
  * Three honesty rules are built into the chrome rather than the footer alone:
  *  - the callsigns are the OPERATING carrier's (SKW####, RPA####), not United marketing
  *    numbers, so the operator is printed next to every one of them;
- *  - the times are scheduled / last-seen out of a cache up to six hours old, so the panel
- *    states its own freshness inline instead of implying live ATC;
- *  - in the degraded tier the board does not appear at all — it is replaced by one line
- *    saying the schedule feed is offline, because an empty board reads as "no departures".
+ *  - the times are scheduled, from a stored schedule whose real age is stated inline and in the
+ *    footer (`freshness` / `footer`, from src/lib/starlink-roster.js: "schedule synced 2h ago",
+ *    "tracker offline, schedule from 22h ago"), never implying live ATC. The fixed "cache (up to
+ *    6h)" footer was false whenever the tracker was down (22 h on Nov 11 2026);
+ *  - an empty board must not read as "no departures" when it is the schedule that ran out:
+ *    `emptyText` says the feed is offline then, and in the degraded tier the board does not
+ *    appear at all — one line says the schedule feed is offline instead.
  *
  * The all-hubs view caps each hub to a tight slice (`boardCapPolicy`): the uncapped 12 h list
  * is ~180 rows, which buries the roster and the ledger below it. "Show all" lifts the cap.
@@ -22,13 +25,10 @@ import { memo } from 'react';
 import { Card } from '@/components/ui/card';
 import { formatFlightTime } from '@/lib/starlink-view.js';
 import { operatorLabel, relativeDeparture } from '@/lib/starlink-roster.js';
+import { FlightLink } from '../../features/FlightLink';
 import type { BoardModel, BoardRow } from './types';
 
 export type WindowHours = 12 | 48;
-
-/** Verbatim from the shipped panel — this line is the whole disclosure for the board. */
-export const BOARD_FOOTER =
-  "A NOC departures board, not a passenger FIDS. Callsigns are the operating carrier (SkyWest, Republic, Mesa…), not United marketing flight numbers. Times are scheduled / last-seen, served through The Blue Board's cache (up to 6h) — not live ATC.";
 
 export const BOARD_UNAVAILABLE_NOTE =
   'Live departures board unavailable — Starlink schedule feed is offline (showing the fleet roster only).';
@@ -51,25 +51,32 @@ function Row({
     // On a phone the route shares the second line with the status instead of taking a third.
     // From `sm` the type takes a fixed column beside the route as well: as an `auto` column after
     // the flexible one it was pushed around by each row's status, so no two types lined up.
-    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,11rem)_6rem_5.5rem_minmax(0,1fr)]">
+    <div className="relative grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,11rem)_6rem_5.5rem_minmax(0,1fr)]">
       <span className="font-mono text-[11px] tabular-nums">
         {time}
         <span className="ml-1.5 text-muted-foreground">{relativeDeparture(row.deltaSec)}</span>
       </span>
 
-      <button
-        type="button"
-        onClick={() => onOpenAircraft(row.tail)}
-        className="min-h-11 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
-        title={`Aircraft details · ${row.tail}`}
-      >
-        <span className="block truncate font-mono text-xs font-semibold">
-          {row.flight_number || '—'}
+      {/* The flight number links to its flight page when it is a United number (UA/UAL); an
+          operating callsign (SKW5408) has no page and is plain text (src/lib/flight-link.js).
+          The aircraft button is stretched over this column with a mouse, as the whole column
+          was the button before; on a touch screen over the whole row, so it keeps a finger-sized
+          target beside the number's own 44 px box. A link cannot sit inside a button. */}
+      <div className="relative min-w-0 pointer-coarse:static">
+        {/* Not `truncate`: its overflow clip would cut the link's touch box (a number is ≤ 7 characters). */}
+        <span className="block font-mono text-xs font-semibold">
+          <FlightLink ident={row.flight_number || '—'} linkClassName="z-10" />
         </span>
-        <span className="block truncate text-[10px] text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => onOpenAircraft(row.tail)}
+          className="block w-full min-w-0 truncate text-left text-[10px] text-muted-foreground after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          title={`Aircraft details · ${row.tail}`}
+        >
+          <span className="sr-only">Aircraft details:</span>{' '}
           {operatorLabel(row.operator)} · {row.tail}
-        </span>
-      </button>
+        </button>
+      </div>
 
       <span className="font-mono text-[11px]">
         {row.origin}
@@ -105,7 +112,7 @@ function Row({
           <button
             type="button"
             onClick={() => onTrack(row)}
-            className="inline-flex min-h-11 shrink-0 items-center rounded-md border px-2 text-[10px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-7"
+            className="relative z-10 inline-flex min-h-11 shrink-0 items-center rounded-md border px-2 text-[10px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-7"
             title={
               row.airborne
                 ? `Track ${row.tail} on the live map`
@@ -130,6 +137,8 @@ export const DeparturesBoard = memo(function DeparturesBoard({
   onWindow,
   onShowAll,
   freshness,
+  emptyText,
+  footer,
   tzAbbrev,
   onOpenAircraft,
   onTrack,
@@ -141,8 +150,12 @@ export const DeparturesBoard = memo(function DeparturesBoard({
   windowH: WindowHours;
   onWindow: (hours: WindowHours) => void;
   onShowAll: () => void;
-  /** "updated 12m ago" / "scheduled times" — never a claim of liveness. */
+  /** `starlinkScheduleFreshness()`: "schedule synced 2h ago · airborne live" / "scheduled times". */
   freshness: string;
+  /** `starlinkBoardEmptyText()`: what an empty window says — "the feed is offline" once the stored schedule has run out. */
+  emptyText: string;
+  /** `starlinkBoardFooter()`: the board's whole disclosure, with the schedule's real age. */
+  footer: string;
   tzAbbrev: (hub: string) => string;
   onOpenAircraft: (reg: string) => void;
   onTrack: (row: BoardRow) => void;
@@ -206,16 +219,15 @@ export const DeparturesBoard = memo(function DeparturesBoard({
 
       <div className="mt-3" id="sl-board-body">
         {board.buckets.length === 0 ? (
-          <p className="py-6 text-center text-xs text-muted-foreground">
-            No United Starlink departures from {hub ?? 'the hubs'} in the next {windowH}h.
-          </p>
+          <p className="py-6 text-center text-xs text-balance text-muted-foreground">{emptyText}</p>
         ) : (
           <>
             {board.buckets.map((bucket) => (
               <div key={bucket.label}>
                 <p className="mt-3 mb-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase first:mt-0">
                   {bucket.label}{' '}
-                  <span className="ml-1 font-mono tabular-nums opacity-70">
+                  {/* No opacity: on the muted label it measured 4.0:1 (axe color-contrast). */}
+                  <span className="ml-1 font-mono tabular-nums">
                     {bucket.rows.length}
                   </span>
                 </p>
@@ -245,7 +257,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
         )}
       </div>
 
-      <p className="mt-3 border-t pt-2 text-[10px] text-muted-foreground">{BOARD_FOOTER}</p>
+      <p className="mt-3 border-t pt-2 text-[10px] text-muted-foreground">{footer}</p>
     </Card>
   );
 });

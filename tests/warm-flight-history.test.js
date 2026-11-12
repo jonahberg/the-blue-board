@@ -119,6 +119,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   delete process.env.CRON_SECRET;
   delete process.env.SCHEDULE_WARM_DELAY_MS;
   delete process.env.SCHEDULE_WARM_TASKS_PER_RUN;
@@ -130,6 +131,13 @@ afterEach(() => {
 
 describe('warm-schedules → flight history', () => {
   it('every board the run fetched is archived, with no fetch of its own', async () => {
+    // Pinned (Nov 2026): the fixture's one flight leaves 10 h after its hub-day start, so on the real
+    // clock some half-hours put a planned board's flight 90–155 min out and the prediction step
+    // reported due: 1 (22:30–23:00Z plans NRT arrivals, whose flight is then 146 min out; it failed
+    // on origin/main too). At 22:05Z the run plans EWR/SFO/IAD arrivals, all 10+ h from their hub-day
+    // start, so nothing is due — the case this test means.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-11T22:05:00Z'));
     const fetchSpy = mockFetch();
     const res = createRes();
     await handler(createReq(), res);

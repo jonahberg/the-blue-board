@@ -2,6 +2,7 @@
 import { unitedHubsMeta, unitedHubs } from '../../../data/trackers/united-hubs.js';
 import { getAtcAirport, getHubProjects, unitedHubDetailCodes, formatCompactNumber, formatTrackerDate, countLabel, unitedHubSeo } from '../../../lib/tracker-detail.js';
 import { countIs, plural } from '../../../lib/plural.js';
+import { contentModified, entryVerified, verificationSummary, verifiedNote } from '../../../data/trackers/verified.js';
 import TrackerDetailLayout from '../../../components/trackers/TrackerDetailLayout.astro';
 import StatusBadge from '../../../components/trackers/StatusBadge.astro';
 import SourceDisclosure from '../../../components/trackers/SourceDisclosure.astro';
@@ -40,11 +41,23 @@ const activeCount = projects.filter((project) => project.status === 'under-const
 const openCount = projects.filter((project) => project.status === 'open').length;
 const totalGates = projects.reduce((sum, project) => sum + (project.gates ?? 0), 0);
 const unitedLedCount = projects.filter((project) => project.builder === 'united' || project.builder === 'joint').length;
+// The headline: what is being built; else what opened in the 90 days before the data's last
+// update (Dulles' Concourse E, Nov 2026), which is the news until it settles; else what is
+// announced; else what is open. Measured against the data's date, not the clock, so a build
+// months later does not change the sentence by itself.
+const daysBefore = (iso, ref) =>
+  (Date.parse(`${ref}T12:00:00Z`) - Date.parse(`${iso.length === 7 ? `${iso}-15` : iso}T12:00:00Z`)) / 86_400_000;
+const recentlyOpened = projects
+  .filter((project) => project.status === 'open' && project.openedDate && daysBefore(project.openedDate, unitedHubsMeta.lastUpdated) <= 90)
+  .sort((a, b) => (b.openedDate ?? '').localeCompare(a.openedDate ?? ''))[0];
 const leadProject =
   projects.find((project) => project.status === 'under-construction') ??
+  recentlyOpened ??
   projects.find((project) => project.status === 'announced') ??
   projects.find((project) => project.status === 'open') ??
   projects[0];
+// This hub's own verification: the oldest day its entries were checked, plus any checked later.
+const verified = verificationSummary(projects, unitedHubsMeta);
 const nextDatedProject = projects
   .find((project) => project.status !== 'open' && project.targetDate);
 
@@ -77,7 +90,8 @@ const schemas = [
     headline: heading,
     description,
     url: canonical,
-    dateModified: unitedHubsMeta.lastVerified,
+    // The latest day this hub's entries can have changed (verified.js), not the file-level date.
+    dateModified: contentModified(projects, unitedHubsMeta),
     author: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
     publisher: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
     about: [
@@ -130,7 +144,8 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
   heading={heading}
   subtitle={subtitle}
   lastUpdated={unitedHubsMeta.lastUpdated}
-  lastVerified={unitedHubsMeta.lastVerified}
+  lastVerified={verified.oldest}
+  verifiedNote={verifiedNote(projects, unitedHubsMeta, unitedHubs)}
   schemas={schemas}
   dataSlug="united-hubs"
   pagePath={`/trackers/united-hubs/${code.toLowerCase()}`}
@@ -140,10 +155,10 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
 >
   <section class={SECTION} aria-label={`${code} project summary`}>
     <div class={SUMMARY_GRID}>
-      <div class={STAT}><strong class={STAT_VALUE}>{projects.length}</strong><span class={STAT_LABEL}>Tracked {plural(projects.length, 'project')}</span></div>
-      <div class={STAT}><strong class={STAT_VALUE}>{activeCount}</strong><span class={STAT_LABEL}>Building or announced</span></div>
-      <div class={STAT}><strong class={STAT_VALUE}>{openCount}</strong><span class={STAT_LABEL}>Already open</span></div>
-      <div class={STAT}><strong class={STAT_VALUE}>{totalGates || '—'}</strong><span class={STAT_LABEL}>Tracked new {plural(totalGates, 'gate')}</span></div>
+      <div class={STAT}><span class={STAT_LABEL}>Tracked {plural(projects.length, 'project')}</span><strong class={STAT_VALUE}>{projects.length}</strong></div>
+      <div class={STAT}><span class={STAT_LABEL}>Building or announced</span><strong class={STAT_VALUE}>{activeCount}</strong></div>
+      <div class={STAT}><span class={STAT_LABEL}>Already open</span><strong class={STAT_VALUE}>{openCount}</strong></div>
+      <div class={STAT}><span class={STAT_LABEL}>Tracked new {plural(totalGates, 'gate')}</span><strong class={STAT_VALUE}>{totalGates || '—'}</strong></div>
     </div>
   </section>
 
@@ -171,7 +186,7 @@ const peerLinks = unitedHubDetailCodes.map((peer) => ({
           <p class={CARD_P}>{project.details}</p>
           <SourceDisclosure
             sources={project.sources}
-            verified={unitedHubsMeta.lastVerified}
+            verified={entryVerified(project, unitedHubsMeta)}
             entryId={project.id}
             entryLabel={`${code} · ${project.name}`}
             shareHref={`/trackers/united-hubs/${code.toLowerCase()}#${project.id}`}

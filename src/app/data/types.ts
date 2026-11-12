@@ -138,8 +138,12 @@ export type StarlinkData = {
   aircraft: StarlinkAircraft[];
   flightsByTail: Record<string, unknown>;
   fleetStats: StarlinkFleetStats | null;
+  /** The tracker's own field — frozen since Oct 27 2026; not a freshness signal. */
   lastUpdated: string | null;
+  /** When our sync took the data ('' on the static fallback). */
   syncedAt: string | null;
+  /** /api/starlink-data's source ('supabase', 'supabase-stale', 'static', …); absent before Nov 2026. */
+  servedFrom?: string;
 };
 
 export type FleetSummary = {
@@ -200,6 +204,22 @@ export type IropsHubMetrics = Record<
     generatedAt?: number | null;
     /** Seconds between that board and the irops run. */
     dataAgeSec?: number | null;
+    /** The same age, under the disclosure name (Nov 2026). */
+    ageSec?: number | null;
+    /** Seconds of the board's own day unseen since it was built; 0 for a final yesterday board. */
+    coverageGapSec?: number | null;
+    /** 0 = today's board, -1 = yesterday's (before 06:00 hub-local). */
+    boardDayOffset?: number | null;
+    /** Unix seconds at which the board's hub-local day ends. */
+    boardDayEndSec?: number | null;
+    /** Rows marked departed with no actual departure time (Guam's feed sends none). */
+    departedWithoutTime?: number;
+    /** Rows carrying an actual or estimated departure time. */
+    departureTimesSeen?: number;
+    /** Rows with no departure time at all, over 30 min past due, not marked departed or cancelled. */
+    pastDueUntimed?: number;
+    /** False when the board carries no departure times: no held flights were inferred from it. */
+    holdsInferred?: boolean;
   }
 >;
 
@@ -218,6 +238,10 @@ export type IropsData = {
   hubMetrics: IropsHubMetrics;
   /** Age of the oldest hub board behind these metrics, seconds (F91). */
   oldestHubAgeSec?: number | null;
+  /** Hub boards whose day is no more than 3 h unseen. Absent before Nov 2026. */
+  hubsCurrent?: number;
+  /** Hub boards behind the score. Absent before Nov 2026. */
+  hubsTotal?: number;
 };
 
 export type FaaAirport = {

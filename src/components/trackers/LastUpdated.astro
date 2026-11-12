@@ -1,21 +1,47 @@
 ---
 // Renders from data, never hardcoded. Noon-UTC anchor matches the news pages' formatter so a
 // bare YYYY-MM-DD never renders a day early west of UTC.
+//
+// `note` adds the entries checked later than the rest, after the date:
+// "Verified November 3, 2026 (Dulles Concourse E entries November 11)". It comes from
+// `verifiedNote()` in src/data/trackers/verified.js, never typed.
 interface Props {
   iso: string;
   prefix?: string;
+  note?: { label: string; iso: string } | null;
 }
 
-const { iso, prefix = 'Updated' } = Astro.props;
+const { iso, prefix = 'Updated', note = null } = Astro.props;
 const display = new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', {
   year: 'numeric',
   month: 'long',
   day: 'numeric',
 });
+// The note's day drops the year when it matches the main date's.
+const noteDisplay = note
+  ? new Date(note.iso + 'T12:00:00Z').toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      ...(note.iso.slice(0, 4) === iso.slice(0, 4) ? {} : { year: 'numeric' }),
+    })
+  : '';
 ---
 
-<span
-  class="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-  ><span class="size-1.5 shrink-0 rounded-full bg-bb-ok" aria-hidden="true"></span>{prefix}
-  <time datetime={iso} class="text-foreground">{display}</time></span
->
+{
+  note ? (
+    // Inline text, not a flex box: it is long, so it wraps like a sentence, and in a running line
+    // ("26 projects · verified …", the /trackers card) it continues the line instead of dropping
+    // whole to the next one.
+    <span class="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <span class="mr-1.5 inline-block size-1.5 rounded-full bg-bb-ok align-middle" aria-hidden="true" />{prefix}{' '}
+      <time datetime={iso} class="whitespace-nowrap text-foreground">{display}</time>{' '}
+      ({note.label} <time datetime={note.iso} class="whitespace-nowrap text-foreground">{noteDisplay}</time>)
+    </span>
+  ) : (
+    <span class="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <span class="size-1.5 shrink-0 rounded-full bg-bb-ok" aria-hidden="true" />
+      {prefix}
+      <time datetime={iso} class="text-foreground">{display}</time>
+    </span>
+  )
+}

@@ -1,6 +1,7 @@
 // Vercel Cron Job: rotates through the 2-day schedule window (today/tomorrow) so exact
 // hub/day/direction snapshots stay warm at the CDN + Supabase snapshot. Yesterday is served
-// on-demand (historical board, rarely viewed) to conserve the metered AeroDataBox quota.
+// on-demand to conserve the metered AeroDataBox quota, apart from one final warm of each hub's
+// yesterday departures board after local midnight (applyRolloverPriority, Nov 2026).
 // Config in vercel.json: { "path": "/api/cron/warm-schedules", "schedule": "*/30 * * * *" }
 //
 // Warm requests send forceRefresh=1 + the cron secret so /api/schedule actually REFETCHES the
@@ -59,12 +60,13 @@ const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
 type WarmTask = {
   hub: string;
   dir: 'departures' | 'arrivals';
-  dayOffset: 0 | 1;
-  label: 'today' | 'tomorrow';
+  dayOffset: -1 | 0 | 1;
+  label: 'yesterday' | 'today' | 'tomorrow';
 };
 
-// Yesterday (dayOffset -1) is intentionally NOT warmed — its board is historical/stable and
-// rarely viewed, so it loads on-demand (and caches) instead of burning quota every cycle.
+// Yesterday (dayOffset -1) is NOT on the ring — its board is historical/stable and loads on-demand
+// (and caches) instead of burning quota every cycle. The one exception is a single "final" warm of
+// each hub's yesterday DEPARTURES board just after local midnight (applyRolloverPriority, Nov 2026).
 function windowTasks(dayOffset: 0 | 1, label: 'today' | 'tomorrow'): WarmTask[] {
   const tasks: WarmTask[] = [];
   for (const dir of ['departures', 'arrivals'] as const) {
@@ -144,26 +146,101 @@ export function rolloverHubs(nowMs = Date.now()): string[] {
   });
 }
 
+// ── The final warm of yesterday's departures board (Nov 2026) ──
+// Until 06:00 hub-local, /api/irops and the dashboard's default board read YESTERDAY's departures
+// board (defaultSchedDayOffset), and nothing refreshed it after the ring's last pre-midnight pass:
+// on Nov 11 2026 IAH's was last built at 21:00 CST and was 525 min old at 05:45 CST, NRT's 505 min
+// old at 05:55 JST (the "7.6 h old board" in the IROPS score). Each hub's yesterday departures
+// board is now warmed ONCE, in the first fire of its window with a tomorrow slot to give up. The
+// window runs from 00:30 hub-local (the last scheduled departures have left) to 06:00, when the
+// board stops being read. The stride-4 ring has tomorrow slots in two fires of every six (2 + 3
+// usable), and the new today boards (above) go first, so the finals are taken earliest-deadline
+// first: a hub whose 06:00 comes sooner goes ahead.
+// "Once" without state: every fire's plan is a pure function of its time, so the fires since the
+// current run of rollover/final windows began are replayed (warmedEarlierInCluster) to see what
+// they already took. The same replay stops the today-board rollover from re-warming a board the
+// previous fire of its hour already warmed (it re-warmed IAD arrivals 30 min apart at Eastern
+// midnight), which is what frees the slots the finals need.
+// Cost: 9 boards × 4 AeroDataBox units = 36 units/day (2.6% of the 1,400 budget), paid by tomorrow
+// boards, which the ring revisits ~2.67×/day anyway; the duplicate today warms it no longer makes
+// save a few units back. A fire the cron skipped is replayed as if it ran, so a board that fire
+// would have warmed is lost for the night (it then ages as before).
+const YESTERDAY_FINAL_DELAY_MS = 30 * 60 * 1000;
+const YESTERDAY_FINAL_WINDOW_MS = 11 * SLOT_MS; // 00:30 → 06:00 hub-local (BOARD_ROLLOVER_HOUR)
+const REPLAY_MAX_FIRES = 48;
+
+/** Hubs inside their yesterday-final window: [00:30, 06:00) hub-local. */
+export function yesterdayFinalHubs(nowMs = Date.now()): string[] {
+  const now = new Date(nowMs);
+  return HUBS.filter((hub) => {
+    const sinceMidnightMs = nowMs - getStartOfHubDay(hub, 0, now) * 1000;
+    return sinceMidnightMs >= YESTERDAY_FINAL_DELAY_MS && sinceMidnightMs < YESTERDAY_FINAL_DELAY_MS + YESTERDAY_FINAL_WINDOW_MS;
+  });
+}
+
+const inAnyWindow = (atMs: number) => rolloverHubs(atMs).length > 0 || yesterdayFinalHubs(atMs).length > 0;
+const taskKey = (t: WarmTask) => `${t.hub}-${t.dir}-${t.dayOffset}`;
+
+/**
+ * Rollover and final tasks (`hub-dir-dayOffset`) that earlier fires of the current cluster already
+ * injected. Walks back to the last fire at which no hub was in either window, then replays forward.
+ */
+function warmedEarlierInCluster(nowMs: number): Set<string> {
+  const done = new Set<string>();
+  if (!inAnyWindow(nowMs)) return done;
+  let back = 0;
+  while (back < REPLAY_MAX_FIRES && inAnyWindow(nowMs - (back + 1) * SLOT_MS)) back++;
+  for (let k = back; k >= 1; k--) {
+    const at = nowMs - k * SLOT_MS;
+    const earlier = injectRolloverTasks(buildWarmPlan(at), at, getWarmSlot(at), done);
+    for (const task of earlier.injectedTasks) done.add(taskKey(task));
+  }
+  return done;
+}
+
 export function applyRolloverPriority(
   plan: WarmTask[],
   nowMs = Date.now(),
   rotationSeed = 0
 ): { plan: WarmTask[]; injected: string[]; displaced: string[] } {
-  const hubs = rolloverHubs(nowMs);
-  if (hubs.length === 0 || plan.length === 0) return { plan, injected: [], displaced: [] };
+  const { injectedTasks: _tasks, ...result } = injectRolloverTasks(plan, nowMs, rotationSeed, warmedEarlierInCluster(nowMs));
+  return result;
+}
 
-  const keyOf = (t: WarmTask) => `${t.hub}-${t.dir}-${t.dayOffset}`;
+function injectRolloverTasks(
+  plan: WarmTask[],
+  nowMs: number,
+  rotationSeed: number,
+  alreadyWarmed: ReadonlySet<string>,
+): { plan: WarmTask[]; injected: string[]; displaced: string[]; injectedTasks: WarmTask[] } {
+  const now = new Date(nowMs);
+  const hubs = rolloverHubs(nowMs);
+  // Earliest deadline (the hub's own 06:00) first; ties in hub order.
+  const finalHubs = yesterdayFinalHubs(nowMs)
+    .map((hub) => ({ hub, midnight: getStartOfHubDay(hub, 0, now) }))
+    .sort((a, b) => a.midnight - b.midnight || (HUBS as readonly string[]).indexOf(a.hub) - (HUBS as readonly string[]).indexOf(b.hub))
+    .map((x) => x.hub);
+  if ((hubs.length === 0 && finalHubs.length === 0) || plan.length === 0) {
+    return { plan, injected: [], displaced: [], injectedTasks: [] };
+  }
+
+  const keyOf = taskKey;
   const ordered: WarmTask[] = [];
   for (const hub of hubs) {
     for (const dir of ['departures', 'arrivals'] as const) ordered.push({ hub, dir, dayOffset: 0, label: 'today' });
   }
-  const offset = ((rotationSeed % ordered.length) + ordered.length) % ordered.length;
-  const candidates = ordered.map((_, i) => ordered[(i + offset) % ordered.length]);
+  const offset = ordered.length ? ((rotationSeed % ordered.length) + ordered.length) % ordered.length : 0;
+  const rotated = ordered.map((_, i) => ordered[(i + offset) % ordered.length]);
+  // Yesterday finals rank after every new today board.
+  const finals: WarmTask[] = finalHubs.map((hub) => ({ hub, dir: 'departures', dayOffset: -1, label: 'yesterday' }));
+  // A board an earlier fire of this cluster already warmed is not a candidate again.
+  const candidates = [...rotated, ...finals].filter((t) => !alreadyWarmed.has(keyOf(t)));
   const candidateKeys = new Set(candidates.map(keyOf));
   const isRollover = (t: WarmTask) => candidateKeys.has(keyOf(t));
 
   const result = [...plan];
   const injected: string[] = [];
+  const injectedTasks: WarmTask[] = [];
   const displaced: string[] = [];
   const maxInjections = Math.max(0, plan.length - 1);
   // Victims are TOMORROW slots only, scanning from the back; the first base task is never one, so
@@ -183,13 +260,14 @@ export function applyRolloverPriority(
     if (victim === -1) break; // no tomorrow slot left: defer to the next fire / organic refresh
     displaced.push(`${result[victim].hub}-${result[victim].dir}-${result[victim].label}`);
     result[victim] = task;
-    injected.push(`${task.hub}-${task.dir}-today`);
+    injected.push(`${task.hub}-${task.dir}-${task.label}`);
+    injectedTasks.push(task);
   }
 
   const rank = new Map(candidates.map((t, i) => [keyOf(t), i]));
   const priority = result.filter(isRollover).sort((a, b) => (rank.get(keyOf(a)) ?? 0) - (rank.get(keyOf(b)) ?? 0));
   const rest = result.filter((t) => !isRollover(t));
-  return { plan: [...priority, ...rest], injected, displaced };
+  return { plan: [...priority, ...rest], injected, displaced, injectedTasks };
 }
 
 // ── IROPS-aware priority (pure) ──

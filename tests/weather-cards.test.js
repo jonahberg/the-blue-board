@@ -397,19 +397,19 @@ describe('faaAlertLines', () => {
 
 describe('radarTitle', () => {
   it('stamps the frame in UTC, zero-padded, and says so with a trailing Z', () => {
-    expect(radarTitle(Date.UTC(2026, 8, 13, 4, 7, 9))).toBe('🌧 NEXRAD Radar — 04:07:09Z');
-    expect(radarTitle(new Date(Date.UTC(2026, 8, 13, 23, 59, 59)))).toBe('🌧 NEXRAD Radar — 23:59:59Z');
+    expect(radarTitle(Date.UTC(2026, 8, 13, 4, 7, 9))).toBe('NEXRAD Radar — 04:07:09Z');
+    expect(radarTitle(new Date(Date.UTC(2026, 8, 13, 23, 59, 59)))).toBe('NEXRAD Radar — 23:59:59Z');
   });
 
   it('renders the bare title before the first cycle lands (edge case)', () => {
-    expect(radarTitle(null)).toBe('🌧 NEXRAD Radar');
-    expect(radarTitle(undefined)).toBe('🌧 NEXRAD Radar');
-    expect(radarTitle(NaN)).toBe('🌧 NEXRAD Radar');
-    expect(radarTitle(new Date('nope'))).toBe('🌧 NEXRAD Radar');
+    expect(radarTitle(null)).toBe('NEXRAD Radar');
+    expect(radarTitle(undefined)).toBe('NEXRAD Radar');
+    expect(radarTitle(NaN)).toBe('NEXRAD Radar');
+    expect(radarTitle(new Date('nope'))).toBe('NEXRAD Radar');
   });
 
   it('treats epoch 0 as a real timestamp rather than as "no data" (edge case)', () => {
-    expect(radarTitle(0)).toBe('🌧 NEXRAD Radar — 00:00:00Z');
+    expect(radarTitle(0)).toBe('NEXRAD Radar — 00:00:00Z');
   });
 });
 

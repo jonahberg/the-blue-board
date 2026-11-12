@@ -71,11 +71,11 @@ export function GET() {
       )
     ),
     renderUrl('/news', getLastModified(newsIndexLastmodPaths), 'daily', '0.9'),
-    // Per-article lastmod — use the article's own publication date so each
-    // entry has a distinct value. The previous getNewsRouteLastmodPaths call
-    // hashed against shared template files, producing identical lastmod for
-    // every article which hurt Google indexing signals.
-    ...articles.map((a) => renderUrl(`/news/${a.slug}`, a.date, 'weekly', '0.7')),
+    // Per-article lastmod — the article's own date, so each entry has a distinct value: the day
+    // it was last updated (`updated`, an "Update, …" note) or else its publication date. The
+    // previous getNewsRouteLastmodPaths call hashed against shared template files, producing
+    // identical lastmod for every article which hurt Google indexing signals.
+    ...articles.map((a) => renderUrl(`/news/${a.slug}`, a.updated ?? a.date, 'weekly', '0.7')),
   ];
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;

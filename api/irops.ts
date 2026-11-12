@@ -6,7 +6,9 @@ import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
 import { CacheStore } from './_cache.js';
 import { getStartOfHubDay, defaultSchedDayOffset } from '../src/lib/hubTz.js';
-import { HUB_READING_STALE_MS, boardAsOfMs, operatedOutcome } from '../src/lib/hub-health.js';
+import {
+  HUB_READING_STALE_MS, boardAsOfMs, boardCoverageGapSec, boardLacksActualTimes, hubBoardCoverage, operatedOutcome,
+} from '../src/lib/hub-health.js';
 import { cancellationKind } from '../src/lib/cancellation.js';
 import { applySightingsToBoard } from '../src/lib/reg-overlay.js';
 import { awaitRegSightings, type SightingRecord } from './_reg-sightings.js';
@@ -18,7 +20,7 @@ export const HUB_TZ: Record<string, string> = {ORD:'America/Chicago',DEN:'Americ
 const iropsCache = new CacheStore<Record<string, unknown>>('irops', { maxSize: 1, defaultTTL: 15 * 60 * 1000 });
 let fetching: Promise<any> | null = null;
 // Persistent per-hub cache — survives full refresh failures
-let hubCache: Record<string, { flights: any[]; fetchedAt: number; generatedAt: number | null }> = {};
+let hubCache: Record<string, { flights: any[]; fetchedAt: number; generatedAt: number | null; day: HubBoardDay }> = {};
 
 /** Test helper: drop the response cache, the per-hub cache and any in-flight build. */
 export function __resetIropsForTests(): void {
@@ -33,6 +35,13 @@ interface HubBoard {
   generatedAt: number | null;
 }
 
+/** Which hub-local day a board covers: 0 today, -1 yesterday (before 06:00 local), and when it ends. */
+export interface HubBoardDay {
+  dayOffset: number;
+  startSec: number;
+  endSec: number;
+}
+
 const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : process.env.VERCEL_URL
@@ -45,11 +54,15 @@ const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
 // metrics carry their age and the client can prefer a fresher board it has loaded itself.
 async function fetchHubFromScheduleAPI(hub: string, timestamp: number): Promise<HubBoard> {
   // IROPS only needs aggregate departure counts and tolerates empty per-hub results, so it must
-  // NOT trigger the paid FR24/AeroDataBox/ScrapingBee fallbacks. Disabling them also makes this
-  // request's query string byte-identical to the warm cron's buildScheduleWarmUrl(), so IROPS
-  // reuses cron-warmed CDN snapshots instead of paying to recompute on every miss.
-  // (We replicate the param string inline rather than importing buildScheduleWarmUrl to avoid a
-  // circular import: warm-schedules.ts already imports getStartOfDayForHub from this file.)
+  // NOT trigger the paid FR24/AeroDataBox/ScrapingBee fallbacks — and so it can never refresh a
+  // board itself: with providerFallback=0, /api/schedule's background refresh stays off
+  // (shouldEnableProviderForBackgroundRefresh). It reads whatever the warm cron (and visitors'
+  // own board loads) last wrote to the shared memory and Supabase snapshot tiers.
+  // This query string is NOT the warm cron's: buildScheduleWarmUrl() sends providerFallback=1 and
+  // forceRefresh=1 (and its response is no-store), so this URL is its own CDN object. When an
+  // instance answers it from its hot cache, /api/schedule stamps it s-maxage=3600, so a board can
+  // sit at the edge up to ~70 min after a newer snapshot exists. (Corrected Nov 2026; this comment
+  // used to call the two byte-identical.)
   const params = new URLSearchParams({
     hub,
     dir: 'departures',
@@ -95,6 +108,29 @@ interface HubMetric {
   generatedAt: number | null;
   /** Age of that board when these metrics were computed, in seconds; null when unknown. */
   dataAgeSec: number | null;
+  /** The same age under the name the disclosure fields use (Nov 2026); `dataAgeSec` stays for old readers. */
+  ageSec: number | null;
+  /**
+   * How much of the board's own day has passed since it was built (src/lib/hub-health.js
+   * boardCoverageGapSec): its age for today's board, 0 for a yesterday board built after midnight.
+   */
+  coverageGapSec: number | null;
+  /** 0 when the board is today's, -1 when it is yesterday's (before 06:00 hub-local). Null when unknown. */
+  boardDayOffset: number | null;
+  /** Unix seconds at which the board's hub-local day ends; null when unknown. */
+  boardDayEndSec: number | null;
+  /**
+   * Rows marked departed/en-route/landed/diverted with no actual departure time. Guam's feed
+   * marks some rows departed and never sends a time (0 of 30 rows over Nov 8–10 2026), so its
+   * on-time figure cannot exist (src/lib/hub-health.js hubOtpUnavailableReason).
+   */
+  departedWithoutTime: number;
+  /** Rows carrying any provider departure time beyond the schedule: actual or estimated. */
+  departureTimesSeen: number;
+  /** Rows not marked departed or cancelled, with no departure time at all, over 30 min past due on the board's clock. */
+  pastDueUntimed: number;
+  /** False when the board carries no departure times (boardLacksActualTimes): no held flights are inferred from it. */
+  holdsInferred: boolean;
 }
 
 interface WorstDelay {
@@ -158,17 +194,67 @@ const OVERDUE_MAX_MIN = 240;
 // rather than fabricate — the same honest-degradation rule as overdueDelayMinutes' cap.
 const CONFIRMED_DELAY_MAX_MIN = 16 * 60;
 
-function overdueDelayMinutes(fl: any, status: string, nowSec: number): number {
+// ── The overdue clock (Nov 11 2026) ──
+// F073 measured "overdue" against the wall clock, but a hub board is a snapshot: the warm ring
+// rebuilds each today board about every 3 hours, and /api/irops cannot refresh one itself. Every
+// departure scheduled after the board was built still reads "scheduled" on it, so on the wall
+// clock it turned into a held flight 30 minutes later, and the longer the board went unrefreshed
+// the more of them there were. Measured on production boards on Nov 11 2026: LAX's 3-hour-old
+// board counted 17 rows as held; its replacement, built 3 hours later, counted 2. The four big
+// hubs' 21:00Z boards, read again 18 minutes later with no new data, gained 22 delays over 30
+// minutes and 15 over 60 (about +1.4 on the index). Replaying ORD/DEN/IAH/EWR as if their boards
+// were 1/2/3 hours old moved the four-hub index from 13.1 to 16.8 / 20.6 / 25.8 (a uniform-lag
+// bound, not an observed day), so a 2-hour-old board was enough to cross the MINOR line.
+//
+// So overdue is measured at what the board can know: its own build time, plus a short grace for
+// the minutes it has been on the shelf. On the same replay this gives 13.1 / 12.9 / 11.0 / 10.4:
+// a stale board now under-reports by 0–3 points instead of over-reporting by 4–13 (no grace:
+// 11.6 / 10.4 / 9.7; a 60-minute grace overshoots). The cost: a hold that starts after the board
+// was built stops growing until the next warm. Under an FAA program the warm cron rotates the
+// hub's today boards into every 30-minute run (warm-schedules.ts applyIropsPriority), so the
+// loss there is minutes; a hold at a hub with no FAA program can wait out a ring cycle (~3 h).
+// A board with no known build time (`generatedAt` null) keeps the wall clock, as before.
+export const OVERDUE_CLOCK_GRACE_SEC = 30 * 60;
+
+/**
+ * The clock overdue is measured against for one hub board: `min(now, generatedAt + grace)`, or
+ * `now` when the board's build time is unknown.
+ */
+export function overdueClockSec(nowSec: number, generatedAt: number | null | undefined): number {
+  if (generatedAt === null || generatedAt === undefined || !Number.isFinite(generatedAt) || generatedAt <= 0) {
+    return nowSec;
+  }
+  return Math.min(nowSec, generatedAt + OVERDUE_CLOCK_GRACE_SEC);
+}
+
+/** Generic status words that say a flight left the gate. */
+const DEPARTED_STATUS: ReadonlySet<string> = new Set(['departed', 'en-route', 'landed', 'diverted']);
+
+/** What one hub board knows about departure times (see HubMetric and boardLacksActualTimes). */
+function boardTimeCounts(flights: any[], clockSec: number) {
+  let departedWithoutTime = 0, departureTimesSeen = 0, pastDueUntimed = 0;
+  for (const fl of flights) {
+    const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
+    const hasDepTime = Boolean(fl.time?.real?.departure || fl.time?.estimated?.departure);
+    if (hasDepTime) { departureTimesSeen++; continue; }
+    if (cancellationKind(fl)) continue;
+    if (DEPARTED_STATUS.has(status)) departedWithoutTime++;
+    else if (fl.time?.scheduled?.departure && clockSec - fl.time.scheduled.departure > 30 * 60) pastDueUntimed++;
+  }
+  return { departedWithoutTime, departureTimesSeen, pastDueUntimed };
+}
+
+function overdueDelayMinutes(fl: any, status: string, clockSec: number): number {
   if (cancellationKind(fl) !== null) return 0;
   if (status === 'departed' || status === 'en-route' || status === 'landed' || status === 'diverted') return 0;
   if (fl.time?.real?.departure) return 0;
   const schedT = fl.time?.scheduled?.departure;
-  if (!schedT || !nowSec || nowSec <= schedT) return 0;
+  if (!schedT || !clockSec || clockSec <= schedT) return 0;
 
   const schedArr = fl.time?.scheduled?.arrival;
-  if (schedArr && nowSec > schedArr) return 0;
+  if (schedArr && clockSec > schedArr) return 0;
 
-  const overdue = Math.round((nowSec - schedT) / 60);
+  const overdue = Math.round((clockSec - schedT) / 60);
   return overdue > OVERDUE_MAX_MIN ? 0 : overdue;
 }
 
@@ -176,19 +262,31 @@ export function computeMetrics(
   flightsByHub: Record<string, any[]>,
   nowSec: number = Math.floor(Date.now() / 1000),
   generatedAtByHub: Record<string, number | null> = {},
+  boardDayByHub: Record<string, HubBoardDay | null> = {},
 ) {
-  let allFlights: any[] = [];
+  // Every row with the overdue clock of the board it came from (see overdueClockSec).
+  const allRows: Array<{ fl: any; clockSec: number; holdsInferred: boolean }> = [];
   const hubMetrics: Record<string, HubMetric> = {};
   let oldestHubAgeSec: number | null = null;
 
   for (const [hub, flights] of Object.entries(flightsByHub)) {
-    allFlights = allFlights.concat(flights);
     const generatedAt = generatedAtByHub[hub] ?? null;
+    const clockSec = overdueClockSec(nowSec, generatedAt);
+    // SCORING (Nov 2026): a board with no departure times cannot tell a held flight from one that
+    // left, so no holds are inferred from it. Guam's rows never get times, and the ones that never
+    // leave "scheduled" read as held for up to 4 hours a day.
+    const timeCounts = boardTimeCounts(flights, clockSec);
+    const holdsInferred = !boardLacksActualTimes(timeCounts);
+    for (const fl of flights) allRows.push({ fl, clockSec, holdsInferred });
     const dataAgeSec = generatedAt === null ? null : Math.max(0, nowSec - generatedAt);
     if (dataAgeSec !== null && (oldestHubAgeSec === null || dataAgeSec > oldestHubAgeSec)) oldestHubAgeSec = dataAgeSec;
+    const day = boardDayByHub[hub] ?? null;
+    const coverageGapSec = boardCoverageGapSec({ generatedAtSec: generatedAt, dayEndSec: day?.endSec ?? null, nowSec });
     hubMetrics[hub] = {
       total: flights.length, cancellations: 0, cancellationsLikely: 0, likelyCanceledSeenFlying: 0,
       delayed30: 0, delayed60: 0, diversions: 0, operated: 0, onTime: 0, generatedAt, dataAgeSec,
+      ageSec: dataAgeSec, coverageGapSec, boardDayOffset: day ? day.dayOffset : null, boardDayEndSec: day ? day.endSec : null,
+      ...timeCounts, holdsInferred,
     };
 
     for (const fl of flights) {
@@ -205,7 +303,7 @@ export function computeMetrics(
       // F073: held/overdue flights count toward delayed30/60 (numerator only; total is
       // untouched so the denominator semantics are unchanged). overdueDelayMinutes returns
       // 0 for anything that has already departed, so operated flights are unaffected.
-      const overdueMin = overdueDelayMinutes(fl, status, nowSec);
+      const overdueMin = holdsInferred ? overdueDelayMinutes(fl, status, clockSec) : 0;
       if (overdueMin > 30) hubMetrics[hub].delayed30++;
       if (overdueMin > 60) hubMetrics[hub].delayed60++;
 
@@ -233,7 +331,7 @@ export function computeMetrics(
   let cancellations = 0, cancellationsLikely = 0, likelyCanceledSeenFlying = 0, delayed30 = 0, delayed60 = 0, diversions = 0;
   const worstDelays: WorstDelay[] = [];
 
-  for (const fl of allFlights) {
+  for (const { fl, clockSec, holdsInferred } of allRows) {
     const status = fl.status?.generic?.status?.text?.toLowerCase() || '';
     if (fl._source?.seenAirborne) likelyCanceledSeenFlying++;
     const cancelled = cancellationKind(fl);
@@ -264,7 +362,7 @@ export function computeMetrics(
       // F073: held/overdue flights (past schedule, not yet departed) — the core of a
       // ground stop. overdueDelayMinutes is 0 for anything already departed, so this
       // never double-counts a flight already scored above.
-      const overdueMin = overdueDelayMinutes(fl, status, nowSec);
+      const overdueMin = holdsInferred ? overdueDelayMinutes(fl, status, clockSec) : 0;
       if (overdueMin > 30) delayed30++;
       if (overdueMin > 60) delayed60++;
       if (overdueMin > 15) {
@@ -278,7 +376,7 @@ export function computeMetrics(
 
   worstDelays.sort((a, b) => b.delay - a.delay);
 
-  const totalFlights = allFlights.length;
+  const totalFlights = allRows.length;
   // F017: delayed30 is CUMULATIVE (every delay >30m, including those >60m) so the UI's
   // ">30m" / ">60m" cards stay backward-compatible and truthful. The SCORE, however,
   // must weight each flight once: a 61-min delay is a single 2-point event, not 1+2=3
@@ -288,6 +386,10 @@ export function computeMetrics(
   const score = totalFlights > 0
     ? ((cancellations * 3 + delayed60 * 2 + delayed30to60 + diversions * 2) / totalFlights * 100)
     : 0;
+
+  // Disclosure (Nov 2026): how many of the boards behind the score are current — the same
+  // definition the IROPS card's line (iropsCoverageNote) and the brief use. Nothing is excluded.
+  const coverage = hubBoardCoverage(hubMetrics);
 
   return {
     score: parseFloat(score.toFixed(1)),
@@ -302,6 +404,10 @@ export function computeMetrics(
     hubMetrics,
     /** The oldest hub board behind these numbers, in seconds; null when no board said. */
     oldestHubAgeSec,
+    /** Hub boards whose day is no more than 3 h unseen (HUB_BOARD_CURRENT_MAX_SEC). */
+    hubsCurrent: coverage.current.length,
+    /** Hub boards behind the score, current or not. */
+    hubsTotal: coverage.total,
     generatedAt: new Date().toISOString()
   };
 }
@@ -315,6 +421,16 @@ export function getStartOfDayForHub(hub: string): number {
   // defaultSchedDayOffset encodes the same "before 6 AM local -> yesterday" rule
   // (BOARD_ROLLOVER_HOUR) this function has always applied.
   return getStartOfHubDay(hub, defaultSchedDayOffset(hub));
+}
+
+/** The hub-local day /api/irops reads for `hub` at `now`, with its start and end (DST-exact). */
+export function getHubBoardDay(hub: string, now: Date = new Date()): HubBoardDay {
+  const dayOffset = defaultSchedDayOffset(hub, now);
+  return {
+    dayOffset,
+    startSec: getStartOfHubDay(hub, dayOffset, now),
+    endSec: getStartOfHubDay(hub, dayOffset + 1, now),
+  };
 }
 
 /**
@@ -341,13 +457,16 @@ export function overlayHubBoards(
 async function buildIropsData() {
   const flightsByHub: Record<string, any[]> = {};
   const generatedAtByHub: Record<string, number | null> = {};
+  const boardDayByHub: Record<string, HubBoardDay | null> = {};
+  const now = new Date();
+  const dayByHub = Object.fromEntries(HUBS.map((hub) => [hub, getHubBoardDay(hub, now)]));
 
   // Fetch all hubs in parallel via the internal schedule API (cached by cron), and the reg
   // sightings beside them (bounded; never throws — an empty map just means no override).
   const sightingsPromise = awaitRegSightings(5000);
   const results = await Promise.allSettled(
     HUBS.map(async (hub) => {
-      const board = await fetchHubFromScheduleAPI(hub, getStartOfDayForHub(hub));
+      const board = await fetchHubFromScheduleAPI(hub, dayByHub[hub].startSec);
       return { hub, ...board };
     })
   );
@@ -356,6 +475,7 @@ async function buildIropsData() {
   const useHubCache = (hub: string) => {
     flightsByHub[hub] = hubCache[hub].flights;
     generatedAtByHub[hub] = hubCache[hub].generatedAt;
+    boardDayByHub[hub] = hubCache[hub].day;
   };
 
   for (const result of results) {
@@ -364,7 +484,8 @@ async function buildIropsData() {
       if (flights && flights.length > 0) {
         flightsByHub[hub] = flights;
         generatedAtByHub[hub] = generatedAt;
-        hubCache[hub] = { flights, fetchedAt: Date.now(), generatedAt };
+        boardDayByHub[hub] = dayByHub[hub];
+        hubCache[hub] = { flights, fetchedAt: Date.now(), generatedAt, day: dayByHub[hub] };
         if (generatedAt !== null && Date.now() - generatedAt * 1000 > HUB_READING_STALE_MS) {
           console.warn(`IROPS: ${hub} board is ${Math.round((Date.now() - generatedAt * 1000) / 60000)}m old`);
         }
@@ -385,7 +506,7 @@ async function buildIropsData() {
     }
   }
 
-  return computeMetrics(overlayHubBoards(flightsByHub, sightings), Math.floor(Date.now() / 1000), generatedAtByHub);
+  return computeMetrics(overlayHubBoards(flightsByHub, sightings), Math.floor(Date.now() / 1000), generatedAtByHub, boardDayByHub);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

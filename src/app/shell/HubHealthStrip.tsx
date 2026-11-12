@@ -15,9 +15,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   HUB_ORDER,
+  hubChipNoFigure,
   hubHealthSeverity,
   hubOtpDescription,
   hubReadingAge,
+  hubReadingDayOffset,
   networkLabel,
 } from '@/lib/hub-health.js';
 import { networkUnknownText } from '@/lib/faa-freshness.js';
@@ -61,6 +63,10 @@ export function HubHealthStrip() {
   });
   const loading = readings.length === 0 && irops.loading;
   const nowMs = Date.now();
+  // Why a hub has no figure, and whether a server reading is yesterday's board, come from the
+  // server's own metrics (v1.28.0). Before it answers, and on a payload without the counts, the
+  // chip keeps its bare dash (src/lib/hub-health.js hubChipNoFigure).
+  const hubMetrics = irops.data?.hubMetrics ?? null;
 
   return (
     <div
@@ -98,6 +104,15 @@ export function HubHealthStrip() {
               stale: boolean;
             } | null;
             const stale = entry.otp !== null && Boolean(age?.stale);
+            // A chip with no reading says why (Guam: "n/a", its feed sends no departure times). A
+            // tap goes to the hub page, so the reason lives in the link's name (fixed sr-only words,
+            // so a poll that only moves a count announces nothing) and in the tooltip (the count).
+            const noFigure =
+              entry.otp === null
+                ? (hubChipNoFigure(hubMetrics, entry.hub) as { label: string; text: string; sr: string } | null)
+                : null;
+            const dayOffset =
+              entry.otp !== null && entry.source === 'server' ? hubReadingDayOffset(hubMetrics?.[entry.hub]) : 0;
 
             return (
               <Tooltip key={entry.hub}>
@@ -111,14 +126,20 @@ export function HubHealthStrip() {
                       // brief row above it (Nov 2026). The row scrolls sideways, which clips any
                       // hit box that pokes outside it, so the chip itself is the target. Keyed
                       // to the POINTER, not the width: an iPad at desktop width is a touch screen.
-                      'flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent pointer-coarse:self-stretch pointer-coarse:px-2',
+                      // `relative`: the stale chip's sr-only words are absolutely positioned, and
+                      // without a positioned chip they escape the sideways scroller and widen the
+                      // whole page (a 390 px phone laid out at 585 px).
+                      'relative flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 no-underline hover:bg-accent pointer-coarse:self-stretch pointer-coarse:px-2',
                       isHome && 'border border-primary/40',
-                      // An hours-old board still shows its number, but visibly receded (F91).
-                      stale && 'opacity-60',
                     )}
                   >
                     {isHome ? <House aria-hidden="true" className="size-3" /> : null}
-                    <SeverityGlyph severity={severity} program={program?.marker} />
+                    {/* An hours-old board still shows its number (F91). It used to recede as a
+                        whole chip at 60% opacity, which took the percentage to 3.8:1; now only the
+                        glyph recedes, the number keeps full contrast, and a History mark (the
+                        "FAA status unknown" icon) plus static sr-only words say "stale" without
+                        relying on the dimming. */}
+                    <SeverityGlyph severity={severity} program={program?.marker} className={stale ? 'opacity-60' : undefined} />
                     <span className="font-medium">{entry.hub}</span>
                     <span
                       className={cn(
@@ -126,23 +147,46 @@ export function HubHealthStrip() {
                         severity ? SEV_TEXT[severity] : 'text-muted-foreground',
                       )}
                     >
-                      {entry.otp === null ? '—' : `${entry.otp}%`}
+                      {entry.otp === null ? (noFigure?.label ?? '—') : `${entry.otp}%`}
                     </span>
+                    {noFigure ? (
+                      <>
+                        {' '}
+                        <span className="sr-only">({noFigure.sr})</span>
+                      </>
+                    ) : null}
+                    {dayOffset === -1 ? (
+                      <>
+                        {' '}
+                        <span className="sr-only">{"(yesterday's departures)"}</span>
+                      </>
+                    ) : null}
+                    {stale ? (
+                      <>
+                        <History aria-hidden="true" data-stale-reading="" className="size-3 shrink-0 text-muted-foreground" />
+                        {' '}
+                        <span className="sr-only">(stale reading)</span>
+                      </>
+                    ) : null}
                   </a>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p className="font-medium">United at {entry.hub} — hub guide</p>
-                  <p className="text-xs">
-                    {hubOtpDescription(entry.otp)}
-                    {entry.source === 'client' ? ' (from the loaded board)' : ''}
-                  </p>
-                  {entry.otp !== null && age ? (
+                  {/* One block: the content is an inline-flex row, so bare <p>s sat side by side
+                      as columns ("United at GUM — hub guide" squeezed beside the reason). */}
+                  <div className="space-y-0.5">
+                    <p className="font-medium">United at {entry.hub} — hub guide</p>
                     <p className="text-xs">
-                      {age.label}
-                      {age.stale ? ' — stale' : ''}
+                      {noFigure ? noFigure.text : hubOtpDescription(entry.otp, dayOffset)}
+                      {entry.source === 'client' ? ' (from the loaded board)' : ''}
                     </p>
-                  ) : null}
-                  {program ? <p className="text-xs">{program.label}</p> : null}
+                    {entry.otp !== null && age ? (
+                      <p className="text-xs">
+                        {age.label}
+                        {age.stale ? ' — stale' : ''}
+                      </p>
+                    ) : null}
+                    {program ? <p className="text-xs">{program.label}</p> : null}
+                  </div>
                 </TooltipContent>
               </Tooltip>
             );

@@ -7,6 +7,8 @@
 // unconfigured live feed, a malformed payload or a failed fetch all resolve to `null`,
 // and the caller renders nothing at all rather than an empty frame or a zeroed bar.
 
+import { CORE_LINE_FLYERS } from './cover-a-day.js';
+
 /** At or above this share of the budget the bar turns amber — a heads-up, not an error. */
 export const SUPPORT_WARN_PCT = 85;
 
@@ -25,6 +27,12 @@ function clampPct(value) {
 
 /**
  * Shape `/api/support-stats` into bars.
+ *
+ * The line under the bars is the site's one reason, `CORE_LINE_FLYERS` from
+ * src/lib/cover-a-day.js ("The Blue Board is free because flyers cover it, one day at a time."),
+ * not the API's `monthlyCostNote` ("Data feeds, hosting, and AI explanations cost real money
+ * every month"), which predates the one voice every ask speaks (Nov 2026). The API stopped sending
+ * it in v1.28.0; an older answer still cached at the CDN may carry it, and it is ignored.
  *
  * @param {{boards?: {used: number, budget: number},
  *   liveFeed?: {configured: boolean, usedPct?: number},
@@ -72,8 +80,5 @@ export function supportMeterModel(data) {
 
   if (!rows.length) return null;
 
-  return {
-    rows,
-    note: typeof data.monthlyCostNote === 'string' ? data.monthlyCostNote : '',
-  };
+  return { rows, note: CORE_LINE_FLYERS };
 }

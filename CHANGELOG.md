@@ -4,6 +4,32 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.28.0] - 2026-11-11
+
+**Flight numbers are links, the disruption index stops counting flights that already left, and the rest of the polish list.**
+
+### Added
+- **Click a flight number, get its page.** Every flight number shown in blue is now a link to that flight's page: the Schedule board, the Starlink departures board, My Flights, Live search results, the Fleet airborne table, and the departure boards on hub pages. On a phone, tapping the number opens the flight page and tapping the rest of the row still opens the flight panel.
+- **Definitions open on a tap.** On a phone, tapping an underlined term (On-Time, Canceled, "presumed departed") opens what it means. It only worked with a mouse before.
+- **"8 of 9 hub boards current"** on the IROPS card, when one hub's schedule is older than the rest.
+- **Update notes on five older stories** (July earnings, June Starlink, the two A321XLR and Coastliner pieces, March's fuel story), each dated and sourced; the original text is unchanged.
+
+### Fixed
+- **The disruption index read too high between schedule refreshes.** A flight still marked "scheduled" 30 minutes after its time was counted as held, measured against the clock on the wall. Hub schedules refresh about every three hours, so flights that had left on time looked held (on a three-hour-old Los Angeles board, about 15 of 17). Each board is now judged by its own clock. The index reads one to three points lower depending on how old the boards are (on Nov 11: 14.4 became about 13.1 in the early afternoon, and 19.9 became 16.6 in the evening, when the Dulles and Los Angeles boards were two and a half hours old), so the card can read NORMAL OPERATIONS where it read MINOR DISRUPTION. The thresholds are unchanged.
+- **Stale overnight boards.** Each hub's previous-day board is now refreshed once after midnight; they had been sitting seven to nine hours old.
+- **"Updated 16d ago" on the Starlink departures board.** It was reading a date the Starlink tracker stopped updating in October. It now says how old the schedule we hold is, and says the feed is offline if that schedule has run out.
+- **Guam's "–" in the hub strip.** The schedule provider sends no actual departure times for Guam, so it can never have an on-time figure. It now says "n/a" and why. Tokyo's dash says how many departures it is waiting for.
+- **602 Starlink aircraft on the fleet page** while the Starlink tab said 681. The fleet page was showing a September figure whenever the tracker was down. It now uses the site's own current count, the tile shows mainline aircraft (326), and the combined figure says "mainline + Express" with its date.
+- **Dulles.** The hub page and the hubs tracker said Concourse E had no opening date. It opened November 10; United now flies from Concourses C, D and E.
+- **"Verified" dates on the hubs tracker** are per entry, so a re-check of two entries no longer stamps all of them.
+- The hub strip's dimmed "stale" percentage was hard to read; a focus ring appeared on the flight panel after a map click; three header controls announced a different name from the one on screen; several iPad buttons were under 44 px.
+
+### Changed
+- **Tracker tables on a phone** are stacked cards instead of a sideways-scrolling table.
+- **Wide tables** on fleet pages can be scrolled from the keyboard.
+- **An upright iPad** opens the map on the lower 48. A phone on its side gets more map and no credits strip.
+- The ⓘ menu, the phone header icon and the More menu use the new "cover a day" wording.
+
 ## [1.27.1] - 2026-11-11
 
 ### Changed

@@ -226,7 +226,15 @@ export function normalizeStarlinkPayload(upstream: any, syncedAt: string = new D
 export const STARLINK_MIN_AIRCRAFT = 400;            // absolute floor (live count 513 on 2026-08-11)
 export const STARLINK_MIN_VALID_TAIL_RATIO = 0.98;   // catches field renames → empty tails
 export const STARLINK_MIN_RELATIVE_RATIO = 0.9;      // catches partial feeds vs the last snapshot
-export const STARLINK_STALE_MS = 6 * 60 * 60 * 1000; // upstream refreshes ~5-minutely
+export const STARLINK_STALE_MS = 6 * 60 * 60 * 1000; // a sync older than this is stale
+/**
+ * The upstream's own freshness signal. Its `lastUpdated` field has read 2026-10-27T05:05Z since
+ * then while its roster (13 installs found Oct 27 – Nov 9) and its schedules kept moving, so the
+ * old "lastUpdated over 6h old" warning fired on every sync and said nothing. What does go stale
+ * when the tracker's schedule feed stops is the schedule itself: a healthy sync carries departures
+ * ~3 days ahead (Nov 11 00:00Z: through Nov 14 06:25Z), so one ending within 12 h is the signal.
+ */
+export const STARLINK_MIN_SCHEDULE_HORIZON_MS = 12 * 60 * 60 * 1000;
 
 export interface StarlinkValidation {
   ok: boolean;
@@ -265,9 +273,17 @@ export function validateStarlinkPayload(payload: StarlinkPayload, previousTotal?
     warnings.push('fleetStats missing from upstream payload');
   }
 
-  const updatedMs = Date.parse(payload.lastUpdated);
-  if (Number.isFinite(updatedMs) && Date.now() - updatedMs > STARLINK_STALE_MS) {
-    warnings.push(`upstream lastUpdated ${payload.lastUpdated} is over 6h old`);
+  let latestDepartureSec = 0;
+  for (const flights of Object.values(payload.flightsByTail || {})) {
+    for (const f of Array.isArray(flights) ? flights : []) {
+      if (Number(f?.departure_ts) > latestDepartureSec) latestDepartureSec = Number(f.departure_ts);
+    }
+  }
+  if (latestDepartureSec === 0) {
+    warnings.push('upstream payload carries no flight schedules');
+  } else if (latestDepartureSec * 1000 - Date.now() < STARLINK_MIN_SCHEDULE_HORIZON_MS) {
+    const hours = Math.round((latestDepartureSec * 1000 - Date.now()) / 3_600_000);
+    warnings.push(`upstream schedules end ${hours}h from now (expected ~3 days ahead) — the tracker's schedule feed may have stopped`);
   }
 
   return { ok: failures.length === 0, failures, warnings };

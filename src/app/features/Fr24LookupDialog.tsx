@@ -29,6 +29,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  focusContentOnOpen,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
@@ -45,6 +46,7 @@ import { fetchFr24Flight } from '../data/api';
 import { shareUrl } from '../data/share';
 import { useFleet } from '../state/fleet';
 import { useUi } from '../state/ui';
+import { FlightLink } from './FlightLink';
 
 /**
  * Whether the lookup can actually answer.
@@ -187,13 +189,15 @@ export default function Fr24LookupDialog() {
       <Dialog open={open} onOpenChange={(next) => (next ? undefined : openFr24(null))}>
         <DialogContent
           aria-label="Flight lookup"
+        // The title's flight number is a link now; Radix would land on it and Enter would leave
+        // the dialog. Focus the dialog itself; the first Tab reaches the link (AircraftDetailDialog).
+        onOpenAutoFocus={focusContentOnOpen}
           className="max-w-[min(420px,calc(100vw-2rem))]"
         >
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2 font-mono">
-              <span className="text-base font-bold text-primary">
-                {flight?.flightNumber || query || '?'}
-              </span>
+              {/* A link to the flight's page when it is a United number, body text when not. */}
+              <FlightLink ident={flight?.flightNumber || query || '?'} className="text-base font-bold" />
               {flight ? (
                 <Badge
                   variant="outline"

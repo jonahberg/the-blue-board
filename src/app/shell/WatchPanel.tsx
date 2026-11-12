@@ -139,7 +139,7 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                       <Button
                         size="sm"
                         variant="ghost"
-                        className={`min-h-11 md:h-8 pointer-fine:md:min-h-0 ${entry.status ? '' : 'ml-auto'}`}
+                        className={`min-h-11 pointer-fine:md:h-8 pointer-fine:md:min-h-0 ${entry.status ? '' : 'ml-auto'}`}
                         onClick={() => {
                           watch.toggle(entry.flight);
                           announce(`Stopped watching ${entry.flight}`);

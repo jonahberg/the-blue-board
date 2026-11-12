@@ -16,6 +16,7 @@ import TrackerPulse from '../../components/trackers/TrackerPulse.astro';
 import TrackerDataActions from '../../components/trackers/TrackerDataActions.astro';
 import BaseLayout from '../../components/site/BaseLayout.astro';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
+import JumpNav from '../../components/site/JumpNav.astro';
 import { SECTION, SECTION_H2 } from '../../components/trackers/detail';
 
 const paths = outlinePaths(outline);
@@ -156,19 +157,22 @@ const tableRows = sortedAirports.map((a) => {
   };
 });
 
+// `phone`: where each cell sits in the stacked card below md (TrackerTable): the airport and
+// its status badge, then its city and date, then the note, then the evidence.
 const columns = [
-  { key: 'airport', label: 'Airport', sortable: true },
-  { key: 'location', label: 'Location', sortable: true },
-  { key: 'status', label: 'Status', sortable: true },
-  { key: 'date', label: 'Went digital', sortable: true },
+  { key: 'airport', label: 'Airport', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-1' },
+  { key: 'location', label: 'Location', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-2 max-md:self-baseline' },
+  { key: 'status', label: 'Status', sortable: true, phone: 'max-md:col-start-2 max-md:row-start-1 max-md:justify-self-end' },
+  { key: 'date', label: 'Went digital', sortable: true, phoneLabel: 'Went digital', phone: 'max-md:col-start-2 max-md:row-start-2 max-md:self-baseline max-md:text-right' },
   { key: 'notes', label: 'Notes' },
   { key: 'sources', label: 'Evidence' },
 ];
 
 // ---- stats ----
+// Only the live count takes a tone: it is the "Live" status, green on the map and in the badges.
 const stats = [
   { label: `${plural(liveCount, 'tower')} live on digital strips`, value: String(liveCount), tone: 'green', sub: 'of 89 in the program' },
-  { label: 'still on paper today', value: String(stillOnPaper), tone: 'amber', sub: `${plannedCount} scheduled · ${paperNoDateCount} no date` },
+  { label: 'still on paper today', value: String(stillOnPaper), sub: `${plannedCount} scheduled · ${paperNoDateCount} no date` },
   { label: 'copper→fiber rebuild done', value: atcMeta.stats.fiber.value, sub: `as of ${new Date(`${atcMeta.stats.fiber.asOf}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}` },
   { label: 'FAA target for all 89', value: atcMeta.stats.target.value, sub: 'IG estimated 2030 — for fewer' },
 ];
@@ -244,9 +248,6 @@ const datasetSchema = {
   ],
 };
 
-const jumpLinkClass =
-  // The same pill as JumpNav (hub, fleet and Newark pages), so an in-page jump looks one way site-wide.
-  'inline-flex min-h-11 items-center rounded-full border border-border bg-card px-3.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:border-primary hover:bg-primary-fill hover:text-primary-foreground';
 const proseClass =
   'mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground last:mb-0 [&_a]:text-primary [&_a]:underline [&_a]:decoration-primary/40 [&_a]:underline-offset-2 [&_a:hover]:decoration-primary';
 const subheadClass = 'mt-4.5 mb-2 text-sm font-semibold text-primary';
@@ -280,19 +281,22 @@ const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-for
         is finally replacing them at 89 airports — this page tracks every one: who's gone digital,
         who's scheduled, and who's still waiting for a date.
       </p>
-      <div class="flex flex-wrap items-center gap-4">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
         <LastUpdated iso={atcMeta.lastUpdated} />
         <LastUpdated iso={atcMeta.lastVerified} prefix="Verified" />
       </div>
-      <nav class="mt-4.5 mb-1.5 flex flex-wrap gap-2" aria-label="Section navigation">
-        <a href="#map" class={jumpLinkClass}>The map</a>
-        <a href="#check" class={jumpLinkClass}>Check your airport</a>
-        <a href="#all" class={jumpLinkClass}>All 89 airports</a>
-        <a href="#whats-changing" class={jumpLinkClass}>What's changing</a>
-        <a href="#paper-strips" class={jumpLinkClass}>Why paper?</a>
-        <a href="#faq" class={jumpLinkClass}>Quick answers</a>
-        <a href="#changelog" class={jumpLinkClass}>Changelog</a>
-      </nav>
+      <JumpNav
+        class="mt-4.5 mb-1.5"
+        items={[
+          { href: '#map', label: 'The map' },
+          { href: '#check', label: 'Check your airport' },
+          { href: '#all', label: 'All 89 airports' },
+          { href: '#whats-changing', label: "What's changing" },
+          { href: '#paper-strips', label: 'Why paper?' },
+          { href: '#faq', label: 'Quick answers' },
+          { href: '#changelog', label: 'Changelog' },
+        ]}
+      />
     </header>
 
     <TrackerPulse

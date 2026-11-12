@@ -68,8 +68,10 @@ const timeline = [
     detail: 'Full runway capacity restored, but the ATC staffing shortfall remains the binding constraint on Newark’s schedule.',
   },
   {
-    date: 'Through Oct 24, 2026',
-    label: 'Cap raised and extended: 72 ops/hour',
+    // The source gives this step no date of its own, only the date the cap ran to, which is in
+    // the label: the date column shows "—" rather than an end date out of order among event dates.
+    date: null,
+    label: 'Cap raised to 72 ops/hour, extended through Oct 24, 2026',
     detail: 'The FAA raises the cap to 72 total operations per hour (36 arrivals + 36 departures) and extends it through October 24, 2026, giving airlines a stable planning horizon while ATC staffing recovers.',
   },
   {
@@ -184,9 +186,14 @@ const ctaClass =
       <ol class="mt-5 list-none space-y-0 pl-0">
         {
           timeline.map((t) => (
-            <li class="flex flex-col gap-1 border-b border-border py-3 last:border-b-0 sm:flex-row sm:gap-4">
+            <li class="flex flex-col gap-1 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-baseline sm:gap-4">
               <span class="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground sm:w-32">
-                {t.date}
+                {t.date ?? (
+                  <>
+                    <span aria-hidden="true">—</span>
+                    <span class="sr-only">No date given</span>
+                  </>
+                )}
               </span>
               <span class="flex-1">
                 <span class="block text-sm font-semibold text-foreground" set:html={t.label} />

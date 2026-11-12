@@ -30,6 +30,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  focusContentOnOpen,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -41,6 +42,7 @@ import {
 import { HUB_TZ } from '@/lib/hubTz.js';
 import { postDelayExplain } from '../data/api';
 import { useUi } from '../state/ui';
+import { FlightLink } from './FlightLink';
 
 type ExplainState =
   | { phase: 'loading' }
@@ -103,11 +105,15 @@ export default function DelayExplainDialog() {
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : openDelayExplain(null))}>
       <DialogContent
         aria-label="AI delay risk explanation"
+        // The title's flight number is a link now; Radix would land on it and Enter would leave
+        // the dialog. Focus the dialog itself; the first Tab reaches the link (AircraftDetailDialog).
+        onOpenAutoFocus={focusContentOnOpen}
         className="max-w-[min(420px,calc(100vw-2rem))]"
       >
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-lg font-bold text-primary">{flight}</span>
+            {/* A link to the flight's page when it has one, body text when not. */}
+            <FlightLink ident={flight} className="font-mono text-lg font-bold" />
             {/* The colour comes from `RISK_BANDS` so it agrees with the badge that was
                 clicked; the LABEL is always spelled out beside it. */}
             <Badge

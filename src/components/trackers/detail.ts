@@ -8,6 +8,8 @@
  * a stylesheet. Keep them whole strings — Tailwind only sees literals.
  */
 
+import { STAT_CARD, STAT_LABEL as STAT_CAPTION, STAT_VALUE as STAT_FIGURE } from '../site/stat-tile';
+
 /** A rule-separated content section. */
 export const SECTION = 'mb-10 border-t border-border pt-6';
 
@@ -21,14 +23,17 @@ export const SECTION_H3 = 'mb-1.5 text-sm font-semibold text-balance text-foregr
 /** Body copy: measured line length, muted. */
 export const SECTION_P = 'mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground last:mb-0';
 
-/** The 3–4 tile summary grid at the top of a detail page. */
+/** The 3–4 tile summary grid at the top of a detail page (the same grid as StatStrip). */
 export const SUMMARY_GRID = 'grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]';
 
-/** One summary tile. */
-export const STAT = 'rounded-lg border border-border bg-card px-4 py-3.5';
-export const STAT_VALUE = 'block font-mono text-lg font-bold leading-tight text-primary';
-export const STAT_LABEL =
-  'mt-1 block font-mono text-[11px] leading-snug font-semibold uppercase tracking-wider text-muted-foreground';
+/**
+ * One summary tile: the site's stat-tile family (src/components/site/stat-tile.ts), label first.
+ * The figure is body colour; it was primary blue, which said nothing. Like StatStrip, a tile
+ * spans two rows of SUMMARY_GRID (`grid-rows-subgrid`) so figures sit level when one label wraps.
+ */
+export const STAT = `${STAT_CARD} row-span-2 grid grid-rows-subgrid gap-y-0`;
+export const STAT_VALUE = `${STAT_FIGURE} text-foreground`;
+export const STAT_LABEL = `${STAT_CAPTION} self-end`;
 
 /** An entry card (an airport, a construction project). */
 export const CARD = 'mb-3 rounded-lg border border-border bg-card px-4 py-3.5 last:mb-0';

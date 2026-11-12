@@ -11,6 +11,8 @@
  *    it, so a six-hour-old board reads as a problem in a greyscale screenshot too.
  */
 
+import { RotateCw } from 'lucide-react';
+
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -31,15 +33,9 @@ export function StalenessBanner({
   condition: BoardCondition;
   onRetry: () => void;
 }) {
-  if (condition.kind === 'none') return null;
-
-  if (condition.kind === 'age-chip') {
-    return (
-      <p className="px-1 py-1 text-[10px] text-muted-foreground" data-testid="sched-age-chip">
-        {condition.message}
-      </p>
-    );
-  }
+  // Only the banner rung paints here. The quiet "data as of …" rung (`age-chip`) rides on the stat
+  // strip's meta line instead (ScheduleView), and `none` paints nothing.
+  if (condition.kind !== 'banner') return null;
 
   return (
     <Alert
@@ -56,7 +52,8 @@ export function StalenessBanner({
         className="h-auto min-h-11 px-1 py-0 text-[11px] underline pointer-fine:md:min-h-0"
         onClick={onRetry}
       >
-        ↻ Retry
+        <RotateCw aria-hidden="true" className="size-3" />
+        Retry
       </Button>
     </Alert>
   );

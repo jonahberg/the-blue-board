@@ -128,6 +128,114 @@ export function freshnessAgo(lastUpdated, now = Date.now()) {
   return `${Math.round(mins / 1440)}d ago`;
 }
 
+// ── Starlink schedule freshness (Nov 2026) ──
+// The departures board and the source line used to say "updated 16d ago" from the tracker's own
+// `lastUpdated`, a field frozen at 2026-10-27T05:05Z while the tracker kept changing — above rows
+// whose departure times count down live and whose Airborne marks come from the live feed. What the
+// rows are actually as old as is the schedule: OUR sync's `syncedAt` (served from a Supabase
+// snapshot, ~22 h old on Nov 11 2026 while the tracker returned 521). `servedFrom` is
+// /api/starlink-data's source word; a "-stale" source means the tracker did not answer.
+
+/** A schedule synced longer ago than this, or served from a "-stale" source, is from an offline tracker. */
+export const STARLINK_SCHEDULE_STALE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Whether the served schedule is stale, and how old it is in words.
+ * @param {{syncedAt?: string|null, servedFrom?: string|null, nowMs?: number}} input
+ * @returns {{ago: string|null, stale: boolean}}
+ */
+export function starlinkScheduleAge({ syncedAt, servedFrom, nowMs = Date.now() } = {}) {
+  const ago = freshnessAgo(syncedAt, nowMs);
+  const syncedMs = syncedAt ? Date.parse(syncedAt) : NaN;
+  const source = String(servedFrom || '');
+  const stale = source.endsWith('-stale') || source === 'static' || (!Number.isNaN(syncedMs) && nowMs - syncedMs > STARLINK_SCHEDULE_STALE_MS);
+  return { ago, stale };
+}
+
+/**
+ * The departures board's subtitle freshness phrase (and the source line's), replacing
+ * `freshnessAgo(lastUpdated)`:
+ *   "schedule synced 2h ago · airborne live"
+ *   "tracker offline, schedule from 22h ago"   (a "-stale" source, or older than 6 h)
+ *   "scheduled times"                          (no sync time: the static roster)
+ * @param {{syncedAt?: string|null, servedFrom?: string|null, nowMs?: number}} input
+ * @returns {string}
+ */
+export function starlinkScheduleFreshness({ syncedAt, servedFrom, nowMs = Date.now() } = {}) {
+  const { ago, stale } = starlinkScheduleAge({ syncedAt, servedFrom, nowMs });
+  if (!ago) return 'scheduled times';
+  return stale ? `tracker offline, schedule from ${ago}` : `schedule synced ${ago} · airborne live`;
+}
+
+/**
+ * The tab's source line freshness ("Starlink data via … · <this> · 681 aircraft"): the schedule
+ * freshness when there is a sync time, otherwise null and the line says nothing about freshness.
+ * It used to print the tracker's frozen `lastUpdated` ("Updated 16d ago"), and "live" when that was
+ * missing.
+ * @param {{syncedAt?: string|null, servedFrom?: string|null, nowMs?: number}} input
+ * @returns {string|null}
+ */
+export function starlinkSourceFreshness({ syncedAt, servedFrom, nowMs = Date.now() } = {}) {
+  if (!syncedAt || Number.isNaN(Date.parse(syncedAt))) return null;
+  return starlinkScheduleFreshness({ syncedAt, servedFrom, nowMs });
+}
+
+/**
+ * The latest scheduled departure (UNIX seconds) in the served per-tail schedules, or null.
+ * @param {Record<string, Array<{departure_ts?: number}>>|null|undefined} flightsByTail
+ * @returns {number|null}
+ */
+export function latestScheduledDepartureTs(flightsByTail) {
+  let latest = 0;
+  for (const flights of Object.values(flightsByTail || {})) {
+    for (const f of Array.isArray(flights) ? flights : []) {
+      const ts = Number(f?.departure_ts);
+      if (Number.isFinite(ts) && ts > latest) latest = ts;
+    }
+  }
+  return latest > 0 ? latest : null;
+}
+
+/**
+ * What the departures board says when its window is empty. When the stored schedule has run out
+ * (no departure after now) the feed is offline — "no departures" would be false. While the tracker
+ * is offline but the stored schedule still reaches into the window, an empty window is still
+ * empty, but on a schedule of that age.
+ * @param {{hub?: string|null, windowH: number, latestDepartureTs: number|null, nowSec: number,
+ *   syncedAt?: string|null, servedFrom?: string|null}} input
+ * @returns {string}
+ */
+export function starlinkBoardEmptyText({ hub, windowH, latestDepartureTs, nowSec, syncedAt, servedFrom }) {
+  const where = hub || 'the hubs';
+  const { ago, stale } = starlinkScheduleAge({ syncedAt, servedFrom, nowMs: nowSec * 1000 });
+  if (latestDepartureTs === null || latestDepartureTs <= nowSec) {
+    return ago
+      ? `The Starlink schedule feed is offline and the last schedule we have (synced ${ago}) has run out, so this board cannot show departures.`
+      : 'The Starlink schedule feed is offline, so this board cannot show departures.';
+  }
+  if (stale && ago) {
+    return `No United Starlink departures from ${where} in the next ${windowH}h on the schedule synced ${ago} (the tracker is offline).`;
+  }
+  return `No United Starlink departures from ${where} in the next ${windowH}h.`;
+}
+
+/**
+ * The departures board's footer, with the schedule's real age in place of the fixed "served
+ * through The Blue Board's cache (up to 6h)" (false whenever the tracker is down: 22 h on Nov 11).
+ * @param {{syncedAt?: string|null, servedFrom?: string|null, nowMs?: number}} input
+ * @returns {string}
+ */
+export function starlinkBoardFooter({ syncedAt, servedFrom, nowMs = Date.now() } = {}) {
+  const { ago, stale } = starlinkScheduleAge({ syncedAt, servedFrom, nowMs });
+  const lead = 'A NOC departures board, not a passenger FIDS. Callsigns are the operating carrier (SkyWest, Republic, Mesa…), not United marketing flight numbers.';
+  const times = !ago
+    ? 'Times are scheduled.'
+    : stale
+      ? `Times are scheduled, from the last schedule we have (synced ${ago}; the tracker is offline).`
+      : `Times are scheduled, from the tracker's schedule synced ${ago}.`;
+  return `${lead} ${times} Airborne marks come from the live flight feed — not live ATC.`;
+}
+
 /** Whole days since a tail's Starlink was first detected, floored at 0. */
 export function daysSinceFound(dateFound, now = Date.now()) {
   const ms = dateFound ? Date.parse(dateFound) : NaN;

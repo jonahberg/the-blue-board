@@ -24,6 +24,8 @@ const ctl = vi.hoisted(() => ({
   fallback: [] as unknown[],
   flights: { N11111: [{ flight_number: 'UA1', origin: 'ORD', destination: 'DEN', departure_ts: 1 }] } as unknown,
   flightsFails: false,
+  /** What `?fields=flights` says about its own sync; the endpoint sends these beside the schedules. */
+  flightsMeta: { lastUpdated: null, syncedAt: null } as Record<string, unknown>,
   requests: [] as string[],
 }));
 
@@ -49,7 +51,7 @@ function stubFetch() {
     }
     if (url === '/api/starlink-data?fields=flights') {
       if (ctl.flightsFails) return json({ error: 'down' }, false);
-      return json({ flightsByTail: ctl.flights, lastUpdated: null, syncedAt: null });
+      return json({ flightsByTail: ctl.flights, ...ctl.flightsMeta });
     }
     throw new Error(`unexpected fetch ${url}`);
   });
@@ -161,3 +163,48 @@ describe('FleetProvider Starlink schedules are lazy (F58)', () => {
     expect(Object.keys(fleet.starlink.flightsByTail)).toEqual(['N11111']);
   });
 });
+
+// v1.28.0: the Starlink tab dates its board by OUR sync and the serving tier, from whichever
+// response carried the schedules, and its source line by the roster's.
+describe('FleetProvider keeps each Starlink response\'s sync time and serving tier', () => {
+  beforeEach(() => {
+    ctl.flightsMeta = { lastUpdated: null, syncedAt: null };
+  });
+
+  it('fields present: the roster\'s and the schedules\' are kept apart', async () => {
+    ctl.starlink = {
+      ...(ctl.starlink as object),
+      lastUpdated: '2026-10-27T05:05:51.855Z',
+      syncedAt: '2026-11-11T00:00:19.635Z',
+      servedFrom: 'supabase-stale',
+    };
+    ctl.flightsMeta = { lastUpdated: '2026-10-27T05:05:51.855Z', syncedAt: '2026-11-11T20:00:00.000Z', servedFrom: 'upstream' };
+    const fleet = await mountStore();
+    expect(fleet.starlink).toMatchObject({ syncedAt: '2026-11-11T00:00:19.635Z', servedFrom: 'supabase-stale', flightsSyncedAt: null, flightsServedFrom: null });
+    await act(async () => fleet.loadStarlinkFlights());
+    await waitFor(() => expect(seen?.starlink.flightsStatus).toBe('ready'));
+    expect(seen!.starlink).toMatchObject({
+      syncedAt: '2026-11-11T00:00:19.635Z',
+      servedFrom: 'supabase-stale',
+      flightsSyncedAt: '2026-11-11T20:00:00.000Z',
+      flightsServedFrom: 'upstream',
+    });
+  });
+
+  it('fields absent (production before v1.28.0 sends no servedFrom): null, never a guess', async () => {
+    ctl.starlink = { ...(ctl.starlink as object), syncedAt: '2026-11-11T00:00:19.635Z' };
+    ctl.flightsMeta = { lastUpdated: null, syncedAt: '2026-11-11T00:00:19.635Z' };
+    const fleet = await mountStore();
+    await act(async () => fleet.loadStarlinkFlights());
+    await waitFor(() => expect(seen?.starlink.flightsStatus).toBe('ready'));
+    expect(seen!.starlink).toMatchObject({ servedFrom: null, flightsSyncedAt: '2026-11-11T00:00:19.635Z', flightsServedFrom: null });
+  });
+
+  it('the static-roster fallback knows neither', async () => {
+    ctl.starlinkFails = true;
+    ctl.fallback = [sl('N11111')];
+    const fleet = await mountStore();
+    expect(fleet.starlink).toMatchObject({ degraded: true, syncedAt: null, servedFrom: null, flightsSyncedAt: null, flightsServedFrom: null });
+  });
+});
+

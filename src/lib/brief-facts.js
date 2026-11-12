@@ -28,7 +28,7 @@
 import {
   BRIEF_HUBS, airportDisplayName, airportForms, isKnownAirportCode, numberWord, normalizeText,
 } from './brief-claims.js';
-import { serverOtpFromMetrics, ON_TIME_GRACE_MIN } from './hub-health.js';
+import { boardCoverageGapSec, serverOtpFromMetrics, ON_TIME_GRACE_MIN } from './hub-health.js';
 import { networkStatus, isWholeAirportClosure, withoutRoutineClosures } from './ops-health.js';
 import { IROPS_MINOR_AT, IROPS_SIGNIFICANT_AT } from './irops-score.js';
 import { buildFaaIndex } from './faa-context.js';
@@ -50,8 +50,36 @@ export const BRIEF_MIN_OPERATED = 25;
  * evidence. The cron publishes nothing (the last brief goes stale honestly) until enough boards read.
  */
 export const BRIEF_MIN_HUB_READINGS = 3;
-/** Hub boards older than this are left out of the brief entirely (the live boards run 1–2 hours old). */
+/**
+ * A hub board whose day has gone unseen for longer than this is left out of the brief: its on-time
+ * and per-hub cancellation facts (the live boards run 1–3 hours old). Measured as the board's
+ * coverage gap (src/lib/hub-health.js boardCoverageGapSec) — its age for today's board, but 0 for a
+ * yesterday board built after local midnight, which is final however old it is (Nov 2026; age alone
+ * dropped every final yesterday board before 06:00 local). The same 3 h as HUB_BOARD_CURRENT_MAX_SEC.
+ */
 export const BRIEF_MAX_BOARD_AGE_MS = 3 * 60 * 60 * 1000;
+/**
+ * The disruption-index fact is left out when boards more than BRIEF_MAX_BOARD_AGE_MS behind hold
+ * more than this share of the index's departures (Nov 2026). Flight-weighted, so a stale NRT or GUM
+ * board (under 1% of the departures) never silences it, and a stale ORD (about a quarter) with any
+ * other stale hub does. The tone rules are unchanged: net.status still reads the same index.
+ */
+export const BRIEF_INDEX_MAX_STALE_SHARE = 0.25;
+
+/**
+ * Why a hub board is too far behind for the brief, or null when it is current. Its coverage gap
+ * (age for today's board; the unseen part of yesterday for yesterday's), from the payload's own
+ * build time and day end at `nowMs`. A payload without `boardDayEndSec` is judged by age, as before.
+ * @param {any} m  one /api/irops hubMetrics entry
+ * @param {number} nowMs
+ * @returns {string|null}
+ */
+function boardBehindReason(m, nowMs) {
+  const gapSec = boardCoverageGapSec({ generatedAtSec: m?.generatedAt, dayEndSec: m?.boardDayEndSec ?? null, nowSec: nowMs / 1000 });
+  if (gapSec === null || gapSec * 1000 <= BRIEF_MAX_BOARD_AGE_MS) return null;
+  const min = Math.round(gapSec / 60);
+  return Number(m?.boardDayOffset) === -1 ? `board missing the last ${min} min of yesterday` : `board ${min} min old`;
+}
 /** METAR observations older than this are not current weather. */
 export const BRIEF_MAX_METAR_AGE_MS = 3 * 60 * 60 * 1000;
 /** A soft hub: below this on-time percentage the tone is at least "watch". */
@@ -286,7 +314,8 @@ export function buildBriefFacts(sources, { nowMs }) {
       const operated = Number(m.operated || 0);
       const atMs = Number.isFinite(Number(m.generatedAt)) && Number(m.generatedAt) > 0 ? Number(m.generatedAt) * 1000 : null;
       if (otp === null) { skipped.push(`otp.${hub}: no reading`); continue; }
-      if (atMs !== null && nowMs - atMs > BRIEF_MAX_BOARD_AGE_MS) { skipped.push(`otp.${hub}: board ${Math.round((nowMs - atMs) / 60000)} min old`); continue; }
+      const behind = boardBehindReason(m, nowMs);
+      if (behind) { skipped.push(`otp.${hub}: ${behind}`); continue; }
       if (operated < BRIEF_MIN_OPERATED) { skipped.push(`otp.${hub}: ${operated} operated (under ${BRIEF_MIN_OPERATED})`); continue; }
       readings[hub] = { otp, operated, at: atMs };
     }
@@ -370,7 +399,20 @@ export function buildBriefFacts(sources, { nowMs }) {
 
     // ── The disruption index and the network status (the strip's own chip) ──
     const score = Number(sources.irops.score);
-    if (Number.isFinite(score)) {
+    // The index counts every hub board; when the ones too far behind hold too many of its
+    // departures, its own fact is left out (BRIEF_INDEX_MAX_STALE_SHARE).
+    let indexFlights = 0;
+    let behindFlights = 0;
+    const behindHubs = [];
+    for (const [hub, m] of Object.entries(sources.irops.hubMetrics || {})) {
+      const total = Number(m?.total) > 0 ? Number(m.total) : 0;
+      indexFlights += total;
+      if (total > 0 && boardBehindReason(m, nowMs)) { behindFlights += total; behindHubs.push(hub); }
+    }
+    const indexStaleShare = indexFlights > 0 ? behindFlights / indexFlights : 0;
+    if (Number.isFinite(score) && indexStaleShare > BRIEF_INDEX_MAX_STALE_SHARE) {
+      skipped.push(`net.index: boards more than 3 h behind hold ${Math.round(indexStaleShare * 100)}% of its departures (${behindHubs.join(', ')})`);
+    } else if (Number.isFinite(score)) {
       const band = score < IROPS_MINOR_AT ? 'normal' : score < IROPS_SIGNIFICANT_AT ? 'minor' : 'significant';
       const bandText = band === 'normal'
         ? `in the normal range (under ${IROPS_MINOR_AT})`
@@ -448,6 +490,8 @@ export function buildBriefFacts(sources, { nowMs }) {
       const hubConfirmed = Math.max(0, Number(m.cancellations || 0) - Number(m.cancellationsLikely || 0));
       const hubTotal = Number(m.total || 0);
       if (hubConfirmed < 3 || hubTotal <= 0) continue;
+      const behind = boardBehindReason(m, nowMs);
+      if (behind) { skipped.push(`cxl.${hub}: ${behind}`); continue; }
       const rate = hubConfirmed / hubTotal;
       facts.push({
         id: `cxl.${hub}`,

@@ -111,9 +111,10 @@ const activeLinkClass = `${linkBase} font-medium text-foreground bg-accent`;
           <path d="m6 6 12 12"></path>
         </svg>
       </summary>
+      <!-- Elevation is the border plus the popover surface (DESIGN.md: no shadow ladder). -->
       <nav
         aria-label="Primary mobile"
-        class="absolute right-0 top-12 z-50 w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+        class="absolute right-0 top-12 z-50 w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground"
       >
         {
           LINKS.map((link) => (

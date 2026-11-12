@@ -17,7 +17,9 @@
 //     endpoint's own auth gate is untouched). No raw credit counts, dollar amounts, or account
 //     identifiers are ever included. If FR24_API_TOKEN is absent, or the upstream call fails,
 //     liveFeed reports { configured: false } rather than erroring the whole response.
-//   - monthlyCostNote: a static string the widget renders alongside the bars.
+// (Until v1.28.0 it also sent `monthlyCostNote`, a static cost sentence. The meter stopped
+// printing it in Nov 2026 — every ask now speaks the one "cover a day" voice — and nothing else
+// read it, so it is gone. src/lib/support-meter.js still ignores it on an older cached answer.)
 //
 // Heavily cached at the CDN (s-maxage 300 + SWR) since none of this needs to be fresh to the
 // second and it is public, unauthenticated, and safe to share across all visitors.
@@ -26,8 +28,6 @@ import type { VercelRequest, VercelResponse } from './_types.js';
 import { hydrateAdbSpend, getAdbDailyUnitBudget } from './_cost-state.js';
 import { fetchFr24UsageRaw } from './fr24-usage.js';
 import { createRateLimiter } from './_rate-limit.js';
-
-const MONTHLY_COST_NOTE = 'Data feeds, hosting, and AI explanations cost real money every month';
 
 // This endpoint is public and unauthenticated, and the CDN cache is keyed by the full URL — so
 // `?z=<random>` is a MISS every time and reaches the origin. Before the memo below, each MISS
@@ -115,6 +115,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       budget: getAdbDailyUnitBudget(),
     },
     liveFeed,
-    monthlyCostNote: MONTHLY_COST_NOTE,
   });
 }

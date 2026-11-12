@@ -31,6 +31,8 @@ const hubState = vi.hoisted(() => ({
   iropsScore: null as number | null,
   /** The current brief's tone, or null while the row is the ticker. */
   briefTone: null as 'calm' | 'watch' | 'disrupted' | null,
+  /** `/api/irops` as the strip reads it (`data.hubMetrics`); null before the server answers. */
+  iropsData: null as { hubMetrics: Record<string, Record<string, unknown>> } | null,
 }));
 function resetHubState() {
   const now = Date.now();
@@ -42,6 +44,7 @@ function resetHubState() {
   hubState.faaUnknownSince = null;
   hubState.iropsScore = null;
   hubState.briefTone = null;
+  hubState.iropsData = null;
 }
 vi.mock('../src/app/state/schedule', () => ({
   useHubHealth: () => ({
@@ -53,7 +56,7 @@ vi.mock('../src/app/state/weather', () => ({
   useWeather: () => ({ faaIndex: hubState.faaIndex, faaUnknownSince: hubState.faaUnknownSince }),
 }));
 vi.mock('../src/app/state/irops', () => ({
-  useIrops: () => ({ loading: false, score: hubState.iropsScore }),
+  useIrops: () => ({ loading: false, score: hubState.iropsScore, data: hubState.iropsData }),
 }));
 vi.mock('../src/app/state/prefs', () => ({ usePrefs: () => ({ homeAirport: '' }) }));
 vi.mock('../src/app/state/brief', () => ({
@@ -284,10 +287,145 @@ describe('HubHealthStrip', () => {
     expect(screen.getByText(/^FAA status unknown since \d\d:\d\d$/)).toBeTruthy();
   });
 
-  it('dims a chip whose reading comes from an hours-old board (F91)', () => {
+  it('marks a chip whose reading comes from an hours-old board, without dimming its number (F91)', () => {
     hubState.hubs[1] = { ...hubState.hubs[1], asOfMs: Date.now() - 3 * 60 * 60_000 };
     renderStrip();
-    expect(classesOf(screen.getByRole('link', { name: /DEN/ }))).toContain('opacity-60');
-    expect(classesOf(screen.getByRole('link', { name: /ORD/ }))).not.toContain('opacity-60');
+    const den = screen.getByRole('link', { name: /DEN/ });
+    const ord = screen.getByRole('link', { name: /ORD/ });
+    // A word and an icon, not only a fainter chip (DESIGN.md: never a visual-only signal).
+    expect(den.textContent).toContain('(stale reading)');
+    expect(den.querySelector('svg[data-stale-reading]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(ord.textContent).not.toContain('stale');
+    expect(ord.querySelector('svg[data-stale-reading]')).toBeNull();
+    // The percentage keeps full contrast: neither the chip nor the number is dimmed (axe
+    // color-contrast measured 3.82:1 for the 60% chip). Only the glyph recedes.
+    expect(classesOf(den)).not.toContain('opacity-60');
+    const pct = [...den.querySelectorAll('span')].find((el) => /%$/.test(el.textContent ?? ''))!;
+    expect(classesOf(pct)).not.toContain('opacity-60');
+    expect(den.querySelector('[aria-hidden="true"].opacity-60')).not.toBeNull();
+    // The sr-only words are absolutely positioned: a positioned chip keeps them inside the
+    // sideways scroller (unpositioned, they widened a 390 px phone page to 585 px).
+    expect(classesOf(den)).toContain('relative');
+    expect(ord.querySelector('.opacity-60')).toBeNull();
+  });
+});
+
+describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
+  const renderStrip = () =>
+    render(
+      <TooltipProvider>
+        <HubHealthStrip />
+      </TooltipProvider>,
+    );
+  const chip = (hub: string) => screen.getByRole('link', { name: new RegExp(`^${hub}`) });
+  /** The tooltip opens on keyboard focus, as it does for a mouse; a tap navigates instead. */
+  const tooltipFor = async (hub: string) => {
+    await act(async () => {
+      chip(hub).focus();
+      await vi.runAllTimersAsync();
+    });
+    return screen.getAllByRole('tooltip').map((t) => t.textContent ?? '').join(' ');
+  };
+  const gum = (over: Record<string, unknown> = {}) => ({
+    total: 9, operated: 0, onTime: 0, cancellations: 0, generatedAt: 1794434424,
+    departureTimesSeen: 0, departedWithoutTime: 2, pastDueUntimed: 4, boardDayOffset: 0, ...over,
+  });
+  const nrt = (over: Record<string, unknown> = {}) => ({
+    total: 12, operated: 1, onTime: 1, cancellations: 0, generatedAt: 1794432632,
+    departureTimesSeen: 1, departedWithoutTime: 0, pastDueUntimed: 0, boardDayOffset: 0, ...over,
+  });
+
+  beforeEach(() => {
+    // Radix positions an open tooltip with floating-ui, which needs a ResizeObserver jsdom lacks.
+    vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+    hubState.hubs = [
+      { hub: 'ORD', otp: 86, source: 'server', asOfMs: Date.now() - 5 * 60_000 },
+      { hub: 'NRT', otp: null, source: null, asOfMs: null },
+      { hub: 'GUM', otp: null, source: null, asOfMs: null },
+    ];
+  });
+
+  it('Guam (no actual times): "n/a" on the chip, the reason in its name and its tooltip', async () => {
+    hubState.iropsData = { hubMetrics: { ORD: { total: 640, operated: 359, onTime: 309, departureTimesSeen: 600, boardDayOffset: 0 }, NRT: nrt(), GUM: gum() } };
+    renderStrip();
+    const link = chip('GUM');
+    expect(link.textContent).toContain('n/a');
+    expect(link.textContent).not.toContain('—');
+    // Visible words plus sr-only words, never an aria-label over different text.
+    expect(link.hasAttribute('aria-label')).toBe(false);
+    const sr = link.querySelector('.sr-only');
+    expect(sr?.textContent).toBe('(no on-time figure: the feed sends no departure times)');
+    expect(link.getAttribute('href')).toBe('/hubs/gum');
+    expect(await tooltipFor('GUM')).toContain(
+      'The schedule feed sends no actual departure times for GUM, so there is no on-time figure.',
+    );
+  });
+
+  it('too few departures yet: the dash stays, the count is in the tooltip only', async () => {
+    hubState.iropsData = { hubMetrics: { NRT: nrt(), GUM: gum() } };
+    renderStrip();
+    const link = chip('NRT');
+    expect(link.textContent).toContain('—');
+    expect(link.querySelector('.sr-only')?.textContent).toBe('(too few departures yet for an on-time figure)');
+    expect(await tooltipFor('NRT')).toContain('1 of 12 NRT departures have left so far today; an on-time figure needs 5.');
+  });
+
+  it('a poll that only moves a count changes nothing in this live region', () => {
+    hubState.iropsData = { hubMetrics: { NRT: nrt(), GUM: gum() } };
+    const { container, rerender } = renderStrip();
+    const before = container.textContent;
+    hubState.iropsData = { hubMetrics: { NRT: nrt({ operated: 3, onTime: 3 }), GUM: gum({ pastDueUntimed: 6 }) } };
+    rerender(
+      <TooltipProvider>
+        <HubHealthStrip />
+      </TooltipProvider>,
+    );
+    expect(container.textContent).toBe(before);
+  });
+
+  it('fields absent (the payload production sends today): the bare dash and the old tooltip, no reason claimed', async () => {
+    // No departureTimesSeen / boardDayOffset: GUM would otherwise read "0 of 9 … have left so far
+    // today", which the feed cannot know.
+    const old = (m: Record<string, unknown>) => {
+      const { departureTimesSeen: _a, departedWithoutTime: _b, pastDueUntimed: _c, boardDayOffset: _d, ...rest } = m;
+      return rest;
+    };
+    hubState.iropsData = { hubMetrics: { NRT: old(nrt()), GUM: old(gum()) } };
+    renderStrip();
+    for (const hub of ['NRT', 'GUM']) {
+      expect(chip(hub).textContent).toContain('—');
+      expect(chip(hub).textContent).not.toContain('n/a');
+      expect(chip(hub).querySelector('.sr-only')).toBeNull();
+    }
+    expect(await tooltipFor('GUM')).toContain('No on-time reading yet');
+  });
+
+  it('before the server answers: the bare dash, never "no departures board"', async () => {
+    hubState.iropsData = null;
+    renderStrip();
+    expect(chip('GUM').textContent).toContain('—');
+    expect(chip('GUM').querySelector('.sr-only')).toBeNull();
+    const tip = await tooltipFor('GUM');
+    expect(tip).toContain('No on-time reading yet');
+    expect(tip).not.toMatch(/departures board/);
+  });
+
+  it('a reading from yesterday\'s board says so, in the name and the tooltip', async () => {
+    hubState.iropsData = {
+      hubMetrics: { ORD: { total: 640, operated: 359, onTime: 309, departureTimesSeen: 600, boardDayOffset: -1 }, NRT: nrt(), GUM: gum() },
+    };
+    renderStrip();
+    expect(chip('ORD').textContent).toContain('86%');
+    expect(chip('ORD').querySelector('.sr-only')?.textContent).toBe("(yesterday's departures)");
+    expect(await tooltipFor('ORD')).toContain("86% of yesterday's operated departures within 30 min of schedule");
+  });
+
+  it('a hub with a reading never shows a reason, whatever its metrics say', () => {
+    hubState.hubs[2] = { hub: 'GUM', otp: 74, source: 'client', asOfMs: Date.now() - 60_000 };
+    hubState.iropsData = { hubMetrics: { NRT: nrt(), GUM: gum() } };
+    renderStrip();
+    expect(chip('GUM').textContent).toContain('74%');
+    expect(chip('GUM').textContent).not.toContain('n/a');
+    expect(chip('GUM').querySelector('.sr-only')).toBeNull();
   });
 });

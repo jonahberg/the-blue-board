@@ -27,8 +27,11 @@
  *    confirm status changes with press/OIG before editing this file.
  *  - Go-live events: Leidos newsroom (leidos.com/insights), FAA newsroom, FedScoop (Lindsey
  *    Wilkinson's beat), local TV in the airport's market.
- *  - After every source pass: bump atcMeta.lastVerified. If facts changed, also bump
- *    atcMeta.lastUpdated and add a changelog entry. Then run `bun run test`.
+ *  - After a full source pass (every airport re-checked): bump atcMeta.lastVerified and delete
+ *    every per-entry `verified`. After a partial pass: leave lastVerified alone and set `verified`
+ *    on the airports you re-checked (src/data/trackers/verified.js; the validator in ./index.js
+ *    treats both trackers alike). If facts changed, also bump atcMeta.lastUpdated and add a
+ *    changelog entry. Then run `bun run test`.
  *
  * Last verified: 2026-11-03
  */
@@ -49,6 +52,8 @@
  * @property {string} [plannedIoc]  YYYY-MM-DD — FAA Aug-2023 waterfall slot (historic, not a promise)
  * @property {string} [note]        one-liner shown in table/map card
  * @property {string[]} sources
+ * @property {string} [verified]    YYYY-MM-DD: re-checked on its own after atcMeta.lastVerified (a
+ *                                  partial pass). Absent, it was last checked on the file's date.
  */
 
 export const atcMeta = {

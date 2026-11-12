@@ -26,6 +26,7 @@ import {
   splitCancellations,
   unconfirmedFigure,
 } from '@/lib/cancellation-display.js';
+import { iropsCoverageLine } from '@/lib/hub-health.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
 import { countIropsFromBoards } from '@/lib/irops-client.js';
 import { IROPS_BANDS_TEXT, iropsScore, iropsScoreCls, iropsScoreLabel } from '@/lib/irops-score.js';
@@ -114,6 +115,7 @@ export function IropsSection() {
 
   const server = irops.data;
   const usingServer = Boolean(server);
+  const { fetchedAt } = irops;
   const hasFallbackRows = fallback.total > 0;
 
   const counts: Counts | null = usingServer
@@ -160,6 +162,19 @@ export function IropsSection() {
         seenFlying: counts.likelyCanceledSeenFlying,
       })
     : null;
+
+  // v1.28.0: how many hub boards behind the score are current ("8 of 9 hub boards current · LAX
+  // board 3 h old"). Server path only, and only from a payload that carries the coverage fields
+  // (src/lib/hub-health.js). The clock is the fetch time, so this line in a polite region changes
+  // when the data does, not on a minute tick.
+  const hubMetrics = server?.hubMetrics;
+  const coverage = useMemo(
+    () =>
+      hubMetrics
+        ? (iropsCoverageLine(hubMetrics, fetchedAt ? Math.floor(fetchedAt / 1000) : undefined) as string | null)
+        : null,
+    [hubMetrics, fetchedAt],
+  );
 
   return (
     <section id="irops-section" aria-labelledby="irops-label" className="scroll-mt-4">
@@ -237,6 +252,10 @@ export function IropsSection() {
 
             {footnote ? (
               <p className="border-t px-3 py-1.5 text-[10px] text-muted-foreground">{footnote}</p>
+            ) : null}
+
+            {usingServer && coverage ? (
+              <p className="border-t px-3 py-1.5 text-[10px] text-muted-foreground">{coverage}</p>
             ) : null}
 
             {/* Only the client path carried this strip: the server payload has no per-airport

@@ -101,3 +101,18 @@ describe('hub copy promises no refresh rate the page does not have', () => {
     });
   }
 });
+
+// v1.28.0: the Dulles Concourse E box reported an opening in the warning treatment (⚠️ and the
+// amber rail). Amber is status only and chrome icons are lucide (DESIGN.md), so it takes the plain
+// callout the hub pages use for information ("IAD by the numbers", "Tip"); its words are unchanged.
+describe('/hubs/iad Concourse E callout', () => {
+  const html = hubs.iad.contentHtml;
+  const box = html.match(/<div class="([^"]*)">\s*<span id="construction"><\/span>([\s\S]*?)<\/div>/);
+
+  it('is the informational callout, with no emoji, and keeps its #construction anchor', () => {
+    expect(box, 'the #construction callout').toBeTruthy();
+    expect(box[1]).toBe('highlight-box');
+    expect(box[2]).toMatch(/^<strong>Concourse E Opens November 10, 2026:<\/strong> United and MWAA unveiled/);
+    expect(EMOJI.test(box[2])).toBe(false);
+  });
+});

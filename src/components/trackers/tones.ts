@@ -3,9 +3,9 @@
  *
  * Tailwind scans source files for literal class names, so every value here must
  * be a whole, unbroken utility string — never assembled with interpolation, or
- * the class is silently absent from the built stylesheet. Six consumers share
- * these maps (StatusBadge, TrackerMap, StatStrip, TrackerPulse, the trackers
- * index cards and the detail pages), which is exactly why they live in one file.
+ * the class is silently absent from the built stylesheet. Four consumers share
+ * these maps (StatusBadge — and through it the detail pages —, TrackerMap,
+ * StatStrip and the trackers index cards), which is exactly why they live in one file.
  *
  * Status is never carried by colour alone: every badge pairs a tone with its
  * text label, and the map pairs it with a marker SHAPE (dot / diamond / ring).

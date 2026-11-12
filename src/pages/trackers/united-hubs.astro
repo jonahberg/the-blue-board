@@ -2,9 +2,11 @@
 import outline from '../../data/trackers/us-outline.json';
 import { unitedHubsMeta, unitedHubs, unitedProjects } from '../../data/trackers/united-hubs.js';
 import { atcAirports } from '../../data/trackers/atc.js';
+import { contentModified, entryVerified, verificationSummary, verifiedNote } from '../../data/trackers/verified.js';
 import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
 import { trackerParentSeo } from '../../lib/tracker-detail.js';
 import { countLabel } from '../../lib/plural.js';
+import { fleetTypes } from '../../data/fleet/index.js';
 import StatStrip from '../../components/trackers/StatStrip.astro';
 import TrackerMap from '../../components/trackers/TrackerMap.astro';
 import TrackerSearch from '../../components/trackers/TrackerSearch.astro';
@@ -18,6 +20,7 @@ import TrackerPulse from '../../components/trackers/TrackerPulse.astro';
 import TrackerDataActions from '../../components/trackers/TrackerDataActions.astro';
 import BaseLayout from '../../components/site/BaseLayout.astro';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
+import JumpNav from '../../components/site/JumpNav.astro';
 import { SECTION, SECTION_H2 } from '../../components/trackers/detail';
 
 const paths = outlinePaths(outline);
@@ -46,6 +49,25 @@ const TYPE_OVERRIDE = {
 const typeLabelFor = (p) => TYPE_OVERRIDE[p.id] ?? TYPE_LABEL[p.projectType];
 
 const hubOrder = ['IAH', 'IAD', 'SFO', 'DEN', 'ORD', 'EWR', 'LAX', 'GUM'];
+// The entries the stats, the map card and the FAQ quote, so their numbers and dates come from the
+// data rather than a second hand-typed copy.
+const projectById = (id) => {
+  const p = unitedProjects.find((x) => x.id === id);
+  if (!p) throw new Error(`united-hubs page: no project "${id}" in src/data/trackers/united-hubs.js`);
+  return p;
+};
+const iahTerminalB = projectById('iah-terminal-b');
+const iadConcourseE = projectById('iad-concourse-e');
+const iadClubE = projectById('iad-club-concourse-e');
+// Club math quotes the Dulles club entry's own seat figure — United's Nov 9 wording, "seating for
+// more than 600" — not a number typed here (it said 650, the pre-opening "around 650"). If the entry
+// stops saying it that way, the build stops rather than print a stale figure.
+const iadClubSeats = /seating for more than (\d+)/.exec(iadClubE.details)?.[1];
+if (!iadClubSeats) throw new Error('united-hubs club math: iad-club-concourse-e no longer says "seating for more than N"');
+const D7810_SEATS = Number(fleetTypes['787-10-dreamliner'].seatConfig.total);
+const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four'];
+const iadClubIn7810s = COUNT_WORDS[Math.round(Number(iadClubSeats) / D7810_SEATS)] ?? String(Math.round(Number(iadClubSeats) / D7810_SEATS));
+const dayOf = (iso, opts) => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', opts);
 const projectsByHub = Object.fromEntries(hubOrder.map((h) => [h, unitedProjects.filter((p) => p.hub === h)]));
 const atcCodes = new Set(atcAirports.map((a) => a.code));
 const hubPulseEntities = Object.fromEntries(
@@ -68,8 +90,9 @@ const hubPulseEntities = Object.fromEntries(
 const hubMapMeta = {
   IAH: { shape: 'diamond', tone: 'yellow', badge: { label: 'United building', tone: 'yellow', glyph: '◆' },
     line1: '4 projects — the 54,000 sq ft flagship club and the 22-gate concourse opened in October 2026.' },
-  IAD: { shape: 'diamond', tone: 'yellow', badge: { label: 'United building', tone: 'yellow', glyph: '◆' },
-    line1: "5 projects — a 14-gate concourse and United's new 40,000 sq ft club, due this fall but still undated." },
+  // Concourse E and its club opened Nov 10 2026; what is left at IAD is announced, not building.
+  IAD: { shape: 'dot', tone: 'green', badge: { label: 'Recently delivered', tone: 'green', glyph: '●' },
+    line1: `5 projects — the ${iadConcourseE.gates}-gate Concourse E opened ${dayOf(iadConcourseE.openedDate, { month: 'long', day: 'numeric', year: 'numeric' })}; United said its new nearly ${iadClubE.sizeSqFt.toLocaleString('en-US')} sq ft club opens with it.` },
   SFO: { shape: 'diamond', tone: 'accent', badge: { label: 'Club announced', tone: 'accent', glyph: '◇' },
     line1: '2 projects — a 25,000 sq ft club with an outdoor terrace, due by end of 2026.' },
   DEN: { shape: 'diamond', tone: 'accent', badge: { label: 'Polaris announced', tone: 'accent', glyph: '◇' },
@@ -104,6 +127,9 @@ const legend = [
   { label: 'Recently delivered', shape: 'dot', tone: 'green' },
   { label: 'Quiet right now', shape: 'ring', tone: 'dim' },
 ];
+
+// ---- verification: each entry's own date; the header names the entries checked later ----
+const verified = verificationSummary(unitedProjects, unitedHubsMeta);
 
 // ---- formatting ----
 const fmtDate = (d) => {
@@ -155,7 +181,7 @@ const tableRows = sortedProjects.map((p) => {
       sources: {
         evidence: {
           sources: p.sources,
-          verified: unitedHubsMeta.lastVerified,
+          verified: entryVerified(p, unitedHubsMeta),
           entryId: p.id,
           entryLabel: `${p.hub} · ${p.name}`,
           shareHref: `/trackers/united-hubs#${p.id}`,
@@ -164,21 +190,28 @@ const tableRows = sortedProjects.map((p) => {
     },
   };
 });
+// `phone`: where each cell sits in the stacked card below md (TrackerTable): the project and
+// its status badge, then its hub and type, then the date and scale, then the evidence.
 const columns = [
-  { key: 'project', label: 'Project', sortable: true },
-  { key: 'hub', label: 'Hub', sortable: true },
-  { key: 'type', label: 'Type', sortable: true },
-  { key: 'status', label: 'Status', sortable: true },
-  { key: 'date', label: 'Opened / target', sortable: true },
-  { key: 'scale', label: 'Scale' },
+  { key: 'project', label: 'Project', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-1' },
+  { key: 'hub', label: 'Hub', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-2 max-md:flex max-md:items-center max-md:gap-x-2' },
+  { key: 'type', label: 'Type', sortable: true, phone: 'max-md:col-start-2 max-md:row-start-2 max-md:self-center max-md:text-right' },
+  { key: 'status', label: 'Status', sortable: true, phone: 'max-md:col-start-2 max-md:row-start-1 max-md:justify-self-end' },
+  { key: 'date', label: 'Opened / target', sortable: true, phoneLabel: 'Opened / target' },
+  { key: 'scale', label: 'Scale', phoneLabel: 'Scale' },
   { key: 'sources', label: 'Evidence' },
 ];
 
 // ---- stats ----
+// Counts and sizes, not statuses, so no tone (DESIGN.md: colour is status only).
 const stats = [
-  { label: 'new flagship clubs in 2026', value: '3', tone: 'green', sub: 'IAH · IAD · SFO' },
-  { label: 'new club space this year', value: '~119k', tone: 'amber', sub: 'sq ft — IAH 54k + IAD 40k + SFO 25k' },
-  { label: 'new gates targeted fall 2026', value: '36', sub: '22 at IAH (concourse open Oct 22) · 14 due at IAD' },
+  { label: 'new flagship clubs in 2026', value: '3', sub: 'IAH · IAD · SFO' },
+  { label: 'new club space this year', value: '~119k', sub: 'sq ft — IAH 54k + IAD 40k + SFO 25k' },
+  {
+    label: unitedHubsMeta.stats.newGates2026.label,
+    value: String(iahTerminalB.gates + iadConcourseE.gates),
+    sub: `${iahTerminalB.gates} at IAH (concourse open Oct 22) · ${iadConcourseE.gates} at IAD (open ${dayOf(iadConcourseE.openedDate, { month: 'short', day: 'numeric' })})`,
+  },
   { label: 'largest club in the network', value: '54,000', sub: 'sq ft — IAH Terminal B North, open since Oct 22' },
 ];
 
@@ -197,7 +230,7 @@ const faq = [
   {
     question: 'What is United building at Washington Dulles?',
     answer:
-      'A new 14-gate, 435,000 sq ft Concourse E (built by the airports authority, occupied entirely by United) with a ~40,000 sq ft flagship United Club above the AeroTrain station. Both slipped from late September to an expected October opening, then October passed without one: MWAA’s October 13 fact sheet says only “fall 2026,” and no date has been announced. Behind it sits the $20B+ Dulles master plan unveiled in July 2026, a decade-long rebuild that includes plans for one of the largest United Polaris lounges in the world.',
+      `A new ${iadConcourseE.gates}-gate, ${fmtSqFt(iadConcourseE.sizeSqFt)} Concourse E, built by the airports authority and occupied entirely by United, and a nearly ${fmtSqFt(iadClubE.sizeSqFt)} flagship United Club above the AeroTrain escalators. After slipping from late September into October and then past it, United and the airports authority unveiled the concourse on November 9, 2026 and said it opens to travelers ${dayOf(iadConcourseE.openedDate, { month: 'long', day: 'numeric' })}; reports written that day and after confirm it opened. United said the club opens with it. Behind it sits the $20B+ Dulles master plan unveiled in July 2026, a decade-long rebuild that includes plans for one of the largest United Polaris lounges in the world.`,
   },
   {
     question: 'Is United building anything at LAX?',
@@ -235,7 +268,9 @@ const datasetSchema = {
   description:
     'Every tracked United Airlines ground-infrastructure project across its eight hubs, with status (open / under construction / announced / rumored), dates, sizes, costs, and sources.',
   url: canonical,
-  dateModified: unitedHubsMeta.lastVerified,
+  // The day the data last changed (the earlier of its last update and its newest check), never
+  // the file-level verified date, which a partial pass leaves behind.
+  dateModified: contentModified(unitedProjects, unitedHubsMeta),
   creator: { '@type': 'Organization', name: 'The Blue Board', url: 'https://theblueboard.co' },
   spatialCoverage: 'United States and Guam',
   keywords: ['United Airlines hubs', 'United Club construction', 'airport terminals', 'airport gates'],
@@ -253,9 +288,6 @@ const datasetSchema = {
   ],
 };
 
-const jumpLinkClass =
-  // The same pill as JumpNav (hub, fleet and Newark pages), so an in-page jump looks one way site-wide.
-  'inline-flex min-h-11 items-center rounded-full border border-border bg-card px-3.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:border-primary hover:bg-primary-fill hover:text-primary-foreground';
 const proseClass =
   'mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground last:mb-0 [&_a]:text-primary [&_a]:underline [&_a]:decoration-primary/40 [&_a]:underline-offset-2 [&_a:hover]:decoration-primary';
 const subheadClass = 'mt-4.5 mb-2 text-sm font-semibold text-primary';
@@ -293,20 +325,23 @@ const chipClass =
         all eight hubs, with honest labels for what's under construction, what's merely
         announced, and what a CEO teased once at a press roundtable.
       </p>
-      <div class="flex flex-wrap items-center gap-4">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
         <LastUpdated iso={unitedHubsMeta.lastUpdated} />
-        <LastUpdated iso={unitedHubsMeta.lastVerified} prefix="Verified" />
+        <LastUpdated iso={verified.oldest} prefix="Verified" note={verifiedNote(unitedProjects, unitedHubsMeta, unitedHubs)} />
       </div>
-      <nav class="mt-4.5 mb-1.5 flex flex-wrap gap-2" aria-label="Section navigation">
-        <a href="#map" class={jumpLinkClass}>The map</a>
-        <a href="#check" class={jumpLinkClass}>Check your hub</a>
-        <a href="#hubs" class={jumpLinkClass}>Hub by hub</a>
-        <a href="#all" class={jumpLinkClass}>All projects</a>
-        <a href="#why" class={jumpLinkClass}>Why</a>
-        <a href="#club-math" class={jumpLinkClass}>Club math</a>
-        <a href="#faq" class={jumpLinkClass}>Quick answers</a>
-        <a href="#changelog" class={jumpLinkClass}>Changelog</a>
-      </nav>
+      <JumpNav
+        class="mt-4.5 mb-1.5"
+        items={[
+          { href: '#map', label: 'The map' },
+          { href: '#check', label: 'Check your hub' },
+          { href: '#hubs', label: 'Hub by hub' },
+          { href: '#all', label: 'All projects' },
+          { href: '#why', label: 'Why' },
+          { href: '#club-math', label: 'Club math' },
+          { href: '#faq', label: 'Quick answers' },
+          { href: '#changelog', label: 'Changelog' },
+        ]}
+      />
     </header>
 
     <TrackerPulse
@@ -405,7 +440,7 @@ const chipClass =
                       <p class="text-xs leading-relaxed text-muted-foreground">{p.details}</p>
                       <SourceDisclosure
                         sources={p.sources}
-                        verified={unitedHubsMeta.lastVerified}
+                        verified={entryVerified(p, unitedHubsMeta)}
                         entryId={p.id}
                         entryLabel={`${p.hub} · ${p.name}`}
                         shareHref={`/trackers/united-hubs#${p.id}`}
@@ -471,7 +506,7 @@ const chipClass =
       <h3 class={subheadClass}>Who's actually paying</h3>
       <p class={proseClass}>
         Read the badges carefully: much of this buildout rides on airport capital programs.
-        MWAA is building Dulles' Concourse E; Houston is a partner on Terminal B; Chicago's
+        MWAA built Dulles' Concourse E; Houston is a partner on Terminal B; Chicago's
         aviation department builds the O'Hare satellites with airline money flowing through
         rates; the Port Authority owns everything moving at Newark. United's own capital is
         concentrated where its brand lives — the clubs — plus the lion's share of Houston's
@@ -531,10 +566,11 @@ const chipClass =
         </li>
         <li class="flex items-baseline gap-3 border-b border-border py-2 last:border-b-0">
           <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-primary">
-            650
+            {iadClubSeats}+
           </span>
           <span class="text-xs leading-relaxed text-muted-foreground">
-            seats in the new Dulles club — more than a 787-10 carries twice over.
+            seats in the new Dulles club — roughly {iadClubIn7810s} full 787-10s ({D7810_SEATS} seats
+            each).
           </span>
         </li>
       </ul>

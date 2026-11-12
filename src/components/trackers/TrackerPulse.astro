@@ -23,17 +23,13 @@ const config = JSON.stringify({ slug, kind, lastUpdated, lastVerified, changes, 
 );
 ---
 
+<!-- A plain card. It once led with a three-colour bar in the status hues (blue, amber, green)
+     that encoded nothing; colour is status only (DESIGN.md), so it went. -->
 <section
-  class="mt-4 mb-8 grid grid-cols-[8px_minmax(0,1fr)] items-center gap-x-3.5 overflow-hidden rounded-lg border border-border bg-card py-3.5 pr-4 pl-3 sm:grid-cols-[8px_minmax(0,1fr)_auto]"
+  class="mt-4 mb-8 grid grid-cols-[minmax(0,1fr)] items-center gap-x-3.5 overflow-hidden rounded-lg border border-border bg-card px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto]"
   data-trk-pulse
   aria-labelledby="trk-pulse-title"
 >
-  <div class="flex h-full flex-col justify-center gap-0.5" aria-hidden="true">
-    <span class="block h-3 rounded-xs bg-primary"></span>
-    <span class="block h-3 rounded-xs bg-bb-warn"></span>
-    <span class="block h-3 rounded-xs bg-bb-ok"></span>
-  </div>
-
   <div class="min-w-0">
     <div
       class="font-mono text-[11px] font-bold uppercase tracking-widest text-primary"
@@ -68,7 +64,7 @@ const config = JSON.stringify({ slug, kind, lastUpdated, lastVerified, changes, 
 
   <!-- On a phone this column is a second row: it takes no height until the watch button or its
        status has something to show, so an idle strip has no empty band at its foot. -->
-  <div class="col-start-2 flex flex-col items-start gap-1 has-[button:not([hidden])]:mt-3 sm:col-start-3 sm:items-end sm:has-[button:not([hidden])]:mt-0">
+  <div class="col-start-1 flex flex-col items-start gap-1 has-[button:not([hidden])]:mt-3 sm:col-start-2 sm:items-end sm:has-[button:not([hidden])]:mt-0">
     <button
       type="button"
       class="inline-flex min-h-11 items-center whitespace-nowrap rounded-md border border-primary bg-primary-fill/20 px-2.5 font-mono text-[11px] font-bold uppercase tracking-wide text-primary hover:bg-primary-fill hover:text-primary-foreground aria-pressed:border-bb-ok/55 aria-pressed:bg-bb-ok/10 aria-pressed:text-bb-ok"

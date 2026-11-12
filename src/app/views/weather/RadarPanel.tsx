@@ -25,14 +25,11 @@ export function RadarPanel({
   onSelectHub: (hub: string) => void;
 }) {
   const legend = WX_LEGEND as { cat: string; color: string }[];
-  // `radarTitle()` opens with a 🌧 emoji; panel titles carry a lucide icon instead (DESIGN.md
-  // Components), so the glyph is dropped here and the icon drawn beside the words.
-  const words = title.replace(/^\p{Extended_Pictographic}\uFE0F?\s*/u, '');
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <h2 id="radar-title" className="flex shrink-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
         <CloudRain aria-hidden="true" className="size-3.5 shrink-0" />
-        {words}
+        {title}
       </h2>
       {/* `isolate z-0`: Leaflet's panes sit at z-index 400+ and would otherwise paint over
           any Sheet or Dialog the shell opens at z-50.

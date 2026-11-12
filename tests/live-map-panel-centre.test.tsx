@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { PHONE_ZOOM_SNAP, US_VIEW, panelAwareCentre, phoneUsView, viewZoom } from '../src/app/map/LiveMap';
+import { PHONE_ZOOM_SNAP, US_VIEW, panelAwareCentre, phoneUsView, usesLower48Framing, viewZoom } from '../src/app/map/LiveMap';
 
 function stubWide(wide: boolean) {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -99,11 +99,28 @@ describe('phoneUsView (Nov 2026: the phone map opened with its top third on Cana
     }
   });
 
-  it('leaves tablets, desktops and a map with no size on the old view', () => {
+  it('leaves wide mouse maps, landscape maps and a map with no size on the old view', () => {
+    // A portrait map with a MOUSE (a narrow desktop window) is not a tablet.
     expect(phoneUsView({ x: 820, y: 950 })).toBeNull();
     expect(phoneUsView({ x: 1120, y: 660 })).toBeNull();
+    expect(phoneUsView({ x: 1120, y: 660 }, { coarse: true })).toBeNull(); // a landscape tablet
     expect(phoneUsView({ x: 0, y: 0 })).toBeNull();
     expect(phoneUsView({ x: 390, y: 0 })).toBeNull();
+    expect(phoneUsView({ x: 820, y: 0 }, { coarse: true })).toBeNull();
+  });
+
+  it('frames an upright touch tablet like a phone: the lower 48 across its width, north-anchored (Nov 2026)', () => {
+    for (const size of [{ x: 820, y: 974 }, { x: 768, y: 838 }, { x: 834, y: 1010 }]) {
+      expect(usesLower48Framing(size, true)).toBe(true);
+      const view = phoneUsView(size, { coarse: true })!;
+      expect(view).not.toBeNull();
+      expect(view.center[0]).toBeLessThan(US_VIEW.center[0]);
+      expect(view.center[1]).toBeCloseTo(-95.75, 5);
+      expect(Math.abs(view.zoom / PHONE_ZOOM_SNAP - Math.round(view.zoom / PHONE_ZOOM_SNAP))).toBeLessThan(1e-6);
+      // Tighter than US_VIEW's whole level 4, which left the country in a band mid-screen.
+      expect(view.zoom).toBeGreaterThan(US_VIEW.zoom);
+    }
+    expect(usesLower48Framing({ x: 820, y: 974 }, false)).toBe(false);
   });
 });
 
