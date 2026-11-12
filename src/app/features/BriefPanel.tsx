@@ -30,7 +30,7 @@ import { useBrief } from '../state/brief';
 import type { BriefReady, BriefViewItem } from '../state/brief';
 import { resolveDeepLink } from '../state/deep-links';
 import type { DeepLinkIntent } from '../state/deep-links';
-import { useSchedule } from '../state/schedule';
+import { useFollowDeepLink } from '../state/follow-link';
 import { useUi } from '../state/ui';
 import type { TabId } from '../tabs';
 import { ToneMark } from './BriefTone';
@@ -46,15 +46,13 @@ type Chip = {
 /** A chip always switches tab; an overlay link that keeps the current tab is never one. */
 type ChipIntent = DeepLinkIntent & { tab: TabId };
 
-/** Follow a chip in place: close the sheet, pick the board, switch tab, scroll. */
+/** Follow a chip in place: close the sheet, then follow it as any dashboard link (board, tab, scroll). */
 function useFollow() {
-  const { setTab } = useUi();
-  const { setCurrent } = useSchedule();
+  const follow = useFollowDeepLink();
   const { setSheetOpen } = useBrief();
   return (intent: ChipIntent) => {
     setSheetOpen(false);
-    if (intent.scheduleHub) setCurrent({ hub: intent.scheduleHub });
-    setTab(intent.tab, intent.scrollTo ? { scrollTo: intent.scrollTo } : undefined);
+    follow(intent);
   };
 }
 
