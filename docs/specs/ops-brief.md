@@ -160,12 +160,16 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    takes the first such item's place when no other item carries it (`report.summaryInserted`).
 5b. **The on-time definition once.** After the first kept item that says "within 30 minutes of
    schedule", a later one has those words trimmed to "on time" (`report.trimmed`); only those words
-   change, so nothing ungrounded can appear.
+   change, so nothing ungrounded can appear. Two more rewrites of the same kind (`report.trimmed`):
+   "after tomorrow 1:00 PM ET" becomes "tomorrow after 1:00 PM ET" (`day_word_order`), and a
+   traveler note naming three or more airports becomes "If you are flying to one of those airports,
+   …", citations kept (`note_three_or_more_airports`).
 6. **Headline.** Checked against the union of the **surviving** items' facts. Fails, runs past 14
    words, or calls the operation calm, smooth, quiet or "running normally" (word match) while the
    computed tone is not calm (`headline:calm_when_not_calm`) → replaced by the template headline
-   (the report keeps the original); "the other hubs are running normally" after a lead that names
-   the problem is not read as calling the operation calm. Its mirror (Nov 2026): a headline that names a stop or delay
+   (the report keeps the original); "the other hubs are running normally" is not read as calling
+   the operation calm when every hub with a problem (on-time under 80%, an FAA program in effect,
+   weather at warning or worse) is named before it. Its mirror (Nov 2026): a headline that names a stop or delay
    program away from the hubs (its airport, or on a calm day any program wording) before anything
    about United's own condition ("United", the hubs, a calm word, a hub's name) is replaced too
    (`headline:leads_with_non_hub_program`). Over 12 words is a warning. The template's own watch

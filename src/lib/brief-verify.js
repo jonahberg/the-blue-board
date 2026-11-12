@@ -55,6 +55,27 @@ const MARKUP_RE = /<[^>]{0,200}>|<\/?[a-z]|[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
 const CALM_HEADLINE_RE = /\b(?:calm|calmly|smooth|smoothly|quiet|quietly)\b|\brunning\s+normally\b/i;
 /** "the other hubs are running normally": the rest of the hubs, after the problem has been named. */
 const OTHER_HUBS_NORMAL_RE = /\b(?:the\s+)?(?:other|remaining)\s+(?:United\s+)?hubs\s+(?:are|look|remain|stay)\s+(?:running\s+)?(?:normally|normal|smoothly|calm)\b/gi;
+/**
+ * Hubs with a problem a headline must name before it may call the others normal: an on-time figure
+ * under 80% (a hub's own fact with a material reading), an FAA program in effect there, or weather
+ * at warning level or worse. A possible program is not one.
+ * @param {Array<import('./brief-facts.js').BriefFact>} facts
+ * @returns {string[]}
+ */
+function hubsWithProblems(facts) {
+  const hubs = new Set();
+  for (const f of facts) {
+    if (!f.hub) continue;
+    if (/^otp\.[A-Z]{3}$/.test(f.id) && f.material !== null) hubs.add(f.hub);
+    if (/^faa\.active\.[A-Z]{3}\./.test(f.id)) hubs.add(f.hub);
+    if (/^wx\.[A-Z]{3}$/.test(f.id) && f.toneFloor !== 'calm') hubs.add(f.hub);
+  }
+  return [...hubs];
+}
+/** True when the text names this airport by any of its forms. */
+function namesAirport(text, code) {
+  return extractClaims(text).some((c) => c.type === 'airport' && c.codes.includes(code));
+}
 /** Words that say how United's operation is doing, which a headline must lead with (see below). */
 const CONDITION_RE = /\b(?:United|United's|hubs?|calm|calmly|smooth|smoothly|quiet|quietly|normal|normally)\b/i;
 /** Words naming a ground stop or delay program. On a calm day none is at a hub (computeTone). */
@@ -231,6 +252,25 @@ function dayBoundTimes(ids, factIndex) {
   return out;
 }
 
+/** How many different airports a sentence names (a shared name like "New York" counts once). */
+function noteAirportCount(text) {
+  const seen = new Set();
+  for (const c of extractClaims(text)) if (c.type === 'airport') seen.add([...c.codes].sort().join('/'));
+  return seen.size;
+}
+
+const CLOCK = '\\d{1,2}:\\d{2}\\s?[AP]M(?:\\s(?:ET|CT|MT|PT|MST|AKT|HT|ChST|JST))?';
+/**
+ * "after tomorrow 1:00 PM ET" → "tomorrow after 1:00 PM ET"; "until tomorrow 2:00 PM ET" → "until
+ * 2:00 PM ET tomorrow". Only word order changes, so every claim was already checked.
+ * @param {string} text
+ */
+export function fixDayWordOrder(text) {
+  return String(text)
+    .replace(new RegExp(`\\b(after|since|before)\\s+tomorrow\\s+(${CLOCK})`, 'gi'), (m, w, clock) => `tomorrow ${w.toLowerCase()} ${clock}`)
+    .replace(new RegExp(`\\b(until|by)\\s+tomorrow\\s+(${CLOCK})`, 'gi'), (m, w, clock) => `${w.toLowerCase()} ${clock} tomorrow`);
+}
+
 /** The on-time definition as the facts state it ("within 30 minutes of schedule"). */
 const ON_TIME_DEFINITION_RE = new RegExp(`\\bwithin\\s+${ON_TIME_GRACE_MIN}\\s+minutes\\s+of\\s+(?:their\\s+)?schedule(?:d\\s+times?)?\\b`, 'i');
 
@@ -294,8 +334,10 @@ const wordCount = (s) => normalizeText(s).trim().split(/\s+/).filter(Boolean).le
  * @property {number} healthyHubOnTime  items that gave a single hub's on-time percentage on a day
  *   every hub is healthy (dropped, reason hub_on_time_on_healthy_day)
  * @property {boolean} summaryInserted  the on-time summary took the first such item's place
- * @property {Array<{item: number, from: string, to: string, reason: string}>} trimmed  words taken
- *   out of a kept item (the on-time definition repeated after the first item that states it)
+ * @property {Array<{item: number|string, from: string, to: string, reason: string}>} trimmed  words
+ *   changed in a kept item or the note, never adding a claim: the on-time definition repeated after
+ *   the first item that states it, "after tomorrow 1:00 PM" word order, a note naming three or more
+ *   airports
  * @property {string[]} [shapeErrors]
  */
 
@@ -363,6 +405,14 @@ export function verifyBrief(candidate, facts) {
     kept.splice(summarySlots[0], 0, { text: summary.statement, fact_ids: ['otp.floor'] });
     report.summaryInserted = true;
   }
+  // "after tomorrow 1:00 PM ET" reads as the day after tomorrow: the day goes where a person puts it.
+  kept.forEach((item, i) => {
+    const fixed = fixDayWordOrder(item.text);
+    if (fixed !== item.text) {
+      report.trimmed.push({ item: i, from: item.text, to: fixed, reason: 'day_word_order' });
+      kept[i] = { ...item, text: fixed };
+    }
+  });
   // The on-time definition is stated once, in the first item that states it (prompt rule 4).
   let definitionSeen = false;
   kept.forEach((item, i) => {
@@ -385,12 +435,13 @@ export function verifyBrief(candidate, facts) {
   const headlineReasons = checkSentence(headline, union, factIndex, { itemRules: false }).filter((r) => r !== 'too_many_fact_ids');
   if (headline.length > MAX_HEADLINE_CHARS || wordCount(headline) > MAX_HEADLINE_WORDS) headlineReasons.push('headline_too_long');
   // "Operations look calm" under a computed "watch" contradicts the tone word beside it. "The other
-  // hubs are running normally" after a lead that names the problem does not call the operation calm
-  // (Nov 2026: "Chicago O'Hare is running behind; the other hubs are running normally.", the shape
-  // the owner liked), so that clause is not read.
-  if (tone !== 'calm' && CALM_HEADLINE_RE.test(headline.replace(OTHER_HUBS_NORMAL_RE, (m, offset) => (offset > 0 ? '' : m)))) {
-    headlineReasons.push('headline:calm_when_not_calm');
-  }
+  // hubs are running normally" does not call the operation calm when every hub with a problem is
+  // named before it (Nov 2026: "Chicago O'Hare is running behind; the other hubs are running
+  // normally.", the shape the owner liked), so that clause is not read then.
+  const problemHubs = hubsWithProblems(factList);
+  const calmRead = headline.replace(OTHER_HUBS_NORMAL_RE, (m, offset) => (
+    offset > 0 && problemHubs.length > 0 && problemHubs.every((h) => namesAirport(headline.slice(0, offset), h)) ? '' : m));
+  if (tone !== 'calm' && CALM_HEADLINE_RE.test(calmRead)) headlineReasons.push('headline:calm_when_not_calm');
   // Its mirror: United's condition comes first, never a program at an airport that is not a hub.
   const awayLead = nonHubLeadReason(headline, tone, factList);
   if (awayLead) headlineReasons.push(awayLead);
@@ -413,7 +464,17 @@ export function verifyBrief(candidate, facts) {
     if (reasons.length) report.travelerNote = { status: 'dropped', reasons };
     else {
       report.travelerNote = { status: 'kept', reasons: [] };
-      traveler_note = { text: normalizeText(input.traveler_note.text).trim(), fact_ids: ids };
+      let text = normalizeText(input.traveler_note.text).trim();
+      // Three or more airports are "one of those airports" (the items name them), as the template
+      // writes it; the citations stay.
+      if (noteAirportCount(text) >= 3) {
+        const cited = ids.map((id) => factIndex.get(id)).filter(Boolean);
+        const verb = cited.some((f) => /\.closure$/.test(f.id)) ? 'flying to or from' : 'flying to';
+        const to = `If you are ${verb} one of those airports, check your flight status before leaving for the airport.`;
+        report.trimmed.push({ item: 'traveler_note', from: text, to, reason: 'note_three_or_more_airports' });
+        text = to;
+      }
+      traveler_note = { text, fact_ids: ids };
     }
   }
 

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { allowanceFromValues, claimFailure, extractClaims } from '../src/lib/brief-claims.js';
 import { readFileSync } from 'node:fs';
 import { buildBriefFacts } from '../src/lib/brief-facts.js';
-import { briefFromSavedResponse, checkSentence, citedFactIds, nonHubLeadReason, trimOnTimeDefinition, validateBriefShape, verifyBrief } from '../src/lib/brief-verify.js';
+import { briefFromSavedResponse, checkSentence, citedFactIds, fixDayWordOrder, nonHubLeadReason, trimOnTimeDefinition, validateBriefShape, verifyBrief } from '../src/lib/brief-verify.js';
 
 const fact = (id, values, extra = {}) => ({
   id, kind: 'otp', statement: `${id} statement`, values, at: null, link: { tab: 'live' }, severity: 5, toneFloor: 'calm', material: id, ...extra,
@@ -372,6 +372,12 @@ describe('verifyBrief: Nov 12 2026 rules', () => {
     for (const headline of ["Chicago O'Hare is running behind; the other hubs are running normally.", 'Chicago O\'Hare lags; the remaining United hubs look normal.']) {
       expect(verifyBrief(brief([lead], { tone: 'watch', headline }), ord).report.headline.status, headline).toBe('kept');
     }
+    // Not when a hub with a problem goes unnamed: on the storm day O'Hare (48%, a delay program) and
+    // Houston (departure delays) are not "running normally".
+    const storm = factsOf('storm-day');
+    const gs = item('The FAA has a ground stop in effect for flights heading to Newark (EWR) until 5:15 PM ET.', ['faa.active.EWR.gs']);
+    expect(verifyBrief(brief([gs], { tone: 'disrupted', headline: 'A ground stop is holding flights into Newark; the other hubs are running normally.' }), storm).report.headline.reasons)
+      .toEqual(['headline:calm_when_not_calm']);
     // Calling the whole operation calm on a watch day is still replaced, and so is a lead that does.
     for (const headline of ["United's hubs are running normally; Chicago O'Hare is lowest.", 'Other hubs are running normally; Chicago O\'Hare lags.']) {
       expect(verifyBrief(brief([lead], { tone: 'watch', headline }), ord).report.headline.reasons, headline).toEqual(['headline:calm_when_not_calm']);
@@ -435,6 +441,36 @@ describe('verifyBrief: Nov 12 2026 rules', () => {
       // A time later today needs no day word.
       const evening = new Map(factsOf('plan-times-evening').map((f) => [f.id, f]));
       expect(checkSentence('A ground delay program is possible for flights into San Francisco until 9:00 PM PT; it is not in effect.', ['faa.planned.SFO'], evening)).toEqual([]);
+    });
+  });
+
+  describe('words a person would put differently', () => {
+    it('a note naming three or more airports becomes "one of those airports", citations kept (five-nonhub-storm samples)', () => {
+      const facts = factsOf('five-nonhub-storm');
+      const ids = ['faa.active.BOS.gs', 'faa.active.JFK.gdp', 'faa.active.LGA.gdp', 'faa.active.other'];
+      const out = verifyBrief(brief([item('A ground stop is holding flights into Boston until 9:30 PM ET.', ['faa.active.BOS.gs'])], {
+        tone: 'watch', headline: 'Thunderstorms are slowing Newark; Boston has a ground stop.',
+        traveler_note: item('If you are flying into Boston, New York JFK or LaGuardia, Philadelphia or Washington Reagan, check your flight status before leaving for the airport.', ids),
+      }), facts);
+      expect(out.brief.traveler_note).toEqual({ text: 'If you are flying to one of those airports, check your flight status before leaving for the airport.', fact_ids: ids });
+      expect(out.report.trimmed).toEqual([expect.objectContaining({ item: 'traveler_note', reason: 'note_three_or_more_airports' })]);
+      // Two stay named.
+      const two = verifyBrief(brief([item('A ground stop is holding flights into Boston until 9:30 PM ET.', ['faa.active.BOS.gs'])], {
+        tone: 'watch', headline: 'Thunderstorms are slowing Newark; Boston has a ground stop.',
+        traveler_note: item('If you are flying into Boston or LaGuardia, check your flight status before leaving for the airport.', ['faa.active.BOS.gs', 'faa.active.LGA.gdp']),
+      }), facts);
+      expect(two.brief.traveler_note.text).toBe('If you are flying into Boston or LaGuardia, check your flight status before leaving for the airport.');
+    });
+    it('"after tomorrow 1:00 PM ET" (a Haiku sample) becomes "tomorrow after 1:00 PM ET"', () => {
+      expect(fixDayWordOrder('possible for flights into Boston after tomorrow 1:00 PM ET, and Miami after tomorrow 1:00 PM ET.'))
+        .toBe('possible for flights into Boston tomorrow after 1:00 PM ET, and Miami tomorrow after 1:00 PM ET.');
+      expect(fixDayWordOrder('in effect until tomorrow 2:00 PM ET.')).toBe('in effect until 2:00 PM ET tomorrow.');
+      expect(fixDayWordOrder('possible tomorrow after 10:00 AM ET.')).toBe('possible tomorrow after 10:00 AM ET.');
+      const facts = factsOf('nonhub-gs-calm');
+      const text = 'The FAA\'s operations plan lists possible programs, none in effect: Boston after tomorrow 1:00 PM ET and San Diego after tomorrow 9:00 AM PT.';
+      const out = verifyBrief(brief([item(text, ['faa.planned.BOS', 'faa.planned.SAN'])], { headline: 'United is running smoothly right now.' }), facts);
+      expect(out.report.dropped).toEqual([]);
+      expect(out.brief.items[0].text).toBe('The FAA\'s operations plan lists possible programs, none in effect: Boston tomorrow after 1:00 PM ET and San Diego tomorrow after 9:00 AM PT.');
     });
   });
 
