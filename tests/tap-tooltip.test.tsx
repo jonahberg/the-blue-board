@@ -39,9 +39,16 @@ describe('tapToggleOpen', () => {
     expect(tapToggleOpen(null)).toBeNull(); // no pointerdown: Enter/Space
     expect(tapToggleOpen(undefined)).toBeNull();
   });
+
+  it('closes on a tap whose click the trigger took in place (a dashboard link followed without a reload)', () => {
+    expect(tapToggleOpen({ pointerType: 'touch', wasOpen: false }, { handledInPlace: true })).toBe(false);
+    expect(tapToggleOpen({ pointerType: 'pen', wasOpen: true }, { handledInPlace: true })).toBe(false);
+    expect(tapToggleOpen({ pointerType: 'mouse', wasOpen: false }, { handledInPlace: true })).toBeNull();
+    expect(tapToggleOpen(null, { handledInPlace: true })).toBeNull();
+  });
 });
 
-function renderTip(onClick = () => {}) {
+function renderTip(onClick: (event: { preventDefault: () => void }) => void = () => {}) {
   render(
     <TooltipProvider delayDuration={200}>
       <Tooltip>
@@ -93,6 +100,15 @@ describe('Tooltip on a touch screen', () => {
     await tap(trigger);
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('tooltip')).toBeTruthy();
+  });
+
+  it('stays shut after a tap whose click the trigger took in place: the reader has moved on', async () => {
+    // A dashboard link followed without a reload (the hub chips) prevents the page load.
+    const onClick = vi.fn((event: { preventDefault: () => void }) => event.preventDefault());
+    const trigger = renderTip(onClick);
+    await tap(trigger);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
   it('does not toggle on a mouse click (hover already shows it; Radix closes on click)', async () => {

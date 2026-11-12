@@ -23,6 +23,8 @@ function TooltipProvider({
 // Tooltip owns its open state so TooltipTrigger can flip it on a touch/pen tap (tapToggleOpen).
 // Mouse and keyboard behaviour is unchanged, and the trigger's own click still runs — a tapped
 // hub-guide link still navigates; the tap only adds the explanation, it never swallows the action.
+// A tap the trigger's own click handler took in place (`defaultPrevented`: a hub chip followed
+// without a reload) closes the tooltip instead, since the reader has moved on.
 const TooltipTapContext = React.createContext<{
   open: boolean
   setOpen: (open: boolean) => void
@@ -73,7 +75,8 @@ function TooltipTrigger({
       }}
       onClick={(event) => {
         onClick?.(event)
-        const next = tapToggleOpen(press.current)
+        // An `asChild` child's own onClick has run by now too (Slot calls it first).
+        const next = tapToggleOpen(press.current, { handledInPlace: event.defaultPrevented })
         press.current = null
         // Applied after this event: on a real tap the trigger's focus (which fires between
         // pointerup and click) opens the tooltip and Radix's close-on-click, which runs right

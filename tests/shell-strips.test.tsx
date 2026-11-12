@@ -532,6 +532,26 @@ describe('HubHealthStrip: a chip opens that hub\'s schedule board, in place (Nov
     expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
   });
 
+  it('after a tap on a touch screen the tooltip stays shut over the board the chip opened', async () => {
+    render(<Strip />);
+    const den = screen.getByRole('link', { name: /^DEN/ });
+
+    // A real tap (tests/tap-tooltip.test.tsx): focus lands after pointerup, which opens the tooltip,
+    // then the click. The shared trigger would toggle it open after the click; a chip followed in
+    // place closes it instead.
+    await act(async () => {
+      fireEvent.pointerDown(den, { pointerType: 'touch', button: 0 });
+      fireEvent.pointerUp(den, { pointerType: 'touch', button: 0 });
+      den.focus();
+      fireEvent.click(den, { detail: 1 });
+      await vi.runAllTimersAsync();
+    });
+
+    expect(seenUi.tab).toBe('schedule');
+    expect(document.activeElement).not.toBe(den);
+    expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
+  });
+
   it('Enter on a focused chip keeps focus, and its tooltip, on the chip', async () => {
     render(<Strip />);
     const den = screen.getByRole('link', { name: /^DEN/ });
