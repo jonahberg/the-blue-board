@@ -61,7 +61,12 @@ These make the work a failure even if every link works:
 | A count, bar, tile or chip that summarizes rows | filters the list it summarizes | the dashboard view that lists them, where one exists |
 | Tracker entry (ATC facility, hub project) | n/a | its tracker page or row anchor |
 | News article | `/news/<slug>` | `/news/<slug>` |
+| Starlink or Wi-Fi badge on a row | the Starlink tab | `/#starlink` |
+| Special-livery or named-aircraft chip | the Fleet tab's special view | `/?tab=fleet&view=special` |
+| A Sources card that names a dashboard view | that tab | n/a |
 | Non-hub airport, operator, fleet family, regional type, news category | plain text, body colour | plain text, body colour |
+
+**What "done" covers.** Goal 1 governs: where an inventory row names an existing destination for a printed thing, it gets linked, whether or not its kind has a row above. Three stated exceptions stay plain: lines in the rotating ticker (a target that changes every five seconds), map legend rows (a key, not a list of things), and tiles inside a `role="status"` live region whose filter has no address (they may become buttons where the filter exists; otherwise they stay text, so the region is not re-read with link names). The runtime guard enforces only what a machine can recognise: flight numbers, tails and hub codes.
 
 Two doors join the sides, so nothing is a dead end:
 
@@ -69,6 +74,8 @@ Two doors join the sides, so nothing is a dead end:
 - Hub pages already have "one button into the board". Fleet type pages get the matching link: the "Aircraft" tile and the seat-configuration counts go to `/?tab=fleet&type=<typeCode>`.
 
 **Owner decision 1 (default above is what gets built unless he says otherwise).** Earlier in the conversation he was shown "hub code → that hub's schedule board, the same wherever it prints". The table above changes that: on content pages a hub code goes to the hub's page, and only inside the dashboard to the Schedule board. The alternative is one destination everywhere (always the hub page, always the fleet page), which is simpler to state and leaves the dashboard on every click.
+
+The hub strip under the header is part of this decision. Each chip ("● ORD 87%") links to `/hubs/<code>` today, with the tooltip "United at ORD — hub guide"; it is the link every dashboard visitor sees. Under the default it is a hub code on an on-time status, so it opens that hub's Schedule board, where the dashboard shows the flights behind the figure, and its tooltip, screen-reader words and DESIGN.md rows change with it. The hub guide is then one click further, through the Schedule board's header link. Under the alternative the strip stays exactly as it is.
 
 ### Links versus buttons
 
@@ -116,7 +123,9 @@ My call, his to veto on the first preview:
 ### Touch
 
 - Dashboard links keep the 44 px touch target with the `FlightLink` box pattern; dense content tables use the existing `touchRowLink` pattern.
-- On a phone row that is already one tap target, only the row's identity link is split out (flight number or tail). Its other names (hub ends, type) become links inside what the row opens: the flight sheet, the roster expansion, the aircraft dialog. On a fine pointer every name in the row links.
+- On a phone row that is already one tap target, only the row's identity link is split out (flight number or tail). Its other names (hub ends, type, tail) are reached one step on: through the flight page the number links to, and through what the row opens where that shows them (the roster expansion, the aircraft dialog, the flight sheet for an airborne flight). On a fine pointer every name in the row links.
+  - Phone Schedule: for a flight that is not in the live feed the flight sheet has no route, aircraft or tail to show (`resolveFlightRoute(null)`, `FlightSheet.tsx:266-270`), so the flight page is the way to those names. The row's tail, dotted-underlined and inert today, loses the underline; it does not become a second link in the row. Teaching the sheet to show a scheduled flight from the board's row is a separate piece of work, not part of this.
+  - Starlink departures on touch: the row keeps opening the aircraft dialog and the origin hub stays plain in the row; the board's own hub chips already select a hub.
 - Chips in dense strips may use the 24 to 28 px chip sizes DESIGN.md already allows.
 
 ## Surfaces
