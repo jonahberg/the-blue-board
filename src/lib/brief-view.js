@@ -33,12 +33,12 @@ const TONES = new Set(['calm', 'watch', 'disrupted']);
 /**
  * Mirrors travelerNoteAllowed in src/lib/brief-facts.js (pinned by tests/brief-view.test.js), kept
  * here so the header row's chunk does not import the fact builder: a traveler note shows on a
- * disrupted brief, or when the brief cites an FAA ground stop or ground delay program at a hub.
- * Only cited facts are served, and the template's note cites the program itself.
+ * disrupted brief, or when the brief cites an FAA ground stop or ground delay program in effect at
+ * any airport (a hub or not, since Nov 2026). Only cited facts are served, and the template's note
+ * cites the program itself.
  */
 function travelerNoteShown(tone, facts) {
-  return tone === 'disrupted'
-    || facts.some((f) => /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/.test(f.id) && typeof f.hub === 'string' && f.hub !== '');
+  return tone === 'disrupted' || facts.some((f) => /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/.test(f.id));
 }
 
 const ms = (iso) => {

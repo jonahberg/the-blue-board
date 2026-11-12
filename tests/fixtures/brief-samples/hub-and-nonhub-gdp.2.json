@@ -1,0 +1,22 @@
+{
+  "headline": "A ground delay program is holding flights into San Francisco.",
+  "tone": "watch",
+  "items": [
+    {
+      "text": "The FAA has a ground delay program in effect for flights into San Francisco (SFO) until 8:59 PM PT, because of low clouds. Those flights are held at their departure airport; delays average 45 minutes, up to 110 minutes.",
+      "fact_ids": ["faa.active.SFO.gdp", "faa.active.count"]
+    },
+    {
+      "text": "The other hubs are running normally, and all seven reporting so far today are at 84% on time or better, meaning within 30 minutes of schedule.",
+      "fact_ids": ["otp.floor", "otp.SFO"]
+    },
+    {
+      "text": "A ground delay program is also in effect for flights into Seattle (SEA) until 9:59 PM PT; those flights are held at their departure airport, with delays averaging 32 minutes, up to 82 minutes. The FAA's operations plan lists 4 possible or planned programs for later, and none of them is in effect now.",
+      "fact_ids": ["faa.active.SEA.gdp", "faa.planned.count"]
+    }
+  ],
+  "traveler_note": {
+    "text": "If you are flying to San Francisco or Seattle, check your flight status before leaving for the airport.",
+    "fact_ids": ["faa.active.SFO.gdp", "faa.active.SEA.gdp"]
+  }
+}

@@ -90,8 +90,47 @@ export const BRIEF_SOFT_HUB_OTP = 70;
  * does not count as a change (materialKey).
  */
 export const BRIEF_HEALTHY_HUB_OTP = 80;
+/**
+ * On a day every hub is healthy, the lowest hub is still named when it is an outlier: at least this
+ * many points below the next-lowest hub (Nov 12 2026: O'Hare at 80% beside 89% or better, the brief
+ * the owner liked) ...
+ */
+export const BRIEF_OUTLIER_GAP_PTS = 8;
+/** ... and below this on-time percentage (88% beside 90% is not a story). */
+export const BRIEF_OUTLIER_UNDER_OTP = 85;
+
+/**
+ * The hub whose healthy on-time figure still trails the others enough to name, or null
+ * (BRIEF_OUTLIER_GAP_PTS, BRIEF_OUTLIER_UNDER_OTP). Only for a day every hub is healthy.
+ * @param {Record<string, {otp: number}>} readings
+ * @returns {string|null}
+ */
+export function healthyOutlier(readings) {
+  const hubs = Object.keys(readings || {});
+  if (hubs.length < 2) return null;
+  const sorted = [...hubs].sort((a, b) => readings[a].otp - readings[b].otp || a.localeCompare(b));
+  const [low, next] = sorted;
+  return readings[next].otp - readings[low].otp >= BRIEF_OUTLIER_GAP_PTS && readings[low].otp < BRIEF_OUTLIER_UNDER_OTP ? low : null;
+}
 /** "About the usual" band for the airborne comparison, in percent either side of the median. */
 export const BRIEF_AIRBORNE_USUAL_BAND_PCT = 10;
+/**
+ * Fewer confirmed cancellations than this across the hubs is not news (one among ~2,700
+ * departures, Nov 11 2026): the `cxl.confirmed` fact is not built, and `collection.skipped` says so.
+ */
+export const BRIEF_MIN_CONFIRMED_CANCELLATIONS = 5;
+/**
+ * Confirmed cancellations below this are never part of the change key, sent or not. The send
+ * threshold (5) sits inside this band, so the fact appearing or disappearing at 4↔5 cannot rewrite
+ * the brief; the key moves only at 10 and then in countBucket's steps.
+ */
+const CONFIRMED_MATERIAL_FROM = 10;
+/**
+ * FAA programs in effect at airports that are not United hubs: at most this many are sent as their
+ * own facts (the most severe: ground stops before delay programs, then the longest average delay);
+ * the rest are folded into one `faa.active.other` fact (Nov 2026).
+ */
+export const BRIEF_MAX_NON_HUB_PROGRAMS = 3;
 
 const HUB_ICAO = { KORD: 'ORD', KDEN: 'DEN', KIAH: 'IAH', KEWR: 'EWR', KSFO: 'SFO', KIAD: 'IAD', KLAX: 'LAX', RJAA: 'NRT', PGUM: 'GUM' };
 
@@ -106,9 +145,11 @@ export function maxTone(...tones) {
 
 /**
  * The brief's tone, from the facts alone (prompt rule 6, made deterministic): the most alarming
- * `toneFloor` of any fact. The model proposes a tone; this decides it. For FAA programs at United
- * hubs it follows the header's own levels (src/lib/ops-health.js): ground delay programs at any
- * number of hubs are "watch" ("Some Delays"); a ground stop or closure at a hub is "disrupted".
+ * `toneFloor` of any fact. The model proposes a tone; this decides it. For FAA programs it follows
+ * the header's own levels (src/lib/ops-health.js networkStatus, which counts programs at United
+ * hubs only): ground delay programs at any number of hubs are "watch" ("Some Delays"); a ground
+ * stop or closure at a hub is "disrupted"; a program at an airport that is not a hub is "calm"
+ * (Nov 2026: a Seattle delay program set a "Watch" brief beside a "Smooth Ops" header).
  * @param {Array<{toneFloor?: string}>} facts
  * @returns {'calm'|'watch'|'disrupted'}
  */
@@ -117,20 +158,45 @@ export function computeTone(facts) {
 }
 
 /** A ground stop or ground delay program in effect at a United hub (only hub facts carry `hub`). */
-const HUB_PROGRAM_ID_RE = /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/;
+const STOP_OR_DELAY_PROGRAM_ID_RE = /^faa\.active\.[A-Z]{3}\.(gs|gdp)$/;
 export function isHubProgramFact(fact) {
-  return HUB_PROGRAM_ID_RE.test(String(fact?.id ?? '')) && typeof fact?.hub === 'string' && fact.hub !== '';
+  return STOP_OR_DELAY_PROGRAM_ID_RE.test(String(fact?.id ?? '')) && typeof fact?.hub === 'string' && fact.hub !== '';
+}
+/** A ground stop or ground delay program in effect at any airport, hub or not. */
+export function isStopOrDelayProgramFact(fact) {
+  return STOP_OR_DELAY_PROGRAM_ID_RE.test(String(fact?.id ?? ''));
+}
+/** A ground stop or ground delay program in effect at an airport that is not a United hub. */
+export function isNonHubProgramFact(fact) {
+  return isStopOrDelayProgramFact(fact) && !isHubProgramFact(fact);
+}
+/** The airport an FAA program fact is about: its hub, else the code in its id. */
+export function programAirport(fact) {
+  return (typeof fact?.hub === 'string' && fact.hub) || String(fact?.id ?? '').split('.')[2] || '';
 }
 
 /**
  * Whether a brief may carry a traveler note: when an FAA ground stop or ground delay program is in
- * effect at a United hub (travelers bound there are held), or the tone is "disrupted". The
- * verifier, the template and the dashboard (src/lib/brief-view.js mirrors it) apply the same rule.
+ * effect at any airport the facts name (travelers bound there are held; Nov 2026: airports that are
+ * not hubs too, since United flies there), or the tone is "disrupted". The verifier, the template
+ * and the dashboard (src/lib/brief-view.js mirrors it) apply the same rule.
  * @param {string} tone
  * @param {Array<{id: string, hub?: string}>} facts
  */
 export function travelerNoteAllowed(tone, facts) {
-  return tone === 'disrupted' || (facts || []).some(isHubProgramFact);
+  return tone === 'disrupted' || (facts || []).some(isStopOrDelayProgramFact);
+}
+
+/**
+ * True when every hub with an on-time figure is at or above BRIEF_HEALTHY_HUB_OTP: the on-time
+ * summary (`otp.floor`) is there and neither the lowest-hub fact nor the soft-hubs fact is. On such
+ * a day per-hub on-time facts are sent only for hubs with an FAA program in effect, and the verifier
+ * keeps a single hub's on-time percentage out of the brief (brief-verify.js).
+ * @param {Array<{id: string}>} facts
+ */
+export function allHubsHealthy(facts) {
+  const ids = new Set((facts || []).map((f) => f.id));
+  return ids.has('otp.floor') && !ids.has('otp.min') && !ids.has('otp.soft');
 }
 
 // ── Clock formatting ──
@@ -193,6 +259,92 @@ export function resolveZuluHhmm(hhmm, nowMs) {
   return best;
 }
 
+const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
+
+/**
+ * The UTC date an FAA operations plan is for, from its advisory link (`adv_date=MMDDYYYY`), as the
+ * epoch ms of that date's midnight UTC. Null when the link has none, or names a date more than a
+ * day from now (a fixture, a stale link): a wrong date must never move a window.
+ * @param {unknown} advisoryUrl
+ * @param {number} nowMs
+ * @returns {number|null}
+ */
+export function planDateMs(advisoryUrl, nowMs) {
+  const m = String(advisoryUrl || '').match(/[?&]adv_date=(\d{2})(\d{2})(\d{4})(?!\d)/);
+  if (!m || !Number.isFinite(nowMs)) return null;
+  const ms = Date.UTC(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+  const now = new Date(nowMs);
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Number.isFinite(ms) && Math.abs(ms - today) <= DAY_MS ? ms : null;
+}
+
+/**
+ * The instant an operations-plan "HHMM" (Zulu) names. A plan looks forward from when it was
+ * issued, so the nearest occurrence is wrong for the evening plan (Nov 12 2026: "AFTER 1500" read
+ * at 01:20Z is 15:00Z that coming morning, 10 AM ET, not 15:00Z ten hours earlier). With the plan's
+ * date: HHMM on that date, or the next day when that is more than 12 h past (the plan dated 11/10
+ * and read at 23:10Z lists "UNTIL 0030" for 00:30Z on 11/11). Without it: the first occurrence no
+ * more than 6 h ago.
+ * @param {string} hhmm
+ * @param {number} nowMs
+ * @param {number|null} [planDate]  planDateMs()
+ * @returns {number|null}
+ */
+export function resolvePlanHhmm(hhmm, nowMs, planDate = null) {
+  const m = String(hhmm || '').match(/^([01]\d|2[0-3])([0-5]\d)$/);
+  if (!m || !Number.isFinite(nowMs)) return null;
+  const offset = Number(m[1]) * HOUR_MS + Number(m[2]) * 60_000;
+  if (planDate !== null && Number.isFinite(planDate)) {
+    const onDate = planDate + offset;
+    return onDate < nowMs - 12 * HOUR_MS ? onDate + DAY_MS : onDate;
+  }
+  const now = new Date(nowMs);
+  let t = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + offset - DAY_MS;
+  while (t < nowMs - 6 * HOUR_MS) t += DAY_MS;
+  return t;
+}
+
+/** "YYYY-MM-DD" and the hour of an instant on a zone's clock. */
+function localParts(ms, timeZone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', hourCycle: 'h23', weekday: 'long',
+  }).formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour), weekday: parts.weekday };
+}
+
+/**
+ * The day an instant falls on, on the airport's own clock, as the words a sentence must carry with
+ * its time (Nov 2026: "after 10:00 AM ET" said at 8:20 PM ET read as a time already past):
+ *   ''          later today, or in the coming night ("until 12:30 AM ET" said at 9 PM)
+ *   'tomorrow'  any other time tomorrow
+ *   'on Friday' further out
+ * Null when the airport has no clock or the instant is unknown. An instant already past gets ''.
+ * @param {number} ms
+ * @param {string} airport
+ * @param {number} nowMs
+ * @returns {string|null}
+ */
+export function airportDayWord(ms, airport, nowMs) {
+  const tz = airportTz(airport);
+  if (!tz || !Number.isFinite(ms) || !Number.isFinite(nowMs)) return null;
+  try {
+    const then = localParts(ms, tz);
+    const now = localParts(nowMs, tz);
+    const days = Math.round((Date.parse(`${then.date}T00:00:00Z`) - Date.parse(`${now.date}T00:00:00Z`)) / DAY_MS);
+    if (days <= 0) return '';
+    if (days === 1) return ms - nowMs <= 12 * HOUR_MS && then.hour < 6 ? '' : 'tomorrow';
+    return `on ${then.weekday}`;
+  } catch {
+    return null;
+  }
+}
+
+/** A clock time with the day it falls on, as one value: "tomorrow 10:00 AM ET" (or just the clock). */
+function dayClock(day, clock) {
+  return day ? `${day} ${clock}` : clock;
+}
+
 // ── Causes (FAA reasons and weather) ──
 
 const FAA_CAUSES = [
@@ -251,6 +403,30 @@ function uniq(list) {
 function hubLabel(code) {
   return `${airportDisplayName(code)} (${code})`;
 }
+function capitalize(s) {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+/**
+ * Which day a set of hub boards covers: 'today', 'yesterday' (before each hub's 6 AM rollover) or
+ * 'mixed'. Statements say "today" or "yesterday" only when every board agrees.
+ * @param {string[]} hubs
+ * @param {number} nowMs
+ */
+function boardsDay(hubs, nowMs) {
+  const yesterday = hubs.map((h) => defaultSchedDayOffset(h, new Date(nowMs)) !== 0);
+  if (yesterday.length && yesterday.every(Boolean)) return 'yesterday';
+  if (yesterday.some(Boolean)) return 'mixed';
+  return 'today';
+}
+/**
+ * "seven United hubs reporting so far today": the hubs with an on-time figure, in words a traveler
+ * would use. "Reporting" stays true when Tokyo Narita and Guam have too few departures yet, or a
+ * board is too far behind to count (Nov 2026: replaces "hubs with an on-time reading").
+ */
+function hubsReporting(n, day) {
+  const when = day === 'today' ? ' so far today' : day === 'yesterday' ? ' yesterday' : '';
+  return `${numberWord(n)} United ${plural(n, 'hub', 'hubs')} reporting${when}`;
+}
 
 /**
  * @typedef {Object} BriefFact
@@ -264,6 +440,8 @@ function hubLabel(code) {
  * @property {number} severity
  * @property {'calm'|'watch'|'disrupted'} toneFloor
  * @property {string|null} material
+ * @property {boolean} [later]  a possible program whose window opens on a later local day (plannedFact)
+ * @property {boolean} [outlier]  a healthy hub's on-time fact sent because it trails the others
  */
 
 /**
@@ -282,7 +460,7 @@ function hubLabel(code) {
  * Build the brief's facts.
  * @param {BriefSources} sources
  * @param {{nowMs: number}} options
- * @returns {{facts: BriefFact[], collection: {sources: Record<string, string>, skipped: string[]}}}
+ * @returns {{facts: BriefFact[], collection: {sources: Record<string, string>, skipped: string[], hubReadings: number}}}
  */
 export function buildBriefFacts(sources, { nowMs }) {
   /** @type {BriefFact[]} */
@@ -302,6 +480,97 @@ export function buildBriefFacts(sources, { nowMs }) {
   // runway-only NOTAMs) that would otherwise paint a working hub "Disrupted" (isWholeAirportClosure).
   const faaIndex = status.faa === 'ok' ? buildFaaIndex(sources.faa.map(withoutRoutineClosures)) : {};
 
+  // ── FAA programs in effect (/api/faa) ── first, so the on-time facts know which hubs have one.
+  /** @type {Set<string>} airports with an active ground stop / ground delay program / closure */
+  const activeAt = new Set();
+  /** @type {Set<string>} hubs with any FAA program in effect (stop, delay program, closure, delays) */
+  const hubsWithProgram = new Set();
+  if (status.faa === 'ok') {
+    const hubPrograms = [];
+    /** @type {Array<{code: string, type: string, avg: number, fact: BriefFact}>} */
+    const otherPrograms = [];
+    for (const airport of sources.faa) {
+      const code = String(airport?.airportCode || '').toUpperCase();
+      if (!/^[A-Z]{3}$/.test(code)) continue;
+      const isHub = BRIEF_HUBS.includes(code);
+      // Other airports only when we know them (a clock zone and a name): the FAA feed lists every
+      // field in the country, and a ground stop at a general-aviation airport is not United news.
+      if (!isHub && !isKnownAirportCode(code)) continue;
+      const programs = Array.isArray(airport.programs) ? airport.programs : [];
+      for (const p of programs) {
+        const type = String(p?.type || '');
+        const keep = type === 'ground_stop' || type === 'ground_delay' || (isHub && (type === 'closure' || type === 'departure_delay' || type === 'arrival_delay'));
+        if (!keep) continue;
+        if (type === 'closure' && !isWholeAirportClosure(p.reason)) {
+          skipped.push(`faa.active.${code}.closure: a scheduled or partial closure, not an outage`);
+          continue;
+        }
+        const endMs = parseIsoMs(p.endTime);
+        if (!isHub && endMs !== null && endMs <= nowMs) {
+          // Away from the hubs a program past its listed end is not news (the feed lags). At a hub
+          // it stays, without the time, as long as the header still counts it.
+          skipped.push(`faa.active.${code}.${type === 'ground_stop' ? 'gs' : 'gdp'}: its listed end, ${formatAirportClock(endMs, code)}, has passed`);
+          continue;
+        }
+        const fact = faaActiveFact(code, p, { isHub, nowMs, asOfMs: asOf.faa ?? nowMs });
+        if (isHub) {
+          facts.push(fact);
+          hubsWithProgram.add(code);
+          if (type === 'ground_stop' || type === 'ground_delay' || type === 'closure') hubPrograms.push({ code, type });
+        } else {
+          otherPrograms.push({ code, type, avg: Number(p.avgDelay) > 0 ? Number(p.avgDelay) : 0, fact });
+        }
+        if (type === 'ground_stop' || type === 'ground_delay' || type === 'closure') activeAt.add(code);
+      }
+    }
+
+    // Stops and delay programs hold flights INTO the airport (faaActiveFact); a closure is at it.
+    const describe = (list) => joinNames(list.map(({ code, type }) =>
+      `${type === 'ground_stop' ? 'a ground stop for flights into' : type === 'ground_delay' ? 'a ground delay program for flights into' : 'a closure at'} ${airportDisplayName(code)}`));
+    const n = hubPrograms.length;
+    // A ground stop or closure at a hub disrupts the network; delay programs, at however many hubs,
+    // are a watch, as the header's network status treats them (computeTone).
+    const countTone = n === 0 ? 'calm' : hubPrograms.some((p) => p.type !== 'ground_delay') ? 'disrupted' : 'watch';
+    facts.push({
+      id: 'faa.active.count',
+      kind: 'faa',
+      statement: n === 0
+        ? 'No FAA ground stop or ground delay program is in effect at any United hub.'
+        : `${n} FAA ${plural(n, 'program affects a United hub', 'programs affect United hubs')}: ${describe(hubPrograms)}.`,
+      values: uniq([String(n), numberWord(n), ...hubPrograms.flatMap((p) => airportForms(p.code))]),
+      at: iso(asOf.faa ?? nowMs),
+      link: { tab: 'weather' },
+      severity: n === 0 ? 1 : 70,
+      toneFloor: countTone,
+      material: `hubprog:${hubPrograms.map((p) => `${p.code}.${p.type}`).sort().join(',')}`,
+    });
+
+    // Programs away from the hubs: the most severe BRIEF_MAX_NON_HUB_PROGRAMS one by one (ground
+    // stops first, then the longest average delay on the same 15-minute steps `material` uses, so a
+    // few minutes of drift cannot swap which ones are sent), the rest in one count.
+    const typeRank = (t) => (t === 'ground_stop' ? 0 : 1);
+    otherPrograms.sort((a, b) => typeRank(a.type) - typeRank(b.type) || round(b.avg, 15) - round(a.avg, 15) || a.code.localeCompare(b.code));
+    const sent = otherPrograms.slice(0, BRIEF_MAX_NON_HUB_PROGRAMS);
+    const folded = otherPrograms.slice(BRIEF_MAX_NON_HUB_PROGRAMS);
+    for (const o of sent) facts.push(o.fact);
+    for (const o of folded) skipped.push(`${o.fact.id}: folded into faa.active.other (only the ${BRIEF_MAX_NON_HUB_PROGRAMS} most severe programs away from the hubs are sent one by one)`);
+    if (folded.length > 0) {
+      const m = folded.length;
+      facts.push({
+        id: 'faa.active.other',
+        kind: 'faa',
+        statement: `The FAA also has ${m} more ${plural(m, 'program', 'programs')} in effect at other airports: ${describe(folded)}.`,
+        values: uniq([String(m), numberWord(m), ...folded.flatMap((p) => airportForms(p.code))]),
+        at: iso(asOf.faa ?? nowMs),
+        link: { tab: 'weather' },
+        // Below the programs sent one by one, and calm: away from the hubs (computeTone).
+        severity: 8.2,
+        toneFloor: 'calm',
+        material: `otherprog:${folded.map((p) => `${p.code}.${p.type}`).sort().join(',')}`,
+      });
+    }
+  }
+
   // ── On-time per hub (src/lib/hub-health.js serverOtpFromMetrics, the hub strip's number) ──
   /** @type {Record<string, {otp: number, operated: number, at: number|null}>} */
   const readings = {};
@@ -320,15 +589,48 @@ export function buildBriefFacts(sources, { nowMs }) {
       readings[hub] = { otp, operated, at: atMs };
     }
 
+    // When every hub with a figure is healthy, a hub's own figure is padding: only a hub with an FAA
+    // program in effect keeps its on-time fact (the summary, otp.floor, covers the rest; Nov 2026).
+    const readingHubs = Object.keys(readings);
+    const everyHubHealthy = readingHubs.length >= 2 && readingHubs.every((h) => readings[h].otp >= BRIEF_HEALTHY_HUB_OTP);
+    const outlier = everyHubHealthy ? healthyOutlier(readings) : null;
+    const byOtp = [...readingHubs].sort((a, b) => readings[a].otp - readings[b].otp || a.localeCompare(b));
+    const othersFloor = outlier ? readings[byOtp[1]].otp : null;
+    const readingsDay = boardsDay(readingHubs, nowMs);
     for (const [hub, r] of Object.entries(readings)) {
+      if (hub === outlier && othersFloor !== null) {
+        // Healthy, but trailing the others (Nov 12 2026: O'Hare at 80% beside 89% or better).
+        const past = readingsDay === 'yesterday';
+        facts.push({
+          id: `otp.${hub}`,
+          kind: 'otp',
+          hub,
+          statement: `${hubLabel(hub)} ${past ? 'was' : 'is'} at ${r.otp}% on time ${past ? 'yesterday' : 'so far today'} (${r.operated} departed), behind the other hubs, which ${past ? 'were' : 'are'} at ${othersFloor}% or better.`,
+          values: uniq([`${r.otp}%`, String(r.operated), `${othersFloor}%`, `${ON_TIME_GRACE_MIN} minutes`, ...airportForms(hub)]),
+          at: iso(r.at),
+          link: { tab: 'schedule', hub },
+          // Above calm filler and programs away from the hubs, below a hub problem that sets a tone.
+          severity: 15,
+          toneFloor: 'calm',
+          // Healthy: never the tone, and never a change on its own (it comes and goes with the gap).
+          material: null,
+          outlier: true,
+        });
+        continue;
+      }
+      if (everyHubHealthy && !hubsWithProgram.has(hub)) {
+        skipped.push(`otp.${hub}: ${r.otp}% and every hub is healthy (the on-time summary covers it)`);
+        continue;
+      }
       const yesterday = defaultSchedDayOffset(hub, new Date(nowMs)) !== 0;
-      const when = yesterday ? 'yesterday (its board has not rolled over to today yet)' : 'so far today';
+      const when = yesterday ? 'yesterday' : 'so far today';
+      const tail = yesterday ? "; today's figures are not in yet" : '';
       const severity = r.otp < 50 ? 70 : r.otp < BRIEF_SOFT_HUB_OTP ? 45 : r.otp < BRIEF_HEALTHY_HUB_OTP ? 20 : 5;
       facts.push({
         id: `otp.${hub}`,
         kind: 'otp',
         hub,
-        statement: `${hubLabel(hub)}: ${r.otp}% of departures ${when} left within ${ON_TIME_GRACE_MIN} minutes of schedule (${r.operated} departed).`,
+        statement: `${hubLabel(hub)}: ${r.otp}% of departures ${when} left within ${ON_TIME_GRACE_MIN} minutes of schedule (${r.operated} departed)${tail}.`,
         values: uniq([`${r.otp}%`, String(r.operated), `${ON_TIME_GRACE_MIN} minutes`, ...airportForms(hub)]),
         at: iso(r.at),
         link: { tab: 'schedule', hub },
@@ -347,12 +649,15 @@ export function buildBriefFacts(sources, { nowMs }) {
       // When every hub reads healthy, which one is lowest is not news: no "lowest" fact, and the
       // floor does not name it (so a sentence cannot either). The best hub is never news.
       const allHealthy = readings[low].otp >= BRIEF_HEALTHY_HUB_OTP;
+      const day = boardsDay(hubs, nowMs);
+      const reporting = hubsReporting(n, day);
+      const are = day === 'yesterday' ? 'were' : 'are';
       if (!allHealthy) {
         facts.push({
           id: 'otp.min',
           kind: 'otp',
           hub: low,
-          statement: `Of the ${n} hubs with an on-time reading, ${hubLabel(low)} is lowest at ${readings[low].otp}%.`,
+          statement: `Of the ${reporting}, ${hubLabel(low)} ${day === 'yesterday' ? 'was' : 'is'} lowest at ${readings[low].otp}% on time.`,
           values: uniq([`${readings[low].otp}%`, String(n), numberWord(n), ...airportForms(low)]),
           at: iso(readings[low].at),
           link: { tab: 'schedule', hub: low },
@@ -363,14 +668,29 @@ export function buildBriefFacts(sources, { nowMs }) {
       }
 
       const soft = sorted.filter((h) => readings[h].otp < BRIEF_SOFT_HUB_OTP);
-      if (soft.length === 0) {
+      if (soft.length === 0 && outlier) {
+        // The trailing hub has its own fact; the summary covers the others.
+        const others = sorted.slice(1);
+        const floorPct = readings[others[0]].otp;
+        facts.push({
+          id: 'otp.floor',
+          kind: 'otp',
+          statement: `The other ${hubsReporting(others.length, day)} ${are} at ${floorPct}% on time or better.`,
+          values: uniq([String(others.length), numberWord(others.length), `${floorPct}%`]),
+          at: iso(Math.min(...others.map((h) => readings[h].at ?? nowMs))),
+          link: { tab: 'schedule', hub: others[0] },
+          severity: 8,
+          toneFloor: 'calm',
+          material: null,
+        });
+      } else if (soft.length === 0) {
         const floorPct = readings[low].otp;
         facts.push({
           id: 'otp.floor',
           kind: 'otp',
           statement: allHealthy
-            ? `All ${n} hubs with an on-time reading are at ${floorPct}% or better.`
-            : `All ${n} hubs with an on-time reading are at ${floorPct}% or better; ${airportDisplayName(low)} is the lowest.`,
+            ? `All ${reporting} ${are} at ${floorPct}% on time or better.`
+            : `All ${reporting} ${are} at ${floorPct}% on time or better; ${airportDisplayName(low)} ${day === 'yesterday' ? 'was' : 'is'} the lowest.`,
           values: uniq([String(n), numberWord(n), `${floorPct}%`, ...(allHealthy ? [] : airportForms(low))]),
           at: iso(Math.min(...hubs.map((h) => readings[h].at ?? nowMs))),
           // The chip proves the floor with the lowest hub's board (the IROPS bar shows no on-time).
@@ -385,7 +705,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         facts.push({
           id: 'otp.soft',
           kind: 'otp',
-          statement: `${soft.length} of the ${n} hubs with an on-time reading ${plural(soft.length, 'is', 'are')} under ${BRIEF_SOFT_HUB_OTP}%: ${joinNames(names)}.`,
+          statement: `${capitalize(numberWord(soft.length))} of the ${reporting} ${day === 'yesterday' ? plural(soft.length, 'was', 'were') : plural(soft.length, 'is', 'are')} under ${BRIEF_SOFT_HUB_OTP}% on time: ${joinNames(names)}.`,
           values: uniq([String(soft.length), numberWord(soft.length), String(n), numberWord(n), `${BRIEF_SOFT_HUB_OTP}%`,
             ...soft.map((h) => `${readings[h].otp}%`), ...soft.flatMap((h) => airportForms(h))]),
           at: iso(Math.min(...soft.map((h) => readings[h].at ?? nowMs))),
@@ -422,7 +742,8 @@ export function buildBriefFacts(sources, { nowMs }) {
       facts.push({
         id: 'net.index',
         kind: 'network',
-        statement: `The Blue Board's disruption index, which weighs cancellations, long delays and diversions across hub departures, is ${score}, ${bandText}.`,
+        // "Network disruption index" is the measure's name on the page (the IROPS section).
+        statement: `The network disruption index, which weighs cancellations, long delays and diversions across United's hub departures, is ${score}, ${bandText}.`,
         values: uniq([String(score), String(IROPS_MINOR_AT), String(IROPS_SIGNIFICANT_AT)]),
         at: iso(asOf.irops ?? nowMs),
         link: { tab: 'weather', section: 'irops' },
@@ -442,7 +763,7 @@ export function buildBriefFacts(sources, { nowMs }) {
     facts.push({
       id: 'net.status',
       kind: 'network',
-      statement: `The Blue Board's network status, which combines hub on-time, FAA programs at hubs and the disruption index, reads "${net.label}".`,
+      statement: `The network status, which combines on-time performance at United's hubs, FAA programs there and the network disruption index, is "${net.label}".`,
       values: [],
       at: iso(asOf.irops ?? nowMs),
       link: { tab: 'weather', section: 'irops' },
@@ -456,24 +777,40 @@ export function buildBriefFacts(sources, { nowMs }) {
     const likely = Number(sources.irops.cancellationsLikely || 0);
     const seenFlying = Number(sources.irops.likelyCanceledSeenFlying || 0);
     const confirmed = Math.max(0, total - likely);
-    facts.push({
-      id: 'cxl.confirmed',
-      kind: 'cancellations',
-      statement: `${confirmed} ${plural(confirmed, 'departure', 'departures')} on United's current hub boards ${plural(confirmed, 'is', 'are')} confirmed canceled.`,
-      values: uniq([String(confirmed), numberWord(confirmed)]),
-      at: iso(asOf.irops ?? nowMs),
-      link: { tab: 'schedule' },
-      severity: confirmed >= 50 ? 50 : confirmed >= 20 ? 30 : confirmed >= 5 ? 12 : 2,
-      toneFloor: 'calm',
-      material: `cxl:${countBucket(confirmed)}`,
-    });
+    // "today" or "yesterday" when the boards holding nearly all the departures agree: Tokyo Narita
+    // and Guam (under 1%) sit on yesterday's board for six hours of the US day.
+    const boardHubs = BRIEF_HUBS.filter((h) => Number(sources.irops.hubMetrics?.[h]?.total) > 0);
+    const departures = (hs) => hs.reduce((s, h) => s + Number(sources.irops.hubMetrics[h].total), 0);
+    const yesterdayHubs = boardHubs.filter((h) => defaultSchedDayOffset(h, new Date(nowMs)) !== 0);
+    const yesterdayShare = boardHubs.length ? departures(yesterdayHubs) / departures(boardHubs) : 0;
+    const cxlDay = yesterdayShare <= 0.05 ? 'today' : yesterdayShare >= 0.95 ? 'yesterday' : 'mixed';
+    if (confirmed < BRIEF_MIN_CONFIRMED_CANCELLATIONS) {
+      // One cancellation among ~2,700 departures is not news (Nov 11 2026); the report still shows it.
+      skipped.push(`cxl.confirmed: ${confirmed} confirmed (under ${BRIEF_MIN_CONFIRMED_CANCELLATIONS}), not news`);
+    } else {
+      const are = cxlDay === 'yesterday' ? plural(confirmed, 'was', 'were') : plural(confirmed, 'is', 'are');
+      const when = cxlDay === 'today' ? ' today' : cxlDay === 'yesterday' ? ' yesterday' : '';
+      facts.push({
+        id: 'cxl.confirmed',
+        kind: 'cancellations',
+        statement: `${confirmed} United ${plural(confirmed, 'departure', 'departures')} from its hubs ${are} confirmed canceled${when}.`,
+        values: uniq([String(confirmed), numberWord(confirmed)]),
+        at: iso(asOf.irops ?? nowMs),
+        link: { tab: 'schedule' },
+        severity: confirmed >= 50 ? 50 : confirmed >= 20 ? 30 : confirmed >= 5 ? 12 : 2,
+        toneFloor: 'calm',
+        // Never material under CONFIRMED_MATERIAL_FROM: the send threshold sits inside that band.
+        material: confirmed < CONFIRMED_MATERIAL_FROM ? null : `cxl:${countBucket(confirmed)}`,
+      });
+    }
     if (likely > 0) {
       facts.push({
         id: 'cxl.unconfirmed',
         kind: 'cancellations',
+        // Stands on its own: the confirmed count beside it is often not sent (under 5).
         statement:
-          `The schedule provider marks ${likely} more hub ${plural(likely, 'departure', 'departures')} as "likely canceled" without confirming ${plural(likely, 'it', 'them')}. ` +
-          `That label is often wrong` + (seenFlying > 0 ? `: ${seenFlying} flights it marked that way today were seen flying.` : '.'),
+          `${likely} ${plural(likely, 'departure', 'departures')} from United's hubs ${plural(likely, 'is', 'are')} marked "likely canceled" by a flight-data provider but not confirmed. ` +
+          `That label is often wrong` + (seenFlying > 0 ? `: ${seenFlying} flights marked that way today were seen flying.` : '.'),
         values: uniq([String(likely), numberWord(likely), seenFlying > 0 ? String(seenFlying) : null]),
         at: iso(asOf.irops ?? nowMs),
         link: { tab: 'schedule' },
@@ -493,11 +830,14 @@ export function buildBriefFacts(sources, { nowMs }) {
       const behind = boardBehindReason(m, nowMs);
       if (behind) { skipped.push(`cxl.${hub}: ${behind}`); continue; }
       const rate = hubConfirmed / hubTotal;
+      const hubYesterday = defaultSchedDayOffset(hub, new Date(nowMs)) !== 0;
       facts.push({
         id: `cxl.${hub}`,
         kind: 'cancellations',
         hub,
-        statement: `${hubLabel(hub)} has ${hubConfirmed} confirmed ${plural(hubConfirmed, 'cancellation', 'cancellations')} among ${hubTotal} departures on its current board.`,
+        statement: hubYesterday
+          ? `${hubLabel(hub)} had ${hubConfirmed} confirmed ${plural(hubConfirmed, 'cancellation', 'cancellations')} among its ${hubTotal} departures yesterday.`
+          : `${hubLabel(hub)} has ${hubConfirmed} confirmed ${plural(hubConfirmed, 'cancellation', 'cancellations')} among its ${hubTotal} departures today.`,
         values: uniq([String(hubConfirmed), numberWord(hubConfirmed), String(hubTotal), ...airportForms(hub)]),
         at: iso(Number(m.generatedAt) > 0 ? Number(m.generatedAt) * 1000 : asOf.irops ?? nowMs),
         link: { tab: 'schedule', hub },
@@ -508,88 +848,23 @@ export function buildBriefFacts(sources, { nowMs }) {
     }
   }
 
-  // ── FAA programs in effect (/api/faa) ──
-  /** @type {Set<string>} airports with an active ground stop / ground delay program / closure */
-  const activeAt = new Set();
-  if (status.faa === 'ok') {
-    const hubPrograms = [];
-    const otherPrograms = [];
-    for (const airport of sources.faa) {
-      const code = String(airport?.airportCode || '').toUpperCase();
-      if (!/^[A-Z]{3}$/.test(code)) continue;
-      const isHub = BRIEF_HUBS.includes(code);
-      // Other airports only when we know them (a clock zone and a name): the FAA feed lists every
-      // field in the country, and a ground stop at a general-aviation airport is not United news.
-      if (!isHub && !isKnownAirportCode(code)) continue;
-      const programs = Array.isArray(airport.programs) ? airport.programs : [];
-      for (const p of programs) {
-        const type = String(p?.type || '');
-        const keep = type === 'ground_stop' || type === 'ground_delay' || (isHub && (type === 'closure' || type === 'departure_delay' || type === 'arrival_delay'));
-        if (!keep) continue;
-        if (type === 'closure' && !isWholeAirportClosure(p.reason)) {
-          skipped.push(`faa.active.${code}.closure: a scheduled or partial closure, not an outage`);
-          continue;
-        }
-        const fact = faaActiveFact(code, p, { isHub, nowMs, asOfMs: asOf.faa ?? nowMs });
-        facts.push(fact);
-        if (type === 'ground_stop' || type === 'ground_delay' || type === 'closure') {
-          activeAt.add(code);
-          (isHub ? hubPrograms : otherPrograms).push({ code, type });
-        }
-      }
-    }
-
-    // Stops and delay programs hold flights INTO the airport (faaActiveFact); a closure is at it.
-    const describe = (list) => joinNames(list.map(({ code, type }) =>
-      `${type === 'ground_stop' ? 'a ground stop for flights into' : type === 'ground_delay' ? 'a ground delay program for flights into' : 'a closure at'} ${airportDisplayName(code)}`));
-    const n = hubPrograms.length;
-    // A ground stop or closure at a hub disrupts the network; delay programs, at however many hubs,
-    // are a watch, as the header's network status treats them (computeTone).
-    const countTone = n === 0 ? 'calm' : hubPrograms.some((p) => p.type !== 'ground_delay') ? 'disrupted' : 'watch';
-    facts.push({
-      id: 'faa.active.count',
-      kind: 'faa',
-      statement: n === 0
-        ? 'No FAA ground stop or ground delay program is in effect at any United hub.'
-        : `${n} FAA ${plural(n, 'program affects a United hub', 'programs affect United hubs')}: ${describe(hubPrograms)}.`,
-      values: uniq([String(n), numberWord(n), ...hubPrograms.flatMap((p) => airportForms(p.code))]),
-      at: iso(asOf.faa ?? nowMs),
-      link: { tab: 'weather' },
-      severity: n === 0 ? 1 : 70,
-      toneFloor: countTone,
-      material: `hubprog:${hubPrograms.map((p) => `${p.code}.${p.type}`).sort().join(',')}`,
-    });
-    if (otherPrograms.length > 0) {
-      const m = otherPrograms.length;
-      facts.push({
-        id: 'faa.active.other',
-        kind: 'faa',
-        statement: `The FAA also has ${m} ${plural(m, 'program', 'programs')} in effect at other airports: ${describe(otherPrograms)}.`,
-        values: uniq([String(m), numberWord(m), ...otherPrograms.flatMap((p) => airportForms(p.code))]),
-        at: iso(asOf.faa ?? nowMs),
-        link: { tab: 'weather' },
-        severity: 10,
-        toneFloor: 'calm',
-        material: `otherprog:${otherPrograms.map((p) => `${p.code}.${p.type}`).sort().join(',')}`,
-      });
-    }
-  }
-
   // ── FAA planned / possible programs (/api/nas operations plan) ──
   if (status.nas === 'ok') {
     const planned = Array.isArray(sources.nas.planned) ? sources.nas.planned : [];
+    // The plan's own date anchors its Zulu times (resolvePlanHhmm).
+    const planDate = planDateMs(sources.nas.advisoryUrl, nowMs);
     const usedIds = new Set();
     let plannedCount = 0;
     let plannedAtHub = 0;
     for (const tmi of planned) {
-      const fact = plannedFact(tmi, { nowMs, activeAt, asOfMs: asOf.nas ?? nowMs, skipped });
+      const fact = plannedFact(tmi, { nowMs, activeAt, asOfMs: asOf.nas ?? nowMs, skipped, planDate });
       if (!fact) continue;
       let id = fact.id;
       for (let i = 2; usedIds.has(id); i++) id = `${fact.id}.${i}`;
       usedIds.add(id);
       facts.push({ ...fact, id });
       plannedCount++;
-      if (fact.hub) plannedAtHub++;
+      if (fact.hub && !fact.later) plannedAtHub++;
     }
     if (plannedCount > 0) {
       facts.push({
@@ -599,7 +874,7 @@ export function buildBriefFacts(sources, { nowMs }) {
         values: uniq([String(plannedCount), numberWord(plannedCount)]),
         at: iso(asOf.nas ?? nowMs),
         link: { tab: 'weather' },
-        // Only possible programs away from the hubs: last, with them (plannedFact).
+        // Only possible programs away from the hubs or not before tomorrow: last, with them.
         severity: plannedAtHub ? 3 : 0,
         toneFloor: 'calm',
         // Only planned programs at hubs count as a change (plannedFact).
@@ -701,8 +976,31 @@ export function buildBriefFacts(sources, { nowMs }) {
 
   for (const fact of sources?.extraFacts || []) facts.push(fact);
 
-  facts.sort((a, b) => b.severity - a.severity || a.id.localeCompare(b.id));
-  return { facts, collection: { sources: status, skipped } };
+  return { facts: orderFacts(facts), collection: { sources: status, skipped, hubReadings: Object.keys(readings).length } };
+}
+
+/**
+ * The order the model reads the facts in (and the template's own tie-breaks): most severe first,
+ * which puts everything about United's hubs above a program at another airport (severity 8.2 to 9,
+ * faaActiveFact) and that above calm filler. On a calm day the on-time summary leads: with nothing
+ * wrong at the hubs, the brief opens by saying so (Nov 2026).
+ * @param {BriefFact[]} facts
+ * @returns {BriefFact[]}
+ */
+export function orderFacts(facts) {
+  const sorted = [...(facts || [])].sort((a, b) => b.severity - a.severity || a.id.localeCompare(b.id));
+  const take = (pred) => { const i = sorted.findIndex(pred); return i >= 0 ? sorted.splice(i, 1)[0] : null; };
+  const summary = take((f) => f.id === 'otp.floor');
+  const outlier = take((f) => f.outlier === true);
+  // The on-time story reads as one: the hub that trails, then "the other hubs".
+  const story = [outlier, summary].filter(Boolean);
+  if (computeTone(facts) === 'calm') return [...story, ...sorted];
+  // Otherwise where the trailing hub (or, without one, the summary) ranks.
+  const anchor = story[0];
+  if (!anchor) return sorted;
+  const at = sorted.findIndex((f) => f.severity < anchor.severity || (f.severity === anchor.severity && f.id.localeCompare(anchor.id) > 0));
+  sorted.splice(at < 0 ? sorted.length : at, 0, ...story);
+  return sorted;
 }
 
 /** One fact for one FAA program in effect. */
@@ -710,15 +1008,19 @@ function faaActiveFact(code, p, { isHub, nowMs, asOfMs }) {
   const type = String(p.type);
   const name = hubLabel(code);
   const endMs = parseIsoMs(p.endTime);
+  // A listed end time already past is never printed (the program is still listed, so at a hub it
+  // stays, as the header still counts it; away from the hubs the caller drops it).
   const endClock = endMs !== null && endMs > nowMs ? formatAirportClock(endMs, code) : null;
+  // The day, when the end is not later today or tonight ("until 2:00 PM ET tomorrow").
+  const endDay = endClock ? airportDayWord(/** @type {number} */ (endMs), code, nowMs) ?? '' : '';
   const cause = faaCausePhrase(p.reason);
   const weather = isWeatherReason(p.reason);
   const avg = Number.isFinite(Number(p.avgDelay)) && Number(p.avgDelay) > 0 ? Math.round(Number(p.avgDelay)) : null;
   const max = Number.isFinite(Number(p.maxDelay)) && Number(p.maxDelay) > 0 ? Math.round(Number(p.maxDelay)) : null;
   const min = Number.isFinite(Number(p.minDelay)) && Number(p.minDelay) > 0 ? Math.round(Number(p.minDelay)) : null;
   const because = cause ? `, because of ${cause}` : '';
-  const until = endClock ? ` until ${endClock}` : '';
-  const values = [...airportForms(code), endClock, cause, weather ? 'weather' : null];
+  const until = endClock ? ` until ${endClock}${endDay ? ` ${endDay}` : ''}` : '';
+  const values = [...airportForms(code), endClock ? dayClock(endDay, endClock) : null, cause, weather ? 'weather' : null];
   let statement;
   let suffix;
   let severity;
@@ -735,8 +1037,10 @@ function faaActiveFact(code, p, { isHub, nowMs, asOfMs }) {
     statement += '.';
     const ext = String(p.probabilityOfExtension || '').trim().toLowerCase();
     if (/^(low|medium|high)$/.test(ext)) statement += ` It rates the chance of an extension as ${ext}.`;
-    severity = isHub ? 100 : 45;
-    toneFloor = isHub ? 'disrupted' : 'watch';
+    // Away from the hubs: below every fact about a hub that is worth a line (a hub's cancellations
+    // are 10), above calm filler, and never the tone (the header counts hub programs only).
+    severity = isHub ? 100 : 9;
+    toneFloor = isHub ? 'disrupted' : 'calm';
   } else if (type === 'ground_delay') {
     suffix = 'gdp';
     statement = `The FAA has a ground delay program in effect for flights heading to ${name}${until}${because}. ${held}`;
@@ -745,9 +1049,10 @@ function faaActiveFact(code, p, { isHub, nowMs, asOfMs }) {
     else if (avg) statement += '.';
     else if (max) { statement += `; delays run up to ${max} minutes.`; values.push(`${max} minutes`); }
     else statement += '.';
-    severity = isHub ? 85 : 35;
-    // A delay program is a watch (and so is the hub-programs count when it lists only those).
-    toneFloor = 'watch';
+    severity = isHub ? 85 : 8.6;
+    // At a hub a delay program is a watch (and so is the hub-programs count when it lists only
+    // those); away from the hubs it never sets the tone, as in the header (computeTone).
+    toneFloor = isHub ? 'watch' : 'calm';
   } else if (type === 'closure') {
     suffix = 'closure';
     statement = `The FAA lists ${name} as closed${until}.`;
@@ -776,7 +1081,7 @@ function faaActiveFact(code, p, { isHub, nowMs, asOfMs }) {
     link: { tab: 'weather', hub: code },
     severity,
     toneFloor,
-    material: `${suffix}:${endMs ? round(endMs / 60000, 15) : 'open'}:${cause || ''}:${avg ? round(avg, 15) : ''}`,
+    material: `${suffix}:${endMs ? round(endMs / 60000, 15) : 'open'}:${cause || ''}:${avg ? round(avg, 15) : ''}${endDay ? `:${endDay}` : ''}`,
   };
 }
 
@@ -785,7 +1090,7 @@ function faaActiveFact(code, p, { isHub, nowMs, asOfMs }) {
  * ground delay program or airspace flow program at an airport we know, or when a program is already
  * in effect there (the active fact says it; a "possible" beside it would contradict it).
  */
-function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
+function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped, planDate = null }) {
   const text = String(tmi?.decoded || tmi?.event || '').replace(/\s+/g, ' ').trim();
   if (!text) return null;
   const upper = text.toUpperCase();
@@ -810,19 +1115,60 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
   // "1800-2200", "BETWEEN 1800 AND 2200". Bare HHMM is Zulu.
   const windowText = `${String(tmi.time || '')} ${text}`.toUpperCase();
   let window = '';
+  /** The window opens on a later local day than now ("tomorrow after 10:00 AM ET"). */
+  let later = false;
   const values = airports.flatMap((c) => airportForms(c));
-  const clock = (hhmm) => formatAirportClock(resolveZuluHhmm(hhmm, nowMs) ?? NaN, primary);
+  // Each time on the airport's clock, with the day it falls on whenever that is not later today
+  // ("tomorrow after 10:00 AM ET"). The day travels in the time's own value ("tomorrow 10:00 AM
+  // ET"), and the verifier drops a sentence that uses the time without it (time_without_day).
+  const at = (hhmm) => resolvePlanHhmm(hhmm, nowMs, planDate);
+  const clock = (ms) => (ms === null ? null : formatAirportClock(ms, primary));
+  const day = (ms) => airportDayWord(/** @type {number} */ (ms), primary, nowMs) ?? '';
+  const ended = (ms) => {
+    skipped.push(`faa.planned.${primary}: its window ended at ${clock(ms)}`);
+    return null;
+  };
   let m;
   if ((m = windowText.match(/\bBETWEEN\s+(\d{4})Z?\s+AND\s+(\d{4})Z?\b/)) || (m = windowText.match(/\b(\d{4})Z?\s*[-–]\s*(\d{4})Z?\b/))) {
-    const a = clock(m[1]);
-    const b = clock(m[2]);
-    if (a && b) { window = ` between ${a} and ${b}`; values.push(a, b); }
+    const aMs = at(m[1]);
+    let bMs = at(m[2]);
+    if (aMs !== null && bMs !== null && bMs <= aMs) bMs += DAY_MS;
+    const a = clock(aMs);
+    const b = clock(bMs);
+    if (a && b && bMs !== null && bMs <= nowMs) return ended(bMs);
+    if (a && b && aMs !== null && aMs <= nowMs) {
+      // Already open: only its end is news.
+      const d = day(bMs);
+      window = ` until ${b}${d ? ` ${d}` : ''}`;
+      values.push(dayClock(d, b));
+    } else if (a && b) {
+      const d = day(aMs);
+      window = `${d ? ` ${d}` : ''} between ${a} and ${b}`;
+      values.push(dayClock(d, a), b);
+      later = d !== '';
+    }
   } else if ((m = windowText.match(/\bUNTIL\s+(\d{4})Z?\b/))) {
-    const a = clock(m[1]);
-    if (a) { window = ` until ${a}`; values.push(a); }
+    const aMs = at(m[1]);
+    const a = clock(aMs);
+    if (a && aMs !== null && aMs <= nowMs) return ended(aMs);
+    if (a) {
+      const d = day(aMs);
+      window = ` until ${a}${d ? ` ${d}` : ''}`;
+      values.push(dayClock(d, a));
+    }
   } else if ((m = windowText.match(/\bAFTER\s+(\d{4})Z?\b/))) {
-    const a = clock(m[1]);
-    if (a) { window = ` after ${a}`; values.push(a); }
+    const aMs = at(m[1]);
+    const a = clock(aMs);
+    if (a && aMs !== null && aMs <= nowMs) {
+      // Its start has passed: possible now, for the rest of the plan.
+      window = ` since ${a}`;
+      values.push(a);
+    } else if (a) {
+      const d = day(aMs);
+      window = `${d ? ` ${d}` : ''} after ${a}`;
+      values.push(dayClock(d, a));
+      later = d !== '';
+    }
   }
 
   const tentative = /\b(POSSIBLE|PROBABLE|POSS|PROB)\b/.test(upper);
@@ -836,6 +1182,10 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
     ? `The FAA's operations plan says ${program} is possible ${target}${window}. It is not in effect.`
     : `The FAA's operations plan expects ${program} ${target}${window}. It is not in effect yet.`;
   const isHub = hubs.length > 0;
+  // At a hub, a possible program later today is a watch; one whose window opens on a later day is
+  // not tonight's news (Nov 12 2026: the next day's plan, issued around 00Z, set the evening's brief
+  // to Watch). It ranks below every fact about now, above possible programs away from the hubs.
+  const watchNow = isHub && !later;
   return {
     id: `faa.planned.${primary}`,
     kind: 'faa_planned',
@@ -846,11 +1196,13 @@ function plannedFact(tmi, { nowMs, activeAt, asOfMs, skipped }) {
     link: { tab: 'weather', hub: primary },
     // Something that may happen at an airport that is not a United hub ranks below every other
     // fact: it orders the model's list last, and the template never picks or leads with it.
-    severity: isHub ? (tentative ? 22 : 30) : 0,
-    toneFloor: isHub ? 'watch' : 'calm',
-    // Something possible at an airport that is not a hub coming, going or moving its window is
-    // not worth a new brief; at a hub it is.
-    material: isHub ? `planned:${program}:${window}` : null,
+    severity: watchNow ? (tentative ? 22 : 30) : isHub ? 0.5 : 0,
+    toneFloor: watchNow ? 'watch' : 'calm',
+    // Something possible at an airport that is not a hub, or not before tomorrow, coming, going or
+    // moving its window is not worth a new brief; later today at a hub it is. At local midnight a
+    // hub's "tomorrow" line becomes today's and joins the key.
+    material: watchNow ? `planned:${program}:${window}` : null,
+    ...(later ? { later: true } : {}),
   };
 }
 
@@ -976,9 +1328,14 @@ export function airborneNormal(days) {
   return { median, days: perDay.length };
 }
 
-/** How many hubs carry an on-time fact (the cron's evidence gate, BRIEF_MIN_HUB_READINGS). */
-export function hubReadingCount(facts) {
-  return (facts || []).filter((f) => /^otp\.[A-Z]{3}$/.test(f.id)).length;
+/**
+ * How many hubs have an on-time figure (the cron's evidence gate, BRIEF_MIN_HUB_READINGS). Read
+ * from the collection, not from the facts: on a day when every hub is healthy most hubs' own
+ * on-time facts are not sent, but their figures are still the evidence the summary rests on.
+ * @param {{hubReadings?: number}} collection  buildBriefFacts' `collection`
+ */
+export function hubReadingCount(collection) {
+  return Number(collection?.hubReadings) || 0;
 }
 
 /**

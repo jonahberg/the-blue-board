@@ -95,7 +95,9 @@ describe('publishing', () => {
     const [row] = briefRows();
     expect(row.source).toBe('model');
     expect(row.items).toHaveLength(2);
-    expect(row.verifier.dropped).toEqual([expect.objectContaining({ index: 2, reasons: ['number_not_in_facts:99%'] })]);
+    // Every hub is healthy on the calm afternoon, so Denver's own fact is not sent: the citation is
+    // unknown, and a hub's on-time percentage on such a day is dropped (the summary already leads).
+    expect(row.verifier.dropped).toEqual([expect.objectContaining({ index: 2, reasons: ['unknown_fact_id:otp.DEN', 'uncited_airport:Denver', 'number_not_in_facts:99%', 'hub_on_time_on_healthy_day'] })]);
   });
 });
 
@@ -106,7 +108,7 @@ describe('template fallbacks', () => {
     ['a timeout (booked at worst case)', modelFail('model_timeout', 0.0012), 'model_timeout'],
     ['a gateway budget 402', modelFail('gateway_budget'), 'gateway_budget'],
     ['a bad shape', modelOk({ headline: 'x', tone: 'calm', items: 'nope', traveler_note: null }), 'invalid_shape'],
-    ['no surviving item', modelOk({ ...GOOD_JSON, items: [{ text: 'Denver is at 12%.', fact_ids: ['otp.DEN'] }] }), 'no_items_survived'],
+    ['no surviving item', modelOk({ ...GOOD_JSON, items: [{ text: '1,200 United flights are in the air.', fact_ids: ['air.total'] }] }), 'no_items_survived'],
   ];
   for (const [label, generate, reason] of cases) {
     it(`${label} → template (${reason})`, async () => {

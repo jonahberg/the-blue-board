@@ -27,6 +27,15 @@ function factsOf(fx) {
 const ALL = FIXTURES.flatMap((fx) => factsOf(fx).map((f) => ({ fixture: fx.name, fact: f })));
 const byId = (facts) => new Map(facts.map((f) => [f.id, f]));
 const fixture = (name) => factsOf(FIXTURES.find((fx) => fx.name === name));
+/**
+ * The calm afternoon with departure delays listed at Los Angeles: on a day every hub is healthy only
+ * a hub with an FAA program keeps its own on-time fact (Nov 2026), so this keeps otp.LAX at 85%.
+ */
+const calmWithLax = () => {
+  const fx = FIXTURES.find((f) => f.name === 'calm-afternoon');
+  const faa = fx.sources.faa.map((a) => (a.airportCode === 'LAX' ? { ...a, departureDelay: true, programs: [{ type: 'departure_delay', reason: 'VOL:Volume', minDelay: 16, maxDelay: 30 }] } : a));
+  return factsOf({ ...fx, sources: { ...fx.sources, faa } });
+};
 
 describe('chip labels', () => {
   it('every fact in every fixture, radio and flow included, gets a short non-empty label', () => {
@@ -39,7 +48,7 @@ describe('chip labels', () => {
   });
 
   it('reads the mockup examples off the calm afternoon', () => {
-    const f = byId(fixture('calm-afternoon'));
+    const f = byId(calmWithLax());
     expect(chipLabel(f.get('otp.LAX'))).toBe('LAX 85%');
     expect(chipLabel(f.get('otp.floor'))).toBe('7 hubs ≥ 85%');
     expect(chipLabel(f.get('faa.planned.BOS'))).toBe('FAA plan · BOS');
@@ -102,7 +111,7 @@ describe('chip tone', () => {
 
 describe('chip targets', () => {
   it('links only where the destination shows the fact', () => {
-    const calm = byId(fixture('calm-afternoon'));
+    const calm = byId(calmWithLax());
     expect(chipTarget(calm.get('otp.LAX'))).toEqual({ tab: 'schedule', href: '/?tab=schedule&hub=LAX' });
     // The on-time floor links its lowest hub, whose board shows it (the IROPS bar does not).
     expect(chipTarget(calm.get('otp.floor'))).toEqual({ tab: 'schedule', href: '/?tab=schedule&hub=LAX' });
@@ -156,7 +165,7 @@ describe('chip targets', () => {
 
 describe('itemChips', () => {
   it('keeps citation order, skips unknown ids and folds duplicate labels', () => {
-    const f = byId(fixture('calm-afternoon'));
+    const f = byId(calmWithLax());
     const chips = itemChips(['otp.floor', 'nope', 'otp.LAX', 'otp.LAX', 'air.starlink'], f);
     expect(chips.map((c) => c.label)).toEqual(['7 hubs ≥ 85%', 'LAX 85%', '280 Starlink']);
     expect(chips[0].title).toBe(f.get('otp.floor').statement);

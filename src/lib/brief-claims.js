@@ -68,6 +68,17 @@ export function airportForms(code) {
   return forms;
 }
 
+/**
+ * The names that stand for this airport alone, in airportForms' order: no code, no shared city name
+ * ("LaGuardia" and "New York LaGuardia" for LGA, never "New York").
+ * @param {string} code
+ * @returns {string[]}
+ */
+export function airportOwnNames(code) {
+  const c = String(code || '').toUpperCase();
+  return airportForms(c).filter((n) => n !== c && !Object.hasOwn(SHARED_NAMES, n));
+}
+
 /** The name a statement uses for an airport: the hub display name, the city, or the code. */
 export function airportDisplayName(code) {
   const c = String(code || '').toUpperCase();
