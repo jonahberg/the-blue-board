@@ -4,6 +4,23 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { HUB_ORDER } from '../src/lib/hub-health.js';
+import {
+  LINK_GUARD_ALLOW,
+  LINK_GUARD_TABS,
+  LINK_GUARD_TAIL_SOURCES,
+  coverageGaps,
+  findNames,
+  findUnlinkedNames,
+  tailsInPayload,
+} from '../src/lib/link-guard.js';
+
+// Production by default. To audit a branch, serve it and point AUDIT_URL at it: `bun run build`,
+// then `bunx astro preview` (its /api proxies to production, astro.config.mjs) and
+// AUDIT_URL=http://localhost:4321. Without /api the dashboard falls back to its static roster, and
+// the link check below then fails for want of flights and hubs rather than passing on a thin tab.
+// When Playwright's own browser revision is not installed, PLAYWRIGHT_CHROMIUM_PATH names one that
+// is (a `chromium_headless_shell-*/…/chrome-headless-shell` under ~/Library/Caches/ms-playwright).
 const BASE_URL = process.env.AUDIT_URL || 'https://theblueboard.co';
 
 // One page of every type the site ships (hubs + trackers + fleet + news + static pages).
@@ -49,6 +66,10 @@ const DASHBOARD_TABS = [
   { label: 'Sources', short: null, hash: '#sources' },
 ];
 
+for (const id of LINK_GUARD_TABS) {
+  if (!DASHBOARD_TABS.some((t) => t.hash === `#${id}`)) throw new Error(`LINK_GUARD_TABS names "${id}", which is not a dashboard tab here`);
+}
+
 const VIEWPORTS = [
   { name: 'desktop-1440', width: 1440, height: 900,  mobile: false },
   { name: 'desktop-1024', width: 1024, height: 768,  mobile: false },
@@ -88,11 +109,158 @@ async function showTab(page, { label, short, hash }) {
   await page.waitForFunction((want) => window.location.hash === want, hash, { timeout: 5000 });
 }
 
+// ── Link guard: a name in a row that is not a link (src/lib/link-guard.js) ────────────────────
+// For each tab in LINK_GUARD_TABS, at every viewport: the text inside its table rows, list items
+// and `[data-link-row]` elements, each run marked with whether a link or button is around it.
+// `findUnlinkedNames` decides which runs print a flight number, a known tail or a hub code with
+// no link; each is a failure, and so is a run that examined too little to mean anything
+// (`coverageGaps`). This script only collects what the browser shows.
+
+/** A same-origin data request: what the tab is still waiting on. Fonts and map tiles are not. */
+const isDataRequest = (request) => {
+  const url = new URL(request.url());
+  return url.origin === new URL(BASE_URL).origin && /^\/(?:api|data)\//.test(url.pathname);
+};
+
+/** The tails the page loaded (LINK_GUARD_TAIL_SOURCES) and its data requests in flight. Attach before `goto`. */
+function watchPage(page) {
+  const tails = new Set();
+  const parsing = [];
+  const inFlight = new Set();
+  page.on('request', (request) => {
+    if (isDataRequest(request)) inFlight.add(request);
+  });
+  page.on('requestfinished', (request) => inFlight.delete(request));
+  page.on('requestfailed', (request) => inFlight.delete(request));
+  page.on('response', (response) => {
+    if (!LINK_GUARD_TAIL_SOURCES.some((re) => re.test(response.url()))) return;
+    parsing.push(
+      response.json().then(
+        (json) => tailsInPayload(json).forEach((tail) => tails.add(tail)),
+        () => {},
+      ),
+    );
+  });
+  return { tails, inFlight, parsed: () => Promise.all(parsing) };
+}
+
+const ROW_SELECTOR = 'tr, li, [data-link-row]';
+
+// The in-browser functions below find the tab's own panel the same way: Radix ids a panel
+// `<base>-content-<tab>`, and the dashboard's panels are the outermost ones. Visited tabs stay
+// mounted (hidden), and the Fleet tab nests a tab set of its own, so "the active tabpanel" alone
+// can be a hidden Fleet sub-panel.
+
+/** Rows rendered in the tab's panel. */
+function countRows({ selector, tab }) {
+  const panel = [...document.querySelectorAll('[role="tabpanel"]')].find(
+    (p) => p.id.endsWith(`-content-${tab}`) && !p.parentElement?.closest('[role="tabpanel"]'),
+  );
+  return panel ? [...panel.querySelectorAll(selector)].filter((row) => row.checkVisibility()).length : 0;
+}
+
+/** Open the first collapsed row disclosure in a row that has a flight link; false when there is none. */
+function openDisclosure({ tab }) {
+  const panel = [...document.querySelectorAll('[role="tabpanel"]')].find(
+    (p) => p.id.endsWith(`-content-${tab}`) && !p.parentElement?.closest('[role="tabpanel"]'),
+  );
+  const button = panel?.querySelector('tr:has(a[data-flight-link]) button[aria-expanded="false"]');
+  if (!button || !button.checkVisibility()) return false;
+  button.click();
+  return true;
+}
+
+/** Wait until no data request is in flight and the row count has held for a second (20 s at most). */
+async function settleRows(page, watch, tab) {
+  const deadline = Date.now() + 20000;
+  let last = -1;
+  let stableSince = Date.now();
+  while (Date.now() < deadline) {
+    const count = await page.evaluate(countRows, { selector: ROW_SELECTOR, tab });
+    if (count !== last || [...watch.inFlight].length > 0) {
+      last = count;
+      stableSince = Date.now();
+    } else if (Date.now() - stableSince >= 1000) {
+      return;
+    }
+    await page.waitForTimeout(250);
+  }
+}
+
+/**
+ * In the browser: every run of text in the tab panel's rows, attributed to its nearest row (an
+ * Upcoming Flights `li` inside the roster expansion's `tr` is its own row). Text that is not
+ * rendered (`display: none`, a closed `<details>`) is not printed and is skipped; sr-only text is
+ * read aloud and is kept. Consecutive text nodes are one run, so `UA{number}` reads as one word.
+ */
+function collectRows({ selector, tab, viewport }) {
+  const panel = [...document.querySelectorAll('[role="tabpanel"]')].find(
+    (p) => p.id.endsWith(`-content-${tab}`) && !p.parentElement?.closest('[role="tabpanel"]'),
+  );
+  if (!panel || !panel.checkVisibility()) return { byKind: {}, rowCount: 0, runs: [] };
+  const section = (row) => {
+    for (let el = row.parentElement; el && el !== panel; el = el.parentElement) {
+      if (el.id) return `#${el.id}`;
+      if (el.getAttribute('aria-label')) return `"${el.getAttribute('aria-label')}"`;
+    }
+    return '(panel)';
+  };
+  const byKind = {};
+  const runs = [];
+  const rows = [...panel.querySelectorAll(selector)].filter((row) => row.checkVisibility());
+  for (const row of rows) {
+    const kind = row.tagName.toLowerCase() + (row.hasAttribute('data-link-row') ? '[data-link-row]' : '');
+    byKind[kind] = (byKind[kind] ?? 0) + 1;
+    const where = `${tab} ${viewport} ${section(row)} ${kind}`;
+    const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+    let run = null;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const parent = node.parentElement;
+      if (!parent || parent.closest(selector) !== row || !parent.checkVisibility()) continue;
+      if (run && node.previousSibling === run.last) {
+        run.text += node.data;
+        run.last = node;
+      } else {
+        run = { text: node.data, linked: Boolean(parent.closest('a[href], button')), where, last: node };
+        runs.push(run);
+      }
+    }
+  }
+  return { byKind, rowCount: rows.length, runs: runs.map(({ text, linked, where }) => ({ text, linked, where })) };
+}
+
+/**
+ * Check one guarded tab at one viewport. Opens one collapsed row disclosure first (a row that has a
+ * flight link and an `aria-expanded="false"` button), so the rows it reveals are checked too.
+ */
+async function checkTabLinks(page, watch, tab, viewport) {
+  await settleRows(page, watch, tab);
+  const opened = await page.evaluate(openDisclosure, { tab });
+  if (opened) await settleRows(page, watch, tab);
+  await watch.parsed();
+  const { byKind, rowCount, runs } = await page.evaluate(collectRows, { selector: ROW_SELECTOR, tab, viewport });
+  const known = { hubs: HUB_ORDER, tails: watch.tails };
+  const names = { flight: 0, tail: 0, hub: 0 };
+  for (const { kind } of findNames(runs, known)) names[kind] += 1;
+  const unlinked = findUnlinkedNames(runs, known, LINK_GUARD_ALLOW);
+  const gaps = coverageGaps(tab, { rows: rowCount, names, knownTails: known.tails.size });
+  const rowsText = Object.entries(byKind).map(([k, n]) => `${k} ${n}`).join(', ') || 'none';
+  console.log(
+    `    link guard ${tab} @ ${viewport}: ${rowCount} rows (${rowsText}${opened ? '; one disclosure opened' : ''}), ` +
+      `names flight ${names.flight} / tail ${names.tail} / hub ${names.hub}, ${known.tails.size} known tails → ` +
+      `${unlinked.length} unlinked`,
+  );
+  for (const name of unlinked) console.log(`    ✗ unlinked ${name.kind} "${name.text}" at ${name.where}`);
+  for (const gap of gaps) console.log(`    ✗ link guard ${tab} @ ${viewport}: ${gap}`);
+  return { rows: rowCount, byKind, disclosureOpened: opened, names, knownTails: known.tails.size, unlinked, gaps };
+}
+
 /**
  * Dismiss any dialog open on load, then show every dashboard tab and run axe on each. A tab that
- * cannot be shown, or an island that renders nothing, is recorded as an error.
+ * cannot be shown, or an island that renders nothing, is recorded as an error. A tab in
+ * LINK_GUARD_TABS also gets the link check.
  */
-async function auditDashboardTabs(page, dir, viewportName) {
+async function auditDashboardTabs(page, dir, viewportName, watch) {
   const results = [];
   // Against `astro dev`, the dev toolbar sits over the phone bottom bar and takes its clicks.
   await page.addStyleTag({ content: 'astro-dev-toolbar{display:none!important}' }).catch(() => {});
@@ -102,6 +270,7 @@ async function auditDashboardTabs(page, dir, viewportName) {
   }
   for (const entry of DASHBOARD_TABS) {
     const result = { tab: entry.label };
+    const guarded = LINK_GUARD_TABS.find((id) => entry.hash === `#${id}`);
     try {
       await showTab(page, entry);
       await page.waitForTimeout(1500);
@@ -111,9 +280,15 @@ async function auditDashboardTabs(page, dir, viewportName) {
       await page.screenshot({ path: join(dir, `index-tab-${slug}.png`) });
       const axeResults = await new AxeBuilder({ page }).analyze();
       result.violations = axeResults.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }));
+      if (guarded) result.linkGuard = await checkTabLinks(page, watch, guarded, viewportName);
     } catch (err) {
       result.error = err.message;
       console.log(`    ⚠ ${viewportName} tab "${entry.label}": ${err.message}`);
+      // A guarded tab that could not be checked is not a pass.
+      if (guarded && !result.linkGuard) {
+        console.log(`    ✗ link guard ${guarded} @ ${viewportName}: not checked: ${err.message}`);
+        result.linkGuard = { unlinked: [], gaps: [`not checked: ${err.message}`] };
+      }
     }
     results.push(result);
   }
@@ -134,7 +309,13 @@ async function run() {
     timestamp: new Date().toISOString(),
     baseUrl: BASE_URL,
     pages: [],
-    summary: { totalViolations: 0, bySeverity: {}, mostCommon: [] },
+    summary: {
+      totalViolations: 0,
+      bySeverity: {},
+      mostCommon: [],
+      // Kept apart from axe's counts: `bySeverity` is keyed by axe impact.
+      linkGuard: { tabs: [...LINK_GUARD_TABS], checks: 0, unlinked: 0, gaps: 0 },
+    },
   };
 
   const violationCounts = {};
@@ -157,6 +338,8 @@ async function run() {
       const page = await context.newPage();
       const pageErrors = [];
       page.on('pageerror', (err) => pageErrors.push(err.message));
+      // Before `goto`: the dashboard loads the Starlink roster at boot.
+      const watch = pg.name === 'index' ? watchPage(page) : null;
       const url = `${BASE_URL}${pg.path}`;
       const screenshotPath = join(dir, `${pg.name}.png`);
 
@@ -193,13 +376,18 @@ async function run() {
           pageEntry = { name: pg.name, path: pg.path, viewports: [] };
           report.pages.push(pageEntry);
         }
-        const tabs = pg.name === 'index' ? await auditDashboardTabs(page, dir, vp.name) : [];
+        const tabs = pg.name === 'index' ? await auditDashboardTabs(page, dir, vp.name, watch) : [];
         // Tab-level findings count in the summary too: below `lg` they were never collected.
         for (const tab of tabs) {
           for (const v of tab.violations ?? []) {
             report.summary.totalViolations += 1;
             report.summary.bySeverity[v.impact] = (report.summary.bySeverity[v.impact] || 0) + 1;
             violationCounts[v.id] = (violationCounts[v.id] || 0) + 1;
+          }
+          if (tab.linkGuard) {
+            report.summary.linkGuard.checks += 1;
+            report.summary.linkGuard.unlinked += tab.linkGuard.unlinked.length;
+            report.summary.linkGuard.gaps += tab.linkGuard.gaps.length;
           }
         }
         if (pageErrors.length) {
@@ -218,6 +406,13 @@ async function run() {
         });
       } catch (err) {
         console.log(`    ⚠ Error: ${err.message}`);
+        // The dashboard never reached its tabs, so the guarded ones were not checked: not a pass.
+        if (watch) {
+          for (const id of LINK_GUARD_TABS) {
+            console.log(`    ✗ link guard ${id} @ ${vp.name}: not checked: ${err.message}`);
+            report.summary.linkGuard.gaps += 1;
+          }
+        }
         let pageEntry = report.pages.find(p => p.name === pg.name);
         if (!pageEntry) {
           pageEntry = { name: pg.name, path: pg.path, viewports: [] };
@@ -262,6 +457,16 @@ async function run() {
     for (const { id, count } of report.summary.mostCommon) {
       console.log(`    ${id} (${count}x)`);
     }
+  }
+  const lg = report.summary.linkGuard;
+  console.log(`\nLink guard (names in rows that are not links; tabs: ${lg.tabs.join(', ')}):`);
+  console.log(`  Checks run: ${lg.checks}`);
+  console.log(`  Unlinked names: ${lg.unlinked}`);
+  console.log(`  Coverage gaps: ${lg.gaps}`);
+  // The guard fails the run; axe findings stay a report, as they always have.
+  if (lg.unlinked > 0 || lg.gaps > 0) {
+    console.log(`  ✗ FAILED — each one is listed above with its tab, viewport and row`);
+    process.exitCode = 1;
   }
   console.log(`\nTo review: read ${reportPath}, then read any screenshot PNGs.`);
 }

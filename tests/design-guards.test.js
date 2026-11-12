@@ -2,6 +2,7 @@
 // CSS: they are about which Tailwind variants and utilities appear at all.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = resolve(__dirname, '..');
@@ -119,6 +120,148 @@ describe('links in running text are not colour-only (audit F43, WCAG 1.4.1)', ()
     const tag = src.match(/<a\s+href="\/"\s+class="([^"]*)">The Blue Board<\/a/);
     expect(tag).not.toBeNull();
     expect(tag[1].split(/\s+/)).toContain('underline');
+  });
+});
+
+// ── Link colour means link (links everywhere, Nov 12 2026) ─────────────────────────────────
+// Nothing that is not a link or a button carries `text-primary` or an underline: the owner
+// clicked a blue "UA576" that was a plain cell and nothing happened. This reads the JSX, so it
+// knows which element a class lands on. A class string held in a constant (`BAR_BUTTON`, built
+// from `PRESS`) is followed to the element that uses it, through template literals, ternaries
+// and `cn(…)` calls; anything the file cannot resolve (an import) is not read.
+//
+// FlightLink, TailLink, HubLink and TypeLink print plain text when the name has no home, and
+// their `className` lands on that plain rendering too, so it is checked; FlightLink's
+// `linkClassName` reaches the link only and is not. DashLink, Button, `a` and `button` are
+// links or buttons whatever they are given.
+const LINK_ELEMENTS = new Set(['a', 'button', 'DashLink', 'Button']);
+const PLAIN_TOO = new Set(['FlightLink', 'TailLink', 'HubLink', 'TypeLink']);
+
+/** The utility a class names, without its variants (`hover:`, `pointer-coarse:`) or `!`. */
+const utility = (cls) => cls.split(':').pop().replace(/^!/, '');
+/** `text-primary` and `text-primary/80`; not `text-primary-foreground`. */
+const LINK_COLOUR = (u) => /^text-primary(?:\/\d+)?$/.test(u);
+/** `underline`; not `underline-offset-2`, `no-underline` or `decoration-*`. */
+const UNDERLINE = (u) => u === 'underline';
+
+/** Every element in `source` whose class names reach `text-primary` or an underline it may not carry. */
+function linkStyleOffenders(source, fileName = 'inline.tsx') {
+  const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  // Same-file names a className can refer to: `const X = …` and `function f() {…}`.
+  const named = new Map();
+  (function index(node) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      named.set(node.name.text, [...(named.get(node.name.text) ?? []), node.initializer]);
+    } else if (ts.isFunctionDeclaration(node) && node.name && node.body) {
+      named.set(node.name.text, [...(named.get(node.name.text) ?? []), node.body]);
+    }
+    ts.forEachChild(node, index);
+  })(sf);
+
+  /** Every string piece an expression can produce, following same-file names once each. */
+  function strings(node, seen = new Set()) {
+    const out = [];
+    (function walk(n) {
+      if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) out.push(n.text);
+      else if (ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) out.push(n.text);
+      else if (ts.isIdentifier(n) && named.has(n.text) && !seen.has(n.text)) {
+        seen.add(n.text);
+        for (const target of named.get(n.text)) walk(target);
+      }
+      ts.forEachChild(n, walk);
+    })(node);
+    return out;
+  }
+
+  const offenders = [];
+  (function visit(node) {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName.getText(sf);
+      if (!LINK_ELEMENTS.has(tag)) {
+        for (const attr of node.attributes.properties) {
+          if (!ts.isJsxAttribute(attr) || attr.name.getText(sf) !== 'className' || !attr.initializer) continue;
+          const classes = strings(attr.initializer).flatMap((s) => s.split(/\s+/)).filter(Boolean);
+          const bad = classes.filter((c) => LINK_COLOUR(utility(c)) || UNDERLINE(utility(c)));
+          if (bad.length) {
+            const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+            offenders.push({ line, tag, classes: [...new Set(bad)], plainToo: PLAIN_TOO.has(tag) });
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  })(sf);
+  return offenders;
+}
+
+describe('link colour and underline only on links and buttons (links everywhere)', () => {
+  // The views this guard covers. Parts 2 and 3 of "links everywhere" add theirs here.
+  const SCOPE = [
+    'src/app/views/StarlinkView.tsx',
+    ...readdirSync(resolve(ROOT, 'src/app/views/starlink'))
+      .filter((name) => name.endsWith('.tsx'))
+      .map((name) => `src/app/views/starlink/${name}`),
+  ];
+  // `file:line` → why that element may carry link colour or an underline. Empty today; a new
+  // entry needs a reason, and an entry that no longer matches anything fails.
+  const ALLOW = {};
+
+  it('finds no element in the Starlink tab that looks like a link and is not one', () => {
+    const found = SCOPE.flatMap((file) =>
+      linkStyleOffenders(readFileSync(resolve(ROOT, file), 'utf8'), file).map(
+        (o) => `${file}:${o.line} <${o.tag}> ${o.classes.join(' ')}${o.plainToo ? ' (className reaches its plain-text rendering)' : ''}`,
+      ),
+    );
+    const at = (entry) => entry.split(' ')[0];
+    expect(found.filter((entry) => !(at(entry) in ALLOW))).toEqual([]);
+    for (const [where, reason] of Object.entries(ALLOW)) {
+      expect(reason.trim(), `${where} needs a reason`).not.toBe('');
+      expect(found.map(at), `${where} is allowlisted but no longer matches`).toContain(where);
+    }
+  });
+
+  it('covers every Starlink view file', () => {
+    expect(SCOPE).toContain('src/app/views/starlink/RosterTable.tsx');
+    expect(SCOPE).toContain('src/app/views/starlink/DeparturesBoard.tsx');
+    expect(SCOPE.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('catches link colour or an underline on an element that is not a link or button', () => {
+    const tags = (src) => linkStyleOffenders(src).map((o) => o.tag);
+    expect(tags('const x = <span className="text-primary">UA576</span>;')).toEqual(['span']);
+    expect(tags('const x = <td className="font-mono underline">ORD</td>;')).toEqual(['td']);
+    expect(tags('const x = <span className="hover:underline">ORD</span>;')).toEqual(['span']);
+    expect(tags('const x = <Card className="text-primary/80" />;')).toEqual(['Card']);
+    expect(tags('const x = <p className={`a ${on ? "text-primary" : ""}`}>x</p>;')).toEqual(['p']);
+    expect(tags("const x = <p className={cn('a', on && 'underline')}>x</p>;")).toEqual(['p']);
+    // A constant, and a constant built from another one, followed to where they are used.
+    expect(tags("const TONE = 'underline';\nconst CELL = `px-2 ${TONE}`;\nconst x = <td className={CELL}>x</td>;")).toEqual(['td']);
+    expect(tags("function cls(on) { return on ? 'text-primary' : ''; }\nconst x = <div className={cls(true)} />;")).toEqual(['div']);
+    // A per-kind link's className reaches its plain-text rendering.
+    expect(tags('const x = <FlightLink ident={n} className="text-primary" />;')).toEqual(['FlightLink']);
+    expect(tags('const x = <HubLink code={c} className="underline" />;')).toEqual(['HubLink']);
+  });
+
+  it('lets links, buttons and the near-misses through', () => {
+    const ok = [
+      'const x = <a href="/" className="text-primary underline underline-offset-2">x</a>;',
+      'const x = <button className="underline hover:underline">x</button>;',
+      'const x = <Button className="text-primary">x</Button>;',
+      'const x = <DashLink href="/" className="underline">x</DashLink>;',
+      'const x = <FlightLink ident={n} linkClassName="text-primary underline" />;',
+      'const x = <span className="bg-primary text-primary-foreground underline-offset-2 decoration-muted-foreground/40 no-underline pointer-coarse:no-underline">x</span>;',
+      // A constant applied only to a button.
+      "const PRESS = 'underline';\nconst x = <button className={PRESS}>x</button>;",
+      // A string that is not a className is not read.
+      'const x = <span title="text-primary underline">x</span>;',
+    ];
+    for (const src of ok) expect(linkStyleOffenders(src), src).toEqual([]);
+  });
+
+  it('reports the line of the offending element', () => {
+    expect(linkStyleOffenders('const a = 1;\n\nconst x = (\n  <span className="text-primary">x</span>\n);')).toEqual([
+      { line: 4, tag: 'span', classes: ['text-primary'], plainToo: false },
+    ]);
   });
 });
 
