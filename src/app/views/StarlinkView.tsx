@@ -82,7 +82,7 @@ import { AskChips } from '../features/AskChips';
 import { RosterTable } from './starlink/RosterTable';
 import type { RosterSortCol } from './starlink/RosterTable';
 import { SlHero } from './starlink/SlHero';
-import type { RolloutBar } from './starlink/SlHero';
+import type { RolloutBar, RosterFleet } from './starlink/SlHero';
 import { VelocityChart } from './starlink/VelocityChart';
 import type { PaceModel, VelocityModel } from './starlink/VelocityChart';
 import { VerificationLedger } from './starlink/VerificationLedger';
@@ -138,6 +138,7 @@ export default function StarlinkView() {
   const [mismatches, setMismatches] = useState<MismatchState>({ disputed: [], summary: null });
 
   const ledgerRef = useRef<HTMLDivElement>(null);
+  const rosterRef = useRef<HTMLElement>(null);
 
   const aircraft = starlink.aircraft;
   const flightsByTail = starlink.flightsByTail as FlightsByTail;
@@ -468,6 +469,23 @@ export default function StarlinkView() {
     ledgerRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }, []);
 
+  // The hero's bars and "+N NEW THIS WEEK" set the roster's own filter and bring the roster into
+  // view, the way "N disputed" brings the ledger. They change only the filter they name.
+  const scrollToRoster = useCallback(() => {
+    rosterRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  }, []);
+  const onShowFleet = useCallback(
+    (fleet: RosterFleet) => {
+      onFleet(fleet);
+      scrollToRoster();
+    },
+    [onFleet, scrollToRoster],
+  );
+  const onShowNew = useCallback(() => {
+    onNewOnly(true);
+    scrollToRoster();
+  }, [onNewOnly, scrollToRoster]);
+
   // The source line is about the roster this tab's count comes from, so it reads the roster's sync.
   // Without a sync time it states no freshness at all (it used to say "live").
   const sourceFreshness = useMemo(
@@ -500,6 +518,8 @@ export default function StarlinkView() {
         }
         onJumpToLedger={jumpToLedger}
         onShowOnMap={onShowOnMap}
+        onShowFleet={onShowFleet}
+        onShowNew={onShowNew}
       />
 
       {chart ? <VelocityChart model={chart} pace={pace} /> : null}
@@ -530,6 +550,7 @@ export default function StarlinkView() {
           emptyText={boardEmptyText}
           footer={boardFooter}
           tzAbbrev={tzAbbrev}
+          fleetByReg={fleetByReg}
           onOpenAircraft={openAircraft}
           onTrack={onBoardTrack}
         />
@@ -539,7 +560,7 @@ export default function StarlinkView() {
         </p>
       )}
 
-      <section aria-labelledby="sl-roster-title" className="space-y-3">
+      <section ref={rosterRef} aria-labelledby="sl-roster-title" className="space-y-3">
         <h3 id="sl-roster-title" className="text-sm font-semibold">
           Starlink Roster
         </h3>
@@ -585,6 +606,7 @@ export default function StarlinkView() {
           nowMs={nowMs}
           nowSec={nowSec}
           tzAbbrev={tzAbbrev}
+          fleetByReg={fleetByReg}
           onTrack={trackByIcao}
           onOpenAircraft={openAircraft}
         />

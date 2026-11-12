@@ -16,7 +16,13 @@
  *
  * Expanding is a per-row disclosure, so the control is a real button inside the first cell
  * rather than a click handler on the `<tr>`: a whole table row acting as a button steals every
- * text selection and hands a screen reader one enormous, unlabelled control.
+ * text selection and hands a screen reader one enormous, unlabelled control. The tail stays that
+ * button; the aircraft dialog is one step on, in the expansion.
+ *
+ * Names with a home link to it (links everywhere, Nov 12 2026): the type by the fleet database's
+ * type for the tail (`fleetTypeCodeForTail`, never the tracker's string), the next flight's number
+ * (quiet: the row is about the tail), and in the expansion each upcoming number and its hub ends.
+ * An Express leg the feed marks United prints its United number (`unitedNumber`).
  */
 
 import { Radio } from 'lucide-react';
@@ -31,12 +37,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { fleetTypeCodeForTail } from '@/lib/fleet-type-link.js';
+import { unitedNumber } from '@/lib/flight-link.js';
 import { nextFlight, starlinkSinceLabel, upcomingFlights } from '@/lib/starlink-roster.js';
 import { formatFlightTime } from '@/lib/starlink-view.js';
 import type { StarlinkAircraft } from '../../data/types';
+import { HubLink, TypeLink } from '../../features/EntityLinks';
+import { FlightLink } from '../../features/FlightLink';
 import { SortableHeader } from '../fleet/SortableHeader';
 import type { SortState } from '../fleet/SortableHeader';
-import type { FlightsByTail, StarlinkFlight } from './types';
+import type { FleetByReg, FlightsByTail, StarlinkFlight } from './types';
 
 export type RosterSortCol = 'tail' | 'fleet' | 'type' | 'operator';
 
@@ -59,6 +69,16 @@ function depTime(
   return formatFlightTime(ts, iata ?? '', tzAbbrev) as string;
 }
 
+/** The number a leg prints and links: UA5415 for an Express leg the feed marks United, else as sent. */
+function legNumber(flight: StarlinkFlight): string {
+  return unitedNumber(flight.flight_number, flight) ?? flight.flight_number ?? '';
+}
+
+/** A route end: its Schedule board when it is a hub, plain text otherwise. */
+function RouteEnd({ code }: { code: string | undefined }) {
+  return code ? <HubLink code={code} /> : <>???</>;
+}
+
 function Expansion({
   aircraft,
   flights,
@@ -67,6 +87,7 @@ function Expansion({
   nowSec,
   colSpan,
   tzAbbrev,
+  typeCode,
   onTrack,
   onOpenAircraft,
 }: {
@@ -77,6 +98,8 @@ function Expansion({
   nowSec: number;
   colSpan: number;
   tzAbbrev: (hub: string) => string;
+  /** The fleet database's type for this tail (`fleetTypeCodeForTail`), or null. */
+  typeCode: string | null;
   onTrack: (icao24: string) => void;
   onOpenAircraft: (reg: string) => void;
 }) {
@@ -99,7 +122,9 @@ function Expansion({
           </div>
           <div>
             <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">Airframe</dt>
-            <dd className="text-xs">{aircraft.type || '—'}</dd>
+            <dd className="text-xs">
+              {aircraft.type ? <TypeLink typeCode={typeCode}>{aircraft.type}</TypeLink> : '—'}
+            </dd>
           </div>
           <div>
             <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">Fleet</dt>
@@ -111,6 +136,8 @@ function Expansion({
           Upcoming Flights
         </p>
         {upcoming.length ? (
+          // Each line is one flight: its number in link colour, its hub ends quiet. On a touch
+          // screen a line is 44 px tall, so one line's touch boxes never cover the next line's.
           <ul className="mt-1 space-y-0.5">
             {upcoming.map((flight, index) => {
               const dep = depTime(flight.departure_ts, flight.origin, tzAbbrev);
@@ -119,15 +146,15 @@ function Expansion({
               return (
                 <li
                   key={`${flight.flight_number ?? ''}-${flight.departure_ts ?? 0}-${index}`}
-                  className="flex flex-wrap items-baseline gap-x-2 text-[11px]"
+                  className="flex min-h-11 flex-wrap items-center gap-x-2 text-[11px] pointer-fine:md:min-h-0 pointer-fine:md:items-baseline"
                 >
-                  <span className="font-mono font-semibold">{flight.flight_number || '—'}</span>
+                  <FlightLink ident={legNumber(flight) || '—'} className="font-mono font-semibold" />
                   <span className="font-mono text-muted-foreground">
-                    {flight.origin || '???'}
+                    <RouteEnd code={flight.origin} />
                     <span aria-hidden="true" className="mx-1">
                       →
                     </span>
-                    {flight.destination || '???'}
+                    <RouteEnd code={flight.destination} />
                   </span>
                   <span className="font-mono tabular-nums text-muted-foreground">
                     {dep}
@@ -186,6 +213,7 @@ export const RosterTable = memo(function RosterTable({
   nowMs,
   nowSec,
   tzAbbrev,
+  fleetByReg,
   onTrack,
   onOpenAircraft,
 }: {
@@ -205,6 +233,8 @@ export const RosterTable = memo(function RosterTable({
   nowMs: number;
   nowSec: number;
   tzAbbrev: (hub: string) => string;
+  /** The fleet database by registration: a mainline tail's type links by it. */
+  fleetByReg: FleetByReg;
   onTrack: (icao24: string) => void;
   onOpenAircraft: (reg: string) => void;
 }) {
@@ -249,6 +279,7 @@ export const RosterTable = memo(function RosterTable({
             const nextLeg = hasFlights
               ? (nextFlight(flights, nowSec) as StarlinkFlight | null)
               : null;
+            const typeCode = fleetTypeCodeForTail(aircraft.tail, fleetByReg);
             return (
               <Fragment key={aircraft.tail}>
                 <TableRow data-state={isOpen ? 'selected' : undefined}>
@@ -285,7 +316,9 @@ export const RosterTable = memo(function RosterTable({
                     ) : null}
                   </TableCell>
                   <TableCell className="text-xs">{aircraft.fleet}</TableCell>
-                  <TableCell className="text-xs">{aircraft.type}</TableCell>
+                  <TableCell className="text-xs">
+                    {aircraft.type ? <TypeLink typeCode={typeCode}>{aircraft.type}</TypeLink> : null}
+                  </TableCell>
                   <TableCell className="text-[11px] text-muted-foreground">
                     {aircraft.operator}
                   </TableCell>
@@ -303,9 +336,11 @@ export const RosterTable = memo(function RosterTable({
                   ) : null}
                   {hasFlights ? (
                     <TableCell className="text-[10px] text-muted-foreground">
+                      {/* One muted run: only the number links (quiet; the row is about the tail).
+                          The hub ends link in the expansion. */}
                       {nextLeg ? (
                         <>
-                          <span className="font-mono">{nextLeg.flight_number || ''}</span>{' '}
+                          <FlightLink ident={legNumber(nextLeg)} tone="quiet" className="font-mono" />{' '}
                           {nextLeg.origin || ''}→{nextLeg.destination || ''}{' '}
                           <span className="font-mono tabular-nums">
                             {depTime(nextLeg.departure_ts, nextLeg.origin, tzAbbrev)}
@@ -326,6 +361,7 @@ export const RosterTable = memo(function RosterTable({
                     nowSec={nowSec}
                     colSpan={colSpan}
                     tzAbbrev={tzAbbrev}
+                    typeCode={typeCode}
                     onTrack={onTrack}
                     onOpenAircraft={onOpenAircraft}
                   />

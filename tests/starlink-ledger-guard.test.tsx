@@ -83,6 +83,9 @@ vi.mock('../src/app/state/prefs', async (importOriginal) => ({
   usePrefs: () => PREFS,
 }));
 
+// The tab's names are in-place links (DashLink → useFollowDeepLink), which need the Schedule and UI
+// stores this file stubs; following one is tests/dash-link.test.tsx's subject, not this file's.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 vi.mock('../src/app/state/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/ui')>()),
   useUi: () =>

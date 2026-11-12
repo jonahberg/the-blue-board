@@ -91,6 +91,13 @@ describe('HubLink', () => {
     expect(link.className).toMatch(AT_REST_UNDERLINE);
   });
 
+  it('prints the hub code its link resolved, whatever case it was passed in', () => {
+    mount(<HubLink code=" ord" />);
+    const link = screen.getByRole('link', { name: 'ORD' });
+    expect(link.textContent).toBe('ORD');
+    expect(link.getAttribute('href')).toBe('/?tab=schedule&hub=ORD');
+  });
+
   it('prints any other airport as plain text', () => {
     mount(<HubLink code="LHR" />);
     expect(screen.queryByRole('link')).toBeNull();

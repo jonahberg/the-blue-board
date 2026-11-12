@@ -11,7 +11,7 @@
  * yet, so every case is also rendered without it.
  */
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FeedValue } from '../src/app/state/feed';
@@ -60,6 +60,9 @@ vi.mock('../src/app/state/prefs', async (importOriginal) => ({
   usePrefs: () => ({ homeAirport: '' }) as unknown as PrefsValue,
 }));
 
+// The tab's names are in-place links (DashLink → useFollowDeepLink), which need the Schedule and UI
+// stores this file stubs; following one is tests/dash-link.test.tsx's subject, not this file's.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 vi.mock('../src/app/state/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/ui')>()),
   useUi: () =>
@@ -119,7 +122,8 @@ describe('Starlink tab: the schedule says how old it is', () => {
     expect(footer()).not.toMatch(/up to 6h|cache/);
     expect(sourceLine()).toContain('· schedule synced 2h ago · airborne live ·');
     expect(sourceLine()).not.toMatch(/16d|Updated/);
-    expect(screen.getByRole('link', { name: 'UAL1234' })).toBeTruthy();
+    // On the board (the roster's next-flight cell links the same number since Nov 12 2026).
+    expect(within(document.getElementById('sl-board') as HTMLElement).getByRole('link', { name: 'UAL1234' })).toBeTruthy();
   });
 
   it('stale: the tracker did not answer and the stored schedule is 22 h old', () => {
@@ -133,7 +137,8 @@ describe('Starlink tab: the schedule says how old it is', () => {
     expect(subtitle()).toBe('tracker offline, schedule from 22h ago');
     expect(footer()).toContain('from the last schedule we have (synced 22h ago; the tracker is offline)');
     // The rows are still real scheduled departures, so they still show.
-    expect(screen.getByRole('link', { name: 'UAL1234' })).toBeTruthy();
+    // On the board (the roster's next-flight cell links the same number since Nov 12 2026).
+    expect(within(document.getElementById('sl-board') as HTMLElement).getByRole('link', { name: 'UAL1234' })).toBeTruthy();
   });
 
   it('offline: the stored schedule has run out, so the empty board says so instead of "no departures"', () => {

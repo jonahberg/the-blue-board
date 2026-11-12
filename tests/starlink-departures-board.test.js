@@ -244,4 +244,22 @@ describe('buildDeparturesBoard', () => {
     expect(out.shownCount).toBe(1);
     expect(out.buckets[0].rows[0].destination).toBe('DEN');
   });
+
+  // The board prints an Express row's United number only on a row the feed marks as United
+  // (`unitedNumber(row.flight_number, row)`, src/lib/flight-link.js), so the row keeps `airline`.
+  it('keeps the airline on each row', () => {
+    const board = buildDeparturesBoard({ N100: [flight('EWR', 'ORD', 1 * H, 'SKW5415')] }, aircraftByTail, {}, HUBS, { now: NOW });
+    expect(board.buckets[0].rows[0].airline).toBe('UA');
+  });
+
+  it('a leg the feed sent without an airline keeps an empty one', () => {
+    const board = buildDeparturesBoard(
+      { N100: [{ flight_number: 'SKW5415', origin: 'EWR', destination: 'ORD', departure_ts: NOW + H }] },
+      aircraftByTail,
+      {},
+      HUBS,
+      { now: NOW },
+    );
+    expect(board.buckets[0].rows[0].airline).toBe('');
+  });
 });

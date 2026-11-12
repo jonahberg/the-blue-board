@@ -65,7 +65,7 @@ export function HubLink({ code, tone = 'quiet', hit, className, finePointerOnly 
   if (!link) return <span className={className}>{code}</span>;
   return (
     <DashLink href={link.href} tone={tone} hit={hit} className={linkClasses(finePointerOnly, className)} data-hub-link={link.code}>
-      {code}
+      {link.code}
     </DashLink>
   );
 }

@@ -12,6 +12,8 @@
 /** One scheduled leg as the Starlink sync writes it. */
 export type StarlinkFlight = {
   flight_number?: string;
+  /** The marketing carrier, 'UA' or '' (`api/_starlink-normalize.ts`). */
+  airline?: string;
   origin?: string;
   destination?: string;
   /** Unix SECONDS — the whole board's clock. */
@@ -22,10 +24,18 @@ export type StarlinkFlight = {
 
 export type FlightsByTail = Record<string, StarlinkFlight[]>;
 
+/**
+ * The fleet database by registration (`useFleet().fleetByReg`), as `fleetTypeCodeForTail` reads it:
+ * the type a tail really is, whatever the tracker prints. Null before it has loaded.
+ */
+export type FleetByReg = Record<string, { t?: string }> | null;
+
 /** One row of `buildDeparturesBoard()`'s bucket lists (`src/lib/starlink-utils.js`). */
 export type BoardRow = {
   tail: string;
   flight_number: string;
+  /** The leg's marketing carrier as the feed sent it, 'UA' or ''. */
+  airline: string;
   origin: string;
   destination: string;
   departure_ts: number;
