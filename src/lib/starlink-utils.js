@@ -172,24 +172,6 @@ export function computeInstallPace(aircraft, nowDate = new Date(), opts = {}) {
   return { weeks, peak, thisWeek: rawCounts[weeksWindow - 1], pace, paceWeeks, dated, remaining, etaWeeks, etaDate };
 }
 
-/**
- * When the Express fleet finishes at the EXPRESS install pace (F94).
- *
- * The whole-fleet pace is mostly mainline; dividing the Express backlog by it said "Dec '26"
- * for a fleet equipping about one aircraft a week. The backlog and the pace must describe the
- * same population, so this runs `computeInstallPace` over the Express aircraft alone.
- *
- * @param {Array<{fleet?: string, dateFound?: string}>} aircraft  the whole served roster.
- * @param {Date} nowDate
- * @param {number|null|undefined} remaining  Express aircraft still to equip.
- * @returns {{pace: number, etaWeeks: (number|null), etaDate: (Date|null)}}
- */
-export function computeExpressEta(aircraft, nowDate, remaining) {
-  const express = (aircraft || []).filter((a) => a && a.fleet === 'Express');
-  const model = computeInstallPace(express, nowDate, typeof remaining === 'number' ? { remaining } : {});
-  return { pace: model.pace, etaWeeks: model.etaWeeks, etaDate: model.etaDate };
-}
-
 // ═══ HUB DEPARTURES BOARD ═══
 /** How far a scheduled departure may lie in the future and still be the leg in the air. */
 const LIVE_LEG_SLACK_SEC = 15 * 60;

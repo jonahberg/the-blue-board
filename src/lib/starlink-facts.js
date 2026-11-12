@@ -1,11 +1,35 @@
 // Pure helpers for the deploy-time Starlink figure refresh
-// (scripts/refresh-starlink-facts.mjs). Kept dependency-free so both the build
-// script (node) and vitest can import them.
+// (scripts/refresh-starlink-facts.mjs), plus United's stated Starlink target, which the
+// dashboard's Starlink tab prints. Kept dependency-free so the build script (node), the
+// dashboard and vitest can all import them.
 
 /** Floor to the nearest 25 for a "500+"-style prose label that can only be stale conservatively. */
 export function starlinkLabel(count) {
   return `${Math.floor(count / 25) * 25}+`;
 }
+
+// ── United's own Starlink target (Nov 12 2026) ──
+// The Starlink tab's velocity card printed "Express · 100% ETA ~Sep '31", a date of our own made by
+// dividing a backlog by a pace. It contradicted United's stated target, and the backlog was mostly
+// single-cabin jets outside United's stated plan. The tile now states United's target and its
+// source instead, and we compute no completion date anywhere. Edit the target here, in one place.
+
+/**
+ * United's stated fleet-wide Starlink target, as the Starlink tab's tile prints it.
+ * Source: United Airlines Holdings Form 8-K, Exhibit 99.1, filed Oct 20 2026 (the third-quarter
+ * results; the same text is on United's newsroom). Checked against the filed exhibit 2026-11-12.
+ */
+export const UNITED_STARLINK_TARGET = Object.freeze({
+  label: "United's target",
+  value: 'End of 2027',
+  note: 'fleet-wide · stated Oct 20, 2026',
+  statedOn: '2026-10-20',
+  quote: 'United expects it to be available fleet-wide by the end of 2027.',
+  source: Object.freeze({
+    name: 'United Airlines Holdings, Form 8-K, Exhibit 99.1 (third-quarter 2026 results), Oct 20 2026',
+    url: 'https://www.sec.gov/Archives/edgar/data/100517/000010051726000184/ual_erx09302026xex991.htm',
+  }),
+});
 
 /** "August 2026" — UTC so the label doesn't depend on the build machine's timezone. */
 export function starlinkAsOf(date = new Date()) {

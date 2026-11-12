@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { starlinkLabel, starlinkAsOf, isPlausibleStarlinkCount } from '../src/lib/starlink-facts.js';
+import {
+  starlinkLabel, starlinkAsOf, isPlausibleStarlinkCount, UNITED_STARLINK_TARGET,
+} from '../src/lib/starlink-facts.js';
 import {
   STARLINK_EQUIPPED_SCOPE as LIB_SCOPE, chooseStarlinkLive, chooseStarlinkRoster, servedStarlinkSyncedAt,
   starlinkCountFromServed, starlinkExpressCountsFromServed, starlinkRosterTailsFromServed,
@@ -119,5 +121,32 @@ describe('src/data/starlink-facts.js labels', () => {
     const sum = Object.values(STARLINK_BY_TYPE).reduce((n, r) => n + r.equipped, 0);
     expect(STARLINK_MAINLINE_EQUIPPED).toBe(sum);
     expect(STARLINK_MAINLINE_EQUIPPED).toBeLessThan(STARLINK_EQUIPPED);
+  });
+});
+
+describe("UNITED_STARLINK_TARGET (Nov 12 2026: United's target, not a date of ours)", () => {
+  it('is what the tile prints, in one place', () => {
+    expect(UNITED_STARLINK_TARGET.label).toBe("United's target");
+    expect(UNITED_STARLINK_TARGET.value).toBe('End of 2027');
+    expect(UNITED_STARLINK_TARGET.note).toBe('fleet-wide · stated Oct 20, 2026');
+  });
+
+  it('carries its date, its words and its source', () => {
+    expect(UNITED_STARLINK_TARGET.statedOn).toBe('2026-10-20');
+    expect(UNITED_STARLINK_TARGET.quote).toBe('United expects it to be available fleet-wide by the end of 2027.');
+    expect(UNITED_STARLINK_TARGET.source.name).toMatch(/8-K.*Exhibit 99\.1.*Oct 20 2026/);
+    expect(UNITED_STARLINK_TARGET.source.url).toMatch(/^https:\/\/www\.sec\.gov\/Archives\/edgar\/data\/100517\//);
+    // The printed note and the stated date agree.
+    expect(new Date(`${UNITED_STARLINK_TARGET.statedOn}T12:00:00Z`).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+    })).toBe('Oct 20, 2026');
+    expect(UNITED_STARLINK_TARGET.note).toContain('Oct 20, 2026');
+    // The quote says what the value says.
+    expect(UNITED_STARLINK_TARGET.quote).toContain(UNITED_STARLINK_TARGET.value.toLowerCase());
+  });
+
+  it('cannot be edited at runtime', () => {
+    expect(Object.isFrozen(UNITED_STARLINK_TARGET)).toBe(true);
+    expect(Object.isFrozen(UNITED_STARLINK_TARGET.source)).toBe(true);
   });
 });
