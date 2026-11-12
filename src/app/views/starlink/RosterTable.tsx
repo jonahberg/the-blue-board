@@ -72,7 +72,7 @@ function depTime(
 
 /** The number a leg prints, which is what it links: UA576 for UAL576, UA5415 for a marked SKW5415. */
 function legNumber(flight: StarlinkFlight): string {
-  return starlinkFlightLabel(flight.flight_number, flight).text;
+  return starlinkFlightLabel(flight.flight_number, flight);
 }
 
 /** A route end: its Schedule board when it is a hub, plain text otherwise. */
@@ -138,7 +138,10 @@ function Expansion({
         </p>
         {upcoming.length ? (
           // Each line is one flight: its number in link colour, its hub ends quiet. On a touch
-          // screen a line is 44 px tall, so one line's touch boxes never cover the next line's.
+          // screen a line is 44 px tall, so one line's touch boxes never cover the next line's, and
+          // the number, the hub ends and the arrow sit further apart (`pointer-coarse:` gap and
+          // margin) so the 44 px boxes in a line never overlap side to side: a box reaches about
+          // 12 px past a three-letter hub code. A mouse keeps the line as it was.
           <ul className="mt-1 space-y-0.5">
             {upcoming.map((flight, index) => {
               const dep = depTime(flight.departure_ts, flight.origin, tzAbbrev);
@@ -148,12 +151,12 @@ function Expansion({
                 <li
                   key={`${flight.flight_number ?? ''}-${flight.departure_ts ?? 0}-${index}`}
                   data-link-row=""
-                  className="flex min-h-11 flex-wrap items-center gap-x-2 text-[11px] pointer-fine:md:min-h-0 pointer-fine:md:items-baseline"
+                  className="flex min-h-11 flex-wrap items-center gap-x-2 text-[11px] pointer-coarse:gap-x-7 pointer-fine:md:min-h-0 pointer-fine:md:items-baseline"
                 >
                   <FlightLink ident={legNumber(flight) || '—'} className="font-mono font-semibold" />
                   <span className="font-mono text-muted-foreground">
                     <RouteEnd code={flight.origin} />
-                    <span aria-hidden="true" className="mx-1">
+                    <span aria-hidden="true" className="mx-1 pointer-coarse:mx-3">
                       →
                     </span>
                     <RouteEnd code={flight.destination} />

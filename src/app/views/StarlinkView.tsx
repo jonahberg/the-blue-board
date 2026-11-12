@@ -44,6 +44,7 @@ import {
   ledgerHasData,
   rolloutBars,
   rolloutBarsNote,
+  ROSTER_DEFAULT_FILTERS,
   rosterFiltersShowing,
   rosterOptions,
   sortRoster,
@@ -128,11 +129,11 @@ export default function StarlinkView() {
   const [boardWindow, setBoardWindow] = useState<WindowHours>(12);
   const [boardShowAll, setBoardShowAll] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [fleetFilter, setFleetFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [operatorFilter, setOperatorFilter] = useState('');
-  const [newOnly, setNewOnly] = useState(false);
+  const [search, setSearch] = useState(ROSTER_DEFAULT_FILTERS.search);
+  const [fleetFilter, setFleetFilter] = useState(ROSTER_DEFAULT_FILTERS.fleet);
+  const [typeFilter, setTypeFilter] = useState(ROSTER_DEFAULT_FILTERS.type);
+  const [operatorFilter, setOperatorFilter] = useState(ROSTER_DEFAULT_FILTERS.operator);
+  const [newOnly, setNewOnly] = useState(ROSTER_DEFAULT_FILTERS.newOnly);
   const [sort, setSort] = useState<{ col: RosterSortCol; asc: boolean }>({ col: 'tail', asc: true });
   const [expanded, setExpanded] = useState<string | null>(null);
 

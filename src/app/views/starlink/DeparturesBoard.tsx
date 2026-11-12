@@ -29,7 +29,7 @@ import { memo } from 'react';
 import { Card } from '@/components/ui/card';
 import { fleetTypeCodeForTail } from '@/lib/fleet-type-link.js';
 import { formatFlightTime } from '@/lib/starlink-view.js';
-import { operatorLabel, relativeDeparture, starlinkFlightLabel } from '@/lib/starlink-roster.js';
+import { operatorLabel, relativeDeparture, starlinkFlightLabel, starlinkInboundLabel } from '@/lib/starlink-roster.js';
 import { HubLink, TypeLink } from '../../features/EntityLinks';
 import { FlightLink } from '../../features/FlightLink';
 import type { BoardModel, BoardRow, FleetByReg } from './types';
@@ -56,7 +56,7 @@ function Row({
   // What the row prints is what it links: UA347 for the feed's UAL347, UA5415 for an Express leg
   // the feed marks United; a number with no page prints as sent.
   const flight = starlinkFlightLabel(row.flight_number, row);
-  const inbound = row.inbound?.flight ? starlinkFlightLabel(row.inbound.flight) : null;
+  const inbound = row.inbound?.flight ? starlinkInboundLabel(row.inbound.flight) : null;
   return (
     // Every row is its own grid, so the time column is a fixed width at every size: an `auto`
     // column sized itself per row and the callsigns under each other started at different x.
@@ -83,7 +83,7 @@ function Row({
       <div className="relative min-w-0 pointer-coarse:static">
         {/* Not `truncate`: its overflow clip would cut the link's touch box (a number is ≤ 7 characters). */}
         <span className="block font-mono text-xs font-semibold">
-          <FlightLink ident={flight.text || '—'} linkClassName="z-10" />
+          <FlightLink ident={flight || '—'} linkClassName="z-10" />
         </span>
         <button
           type="button"
@@ -138,14 +138,15 @@ function Row({
           </span>
         ) : row.inbound ? (
           // The aircraft is in the air on its inbound leg — this departure has not happened. The
-          // inbound number is the live feed's, in the tab's one form (UAL3508 reads UA3508); it has
-          // no Starlink row, so an Express callsign there (YX3568) stays as sent.
+          // inbound number is the live feed's, and that feed carries only United flights
+          // (/api/fr24-feed?airline=UAL), so the leg is United's: YX3568 reads UA3568, UAL3508
+          // reads UA3508 (`starlinkInboundLabel`).
           <span className="text-[10px] text-muted-foreground">
             SCHED · inbound
             {inbound ? (
               <>
                 {' on '}
-                <FlightLink ident={inbound.text} tone="quiet" linkClassName="z-10" />
+                <FlightLink ident={inbound} tone="quiet" linkClassName="z-10" />
               </>
             ) : null}
           </span>
@@ -160,7 +161,7 @@ function Row({
             title={
               row.airborne
                 ? `Track ${row.tail} on the live map`
-                : `Track ${row.tail}'s inbound flight${inbound ? ` ${inbound.text}` : ''} on the live map`
+                : `Track ${row.tail}'s inbound flight${inbound ? ` ${inbound}` : ''} on the live map`
             }
           >
             <Radio aria-hidden="true" className="mr-1 inline size-3 align-[-2px]" />

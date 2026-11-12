@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
 
+import { flightLink } from '../src/lib/flight-link.js';
+
 import {
   ALASKA_HAWAIIAN_CODE,
   buildIndustryRows,
@@ -35,6 +37,7 @@ import {
   rosterOptions,
   sortRoster,
   starlinkFlightLabel,
+  starlinkInboundLabel,
   starlinkSinceLabel,
   upcomingFlights,
 } from '../src/lib/starlink-roster.js';
@@ -109,34 +112,58 @@ describe('rosterFiltersShowing (the hero buttons, Nov 12 2026)', () => {
 });
 
 describe('starlinkFlightLabel (one printed form for United numbers, Nov 12 2026)', () => {
+  /** The label and whether FlightLink will link it: the label is the one decision, FlightLink reads it. */
+  const shown = (printed, row) => {
+    const text = starlinkFlightLabel(printed, row);
+    return { text, links: flightLink(text)?.ident ?? null };
+  };
+
   it("a United number prints as its link's ident: UAL347 reads UA347", () => {
-    expect(starlinkFlightLabel('UAL347', { airline: 'UA' })).toEqual({ text: 'UA347', linkIdent: 'UA347' });
-    expect(starlinkFlightLabel('UA576', { airline: '' })).toEqual({ text: 'UA576', linkIdent: 'UA576' });
+    expect(shown('UAL347', { airline: 'UA' })).toEqual({ text: 'UA347', links: 'UA347' });
+    expect(shown('UA576', { airline: '' })).toEqual({ text: 'UA576', links: 'UA576' });
   });
 
   it('an Express leg the feed marks United prints and links its United number', () => {
-    expect(starlinkFlightLabel('SKW5415', { airline: 'UA' })).toEqual({ text: 'UA5415', linkIdent: 'UA5415' });
-    expect(starlinkFlightLabel('G74612', { airline: 'UA' })).toEqual({ text: 'UA4612', linkIdent: 'UA4612' });
+    expect(shown('SKW5415', { airline: 'UA' })).toEqual({ text: 'UA5415', links: 'UA5415' });
+    expect(shown('G74612', { airline: 'UA' })).toEqual({ text: 'UA4612', links: 'UA4612' });
   });
 
   it('a number that does not link prints exactly what the feed sent', () => {
     // Not marked United, an untested prefix, a provider suffix, a bare number.
-    expect(starlinkFlightLabel('SKW5415', { airline: '' })).toEqual({ text: 'SKW5415', linkIdent: null });
-    expect(starlinkFlightLabel('SKW5415', null)).toEqual({ text: 'SKW5415', linkIdent: null });
-    expect(starlinkFlightLabel('UCA5004', { airline: 'UA' })).toEqual({ text: 'UCA5004', linkIdent: null });
-    expect(starlinkFlightLabel('SKW5415A', { airline: 'UA' })).toEqual({ text: 'SKW5415A', linkIdent: null });
-    expect(starlinkFlightLabel('5415', { airline: 'UA' })).toEqual({ text: '5415', linkIdent: null });
-  });
-
-  it("the live feed's inbound number (no row) links only when it is United's", () => {
-    expect(starlinkFlightLabel('UA3508')).toEqual({ text: 'UA3508', linkIdent: 'UA3508' });
-    expect(starlinkFlightLabel('UAL3508')).toEqual({ text: 'UA3508', linkIdent: 'UA3508' });
-    expect(starlinkFlightLabel('YX3568')).toEqual({ text: 'YX3568', linkIdent: null });
+    expect(shown('SKW5415', { airline: '' })).toEqual({ text: 'SKW5415', links: null });
+    expect(shown('SKW5415', null)).toEqual({ text: 'SKW5415', links: null });
+    expect(shown('UCA5004', { airline: 'UA' })).toEqual({ text: 'UCA5004', links: null });
+    expect(shown('SKW5415A', { airline: 'UA' })).toEqual({ text: 'SKW5415A', links: null });
+    expect(shown('5415', { airline: 'UA' })).toEqual({ text: '5415', links: null });
   });
 
   it('an empty or missing number prints nothing and links nothing', () => {
-    expect(starlinkFlightLabel('', { airline: 'UA' })).toEqual({ text: '', linkIdent: null });
-    expect(starlinkFlightLabel(undefined, { airline: 'UA' })).toEqual({ text: '', linkIdent: null });
+    expect(shown('', { airline: 'UA' })).toEqual({ text: '', links: null });
+    expect(shown(undefined, { airline: 'UA' })).toEqual({ text: '', links: null });
+  });
+});
+
+// The inbound leg comes from the dashboard's live feed, /api/fr24-feed?airline=UAL, which carries
+// only United flights (src/lib/united-feed.js), so it reads as a United row. On the Nov 12 preview a
+// board row read "inbound on YX3568" (FR24 printing Republic's number on a United flight), plain,
+// beside "inbound on UA4190", linked.
+describe('starlinkInboundLabel (the live feed is United-only, Nov 12 2026)', () => {
+  it("an Express operator number on the live feed reads as United's and links", () => {
+    expect(starlinkInboundLabel('YX3568')).toBe('UA3568');
+    expect(flightLink(starlinkInboundLabel('YX3568'))?.href).toBe('/flight/UA3568');
+    expect(starlinkInboundLabel('SKW5123')).toBe('UA5123');
+    expect(starlinkInboundLabel('G74612')).toBe('UA4612');
+  });
+
+  it('a United number prints as its ident', () => {
+    expect(starlinkInboundLabel('UA4190')).toBe('UA4190');
+    expect(starlinkInboundLabel('UAL3508')).toBe('UA3508');
+  });
+
+  it('a number no rule reads stays as sent and links nothing', () => {
+    expect(starlinkInboundLabel('UCA5004')).toBe('UCA5004');
+    expect(flightLink(starlinkInboundLabel('UCA5004'))).toBeNull();
+    expect(starlinkInboundLabel('')).toBe('');
   });
 });
 
@@ -644,10 +671,10 @@ describe('Starlink schedule freshness', () => {
       .toBe('No United Starlink departures from the hubs in the next 12h.');
   });
 
-  it("the footer's lead says the numbers are United's and the name under each is the operator (Nov 12 2026)", () => {
+  it("the footer's lead says the UA numbers are United's and the name under each is the operator (Nov 12 2026)", () => {
     const footer = starlinkBoardFooter({ syncedAt: synced2h, servedFrom: 'supabase', nowMs: NOW_MS });
     expect(footer.startsWith(
-      "A NOC departures board, not a passenger FIDS. Flight numbers are United's; the name under each is the carrier that operates it (SkyWest, Republic, Mesa…). ",
+      "A NOC departures board, not a passenger FIDS. Flight numbers shown as UA are United's; the name under each is the carrier that operates it (SkyWest, Republic, Mesa…). ",
     )).toBe(true);
     expect(footer).not.toMatch(/Callsigns|not United marketing/);
   });

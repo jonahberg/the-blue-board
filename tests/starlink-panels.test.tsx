@@ -374,14 +374,19 @@ describe('DeparturesBoard links (Nov 12 2026)', () => {
     expect(inbound.className).toMatch(/(?:^|\s)z-10(?:\s|$)/);
   });
 
-  it("an inbound callsign prints in the tab's one form: UAL3508 reads UA3508; YX3568 stays as sent, plain", () => {
+  it("an inbound number prints in the tab's one form: UAL3508 reads UA3508", () => {
     renderBoard(FLIGHTS, { airborne: { N75436: { icao24: 'a1b2c3', origin: 'SFO', dest: 'DEN', callsign: 'UAL3508' } } });
     expect(screen.getByRole('link', { name: 'UA3508' }).getAttribute('href')).toBe('/flight/UA3508');
     expect(screen.queryByText(/UAL3508/)).toBeNull();
-    cleanup();
-    renderBoard(FLIGHTS, { airborne: { N75436: { icao24: 'a1b2c3', origin: 'SFO', dest: 'DEN', callsign: 'YX3568' } } });
-    expect(screen.getByText(/^SCHED · inbound/).textContent).toBe('SCHED · inbound on YX3568');
-    expect(screen.queryByRole('link', { name: /3568/ })).toBeNull();
+  });
+
+  // The live feed is United-only (/api/fr24-feed?airline=UAL), so the inbound leg is United's: on
+  // the Nov 12 preview "inbound on YX3568" sat plain beside a linked "inbound on UA4190".
+  it('an Express operator number on the inbound leg reads as its United number and links', () => {
+    renderBoard(FLIGHTS, { airborne: { N75436: { icao24: 'a1b2c3', origin: 'SFO', dest: 'DEN', flightIATA: 'YX3568' } } });
+    expect(screen.getByText(/^SCHED · inbound/).textContent).toBe('SCHED · inbound on UA3568');
+    expect(screen.getByRole('link', { name: 'UA3568' }).getAttribute('href')).toBe('/flight/UA3568');
+    expect(screen.getByRole('button', { name: /Track inbound/ }).getAttribute('title')).toContain('UA3568');
   });
 
   it('marks every row for the link audit', () => {
@@ -500,6 +505,10 @@ describe('RosterTable links (Nov 12 2026)', () => {
       expect(hub.className).not.toMatch(/(?:^|\s)text-primary(?:\s|$)/);
     }
     expect(within(list).queryByRole('link', { name: 'DSM' })).toBeNull();
+    // On a touch screen the line's live targets (number, hub ends) sit far enough apart that their
+    // 44 px boxes never overlap (`pointer-coarse:` spacing; a mouse keeps the line as it was).
+    expect(list.querySelector('li')?.className).toMatch(/(?:^|\s)pointer-coarse:gap-x-7(?:\s|$)/);
+    expect(list.querySelector('li [aria-hidden="true"]')?.className).toMatch(/(?:^|\s)pointer-coarse:mx-3(?:\s|$)/);
     // Each line is one flight: one link-coloured thing per line, and each is marked for the audit.
     for (const line of list.querySelectorAll('li')) {
       expect(line.querySelectorAll('.text-primary')).toHaveLength(1);
