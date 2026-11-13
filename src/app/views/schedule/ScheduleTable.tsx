@@ -651,6 +651,10 @@ export const ScheduleTable = forwardRef<
                           // Fleet cell's repeat stays plain). It never truncates: the words either
                           // side of it do, so a narrow cell clips the seats or the operator, not
                           // the link (an Express line ends in Starlink).
+                          // Its touch target must not make the row taller (on a touch tablet the
+                          // table is this one). After words on its line it takes a `box`, which
+                          // starts clear of the tail above; opening the line (a roster-only tail)
+                          // a box would sit over the tail's, so it is the 44 px element there.
                           const before = parts.slice(0, at).map((part) => part.text).join(' · ');
                           const after = parts.slice(at + 1).map((part) => part.text).join(' · ');
                           return (
@@ -664,6 +668,7 @@ export const ScheduleTable = forwardRef<
                                 <StarlinkLink
                                   href={row.starlinkHref!}
                                   label={parts[at].text}
+                                  hit={before ? 'box' : 'inline'}
                                   iconClassName="mr-0.5 inline size-2.5 align-[-1px]"
                                 />
                                 {after ? <span className="text-muted-foreground"> · </span> : null}

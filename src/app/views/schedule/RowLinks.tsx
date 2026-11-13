@@ -15,6 +15,7 @@ import { Fragment } from 'react';
 import { cn } from '@/lib/utils';
 import { DashLink } from '../../features/DashLink';
 import { HubLink, HubStatusLink } from '../../features/EntityLinks';
+import type { LinkHit } from '../../features/link-style';
 import type { FaaPart, RouteEnd } from './useBoardModel';
 
 /**
@@ -77,18 +78,21 @@ export function FaaLine({ parts, finePointerOnly = false }: { parts: FaaPart[]; 
 
 /**
  * The row's ⚡ Starlink mark as a link to the Starlink tab. Quiet, so it takes the violet of the
- * span it sits in (Starlink as a fact is `bb-starlink`, DESIGN.md 2026-11-11). `hit`: `inline` in
- * the desktop table, where it shares a cell with the tail; with `finePointerOnly` it has none.
+ * span it sits in (Starlink as a fact is `bb-starlink`, DESIGN.md 2026-11-11). `hit` is the
+ * caller's (the desktop table picks it by where the link sits on its line); with
+ * `finePointerOnly` it has none.
  */
 export function StarlinkLink({
   href,
   label,
+  hit = 'inline',
   finePointerOnly = false,
   iconClassName,
   className,
 }: {
   href: string;
   label: string;
+  hit?: LinkHit;
   finePointerOnly?: boolean;
   iconClassName: string;
   className?: string;
@@ -97,7 +101,7 @@ export function StarlinkLink({
     <DashLink
       href={href}
       tone="quiet"
-      hit={finePointerOnly ? 'none' : 'inline'}
+      hit={finePointerOnly ? 'none' : hit}
       className={cn(finePointerOnly && FINE_POINTER_ONLY, finePointerOnly && ABOVE_ROW, className)}
     >
       <Zap aria-hidden="true" className={iconClassName} />

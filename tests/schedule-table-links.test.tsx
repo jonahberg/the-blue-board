@@ -188,6 +188,21 @@ describe('the desktop Schedule row links what it names', () => {
     expect(link.closest('[title]')!.textContent).toBe('E175 · SkyWest Airlines · Starlink');
   });
 
+  it('a Starlink link after words on its line takes a touch box, not height: the row does not grow on a tablet', () => {
+    renderTable([linkedRow()]);
+    const classes = document.querySelector<HTMLElement>('a[href="/#starlink"]')!.className.split(/\s+/);
+    // `box`: an after: box over the line, the element its text's height.
+    expect(classes).toContain('after:h-11');
+    expect(classes).not.toContain('min-h-11');
+  });
+
+  it("a Starlink link that opens its line (a roster-only tail) is a 44 px element, as its box would cover the tail's", () => {
+    renderTable([linkedRow({ fleet: { badge: 'Starlink', starlink: true, enrich: '⚡ Starlink', source: 'starlink-roster' } })]);
+    const classes = document.querySelector<HTMLElement>('a[href="/#starlink"]')!.className.split(/\s+/);
+    expect(classes).toContain('min-h-11');
+    expect(classes).not.toContain('after:h-11');
+  });
+
   it('a type the tail does not decide, a non-hub end and a row with no Starlink stay plain', () => {
     renderTable([
       linkedRow({
