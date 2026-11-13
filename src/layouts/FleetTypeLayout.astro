@@ -106,9 +106,12 @@ const fleetNavItems = fleetOrder.map((t: string) => ({
 // Registry links (src/lib/fleet-registry-links.js) are 44 px tall on touch and relax only for a
 // mouse at md+ (DESIGN.md touch rule), reaching into the cell's padding (-my-1.5) so a row is 44 px
 // rather than 56, and a mouse keeps the table exactly as dense as before: the /fleet index's
-// `touchRowLink`. The tail is the row's one link-coloured link (the row is about it); "Starlink"
-// keeps the content pages' quiet underlined look from `.bb-content a`, in Starlink violet.
-const touchRowLink = 'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:my-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
+// `touchRowLink`. For a mouse at md+ the link is an inline block with 4 px above and below
+// cancelled by a −4 px margin: a 27.5 px target (DESIGN.md: a link in a compact list a mouse uses
+// is at least 24 px) in an unchanged 32.5 px row. The tail is the row's one link-coloured link
+// (the row is about it); "Starlink" keeps the content pages' quiet underlined look from
+// `.bb-content a`, in Starlink violet.
+const touchRowLink = 'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:inline-block pointer-fine:md:-my-1 pointer-fine:md:min-h-0 pointer-fine:md:pt-1 pointer-fine:md:pb-1';
 const tailLinkClass = `${touchRowLink} font-bold text-primary no-underline underline-offset-2 hover:underline hover:decoration-current`;
 
 /** Registry status tone. Always rendered next to the status text, never alone. */

@@ -229,8 +229,11 @@ const faqSchema = {
 // tables' density. One link per row: the link reaches into the cell's padding (-my-1.5), so a
 // row is 44 px rather than 56, its text level with the row's other cells. Several per cell (the family's types): a 44 px line each, the
 // first one's text level with the family name beside it.
+// For a mouse at md+ a row link is an inline block with 4 px above and below cancelled by a
+// −4 px margin: a 27.5 px target (DESIGN.md: a link in a compact list a mouse uses is at least
+// 24 px) in a row of unchanged height.
 const touchTypeLink = 'inline-flex min-h-11 items-start whitespace-nowrap pt-1.5 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
-const touchRowLink = 'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:my-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
+const touchRowLink = 'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:inline-block pointer-fine:md:-my-1 pointer-fine:md:min-h-0 pointer-fine:md:pt-1 pointer-fine:md:pb-1';
 // Links everywhere (Nov 2026): one link-coloured link per row, the thing the row is about (the
 // type code in the seat table); every other link in a row keeps the content pages' quiet look,
 // body colour with an underline (`.bb-content a`).

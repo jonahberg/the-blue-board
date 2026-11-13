@@ -16,8 +16,15 @@ if (!hasDist && process.env.CI) throw new Error('dist/ is missing in CI — run 
 const FLEET = JSON.parse(readFileSync(resolve(__dirname, '..', 'public', 'data', 'fleet.json'), 'utf8'));
 const page = (rel) => new JSDOM(readFileSync(join(DIST, rel), 'utf8')).window.document;
 const classes = (el) => (el.getAttribute('class') || '').split(/\s+/);
-/** The touch rule's row link: 44 px on touch, the table's own height with a mouse at md+. */
-const TOUCH_ROW = ['min-h-11', '-my-1.5', 'pointer-fine:md:my-0', 'pointer-fine:md:inline', 'pointer-fine:md:min-h-0', 'pointer-fine:md:pt-0'];
+/**
+ * The touch rule's row link: 44 px on touch; with a mouse at md+ a 27.5 px inline block whose
+ * 4 px padding is cancelled by a −4 px margin, so the row keeps its height (DESIGN.md: 24 px for a
+ * mouse in a compact list).
+ */
+const TOUCH_ROW = [
+  'min-h-11', '-my-1.5',
+  'pointer-fine:md:inline-block', 'pointer-fine:md:-my-1', 'pointer-fine:md:min-h-0', 'pointer-fine:md:pt-1', 'pointer-fine:md:pb-1',
+];
 
 /** Elements wearing link colour that are neither a link nor a button, as "tag.text". */
 function painted(doc) {
