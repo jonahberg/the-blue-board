@@ -26,7 +26,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 - **A hub link from another tab opens the schedule board fresh.** Its filters, its "Ask the board" answer and its sort are cleared, and today's board scrolls to now, as when the address is opened directly. A hub link followed while the Schedule tab is showing keeps your filters and sort.
 
 ### Fixed
-- **Back and Forward say where they went.** After a link that changed the tab, Back and Forward now announce the tab they return to and move keyboard focus to it, as the link did, and the tab's area shows a focus ring when it has keyboard focus. A place announced twice in a row is now said both times.
+- **Back and Forward say where they went.** After a link that changed the tab, Back and Forward now announce the tab they return to and, when keyboard focus was in the tab you left, move it to the tab they open, as the link did. The tab's area shows a focus ring when it has keyboard focus. A place announced twice in a row is now said both times.
 - **Airborne Now matches its own count.** An aircraft taxiing with the feed's ground flag unset was listed as airborne without being counted. The list, the special aircraft and the aircraft details now use the rule the count uses, so that aircraft no longer reads "Airborne — View on map".
 - **The live map's filters on a phone or tablet stayed open** over the Schedule tab after "Check the Schedule tab", with keyboard focus trapped inside them. A link there now closes them.
 - **The brief's chips, in the brief sheet,** now move keyboard focus to the part of the dashboard they open.
