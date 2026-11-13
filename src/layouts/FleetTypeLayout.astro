@@ -22,6 +22,7 @@ import fleetDb from '../../public/data/fleet.json';
 import { STARLINK_ROSTER_AS_OF, starlinkForType } from '../data/starlink-facts.js';
 import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
 import { fleetSeo } from '../lib/page-seo.js';
+import { fleetLiveListHref } from '../lib/fleet-live.js';
 import { isStarlinkWifi, registryRowLinks } from '../lib/fleet-registry-links.js';
 import { registryStarlinkNote } from '../lib/starlink-facts.js';
 
@@ -154,7 +155,11 @@ function statusClass(status: string | undefined): string {
       <StatTile label="Body Type" value={data.bodyType === 'widebody' ? 'Wide' : 'Narrow'} />
     </div>
 
-    <FleetLive displayName={data.displayName} tails={typeAircraft.map((a: any) => String(a.r || '')).filter(Boolean)} />
+    <FleetLive
+      displayName={data.displayName}
+      tails={typeAircraft.map((a: any) => String(a.r || '')).filter(Boolean)}
+      listHref={fleetLiveListHref(typeCode)}
+    />
 
     <div class="mt-6 text-center">
       <a

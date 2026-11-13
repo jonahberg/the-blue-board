@@ -22,6 +22,7 @@
 // The four are siblings, never nested.
 
 import { parseFr24Feed } from './feed-health.js';
+import { fleetTypeLink } from './fleet-type-link.js';
 import { flightLink } from './flight-link.js';
 import { isOnGround } from './flight-phase.js';
 import { hubLink } from './hub-link.js';
@@ -50,6 +51,20 @@ const identNumber = (ident) => {
   const m = /(\d+)/.exec(ident);
   return m ? Number(m[1]) : Number.POSITIVE_INFINITY;
 };
+
+/**
+ * Where the strip's count ("82 of 188 airborne") links: the dashboard's Fleet tab on its Airborne
+ * sub-view filtered to this type, which lists the same aircraft matched the same way, by tail
+ * (src/lib/fleet-view.js buildAirborneRows takes the type filter; fleetDeepLinkTarget opens a
+ * `view` with its filter). Null for a type with no fleet database code.
+ *
+ * @param {unknown} typeCode  the fleet database type code ('737 MAX 9').
+ * @returns {string|null}
+ */
+export function fleetLiveListHref(typeCode) {
+  const link = fleetTypeLink(typeCode, 'dashboard');
+  return link ? `${link.href}&view=airborne` : null;
+}
 
 /**
  * Where each name in one strip row links, or null where it prints as text.

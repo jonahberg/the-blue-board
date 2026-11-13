@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { airborneOfType, feedFlightIdent, fleetLiveRowLinks, normalizeTail } from '../src/lib/fleet-live.js';
+import { airborneOfType, feedFlightIdent, fleetLiveListHref, fleetLiveRowLinks, normalizeTail } from '../src/lib/fleet-live.js';
 import { isOnGround } from '../src/lib/flight-phase.js';
 import { parseFr24Feed } from '../src/lib/feed-health.js';
 
@@ -84,6 +84,17 @@ describe('helpers', () => {
     expect(result.flights[0].href).toBe(`/?flight=${t1}`);
     // feedRow's default route is ORD → LGA: one hub end.
     expect(result.flights[0].links).toEqual({ ident: null, origin: '/hubs/ord', dest: null, reg: `/?aircraft=${t1}`, map: `/?flight=${t1}` });
+  });
+});
+
+describe('fleetLiveListHref: where the strip count links', () => {
+  it('the Fleet tab on its Airborne list, filtered to the type', () => {
+    expect(fleetLiveListHref('737 MAX 9')).toBe('/?tab=fleet&type=737%20MAX%209&view=airborne');
+    expect(fleetLiveListHref('787-9')).toBe('/?tab=fleet&type=787-9&view=airborne');
+  });
+  it('a type with no fleet database code has no list: the count is text', () => {
+    expect(fleetLiveListHref('B739')).toBeNull();
+    expect(fleetLiveListHref(undefined)).toBeNull();
   });
 });
 

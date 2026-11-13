@@ -19,9 +19,14 @@ interface Props {
   displayName: string;
   /** Registrations of every aircraft of this type in the registry. */
   tails: string[];
+  /**
+   * Where the count links: the dashboard's Airborne list filtered to this type
+   * (src/lib/fleet-live.js fleetLiveListHref). Without one the count is text.
+   */
+  listHref?: string | null;
 }
 
-const { displayName, tails } = Astro.props;
+const { displayName, tails, listHref = null } = Astro.props;
 const total = tails.length;
 ---
 
@@ -43,8 +48,10 @@ const total = tails.length;
     </p>
   </div>
 
+  <!-- Reserved height: the 44 px count line, 8 px, the list's 1 px rule and four 44 px rows on a
+       phone (two rows from md), 12 px under them. -->
   <div
-    class="px-4 pb-3 [@media(scripting:enabled)]:min-h-[14.8125rem] md:[@media(scripting:enabled)]:min-h-[9.3125rem]"
+    class="px-4 pb-3 [@media(scripting:enabled)]:min-h-[15.0625rem] md:[@media(scripting:enabled)]:min-h-[9.5625rem]"
     data-fl-body
   >
     <p class="pt-1.5 text-xs leading-relaxed text-muted-foreground" data-fl-fallback>
@@ -53,9 +60,27 @@ const total = tails.length;
     </p>
 
     <div data-fl-live hidden>
-      <p class="flex h-10 items-baseline gap-2 overflow-hidden pt-1.5 text-xs whitespace-nowrap text-muted-foreground">
-        <span class="font-mono text-2xl leading-none font-bold text-foreground tabular-nums" data-fl-count></span>
-        <span data-fl-count-label></span>
+      <!-- The count summarizes the dashboard's Airborne list for this type, so it links there
+           (quiet, the whole 44 px line). The words are filled in by the script. -->
+      <p class="flex h-11 text-xs whitespace-nowrap text-muted-foreground">
+        {
+          listHref ? (
+            <a
+              class="inline-flex h-full items-baseline gap-2 pt-1.5 underline decoration-muted-foreground/40 underline-offset-4 hover:decoration-current focus-visible:decoration-current"
+              href={listHref}
+              data-fl-count-link
+            >
+              <span class="font-mono text-2xl leading-none font-bold text-foreground tabular-nums" data-fl-count></span>
+              <span data-fl-count-label></span>
+              <span class="sr-only">, list them in the dashboard</span>
+            </a>
+          ) : (
+            <span class="inline-flex items-baseline gap-2 pt-1.5">
+              <span class="font-mono text-2xl leading-none font-bold text-foreground tabular-nums" data-fl-count></span>
+              <span data-fl-count-label></span>
+            </span>
+          )
+        }
       </p>
       <ul
         class="mt-2 grid grid-cols-1 border-t border-border md:grid-cols-2 md:gap-x-6"

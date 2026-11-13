@@ -58,6 +58,16 @@ describe.skipIf(!hasDist)('fleet type pages: the registry links every tail', () 
     });
   }
 
+  it('the live strip\'s count links to the dashboard\'s Airborne list for the type', () => {
+    for (const slug of fleetOrder) {
+      const doc = page(`fleet/${slug}.html`);
+      const link = doc.querySelector('[data-fleet-live] a[data-fl-count-link]');
+      expect(link.getAttribute('href'), slug).toBe(`/?tab=fleet&type=${encodeURIComponent(fleetTypes[slug].typeCode)}&view=airborne`);
+      expect(link.querySelector('[data-fl-count]')).not.toBeNull();
+      expect(link.textContent).toContain(', list them in the dashboard');
+    }
+  });
+
   it('the h1 names the page in body colour, and no link-coloured text on a type page is not a link', () => {
     for (const slug of fleetOrder) {
       const doc = page(`fleet/${slug}.html`);
