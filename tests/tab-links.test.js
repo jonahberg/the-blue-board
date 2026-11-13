@@ -79,8 +79,6 @@ describe('one home per address', () => {
     'src/lib/tab-links.js': [LIVE_TAB_HREF, SCHEDULE_TAB_HREF, FLEET_TAB_HREF, FLEET_AIRBORNE_HREF, WEATHER_TAB_HREF, MY_FLIGHTS_HREF],
     'src/lib/starlink-link.js': [STARLINK_TAB_HREF],
     'src/lib/hub-link.js': [NAS_STATUS_HREF],
-    // The content pages' copy, until they take it from hub-link.js too.
-    'src/lib/nas-status-link.js': [NAS_STATUS_HREF],
   };
   const ADDRESSES = new Set(Object.values(HOMES).flat());
 
@@ -92,6 +90,19 @@ describe('one home per address', () => {
         .filter((text) => ADDRESSES.has(text) && !HOMES[file]?.includes(text))
         .map((text) => `${file}: '${text}'`),
     );
+    expect(typed).toEqual([]);
+  });
+
+  it('no content page, layout, component or page script writes one by hand either', () => {
+    const astro = [...files('src/pages', ['.astro']), ...files('src/layouts', ['.astro']), ...files('src/components', ['.astro'])];
+    const scripts = files('src/scripts', ['.ts']);
+    expect(astro.length + scripts.length).toBeGreaterThan(50);
+    // An .astro template is not TypeScript: an address in quotes is an attribute or a string.
+    const quoted = (text) => [...ADDRESSES].filter((address) => ['"', "'", '`'].some((q) => text.includes(`${q}${address}${q}`)));
+    const typed = [
+      ...astro.flatMap((file) => quoted(readFileSync(resolve(ROOT, file), 'utf8')).map((text) => `${file}: '${text}'`)),
+      ...scripts.flatMap((file) => stringLiterals(file).filter((text) => ADDRESSES.has(text)).map((text) => `${file}: '${text}'`)),
+    ];
     expect(typed).toEqual([]);
   });
 

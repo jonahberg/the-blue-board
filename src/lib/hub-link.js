@@ -29,8 +29,9 @@ export function hubLink(code, side) {
 
 /**
  * The Weather tab's NAS status panel, which lists every FAA program at every airport: where an FAA
- * code links (`hubStatusLink(code, 'nas')`), and where a line about FAA programs in general links
- * with no code of its own (the Sources tab's FAA card, the brief's planned-program chips).
+ * code links (`hubStatusLink(code, 'nas')`, Newark's program line included), and where a line about
+ * FAA programs in general links with no code of its own (the Sources tab's FAA card, the brief's
+ * planned-program chips, /hubs "Ground stops & FAA alerts"). The one place the address is written.
  */
 export const NAS_STATUS_HREF = '/?tab=weather&section=nas';
 

@@ -6,8 +6,7 @@ import HighlightBox from '../components/site/HighlightBox.astro';
 import JumpNav from '../components/site/JumpNav.astro';
 import StatTile from '../components/site/StatTile.astro';
 import { HUB_ORDER } from '../lib/hub-health.js';
-import { hubLink } from '../lib/hub-link.js';
-import { NAS_STATUS_HREF } from '../lib/nas-status-link.js';
+import { hubLink, hubStatusLink } from '../lib/hub-link.js';
 
 const faqEntries = [
   {
@@ -163,11 +162,12 @@ const ctaClass =
         {/* The count is United flights to or from EWR in the live feed, so the tile links to the
             Live map filtered to Newark, which shows those flights (StatTile `href`). */}
         <StatTile label="Active United Flights (EWR)" value="—" id="newark-active" href="/?hub=ewr" />
-        {/* The FAA program line links to the dashboard's NAS status panel, which lists every FAA
+        {/* The FAA program line is EWR's FAA status, so it links where the dashboard links an FAA
+            code (`hubStatusLink(code, 'nas')`): the NAS status panel, which lists every FAA
             program in force. src/scripts/newark-live.ts rewrites the text of #newark-program-status
             on each poll, so the id sits on an inner span and the link around it survives. */}
         <a
-          href={NAS_STATUS_HREF}
+          href={hubStatusLink('EWR', 'nas')?.href}
           class="group flex flex-col justify-center gap-1 rounded-lg border border-border bg-background px-3.5 py-2.5 text-xs leading-relaxed text-foreground transition-colors hover:border-primary"
         >
           <span id="newark-program-status">Checking FAA program status for EWR…</span>
