@@ -195,6 +195,32 @@ describe('in the Filters sheet (below lg), a link followed in place closes the s
   });
 });
 
+describe('only the Filters sheet follows as from an overlay (fromOverlay closes the flight sheet)', () => {
+  it('the desktop sidebar does not: a hub end or a tail followed leaves the flight sheet open', async () => {
+    renderSidebar();
+    await search('57');
+    act(() => seen.ui!.select({ kind: 'ident', ident: 'UA1' }));
+
+    fireEvent.click(linkNamed(rowOf('UA576'), 'N37502')!);
+    expect(seen.ui!.aircraftReg).toBe('N37502');
+    expect(seen.ui!.selection).toEqual({ kind: 'ident', ident: 'UA1' });
+
+    fireEvent.click(linkNamed(rowOf('UA576'), 'SFO')!);
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(seen.ui!.selection).toEqual({ kind: 'ident', ident: 'UA1' });
+  });
+
+  it('the Filters sheet does: a hub end followed from it closes the flight sheet as well', async () => {
+    renderSidebar({ onFollowInPlace: vi.fn() });
+    await search('57');
+    act(() => seen.ui!.select({ kind: 'ident', ident: 'UA1' }));
+
+    fireEvent.click(linkNamed(rowOf('UA576'), 'SFO')!);
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(seen.ui!.selection).toBeNull();
+  });
+});
+
 describe('hub-traffic and phase rows stay filter toggles, with nothing in link colour', () => {
   it('no link in them, and no text-primary', () => {
     renderSidebar();
