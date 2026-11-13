@@ -62,8 +62,8 @@ const renderCard = () =>
 
 /** The links inside the live region, and its buttons (the block has always had two: IROPS and "?"). */
 function controlsInLiveRegion() {
-  const region = document.querySelector('[aria-live]') as HTMLElement;
-  expect(region).toBeTruthy();
+  const region = document.getElementById('irops-content') as HTMLElement;
+  expect(region?.getAttribute('aria-live')).toBe('polite');
   return {
     links: region.querySelectorAll('a').length,
     buttons: [...region.querySelectorAll('button')].map((b) => b.getAttribute('aria-label') || b.textContent),

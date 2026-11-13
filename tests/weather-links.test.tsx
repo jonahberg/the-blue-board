@@ -86,6 +86,8 @@ const NAS = {
   ],
   planned: [
     { time: '', event: 'AFTER 1500\t-ORD/IAD GROUND DELAY PROGRAM POSSIBLE', decoded: 'AFTER 1500\t-ORD/IAD GROUND DELAY PROGRAM POSSIBLE', affectedAirports: ['ORD', 'IAD', 'BWI'] },
+    // Four hubs on one item, after a title long enough to wrap on a phone.
+    { time: '', event: 'AFTER 1800\t-NORTHEAST AND MIDWEST AIRPORTS GROUND STOP/DELAY PROGRAM POSSIBLE FOR THUNDERSTORMS', decoded: 'AFTER 1800\t-NORTHEAST AND MIDWEST AIRPORTS GROUND STOP/DELAY PROGRAM POSSIBLE FOR THUNDERSTORMS', affectedAirports: ['ORD', 'IAD', 'DEN', 'IAH'] },
   ],
 } as unknown as NasData;
 
@@ -93,7 +95,7 @@ describe('NasPanel: each hub tag goes to that hub\'s card on this tab', () => {
   it('links every hub tag to /?tab=weather&hub=, quiet, and tags no other airport', () => {
     mount(<NasPanel nas={NAS} />);
     const links = screen.getAllByRole('link').filter((a) => a.hasAttribute('data-hub-status-link'));
-    expect(links.map((a) => a.textContent)).toEqual(['EWR', 'ORD', 'IAD']);
+    expect(links.map((a) => a.textContent)).toEqual(['EWR', 'ORD', 'IAD', 'ORD', 'IAD', 'DEN', 'IAH']);
     for (const a of links) {
       expect(a.getAttribute('href')).toBe(`/?tab=weather&hub=${a.textContent}`);
       expect(a.getAttribute('data-hub-status-kind')).toBe('weather');
@@ -114,26 +116,50 @@ describe('NasPanel: each hub tag goes to that hub\'s card on this tab', () => {
     expect(linkColourOnPlainText()).toEqual([]);
   });
 
-  it('wherever the touch boxes are drawn, a tagged item is 44 px tall and its tags sit apart', () => {
+  it('an item\'s tags sit in their own link row after the title, which stays outside it', () => {
     mount(<NasPanel nas={NAS} />);
     const items = [...document.querySelectorAll('li')];
     const tagged = items.filter((li) => li.querySelector('a[data-hub-status-link]'));
     const untagged = items.filter((li) => !li.querySelector('a[data-hub-status-link]'));
-    expect(tagged).toHaveLength(2);
+    expect(tagged).toHaveLength(3);
     expect(untagged).toHaveLength(1);
-    for (const li of tagged) expect(classes(li)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
-    for (const li of untagged) expect(classes(li)).not.toContain('min-h-11');
+    for (const li of tagged) {
+      const rows = li.querySelectorAll('[data-link-row]');
+      expect(rows).toHaveLength(1);
+      // The row holds the tags and nothing else: every child is a tag link, every tag is in it.
+      const children = [...rows[0].children];
+      expect(children.every((c) => c.matches('a[data-hub-status-link]'))).toBe(true);
+      expect(children).toHaveLength(li.querySelectorAll('a[data-hub-status-link]').length);
+      expect(rows[0].textContent).toMatch(/^([A-Z]{3})+$/);
+      // The title's words are outside the row, so a guard rule can excuse them and not a tag.
+      expect(rows[0].parentElement?.firstChild?.nodeType).toBe(Node.TEXT_NODE);
+    }
+    for (const li of untagged) expect(li.querySelector('[data-link-row]')).toBeNull();
+  });
+
+  it('each tag is itself a 44 px square target until a mouse at md (pinned by min-h-11 and min-w-11), with no after: box', () => {
+    // An element box cannot overlap its neighbour the way a 44 px after: box on a 16 px line did,
+    // however the tags wrap; the classes are the only way to pin the size in jsdom.
+    mount(<NasPanel nas={NAS} />);
     for (const a of document.querySelectorAll('a[data-hub-status-link]')) {
-      expect(classes(a)).toEqual(expect.arrayContaining(['ml-5', 'first:ml-1', 'pointer-fine:md:ml-1']));
+      expect(classes(a)).toEqual(expect.arrayContaining(['min-h-11', 'min-w-11']));
+      expect(classes(a).some((c) => c.startsWith('after:'))).toBe(false);
     }
   });
 
-  it('a click on a tag, with Weather showing, scrolls to that hub\'s card and stays on the tab', () => {
+  it('a tag reads as a quiet link, not a badge: no pill background', () => {
+    mount(<NasPanel nas={NAS} />);
+    for (const a of document.querySelectorAll('a[data-hub-status-link]')) {
+      expect(classes(a).some((c) => /^bg-/.test(c))).toBe(false);
+    }
+  });
+
+  it('a click on a tag, with Weather showing, asks for that hub\'s card (pendingScroll) and stays on the tab', () => {
     mount(<NasPanel nas={NAS} />);
     expect(seen.ui!.tab).toBe('weather');
     const before = window.history.length;
     act(() => {
-      fireEvent.click(screen.getByRole('link', { name: 'IAD' }));
+      fireEvent.click(screen.getAllByRole('link', { name: 'IAD' })[0]);
     });
     expect(seen.ui!.tab).toBe('weather');
     expect(seen.ui!.pendingScroll).toBe('hub-card-IAD');

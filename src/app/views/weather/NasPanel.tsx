@@ -69,19 +69,20 @@ function badgeTone(item: NasItem): string {
 }
 
 /**
- * A hub tag: the hub's card on this tab (`HubStatusLink kind="weather"`), quiet, on a neutral tag.
- * Wherever its 44 px touch box is drawn (every pointer below `md`, a coarse one at any width) the
- * tags after the first sit 20 px apart, so two tags' boxes never overlap; a mouse at `md`+ keeps
- * them tight. The first tag's box may cover the end of the title, which is text.
+ * An item's hub tags: their own link row after the title, so the title (the FAA's free text) and
+ * the tags are separate rows for the runtime link guard. Each tag goes to the hub's card on this
+ * tab (`HubStatusLink kind="weather"`): a quiet link, body colour with the muted underline, and no
+ * pill, so it reads as a link rather than a badge.
+ *
+ * Wherever the touch floor applies (every pointer below `md`, a coarse one at any width) the row
+ * sits on its own line under the title and each tag is itself a 44 × 44 px box with no `after:`
+ * box, so however the tags wrap, two tags' targets never overlap: element boxes in a wrapping row
+ * only meet at their edges. The row starts 12 px left so the first code lines up with the title.
+ * A mouse at `md`+ gets the tight tags inline after the title, as before.
  */
-const HUB_TAG = 'ml-5 rounded-sm bg-muted px-1 font-mono text-[9px] first:ml-1 pointer-fine:md:ml-1';
-
-/**
- * An item with hub tags is 44 px tall wherever the boxes are drawn: a tag's box reaches about 14 px
- * above the title's line, and with the item that tall and the list's gap below it, no box reaches
- * the next item's.
- */
-const TAGGED_ITEM = 'min-h-11 pointer-fine:md:min-h-0';
+const TAG_ROW = '-ml-3 flex flex-wrap gap-x-1 pointer-fine:md:ml-1 pointer-fine:md:inline-flex';
+const HUB_TAG =
+  'inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[10px] pointer-fine:md:min-h-0 pointer-fine:md:min-w-0';
 
 function Tier({ label, items }: { label: string; items: NasItem[] }) {
   if (!items.length) return null;
@@ -95,7 +96,7 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
       </div>
       <ul className="mt-1.5 space-y-1.5">
         {items.map((item, i) => (
-          <li key={`${item.sevType}-${item.title}-${i}`} className={cn('flex gap-2', item.hubs.length && TAGGED_ITEM)}>
+          <li key={`${item.sevType}-${item.title}-${i}`} className="flex gap-2">
             <Badge
               variant="outline"
               // One width for GS, CDR and OTHER, so every title in a tier starts on the same line.
@@ -112,9 +113,13 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
                     title is the FAA's own words and stays text, a facility code in it too: the
                     hub tags after it are where a hub links. */}
                 {nasDisplayTitle(item.title) as string}
-                {item.hubs.map((hub) => (
-                  <HubStatusLink key={hub} code={hub} kind="weather" className={HUB_TAG} />
-                ))}
+                {item.hubs.length ? (
+                  <span data-link-row="" className={TAG_ROW}>
+                    {item.hubs.map((hub) => (
+                      <HubStatusLink key={hub} code={hub} kind="weather" hit="none" className={HUB_TAG} />
+                    ))}
+                  </span>
+                ) : null}
               </p>
               {item.detailParts.length ? (
                 <p className="text-[10px] text-muted-foreground">
