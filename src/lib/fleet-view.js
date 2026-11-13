@@ -382,6 +382,49 @@ export function fleetDeepLinkTarget({ filter, view }, options) {
 }
 
 /**
+ * What a Fleet link followed while the Fleet tab is already showing does (the links plan, ruling 2,
+ * Nov 12 2026: a follow that stays on its tab resets nothing). Only what the link names changes:
+ *
+ *  - a known type sets the type filter, a known status the status filter; search, Wi-Fi, the other
+ *    of the two and the Express search stay as the reader set them (`filter` carries only the one
+ *    the link names);
+ *  - a `view` opens that sub-view; with none, the sub-view stays when it lists what the filter
+ *    narrows (All Aircraft for either, Airborne Now for a type) and All Aircraft opens otherwise,
+ *    so the click shows its result;
+ *  - an unknown filter with no `view` changes nothing (null), as for a link arriving.
+ *
+ * Nothing scrolls: the reader is on the tab, looking at what they clicked.
+ *
+ * @param {{filter: string|null|undefined, view: 'airborne'|'special'|'express'|null|undefined}} link
+ * @param {{typeValues: Iterable<string>, statusValues: Iterable<string>}} options
+ * @param {'all'|'airborne'|'special'|'express'} subView  the sub-view showing now.
+ * @returns {{filter: {status: string}|{type: string}|null, subView: 'all'|'airborne'|'special'|'express'}|null}
+ */
+export function fleetStayTarget({ filter, view }, options, subView) {
+  const resolved = resolveFleetDeepLinkFilter(filter, options);
+  if (!resolved && !view) return null;
+  if (!resolved) return { filter: null, subView: /** @type {'airborne'|'special'|'express'} */ (view) };
+  const named = resolved.type ? { type: resolved.type } : { status: resolved.status };
+  const shown = subView === 'all' || (subView === 'airborne' && Boolean(resolved.type));
+  return { filter: named, subView: view || (shown ? subView : 'all') };
+}
+
+/**
+ * The next step for a Fleet address waiting for the fleet database (the cold load's, or a link
+ * followed before the database arrived): 'apply' once it has rows, 'wait' until then, 'drop' when
+ * the load failed or the wait ran past its deadline. One budget for both, so a link applied long
+ * after the reader moved on never resets and scrolls the tab under them (the cold load's 10 s,
+ * which the shipped dashboard's 200 ms poll also gave up at).
+ *
+ * @param {{loaded: boolean, loadFailed: boolean, now: number, deadline: number}} state
+ * @returns {'apply'|'wait'|'drop'}
+ */
+export function heldFleetLinkStep({ loaded, loadFailed, now, deadline }) {
+  if (loadFailed || now > deadline) return 'drop';
+  return loaded ? 'apply' : 'wait';
+}
+
+/**
  * The special-aircraft panel's rows, cross-referenced against the live feed so a named
  * aircraft that is in the air right now says so.
  *

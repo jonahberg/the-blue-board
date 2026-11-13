@@ -20,6 +20,7 @@ import { safeLocalStorage } from './storage';
 import { canonicalizeHashParams, cleanTabHash } from '@/lib/tab-hash.js';
 import type { TabId } from '../tabs';
 import type { Flight } from '../data/types';
+import { readFleetDeepLinks } from './deep-links';
 import type { FleetDeepLinks } from './deep-links';
 
 /** What the flight sheet is showing: a live aircraft, or a flight number to look up. */
@@ -31,8 +32,33 @@ export type Selection =
 /** A map "look here" request. `key` makes repeated focuses on the same point distinct. */
 export type MapFocus = { lat: number; lon: number; key: number } | null;
 
-/** A Fleet-tab link followed in place. `seq` counts follows, from 1, so a repeat is a change. */
-export type FleetLink = { filter: string | null; view: FleetDeepLinks['view']; seq: number };
+/**
+ * A Fleet-tab link followed in place. `seq` counts follows, from 1, so a repeat is a change.
+ *
+ * `arriving`: true when the link came from another tab, so the Fleet view first puts itself back
+ * where a cold load starts, then applies the link and scrolls to it; false when the Fleet tab was
+ * already showing, so it applies only the filter or sub-view the link names and resets nothing
+ * (the links plan, ruling 2). `at`: when it was followed (ms), so a link held for the fleet
+ * database gives up on the same budget a cold load does.
+ */
+export type FleetLink = {
+  filter: string | null;
+  view: FleetDeepLinks['view'];
+  seq: number;
+  arriving: boolean;
+  at: number;
+};
+
+/**
+ * A hub link that ARRIVED at the Schedule tab from another tab (`useFollowDeepLink`), for the
+ * Schedule view: on a new `seq` it clears its own status, type and search filters, so the board
+ * the link opened lands as a cold load of `/?tab=schedule&hub=ORD` does (the links plan, ruling 9).
+ * The board itself (hub, Departures, the hub's default day) is already set through the Schedule
+ * store by the follow. A hub link followed while Schedule is showing changes the hub only and does
+ * not bump this (ruling 2: the reader's direction, day and filters stay). Not consumed yet: the
+ * Schedule view reads it from `useUi().scheduleLink` (links part 2, slice 2a).
+ */
+export type ScheduleLink = { hub: string; seq: number };
 
 export type UiValue = {
   tab: TabId;
@@ -61,9 +87,22 @@ export type UiValue = {
    * the Fleet view knows which filters its controls offer and when the fleet database has
    * arrived, so this store only holds the request and the view applies it. It applies on each
    * new `seq`: the same link clicked twice, after the visitor has cleared the filter, applies twice.
+   * `options.arriving` (default true) says whether the link came from another tab (`FleetLink`).
    */
   fleetLink: FleetLink | null;
-  followFleetLink: (link: FleetDeepLinks) => void;
+  followFleetLink: (link: FleetDeepLinks, options?: { arriving?: boolean }) => void;
+
+  /**
+   * The Fleet tab's slice of the address the page was opened on (`?type=` / `?filter=` /
+   * `?view=`), read once when the dashboard starts. The Fleet view applies it once its database
+   * has loaded; it reads it here rather than from the address bar because a followed link to
+   * another tab may have taken those parameters out of the address by then (`addressAfterFollow`).
+   */
+  coldFleetLink: FleetDeepLinks;
+
+  /** The last hub link that arrived at the Schedule tab from another tab (`ScheduleLink`). */
+  scheduleLink: ScheduleLink | null;
+  followScheduleLink: (hub: string) => void;
 
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
@@ -138,6 +177,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [focus, setFocus] = useState<MapFocus>(null);
   const [starlinkFilter, setStarlinkFilter] = useState(false);
   const [fleetLink, setFleetLink] = useState<FleetLink | null>(null);
+  // After `initialTab`, which first moves parameters trapped after the '#' into the query.
+  const [coldFleetLink] = useState<FleetDeepLinks>(readFleetDeepLinks);
+  const [scheduleLink, setScheduleLink] = useState<ScheduleLink | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [aircraftReg, setAircraftReg] = useState<string | null>(null);
   const [delayExplain, setDelayExplain] = useState<Record<string, unknown> | null>(null);
@@ -167,8 +209,14 @@ export function UiProvider({ children }: { children: ReactNode }) {
 
   const clearPendingScroll = useCallback(() => setPendingScroll(null), []);
 
-  const followFleetLink = useCallback((link: FleetDeepLinks) => {
-    setFleetLink((prev) => ({ filter: link.filter, view: link.view, seq: (prev?.seq ?? 0) + 1 }));
+  const followFleetLink = useCallback((link: FleetDeepLinks, options?: { arriving?: boolean }) => {
+    const arriving = options?.arriving ?? true;
+    const at = Date.now();
+    setFleetLink((prev) => ({ filter: link.filter, view: link.view, seq: (prev?.seq ?? 0) + 1, arriving, at }));
+  }, []);
+
+  const followScheduleLink = useCallback((hub: string) => {
+    setScheduleLink((prev) => ({ hub, seq: (prev?.seq ?? 0) + 1 }));
   }, []);
 
   // Centring the map means showing it: every caller (My Flights, Starlink "Track", the aircraft
@@ -244,6 +292,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
       setStarlinkFilter,
       fleetLink,
       followFleetLink,
+      coldFleetLink,
+      scheduleLink,
+      followScheduleLink,
       searchOpen,
       setSearchOpen,
       aircraftReg,
@@ -275,6 +326,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
       starlinkFilter,
       fleetLink,
       followFleetLink,
+      coldFleetLink,
+      scheduleLink,
+      followScheduleLink,
       searchOpen,
       aircraftReg,
       delayExplain,

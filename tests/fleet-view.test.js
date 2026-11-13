@@ -9,6 +9,8 @@ import {
   FLEET_FAMILY_COLORS,
   fleetDeepLinkTarget,
   fleetHealthCounts,
+  fleetStayTarget,
+  heldFleetLinkStep,
   resolveFleetDeepLinkFilter,
   sortAirborneRows,
   typeCounts,
@@ -382,5 +384,58 @@ describe('buildSpecialRows', () => {
     const rows = buildSpecialRows(special, fleetByReg, []);
     expect(rows.map((r) => r.reg)).toEqual(['N17104', 'N26902']);
     expect(rows[0]).toMatchObject({ kind: 'named', type: '757-200', delivered: '1994' });
+  });
+});
+
+describe('fleetStayTarget: a Fleet link followed while the Fleet tab is showing (ruling 2)', () => {
+  const options = { statusValues: ['active', 'stored', 'starlink'], typeValues: ['A319', '737 MAX 9'] };
+
+  it('names only the filter the link sets, so every other filter stays', () => {
+    expect(fleetStayTarget({ filter: 'A319', view: null }, options, 'all')).toEqual({ filter: { type: 'A319' }, subView: 'all' });
+    expect(fleetStayTarget({ filter: 'starlink', view: null }, options, 'all')).toEqual({
+      filter: { status: 'starlink' },
+      subView: 'all',
+    });
+  });
+
+  it('keeps the sub-view when it lists what the filter narrows, else opens All Aircraft', () => {
+    // Airborne Now is filtered by type, not by status.
+    expect(fleetStayTarget({ filter: 'A319', view: null }, options, 'airborne')?.subView).toBe('airborne');
+    expect(fleetStayTarget({ filter: 'starlink', view: null }, options, 'airborne')?.subView).toBe('all');
+    for (const from of ['special', 'express']) {
+      expect(fleetStayTarget({ filter: 'A319', view: null }, options, from)?.subView, from).toBe('all');
+      expect(fleetStayTarget({ filter: 'stored', view: null }, options, from)?.subView, from).toBe('all');
+    }
+  });
+
+  it('a view opens that view, with or without a known filter', () => {
+    expect(fleetStayTarget({ filter: null, view: 'special' }, options, 'all')).toEqual({ filter: null, subView: 'special' });
+    expect(fleetStayTarget({ filter: 'A319', view: 'airborne' }, options, 'express')).toEqual({
+      filter: { type: 'A319' },
+      subView: 'airborne',
+    });
+    expect(fleetStayTarget({ filter: 'B789', view: 'express' }, options, 'all')).toEqual({ filter: null, subView: 'express' });
+  });
+
+  it('an unknown or empty filter with no view changes nothing', () => {
+    expect(fleetStayTarget({ filter: 'B789', view: null }, options, 'all')).toBeNull();
+    expect(fleetStayTarget({ filter: null, view: null }, options, 'special')).toBeNull();
+  });
+});
+
+describe('heldFleetLinkStep: a Fleet address waiting for the fleet database', () => {
+  const at = { now: 1_000, deadline: 11_000 };
+
+  it('waits while the database has not arrived, and applies once it has', () => {
+    expect(heldFleetLinkStep({ loaded: false, loadFailed: false, ...at })).toBe('wait');
+    expect(heldFleetLinkStep({ loaded: true, loadFailed: false, ...at })).toBe('apply');
+    // At the deadline exactly, still in budget.
+    expect(heldFleetLinkStep({ loaded: true, loadFailed: false, now: 11_000, deadline: 11_000 })).toBe('apply');
+  });
+
+  it('drops it when the load failed, or when the database arrives past the deadline', () => {
+    expect(heldFleetLinkStep({ loaded: false, loadFailed: true, ...at })).toBe('drop');
+    expect(heldFleetLinkStep({ loaded: true, loadFailed: false, now: 11_001, deadline: 11_000 })).toBe('drop');
+    expect(heldFleetLinkStep({ loaded: false, loadFailed: false, now: 11_001, deadline: 11_000 })).toBe('drop');
   });
 });

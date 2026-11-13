@@ -47,6 +47,8 @@ import {
   deliveryStats,
   fleetDeepLinkTarget,
   fleetHealthCounts,
+  fleetStayTarget,
+  heldFleetLinkStep,
   sortAirborneRows,
   typeCounts as countByType,
   wifiFilterOptions,
@@ -57,7 +59,6 @@ import { listSpecialLiveries } from '@/lib/special-livery.js';
 import { expressStarlinkScope } from '@/lib/starlink-roster.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { ExpressAircraft, FleetAircraft } from '../data/types';
-import { readFleetDeepLinks } from '../state/deep-links';
 import type { FleetDeepLinks } from '../state/deep-links';
 import { AskChips } from '../features/AskChips';
 import { useAskFleet } from './fleet/useAskFleet';
@@ -102,7 +103,7 @@ export default function FleetView() {
     expressStatus,
   } = useFleet();
   const { flights, lastGoodTs } = useFeed();
-  const { openAircraft, setTab, fleetLink } = useUi();
+  const { openAircraft, setTab, fleetLink, coldFleetLink } = useUi();
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -349,14 +350,34 @@ export default function FleetView() {
   // nothing had happened (found by the reviewer on the preview build, Nov 12 2026).
   const { active: askActive, clear: clearAsk } = ask;
   const [linkScroll, setLinkScroll] = useState<{ to: 'controls' | 'panel' } | null>(null);
+  //
+  // A link followed while this tab is already showing (`fleetLink.arriving` false, the links plan's
+  // ruling 2) is not an arrival: it sets only the filter or sub-view it names (`fleetStayTarget`),
+  // resets nothing and scrolls nowhere.
   const applyFleetDeepLink = useCallback(
-    (link: FleetDeepLinks, { followed }: { followed: boolean }) => {
-      const target = fleetDeepLinkTarget(link, {
+    (link: FleetDeepLinks, how: 'cold' | 'arrive' | 'stay') => {
+      const options = {
         statusValues: STATUS_OPTIONS.map((option) => option.value),
         typeValues: typeOptions.map((option) => option.value),
-      }) as { filter: { status: string; type: string } | null; subView: SubView; scrollTo: 'controls' | 'panel' } | null;
+      };
+      if (how === 'stay') {
+        const stay = fleetStayTarget(link, options, subView) as {
+          filter: { status: string } | { type: string } | null;
+          subView: SubView;
+        } | null;
+        if (!stay) return;
+        if (stay.filter && 'type' in stay.filter) setTypeFilter(stay.filter.type);
+        else if (stay.filter) setStatusFilter(stay.filter.status);
+        setSubView(stay.subView);
+        return;
+      }
+      const target = fleetDeepLinkTarget(link, options) as {
+        filter: { status: string; type: string } | null;
+        subView: SubView;
+        scrollTo: 'controls' | 'panel';
+      } | null;
       if (!target) return;
-      if (followed) {
+      if (how === 'arrive') {
         setSearch('');
         setWifiFilter('');
         setStatusFilter('');
@@ -372,7 +393,7 @@ export default function FleetView() {
       // A new object each time, so the same link followed twice scrolls twice.
       setLinkScroll({ to: target.scrollTo });
     },
-    [typeOptions, askActive, clearAsk],
+    [typeOptions, askActive, clearAsk, subView],
   );
 
   // The scroll a link asked for, once the filter and sub-view it set have rendered: the controls
@@ -396,34 +417,45 @@ export default function FleetView() {
   // A cold load. The shipped dashboard polled every 200 ms for up to 10 s because the fleet
   // database arrives after the URL is read. Here the same wait is an effect that latches the
   // first time `fleetDb` is non-empty — and gives up on the same 10 s budget so a failed load
-  // does not leave a filter pending forever.
+  // does not leave a filter pending forever (`heldFleetLinkStep`). The address is the one the
+  // page was opened on, held by the UI store at startup (`coldFleetLink`): a link followed to
+  // another tab before the database arrived has taken it out of the address bar by now.
   const deepLinkDone = useRef(false);
   const deepLinkDeadline = useRef(Date.now() + DEEP_LINK_TIMEOUT_MS);
   useEffect(() => {
     if (deepLinkDone.current) return;
-    if (loadFailed || Date.now() > deepLinkDeadline.current) {
-      deepLinkDone.current = true;
-      return;
-    }
-    if (!fleetDb.length) return;
+    const step = heldFleetLinkStep({
+      loaded: fleetDb.length > 0,
+      loadFailed,
+      now: Date.now(),
+      deadline: deepLinkDeadline.current,
+    });
+    if (step === 'wait') return;
     deepLinkDone.current = true;
-    applyFleetDeepLink(readFleetDeepLinks(), { followed: false });
-  }, [fleetDb.length, loadFailed, applyFleetDeepLink]);
+    if (step === 'apply') applyFleetDeepLink(coldFleetLink, 'cold');
+  }, [fleetDb.length, loadFailed, applyFleetDeepLink, coldFleetLink]);
 
   // A link followed in place (`useUi().followFleetLink`, from a DashLink anywhere in the
   // dashboard). Each follow has a new `seq`, so the same link clicked again after the visitor
   // cleared the filter applies again. The ref starts at 0, not at the current `seq`: this view
   // mounts on the first visit to the tab, which is often the follow itself, so the link is
-  // already in the store. A link followed before the database arrives is held until it does.
+  // already in the store. A link followed before the database arrives is held until it does, on
+  // the cold load's budget counted from the follow (`fleetLink.at`): later than that it is dropped.
   // Declared after the cold load's effect so that, when both apply in one commit, the link the
   // visitor just clicked wins over an address the page was opened on.
   const appliedFleetLinkSeq = useRef(0);
   useEffect(() => {
     if (!fleetLink || fleetLink.seq === appliedFleetLinkSeq.current) return;
-    if (!fleetDb.length) return;
+    const step = heldFleetLinkStep({
+      loaded: fleetDb.length > 0,
+      loadFailed,
+      now: Date.now(),
+      deadline: fleetLink.at + DEEP_LINK_TIMEOUT_MS,
+    });
+    if (step === 'wait') return;
     appliedFleetLinkSeq.current = fleetLink.seq;
-    applyFleetDeepLink(fleetLink, { followed: true });
-  }, [fleetLink, fleetDb.length, applyFleetDeepLink]);
+    if (step === 'apply') applyFleetDeepLink(fleetLink, fleetLink.arriving ? 'arrive' : 'stay');
+  }, [fleetLink, fleetDb.length, loadFailed, applyFleetDeepLink]);
 
   // ── Load failure ────────────────────────────────────────────────────────────────────
   // Only the panels that READ the fleet database go away. The airborne count, the

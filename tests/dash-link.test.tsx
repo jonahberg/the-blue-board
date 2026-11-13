@@ -119,13 +119,42 @@ describe('DashLink, an unmodified primary click', () => {
 
     fireEvent.click(link);
     expect(reachedDocumentPrevented).toBe(true);
-    expect(seen.ui!.fleetLink).toEqual({ filter: 'A319', view: null, seq: 1 });
+    // From Live: the link arrives at Fleet.
+    expect(seen.ui!.fleetLink).toEqual({ filter: 'A319', view: null, seq: 1, arriving: true, at: expect.any(Number) });
     expect(seen.ui!.tab).toBe('fleet');
 
-    // The same link again applies again: the Fleet view watches `seq`, not the filter.
+    // The same link again applies again: the Fleet view watches `seq`, not the filter. Fleet is
+    // showing now, so this one does not arrive (the Fleet view resets nothing for it).
     fireEvent.click(link);
-    expect(seen.ui!.fleetLink).toEqual({ filter: 'A319', view: null, seq: 2 });
+    expect(seen.ui!.fleetLink).toEqual({ filter: 'A319', view: null, seq: 2, arriving: false, at: expect.any(Number) });
     expect(seen.ui!.tab).toBe('fleet');
+  });
+
+  it('a hub link arriving at Schedule bumps scheduleLink; one followed on Schedule does not', () => {
+    const link = mount('/?tab=schedule&hub=ORD');
+    expect(seen.ui!.scheduleLink).toBeNull();
+
+    fireEvent.click(link);
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+
+    // Schedule is showing now: the board changes hub, the Schedule view keeps its filters.
+    act(() => seen.schedule!.setCurrent({ hub: 'DEN' }));
+    fireEvent.click(link);
+    expect(seen.schedule!.current.hub).toBe('ORD');
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+  });
+
+  it("a hub link followed on Schedule changes the hub and keeps the reader's direction and day", () => {
+    const link = mount('/?tab=schedule&hub=ORD');
+    act(() => seen.ui!.setTab('schedule'));
+    act(() => seen.schedule!.setCurrent({ dir: 'arrivals', day: 1 }));
+    const before = window.history.length;
+
+    fireEvent.click(link);
+
+    expect(seen.schedule!.current).toEqual({ hub: 'ORD', dir: 'arrivals', day: 1 });
+    expect(window.history.length).toBe(before);
+    expect(seen.ui!.announcement).toBe('');
   });
 });
 

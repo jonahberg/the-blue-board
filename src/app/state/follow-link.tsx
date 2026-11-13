@@ -9,6 +9,13 @@
  * on). It is not the cold load's order (`useDeepLinks` sets the tab first); the end state is the
  * same.
  *
+ * A link ARRIVES when it changes the tab, and only then is its destination put where a cold load of
+ * the same address starts (a hub link: Departures, the hub's default day, and `scheduleLink` for
+ * the Schedule view's own filters; a Fleet link: `fleetLink.arriving`, so the Fleet view resets
+ * before it applies). A link followed on the tab already showing changes only what it names: a hub
+ * link on Schedule changes the board's hub and keeps direction and day, a Fleet link sets its own
+ * filter (the links plan, ruling 2).
+ *
  * A link that changes the tab leaves ONE history entry (`pushHistoryEntry`), so Back returns to the
  * tab the reader was on: the hash listener in `useDeepLinks` restores it, and `FollowProvider`
  * announces the tab and moves focus as a follow does. A link to the tab already showing and an
@@ -52,20 +59,23 @@ type Latest = {
   setTab: UiValue['setTab'];
   openAircraft: UiValue['openAircraft'];
   followFleetLink: UiValue['followFleetLink'];
+  followScheduleLink: UiValue['followScheduleLink'];
   announce: UiValue['announce'];
   setCurrent: ScheduleValue['setCurrent'];
+  board: ScheduleValue['current'];
 };
 
 export function FollowProvider({ children }: { children: ReactNode }) {
-  const { tab, setTab, openAircraft, followFleetLink, announce } = useUi();
-  const { setCurrent } = useSchedule();
-  const latest = useRef<Latest>({ tab, setTab, openAircraft, followFleetLink, announce, setCurrent });
+  const { tab, setTab, openAircraft, followFleetLink, followScheduleLink, announce } = useUi();
+  const { setCurrent, current: board } = useSchedule();
+  const now = { tab, setTab, openAircraft, followFleetLink, followScheduleLink, announce, setCurrent, board };
+  const latest = useRef<Latest>(now);
   // The tab a history move has already been announced for, until the tab change commits: Back
   // fires `popstate` and then `hashchange`, and the second must not speak again.
   const historyMoveTo = useRef<TabId | null>(null);
   // After commit, so a render React throws away never reaches a click.
   useLayoutEffect(() => {
-    latest.current = { tab, setTab, openAircraft, followFleetLink, announce, setCurrent };
+    latest.current = now;
     historyMoveTo.current = null;
   });
 
@@ -94,14 +104,28 @@ export function FollowProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const follow = useCallback<FollowDeepLink>((intent) => {
-    const { tab: from, setTab, openAircraft, followFleetLink, announce, setCurrent } = latest.current;
+    const { tab: from, setTab, openAircraft, followFleetLink, followScheduleLink, announce, setCurrent, board } =
+      latest.current;
     const to = intent.tab && intent.tab !== from ? intent.tab : null;
+    // Arriving from another tab, or already there (the links plan, ruling 2): only a link that
+    // arrives puts its destination where a cold load of its address starts; one followed on the
+    // tab already showing changes what it names and resets nothing.
+    const arriving = to !== null;
     // Read before anything moves: a caller may blur the link after this returns (the hub chip).
-    const refocus = to !== null && focusLeavesWith(from);
-    // A board as a cold load opens it: Departures (the hub chip's figure is operated departures),
-    // and, with no day given, the hub's useful day (`setCurrent` re-derives it).
-    if (intent.scheduleHub) setCurrent({ hub: intent.scheduleHub, dir: 'departures' });
-    if (intent.fleet) followFleetLink(intent.fleet);
+    const refocus = arriving && focusLeavesWith(from);
+    if (intent.scheduleHub) {
+      if (arriving) {
+        // A board as a cold load opens it: Departures (the hub chip's figure is operated
+        // departures), and, with no day given, the hub's useful day (`setCurrent` re-derives it).
+        // The Schedule view clears its own filters on the new `scheduleLink` seq.
+        setCurrent({ hub: intent.scheduleHub, dir: 'departures' });
+        followScheduleLink(intent.scheduleHub);
+      } else {
+        // On the Schedule tab already: the hub changes, the reader's direction and day stay.
+        setCurrent({ hub: intent.scheduleHub, day: board.day });
+      }
+    }
+    if (intent.fleet) followFleetLink(intent.fleet, { arriving });
     if (to) {
       pushHistoryEntry(from, to);
       setTab(to, { hash: false, ...(intent.scrollTo ? { scrollTo: intent.scrollTo } : {}) });

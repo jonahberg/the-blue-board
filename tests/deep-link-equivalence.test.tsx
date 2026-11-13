@@ -16,6 +16,11 @@
  * What is stubbed: the fleet database and the live feed (a small fixed database), the watch list
  * and watched-flight alerts (the Schedule store's collaborators; the real ones poll), and fetch.
  *
+ * A link followed on the tab already showing is not an arrival and is not compared with a cold
+ * load: it changes what it names and keeps the rest (the links plan, ruling 2), pinned at the end.
+ * So is a cold load's Fleet address that a link followed before the fleet data landed has taken out
+ * of the address bar: it still applies (the UI store holds it from startup).
+ *
  * What this does NOT cover: the rest of Dashboard.tsx (the shell, the lazy tab registry, the other
  * views and providers), the Schedule board's own loading, and anything a real browser adds (the
  * address bar, history, a real page load). The two arms' addresses differ by design and are not
@@ -363,5 +368,82 @@ describe('a cold load and an in-place click of the same address end in the same 
     expect(coldState.tab).toBe('live');
     expect(clicked.tab).toBe('stats');
     expect({ ...clicked, tab: coldState.tab }).toEqual(coldState);
+  });
+});
+
+describe('a link followed on the tab already showing changes what it names and resets nothing (ruling 2)', () => {
+  it('/?tab=fleet&type=737%20MAX%209 from a filtered Fleet tab: the type changes, Wi-Fi and search stay', async () => {
+    mountAt('/#stats', '/?tab=fleet&type=737%20MAX%209');
+    act(() => seen.ui!.setTab('fleet'));
+    await pick('Fleet WiFi filter', 'Starlink');
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Fleet search' }), { target: { value: 'N37' } });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+    const before = window.history.length;
+    scrolls.length = 0;
+
+    fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+    expect(reachedDocumentPrevented).toBe(true);
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+
+    expect(state()).toMatchObject({
+      tab: 'fleet',
+      fleetType: expect.stringContaining('737 MAX 9'),
+      fleetWifi: 'Starlink',
+      fleetSearch: 'N37',
+      fleetRows: 1,
+    });
+    expect(scrolls).toEqual([]);
+    expect(window.history.length).toBe(before);
+  });
+
+  it('/?tab=schedule&hub=DEN from the Schedule tab on Arrivals for tomorrow: the hub changes, the rest stays', () => {
+    mountAt('/#stats', '/?tab=schedule&hub=DEN');
+    act(() => seen.ui!.setTab('schedule'));
+    act(() => seen.schedule!.setCurrent({ dir: 'arrivals', day: 1 }));
+
+    fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+
+    expect(state()).toMatchObject({ tab: 'schedule', scheduleHub: 'DEN', scheduleDir: 'arrivals', scheduleDay: 1 });
+    expect(seen.ui!.scheduleLink).toBeNull();
+  });
+});
+
+describe("a cold load's Fleet address survives a link followed before the fleet data arrives", () => {
+  it('/?tab=fleet&type=A319, a follow to Schedule, the data lands, then Fleet: filtered to the A319 as cold', async () => {
+    const coldState = await cold('/?tab=fleet&type=A319');
+
+    const loaded = { fleetDb: FLEET.fleetDb, fleetByReg: FLEET.fleetByReg, loading: FLEET.loading };
+    Object.assign(FLEET, { fleetDb: [], fleetByReg: {}, loading: true });
+    try {
+      mountAt('/?tab=fleet&type=A319', '/?tab=schedule&hub=DEN');
+      expect(seen.ui!.tab).toBe('fleet');
+      expect(state().fleetRows).toBe(0);
+
+      fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+      expect(seen.ui!.tab).toBe('schedule');
+      // The follow's history entry dropped the dashboard's own parameters.
+      expect(window.location.search).toBe('');
+
+      // The fleet data lands while Schedule is showing (any render reads the store again).
+      Object.assign(FLEET, loaded);
+      act(() => seen.ui!.announce('fleet data landed'));
+      act(() => seen.ui!.setTab('fleet'));
+      const after = await finalState();
+      cleanup();
+
+      const fleetOnly = ({ fleetType, fleetStatus, fleetSubView, fleetWifi, fleetSearch, fleetRows, fleetExpressSearch }: typeof after) => ({
+        fleetType,
+        fleetStatus,
+        fleetSubView,
+        fleetWifi,
+        fleetSearch,
+        fleetRows,
+        fleetExpressSearch,
+      });
+      expect(fleetOnly(after)).toEqual(fleetOnly(coldState));
+      expect(after.fleetType).toContain('A319');
+    } finally {
+      Object.assign(FLEET, loaded);
+    }
   });
 });
