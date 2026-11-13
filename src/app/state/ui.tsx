@@ -94,10 +94,19 @@ export type UiValue = {
   showBmacToast: (ident: string) => void;
   dismissBmacToast: () => void;
 
-  /** The current text of the single polite live region. */
+  /**
+   * The current text of the single polite live region. A sentence announced twice in a row ends
+   * the second time with `ANNOUNCEMENT_REPEAT_MARK`, so the region changes and speaks it again.
+   */
   announcement: string;
   announce: (text: string) => void;
 };
+
+/**
+ * Appended to an announcement equal to the one before it, so the live region's text changes and
+ * the sentence is spoken again; a zero-width space, which a screen reader does not read.
+ */
+export const ANNOUNCEMENT_REPEAT_MARK = '​';
 
 /** Inventory §30: the landing toast appears three seconds after the flight lands. */
 const BMAC_DELAY_MS = 3000;
@@ -173,11 +182,17 @@ export function UiProvider({ children }: { children: ReactNode }) {
     [setTab],
   );
 
-  /** Repeating the same sentence is a no-op: screen readers announce a changed value. */
+  /**
+   * A screen reader speaks a live region when its text changes, so the same sentence twice (the
+   * same link followed twice, Back to a tab announced a moment ago) would be heard once. A repeat
+   * gets a trailing zero-width space, and the repeat after that drops it again: the text node
+   * changes every time and what is read aloud stays the same (`ANNOUNCEMENT_REPEAT_MARK`).
+   */
   const announce = useCallback((text: string) => {
-    if (!text || text === lastAnnouncement.current) return;
-    lastAnnouncement.current = text;
-    setAnnouncement(text);
+    if (!text) return;
+    const next = text === lastAnnouncement.current ? `${text}${ANNOUNCEMENT_REPEAT_MARK}` : text;
+    lastAnnouncement.current = next;
+    setAnnouncement(next);
   }, []);
 
   /**
