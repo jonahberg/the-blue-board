@@ -23,7 +23,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ### Changed
 - **A link inside a panel or dialog takes you there.** From the flight panel, the aircraft details, the flight lookup, the delay explanation, the brief, the watched flights panel or the live map's filters on a phone or tablet, a link to another part of the dashboard closes what it was in and lands where opening its address would, with keyboard focus there and a screen reader told where it went. A registration in the flight panel opens the aircraft over the panel instead, and closing the aircraft brings you back to it.
-- **A hub link from another tab opens the schedule board fresh.** Its filters, its "Ask the board" answer and its sort are cleared, and today's board scrolls to now, as when the address is opened directly. A hub link followed while the Schedule tab is showing keeps your filters and sort.
+- **A hub link from another tab opens the schedule board fresh.** Its filters, its "Ask the board" answer and its sort are cleared, and today's board scrolls to now, as when the address is opened directly. A hub link followed while the Schedule tab is showing keeps your status, type and search filters and your sort; the new board's own filters (route type, Wi-Fi, time and risk) start over, as they do whenever you change boards.
 
 ### Fixed
 - **Back and Forward say where they went.** After a link that changed the tab, Back and Forward now announce the tab they return to and, when keyboard focus was in the tab you left, move it to the tab they open, as the link did. The tab's area shows a focus ring when it has keyboard focus. A place announced twice in a row is now said both times.
