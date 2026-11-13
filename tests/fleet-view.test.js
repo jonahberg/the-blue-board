@@ -18,6 +18,9 @@ import {
   typeCounts,
   wifiFilterOptions,
 } from '../src/lib/fleet-view.js';
+import { matchAircraft } from '../src/lib/fleet-match.js';
+import { fleetUtilization } from '../src/lib/fleet-utils.js';
+import { isAirborne } from '../src/lib/live-stats.js';
 
 // Rows shaped like /data/fleet.json.
 const FLEET = [
@@ -290,6 +293,17 @@ describe('buildAirborneRows / sortAirborneRows', () => {
     expect(rows.map((r) => r.reg)).toEqual(before);
   });
 
+  it('lists exactly the aircraft the tab counts as airborne: ground telemetry is on the ground, flag or not', () => {
+    // Not flagged on the ground, but at 10 m and 5 m/s: the shared rule (`isOnGround`) says ground.
+    const taxiing = { reg: 'N37502', icao24: 'a5', flightIATA: 'UA600', origin: 'ORD', dest: 'DEN', alt: 10, spd: 5, vr: 0, onGround: false };
+    const feed = [...FLIGHTS, taxiing];
+    const rows = buildAirborneRows(feed, deps);
+    expect(rows.map((r) => r.reg)).toEqual(['N802UA', 'N17104']);
+    // The utilization's "m" and the "Airborne Now (N)" tab count, from the same feed.
+    const counted = fleetUtilization(feed.filter(isAirborne), FLEET.length, (f) => matchAircraft(f, fleetByReg)).matched;
+    expect(rows).toHaveLength(counted);
+  });
+
   it('carries each route end as printed, so the view links the hub ends without parsing the route', () => {
     const rows = buildAirborneRows(
       [...FLIGHTS, { reg: 'N37502', icao24: 'a4', flightIATA: 'UA500', alt: 9000, onGround: false }],
@@ -451,6 +465,13 @@ describe('buildSpecialRows', () => {
   it('ignores an on-ground sighting', () => {
     const rows = buildSpecialRows(special, fleetByReg, [
       { reg: 'N17104', flightIATA: 'UA200', origin: 'SFO', dest: 'HNL', onGround: true },
+    ]);
+    expect(rows.find((r) => r.reg === 'N17104').airborne).toBeNull();
+  });
+
+  it('ignores ground telemetry the feed did not flag, as every airborne count does', () => {
+    const rows = buildSpecialRows(special, fleetByReg, [
+      { reg: 'N17104', flightIATA: 'UA200', origin: 'SFO', dest: 'HNL', alt: 10, spd: 5, vr: 0, onGround: false },
     ]);
     expect(rows.find((r) => r.reg === 'N17104').airborne).toBeNull();
   });

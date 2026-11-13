@@ -8,7 +8,7 @@
 // applyFleetDeepLinkFilter() (:486-508) and the seat bar in buildAircraftDetailHTML()
 // (:7385-7395).
 
-import { getPhase } from './flight-phase.js';
+import { getPhase, isOnGround } from './flight-phase.js';
 import { matchAircraft } from './fleet-match.js';
 import { fleetTypeCodeFor } from './fleet-type-link.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from './fleet-utils.js';
@@ -310,6 +310,11 @@ export function fleetTypeTextLink(typeText, activeType) {
  * Flights that do not resolve to a mainline airframe are dropped, not shown as blanks — this
  * table is the fleet's view of the sky, and a United Express regional is not in the fleet.
  *
+ * "Airborne" is the one rule every count on every tab uses (`isOnGround`: the feed's flag, or
+ * telemetry under 100 ft and 50 kt), so with no type or search filter the list is exactly the
+ * utilization's "m" and the "Airborne Now (N)" count. The feed's flag alone let a taxiing
+ * aircraft into the list but not into the count.
+ *
  * Each row carries its route ends as printed (`origin`, `dest`; '???' when the feed has none), so
  * the view links the hub ends without parsing `route`, and the type it links to (`typeLink`,
  * `fleetRowTypeLink` under the shared type filter).
@@ -322,7 +327,7 @@ export function buildAirborneRows(flights, { fleetByReg, starlinkTails, special,
   const searchUpper = (search || '').toUpperCase();
   const rows = [];
   (flights || []).forEach((f) => {
-    if (!f || f.onGround) return;
+    if (!f || isOnGround(f)) return;
     const ac = matchAircraft(f, fleetByReg || {});
     if (!ac) return;
     if (type && ac.t !== type) return;
@@ -477,6 +482,7 @@ export function heldFleetLinkStep({ loaded, loadFailed, now, deadline }) {
  *
  * Each row carries the type it links to (`typeLink`, by its tail; the panel is not filtered by
  * type, so no card's type is the list's own) and an airborne entry's route ends as printed.
+ * "Airborne" is the shared `isOnGround` rule, as in `buildAirborneRows`.
  *
  * @param {Map<string, {name: string, type: string}>} special
  * @param {Record<string, Object>} fleetByReg
@@ -489,7 +495,7 @@ export function buildSpecialRows(special, fleetByReg, flights, liveries = []) {
   /** @type {Record<string, {flight: string, route: string, origin: string, dest: string}>} */
   const airborne = {};
   (flights || []).forEach((f) => {
-    if (!f || f.onGround) return;
+    if (!f || isOnGround(f)) return;
     const reg = f.reg ? f.reg.replace('-', '') : null;
     if (reg && ((special && special.has(reg)) || liveryTails.has(reg))) {
       const origin = f.origin || '???';
