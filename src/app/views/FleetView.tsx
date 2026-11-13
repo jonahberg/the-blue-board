@@ -89,6 +89,13 @@ type SubView = 'all' | 'airborne' | 'special' | 'express';
 /** How long the `?view=`/`?type=` deep links wait for the fleet database before giving up. */
 const DEEP_LINK_TIMEOUT_MS = 10000;
 
+/**
+ * The opening addresses (`useUi().coldFleetLink`, one object per page load) this view has already
+ * applied or given up on. A remount (the error boundary's "Try again") must not apply the address
+ * the page was opened on a second time, long after the reader changed the filters.
+ */
+const SPENT_COLD_FLEET_LINKS = new WeakSet<FleetDeepLinks>();
+
 export default function FleetView() {
   const {
     fleetDb,
@@ -424,6 +431,10 @@ export default function FleetView() {
   const deepLinkDeadline = useRef(Date.now() + DEEP_LINK_TIMEOUT_MS);
   useEffect(() => {
     if (deepLinkDone.current) return;
+    if (SPENT_COLD_FLEET_LINKS.has(coldFleetLink)) {
+      deepLinkDone.current = true;
+      return;
+    }
     const step = heldFleetLinkStep({
       loaded: fleetDb.length > 0,
       loadFailed,
@@ -432,6 +443,7 @@ export default function FleetView() {
     });
     if (step === 'wait') return;
     deepLinkDone.current = true;
+    SPENT_COLD_FLEET_LINKS.add(coldFleetLink);
     if (step === 'apply') applyFleetDeepLink(coldFleetLink, 'cold');
   }, [fleetDb.length, loadFailed, applyFleetDeepLink, coldFleetLink]);
 

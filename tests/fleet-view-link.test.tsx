@@ -774,6 +774,26 @@ describe('a link held for the fleet database has the cold load\'s budget', () =>
 });
 
 describe('the cold load\'s Fleet address is the one the page was opened on', () => {
+  it('applies once per page load: a remount (the error boundary\'s "Try again") does not apply it again', () => {
+    window.history.replaceState(null, '', '/?tab=fleet&type=A319');
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    expect(rows()).toHaveLength(6);
+    // The reader takes the filter off, then the view is mounted afresh in the same page.
+    fireEvent.click(typeCard('A319'));
+    expect(rows()).toHaveLength(8);
+
+    view.rerender(tree('again'));
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+  });
+
   it('still applies when a followed link has since taken it out of the address bar', () => {
     window.history.replaceState(null, '', '/?tab=fleet&type=A319');
     ctl.fleet = fleetValue([], true);
