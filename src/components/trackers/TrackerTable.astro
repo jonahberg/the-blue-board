@@ -63,9 +63,12 @@ const toneClass = (tone: Tone) =>
   tone === 'quiet'
     ? 'text-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground focus-visible:decoration-foreground'
     : 'text-primary underline-offset-2 hover:underline';
-/** src/pages/fleet/index.astro `touchRowLink`: 44 px on touch, the text's own height for a mouse. */
+/**
+ * src/pages/fleet/index.astro `touchRowLink`: 44 px on touch, the text's own height for a mouse;
+ * plus a 44 px minimum width on touch, because a three-letter code ("ORD") is 20 px wide.
+ */
 const touchRowLink =
-  'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:my-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
+  'inline-flex min-h-11 min-w-11 items-start -my-1.5 pt-1.5 pointer-fine:md:my-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:min-w-0 pointer-fine:md:pt-0';
 
 // From md to lg the columns are tight (a 734 px table at 768): headers and link text may wrap
 // there, and keep to one line from lg.
