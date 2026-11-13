@@ -105,7 +105,12 @@ const titleId = `hub-board-title-${hubLower}`;
        whole row height over the flight column (the `after:` box is placed on the `relative` row,
        at the column's offset in each grid below, and takes in the row's 1 px rule), so a tap
        anywhere in that column lands — 48 px on a phone row, 44 px from md — while the status pill and the delay keep their own titles.
-       A number the site has no page for stays text: the script leaves the `<a>` without an href. -->
+       A number the site has no page for stays text: the script leaves the `<a>` without an href.
+       The far end links to its hub page when it is another of the nine hubs (links everywhere,
+       Nov 12 2026; `destHref`, src/lib/hub-board-view.js), any other airport stays text. It is a
+       quiet link (body colour, muted underline) so the board's one button stays the way in. Its hit
+       box is hung off the row the same way, over the "To" column (48 px wide and the row's height
+       on a phone, the column's 56 px from md), clear of the flight column's box and the status. -->
   <template data-hb-row>
     <li
       class="relative grid h-12 grid-cols-[2.75rem_3.25rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1rem] content-center gap-x-2 border-b border-border last:border-b-0 md:h-11 md:grid-cols-[3rem_4.5rem_3.5rem_minmax(0,1fr)_6rem_10rem] md:grid-rows-1 md:gap-x-3"
@@ -119,7 +124,10 @@ const titleId = `hub-board-title-${hubLower}`;
         data-f="ident"></a
       >
       <span class="col-start-3 row-start-1 min-w-0 self-center truncate font-mono text-xs text-foreground">
-        <span class="sr-only">to </span><span data-f="dest"></span>
+        <span class="sr-only">to </span><a
+          class="underline decoration-muted-foreground/40 underline-offset-2 after:absolute after:top-0 after:-bottom-px after:left-28 after:w-12 hover:decoration-foreground focus-visible:decoration-foreground md:after:left-36 md:after:w-14 [&:not([href])]:no-underline [&:not([href])]:after:hidden"
+          data-f="dest"></a
+        >
       </span>
       <span
         class="col-span-2 col-start-2 row-start-2 min-w-0 truncate text-[11px] leading-4 text-muted-foreground md:col-span-1 md:col-start-4 md:row-start-1 md:self-center md:text-xs"

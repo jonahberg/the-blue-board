@@ -8,7 +8,8 @@
  *
  * Every word in a row comes from src/lib/hub-board-view.js, which runs the dashboard's own row
  * model; this file only clones the `<template>` and sets `textContent` (never innerHTML). Each
- * flight number links to its flight page (/flight/UA5789) through ./flight-link.ts.
+ * flight number links to its flight page (/flight/UA5789) through ./flight-link.ts, and a
+ * destination that is one of the nine hubs to its hub page (/hubs/den).
  *
  * Failure is quiet by design: a failed or empty first load leaves the static line and releases the
  * reserved height; a failed refresh keeps the board it already has, re-cut to this clock.
@@ -133,8 +134,14 @@ if (root) {
     // which is plain text to every reader (src/scripts/flight-link.ts).
     const ident = f('ident');
     if (ident) setFlightLink(ident, row.ident);
+    // The far end links to its hub page when it is another of the nine hubs; any other airport
+    // (and a name sent in place of a code) is an href-less `<a>`, plain text to every reader.
     const dest = f('dest');
-    if (dest) dest.textContent = row.dest;
+    if (dest) {
+      dest.textContent = row.dest;
+      if (row.destHref) dest.setAttribute('href', row.destHref);
+      else dest.removeAttribute('href');
+    }
     const city = f('city');
     if (city) city.textContent = row.destName;
     const gate = f('gate');

@@ -125,6 +125,31 @@ describe('hubBoardRows', () => {
     const [view] = hubBoardRows(payloadFor({ flights: [row], total: 1, meta: {} }), NOW_SEC);
     expect(view.dest).toBe('Traverse City Cherry Capital');
     expect(view.destName).toBe('');
+    expect(view.destHref).toBeNull();
+  });
+
+  // Links everywhere (Nov 12 2026): a content page sends a hub code to its hub page. Only the nine
+  // hubs have one; the board's own hub would be a self-link, and a name is not a code.
+  it('links the far end to its hub page only when it is another of the nine hubs', () => {
+    const board = {
+      flights: [
+        makeRow({ ident: 'UA1', sched: cst('15:00'), dest: 'DEN', destName: 'Denver' }),
+        makeRow({ ident: 'UA2', sched: cst('15:01'), dest: 'gum', destName: 'Guam' }),
+        makeRow({ ident: 'UA3', sched: cst('15:02'), dest: 'LGA', destName: 'New York' }),
+        makeRow({ ident: 'UA4', sched: cst('15:03'), dest: 'ORD', destName: 'Chicago' }),
+        makeRow({ ident: 'UA5', sched: cst('15:04'), dest: 'NRT', destName: 'Tokyo' }),
+      ],
+      total: 5,
+      meta: {},
+    };
+    const rows = hubBoardRows(payloadFor(board), NOW_SEC);
+    expect(rows.map((r) => [r.ident, r.destHref])).toEqual([
+      ['UA1', '/hubs/den'],
+      ['UA2', '/hubs/gum'],
+      ['UA3', null],
+      ['UA4', null],
+      ['UA5', '/hubs/nrt'],
+    ]);
   });
 });
 
