@@ -4,18 +4,16 @@
 //   - the registration → the dashboard's aircraft dialog (`tailLink`, /?aircraft=N12345). A tail
 //     has no page of its own, so the content side crosses to the dashboard. Link colour: the row
 //     is about the tail.
-//   - "Starlink" in the Wi-Fi column → the dashboard's Starlink tab (/#starlink), where the
-//     roster lists the aircraft (the spec's "Starlink or Wi-Fi badge on a row"). Body colour with
-//     a quiet underline, in Starlink violet as everywhere.
+//   - "Starlink" in the Wi-Fi column → the dashboard's Starlink tab (/#starlink, from
+//     ./starlink-link.js), where the roster lists the aircraft (the spec's "Starlink or Wi-Fi
+//     badge on a row"). Body colour with a quiet underline, in Starlink violet as everywhere.
 //   - every other cell (fleet number, config, IFE, power, year, status) names nothing with a home
 //     and stays text.
 //
 // DOM-free; tested in tests/fleet-registry-links.test.js.
 
+import { STARLINK_TAB_HREF } from './starlink-link.js';
 import { tailLink } from './tail-link.js';
-
-/** The dashboard's Starlink tab, the home of a Starlink fact on a content page. */
-export const STARLINK_TAB_HREF = '/#starlink';
 
 /** The fleet database's Wi-Fi field says Starlink ('Starlink', 'starlink'). */
 export function isStarlinkWifi(wifi) {

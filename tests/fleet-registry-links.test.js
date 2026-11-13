@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { STARLINK_TAB_HREF, isStarlinkWifi, registryRowLinks } from '../src/lib/fleet-registry-links.js';
+import { isStarlinkWifi, registryRowLinks } from '../src/lib/fleet-registry-links.js';
+import { STARLINK_TAB_HREF } from '../src/lib/starlink-link.js';
 
 const FLEET = JSON.parse(readFileSync(resolve(__dirname, '..', 'public', 'data', 'fleet.json'), 'utf8'));
 
@@ -13,7 +14,8 @@ describe('registryRowLinks', () => {
     expect(registryRowLinks({ r: 'N78501', w: 'Starlink' })).toEqual({ reg: '/?aircraft=N78501', wifi: '/#starlink' });
     expect(registryRowLinks({ r: 'N686UA', w: 'Satl Ku' })).toEqual({ reg: '/?aircraft=N686UA', wifi: null });
     expect(registryRowLinks({ r: 'N686UA', w: '' })).toEqual({ reg: '/?aircraft=N686UA', wifi: null });
-    expect(STARLINK_TAB_HREF).toBe('/#starlink');
+    // The one shared address for a Starlink fact on a content page.
+    expect(registryRowLinks({ r: 'N78501', w: 'Starlink' }).wifi).toBe(STARLINK_TAB_HREF);
   });
 
   it('a value that is not a US registration prints as text', () => {

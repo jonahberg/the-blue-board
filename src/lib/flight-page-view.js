@@ -23,7 +23,7 @@
 
 import { AIRPORT_COORDS, cityFor } from './airports.js';
 import { fleetTypeLink } from './fleet-type-link.js';
-import { STARLINK_TAB_HREF } from './fleet-registry-links.js';
+import { STARLINK_TAB_HREF } from './starlink-link.js';
 import { hubLink } from './hub-link.js';
 import { tailLink } from './tail-link.js';
 import { CABIN_LABELS, HISTORY_DAY_KINDS, historyWords, inboundLeg, shortDate, summarizeHistory, tailLegsView } from './flight-page.js';
