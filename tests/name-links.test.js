@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest';
 
 import { FLEET_TYPE_SLUGS, fleetTypeCodeFor } from '../src/lib/fleet-type-link.js';
 import {
-  STARLINK_TAB_HREF,
   providerTypeText,
   routeEndLabel,
   routeEnds,
@@ -102,9 +101,3 @@ describe("unmatchedTailLinks: the flight sheet's unmatched tail links only when 
   });
 });
 
-describe('the badge address', () => {
-  it('the Starlink tab, as an address the dashboard follows in place', async () => {
-    const { resolveDeepLink } = await import('../src/app/state/deep-links');
-    expect(resolveDeepLink(STARLINK_TAB_HREF)).toMatchObject({ tab: 'starlink', aircraft: null, fleet: null });
-  });
-});

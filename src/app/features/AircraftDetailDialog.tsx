@@ -59,7 +59,7 @@ import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from '@/lib/fleet-utils.js';
 import { buildSeatBar, nonMainlineAircraftSummary } from '@/lib/fleet-view.js';
 import { getPhase } from '@/lib/flight-phase.js';
-import { STARLINK_TAB_HREF } from '@/lib/name-links.js';
+import { STARLINK_TAB_HREF } from '@/lib/starlink-link.js';
 import { ENGINE_BY_TYPE } from '@/lib/special-aircraft.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { shareUrl } from '../data/share';

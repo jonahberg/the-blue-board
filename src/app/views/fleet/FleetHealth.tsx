@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { starlinkShareCaption } from '@/lib/fleet-utils.js';
+import type { STARLINK_TAB_HREF } from '@/lib/starlink-link.js';
 import { DashLink } from '../../features/DashLink';
 
 export type HealthBar = { key: string; label: string; color: string; count: number; pct: string };
@@ -37,7 +38,7 @@ export type HealthModel = {
 };
 
 /** `href`: the chip is a quiet link to the Starlink tab (in place); without one it is text. */
-export type StarlinkChip = { label: string; value: string; tone: 'ok' | 'express' | 'neutral'; href?: '/#starlink' };
+export type StarlinkChip = { label: string; value: string; tone: 'ok' | 'express' | 'neutral'; href?: typeof STARLINK_TAB_HREF };
 
 const CHIP_TONES: Record<StarlinkChip['tone'], string> = {
   ok: 'border-bb-ok/20 bg-bb-ok/10 text-bb-ok',

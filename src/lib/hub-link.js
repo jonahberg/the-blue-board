@@ -27,8 +27,12 @@ export function hubLink(code, side) {
   return null;
 }
 
-/** The Weather tab's NAS status panel, which lists every FAA program at every airport. */
-const NAS_HREF = '/?tab=weather&section=nas';
+/**
+ * The Weather tab's NAS status panel, which lists every FAA program at every airport: where an FAA
+ * code links (`hubStatusLink(code, 'nas')`), and where a line about FAA programs in general links
+ * with no code of its own (the Sources tab's FAA card, the brief's planned-program chips).
+ */
+export const NAS_STATUS_HREF = '/?tab=weather&section=nas';
 
 /**
  * Where a hub code printed as part of a status links inside the dashboard: where that status is
@@ -51,6 +55,6 @@ export function hubStatusLink(code, kind) {
   if (typeof code !== 'string') return null;
   const airport = code.trim().toUpperCase();
   if (kind === 'weather') return HUBS.has(airport) ? { code: airport, href: `/?tab=weather&hub=${airport}` } : null;
-  if (kind === 'nas') return /^[A-Z]{3,4}$/.test(airport) ? { code: airport, href: NAS_HREF } : null;
+  if (kind === 'nas') return /^[A-Z]{3,4}$/.test(airport) ? { code: airport, href: NAS_STATUS_HREF } : null;
   return null;
 }

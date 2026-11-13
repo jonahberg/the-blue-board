@@ -12,12 +12,13 @@
  * (DESIGN.md 2026-11-11).
  */
 
+import { STARLINK_TAB_HREF } from '@/lib/starlink-link.js';
 import { DashLink } from '../../features/DashLink';
 
 export function StarlinkRowChip() {
   return (
     <DashLink
-      href="/#starlink"
+      href={STARLINK_TAB_HREF}
       hit="none"
       title="Starlink-equipped · open the Starlink tab"
       className="inline-flex min-h-11 min-w-11 items-center justify-center pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"

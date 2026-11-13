@@ -12,19 +12,23 @@
 //
 // DOM-free; tested in tests/sources-links.test.ts.
 
+import { NAS_STATUS_HREF } from './hub-link.js';
+import { STARLINK_TAB_HREF } from './starlink-link.js';
+import { FLEET_TAB_HREF, LIVE_TAB_HREF, SCHEDULE_TAB_HREF, WEATHER_TAB_HREF } from './tab-links.js';
+
 /**
  * `where` is said to a screen reader after the name, so the link's name says where it goes.
  *
  * @type {Readonly<Record<string, Readonly<{href: string, where: string}>>>}
  */
 export const SOURCE_VIEW_LINKS = Object.freeze({
-  'Live Flight Positions — Flightradar24': Object.freeze({ href: '/#live', where: 'Live tab' }),
-  'Flight Schedule — AeroDataBox': Object.freeze({ href: '/#schedule', where: 'Schedule tab' }),
-  'Fleet Database — United Fleet Site': Object.freeze({ href: '/#fleet', where: 'Fleet tab' }),
-  'Starlink Tracker — @martinamps': Object.freeze({ href: '/#starlink', where: 'Starlink tab' }),
-  'Aviation Weather — AWC': Object.freeze({ href: '/#weather', where: 'Weather tab' }),
-  'NEXRAD Radar — Iowa State / NWS': Object.freeze({ href: '/#weather', where: 'Weather tab' }),
-  'NAS Status — FAA': Object.freeze({ href: '/?tab=weather&section=nas', where: 'Weather tab, NAS status' }),
+  'Live Flight Positions — Flightradar24': Object.freeze({ href: LIVE_TAB_HREF, where: 'Live tab' }),
+  'Flight Schedule — AeroDataBox': Object.freeze({ href: SCHEDULE_TAB_HREF, where: 'Schedule tab' }),
+  'Fleet Database — United Fleet Site': Object.freeze({ href: FLEET_TAB_HREF, where: 'Fleet tab' }),
+  'Starlink Tracker — @martinamps': Object.freeze({ href: STARLINK_TAB_HREF, where: 'Starlink tab' }),
+  'Aviation Weather — AWC': Object.freeze({ href: WEATHER_TAB_HREF, where: 'Weather tab' }),
+  'NEXRAD Radar — Iowa State / NWS': Object.freeze({ href: WEATHER_TAB_HREF, where: 'Weather tab' }),
+  'NAS Status — FAA': Object.freeze({ href: NAS_STATUS_HREF, where: 'Weather tab, NAS status' }),
 });
 
 /**

@@ -33,7 +33,7 @@ import { hubLink, hubStatusLink } from './hub-link.js';
 import { getUnitedTerminal } from './hub-terminals.js';
 import { isPlausibleDelta } from './schedule-plausibility.js';
 import { displayScheduleStatus } from './status-display.js';
-import { STARLINK_TAB_HREF } from './tab-links.js';
+import { STARLINK_TAB_HREF } from './starlink-link.js';
 
 /** A delta smaller than this is noise, not a delay worth a second line in the time cell. */
 export const ACTUAL_LINE_THRESHOLD_MINUTES = 5;

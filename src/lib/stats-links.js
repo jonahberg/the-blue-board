@@ -12,6 +12,8 @@
 //
 // DOM-free; tested in tests/stats-links.test.ts.
 
+import { FLEET_AIRBORNE_HREF, LIVE_TAB_HREF } from './tab-links.js';
+
 /**
  * The linked cards, by their printed label. `where` is said to a screen reader after the label,
  * so the link's name says where it goes.
@@ -19,8 +21,8 @@
  * @type {Readonly<Record<string, Readonly<{href: string, where: string}>>>}
  */
 export const STATS_METRIC_LINKS = Object.freeze({
-  'Flights Airborne': Object.freeze({ href: '/#live', where: 'Live tab' }),
-  'Fleet Utilization': Object.freeze({ href: '/?tab=fleet&view=airborne', where: 'Fleet tab, Airborne' }),
+  'Flights Airborne': Object.freeze({ href: LIVE_TAB_HREF, where: 'Live tab' }),
+  'Fleet Utilization': Object.freeze({ href: FLEET_AIRBORNE_HREF, where: 'Fleet tab, Airborne' }),
 });
 
 /** What a card prints before its data has answered. */

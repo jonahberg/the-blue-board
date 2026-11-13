@@ -12,16 +12,14 @@
  *    component never parses "Ground Stop at EWR, avg 45 min" (`scheduleFaaParts`). The joined text
  *    stays exactly what `getFAADelayContext` printed.
  *  - The Starlink mark: one link per row, to the Starlink tab (`starlinkHref`).
- *  - The tab addresses the slice links to are ones `resolveDeepLink` follows in place.
+ *  (The tab addresses themselves: tests/tab-links.test.js.)
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { resolveDeepLink } from '../src/app/state/deep-links';
-import { TAB_HASHES } from '../src/app/tabs';
 import { faaContextText, faaDelayContextParts, getFAADelayContext } from '../src/lib/faa-context.js';
 import { buildScheduleRow as buildRow, routeCell, routeEnds, scheduleFaaParts } from '../src/lib/schedule-row-model.js';
-import { MY_FLIGHTS_HREF, SCHEDULE_TAB_HREF, STARLINK_TAB_HREF } from '../src/lib/tab-links.js';
+import { STARLINK_TAB_HREF } from '../src/lib/starlink-link.js';
 
 const flight = (origin: unknown, destination: unknown) => ({ airport: { origin, destination } });
 /** The row model, read field by field (the lib's JSDoc types the whole row as `object`). */
@@ -166,16 +164,5 @@ describe('buildScheduleRow: the link decisions it carries', () => {
     expect(buildScheduleRow(base, { ...ctx, reg: 'N37502' }).starlinkHref).toBe(STARLINK_TAB_HREF);
     expect(buildScheduleRow(base, { ...ctx, reg: 'N75436' }).starlinkHref).toBeNull();
     expect(buildScheduleRow(base, { ...ctx, reg: '' }).starlinkHref).toBeNull();
-  });
-});
-
-describe('the tab addresses this slice links to follow in place', () => {
-  it.each([
-    [SCHEDULE_TAB_HREF, 'schedule'],
-    [MY_FLIGHTS_HREF, 'myflight'],
-    [STARLINK_TAB_HREF, 'starlink'],
-  ] as const)('%s opens the %s tab and nothing else', (href, tab) => {
-    expect(href).toBe(`/${TAB_HASHES[tab]}`);
-    expect(resolveDeepLink(href)).toEqual({ tab, scrollTo: null, scheduleHub: null, aircraft: null, fleet: null });
   });
 });

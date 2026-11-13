@@ -28,7 +28,8 @@ import {
   myFlightTimes,
   seatConfigString,
 } from '@/lib/my-flights.js';
-import { STARLINK_TAB_HREF, routeEndLabel } from '@/lib/name-links.js';
+import { routeEndLabel } from '@/lib/name-links.js';
+import { STARLINK_TAB_HREF } from '@/lib/starlink-link.js';
 import type { FleetAircraft, Flight, FlightTimes, WatchedFlight } from '../../data/types';
 import { DashLink } from '../../features/DashLink';
 import { HubLink, TailLink, TypeLink } from '../../features/EntityLinks';

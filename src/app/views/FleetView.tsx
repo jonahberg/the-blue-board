@@ -57,6 +57,7 @@ import {
 import { isAirborne } from '@/lib/live-stats.js';
 import { scrollBehavior } from '@/lib/motion.js';
 import { listSpecialLiveries } from '@/lib/special-livery.js';
+import { STARLINK_TAB_HREF } from '@/lib/starlink-link.js';
 import { expressStarlinkScope } from '@/lib/starlink-roster.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { ExpressAircraft, FleetAircraft } from '../data/types';
@@ -221,7 +222,7 @@ export default function FleetView() {
     // "Mainline" (the tracker's own census) and "New (7d)" have no list that shows exactly them
     // here, so they are text, in body colour (link colour means link).
     const rows: StarlinkChip[] = [
-      { label: 'Total', value: String(stats.total), tone: 'ok', href: '/#starlink' },
+      { label: 'Total', value: String(stats.total), tone: 'ok', href: STARLINK_TAB_HREF },
       { label: 'Mainline', value: String(stats.mainline), tone: 'neutral' },
       { label: 'Express', value: String(stats.express), tone: 'express' },
     ];
