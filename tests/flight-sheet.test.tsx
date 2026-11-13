@@ -34,6 +34,8 @@ const fleet = vi.hoisted(() => ({
 vi.mock('../src/app/state/fleet', () => ({ useFleet: () => fleet }));
 const watch = vi.hoisted(() => ({ isWatched: () => false, toggle: () => true }));
 vi.mock('../src/app/state/watch', () => ({ useWatch: () => watch }));
+// The sheet's names are dashboard links; where a click lands is tests/overlay-follow-focus.test.tsx.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 vi.mock('../src/app/data/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/data/api')>()),
   fetchFlightTimes: async () => h.times,
@@ -159,7 +161,9 @@ describe('FlightSheet aircraft line for a tail missing from the fleet DB (F10/F7
   it('a 787-9 is a recent delivery, never "United Express"', async () => {
     viewport(1280);
     await open(flight({ acType: 'B789', reg: 'N71108', flightIATA: 'UA28', origin: 'SIN', dest: 'SFO' }));
-    expect(screen.getByText(/N71108 \(not yet in fleet DB \(recent delivery\?\)\)/)).toBeTruthy();
+    // The tail is a link to its aircraft dialog, so the line spans elements.
+    const line = screen.getByRole('link', { name: 'N71108' }).closest('p')!;
+    expect(line.textContent).toBe('B789 · N71108 (not yet in fleet DB (recent delivery?))');
     expect(screen.queryByText(/United Express/)).toBeNull();
   });
 
@@ -192,7 +196,7 @@ describe('FlightSheet United Express aircraft from the Express fleet', () => {
     await open(skw());
     const section = aircraftSection();
     expect(section.textContent).toContain('E175');
-    expect(screen.getByRole('button', { name: 'N85377' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'N85377' }).getAttribute('href')).toBe('/?aircraft=N85377');
     expect(section.textContent).toContain('SkyWest Airlines · United Express');
     // Zulu, like the dashboard clock: the backfilled 06:00Z reads Oct 1 in every zone.
     expect(section.textContent).toContain('Seen flying United since Oct 1, 2026');
@@ -332,5 +336,58 @@ describe('FlightSheet links to the flight page', () => {
     cleanup();
     await open(flight({ flightIATA: '', callsign: 'SKW5123' }));
     expect(screen.queryByRole('link', { name: 'Open flight page' })).toBeNull();
+  });
+});
+
+describe('FlightSheet links the names it prints (links part 2)', () => {
+  const mainline = {
+    r: 'N37502', t: '737 MAX 9', c: '20F/48E+/111Y', w: 'Satl Ku', i: 'PDE', seats: {}, tot: 179,
+  };
+
+  it('the hub ends of the big route link to their boards; another airport is plain', async () => {
+    viewport(1280);
+    await open(flight({ origin: 'ORD', dest: 'LHR' }));
+    const ord = screen.getByRole('link', { name: 'ORD' });
+    expect(ord.getAttribute('href')).toBe('/?tab=schedule&hub=ORD');
+    expect(ord.className).not.toContain('text-primary');
+    expect(screen.queryByRole('link', { name: 'LHR' })).toBeNull();
+  });
+
+  it('the mainline type links by its tail, the tail is the identity link, the Starlink badge opens the tab', async () => {
+    viewport(1280);
+    fleet.fleetByReg = { N37502: mainline };
+    fleet.starlink = { tails: new Set(['N37502']) };
+    await open(flight({ reg: 'N37502', acType: 'B39M' }));
+    const type = screen.getByRole('link', { name: '737 MAX 9' });
+    expect(type.getAttribute('href')).toBe('/?tab=fleet&type=737%20MAX%209');
+    expect(type.className).not.toContain('text-primary');
+    const tail = screen.getByRole('link', { name: 'N37502' });
+    expect(tail.getAttribute('href')).toBe('/?aircraft=N37502');
+    expect(tail.className).toContain('text-primary');
+    expect(screen.queryByRole('button', { name: 'N37502' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Starlink confirmed' }).getAttribute('href')).toBe('/#starlink');
+  });
+
+  it("a named aircraft's ★ badge opens the Fleet tab's special view", async () => {
+    viewport(1280);
+    fleet.fleetByReg = { N37502: mainline };
+    fleet.special = new Map([['N37502', { name: 'Star of the Show', type: 'named' }]]);
+    await open(flight({ reg: 'N37502' }));
+    expect(screen.getByRole('link', { name: 'Star of the Show' }).getAttribute('href')).toBe('/?tab=fleet&view=special');
+    fleet.special = new Map();
+  });
+
+  it("an unmatched aircraft's ICAO code stays plain and its tail links", async () => {
+    viewport(1280);
+    await open(flight({ acType: 'A320', reg: 'N401UA' }));
+    expect(screen.queryByRole('link', { name: 'A320' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'N401UA' }).getAttribute('href')).toBe('/?aircraft=N401UA');
+  });
+
+  it('the title stays plain text', async () => {
+    viewport(1280);
+    await open(flight());
+    const title = dialog().querySelector('[data-slot="sheet-title"]')!;
+    expect(title.querySelector('a')).toBeNull();
   });
 });
