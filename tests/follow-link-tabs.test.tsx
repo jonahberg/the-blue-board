@@ -212,6 +212,30 @@ describe('Back after a followed link', () => {
     expect(address()).toBe('/#starlink');
   });
 
+  it('a browser that refuses the history call still follows the link, without the entry', async () => {
+    mountAt('/#starlink');
+    const before = window.history.length;
+    const refuse = () => {
+      throw new DOMException('Attempt to use history.pushState() more than 100 times per 30 seconds', 'SecurityError');
+    };
+    const push = vi.spyOn(window.history, 'pushState').mockImplementation(refuse);
+    try {
+      const ord = screen.getByRole('link', { name: 'ORD' });
+      ord.focus();
+      fireEvent.click(ord);
+      await nextFrame();
+
+      expect(push).toHaveBeenCalled();
+      expect(seen.ui!.tab).toBe('schedule');
+      expect(seen.schedule!.current.hub).toBe('ORD');
+      expect(seen.ui!.announcement).toBe('Schedule, ORD');
+      expect(document.activeElement).toBe(panel('schedule'));
+      expect(window.history.length).toBe(before);
+    } finally {
+      push.mockRestore();
+    }
+  });
+
   it('the tab bar still replaces, and a link to the tab now showing leaves no entry', () => {
     mountAt('/#starlink');
     const before = window.history.length;

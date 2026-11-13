@@ -101,11 +101,17 @@ export function FollowProvider({ children }: { children: ReactNode }) {
  */
 function pushHistoryEntry(from: TabId, to: TabId) {
   if (typeof window === 'undefined') return;
-  const { pathname, search, hash } = window.location;
-  if (resolveTabParam(hash) !== from) {
-    window.history.replaceState(window.history.state, '', `${pathname}${search}${TAB_HASHES[from]}`);
+  try {
+    const { pathname, search, hash } = window.location;
+    if (resolveTabParam(hash) !== from) {
+      window.history.replaceState(window.history.state, '', `${pathname}${search}${TAB_HASHES[from]}`);
+    }
+    window.history.pushState(null, '', addressAfterFollow(window.location, TAB_HASHES[to]));
+  } catch {
+    // A browser may refuse a history call (Safari throws a SecurityError past about a hundred in
+    // thirty seconds; a sandboxed frame may throw on any). The click has already been taken from
+    // the browser, so the follow still happens: the tab changes, without its Back entry.
   }
-  window.history.pushState(null, '', addressAfterFollow(window.location, TAB_HASHES[to]));
 }
 
 /** The panel that holds a tab's view: Dashboard.tsx marks each `TabsContent` with its tab id. */
