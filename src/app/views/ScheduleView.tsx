@@ -13,6 +13,11 @@
  *    a hub switch is the more annoying failure.
  *  - The board loads from an effect keyed on the selection, so a deep link (`?hub=DEN`), the
  *    search palette's `goto` and a click on the hub select all take the same path.
+ *  - A hub link that ARRIVES here from another tab or an overlay (`scheduleLink`, a new `seq`)
+ *    clears every filter, both copies, and an "Ask the board" answer, so the board lands where a
+ *    cold load of `/?tab=schedule&hub=DEN` lands (the links plan, ruling 9). The follow has already
+ *    set the board itself. A hub link followed while Schedule is showing does not bump `seq` and
+ *    leaves the filters alone (ruling 2). The sort stays, as the Fleet tab's arrival keeps its own.
  *  - AeroDataBox is credited before any other provider in the footer — the schedules are
  *    theirs, and crediting Flightradar24 here was a ToS violation. FR24 credit belongs to
  *    live aircraft positions only.
@@ -116,6 +121,30 @@ export default function ScheduleView() {
 
   // "Ask the board" (⌘K). Called after the reset above, so the filters it sets survive the board change.
   const ask = useAskSchedule({ hub, dir, day, setCurrent: schedule.setCurrent, filters, setFilters });
+
+  // A hub link arrived from another tab (`scheduleLink`; contract: act on a new `seq` only, keyed
+  // on `seq`, never `hub`). Every filter goes, both copies, not only status, type and search: on
+  // a board already showing that hub, Departures and its default day, nothing else resets the four
+  // contextual filters. The answer to "Ask the board" goes too.
+  //
+  // The effect's first run only notes the `seq`. The view is new then: the first arrival mounts
+  // it in the same commit, or the error boundary's "Try again" remounts it. Its filters are empty
+  // by construction, and an answer re-applying itself in that same commit (`useAskSchedule`) must
+  // not be reset over.
+  const { scheduleLink } = ui;
+  const seenLinkSeq = useRef(0);
+  const linkEffectRan = useRef(false);
+  const clearAsk = ask.clear;
+  useEffect(() => {
+    const fresh = !linkEffectRan.current;
+    linkEffectRan.current = true;
+    if (!scheduleLink || scheduleLink.seq === seenLinkSeq.current) return;
+    seenLinkSeq.current = scheduleLink.seq;
+    if (fresh) return;
+    setFilters(EMPTY_FILTERS);
+    setDebouncedFilters(EMPTY_FILTERS);
+    clearAsk();
+  }, [scheduleLink, clearAsk]);
 
   const dayStartSec = useMemo(() => {
     if (!hub) return 0;

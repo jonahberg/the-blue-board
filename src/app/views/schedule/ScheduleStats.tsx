@@ -31,6 +31,7 @@ import { Card } from '@/components/ui/card';
 import { statStripCopy } from '@/lib/board-stats.js';
 import { boardCanceledTitle, splitCancellations, unconfirmedFigure } from '@/lib/cancellation-display.js';
 import { cn } from '@/lib/utils';
+import { HubStatusLink } from '../../features/EntityLinks';
 import { JargonTerm } from '../../features/JargonTerm';
 import { HubGuideLink } from './HubGuideLink';
 import type { BoardModel } from './useBoardModel';
@@ -166,10 +167,12 @@ export function ScheduleStats({
       </JargonTerm>
     ) : null,
     showDisruption ? (
+      // The hub's code links to its Weather card, where its FAA program and weather are shown
+      // (links everywhere: a hub code printed with a status goes to that status).
       <span key="faa" className="mr-2 text-bb-warn">
         <TriangleAlert aria-hidden="true" className="mr-1 inline size-3 align-[-2px]" />
-        {hub} under FAA delay program (avg {Math.round(hubDisruptionMinutes as number)}min) — statuses may
-        lag.
+        <HubStatusLink code={hub} kind="weather" /> under FAA delay program (avg{' '}
+        {Math.round(hubDisruptionMinutes as number)}min) — statuses may lag.
       </span>
     ) : null,
     footnote ? <span key="footnote">{footnote}</span> : null,

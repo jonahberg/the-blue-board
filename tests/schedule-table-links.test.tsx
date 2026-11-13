@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SchedulePhoneRow } from '../src/app/views/schedule/SchedulePhoneRow';
+import { ScheduleStats } from '../src/app/views/schedule/ScheduleStats';
 import { ScheduleTable } from '../src/app/views/schedule/ScheduleTable';
 import type { ScheduleTableHandle } from '../src/app/views/schedule/ScheduleTable';
 import type { RowModel } from '../src/app/views/schedule/useBoardModel';
@@ -332,5 +333,25 @@ describe('the phone Schedule row: the same links, inert on a coarse pointer', ()
       />,
     );
     expect(screen.getByText('── NOW · 12:30 CST ──').className).not.toMatch(/(^|\s)text-primary(\s|$)/);
+  });
+});
+
+describe("the stat strip's FAA note links the board's hub to its Weather card", () => {
+  const stats = {
+    total: 3, onTime: 1, late: 0, untimed: 0, inAir: 0, upcoming: 1, canceled: 1, canceledUncertain: 0,
+    canceledConfirmed: 1, presumed: 0, operated: 1, otp: 100, uncategorized: 0,
+  };
+
+  it.each([false, true])('compact %s: "ORD under FAA delay program", ORD a quiet link to /?tab=weather&hub=ORD', (compact) => {
+    mount(<ScheduleStats stats={stats} dir="departures" dayLabel="Thu, Nov 12" hub="ORD" hubDisruptionMinutes={75} compact={compact} />);
+    const link = document.querySelector<HTMLAnchorElement>('a[data-hub-status-link="ORD"]')!;
+    expect(link.getAttribute('href')).toBe('/?tab=weather&hub=ORD');
+    expect(link.className.split(/\s+/)).not.toContain('text-primary');
+    expect(link.parentElement!.textContent).toMatch(/^ORD under FAA delay program \(avg 75min\) — statuses may lag\.$/);
+  });
+
+  it('the cards stay text: none is a link (the Canceled figure counts confirmed only; its filter also matches Likely Canceled)', () => {
+    mount(<ScheduleStats stats={stats} dir="departures" dayLabel="Thu, Nov 12" hub="ORD" hubDisruptionMinutes={0} />);
+    expect(document.querySelectorAll('a')).toHaveLength(0);
   });
 });
