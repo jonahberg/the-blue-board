@@ -11,7 +11,7 @@ import {
   LINK_GUARD_TAIL_SOURCES,
   coverageGaps,
   findNames,
-  findUnlinkedNames,
+  findUnlinkedNamesByRegion,
   tailsInPayload,
 } from '../src/lib/link-guard.js';
 
@@ -111,10 +111,28 @@ async function showTab(page, { label, short, hash }) {
 
 // ── Link guard: a name in a row that is not a link (src/lib/link-guard.js) ────────────────────
 // For each tab in LINK_GUARD_TABS, at every viewport: the text inside its table rows, list items
-// and `[data-link-row]` elements, each run marked with whether a link or button is around it.
-// `findUnlinkedNames` decides which runs print a flight number, a known tail or a hub code with
-// no link; each is a failure, and so is a run that examined too little to mean anything
+// and `[data-link-row]` elements, each run marked with whether a link or button is around it and
+// with the hub of the region it sits in (`data-link-self`, the Schedule board's own hub).
+// `findUnlinkedNamesByRegion` decides which runs print a flight number, a known tail or a hub code
+// with no link; each is a failure, and so is a run that examined too little to mean anything
 // (`coverageGaps`). This script only collects what the browser shows.
+//
+// What is read is the tab's own panel as it first shows, except where a tab lists its rows only
+// after a search (LINK_GUARD_SEARCH): there the audit types the search and reads the search box's
+// own block (its results), in the panel at `lg`+ or in the sheet that holds it below `lg`.
+
+/**
+ * Tabs whose rows exist only once a search is typed, and what the audit types. Live's search runs
+ * over the feed the page already holds; nothing is fetched. "UA" lists United flights (capped at
+ * 50 rows), each with its route's ends and its tail. Below `lg` the search box is in the Filters
+ * sheet, which the audit opens first and closes after.
+ */
+const LINK_GUARD_SEARCH = {
+  live: { text: 'UA', box: 'input[aria-label="Search the live feed"]', sheet: 'Filters' },
+};
+
+/** The tab whose roster rows open a disclosure the check should read too (the Starlink roster's expansion). */
+const DISCLOSURE_TABS = new Set(['starlink']);
 
 /** A same-origin data request: what the tab is still waiting on. Fonts and map tiles are not. */
 const isDataRequest = (request) => {
@@ -145,38 +163,48 @@ function watchPage(page) {
 }
 
 const ROW_SELECTOR = 'tr, li, [data-link-row]';
+const ROOT_MARK = 'data-link-audit-root';
 
-// The in-browser functions below find the tab's own panel the same way: Radix ids a panel
-// `<base>-content-<tab>`, and the dashboard's panels are the outermost ones. Visited tabs stay
-// mounted (hidden), and the Fleet tab nests a tab set of its own, so "the active tabpanel" alone
-// can be a hidden Fleet sub-panel.
+/**
+ * In the browser: mark what the check reads, and return whether it was found. By default the tab's
+ * own panel: Radix ids a panel `<base>-content-<tab>`, and the dashboard's panels are the outermost
+ * ones (visited tabs stay mounted, hidden, and the Fleet tab nests a tab set of its own, so "the
+ * active tabpanel" alone can be a hidden Fleet sub-panel). With `box`, the block that holds the
+ * first visible element matching it (the Live search box's own block, wherever it is).
+ */
+function markRoot({ tab, box, mark }) {
+  document.querySelectorAll(`[${mark}]`).forEach((el) => el.removeAttribute(mark));
+  const root = box
+    ? [...document.querySelectorAll(box)].find((el) => el.checkVisibility())?.parentElement
+    : [...document.querySelectorAll('[role="tabpanel"]')].find(
+        (p) => p.id.endsWith(`-content-${tab}`) && !p.parentElement?.closest('[role="tabpanel"]'),
+      );
+  root?.setAttribute(mark, '');
+  return Boolean(root);
+}
 
-/** Rows rendered in the tab's panel. */
-function countRows({ selector, tab }) {
-  const panel = [...document.querySelectorAll('[role="tabpanel"]')].find(
-    (p) => p.id.endsWith(`-content-${tab}`) && !p.parentElement?.closest('[role="tabpanel"]'),
-  );
-  return panel ? [...panel.querySelectorAll(selector)].filter((row) => row.checkVisibility()).length : 0;
+/** Rows rendered in what `markRoot` marked. */
+function countRows({ selector, mark }) {
+  const root = document.querySelector(`[${mark}]`);
+  return root ? [...root.querySelectorAll(selector)].filter((row) => row.checkVisibility()).length : 0;
 }
 
 /** Open the first collapsed row disclosure in a row that has a flight link; false when there is none. */
-function openDisclosure({ tab }) {
-  const panel = [...document.querySelectorAll('[role="tabpanel"]')].find(
-    (p) => p.id.endsWith(`-content-${tab}`) && !p.parentElement?.closest('[role="tabpanel"]'),
-  );
-  const button = panel?.querySelector('tr:has(a[data-flight-link]) button[aria-expanded="false"]');
+function openDisclosure({ mark }) {
+  const root = document.querySelector(`[${mark}]`);
+  const button = root?.querySelector('tr:has(a[data-flight-link]) button[aria-expanded="false"]');
   if (!button || !button.checkVisibility()) return false;
   button.click();
   return true;
 }
 
 /** Wait until no data request is in flight and the row count has held for a second (20 s at most). */
-async function settleRows(page, watch, tab) {
+async function settleRows(page, watch) {
   const deadline = Date.now() + 20000;
   let last = -1;
   let stableSince = Date.now();
   while (Date.now() < deadline) {
-    const count = await page.evaluate(countRows, { selector: ROW_SELECTOR, tab });
+    const count = await page.evaluate(countRows, { selector: ROW_SELECTOR, mark: ROOT_MARK });
     if (count !== last || [...watch.inFlight].length > 0) {
       last = count;
       stableSince = Date.now();
@@ -188,15 +216,15 @@ async function settleRows(page, watch, tab) {
 }
 
 /**
- * In the browser: every run of text in the tab panel's rows, attributed to its nearest row (an
- * Upcoming Flights `li` inside the roster expansion's `tr` is its own row). Text that is not
+ * In the browser: every run of text in the marked root's rows, attributed to its nearest row (an
+ * Upcoming Flights `li` inside the roster expansion's `tr` is its own row, and so is a
+ * `[data-link-row="status-note"]` cell inside a table row, named with its value). Text that is not
  * rendered (`display: none`, a closed `<details>`) is not printed and is skipped; sr-only text is
  * read aloud and is kept. Consecutive text nodes are one run, so `UA{number}` reads as one word.
+ * Each run carries its region's hub (`data-link-self`), when a view marked one.
  */
-function collectRows({ selector, tab, viewport }) {
-  const panel = [...document.querySelectorAll('[role="tabpanel"]')].find(
-    (p) => p.id.endsWith(`-content-${tab}`) && !p.parentElement?.closest('[role="tabpanel"]'),
-  );
+function collectRows({ selector, tab, viewport, mark }) {
+  const panel = document.querySelector(`[${mark}]`);
   if (!panel || !panel.checkVisibility()) return { byKind: {}, rowCount: 0, runs: [] };
   const section = (row) => {
     for (let el = row.parentElement; el && el !== panel; el = el.parentElement) {
@@ -209,9 +237,11 @@ function collectRows({ selector, tab, viewport }) {
   const runs = [];
   const rows = [...panel.querySelectorAll(selector)].filter((row) => row.checkVisibility());
   for (const row of rows) {
-    const kind = row.tagName.toLowerCase() + (row.hasAttribute('data-link-row') ? '[data-link-row]' : '');
+    const named = row.getAttribute('data-link-row');
+    const kind = row.tagName.toLowerCase() + (named === null ? '' : named ? `[data-link-row=${named}]` : '[data-link-row]');
     byKind[kind] = (byKind[kind] ?? 0) + 1;
     const where = `${tab} ${viewport} ${section(row)} ${kind}`;
+    const self = row.closest('[data-link-self]')?.getAttribute('data-link-self') || null;
     const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
     let run = null;
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -221,28 +251,65 @@ function collectRows({ selector, tab, viewport }) {
         run.text += node.data;
         run.last = node;
       } else {
-        run = { text: node.data, linked: Boolean(parent.closest('a[href], button')), where, last: node };
+        run = { text: node.data, linked: Boolean(parent.closest('a[href], button')), where, self, last: node };
         runs.push(run);
       }
     }
   }
-  return { byKind, rowCount: rows.length, runs: runs.map(({ text, linked, where }) => ({ text, linked, where })) };
+  return { byKind, rowCount: rows.length, runs: runs.map(({ text, linked, where, self }) => ({ text, linked, where, self })) };
 }
 
 /**
- * Check one guarded tab at one viewport. Opens one collapsed row disclosure first (a row that has a
- * flight link and an `aria-expanded="false"` button), so the rows it reveals are checked too.
+ * Type a tab's search (LINK_GUARD_SEARCH), opening the sheet that holds the box when it is not
+ * showing. True when the sheet was opened, so it is closed again after.
+ */
+async function typeSearch(page, { text, box, sheet }) {
+  let opened = false;
+  if (!(await page.locator(box).first().isVisible().catch(() => false))) {
+    await page.getByRole('button', { name: sheet, exact: true }).click({ timeout: 5000 });
+    await page.getByRole('dialog', { name: sheet }).waitFor({ timeout: 5000 });
+    opened = true;
+  }
+  await page.locator(box).first().fill(text, { timeout: 5000 });
+  return opened;
+}
+
+/** Clear the search again, and close the sheet it was typed in. */
+async function clearSearch(page, { box, sheet }, opened) {
+  await page.locator(box).first().fill('', { timeout: 5000 }).catch(() => {});
+  if (opened) {
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.getByRole('dialog', { name: sheet }).waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+  }
+}
+
+/**
+ * Check one guarded tab at one viewport. On a tab in LINK_GUARD_SEARCH, types its search first and
+ * reads the search box's block. On a tab in DISCLOSURE_TABS, opens one collapsed row disclosure
+ * first (a row that has a flight link and an `aria-expanded="false"` button), so the rows it
+ * reveals are checked too.
  */
 async function checkTabLinks(page, watch, tab, viewport) {
-  await settleRows(page, watch, tab);
-  const opened = await page.evaluate(openDisclosure, { tab });
-  if (opened) await settleRows(page, watch, tab);
-  await watch.parsed();
-  const { byKind, rowCount, runs } = await page.evaluate(collectRows, { selector: ROW_SELECTOR, tab, viewport });
+  const search = LINK_GUARD_SEARCH[tab] ?? null;
+  const sheetOpened = search ? await typeSearch(page, search) : false;
+  let collected;
+  let opened = false;
+  try {
+    await page.evaluate(markRoot, { tab, box: search?.box ?? null, mark: ROOT_MARK });
+    await settleRows(page, watch);
+    opened = DISCLOSURE_TABS.has(tab) ? await page.evaluate(openDisclosure, { mark: ROOT_MARK }) : false;
+    if (opened) await settleRows(page, watch);
+    await watch.parsed();
+    collected = await page.evaluate(collectRows, { selector: ROW_SELECTOR, tab, viewport, mark: ROOT_MARK });
+  } finally {
+    await page.evaluate((mark) => document.querySelectorAll(`[${mark}]`).forEach((el) => el.removeAttribute(mark)), ROOT_MARK).catch(() => {});
+    if (search) await clearSearch(page, search, sheetOpened);
+  }
+  const { byKind, rowCount, runs } = collected;
   const known = { hubs: HUB_ORDER, tails: watch.tails };
   const names = { flight: 0, tail: 0, hub: 0 };
   for (const { kind } of findNames(runs, known)) names[kind] += 1;
-  const unlinked = findUnlinkedNames(runs, known, LINK_GUARD_ALLOW);
+  const unlinked = findUnlinkedNamesByRegion(runs, known, LINK_GUARD_ALLOW);
   const gaps = coverageGaps(tab, { rows: rowCount, names, knownTails: known.tails.size });
   const rowsText = Object.entries(byKind).map(([k, n]) => `${k} ${n}`).join(', ') || 'none';
   console.log(

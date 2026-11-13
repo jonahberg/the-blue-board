@@ -20,6 +20,7 @@ import { safeLocalStorage } from './storage';
 import { canonicalizeHashParams, cleanTabHash } from '@/lib/tab-hash.js';
 import type { TabId } from '../tabs';
 import type { Flight } from '../data/types';
+import { fleetDeepLinksFrom } from '@/lib/fleet-address.js';
 import type { FleetDeepLinks } from './deep-links';
 
 /** What the flight sheet is showing: a live aircraft, or a flight number to look up. */
@@ -31,8 +32,37 @@ export type Selection =
 /** A map "look here" request. `key` makes repeated focuses on the same point distinct. */
 export type MapFocus = { lat: number; lon: number; key: number } | null;
 
-/** A Fleet-tab link followed in place. `seq` counts follows, from 1, so a repeat is a change. */
-export type FleetLink = { filter: string | null; view: FleetDeepLinks['view']; seq: number };
+/**
+ * A Fleet-tab link followed in place. `seq` counts follows, from 1, so a repeat is a change.
+ *
+ * `arriving`: true when the link came from another tab, so the Fleet view first puts itself back
+ * where a cold load starts, then applies the link and scrolls to it; false when the Fleet tab was
+ * already showing, so it applies only the filter or sub-view the link names and resets nothing
+ * (the links plan, ruling 2). `at`: when it was followed (ms), so a link held for the fleet
+ * database gives up on the same budget a cold load does.
+ */
+export type FleetLink = {
+  filter: string | null;
+  view: FleetDeepLinks['view'];
+  seq: number;
+  arriving: boolean;
+  at: number;
+};
+
+/**
+ * A hub link that ARRIVED at the Schedule tab (`useFollowDeepLink`): from another tab, or from an
+ * overlay on any tab. The Schedule view reads it (`useUi().scheduleLink`, ScheduleView.tsx): on a
+ * new `seq` it clears all eight board filters (the controls and their debounced copies), its own
+ * "Ask the board" answer and the sort, and scrolls today's board to NOW, so the board the link
+ * opened lands as a cold load of `/?tab=schedule&hub=ORD` does (the links plan, ruling 9). The
+ * board itself (hub, Departures, the hub's default day) is already set through the Schedule store
+ * by the follow. A hub link followed while Schedule is showing, outside an overlay, opens the same
+ * board and does not bump this: the reader's filters stay (ruling 2). The view keeps the last `seq`
+ * seen in a ref that starts at 0 (it mounts in the same commit as the first arrival, with `seq` 1
+ * already set), acts on a new `seq` only, and on its first run only scrolls: a fresh view has
+ * nothing to clear.
+ */
+export type ScheduleLink = { hub: string; seq: number };
 
 export type UiValue = {
   tab: TabId;
@@ -61,9 +91,22 @@ export type UiValue = {
    * the Fleet view knows which filters its controls offer and when the fleet database has
    * arrived, so this store only holds the request and the view applies it. It applies on each
    * new `seq`: the same link clicked twice, after the visitor has cleared the filter, applies twice.
+   * `options.arriving` (default true) says whether the link came from another tab (`FleetLink`).
    */
   fleetLink: FleetLink | null;
-  followFleetLink: (link: FleetDeepLinks) => void;
+  followFleetLink: (link: FleetDeepLinks, options?: { arriving?: boolean }) => void;
+
+  /**
+   * The Fleet tab's slice of the address the page was opened on (`?type=` / `?filter=` /
+   * `?view=`), read once when the dashboard starts. The Fleet view applies it once its database
+   * has loaded; it reads it here rather than from the address bar because a followed link to
+   * another tab may have taken those parameters out of the address by then (`addressAfterFollow`).
+   */
+  coldFleetLink: FleetDeepLinks;
+
+  /** The last hub link that arrived at the Schedule tab from another tab (`ScheduleLink`). */
+  scheduleLink: ScheduleLink | null;
+  followScheduleLink: (hub: string) => void;
 
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
@@ -94,10 +137,19 @@ export type UiValue = {
   showBmacToast: (ident: string) => void;
   dismissBmacToast: () => void;
 
-  /** The current text of the single polite live region. */
+  /**
+   * The current text of the single polite live region. A sentence announced twice in a row ends
+   * the second time with `ANNOUNCEMENT_REPEAT_MARK`, so the region changes and speaks it again.
+   */
   announcement: string;
   announce: (text: string) => void;
 };
+
+/**
+ * Appended to an announcement equal to the one before it, so the live region's text changes and
+ * the sentence is spoken again; a zero-width space, which a screen reader does not read.
+ */
+export const ANNOUNCEMENT_REPEAT_MARK = '​';
 
 /** Inventory §30: the landing toast appears three seconds after the flight lands. */
 const BMAC_DELAY_MS = 3000;
@@ -122,6 +174,16 @@ function initialTab(): TabId {
   return match ?? DEFAULT_TAB;
 }
 
+/**
+ * The Fleet tab's slice of the address the page was opened on (`coldFleetLink`). Read from the
+ * lib (`src/lib/fleet-address.js`), not through deep-links.ts, whose imports reach the dialogs
+ * and through them this store: a cycle that deadlocks a test mocking this module.
+ */
+function initialFleetLink(): FleetDeepLinks {
+  if (typeof window === 'undefined') return { filter: null, view: null };
+  return fleetDeepLinksFrom(new URLSearchParams(window.location.search)) as FleetDeepLinks;
+}
+
 export function UiProvider({ children }: { children: ReactNode }) {
   const [tab, setTabState] = useState<TabId>(initialTab);
   const [pendingScroll, setPendingScroll] = useState<string | null>(null);
@@ -129,6 +191,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [focus, setFocus] = useState<MapFocus>(null);
   const [starlinkFilter, setStarlinkFilter] = useState(false);
   const [fleetLink, setFleetLink] = useState<FleetLink | null>(null);
+  // After `initialTab`, which first moves parameters trapped after the '#' into the query.
+  const [coldFleetLink] = useState<FleetDeepLinks>(initialFleetLink);
+  const [scheduleLink, setScheduleLink] = useState<ScheduleLink | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [aircraftReg, setAircraftReg] = useState<string | null>(null);
   const [delayExplain, setDelayExplain] = useState<Record<string, unknown> | null>(null);
@@ -150,7 +215,12 @@ export function UiProvider({ children }: { children: ReactNode }) {
       // back button with eight entries. A followed link that changes the tab pushes its one entry
       // itself and calls this with `hash: false` (state/follow-link.tsx).
       if (options?.hash !== false && typeof window !== 'undefined') {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${TAB_HASHES[id]}`);
+        try {
+          window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${TAB_HASHES[id]}`);
+        } catch {
+          // A browser that refuses history calls (Safari past its rate limit) keeps the old
+          // address; the tab still changes, and a caller (a followed link) carries on.
+        }
       }
     },
     [],
@@ -158,8 +228,14 @@ export function UiProvider({ children }: { children: ReactNode }) {
 
   const clearPendingScroll = useCallback(() => setPendingScroll(null), []);
 
-  const followFleetLink = useCallback((link: FleetDeepLinks) => {
-    setFleetLink((prev) => ({ filter: link.filter, view: link.view, seq: (prev?.seq ?? 0) + 1 }));
+  const followFleetLink = useCallback((link: FleetDeepLinks, options?: { arriving?: boolean }) => {
+    const arriving = options?.arriving ?? true;
+    const at = Date.now();
+    setFleetLink((prev) => ({ filter: link.filter, view: link.view, seq: (prev?.seq ?? 0) + 1, arriving, at }));
+  }, []);
+
+  const followScheduleLink = useCallback((hub: string) => {
+    setScheduleLink((prev) => ({ hub, seq: (prev?.seq ?? 0) + 1 }));
   }, []);
 
   // Centring the map means showing it: every caller (My Flights, Starlink "Track", the aircraft
@@ -173,11 +249,17 @@ export function UiProvider({ children }: { children: ReactNode }) {
     [setTab],
   );
 
-  /** Repeating the same sentence is a no-op: screen readers announce a changed value. */
+  /**
+   * A screen reader speaks a live region when its text changes, so the same sentence twice (the
+   * same link followed twice, Back to a tab announced a moment ago) would be heard once. A repeat
+   * gets a trailing zero-width space, and the repeat after that drops it again: the text node
+   * changes every time and what is read aloud stays the same (`ANNOUNCEMENT_REPEAT_MARK`).
+   */
   const announce = useCallback((text: string) => {
-    if (!text || text === lastAnnouncement.current) return;
-    lastAnnouncement.current = text;
-    setAnnouncement(text);
+    if (!text) return;
+    const next = text === lastAnnouncement.current ? `${text}${ANNOUNCEMENT_REPEAT_MARK}` : text;
+    lastAnnouncement.current = next;
+    setAnnouncement(next);
   }, []);
 
   /**
@@ -229,6 +311,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
       setStarlinkFilter,
       fleetLink,
       followFleetLink,
+      coldFleetLink,
+      scheduleLink,
+      followScheduleLink,
       searchOpen,
       setSearchOpen,
       aircraftReg,
@@ -260,6 +345,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
       starlinkFilter,
       fleetLink,
       followFleetLink,
+      coldFleetLink,
+      scheduleLink,
+      followScheduleLink,
       searchOpen,
       aircraftReg,
       delayExplain,

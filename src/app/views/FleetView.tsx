@@ -38,6 +38,7 @@ import {
 } from '@/lib/fleet-utils.js';
 import { matchAircraft } from '@/lib/fleet-match.js';
 import { EXPRESS_STALE_DAYS, summarizeExpressFleet } from '@/lib/express-fleet.js';
+import { expressSearchChip, expressSearchChips } from '@/lib/express-fleet-chips.js';
 import { filterExpressFleet, sortExpressFleet } from '@/lib/express-fleet-view.js';
 import {
   buildAirborneRows,
@@ -47,6 +48,8 @@ import {
   deliveryStats,
   fleetDeepLinkTarget,
   fleetHealthCounts,
+  fleetStayTarget,
+  heldFleetLinkStep,
   sortAirborneRows,
   typeCounts as countByType,
   wifiFilterOptions,
@@ -54,11 +57,12 @@ import {
 import { isAirborne } from '@/lib/live-stats.js';
 import { scrollBehavior } from '@/lib/motion.js';
 import { listSpecialLiveries } from '@/lib/special-livery.js';
+import { STARLINK_TAB_HREF } from '@/lib/starlink-link.js';
 import { expressStarlinkScope } from '@/lib/starlink-roster.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { ExpressAircraft, FleetAircraft } from '../data/types';
-import { readFleetDeepLinks } from '../state/deep-links';
 import type { FleetDeepLinks } from '../state/deep-links';
+import type { FleetLink } from '../state/ui';
 import { AskChips } from '../features/AskChips';
 import { useAskFleet } from './fleet/useAskFleet';
 import { useFeed } from '../state/feed';
@@ -68,7 +72,7 @@ import { AirborneTable } from './fleet/AirborneTable';
 import type { AirborneRow, AirborneSortCol } from './fleet/AirborneTable';
 import { DeliveryTimeline } from './fleet/DeliveryTimeline';
 import { ExpressFleetPanel } from './fleet/ExpressFleetPanel';
-import type { ExpressSortCol, ExpressSummary } from './fleet/ExpressFleetPanel';
+import type { ExpressChips, ExpressSortCol, ExpressSummary } from './fleet/ExpressFleetPanel';
 import type { TimelineModel, TimelineStats } from './fleet/DeliveryTimeline';
 import { FleetComposition } from './fleet/FleetComposition';
 import { FleetControls, STATUS_OPTIONS } from './fleet/FleetControls';
@@ -88,6 +92,20 @@ type SubView = 'all' | 'airborne' | 'special' | 'express';
 /** How long the `?view=`/`?type=` deep links wait for the fleet database before giving up. */
 const DEEP_LINK_TIMEOUT_MS = 10000;
 
+/**
+ * The opening addresses (`useUi().coldFleetLink`, one object per page load) this view has already
+ * applied or given up on. A remount (the error boundary's "Try again") must not apply the address
+ * the page was opened on a second time, long after the reader changed the filters.
+ */
+const SPENT_COLD_FLEET_LINKS = new WeakSet<FleetDeepLinks>();
+
+/**
+ * The followed links (`useUi().fleetLink`, a new object per follow) this view has applied or
+ * dropped. Held outside the component for the same reason: a remount must not apply the last
+ * followed link again, or give a dropped one a fresh budget from the new mount.
+ */
+const SPENT_FLEET_LINKS = new WeakSet<FleetLink>();
+
 export default function FleetView() {
   const {
     fleetDb,
@@ -102,7 +120,7 @@ export default function FleetView() {
     expressStatus,
   } = useFleet();
   const { flights, lastGoodTs } = useFeed();
-  const { openAircraft, setTab, fleetLink } = useUi();
+  const { setTab, fleetLink, coldFleetLink } = useUi();
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -200,9 +218,12 @@ export default function FleetView() {
     const mainlinePct = starlinkShare ? starlinkShare.pct : null;
     const expressPct = expressScope ? expressScope.pct : null;
     const newThisWeek = starlink.aircraft.filter((a) => isRecentlyFound(a.dateFound)).length;
+    // "Total" is every equipped aircraft, which the Starlink tab lists: a quiet link there.
+    // "Mainline" (the tracker's own census) and "New (7d)" have no list that shows exactly them
+    // here, so they are text, in body colour (link colour means link).
     const rows: StarlinkChip[] = [
-      { label: 'Total', value: String(stats.total), tone: 'ok' },
-      { label: 'Mainline', value: String(stats.mainline), tone: 'primary' },
+      { label: 'Total', value: String(stats.total), tone: 'ok', href: STARLINK_TAB_HREF },
+      { label: 'Mainline', value: String(stats.mainline), tone: 'neutral' },
       { label: 'Express', value: String(stats.express), tone: 'express' },
     ];
     if (mainlinePct != null) {
@@ -211,7 +232,7 @@ export default function FleetView() {
     if (expressPct != null) {
       rows.push({ label: 'Express Fleet', value: `${expressPct}%`, tone: 'neutral' });
     }
-    if (newThisWeek > 0) rows.push({ label: 'New (7d)', value: `+${newThisWeek}`, tone: 'new' });
+    if (newThisWeek > 0) rows.push({ label: 'New (7d)', value: `+${newThisWeek}`, tone: 'neutral' });
     return rows;
   }, [starlink.stats, starlink.aircraft, starlinkShare, expressScope]);
 
@@ -247,6 +268,16 @@ export default function FleetView() {
     () => summarizeExpressFleet(expressDb) as ExpressSummary,
     [expressDb],
   );
+  // The summary's counts as buttons that set the Express search (ruling 7), each only when its
+  // word lists exactly the rows it counts; decided over the whole fleet, like the summary.
+  const expressChips = useMemo<ExpressChips>(
+    () => ({
+      operators: expressSearchChips(expressSummary.byOperator, expressDb),
+      types: expressSearchChips(expressSummary.byType, expressDb),
+      starlink: expressSearchChip('Starlink', expressSummary.starlink, expressDb),
+    }),
+    [expressSummary, expressDb],
+  );
   const expressRows = useMemo(
     () =>
       sortExpressFleet(
@@ -272,6 +303,14 @@ export default function FleetView() {
     special: specialRows.length,
     express: expressDb.length,
   };
+
+  // Stable, so the memoised All Aircraft table (about 1,150 rows of links) skips the re-render
+  // every feed poll and UI store change gives this view.
+  const sortFleetTable = useCallback(
+    (col: FleetSortCol) =>
+      setFleetSort((current) => (current.col === col ? { col, asc: !current.asc } : { col, asc: true })),
+    [],
+  );
 
   // ── Cross-zone: a variant card IS the type filter ───────────────────────────────────
   const selectTypeFromCard = useCallback((type: string) => {
@@ -349,14 +388,34 @@ export default function FleetView() {
   // nothing had happened (found by the reviewer on the preview build, Nov 12 2026).
   const { active: askActive, clear: clearAsk } = ask;
   const [linkScroll, setLinkScroll] = useState<{ to: 'controls' | 'panel' } | null>(null);
+  //
+  // A link followed while this tab is already showing (`fleetLink.arriving` false, the links plan's
+  // ruling 2) is not an arrival: it sets only the filter or sub-view it names (`fleetStayTarget`),
+  // resets nothing and scrolls nowhere.
   const applyFleetDeepLink = useCallback(
-    (link: FleetDeepLinks, { followed }: { followed: boolean }) => {
-      const target = fleetDeepLinkTarget(link, {
+    (link: FleetDeepLinks, how: 'cold' | 'arrive' | 'stay') => {
+      const options = {
         statusValues: STATUS_OPTIONS.map((option) => option.value),
         typeValues: typeOptions.map((option) => option.value),
-      }) as { filter: { status: string; type: string } | null; subView: SubView; scrollTo: 'controls' | 'panel' } | null;
+      };
+      if (how === 'stay') {
+        const stay = fleetStayTarget(link, options, subView) as {
+          filter: { status: string } | { type: string } | null;
+          subView: SubView;
+        } | null;
+        if (!stay) return;
+        if (stay.filter && 'type' in stay.filter) setTypeFilter(stay.filter.type);
+        else if (stay.filter) setStatusFilter(stay.filter.status);
+        setSubView(stay.subView);
+        return;
+      }
+      const target = fleetDeepLinkTarget(link, options) as {
+        filter: { status: string; type: string } | null;
+        subView: SubView;
+        scrollTo: 'controls' | 'panel';
+      } | null;
       if (!target) return;
-      if (followed) {
+      if (how === 'arrive') {
         setSearch('');
         setWifiFilter('');
         setStatusFilter('');
@@ -372,8 +431,23 @@ export default function FleetView() {
       // A new object each time, so the same link followed twice scrolls twice.
       setLinkScroll({ to: target.scrollTo });
     },
-    [typeOptions, askActive, clearAsk],
+    [typeOptions, askActive, clearAsk, subView],
   );
+
+  // The Fleet Pulse's utilization line opens the Airborne Now list. It lands where a cold load of
+  // `?view=airborne` lands (ruling 9): the filters are put back first, so the list shows every
+  // mainline aircraft flying, the "m" of "m/total", then the tab scrolls to it. A button, not a
+  // link: on this tab a followed link is a stay and would keep a type filter that hides most of the
+  // aircraft counted.
+  const showAirborne = useCallback(
+    () => applyFleetDeepLink({ filter: null, view: 'airborne' }, 'arrive'),
+    [applyFleetDeepLink],
+  );
+
+  // A type link followed in place from the Pulse or a Special card sets the type filter and nothing
+  // else (ruling 2, the 'stay' above), and the table it filters is far below them: bring the
+  // controls row into view, as a Composition variant card does, through the scroll a link asks for.
+  const scrollToControls = useCallback(() => setLinkScroll({ to: 'controls' }), []);
 
   // The scroll a link asked for, once the filter and sub-view it set have rendered: the controls
   // row for a filter, the open sub-view's panel for a view alone, top of the tab's scroller (the
@@ -396,34 +470,55 @@ export default function FleetView() {
   // A cold load. The shipped dashboard polled every 200 ms for up to 10 s because the fleet
   // database arrives after the URL is read. Here the same wait is an effect that latches the
   // first time `fleetDb` is non-empty — and gives up on the same 10 s budget so a failed load
-  // does not leave a filter pending forever.
+  // does not leave a filter pending forever (`heldFleetLinkStep`). The address is the one the
+  // page was opened on, held by the UI store at startup (`coldFleetLink`): a link followed to
+  // another tab before the database arrived has taken it out of the address bar by now.
   const deepLinkDone = useRef(false);
   const deepLinkDeadline = useRef(Date.now() + DEEP_LINK_TIMEOUT_MS);
   useEffect(() => {
     if (deepLinkDone.current) return;
-    if (loadFailed || Date.now() > deepLinkDeadline.current) {
+    if (SPENT_COLD_FLEET_LINKS.has(coldFleetLink)) {
       deepLinkDone.current = true;
       return;
     }
-    if (!fleetDb.length) return;
+    const step = heldFleetLinkStep({
+      loaded: fleetDb.length > 0,
+      loadFailed,
+      now: Date.now(),
+      deadline: deepLinkDeadline.current,
+    });
+    if (step === 'wait') return;
     deepLinkDone.current = true;
-    applyFleetDeepLink(readFleetDeepLinks(), { followed: false });
-  }, [fleetDb.length, loadFailed, applyFleetDeepLink]);
+    SPENT_COLD_FLEET_LINKS.add(coldFleetLink);
+    if (step === 'apply') applyFleetDeepLink(coldFleetLink, 'cold');
+  }, [fleetDb.length, loadFailed, applyFleetDeepLink, coldFleetLink]);
 
   // A link followed in place (`useUi().followFleetLink`, from a DashLink anywhere in the
-  // dashboard). Each follow has a new `seq`, so the same link clicked again after the visitor
-  // cleared the filter applies again. The ref starts at 0, not at the current `seq`: this view
-  // mounts on the first visit to the tab, which is often the follow itself, so the link is
-  // already in the store. A link followed before the database arrives is held until it does.
+  // dashboard). Each follow is a new object, so the same link clicked again after the visitor
+  // cleared the filter applies again. A link already in the store when this view mounts is
+  // applied: the view mounts on the first visit to the tab, which is often the follow itself. A
+  // link followed before the database arrives is held until it does, on the cold load's budget:
+  // 10 s from the follow (`fleetLink.at`), or from this view's mount when that is later (a first
+  // visit spends part of the wait loading the tab's own code). Later than that it is dropped.
+  // Once applied or dropped it is spent (`SPENT_FLEET_LINKS`): a remount (the error boundary's
+  // "Try again") neither applies it again nor gives a dropped link another wait. A link still
+  // waiting for the database when the view remounts is not spent, and waits on the same formula
+  // read with the new mount: until the later of 10 s from the follow and 10 s from the remount
+  // (the tab that would have shown it never did, so applying it is what the reader asked for).
   // Declared after the cold load's effect so that, when both apply in one commit, the link the
   // visitor just clicked wins over an address the page was opened on.
-  const appliedFleetLinkSeq = useRef(0);
   useEffect(() => {
-    if (!fleetLink || fleetLink.seq === appliedFleetLinkSeq.current) return;
-    if (!fleetDb.length) return;
-    appliedFleetLinkSeq.current = fleetLink.seq;
-    applyFleetDeepLink(fleetLink, { followed: true });
-  }, [fleetLink, fleetDb.length, applyFleetDeepLink]);
+    if (!fleetLink || SPENT_FLEET_LINKS.has(fleetLink)) return;
+    const step = heldFleetLinkStep({
+      loaded: fleetDb.length > 0,
+      loadFailed,
+      now: Date.now(),
+      deadline: Math.max(fleetLink.at + DEEP_LINK_TIMEOUT_MS, deepLinkDeadline.current),
+    });
+    if (step === 'wait') return;
+    SPENT_FLEET_LINKS.add(fleetLink);
+    if (step === 'apply') applyFleetDeepLink(fleetLink, fleetLink.arriving ? 'arrive' : 'stay');
+  }, [fleetLink, fleetDb.length, loadFailed, applyFleetDeepLink]);
 
   // ── Load failure ────────────────────────────────────────────────────────────────────
   // Only the panels that READ the fleet database go away. The airborne count, the
@@ -478,6 +573,9 @@ export default function FleetView() {
             utilisation={utilisation}
             updatedAt={updatedAt}
             loading={loading}
+            onShowAirborne={showAirborne}
+            typeFilter={typeFilter}
+            onTypeFollowed={scrollToControls}
           />
           <FleetHealth
             health={health}
@@ -622,18 +720,15 @@ export default function FleetView() {
             <FleetTable
               rows={tableRows}
               sort={fleetSort}
-              onSort={(col) =>
-                setFleetSort((current) =>
-                  current.col === col ? { col, asc: !current.asc } : { col, asc: true },
-                )
-              }
+              onSort={sortFleetTable}
               starlinkTails={starlink.tails}
               special={special}
               filtersActive={filtersActive}
               onClearFilters={clearFilters}
               hiddenHint={hiddenHint}
               onShowHidden={showHidden}
-              onOpenAircraft={openAircraft}
+              fleetByReg={fleetByReg}
+              typeFilter={typeFilter}
             />
           </TabsContent>
 
@@ -647,12 +742,11 @@ export default function FleetView() {
                 )
               }
               feedLoading={flights.length === 0}
-              onOpenAircraft={openAircraft}
             />
           </TabsContent>
 
           <TabsContent value="special" className="scroll-mt-2">
-            <SpecialPanel rows={specialRows} loading={loading} onOpenAircraft={openAircraft} />
+            <SpecialPanel rows={specialRows} loading={loading} onTypeFollowed={scrollToControls} />
           </TabsContent>
 
           <TabsContent value="express" className="scroll-mt-2">
@@ -660,6 +754,7 @@ export default function FleetView() {
               rows={expressRows}
               showCabin={expressHasCabin}
               summary={expressSummary}
+              chips={expressChips}
               staleDays={EXPRESS_STALE_DAYS}
               status={expressStatus}
               search={expressSearch}
@@ -671,7 +766,6 @@ export default function FleetView() {
                 )
               }
               nowMs={Date.now()}
-              onOpenAircraft={openAircraft}
             />
           </TabsContent>
         </Tabs>

@@ -1,5 +1,7 @@
 /**
- * URL → dashboard state, on first load and on every hash change.
+ * URL → dashboard state, on first load. A later hash change (Back, Forward, an in-page `#tab`
+ * anchor) is `FollowProvider`'s (follow-link.tsx): one listener shows the tab, announces it and
+ * moves focus.
  *
  * The whole published deep-link surface (inventory §16) lands here so no view has to parse
  * the query string for itself:
@@ -8,7 +10,8 @@
  *   ?tab=weather&hub= Weather, scrolled to that hub's card (the brief's FAA/weather chips)
  *   ?tab=weather&section=nas   Weather, scrolled to the NAS status panel (FAA plan chips)
  *   ?flight= / ?q=    open the flight sheet, or offer a schedule lookup when not airborne
- *   ?hub=             selects that schedule board; with no ?tab (or ?tab=live) it is ALSO the
+ *   ?hub=             selects that schedule board (not with ?tab=weather, where it names a Weather
+ *                     card); with no ?tab (or ?tab=live) it is ALSO the
  *                     Live map's hub filter — `readLiveHubDeepLink()`, read by the Live view
  *                     (the hub pages' "Live <HUB> Map" CTA, F13/F45)
  *   ?view=starlink    the Starlink tab (its airborne/special/express siblings are Fleet-tab sub-views)
@@ -26,6 +29,7 @@
 
 import { useEffect, useRef } from 'react';
 
+import { fleetDeepLinksFrom as readFleetParams } from '@/lib/fleet-address.js';
 import { DEEP_LINK_PARAMS } from '@/lib/followed-link.js';
 import { hubLink } from '@/lib/hub-link.js';
 import { hashTailParams, weatherScrollTarget } from '@/lib/tab-hash.js';
@@ -60,32 +64,21 @@ export type FleetDeepLinks = {
 };
 
 /**
- * Read the Fleet tab's deep links straight off the URL.
- *
- * These three parameters name rows INSIDE the Fleet tab, and only the Fleet view knows
- * which filter values its controls actually offer and when the fleet database has arrived
- * — so the view reads them itself rather than being pushed a value it cannot yet apply.
- * Safe to call on any render: it is a pure read of `window.location.search`.
+ * The Fleet tab's slice of a query string, for an in-place link (`resolveDeepLink`). One reading
+ * with a cold load: `src/lib/fleet-address.js`, which the UI store reads at startup
+ * (`coldFleetLink`). These parameters name rows INSIDE the Fleet tab, and only the Fleet view knows
+ * which filter values its controls offer and when the fleet database has arrived, so the view
+ * applies them itself rather than being pushed a value it cannot yet use.
  */
-export function readFleetDeepLinks(): FleetDeepLinks {
-  if (typeof window === 'undefined') return { filter: null, view: null };
-  return fleetDeepLinksFrom(new URLSearchParams(window.location.search));
-}
-
-/** The Fleet tab's slice of a query string; one reading for a cold load and an in-place link. */
 function fleetDeepLinksFrom(params: URLSearchParams): FleetDeepLinks {
-  const view = params.get('view')?.toLowerCase();
-  return {
-    filter: params.get('type') ?? params.get('filter'),
-    view: view === 'airborne' || view === 'special' || view === 'express' ? view : null,
-  };
+  return readFleetParams(params) as FleetDeepLinks;
 }
 
 /**
  * The Live map's hub from `?hub=`, when the link is for the Live view (no `?tab`, or
  * `?tab=live`). Validated against the hubs the map knows, so `?hub=xyz` is ignored rather than
  * filtering the map to nothing. The Live view seeds its hub filter with this and centres on
- * the hub — like `readFleetDeepLinks()`, a pure read the owning view does itself.
+ * the hub: a pure read of the address that the owning view does itself.
  */
 export function readLiveHubDeepLink(knownHubs: readonly string[]): string | null {
   if (typeof window === 'undefined') return null;
@@ -216,15 +209,20 @@ export function useDeepLinks(deps: DeepLinkDeps) {
       depsRef.current.setTab(resolved, scrollTo ? { scrollTo } : undefined);
     }
 
+    // `?hub=` picks the Schedule board: with `?tab=schedule`, alone, with `?tab=irops` (the hub
+    // pages' "IROPS Monitor" link). Not with `?tab=weather`, where the hub names a Weather card
+    // (`hubStatusLink`, the brief's chips): a click on that link leaves the board the reader chose
+    // (`resolveDeepLink`), so the same address opened cold does too: one address, one end state.
     const hub = params.get('hub');
-    if (hub) {
+    const weatherCard = String(params.get('tab') ?? '').trim().toLowerCase() === 'weather';
+    if (hub && !weatherCard) {
       depsRef.current.setScheduleHub(hub.toUpperCase());
       if (resolved === 'schedule') depsRef.current.setTab('schedule');
     }
 
     // ?view=starlink is tab routing and belongs here. ?view=airborne|special|express and
-    // ?type=/?filter= select rows INSIDE the Fleet tab: the Fleet view reads those itself
-    // through `readFleetDeepLinks()`, once its database has actually loaded.
+    // ?type=/?filter= select rows INSIDE the Fleet tab: the UI store reads them once at startup
+    // (`coldFleetLink`) and the Fleet view applies them once its database has actually loaded.
     if (params.get('view')?.toLowerCase() === 'starlink') depsRef.current.setTab('starlink');
 
     const aircraft = params.get('aircraft');
@@ -248,22 +246,10 @@ export function useDeepLinks(deps: DeepLinkDeps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The hash is the one deep link that can change under us: an in-page anchor, and Back or Forward
-  // across the entry a followed link leaves (follow-link.tsx). Back between two entries of this page
-  // fires `popstate`, and `hashchange` as well when their hashes differ, which a followed link's
-  // always do; both are heard, and the second finds the tab already set.
-  useEffect(() => {
-    function onHashChange() {
-      const resolved = resolveTabParam(window.location.hash);
-      if (resolved) depsRef.current.setTab(resolved, { hash: false });
-    }
-    window.addEventListener('hashchange', onHashChange);
-    window.addEventListener('popstate', onHashChange);
-    return () => {
-      window.removeEventListener('hashchange', onHashChange);
-      window.removeEventListener('popstate', onHashChange);
-    };
-  }, []);
+  // The hash is the one deep link that can change under us (an in-page anchor, Back or Forward
+  // across the entry a followed link leaves). It is not heard here: `FollowProvider` owns that move
+  // with a single listener, because a second listener would run after the tab change had already
+  // committed (follow-link.tsx).
 
   // ?flight= / ?q= — latched until the feed has actually answered.
   useEffect(() => {

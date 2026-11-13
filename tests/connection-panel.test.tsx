@@ -11,6 +11,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// The result card's hub names are dashboard links; where a click lands is tested elsewhere.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
+
 const payloads = vi.hoisted(() => ({ byFlight: {} as Record<string, unknown> }));
 vi.mock('../src/app/data/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/data/api')>()),
@@ -105,7 +108,9 @@ describe('ManualConnectionCheck', () => {
     fireEvent.change(screen.getByLabelText('Outbound flight number'), { target: { value: 'UA786' } });
     fireEvent.click(screen.getByRole('button', { name: 'Check' }));
 
-    expect(await screen.findByText(/Connection at ORD/)).toBeTruthy();
+    // The title's hub is a link to its board, so the words span two elements.
+    const hub = await screen.findByRole('link', { name: 'ORD' });
+    expect(hub.closest('span')!.textContent).toMatch(/^Connection at ORD/);
     expect(screen.getByText(/LGA/)).toBeTruthy();
     expect(screen.queryByText(/departs from ICT/)).toBeNull();
   });

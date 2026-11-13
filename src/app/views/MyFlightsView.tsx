@@ -34,6 +34,7 @@ import {
   findWatchedConnections,
 } from '@/lib/connection-pairing.js';
 import { formatDelayExplainFAAStatus } from '@/lib/delay-explain-context.js';
+import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { HUB_COORDINATES, HUB_RISK_PROFILES, computeDelayRiskModel } from '@/lib/delay-risk.js';
 import { resolveFlightStatus } from '@/lib/flight-status-resolve.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
@@ -46,6 +47,7 @@ import {
   reconcileLiveArrival,
   resolveMyFlightRoute,
 } from '@/lib/my-flights.js';
+import { providerTypeText } from '@/lib/name-links.js';
 import type { Flight } from '../data/types';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
@@ -253,6 +255,9 @@ export default function MyFlightsView() {
         reg,
         liveFlight,
         aircraft: reg ? fleetByReg[reg] : undefined,
+        // The card's type links by this tail's fleet type; with no tail, only a provider string
+        // that is exactly a fleet type (never an ICAO code) may decide it.
+        typeCode: fleetTypeCodeFor({ reg, typeText: providerTypeText(td?.aircraft), fleetByReg }),
         isStarlink: Boolean(reg) && starlink.tails.has(reg),
         inbound,
         journeySegments: segments,

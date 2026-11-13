@@ -1,6 +1,9 @@
 import { beforeAll, describe, it, expect } from 'vitest';
-import { buildFaaIndex, explainFAAStatus, faaTypeLabel, getFAADelayContext } from '../src/lib/faa-context.js';
+import { buildFaaIndex, explainFAAStatus, faaContextText, faaDelayContextParts, faaTypeLabel } from '../src/lib/faa-context.js';
 import { serverFaaResponse } from './fixtures/faa-server-shape.js';
+
+/** The route summary a delayed board row prints: the parts, joined. */
+const routeContext = (index, origin, dest) => faaContextText(faaDelayContextParts(index, origin, dest));
 
 // Delay types are the snake_case vocabulary api/faa.ts actually sends
 // ('ground_stop' | 'ground_delay' | 'departure_delay' | 'arrival_delay' | 'closure').
@@ -73,7 +76,7 @@ describe('explainFAAStatus', () => {
   });
 });
 
-describe('getFAADelayContext', () => {
+describe('the route summary (faaDelayContextParts, joined by faaContextText)', () => {
   const index = buildFaaIndex([
     { airportCode: 'EWR', delays: [{ type: 'ground_stop', reason: 'thunderstorms', avgDelay: 45 }] },
     { airportCode: 'ORD', delays: [{ type: 'ground_delay', reason: 'wind' }] },
@@ -82,27 +85,27 @@ describe('getFAADelayContext', () => {
   ]);
 
   it('summarises both ends of a route, origin first', () => {
-    expect(getFAADelayContext(index, 'EWR', 'ORD')).toBe('Ground Stop at EWR, avg 45 min · GDP at ORD');
+    expect(routeContext(index, 'EWR', 'ORD')).toBe('Ground Stop at EWR, avg 45 min · GDP at ORD');
   });
 
   it('abbreviates departure and arrival delays and lists each one', () => {
-    expect(getFAADelayContext(index, 'SFO', 'DEN')).toBe('Dep Delay at SFO, avg 20 min · Arr Delay at SFO, avg 35 min');
+    expect(routeContext(index, 'SFO', 'DEN')).toBe('Dep Delay at SFO, avg 20 min · Arr Delay at SFO, avg 35 min');
   });
 
   it('returns an empty string when neither airport has delays', () => {
-    expect(getFAADelayContext(index, 'DEN', 'LAX')).toBe('');
-    expect(getFAADelayContext({}, 'EWR', 'ORD')).toBe('');
+    expect(routeContext(index, 'DEN', 'LAX')).toBe('');
+    expect(routeContext({}, 'EWR', 'ORD')).toBe('');
   });
 
   it('skips missing route endpoints (edge case)', () => {
-    expect(getFAADelayContext(index, 'EWR', undefined)).toBe('Ground Stop at EWR, avg 45 min');
-    expect(getFAADelayContext(index, undefined, 'ORD')).toBe('GDP at ORD');
-    expect(getFAADelayContext(index, undefined, undefined)).toBe('');
+    expect(routeContext(index, 'EWR', undefined)).toBe('Ground Stop at EWR, avg 45 min');
+    expect(routeContext(index, undefined, 'ORD')).toBe('GDP at ORD');
+    expect(routeContext(index, undefined, undefined)).toBe('');
   });
 
   it('falls back to a generic "Delay" label for an unrecognised type (edge case)', () => {
     const idx = buildFaaIndex([{ airportCode: 'IAH', delays: [{ type: 'Runway construction' }] }]);
-    expect(getFAADelayContext(idx, 'IAH', null)).toBe('Delay at IAH');
+    expect(routeContext(idx, 'IAH', null)).toBe('Delay at IAH');
   });
 });
 
@@ -129,8 +132,8 @@ describe('FAA helpers on the real /api/faa response', () => {
   });
 
   it('labels the route context Ground Stop / GDP', () => {
-    expect(getFAADelayContext(index, 'EWR', 'LGA')).toBe('Ground Stop at EWR · GDP at LGA, avg 18 min');
-    expect(getFAADelayContext(index, 'SLC', 'BOS')).toBe('Dep Delay at SLC, avg 15 min · Arr Delay at BOS');
+    expect(routeContext(index, 'EWR', 'LGA')).toBe('Ground Stop at EWR · GDP at LGA, avg 18 min');
+    expect(routeContext(index, 'SLC', 'BOS')).toBe('Dep Delay at SLC, avg 15 min · Arr Delay at BOS');
   });
 });
 

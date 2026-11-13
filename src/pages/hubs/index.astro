@@ -2,8 +2,9 @@
 import { hubOrder, hubs } from '../../data/hubs/index.js';
 import { HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../../data/facts.js';
 import BaseLayout from '../../components/site/BaseLayout.astro';
-import { NAS_STATUS_HREF } from '../../lib/nas-status-link.js';
+import { NAS_STATUS_HREF } from '../../lib/hub-link.js';
 import { STARLINK_TAB_HREF } from '../../lib/starlink-link.js';
+import { LIVE_TAB_HREF, SCHEDULE_TAB_HREF, WEATHER_TAB_HREF } from '../../lib/tab-links.js';
 import { withBrand } from '../../lib/page-seo.js';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
@@ -209,7 +210,7 @@ const itemListSchema = {
     <ContentSection heading="What The Blue Board Tracks at Each Hub">
       <ul>
         <li>
-          <strong><a href="/#live">Live flight counts</a></strong> — active United flights at each
+          <strong><a href={LIVE_TAB_HREF}>Live flight counts</a></strong> — active United flights at each
           hub, updated every 30 seconds
         </li>
         <li>
@@ -221,7 +222,7 @@ const itemListSchema = {
           NAS status affecting hub operations
         </li>
         <li>
-          <strong><a href="/#schedule">Departure &amp; arrival schedules</a></strong> — with on-time
+          <strong><a href={SCHEDULE_TAB_HREF}>Departure &amp; arrival schedules</a></strong> — with on-time
           stats and equipment swap detection
         </li>
         <li>
@@ -229,7 +230,7 @@ const itemListSchema = {
           have Starlink satellite internet
         </li>
         <li>
-          <strong><a href="/#weather">Weather conditions</a></strong> — METAR observations and NEXRAD
+          <strong><a href={WEATHER_TAB_HREF}>Weather conditions</a></strong> — METAR observations and NEXRAD
           radar overlay
         </li>
         <li>

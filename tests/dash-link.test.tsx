@@ -16,12 +16,13 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DashLink } from '../src/app/features/DashLink';
+import { DashLink, dashLinkClick } from '../src/app/features/DashLink';
 import { FollowProvider } from '../src/app/state/follow-link';
 import { ScheduleProvider, useSchedule } from '../src/app/state/schedule';
 import type { ScheduleValue } from '../src/app/state/schedule';
 import { UiProvider, useUi } from '../src/app/state/ui';
 import type { UiValue } from '../src/app/state/ui';
+import { defaultSchedDayOffset } from '../src/lib/hubTz.js';
 
 vi.mock('../src/app/state/watch', () => ({ useWatch: () => ({ watched: [] }) }));
 vi.mock('../src/app/state/watch-alerts', () => ({ useWatchAlerts: () => ({ observe: () => {} }) }));
@@ -59,6 +60,25 @@ let reachedDocumentPrevented: boolean | null = null;
 function recordClick(event: Event) {
   reachedDocumentPrevented = event.defaultPrevented;
   event.preventDefault();
+}
+
+/**
+ * Everything a link can change, read back after a click: the stores, the address and the history.
+ * A click left to the browser must leave all of it as it was.
+ */
+function everything() {
+  const ui = seen.ui!;
+  return {
+    tab: ui.tab,
+    pendingScroll: ui.pendingScroll,
+    aircraft: ui.aircraftReg,
+    fleetLink: ui.fleetLink,
+    scheduleLink: ui.scheduleLink,
+    announcement: ui.announcement,
+    board: seen.schedule!.current,
+    address: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    historyLength: window.history.length,
+  };
 }
 
 beforeEach(() => {
@@ -119,13 +139,45 @@ describe('DashLink, an unmodified primary click', () => {
 
     fireEvent.click(link);
     expect(reachedDocumentPrevented).toBe(true);
-    expect(seen.ui!.fleetLink).toEqual({ filter: 'A319', view: null, seq: 1 });
+    // From Live: the link arrives at Fleet.
+    expect(seen.ui!.fleetLink).toEqual({ filter: 'A319', view: null, seq: 1, arriving: true, at: expect.any(Number) });
     expect(seen.ui!.tab).toBe('fleet');
 
-    // The same link again applies again: the Fleet view watches `seq`, not the filter.
+    // The same link again applies again: the Fleet view watches `seq`, not the filter. Fleet is
+    // showing now, so this one does not arrive (the Fleet view resets nothing for it).
     fireEvent.click(link);
-    expect(seen.ui!.fleetLink).toEqual({ filter: 'A319', view: null, seq: 2 });
+    expect(seen.ui!.fleetLink).toEqual({ filter: 'A319', view: null, seq: 2, arriving: false, at: expect.any(Number) });
     expect(seen.ui!.tab).toBe('fleet');
+  });
+
+  it('a hub link arriving at Schedule bumps scheduleLink; one followed on Schedule does not', () => {
+    const link = mount('/?tab=schedule&hub=ORD');
+    expect(seen.ui!.scheduleLink).toBeNull();
+
+    fireEvent.click(link);
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+
+    // Schedule is showing now: the board changes hub, the Schedule view keeps its filters.
+    act(() => seen.schedule!.setCurrent({ hub: 'DEN' }));
+    fireEvent.click(link);
+    expect(seen.schedule!.current.hub).toBe('ORD');
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+  });
+
+  it("a hub link followed on Schedule opens the hub's Departures on its default day, and moves nothing else", () => {
+    const link = mount('/?tab=schedule&hub=ORD');
+    act(() => seen.ui!.setTab('schedule'));
+    act(() => seen.schedule!.setCurrent({ dir: 'arrivals', day: 1 }));
+    const before = window.history.length;
+
+    fireEvent.click(link);
+
+    // The board the address names, as a cold load opens it.
+    expect(seen.schedule!.current).toEqual({ hub: 'ORD', dir: 'departures', day: defaultSchedDayOffset('ORD') });
+    // Not an arrival: no history entry, nothing said, the Schedule view's filters left alone.
+    expect(window.history.length).toBe(before);
+    expect(seen.ui!.announcement).toBe('');
+    expect(seen.ui!.scheduleLink).toBeNull();
   });
 });
 
@@ -134,14 +186,14 @@ describe('DashLink, everything else is the browser\'s', () => {
     'leaves a modified click to the browser (%o)',
     (init) => {
       const link = mount('/?tab=schedule&hub=ORD');
+      const before = everything();
 
       fireEvent.click(link, init);
 
       expect(reachedDocumentPrevented).toBe(false);
       expect(seen.ui!.tab).toBe('live');
       expect(seen.schedule!.current.hub).toBe('DEN');
-      expect(seen.ui!.aircraftReg).toBeNull();
-      expect(seen.ui!.fleetLink).toBeNull();
+      expect(everything()).toEqual(before);
     },
   );
 
@@ -154,11 +206,75 @@ describe('DashLink, everything else is the browser\'s', () => {
     '/?tab=schedule&hub=ORD&flight=UA576',
   ])('does not intercept an address it cannot follow in place (%s)', (href) => {
     const link = mount(href);
+    const before = everything();
 
     fireEvent.click(link);
 
     expect(reachedDocumentPrevented).toBe(false);
     expect(seen.ui!.tab).toBe('live');
     expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(everything()).toEqual(before);
+  });
+
+  it('leaves alone a click something earlier already cancelled, and changes nothing', () => {
+    const link = mount('/?tab=schedule&hub=ORD');
+    const before = everything();
+    // A capture listener above the dashboard (a dialog's outside-click guard, say) has handled it.
+    const cancelFirst = (event: Event) => event.preventDefault();
+    document.addEventListener('click', cancelFirst, { capture: true });
+    try {
+      fireEvent.click(link);
+    } finally {
+      document.removeEventListener('click', cancelFirst, { capture: true });
+    }
+
+    expect(everything()).toEqual(before);
+  });
+});
+
+describe('dashLinkClick returns whether it followed the link', () => {
+  /** A React click event as the handler reads it. */
+  function click(init: Partial<{ defaultPrevented: boolean; button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }> = {}) {
+    const event = { defaultPrevented: false, button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...init, preventDefault: vi.fn() };
+    return event as typeof event & Parameters<ReturnType<typeof dashLinkClick>>[0];
+  }
+
+  it('true, with the default prevented and the intent followed, for a plain click it can follow', () => {
+    const follow = vi.fn();
+    const event = click();
+    expect(dashLinkClick(follow, '/?tab=schedule&hub=ORD')(event)).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(follow).toHaveBeenCalledWith(expect.objectContaining({ tab: 'schedule', scheduleHub: 'ORD' }));
+  });
+
+  it.each([
+    ['already cancelled', { defaultPrevented: true }],
+    ['a middle click', { button: 1 }],
+    ['Cmd', { metaKey: true }],
+    ['Ctrl', { ctrlKey: true }],
+    ['Shift', { shiftKey: true }],
+    ['Alt', { altKey: true }],
+  ])('false, touching nothing, for a click %s', (_, init) => {
+    const follow = vi.fn();
+    const event = click(init);
+    expect(dashLinkClick(follow, '/?tab=schedule&hub=ORD')(event)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(follow).not.toHaveBeenCalled();
+  });
+
+  it('passes fromOverlay on to the follow, and nothing when it is not given', () => {
+    const follow = vi.fn();
+    dashLinkClick(follow, '/?tab=fleet&type=A319', { fromOverlay: true })(click());
+    expect(follow).toHaveBeenLastCalledWith(expect.objectContaining({ tab: 'fleet' }), { fromOverlay: true });
+    dashLinkClick(follow, '/?tab=fleet&type=A319')(click());
+    expect(follow.mock.calls.at(-1)).toHaveLength(1);
+  });
+
+  it('false, touching nothing, for an address the resolver turns down', () => {
+    const follow = vi.fn();
+    const event = click();
+    expect(dashLinkClick(follow, '/hubs/ord')(event)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(follow).not.toHaveBeenCalled();
   });
 });

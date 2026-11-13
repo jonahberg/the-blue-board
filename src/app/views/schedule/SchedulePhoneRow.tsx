@@ -19,6 +19,17 @@
  * button is named by its own `sr-only` words ("UA2059 flight details"), and since it has no
  * visible box its keyboard focus ring is drawn on the row-sized `after:` box instead.
  *
+ * The row's other names link too (links everywhere, part 2: the other hub, the tail, the type,
+ * the FAA airport codes, ⚡ Starlink), but only for a mouse or a keyboard: on a touch screen they
+ * take no taps (`finePointerOnly`), so a tap on them falls through to whatever is under it (the
+ * links plan, ruling 3). That is the flight sheet button almost everywhere, with two exceptions
+ * where a touch box from line 1 reaches into line 2: the flight number's 44 px box covers the top
+ * 12 of line 2's 16 px for the number's width (the tail sits there, so a tap on the tail's upper
+ * part opens the flight page), and the risk badge's box does the same at the right end of line 2.
+ * The number's box is part 1's and stays: 44 px is the touch floor (DESIGN.md), and a shorter box
+ * would trade this for a small target. The links come after the number in the row, so with a
+ * mouse each paints over the number's box where they meet.
+ *
  * Every text field comes from the row model as built; the wording decisions live in
  * `src/lib/schedule-phone-row.js` with a test. Nothing here re-derives a status or a delay.
  */
@@ -36,10 +47,12 @@ import {
 import { riskControl } from '@/lib/schedule-row-display.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { cn } from '@/lib/utils';
+import { TailLink, TypeLink } from '../../features/EntityLinks';
 import { FlightLink } from '../../features/FlightLink';
 import { SpecialLiveryMarker } from '../../features/SpecialLiveryBadge';
 import type { RowModel } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
+import { FaaLine, FleetTypeWords, RouteEnds, StarlinkLink } from './RowLinks';
 import { STATUS_PILL, SWAP_TONE, riskControlClass } from './tone';
 
 export type SchedulePhoneRowProps = {
@@ -131,7 +144,7 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
             ) : (
               <span className="shrink-0 font-mono text-xs text-muted-foreground">—</span>
             )}
-            <span className="shrink-0 font-mono text-xs">{row.routeLine}</span>
+            <RouteEnds ends={row.routeEnds} finePointerOnly className="shrink-0 font-mono text-xs" />
 
             <span className="ml-auto flex min-w-0 items-center gap-1">
               <span
@@ -183,12 +196,15 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
               Wi-Fi (the thing the site is known for) is never the part cut off. */}
           <div className="flex min-w-0 items-center gap-1 text-[10px] leading-4 text-muted-foreground">
             {aircraft.tail ? (
-              // A tail backfilled from live tracking is dotted, as on the desktop board.
+              // A link to the aircraft dialog for a mouse or a keyboard. A tail backfilled from live
+              // tracking has no dotted underline any more (it read as a link that did nothing); the
+              // title and the sr-only words say where it came from.
               <span
-                className={cn('shrink-0 font-mono', row.regFromLive && 'underline decoration-dotted underline-offset-2')}
+                className="shrink-0 font-mono"
                 title={row.regFromLive ? 'Tail from live flight tracking (not in the schedule feed)' : undefined}
               >
-                {aircraft.tail}
+                <TailLink reg={aircraft.tail} tone="quiet" finePointerOnly className="z-10" />
+                {row.regFromLive ? <span className="sr-only"> (tail from live flight tracking, not in the schedule feed)</span> : null}
               </span>
             ) : row.regPending ? (
               <span className="shrink-0" title="Our schedule feed names the aircraft 1–2 hours before departure; United may have assigned it already">
@@ -198,7 +214,13 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
             {/* Inert inside the stretched row button: icon + sr-only words, never a control. */}
             {aircraft.tail ? <SpecialLiveryMarker livery={liveryForTail(row.reg)} /> : null}
             {(aircraft.tail || row.regPending) && aircraft.type ? <Sep /> : null}
-            {aircraft.type ? <span className="shrink-0">{aircraft.type}</span> : null}
+            {aircraft.type ? (
+              // Linked by the tail's fleet type only (`typeCode`), never by these words.
+              <TypeLink typeCode={row.typeCode} finePointerOnly className="z-10 shrink-0">
+                {aircraft.type}
+                <FleetTypeWords typeCode={row.typeCode} printed={aircraft.type} />
+              </TypeLink>
+            ) : null}
             {aircraft.seats ? (
               <>
                 <Sep />
@@ -210,8 +232,20 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
                 <Sep />
                 {aircraft.starlink ? (
                   <span className="flex shrink-0 items-center gap-0.5 font-medium text-bb-starlink">
-                    <Zap aria-hidden="true" className="size-3" />
-                    Starlink
+                    {row.starlinkHref ? (
+                      <StarlinkLink
+                        href={row.starlinkHref}
+                        label="Starlink"
+                        finePointerOnly
+                        iconClassName="size-3"
+                        className="flex items-center gap-0.5"
+                      />
+                    ) : (
+                      <>
+                        <Zap aria-hidden="true" className="size-3" />
+                        Starlink
+                      </>
+                    )}
                   </span>
                 ) : (
                   <span className="flex shrink-0 items-center gap-0.5">
@@ -229,7 +263,11 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
                 <span className={cn('rounded-sm border px-1', SWAP_TONE[row.swap!.tone])}>{swapText}</span>
               ) : null}
               {row.status.seen ? <span className="text-muted-foreground">seen airborne</span> : null}
-              {row.faaContext ? <span className="text-bb-warn">{row.faaContext}</span> : null}
+              {row.faaContext ? (
+                <span className="text-bb-warn">
+                  {row.faaParts?.length ? <FaaLine parts={row.faaParts} finePointerOnly /> : row.faaContext}
+                </span>
+              ) : null}
               {row.special ? (
                 <span className="flex items-center gap-0.5 text-muted-foreground">
                   <Star aria-hidden="true" className="size-3" />

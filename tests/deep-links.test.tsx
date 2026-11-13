@@ -12,7 +12,9 @@ import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Flight } from '../src/app/data/types';
-import { readFleetDeepLinks, resolveDeepLink, useDeepLinks } from '../src/app/state/deep-links';
+import { resolveDeepLink, useDeepLinks } from '../src/app/state/deep-links';
+import { HUB_ORDER } from '../src/lib/hub-health.js';
+import { hubStatusLink } from '../src/lib/hub-link.js';
 import { resolveTabParam } from '../src/app/tabs';
 
 /** A parseFr24Feed-shaped flight. */
@@ -85,6 +87,16 @@ describe('?tab= and #hash', () => {
     expect(mountAt('/?tab=weather').deps.setTab).toHaveBeenCalledWith('weather', undefined);
   });
 
+  it('?tab=weather&hub= picks no Schedule board (the hub names a Weather card); ?tab=irops&hub= and ?hub= alone still do', () => {
+    expect(mountAt('/?tab=weather&hub=ewr').deps.setScheduleHub).not.toHaveBeenCalled();
+    cleanup();
+    expect(mountAt('/?tab=Weather&hub=den').deps.setScheduleHub).not.toHaveBeenCalled();
+    cleanup();
+    expect(mountAt('/?tab=irops&hub=iah').deps.setScheduleHub).toHaveBeenCalledWith('IAH');
+    cleanup();
+    expect(mountAt('/?hub=ord').deps.setScheduleHub).toHaveBeenCalledWith('ORD');
+  });
+
   it('?tab=weather&section=nas lands on the NAS status panel', () => {
     const { deps } = mountAt('/?tab=weather&section=nas');
     expect(deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'nas-section' });
@@ -104,13 +116,14 @@ describe('?tab= and #hash', () => {
     expect(resolveTabParam('')).toBeNull();
   });
 
-  it('a later hashchange switches tab without rewriting the hash', () => {
+  it('a later hash change is not read here (FollowProvider owns it: tests/follow-link-tabs.test.tsx)', () => {
     const { deps } = mountAt('/');
     act(() => {
       window.location.hash = '#fleet';
       window.dispatchEvent(new HashChangeEvent('hashchange'));
+      window.dispatchEvent(new PopStateEvent('popstate'));
     });
-    expect(deps.setTab).toHaveBeenCalledWith('fleet', { hash: false });
+    expect(deps.setTab).not.toHaveBeenCalled();
   });
 });
 
@@ -235,19 +248,9 @@ describe('?flight= / ?q= (latched until the feed answers)', () => {
   });
 });
 
-describe('readFleetDeepLinks', () => {
-  it('reads ?type= (preferred) or ?filter=, and only the fleet sub-views', () => {
-    window.history.replaceState(null, '', '/?type=B39M&filter=starlink&view=special');
-    expect(readFleetDeepLinks()).toEqual({ filter: 'B39M', view: 'special' });
-    window.history.replaceState(null, '', '/?filter=starlink&view=AIRBORNE');
-    expect(readFleetDeepLinks()).toEqual({ filter: 'starlink', view: 'airborne' });
-    window.history.replaceState(null, '', '/?view=starlink');
-    expect(readFleetDeepLinks()).toEqual({ filter: null, view: null });
-  });
-
-  it('reads ?view=express — the United Express sub-view — and does not route on it', () => {
-    window.history.replaceState(null, '', '/?tab=fleet&view=Express');
-    expect(readFleetDeepLinks()).toEqual({ filter: null, view: 'express' });
+// How the Fleet tab's parameters are read is src/lib/fleet-address.js's (tests/fleet-address.test.js).
+describe('the Fleet tab\'s own parameters on a cold load', () => {
+  it('?view=express names the United Express sub-view inside the Fleet tab; the cold load does not route on it', () => {
     expect(mountAt('/?view=express').deps.setTab).not.toHaveBeenCalled();
   });
 });
@@ -294,6 +297,19 @@ describe('resolveDeepLink (the brief chips follow the same resolver a cold load 
     expect(resolveDeepLink('/?tab=schedule&hub=xyz')).toEqual({ ...none, tab: 'schedule' });
     expect(resolveDeepLink('/?tab=weather&hub=EWR')).toMatchObject({ tab: 'weather', scheduleHub: null });
     expect(resolveDeepLink('/?hub=ord')).toBeNull();
+  });
+
+  it('every address hubStatusLink gives resolves in place, to the Weather card or the NAS panel', () => {
+    for (const hub of HUB_ORDER) {
+      expect(resolveDeepLink(hubStatusLink(hub, 'weather')!.href), hub).toEqual({
+        ...none,
+        tab: 'weather',
+        scrollTo: `hub-card-${hub}`,
+      });
+    }
+    for (const airport of ['EWR', 'LGA']) {
+      expect(resolveDeepLink(hubStatusLink(airport, 'nas')!.href), airport).toEqual({ ...none, tab: 'weather', scrollTo: 'nas-section' });
+    }
   });
 
   it('every href the brief\'s chips build still resolves (src/lib/brief-chips.js)', () => {

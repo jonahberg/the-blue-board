@@ -148,11 +148,24 @@ Budget a day for a new tracker, most of it data research.
 
 At four viewports it screenshots and runs axe on every page in `PAGES` and every dashboard tab,
 and runs the link check on each tab in `LINK_GUARD_TABS` (`src/lib/link-guard.js`): a United
-flight number, a tail the page loaded or a hub code inside a table row, list item or
-`[data-link-row]` must sit inside a link or button. Axe findings are a report. An unlinked name,
-or a guarded tab that showed too little to check (no rows, no loaded tails, none of a kind it must
-show), fails the run (exit 1) and is listed with its tab, viewport and row. Output goes to
-`audit-output/` (gitignored).
+flight number, a tail the page loaded (the Starlink roster, the fleet database) or a hub code
+inside a table row, list item or `[data-link-row]` must sit inside a link or button. Axe findings
+are a report. An unlinked name, or a guarded tab that showed too little to check (no rows, no
+loaded tails, none of a kind it must show, `LINK_GUARD_EXPECT`), fails the run (exit 1) and is
+listed with its tab, viewport and row. Output goes to `audit-output/` (gitignored).
+
+- **What it reads.** Live, Schedule, Fleet, Starlink, Weather and Stats, each as it first shows
+  (the Fleet tab's All Aircraft, not its other sub-views). Live lists rows only after a search, so
+  the audit types "UA" into its search box (opening the Filters sheet below `lg`), reads the
+  results, then clears the box and closes the sheet; the search runs over the feed the page already
+  has. My Flights is not checked: its rows are watched flights, and watching one would poll
+  `/api/flight`. Sources prints no names.
+- **A view's own name.** A region marked `data-link-self="ORD"` (the Schedule board) may print
+  that hub as text: it is checked with that hub as `self` (`findUnlinkedNamesByRegion`).
+- **A name printed plain on purpose** sits in an element of its own marked
+  `data-link-row="<what it is>"`, which the audit reads as its own row
+  (`td[data-link-row=status-note]`), with a `LINK_GUARD_ALLOW` entry for exactly that and a reason.
+  Never allow a whole `tr` or `li` that also holds names that must link.
 
 It audits production by default, and production fails the link check for any branch whose links
 are not live yet. To audit a branch, build it and serve the build; `astro preview` proxies `/api`

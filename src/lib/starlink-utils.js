@@ -1,6 +1,8 @@
 // ═══ STARLINK UTILITIES ═══
 // Pure data functions for the STARLINK tab, extracted for testability (mirrors fleet-utils.js).
 
+import { starlinkInboundNumber } from './starlink-roster.js';
+
 const MONTH_LABELS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 /**
@@ -230,7 +232,9 @@ export function departureBucketLabel(deltaSec) {
  * never every departure of a tail that happens to be in the air (F3/F98): an aircraft flying
  * its inbound DEN→SFO leg is not airborne on its SFO→ORD departure 90 minutes from now. Its
  * other rows get `inbound: {flight, icao24}` so the board can say "inbound on UA1389" and still
- * offer to track the airframe.
+ * offer to track the airframe. `inbound.flight` is the number the board reads for that leg
+ * (`starlinkInboundNumber`): the feed's `flightIATA`, an Express operator number there read as
+ * United's (YX3568 → UA3568), else the callsign exactly as sent (RPA3568 stays RPA3568).
  *
  * @param {Record<string, Array<{flight_number?:string, airline?:string, origin?:string, destination?:string, departure_ts?:number, departure_time?:string, arrival_time?:string}>>} flightsByTail
  * @param {Record<string, {type?:string, fleet?:string, operator?:string}>} aircraftByTail - tail → fleet DB entry
@@ -268,7 +272,7 @@ export function buildDeparturesBoard(flightsByTail, aircraftByTail, airborneByTa
     const flights = flightsByTail[tail] || [];
     const liveIdx = air ? liveLegIndex(flights, air, now) : -1;
     const inbound = air
-      ? { flight: String(air.flightIATA || air.callsign || ''), icao24: String(air.icao24 || '') }
+      ? { flight: starlinkInboundNumber(air), icao24: String(air.icao24 || '') }
       : null;
     for (let i = 0; i < flights.length; i++) {
       const f = flights[i];

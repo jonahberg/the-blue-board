@@ -254,6 +254,32 @@ export function manualConnectionOutcome(r1, r2, inFlight, outFlight) {
 }
 
 /**
+ * What a connection card prints and which of it links: the airport where the legs meet, each
+ * leg's flight number, the inbound's origin and the outbound's destination. A code links once per
+ * card. The meeting airport links in the card's title ("Connection at ORD") and prints plain
+ * where it repeats on the two leg lines; an end that repeats one already linked (a round trip,
+ * SFO → ORD → SFO) prints plain the second time. Whether a code that may link is a hub with a
+ * board is the hub link's own rule, not decided here: the manual check can meet anywhere.
+ *
+ * @param {{hub: string, inbound: {w: {flight: string}, td: Object}, outbound: {w: {flight: string}, td: Object}}} conn
+ * @returns {{hub: string, inbound: {flight: string, origin: string, originLinks: boolean}, outbound: {flight: string, destination: string, destinationLinks: boolean}}}
+ */
+export function connectionCardNames(conn) {
+  const hub = conn.hub || '';
+  const origin = conn.inbound.td?.origin?.iata || '';
+  const destination = conn.outbound.td?.destination?.iata || '';
+  const linked = new Set([hub]);
+  const originLinks = Boolean(origin) && !linked.has(origin);
+  if (originLinks) linked.add(origin);
+  const destinationLinks = Boolean(destination) && !linked.has(destination);
+  return {
+    hub,
+    inbound: { flight: conn.inbound.w.flight, origin: origin || '?', originLinks },
+    outbound: { flight: conn.outbound.w.flight, destination: destination || '?', destinationLinks },
+  };
+}
+
+/**
  * The detail line under a connection card.
  *
  * The honesty clause is load-bearing: `MIN_CONNECTION_TIMES` is OUR padded comfort

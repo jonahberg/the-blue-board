@@ -78,7 +78,12 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 text-sm outline-none", className)}
+      // No `outline-none` (shadcn's default): a panel takes focus from Tab (Radix gives it
+      // tabIndex 0) and when a followed link or Back moves focus to it, and focus is always
+      // visible (DESIGN.md). The ring is the site's own, global.css `:focus-visible`, so a mouse
+      // click inside the panel, which focuses it too, draws none (`:focus:not(:focus-visible)`).
+      // Drawn inside the edge: a dashboard panel spans the width, where a ring outside is off-screen.
+      className={cn("flex-1 text-sm focus-visible:-outline-offset-2", className)}
       {...props}
     />
   )

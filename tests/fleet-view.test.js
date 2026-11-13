@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  airborneFlightForTail,
   buildAirborneRows,
   buildConfigGallery,
   buildDeliveryTimeline,
@@ -9,11 +10,18 @@ import {
   FLEET_FAMILY_COLORS,
   fleetDeepLinkTarget,
   fleetHealthCounts,
+  fleetRowTypeLink,
+  fleetTypeTextLink,
+  fleetStayTarget,
+  heldFleetLinkStep,
   resolveFleetDeepLinkFilter,
   sortAirborneRows,
   typeCounts,
   wifiFilterOptions,
 } from '../src/lib/fleet-view.js';
+import { matchAircraft } from '../src/lib/fleet-match.js';
+import { fleetUtilization } from '../src/lib/fleet-utils.js';
+import { isAirborne } from '../src/lib/live-stats.js';
 
 // Rows shaped like /data/fleet.json.
 const FLEET = [
@@ -285,6 +293,74 @@ describe('buildAirborneRows / sortAirborneRows', () => {
     expect(sortAirborneRows(rows, 'reg', true).map((r) => r.reg)).toEqual(['N17104', 'N802UA']);
     expect(rows.map((r) => r.reg)).toEqual(before);
   });
+
+  it('lists exactly the aircraft the tab counts as airborne: ground telemetry is on the ground, flag or not', () => {
+    // Not flagged on the ground, but at 10 m and 5 m/s: the shared rule (`isOnGround`) says ground.
+    const taxiing = { reg: 'N37502', icao24: 'a5', flightIATA: 'UA600', origin: 'ORD', dest: 'DEN', alt: 10, spd: 5, vr: 0, onGround: false };
+    const feed = [...FLIGHTS, taxiing];
+    const rows = buildAirborneRows(feed, deps);
+    expect(rows.map((r) => r.reg)).toEqual(['N802UA', 'N17104']);
+    // The utilization's "m" and the "Airborne Now (N)" tab count, from the same feed.
+    const counted = fleetUtilization(feed.filter(isAirborne), FLEET.length, (f) => matchAircraft(f, fleetByReg)).matched;
+    expect(rows).toHaveLength(counted);
+  });
+
+  it('carries each route end as printed, so the view links the hub ends without parsing the route', () => {
+    const rows = buildAirborneRows(
+      [...FLIGHTS, { reg: 'N37502', icao24: 'a4', flightIATA: 'UA500', alt: 9000, onGround: false }],
+      deps,
+    );
+    expect(rows.map((r) => [r.origin, r.dest])).toEqual([['ORD', 'DEN'], ['SFO', 'HNL'], ['???', '???']]);
+    // The route string is the two ends, unchanged.
+    expect(rows.map((r) => r.route)).toEqual(['ORD > DEN', 'SFO > HNL', '??? > ???']);
+  });
+
+  it('links each row\'s type by its tail, and not when the table is filtered to that type (ruling 1)', () => {
+    expect(buildAirborneRows(FLIGHTS, deps).map((r) => r.typeLink)).toEqual(['A319', '757-200']);
+    // Filtered to the 757-200, every row is a 757-200: its type cell would lead where the reader is.
+    expect(buildAirborneRows(FLIGHTS, { ...deps, type: '757-200' }).map((r) => r.typeLink)).toEqual([null]);
+    // A search narrows the rows but is not a type filter: the type still links.
+    expect(buildAirborneRows(FLIGHTS, { ...deps, search: '757' }).map((r) => r.typeLink)).toEqual(['757-200']);
+  });
+});
+
+describe('fleetTypeTextLink: a printed fleet type with no tail (the Pulse rows)', () => {
+  it('links an exact fleet database type code', () => {
+    expect(fleetTypeTextLink('737 MAX 9', '')).toBe('737 MAX 9');
+    expect(fleetTypeTextLink('A319', 'A320')).toBe('A319');
+  });
+
+  it('is null when the tab is already filtered to it: the link would change nothing (ruling 1)', () => {
+    expect(fleetTypeTextLink('737 MAX 9', '737 MAX 9')).toBeNull();
+  });
+
+  it('is null for anything that is not exactly a fleet type code', () => {
+    expect(fleetTypeTextLink('B739', '')).toBeNull();
+    expect(fleetTypeTextLink('737 max 9', '')).toBeNull();
+    expect(fleetTypeTextLink('E175', '')).toBeNull();
+    expect(fleetTypeTextLink(undefined, '')).toBeNull();
+  });
+});
+
+describe('fleetRowTypeLink: the type a Fleet-tab row links to', () => {
+  const fleetByReg = Object.fromEntries(FLEET.map((a) => [a.r, a]));
+
+  it('is the fleet database\'s type for the row\'s tail', () => {
+    expect(fleetRowTypeLink('N802UA', fleetByReg, '')).toBe('A319');
+    expect(fleetRowTypeLink('N37502', fleetByReg, '')).toBe('737 MAX 9');
+  });
+
+  it('is null in a list already filtered to that type (ruling 1), and a link under any other filter', () => {
+    expect(fleetRowTypeLink('N802UA', fleetByReg, 'A319')).toBeNull();
+    expect(fleetRowTypeLink('N802UA', fleetByReg, '737 MAX 9')).toBe('A319');
+  });
+
+  it('is null for a tail the database does not know, before it loads, and for a non-US registration', () => {
+    expect(fleetRowTypeLink('N999ZZ', fleetByReg, '')).toBeNull();
+    expect(fleetRowTypeLink('N802UA', null, '')).toBeNull();
+    expect(fleetRowTypeLink('N802UA', {}, '')).toBeNull();
+    expect(fleetRowTypeLink('JA873A', { JA873A: { t: '787-9' } }, '')).toBeNull();
+  });
 });
 
 describe('resolveFleetDeepLinkFilter', () => {
@@ -367,8 +443,24 @@ describe('buildSpecialRows', () => {
       { reg: 'N171-04', flightIATA: 'UA200', origin: 'SFO', dest: 'HNL', onGround: false },
     ]);
     // The feed's registration arrives dashed; the index is not.
-    expect(rows.find((r) => r.reg === 'N17104').airborne).toEqual({ flight: 'UA200', route: 'SFO > HNL' });
+    expect(rows.find((r) => r.reg === 'N17104').airborne).toEqual({
+      flight: 'UA200',
+      route: 'SFO > HNL',
+      origin: 'SFO',
+      dest: 'HNL',
+    });
     expect(rows.find((r) => r.reg === 'N26902').airborne).toBeNull();
+  });
+
+  it('links each card\'s type by its tail; a curated livery off the mainline database has none', () => {
+    const rows = buildSpecialRows(special, fleetByReg, [], [
+      { tail: 'N642SY', name: 'Express livery', description: 'A regional jet' },
+    ]);
+    expect(rows.map((r) => [r.reg, r.typeLink])).toEqual([
+      ['N642SY', null],
+      ['N17104', '757-200'],
+      ['N26902', '787-9'],
+    ]);
   });
 
   it('ignores an on-ground sighting', () => {
@@ -378,9 +470,92 @@ describe('buildSpecialRows', () => {
     expect(rows.find((r) => r.reg === 'N17104').airborne).toBeNull();
   });
 
+  it('ignores ground telemetry the feed did not flag, as every airborne count does', () => {
+    const rows = buildSpecialRows(special, fleetByReg, [
+      { reg: 'N17104', flightIATA: 'UA200', origin: 'SFO', dest: 'HNL', alt: 10, spd: 5, vr: 0, onGround: false },
+    ]);
+    expect(rows.find((r) => r.reg === 'N17104').airborne).toBeNull();
+  });
+
   it('drops a special registration the fleet database does not have', () => {
     const rows = buildSpecialRows(special, fleetByReg, []);
     expect(rows.map((r) => r.reg)).toEqual(['N17104', 'N26902']);
     expect(rows[0]).toMatchObject({ kind: 'named', type: '757-200', delivered: '1994' });
+  });
+});
+
+describe('fleetStayTarget: a Fleet link followed while the Fleet tab is showing (ruling 2)', () => {
+  const options = { statusValues: ['active', 'stored', 'starlink'], typeValues: ['A319', '737 MAX 9'] };
+
+  it('names only the filter the link sets, so every other filter stays', () => {
+    expect(fleetStayTarget({ filter: 'A319', view: null }, options, 'all')).toEqual({ filter: { type: 'A319' }, subView: 'all' });
+    expect(fleetStayTarget({ filter: 'starlink', view: null }, options, 'all')).toEqual({
+      filter: { status: 'starlink' },
+      subView: 'all',
+    });
+  });
+
+  it('keeps the sub-view when it lists what the filter narrows, else opens All Aircraft', () => {
+    // Airborne Now is filtered by type, not by status.
+    expect(fleetStayTarget({ filter: 'A319', view: null }, options, 'airborne')?.subView).toBe('airborne');
+    expect(fleetStayTarget({ filter: 'starlink', view: null }, options, 'airborne')?.subView).toBe('all');
+    for (const from of ['special', 'express']) {
+      expect(fleetStayTarget({ filter: 'A319', view: null }, options, from)?.subView, from).toBe('all');
+      expect(fleetStayTarget({ filter: 'stored', view: null }, options, from)?.subView, from).toBe('all');
+    }
+  });
+
+  it('a view opens that view, with or without a known filter', () => {
+    expect(fleetStayTarget({ filter: null, view: 'special' }, options, 'all')).toEqual({ filter: null, subView: 'special' });
+    expect(fleetStayTarget({ filter: 'A319', view: 'airborne' }, options, 'express')).toEqual({
+      filter: { type: 'A319' },
+      subView: 'airborne',
+    });
+    expect(fleetStayTarget({ filter: 'B789', view: 'express' }, options, 'all')).toEqual({ filter: null, subView: 'express' });
+  });
+
+  it('an unknown or empty filter with no view changes nothing', () => {
+    expect(fleetStayTarget({ filter: 'B789', view: null }, options, 'all')).toBeNull();
+    expect(fleetStayTarget({ filter: null, view: null }, options, 'special')).toBeNull();
+  });
+});
+
+describe('heldFleetLinkStep: a Fleet address waiting for the fleet database', () => {
+  const at = { now: 1_000, deadline: 11_000 };
+
+  it('waits while the database has not arrived, and applies once it has', () => {
+    expect(heldFleetLinkStep({ loaded: false, loadFailed: false, ...at })).toBe('wait');
+    expect(heldFleetLinkStep({ loaded: true, loadFailed: false, ...at })).toBe('apply');
+    // At the deadline exactly, still in budget.
+    expect(heldFleetLinkStep({ loaded: true, loadFailed: false, now: 11_000, deadline: 11_000 })).toBe('apply');
+  });
+
+  it('drops it when the load failed, or when the database arrives past the deadline', () => {
+    expect(heldFleetLinkStep({ loaded: false, loadFailed: true, ...at })).toBe('drop');
+    expect(heldFleetLinkStep({ loaded: true, loadFailed: false, now: 11_001, deadline: 11_000 })).toBe('drop');
+    expect(heldFleetLinkStep({ loaded: false, loadFailed: false, now: 11_001, deadline: 11_000 })).toBe('drop');
+  });
+});
+
+describe('airborneFlightForTail: the aircraft dialog\'s live flight, by the rule Airborne Now uses', () => {
+  const climbing = { reg: 'N37-502', flightIATA: 'UA600', origin: 'ORD', dest: 'DEN', alt: 3000, spd: 180, vr: 1500, onGround: false };
+
+  it('finds the tail\'s flight in the air, whatever the feed\'s hyphen or case', () => {
+    expect(airborneFlightForTail([climbing], 'N37502')).toBe(climbing);
+    expect(airborneFlightForTail([climbing], 'n37502')).toBe(climbing);
+  });
+
+  it('a flight the feed did not flag but whose telemetry is on the ground is not airborne (isOnGround)', () => {
+    const taxiing = { ...climbing, alt: 10, spd: 5, vr: 0, onGround: false };
+    expect(airborneFlightForTail([taxiing], 'N37502')).toBeUndefined();
+    // The same row and the same answer as the Airborne Now list.
+    expect(buildAirborneRows([taxiing], { fleetByReg: { N37502: { r: 'N37502', t: '737 MAX 9' } }, starlinkTails: new Set(), special: new Map() })).toEqual([]);
+  });
+
+  it('a flight the feed flags on the ground, another tail, or no tail at all finds nothing', () => {
+    expect(airborneFlightForTail([{ ...climbing, onGround: true }], 'N37502')).toBeUndefined();
+    expect(airborneFlightForTail([climbing], 'N37503')).toBeUndefined();
+    expect(airborneFlightForTail([climbing], '')).toBeUndefined();
+    expect(airborneFlightForTail(null, 'N37502')).toBeUndefined();
   });
 });

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { fleetTypes } from '../src/data/fleet/index.js'; // the TEST may import it; the lib may not
-import { FLEET_TYPE_SLUGS, fleetTypeCodeForTail, fleetTypeLink } from '../src/lib/fleet-type-link.js';
+import { FLEET_TYPE_SLUGS, fleetTypeCodeFor, fleetTypeCodeForTail, fleetTypeLink, fleetTypeWords } from '../src/lib/fleet-type-link.js';
 
 describe('FLEET_TYPE_SLUGS: the fleet database type code behind each fleet page', () => {
   it('is exactly the inversion of the fleet pages', () => {
@@ -79,5 +79,71 @@ describe('fleetTypeCodeForTail: the type a tail links to comes from the fleet da
     for (const bad of ['UA576', '', null, 42]) {
       expect(fleetTypeCodeForTail(bad, { N75436: { t: '737-900ER' } }), String(bad)).toBeNull();
     }
+  });
+});
+
+describe('fleetTypeCodeFor: a row with a tail by the tail only; a row without one by an exact type string', () => {
+  const fleetByReg = { N75436: { t: '737-900ER' }, N37502: { t: '737 MAX 9' }, N999XX: { t: '737-600' } };
+
+  it('a tail the database knows decides, whatever the row prints', () => {
+    expect(fleetTypeCodeFor({ reg: 'N75436', typeText: '737-900', fleetByReg })).toBe('737-900ER');
+    expect(fleetTypeCodeFor({ reg: 'n-75436', typeText: 'B739', fleetByReg })).toBe('737-900ER');
+    expect(fleetTypeCodeFor({ reg: 'N37502', fleetByReg })).toBe('737 MAX 9');
+  });
+
+  it('a row with a tail never reads its printed text: null while the database loads or after it failed', () => {
+    for (const db of [null, undefined, {}]) {
+      expect(fleetTypeCodeFor({ reg: 'N75436', typeText: '737-900', fleetByReg: db }), JSON.stringify(db)).toBeNull();
+    }
+  });
+
+  it('a row with a tail the database does not know, or whose type has no fleet page, is null', () => {
+    expect(fleetTypeCodeFor({ reg: 'N613UX', typeText: 'A321neo', fleetByReg })).toBeNull();
+    expect(fleetTypeCodeFor({ reg: 'N999XX', typeText: '737-700', fleetByReg })).toBeNull();
+  });
+
+  it('a row with no tail links an exact fleet database type string', () => {
+    expect(fleetTypeCodeFor({ typeText: '737 MAX 9', fleetByReg })).toBe('737 MAX 9');
+    expect(fleetTypeCodeFor({ reg: null, typeText: '787-10', fleetByReg: null })).toBe('787-10');
+    // A value that is not a registration is no tail.
+    expect(fleetTypeCodeFor({ reg: 'UA576', typeText: 'A319', fleetByReg })).toBe('A319');
+  });
+
+  it('without a tail, clipped or differently written text, regional types and most ICAO codes are null', () => {
+    for (const text of ['B739', 'B772', 'B38M', 'Boeing 737', '737 max 9', '737-900 ', 'E175', 'CRJ-550', 'A320neo', '', null, 42]) {
+      expect(fleetTypeCodeFor({ typeText: text, fleetByReg }), String(text)).toBeNull();
+    }
+    // A319 and A320 are ICAO codes and fleet type codes at once: why typeText must never be an acType.
+    expect(fleetTypeCodeFor({ typeText: 'A319' })).toBe('A319');
+    expect(fleetTypeCodeFor({ typeText: 'A320' })).toBe('A320');
+    expect(fleetTypeCodeFor()).toBeNull();
+  });
+
+  it('every value it returns has a fleet page and a Fleet tab link', () => {
+    for (const typeText of Object.keys(FLEET_TYPE_SLUGS)) {
+      const code = fleetTypeCodeFor({ typeText });
+      expect(code, typeText).toBe(typeText);
+      expect(fleetTypeLink(code, 'dashboard')?.href, typeText).toBe(`/?tab=fleet&type=${encodeURIComponent(typeText)}`);
+    }
+  });
+});
+
+describe('fleetTypeWords: what a type link says after its printed text', () => {
+  it('names the fleet type it opens when the row prints something else', () => {
+    expect(fleetTypeWords('B739', '737-900ER')).toBe('(737-900ER in the fleet)');
+    expect(fleetTypeWords('A321 NEO', 'A321neo')).toBe('(A321neo in the fleet)');
+  });
+
+  it('says only "(in the fleet)" when the row prints that type, so it is not said twice', () => {
+    expect(fleetTypeWords('737 MAX 9', '737 MAX 9')).toBe('(in the fleet)');
+    // A319 and A320 are ICAO codes and fleet types at once: the desktop row prints the code.
+    expect(fleetTypeWords('A320', 'A320')).toBe('(in the fleet)');
+    expect(fleetTypeWords(' 737  max 9 ', '737 MAX 9')).toBe('(in the fleet)');
+  });
+
+  it('nothing when the type does not link', () => {
+    expect(fleetTypeWords('CRJ7', null)).toBeNull();
+    expect(fleetTypeWords('B739', 'B739')).toBeNull();
+    expect(fleetTypeWords('737 MAX 9', '')).toBeNull();
   });
 });

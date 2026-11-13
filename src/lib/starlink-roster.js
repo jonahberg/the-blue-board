@@ -121,16 +121,38 @@ export function starlinkFlightLabel(printed, row = null) {
 const LIVE_FEED_ROW = Object.freeze({ airline: 'UA' });
 
 /**
- * The departures board's "inbound on …" number: the flight the aircraft is flying now, from the
- * live feed (`flightIATA`, else the callsign). That feed is United-only (`LIVE_FEED_ROW`), so the
- * inbound leg is United's and an Express operator number FR24 prints on it reads as its United
- * number: "YX3568" reads "UA3568" and links, as "UA4190" beside it does (Nov 12 2026 preview).
+ * The number the departures board's "inbound on …" reads for the flight the aircraft is flying
+ * now: the live feed's `flightIATA`, else its callsign (`buildDeparturesBoard` stores it as
+ * `inbound.flight`).
  *
- * @param {unknown} printed  the live feed's number for the inbound leg.
+ * The feed is United-only (`LIVE_FEED_ROW`), so an Express operator number FR24 prints as the
+ * flight number reads as its United number: `flightIATA` "YX3568" reads "UA3568", as "UA4190"
+ * beside it does (Nov 12 2026 preview). Only `flightIATA` is read that way. A callsign is the
+ * operator's own radio call (RPA3568, SKW5123), and nothing has checked that its digits are the
+ * United number (`EXPRESS_NUMBER_CHECK` covered the Starlink feed's flight numbers), so a callsign
+ * fallback stays exactly as sent; a mainline UAL callsign is United's own number (UAL347 → UA347)
+ * and `starlinkInboundLabel` reads it so.
+ *
+ * @param {{flightIATA?: unknown, callsign?: unknown} | null | undefined} live  the live feed's flight.
+ * @returns {string}
+ */
+export function starlinkInboundNumber(live) {
+  const iata = typeof live?.flightIATA === 'string' ? live.flightIATA.trim() : '';
+  if (iata) return starlinkFlightLabel(iata, LIVE_FEED_ROW);
+  return typeof live?.callsign === 'string' ? live.callsign.trim() : '';
+}
+
+/**
+ * What the departures board prints for its "inbound on …" number (`inbound.flight`, chosen by
+ * `starlinkInboundNumber`): a United number as its page's ident ("UAL347" reads "UA347"),
+ * anything else exactly as given. It reads no operator prefix itself: that reading belongs to the
+ * feed's `flightIATA` alone, and is done where that field is known.
+ *
+ * @param {unknown} printed  the inbound leg's number, `inbound.flight`.
  * @returns {string}
  */
 export function starlinkInboundLabel(printed) {
-  return starlinkFlightLabel(printed, LIVE_FEED_ROW);
+  return starlinkFlightLabel(printed);
 }
 
 /** 30 minutes: a flight that has just pushed back is still "the next one" on this board. */

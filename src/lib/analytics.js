@@ -97,20 +97,25 @@ export function hubMatrix(airborneFlights, hubs) {
 /**
  * Busiest city pairs in the live feed, directional.
  *
+ * Each row carries its two ends as codes as well as the joined `route`, so the Stats tab links
+ * the hub ends without parsing the arrow back apart (links everywhere, part 2).
+ *
  * @param {Array<Object>} airborneFlights
  * @param {number} limit  the chart shows 15.
- * @returns {Array<{route: string, count: number}>} sorted busiest-first.
+ * @returns {Array<{route: string, origin: string, dest: string, count: number}>} sorted busiest-first.
  */
 export function topRoutes(airborneFlights, limit) {
-  const routeCount = {};
+  const routes = new Map();
   airborneFlights.filter(f => f.origin && f.dest).forEach(f => {
     const key = f.origin + '→' + f.dest;
-    routeCount[key] = (routeCount[key] || 0) + 1;
+    const row = routes.get(key);
+    if (row) row.count++;
+    else routes.set(key, { route: key, origin: f.origin, dest: f.dest, count: 1 });
   });
-  return Object.entries(routeCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([route, count]) => ({ route, count }));
+  // A stable sort over first-seen order, as the object it replaces gave.
+  return [...routes.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
 }
 
 /**

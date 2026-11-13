@@ -93,6 +93,8 @@ vi.mock('../src/app/state/ui', async (importOriginal) => ({
       focusOn: () => {},
       openAircraft: () => {},
       setStarlinkFilter: () => {},
+      // The address the page opened on names no Fleet filter (the real store reads it at startup).
+      coldFleetLink: { filter: null, view: null },
     }) as unknown as UiValue,
 }));
 

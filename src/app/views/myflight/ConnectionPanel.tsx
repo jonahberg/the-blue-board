@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { cityFor } from '@/lib/airports.js';
 import {
   computeConnectionRisk,
+  connectionCardNames,
   connectionDetailLine,
   manualConnectionOutcome,
   normalizeConnectionFlight,
@@ -30,6 +31,8 @@ import {
 import { findLiveFlight, reconcileLiveArrival } from '@/lib/my-flights.js';
 import { ApiError, fetchFlightTimes } from '../../data/api';
 import type { Flight, FlightTimes } from '../../data/types';
+import { HubLink } from '../../features/EntityLinks';
+import { FlightLink } from '../../features/FlightLink';
 
 export type ConnectionRisk = {
   state: 'scored' | 'insufficient' | 'disrupted';
@@ -51,16 +54,39 @@ export type ConnectionPair = {
   outbound: { w: { flight: string }; td: { destination?: { iata?: string } } };
 };
 
+type CardNames = {
+  hub: string;
+  inbound: { flight: string; origin: string; originLinks: boolean };
+  outbound: { flight: string; destination: string; destinationLinks: boolean };
+};
+
+/**
+ * One leg of the connection on one line: its number in link colour (the flight page; a number
+ * with no page is plain), its far end quiet. Wherever touch boxes are drawn the line is 44 px tall
+ * and its names sit far apart, so no box covers another (JourneyChain's legs, the Starlink
+ * roster's Upcoming Flights).
+ */
+const LEG_LINE =
+  'flex min-h-11 flex-wrap items-center gap-x-7 pointer-fine:md:min-h-0 pointer-fine:md:items-baseline pointer-fine:md:gap-x-2';
+const LEG_ARROW = 'mx-3 pointer-fine:md:mx-1';
+
+/**
+ * Each code links once per card (`connectionCardNames`): the airport where the legs meet in the
+ * title, the far ends where they first print; the repeats are plain. Any of them links only when it
+ * is a hub with a board (the manual check can meet anywhere).
+ */
 export function ConnectionCard({ conn, risk }: { conn: ConnectionPair; risk: ConnectionRisk }) {
   const detail = connectionDetailLine(risk) as { tone: string; text: string };
+  const names = connectionCardNames(conn) as CardNames;
   return (
     <Card
       className="gap-2 border-l-4 p-3 text-[11px]"
       style={{ borderLeftColor: risk.color }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* 44 px tall on touch (`hit="inline"`): a box would reach down over the first leg's. */}
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          Connection at {conn.hub} ({cityFor(conn.hub) || conn.hub})
+          Connection at <HubLink code={names.hub} hit="inline" /> ({cityFor(names.hub) || names.hub})
         </span>
         <span
           className="rounded-md px-1.5 py-0.5 text-[9px] font-bold"
@@ -70,13 +96,21 @@ export function ConnectionCard({ conn, risk }: { conn: ConnectionPair; risk: Con
         </span>
       </div>
       <div className="space-y-0.5 font-mono">
-        <div>
-          {conn.inbound.w.flight} {conn.inbound.td.origin?.iata || '?'} →{' '}
-          <strong>{conn.hub}</strong>
+        <div data-link-row="" className={LEG_LINE}>
+          <FlightLink ident={names.inbound.flight} />
+          <span>
+            {names.inbound.originLinks ? <HubLink code={names.inbound.origin} /> : names.inbound.origin}
+            <span className={LEG_ARROW}>→</span>
+            <strong>{names.hub}</strong>
+          </span>
         </div>
-        <div>
-          {conn.outbound.w.flight} <strong>{conn.hub}</strong> →{' '}
-          {conn.outbound.td.destination?.iata || '?'}
+        <div data-link-row="" className={LEG_LINE}>
+          <FlightLink ident={names.outbound.flight} />
+          <span>
+            <strong>{names.hub}</strong>
+            <span className={LEG_ARROW}>→</span>
+            {names.outbound.destinationLinks ? <HubLink code={names.outbound.destination} /> : names.outbound.destination}
+          </span>
         </div>
       </div>
       <p className={detail.tone === 'muted' ? 'text-muted-foreground' : 'text-muted-foreground'}>
@@ -160,7 +194,8 @@ export function ManualConnectionCheck({ flights = [] }: { flights?: Flight[] }) 
 
   return (
     <section id="myflight-check" className="rounded-md border p-3.5">
-      <h3 className="mb-2.5 text-[10px] font-medium uppercase tracking-widest text-primary">
+      {/* Body colour: a heading, not a link. */}
+      <h3 className="mb-2.5 text-[10px] font-medium uppercase tracking-widest text-foreground">
         Check a Connection
       </h3>
       <div className="flex flex-wrap gap-2">

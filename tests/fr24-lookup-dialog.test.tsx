@@ -15,10 +15,13 @@ const lookup = vi.hoisted(() => ({ response: null as unknown }));
 // per render would re-run the lookup forever.
 const ui = vi.hoisted(() => ({ fr24Query: 'UA2278', openFr24: () => {}, openAircraft: () => {}, announce: () => {} }));
 vi.mock('../src/app/state/ui', () => ({ useUi: () => ui }));
-const fleet = vi.hoisted(() => ({ fleetDb: [] }));
+const fleet = vi.hoisted(() => ({ fleetDb: [] as Record<string, unknown>[], fleetByReg: {} as Record<string, unknown> }));
 vi.mock('../src/app/state/fleet', () => ({ useFleet: () => fleet }));
+// The dialog's names are dashboard links; where a click lands is tests/overlay-follow-focus.test.tsx.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 vi.mock('../src/app/data/api', () => ({ fetchFr24Flight: async () => lookup.response }));
 
+import { TailLink } from '../src/app/features/EntityLinks';
 import Fr24LookupDialog from '../src/app/features/Fr24LookupDialog';
 
 /** /api/fr24-flight's answer for UA2278 at 2026-09-27T04:33Z (normalised yesterday's leg). */
@@ -45,7 +48,11 @@ function response(previousLeg: boolean) {
   };
 }
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  fleet.fleetDb = [];
+  fleet.fleetByReg = {};
+});
 
 describe('Fr24LookupDialog previous-leg label (F0)', () => {
   it('labels an earlier completed leg as "Last operated <date>", not as the flight', async () => {
@@ -63,5 +70,63 @@ describe('Fr24LookupDialog previous-leg label (F0)', () => {
     render(<Fr24LookupDialog />);
     expect(await screen.findByText('Arr Actual')).toBeTruthy();
     expect(screen.queryByText(/Last operated/)).toBeNull();
+  });
+});
+
+describe('Fr24LookupDialog links the names it prints (links part 2)', () => {
+  const N24542 = { r: 'N24542', t: 'A321neo', c: '20F/57E+/119Y', w: 'Starlink' };
+
+  it('hub ends link to their boards, from inside the dialog', async () => {
+    lookup.response = response(false);
+    render(<Fr24LookupDialog />);
+    expect((await screen.findByRole('link', { name: 'SFO' })).getAttribute('href')).toBe('/?tab=schedule&hub=SFO');
+    expect(screen.getByRole('link', { name: 'ORD' }).getAttribute('href')).toBe('/?tab=schedule&hub=ORD');
+  });
+
+  it("the feed's ICAO type links by the tail's fleet type; the tail opens its aircraft dialog", async () => {
+    fleet.fleetDb = [N24542];
+    fleet.fleetByReg = { N24542 };
+    lookup.response = response(false);
+    render(<Fr24LookupDialog />);
+    const type = await screen.findByRole('link', { name: 'A21N' });
+    expect(type.getAttribute('href')).toBe('/?tab=fleet&type=A321neo');
+    expect(screen.getByRole('link', { name: 'N24542' }).getAttribute('href')).toBe('/?aircraft=N24542');
+    expect(screen.queryByRole('button', { name: 'N24542' })).toBeNull();
+    // The fleet match's type links too; its label is not link-coloured.
+    expect(screen.getByRole('link', { name: 'A321neo' }).getAttribute('href')).toBe('/?tab=fleet&type=A321neo');
+    expect(screen.getByText('Fleet Match:').className).not.toContain('text-primary');
+  });
+
+  // The lookup's tail is written by hand (`TailAnchor`) so that it closes only the lookup; it must
+  // stay what a quiet inline TailLink renders, or a change to TailLink would leave it behind.
+  it("the tail's markup is a quiet inline TailLink's: class, href and data-tail-link", async () => {
+    lookup.response = response(false);
+    render(<Fr24LookupDialog />);
+    const tail = await screen.findByRole('link', { name: 'N24542' });
+    const reference = render(<TailLink reg="N24542" tone="quiet" hit="inline" className="font-mono" />).container.querySelector('a')!;
+    expect(tail.getAttribute('class')).toBe(reference.getAttribute('class'));
+    expect(tail.getAttribute('href')).toBe(reference.getAttribute('href'));
+    expect(tail.getAttribute('data-tail-link')).toBe(reference.getAttribute('data-tail-link'));
+    expect(tail.getAttribute('data-tail-link')).toBe('N24542');
+  });
+
+  it('a tail with no aircraft page prints as TailLink prints it: plain, in the same span', async () => {
+    const answer = response(false);
+    answer.flight.aircraft.reg = 'G-XWBA';
+    lookup.response = answer;
+    render(<Fr24LookupDialog />);
+    const tail = await screen.findByText('G-XWBA');
+    expect(screen.queryByRole('link', { name: 'G-XWBA' })).toBeNull();
+    const reference = render(<TailLink reg="G-XWBA" tone="quiet" hit="inline" className="font-mono" />).container.firstElementChild!;
+    expect(tail.outerHTML).toBe(reference.outerHTML);
+  });
+
+  it('without a tail the fleet knows, the ICAO code stays plain', async () => {
+    lookup.response = response(false);
+    render(<Fr24LookupDialog />);
+    expect(await screen.findByText('A21N')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'A21N' })).toBeNull();
+    // The tail is still a link: the aircraft dialog says what it knows of any tail.
+    expect(screen.getByRole('link', { name: 'N24542' })).toBeTruthy();
   });
 });

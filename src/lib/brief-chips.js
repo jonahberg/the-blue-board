@@ -12,7 +12,10 @@
 // destination actually shows the fact (see `chipTarget`). The hrefs are real deep links that
 // resolve on a cold load (src/app/state/deep-links.ts), so a middle-click opens the same place.
 
+import { NAS_STATUS_HREF } from './hub-link.js';
+import { STARLINK_TAB_HREF } from './starlink-link.js';
 import { WEATHER_CARD_HUBS } from './tab-hash.js';
+import { LIVE_TAB_HREF, WEATHER_TAB_HREF } from './tab-links.js';
 
 /**
  * @typedef {{id: string, kind: string, hub?: string, statement: string, values: string[],
@@ -208,18 +211,18 @@ export function chipTarget(fact) {
       if (low) return { tab: 'schedule', href: `/?tab=schedule&hub=${low}` };
       return { tab: 'weather', href: '/?tab=irops' };
     }
-    if (kind === 'faa_planned') return { tab: 'weather', href: '/?tab=weather&section=nas' };
+    if (kind === 'faa_planned') return { tab: 'weather', href: NAS_STATUS_HREF };
     if (linkHub) {
       return WEATHER_CARD_HUBS.includes(linkHub) ? { tab: 'weather', href: `/?tab=weather&hub=${linkHub}` } : null;
     }
     // No hub: the hub-programs count and the weather summary are the cards themselves. A count of
     // programs at OTHER airports is not shown anywhere on the tab.
     if (id === 'faa.active.other') return null;
-    return { tab: 'weather', href: '/#weather' };
+    return { tab: 'weather', href: WEATHER_TAB_HREF };
   }
 
-  if (link.tab === 'live') return { tab: 'live', href: '/#live' };
-  if (link.tab === 'starlink') return { tab: 'starlink', href: '/#starlink' };
+  if (link.tab === 'live') return { tab: 'live', href: LIVE_TAB_HREF };
+  if (link.tab === 'starlink') return { tab: 'starlink', href: STARLINK_TAB_HREF };
   return null;
 }
 

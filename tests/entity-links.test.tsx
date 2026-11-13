@@ -15,7 +15,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HubLink, TailLink, TypeLink } from '../src/app/features/EntityLinks';
+import { HubLink, HubStatusLink, TailLink, TypeLink } from '../src/app/features/EntityLinks';
 import { FlightLink } from '../src/app/features/FlightLink';
 import { FollowProvider } from '../src/app/state/follow-link';
 import { ScheduleProvider } from '../src/app/state/schedule';
@@ -138,6 +138,45 @@ describe('HubLink', () => {
     cleanup();
     mount(<HubLink code="ORD" />);
     expect(screen.getByRole('link', { name: 'ORD' }).className).toContain('after:h-11');
+  });
+});
+
+describe('HubStatusLink', () => {
+  it("kind='weather': a hub to its Weather card, quiet, followed in place to the card", () => {
+    mount(<HubStatusLink code="ewr" kind="weather" />);
+    const link = screen.getByRole('link', { name: 'EWR' });
+    expect(link.getAttribute('href')).toBe('/?tab=weather&hub=EWR');
+    expect(link.className).not.toMatch(/text-primary/);
+    expect(link.className).toMatch(AT_REST_UNDERLINE);
+
+    expect(fireEvent.click(link)).toBe(false);
+    expect(ui!.tab).toBe('weather');
+    expect(ui!.pendingScroll).toBe('hub-card-EWR');
+  });
+
+  it("kind='nas': any airport to the NAS status panel, followed in place to the panel", () => {
+    mount(<HubStatusLink code="LGA" kind="nas" />);
+    const link = screen.getByRole('link', { name: 'LGA' });
+    expect(link.getAttribute('href')).toBe('/?tab=weather&section=nas');
+
+    expect(fireEvent.click(link)).toBe(false);
+    expect(ui!.tab).toBe('weather');
+    expect(ui!.pendingScroll).toBe('nas-section');
+  });
+
+  it("kind='weather' prints an airport without a card as plain text", () => {
+    mount(<HubStatusLink code="LGA" kind="weather" className="font-mono" />);
+    expect(screen.queryByRole('link')).toBeNull();
+    const plain = screen.getByText('LGA');
+    expect(plain.tagName).toBe('SPAN');
+    expect(plain.className).toBe('font-mono');
+  });
+
+  it('takes the same options as HubLink: finePointerOnly drops the touch box and takes no taps', () => {
+    mount(<HubStatusLink code="ORD" kind="weather" finePointerOnly hit="box" />);
+    const classes = screen.getByRole('link', { name: 'ORD' }).className.split(/\s+/);
+    expect(classes).toContain('pointer-coarse:pointer-events-none');
+    expect(classes.filter((cls) => cls.includes('after:'))).toEqual([]);
   });
 });
 

@@ -8,8 +8,9 @@
 // applyFleetDeepLinkFilter() (:486-508) and the seat bar in buildAircraftDetailHTML()
 // (:7385-7395).
 
-import { getPhase } from './flight-phase.js';
+import { getPhase, isOnGround } from './flight-phase.js';
 import { matchAircraft } from './fleet-match.js';
+import { fleetTypeCodeFor } from './fleet-type-link.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from './fleet-utils.js';
 import { CABIN_COLORS, SEAT_BAR_COLORS } from './special-aircraft.js';
 
@@ -271,21 +272,80 @@ export function buildSeatBar(seats, tot) {
 }
 
 /**
+ * The type a Fleet-tab row links to (the Fleet tab filtered to it, `TypeLink`): the fleet
+ * database's type for the row's tail (`fleetTypeCodeFor`), or null when the row has none or when
+ * the list it sits in is already filtered to that type. There the link would lead where the reader
+ * already is, so the type prints as plain text (the links plan, ruling 1).
+ *
+ * @param {unknown} reg  the row's registration.
+ * @param {Record<string, {t?: string}>|null|undefined} fleetByReg
+ * @param {string} activeType  the type filter of the list the row is in ('' for none, or for a
+ *   list the type filter does not narrow).
+ * @returns {string|null}  a fleet database type code, e.g. '737 MAX 9'.
+ */
+export function fleetRowTypeLink(reg, fleetByReg, activeType) {
+  const typeCode = fleetTypeCodeFor({ reg, fleetByReg });
+  return typeCode && typeCode !== activeType ? typeCode : null;
+}
+
+/**
+ * The type a printed fleet type with no tail links to (the Fleet Pulse's per-type rows): the
+ * printed text when it is exactly a fleet database type code (`fleetTypeCodeFor`), or null when it
+ * is not, or when the tab is already filtered to that type. There the link would change nothing,
+ * so the type prints as plain text (the links plan, ruling 1).
+ *
+ * @param {unknown} typeText  a fleet database type string as printed, e.g. '737 MAX 9'.
+ * @param {string} activeType  the Fleet tab's type filter ('' for none).
+ * @returns {string|null}
+ */
+export function fleetTypeTextLink(typeText, activeType) {
+  const typeCode = fleetTypeCodeFor({ typeText });
+  return typeCode && typeCode !== activeType ? typeCode : null;
+}
+
+/**
+ * A tail's flight in the air right now, for the aircraft dialog's "Airborne — View on map" block,
+ * or undefined when it is not flying. "Airborne" is the rule every airborne count and list uses
+ * (`isOnGround`: the feed's flag, or ground-level telemetry), so the dialog says Airborne exactly
+ * when the Fleet tab's Airborne Now lists the aircraft; the feed's flag alone let a taxiing
+ * aircraft read "Airborne" in its dialog while the list left it out. Registrations compare without
+ * hyphens and case (the feed says N17-104).
+ *
+ * @param {Array<Object>|null|undefined} flights  the live feed.
+ * @param {string} reg  the tail.
+ * @returns {Object|undefined}
+ */
+export function airborneFlightForTail(flights, reg) {
+  const key = String(reg || '').replace(/-/g, '').toUpperCase();
+  if (!key) return undefined;
+  return (flights || []).find((f) => f && String(f.reg || '').replace(/-/g, '').toUpperCase() === key && !isOnGround(f));
+}
+
+/**
  * The "Airborne Now" table: every live flight the fleet database can name, with the type and
  * search filters from the shared controls applied.
  *
  * Flights that do not resolve to a mainline airframe are dropped, not shown as blanks — this
  * table is the fleet's view of the sky, and a United Express regional is not in the fleet.
  *
+ * "Airborne" is the one rule every count on every tab uses (`isOnGround`: the feed's flag, or
+ * telemetry under 100 ft and 50 kt), so with no type or search filter the list is exactly the
+ * utilization's "m" and the "Airborne Now (N)" count. The feed's flag alone let a taxiing
+ * aircraft into the list but not into the count.
+ *
+ * Each row carries its route ends as printed (`origin`, `dest`; '???' when the feed has none), so
+ * the view links the hub ends without parsing `route`, and the type it links to (`typeLink`,
+ * `fleetRowTypeLink` under the shared type filter).
+ *
  * @param {Array<Object>} flights
  * @param {{fleetByReg: Record<string, Object>, starlinkTails: Set<string>, special: Map<string, {name: string, type: string}>, type?: string, search?: string}} deps
- * @returns {Array<{reg: string, type: string, flight: string, route: string, alt: string, altRaw: number, phase: string, starlink: boolean, special: {name: string}|null, icao24: string}>}
+ * @returns {Array<{reg: string, type: string, typeLink: string|null, flight: string, route: string, origin: string, dest: string, alt: string, altRaw: number, phase: string, starlink: boolean, special: {name: string}|null, icao24: string}>}
  */
 export function buildAirborneRows(flights, { fleetByReg, starlinkTails, special, type = '', search = '' }) {
   const searchUpper = (search || '').toUpperCase();
   const rows = [];
   (flights || []).forEach((f) => {
-    if (!f || f.onGround) return;
+    if (!f || isOnGround(f)) return;
     const ac = matchAircraft(f, fleetByReg || {});
     if (!ac) return;
     if (type && ac.t !== type) return;
@@ -295,11 +355,16 @@ export function buildAirborneRows(flights, { fleetByReg, starlinkTails, special,
       !(ac.t || '').toUpperCase().includes(searchUpper)
     ) return;
     const phase = getPhase(f.alt, f.vr, f.spd);
+    const origin = f.origin || '???';
+    const dest = f.dest || '???';
     rows.push({
       reg: ac.r,
       type: ac.t,
+      typeLink: fleetRowTypeLink(ac.r, fleetByReg, type),
       flight: f.flightIATA || f.callsign || '',
-      route: `${f.origin || '???'} > ${f.dest || '???'}`,
+      route: `${origin} > ${dest}`,
+      origin,
+      dest,
       alt: f.alt ? `${Math.round(f.alt * 3.28084).toLocaleString()}ft` : '--',
       altRaw: f.alt || 0,
       phase: phase.phase,
@@ -382,6 +447,49 @@ export function fleetDeepLinkTarget({ filter, view }, options) {
 }
 
 /**
+ * What a Fleet link followed while the Fleet tab is already showing does (the links plan, ruling 2,
+ * Nov 12 2026: a follow that stays on its tab resets nothing). Only what the link names changes:
+ *
+ *  - a known type sets the type filter, a known status the status filter; search, Wi-Fi, the other
+ *    of the two and the Express search stay as the reader set them (`filter` carries only the one
+ *    the link names);
+ *  - a `view` opens that sub-view; with none, the sub-view stays when it lists what the filter
+ *    narrows (All Aircraft for either, Airborne Now for a type) and All Aircraft opens otherwise,
+ *    so the click shows its result;
+ *  - an unknown filter with no `view` changes nothing (null), as for a link arriving.
+ *
+ * Nothing scrolls: the reader is on the tab, looking at what they clicked.
+ *
+ * @param {{filter: string|null|undefined, view: 'airborne'|'special'|'express'|null|undefined}} link
+ * @param {{typeValues: Iterable<string>, statusValues: Iterable<string>}} options
+ * @param {'all'|'airborne'|'special'|'express'} subView  the sub-view showing now.
+ * @returns {{filter: {status: string}|{type: string}|null, subView: 'all'|'airborne'|'special'|'express'}|null}
+ */
+export function fleetStayTarget({ filter, view }, options, subView) {
+  const resolved = resolveFleetDeepLinkFilter(filter, options);
+  if (!resolved && !view) return null;
+  if (!resolved) return { filter: null, subView: /** @type {'airborne'|'special'|'express'} */ (view) };
+  const named = resolved.type ? { type: resolved.type } : { status: resolved.status };
+  const shown = subView === 'all' || (subView === 'airborne' && Boolean(resolved.type));
+  return { filter: named, subView: view || (shown ? subView : 'all') };
+}
+
+/**
+ * The next step for a Fleet address waiting for the fleet database (the cold load's, or a link
+ * followed before the database arrived): 'apply' once it has rows, 'wait' until then, 'drop' when
+ * the load failed or the wait ran past its deadline. One budget for both, so a link applied long
+ * after the reader moved on never resets and scrolls the tab under them (the cold load's 10 s,
+ * which the shipped dashboard's 200 ms poll also gave up at).
+ *
+ * @param {{loaded: boolean, loadFailed: boolean, now: number, deadline: number}} state
+ * @returns {'apply'|'wait'|'drop'}
+ */
+export function heldFleetLinkStep({ loaded, loadFailed, now, deadline }) {
+  if (loadFailed || now > deadline) return 'drop';
+  return loaded ? 'apply' : 'wait';
+}
+
+/**
  * The special-aircraft panel's rows, cross-referenced against the live feed so a named
  * aircraft that is in the air right now says so.
  *
@@ -390,23 +498,31 @@ export function fleetDeepLinkTarget({ filter, view }, options) {
  * can legitimately appear twice — N76021 is the named "Larry Kellner" and wears Star Alliance
  * colours — so each row carries a `key` of reg + kind for React.
  *
+ * Each row carries the type it links to (`typeLink`, by its tail; the panel is not filtered by
+ * type, so no card's type is the list's own) and an airborne entry's route ends as printed.
+ * "Airborne" is the shared `isOnGround` rule, as in `buildAirborneRows`.
+ *
  * @param {Map<string, {name: string, type: string}>} special
  * @param {Record<string, Object>} fleetByReg
  * @param {Array<Object>} flights
  * @param {Array<{tail: string, name: string, description: string}>} [liveries]  in display order.
- * @returns {Array<{key: string, reg: string, name: string, kind: string, type: string, delivered: string, description?: string, airborne: {flight: string, route: string}|null}>}
+ * @returns {Array<{key: string, reg: string, name: string, kind: string, type: string, typeLink: string|null, delivered: string, description?: string, airborne: {flight: string, route: string, origin: string, dest: string}|null}>}
  */
 export function buildSpecialRows(special, fleetByReg, flights, liveries = []) {
   const liveryTails = new Set((liveries || []).map((l) => l.tail));
-  /** @type {Record<string, {flight: string, route: string}>} */
+  /** @type {Record<string, {flight: string, route: string, origin: string, dest: string}>} */
   const airborne = {};
   (flights || []).forEach((f) => {
-    if (!f || f.onGround) return;
+    if (!f || isOnGround(f)) return;
     const reg = f.reg ? f.reg.replace('-', '') : null;
     if (reg && ((special && special.has(reg)) || liveryTails.has(reg))) {
+      const origin = f.origin || '???';
+      const dest = f.dest || '???';
       airborne[reg] = {
         flight: f.flightIATA || f.callsign || '',
-        route: `${f.origin || '???'} > ${f.dest || '???'}`,
+        route: `${origin} > ${dest}`,
+        origin,
+        dest,
       };
     }
   });
@@ -423,6 +539,7 @@ export function buildSpecialRows(special, fleetByReg, flights, liveries = []) {
       name: livery.name,
       kind: 'paint',
       type: ac ? ac.t : '',
+      typeLink: fleetRowTypeLink(reg, fleetByReg, ''),
       delivered: (ac && ac.d) || '?',
       description: livery.description,
       airborne: airborne[reg] || null,
@@ -438,6 +555,7 @@ export function buildSpecialRows(special, fleetByReg, flights, liveries = []) {
       name: entry.name,
       kind: entry.type,
       type: ac.t,
+      typeLink: fleetRowTypeLink(reg, fleetByReg, ''),
       delivered: ac.d || '?',
       airborne: airborne[reg] || null,
     });

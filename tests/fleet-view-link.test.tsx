@@ -37,6 +37,10 @@ vi.mock('../src/app/state/feed', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/feed')>()),
   useFeed: () => ({ flights: [], lastGoodTs: null }) as unknown as FeedValue,
 }));
+// The tab's names are in-place links (DashLink → useFollowDeepLink), which need the Schedule store
+// and FollowProvider; these tests drive the Fleet link through the UI store, so no link is followed.
+// The links themselves are tested with the real providers in tests/fleet-tab-links.test.tsx.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 
 // 6 A319s and 2 737 MAX 9s, the MAX 9s on Starlink.
 const FLEET_DB = [
@@ -87,6 +91,11 @@ function mount() {
 
 function follow(link: FleetDeepLinks) {
   act(() => seen.ui!.followFleetLink(link));
+}
+
+/** A link followed while the Fleet tab is already showing (`arriving: false`, ruling 2). */
+function followHere(link: FleetDeepLinks) {
+  act(() => seen.ui!.followFleetLink(link, { arriving: false }));
 }
 
 /** The registrations in the visible sub-view's table. */
@@ -576,5 +585,318 @@ describe('a link brings the reader to what it set', () => {
     mount();
     await nextFrame();
     expect(scrolls).toEqual([]);
+  });
+});
+
+/** Pick an option from one of the Fleet controls' Radix selects, as a mouse does. */
+async function pickOption(name: string, option: RegExp | string) {
+  await act(async () => {
+    fireEvent.pointerDown(screen.getByRole('combobox', { name }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  });
+  const item = await screen.findByRole('option', { name: option });
+  await act(async () => {
+    fireEvent.click(item);
+  });
+}
+
+/** Type into the Fleet search; it reports upward after its 120 ms debounce. */
+async function searchFor(value: string) {
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Fleet search' }), { target: { value } });
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+}
+
+const wifiSelect = () => screen.getByRole('combobox', { name: 'Fleet WiFi filter' });
+const searchBox = () => screen.getByRole('searchbox', { name: 'Fleet search' }) as HTMLInputElement;
+
+describe('a link followed while the Fleet tab is showing resets nothing (ruling 2)', () => {
+  it('a type sets the type filter and keeps search and Wi-Fi; nothing scrolls', async () => {
+    mount();
+    await pickOption('Fleet WiFi filter', 'Satellite Ku');
+    await searchFor('N10');
+    await nextFrame();
+    scrolls.length = 0;
+
+    followHere({ filter: 'A319', view: null });
+    await nextFrame();
+
+    expect(typeSelect().textContent).toContain('A319');
+    expect(wifiSelect().textContent).toContain('Satellite Ku');
+    expect(searchBox().value).toBe('N10');
+    expect(rows()).toHaveLength(6);
+    expect(activeSubView()).toMatch(/^All Aircraft/);
+    expect(scrolls).toEqual([]);
+  });
+
+  it('a type keeps the status filter, and a status keeps the type filter', () => {
+    mount();
+    followHere({ filter: 'starlink', view: null });
+    followHere({ filter: '737 MAX 9', view: null });
+    expect(statusSelect().textContent).toContain('Starlink');
+    expect(typeSelect().textContent).toContain('737 MAX 9');
+    expect(rows()).toEqual(['N37502', 'N37503']);
+
+    followHere({ filter: 'active', view: null });
+    expect(statusSelect().textContent).toContain('Active');
+    expect(typeSelect().textContent).toContain('737 MAX 9');
+  });
+
+  it('the same link arriving from another tab resets first (the contrast)', async () => {
+    mount();
+    await pickOption('Fleet WiFi filter', 'Satellite Ku');
+    await searchFor('N10');
+
+    follow({ filter: 'A319', view: null });
+
+    expect(wifiSelect().textContent).toContain('All WiFi');
+    expect(searchBox().value).toBe('');
+  });
+
+  it('keeps Airborne Now for a type; opens All Aircraft from Special or United Express', () => {
+    mount();
+    openSubView(/^Airborne Now/);
+    followHere({ filter: 'A319', view: null });
+    expect(activeSubView()).toMatch(/^Airborne Now/);
+    expect(typeSelect().textContent).toContain('A319');
+
+    for (const from of [/^Special/, /^United Express/]) {
+      openSubView(from);
+      followHere({ filter: '737 MAX 9', view: null });
+      expect(activeSubView()).toMatch(/^All Aircraft/);
+      expect(rows()).toEqual(['N37502', 'N37503']);
+    }
+  });
+
+  it('keeps the United Express search when it opens All Aircraft', () => {
+    mount();
+    openSubView(/^United Express/);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'United Express search' }), { target: { value: 'skywest' } });
+    followHere({ filter: 'A319', view: null });
+    openSubView(/^United Express/);
+    expect(screen.getByRole('searchbox', { name: 'United Express search' })).toHaveProperty('value', 'skywest');
+  });
+
+  it('a view opens it; an unknown value changes nothing', () => {
+    mount();
+    followHere({ filter: 'A319', view: null });
+    followHere({ filter: null, view: 'special' });
+    expect(activeSubView()).toMatch(/^Special/);
+    openSubView(/^All Aircraft/);
+    expect(typeSelect().textContent).toContain('A319');
+
+    followHere({ filter: 'B789', view: null });
+    expect(typeSelect().textContent).toContain('A319');
+    expect(rows()).toHaveLength(6);
+  });
+});
+
+describe('a link held for the fleet database has the cold load\'s budget', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** The fleet database lands. */
+  function arrive(view: ReturnType<typeof mount>) {
+    ctl.fleet = fleetValue(FLEET_DB);
+    view.rerender(
+      <UiProvider>
+        <FleetView />
+        <Probe />
+      </UiProvider>,
+    );
+  }
+
+  it('a database that lands more than 10 s after the follow does not apply it, or scroll', async () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    ctl.fleet = fleetValue([], true);
+    const view = mount();
+    follow({ filter: 'A319', view: null });
+
+    clock.mockReturnValue(start + 10_001);
+    arrive(view);
+    await nextFrame();
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+    expect(scrolls).toEqual([]);
+  });
+
+  it('within 10 s it is applied, as before', async () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    ctl.fleet = fleetValue([], true);
+    const view = mount();
+    follow({ filter: 'A319', view: null });
+
+    clock.mockReturnValue(start + 9_000);
+    arrive(view);
+
+    expect(rows()).toHaveLength(6);
+  });
+
+  it('on a first visit the budget runs from the mount too: a view that mounts 11 s late still applies it', () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    function Follower() {
+      const ui = useUi();
+      return (
+        <button type="button" onClick={() => ui.followFleetLink({ filter: 'A319', view: null })}>
+          follow first
+        </button>
+      );
+    }
+    function Lazy({ show }: { show: boolean }) {
+      return show ? <FleetView /> : null;
+    }
+    const tree = (show: boolean) => (
+      <UiProvider>
+        <Follower />
+        <Lazy show={show} />
+      </UiProvider>
+    );
+    const view = render(tree(false));
+    fireEvent.click(screen.getByRole('button', { name: 'follow first' }));
+
+    // The tab's code took 11 s to arrive; the database is already there when it mounts.
+    clock.mockReturnValue(start + 11_000);
+    view.rerender(tree(true));
+
+    expect(rows()).toHaveLength(6);
+    expect(typeSelect().textContent).toContain('A319');
+  });
+
+  it('a failed load drops it: a later retry that succeeds does not apply it', () => {
+    ctl.fleet = { ...fleetValue([]), loadFailed: true } as FleetValue;
+    const view = mount();
+    follow({ filter: 'A319', view: null });
+
+    arrive(view);
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+  });
+});
+
+describe('the cold load\'s Fleet address is the one the page was opened on', () => {
+  it('applies once per page load: a remount (the error boundary\'s "Try again") does not apply it again', () => {
+    window.history.replaceState(null, '', '/?tab=fleet&type=A319');
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    expect(rows()).toHaveLength(6);
+    // The reader takes the filter off, then the view is mounted afresh in the same page.
+    fireEvent.click(typeCard('A319'));
+    expect(rows()).toHaveLength(8);
+
+    view.rerender(tree('again'));
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+  });
+
+  it('a followed link applies once too: a remount does not snap the filters back, or scroll', async () => {
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    // Followed from another tab (the Starlink tab's "A319"), applied, then taken off by hand.
+    follow({ filter: 'A319', view: null });
+    expect(rows()).toHaveLength(6);
+    await nextFrame();
+    fireEvent.click(typeCard('A319'));
+    expect(rows()).toHaveLength(8);
+    scrolls.length = 0;
+
+    // The tab throws and the reader presses "Try again": the view mounts afresh, the link still
+    // in the store.
+    view.rerender(tree('again'));
+    await nextFrame();
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+    expect(scrolls).toEqual([]);
+  });
+
+  it.each([
+    { landsAt: 12_000, rows: 6, type: 'A319', result: 'applied: the remount at 5 s waits until 15 s' },
+    { landsAt: 16_000, rows: 8, type: 'All Types', result: 'dropped: past the remount\'s 10 s too' },
+  ])('a link still waiting when the view remounts waits on the new mount\'s budget; data at $landsAt ms is $result', ({ landsAt, rows: expected, type }) => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    ctl.fleet = fleetValue([], true);
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    follow({ filter: 'A319', view: null });
+    // The tab throws before the database lands; "Try again" at 5 s mounts it afresh.
+    clock.mockReturnValue(start + 5_000);
+    view.rerender(tree('again'));
+
+    clock.mockReturnValue(start + landsAt);
+    ctl.fleet = fleetValue(FLEET_DB);
+    view.rerender(tree('again'));
+
+    expect(rows()).toHaveLength(expected);
+    expect(typeSelect().textContent).toContain(type);
+    clock.mockRestore();
+  });
+
+  it('a followed link dropped for arriving late stays dropped after a remount', async () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    ctl.fleet = fleetValue([], true);
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    follow({ filter: 'A319', view: null });
+    // The database lands past the link's 10 s: dropped.
+    clock.mockReturnValue(start + 10_001);
+    ctl.fleet = fleetValue(FLEET_DB);
+    view.rerender(tree('first'));
+    expect(rows()).toHaveLength(8);
+    scrolls.length = 0;
+
+    // A remount must not give it a fresh 10 s from the new mount.
+    view.rerender(tree('again'));
+    await nextFrame();
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+    expect(scrolls).toEqual([]);
+    clock.mockRestore();
+  });
+
+  it('still applies when a followed link has since taken it out of the address bar', () => {
+    window.history.replaceState(null, '', '/?tab=fleet&type=A319');
+    ctl.fleet = fleetValue([], true);
+    const view = mount();
+    // A link followed to another tab before the database landed (follow-link.tsx) leaves this.
+    window.history.pushState(null, '', '/#schedule');
+
+    ctl.fleet = fleetValue(FLEET_DB);
+    view.rerender(
+      <UiProvider>
+        <FleetView />
+        <Probe />
+      </UiProvider>,
+    );
+
+    expect(typeSelect().textContent).toContain('A319');
+    expect(rows()).toHaveLength(6);
   });
 });

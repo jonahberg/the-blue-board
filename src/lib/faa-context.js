@@ -1,12 +1,13 @@
 // ═══ FAA STATUS: INDEX, PROSE AND ROUTE CONTEXT ═══
 // Three views of the /api/faa payload:
-//  - buildFaaIndex     the by-airport lookup every weather/schedule panel reads
-//  - explainFAAStatus  the plain-English paragraph behind a hub card's "▾ Details"
-//  - getFAADelayContext the one-line route summary appended to delayed board rows
+//  - buildFaaIndex          the by-airport lookup every weather/schedule panel reads
+//  - explainFAAStatus       the plain-English paragraph behind a hub card's "▾ Details"
+//  - faaDelayContextParts   the route summary on delayed board rows, as parts so the board can
+//    link each airport code; faaContextText joins them into the one line
 //
-// Extracted verbatim from src/dashboard/main.js (:5810-5821 buildFaaIndex,
-// :4446-4481 explainFAAStatus, :6133-6151 getFAADelayContext). The index is injected
-// rather than read from a module global so this stays pure.
+// Extracted from src/dashboard/main.js (:5810-5821 buildFaaIndex, :4446-4481 explainFAAStatus,
+// :6133-6151 the route summary, which the parts now build). The index is injected rather than
+// read from a module global so this stays pure.
 //
 // describeFaaProgram is NOT here: it already lives in ./delay-explain-context.js and
 // main.js imports it from there. Re-implementing it would fork one rule into two.
@@ -116,16 +117,19 @@ export function explainFAAStatus(airportCode, delays, rawData) {
 }
 
 /**
- * One-line FAA context for a route, e.g.
- * "Ground Stop at EWR, avg 45 min · GDP at ORD".
+ * The FAA context for a route as parts, one per program, with the airport code kept apart from the
+ * words around it: "Ground Stop at EWR, avg 45 min" is `{lead: 'Ground Stop at ', code: 'EWR',
+ * tail: ', avg 45 min'}`. A board that links the code (the Schedule rows) reads it from here
+ * rather than parsing the sentence; `faaContextText` joins the parts back into the one line
+ * ("Ground Stop at EWR, avg 45 min · GDP at ORD").
  *
  * @param {Record<string, FaaAirport>} faaIndex  from buildFaaIndex().
  * @param {string|null|undefined} originIata
  * @param {string|null|undefined} destIata
- * @returns {string} '' when neither end has a delay.
+ * @returns {Array<{lead: string, code: string, tail: string}>} empty when neither end has a delay.
  */
-export function getFAADelayContext(faaIndex, originIata, destIata) {
-  const contexts = [];
+export function faaDelayContextParts(faaIndex, originIata, destIata) {
+  const parts = [];
   [originIata, destIata].forEach(apt => {
     if (!apt) return;
     const faa = faaIndex[apt];
@@ -138,10 +142,20 @@ export function getFAADelayContext(faaIndex, originIata, destIata) {
       else if (dtype.includes('departure')) label = 'Dep Delay';
       else if (dtype.includes('arrival')) label = 'Arr Delay';
       const avg = d.avgDelay ? `, avg ${d.avgDelay} min` : '';
-      contexts.push(`${label} at ${apt}${avg}`);
+      parts.push({ lead: `${label} at `, code: apt, tail: avg });
     });
   });
-  return contexts.join(' · ');
+  return parts;
+}
+
+/**
+ * The parts from `faaDelayContextParts` as one line, joined with " · ".
+ *
+ * @param {Array<{lead: string, code: string, tail: string}>} parts
+ * @returns {string}
+ */
+export function faaContextText(parts) {
+  return parts.map((part) => `${part.lead}${part.code}${part.tail}`).join(' · ');
 }
 
 /**

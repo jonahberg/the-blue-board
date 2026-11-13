@@ -204,7 +204,13 @@ describe('Fleet tab: Special panel rows', () => {
     const rows = buildSpecialRows(special, fleetByReg, [
       { reg: 'N75435', flightIATA: 'UA1226', origin: 'IAH', dest: 'ORD', onGround: false },
     ], liveries);
-    expect(rows.find((r) => r.key === 'N75435:paint')?.airborne).toEqual({ flight: 'UA1226', route: 'IAH > ORD' });
+    expect(rows.find((r) => r.key === 'N75435:paint')?.airborne).toEqual({
+      flight: 'UA1226',
+      route: 'IAH > ORD',
+      // The route's ends as printed, so the Special card links its hub ends without parsing it.
+      origin: 'IAH',
+      dest: 'ORD',
+    });
   });
 
   it('is unchanged without a livery list', () => {

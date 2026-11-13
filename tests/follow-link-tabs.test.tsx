@@ -23,6 +23,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { DashLink } from '../src/app/features/DashLink';
+import { TailLink, TypeLink } from '../src/app/features/EntityLinks';
 import { TabBar } from '../src/app/shell/TabBar';
 import { useDeepLinks } from '../src/app/state/deep-links';
 import { FollowProvider } from '../src/app/state/follow-link';
@@ -64,6 +65,18 @@ function Shell() {
       <header>
         <DashLink href="/?tab=schedule&hub=DEN">DEN chip</DashLink>
       </header>
+      {/* An overlay's links (the flight sheet, the aircraft dialog), outside every panel. */}
+      <div role="dialog" aria-label="overlay">
+        <DashLink href="/?tab=schedule&hub=ORD" fromOverlay>
+          ORD in the sheet
+        </DashLink>
+        <TypeLink typeCode="737 MAX 9" fromOverlay>
+          737 MAX 9 in the dialog
+        </TypeLink>
+        <TailLink reg="N78501" fromOverlay>
+          N78501 in the sheet
+        </TailLink>
+      </div>
       <Tabs value={ui.tab} onValueChange={(value) => ui.setTab(value as TabId)}>
         <TabBar />
         {TABS.map(({ id }) => (
@@ -103,6 +116,44 @@ async function back() {
     window.history.back();
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
+}
+
+/** The page's `popstate` / `hashchange` listeners, in the order they were registered. */
+type HistoryListener = { type: 'popstate' | 'hashchange'; listener: EventListenerOrEventListenerObject };
+
+/** Record every history listener the dashboard registers from now on (call before mounting). */
+function recordHistoryListeners() {
+  const listeners: HistoryListener[] = [];
+  const add = window.addEventListener.bind(window);
+  const spy = vi.spyOn(window, 'addEventListener').mockImplementation(((
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ) => {
+    if (type === 'popstate' || type === 'hashchange') listeners.push({ type, listener });
+    add(type, listener, options);
+  }) as typeof window.addEventListener);
+  return { listeners, restore: () => spy.mockRestore() };
+}
+
+/**
+ * Back or Forward the way a browser delivers it: the entry's address is restored, then `popstate`
+ * and `hashchange` fire, and between one listener and the next the browser runs a microtask
+ * checkpoint, where React commits a tab change a listener asked for (popstate and hashchange are
+ * discrete events). jsdom calls every listener in one stack, with no checkpoint, so its own
+ * `history.back()` cannot show an order bug; here each listener runs in its own `act`.
+ */
+async function browserHistoryMove(address: string, listeners: HistoryListener[]) {
+  window.history.replaceState(null, '', address);
+  for (const type of ['popstate', 'hashchange'] as const) {
+    for (const entry of listeners.filter((l) => l.type === type)) {
+      const event = type === 'popstate' ? new PopStateEvent('popstate') : new HashChangeEvent('hashchange');
+      await act(async () => {
+        if (typeof entry.listener === 'function') entry.listener.call(window, event);
+        else entry.listener.handleEvent(event);
+      });
+    }
+  }
 }
 
 /** After the frame a follow waits for before it moves focus. */
@@ -212,6 +263,63 @@ describe('Back after a followed link', () => {
     expect(address()).toBe('/#starlink');
   });
 
+  it('a browser that refuses the history call still follows the link, without the entry', async () => {
+    mountAt('/?utm_source=email#starlink');
+    const before = window.history.length;
+    const refuse = () => {
+      throw new DOMException('Attempt to use history.pushState() more than 100 times per 30 seconds', 'SecurityError');
+    };
+    const push = vi.spyOn(window.history, 'pushState').mockImplementation(refuse);
+    try {
+      const ord = screen.getByRole('link', { name: 'ORD' });
+      ord.focus();
+      fireEvent.click(ord);
+      await nextFrame();
+
+      expect(push).toHaveBeenCalled();
+      expect(seen.ui!.tab).toBe('schedule');
+      expect(seen.schedule!.current.hub).toBe('ORD');
+      expect(seen.ui!.announcement).toBe('Schedule, ORD');
+      expect(document.activeElement).toBe(panel('schedule'));
+      expect(window.history.length).toBe(before);
+      // The address still names the tab showing, where the browser allows a replace.
+      expect(address()).toBe('/?utm_source=email#schedule');
+    } finally {
+      push.mockRestore();
+    }
+  });
+
+  it('a browser that refuses every history call: the follow still lands, the tab bar too, nothing throws', async () => {
+    mountAt('/#starlink');
+    const refuse = () => {
+      throw new DOMException('history refused', 'SecurityError');
+    };
+    const push = vi.spyOn(window.history, 'pushState').mockImplementation(refuse);
+    const replace = vi.spyOn(window.history, 'replaceState').mockImplementation(refuse);
+    const errors: unknown[] = [];
+    const onError = (event: ErrorEvent) => errors.push(event.error);
+    window.addEventListener('error', onError);
+    try {
+      const ord = screen.getByRole('link', { name: 'ORD' });
+      ord.focus();
+      fireEvent.click(ord);
+      await nextFrame();
+
+      expect(seen.ui!.tab).toBe('schedule');
+      expect(seen.ui!.announcement).toBe('Schedule, ORD');
+      expect(document.activeElement).toBe(panel('schedule'));
+      expect(address()).toBe('/#starlink');
+
+      pickTab('Fleet');
+      expect(seen.ui!.tab).toBe('fleet');
+      expect(errors).toEqual([]);
+    } finally {
+      window.removeEventListener('error', onError);
+      push.mockRestore();
+      replace.mockRestore();
+    }
+  });
+
   it('the tab bar still replaces, and a link to the tab now showing leaves no entry', () => {
     mountAt('/#starlink');
     const before = window.history.length;
@@ -229,6 +337,92 @@ describe('Back after a followed link', () => {
     expect(seen.schedule!.current.hub).toBe('DEN');
     expect(window.history.length).toBe(before);
     expect(address()).toBe('/#schedule');
+  });
+});
+
+describe('a link followed from inside an overlay (fromOverlay)', () => {
+  it('a hub link in the flight sheet over Live: the sheet closes, Schedule shows that hub, focus goes to its panel', async () => {
+    mountAt('/#live');
+    act(() => seen.ui!.select({ kind: 'ident', ident: 'UA1' }));
+    const before = window.history.length;
+    const link = screen.getByRole('link', { name: 'ORD in the sheet' });
+    link.focus();
+
+    fireEvent.click(link);
+    await nextFrame();
+
+    expect(seen.ui!.selection).toBeNull();
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(seen.schedule!.current).toMatchObject({ hub: 'ORD', dir: 'departures' });
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+    expect(seen.ui!.announcement).toBe('Schedule, ORD');
+    // Focus was in the overlay, outside every panel: it still moves, to the panel shown.
+    expect(document.activeElement).toBe(panel('schedule'));
+    expect(window.history.length).toBe(before + 1);
+  });
+
+  it('a type link in the aircraft dialog over Fleet: the dialog closes and it lands as an arrival, with no history entry', async () => {
+    mountAt('/#fleet');
+    act(() => seen.ui!.openAircraft('N37502'));
+    const before = window.history.length;
+    const link = screen.getByRole('link', { name: '737 MAX 9 in the dialog' });
+    link.focus();
+
+    fireEvent.click(link);
+    await nextFrame();
+
+    expect(seen.ui!.aircraftReg).toBeNull();
+    expect(seen.ui!.tab).toBe('fleet');
+    expect(seen.ui!.fleetLink).toMatchObject({ filter: '737 MAX 9', arriving: true });
+    expect(seen.ui!.announcement).toBe('Fleet, 737 MAX 9');
+    expect(document.activeElement).toBe(panel('fleet'));
+    expect(window.history.length).toBe(before);
+    expect(address()).toBe('/#fleet');
+  });
+
+  it('a hub link in an overlay over Schedule bumps scheduleLink (an arrival); the same link outside one does not', async () => {
+    mountAt('/#schedule');
+    act(() => seen.ui!.select({ kind: 'ident', ident: 'UA1' }));
+    fireEvent.click(screen.getByRole('link', { name: 'ORD in the sheet' }));
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+    expect(seen.ui!.announcement).toBe('Schedule, ORD');
+
+    fireEvent.click(screen.getByRole('link', { name: 'DEN chip' }));
+    expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+  });
+
+  it('a tail link replaces every overlay with its aircraft dialog, on the tab already showing', async () => {
+    mountAt('/#live');
+    act(() => {
+      seen.ui!.select({ kind: 'ident', ident: 'UA1' });
+      seen.ui!.openFr24('UA9');
+      seen.ui!.openDelayExplain({ flight: 'UA1' });
+      seen.ui!.setSearchOpen(true);
+    });
+    const before = window.history.length;
+
+    fireEvent.click(screen.getByRole('link', { name: 'N78501 in the sheet' }));
+    await nextFrame();
+
+    expect(seen.ui!).toMatchObject({
+      selection: null,
+      fr24Query: null,
+      delayExplain: null,
+      searchOpen: false,
+      aircraftReg: 'N78501',
+      tab: 'live',
+      announcement: '',
+    });
+    expect(window.history.length).toBe(before);
+  });
+
+  it('a modified click on an overlay link is still the browser\'s, and closes nothing', () => {
+    mountAt('/#live');
+    act(() => seen.ui!.select({ kind: 'ident', ident: 'UA1' }));
+    fireEvent.click(screen.getByRole('link', { name: 'ORD in the sheet' }), { metaKey: true });
+    expect(seen.ui!.selection).toEqual({ kind: 'ident', ident: 'UA1' });
+    expect(seen.ui!.tab).toBe('live');
   });
 });
 
@@ -294,6 +488,109 @@ describe('focus and the announcement after a followed link', () => {
 
     expect(document.activeElement).toBe(tail);
     expect(seen.ui!.announcement).toBe('');
+  });
+
+  it('Back says the tab it returns to, once, and moves focus to its panel; Forward does the same', async () => {
+    mountAt('/#starlink');
+    const ord = screen.getByRole('link', { name: 'ORD' });
+    ord.focus();
+    fireEvent.click(ord);
+    await nextFrame();
+    expect(document.activeElement).toBe(panel('schedule'));
+
+    await back();
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('starlink');
+    // Exactly the tab's name: popstate and hashchange both fired, and it was said once (a second
+    // announcement of the same words would carry the repeat mark).
+    expect(seen.ui!.announcement).toBe('Starlink');
+    expect(document.activeElement).toBe(panel('starlink'));
+
+    await act(async () => {
+      window.history.forward();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(seen.ui!.announcement).toBe('Schedule');
+    expect(document.activeElement).toBe(panel('schedule'));
+  });
+
+  it("Back and Forward in a browser's order (the tab change commits between listeners) say the tab and move focus", async () => {
+    const { listeners, restore } = recordHistoryListeners();
+    try {
+      mountAt('/#starlink');
+      expect(listeners.length).toBeGreaterThan(0);
+      const ord = screen.getByRole('link', { name: 'ORD' });
+      ord.focus();
+      fireEvent.click(ord);
+      await nextFrame();
+      expect(document.activeElement).toBe(panel('schedule'));
+
+      await browserHistoryMove('/#starlink', listeners);
+      await nextFrame();
+
+      expect(seen.ui!.tab).toBe('starlink');
+      expect(seen.ui!.announcement).toBe('Starlink');
+      expect(document.activeElement).toBe(panel('starlink'));
+
+      await browserHistoryMove('/#schedule', listeners);
+      await nextFrame();
+
+      expect(seen.ui!.tab).toBe('schedule');
+      expect(seen.ui!.announcement).toBe('Schedule');
+      expect(document.activeElement).toBe(panel('schedule'));
+    } finally {
+      restore();
+    }
+  });
+
+  it('Back with focus outside the panels says the tab and leaves focus where it is', async () => {
+    mountAt('/#starlink');
+    const chip = screen.getByRole('link', { name: 'DEN chip' });
+    chip.focus();
+    fireEvent.click(chip, { detail: 0 });
+    await nextFrame();
+    expect(document.activeElement).toBe(chip);
+
+    await back();
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('starlink');
+    expect(seen.ui!.announcement).toBe('Starlink');
+    expect(document.activeElement).toBe(chip);
+  });
+
+  it('a later hash change (an in-page #tab anchor) shows the tab without rewriting the address', async () => {
+    mountAt('/#starlink');
+    const replace = vi.spyOn(window.history, 'replaceState');
+    try {
+      await act(async () => {
+        window.location.hash = '#fleet';
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expect(seen.ui!.tab).toBe('fleet');
+      expect(seen.ui!.announcement).toBe('Fleet');
+      expect(address()).toBe('/#fleet');
+      expect(replace).not.toHaveBeenCalled();
+    } finally {
+      replace.mockRestore();
+    }
+  });
+
+  it('the tab bar says nothing and leaves focus on the tab', async () => {
+    mountAt('/#starlink');
+    const trigger = screen.getByRole('tab', { name: 'Schedule' });
+    trigger.focus();
+
+    pickTab('Schedule');
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(seen.ui!.announcement).toBe('');
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('a link to the tab already showing moves nothing and says nothing', async () => {

@@ -13,8 +13,14 @@
  * The Fleet cases also start from a Fleet tab the visitor has already filtered (type, Wi-Fi, search,
  * the Express search, left on United Express): a followed link first puts the tab back where a cold
  * load starts, so that history does not show.
- * What is stubbed: the fleet database and the live feed (a small fixed database), the watch list
- * and watched-flight alerts (the Schedule store's collaborators; the real ones poll), and fetch.
+ * What is stubbed: the fleet database and the live feed (a small fixed database, and two flights in
+ * the air on its tails, so Airborne Now has rows a missed reset would change), the watch list and
+ * watched-flight alerts (the Schedule store's collaborators; the real ones poll), and fetch.
+ *
+ * A link followed on the tab already showing is not an arrival and is not compared with a cold
+ * load: it changes what it names and keeps the rest (the links plan, ruling 2), pinned at the end.
+ * So is a cold load's Fleet address that a link followed before the fleet data landed has taken out
+ * of the address bar: it still applies (the UI store holds it from startup).
  *
  * What this does NOT cover: the rest of Dashboard.tsx (the shell, the lazy tab registry, the other
  * views and providers), the Schedule board's own loading, and anything a real browser adds (the
@@ -48,8 +54,15 @@ vi.mock('../src/app/state/fleet', async (importOriginal) => ({
 }));
 vi.mock('../src/app/state/feed', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/feed')>()),
-  useFeed: () => ({ flights: [], lastGoodTs: null }) as unknown as FeedValue,
+  useFeed: () => ({ flights: FLIGHTS, lastGoodTs: null }) as unknown as FeedValue,
 }));
+
+// In the air on an A319 and the 737 MAX 9 (`isAirborne`), so Airborne Now lists two rows, and one
+// under a type filter of A319 or a search for "N10": a link that did not reset them shows it.
+const FLIGHTS = vi.hoisted(() => [
+  { reg: 'N100UA', icao24: 'a00001', flightIATA: 'UA100', callsign: 'UAL100', origin: 'ORD', dest: 'DEN', alt: 10000, spd: 400, vr: 0, onGround: false },
+  { reg: 'N37502', icao24: 'a00002', flightIATA: 'UA375', callsign: 'UAL375', origin: 'SFO', dest: 'EWR', alt: 10000, spd: 400, vr: 0, onGround: false },
+]);
 
 const FLEET_DB = [
   ...Array.from({ length: 6 }, (_, i) => ({ r: `N10${i}UA`, t: 'A319', w: 'Satl Ku', s: '', d: '2000' })),
@@ -75,7 +88,7 @@ Object.assign(FLEET, {
 const seen: { ui: UiValue | null; schedule: ScheduleValue | null } = { ui: null, schedule: null };
 
 /** Dashboard.tsx's deep-link wiring and its keep-mounted-once-visited Fleet view, and nothing else. */
-function Shell({ href }: { href: string }) {
+function Shell({ href, fromOverlay = false }: { href: string; fromOverlay?: boolean }) {
   const ui = useUi();
   const schedule = useSchedule();
   seen.ui = ui;
@@ -100,7 +113,9 @@ function Shell({ href }: { href: string }) {
 
   return (
     <>
-      <DashLink href={href}>follow</DashLink>
+      <DashLink href={href} fromOverlay={fromOverlay}>
+        follow
+      </DashLink>
       {visited.has('fleet') ? (
         <div data-testid="fleet-panel" data-active={ui.tab === 'fleet'}>
           <FleetView />
@@ -110,13 +125,13 @@ function Shell({ href }: { href: string }) {
   );
 }
 
-function mountAt(url: string, href: string) {
+function mountAt(url: string, href: string, { fromOverlay = false } = {}) {
   window.history.replaceState(null, '', url);
   render(
     <UiProvider>
       <ScheduleProvider defaultHub="ORD">
         <FollowProvider>
-          <Shell href={href} />
+          <Shell href={href} fromOverlay={fromOverlay} />
         </FollowProvider>
       </ScheduleProvider>
     </UiProvider>,
@@ -133,6 +148,8 @@ function state() {
     scheduleDir: seen.schedule!.current.dir,
     scheduleDay: seen.schedule!.current.day,
     aircraft: seen.ui!.aircraftReg,
+    // Where the Weather tab will scroll once it shows (a hub's card, the NAS panel).
+    weatherScroll: seen.ui!.pendingScroll,
     fleetType: lookup?.querySelector('[aria-label="Fleet type filter"]')?.textContent ?? null,
     fleetStatus: lookup?.querySelector('[aria-label="Fleet status filter"]')?.textContent ?? null,
     fleetSubView: lookup?.querySelector('[role="tab"][data-state="active"]')?.textContent ?? null,
@@ -332,15 +349,32 @@ describe('a cold load and an in-place click of the same address end in the same 
     expect(await inPlace('/?tab=fleet&view=special', { fleetVisited: true })).toEqual(coldState);
   });
 
-  it.each(['/?tab=fleet&type=737%20MAX%209', '/?tab=fleet&view=special', '/?tab=fleet&filter=starlink'])(
-    '%s followed from a Fleet tab with every filter set lands where the cold load does',
-    async (address) => {
-      const coldState = await cold(address);
-      expect(coldState).toMatchObject({ fleetWifi: 'All WiFi', fleetSearch: '', fleetExpressSearch: '' });
-      expect(coldState.fleetScrolls).toEqual([address.includes('view=') ? 'panel:special' : 'controls']);
-      expect(await inPlaceFromDirtyFleet(address)).toEqual(coldState);
-    },
-  );
+  it('/?tab=fleet&view=airborne: the Fleet tab on Airborne Now, unfiltered, scrolled to that panel', async () => {
+    // The Stats tab's "Fleet Utilization" card links here.
+    const coldState = await cold('/?tab=fleet&view=airborne');
+    expect(coldState).toMatchObject({
+      tab: 'fleet',
+      fleetType: expect.stringContaining('All Types'),
+      fleetSubView: expect.stringMatching(/^Airborne Now/),
+      fleetRows: 2,
+      fleetScrolls: ['panel:airborne'],
+    });
+    expect(await inPlace('/?tab=fleet&view=airborne')).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&view=airborne', { fleetVisited: true })).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&view=airborne', { fleetLeftOn: /^Special/ })).toEqual(coldState);
+  });
+
+  it.each([
+    ['/?tab=fleet&type=737%20MAX%209', 'controls'],
+    ['/?tab=fleet&view=special', 'panel:special'],
+    ['/?tab=fleet&view=airborne', 'panel:airborne'],
+    ['/?tab=fleet&filter=starlink', 'controls'],
+  ])('%s followed from a Fleet tab with every filter set lands where the cold load does', async (address, scroll) => {
+    const coldState = await cold(address);
+    expect(coldState).toMatchObject({ fleetWifi: 'All WiFi', fleetSearch: '', fleetExpressSearch: '' });
+    expect(coldState.fleetScrolls).toEqual([scroll]);
+    expect(await inPlaceFromDirtyFleet(address)).toEqual(coldState);
+  });
 
   it('/?tab=fleet&type=B789: a type the controls do not offer is ignored either way, and scrolls nowhere', async () => {
     const coldState = await cold('/?tab=fleet&type=B789');
@@ -353,6 +387,36 @@ describe('a cold load and an in-place click of the same address end in the same 
     expect(await inPlace('/?tab=fleet&type=B789')).toEqual(coldState);
   });
 
+  it.each([
+    ['/?tab=weather&hub=EWR', 'hub-card-EWR'],
+    ['/?tab=weather&section=nas', 'nas-section'],
+  ])('%s (hubStatusLink): the Weather tab, headed for %s, the Schedule board left alone', async (address, target) => {
+    const coldState = await cold(address);
+    // Neither picks the hidden Schedule board: the hub names a Weather card, not a board.
+    expect(coldState).toMatchObject({ tab: 'weather', weatherScroll: target, aircraft: null, fleetScrolls: [], scheduleHub: 'ORD' });
+    expect(await inPlace(address)).toEqual(coldState);
+    // Left on the Schedule board on Arrivals for tomorrow: the board is not this link's
+    // destination and stays as the reader left it; everything the link is for lands as cold.
+    const fromSchedule = await inPlaceFromDirtySchedule(address);
+    expect(fromSchedule).toMatchObject({ scheduleHub: 'ORD', scheduleDir: 'arrivals', scheduleDay: 1 });
+    expect({ ...fromSchedule, scheduleDir: coldState.scheduleDir, scheduleDay: coldState.scheduleDay }).toEqual(coldState);
+  });
+
+  it('a hubStatusLink followed on the Weather tab itself, headed elsewhere: it heads for its own target', async () => {
+    const coldState = await cold('/?tab=weather&hub=EWR');
+    mountAt('/#stats', '/?tab=weather&hub=EWR');
+    act(() => seen.ui!.setTab('weather', { scrollTo: 'irops-section' }));
+    const before = window.history.length;
+
+    fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+    expect(reachedDocumentPrevented).toBe(true);
+    const result = await finalState();
+    cleanup();
+
+    expect(result).toEqual(coldState);
+    expect(window.history.length).toBe(before);
+  });
+
   it('/?aircraft=N78501: both open the aircraft dialog; the tab is the one stated difference', async () => {
     const coldState = await cold('/?aircraft=N78501');
     const clicked = await inPlace('/?aircraft=N78501');
@@ -363,5 +427,110 @@ describe('a cold load and an in-place click of the same address end in the same 
     expect(coldState.tab).toBe('live');
     expect(clicked.tab).toBe('stats');
     expect({ ...clicked, tab: coldState.tab }).toEqual(coldState);
+  });
+});
+
+describe('a link followed on the tab already showing changes what it names and resets nothing (ruling 2)', () => {
+  it('/?tab=fleet&type=737%20MAX%209 from a filtered Fleet tab: the type changes, Wi-Fi and search stay', async () => {
+    mountAt('/#stats', '/?tab=fleet&type=737%20MAX%209');
+    act(() => seen.ui!.setTab('fleet'));
+    await pick('Fleet WiFi filter', 'Starlink');
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Fleet search' }), { target: { value: 'N37' } });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+    const before = window.history.length;
+    scrolls.length = 0;
+
+    fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+    expect(reachedDocumentPrevented).toBe(true);
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+
+    expect(state()).toMatchObject({
+      tab: 'fleet',
+      fleetType: expect.stringContaining('737 MAX 9'),
+      fleetWifi: 'Starlink',
+      fleetSearch: 'N37',
+      fleetRows: 1,
+    });
+    expect(scrolls).toEqual([]);
+    expect(window.history.length).toBe(before);
+  });
+
+  it('/?tab=schedule&hub=DEN from the Schedule tab on Arrivals for tomorrow: the board a cold load opens, filters untouched', async () => {
+    const coldState = await cold('/?tab=schedule&hub=DEN');
+    mountAt('/#stats', '/?tab=schedule&hub=DEN');
+    act(() => seen.ui!.setTab('schedule'));
+    act(() => seen.schedule!.setCurrent({ dir: 'arrivals', day: 1 }));
+    const before = window.history.length;
+
+    fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+
+    // Which board shows is what the address names: DEN, Departures, DEN's default day.
+    const after = await finalState();
+    expect(after).toEqual(coldState);
+    // Not an arrival: no Schedule filter reset requested, no history entry.
+    expect(seen.ui!.scheduleLink).toBeNull();
+    expect(window.history.length).toBe(before);
+    cleanup();
+  });
+});
+
+describe("a cold load's Fleet address survives a link followed before the fleet data arrives", () => {
+  it('/?tab=fleet&type=A319, a follow to Schedule, the data lands, then Fleet: filtered to the A319 as cold', async () => {
+    const coldState = await cold('/?tab=fleet&type=A319');
+
+    const loaded = { fleetDb: FLEET.fleetDb, fleetByReg: FLEET.fleetByReg, loading: FLEET.loading };
+    Object.assign(FLEET, { fleetDb: [], fleetByReg: {}, loading: true });
+    try {
+      mountAt('/?tab=fleet&type=A319', '/?tab=schedule&hub=DEN');
+      expect(seen.ui!.tab).toBe('fleet');
+      expect(state().fleetRows).toBe(0);
+
+      fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+      expect(seen.ui!.tab).toBe('schedule');
+      // The follow's history entry dropped the dashboard's own parameters.
+      expect(window.location.search).toBe('');
+
+      // The fleet data lands while Schedule is showing (any render reads the store again).
+      Object.assign(FLEET, loaded);
+      act(() => seen.ui!.announce('fleet data landed'));
+      act(() => seen.ui!.setTab('fleet'));
+      const after = await finalState();
+      cleanup();
+
+      const fleetOnly = ({ fleetType, fleetStatus, fleetSubView, fleetWifi, fleetSearch, fleetRows, fleetExpressSearch }: typeof after) => ({
+        fleetType,
+        fleetStatus,
+        fleetSubView,
+        fleetWifi,
+        fleetSearch,
+        fleetRows,
+        fleetExpressSearch,
+      });
+      expect(fleetOnly(after)).toEqual(fleetOnly(coldState));
+      expect(after.fleetType).toContain('A319');
+    } finally {
+      Object.assign(FLEET, loaded);
+    }
+  });
+});
+
+describe('a link followed from an overlay lands as an arrival, even on the tab already showing', () => {
+  it('a type link in the aircraft dialog over a searched Fleet tab: the dialog closes, the search clears, the type applies', async () => {
+    const coldState = await cold('/?tab=fleet&type=737%20MAX%209');
+    mountAt('/#fleet', '/?tab=fleet&type=737%20MAX%209', { fromOverlay: true });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Fleet search' }), { target: { value: 'N10' } });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+    act(() => seen.ui!.openAircraft('N37502'));
+    expect(state()).toMatchObject({ fleetSearch: 'N10', aircraft: 'N37502' });
+    scrolls.length = 0;
+
+    fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+    expect(reachedDocumentPrevented).toBe(true);
+    const result = await finalState();
+    cleanup();
+
+    // Not "No aircraft match" behind the dialog: where the address opened cold lands.
+    expect(result).toEqual(coldState);
+    expect(result).toMatchObject({ aircraft: null, fleetSearch: '', fleetRows: 1 });
   });
 });

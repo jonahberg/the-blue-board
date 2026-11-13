@@ -150,10 +150,15 @@ describe('topRoutes', () => {
       airborne({ origin: 'EWR', dest: 'LHR' }),
     ], 15);
     expect(rows).toEqual([
-      { route: 'ORD→DEN', count: 3 },
-      { route: 'SFO→LAX', count: 2 },
-      { route: 'EWR→LHR', count: 1 },
+      { route: 'ORD→DEN', origin: 'ORD', dest: 'DEN', count: 3 },
+      { route: 'SFO→LAX', origin: 'SFO', dest: 'LAX', count: 2 },
+      { route: 'EWR→LHR', origin: 'EWR', dest: 'LHR', count: 1 },
     ]);
+  });
+
+  it('carries each end as its own code, so a view links the hub ends without parsing the arrow', () => {
+    const [row] = topRoutes([airborne({ origin: 'LHR', dest: 'EWR' })], 15);
+    expect(row).toEqual({ route: 'LHR→EWR', origin: 'LHR', dest: 'EWR', count: 1 });
   });
 
   it('treats the two directions of a city pair as different routes', () => {

@@ -24,6 +24,7 @@ import FlightHistoryCard from '../../components/site/FlightHistoryCard.astro';
 import FlightReadCard from '../../components/site/FlightReadCard.astro';
 import FlightTrip from '../../components/site/FlightTrip.astro';
 import { supportUrl } from '../../lib/support-link.js';
+import { MY_FLIGHTS_HREF } from '../../lib/tab-links.js';
 import { UNCONFIGURED_STATUS, flightPageSupportCopy } from '../../lib/cover-a-day.js';
 
 const supportLine = flightPageSupportCopy(UNCONFIGURED_STATUS);
@@ -50,7 +51,7 @@ const description =
       </div>
       <div class="flex flex-wrap items-center gap-2" data-fp-actions hidden>
         <a
-          href="/#myflight"
+          href={MY_FLIGHTS_HREF}
           class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-primary-fill px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-fill/90"
           data-fp-watch
         >

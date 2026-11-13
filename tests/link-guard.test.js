@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
+import { TABS } from '../src/app/tabs';
 import { HUB_ORDER } from '../src/lib/hub-health.js';
 import {
   LINK_GUARD_ALLOW,
   LINK_GUARD_EXPECT,
   LINK_GUARD_TABS,
+  LINK_GUARD_TAIL_SOURCES,
   coverageGaps,
   findNames,
   findUnlinkedNames,
+  findUnlinkedNamesByRegion,
   tailsInPayload,
 } from '../src/lib/link-guard.js';
 
@@ -84,6 +87,11 @@ describe('tailsInPayload: the tails a page loaded', () => {
     expect(tailsInPayload({ disputed: [{ tail: 'N77012', aircraft: '777' }] })).toEqual(['N77012']);
   });
 
+  it("reads the fleet database's `r`, its registration field", () => {
+    expect(tailsInPayload([{ r: 'N4888U', t: 'A319' }, { r: 'N37502', t: '737 MAX 9' }]).sort()).toEqual(['N37502', 'N4888U']);
+    expect(LINK_GUARD_TAIL_SOURCES.some((re) => re.test('https://theblueboard.co/data/fleet.json'))).toBe(true);
+  });
+
   it('returns nothing for a payload without tails', () => {
     for (const payload of [null, undefined, 42, 'N78501', {}, [], { tail: 7 }]) {
       expect(tailsInPayload(payload), JSON.stringify(payload)).toEqual([]);
@@ -116,9 +124,17 @@ describe('coverageGaps: a run that examined nothing does not pass', () => {
 });
 
 describe('the guard configuration', () => {
-  it('guards the Starlink tab, and says what that tab must show', () => {
-    expect(LINK_GUARD_TABS).toEqual(['starlink']);
+  it('guards every tab whose rows print names, and says what each must show', () => {
+    expect([...LINK_GUARD_TABS].sort()).toEqual(['fleet', 'live', 'schedule', 'starlink', 'stats', 'weather']);
+    for (const tab of LINK_GUARD_TABS) {
+      expect(TABS.some((t) => t.id === tab), tab).toBe(true);
+      expect(LINK_GUARD_EXPECT[tab], tab).toBeDefined();
+    }
     expect(LINK_GUARD_EXPECT.starlink).toEqual(['flight', 'tail', 'hub']);
+    expect(LINK_GUARD_EXPECT.fleet).toEqual(['tail']);
+    // Left out, each for a stated reason (My Flights would need a watched flight; Sources prints no names).
+    expect(LINK_GUARD_TABS).not.toContain('myflight');
+    expect(LINK_GUARD_TABS).not.toContain('sources');
   });
 
   it('every allowlist entry is a pattern with a reason', () => {
@@ -126,5 +142,67 @@ describe('the guard configuration', () => {
       expect(entry.where).toBeInstanceOf(RegExp);
       expect(entry.reason.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  // An entry excuses the one element a view marked for it, never the row the names sit in.
+  it.each([
+    ['fleet desktop-1440 #fleet-lookup-zone td[data-link-row=status-note]', 'SFO Stored 10/30/26', true],
+    ['fleet desktop-1440 #fleet-lookup-zone tr', 'N37502 SFO', false],
+    ['fleet mobile-390 (panel) span[data-link-row=health-category]', 'Future GUM', true],
+    ['fleet mobile-390 (panel) li', 'GUM 3', false],
+    ['weather tablet-768 #nas-section li', 'EWR ground stop/delay program possible', true],
+    ['weather tablet-768 #nas-section span[data-link-row]', 'EWR', false],
+    ['weather tablet-768 #hub-card-EWR div[data-link-row]', 'EWR', false],
+    ['schedule desktop-1440 #schedule-board tr', 'UA576 N37502 DEN', false],
+  ])('%s: "%s" is excused: %s', (at, text, excused) => {
+    expect(findUnlinkedNames([row(text, false, at)], { ...known, tails: new Set(['N37502']) }, LINK_GUARD_ALLOW).length === 0).toBe(excused);
+  });
+});
+
+describe('findUnlinkedNamesByRegion: each region checked with its own hub', () => {
+  const at = 'schedule desktop-1440 (panel) tr';
+  const run = (text, self) => ({ text, linked: false, where: at, self });
+
+  it("a plain hub equal to its own region's hub is excused, and only there", () => {
+    expect(findUnlinkedNamesByRegion([run('ORD → DEN', 'ORD'), run('ORD', 'SFO'), run('SFO')], known, []).map((n) => n.text)).toEqual([
+      'DEN',
+      'ORD',
+      'SFO',
+    ]);
+    expect(findUnlinkedNamesByRegion([run('SFO → LAX', 'sfo ')], known, []).map((n) => n.text)).toEqual(['LAX']);
+  });
+
+  it('without regions it is findUnlinkedNames with no self, and it still checks the allowlist', () => {
+    const rows = [row('UA576'), row('ORD'), row('N78501', true)];
+    expect(findUnlinkedNamesByRegion(rows, known, [])).toEqual(findUnlinkedNames(rows, known, []));
+    expect(() => findUnlinkedNamesByRegion([], known, [{ where: /x/, reason: '' }])).toThrow(/reason/);
+  });
+});
+
+describe('findUnlinkedNames with self: the view\'s own name prints plain by rule (ruling 1)', () => {
+  const board = 'schedule desktop-1440 #schedule-board tr';
+  const at = (text) => row(text, false, board);
+
+  it("a plain hub code equal to the view's own hub is not a violation", () => {
+    expect(findUnlinkedNames([at('ORD → DEN')], known, [], { hub: 'ORD' })).toEqual([{ text: 'DEN', kind: 'hub', where: board }]);
+    expect(findUnlinkedNames([at('ORD')], known, [], { hub: 'ord ' })).toEqual([]);
+  });
+
+  it('every other name in the same rows is still checked', () => {
+    expect(findUnlinkedNames([at('UA576 ORD N78501')], known, [], { hub: 'ORD' }).map((n) => n.text)).toEqual(['UA576', 'N78501']);
+  });
+
+  it('no self, or an empty or missing hub: the behaviour without it', () => {
+    for (const self of [undefined, {}, { hub: null }, { hub: '' }]) {
+      expect(findUnlinkedNames([at('ORD')], known, [], self), JSON.stringify(self)).toEqual([{ text: 'ORD', kind: 'hub', where: board }]);
+    }
+  });
+
+  it('only a hub is excused: a flight number or tail that happens to match is still reported', () => {
+    expect(findUnlinkedNames([at('N78501')], known, [], { hub: 'N78501' })).toEqual([{ text: 'N78501', kind: 'tail', where: board }]);
+  });
+
+  it('the allowlist is still checked for reasons when self is given', () => {
+    expect(() => findUnlinkedNames([], known, [{ where: /x/ }], { hub: 'ORD' })).toThrow(/a reason is required/);
   });
 });

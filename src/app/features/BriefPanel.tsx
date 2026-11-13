@@ -46,13 +46,22 @@ type Chip = {
 /** A chip always switches tab; an overlay link that keeps the current tab is never one. */
 type ChipIntent = DeepLinkIntent & { tab: TabId };
 
-/** Follow a chip in place: close the sheet, then follow it as any dashboard link (board, tab, scroll). */
-function useFollow() {
+/**
+ * Follow a chip in place: close the sheet, then follow it as any dashboard link (board, tab,
+ * scroll). In the sheet the chip is inside an overlay, so it follows as one (`fromOverlay`): it
+ * lands as an arrival even on the tab already showing (announced, the board's filters cleared) and
+ * focus moves to the destination panel, where it was on the chip, outside every panel, and would
+ * fall to the page when the sheet unmounted. The sidebar panel is not an overlay: its chips follow
+ * as any link on the page does.
+ */
+function useFollow(variant: 'sidebar' | 'sheet') {
   const follow = useFollowDeepLink();
   const { setSheetOpen } = useBrief();
+  const fromOverlay = variant === 'sheet';
   return (intent: ChipIntent) => {
     setSheetOpen(false);
-    follow(intent);
+    if (fromOverlay) follow(intent, { fromOverlay: true });
+    else follow(intent);
   };
 }
 
@@ -149,7 +158,7 @@ export type BriefBodyProps = {
 
 export function BriefBody({ view, variant, renderHeadline }: BriefBodyProps) {
   const { tab } = useUi();
-  const follow = useFollow();
+  const follow = useFollow(variant);
   const sheet = variant === 'sheet';
   const written = formatBriefClock(view.generatedAtMs);
   const freshness = briefFreshnessLine(view);

@@ -31,6 +31,7 @@ import { matchAircraft } from '@/lib/fleet-match.js';
 import { fleetUtilization } from '@/lib/fleet-utils.js';
 import { isAirborne } from '@/lib/live-stats.js';
 import { HUB_ORDER } from '@/lib/hub-health.js';
+import { metricLink } from '@/lib/stats-links.js';
 import type { Flight } from '../data/types';
 import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
@@ -42,6 +43,7 @@ import type { Metric } from './stats/MetricCards';
 import { PhaseDonut } from './stats/PhaseDonut';
 import type { PhaseModel } from './stats/PhaseDonut';
 import { AgeBars, RouteBars } from './stats/RouteBars';
+import type { RouteRow } from './stats/RouteBars';
 import { UtilizationChart } from './stats/UtilizationChart';
 import type { TypeUtilisation } from './fleet/FleetPulse';
 
@@ -100,7 +102,7 @@ export default function StatsView() {
   const matrix = useMemo(() => hubMatrix(airborne, HUBS) as MatrixModel, [airborne]);
 
   const routes = useMemo(
-    () => topRoutes(airborne, 15) as { route: string; count: number }[],
+    () => topRoutes(airborne, 15) as RouteRow[],
     [airborne],
   );
 
@@ -116,7 +118,7 @@ export default function StatsView() {
     const util = fleetUtilization(airborne, fleetDb.length, (f: Flight) =>
       matchAircraft(f, fleetByReg),
     ) as { matched: number; total: number; pct: number | null };
-    return [
+    const cards: Metric[] = [
       { label: 'Flights Airborne', value: String(airborne.length) },
       {
         label: 'Fleet Utilization',
@@ -132,6 +134,9 @@ export default function StatsView() {
         sub: `${starlinkAirborne} of ${airborne.length} airborne`,
       },
     ];
+    // A card links to the view that shows what it counts: exactly so for Fleet Utilization
+    // (Airborne Now), and the Live map for Flights Airborne (stats-links.js says how they differ).
+    return cards.map((card) => ({ ...card, link: metricLink(card.label, card.value) }));
   }, [airborne, fleetDb.length, fleetByReg, starlink.tails, ages.fleetAvg]);
 
   // Layout (Nov 2026): cards are paired by HEIGHT and by what they answer, so a grid row never
