@@ -6,6 +6,9 @@
  *  - `TailLink`: a US registration → its aircraft dialog (`tailLink`). Identity tone by default:
  *    on a roster or ledger row the tail is what the row is about.
  *  - `HubLink`: one of the nine hubs → its Schedule board (`hubLink(code, 'dashboard')`). Quiet.
+ *  - `HubStatusLink`: a code printed with a status → where that status is shown
+ *    (`hubStatusLink(code, kind)`): `kind="weather"` a hub's Weather card, `kind="nas"` the NAS
+ *    status panel (any airport). Quiet. Same props as `HubLink`, plus `kind`.
  *  - `TypeLink`: a fleet database type code → the Fleet tab filtered to it
  *    (`fleetTypeLink(typeCode, 'dashboard')`). Quiet. The row prints its own type text
  *    (`children`); `typeCode` alone decides the link, so a row whose tracker says "737-900" links
@@ -28,7 +31,7 @@
 import type { ReactNode } from 'react';
 
 import { fleetTypeLink } from '@/lib/fleet-type-link.js';
-import { hubLink } from '@/lib/hub-link.js';
+import { hubLink, hubStatusLink } from '@/lib/hub-link.js';
 import { tailLink } from '@/lib/tail-link.js';
 import { cn } from '@/lib/utils';
 import { DashLink } from './DashLink';
@@ -75,6 +78,30 @@ export function HubLink({ code, tone = 'quiet', hit, className, finePointerOnly 
   if (!link) return <span className={className}>{code}</span>;
   return (
     <DashLink href={link.href} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-hub-link={link.code}>
+      {link.code}
+    </DashLink>
+  );
+}
+
+export function HubStatusLink({
+  code,
+  kind,
+  tone = 'quiet',
+  hit,
+  className,
+  finePointerOnly,
+}: EntityLinkProps & { code: string; kind: 'weather' | 'nas' }) {
+  const link = hubStatusLink(code, kind);
+  if (!link) return <span className={className}>{code}</span>;
+  return (
+    <DashLink
+      href={link.href}
+      tone={tone}
+      hit={hitFor(finePointerOnly, hit)}
+      className={linkClasses(finePointerOnly, className)}
+      data-hub-status-link={link.code}
+      data-hub-status-kind={kind}
+    >
       {link.code}
     </DashLink>
   );

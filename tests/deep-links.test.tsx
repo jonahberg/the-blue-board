@@ -13,6 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Flight } from '../src/app/data/types';
 import { readFleetDeepLinks, resolveDeepLink, useDeepLinks } from '../src/app/state/deep-links';
+import { HUB_ORDER } from '../src/lib/hub-health.js';
+import { hubStatusLink } from '../src/lib/hub-link.js';
 import { resolveTabParam } from '../src/app/tabs';
 
 /** A parseFr24Feed-shaped flight. */
@@ -294,6 +296,19 @@ describe('resolveDeepLink (the brief chips follow the same resolver a cold load 
     expect(resolveDeepLink('/?tab=schedule&hub=xyz')).toEqual({ ...none, tab: 'schedule' });
     expect(resolveDeepLink('/?tab=weather&hub=EWR')).toMatchObject({ tab: 'weather', scheduleHub: null });
     expect(resolveDeepLink('/?hub=ord')).toBeNull();
+  });
+
+  it('every address hubStatusLink gives resolves in place, to the Weather card or the NAS panel', () => {
+    for (const hub of HUB_ORDER) {
+      expect(resolveDeepLink(hubStatusLink(hub, 'weather')!.href), hub).toEqual({
+        ...none,
+        tab: 'weather',
+        scrollTo: `hub-card-${hub}`,
+      });
+    }
+    for (const airport of ['EWR', 'LGA']) {
+      expect(resolveDeepLink(hubStatusLink(airport, 'nas')!.href), airport).toEqual({ ...none, tab: 'weather', scrollTo: 'nas-section' });
+    }
   });
 
   it('every href the brief\'s chips build still resolves (src/lib/brief-chips.js)', () => {

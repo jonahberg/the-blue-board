@@ -138,6 +138,8 @@ function state() {
     scheduleDir: seen.schedule!.current.dir,
     scheduleDay: seen.schedule!.current.day,
     aircraft: seen.ui!.aircraftReg,
+    // Where the Weather tab will scroll once it shows (a hub's card, the NAS panel).
+    weatherScroll: seen.ui!.pendingScroll,
     fleetType: lookup?.querySelector('[aria-label="Fleet type filter"]')?.textContent ?? null,
     fleetStatus: lookup?.querySelector('[aria-label="Fleet status filter"]')?.textContent ?? null,
     fleetSubView: lookup?.querySelector('[role="tab"][data-state="active"]')?.textContent ?? null,
@@ -356,6 +358,45 @@ describe('a cold load and an in-place click of the same address end in the same 
       fleetScrolls: [],
     });
     expect(await inPlace('/?tab=fleet&type=B789')).toEqual(coldState);
+  });
+
+  it.each([
+    ['/?tab=weather&hub=EWR', 'hub-card-EWR'],
+    ['/?tab=weather&section=nas', 'nas-section'],
+  ])("%s (hubStatusLink): the Weather tab, headed for %s; the Schedule board is the one stated difference", async (address, target) => {
+    const coldState = await cold(address);
+    expect(coldState).toMatchObject({ tab: 'weather', weatherScroll: target, aircraft: null, fleetScrolls: [] });
+    // Cold, `?hub=` also picks the (hidden) Schedule board, on any tab (`useDeepLinks`); in place,
+    // a Weather link leaves the board the reader chose alone (`resolveDeepLink` selects a board
+    // only on the Schedule tab, part 1). Everything the link is for lands the same.
+    const sameBut = (state: typeof coldState, board: typeof coldState) => ({
+      ...state,
+      scheduleHub: board.scheduleHub,
+      scheduleDir: board.scheduleDir,
+      scheduleDay: board.scheduleDay,
+    });
+    const clicked = await inPlace(address);
+    expect(clicked.scheduleHub).toBe('ORD');
+    expect(sameBut(clicked, coldState)).toEqual(coldState);
+    // Left on the Schedule board on Arrivals for tomorrow: the board stays as the reader left it.
+    const fromSchedule = await inPlaceFromDirtySchedule(address);
+    expect(fromSchedule).toMatchObject({ scheduleHub: 'ORD', scheduleDir: 'arrivals', scheduleDay: 1 });
+    expect(sameBut(fromSchedule, coldState)).toEqual(coldState);
+  });
+
+  it('a hubStatusLink followed on the Weather tab itself, headed elsewhere: it heads for its own target', async () => {
+    const coldState = await cold('/?tab=weather&hub=EWR');
+    mountAt('/#stats', '/?tab=weather&hub=EWR');
+    act(() => seen.ui!.setTab('weather', { scrollTo: 'irops-section' }));
+    const before = window.history.length;
+
+    fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+    expect(reachedDocumentPrevented).toBe(true);
+    const result = await finalState();
+    cleanup();
+
+    expect({ ...result, scheduleHub: coldState.scheduleHub }).toEqual(coldState);
+    expect(window.history.length).toBe(before);
   });
 
   it('/?aircraft=N78501: both open the aircraft dialog; the tab is the one stated difference', async () => {
