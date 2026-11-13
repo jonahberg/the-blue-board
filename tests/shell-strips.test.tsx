@@ -14,7 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -46,11 +46,15 @@ function resetHubState() {
   hubState.briefTone = null;
   hubState.iropsData = null;
 }
+// A hub chip is followed in place (useFollowDeepLink), which selects the board through the
+// Schedule store's setCurrent.
+const setCurrent = vi.hoisted(() => vi.fn());
 vi.mock('../src/app/state/schedule', () => ({
   useHubHealth: () => ({
     hubs: hubState.hubs,
     byHub: Object.fromEntries(hubState.hubs.map((h) => [h.hub, h.otp])),
   }),
+  useSchedule: () => ({ setCurrent }),
 }));
 vi.mock('../src/app/state/weather', () => ({
   useWeather: () => ({ faaIndex: hubState.faaIndex, faaUnknownSince: hubState.faaUnknownSince }),
@@ -68,9 +72,35 @@ vi.mock('../src/app/state/brief', () => ({
 const { default: NewsBanner } = await import('../src/app/features/NewsBanner');
 const { default: TipStrip } = await import('../src/app/features/TipStrip');
 const { HubHealthStrip } = await import('../src/app/shell/HubHealthStrip');
-const { UiProvider } = await import('../src/app/state/ui');
+const { UiProvider, useUi } = await import('../src/app/state/ui');
+const { FollowProvider } = await import('../src/app/state/follow-link');
 
 const classesOf = (el: Element | null) => (el?.getAttribute('class') ?? '').split(/\s+/);
+
+/** The tab as the last render saw it. */
+const seenUi: { tab: string | null } = { tab: null };
+function TabProbe() {
+  seenUi.tab = useUi().tab;
+  return null;
+}
+
+/** The strip as the shell mounts it: inside the UI store, the follow provider and the tooltip provider. */
+function Strip() {
+  return (
+    <UiProvider>
+      <FollowProvider>
+        <TooltipProvider>
+          <HubHealthStrip />
+        </TooltipProvider>
+        <TabProbe />
+      </FollowProvider>
+    </UiProvider>
+  );
+}
+
+/** A chip's sr-only words other than where it goes: the reasons and readings it states. */
+const readingWords = (chip: Element) =>
+  [...chip.querySelectorAll('.sr-only:not([data-chip-destination])')].map((el) => el.textContent);
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -187,11 +217,7 @@ describe('TipStrip', () => {
 
 describe('HubHealthStrip', () => {
   it('is one 28px row at every width and pointer, like the brief row above it (Nov 2026)', () => {
-    const { container } = render(
-      <TooltipProvider>
-        <HubHealthStrip />
-      </TooltipProvider>,
-    );
+    const { container } = render(<Strip />);
     const strip = container.querySelector('[aria-label="Hub on-time performance"]');
     expect(classesOf(strip)).toContain('h-7');
     // The 44 px touch chips made this a 45 px row on a phone; no variant may grow it back.
@@ -199,11 +225,7 @@ describe('HubHealthStrip', () => {
   });
 
   it('gives every hub chip 24px for a mouse and the full row for a finger (WCAG 2.5.8)', () => {
-    render(
-      <TooltipProvider>
-        <HubHealthStrip />
-      </TooltipProvider>,
-    );
+    render(<Strip />);
     for (const hub of ['ORD', 'DEN']) {
       const chip = screen.getByRole('link', { name: new RegExp(hub) });
       // A finger gets the row's whole 27 px inside its border and a wider pad. The row scrolls
@@ -217,11 +239,7 @@ describe('HubHealthStrip', () => {
   });
 
   const renderStrip = () =>
-    render(
-      <TooltipProvider>
-        <HubHealthStrip />
-      </TooltipProvider>,
-    );
+    render(<Strip />);
 
   it('labels the network chip from the on-time readings alone when nothing else is wrong', () => {
     renderStrip();
@@ -246,11 +264,7 @@ describe('HubHealthStrip', () => {
     expect(wrapper.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
     // A poll that changes nothing about the state changes nothing in this live region.
     const before = container.textContent;
-    rerender(
-      <TooltipProvider>
-        <HubHealthStrip />
-      </TooltipProvider>,
-    );
+    rerender(<Strip />);
     expect(container.textContent).toBe(before);
   });
 
@@ -312,11 +326,7 @@ describe('HubHealthStrip', () => {
 
 describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
   const renderStrip = () =>
-    render(
-      <TooltipProvider>
-        <HubHealthStrip />
-      </TooltipProvider>,
-    );
+    render(<Strip />);
   const chip = (hub: string) => screen.getByRole('link', { name: new RegExp(`^${hub}`) });
   /** The tooltip opens on keyboard focus, as it does for a mouse; a tap navigates instead. */
   const tooltipFor = async (hub: string) => {
@@ -353,9 +363,9 @@ describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
     expect(link.textContent).not.toContain('—');
     // Visible words plus sr-only words, never an aria-label over different text.
     expect(link.hasAttribute('aria-label')).toBe(false);
-    const sr = link.querySelector('.sr-only');
-    expect(sr?.textContent).toBe('(no on-time figure: the feed sends no departure times)');
-    expect(link.getAttribute('href')).toBe('/hubs/gum');
+    expect(readingWords(link)).toEqual(['(no on-time figure: the feed sends no departure times)']);
+    // A tap opens GUM's board in place (the hub guide is one link further, in the board's header).
+    expect(link.getAttribute('href')).toBe('/?tab=schedule&hub=GUM');
     expect(await tooltipFor('GUM')).toContain(
       'The schedule feed sends no actual departure times for GUM, so there is no on-time figure.',
     );
@@ -366,7 +376,7 @@ describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
     renderStrip();
     const link = chip('NRT');
     expect(link.textContent).toContain('—');
-    expect(link.querySelector('.sr-only')?.textContent).toBe('(too few departures yet for an on-time figure)');
+    expect(readingWords(link)).toEqual(['(too few departures yet for an on-time figure)']);
     expect(await tooltipFor('NRT')).toContain('1 of 12 NRT departures have left so far today; an on-time figure needs 5.');
   });
 
@@ -375,11 +385,7 @@ describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
     const { container, rerender } = renderStrip();
     const before = container.textContent;
     hubState.iropsData = { hubMetrics: { NRT: nrt({ operated: 3, onTime: 3 }), GUM: gum({ pastDueUntimed: 6 }) } };
-    rerender(
-      <TooltipProvider>
-        <HubHealthStrip />
-      </TooltipProvider>,
-    );
+    rerender(<Strip />);
     expect(container.textContent).toBe(before);
   });
 
@@ -395,7 +401,7 @@ describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
     for (const hub of ['NRT', 'GUM']) {
       expect(chip(hub).textContent).toContain('—');
       expect(chip(hub).textContent).not.toContain('n/a');
-      expect(chip(hub).querySelector('.sr-only')).toBeNull();
+      expect(readingWords(chip(hub))).toEqual([]);
     }
     expect(await tooltipFor('GUM')).toContain('No on-time reading yet');
   });
@@ -404,7 +410,7 @@ describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
     hubState.iropsData = null;
     renderStrip();
     expect(chip('GUM').textContent).toContain('—');
-    expect(chip('GUM').querySelector('.sr-only')).toBeNull();
+    expect(readingWords(chip('GUM'))).toEqual([]);
     const tip = await tooltipFor('GUM');
     expect(tip).toContain('No on-time reading yet');
     expect(tip).not.toMatch(/departures board/);
@@ -416,7 +422,7 @@ describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
     };
     renderStrip();
     expect(chip('ORD').textContent).toContain('86%');
-    expect(chip('ORD').querySelector('.sr-only')?.textContent).toBe("(yesterday's departures)");
+    expect(readingWords(chip('ORD'))).toEqual(["(yesterday's departures)"]);
     expect(await tooltipFor('ORD')).toContain("86% of yesterday's operated departures within 30 min of schedule");
   });
 
@@ -426,6 +432,147 @@ describe('HubHealthStrip: why a hub has no on-time figure (v1.28.0)', () => {
     renderStrip();
     expect(chip('GUM').textContent).toContain('74%');
     expect(chip('GUM').textContent).not.toContain('n/a');
-    expect(chip('GUM').querySelector('.sr-only')).toBeNull();
+    expect(readingWords(chip('GUM'))).toEqual([]);
+  });
+});
+
+describe('HubHealthStrip: a chip opens that hub\'s schedule board, in place (Nov 12 2026)', () => {
+  /** Whether the last click still had its default when it reached the document (after React). */
+  let reachedDocumentPrevented: boolean | null = null;
+  function recordClick(event: Event) {
+    reachedDocumentPrevented = event.defaultPrevented;
+    // jsdom cannot load another document and says so on the console.
+    event.preventDefault();
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+    window.history.replaceState(null, '', '/');
+    setCurrent.mockClear();
+    seenUi.tab = null;
+    reachedDocumentPrevented = null;
+    document.addEventListener('click', recordClick);
+  });
+  afterEach(() => {
+    document.removeEventListener('click', recordClick);
+    vi.unstubAllGlobals();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('each chip is a real address: that hub\'s Schedule board', () => {
+    render(<Strip />);
+    for (const hub of ['ORD', 'DEN']) {
+      expect(screen.getByRole('link', { name: new RegExp(`^${hub}`) }).getAttribute('href')).toBe(`/?tab=schedule&hub=${hub}`);
+    }
+  });
+
+  it('a click selects the board and the Schedule tab without leaving the page', () => {
+    render(<Strip />);
+    expect(seenUi.tab).toBe('live');
+    act(() => {
+      screen.getByRole('link', { name: /^DEN/ }).click();
+    });
+    expect(reachedDocumentPrevented).toBe(true);
+    // Departures, as a cold load opens it: the chip's figure is operated departures.
+    expect(setCurrent).toHaveBeenCalledWith({ hub: 'DEN', dir: 'departures' });
+    expect(seenUi.tab).toBe('schedule');
+  });
+
+  it('a modified click is the browser\'s (a new tab gets the address)', () => {
+    render(<Strip />);
+    act(() => {
+      screen
+        .getByRole('link', { name: /^ORD/ })
+        .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
+    });
+    expect(reachedDocumentPrevented).toBe(false);
+    expect(setCurrent).not.toHaveBeenCalled();
+    expect(seenUi.tab).toBe('live');
+  });
+
+  it('its name carries the hub, its figure and where it goes; the tooltip says it too', async () => {
+    render(<Strip />);
+    const ord = screen.getByRole('link', { name: /^ORD.*83%.*\(schedule board\)$/ });
+    // Visible words plus fixed sr-only words, never an aria-label over different text.
+    expect(ord.hasAttribute('aria-label')).toBe(false);
+    expect(ord.querySelector('[data-chip-destination]')?.textContent).toBe('(schedule board)');
+    await act(async () => {
+      ord.focus();
+      await vi.runAllTimersAsync();
+    });
+    const tip = screen.getAllByRole('tooltip').map((t) => t.textContent ?? '').join(' ');
+    expect(tip).toContain('United at ORD · schedule board');
+    // Before 06:00 hub-local the board that opens is yesterday's, so the chip never says "today's".
+    expect(tip).not.toMatch(/hub guide|today's/);
+    expect(ord.textContent).not.toMatch(/today's/);
+  });
+
+  /** Focus the chip and let its tooltip open (the provider's delay), as a tab or a tap does. */
+  async function focusWithTooltip(chip: HTMLElement) {
+    await act(async () => {
+      chip.focus();
+      await vi.runAllTimersAsync();
+    });
+    expect(screen.getAllByRole('tooltip').map((t) => t.textContent).join(' ')).toContain('United at DEN');
+  }
+
+  it('after a tap or click the chip lets go of focus, so its tooltip does not sit over the board', async () => {
+    render(<Strip />);
+    const den = screen.getByRole('link', { name: /^DEN/ });
+    await focusWithTooltip(den);
+
+    // A pointer's click counts itself in `detail`.
+    await act(async () => {
+      fireEvent.click(den, { detail: 1 });
+      await vi.runAllTimersAsync();
+    });
+
+    expect(seenUi.tab).toBe('schedule');
+    expect(document.activeElement).not.toBe(den);
+    expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
+  });
+
+  it('after a tap on a touch screen the tooltip stays shut over the board the chip opened', async () => {
+    render(<Strip />);
+    const den = screen.getByRole('link', { name: /^DEN/ });
+
+    // A real tap (tests/tap-tooltip.test.tsx): focus lands after pointerup, which opens the tooltip,
+    // then the click. The shared trigger would toggle it open after the click; a chip followed in
+    // place closes it instead.
+    await act(async () => {
+      fireEvent.pointerDown(den, { pointerType: 'touch', button: 0 });
+      fireEvent.pointerUp(den, { pointerType: 'touch', button: 0 });
+      den.focus();
+      fireEvent.click(den, { detail: 1 });
+      await vi.runAllTimersAsync();
+    });
+
+    expect(seenUi.tab).toBe('schedule');
+    expect(document.activeElement).not.toBe(den);
+    expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
+  });
+
+  it('Enter on a focused chip keeps focus, and its tooltip, on the chip', async () => {
+    render(<Strip />);
+    const den = screen.getByRole('link', { name: /^DEN/ });
+    await focusWithTooltip(den);
+
+    // A keyboard activation is a click with no pointer: `detail` 0.
+    await act(async () => {
+      fireEvent.click(den, { detail: 0 });
+      await vi.runAllTimersAsync();
+    });
+
+    expect(seenUi.tab).toBe('schedule');
+    expect(document.activeElement).toBe(den);
+    expect(screen.getAllByRole('tooltip').map((t) => t.textContent).join(' ')).toContain('United at DEN');
+  });
+
+  it('keeps every class and size of the chip (tuned Nov 11 2026)', () => {
+    render(<Strip />);
+    const chip = screen.getByRole('link', { name: /^ORD/ });
+    expect(classesOf(chip)).toEqual(
+      expect.arrayContaining(['relative', 'flex', 'min-h-6', 'shrink-0', 'items-center', 'gap-1', 'rounded-md', 'px-1.5', 'no-underline', 'hover:bg-accent', 'pointer-coarse:self-stretch', 'pointer-coarse:px-2']),
+    );
   });
 });

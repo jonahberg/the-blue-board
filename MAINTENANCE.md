@@ -131,7 +131,8 @@ the list below — most of it is invisible until something is missing.
    `src/lib/home-seo.js`.
 7. **`public/llms.txt` + `public/llms-full.txt`** — the URL table and, if the route answers a
    distinct question, the "When To Use This Site" list.
-8. **`scripts/ui-audit.mjs`** — add it to `PAGES` so the axe + screenshot pass covers it.
+8. **`scripts/ui-audit.mjs`** — add it to `PAGES` so the axe + screenshot pass covers it (how to
+   run it: "The UI audit" below).
 9. **`scripts/generate-og.py`** — an OG card, then revert every og file the script re-rendered
    that you did not mean to change (the recipe under "Stats that live outside the data files").
 10. **`src/pages/feed.xml.ts`** — only if the route publishes dated entries.
@@ -142,3 +143,33 @@ does, so a page on `BaseLayout` is instrumented by construction — and a page t
 BaseLayout fails the test rather than silently going unmeasured.
 
 Budget a day for a new tracker, most of it data research.
+
+## The UI audit (`scripts/ui-audit.mjs`)
+
+At four viewports it screenshots and runs axe on every page in `PAGES` and every dashboard tab,
+and runs the link check on each tab in `LINK_GUARD_TABS` (`src/lib/link-guard.js`): a United
+flight number, a tail the page loaded or a hub code inside a table row, list item or
+`[data-link-row]` must sit inside a link or button. Axe findings are a report. An unlinked name,
+or a guarded tab that showed too little to check (no rows, no loaded tails, none of a kind it must
+show), fails the run (exit 1) and is listed with its tab, viewport and row. Output goes to
+`audit-output/` (gitignored).
+
+It audits production by default, and production fails the link check for any branch whose links
+are not live yet. To audit a branch, build it and serve the build; `astro preview` proxies `/api`
+to production (`astro.config.mjs`), so the tabs get live data:
+
+```sh
+bun run build
+bunx astro preview --background --port 4387   # a port no other worktree is using
+AUDIT_URL=http://localhost:4387 \
+PLAYWRIGHT_CHROMIUM_PATH=~/Library/Caches/ms-playwright/chromium_headless_shell-1254/chrome-headless-shell-mac-arm64/chrome-headless-shell \
+  bun run ui-audit
+bunx astro preview stop
+git checkout -- src/data/starlink-live.json && rm -rf dist
+```
+
+- `PLAYWRIGHT_CHROMIUM_PATH` is needed only when Playwright's own browser revision is not
+  installed; point it at whichever `chrome-headless-shell` is under `~/Library/Caches/ms-playwright/`.
+- `AUDIT_PAGES=index AUDIT_VIEWPORTS=mobile-390` narrows a quick run; the link check runs on `index`.
+- The link check needs live data. With no `/api`, or with the Starlink schedule feed down, it
+  fails with a coverage gap rather than passing on a thin tab, so read the gap line before the code.

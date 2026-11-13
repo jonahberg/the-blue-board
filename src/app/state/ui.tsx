@@ -20,6 +20,7 @@ import { safeLocalStorage } from './storage';
 import { canonicalizeHashParams, cleanTabHash } from '@/lib/tab-hash.js';
 import type { TabId } from '../tabs';
 import type { Flight } from '../data/types';
+import type { FleetDeepLinks } from './deep-links';
 
 /** What the flight sheet is showing: a live aircraft, or a flight number to look up. */
 export type Selection =
@@ -29,6 +30,9 @@ export type Selection =
 
 /** A map "look here" request. `key` makes repeated focuses on the same point distinct. */
 export type MapFocus = { lat: number; lon: number; key: number } | null;
+
+/** A Fleet-tab link followed in place. `seq` counts follows, from 1, so a repeat is a change. */
+export type FleetLink = { filter: string | null; view: FleetDeepLinks['view']; seq: number };
 
 export type UiValue = {
   tab: TabId;
@@ -51,6 +55,15 @@ export type UiValue = {
    */
   starlinkFilter: boolean;
   setStarlinkFilter: (on: boolean) => void;
+
+  /**
+   * The last Fleet link followed in place (`/?tab=fleet&type=A319`, `useFollowDeepLink`). Only
+   * the Fleet view knows which filters its controls offer and when the fleet database has
+   * arrived, so this store only holds the request and the view applies it. It applies on each
+   * new `seq`: the same link clicked twice, after the visitor has cleared the filter, applies twice.
+   */
+  fleetLink: FleetLink | null;
+  followFleetLink: (link: FleetDeepLinks) => void;
 
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
@@ -115,6 +128,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [selection, setSelection] = useState<Selection>(null);
   const [focus, setFocus] = useState<MapFocus>(null);
   const [starlinkFilter, setStarlinkFilter] = useState(false);
+  const [fleetLink, setFleetLink] = useState<FleetLink | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [aircraftReg, setAircraftReg] = useState<string | null>(null);
   const [delayExplain, setDelayExplain] = useState<Record<string, unknown> | null>(null);
@@ -132,8 +146,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
     (id: TabId, options?: { hash?: boolean; scrollTo?: string }) => {
       setTabState(id);
       if (options?.scrollTo) setPendingScroll(options.scrollTo);
-      // `replaceState`, never `pushState`: the tab bar is navigation within one page and must
-      // not fill the visitor's back button with eight entries.
+      // `replaceState`: the tab bar is navigation within one page and must not fill the visitor's
+      // back button with eight entries. A followed link that changes the tab pushes its one entry
+      // itself and calls this with `hash: false` (state/follow-link.tsx).
       if (options?.hash !== false && typeof window !== 'undefined') {
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${TAB_HASHES[id]}`);
       }
@@ -142,6 +157,10 @@ export function UiProvider({ children }: { children: ReactNode }) {
   );
 
   const clearPendingScroll = useCallback(() => setPendingScroll(null), []);
+
+  const followFleetLink = useCallback((link: FleetDeepLinks) => {
+    setFleetLink((prev) => ({ filter: link.filter, view: link.view, seq: (prev?.seq ?? 0) + 1 }));
+  }, []);
 
   // Centring the map means showing it: every caller (My Flights, Starlink "Track", the aircraft
   // dialog, the flight sheet, ⌘K) expects to land on Live, as the legacy focusFlight() did.
@@ -208,6 +227,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
       focusOn,
       starlinkFilter,
       setStarlinkFilter,
+      fleetLink,
+      followFleetLink,
       searchOpen,
       setSearchOpen,
       aircraftReg,
@@ -237,6 +258,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
       focus,
       focusOn,
       starlinkFilter,
+      fleetLink,
+      followFleetLink,
       searchOpen,
       aircraftReg,
       delayExplain,

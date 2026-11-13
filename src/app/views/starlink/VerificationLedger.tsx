@@ -26,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatVerifyDate, integrityAlertText } from '@/lib/starlink-roster.js';
+import { TailLink } from '../../features/EntityLinks';
 import type { DisputedClaim, VerifySummary } from './types';
 
 export const LEDGER_NOTE =
@@ -126,8 +127,9 @@ export const VerificationLedger = memo(function VerificationLedger({
                 ) : (
                   disputed.map((claim, index) => (
                     <TableRow key={`${claim.tail ?? ''}-${index}`}>
+                      {/* The row is about the tail: it opens the aircraft dialog, in place. */}
                       <TableCell className="font-mono">
-                        {claim.tail ?? ''}
+                        {claim.tail ? <TailLink reg={claim.tail} /> : ''}
                         {claim.tail && conflicts.has(claim.tail) ? (
                           <span
                             className="ml-1 inline-flex size-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white"

@@ -6,15 +6,22 @@
  * at 85% on-time and under a ground stop at the same time, and the ground stop is the thing
  * a traveller needs to see. Severity is never colour-only: each chip carries a glyph.
  *
- * The hub code links to its hub guide, which is also why this strip is worth crawling.
+ * A chip opens that hub's Schedule board in place (`/?tab=schedule&hub=ORD`), where the
+ * dashboard lists the flights behind the figure: a hub code on a status goes where that status is
+ * shown (owner decision, Nov 12 2026). The hub guide is one link further, in the board's header.
+ *
+ * The page no longer navigates away on a chip, so after a tap or a click the chip lets go of focus
+ * and its tooltip closes instead of sitting over the board it opened; Enter keeps focus on the chip.
  */
 
 import { History, House } from 'lucide-react';
+import type { MouseEvent } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   HUB_ORDER,
+  hubChipDestination,
   hubChipNoFigure,
   hubHealthSeverity,
   hubOtpDescription,
@@ -23,10 +30,14 @@ import {
   networkLabel,
 } from '@/lib/hub-health.js';
 import { networkUnknownText } from '@/lib/faa-freshness.js';
+import { hubLink } from '@/lib/hub-link.js';
 import { networkChipRepeatsBrief } from '@/lib/network-chip.js';
 import { hubProgramMarker } from '@/lib/ops-health.js';
 import { cn } from '@/lib/utils';
+import { dashLinkClick } from '../features/DashLink';
 import { useBrief } from '../state/brief';
+import type { DeepLinkIntent } from '../state/deep-links';
+import { useFollowDeepLink } from '../state/follow-link';
 import { useIrops } from '../state/irops';
 import { usePrefs } from '../state/prefs';
 import { useHubHealth } from '../state/schedule';
@@ -34,7 +45,20 @@ import { useWeather } from '../state/weather';
 import { SEV_TEXT, SeverityGlyph } from './Status';
 import type { Severity } from './Status';
 
+/**
+ * A chip's click: followed in place as any dashboard link is (`dashLinkClick`). After a pointer's
+ * tap or click (`detail` counts clicks; a keyboard activation is 0) the chip blurs, which closes the
+ * tooltip its focus opened; a keyboard activation keeps focus, and its tooltip, on the chip.
+ */
+function chipClick(follow: (intent: DeepLinkIntent) => void, href: string) {
+  const click = dashLinkClick(follow, href);
+  return (event: MouseEvent<HTMLAnchorElement>) => {
+    if (click(event) && event.detail > 0) event.currentTarget.blur();
+  };
+}
+
 export function HubHealthStrip() {
+  const follow = useFollowDeepLink();
   const { hubs } = useHubHealth();
   const { faaIndex, faaUnknownSince } = useWeather();
   const { homeAirport } = usePrefs();
@@ -105,7 +129,7 @@ export function HubHealthStrip() {
             } | null;
             const stale = entry.otp !== null && Boolean(age?.stale);
             // A chip with no reading says why (Guam: "n/a", its feed sends no departure times). A
-            // tap goes to the hub page, so the reason lives in the link's name (fixed sr-only words,
+            // tap opens the hub's board, so the reason lives in the link's name (fixed sr-only words,
             // so a poll that only moves a count announces nothing) and in the tooltip (the count).
             const noFigure =
               entry.otp === null
@@ -113,12 +137,17 @@ export function HubHealthStrip() {
                 : null;
             const dayOffset =
               entry.otp !== null && entry.source === 'server' ? hubReadingDayOffset(hubMetrics?.[entry.hub]) : 0;
+            // The strip lists the nine hubs, so every chip has a board. A plain click follows it in
+            // place; a modified click, a middle click and "copy link" get the address.
+            const href = hubLink(entry.hub, 'dashboard')?.href;
+            const destination = hubChipDestination(entry.hub);
 
             return (
               <Tooltip key={entry.hub}>
                 <TooltipTrigger asChild>
                   <a
-                    href={`/hubs/${entry.hub.toLowerCase()}`}
+                    href={href}
+                    onClick={href ? chipClick(follow, href) : undefined}
                     className={cn(
                       // 24 px for a mouse (WCAG 2.5.8). A finger gets the whole row's height
                       // (27 px inside its border) and a wider pad: the 44 px chips of Oct 3 2026
@@ -168,13 +197,18 @@ export function HubHealthStrip() {
                         <span className="sr-only">(stale reading)</span>
                       </>
                     ) : null}
+                    {/* Where the tap goes, last, so the name still opens with the hub and its figure. */}
+                    {' '}
+                    <span className="sr-only" data-chip-destination="">
+                      ({destination.sr})
+                    </span>
                   </a>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   {/* One block: the content is an inline-flex row, so bare <p>s sat side by side
-                      as columns ("United at GUM — hub guide" squeezed beside the reason). */}
+                      as columns ("United at GUM · schedule board" squeezed beside the reason). */}
                   <div className="space-y-0.5">
-                    <p className="font-medium">United at {entry.hub} — hub guide</p>
+                    <p className="font-medium">{destination.tooltip}</p>
                     <p className="text-xs">
                       {noFigure ? noFigure.text : hubOtpDescription(entry.otp, dayOffset)}
                       {entry.source === 'client' ? ' (from the loaded board)' : ''}

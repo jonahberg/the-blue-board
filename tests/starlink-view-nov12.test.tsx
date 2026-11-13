@@ -81,6 +81,9 @@ vi.mock('../src/app/state/prefs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/prefs')>()),
   usePrefs: () => ({ homeAirport: 'ORD' }) as unknown as PrefsValue,
 }));
+// The tab's names are in-place links (DashLink → useFollowDeepLink), which need the Schedule and UI
+// stores this file stubs; following one is tests/dash-link.test.tsx's subject, not this file's.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 vi.mock('../src/app/state/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/ui')>()),
   useUi: () =>
@@ -111,12 +114,22 @@ afterEach(() => {
 
 const text = (id: string) => document.getElementById(id)?.textContent ?? null;
 
+/**
+ * What a row shows: its text without the sr-only words a bar row carries as a button
+ * ("Show … aircraft in the roster below", Nov 12 2026).
+ */
+const shown = (el: HTMLElement) => {
+  const copy = el.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('.sr-only').forEach((node) => node.remove());
+  return copy.textContent?.trim().replace(/\s+/g, ' ') ?? '';
+};
+
 describe('the Starlink tab on the Nov 12 2026 fleet-summary', () => {
   it('Express bar: 354 / 368 · 96% from the one payload, and the note says what it counts', () => {
     state.fleetSummary = FLEET_SUMMARY;
     render(<StarlinkView />);
     const express = document.querySelector('#sl-bars [data-bar="Express"]') as HTMLElement;
-    expect(express.textContent).toBe('Express354 / 368 · 96%');
+    expect(shown(express)).toBe('Express 354 / 368 · 96%');
     expect(document.getElementById('sl-bars')?.textContent).not.toMatch(/513|69%/);
     expect(text('sl-bars-note')).toBe(
       'Mainline: 1 of 2 aircraft in our fleet database · Express: per the Starlink tracker. ' +
@@ -128,11 +141,11 @@ describe('the Starlink tab on the Nov 12 2026 fleet-summary', () => {
   it('Express bar without the payload: the equipped count, no bar, no percentage', () => {
     render(<StarlinkView />);
     const express = document.querySelector('#sl-bars [data-bar="Express"]') as HTMLElement;
-    expect(express.textContent).toBe('Express355 equipped');
+    expect(shown(express)).toBe('Express 355 equipped');
     expect(express.querySelector('.bg-bb-ok')).toBeNull();
     // The Mainline bar is untouched.
     const mainline = document.querySelector('#sl-bars [data-bar="Mainline"]') as HTMLElement;
-    expect(mainline.textContent).toBe('Mainline1 / 2 · 50%');
+    expect(shown(mainline)).toBe('Mainline 1 / 2 · 50%');
   });
 
   it("the second velocity tile is United's target and no date of ours appears", () => {

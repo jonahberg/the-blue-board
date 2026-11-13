@@ -26,7 +26,9 @@
 
 import { useEffect, useRef } from 'react';
 
-import { weatherScrollTarget } from '@/lib/tab-hash.js';
+import { DEEP_LINK_PARAMS } from '@/lib/followed-link.js';
+import { hubLink } from '@/lib/hub-link.js';
+import { hashTailParams, weatherScrollTarget } from '@/lib/tab-hash.js';
 import { parseWatchLink, withoutWatchParams } from '@/lib/watch-link.js';
 import { FR24_LOOKUP_AVAILABLE } from '../features/Fr24LookupDialog';
 import { resolveTabParam } from '../tabs';
@@ -67,7 +69,11 @@ export type FleetDeepLinks = {
  */
 export function readFleetDeepLinks(): FleetDeepLinks {
   if (typeof window === 'undefined') return { filter: null, view: null };
-  const params = new URLSearchParams(window.location.search);
+  return fleetDeepLinksFrom(new URLSearchParams(window.location.search));
+}
+
+/** The Fleet tab's slice of a query string; one reading for a cold load and an in-place link. */
+function fleetDeepLinksFrom(params: URLSearchParams): FleetDeepLinks {
   const view = params.get('view')?.toLowerCase();
   return {
     filter: params.get('type') ?? params.get('filter'),
@@ -90,9 +96,6 @@ export function readLiveHubDeepLink(knownHubs: readonly string[]): string | null
   return !tab || tab === 'live' ? hub : null;
 }
 
-/** Query parameters that name a specific destination inside the dashboard. */
-const DEEP_LINK_PARAMS = ['tab', 'hub', 'section', 'flight', 'q', 'aircraft', 'view', 'filter', 'type', 'waitlist', 'watch'];
-
 /**
  * True when the visitor arrived on a deep link. The first-visit welcome overlay should not
  * open on top of the view the link was sent for (F45) — the arrival already has a purpose.
@@ -103,25 +106,84 @@ export function isDeepLinkArrival(): boolean {
   return DEEP_LINK_PARAMS.some((key) => params.has(key));
 }
 
-/** Where an in-dashboard link goes: the tab, the element to scroll to, the board's hub. */
-export type DeepLinkIntent = { tab: TabId; scrollTo: string | null; scheduleHub: string | null };
+/** Where an in-dashboard link goes. */
+export type DeepLinkIntent = {
+  /** The tab to show; null for an overlay link (`?aircraft=`) that keeps the current tab. */
+  tab: TabId | null;
+  /** The element to scroll to on the Weather tab. */
+  scrollTo: string | null;
+  /** The Schedule board to select: only on the Schedule tab, and only one of the nine hubs. */
+  scheduleHub: string | null;
+  /** The registration whose aircraft dialog opens, upper-cased. */
+  aircraft: string | null;
+  /** The Fleet view's filter and sub-view: only on the Fleet tab, and only when one is named. */
+  fleet: FleetDeepLinks | null;
+};
+
+const SITE_ORIGIN = 'https://theblueboard.co';
 
 /**
- * Resolve a dashboard href (`/?tab=schedule&hub=ORD`, `/?tab=weather&hub=EWR`, `/#live`) the way a
- * cold load of that URL would, so a chip clicked in place and the same link opened in a new tab
- * land in the same spot. Null when the href names no tab.
+ * Resolve a dashboard href (`/?tab=schedule&hub=ORD`, `/?tab=weather&hub=EWR`, `/#live`,
+ * `/?aircraft=N78501`, `/?tab=fleet&type=737%20MAX%209`) the way a cold load of that URL would, so
+ * a link clicked in place and the same link opened in a new tab land in the same spot.
+ *
+ * Null — the link then loads like any other — when the href is not the dashboard's (another
+ * origin, or a path other than `/`: a flight, hub or fleet page is a page load), when it names
+ * nothing an intent carries (`/`, a UTM-only link), and when a cold load would apply more of it
+ * than an intent can carry (`carriesMoreThanAnIntent`), so following it in place never
+ * half-applies it.
  */
 export function resolveDeepLink(href: string): DeepLinkIntent | null {
   let url: URL;
   try {
-    url = new URL(href, 'https://theblueboard.co');
+    url = new URL(href, SITE_ORIGIN);
   } catch {
     return null;
   }
-  const tab = resolveTabParam(url.searchParams.get('tab')) ?? resolveTabParam(url.hash);
-  if (!tab) return null;
-  const hub = url.searchParams.get('hub')?.trim().toUpperCase() || null;
-  return { tab, scrollTo: weatherScrollTarget(url.searchParams), scheduleHub: tab === 'schedule' ? hub : null };
+  if (url.origin !== SITE_ORIGIN || url.pathname !== '/') return null;
+  // A cold load first moves parameters trapped after the '#' into the query, existing keys
+  // winning (`canonicalizeHashParams`, called by `initialTab` in ui.tsx), so they count here too.
+  const params = new URLSearchParams(url.search);
+  for (const [key, value] of new URLSearchParams(hashTailParams(url.hash))) {
+    if (!params.has(key)) params.set(key, value);
+  }
+
+  // Same precedence as `useDeepLinks`: ?view=starlink is applied after ?tab=, and both after the
+  // hash the dashboard opened on.
+  const tab =
+    (params.get('view')?.toLowerCase() === 'starlink' ? 'starlink' : null) ??
+    resolveTabParam(params.get('tab')) ??
+    resolveTabParam(url.hash);
+  const aircraft = params.get('aircraft')?.trim().toUpperCase() || null;
+  if (!tab && !aircraft) return null;
+  if (carriesMoreThanAnIntent(params, tab)) return null;
+
+  const fleet = tab === 'fleet' ? fleetDeepLinksFrom(params) : null;
+  return {
+    tab,
+    // `weatherScrollTarget` reads the raw ?tab=; the target belongs to the tab actually shown.
+    scrollTo: tab === 'weather' ? weatherScrollTarget(params) : null,
+    scheduleHub: tab === 'schedule' ? (hubLink(params.get('hub'), 'dashboard')?.code ?? null) : null,
+    aircraft,
+    fleet: fleet && (fleet.filter || fleet.view) ? fleet : null,
+  };
+}
+
+/**
+ * True when the query names something a cold load acts on (`useDeepLinks`, the views' own reads)
+ * that an intent for `tab` cannot carry: the flight sheet, the watch list, the waitlist dialog, a
+ * Weather section off the Weather tab, a hub that is neither a Schedule board nor a Weather card
+ * (with no tab or on Live it is the Live map's hub filter, `readLiveHubDeepLink`), and the Fleet
+ * view's filter or sub-view off the Fleet tab (the Fleet view reads those whenever it mounts).
+ * Parameters that name nothing in the dashboard (`utm_*`) are ignored, as on a cold load.
+ */
+function carriesMoreThanAnIntent(params: URLSearchParams, tab: TabId | null): boolean {
+  if (['flight', 'q', 'watch', 'waitlist'].some((key) => params.has(key))) return true;
+  if (params.has('section') && tab !== 'weather') return true;
+  if (params.has('hub') && tab !== 'schedule' && tab !== 'weather') return true;
+  const view = params.get('view')?.toLowerCase();
+  const fleetParam = params.has('type') || params.has('filter') || (view !== undefined && view !== 'starlink');
+  return fleetParam && tab !== 'fleet';
 }
 
 /** 'UAL123' / 'ua 123' / '123' → 'UA123'. */
@@ -186,14 +248,21 @@ export function useDeepLinks(deps: DeepLinkDeps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The hash is the one deep link that can change under us (back button, in-page anchor).
+  // The hash is the one deep link that can change under us: an in-page anchor, and Back or Forward
+  // across the entry a followed link leaves (follow-link.tsx). Back between two entries of this page
+  // fires `popstate`, and `hashchange` as well when their hashes differ, which a followed link's
+  // always do; both are heard, and the second finds the tab already set.
   useEffect(() => {
     function onHashChange() {
       const resolved = resolveTabParam(window.location.hash);
       if (resolved) depsRef.current.setTab(resolved, { hash: false });
     }
     window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onHashChange);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('popstate', onHashChange);
+    };
   }, []);
 
   // ?flight= / ?q= — latched until the feed has actually answered.

@@ -44,6 +44,8 @@ import {
   ledgerHasData,
   rolloutBars,
   rolloutBarsNote,
+  ROSTER_DEFAULT_FILTERS,
+  rosterFiltersShowing,
   rosterOptions,
   sortRoster,
   starlinkBoardEmptyText,
@@ -82,7 +84,7 @@ import { AskChips } from '../features/AskChips';
 import { RosterTable } from './starlink/RosterTable';
 import type { RosterSortCol } from './starlink/RosterTable';
 import { SlHero } from './starlink/SlHero';
-import type { RolloutBar } from './starlink/SlHero';
+import type { RolloutBar, RosterFleet } from './starlink/SlHero';
 import { VelocityChart } from './starlink/VelocityChart';
 import type { PaceModel, VelocityModel } from './starlink/VelocityChart';
 import { VerificationLedger } from './starlink/VerificationLedger';
@@ -127,17 +129,18 @@ export default function StarlinkView() {
   const [boardWindow, setBoardWindow] = useState<WindowHours>(12);
   const [boardShowAll, setBoardShowAll] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [fleetFilter, setFleetFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [operatorFilter, setOperatorFilter] = useState('');
-  const [newOnly, setNewOnly] = useState(false);
+  const [search, setSearch] = useState(ROSTER_DEFAULT_FILTERS.search);
+  const [fleetFilter, setFleetFilter] = useState(ROSTER_DEFAULT_FILTERS.fleet);
+  const [typeFilter, setTypeFilter] = useState(ROSTER_DEFAULT_FILTERS.type);
+  const [operatorFilter, setOperatorFilter] = useState(ROSTER_DEFAULT_FILTERS.operator);
+  const [newOnly, setNewOnly] = useState(ROSTER_DEFAULT_FILTERS.newOnly);
   const [sort, setSort] = useState<{ col: RosterSortCol; asc: boolean }>({ col: 'tail', asc: true });
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const [mismatches, setMismatches] = useState<MismatchState>({ disputed: [], summary: null });
 
   const ledgerRef = useRef<HTMLDivElement>(null);
+  const rosterRef = useRef<HTMLElement>(null);
 
   const aircraft = starlink.aircraft;
   const flightsByTail = starlink.flightsByTail as FlightsByTail;
@@ -468,6 +471,25 @@ export default function StarlinkView() {
     ledgerRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }, []);
 
+  // The hero's bars and "+N NEW THIS WEEK" set the roster to show what they name, every other
+  // filter back at rest (`rosterFiltersShowing`), and bring the roster into view the way
+  // "N disputed" brings the ledger. A type, operator or search left from before would otherwise
+  // land the click on "No aircraft match your filters".
+  const showInRoster = useCallback((filters: ReturnType<typeof rosterFiltersShowing>) => {
+    setSearch(filters.search);
+    setFleetFilter(filters.fleet);
+    setTypeFilter(filters.type);
+    setOperatorFilter(filters.operator);
+    setNewOnly(filters.newOnly);
+    setExpanded(null);
+    rosterRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  }, []);
+  const onShowFleet = useCallback(
+    (fleet: RosterFleet) => showInRoster(rosterFiltersShowing(fleet)),
+    [showInRoster],
+  );
+  const onShowNew = useCallback(() => showInRoster(rosterFiltersShowing('new')), [showInRoster]);
+
   // The source line is about the roster this tab's count comes from, so it reads the roster's sync.
   // Without a sync time it states no freshness at all (it used to say "live").
   const sourceFreshness = useMemo(
@@ -500,6 +522,8 @@ export default function StarlinkView() {
         }
         onJumpToLedger={jumpToLedger}
         onShowOnMap={onShowOnMap}
+        onShowFleet={onShowFleet}
+        onShowNew={onShowNew}
       />
 
       {chart ? <VelocityChart model={chart} pace={pace} /> : null}
@@ -530,6 +554,7 @@ export default function StarlinkView() {
           emptyText={boardEmptyText}
           footer={boardFooter}
           tzAbbrev={tzAbbrev}
+          fleetByReg={fleetByReg}
           onOpenAircraft={openAircraft}
           onTrack={onBoardTrack}
         />
@@ -539,7 +564,7 @@ export default function StarlinkView() {
         </p>
       )}
 
-      <section aria-labelledby="sl-roster-title" className="space-y-3">
+      <section ref={rosterRef} aria-labelledby="sl-roster-title" className="space-y-3">
         <h3 id="sl-roster-title" className="text-sm font-semibold">
           Starlink Roster
         </h3>
@@ -585,6 +610,7 @@ export default function StarlinkView() {
           nowMs={nowMs}
           nowSec={nowSec}
           tzAbbrev={tzAbbrev}
+          fleetByReg={fleetByReg}
           onTrack={trackByIcao}
           onOpenAircraft={openAircraft}
         />

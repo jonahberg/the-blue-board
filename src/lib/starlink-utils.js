@@ -232,7 +232,7 @@ export function departureBucketLabel(deltaSec) {
  * other rows get `inbound: {flight, icao24}` so the board can say "inbound on UA1389" and still
  * offer to track the airframe.
  *
- * @param {Record<string, Array<{flight_number?:string, origin?:string, destination?:string, departure_ts?:number, departure_time?:string, arrival_time?:string}>>} flightsByTail
+ * @param {Record<string, Array<{flight_number?:string, airline?:string, origin?:string, destination?:string, departure_ts?:number, departure_time?:string, arrival_time?:string}>>} flightsByTail
  * @param {Record<string, {type?:string, fleet?:string, operator?:string}>} aircraftByTail - tail → fleet DB entry
  * @param {Record<string, Object>|Map<string, Object>} airborneByTail - tail → live flight
  *   (`{icao24, origin?, dest?, flightIATA?, callsign?}` — the feed's Flight shape)
@@ -281,6 +281,9 @@ export function buildDeparturesBoard(flightsByTail, aircraftByTail, airborneByTa
       rows.push({
         tail,
         flight_number: String((f && f.flight_number) || ''),
+        // The feed's marketing carrier ('UA' or ''): an Express number prints as United's only on
+        // a row marked United (`unitedNumber`, src/lib/flight-link.js).
+        airline: String((f && f.airline) || ''),
         origin,
         destination: String((f && f.destination) || '').toUpperCase(),
         departure_ts: ts,

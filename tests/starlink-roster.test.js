@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
 
+import { flightLink } from '../src/lib/flight-link.js';
+
 import {
   ALASKA_HAWAIIAN_CODE,
   buildIndustryRows,
@@ -30,8 +32,12 @@ import {
   relativeDeparture,
   rolloutBars,
   rolloutBarsNote,
+  ROSTER_DEFAULT_FILTERS,
+  rosterFiltersShowing,
   rosterOptions,
   sortRoster,
+  starlinkFlightLabel,
+  starlinkInboundLabel,
   starlinkSinceLabel,
   upcomingFlights,
 } from '../src/lib/starlink-roster.js';
@@ -78,6 +84,86 @@ describe('filterRoster', () => {
   it('survives a null roster and null rows', () => {
     expect(filterRoster(null, { search: 'N' }, NOW)).toEqual([]);
     expect(filterRoster([null, ROSTER[0]], {}, NOW)).toHaveLength(1);
+  });
+});
+
+describe('rosterFiltersShowing (the hero buttons, Nov 12 2026)', () => {
+  it('a bar sets its fleet and puts every other filter back at rest', () => {
+    expect(rosterFiltersShowing('Mainline')).toEqual({ search: '', fleet: 'Mainline', type: '', operator: '', newOnly: false });
+    expect(rosterFiltersShowing('Express')).toEqual({ ...ROSTER_DEFAULT_FILTERS, fleet: 'Express' });
+  });
+
+  it('"+N new this week" turns New this week on and clears the fleet', () => {
+    expect(rosterFiltersShowing('new')).toEqual({ search: '', fleet: '', type: '', operator: '', newOnly: true });
+  });
+
+  it('always lands on rows when the roster has what the button names', () => {
+    // A stale type, operator and search that match nothing in the named fleet.
+    const stale = { search: 'N801', fleet: 'Express', type: 'CRJ-550', operator: 'SkyWest dba United Express', newOnly: false };
+    expect(filterRoster(ROSTER, { ...stale, fleet: 'Mainline' }, NOW)).toEqual([]);
+    expect(filterRoster(ROSTER, rosterFiltersShowing('Mainline'), NOW).map((a) => a.tail)).toEqual(['N12345']);
+    expect(filterRoster(ROSTER, rosterFiltersShowing('Express'), NOW).map((a) => a.tail)).toEqual(['N801SK', 'N404RP']);
+    expect(filterRoster(ROSTER, rosterFiltersShowing('new'), NOW).map((a) => a.tail)).toEqual(['N12345', 'N404RP']);
+  });
+
+  it('the defaults are frozen', () => {
+    expect(Object.isFrozen(ROSTER_DEFAULT_FILTERS)).toBe(true);
+  });
+});
+
+describe('starlinkFlightLabel (one printed form for United numbers, Nov 12 2026)', () => {
+  /** The label and whether FlightLink will link it: the label is the one decision, FlightLink reads it. */
+  const shown = (printed, row) => {
+    const text = starlinkFlightLabel(printed, row);
+    return { text, links: flightLink(text)?.ident ?? null };
+  };
+
+  it("a United number prints as its link's ident: UAL347 reads UA347", () => {
+    expect(shown('UAL347', { airline: 'UA' })).toEqual({ text: 'UA347', links: 'UA347' });
+    expect(shown('UA576', { airline: '' })).toEqual({ text: 'UA576', links: 'UA576' });
+  });
+
+  it('an Express leg the feed marks United prints and links its United number', () => {
+    expect(shown('SKW5415', { airline: 'UA' })).toEqual({ text: 'UA5415', links: 'UA5415' });
+    expect(shown('G74612', { airline: 'UA' })).toEqual({ text: 'UA4612', links: 'UA4612' });
+  });
+
+  it('a number that does not link prints exactly what the feed sent', () => {
+    // Not marked United, an untested prefix, a provider suffix, a bare number.
+    expect(shown('SKW5415', { airline: '' })).toEqual({ text: 'SKW5415', links: null });
+    expect(shown('SKW5415', null)).toEqual({ text: 'SKW5415', links: null });
+    expect(shown('UCA5004', { airline: 'UA' })).toEqual({ text: 'UCA5004', links: null });
+    expect(shown('SKW5415A', { airline: 'UA' })).toEqual({ text: 'SKW5415A', links: null });
+    expect(shown('5415', { airline: 'UA' })).toEqual({ text: '5415', links: null });
+  });
+
+  it('an empty or missing number prints nothing and links nothing', () => {
+    expect(shown('', { airline: 'UA' })).toEqual({ text: '', links: null });
+    expect(shown(undefined, { airline: 'UA' })).toEqual({ text: '', links: null });
+  });
+});
+
+// The inbound leg comes from the dashboard's live feed, /api/fr24-feed?airline=UAL, which carries
+// only United flights (src/lib/united-feed.js), so it reads as a United row. On the Nov 12 preview a
+// board row read "inbound on YX3568" (FR24 printing Republic's number on a United flight), plain,
+// beside "inbound on UA4190", linked.
+describe('starlinkInboundLabel (the live feed is United-only, Nov 12 2026)', () => {
+  it("an Express operator number on the live feed reads as United's and links", () => {
+    expect(starlinkInboundLabel('YX3568')).toBe('UA3568');
+    expect(flightLink(starlinkInboundLabel('YX3568'))?.href).toBe('/flight/UA3568');
+    expect(starlinkInboundLabel('SKW5123')).toBe('UA5123');
+    expect(starlinkInboundLabel('G74612')).toBe('UA4612');
+  });
+
+  it('a United number prints as its ident', () => {
+    expect(starlinkInboundLabel('UA4190')).toBe('UA4190');
+    expect(starlinkInboundLabel('UAL3508')).toBe('UA3508');
+  });
+
+  it('a number no rule reads stays as sent and links nothing', () => {
+    expect(starlinkInboundLabel('UCA5004')).toBe('UCA5004');
+    expect(flightLink(starlinkInboundLabel('UCA5004'))).toBeNull();
+    expect(starlinkInboundLabel('')).toBe('');
   });
 });
 
@@ -583,6 +669,14 @@ describe('Starlink schedule freshness', () => {
       .toBe('No United Starlink departures from SFO in the next 12h on the schedule synced 22h ago (the tracker is offline).');
     expect(starlinkBoardEmptyText({ ...base, hub: null, servedFrom: 'supabase', syncedAt: '2026-11-11T20:00:00Z', latestDepartureTs: nowSec + 86400 }))
       .toBe('No United Starlink departures from the hubs in the next 12h.');
+  });
+
+  it("the footer's lead says the UA numbers are United's and the name under each is the operator (Nov 12 2026)", () => {
+    const footer = starlinkBoardFooter({ syncedAt: synced2h, servedFrom: 'supabase', nowMs: NOW_MS });
+    expect(footer.startsWith(
+      "A NOC departures board, not a passenger FIDS. Flight numbers shown as UA are United's; the name under each is the carrier that operates it (SkyWest, Republic, Mesa…). ",
+    )).toBe(true);
+    expect(footer).not.toMatch(/Callsigns|not United marketing/);
   });
 
   it('the footer states the schedule age instead of "cache (up to 6h)"', () => {

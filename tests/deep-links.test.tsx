@@ -253,13 +253,118 @@ describe('readFleetDeepLinks', () => {
 });
 
 describe('resolveDeepLink (the brief chips follow the same resolver a cold load uses)', () => {
+  const none = { scrollTo: null, scheduleHub: null, aircraft: null, fleet: null };
+
   it('resolves every chip href shape', () => {
-    expect(resolveDeepLink('/?tab=schedule&hub=ord')).toEqual({ tab: 'schedule', scrollTo: null, scheduleHub: 'ORD' });
-    expect(resolveDeepLink('/?tab=irops')).toEqual({ tab: 'weather', scrollTo: 'irops-section', scheduleHub: null });
-    expect(resolveDeepLink('/?tab=weather&hub=EWR')).toEqual({ tab: 'weather', scrollTo: 'hub-card-EWR', scheduleHub: null });
-    expect(resolveDeepLink('/?tab=weather&section=nas')).toEqual({ tab: 'weather', scrollTo: 'nas-section', scheduleHub: null });
-    expect(resolveDeepLink('/#live')).toEqual({ tab: 'live', scrollTo: null, scheduleHub: null });
-    expect(resolveDeepLink('/#starlink')).toEqual({ tab: 'starlink', scrollTo: null, scheduleHub: null });
+    expect(resolveDeepLink('/?tab=schedule&hub=ord')).toEqual({ ...none, tab: 'schedule', scheduleHub: 'ORD' });
+    expect(resolveDeepLink('/?tab=irops')).toEqual({ ...none, tab: 'weather', scrollTo: 'irops-section' });
+    expect(resolveDeepLink('/?tab=weather&hub=EWR')).toEqual({ ...none, tab: 'weather', scrollTo: 'hub-card-EWR' });
+    expect(resolveDeepLink('/?tab=weather&section=nas')).toEqual({ ...none, tab: 'weather', scrollTo: 'nas-section' });
+    expect(resolveDeepLink('/#live')).toEqual({ ...none, tab: 'live' });
+    expect(resolveDeepLink('/#starlink')).toEqual({ ...none, tab: 'starlink' });
     expect(resolveDeepLink('/?nothing=1')).toBeNull();
+  });
+
+  it('?aircraft= is an overlay link: upper-cased, and it keeps the current tab', () => {
+    expect(resolveDeepLink('/?aircraft=n78501')).toEqual({ ...none, tab: null, aircraft: 'N78501' });
+    expect(resolveDeepLink('/?tab=fleet&aircraft=n1')).toEqual({ ...none, tab: 'fleet', aircraft: 'N1' });
+    expect(resolveDeepLink('/?aircraft=')).toBeNull();
+  });
+
+  it('reads the Fleet tab\'s filter and sub-view the way the Fleet view does', () => {
+    expect(resolveDeepLink('/?tab=fleet&type=737%20MAX%209')).toEqual({ ...none, tab: 'fleet', fleet: { filter: '737 MAX 9', view: null } });
+    expect(resolveDeepLink('/?tab=fleet&view=special')).toEqual({ ...none, tab: 'fleet', fleet: { filter: null, view: 'special' } });
+    expect(resolveDeepLink('/?tab=fleet&filter=starlink&view=Express')).toMatchObject({ fleet: { filter: 'starlink', view: 'express' } });
+    expect(resolveDeepLink('/?tab=fleet&type=B39M&filter=starlink')).toMatchObject({ fleet: { filter: 'B39M', view: null } });
+    // Nothing for the Fleet view to apply: no fleet slice.
+    expect(resolveDeepLink('/?tab=fleet')).toEqual({ ...none, tab: 'fleet' });
+    expect(resolveDeepLink('/?tab=fleet&view=bogus')).toEqual({ ...none, tab: 'fleet' });
+    // A Fleet sub-view without the tab does not route on a cold load either.
+    expect(resolveDeepLink('/?view=airborne')).toBeNull();
+  });
+
+  it('?view=starlink is tab routing, as on a cold load, and wins over ?tab=', () => {
+    expect(resolveDeepLink('/?view=starlink')).toEqual({ ...none, tab: 'starlink' });
+    expect(resolveDeepLink('/?tab=fleet&view=Starlink')).toEqual({ ...none, tab: 'starlink' });
+    // The Weather scroll target belongs to the Weather tab only.
+    expect(resolveDeepLink('/?tab=irops&view=starlink')).toEqual({ ...none, tab: 'starlink' });
+  });
+
+  it('selects a Schedule board only for one of the nine hubs, and only on the Schedule tab', () => {
+    expect(resolveDeepLink('/?tab=schedule&hub=xyz')).toEqual({ ...none, tab: 'schedule' });
+    expect(resolveDeepLink('/?tab=weather&hub=EWR')).toMatchObject({ tab: 'weather', scheduleHub: null });
+    expect(resolveDeepLink('/?hub=ord')).toBeNull();
+  });
+
+  it('every href the brief\'s chips build still resolves (src/lib/brief-chips.js)', () => {
+    for (const hub of ['ORD', 'DEN', 'IAH', 'EWR', 'SFO', 'IAD', 'LAX', 'NRT', 'GUM']) {
+      expect(resolveDeepLink(`/?tab=schedule&hub=${hub}`), hub).toEqual({ ...none, tab: 'schedule', scheduleHub: hub });
+      expect(resolveDeepLink(`/?tab=weather&hub=${hub}`), hub).toEqual({ ...none, tab: 'weather', scrollTo: `hub-card-${hub}` });
+    }
+    expect(resolveDeepLink('/#weather')).toEqual({ ...none, tab: 'weather' });
+  });
+
+  it('is null for an address a cold load would apply more of than the intent carries', () => {
+    for (const partial of [
+      // ?hub= is the Live map's hub filter with no tab or on Live, and nothing on other tabs.
+      '/?hub=ord',
+      '/?tab=live&hub=ORD',
+      '/?aircraft=N1&hub=ORD',
+      '/?tab=fleet&hub=ORD',
+      '/?view=starlink&hub=ORD',
+      '/?tab=weather&hub=EWR&view=starlink',
+      // The flight sheet, the watch list and the waitlist dialog.
+      '/?tab=schedule&flight=UA1',
+      '/?tab=schedule&q=UA1',
+      '/?tab=schedule&watch=UA929',
+      '/?tab=schedule&waitlist=1',
+      '/?aircraft=N1&flight=UA1',
+      // ?section= only scrolls the Weather tab.
+      '/?tab=schedule&section=nas',
+      '/?tab=weather&section=nas&view=starlink',
+      // The Fleet view reads its filter and sub-view whenever it mounts, on any tab.
+      '/?tab=stats&type=B39M',
+      '/?tab=live&filter=starlink',
+      '/?aircraft=N1&view=airborne',
+      // Parameters after the '#' are moved into the query on a cold load (canonicalizeHashParams).
+      '/#live&hub=ORD',
+      '/#schedule?flight=UA1',
+    ]) {
+      expect(resolveDeepLink(partial), partial).toBeNull();
+    }
+  });
+
+  it('ignores what a cold load ignores', () => {
+    // An unknown tab, an unknown board, an unknown Fleet sub-view, a section on the IROPS alias.
+    expect(resolveDeepLink('/?tab=bogus&aircraft=n1')).toEqual({ ...none, tab: null, aircraft: 'N1' });
+    expect(resolveDeepLink('/?tab=bogus')).toBeNull();
+    expect(resolveDeepLink('/?tab=schedule&hub=xyz')).toEqual({ ...none, tab: 'schedule' });
+    expect(resolveDeepLink('/?tab=irops&hub=DEN')).toEqual({ ...none, tab: 'weather', scrollTo: 'irops-section' });
+    // Parameters that name nothing inside the dashboard, in the query or after the '#'.
+    expect(resolveDeepLink('/?tab=fleet&utm_source=email&utm_medium=email')).toEqual({ ...none, tab: 'fleet' });
+    expect(resolveDeepLink('/#fleet&utm_source=email')).toEqual({ ...none, tab: 'fleet' });
+    // A trapped Fleet parameter is applied, as the cold load moves it into the query.
+    expect(resolveDeepLink('/?view=express#fleet&utm_source=email')).toEqual({ ...none, tab: 'fleet', fleet: { filter: null, view: 'express' } });
+    expect(resolveDeepLink('/#fleet&type=B39M')).toEqual({ ...none, tab: 'fleet', fleet: { filter: 'B39M', view: null } });
+  });
+
+  it('is null for any address that is not the dashboard\'s, or that names nothing', () => {
+    for (const outside of [
+      '/flight/UA576',
+      '/hubs/ord',
+      '/fleet/a319',
+      '/hubs/ord?tab=schedule&hub=ORD',
+      '/fleet/a319#fleet',
+      '/flight/UA576?aircraft=N78501',
+      'https://example.com/?tab=fleet',
+      '//example.com/?tab=fleet',
+      'https://www.theblueboard.co/?tab=fleet',
+      '/',
+      '/?utm_source=x',
+      '/?waitlist=1',
+    ]) {
+      expect(resolveDeepLink(outside), outside).toBeNull();
+    }
+    expect(resolveDeepLink('https://theblueboard.co/?tab=fleet')).toEqual({ ...none, tab: 'fleet' });
   });
 });

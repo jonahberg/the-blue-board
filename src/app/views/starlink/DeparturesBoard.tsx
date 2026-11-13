@@ -5,8 +5,12 @@
  * and buckets, and this file lays the result out.
  *
  * Three honesty rules are built into the chrome rather than the footer alone:
- *  - the callsigns are the OPERATING carrier's (SKW####, RPA####), not United marketing
- *    numbers, so the operator is printed next to every one of them;
+ *  - every United number prints in one form, the ident of the flight page it links to
+ *    (`starlinkFlightLabel()` in src/lib/starlink-roster.js): the feed's mainline UAL347 reads
+ *    UA347, and an Express leg the feed marks United reads its United number (SKW5415 → UA5415,
+ *    `unitedNumber()`, checked against flight_history and approved by the owner Nov 12 2026). The
+ *    carrier that operates the flight is printed under every number, and a number that does not
+ *    link prints as the feed sent it;
  *  - the times are scheduled, from a stored schedule whose real age is stated inline and in the
  *    footer (`freshness` / `footer`, from src/lib/starlink-roster.js: "schedule synced 2h ago",
  *    "tracker offline, schedule from 22h ago"), never implying live ATC. The fixed "cache (up to
@@ -23,10 +27,12 @@ import { Radio } from 'lucide-react';
 import { memo } from 'react';
 
 import { Card } from '@/components/ui/card';
+import { fleetTypeCodeForTail } from '@/lib/fleet-type-link.js';
 import { formatFlightTime } from '@/lib/starlink-view.js';
-import { operatorLabel, relativeDeparture } from '@/lib/starlink-roster.js';
+import { operatorLabel, relativeDeparture, starlinkFlightLabel, starlinkInboundLabel } from '@/lib/starlink-roster.js';
+import { HubLink, TypeLink } from '../../features/EntityLinks';
 import { FlightLink } from '../../features/FlightLink';
-import type { BoardModel, BoardRow } from './types';
+import type { BoardModel, BoardRow, FleetByReg } from './types';
 
 export type WindowHours = 12 | 48;
 
@@ -36,36 +42,48 @@ export const BOARD_UNAVAILABLE_NOTE =
 function Row({
   row,
   tzAbbrev,
+  fleetByReg,
   onOpenAircraft,
   onTrack,
 }: {
   row: BoardRow;
   tzAbbrev: (hub: string) => string;
+  fleetByReg: FleetByReg;
   onOpenAircraft: (reg: string) => void;
   onTrack: (row: BoardRow) => void;
 }) {
   const time = formatFlightTime(row.departure_ts, row.origin, tzAbbrev) as string;
+  // What the row prints is what it links: UA347 for the feed's UAL347, UA5415 for an Express leg
+  // the feed marks United; a number with no page prints as sent.
+  const flight = starlinkFlightLabel(row.flight_number, row);
+  const inbound = row.inbound?.flight ? starlinkInboundLabel(row.inbound.flight) : null;
   return (
     // Every row is its own grid, so the time column is a fixed width at every size: an `auto`
     // column sized itself per row and the callsigns under each other started at different x.
     // On a phone the route shares the second line with the status instead of taking a third.
     // From `sm` the type takes a fixed column beside the route as well: as an `auto` column after
     // the flexible one it was pushed around by each row's status, so no two types lined up.
-    <div className="relative grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,11rem)_6rem_5.5rem_minmax(0,1fr)]">
+    // `data-link-row`: the link audit reads each board row as one row (it is a grid, not a <tr>).
+    <div
+      data-link-row=""
+      className="relative grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,11rem)_6rem_5.5rem_minmax(0,1fr)]"
+    >
       <span className="font-mono text-[11px] tabular-nums">
         {time}
         <span className="ml-1.5 text-muted-foreground">{relativeDeparture(row.deltaSec)}</span>
       </span>
 
-      {/* The flight number links to its flight page when it is a United number (UA/UAL); an
-          operating callsign (SKW5408) has no page and is plain text (src/lib/flight-link.js).
+      {/* The flight number links to its flight page when it is a United number (UA/UAL, or an
+          Express leg the feed marks United), printed as that page's ident; an operating callsign
+          the feed did not mark United (SKW5408) has no page and is plain text.
           The aircraft button is stretched over this column with a mouse, as the whole column
-          was the button before; on a touch screen over the whole row, so it keeps a finger-sized
-          target beside the number's own 44 px box. A link cannot sit inside a button. */}
+          was the button before; on a touch screen over the whole row, so the row stays one tap
+          target (the aircraft dialog) and only the flight numbers (`z-10`) and Track sit above
+          it. A link cannot sit inside a button. */}
       <div className="relative min-w-0 pointer-coarse:static">
         {/* Not `truncate`: its overflow clip would cut the link's touch box (a number is ≤ 7 characters). */}
         <span className="block font-mono text-xs font-semibold">
-          <FlightLink ident={row.flight_number || '—'} linkClassName="z-10" />
+          <FlightLink ident={flight || '—'} linkClassName="z-10" />
         </span>
         <button
           type="button"
@@ -78,15 +96,33 @@ function Row({
         </button>
       </div>
 
+      {/* A hub end links to its Schedule board with a mouse, where the aircraft button covers only
+          the flight-number column. On a touch screen the row is one tap target, so the hubs and the type
+          take no taps there (`finePointerOnly`); the board's own hub chips pick a hub. Any other
+          airport is plain text. */}
       <span className="font-mono text-[11px]">
-        {row.origin}
+        <HubLink code={row.origin} finePointerOnly className="z-10" />
         <span aria-hidden="true" className="mx-1 text-muted-foreground">
           →
         </span>
-        {row.destination || '???'}
+        {row.destination ? <HubLink code={row.destination} finePointerOnly className="z-10" /> : '???'}
       </span>
 
-      <span className="hidden truncate text-[11px] text-muted-foreground sm:inline">{row.type}</span>
+      {/* The tracker's words, linked by the type the fleet database has for this tail: N75436
+          prints "737-900" and is a 737-900ER. `truncate` is on the link, not this cell, so the
+          cell's overflow clip cannot cut the link's focus ring; inline-block keeps the link as
+          wide as its words, not the column. */}
+      <span className="hidden min-w-0 text-[11px] text-muted-foreground sm:block">
+        {row.type ? (
+          <TypeLink
+            typeCode={fleetTypeCodeForTail(row.tail, fleetByReg)}
+            finePointerOnly
+            className="inline-block max-w-full truncate align-top"
+          >
+            {row.type}
+          </TypeLink>
+        ) : null}
+      </span>
 
       {/* A long status ("SCHED · inbound on UA3508" + Track inbound) keeps a phone line of its
           own; SCHED or Airborne + Track shares the route's. */}
@@ -101,9 +137,18 @@ function Row({
             Airborne
           </span>
         ) : row.inbound ? (
-          // The aircraft is in the air on its inbound leg — this departure has not happened.
+          // The aircraft is in the air on its inbound leg — this departure has not happened. The
+          // inbound number is the live feed's, and that feed carries only United flights
+          // (/api/fr24-feed?airline=UAL), so the leg is United's: YX3568 reads UA3568, UAL3508
+          // reads UA3508 (`starlinkInboundLabel`).
           <span className="text-[10px] text-muted-foreground">
-            SCHED · inbound{row.inbound.flight ? ` on ${row.inbound.flight}` : ''}
+            SCHED · inbound
+            {inbound ? (
+              <>
+                {' on '}
+                <FlightLink ident={inbound} tone="quiet" linkClassName="z-10" />
+              </>
+            ) : null}
           </span>
         ) : (
           <span className="text-[10px] text-muted-foreground">SCHED</span>
@@ -116,7 +161,7 @@ function Row({
             title={
               row.airborne
                 ? `Track ${row.tail} on the live map`
-                : `Track ${row.tail}'s inbound flight${row.inbound?.flight ? ` ${row.inbound.flight}` : ''} on the live map`
+                : `Track ${row.tail}'s inbound flight${inbound ? ` ${inbound}` : ''} on the live map`
             }
           >
             <Radio aria-hidden="true" className="mr-1 inline size-3 align-[-2px]" />
@@ -140,6 +185,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
   emptyText,
   footer,
   tzAbbrev,
+  fleetByReg,
   onOpenAircraft,
   onTrack,
 }: {
@@ -157,6 +203,8 @@ export const DeparturesBoard = memo(function DeparturesBoard({
   /** `starlinkBoardFooter()`: the board's whole disclosure, with the schedule's real age. */
   footer: string;
   tzAbbrev: (hub: string) => string;
+  /** The fleet database by registration: a mainline tail's type links by it. */
+  fleetByReg: FleetByReg;
   onOpenAircraft: (reg: string) => void;
   onTrack: (row: BoardRow) => void;
 }) {
@@ -166,7 +214,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
         <div className="min-w-0">
           <h3 className="text-sm font-semibold">Hub Departures Board</h3>
           <p className="text-[11px] text-muted-foreground">
-            United Starlink aircraft departing the hubs · operating callsigns ·{' '}
+            United Starlink aircraft departing the hubs · United flight numbers ·{' '}
             <span id="sl-board-updated">{freshness}</span>
           </p>
         </div>
@@ -237,6 +285,7 @@ export const DeparturesBoard = memo(function DeparturesBoard({
                       key={`${row.tail}-${row.departure_ts}-${row.flight_number}`}
                       row={row}
                       tzAbbrev={tzAbbrev}
+                      fleetByReg={fleetByReg}
                       onOpenAircraft={onOpenAircraft}
                       onTrack={onTrack}
                     />

@@ -80,6 +80,9 @@ vi.mock('../src/app/state/prefs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/prefs')>()),
   usePrefs: () => ({ homeAirport: 'ORD' }) as unknown as PrefsValue,
 }));
+// The tab's names are in-place links (DashLink → useFollowDeepLink), which need the Schedule and UI
+// stores this file stubs; following one is tests/dash-link.test.tsx's subject, not this file's.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 vi.mock('../src/app/state/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/ui')>()),
   useUi: () =>
@@ -111,6 +114,16 @@ afterEach(() => {
 
 const expressRow = () => document.querySelector('#sl-bars [data-bar="Express"]') as HTMLElement;
 
+/**
+ * What a row shows: its text without the sr-only words a bar row carries as a button
+ * ("Show … aircraft in the roster below", Nov 12 2026).
+ */
+const shown = (el: HTMLElement) => {
+  const copy = el.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('.sr-only').forEach((node) => node.remove());
+  return copy.textContent?.trim().replace(/\s+/g, ' ') ?? '';
+};
+
 describe('one mainline total on the Fleet and Starlink tabs', () => {
   it("the Starlink tab's Mainline bar is the fleet database's count, not the tracker's", () => {
     render(<StarlinkView />);
@@ -124,7 +137,7 @@ describe('one mainline total on the Fleet and Starlink tabs', () => {
   it('without a fleet-summary the Express row is the equipped count: no bar, no percentage', () => {
     render(<StarlinkView />);
     const row = expressRow();
-    expect(row.textContent).toBe('Express2 equipped');
+    expect(shown(row)).toBe('Express 2 equipped');
     expect(row.textContent).not.toContain('%');
     expect(row.textContent).not.toContain('/ 4');
     expect(row.querySelector('.bg-bb-ok')).toBeNull();
@@ -150,7 +163,7 @@ describe('one mainline total on the Fleet and Starlink tabs', () => {
     render(<StarlinkView />);
     const row = expressRow();
     // 3 of the 6 two-cabin jets, never the tracker's 2 equipped over its 4.
-    expect(row.textContent).toBe('Express3 / 6 · 50%');
+    expect(shown(row)).toBe('Express 3 / 6 · 50%');
     expect(row.querySelector('.bg-bb-ok')).not.toBeNull();
     expect(document.getElementById('sl-bars-note')?.textContent).toBe(
       'Mainline: 2 of 8 aircraft in our fleet database · Express: per the Starlink tracker. ' +

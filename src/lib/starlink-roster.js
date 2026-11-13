@@ -7,6 +7,7 @@
 // The chart lives next door in starlink-chart.js; the recency badge, the integrity tripwire,
 // the hub-local time format and the board cap policy live in starlink-view.js.
 
+import { flightLink, unitedNumber } from './flight-link.js';
 import { starlinkShareCaption } from './fleet-utils.js';
 import { isRecentlyFound } from './starlink-view.js';
 
@@ -67,6 +68,69 @@ export function rosterOptions(aircraft) {
     types: [...types].sort(),
     operators: [...operators].sort(),
   };
+}
+
+/** @typedef {{search: string, fleet: string, type: string, operator: string, newOnly: boolean}} RosterFilters */
+
+/**
+ * The roster's filters at rest: what the controls show before anyone touches them.
+ * @type {Readonly<RosterFilters>}
+ */
+export const ROSTER_DEFAULT_FILTERS = Object.freeze({ search: '', fleet: '', type: '', operator: '', newOnly: false });
+
+/**
+ * The roster's filters after one of the hero's buttons: exactly what the button names, with every
+ * other filter back at rest (Nov 12 2026). Setting only the named filter could land on "No
+ * aircraft match your filters" behind a type, operator or search left over from before.
+ *
+ * @param {'Mainline'|'Express'|'new'} target  a bar's fleet, or the "+N NEW THIS WEEK" chip.
+ * @returns {RosterFilters}
+ */
+export function rosterFiltersShowing(target) {
+  if (target === 'new') return { ...ROSTER_DEFAULT_FILTERS, newOnly: true };
+  return { ...ROSTER_DEFAULT_FILTERS, fleet: target === 'Mainline' || target === 'Express' ? target : '' };
+}
+
+/**
+ * What the Starlink tab prints for a flight number (Nov 12 2026).
+ *
+ * One printed form for every United number on the tab: where the number has a flight page, the tab
+ * prints that page's ident, so the feed's mainline "UAL347" reads "UA347" and an Express leg the
+ * feed marks United ("SKW5415" with `airline: 'UA'`, `unitedNumber`) reads "UA5415". A number with
+ * no page prints exactly what the feed sent ("SKW5415" on a row not marked United, "UCA5004").
+ *
+ * The label is the one decision: `FlightLink` links what it is given when `flightLink` reads it,
+ * and a label is either a page's ident (which `flightLink` reads as itself) or a number it rejected.
+ *
+ * @param {unknown} printed  the number as the feed sent it.
+ * @param {{airline?: string} | null} [row]  the feed row it came from.
+ * @returns {string}
+ */
+export function starlinkFlightLabel(printed, row = null) {
+  const text = typeof printed === 'string' ? printed : '';
+  return flightLink(unitedNumber(text, row) ?? text)?.ident ?? text;
+}
+
+/**
+ * The live feed's rows are United's. The dashboard's live feed is `/api/fr24-feed?airline=UAL`,
+ * which carries only United flights: FR24's `airline=UAL` rows, plus the operator rows whose
+ * flight number is United's (`mergeUnitedFeed`, src/lib/united-feed.js); any other airline is a
+ * separate request no dashboard view makes. So a number on it is read as on a Starlink row marked
+ * United.
+ */
+const LIVE_FEED_ROW = Object.freeze({ airline: 'UA' });
+
+/**
+ * The departures board's "inbound on …" number: the flight the aircraft is flying now, from the
+ * live feed (`flightIATA`, else the callsign). That feed is United-only (`LIVE_FEED_ROW`), so the
+ * inbound leg is United's and an Express operator number FR24 prints on it reads as its United
+ * number: "YX3568" reads "UA3568" and links, as "UA4190" beside it does (Nov 12 2026 preview).
+ *
+ * @param {unknown} printed  the live feed's number for the inbound leg.
+ * @returns {string}
+ */
+export function starlinkInboundLabel(printed) {
+  return starlinkFlightLabel(printed, LIVE_FEED_ROW);
 }
 
 /** 30 minutes: a flight that has just pushed back is still "the next one" on this board. */
@@ -222,12 +286,16 @@ export function starlinkBoardEmptyText({ hub, windowH, latestDepartureTs, nowSec
 /**
  * The departures board's footer, with the schedule's real age in place of the fixed "served
  * through The Blue Board's cache (up to 6h)" (false whenever the tracker is down: 22 h on Nov 11).
+ * Its lead says whose numbers the board prints: the ones shown as UA are United's (a number with no
+ * flight page prints as the feed sent it, `starlinkFlightLabel`), with the operating carrier named
+ * under each. It used to say the numbers were the operating carrier's callsigns, which stopped
+ * being true when Express legs began printing their United number (Nov 12 2026).
  * @param {{syncedAt?: string|null, servedFrom?: string|null, nowMs?: number}} input
  * @returns {string}
  */
 export function starlinkBoardFooter({ syncedAt, servedFrom, nowMs = Date.now() } = {}) {
   const { ago, stale } = starlinkScheduleAge({ syncedAt, servedFrom, nowMs });
-  const lead = 'A NOC departures board, not a passenger FIDS. Callsigns are the operating carrier (SkyWest, Republic, Mesa…), not United marketing flight numbers.';
+  const lead = "A NOC departures board, not a passenger FIDS. Flight numbers shown as UA are United's; the name under each is the carrier that operates it (SkyWest, Republic, Mesa…).";
   const times = !ago
     ? 'Times are scheduled.'
     : stale

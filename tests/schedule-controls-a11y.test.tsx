@@ -11,16 +11,16 @@ import { EMPTY_FILTERS } from '@/app/views/schedule/useBoardModel';
 
 afterEach(cleanup);
 
-function renderControls(onDir = vi.fn()) {
+function renderControls(onDir = vi.fn(), { hub = 'ORD', desktop = true }: { hub?: string; desktop?: boolean } = {}) {
   render(
     <ScheduleControls
-      hub="ORD"
+      hub={hub}
       dir="departures"
       day={0}
       filters={EMPTY_FILTERS}
       aircraftOptions={[]}
       drawerOpen={false}
-      desktop
+      desktop={desktop}
       loading={false}
       showJumpToNow
       onHub={vi.fn()}
@@ -70,5 +70,36 @@ describe('ScheduleControls a11y', () => {
     const rem = phoneWidth === 'w-44' ? 11 : Number((phoneWidth.match(/^w-\[(\d+(?:\.\d+)?)rem\]$/) || [])[1]);
     expect(Number.isFinite(rem)).toBe(true);
     expect(input.placeholder.length * 16 * 0.6 + 24).toBeLessThanOrEqual(rem * 16);
+  });
+});
+
+describe('the Schedule header\'s one door to the hub guide', () => {
+  it('names the hub beside the board selector and goes to its hub page, a plain link that leaves the dashboard', () => {
+    renderControls();
+    const link = screen.getByRole('link', { name: 'ORD hub guide' });
+    expect(link.getAttribute('href')).toBe('/hubs/ord');
+    expect(link.getAttribute('target')).toBeNull();
+    // Quiet: body colour with an underline, not link colour (one link-coloured link per row).
+    const classes = link.className.split(/\s+/);
+    expect(classes).not.toContain('text-primary');
+    expect(classes).toContain('underline');
+    // 44 px on touch, relaxed only for a mouse at md+ (DESIGN.md Responsive).
+    expect(classes).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
+    // Beside the hub selector, in the same group.
+    const select = screen.getByRole('combobox', { name: 'Schedule hub' });
+    expect(select.nextElementSibling).toBe(link);
+  });
+
+  it('follows the board: DEN links to the DEN guide', () => {
+    renderControls(vi.fn(), { hub: 'DEN' });
+    expect(screen.getByRole('link', { name: 'DEN hub guide' }).getAttribute('href')).toBe('/hubs/den');
+  });
+
+  it('shows no door for "All hubs", and none in the phone toolbar (its rows are full; the stat strip carries it there)', () => {
+    renderControls(vi.fn(), { hub: '' });
+    expect(screen.queryByRole('link', { name: /hub guide/ })).toBeNull();
+    cleanup();
+    renderControls(vi.fn(), { desktop: false });
+    expect(screen.queryByRole('link', { name: /hub guide/ })).toBeNull();
   });
 });

@@ -4,6 +4,25 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.29.0] - 2026-11-12
+
+**Names in the Starlink tab are links, Express flights show their United number, and the hub chips open the schedule board.**
+
+### Changed
+- **The hub chips under the header open the schedule board.** A chip such as "ORD 87%" now opens O'Hare's schedule board in the dashboard, on its departures, where the flights behind that figure are listed. It used to open the O'Hare hub guide, which is now one link further, "ORD hub guide" in the schedule board's header.
+- **Express flights show United's flight number.** The Starlink departures board and roster printed the regional carriers' own numbers, such as SkyWest's SKW5415. Where the Starlink feed marks a flight as United's, it now reads UA5415 and links to that flight's page; the carrier that flies it is still named on the row. On November 12, 83 of these flights were checked against the site's flight history by route and departure time: 82 matched, all 82 with the same number. A further 42 later flights, written with the codes YV, G7 and YX, were checked a weaker way: the same United number had flown the same route within the past week, 42 of 42. The live map and the ticker still show callsigns as they are sent.
+- The departures board's notes now say "United flight numbers" and "Flight numbers shown as UA are United's", instead of calling them the operating carrier's callsigns.
+
+### Added
+- **Click a name in the Starlink tab.** The flight numbers in the roster, in each aircraft's upcoming flights and in "inbound on UA3508" now open their flight pages, as the departures board's already did. A United hub at either end of a route opens that hub's schedule board. A mainline aircraft type (737-900ER, A321neo…) opens the Fleet tab showing that type, and the type comes from the fleet database for that aircraft: a jet the Starlink tracker lists as a "737-900" goes to the 737-900ER when that is what it is. A tail in the verification ledger opens the aircraft. Other airports, regional types and operators stay plain text.
+- **One blue link per row, at most.** Only the thing a row is about is blue: the flight number, or a tail in the ledger. The row's other links are in the text's own colour with a faint underline that strengthens on hover. On a phone, tapping a departures row still opens the aircraft; the hubs and the type in it link with a mouse.
+- **The Mainline and Express bars and "+N new this week" are buttons.** Each one shows those aircraft in the roster below, with the roster's other filters cleared, and scrolls down to it.
+- **"About the 737 MAX 9."** With one type picked in the Fleet tab, the end of the filter row links to that type's fleet page.
+- **No reload.** A link that stays inside the dashboard opens its tab, schedule board or aircraft without reloading the page. A hub opens on its departures, whichever direction the board was last left on. A link into the Fleet tab clears the tab's search and filters, sets its own, and scrolls to the list. After a link that changes the tab, Back returns to the tab you were on. A link inside a tab moves keyboard focus to the tab it opens, and a screen reader hears where it went ("Schedule, ORD"). Cmd-click, Ctrl-click and a middle click still open a new tab, and every link has a real address to copy.
+
+### Fixed
+- **UAL347 and UA1982 on one board.** The Starlink tab printed mainline flight numbers in two forms, as the feed sent them. Every number that links now reads UA.
+
 ## [1.28.2] - 2026-11-12
 
 **The Starlink tab: what the Express bar counts, United's own target, and Alaska with Hawaiian.**

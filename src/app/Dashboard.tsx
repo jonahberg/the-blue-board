@@ -42,6 +42,7 @@ import { BriefProvider } from './state/brief';
 import { useDeepLinks } from './state/deep-links';
 import { FeedProvider, useFeed } from './state/feed';
 import { FleetProvider } from './state/fleet';
+import { FollowProvider } from './state/follow-link';
 import { IropsProvider } from './state/irops';
 import { PrefsProvider, usePrefs } from './state/prefs';
 import { ScheduleProvider, useSchedule } from './state/schedule';
@@ -163,6 +164,9 @@ function DashboardShell() {
             key={id}
             value={id}
             forceMount
+            // A followed link that hides the panel holding focus moves focus to the panel it opens
+            // (state/follow-link.tsx), found by this; the Fleet view has tab panels of its own.
+            data-tab-panel={id}
             // `relative` makes the panel the containing block for absolutely positioned
             // descendants (Tailwind `sr-only` captions/cells in the Stats and Starlink tables);
             // without it they escaped the scroller and made the whole page scrollable.
@@ -231,14 +235,19 @@ function DashboardShell() {
   );
 }
 
-/** Seeds the Schedule tab's default board from the viewer's home hub. */
+/**
+ * Seeds the Schedule tab's default board from the viewer's home hub. `FollowProvider` (an
+ * in-place link's `follow`) reads the UI and Schedule stores, so it sits just inside the second.
+ */
 function ShellWithPrefs() {
   const { homeAirport } = usePrefs();
   return (
     <ScheduleProvider defaultHub={homeAirport || 'ORD'}>
-      <WeatherProvider>
-        <DashboardShell />
-      </WeatherProvider>
+      <FollowProvider>
+        <WeatherProvider>
+          <DashboardShell />
+        </WeatherProvider>
+      </FollowProvider>
     </ScheduleProvider>
   );
 }
