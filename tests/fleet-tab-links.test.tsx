@@ -618,3 +618,38 @@ describe('Fleet Health', () => {
     expect(healthCounts.querySelectorAll('button, a')).toHaveLength(0);
   });
 });
+
+describe('Composition and the delivery timeline', () => {
+  it('the route callouts are body text, not link colour, and link nothing', () => {
+    mount();
+    const callout = screen.getByText('ORD-LAX · EWR-SFO · West Coast-HNL');
+    expect(classesOf(callout)).not.toContain('text-primary');
+    expect(classesOf(callout)).toContain('text-foreground');
+    expect(callout.querySelector('a')).toBeNull();
+  });
+
+  it('the newest and oldest tails are quiet links to their aircraft dialog; the average is body colour', () => {
+    mount();
+    const stats = screen.getByText(/^Average:/);
+    expect(stats.querySelector('.text-primary')).toBeNull();
+    const [newest, oldest] = within(stats).getAllByRole('link');
+    expect(newest.getAttribute('href')).toBe('/?aircraft=N37502');
+    expect(oldest.getAttribute('href')).toBe('/?aircraft=N100UA');
+    for (const link of [newest, oldest]) {
+      expect(isQuiet(link)).toBe(true);
+      expect(classesOf(link)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
+    }
+    expect(stats.textContent).toContain('Newest: N37502 (2018)');
+    expect(fireEvent.click(oldest)).toBe(false);
+    expect(seen.ui!.aircraftReg).toBe('N100UA');
+  });
+
+  it('the variant cards stay the type filter\'s toggles', () => {
+    mount();
+    const card = typeCard('A319');
+    expect(card.tagName).toBe('BUTTON');
+    fireEvent.click(card);
+    expect(card.getAttribute('aria-pressed')).toBe('true');
+    expect(typeSelect().textContent).toContain('A319');
+  });
+});
