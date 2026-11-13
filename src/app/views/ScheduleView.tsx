@@ -13,6 +13,14 @@
  *    a hub switch is the more annoying failure.
  *  - The board loads from an effect keyed on the selection, so a deep link (`?hub=DEN`), the
  *    search palette's `goto` and a click on the hub select all take the same path.
+ *  - A hub link that ARRIVES here from another tab or an overlay (`scheduleLink`, a new `seq`)
+ *    clears every filter, both copies, and Schedule's own "Ask the board" answer (never another
+ *    view's), so the board lands where a cold load of `/?tab=schedule&hub=DEN` lands (the links
+ *    plan, ruling 9). It also puts the sort back to Time ascending, where a cold load starts: the
+ *    one sort with the NOW line and the scroll to it (Fleet keeps its sort, which anchors
+ *    nothing). The follow has already set the board itself. A hub link followed while Schedule is
+ *    showing does not bump `seq`: the status, type and search filters and the sort stay (ruling
+ *    2), and a new board resets its four contextual filters as any board change does.
  *  - AeroDataBox is credited before any other provider in the footer — the schedules are
  *    theirs, and crediting Flightradar24 here was a ToS violation. FR24 credit belongs to
  *    live aircraft positions only.
@@ -58,6 +66,9 @@ import type { BoardFilters, RowModel, SortColumn } from './schedule/useBoardMode
 /** How long a filter change waits before the board is recomputed. */
 const RENDER_DEBOUNCE_MS = 120;
 
+/** The board's opening sort: the only one with the NOW divider and the scroll to it. */
+const DEFAULT_SORT: { column: SortColumn; asc: boolean } = { column: 'time', asc: true };
+
 /** Contextual filters describe a BOARD, so they reset when the board changes. */
 const CONTEXTUAL_FILTERS = {
   routeType: '',
@@ -82,10 +93,7 @@ export default function ScheduleView() {
 
   const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
   const [debouncedFilters, setDebouncedFilters] = useState<BoardFilters>(EMPTY_FILTERS);
-  const [sort, setSort] = useState<{ column: SortColumn; asc: boolean }>({
-    column: 'time',
-    asc: true,
-  });
+  const [sort, setSort] = useState<{ column: SortColumn; asc: boolean }>(DEFAULT_SORT);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const tableRef = useRef<ScheduleTableHandle>(null);
 
@@ -116,6 +124,45 @@ export default function ScheduleView() {
 
   // "Ask the board" (⌘K). Called after the reset above, so the filters it sets survive the board change.
   const ask = useAskSchedule({ hub, dir, day, setCurrent: schedule.setCurrent, filters, setFilters });
+
+  // A hub link arrived from another tab (`scheduleLink`; contract: act on a new `seq` only, keyed
+  // on `seq`, never `hub`). Every filter goes, both copies, not only status, type and search: on
+  // a board already showing that hub, Departures and its default day, nothing else resets the four
+  // contextual filters. The sort goes back to Time ascending, where a cold load starts and the only
+  // sort with the NOW line. Schedule's own answer to "Ask the board" goes too, and only Schedule's:
+  // the store holds one answer for whichever view asked, and a Live answer must survive a link
+  // followed out of Live (as Fleet guards its own, `askActive`).
+  //
+  // A cold load of today's board scrolls to NOW, and so does an arrival. The store raises that
+  // scroll itself only when a board loads fresh (`autoScroll`, the effect below), so an arrival at a
+  // board already loaded this session asks for it here (`arrivalScroll`): once, on the commit after
+  // this reset, when the default sort and the empty filters are the ones on screen. A board that is
+  // not loaded yet loads fresh and the store's own scroll runs, so the arrival adds none.
+  //
+  // The effect's first run skips the reset. The view is new then: the first arrival mounts it in
+  // the same commit, or the error boundary's "Try again" remounts it. Its filters are empty by
+  // construction, and an answer re-applying itself in that same commit (`useAskSchedule`) must not
+  // be reset over. It still asks for the scroll: a first visit through a hub link to a board the
+  // idle preload already loaded (it raises no scroll) must land on NOW as a cold load does. A
+  // remount replays the last `seq`, so "Try again" on today's board may also scroll to NOW once;
+  // that is accepted (it is where a fresh view of that board starts).
+  const { scheduleLink } = ui;
+  const seenLinkSeq = useRef(0);
+  const linkEffectRan = useRef(false);
+  const [arrivalScroll, setArrivalScroll] = useState<{ key: string } | null>(null);
+  const { active: askActive, clear: clearAsk } = ask;
+  useEffect(() => {
+    const fresh = !linkEffectRan.current;
+    linkEffectRan.current = true;
+    if (!scheduleLink || scheduleLink.seq === seenLinkSeq.current) return;
+    seenLinkSeq.current = scheduleLink.seq;
+    if (boards[key]) setArrivalScroll({ key });
+    if (fresh) return;
+    setFilters(EMPTY_FILTERS);
+    setDebouncedFilters(EMPTY_FILTERS);
+    setSort(DEFAULT_SORT);
+    if (askActive) clearAsk();
+  }, [scheduleLink, askActive, clearAsk]);
 
   const dayStartSec = useMemo(() => {
     if (!hub) return 0;
@@ -204,6 +251,16 @@ export default function ScheduleView() {
     lastAnchored.current = schedule.autoScroll!.n;
     tableRef.current?.scrollToNow(false);
   }, [schedule.autoScroll, key, ui.tab, model.firstFutureIndex]);
+
+  // An arrival at a board already loaded this session (set by the `scheduleLink` effect above):
+  // scroll to NOW once, on the commit where the arrival's reset is on screen, then never again for
+  // it, whatever lands later. Nothing to scroll to on a board with no NOW line (not today's).
+  useEffect(() => {
+    if (!arrivalScroll) return;
+    setArrivalScroll(null);
+    if (arrivalScroll.key !== key || ui.tab !== 'schedule' || model.firstFutureIndex < 0) return;
+    tableRef.current?.scrollToNow(false);
+  }, [arrivalScroll, key, ui.tab, model.firstFutureIndex]);
 
   // The search palette asked for a row. The board may still be loading, so this retries on
   // each render until the row exists (or the viewer navigates away and clears it).
@@ -383,7 +440,6 @@ export default function ScheduleView() {
             onSort={onSort}
             isWatched={watch.isWatched}
             onToggleWatch={onToggleWatch}
-            onOpenAircraft={ui.openAircraft}
             onExplainDelay={ui.openDelayExplain}
             boardAsOf={asOf}
             windowKey={windowKey}

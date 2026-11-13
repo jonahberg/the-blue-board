@@ -8,6 +8,24 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ScheduleTable } from '@/app/views/schedule/ScheduleTable';
 import type { EmptyReason, ScheduleTableHandle } from '@/app/views/schedule/ScheduleTable';
 import type { RowModel } from '@/app/views/schedule/useBoardModel';
+import { FollowProvider } from '@/app/state/follow-link';
+import { ScheduleProvider } from '@/app/state/schedule';
+import { UiProvider } from '@/app/state/ui';
+
+// The rows' names are links followed in place (links everywhere, part 2), so the board is mounted in
+// the real UI, Schedule and follow stores; the Schedule store's watch collaborators are stubbed.
+vi.mock('@/app/state/watch', () => ({ useWatch: () => ({ watched: [] }) }));
+vi.mock('@/app/state/watch-alerts', () => ({ useWatchAlerts: () => ({ observe: () => {} }) }));
+
+function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <UiProvider>
+      <ScheduleProvider defaultHub="ORD">
+        <FollowProvider>{children}</FollowProvider>
+      </ScheduleProvider>
+    </UiProvider>
+  );
+}
 
 afterEach(cleanup);
 
@@ -32,9 +50,11 @@ function rowModel(i: number, patch: Partial<RowModel> = {}): RowModel {
     actualFromRunway: false,
     routeLine: 'ORD → DEN',
     routeSub: null,
+    routeEnds: { from: { text: 'ORD', hub: null }, to: { text: 'DEN', hub: null } },
     acCode: 'B738',
     acText: '',
     acShort: '',
+    typeCode: null,
     reg: '',
     regFromLive: false,
     gate: '—',
@@ -43,6 +63,8 @@ function rowModel(i: number, patch: Partial<RowModel> = {}): RowModel {
     swap: null,
     special: null,
     faaContext: null,
+    faaParts: [],
+    starlinkHref: null,
     delay: { kind: 'none' },
     watchRoute: 'ORD→DEN',
     effectiveTime: 0,
@@ -60,6 +82,7 @@ function renderTable({
 } = {}) {
   const ref = createRef<ScheduleTableHandle>();
   render(
+    <Providers>
     <TooltipProvider>
       <ScheduleTable
         ref={ref}
@@ -71,7 +94,6 @@ function renderTable({
         onSort={vi.fn()}
         isWatched={() => false}
         onToggleWatch={onToggleWatch}
-        onOpenAircraft={vi.fn()}
         onExplainDelay={vi.fn()}
         boardAsOf="9:17 PM CDT"
         windowKey="ORD:departures:0"
@@ -80,7 +102,8 @@ function renderTable({
         emptySubject="tomorrow's EWR arrivals (Mon, Sep 28)"
         onClearFilters={onClearFilters}
       />
-    </TooltipProvider>,
+    </TooltipProvider>
+    </Providers>,
   );
   return ref;
 }

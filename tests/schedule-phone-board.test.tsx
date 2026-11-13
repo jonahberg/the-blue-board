@@ -10,6 +10,24 @@ import { ScheduleTable } from '@/app/views/schedule/ScheduleTable';
 import type { ScheduleTableHandle } from '@/app/views/schedule/ScheduleTable';
 import { SchedulePhoneRow } from '@/app/views/schedule/SchedulePhoneRow';
 import type { RowModel } from '@/app/views/schedule/useBoardModel';
+import { FollowProvider } from '@/app/state/follow-link';
+import { ScheduleProvider } from '@/app/state/schedule';
+import { UiProvider } from '@/app/state/ui';
+
+// The rows' names are links followed in place (links everywhere, part 2), so the board is mounted in
+// the real UI, Schedule and follow stores; the Schedule store's watch collaborators are stubbed.
+vi.mock('@/app/state/watch', () => ({ useWatch: () => ({ watched: [] }) }));
+vi.mock('@/app/state/watch-alerts', () => ({ useWatchAlerts: () => ({ observe: () => {} }) }));
+
+function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <UiProvider>
+      <ScheduleProvider defaultHub="ORD">
+        <FollowProvider>{children}</FollowProvider>
+      </ScheduleProvider>
+    </UiProvider>
+  );
+}
 
 afterEach(cleanup);
 
@@ -33,9 +51,11 @@ function rowModel(i: number, patch: Partial<RowModel> = {}): RowModel {
     actualFromRunway: false,
     routeLine: 'ROC → ORD',
     routeSub: 'Rochester',
+    routeEnds: { from: { text: 'ROC', hub: null }, to: { text: 'ORD', hub: null } },
     acCode: 'B753',
     acText: 'Boeing 757-300',
     acShort: '757-300',
+    typeCode: null,
     reg: 'N57868',
     regFromLive: false,
     gate: 'T1',
@@ -44,6 +64,8 @@ function rowModel(i: number, patch: Partial<RowModel> = {}): RowModel {
     swap: null,
     special: null,
     faaContext: null,
+    faaParts: [],
+    starlinkHref: null,
     delay: { kind: 'none' },
     watchRoute: 'ROC→ORD',
     effectiveTime: 0,
@@ -70,9 +92,11 @@ function renderRow(row: RowModel, overrides: Partial<Parameters<typeof ScheduleP
     ...overrides,
   };
   render(
+    <Providers>
     <ol>
       <SchedulePhoneRow {...props} />
-    </ol>,
+    </ol>
+    </Providers>,
   );
   return props;
 }
@@ -320,6 +344,7 @@ function renderBoard(rows: RowModel[], dividerIndex: number) {
   const ref = createRef<ScheduleTableHandle>();
   const onOpenFlight = vi.fn();
   render(
+    <Providers>
     <TooltipProvider>
       <ScheduleTable
         ref={ref}
@@ -333,7 +358,6 @@ function renderBoard(rows: RowModel[], dividerIndex: number) {
         onSort={vi.fn()}
         isWatched={() => false}
         onToggleWatch={vi.fn()}
-        onOpenAircraft={vi.fn()}
         onExplainDelay={vi.fn()}
         boardAsOf="9:17 PM CDT"
         windowKey="ORD:departures:0"
@@ -341,7 +365,8 @@ function renderBoard(rows: RowModel[], dividerIndex: number) {
         emptySubject="today's ORD departures"
         onClearFilters={vi.fn()}
       />
-    </TooltipProvider>,
+    </TooltipProvider>
+    </Providers>,
   );
   return { ref, onOpenFlight };
 }

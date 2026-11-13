@@ -36,7 +36,6 @@ function FiltersSheet({ autoFocus }: { autoFocus?: (event: Event) => void }) {
           onPhaseFilter={noop}
           onClearFilters={noop}
           onSelect={noop}
-          onGoToSchedule={noop}
         />
       </SheetContent>
     </Sheet>

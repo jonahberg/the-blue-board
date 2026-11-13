@@ -280,7 +280,8 @@ export function ScheduleControls({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-primary">
+        {/* Body colour: link colour means link (links everywhere), and a heading is not one. */}
+        <h2 className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-foreground">
           <CalendarDays aria-hidden="true" className="size-3.5" /> Flight Schedule
         </h2>
 

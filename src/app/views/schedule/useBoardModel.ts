@@ -25,7 +25,7 @@ import { effectiveRowTime, firstFutureIndex, nowDividerIndex } from '@/lib/board
 import { getScheduleRiskContext } from '@/lib/delay-explain-context.js';
 import { HUB_COORDINATES, HUB_RISK_PROFILES, computeDelayRiskModel, riskTimesForRow } from '@/lib/delay-risk.js';
 import { getTypicalFleetStats } from '@/lib/equipment-swaps.js';
-import { getFAADelayContext } from '@/lib/faa-context.js';
+import { faaContextText } from '@/lib/faa-context.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
 import { withFleetType } from '@/lib/aircraft-type.js';
 import { applySightingsToBoard, sightingsFromLiveFeed } from '@/lib/reg-overlay.js';
@@ -34,7 +34,7 @@ import { matchesScheduleFilters } from '@/lib/schedule-board-filters.js';
 import { hubTzAbbrev } from '@/lib/schedule-load.js';
 import { regMatchesModel } from '@/lib/schedule-reg-guard.js';
 import { getScheduleFleetFamily } from '@/lib/schedule-filters.js';
-import { buildScheduleRow, uniqueRowKeys } from '@/lib/schedule-row-model.js';
+import { buildScheduleRow, scheduleFaaParts, uniqueRowKeys } from '@/lib/schedule-row-model.js';
 import { classifySchedStatus } from '@/lib/schedule-status.js';
 import { analyzeSwapImpact } from '@/lib/swap-impact.js';
 import { formatSchedTime } from '@/lib/schedule-row-model.js';
@@ -123,6 +123,12 @@ export type DelayCell =
     }
   | { kind: 'risk'; risk: RiskModel; context: Record<string, unknown> };
 
+/** One FAA program in a row's FAA line, its airport code apart (`scheduleFaaParts`). */
+export type FaaPart = { lead: string; code: string; tail: string; kind: 'weather' | 'nas' };
+
+/** One end of a row's route as printed, and the hub it links to (null: plain). `routeEnds`. */
+export type RouteEnd = { text: string; hub: string | null };
+
 export type RowModel = {
   /** The provider's flight number, raw: the row key, the watch target, the deep link. */
   ident: string;
@@ -143,9 +149,13 @@ export type RowModel = {
   actualFromRunway: boolean;
   routeLine: string;
   routeSub: string | null;
+  /** The route's ends: the board's own hub is plain, another hub links to its board. */
+  routeEnds: { from: RouteEnd; to: RouteEnd };
   acCode: string;
   acText: string;
   acShort: string;
+  /** The fleet type the row's type links to, by the tail only (`fleetTypeCodeFor`); null: plain. */
+  typeCode: string | null;
   reg: string;
   /** The tail came from live tracking, not the schedule feed — the row says so. */
   regFromLive: boolean;
@@ -158,9 +168,13 @@ export type RowModel = {
    * not know — the Starlink roster, when `badge` is the literal 'Starlink' and there is no cabin.
    */
   fleet: { badge: string; starlink: boolean; enrich: string; source: 'fleet' | 'express' | 'starlink-roster' } | null;
+  /** The row's ⚡ Starlink mark links here (the Starlink tab); null when the tail has none. */
+  starlinkHref: string | null;
   swap: SwapModel | null;
   special: string | null;
   faaContext: string | null;
+  /** `faaContext` as parts, each airport code apart with the status link it takes. */
+  faaParts: FaaPart[];
   delay: DelayCell;
   watchRoute: string;
   effectiveTime: number;
@@ -511,14 +525,16 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
       const change = swapByFlight.get(
         (row as FlightShape).identification?.number?.default || '',
       );
-      const faaContext =
+      // The FAA line as parts, so each airport code in it can link to where its status is shown.
+      const faaParts =
         displayCls(status) === 'delayed'
-          ? ((getFAADelayContext(
+          ? (scheduleFaaParts(
               faaIndex as Record<string, object>,
               (row as FlightShape).airport?.origin?.code?.iata || '',
               (row as FlightShape).airport?.destination?.code?.iata || '',
-            ) as string) || null)
-          : null;
+            ) as FaaPart[])
+          : [];
+      const faaContext = faaParts.length ? (faaContextText(faaParts) as string) : null;
 
       return buildScheduleRow(row, {
         hub,
@@ -542,6 +558,7 @@ export function useBoardModel(input: BoardModelInput): BoardModel {
         expressByReg,
         special,
         faaContext,
+        faaParts,
         hubOtp,
         weatherOpsByHub,
         iropsHubRates,

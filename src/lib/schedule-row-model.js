@@ -26,10 +26,14 @@ import { iataForAirportName, isPlaceholderAirportName } from './airport-codes.js
 import { boardTimeEvidence } from './board-delay.js';
 import { formatDelayMinutes } from './delay-format.js';
 import { ICAO_TO_FLEET_TYPE } from './equipment-swaps.js';
+import { faaDelayContextParts } from './faa-context.js';
+import { fleetTypeCodeFor } from './fleet-type-link.js';
 import { normalizeWifi } from './fleet-utils.js';
+import { hubLink, hubStatusLink } from './hub-link.js';
 import { getUnitedTerminal } from './hub-terminals.js';
 import { isPlausibleDelta } from './schedule-plausibility.js';
 import { displayScheduleStatus } from './status-display.js';
+import { STARLINK_TAB_HREF } from './tab-links.js';
 
 /** A delta smaller than this is noise, not a delay worth a second line in the time cell. */
 export const ACTUAL_LINE_THRESHOLD_MINUTES = 5;
@@ -143,16 +147,66 @@ export function displayFlightIdent(ident) {
  */
 export function routeCell(flight, hub, dir) {
   const isDep = dir !== 'arrivals';
-  const endpoint = isDep ? flight?.airport?.destination : flight?.airport?.origin;
-  // Codes, not cities (live audit Oct 4 2026: "San Francisco → DEN" beside "SFO → DEN"): a missing
-  // code is recovered from an unambiguous airport name, and a placeholder name ("Unknown") is no name.
-  const name = isPlaceholderAirportName(endpoint?.name) ? '' : shortAirportName(endpoint);
-  const code = endpoint?.code?.iata || iataForAirportName(endpoint?.name);
-  const primary = code || name || '—';
+  const { code, name, primary } = otherEnd(flight, dir);
   return {
     routeLine: isDep ? `${hub} → ${primary}` : `${primary} → ${hub}`,
     routeSub: code && name ? name : null,
   };
+}
+
+/**
+ * The end of the route that is not the board's hub: its code, its short name and what the route
+ * prints for it (`primary`). One reading for `routeCell` and `routeEnds`, so the link and the
+ * printed line cannot disagree.
+ */
+function otherEnd(flight, dir) {
+  const endpoint = dir !== 'arrivals' ? flight?.airport?.destination : flight?.airport?.origin;
+  // Codes, not cities (live audit Oct 4 2026: "San Francisco → DEN" beside "SFO → DEN"): a missing
+  // code is recovered from an unambiguous airport name, and a placeholder name ("Unknown") is no name.
+  const name = isPlaceholderAirportName(endpoint?.name) ? '' : shortAirportName(endpoint);
+  const code = endpoint?.code?.iata || iataForAirportName(endpoint?.name);
+  return { code, name, primary: code || name || '—' };
+}
+
+/**
+ * The route's two ends as the board prints them (`routeLine` is `${from.text} → ${to.text}`), each
+ * with the hub it links to, or null when it prints plain (links everywhere, part 2).
+ *
+ *  - The board's own hub is plain: a link to the board already showing does nothing (the links
+ *    plan, ruling 1).
+ *  - The other end links to its own Schedule board when it is one of the nine hubs and not the
+ *    board's own; any other airport, a name printed for a missing code, and the dash are plain.
+ *
+ * @param {object} flight
+ * @param {string} hub  the board's hub.
+ * @param {('departures'|'arrivals')} dir
+ * @returns {{from: {text: string, hub: string|null}, to: {text: string, hub: string|null}}}
+ */
+export function routeEnds(flight, hub, dir) {
+  const { code, primary } = otherEnd(flight, dir);
+  const own = String(hub || '').trim().toUpperCase();
+  const linked = code ? hubLink(code, 'dashboard') : null;
+  const board = { text: hub, hub: null };
+  const other = { text: primary, hub: linked && linked.code !== own ? linked.code : null };
+  return dir !== 'arrivals' ? { from: board, to: other } : { from: other, to: board };
+}
+
+/**
+ * The FAA context for a Schedule row as parts (`faaDelayContextParts`), each with the status link
+ * its airport code takes (links everywhere, part 2): a hub's code goes to its Weather card
+ * (`kind: 'weather'`), any other airport's to the NAS status panel, which lists programs at every
+ * airport (`kind: 'nas'`). `faaContextText` joins them into the row's `faaContext` sentence.
+ *
+ * @param {Record<string, object>} faaIndex
+ * @param {string|null|undefined} originIata
+ * @param {string|null|undefined} destIata
+ * @returns {Array<{lead: string, code: string, tail: string, kind: 'weather'|'nas'}>}
+ */
+export function scheduleFaaParts(faaIndex, originIata, destIata) {
+  return faaDelayContextParts(faaIndex, originIata, destIata).map((part) => ({
+    ...part,
+    kind: hubStatusLink(part.code, 'weather') ? 'weather' : 'nas',
+  }));
 }
 
 /**
@@ -549,6 +603,7 @@ export function buildScheduleRow(flight, ctx) {
     expressByReg = {},
     special = new Map(),
     faaContext = null,
+    faaParts = [],
     hubOtp = {},
     weatherOpsByHub = {},
     iropsHubRates = {},
@@ -567,6 +622,7 @@ export function buildScheduleRow(flight, ctx) {
 
   const { routeLine, routeSub } = routeCell(flight, hub, dir);
   const { acCode, acText, acShort } = aircraftCell(flight);
+  const fleet = fleetCell(reg, fleetByReg, starlinkTails, expressByReg);
   const specialEntry = reg ? special.get(reg.replace('-', '')) || special.get(reg) : undefined;
   const delay = delayCell({
     statusKey: status.key,
@@ -608,18 +664,28 @@ export function buildScheduleRow(flight, ctx) {
     actualFromRunway: evidence.actualFromRunway,
     routeLine,
     routeSub,
+    // Links everywhere, part 2: the same route as two ends, each with the hub it links to or null.
+    routeEnds: routeEnds(flight, hub, dir),
     acCode,
     acText,
     acShort,
+    // The fleet type the row's type links to: by the tail only, never the feed's ICAO code or text
+    // (the links plan, ruling 5). Null with no tail, an unknown tail, or before the database loads.
+    typeCode: fleetTypeCodeFor({ reg, fleetByReg }),
     reg,
     regFromLive: isRegFromLiveFeed(flight, reg),
     regPending,
     gate: terminalGateCell(flight, dir),
     status,
-    fleet: fleetCell(reg, fleetByReg, starlinkTails, expressByReg),
+    fleet,
+    // The row's ⚡ Starlink mark links to the Starlink tab, once per row (the first mention: the
+    // Reg cell's detail line on a desktop, the aircraft line on a phone).
+    starlinkHref: fleet?.starlink ? STARLINK_TAB_HREF : null,
     swap: swapCell(swapChange, reg, swapImpacts),
     special: specialEntry ? specialEntry.name : null,
     faaContext,
+    // `faaContext` as parts (`scheduleFaaParts`), so each airport code can link to its status.
+    faaParts: Array.isArray(faaParts) ? faaParts : [],
     delay:
       delay.kind === 'risk'
         ? {
