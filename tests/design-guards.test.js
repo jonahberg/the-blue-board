@@ -139,8 +139,8 @@ const PLAIN_TOO = new Set(['FlightLink', 'TailLink', 'HubLink', 'TypeLink']);
 
 /** The utility a class names, without its variants (`hover:`, `pointer-coarse:`) or `!`. */
 const utility = (cls) => cls.split(':').pop().replace(/^!/, '');
-/** `text-primary` and `text-primary/80`; not `text-primary-foreground`. */
-const LINK_COLOUR = (u) => /^text-primary(?:\/\d+)?$/.test(u);
+/** `text-primary`, `text-primary/80` and `text-[var(--color-primary)]`; not `text-primary-foreground`. */
+const LINK_COLOUR = (u) => /^text-primary(?:\/\d+)?$/.test(u) || /^text-\[var\(--(?:color-)?primary\)\]$/.test(u);
 /** `underline`; not `underline-offset-2`, `no-underline` or `decoration-*`. */
 const UNDERLINE = (u) => u === 'underline';
 
@@ -523,6 +523,7 @@ describe('link colour and underline only on links and buttons, on the content pa
     // painted-but-inert list).
     'src/layouts/NewsLayout.astro',
     ...astroIn('src/pages/fleet'),
+    ...astroIn('src/pages/flight'),
     ...astroIn('src/pages/hubs'),
     ...astroIn('src/pages/trackers'),
     'src/pages/newark.astro',
@@ -600,6 +601,7 @@ describe('link colour and underline only on links and buttons, on the content pa
       'src/components/trackers/TrackerTable.astro',
       'src/components/site/FlightAircraftCard.astro',
       'src/components/site/HubBoard.astro',
+      'src/pages/flight/index.astro',
     ]) {
       expect(ASTRO_SCOPE).toContain(file);
     }
@@ -693,7 +695,7 @@ function cssLinkStyleOffenders(css) {
     const applied = [...body.matchAll(/@apply([^;]*);/g)].flatMap(([, list]) => list.trim().split(/\s+/)).map(utility);
     const paints =
       applied.some((u) => LINK_COLOUR(u) || UNDERLINE(u)) ||
-      /(?:^|;)\s*color:\s*var\(--primary\)/.test(body) ||
+      /(?:^|;)\s*color:\s*var\(--(?:color-)?primary\)/.test(body) ||
       /text-decoration(?:-line)?:\s*underline/.test(body);
     if (!paints) continue;
     for (const selector of selectors.split(',').map((s) => s.trim())) {
@@ -728,11 +730,16 @@ describe('content.css paints link colour and underlines only on links (links eve
     ]);
     expect(cssLinkStyleOffenders('.x span { @apply hover:underline; }')).toEqual(['.x span']);
     expect(cssLinkStyleOffenders('.x .code { color: var(--primary); }')).toEqual(['.x .code']);
+    // The theme's own name for the colour, and the arbitrary-value utility.
+    expect(cssLinkStyleOffenders('.bb-content .iata { color: var(--color-primary); }')).toEqual(['.bb-content .iata']);
+    expect(cssLinkStyleOffenders('.bb-content .iata { @apply font-mono text-[var(--color-primary)]; }')).toEqual(['.bb-content .iata']);
+    expect(cssLinkStyleOffenders('.x .code { @apply text-[var(--primary)]; }')).toEqual(['.x .code']);
     expect(cssLinkStyleOffenders('.x .code { text-decoration: underline; }')).toEqual(['.x .code']);
     for (const ok of [
       '.bb-content a { @apply text-foreground underline decoration-muted-foreground/50; }',
       '.bb-content li a:hover { @apply text-primary; }',
       '.bb-content .btn { @apply bg-primary-fill text-primary-foreground no-underline underline-offset-2; }',
+      '.bb-content .tag { color: var(--color-primary-foreground); background-color: var(--color-primary); }',
       '/* .bb-content .iata { @apply text-primary; } */',
     ]) {
       expect(cssLinkStyleOffenders(ok), ok).toEqual([]);

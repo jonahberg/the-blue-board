@@ -23,16 +23,15 @@ const classes = (el) => (el.getAttribute('class') ?? '').split(/\s+/);
 const isEntryTone = (a) => classes(a).includes('text-primary');
 const isQuiet = (a) => classes(a).includes('decoration-muted-foreground/40') && classes(a).includes('text-foreground');
 
-const detailPages = (dir) => (hasDist ? readdirSync(join(DIST, 'trackers', dir)).map((f) => `trackers/${dir}/${f}`) : []);
-const PAGES = [
-  'hubs.html',
-  ...HUBS.map((h) => `hubs/${h}.html`),
+/** The built pages in `dir`, as paths under dist/. */
+const htmlIn = (dir) => (hasDist ? readdirSync(join(DIST, dir)).filter((f) => f.endsWith('.html')).map((f) => `${dir}/${f}`) : []);
+/** Every content page links everywhere covers: hubs, fleet, trackers, Newark and the flight page. */
+const CONTENT_PAGES = [
+  'hubs.html', ...htmlIn('hubs'),
+  'fleet.html', ...htmlIn('fleet'),
+  'trackers.html', ...htmlIn('trackers'), ...htmlIn('trackers/atc'), ...htmlIn('trackers/united-hubs'),
   'newark.html',
-  'trackers.html',
-  'trackers/atc.html',
-  'trackers/united-hubs.html',
-  ...detailPages('atc'),
-  ...detailPages('united-hubs'),
+  'flight.html',
 ];
 
 describe.skipIf(!hasDist)('hub pages', () => {
@@ -221,9 +220,10 @@ describe.skipIf(!hasDist)('tracker pages', () => {
 /**
  * The link faults in one built page's raw HTML, in document order, each as "<kind>: <a …>".
  * `isBuilt(path)` says whether the build made a page or file at that path ('/hubs/ord',
- * '/trackers/atc.csv').
+ * '/trackers/atc.csv'); `idsAt(path)` gives the ids of the built page there, or null when there
+ * is no page (a download, a dashboard address), whose fragments are not checked.
  */
-function linkFaults(html, pagePath, isBuilt) {
+function linkFaults(html, pagePath, isBuilt, idsAt = () => null) {
   const markup = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
   const attr = (attrs, name) => {
     const m = attrs.match(new RegExp(`(?:^|\\s)${name}(?:\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+)))?(?=\\s|/|$)`, 'i'));
@@ -258,7 +258,17 @@ function linkFaults(html, pagePath, isBuilt) {
     // Any fragment, even a bare "#" (a placeholder a page script fills), is an in-page jump.
     const jump = href.includes('#');
     if (path === norm(pagePath) && !jump && !url.search) out.push(`self-link: ${tag}`);
-    else if (/^\/(hubs|fleet|trackers)(\/|$)/.test(path) && !isBuilt(path)) out.push(`no built page: ${tag}`);
+    else if (/^\/(hubs|fleet|trackers)(\/|$)/.test(path) && !isBuilt(path)) {
+      out.push(`no built page: ${tag}`);
+      continue;
+    }
+    // A jump must land: the page it names has that id. The dashboard's tab hashes (path /) are
+    // not ids, and a bare "#" names none.
+    const fragment = decodeURIComponent(url.hash.slice(1));
+    if (fragment && path !== '/') {
+      const ids = idsAt(path);
+      if (ids && !ids.has(fragment)) out.push(`no target: ${tag}`);
+    }
   }
   return out;
 }
@@ -267,16 +277,19 @@ function linkFaults(html, pagePath, isBuilt) {
 const builtInDist = (path) =>
   [`${path}.html`, `${path}/index.html`, path].some((p) => existsSync(join(DIST, p)) && statSync(join(DIST, p)).isFile());
 
+/** The ids on the built page at `path`, or null when the build made no page there. Read once each. */
+const idsCache = new Map();
+const idsInDist = (path) => {
+  if (!idsCache.has(path)) {
+    const file = [`${path}.html`, `${path}/index.html`].map((p) => join(DIST, p)).find((p) => existsSync(p) && statSync(p).isFile());
+    idsCache.set(path, file ? new Set([...readFileSync(file, 'utf8').matchAll(/\sid="([^"]+)"/g)].map((m) => m[1])) : null);
+  }
+  return idsCache.get(path);
+};
+
 describe.skipIf(!hasDist)('every content page links only to other pages that exist, and never inside another control', () => {
   it('hubs, fleet, trackers, Newark and the flight page: no self-link, no link in a link or button, no link to an unbuilt page', () => {
-    const htmlIn = (dir) => readdirSync(join(DIST, dir)).filter((f) => f.endsWith('.html')).map((f) => `${dir}/${f}`);
-    const pages = [
-      'hubs.html', ...htmlIn('hubs'),
-      'fleet.html', ...htmlIn('fleet'),
-      'trackers.html', ...htmlIn('trackers'), ...htmlIn('trackers/atc'), ...htmlIn('trackers/united-hubs'),
-      'newark.html',
-      'flight.html',
-    ];
+    const pages = CONTENT_PAGES;
     // A sweep of nothing proves nothing: every page the data makes is in it (50 on Nov 12 2026).
     expect(htmlIn('hubs')).toHaveLength(HUBS.length);
     expect(htmlIn('fleet')).toHaveLength(fleetOrder.length);
@@ -284,19 +297,24 @@ describe.skipIf(!hasDist)('every content page links only to other pages that exi
     expect(htmlIn('trackers/united-hubs')).toHaveLength(unitedHubDetailCodes.length);
     expect(htmlIn('trackers').length).toBeGreaterThanOrEqual(2);
     let links = 0;
+    let jumps = 0;
     const found = pages.flatMap((rel) => {
       const html = readFileSync(join(DIST, rel), 'utf8');
       links += html.match(/<a\b/g)?.length ?? 0;
-      return linkFaults(html, `/${rel.replace(/\.html$/, '')}`, builtInDist).map((fault) => `${rel}: ${fault}`);
+      jumps += [...html.matchAll(/<a [^>]*href="([^"]*#[^"]+)"/g)].filter((m) => !/^\/[?#]/.test(m[1])).length;
+      return linkFaults(html, `/${rel.replace(/\.html$/, '')}`, builtInDist, idsInDist).map((fault) => `${rel}: ${fault}`);
     });
     expect(links).toBeGreaterThan(4500); // 4,931 on Nov 12 2026
+    expect(jumps).toBeGreaterThan(300); // fragment links whose target is checked: 333 on Nov 12 2026
     expect(found).toEqual([]);
   });
 });
 
 describe('the content-page link sweep catches what it is for', () => {
   const BUILT = new Set(['/hubs/ord', '/hubs/den', '/hubs/sfo', '/fleet', '/trackers/atc', '/trackers/atc.csv']);
-  const faults = (html) => linkFaults(html, '/hubs/ord', (path) => BUILT.has(path));
+  // The ids each built page has (a CSV download is not a page: no ids to check).
+  const IDS = { '/hubs/ord': new Set(['main', 'faq']), '/hubs/den': new Set(['main', 'faq']), '/hubs/sfo': new Set(['main']), '/fleet': new Set(['main']), '/trackers/atc': new Set(['row-ord']) };
+  const faults = (html) => linkFaults(html, '/hubs/ord', (path) => BUILT.has(path), (path) => IDS[path] ?? null);
 
   it('a self-link, a link in a link (in a template too), a link in a button, and a link to a page that was not built', () => {
     expect(faults('<a href="/hubs/ord">ORD</a>')).toEqual(['self-link: <a href="/hubs/ord">']);
@@ -313,10 +331,20 @@ describe('the content-page link sweep catches what it is for', () => {
     ]);
   });
 
+  it('a jump to a fragment the target page does not have, on this page or another', () => {
+    expect(faults('<a href="#construction">Construction</a>')).toEqual(['no target: <a href="#construction">']);
+    expect(faults('<a href="/hubs/den#delay-patterns">x</a><a href="/trackers/atc#row-zzz">y</a>')).toEqual([
+      'no target: <a href="/hubs/den#delay-patterns">',
+      'no target: <a href="/trackers/atc#row-zzz">',
+    ]);
+  });
+
   it('lets the current nav pill, in-page jumps, built pages, downloads and other addresses through', () => {
     for (const ok of [
       '<a href="/hubs/ord" aria-current="page">ORD</a>',
       '<a href="#main">Skip to content</a><a href="/hubs/ord#faq">FAQ</a><a href="#" hidden>Open entry</a>',
+      // Fragments that exist; the dashboard's tab hashes (path /) and a bare '#' are not ids to check.
+      '<a href="/hubs/den#faq">x</a><a href="/trackers/atc#row-ord">y</a><a href="/#starlink">z</a><a href="/?tab=x#live">w</a><a href="/trackers/atc.csv#x">c</a>',
       '<a href="/hubs/den">DEN</a></a><a href="/hubs/sfo">SFO</a>',
       '<a href="/fleet/">Fleet</a><a href="/trackers/atc.csv">CSV</a><a href="/trackers/atc?x=1">ATC</a>',
       '<a href="/?tab=fleet&amp;type=A319">x</a><a href="/news/x">n</a><a href="https://example.com/hubs/zzz">e</a>',
@@ -329,28 +357,36 @@ describe('the content-page link sweep catches what it is for', () => {
   });
 });
 
-/** Inside a card made clickable whole by a stretched link (DESIGN.md 2026-11-11): a click on it follows that link. */
+/**
+ * Inside a card made clickable whole by a stretched link (DESIGN.md 2026-11-11): a click on it
+ * follows that link. The card is the nearest `relative` ancestor, so a `relative` page wrapper
+ * further out can never exempt a whole page.
+ */
 const inStretchedCard = (el) => {
-  for (let up = el.parentElement; up; up = up.parentElement) {
-    if (classes(up).includes('relative') && [...up.querySelectorAll('a')].some((a) => classes(a).includes('after:inset-0'))) return true;
-  }
-  return false;
+  let card = el.parentElement;
+  while (card && !classes(card).includes('relative')) card = card.parentElement;
+  return !!card && [...card.querySelectorAll('a')].some((a) => classes(a).includes('after:inset-0'));
 };
+/** The plane marker on a flight page's progress track: an aria-hidden icon drawn in link colour, not text. */
+const isTrackIcon = (el) => el.getAttribute('data-f') === 'track-dot' && !!el.querySelector('[aria-hidden="true"]');
 
 describe.skipIf(!hasDist)('link colour means link on these pages', () => {
   it('no element carries text-primary or an underline unless it is, or sits in, a link, button or disclosure', () => {
+    // Every content page, fleet and flight pages included, and the rows their <template>s hold.
     let seen = 0;
     const offenders = [];
-    for (const rel of PAGES) {
+    expect(CONTENT_PAGES.length).toBeGreaterThanOrEqual(50);
+    for (const rel of CONTENT_PAGES) {
       const doc = load(rel);
-      for (const el of doc.querySelectorAll('main [class]')) {
+      const roots = [doc.querySelector('main'), ...[...doc.querySelectorAll('main template')].map((t) => t.content)];
+      for (const el of roots.flatMap((root) => [...root.querySelectorAll('[class]')])) {
         const toks = classes(el);
         if (!toks.includes('text-primary') && !toks.includes('underline')) continue;
         seen++;
-        if (!el.closest('a, button, summary') && !inStretchedCard(el)) offenders.push(`${rel} <${el.tagName.toLowerCase()}> "${el.textContent.trim().slice(0, 40)}"`);
+        if (!el.closest('a, button, summary') && !inStretchedCard(el) && !isTrackIcon(el)) offenders.push(`${rel} <${el.tagName.toLowerCase()}> "${el.textContent.trim().slice(0, 40)}"`);
       }
     }
-    expect(seen).toBeGreaterThan(100);
+    expect(seen).toBeGreaterThan(1000);
     expect(offenders).toEqual([]);
   });
 });
