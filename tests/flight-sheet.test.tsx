@@ -161,9 +161,9 @@ describe('FlightSheet aircraft line for a tail missing from the fleet DB (F10/F7
   it('a 787-9 is a recent delivery, never "United Express"', async () => {
     viewport(1280);
     await open(flight({ acType: 'B789', reg: 'N71108', flightIATA: 'UA28', origin: 'SIN', dest: 'SFO' }));
-    // The tail is a link to its aircraft dialog, so the line spans elements.
-    const line = screen.getByRole('link', { name: 'N71108' }).closest('p')!;
-    expect(line.textContent).toBe('B789 · N71108 (not yet in fleet DB (recent delivery?))');
+    expect(screen.getByText(/N71108 \(not yet in fleet DB \(recent delivery\?\)\)/)).toBeTruthy();
+    // Plain: the aircraft dialog would only repeat this line, or guess "United Express" (ruling 6).
+    expect(screen.queryByRole('link', { name: 'N71108' })).toBeNull();
     expect(screen.queryByText(/United Express/)).toBeNull();
   });
 
@@ -377,11 +377,22 @@ describe('FlightSheet links the names it prints (links part 2)', () => {
     fleet.special = new Map();
   });
 
-  it("an unmatched aircraft's ICAO code stays plain and its tail links", async () => {
+  it("an unmatched aircraft's ICAO code and tail stay plain when no database or roster knows the tail", async () => {
     viewport(1280);
     await open(flight({ acType: 'A320', reg: 'N401UA' }));
     expect(screen.queryByRole('link', { name: 'A320' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'N401UA' }).getAttribute('href')).toBe('/?aircraft=N401UA');
+    expect(screen.queryByRole('link', { name: 'N401UA' })).toBeNull();
+    expect(screen.getByText(/A320 · N401UA/)).toBeTruthy();
+  });
+
+  it('an unmatched tail the Starlink roster knows links to its aircraft dialog', async () => {
+    viewport(1280);
+    fleet.starlink = {
+      tails: new Set(['N642SY']),
+      aircraft: [{ tail: 'N642SY', fleet: 'Express', type: 'E175SC', operator: 'SkyWest dba UAX' }],
+    } as typeof fleet.starlink;
+    await open(flight({ acType: 'E75L', reg: 'N642SY' }));
+    expect(screen.getByRole('link', { name: 'N642SY' }).getAttribute('href')).toBe('/?aircraft=N642SY');
   });
 
   it('the title stays plain text', async () => {

@@ -13,6 +13,7 @@ import {
   providerTypeText,
   routeEndLabel,
   routeEnds,
+  unmatchedTailLinks,
 } from '../src/lib/name-links.js';
 
 describe('routeEnds: the delay explanation\'s "ORD→DEN", split so each end can link', () => {
@@ -79,6 +80,26 @@ describe('providerTypeText: a provider type string that may decide a type link w
     expect(fleetTypeCodeFor({ reg: 'N75436', typeText: providerTypeText('A320'), fleetByReg })).toBe('737-900ER');
     expect(fleetTypeCodeFor({ reg: '', typeText: providerTypeText('A320'), fleetByReg })).toBeNull();
     expect(fleetTypeCodeFor({ reg: '', typeText: providerTypeText('737 MAX 9'), fleetByReg })).toBe('737 MAX 9');
+  });
+});
+
+describe("unmatchedTailLinks: the flight sheet's unmatched tail links only when the dialog adds something", () => {
+  const roster = [{ tail: 'N642SY', fleet: 'Express', type: 'E175SC', operator: 'SkyWest dba UAX' }];
+
+  it('links a tail the Starlink roster knows (the dialog shows its type, operator and Starlink)', () => {
+    expect(unmatchedTailLinks('N642SY', roster)).toBe(true);
+    expect(unmatchedTailLinks('n-642sy', roster)).toBe(true);
+  });
+
+  it('a tail no database knows prints plain: the dialog would only repeat the sheet, or guess "United Express"', () => {
+    expect(unmatchedTailLinks('N71108', roster)).toBe(false);
+    expect(unmatchedTailLinks('N71108', [])).toBe(false);
+    expect(unmatchedTailLinks('N71108', null)).toBe(false);
+  });
+
+  it('nothing to link without a tail', () => {
+    expect(unmatchedTailLinks('', roster)).toBe(false);
+    expect(unmatchedTailLinks(undefined, roster)).toBe(false);
   });
 });
 

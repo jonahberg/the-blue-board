@@ -8,6 +8,7 @@
 // DOM-free; tested in tests/name-links.test.js.
 
 import { FLEET_TYPE_SLUGS } from './fleet-type-link.js';
+import { nonMainlineAircraftSummary } from './fleet-view.js';
 
 /** The Starlink tab: where a Starlink badge on a flight or an aircraft goes. */
 export const STARLINK_TAB_HREF = '/#starlink';
@@ -69,4 +70,25 @@ const ICAO_DESIGNATOR_RE = /^[A-Z][A-Z0-9]{1,3}$/;
 export function providerTypeText(text) {
   if (typeof text !== 'string' || !Object.hasOwn(FLEET_TYPE_SLUGS, text)) return null;
   return ICAO_DESIGNATOR_RE.test(text) ? null : text;
+}
+
+/**
+ * Whether the flight sheet's "unmatched" line ("E75L · N123 (not in mainline fleet DB)") links its
+ * tail to the aircraft dialog. That line prints only when neither the mainline fleet database nor
+ * the United Express fleet knows the tail, so the dialog has no card of its own for it. Its
+ * fallback repeats what the sheet already shows (the same flight, the feed's ICAO type,
+ * Planespotters), and on the ground it says the tail "may be a United Express aircraft", the guess
+ * the sheet's note exists to avoid for a recent mainline delivery. The one thing it adds is what
+ * the Starlink roster knows (type, operator, Starlink), so the tail links only when the roster
+ * knows it: the dialog's own summary with the live flight left out
+ * (`nonMainlineAircraftSummary(reg, roster, null)`). Plan ruling 6: a class of tail whose dialog
+ * is thin stays plain.
+ *
+ * @param {unknown} reg  the registration as printed.
+ * @param {Array<{tail: string}> | null | undefined} roster  the Starlink roster (`useFleet().starlink.aircraft`).
+ * @returns {boolean}
+ */
+export function unmatchedTailLinks(reg, roster) {
+  if (typeof reg !== 'string' || !reg) return false;
+  return nonMainlineAircraftSummary(reg, roster, null) !== null;
 }

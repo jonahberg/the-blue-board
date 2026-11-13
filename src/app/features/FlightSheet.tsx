@@ -20,7 +20,8 @@
  * The ones that go to a tab are `fromOverlay`: following one closes this sheet (and any other
  * overlay) and lands as an arrival. The tail links are not (the controller's exception to "every
  * link in an overlay"): a tail opens the aircraft dialog OVER this sheet, as its button did, so the
- * reader keeps their flight and the map's selection, and Escape returns focus to the tail. The
+ * reader keeps their flight and the map's selection, and Escape returns focus to the tail. A tail
+ * neither fleet knows links only when the Starlink roster knows it (`unmatchedTailLinks`). The
  * title stays plain; "Open flight page" under it is the flight's link.
  */
 
@@ -49,7 +50,7 @@ import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
 import { modalityOf, openFocusOptions } from '@/lib/input-modality.js';
 import { flightPagePath, parseFlightIdent } from '@/lib/flight-page.js';
-import { SPECIAL_VIEW_HREF, STARLINK_TAB_HREF } from '@/lib/name-links.js';
+import { SPECIAL_VIEW_HREF, STARLINK_TAB_HREF, unmatchedTailLinks } from '@/lib/name-links.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { resolveFlightRoute } from '../data/route';
 import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
@@ -601,14 +602,20 @@ export function FlightSheet() {
                 {/* "Loading" and "not in the database" are different facts. Asserting the
                     second while the fleet is still downloading tells a mainline passenger
                     their aircraft is a United Express jet. The feed's ICAO code stays plain (it
-                    names no one fleet type); the tail opens its aircraft dialog. */}
+                    names no one fleet type). The tail links only when the Starlink roster knows
+                    it: otherwise the dialog has nothing this line does not already say
+                    (`unmatchedTailLinks`). Not `fromOverlay`, as the other tails. */}
                 {flight ? (
                   <>
                     {flight.acType || 'Unknown type'}
                     {flight.reg ? (
                       <>
                         {' · '}
-                        <TailLink reg={flight.reg} hit="inline" fromOverlay />
+                        {unmatchedTailLinks(flight.reg, starlink.aircraft) ? (
+                          <TailLink reg={flight.reg} hit="inline" />
+                        ) : (
+                          flight.reg
+                        )}
                       </>
                     ) : null}{' '}
                     ({fleetLoading ? 'Loading aircraft data…' : unmatchedAircraftNote(flight.acType)})
