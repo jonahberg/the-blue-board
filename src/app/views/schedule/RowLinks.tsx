@@ -53,6 +53,25 @@ export function RouteEnds({
 }
 
 /**
+ * The type link's destination, for a screen reader: " (737-900ER in the fleet)" after the printed
+ * text. The row prints the feed's words (B739, "A321 NEO") and the TAIL decides the link, so the
+ * link's name says which fleet type it opens. sr-only words, never an `aria-label` over different
+ * text (DESIGN.md 2026-11-11). Nothing when the type does not link.
+ */
+export function FleetTypeWords({ typeCode }: { typeCode: string | null }) {
+  if (!typeCode) return null;
+  // The space outside the hidden span, as the hub strip's "(schedule board)" words have it.
+  return (
+    <>
+      {' '}
+      <span className="sr-only" data-type-destination="">
+        ({typeCode} in the fleet)
+      </span>
+    </>
+  );
+}
+
+/**
  * "Ground Stop at EWR, avg 45 min · GDP at LGA": each airport code links to where its status is
  * shown, a hub's Weather card or the NAS status panel (`HubStatusLink`); the words stay text.
  */

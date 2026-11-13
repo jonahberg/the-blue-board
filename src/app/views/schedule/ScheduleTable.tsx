@@ -60,7 +60,7 @@ import { TailLink, TypeLink } from '../../features/EntityLinks';
 import { FlightLink } from '../../features/FlightLink';
 import { JargonTerm } from '../../features/JargonTerm';
 import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
-import { FaaLine, RouteEnds, StarlinkLink } from './RowLinks';
+import { FaaLine, FleetTypeWords, RouteEnds, StarlinkLink } from './RowLinks';
 import { SchedulePhoneRow } from './SchedulePhoneRow';
 import { STATUS_TONE, SWAP_TONE, riskControlClass } from './tone';
 
@@ -527,7 +527,14 @@ export const ScheduleTable = forwardRef<
                     {/* The type links to the Fleet tab by the TAIL's fleet type (`typeCode`), never by
                         this ICAO code: B739 is the 737-900 and the 737-900ER. */}
                     <span className="font-mono" title={row.acText}>
-                      {row.acCode !== '—' ? <TypeLink typeCode={row.typeCode}>{row.acCode}</TypeLink> : row.acCode}
+                      {row.acCode !== '—' ? (
+                        <TypeLink typeCode={row.typeCode}>
+                          {row.acCode}
+                          <FleetTypeWords typeCode={row.typeCode} />
+                        </TypeLink>
+                      ) : (
+                        row.acCode
+                      )}
                     </span>
                     {row.acShort ? (
                       <span className="block text-[9px] text-muted-foreground">{row.acShort}</span>

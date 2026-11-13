@@ -223,6 +223,15 @@ describe('the desktop Schedule row links what it names', () => {
     expect(plain(row, 'A319')).toBe(true);
   });
 
+  it('the type link says where it goes: the printed ICAO code, then the fleet type it opens', () => {
+    renderTable([linkedRow({ acCode: 'B739', typeCode: '737-900ER' })]);
+    // jsdom's name calculation trims the hidden span, so the space between is optional here.
+    const link = screen.getByRole('link', { name: /^B739 ?\(737-900ER in the fleet\)$/ });
+    expect(link.getAttribute('href')).toBe('/?tab=fleet&type=737-900ER');
+    expect(link.hasAttribute('aria-label')).toBe(false);
+    expect(link.querySelector('[data-type-destination]')?.textContent).toBe('(737-900ER in the fleet)');
+  });
+
   it('a tail from live tracking is a quiet link like any other, its explanation still there', () => {
     renderTable([linkedRow({ regFromLive: true })]);
     const tail = linkNamed(document.body, 'N37502')!;
@@ -326,6 +335,11 @@ describe('the phone Schedule row: the same links, inert on a coarse pointer', ()
       // No touch box: a link that takes no taps needs none, and it would cover the number beside it.
       expect(a.className, a.getAttribute('href')!).not.toMatch(/after:h-11/);
     }
+  });
+
+  it('the type link says where it goes', () => {
+    renderPhone(linkedRow());
+    expect(screen.getByRole('link', { name: /^737 MAX 9 ?\(737 MAX 9 in the fleet\)$/ })).toBeTruthy();
   });
 
   it('the tail has lost its dotted underline; a live-tracking tail still says so', () => {

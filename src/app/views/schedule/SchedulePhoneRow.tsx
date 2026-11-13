@@ -47,7 +47,7 @@ import { FlightLink } from '../../features/FlightLink';
 import { SpecialLiveryMarker } from '../../features/SpecialLiveryBadge';
 import type { RowModel } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
-import { FaaLine, RouteEnds, StarlinkLink } from './RowLinks';
+import { FaaLine, FleetTypeWords, RouteEnds, StarlinkLink } from './RowLinks';
 import { STATUS_PILL, SWAP_TONE, riskControlClass } from './tone';
 
 export type SchedulePhoneRowProps = {
@@ -213,6 +213,7 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
               // Linked by the tail's fleet type only (`typeCode`), never by these words.
               <TypeLink typeCode={row.typeCode} finePointerOnly className="z-10 shrink-0">
                 {aircraft.type}
+                <FleetTypeWords typeCode={row.typeCode} />
               </TypeLink>
             ) : null}
             {aircraft.seats ? (
