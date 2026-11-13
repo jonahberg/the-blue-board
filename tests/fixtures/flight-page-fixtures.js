@@ -134,6 +134,6 @@ export function payloadFor(row, { history = null, tail = null, aircraft = null, 
 }
 
 export const ua929Aircraft = {
-  reg: 'N686UA', type: '767-300ER', config: '46J/22PP/43E+/56Y', seats: { J: 46, PP: 22, 'E+': 43, Y: 56 }, total: 167,
+  reg: 'N686UA', type: '767-300ER', typeCode: '767-300ER', config: '46J/22PP/43E+/56Y', seats: { J: 46, PP: 22, 'E+': 43, Y: 56 }, total: 167,
   wifi: 'Satellite Ku', starlink: false, ife: 'AVOD', delivered: '1999', operator: 'United Airlines', express: false, source: 'fleet',
 };

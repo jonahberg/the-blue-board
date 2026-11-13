@@ -122,4 +122,27 @@ describe('replaceChildrenKeepingFocus', () => {
     replaceChildrenKeepingFocus(list, [row('/flight/UA9')]);
     expect(document.activeElement).toBe(outside);
   });
+
+  // Hub links repeat in a refreshing list (a tail's legs chain: one leg's destination is the next
+  // one's origin; the fleet strip's rows share SFO or EWR). Focus on the second ORD must come back
+  // to the second ORD, not jump to the first.
+  it('restores the same occurrence when two links share an href', () => {
+    const list = document.createElement('ol');
+    document.body.append(list);
+    list.replaceChildren(row('/hubs/ord'), row('/flight/UA930'), row('/hubs/ord'));
+    list.querySelectorAll('a')[2].focus();
+    replaceChildrenKeepingFocus(list, [row('/hubs/ord'), row('/flight/UA930'), row('/hubs/ord')]);
+    const links = [...list.querySelectorAll('a')];
+    expect(document.activeElement).toBe(links[2]);
+    expect(links.indexOf(document.activeElement as HTMLAnchorElement)).toBe(2);
+  });
+
+  it('falls back to the first link with that href when the refresh has fewer of them', () => {
+    const list = document.createElement('ol');
+    document.body.append(list);
+    list.replaceChildren(row('/flight/UA1'), row('/hubs/ord'), row('/hubs/ord'));
+    list.querySelectorAll('a')[2].focus();
+    replaceChildrenKeepingFocus(list, [row('/flight/UA2'), row('/hubs/ord')]);
+    expect(document.activeElement).toBe(list.querySelectorAll('a')[1]);
+  });
 });

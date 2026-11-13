@@ -21,6 +21,7 @@
  * say "Watching" on the button; it never writes it.
  */
 
+import { LINK_TONE } from '../app/features/link-style';
 import { readWatched } from '../lib/watch-utils.js';
 import { watchLinkHref } from '../lib/watch-link.js';
 import { parseFlightIdent, flightPagePath } from '../lib/flight-page.js';
@@ -31,6 +32,7 @@ import { replaceChildrenKeepingFocus, setFlightLink, splitFlightIdents } from '.
 
 type Payload = Record<string, any> & { status?: string; ident?: string };
 type View = ReturnType<typeof flightPageView>;
+type End = { code: string; href: string | null };
 
 const REFRESH_MS = 60_000;
 const FETCH_TIMEOUT_MS = 8_000;
@@ -42,6 +44,46 @@ const FETCH_TIMEOUT_MS = 8_000;
  */
 const STEP_FLIGHT_LINK =
   'relative font-medium text-primary underline-offset-2 after:absolute after:-inset-x-1 after:-inset-y-3.5 hover:underline';
+
+/*
+ * The other names the page links (src/lib/flight-page-view.js decides which): hub route ends, the
+ * tail, the type, Starlink Wi-Fi. The look is the dashboard's (src/app/features/link-style.ts): the
+ * tail is the aircraft card's one link-coloured link, the rest are body colour with a quiet
+ * underline. A code keeps its size and an `after:` box gives it 44 px on touch and 24 px for a
+ * mouse at md+ (DESIGN.md: a link in a compact list a mouse uses is at least 24 px); the narrow box
+ * in "Its recent flights" stays clear of the flight number's own box beside it. The type and the
+ * Wi-Fi line sit one above the other, so they grow their own line to 44 px on touch instead of
+ * overlapping boxes.
+ */
+const HIT_BOX =
+  'relative after:absolute after:top-1/2 after:left-1/2 after:h-11 after:w-[max(calc(100%+0.5rem),2.75rem)] after:-translate-x-1/2 after:-translate-y-1/2 pointer-fine:md:after:h-6';
+const HIT_BOX_NARROW =
+  'relative after:absolute after:top-1/2 after:left-1/2 after:h-11 after:w-[calc(100%+0.5rem)] after:-translate-x-1/2 after:-translate-y-1/2 pointer-fine:md:after:h-6';
+const HIT_LINE = 'inline-flex min-h-11 items-center pointer-fine:md:min-h-0';
+const QUIET = LINK_TONE.quiet;
+const IDENTITY = LINK_TONE.identity;
+
+/** `text` as a link to `href` with `className`, or plain text when it has none. */
+function linkOrText(text: string, href: string | null | undefined, className: string): Node {
+  if (!href) return document.createTextNode(text);
+  const a = document.createElement('a');
+  a.className = className;
+  a.href = href;
+  a.textContent = text;
+  return a;
+}
+
+/** "ORD → LHR": each hub end a quiet link, the arrow decoration (a screen reader hears "ORD to LHR"). */
+function routeNodes(route: { origin: End; dest: End }, box: string): Node[] {
+  const arrow = el('span', '', ' → ');
+  arrow.setAttribute('aria-hidden', 'true');
+  return [
+    linkOrText(route.origin.code, route.origin.href, `${QUIET} ${box}`),
+    arrow,
+    el('span', 'sr-only', ' to '),
+    linkOrText(route.dest.code, route.dest.href, `${QUIET} ${box}`),
+  ];
+}
 
 const root = document.querySelector<HTMLElement>('[data-flight-page]');
 
@@ -156,10 +198,11 @@ if (root) {
       return;
     }
     const f = (name: string) => q<HTMLElement>(trip, `[data-f="${name}"]`);
-    f('origin')!.textContent = t.origin.code;
+    // A hub end links to its hub page; any other airport is text.
+    replaceChildrenKeepingFocus(f('origin')!, [linkOrText(t.origin.code, t.origin.href, `${QUIET} ${HIT_BOX}`)]);
     f('origin-city')!.textContent = t.origin.city;
     f('origin-time')!.textContent = t.origin.time;
-    f('dest')!.textContent = t.dest.code;
+    replaceChildrenKeepingFocus(f('dest')!, [linkOrText(t.dest.code, t.dest.href, `${QUIET} ${HIT_BOX}`)]);
     f('dest-city')!.textContent = t.dest.city;
     f('dest-time')!.textContent = t.dest.time;
     const fill = f('track-fill');
@@ -219,7 +262,7 @@ if (root) {
     }
     const f = (name: string) => q<HTMLElement>(historyCard, `[data-f="${name}"]`);
     f('title')!.textContent = h.title;
-    f('route')!.textContent = h.routeLabel;
+    replaceChildrenKeepingFocus(f('route')!, routeNodes(h.route, HIT_BOX_NARROW));
     const strip = f('strip') as HTMLOListElement;
     const template = q<HTMLTemplateElement>(historyCard, 'template[data-fp-day]');
     if (strip && template) {
@@ -261,11 +304,13 @@ if (root) {
       return;
     }
     const f = (name: string) => q<HTMLElement>(aircraftCard, `[data-f="${name}"]`);
-    f('reg')!.textContent = a.reg;
-    f('summary')!.textContent = a.summary;
+    // The tail opens the dashboard's aircraft dialog (the card's one link-coloured link); the type
+    // its fleet page; Starlink the dashboard's Starlink tab. What links is the view's decision.
+    replaceChildrenKeepingFocus(f('reg')!, [linkOrText(a.reg, a.regHref, `${IDENTITY} ${HIT_BOX}`)]);
+    replaceChildrenKeepingFocus(f('summary')!, a.summaryParts.map((part) => linkOrText(part.text, part.href, `${QUIET} ${HIT_LINE}`)));
     const wifi = f('wifi')!;
     if (a.wifi) {
-      f('wifi-text')!.textContent = a.wifi.text;
+      replaceChildrenKeepingFocus(f('wifi-text')!, [linkOrText(a.wifi.text, a.wifi.href, `${QUIET} ${HIT_LINE}`)]);
       const icon = aircraftCard.querySelector<SVGElement>('[data-f="starlink-icon"]');
       if (icon) icon.style.display = a.wifi.starlink ? '' : 'none';
       wifi.hidden = false;
@@ -294,7 +339,7 @@ if (root) {
           const li = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
           // The aircraft's other flights link to their pages; this page's own number stays text.
           setFlightLink(q<HTMLElement>(li, '[data-f="flight"]')!, leg.flight, ident);
-          q<HTMLElement>(li, '[data-f="route"]')!.textContent = `${leg.origin} → ${leg.dest}`;
+          q<HTMLElement>(li, '[data-f="route"]')!.replaceChildren(...routeNodes(leg.route, HIT_BOX_NARROW));
           const result = q<HTMLElement>(li, '[data-f="result"]')!;
           result.textContent = leg.result;
           result.className = `${result.className} ${leg.tone ? (TONE_TEXT as Record<string, string>)[leg.tone] : 'text-muted-foreground'}`;
@@ -364,7 +409,11 @@ if (root) {
     const view = flightPageView(payload, nowSec, { live });
     currentView = view;
     if (title) title.textContent = ident;
-    if (routeEl) routeEl.textContent = view.routeLine;
+    // A flight we do not have prints the last route it flew in codes; its hub ends link.
+    if (routeEl) {
+      if (view.route) replaceChildrenKeepingFocus(routeEl, routeNodes(view.route, HIT_BOX_NARROW));
+      else routeEl.textContent = view.routeLine;
+    }
     setVerdict(view.verdict.parts);
     if (stampEl) stampEl.textContent = view.stamp;
     if (noteEl) {

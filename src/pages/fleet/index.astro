@@ -15,6 +15,9 @@ import StatTile from '../../components/site/StatTile.astro';
 import SupportNote from '../../components/site/SupportNote.astro';
 import { FLEET_DB_AS_OF, formatFleetAsOf, polarisAircraftCount } from '../../lib/fleet-utils.js';
 import fleetDb from '../../../public/data/fleet.json';
+import { fleetTypeLink } from '../../lib/fleet-type-link.js';
+import { STARLINK_TAB_HREF } from '../../lib/fleet-registry-links.js';
+import { hubLink } from '../../lib/hub-link.js';
 import { withBrand } from '../../lib/page-seo.js';
 
 // Build type summaries for the grid
@@ -226,8 +229,18 @@ const faqSchema = {
 // tables' density. One link per row: the link reaches into the cell's padding (-my-1.5), so a
 // row is 44 px rather than 56, its text level with the row's other cells. Several per cell (the family's types): a 44 px line each, the
 // first one's text level with the family name beside it.
+// For a mouse at md+ a row link is an inline block with 4 px above and below cancelled by a
+// −4 px margin: a 27.5 px target (DESIGN.md: a link in a compact list a mouse uses is at least
+// 24 px) in a row of unchanged height.
 const touchTypeLink = 'inline-flex min-h-11 items-start whitespace-nowrap pt-1.5 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
-const touchRowLink = 'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:my-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
+const touchRowLink = 'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:inline-block pointer-fine:md:-my-1 pointer-fine:md:min-h-0 pointer-fine:md:pt-1 pointer-fine:md:pb-1';
+// Links everywhere (Nov 2026): one link-coloured link per row, the thing the row is about (the
+// type code in the seat table); every other link in a row keeps the content pages' quiet look,
+// body colour with an underline (`.bb-content a`).
+const identityLink = 'text-primary no-underline underline-offset-2 hover:underline hover:decoration-current';
+
+// The hubs the "What's New" list names, linked by the content side's hub rule.
+const hubHref = (code: string) => hubLink(code, 'site')?.href;
 
 // The site's page-link pill (PillNav, the 404 page, news cross-links): bordered card, no tint.
 const hubLinkClass =
@@ -292,7 +305,8 @@ const hubLinkClass =
             {
               FAMILY_ROWS.map((fam) => (
                 <tr>
-                  <td class="font-semibold text-primary">{fam.name}</td>
+                  {/* A family has no page (spec: fleet family → body text); its types do. */}
+                  <td class="font-semibold text-foreground">{fam.name}</td>
                   <td>
                     {/* On touch each type is a 44 px link, spaced apart instead of comma-run; a
                         mouse at md+ keeps the compact comma list (touchTypeLink). */}
@@ -319,19 +333,20 @@ const hubLinkClass =
             href="/fleet/787-9-dreamliner">787-9 Dreamliners</a
           > carry eight ultra-premium Polaris Studio suites — sliding privacy doors, 27-inch 4K screens,
           and a companion seat — giving them the highest premium-seat ratio of any U.S. widebody. In service
-          since April 2026 from San Francisco to Singapore and London, since joined by Zurich and Seoul,
-          with Houston departures scheduled from October 24, 2026.
+          since April 2026 from <a href={hubHref('SFO')}>San Francisco</a> to Singapore and London, since joined by Zurich and Seoul,
+          with <a href={hubHref('IAH')}>Houston</a> departures scheduled from October 24, 2026.
         </li>
         <li>
           <strong>The Airbus A321XLR enters service.</strong> United's first long-range single-aisle
           jet arrived in June 2026 with 20 lie-flat Polaris suites and Premium Plus and debuted in
           domestic service in September. It is scheduled to start replacing the <a
             href="/fleet/757-200">Boeing 757-200</a
-          > on long, thin transatlantic routes; its first two, Washington Dulles to Dublin and Amsterdam, are scheduled from December 1, 2026.
+          > on long, thin transatlantic routes; its first two, <a href={hubHref('IAD')}>Washington Dulles</a> to Dublin and Amsterdam, are scheduled from December 1, 2026.
         </li>
         <li>
-          <strong>Free Starlink WiFi passes {STARLINK_EQUIPPED_LABEL} aircraft</strong> {starlinkCombinedNote}. United
-          Express regional jets led the rollout, mainline <a href="/fleet/737-800">737-800s</a>
+          <strong>Free Starlink WiFi passes {STARLINK_EQUIPPED_LABEL} aircraft</strong> {starlinkCombinedNote}. <a
+            href="/?tab=fleet&view=express">United Express regional jets</a
+          > led the rollout, mainline <a href="/fleet/737-800">737-800s</a>
           followed in October 2025, and the first widebody <a href="/fleet/777-200er"
             >Boeing 777</a
           > went live in June 2026. United expects Starlink on 61% of its flights by the end of 2026 and
@@ -358,7 +373,8 @@ const hubLinkClass =
       fleetFamilies.map((fam) => (
         <section class="mt-8">
           <div class="mb-3 flex flex-wrap items-baseline gap-2.5 border-b border-border pb-2">
-            <span class="font-mono text-xl font-bold tracking-wide text-primary tabular-nums">
+            {/* A count, not a link and not a status: body colour (DESIGN.md: colour is status only). */}
+            <span class="font-mono text-xl font-bold tracking-wide text-foreground tabular-nums">
               {fam.count}
             </span>
             <h2 class="text-base font-bold tracking-tight text-foreground">{fam.name}</h2>
@@ -420,10 +436,22 @@ const hubLinkClass =
             {
               seatConfigOrder.map((key) => {
                 const t = fleetTypes[key];
+                // The type → its page (the row's one link-coloured link); its count → the
+                // dashboard's Fleet tab filtered to the type, which lists those aircraft.
+                const page = fleetTypeLink(t.typeCode, 'site');
+                const list = fleetTypeLink(t.typeCode, 'dashboard');
                 return (
                   <tr>
-                    <td class="font-bold"><a class={touchRowLink} href={`/fleet/${t.slug}`}>{t.typeCode}</a></td>
-                    <td class="text-right font-mono">{t.count}</td>
+                    <td class="font-bold">
+                      {page ? <a class={`${touchRowLink} font-bold ${identityLink}`} href={page.href}>{t.typeCode}</a> : t.typeCode}
+                    </td>
+                    <td class="text-right font-mono">
+                      {list ? (
+                        <a class={touchRowLink} href={list.href}>{t.count}<span class="sr-only">, list them in the dashboard</span></a>
+                      ) : (
+                        t.count
+                      )}
+                    </td>
                     <td>
                       {t.seatConfig.cabins.map((cab: { name: string; seats: string; cssClass: string }) => (
                         <span class:list={['cabin-tag', cab.cssClass]}>
@@ -469,7 +497,7 @@ const hubLinkClass =
 
       <h3>Which United Airlines planes have Starlink WiFi?</h3>
       <p>
-        {starlinkFaqLead} Check if your specific plane has Starlink using the <a href="/?tab=fleet"
+        {starlinkFaqLead} Check if your specific plane has Starlink using the <a href={STARLINK_TAB_HREF}
           >Starlink Tracker</a
         > — search by tail number or aircraft type.
       </p>
