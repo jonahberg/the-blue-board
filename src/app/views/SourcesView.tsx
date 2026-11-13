@@ -13,6 +13,12 @@
  * "LIVE" while carrying the `fresh-daily` class (`legacy/index.html:888`), so the label and
  * the styling disagreed about the same fact. It is a community tracker we copy every 4 hours,
  * so it is not LIVE; the pill says DAILY (refreshed at least daily).
+ *
+ * A card's name links to the dashboard view that shows that source's data, quiet, in place
+ * (links everywhere, part 2; the name → address table is src/lib/sources-links.js). The basemap,
+ * the route estimate and the subreddit have no view, so their names stay text. Link colour means
+ * link: the section headings and the "Disclaimer:" label are body colour, as the Starlink tab's
+ * panel titles are never link-coloured.
  */
 
 import {
@@ -33,6 +39,8 @@ import type { LucideIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { sourceViewLink } from '@/lib/sources-links.js';
+import { DashLink } from '../features/DashLink';
 
 type Freshness = 'LIVE' | 'DAILY' | 'SNAPSHOT' | 'TILES' | 'COMPUTED';
 
@@ -147,13 +155,21 @@ const COMMUNITY: Source[] = [
 ];
 
 function SourceCard({ source }: { source: Source }) {
+  const view = sourceViewLink(source.name);
   return (
     <Card size="sm" className="min-w-0">
       <CardContent className="flex gap-3">
         <source.icon aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-            {source.name}
+            {view ? (
+              <DashLink href={view.href}>
+                {source.name}{' '}
+                <span className="sr-only">({view.where})</span>
+              </DashLink>
+            ) : (
+              source.name
+            )}
             {source.freshness ? (
               <Badge
                 variant="outline"
@@ -188,23 +204,23 @@ function SourceCard({ source }: { source: Source }) {
 export default function SourcesView() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-3 p-3 md:p-6">
-      <h2 className="flex items-center gap-1.5 text-base font-semibold text-primary">
-        <ClipboardList aria-hidden="true" className="size-4" /> Data Sources &amp; Credits
+      <h2 className="flex items-center gap-1.5 text-base font-semibold">
+        <ClipboardList aria-hidden="true" className="size-4 text-muted-foreground" /> Data Sources &amp; Credits
       </h2>
 
       {SOURCES.map((source) => (
         <SourceCard key={source.name} source={source} />
       ))}
 
-      <h2 className="flex items-center gap-1.5 pt-3 text-sm font-semibold text-primary">
-        <Handshake aria-hidden="true" className="size-4" /> Community
+      <h2 className="flex items-center gap-1.5 pt-3 text-sm font-semibold">
+        <Handshake aria-hidden="true" className="size-4 text-muted-foreground" /> Community
       </h2>
       {COMMUNITY.map((source) => (
         <SourceCard key={source.name} source={source} />
       ))}
 
       <div className="rounded-md border bg-card/60 p-3 text-[11px] leading-relaxed text-muted-foreground">
-        <strong className="text-primary">Disclaimer:</strong> This dashboard is an independent
+        <strong className="text-foreground">Disclaimer:</strong> This dashboard is an independent
         project and is not affiliated with, endorsed by, or connected to United Airlines, Inc. All
         trademarks belong to their respective owners. Flight tracking data is sourced from publicly
         available ADS-B receivers. Route estimates are algorithmic approximations and may not
