@@ -162,12 +162,11 @@ describe.skipIf(!hasDist)('tracker pages', () => {
       const card = doc.getElementById(p.id);
       expect(hrefsIn(card)).toContain(`/trackers/united-hubs/${p.hub.toLowerCase()}#${p.id}`);
     }
-    // Every hub's map card, and Guam's "Beyond the map" entry, end in its tracker page and its hub guide.
+    // The marker cards carry no links (the slot is swapped on every marker focus or hover, so they
+    // could not be reached); Guam's always-visible "Beyond the map" entry carries its two.
     const map = doc.querySelector('[data-trk-map]');
-    for (const code of unitedHubDetailCodes) {
-      const c = code.toLowerCase();
-      expect(hrefsIn(map), code).toEqual(expect.arrayContaining([`/trackers/united-hubs/${c}`, `/hubs/${c}`]));
-    }
+    for (const card of map.querySelectorAll('[data-trk-card]')) expect(hrefsIn(card), card.dataset.trkCard).toEqual([]);
+    expect(hrefsIn(map)).toEqual(['/trackers/united-hubs/gum', '/hubs/gum']);
     const club = doc.getElementById('club-math');
     expect(hrefsIn(club)).toEqual([
       '/trackers/united-hubs/iah#iah-club-b-north',
@@ -177,10 +176,11 @@ describe.skipIf(!hasDist)('tracker pages', () => {
     ]);
   });
 
-  it('/trackers/atc: a hub tower\'s map card links its tower page and hub guide; other airports\' cards none', () => {
+  it('/trackers/atc: no link inside the map (its cards are swapped on every marker focus; SJU is not a hub)', () => {
     const doc = load('trackers/atc.html');
-    expect(hrefsIn(doc.querySelector('[data-trk-card="ord"]'))).toEqual(['/trackers/atc/ord', '/hubs/ord']);
-    expect(hrefsIn(doc.querySelector('[data-trk-card="cle"]'))).toEqual([]);
+    const map = doc.querySelector('[data-trk-map]');
+    expect(map.querySelectorAll('[data-trk-card]').length).toBeGreaterThan(80);
+    expect(hrefsIn(map)).toEqual([]);
   });
 
   for (const [dir, codes] of [['atc', atcHubDetailCodes], ['united-hubs', unitedHubDetailCodes]]) {

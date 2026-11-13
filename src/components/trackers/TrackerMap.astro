@@ -9,10 +9,13 @@
 // Shapes draw with `currentColor`, so one tone class on the wrapping `<g>` colours the marker,
 // and the legend reuses the same map.
 //
-// Links (links everywhere, Nov 12 2026): a United hub's inspector card, and its entry in "Beyond the
-// map", end in that place's links (`links`, from src/lib/tracker-links.js `mapPlaceLinks`): its
-// entry on this tracker in link colour, then its hub page, quiet. Legend rows stay text (a key, not
-// a list of things). The markers stay buttons that show a card.
+// Links (links everywhere, Nov 12 2026): a United hub's entry in "Beyond the map" (Guam) ends in
+// that place's links (`links`, from src/lib/tracker-links.js `mapPlaceLinks`): its entry on this
+// tracker in link colour, then its hub page, quiet. The inspector cards carry no links: the card
+// slot is replaced whenever any marker is focused or hovered (src/scripts/trackers.ts), so Tab from
+// a marker, or a mouse moving down to the card, swaps it before its links can be reached. The table
+// or hub-by-hub section under the map carries the same two links for every hub. Legend rows stay
+// text (a key, not a list of things). The markers stay buttons that show a card.
 import StatusBadge from './StatusBadge.astro';
 import { TONE_TEXT, toneClass } from './tones';
 
@@ -35,7 +38,6 @@ interface MapPoint {
     badge: { label: string; tone: string; glyph: string };
     line1?: string;
     line2?: string;
-    links?: PlaceLink[];
   };
 }
 
@@ -196,15 +198,6 @@ const placeLinkClass = (tone: PlaceLink['tone']) => [
           {p.card.line2 && (
             <div class="mt-1 text-[11px] leading-relaxed text-muted-foreground">{p.card.line2}</div>
           )}
-          {p.card.links?.length ? (
-            <div class="mt-1 flex flex-wrap gap-x-4">
-              {p.card.links.map((l) => (
-                <a class:list={placeLinkClass(l.tone)} href={l.href}>
-                  {l.text}
-                </a>
-              ))}
-            </div>
-          ) : null}
         </div>
       ))
     }

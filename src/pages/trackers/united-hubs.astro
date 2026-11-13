@@ -122,10 +122,11 @@ for (const code of hubOrder) {
   const h = unitedHubs[code];
   const m = hubMapMeta[code];
   const p = projectPoint(h.lng, h.lat);
-  // A hub's card and its "Beyond the map" entry (Guam) link to its page here and to its hub page.
-  const links = mapPlaceLinks(code, unitedHubEntryHref(code, unitedHubDetailCodes), `${code} projects →`);
-  const card = { title: `${code} — ${h.name}`, badge: m.badge, line1: m.line1, line2: h.quietNote ?? '', links };
+  const card = { title: `${code} — ${h.name}`, badge: m.badge, line1: m.line1, line2: h.quietNote ?? '' };
   if (!p) {
+    // Guam's "Beyond the map" entry is always on screen and in tab order, so it carries the place's
+    // links (its page here, its hub page). The marker cards do not: see TrackerMap.astro.
+    const links = mapPlaceLinks(code, unitedHubEntryHref(code, unitedHubDetailCodes), `${code} projects →`);
     offMap.push({ title: `${code} — ${h.city}`, badge: m.badge, links });
     continue;
   }
@@ -416,7 +417,7 @@ const chipClass =
                     Nov 12 2026), the group's one link-coloured link. The name opens the hub's page on
                     this tracker and the FAA line its tower page, both quiet. */}
                 <a
-                  class="-my-3 inline-flex min-h-11 items-center font-mono text-base font-bold text-primary underline-offset-2 hover:underline pointer-fine:md:my-0 pointer-fine:md:min-h-0"
+                  class="-my-3 inline-flex min-h-11 min-w-11 items-center font-mono text-base font-bold text-primary underline-offset-2 hover:underline pointer-fine:md:my-0 pointer-fine:md:min-h-0 pointer-fine:md:min-w-0"
                   href={hubLink(code, 'site')?.href}
                 >
                   {code}

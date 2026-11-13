@@ -56,10 +56,10 @@ export function projectEntryHref(project) {
 }
 
 /**
- * The links a tracker map prints for a place it marks: for a United hub, its own entry on this
- * tracker (the place the marker stands for, in link colour) and then its hub page (quiet, worded as
- * the dashboard's door, "ORD hub guide"). Any other airport gets none: its home is its row in the
- * table under the map.
+ * The links a tracker map prints for a place it lists "Beyond the map" (Guam): for a United hub,
+ * its own entry on this tracker (in link colour) and then its hub page (quiet, worded as the
+ * dashboard's door, "ORD hub guide"). Any other airport gets none: its home is its row in the table
+ * under the map. The marker cards print none (src/components/trackers/TrackerMap.astro).
  *
  * @param {unknown} code
  * @param {string | null} entryHref  this tracker's page for the hub, or null when it has none.

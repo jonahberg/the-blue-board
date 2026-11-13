@@ -5,7 +5,7 @@ import { unitedHubs } from '../../data/trackers/united-hubs.js';
 import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
 import { atcHubDetailCodes, trackerParentSeo } from '../../lib/tracker-detail.js';
 import { hubLink } from '../../lib/hub-link.js';
-import { atcEntryHref, mapPlaceLinks, unitedHubEntryHref } from '../../lib/tracker-links.js';
+import { atcEntryHref, unitedHubEntryHref } from '../../lib/tracker-links.js';
 import { countIs, countLabel, plural } from '../../lib/plural.js';
 import StatStrip from '../../components/trackers/StatStrip.astro';
 import TrackerMap from '../../components/trackers/TrackerMap.astro';
@@ -96,9 +96,6 @@ for (const a of atcAirports) {
       badge,
       line1: `${a.city}, ${a.state} · ${dateLine}`,
       line2: a.note ?? '',
-      // A United hub's card links to its tower page here and to its hub page; any other airport's
-      // home is its row in the table below (src/lib/tracker-links.js).
-      links: mapPlaceLinks(a.code, atcEntryHref(a.code, atcHubDetailCodes), `${a.code} status →`),
     },
   });
 }
