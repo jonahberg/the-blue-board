@@ -130,12 +130,16 @@ describe('links in running text are not colour-only (audit F43, WCAG 1.4.1)', ()
 // from `PRESS`) is followed to the element that uses it, through template literals, ternaries
 // and `cn(…)` calls; anything the file cannot resolve (an import) is not read.
 //
-// FlightLink, TailLink, HubLink and TypeLink print plain text when the name has no home, and
-// their `className` lands on that plain rendering too, so it is checked; FlightLink's
-// `linkClassName` reaches the link only and is not. DashLink, Button, `a` and `button` are
-// links or buttons whatever they are given.
-const LINK_ELEMENTS = new Set(['a', 'button', 'DashLink', 'Button']);
-const PLAIN_TOO = new Set(['FlightLink', 'TailLink', 'HubLink', 'TypeLink']);
+// FlightLink, TailLink, HubLink, HubStatusLink and TypeLink print plain text when the name has no
+// home, and their `className` lands on that plain rendering too, so it is checked; FlightLink's
+// `linkClassName` reaches the link only and is not. DashLink, Button, `a`, `button` and
+// ToggleGroupItem (a Radix toggle, rendered as a button) are links or buttons whatever they are
+// given, and an element written inside one of them is part of that control: the active sort
+// arrow inside a sort header's button, the watched eye inside the watch toggle (DESIGN.md
+// 2026-11-11: "↑/↓ in primary"; "an 'on' toggle takes the primary colour"). An element inside
+// any other component (a Card, a TailLink, which may print plain text) is held to the rule.
+const LINK_ELEMENTS = new Set(['a', 'button', 'DashLink', 'Button', 'ToggleGroupItem']);
+const PLAIN_TOO = new Set(['FlightLink', 'TailLink', 'HubLink', 'HubStatusLink', 'TypeLink']);
 
 /** The utility a class names, without its variants (`hover:`, `pointer-coarse:`) or `!`. */
 const utility = (cls) => cls.split(':').pop().replace(/^!/, '');
@@ -179,10 +183,10 @@ function linkStyleOffenders(source, fileName = 'inline.tsx') {
   const strings = (node) => stringPieces(node, named);
 
   const offenders = [];
-  (function visit(node) {
+  (function visit(node, insideControl = false) {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = node.tagName.getText(sf);
-      if (!LINK_ELEMENTS.has(tag)) {
+      if (!LINK_ELEMENTS.has(tag) && !insideControl) {
         for (const attr of node.attributes.properties) {
           if (!ts.isJsxAttribute(attr) || attr.name.getText(sf) !== 'className' || !attr.initializer) continue;
           const classes = strings(attr.initializer).flatMap((s) => s.split(/\s+/)).filter(Boolean);
@@ -194,41 +198,73 @@ function linkStyleOffenders(source, fileName = 'inline.tsx') {
         }
       }
     }
-    ts.forEachChild(node, visit);
+    // What a link or button wraps is part of it.
+    const opensControl = ts.isJsxElement(node) && LINK_ELEMENTS.has(node.openingElement.tagName.getText(sf));
+    ts.forEachChild(node, (child) => visit(child, insideControl || (opensControl && child !== node.openingElement)));
   })(sf);
   return offenders;
 }
 
 describe('link colour and underline only on links and buttons (links everywhere)', () => {
-  // The views this guard covers. Parts 2 and 3 of "links everywhere" add theirs here.
-  const SCOPE = [
-    'src/app/views/StarlinkView.tsx',
-    ...readdirSync(resolve(ROOT, 'src/app/views/starlink'))
+  // Every dashboard view that prints names, and the overlays and panels that do: each tab's view
+  // and its folder, the watch panel and banner, the flight sheet, the aircraft, FR24 and delay
+  // dialogs, and the brief's panel and sheet.
+  const tsxIn = (dir) =>
+    readdirSync(resolve(ROOT, dir))
       .filter((name) => name.endsWith('.tsx'))
-      .map((name) => `src/app/views/starlink/${name}`),
+      .map((name) => `${dir}/${name}`);
+  const VIEWS = ['Starlink', 'Schedule', 'Live', 'Stats', 'Weather', 'Fleet', 'MyFlights', 'Sources'];
+  const VIEW_DIRS = ['starlink', 'schedule', 'live', 'stats', 'weather', 'fleet', 'myflight'];
+  const SCOPE = [
+    ...VIEWS.map((view) => `src/app/views/${view}View.tsx`),
+    ...VIEW_DIRS.flatMap((dir) => tsxIn(`src/app/views/${dir}`)),
+    'src/app/shell/WatchPanel.tsx',
+    'src/app/shell/WatchBanner.tsx',
+    ...['FlightSheet', 'AircraftDetailDialog', 'Fr24LookupDialog', 'DelayExplainDialog', 'BriefPanel', 'BriefSheet'].map(
+      (name) => `src/app/features/${name}.tsx`,
+    ),
   ];
-  // `file:line` → why that element may carry link colour or an underline. Empty today; a new
-  // entry needs a reason, and an entry that no longer matches anything fails.
+  // `file <tag> classes` → how many such elements the file may hold and why they may carry link
+  // colour or an underline (`allowlistProblems`, below: what an element is, not its line). Empty:
+  // the state marks the views carry (sort arrows, the watched eye, the map's "on" toggles) sit in
+  // their controls, which the scan knows.
   const ALLOW = {};
 
-  it('finds no element in the Starlink tab that looks like a link and is not one', () => {
+  it('finds no element in the dashboard that looks like a link and is not one', () => {
     const found = SCOPE.flatMap((file) =>
       linkStyleOffenders(readFileSync(resolve(ROOT, file), 'utf8'), file).map(
         (o) => `${file}:${o.line} <${o.tag}> ${o.classes.join(' ')}${o.plainToo ? ' (className reaches its plain-text rendering)' : ''}`,
       ),
     );
-    const at = (entry) => entry.split(' ')[0];
-    expect(found.filter((entry) => !(at(entry) in ALLOW))).toEqual([]);
-    for (const [where, reason] of Object.entries(ALLOW)) {
-      expect(reason.trim(), `${where} needs a reason`).not.toBe('');
-      expect(found.map(at), `${where} is allowlisted but no longer matches`).toContain(where);
-    }
+    expect(allowlistProblems(found, ALLOW)).toEqual([]);
   });
 
-  it('covers every Starlink view file', () => {
-    expect(SCOPE).toContain('src/app/views/starlink/RosterTable.tsx');
-    expect(SCOPE).toContain('src/app/views/starlink/DeparturesBoard.tsx');
-    expect(SCOPE.length).toBeGreaterThanOrEqual(8);
+  it('covers every dashboard view and the overlays that print names', () => {
+    for (const file of [
+      'src/app/views/starlink/RosterTable.tsx',
+      'src/app/views/starlink/DeparturesBoard.tsx',
+      'src/app/views/schedule/ScheduleTable.tsx',
+      'src/app/views/schedule/SchedulePhoneRow.tsx',
+      'src/app/views/live/LiveSidebar.tsx',
+      'src/app/views/live/MapControls.tsx',
+      'src/app/views/stats/HubMatrix.tsx',
+      'src/app/views/weather/NasPanel.tsx',
+      'src/app/views/weather/HubCard.tsx',
+      'src/app/views/fleet/FleetTable.tsx',
+      'src/app/views/fleet/SortableHeader.tsx',
+      'src/app/views/myflight/FlightCard.tsx',
+      'src/app/views/SourcesView.tsx',
+      'src/app/shell/WatchPanel.tsx',
+      'src/app/features/FlightSheet.tsx',
+      'src/app/features/AircraftDetailDialog.tsx',
+      'src/app/features/Fr24LookupDialog.tsx',
+      'src/app/features/DelayExplainDialog.tsx',
+      'src/app/features/BriefPanel.tsx',
+    ]) {
+      expect(SCOPE).toContain(file);
+    }
+    for (const file of SCOPE) expect(statSync(resolve(ROOT, file)).isFile(), file).toBe(true);
+    expect(SCOPE.length).toBeGreaterThanOrEqual(60);
   });
 
   it('catches link colour or an underline on an element that is not a link or button', () => {
@@ -245,6 +281,14 @@ describe('link colour and underline only on links and buttons (links everywhere)
     // A per-kind link's className reaches its plain-text rendering.
     expect(tags('const x = <FlightLink ident={n} className="text-primary" />;')).toEqual(['FlightLink']);
     expect(tags('const x = <HubLink code={c} className="underline" />;')).toEqual(['HubLink']);
+    expect(tags('const x = <HubStatusLink code={c} kind="nas" className="text-primary" />;')).toEqual(['HubStatusLink']);
+    // Beside a button is not inside it; inside a component that is not a control is not either,
+    // and a per-kind link may print plain text, so what it wraps is held to the rule too.
+    expect(tags('const x = <div><button>Sort</button><span className="text-primary">↑</span></div>;')).toEqual(['span']);
+    expect(tags('const x = <Card><span className="text-primary">UA576</span></Card>;')).toEqual(['span']);
+    expect(tags('const x = <TailLink reg={r}><span className="underline">{r}</span></TailLink>;')).toEqual(['span']);
+    // After a button closes, the next element is outside it.
+    expect(tags('const x = <p><button><i /></button><b className="underline">x</b></p>;')).toEqual(['b']);
   });
 
   it('lets links, buttons and the near-misses through', () => {
@@ -259,6 +303,12 @@ describe('link colour and underline only on links and buttons (links everywhere)
       "const PRESS = 'underline';\nconst x = <button className={PRESS}>x</button>;",
       // A string that is not a className is not read.
       'const x = <span title="text-primary underline">x</span>;',
+      // A control's own state marks: an element written inside a link or button is part of it,
+      // however deep, and a toggle group item is a button.
+      'const x = <button onClick={f}>Time<span className={on ? "text-primary" : "text-muted-foreground"}>↑</span></button>;',
+      'const x = <Button aria-pressed={w}><Eye className={w ? "text-primary" : ""} /></Button>;',
+      'const x = <a href="/"><span><i className="underline">x</i></span></a>;',
+      'const x = <ToggleGroupItem value="hubs" className="data-[state=on]:text-primary">Hubs</ToggleGroupItem>;',
     ];
     for (const src of ok) expect(linkStyleOffenders(src), src).toEqual([]);
   });
