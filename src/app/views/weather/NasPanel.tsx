@@ -80,7 +80,7 @@ function badgeTone(item: NasItem): string {
  * only meet at their edges. The row starts 12 px left so the first code lines up with the title.
  * A mouse at `md`+ gets the tight tags inline after the title, as before.
  */
-const TAG_ROW = '-ml-3 flex flex-wrap gap-x-1 pointer-fine:md:ml-1 pointer-fine:md:inline-flex';
+const TAG_ROW = '-ml-3 flex flex-wrap gap-x-1.5 pointer-fine:md:ml-1 pointer-fine:md:inline-flex';
 const HUB_TAG =
   'inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[10px] pointer-fine:md:min-h-0 pointer-fine:md:min-w-0';
 
