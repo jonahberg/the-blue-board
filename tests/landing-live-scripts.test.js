@@ -306,6 +306,9 @@ describe.skipIf(!hasDist)('src/scripts/fleet-live.ts on /fleet/787-9-dreamliner'
     expect(hub.className).not.toContain('text-primary');
     // The route cell clips (truncate), so the focus ring is drawn inside the link, as on the hub board.
     expect(hub.className.split(/\s+/)).toContain('focus-visible:-outline-offset-2');
+    // At least 24 px tall for a mouse (DESIGN.md), the tail's 11 px text included.
+    const tailLink = second.querySelector('[data-f="reg"] a');
+    expect(tailLink.className.split(/\s+/)).toContain('min-h-6');
   });
 
   // Rows re-cut on every refresh, and hubs repeat across them: "the third link to /hubs/sfo" is a

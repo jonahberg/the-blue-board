@@ -23,12 +23,13 @@ const FETCH_TIMEOUT_MS = 10_000;
 
 /**
  * A hub end or the tail in a row: body colour with a quiet underline (the site's second-name look,
- * LINK_TONE.quiet), above the row's stretched live-map link (`z-10`), 24 px tall for a mouse. On a
+ * LINK_TONE.quiet), above the row's stretched live-map link (`z-10`), at least 24 px tall for a
+ * mouse (`min-h-6`: the tail's 11 px text alone makes 22.7 px), inside the 44 px row. On a
  * touch screen the row is one tap target (the map, with the number split out), so these take no
  * taps and drop the underline there; they stay in the tab order. The route cell truncates (clips),
  * so the focus ring is drawn inside the link (`-outline-offset-2`), as on the hub board.
  */
-const ROW_NAME_LINK = `relative z-10 inline-block py-1 ${LINK_TONE.quiet} focus-visible:-outline-offset-2 pointer-coarse:pointer-events-none pointer-coarse:no-underline`;
+const ROW_NAME_LINK = `relative z-10 inline-block min-h-6 py-1 ${LINK_TONE.quiet} focus-visible:-outline-offset-2 pointer-coarse:pointer-events-none pointer-coarse:no-underline`;
 
 /** `text` as a quiet link to `href`, or as plain text when it has none. */
 function nameOrText(text: string, href: string | null): Node {
