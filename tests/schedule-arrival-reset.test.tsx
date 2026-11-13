@@ -15,13 +15,18 @@
  * load, and the board's own loading policy.
  *
  * Also pinned: a hub link followed while Schedule is showing changes the board and keeps the
- * filters (ruling 2), and the error boundary's remount does not replay the last arrival's reset
- * over an answer applied since.
+ * reader's status, type and search (ruling 2; the new board still resets its four board filters,
+ * as any board change does), and the error boundary's remount does not replay the last arrival's
+ * reset over an answer applied since.
  */
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useCallback, useEffect, useState } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Each case mounts the whole view and waits out real debounces (about 2 s alone); under a loaded
+// machine that has measured three times as long, past the 5 s default.
+vi.setConfig({ testTimeout: 20_000 });
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DashLink } from '../src/app/features/DashLink';
@@ -340,7 +345,7 @@ describe('a hub link arriving at Schedule ends where a cold load of its address 
 });
 
 describe('what the arrival reset leaves alone', () => {
-  it('a hub link followed while Schedule is showing changes the board and keeps every filter (ruling 2)', async () => {
+  it('a hub link followed while Schedule is showing keeps status, type and search (ruling 2)', async () => {
     mountAt('/#schedule', '/?tab=schedule&hub=DEN');
     await settle();
     await dirtyFilters();
@@ -352,8 +357,13 @@ describe('what the arrival reset leaves alone', () => {
       hub: 'DEN',
       dir: 'departures',
       day: defaultSchedDayOffset('DEN'),
+      // What the reader is looking for stays.
       status: 'Canceled',
       find: 'UA',
+      // The board changed (ORD to DEN), so its four board filters reset, as any board change
+      // resets them (ScheduleView's [hub, dir, day] effect). Not the arrival reset: no seq.
+      routeType: 'All Routes',
+      wifi: 'All WiFi',
     });
     expect(seen.ui!.scheduleLink).toBeNull();
   });

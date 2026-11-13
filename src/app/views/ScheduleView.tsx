@@ -16,8 +16,9 @@
  *  - A hub link that ARRIVES here from another tab or an overlay (`scheduleLink`, a new `seq`)
  *    clears every filter, both copies, and an "Ask the board" answer, so the board lands where a
  *    cold load of `/?tab=schedule&hub=DEN` lands (the links plan, ruling 9). The follow has already
- *    set the board itself. A hub link followed while Schedule is showing does not bump `seq` and
- *    leaves the filters alone (ruling 2). The sort stays, as the Fleet tab's arrival keeps its own.
+ *    set the board itself. A hub link followed while Schedule is showing does not bump `seq`: the
+ *    status, type and search filters stay (ruling 2), and a new board resets its four contextual
+ *    filters as any board change does. The sort stays, as the Fleet tab's arrival keeps its own.
  *  - AeroDataBox is credited before any other provider in the footer — the schedules are
  *    theirs, and crediting Flightradar24 here was a ToS violation. FR24 credit belongs to
  *    live aircraft positions only.
