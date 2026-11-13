@@ -22,6 +22,7 @@ import { ScheduleProvider, useSchedule } from '../src/app/state/schedule';
 import type { ScheduleValue } from '../src/app/state/schedule';
 import { UiProvider, useUi } from '../src/app/state/ui';
 import type { UiValue } from '../src/app/state/ui';
+import { defaultSchedDayOffset } from '../src/lib/hubTz.js';
 
 vi.mock('../src/app/state/watch', () => ({ useWatch: () => ({ watched: [] }) }));
 vi.mock('../src/app/state/watch-alerts', () => ({ useWatchAlerts: () => ({ observe: () => {} }) }));
@@ -163,7 +164,7 @@ describe('DashLink, an unmodified primary click', () => {
     expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
   });
 
-  it("a hub link followed on Schedule changes the hub and keeps the reader's direction and day", () => {
+  it("a hub link followed on Schedule opens the hub's Departures on its default day, and moves nothing else", () => {
     const link = mount('/?tab=schedule&hub=ORD');
     act(() => seen.ui!.setTab('schedule'));
     act(() => seen.schedule!.setCurrent({ dir: 'arrivals', day: 1 }));
@@ -171,9 +172,12 @@ describe('DashLink, an unmodified primary click', () => {
 
     fireEvent.click(link);
 
-    expect(seen.schedule!.current).toEqual({ hub: 'ORD', dir: 'arrivals', day: 1 });
+    // The board the address names, as a cold load opens it.
+    expect(seen.schedule!.current).toEqual({ hub: 'ORD', dir: 'departures', day: defaultSchedDayOffset('ORD') });
+    // Not an arrival: no history entry, nothing said, the Schedule view's filters left alone.
     expect(window.history.length).toBe(before);
     expect(seen.ui!.announcement).toBe('');
+    expect(seen.ui!.scheduleLink).toBeNull();
   });
 });
 

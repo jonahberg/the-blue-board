@@ -437,15 +437,22 @@ describe('a link followed on the tab already showing changes what it names and r
     expect(window.history.length).toBe(before);
   });
 
-  it('/?tab=schedule&hub=DEN from the Schedule tab on Arrivals for tomorrow: the hub changes, the rest stays', () => {
+  it('/?tab=schedule&hub=DEN from the Schedule tab on Arrivals for tomorrow: the board a cold load opens, filters untouched', async () => {
+    const coldState = await cold('/?tab=schedule&hub=DEN');
     mountAt('/#stats', '/?tab=schedule&hub=DEN');
     act(() => seen.ui!.setTab('schedule'));
     act(() => seen.schedule!.setCurrent({ dir: 'arrivals', day: 1 }));
+    const before = window.history.length;
 
     fireEvent.click(screen.getByRole('link', { name: 'follow' }));
 
-    expect(state()).toMatchObject({ tab: 'schedule', scheduleHub: 'DEN', scheduleDir: 'arrivals', scheduleDay: 1 });
+    // Which board shows is what the address names: DEN, Departures, DEN's default day.
+    const after = await finalState();
+    expect(after).toEqual(coldState);
+    // Not an arrival: no Schedule filter reset requested, no history entry.
     expect(seen.ui!.scheduleLink).toBeNull();
+    expect(window.history.length).toBe(before);
+    cleanup();
   });
 });
 

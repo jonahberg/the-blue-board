@@ -10,11 +10,12 @@
  * same.
  *
  * A link ARRIVES when it changes the tab, and only then is its destination put where a cold load of
- * the same address starts (a hub link: Departures, the hub's default day, and `scheduleLink` for
- * the Schedule view's own filters; a Fleet link: `fleetLink.arriving`, so the Fleet view resets
- * before it applies). A link followed on the tab already showing changes only what it names: a hub
- * link on Schedule changes the board's hub and keeps direction and day, a Fleet link sets its own
- * filter (the links plan, ruling 2).
+ * the same address starts (a hub link: `scheduleLink`, so the Schedule view clears its own
+ * filters; a Fleet link: `fleetLink.arriving`, so the Fleet view resets before it applies). A link
+ * followed on the tab already showing resets nothing (the links plan, ruling 2): no filter, no
+ * history entry, no focus move. What the address names still applies either way: a hub link opens
+ * that hub's board on Departures and the hub's default day, as a cold load does, and a Fleet link
+ * on Fleet sets its own filter.
  *
  * A link that changes the tab leaves ONE history entry (`pushHistoryEntry`), so Back returns to the
  * tab the reader was on: `FollowProvider`'s history listener restores it, announces the tab and
@@ -62,13 +63,12 @@ type Latest = {
   followScheduleLink: UiValue['followScheduleLink'];
   announce: UiValue['announce'];
   setCurrent: ScheduleValue['setCurrent'];
-  board: ScheduleValue['current'];
 };
 
 export function FollowProvider({ children }: { children: ReactNode }) {
   const { tab, setTab, openAircraft, followFleetLink, followScheduleLink, announce } = useUi();
-  const { setCurrent, current: board } = useSchedule();
-  const now = { tab, setTab, openAircraft, followFleetLink, followScheduleLink, announce, setCurrent, board };
+  const { setCurrent } = useSchedule();
+  const now = { tab, setTab, openAircraft, followFleetLink, followScheduleLink, announce, setCurrent };
   const latest = useRef<Latest>(now);
   // The tab a history move has already been announced for, until the tab change commits: Back
   // fires `popstate` and then `hashchange`, and the second must not speak again.
@@ -113,8 +113,7 @@ export function FollowProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const follow = useCallback<FollowDeepLink>((intent) => {
-    const { tab: from, setTab, openAircraft, followFleetLink, followScheduleLink, announce, setCurrent, board } =
-      latest.current;
+    const { tab: from, setTab, openAircraft, followFleetLink, followScheduleLink, announce, setCurrent } = latest.current;
     const to = intent.tab && intent.tab !== from ? intent.tab : null;
     // Arriving from another tab, or already there (the links plan, ruling 2): only a link that
     // arrives puts its destination where a cold load of its address starts; one followed on the
@@ -123,16 +122,14 @@ export function FollowProvider({ children }: { children: ReactNode }) {
     // Read before anything moves: a caller may blur the link after this returns (the hub chip).
     const refocus = arriving && focusLeavesWith(from);
     if (intent.scheduleHub) {
-      if (arriving) {
-        // A board as a cold load opens it: Departures (the hub chip's figure is operated
-        // departures), and, with no day given, the hub's useful day (`setCurrent` re-derives it).
-        // The Schedule view clears its own filters on the new `scheduleLink` seq.
-        setCurrent({ hub: intent.scheduleHub, dir: 'departures' });
-        followScheduleLink(intent.scheduleHub);
-      } else {
-        // On the Schedule tab already: the hub changes, the reader's direction and day stay.
-        setCurrent({ hub: intent.scheduleHub, day: board.day });
-      }
+      // The board the address names, as a cold load of it opens it, whether the link arrives or
+      // Schedule is already showing: Departures (the hub chip's figure is operated departures)
+      // and, with no day given, the hub's useful day (`setCurrent` re-derives it). DESIGN.md
+      // 2026-11-12; the controller's ruling on the foundation review, Nov 12 2026.
+      setCurrent({ hub: intent.scheduleHub, dir: 'departures' });
+      // Only a link that arrives clears the Schedule view's own status, type and search filters
+      // (the view does it on a new `scheduleLink` seq); one followed on Schedule leaves them.
+      if (arriving) followScheduleLink(intent.scheduleHub);
     }
     if (intent.fleet) followFleetLink(intent.fleet, { arriving });
     if (to) {
