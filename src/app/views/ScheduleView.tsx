@@ -14,8 +14,9 @@
  *  - The board loads from an effect keyed on the selection, so a deep link (`?hub=DEN`), the
  *    search palette's `goto` and a click on the hub select all take the same path.
  *  - A hub link that ARRIVES here from another tab or an overlay (`scheduleLink`, a new `seq`)
- *    clears every filter, both copies, and an "Ask the board" answer, so the board lands where a
- *    cold load of `/?tab=schedule&hub=DEN` lands (the links plan, ruling 9). The follow has already
+ *    clears every filter, both copies, and Schedule's own "Ask the board" answer (never another
+ *    view's), so the board lands where a cold load of `/?tab=schedule&hub=DEN` lands (the links
+ *    plan, ruling 9). The follow has already
  *    set the board itself. A hub link followed while Schedule is showing does not bump `seq`: the
  *    status, type and search filters stay (ruling 2), and a new board resets its four contextual
  *    filters as any board change does. The sort stays, as the Fleet tab's arrival keeps its own.
@@ -126,7 +127,9 @@ export default function ScheduleView() {
   // A hub link arrived from another tab (`scheduleLink`; contract: act on a new `seq` only, keyed
   // on `seq`, never `hub`). Every filter goes, both copies, not only status, type and search: on
   // a board already showing that hub, Departures and its default day, nothing else resets the four
-  // contextual filters. The answer to "Ask the board" goes too.
+  // contextual filters. Schedule's own answer to "Ask the board" goes too, and only Schedule's:
+  // the store holds one answer for whichever view asked, and a Live answer must survive a link
+  // followed out of Live (as Fleet guards its own, `askActive`).
   //
   // The effect's first run only notes the `seq`. The view is new then: the first arrival mounts
   // it in the same commit, or the error boundary's "Try again" remounts it. Its filters are empty
@@ -135,7 +138,7 @@ export default function ScheduleView() {
   const { scheduleLink } = ui;
   const seenLinkSeq = useRef(0);
   const linkEffectRan = useRef(false);
-  const clearAsk = ask.clear;
+  const { active: askActive, clear: clearAsk } = ask;
   useEffect(() => {
     const fresh = !linkEffectRan.current;
     linkEffectRan.current = true;
@@ -144,8 +147,8 @@ export default function ScheduleView() {
     if (fresh) return;
     setFilters(EMPTY_FILTERS);
     setDebouncedFilters(EMPTY_FILTERS);
-    clearAsk();
-  }, [scheduleLink, clearAsk]);
+    if (askActive) clearAsk();
+  }, [scheduleLink, askActive, clearAsk]);
 
   const dayStartSec = useMemo(() => {
     if (!hub) return 0;

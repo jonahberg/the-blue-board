@@ -332,6 +332,22 @@ describe('a hub link arriving at Schedule ends where a cold load of its address 
     expect(state()).toEqual(coldState);
   });
 
+  it("another view's answer to \"Ask the board\" survives an arrival at a Schedule view already mounted", async () => {
+    mountAt('/#schedule', '/?tab=schedule&hub=DEN');
+    await settle();
+    act(() => seen.ui!.setTab('live'));
+    act(() => {
+      setAskResult({ view: 'live', filters: { starlink: true } }, 'rules');
+    });
+    const liveAnswer = __peekAskStateForTests().result;
+    expect(liveAnswer).toMatchObject({ view: 'live' });
+
+    await follow();
+
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(__peekAskStateForTests().result).toEqual(liveAnswer);
+  });
+
   it('on a first visit to Schedule: the view the link mounts lands as cold', async () => {
     const coldState = await cold('/?tab=schedule&hub=DEN');
     mountAt('/#stats', '/?tab=schedule&hub=DEN');
