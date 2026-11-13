@@ -143,9 +143,8 @@ function statusClass(status: string | undefined): string {
 
     <header class="mt-6 border-b border-border pb-5">
       {/* The type code in the h1 (`.type-badge`, mono) names this page, so it is not a link
-          (ruling 1, self-links are plain) and takes body colour: link colour on it was decoration
-          (DESIGN.md "colour that is not a status signal is decoration"). */}
-      <h1 class="bb-content text-2xl font-bold tracking-tight text-balance text-foreground [&_.type-badge]:text-foreground">
+          (self-links are plain text) and content.css gives it body colour. */}
+      <h1 class="bb-content text-2xl font-bold tracking-tight text-balance text-foreground">
         <Fragment set:html={data.headerTitle.replace(/ — /g, "&nbsp;— ")} />
       </h1>
       <p class="mt-1.5 text-xs text-muted-foreground">{data.subtitle}</p>

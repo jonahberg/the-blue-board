@@ -265,6 +265,79 @@ describe('link colour and underline only on links and buttons (links everywhere)
   });
 });
 
+// content.css styles the raw HTML strings in src/data (hub and fleet `headerTitle`, `contentHtml`,
+// news bodies), which no class-reading guard can see. Its link colour and underlines may land
+// only on links: the hub h1's `.iata` (ORD) and the fleet h1's `.type-badge` name the page itself
+// and were painted in link colour without being links.
+const CSS_LINK_SELECTOR = /(?:^|[\s>+~])a(?::[\w-]+(?:\([^)]*\))?)*$/;
+// selector → why a rule that is not `… a` may carry link colour or an underline.
+const CSS_LINK_ALLOW = {
+  '.bb-content .live-link': 'set only on an <a> in the hub data strings (checked below)',
+};
+
+/** `selector` for every rule in `css` that applies link colour or an underline and does not target a link. */
+function cssLinkStyleOffenders(css) {
+  const out = [];
+  const plain = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const [, selectors, body] of plain.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const applied = [...body.matchAll(/@apply([^;]*);/g)].flatMap(([, list]) => list.trim().split(/\s+/)).map(utility);
+    const paints =
+      applied.some((u) => LINK_COLOUR(u) || UNDERLINE(u)) ||
+      /(?:^|;)\s*color:\s*var\(--primary\)/.test(body) ||
+      /text-decoration(?:-line)?:\s*underline/.test(body);
+    if (!paints) continue;
+    for (const selector of selectors.split(',').map((s) => s.trim())) {
+      if (!CSS_LINK_SELECTOR.test(selector)) out.push(selector);
+    }
+  }
+  return out;
+}
+
+describe('content.css paints link colour and underlines only on links (links everywhere)', () => {
+  it('finds no rule that makes something look like a link without being one', () => {
+    const found = cssLinkStyleOffenders(readFileSync(resolve(ROOT, 'src/styles/content.css'), 'utf8'));
+    expect(found.filter((s) => !(s in CSS_LINK_ALLOW))).toEqual([]);
+    for (const [selector, reason] of Object.entries(CSS_LINK_ALLOW)) {
+      expect(reason.trim(), `${selector} needs a reason`).not.toBe('');
+      expect(found, `${selector} is allowlisted but no longer matches`).toContain(selector);
+    }
+  });
+
+  it('.live-link is only ever an <a> in the data strings', () => {
+    const tags = [...walkData(resolve(ROOT, 'src/data'))].flatMap((path) =>
+      [...readFileSync(path, 'utf8').matchAll(/<([a-zA-Z][\w-]*)\b[^<>]*\blive-link\b/g)].map((m) => m[1]),
+    );
+    expect(tags.length).toBeGreaterThan(0);
+    expect([...new Set(tags)]).toEqual(['a']);
+  });
+
+  it('catches link colour or an underline on a selector that is not a link, and lets links through', () => {
+    expect(cssLinkStyleOffenders('@layer components { .bb-content .iata, .bb-content .type-badge { @apply font-mono text-primary; } }')).toEqual([
+      '.bb-content .iata',
+      '.bb-content .type-badge',
+    ]);
+    expect(cssLinkStyleOffenders('.x span { @apply hover:underline; }')).toEqual(['.x span']);
+    expect(cssLinkStyleOffenders('.x .code { color: var(--primary); }')).toEqual(['.x .code']);
+    expect(cssLinkStyleOffenders('.x .code { text-decoration: underline; }')).toEqual(['.x .code']);
+    for (const ok of [
+      '.bb-content a { @apply text-foreground underline decoration-muted-foreground/50; }',
+      '.bb-content li a:hover { @apply text-primary; }',
+      '.bb-content .btn { @apply bg-primary-fill text-primary-foreground no-underline underline-offset-2; }',
+      '/* .bb-content .iata { @apply text-primary; } */',
+    ]) {
+      expect(cssLinkStyleOffenders(ok), ok).toEqual([]);
+    }
+  });
+});
+
+function* walkData(dir) {
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) yield* walkData(path);
+    else if (/\.(js|ts|json)$/.test(name)) yield path;
+  }
+}
+
 describe('content pages keep an 11px type floor (audit F75)', () => {
   // DESIGN.md reserves arbitrary micro sizes for dense DASHBOARD chrome; the prerendered
   // content pages had carried the legacy tracker CSS's 8–10px labels over.

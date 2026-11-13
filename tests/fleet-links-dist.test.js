@@ -99,13 +99,14 @@ describe.skipIf(!hasDist)('fleet type pages: the registry links every tail', () 
     }
   });
 
-  it('the h1 names the page in body colour, and no link-coloured text on a type page is not a link', () => {
+  it('the h1 names the page and is not a link, and no link-coloured text on a type page is not a link', () => {
+    // The h1's `.type-badge` takes body colour from content.css, which jsdom cannot see;
+    // tests/design-guards.test.js holds content.css to links-only link colour.
     for (const slug of fleetOrder) {
       const doc = page(`fleet/${slug}.html`);
       const h1 = doc.querySelector('main h1');
       expect(h1.querySelector('.type-badge')).not.toBeNull();
       expect(h1.querySelector('a')).toBeNull();
-      expect(classes(h1)).toContain('[&_.type-badge]:text-foreground');
       expect(painted(doc), slug).toEqual([]);
     }
   });
