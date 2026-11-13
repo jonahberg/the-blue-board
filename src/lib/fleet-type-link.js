@@ -58,3 +58,22 @@ export function fleetTypeCodeForTail(reg, fleetByReg) {
   const typeCode = fleetByReg[tail]?.t;
   return typeof typeCode === 'string' && Object.hasOwn(FLEET_TYPE_SLUGS, typeCode) ? typeCode : null;
 }
+
+/**
+ * The type a row links to, by the rule above in one call: the tail's type in the fleet database
+ * when the row has a tail the database knows (`fleetTypeCodeForTail`); otherwise the printed type
+ * text, only when it is exactly one of the fleet database's type codes; otherwise null. A row
+ * whose tail the database knows never falls back to its printed text, so N75436's "737-900" links
+ * as the 737-900ER. ICAO codes (B739 is the 737-900 and the 737-900ER), clipped provider text
+ * ("Boeing 737") and regional types are null on their own.
+ *
+ * @param {{reg?: unknown, typeText?: unknown, fleetByReg?: Record<string, {t?: string}> | null}} row
+ * @returns {string | null}  a key of FLEET_TYPE_SLUGS, e.g. '737-900ER'.
+ */
+export function fleetTypeCodeFor({ reg, typeText, fleetByReg } = {}) {
+  const byTail = fleetTypeCodeForTail(reg, fleetByReg);
+  if (byTail) return byTail;
+  const tail = tailLink(reg)?.reg;
+  if (tail && fleetByReg && Object.hasOwn(fleetByReg, tail)) return null;
+  return typeof typeText === 'string' && Object.hasOwn(FLEET_TYPE_SLUGS, typeText) ? typeText : null;
+}
