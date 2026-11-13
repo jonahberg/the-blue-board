@@ -14,6 +14,10 @@
  * items, one plain line — "FAA status as of HH:MMZ: …" — and a stale NAS answer's tiers are not
  * drawn, so nothing here reads as a confirmed live disruption. The stale airport programs are
  * already out of `faaIndex` (state/weather.tsx), so the hub cards and the strip agree.
+ *
+ * Each hub tag on an item links to that hub's card on this tab, in place (links everywhere, part
+ * 2): the tag is a hub printed with its FAA status, so it goes where the dashboard shows that hub's
+ * status, not to its board. The panel is not a live region, so its links are not re-read on a poll.
  */
 
 import { History } from 'lucide-react';
@@ -30,6 +34,7 @@ import {
 import { WX_HUBS } from '@/lib/weather-cards.js';
 import { cn } from '@/lib/utils';
 import type { NasData } from '../../data/types';
+import { HubStatusLink } from '../../features/EntityLinks';
 import { useWeatherOptional } from '../../state/weather';
 
 type DetailPart = { kind: 'text' | 'delay'; text: string };
@@ -63,6 +68,21 @@ function badgeTone(item: NasItem): string {
   return BADGE_TONE[cls] ?? BADGE_TONE['sev-other'];
 }
 
+/**
+ * A hub tag: the hub's card on this tab (`HubStatusLink kind="weather"`), quiet, on a neutral tag.
+ * Wherever its 44 px touch box is drawn (every pointer below `md`, a coarse one at any width) the
+ * tags after the first sit 20 px apart, so two tags' boxes never overlap; a mouse at `md`+ keeps
+ * them tight. The first tag's box may cover the end of the title, which is text.
+ */
+const HUB_TAG = 'ml-5 rounded-sm bg-muted px-1 font-mono text-[9px] first:ml-1 pointer-fine:md:ml-1';
+
+/**
+ * An item with hub tags is 44 px tall wherever the boxes are drawn: a tag's box reaches about 14 px
+ * above the title's line, and with the item that tall and the list's gap below it, no box reaches
+ * the next item's.
+ */
+const TAGGED_ITEM = 'min-h-11 pointer-fine:md:min-h-0';
+
 function Tier({ label, items }: { label: string; items: NasItem[] }) {
   if (!items.length) return null;
   return (
@@ -75,7 +95,7 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
       </div>
       <ul className="mt-1.5 space-y-1.5">
         {items.map((item, i) => (
-          <li key={`${item.sevType}-${item.title}-${i}`} className="flex gap-2">
+          <li key={`${item.sevType}-${item.title}-${i}`} className={cn('flex gap-2', item.hubs.length && TAGGED_ITEM)}>
             <Badge
               variant="outline"
               // One width for GS, CDR and OTHER, so every title in a tier starts on the same line.
@@ -88,15 +108,12 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
             </Badge>
             <div className="min-w-0">
               <p className="text-[11px]">
-                {/* Sentence case for reading; codes and acronyms stay as the FAA sent them. */}
+                {/* Sentence case for reading; codes and acronyms stay as the FAA sent them. The
+                    title is the FAA's own words and stays text, a facility code in it too: the
+                    hub tags after it are where a hub links. */}
                 {nasDisplayTitle(item.title) as string}
                 {item.hubs.map((hub) => (
-                  <span
-                    key={hub}
-                    className="ml-1 rounded-sm bg-primary/15 px-1 font-mono text-[9px] text-primary"
-                  >
-                    {hub}
-                  </span>
+                  <HubStatusLink key={hub} code={hub} kind="weather" className={HUB_TAG} />
                 ))}
               </p>
               {item.detailParts.length ? (
