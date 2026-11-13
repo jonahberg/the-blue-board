@@ -111,6 +111,20 @@ describe('AircraftDetailDialog, a mainline tail', () => {
     expect(screen.queryByRole('link', { name: 'DEN' })).toBeNull();
   });
 
+  it('a named aircraft taxiing without the feed\'s ground flag is not "Airborne": the rule Airborne Now uses', async () => {
+    // Ground-level telemetry (10 m, 5 m/s) counts as on the ground (`isOnGround`), so the Fleet
+    // tab leaves this aircraft out of Airborne Now and its Special card says NAMED, not AIRBORNE.
+    feed.flights = [{
+      fr24id: '3c', icao24: 'a', lat: 40, lon: -100, hdg: 90, alt: 10, spd: 5, vr: 0, squawk: null,
+      acType: 'B39M', reg: 'N37502', origin: 'DEN', dest: 'SEA', flightIATA: 'UA360', onGround: false,
+      callsign: 'UAL360', airline: 'UAL',
+    }];
+    await renderDialog();
+    expect(screen.getByText('Star of the Show')).toBeTruthy();
+    expect(screen.queryByText(/Airborne/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^View on map/ })).toBeNull();
+  });
+
   it('a live flight with neither a flight number nor a callsign is named by the tail, never "?"', async () => {
     feed.flights = [{
       fr24id: '3c', icao24: 'a', lat: 40, lon: -100, hdg: 90, alt: 10000, spd: 220, vr: 0, squawk: null,

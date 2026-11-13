@@ -57,7 +57,7 @@ import {
 } from '@/lib/express-fleet-view.js';
 import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from '@/lib/fleet-utils.js';
-import { buildSeatBar, nonMainlineAircraftSummary } from '@/lib/fleet-view.js';
+import { airborneFlightForTail, buildSeatBar, nonMainlineAircraftSummary } from '@/lib/fleet-view.js';
 import { getPhase } from '@/lib/flight-phase.js';
 import { STARLINK_TAB_HREF } from '@/lib/starlink-link.js';
 import { ENGINE_BY_TYPE } from '@/lib/special-aircraft.js';
@@ -186,8 +186,10 @@ export default function AircraftDetailDialog() {
   const open = Boolean(aircraftReg) && !onboardingOpen;
   const aircraft = reg ? fleetByReg[reg] : undefined;
 
+  // The tail's flight in the air, by the rule Airborne Now and every airborne count use
+  // (`isOnGround`): ground-level telemetry is on the ground even when the feed's flag is unset.
   const liveFlight = useMemo<Flight | undefined>(
-    () => (reg ? flights.find((f) => normalizeReg(f.reg) === reg && !f.onGround) : undefined),
+    () => (reg ? (airborneFlightForTail(flights, reg) as Flight | undefined) : undefined),
     [flights, reg],
   );
 

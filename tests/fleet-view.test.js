@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  airborneFlightForTail,
   buildAirborneRows,
   buildConfigGallery,
   buildDeliveryTimeline,
@@ -533,5 +534,28 @@ describe('heldFleetLinkStep: a Fleet address waiting for the fleet database', ()
     expect(heldFleetLinkStep({ loaded: false, loadFailed: true, ...at })).toBe('drop');
     expect(heldFleetLinkStep({ loaded: true, loadFailed: false, now: 11_001, deadline: 11_000 })).toBe('drop');
     expect(heldFleetLinkStep({ loaded: false, loadFailed: false, now: 11_001, deadline: 11_000 })).toBe('drop');
+  });
+});
+
+describe('airborneFlightForTail: the aircraft dialog\'s live flight, by the rule Airborne Now uses', () => {
+  const climbing = { reg: 'N37-502', flightIATA: 'UA600', origin: 'ORD', dest: 'DEN', alt: 3000, spd: 180, vr: 1500, onGround: false };
+
+  it('finds the tail\'s flight in the air, whatever the feed\'s hyphen or case', () => {
+    expect(airborneFlightForTail([climbing], 'N37502')).toBe(climbing);
+    expect(airborneFlightForTail([climbing], 'n37502')).toBe(climbing);
+  });
+
+  it('a flight the feed did not flag but whose telemetry is on the ground is not airborne (isOnGround)', () => {
+    const taxiing = { ...climbing, alt: 10, spd: 5, vr: 0, onGround: false };
+    expect(airborneFlightForTail([taxiing], 'N37502')).toBeUndefined();
+    // The same row and the same answer as the Airborne Now list.
+    expect(buildAirborneRows([taxiing], { fleetByReg: { N37502: { r: 'N37502', t: '737 MAX 9' } }, starlinkTails: new Set(), special: new Map() })).toEqual([]);
+  });
+
+  it('a flight the feed flags on the ground, another tail, or no tail at all finds nothing', () => {
+    expect(airborneFlightForTail([{ ...climbing, onGround: true }], 'N37502')).toBeUndefined();
+    expect(airborneFlightForTail([climbing], 'N37503')).toBeUndefined();
+    expect(airborneFlightForTail([climbing], '')).toBeUndefined();
+    expect(airborneFlightForTail(null, 'N37502')).toBeUndefined();
   });
 });

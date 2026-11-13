@@ -304,6 +304,24 @@ export function fleetTypeTextLink(typeText, activeType) {
 }
 
 /**
+ * A tail's flight in the air right now, for the aircraft dialog's "Airborne — View on map" block,
+ * or undefined when it is not flying. "Airborne" is the rule every airborne count and list uses
+ * (`isOnGround`: the feed's flag, or ground-level telemetry), so the dialog says Airborne exactly
+ * when the Fleet tab's Airborne Now lists the aircraft; the feed's flag alone let a taxiing
+ * aircraft read "Airborne" in its dialog while the list left it out. Registrations compare without
+ * hyphens and case (the feed says N17-104).
+ *
+ * @param {Array<Object>|null|undefined} flights  the live feed.
+ * @param {string} reg  the tail.
+ * @returns {Object|undefined}
+ */
+export function airborneFlightForTail(flights, reg) {
+  const key = String(reg || '').replace(/-/g, '').toUpperCase();
+  if (!key) return undefined;
+  return (flights || []).find((f) => f && String(f.reg || '').replace(/-/g, '').toUpperCase() === key && !isOnGround(f));
+}
+
+/**
  * The "Airborne Now" table: every live flight the fleet database can name, with the type and
  * search filters from the shared controls applied.
  *
