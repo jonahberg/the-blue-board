@@ -212,8 +212,11 @@ describe('FleetView — the United Express sub-tab', () => {
     const rows = expressPanel().querySelectorAll('tbody tr');
     expect(rows).toHaveLength(1);
     expect(rows[0].textContent).toContain('N14148');
-    fireEvent.click(screen.getByRole('button', { name: 'N14148' }));
-    expect(ctl.opened).toEqual(['N14148']);
+    // The registration is a link to the aircraft dialog, followed in place (TailLink).
+    const tail = screen.getByRole('link', { name: 'N14148' });
+    expect(tail.getAttribute('href')).toBe('/?aircraft=N14148');
+    expect(fireEvent.click(tail)).toBe(false);
+    expect(ctl.followed).toEqual([expect.objectContaining({ tab: null, aircraft: 'N14148' })]);
 
     fireEvent.change(box, { target: { value: 'zzz' } });
     expect(expressPanel().textContent).toContain('No United Express aircraft match');
@@ -249,7 +252,7 @@ describe('FleetView — the United Express sub-tab', () => {
     fireEvent.click(lastSeen);
     fireEvent.click(lastSeen);
     expect(lastSeen.closest('th')?.getAttribute('aria-sort')).toBe('descending');
-    const regs = [...expressPanel().querySelectorAll('tbody tr')].map((r) => r.querySelector('button')?.textContent);
+    const regs = [...expressPanel().querySelectorAll('tbody tr')].map((r) => r.querySelector('td')?.textContent);
     expect(regs).toEqual(['N140SY', 'N14148', 'N85377']);
   });
 });

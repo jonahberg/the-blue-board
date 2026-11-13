@@ -379,3 +379,89 @@ describe('Special', () => {
     expect(bodyRows()).toHaveLength(6);
   });
 });
+
+describe('United Express', () => {
+  const EXPRESS = [
+    { r: 'N140SY', t: 'E175', tk: 'E175-70', o: 'SkyWest Airlines', oc: 'SKW', w: 'Starlink', c: '', fs: '2026-10-01T05:00:00Z', ls: '2026-10-04T18:13:07Z', lf: 'UA6005', x: true },
+    { r: 'N85377', t: 'E175', tk: 'E175', o: 'SkyWest Airlines', oc: 'SKW', w: '', c: '', fs: '2026-10-01T06:00:00Z', ls: '2026-10-02T12:00:00Z', lf: 'UA5928', x: true },
+    { r: 'N504GJ', t: 'CRJ550', tk: 'CRJ550', o: 'GoJet Airlines', oc: 'GJS', w: 'Starlink', c: '', fs: '2026-10-01T06:00:00Z', ls: '2026-11-03T12:00:00Z', lf: 'G74576', x: true },
+    { r: 'N14148', t: '', tk: '', o: 'CommutAir', oc: 'UCA', w: '', c: '', fs: '2026-10-01T05:00:00Z', ls: '2026-10-04T18:13:06Z', lf: '', x: true },
+  ];
+  beforeEach(() => {
+    ctl.fleet = fleetValue({
+      expressDb: EXPRESS,
+      expressByReg: Object.fromEntries(EXPRESS.map((e) => [e.r, e])),
+    });
+  });
+
+  const expressSearch = () => screen.getByRole('searchbox', { name: 'United Express search' }) as HTMLInputElement;
+  const chip = (name: RegExp) => screen.getByRole('button', { name });
+
+  it('the tail is the row\'s link-coloured link; a United last flight a quiet link; G7 plain (ruling 4)', () => {
+    mount();
+    openSubView(/^United Express/);
+    const tail = within(cells(rowOf('N140SY'))[0]).getByRole('link', { name: 'N140SY' });
+    expect(tail.getAttribute('href')).toBe('/?aircraft=N140SY');
+    expect(isIdentity(tail)).toBe(true);
+    expect(fireEvent.click(tail)).toBe(false);
+    expect(seen.ui!.aircraftReg).toBe('N140SY');
+
+    const lastFlight = within(rowOf('N140SY')).getByRole('link', { name: 'UA6005' });
+    expect(lastFlight.getAttribute('href')).toBe('/flight/UA6005');
+    expect(isQuiet(lastFlight)).toBe(true);
+    // GoJet's own number has no flight page: plain text.
+    expect(within(rowOf('N504GJ')).queryByRole('link', { name: 'G74576' })).toBeNull();
+    expect(rowOf('N504GJ').textContent).toContain('G74576');
+    // The regional type and the operator have no home.
+    expect([...rowOf('N140SY').querySelectorAll('a')].map((a) => a.textContent)).toEqual(['N140SY', 'UA6005']);
+  });
+
+  it('an operator chip sets the search to its name and, pressed again, clears it', () => {
+    mount();
+    openSubView(/^United Express/);
+    fireEvent.change(expressSearch(), { target: { value: 'zzz' } });
+    const skywest = chip(/SkyWest Airlines 2/);
+    expect(skywest.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(skywest);
+    expect(expressSearch().value).toBe('SkyWest Airlines');
+    expect(chip(/SkyWest Airlines 2/).getAttribute('aria-pressed')).toBe('true');
+    expect(bodyRows().map((r) => cells(r)[0].textContent)).toEqual(['N140SY', 'N85377']);
+
+    fireEvent.click(chip(/SkyWest Airlines 2/));
+    expect(expressSearch().value).toBe('');
+    expect(bodyRows()).toHaveLength(4);
+  });
+
+  it('a type chip and the Starlink count list exactly what they count', () => {
+    mount();
+    openSubView(/^United Express/);
+    fireEvent.click(chip(/CRJ550 1/));
+    expect(bodyRows().map((r) => cells(r)[0].textContent)).toEqual(['N504GJ']);
+    // Another chip replaces the search; the first is no longer pressed.
+    fireEvent.click(chip(/2 Starlink/));
+    expect(expressSearch().value).toBe('Starlink');
+    expect(bodyRows().map((r) => cells(r)[0].textContent)).toEqual(['N140SY', 'N504GJ']);
+    expect(chip(/CRJ550 1/).getAttribute('aria-pressed')).toBe('false');
+    expect(chip(/2 Starlink/).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('the "Unknown type" bucket stays text: no word lists it', () => {
+    mount();
+    openSubView(/^United Express/);
+    expect(screen.queryByRole('button', { name: /Unknown type/ })).toBeNull();
+    expect(panel().textContent).toContain('Unknown type 1');
+  });
+
+  it('a chip is named by its words plus "Show … aircraft in the list below", and is 44 px tall on touch', () => {
+    mount();
+    openSubView(/^United Express/);
+    const commutair = chip(/CommutAir/);
+    expect(commutair.textContent).toBe('Show CommutAir 1 aircraft in the list below');
+    expect(commutair.hasAttribute('aria-label')).toBe(false);
+    expect(classesOf(commutair)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
+    // Buttons, not links: no link colour, no underline.
+    expect(classesOf(commutair)).not.toContain('text-primary');
+    expect(classesOf(commutair)).not.toContain('underline');
+  });
+});

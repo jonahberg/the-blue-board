@@ -38,6 +38,7 @@ import {
 } from '@/lib/fleet-utils.js';
 import { matchAircraft } from '@/lib/fleet-match.js';
 import { EXPRESS_STALE_DAYS, summarizeExpressFleet } from '@/lib/express-fleet.js';
+import { expressSearchChip, expressSearchChips } from '@/lib/express-fleet-chips.js';
 import { filterExpressFleet, sortExpressFleet } from '@/lib/express-fleet-view.js';
 import {
   buildAirborneRows,
@@ -70,7 +71,7 @@ import { AirborneTable } from './fleet/AirborneTable';
 import type { AirborneRow, AirborneSortCol } from './fleet/AirborneTable';
 import { DeliveryTimeline } from './fleet/DeliveryTimeline';
 import { ExpressFleetPanel } from './fleet/ExpressFleetPanel';
-import type { ExpressSortCol, ExpressSummary } from './fleet/ExpressFleetPanel';
+import type { ExpressChips, ExpressSortCol, ExpressSummary } from './fleet/ExpressFleetPanel';
 import type { TimelineModel, TimelineStats } from './fleet/DeliveryTimeline';
 import { FleetComposition } from './fleet/FleetComposition';
 import { FleetControls, STATUS_OPTIONS } from './fleet/FleetControls';
@@ -118,7 +119,7 @@ export default function FleetView() {
     expressStatus,
   } = useFleet();
   const { flights, lastGoodTs } = useFeed();
-  const { openAircraft, setTab, fleetLink, coldFleetLink } = useUi();
+  const { setTab, fleetLink, coldFleetLink } = useUi();
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -262,6 +263,16 @@ export default function FleetView() {
   const expressSummary = useMemo(
     () => summarizeExpressFleet(expressDb) as ExpressSummary,
     [expressDb],
+  );
+  // The summary's counts as buttons that set the Express search (ruling 7), each only when its
+  // word lists exactly the rows it counts; decided over the whole fleet, like the summary.
+  const expressChips = useMemo<ExpressChips>(
+    () => ({
+      operators: expressSearchChips(expressSummary.byOperator, expressDb),
+      types: expressSearchChips(expressSummary.byType, expressDb),
+      starlink: expressSearchChip('Starlink', expressSummary.starlink, expressDb),
+    }),
+    [expressSummary, expressDb],
   );
   const expressRows = useMemo(
     () =>
@@ -718,6 +729,7 @@ export default function FleetView() {
               rows={expressRows}
               showCabin={expressHasCabin}
               summary={expressSummary}
+              chips={expressChips}
               staleDays={EXPRESS_STALE_DAYS}
               status={expressStatus}
               search={expressSearch}
@@ -729,7 +741,6 @@ export default function FleetView() {
                 )
               }
               nowMs={Date.now()}
-              onOpenAircraft={openAircraft}
             />
           </TabsContent>
         </Tabs>
