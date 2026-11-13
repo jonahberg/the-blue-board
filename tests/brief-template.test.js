@@ -272,7 +272,7 @@ describe('far fewer flights in the air than usual (Nov 13 2026, the nationwide g
     expect(text).not.toMatch(/nationwide|national|all airports|every airport is/i);
   });
 
-  it('at 30% to 44% fewer it is a watch: a hub delay program keeps the headline, the shortfall is an item', () => {
+  it('at 35% to 44% fewer it is a watch: a hub delay program keeps the headline, the shortfall is an item', () => {
     const t = buildTemplateBrief(withAir(420)); // 35% fewer
     expect(t.tone).toBe('watch');
     expect(t.headline).toBe('A ground delay program is holding flights into San Francisco.');
@@ -280,7 +280,7 @@ describe('far fewer flights in the air than usual (Nov 13 2026, the nationwide g
     expect(t.traveler_note.fact_ids).not.toContain('air.normal');
   });
 
-  it('at 30% to 44% fewer with no hub delay program, the shortfall is the watch headline', () => {
+  it('at 35% to 44% fewer with no hub delay program, the shortfall is the watch headline', () => {
     // Without the San Francisco program, and the hub-program count that goes with it.
     const facts = withAir(420).filter((f) => f.id !== 'faa.active.SFO.gdp' && f.id !== 'faa.active.count');
     const t = templateHeadline(facts);

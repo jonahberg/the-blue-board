@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BRIEF_AIRBORNE_DISRUPTED_PCT, BRIEF_AIRBORNE_MIN_USUAL, BRIEF_AIRBORNE_WATCH_PCT,
-  BRIEF_HUBS, airborneNormal, airborneShortfallTone, airportDayWord, buildBriefFacts, isAirborneShortfallFact, computeTone, countAirborneAndStarlink,
+  BRIEF_HUBS, airborneNormal, airborneShortfallTone, airportDayWord, buildBriefFacts, isAirborneShortfallFact, sameClockDaysBefore, computeTone, countAirborneAndStarlink,
   faaCausePhrase, formatAirportClock, isNonHubProgramFact, isWholeAirportClosure, materialKey, maxTone,
   parseIsoMs, planDateMs, publicFact, resolvePlanHhmm, resolveZuluHhmm, travelerNoteAllowed,
 } from '../src/lib/brief-facts.js';
@@ -770,11 +770,13 @@ describe('Nov 13 2026: far fewer flights in the air than usual sets the tone', (
   const fx = fixture('nationwide-stop-2026-11-13');
   const air = (airborne, median = 651) => byId(build(fx, { air: { airborne, starlink: null }, airNormal: { median, days: 7 } }).facts)['air.normal'];
 
-  it('the thresholds: watch at 30% fewer, disrupted at 45% fewer, never for more than usual', () => {
-    expect([BRIEF_AIRBORNE_WATCH_PCT, BRIEF_AIRBORNE_DISRUPTED_PCT, BRIEF_AIRBORNE_MIN_USUAL]).toEqual([30, 45, 100]);
+  it('the thresholds: watch at 35% fewer, disrupted at 45% fewer, never for more than usual', () => {
+    expect([BRIEF_AIRBORNE_WATCH_PCT, BRIEF_AIRBORNE_DISRUPTED_PCT, BRIEF_AIRBORNE_MIN_USUAL]).toEqual([35, 45, 100]);
     expect(airborneShortfallTone(651, 651)).toBe('calm');
-    expect(airborneShortfallTone(463, 651)).toBe('calm'); // 29% fewer
-    expect(airborneShortfallTone(456, 651)).toBe('watch'); // 30% fewer
+    // The largest ordinary shortfall in 40 days of samples was 30% (Tue Oct 20 2026, 10:25 PM PT).
+    expect(airborneShortfallTone(456, 651)).toBe('calm'); // 30% fewer
+    expect(airborneShortfallTone(430, 651)).toBe('calm'); // 34% fewer
+    expect(airborneShortfallTone(423, 651)).toBe('watch'); // 35% fewer
     expect(airborneShortfallTone(365, 651)).toBe('watch'); // 44% fewer
     expect(airborneShortfallTone(358, 651)).toBe('disrupted'); // 45% fewer
     expect(airborneShortfallTone(1200, 651)).toBe('calm');
@@ -787,11 +789,12 @@ describe('Nov 13 2026: far fewer flights in the air than usual sets the tone', (
     expect(air(40, 99)).toMatchObject({ toneFloor: 'calm', material: 'airnorm:below' });
   });
 
-  it('the afternoon as stored: 16% and 23% fewer stay calm, 31% is a watch, 47% and 72% are disrupted', () => {
-    // [airborne, 7-day median] from ops_briefs rows 156, 157, 158, 160 and 164 (12:50 to 2:20 PM PT).
+  it('the afternoon as stored: 16%, 23% and 31% fewer stay calm, 42% is a watch, 47% and 72% are disrupted', () => {
+    // [airborne, 7-day median] from ops_briefs rows 156 to 160 and 164 (12:50 to 2:20 PM PT).
     expect(air(518, 620).toneFloor).toBe('calm');
     expect(air(481, 622).toneFloor).toBe('calm');
-    expect(air(432, 630).toneFloor).toBe('watch');
+    expect(air(432, 630).toneFloor).toBe('calm');
+    expect(air(368, 639).toneFloor).toBe('watch');
     expect(air(333, 632).toneFloor).toBe('disrupted');
     expect(air(183, 651).toneFloor).toBe('disrupted');
   });
@@ -804,7 +807,7 @@ describe('Nov 13 2026: far fewer flights in the air than usual sets the tone', (
       statement: 'The 174 United flights in the air are 73% fewer than usual for this time of day: over the past 7 days, the median at this hour was 651.',
       severity: 110,
       toneFloor: 'disrupted',
-      material: 'airnorm:below:disrupted',
+      material: 'airnorm:below:disrupted:70',
     });
     expect(isAirborneShortfallFact(facts[0])).toBe(true);
     // Nothing else in these payloads reaches "disrupted": without the shortfall the tone was "watch".
@@ -814,8 +817,12 @@ describe('Nov 13 2026: far fewer flights in the air than usual sets the tone', (
   });
 
   it('a watch-level shortfall ranks below a hub delay program, and the change key moves with the band', () => {
-    const watch = air(420);
-    expect(watch).toMatchObject({ severity: 50, toneFloor: 'watch', material: 'airnorm:below:watch' });
+    const watch = air(420); // 35% fewer
+    expect(watch).toMatchObject({ severity: 50, toneFloor: 'watch', material: 'airnorm:below:watch:30' });
+    // The brief quotes the figure, so the key moves every ten points while the shortfall sets the tone.
+    expect(air(183).material).toBe('airnorm:below:disrupted:70');
+    expect(air(174).material).toBe('airnorm:below:disrupted:70');
+    expect(air(250).material).toBe('airnorm:below:disrupted:60');
     expect(isAirborneShortfallFact(watch)).toBe(true);
     const mild = air(521); // 20% fewer
     expect(mild).toMatchObject({ severity: 2, toneFloor: 'calm', material: 'airnorm:below' });
@@ -823,8 +830,22 @@ describe('Nov 13 2026: far fewer flights in the air than usual sets the tone', (
     expect(air(651)).toMatchObject({ toneFloor: 'calm', material: 'airnorm:usual' });
   });
 
+  it('"this time of day" is the US wall clock, so a clock change does not shift the comparison', () => {
+    const t = (iso) => Date.parse(iso);
+    // An ordinary week: exactly 24 hours a day.
+    expect(sameClockDaysBefore(t('2026-11-13T22:20:00Z'), 1)).toBe(t('2026-11-12T22:20:00Z'));
+    expect(sameClockDaysBefore(t('2026-11-13T22:20:00Z'), 7)).toBe(t('2026-11-06T22:20:00Z'));
+    // Wed Nov 4 2026, 2:40 AM PT (standard time). Three days back is still standard time; four days
+    // back is Sat Oct 31, on daylight time, when 2:40 AM PT was 09:40Z, not 10:40Z. Comparing with
+    // 10:40Z put the morning ramp-up an hour ahead and read 39% fewer than usual.
+    expect(sameClockDaysBefore(t('2026-11-04T10:40:00Z'), 3)).toBe(t('2026-11-01T10:40:00Z'));
+    expect(sameClockDaysBefore(t('2026-11-04T10:40:00Z'), 4)).toBe(t('2026-10-31T09:40:00Z'));
+    // Spring forward (Mar 14 2027): the day before was on standard time, an hour later against UTC.
+    expect(sameClockDaysBefore(t('2027-03-15T15:00:00Z'), 2)).toBe(t('2027-03-13T16:00:00Z'));
+  });
+
   it('the model is told the shortfall leads, and never to explain it', () => {
-    expect(BRIEF_SYSTEM_PROMPT).toMatch(/far fewer United flights are in the air than usual \(id "air\.normal", 30% or more fewer\), that is the lead/);
+    expect(BRIEF_SYSTEM_PROMPT).toMatch(/far fewer United flights are in the air than usual \(id "air\.normal", 35% or more fewer\), that is the lead/);
     expect(BRIEF_SYSTEM_PROMPT).toMatch(/do not give a reason for the shortfall/);
   });
 });

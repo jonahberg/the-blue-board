@@ -81,7 +81,7 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `wx.summary` | weather | same | Weather is not affecting operations at any of the 9 United hubs with a current report. | calm |
 | `air.total` | airborne | live feed, `isOnGround()` complement (the Live stat bar) | 630 United flights, including United Express, are in the air right now. | calm |
 | `air.starlink` | airborne | live feed × Starlink roster × fleet match (`makeIsStarlinkFlight`'s rule) | 280 of the 630 United flights in the air have Starlink Wi-Fi. | calm |
-| `air.normal` | airborne | `airborne_samples`, median of the same clock time on the previous 7 days (≥ 3 days needed) | The 702 United flights in the air are 11% fewer than usual for this time of day: … the median at this hour was 790. | calm; **watch at 30% fewer than usual, disrupted at 45% fewer** when the usual is 100 or more (v1.31.1) |
+| `air.normal` | airborne | `airborne_samples`, median of the same clock time on the previous 7 days (≥ 3 days needed) | The 702 United flights in the air are 11% fewer than usual for this time of day: … the median at this hour was 790. | calm; **watch at 35% fewer than usual, disrupted at 45% fewer** when the usual is 100 or more (v1.31.1) |
 | `flow.<HUB>.arrivals` / `.departures` | flow | Enhanced Radar `operations.flow` (from FAA data); [radio](#air-traffic-control-radio-enhanced-radar), off by default | Enhanced Radar, from FAA data, reports Newark (EWR) arrivals: a planned rate of 36 an hour, 26 landed in the last hour and 39 scheduled in the next hour, more than the planned rate allows. | calm |
 | `flow.<HUB>.runways` | flow | Enhanced Radar `operations.runways` | Enhanced Radar reports Newark (EWR) landing on runway 22L and taking off from runway 22R. | calm |
 | `radio.<HUB>.<id>` | radio | each Enhanced Radar `critical` / `notable` observation under 2 h old (max 3 per hub): time, the API's tags and runways as values; the **sanitized** title as `quote` only | Heard on Newark (EWR) air traffic control frequencies at 5:29 PM ET, in Enhanced Radar's model-written summary, which can contain mistakes: "GLS approach out of service". | calm (never sets the tone) |
@@ -208,7 +208,10 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    `calm`** (Nov 2026), and so is a possible hub program whose window opens tomorrow or later.
    **Far fewer United flights in the air than usual** sets the tone with no FAA program at all
    (v1.31.1, after the Nov 13 2026 nationwide ground stop, which none of the FAA feeds listed):
-   `watch` at 30% fewer than the 7-day median for this time of day, `disrupted` at 45% fewer. At
+   `watch` at 35% fewer than the 7-day median for this time of day, `disrupted` at 45% fewer
+   (neither was crossed in the 10,651 samples of Oct 4 to Nov 13 before the stop; the largest was
+   30%). "This time of day" is the US wall clock (`sameClockDaysBefore`), so the week after a clock
+   change compares like with like. At
    `disrupted` the fact is first in the list, an item citing it is moved to the front (or its
    statement is put there, `shortfallLed`; at the item limit the last item is dropped as
    `displaced_by_network_shortfall`), and a headline that is not about how many flights are flying
@@ -274,7 +277,7 @@ out of the key entirely, id included, so it appearing or disappearing is not a c
 | fact | material |
 |---|---|
 | `air.total`, `air.starlink` | none (`null`): the count moves all day |
-| `air.normal` | usual / above / below (±10% of the 7-day median), and below:watch / below:disrupted at 30% / 45% fewer |
+| `air.normal` | usual / above / below (±10% of the 7-day median), and below:watch:NN / below:disrupted:NN at 35% / 45% fewer, NN the shortfall in ten-point steps (the brief quotes the figure) |
 | `net.index` | its band (normal / minor / significant), not the score |
 | `otp.<HUB>` | none while at or above 80% (`BRIEF_HEALTHY_HUB_OTP`), so a healthy hub's reading moving, appearing or aging out is not a change; below 80%, rounded to 5 points. Not sending healthy hubs' facts on a healthy day (Nov 2026) therefore changes no key |
 | `cxl.confirmed` | none under 10, sent (5–9) or not (0–4): the send threshold sits inside that band, so 4 ↔ 5 never rewrites; from 10, the existing count steps (10–12, 13–17, …) |
