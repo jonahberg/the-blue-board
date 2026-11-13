@@ -209,9 +209,8 @@ describe('All Aircraft', () => {
 
   it('the SL mark is a quiet link to the Starlink tab, one per Starlink row', () => {
     mount();
-    const sl = within(rowOf('N37502')).getByRole('link', { name: /^SL/ });
+    const sl = within(rowOf('N37502')).getByRole('link', { name: 'SL (Starlink tab)' });
     expect(sl.getAttribute('href')).toBe('/#starlink');
-    expect(sl.textContent).toBe('SL (Starlink tab)');
     expect(isQuiet(sl)).toBe(true);
     expect(rowOf('N37502').querySelectorAll('a[href="/#starlink"]')).toHaveLength(1);
     expect(rowOf('N100UA').querySelector('a[href="/#starlink"]')).toBeNull();
@@ -439,7 +438,7 @@ describe('United Express', () => {
     fireEvent.click(chip(/CRJ550 1/));
     expect(bodyRows().map((r) => cells(r)[0].textContent)).toEqual(['N504GJ']);
     // Another chip replaces the search; the first is no longer pressed.
-    fireEvent.click(chip(/2 Starlink/));
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 Starlink aircraft in the list below' }));
     expect(expressSearch().value).toBe('Starlink');
     expect(bodyRows().map((r) => cells(r)[0].textContent)).toEqual(['N140SY', 'N504GJ']);
     expect(chip(/CRJ550 1/).getAttribute('aria-pressed')).toBe('false');
@@ -456,8 +455,7 @@ describe('United Express', () => {
   it('a chip is named by its words plus "Show … aircraft in the list below", and is 44 px tall on touch', () => {
     mount();
     openSubView(/^United Express/);
-    const commutair = chip(/CommutAir/);
-    expect(commutair.textContent).toBe('Show CommutAir 1 aircraft in the list below');
+    const commutair = screen.getByRole('button', { name: 'Show CommutAir 1 aircraft in the list below' });
     expect(commutair.hasAttribute('aria-label')).toBe(false);
     expect(classesOf(commutair)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
     // Buttons, not links: no link colour, no underline.
@@ -567,5 +565,56 @@ describe('Fleet Pulse', () => {
     mount();
     expect(screen.queryByRole('button', { name: /show the Airborne Now list/ })).toBeNull();
     expect(document.getElementById('fleet-airborne-count')!.textContent).toBe('3');
+  });
+});
+
+describe('Fleet Health', () => {
+  const today = new Date().toISOString().slice(0, 10);
+  beforeEach(() => {
+    // A named aircraft carries its name as a status note, as on the real database: the health
+    // panel counts it active, Status "Active" (no note) does not list it.
+    const db = [...FLEET_DB.slice(0, 7), { ...FLEET_DB[7], s: '*Sam E. Ashmore' }];
+    ctl.fleet = fleetValue({
+      fleetDb: db,
+      fleetByReg: Object.fromEntries(db.map((a) => [a.r, a])),
+      starlink: {
+        tails: new Set(['N37502', 'N37503']),
+        flightsByTail: {},
+        stats: { total: 602, mainline: 247, express: 355, mainlineTotal: 1156, expressTotal: 513 },
+        aircraft: [{ tail: 'N37502', fleet: 'Mainline', type: '737 MAX 9', dateFound: today }],
+        lastUpdated: null,
+        syncedAt: null,
+        degraded: false,
+      },
+    });
+  });
+
+  const chipList = () => screen.getByText('Total').closest('ul') as HTMLElement;
+
+  it('"Total" is a quiet link to the Starlink tab, followed in place', () => {
+    mount();
+    const total = within(chipList()).getByRole('link', { name: '602 Total (Starlink tab)' });
+    expect(total.getAttribute('href')).toBe('/#starlink');
+    expect(isQuiet(total)).toBe(true);
+    expect(classesOf(total)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
+    expect(fireEvent.click(total)).toBe(false);
+    expect(seen.ui!.tab).toBe('starlink');
+  });
+
+  it('no other chip is a link, and none is painted in link colour', () => {
+    mount();
+    expect(within(chipList()).getAllByRole('link')).toHaveLength(1);
+    expect(within(chipList()).getByText('Mainline')).toBeTruthy();
+    expect(within(chipList()).getByText('New (7d)')).toBeTruthy();
+    expect(chipList().querySelectorAll('[class*="text-primary"]')).toHaveLength(0);
+  });
+
+  it('the health counts and bars stay text: no Status option lists exactly what they count', () => {
+    mount();
+    const health = screen.getByText('Total Mainline Aircraft').closest('div.flex-col') as HTMLElement;
+    expect(health.textContent).toContain('8 active (100.0%) · 0 out of service');
+    // Status "Active" lists the 7 aircraft with no note, not the 8 counted active.
+    const healthCounts = screen.getByText('Total Mainline Aircraft').parentElement!.parentElement!.parentElement as HTMLElement;
+    expect(healthCounts.querySelectorAll('button, a')).toHaveLength(0);
   });
 });

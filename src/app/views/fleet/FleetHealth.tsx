@@ -9,6 +9,14 @@
  * The load-failure state is its own thing and deliberately blunt. "0 Mainline Aircraft" is a
  * factual claim the dashboard has no business making when `/data/fleet.json` simply did not
  * arrive, so the panel says which of the two happened (F035).
+ *
+ * Links everywhere (Nov 12 2026). A count is a button only where the Status select has an option
+ * for exactly the aircraft it counts (ruling 7), and none here does: "active" counts named
+ * aircraft and NEXT notes as active while Status "Active" lists only aircraft with no status note
+ * (1,092 against 1,070 on the Nov 3 database), and "out of service" is a subset of Stored/Maint
+ * (62 against 84); the other categories have no option. So the counts and bars stay text. Of the
+ * Starlink chips, "Total" links to the Starlink tab (`href`); the rest have no exact home and are
+ * body colour, never link colour.
  */
 
 import { RotateCw } from 'lucide-react';
@@ -17,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { starlinkShareCaption } from '@/lib/fleet-utils.js';
+import { DashLink } from '../../features/DashLink';
 
 export type HealthBar = { key: string; label: string; color: string; count: number; pct: string };
 export type HealthModel = {
@@ -27,15 +36,24 @@ export type HealthModel = {
   bars: HealthBar[];
 };
 
-export type StarlinkChip = { label: string; value: string; tone: 'ok' | 'primary' | 'express' | 'neutral' | 'new' };
+/** `href`: the chip is a quiet link to the Starlink tab (in place); without one it is text. */
+export type StarlinkChip = { label: string; value: string; tone: 'ok' | 'express' | 'neutral'; href?: '/#starlink' };
 
 const CHIP_TONES: Record<StarlinkChip['tone'], string> = {
   ok: 'border-bb-ok/20 bg-bb-ok/10 text-bb-ok',
-  primary: 'border-primary/20 bg-primary/10 text-primary',
   express: 'border-bb-starlink/20 bg-bb-starlink/10 text-bb-starlink',
   neutral: 'border-border bg-muted/40 text-foreground',
-  new: 'border-primary/20 bg-primary/10 text-primary',
 };
+
+/** One chip's figure and label. */
+function ChipContent({ chip }: { chip: StarlinkChip }) {
+  return (
+    <>
+      <span className="font-mono text-sm font-semibold tabular-nums">{chip.value}</span>{' '}
+      <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{chip.label}</span>
+    </>
+  );
+}
 
 export function FleetLoadError({ onRetry }: { onRetry: () => void }) {
   return (
@@ -145,17 +163,29 @@ export function FleetHealth({
 
         {chips.length > 0 ? (
           <ul className="mt-2 flex flex-wrap gap-1.5">
-            {chips.map((chip) => (
-              <li
-                key={chip.label}
-                className={`flex flex-col items-center rounded-md border px-2 py-1 ${CHIP_TONES[chip.tone]}`}
-              >
-                <span className="font-mono text-sm font-semibold tabular-nums">{chip.value}</span>
-                <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
-                  {chip.label}
-                </span>
-              </li>
-            ))}
+            {/* A linked chip is 44 px tall on touch; the text chips beside it stretch to the row
+                and keep their words centred. */}
+            {chips.map((chip) =>
+              chip.href ? (
+                <li key={chip.label} className="flex">
+                  <DashLink
+                    href={chip.href}
+                    hit="inline"
+                    className={`flex-col justify-center rounded-md border px-2 py-1 ${CHIP_TONES[chip.tone]}`}
+                  >
+                    <ChipContent chip={chip} />{' '}
+                    <span className="sr-only">(Starlink tab)</span>
+                  </DashLink>
+                </li>
+              ) : (
+                <li
+                  key={chip.label}
+                  className={`flex flex-col items-center justify-center rounded-md border px-2 py-1 ${CHIP_TONES[chip.tone]}`}
+                >
+                  <ChipContent chip={chip} />
+                </li>
+              ),
+            )}
           </ul>
         ) : loading ? (
           <Skeleton className="mt-2 h-10 w-full" />

@@ -102,8 +102,8 @@ function CountChips({
             className={CHIP_BUTTON}
           >
             <span className="sr-only">Show</span> {chip.label}{' '}
-            <span className="font-mono tabular-nums text-muted-foreground">{chip.count}</span>
-            <span className="sr-only"> aircraft in the list below</span>
+            <span className="font-mono tabular-nums text-muted-foreground">{chip.count}</span>{' '}
+            <span className="sr-only">aircraft in the list below</span>
           </button>
         ) : (
           <span key={chip.label} className="rounded border px-1.5 py-0.5 text-[11px]">
@@ -169,8 +169,8 @@ export function ExpressFleetPanel({
               >
                 <Zap aria-hidden="true" className="size-3.5" />
                 <span className="sr-only">Show</span>{' '}
-                <span className="font-mono font-semibold tabular-nums">{summary.starlink}</span> Starlink
-                <span className="sr-only"> aircraft in the list below</span>
+                <span className="font-mono font-semibold tabular-nums">{summary.starlink}</span> Starlink{' '}
+                <span className="sr-only">aircraft in the list below</span>
               </button>
             ) : (
               <span className="inline-flex items-center gap-1 text-bb-starlink">

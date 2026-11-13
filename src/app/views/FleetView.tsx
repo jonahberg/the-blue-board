@@ -217,9 +217,12 @@ export default function FleetView() {
     const mainlinePct = starlinkShare ? starlinkShare.pct : null;
     const expressPct = expressScope ? expressScope.pct : null;
     const newThisWeek = starlink.aircraft.filter((a) => isRecentlyFound(a.dateFound)).length;
+    // "Total" is every equipped aircraft, which the Starlink tab lists: a quiet link there.
+    // "Mainline" (the tracker's own census) and "New (7d)" have no list that shows exactly them
+    // here, so they are text, in body colour (link colour means link).
     const rows: StarlinkChip[] = [
-      { label: 'Total', value: String(stats.total), tone: 'ok' },
-      { label: 'Mainline', value: String(stats.mainline), tone: 'primary' },
+      { label: 'Total', value: String(stats.total), tone: 'ok', href: '/#starlink' },
+      { label: 'Mainline', value: String(stats.mainline), tone: 'neutral' },
       { label: 'Express', value: String(stats.express), tone: 'express' },
     ];
     if (mainlinePct != null) {
@@ -228,7 +231,7 @@ export default function FleetView() {
     if (expressPct != null) {
       rows.push({ label: 'Express Fleet', value: `${expressPct}%`, tone: 'neutral' });
     }
-    if (newThisWeek > 0) rows.push({ label: 'New (7d)', value: `+${newThisWeek}`, tone: 'new' });
+    if (newThisWeek > 0) rows.push({ label: 'New (7d)', value: `+${newThisWeek}`, tone: 'neutral' });
     return rows;
   }, [starlink.stats, starlink.aircraft, starlinkShare, expressScope]);
 

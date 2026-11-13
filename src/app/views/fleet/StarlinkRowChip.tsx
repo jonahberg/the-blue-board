@@ -25,8 +25,8 @@ export function StarlinkRowChip() {
     >
       <span className="rounded border border-bb-starlink/30 bg-bb-starlink/10 px-1 py-0.5 text-[9px] font-medium text-bb-starlink">
         SL
-      </span>
-      <span className="sr-only"> (Starlink tab)</span>
+      </span>{' '}
+      <span className="sr-only">(Starlink tab)</span>
     </DashLink>
   );
 }
