@@ -13,9 +13,16 @@
  * the same address starts (a hub link: `scheduleLink`, so the Schedule view clears its own
  * filters; a Fleet link: `fleetLink.arriving`, so the Fleet view resets before it applies). A link
  * followed on the tab already showing resets nothing (the links plan, ruling 2): no filter, no
- * history entry, no focus move. What the address names still applies either way: a hub link opens
- * that hub's board on Departures and the hub's default day, as a cold load does, and a Fleet link
- * on Fleet sets its own filter.
+ * history entry, nothing said, and focus moves only when it would otherwise be lost. What the
+ * address names still applies either way: a hub link opens that hub's board on Departures and the
+ * hub's default day, as a cold load does, and a Fleet link on Fleet sets its own filter.
+ *
+ * That focus case: the link followed often leaves the page once its destination applies (a type
+ * cell in a Fleet table filtered to that type turns to text, a hub link in a Schedule row is
+ * replaced with the new board's rows), and focus falls to <body>. When focus was on the link, or
+ * elsewhere in the panel, or already lost, and is lost once the destination has applied and
+ * painted, it goes to the tab's panel (`moveFocusToPanel` with `ifLost`). A link still on the page
+ * keeps focus.
  *
  * A link that changes the tab leaves ONE history entry (`pushHistoryEntry`), so Back returns to the
  * tab the reader was on: `FollowProvider`'s history listener restores it, announces the tab and
@@ -160,6 +167,10 @@ export function FollowProvider({ children }: { children: ReactNode }) {
     // Read before anything moves: a caller may blur the link after this returns (the hub chip).
     // From an overlay focus is in the overlay, which closes, so it always moves.
     const refocus = arriving && (fromOverlay || focusLeavesWith(from));
+    // A stay keeps focus where it is, unless the link followed leaves the page and takes focus
+    // with it. Only focus that was in this tab's panel (the link itself) or already lost is
+    // watched, as an arrival watches it: a header chip that lets go of focus after a tap is not.
+    const keepFocus = !arriving && Boolean(intent.tab) && focusLeavesWith(from);
     if (fromOverlay) closeOverlays(latest.current, { keepAircraft: Boolean(intent.aircraft) });
     if (intent.scheduleHub) {
       // The board the address names, as a cold load of it opens it, whether the link arrives or
@@ -183,6 +194,8 @@ export function FollowProvider({ children }: { children: ReactNode }) {
     if (lands) {
       announce(followAnnouncement(tabById(lands)?.label ?? lands, intent));
       if (refocus) moveFocusToPanel(lands, from, { force: fromOverlay });
+    } else if (keepFocus) {
+      moveFocusToPanel(from, from, { ifLost: true });
     }
   }, []);
 
@@ -267,16 +280,29 @@ function focusLeavesWith(from: TabId): boolean {
  * the tab scrolls (the Fleet link's scroll to its controls, a Weather link's to its hub card).
  * `force`: a link from an overlay, whose focus is still in the overlay as it closes; it moves
  * whatever holds focus.
+ * `ifLost`: a link followed on the tab already showing (`to` is `from`). Focus moves only once it
+ * is lost (on <body>, or on an element no longer in the page), and anything still holding it keeps
+ * it. Each of the frames is checked, because the link may leave only when the view's own update
+ * renders: the Fleet view applies a type in an effect, whose update can render after the first
+ * frame.
  */
-function moveFocusToPanel(to: TabId, from: TabId, { force = false, framesLeft = 3 } = {}) {
+function moveFocusToPanel(to: TabId, from: TabId, { force = false, ifLost = false, framesLeft = 3 } = {}) {
   if (typeof requestAnimationFrame !== 'function') return;
   requestAnimationFrame(() => {
+    const again = () => {
+      if (framesLeft > 1) moveFocusToPanel(to, from, { force, ifLost, framesLeft: framesLeft - 1 });
+    };
     const panel = tabPanel(to);
     if (!panel || panel.getAttribute('data-state') !== 'active') {
-      if (framesLeft > 1) moveFocusToPanel(to, from, { force, framesLeft: framesLeft - 1 });
+      again();
       return;
     }
     const active = document.activeElement;
+    if (ifLost) {
+      if (!active || active === document.body || !active.isConnected) panel.focus({ preventScroll: true });
+      else again();
+      return;
+    }
     if (!force && active && active !== document.body && !tabPanel(from)?.contains(active)) return;
     panel.focus({ preventScroll: true });
   });
