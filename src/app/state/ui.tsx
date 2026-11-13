@@ -20,7 +20,7 @@ import { safeLocalStorage } from './storage';
 import { canonicalizeHashParams, cleanTabHash } from '@/lib/tab-hash.js';
 import type { TabId } from '../tabs';
 import type { Flight } from '../data/types';
-import { readFleetDeepLinks } from './deep-links';
+import { fleetDeepLinksFrom } from '@/lib/fleet-address.js';
 import type { FleetDeepLinks } from './deep-links';
 
 /** What the flight sheet is showing: a live aircraft, or a flight number to look up. */
@@ -170,6 +170,16 @@ function initialTab(): TabId {
   return match ?? DEFAULT_TAB;
 }
 
+/**
+ * The Fleet tab's slice of the address the page was opened on (`coldFleetLink`). Read from the
+ * lib rather than `readFleetDeepLinks` (deep-links.ts), whose imports reach the dialogs and through
+ * them this store: a cycle that deadlocks a test mocking this module.
+ */
+function initialFleetLink(): FleetDeepLinks {
+  if (typeof window === 'undefined') return { filter: null, view: null };
+  return fleetDeepLinksFrom(new URLSearchParams(window.location.search)) as FleetDeepLinks;
+}
+
 export function UiProvider({ children }: { children: ReactNode }) {
   const [tab, setTabState] = useState<TabId>(initialTab);
   const [pendingScroll, setPendingScroll] = useState<string | null>(null);
@@ -178,7 +188,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [starlinkFilter, setStarlinkFilter] = useState(false);
   const [fleetLink, setFleetLink] = useState<FleetLink | null>(null);
   // After `initialTab`, which first moves parameters trapped after the '#' into the query.
-  const [coldFleetLink] = useState<FleetDeepLinks>(readFleetDeepLinks);
+  const [coldFleetLink] = useState<FleetDeepLinks>(initialFleetLink);
   const [scheduleLink, setScheduleLink] = useState<ScheduleLink | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [aircraftReg, setAircraftReg] = useState<string | null>(null);

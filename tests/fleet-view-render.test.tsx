@@ -27,10 +27,20 @@ vi.mock('../src/app/state/feed', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/feed')>()),
   useFeed: () => ({ flights: ctl.flights, lastGoodTs: null }) as unknown as FeedValue,
 }));
-vi.mock('../src/app/state/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/app/state/ui')>()),
-  useUi: () => ({ openAircraft: (reg: string) => ctl.opened.push(reg), setTab: () => {} }) as unknown as UiValue,
-}));
+// `coldFleetLink` is the address the page opened on, which the real store reads once at startup;
+// each test here sets the address before it mounts, so reading it on render is the same thing.
+vi.mock('../src/app/state/ui', async (importOriginal) => {
+  const { fleetDeepLinksFrom } = await import('../src/lib/fleet-address.js');
+  return {
+    ...(await importOriginal<typeof import('../src/app/state/ui')>()),
+    useUi: () =>
+      ({
+        openAircraft: (reg: string) => ctl.opened.push(reg),
+        setTab: () => {},
+        coldFleetLink: fleetDeepLinksFrom(new URLSearchParams(window.location.search)),
+      }) as unknown as UiValue,
+  };
+});
 
 // 8 mainline airframes, 2 on Starlink; one more Starlink tail the database does not list.
 const FLEET_DB = [

@@ -26,6 +26,7 @@
 
 import { useEffect, useRef } from 'react';
 
+import { fleetDeepLinksFrom as readFleetParams } from '@/lib/fleet-address.js';
 import { DEEP_LINK_PARAMS } from '@/lib/followed-link.js';
 import { hubLink } from '@/lib/hub-link.js';
 import { hashTailParams, weatherScrollTarget } from '@/lib/tab-hash.js';
@@ -72,13 +73,12 @@ export function readFleetDeepLinks(): FleetDeepLinks {
   return fleetDeepLinksFrom(new URLSearchParams(window.location.search));
 }
 
-/** The Fleet tab's slice of a query string; one reading for a cold load and an in-place link. */
+/**
+ * The Fleet tab's slice of a query string; one reading for a cold load and an in-place link
+ * (`src/lib/fleet-address.js`, which the UI store also reads at startup).
+ */
 function fleetDeepLinksFrom(params: URLSearchParams): FleetDeepLinks {
-  const view = params.get('view')?.toLowerCase();
-  return {
-    filter: params.get('type') ?? params.get('filter'),
-    view: view === 'airborne' || view === 'special' || view === 'express' ? view : null,
-  };
+  return readFleetParams(params) as FleetDeepLinks;
 }
 
 /**
