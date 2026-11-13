@@ -369,13 +369,17 @@ describe('Special', () => {
     expect(card.textContent).toContain('Not in the mainline fleet database');
   });
 
-  it('a type followed from a card opens All Aircraft filtered to it (ruling 2: Special does not list a type)', () => {
+  it('a type followed from a card opens All Aircraft filtered to it (ruling 2: Special does not list a type) and scrolls to the controls', async () => {
     mount();
     openSubView(/^Special/);
+    await nextFrame();
+    scrolls.length = 0;
     fireEvent.click(within(cardOf('N100UA')).getByRole('link', { name: 'A319' }));
+    await nextFrame();
     expect(activeSubView()).toMatch(/^All Aircraft/);
     expect(typeSelect().textContent).toContain('A319');
     expect(bodyRows()).toHaveLength(6);
+    expect(scrolls).toEqual(['controls']);
   });
 });
 
@@ -544,7 +548,7 @@ describe('Fleet Pulse', () => {
     expect(await fleetState()).toEqual(cold);
   });
 
-  it('each type label is a quiet link to this tab filtered to it; followed here it keeps the search', async () => {
+  it('each type label is a quiet link to this tab filtered to it; followed here it keeps the search and scrolls to the controls', async () => {
     mount();
     await searchFor('N');
     await nextFrame();
@@ -564,6 +568,20 @@ describe('Fleet Pulse', () => {
     await nextFrame();
     expect(typeSelect().textContent).toContain('737 MAX 9');
     expect(searchBox().value).toBe('N');
+    // The filtered table is far below the Pulse: like a variant card, the follow brings the
+    // controls row (the type it set, then the rows) into view.
+    expect(scrolls).toEqual(['controls']);
+  });
+
+  it('a modified click on a type label is left to the browser: nothing filters, nothing scrolls', async () => {
+    mount();
+    await nextFrame();
+    scrolls.length = 0;
+    const pulse = document.getElementById('fleet-airborne-count')!.closest('div.flex-col') as HTMLElement;
+    // fireEvent.click returns true when nothing prevented the default (the browser opens the address).
+    expect(fireEvent.click(within(pulse).getByRole('link', { name: '737 MAX 9' }), { ctrlKey: true })).toBe(true);
+    await nextFrame();
+    expect(typeSelect().textContent).toContain('All Types');
     expect(scrolls).toEqual([]);
   });
 

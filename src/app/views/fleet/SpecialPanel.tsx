@@ -20,6 +20,8 @@
  * no card's type is the list's own). An airborne card's flight number links to its flight page
  * when it is a United number, and each hub end of its route to that hub's Schedule board, both
  * quiet. The name, description and the NAMED / LIVERY / AIRBORNE chips have no home and stay plain.
+ * A type followed in place opens All Aircraft filtered to it and brings the controls row into
+ * view (`onTypeFollowed`), as a Composition variant card does.
  * The registration and type are 44 px tall on touch inside their line (`hit="inline"`); the
  * airborne line is 44 px tall on touch and spaces its number and hub ends so their 44 px touch
  * boxes never overlap (tight only for a mouse at `md`+).
@@ -30,6 +32,7 @@ import { Paintbrush } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HubLink, TailLink, TypeLink } from '../../features/EntityLinks';
 import { FlightLink } from '../../features/FlightLink';
+import { typeLinkFollowed } from './type-followed';
 
 export type SpecialRow = {
   /** reg + kind: a tail with a name AND a livery (N76021) is two cards. */
@@ -49,9 +52,12 @@ export type SpecialRow = {
 export function SpecialPanel({
   rows,
   loading,
+  onTypeFollowed,
 }: {
   rows: SpecialRow[];
   loading: boolean;
+  /** A card's type link was followed in place: bring the filtered list into view. */
+  onTypeFollowed?: () => void;
 }) {
   if (loading && !rows.length) {
     return (
@@ -77,7 +83,7 @@ export function SpecialPanel({
       aria-label="Special fleet list, scrollable region"
       className="max-h-[60svh] overflow-auto rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
     >
-      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2" onClick={typeLinkFollowed(onTypeFollowed)}>
         {rows.map((row) => (
           <li
             key={row.key}

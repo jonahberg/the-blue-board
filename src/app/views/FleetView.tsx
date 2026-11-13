@@ -443,6 +443,11 @@ export default function FleetView() {
     [applyFleetDeepLink],
   );
 
+  // A type link followed in place from the Pulse or a Special card sets the type filter and nothing
+  // else (ruling 2, the 'stay' above), and the table it filters is far below them: bring the
+  // controls row into view, as a Composition variant card does, through the scroll a link asks for.
+  const scrollToControls = useCallback(() => setLinkScroll({ to: 'controls' }), []);
+
   // The scroll a link asked for, once the filter and sub-view it set have rendered: the controls
   // row for a filter, the open sub-view's panel for a view alone, top of the tab's scroller (the
   // header and tab bar sit outside it; `scroll-mt-2` keeps a little air). A frame later, as the
@@ -566,6 +571,7 @@ export default function FleetView() {
             loading={loading}
             onShowAirborne={showAirborne}
             typeFilter={typeFilter}
+            onTypeFollowed={scrollToControls}
           />
           <FleetHealth
             health={health}
@@ -736,7 +742,7 @@ export default function FleetView() {
           </TabsContent>
 
           <TabsContent value="special" className="scroll-mt-2">
-            <SpecialPanel rows={specialRows} loading={loading} />
+            <SpecialPanel rows={specialRows} loading={loading} onTypeFollowed={scrollToControls} />
           </TabsContent>
 
           <TabsContent value="express" className="scroll-mt-2">

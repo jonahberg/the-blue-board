@@ -20,14 +20,16 @@
  * database types; the type the tab is already filtered to prints plain, since its link would
  * change nothing). The labels take no taps on a coarse pointer (`finePointerOnly`), so the rows
  * keep their compact height on a phone; there the Composition variant cards just below set the
- * type, with 44 px targets. With a mouse they are live at every width, as small as the row. This
- * block is not a live region, so its counts may be controls.
+ * type, with 44 px targets. With a mouse they are live at every width, as small as the row. A
+ * label followed in place brings the controls row into view (`onTypeFollowed`), since the table it
+ * filters is far below. This block is not a live region, so its counts may be controls.
  */
 
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fleetTypeTextLink } from '@/lib/fleet-view.js';
 import { TypeLink } from '../../features/EntityLinks';
+import { typeLinkFollowed } from './type-followed';
 
 /** The count that opens the Airborne Now list: its look at rest, the hero buttons' hover and focus. */
 const PRESS =
@@ -48,6 +50,7 @@ export function FleetPulse({
   fleetFailed = false,
   onShowAirborne,
   typeFilter = '',
+  onTypeFollowed,
 }: {
   airborne: number;
   /** Airborne flights that resolve to an airframe in the fleet database. */
@@ -69,6 +72,8 @@ export function FleetPulse({
   onShowAirborne?: () => void;
   /** The Fleet tab's type filter: that type's label prints plain. */
   typeFilter?: string;
+  /** A type label was followed in place: bring the filtered list into view. */
+  onTypeFollowed?: () => void;
 }) {
   const flying = utilisation.filter((row) => row.total > 0 && row.flying > 0);
   // The list can show aircraft only once the fleet database has loaded.
@@ -121,7 +126,7 @@ export function FleetPulse({
       ) : null}
 
       {flying.length > 0 ? (
-        <ul className="mt-3 space-y-1">
+        <ul className="mt-3 space-y-1" onClick={typeLinkFollowed(onTypeFollowed)}>
           {flying.map((row) => (
             <li key={row.type} className="flex items-center gap-2 text-[11px]">
               {/* No `truncate` here: its clip would cut the link's focus ring, and the longest type
