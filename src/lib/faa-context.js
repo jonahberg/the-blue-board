@@ -116,16 +116,19 @@ export function explainFAAStatus(airportCode, delays, rawData) {
 }
 
 /**
- * One-line FAA context for a route, e.g.
- * "Ground Stop at EWR, avg 45 min · GDP at ORD".
+ * The FAA context for a route as parts, one per program, with the airport code kept apart from the
+ * words around it: "Ground Stop at EWR, avg 45 min" is `{lead: 'Ground Stop at ', code: 'EWR',
+ * tail: ', avg 45 min'}`. A board that links the code (the Schedule rows) reads it from here
+ * rather than parsing the sentence; `faaContextText` joins the parts back into exactly what
+ * `getFAADelayContext` prints.
  *
  * @param {Record<string, FaaAirport>} faaIndex  from buildFaaIndex().
  * @param {string|null|undefined} originIata
  * @param {string|null|undefined} destIata
- * @returns {string} '' when neither end has a delay.
+ * @returns {Array<{lead: string, code: string, tail: string}>} empty when neither end has a delay.
  */
-export function getFAADelayContext(faaIndex, originIata, destIata) {
-  const contexts = [];
+export function faaDelayContextParts(faaIndex, originIata, destIata) {
+  const parts = [];
   [originIata, destIata].forEach(apt => {
     if (!apt) return;
     const faa = faaIndex[apt];
@@ -138,10 +141,33 @@ export function getFAADelayContext(faaIndex, originIata, destIata) {
       else if (dtype.includes('departure')) label = 'Dep Delay';
       else if (dtype.includes('arrival')) label = 'Arr Delay';
       const avg = d.avgDelay ? `, avg ${d.avgDelay} min` : '';
-      contexts.push(`${label} at ${apt}${avg}`);
+      parts.push({ lead: `${label} at `, code: apt, tail: avg });
     });
   });
-  return contexts.join(' · ');
+  return parts;
+}
+
+/**
+ * The parts from `faaDelayContextParts` as one line, joined with " · ".
+ *
+ * @param {Array<{lead: string, code: string, tail: string}>} parts
+ * @returns {string}
+ */
+export function faaContextText(parts) {
+  return parts.map((part) => `${part.lead}${part.code}${part.tail}`).join(' · ');
+}
+
+/**
+ * One-line FAA context for a route, e.g.
+ * "Ground Stop at EWR, avg 45 min · GDP at ORD".
+ *
+ * @param {Record<string, FaaAirport>} faaIndex  from buildFaaIndex().
+ * @param {string|null|undefined} originIata
+ * @param {string|null|undefined} destIata
+ * @returns {string} '' when neither end has a delay.
+ */
+export function getFAADelayContext(faaIndex, originIata, destIata) {
+  return faaContextText(faaDelayContextParts(faaIndex, originIata, destIata));
 }
 
 /**
