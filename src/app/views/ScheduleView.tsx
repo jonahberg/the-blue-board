@@ -383,7 +383,6 @@ export default function ScheduleView() {
             onSort={onSort}
             isWatched={watch.isWatched}
             onToggleWatch={onToggleWatch}
-            onOpenAircraft={ui.openAircraft}
             onExplainDelay={ui.openDelayExplain}
             boardAsOf={asOf}
             windowKey={windowKey}

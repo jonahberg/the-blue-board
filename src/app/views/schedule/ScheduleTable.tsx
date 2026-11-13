@@ -56,9 +56,11 @@ import { clampWindow, expandWindow, initialWindow, windowIncluding } from '@/lib
 import { cn } from '@/lib/utils';
 import type { RowModel, SortColumn } from './useBoardModel';
 import { DelayFigure } from './DelayFigure';
+import { TailLink, TypeLink } from '../../features/EntityLinks';
 import { FlightLink } from '../../features/FlightLink';
 import { JargonTerm } from '../../features/JargonTerm';
 import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
+import { FaaLine, RouteEnds, StarlinkLink } from './RowLinks';
 import { SchedulePhoneRow } from './SchedulePhoneRow';
 import { STATUS_TONE, SWAP_TONE, riskControlClass } from './tone';
 
@@ -90,9 +92,10 @@ const HIGHLIGHT_MS = 2000;
 const noop = () => {};
 
 /**
- * 44 px of hit area below `md:` for the buttons that sit INSIDE a row — the tail links and
- * the risk badge. Rows already wrap to two lines on a phone, so the taller target costs no
- * density there and none at all on a desktop, where it collapses back to the text height.
+ * 44 px of hit area below `md:` for the risk badge, a button INSIDE a row (the tails and the
+ * Starlink mark take the same height as links, `hit="inline"`). Rows already wrap to two lines
+ * on a phone, so the taller target costs no density there and none at all on a desktop, where it
+ * collapses back to the text height.
  */
 const TAP_TARGET = 'inline-flex min-h-11 items-center pointer-fine:md:min-h-0';
 
@@ -144,7 +147,6 @@ export const ScheduleTable = forwardRef<
     onSort: (column: SortColumn) => void;
     isWatched: (flight: string) => boolean;
     onToggleWatch: (row: RowModel) => void;
-    onOpenAircraft: (reg: string) => void;
     onExplainDelay: (context: Record<string, unknown>) => void;
     boardAsOf: string;
     /** Changes whenever the board, its filters or its sort change: the painted window resets. */
@@ -170,7 +172,6 @@ export const ScheduleTable = forwardRef<
     onSort,
     isWatched,
     onToggleWatch,
-    onOpenAircraft,
     onExplainDelay,
     boardAsOf,
     windowKey,
@@ -401,7 +402,8 @@ export const ScheduleTable = forwardRef<
                   <li
                     key="sched-now-divider"
                     aria-label="Current time marker"
-                    className="border-b bg-primary/10 px-2 py-1 font-mono text-[10px] tracking-wide text-primary"
+                    // Body colour on the primary tint: link colour means link (links everywhere).
+                    className="border-b bg-primary/10 px-2 py-1 font-mono text-[10px] tracking-wide text-foreground"
                   >
                     ── NOW · {dividerLabel} ──
                   </li>,
@@ -513,16 +515,19 @@ export const ScheduleTable = forwardRef<
                     <FlightLink ident={row.identDisplay} hit="inline" />
                   </TableCell>
 
+                  {/* The board's own hub is plain; the other end links to its board when it is a hub. */}
                   <TableCell>
-                    <span className="font-mono">{row.routeLine}</span>
+                    <RouteEnds ends={row.routeEnds} className="font-mono" />
                     {row.routeSub ? (
                       <span className="block text-[9px] text-muted-foreground">{row.routeSub}</span>
                     ) : null}
                   </TableCell>
 
                   <TableCell>
+                    {/* The type links to the Fleet tab by the TAIL's fleet type (`typeCode`), never by
+                        this ICAO code: B739 is the 737-900 and the 737-900ER. */}
                     <span className="font-mono" title={row.acText}>
-                      {row.acCode}
+                      {row.acCode !== '—' ? <TypeLink typeCode={row.typeCode}>{row.acCode}</TypeLink> : row.acCode}
                     </span>
                     {row.acShort ? (
                       <span className="block text-[9px] text-muted-foreground">{row.acShort}</span>
@@ -549,15 +554,9 @@ export const ScheduleTable = forwardRef<
                             {row.swap.tone === 'downgrade' ? 'Downgrade:' : row.swap.tone === 'upgrade' ? 'Upgrade:' : 'Swap:'}
                           </span>
                           {row.swap.oldType} → {row.swap.newType}
-                          {row.swap.reg ? (
-                            <button
-                              type="button"
-                              className={cn('underline', TAP_TARGET)}
-                              onClick={() => onOpenAircraft(row.swap!.reg)}
-                            >
-                              {row.swap.reg}
-                            </button>
-                          ) : null}
+                          {/* The type names come from an ICAO lookup and stay plain (ruling 5); the
+                              new tail opens its aircraft dialog. */}
+                          {row.swap.reg ? <TailLink reg={row.swap.reg} tone="quiet" hit="inline" /> : null}
                         </span>
                         {row.swap.impacts.length ? (
                           <span className="mt-0.5 flex flex-wrap gap-1">
@@ -579,30 +578,28 @@ export const ScheduleTable = forwardRef<
                   </TableCell>
 
                   <TableCell className="max-w-48 font-mono text-[10px]">
+                    {/* The tail opens its aircraft dialog in place: a real link, quiet like every
+                        name in the row but the flight number. One from live tracking looks the same
+                        (the dotted underline read as a second kind of link); its tooltip sits on a
+                        wrapper, because the link takes no ref, and the words are there for a
+                        screen reader too. */}
                     {row.reg ? (
                       row.regFromLive ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className={cn('underline decoration-dotted underline-offset-2', TAP_TARGET)}
-                              onClick={() => onOpenAircraft(row.reg)}
-                            >
-                              {row.reg}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Tail from live flight tracking (not in the schedule feed)
-                          </TooltipContent>
-                        </Tooltip>
+                        <>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <TailLink reg={row.reg} tone="quiet" hit="inline" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Tail from live flight tracking (not in the schedule feed)
+                            </TooltipContent>
+                          </Tooltip>
+                          <span className="sr-only"> (tail from live flight tracking, not in the schedule feed)</span>
+                        </>
                       ) : (
-                        <button
-                          type="button"
-                          className={cn('underline', TAP_TARGET)}
-                          onClick={() => onOpenAircraft(row.reg)}
-                        >
-                          {row.reg}
-                        </button>
+                        <TailLink reg={row.reg} tone="quiet" hit="inline" />
                       )
                     ) : row.regPending ? (
                       // A term, not a title=: a touch screen never shows a title (Nov 2026).
@@ -627,9 +624,12 @@ export const ScheduleTable = forwardRef<
                       ? (() => {
                           // Starlink once, with the phone row's Zap mark (schedule-reg-line.js).
                           const parts = regDetailParts(row.fleet.enrich);
+                          // The row's one Starlink link (`starlinkHref`, the first mention; the
+                          // Fleet cell's repeat stays plain). `-m-1 p-1`: the line truncates, and
+                          // its clip would otherwise cut the link's focus ring.
                           return (
                             <span
-                              className="block truncate text-[9px] text-muted-foreground"
+                              className="-m-1 block truncate p-1 text-[9px] text-muted-foreground"
                               title={regDetailText(parts)}
                             >
                               {parts.map((part, i) => (
@@ -637,8 +637,18 @@ export const ScheduleTable = forwardRef<
                                   {i > 0 ? ' · ' : null}
                                   {part.starlink ? (
                                     <span className="text-bb-starlink">
-                                      <Zap aria-hidden="true" className="mr-0.5 inline size-2.5 align-[-1px]" />
-                                      {part.text}
+                                      {row.starlinkHref ? (
+                                        <StarlinkLink
+                                          href={row.starlinkHref}
+                                          label={part.text}
+                                          iconClassName="mr-0.5 inline size-2.5 align-[-1px]"
+                                        />
+                                      ) : (
+                                        <>
+                                          <Zap aria-hidden="true" className="mr-0.5 inline size-2.5 align-[-1px]" />
+                                          {part.text}
+                                        </>
+                                      )}
                                     </span>
                                   ) : (
                                     part.text
@@ -678,8 +688,11 @@ export const ScheduleTable = forwardRef<
                     {row.status.asOf ? (
                       <span className="block text-[9px] text-muted-foreground">as of {boardAsOf}</span>
                     ) : null}
+                    {/* Each airport code links to where its FAA status is shown. */}
                     {row.faaContext ? (
-                      <span className="block text-[9px] text-bb-warn">{row.faaContext}</span>
+                      <span className="block text-[9px] text-bb-warn">
+                        {row.faaParts?.length ? <FaaLine parts={row.faaParts} /> : row.faaContext}
+                      </span>
                     ) : null}
                   </TableCell>
 
@@ -762,7 +775,7 @@ export const ScheduleTable = forwardRef<
                       {/* Pinned to the left edge of the scrollport: centred across a table
                           that is ~1400 px wide, the label sits off-screen on a phone and the
                           divider reads as an unexplained empty band. */}
-                      <span className="sticky left-0 block px-2 py-1 font-mono text-[10px] tracking-wide text-primary">
+                      <span className="sticky left-0 block px-2 py-1 font-mono text-[10px] tracking-wide text-foreground">
                         ── NOW · {dividerLabel} ──
                       </span>
                     </TableCell>
