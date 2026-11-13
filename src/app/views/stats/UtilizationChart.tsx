@@ -11,10 +11,30 @@
  * utilisation is a measure, not a status, so it is drawn in the accent exactly as the Fleet
  * tab draws it (F69). Only idle types (nothing flying) recede. Every row carries its own
  * "N/M P%" figure.
+ *
+ * The type is the row's identity link (links everywhere, part 2): the Fleet tab filtered to it,
+ * in place. Every `TYPE_ORDER` string is a fleet database type, and `fleetTypeCodeFor` still
+ * decides, so a string with no fleet page would print as text. The figures and the bar stay text.
+ * Wherever the link's 44 px touch box is drawn a row is 44 px tall, so one row's box never covers
+ * the next row's link; a mouse at `md`+ keeps the dense list.
  */
 
+import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { UTIL_BAR_COLOR, UTIL_TEXT_CLASS, utilBand } from '@/lib/stats-chart.js';
+import { TypeLink } from '../../features/EntityLinks';
 import type { TypeUtilisation } from '../fleet/FleetPulse';
+
+/**
+ * A type-per-row list: 44 px rows where the touch box is drawn. Shared with the fleet-age list
+ * (RouteBars.tsx), whose rows line up with these at `lg`.
+ */
+export const TYPE_ROW = 'flex min-h-11 items-center gap-2 py-1 text-[11px] pointer-fine:md:min-h-0';
+
+/**
+ * The type column. Never `truncate`: overflow clipping would clip the link's touch box too, and
+ * the longest type ("737-900ER") fits the column.
+ */
+export const TYPE_CELL = 'w-[72px] shrink-0 font-mono sm:w-[86px]';
 
 export function UtilizationChart({ rows }: { rows: TypeUtilisation[] }) {
   return (
@@ -22,8 +42,10 @@ export function UtilizationChart({ rows }: { rows: TypeUtilisation[] }) {
       {rows.map((row) => {
         const band = utilBand(row.pct) as keyof typeof UTIL_BAR_COLOR;
         return (
-          <li key={row.type} className="flex items-center gap-2 py-1 text-[11px]">
-            <span className="w-[72px] shrink-0 truncate font-mono sm:w-[86px]">{row.type}</span>
+          <li key={row.type} className={TYPE_ROW}>
+            <TypeLink typeCode={fleetTypeCodeFor({ typeText: row.type })} tone="identity" className={TYPE_CELL}>
+              {row.type}
+            </TypeLink>
             <span
               className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
               aria-hidden="true"

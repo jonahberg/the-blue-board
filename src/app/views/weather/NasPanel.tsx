@@ -14,6 +14,10 @@
  * items, one plain line — "FAA status as of HH:MMZ: …" — and a stale NAS answer's tiers are not
  * drawn, so nothing here reads as a confirmed live disruption. The stale airport programs are
  * already out of `faaIndex` (state/weather.tsx), so the hub cards and the strip agree.
+ *
+ * Each hub tag on an item links to that hub's card on this tab, in place (links everywhere, part
+ * 2): the tag is a hub printed with its FAA status, so it goes where the dashboard shows that hub's
+ * status, not to its board. The panel is not a live region, so its links are not re-read on a poll.
  */
 
 import { History } from 'lucide-react';
@@ -30,6 +34,7 @@ import {
 import { WX_HUBS } from '@/lib/weather-cards.js';
 import { cn } from '@/lib/utils';
 import type { NasData } from '../../data/types';
+import { HubStatusLink } from '../../features/EntityLinks';
 import { useWeatherOptional } from '../../state/weather';
 
 type DetailPart = { kind: 'text' | 'delay'; text: string };
@@ -63,6 +68,22 @@ function badgeTone(item: NasItem): string {
   return BADGE_TONE[cls] ?? BADGE_TONE['sev-other'];
 }
 
+/**
+ * An item's hub tags: their own link row after the title, so the title (the FAA's free text) and
+ * the tags are separate rows for the runtime link guard. Each tag goes to the hub's card on this
+ * tab (`HubStatusLink kind="weather"`): a quiet link, body colour with the muted underline, and no
+ * pill, so it reads as a link rather than a badge.
+ *
+ * Wherever the touch floor applies (every pointer below `md`, a coarse one at any width) the row
+ * sits on its own line under the title and each tag is itself a 44 × 44 px box with no `after:`
+ * box, so however the tags wrap, two tags' targets never overlap: element boxes in a wrapping row
+ * only meet at their edges. The row starts 12 px left so the first code lines up with the title.
+ * A mouse at `md`+ gets the tight tags inline after the title, as before.
+ */
+const TAG_ROW = '-ml-3 flex flex-wrap gap-x-1.5 pointer-fine:md:ml-1 pointer-fine:md:inline-flex';
+const HUB_TAG =
+  'inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[10px] pointer-fine:md:min-h-0 pointer-fine:md:min-w-0';
+
 function Tier({ label, items }: { label: string; items: NasItem[] }) {
   if (!items.length) return null;
   return (
@@ -88,16 +109,17 @@ function Tier({ label, items }: { label: string; items: NasItem[] }) {
             </Badge>
             <div className="min-w-0">
               <p className="text-[11px]">
-                {/* Sentence case for reading; codes and acronyms stay as the FAA sent them. */}
+                {/* Sentence case for reading; codes and acronyms stay as the FAA sent them. The
+                    title is the FAA's own words and stays text, a facility code in it too: the
+                    hub tags after it are where a hub links. */}
                 {nasDisplayTitle(item.title) as string}
-                {item.hubs.map((hub) => (
-                  <span
-                    key={hub}
-                    className="ml-1 rounded-sm bg-primary/15 px-1 font-mono text-[9px] text-primary"
-                  >
-                    {hub}
+                {item.hubs.length ? (
+                  <span data-link-row="" className={TAG_ROW}>
+                    {item.hubs.map((hub) => (
+                      <HubStatusLink key={hub} code={hub} kind="weather" hit="none" className={HUB_TAG} />
+                    ))}
                   </span>
-                ))}
+                ) : null}
               </p>
               {item.detailParts.length ? (
                 <p className="text-[10px] text-muted-foreground">

@@ -4,13 +4,33 @@
  *  - upstream text is escaped by React (the old innerHTML-escaping wrapper is gone), and
  *  - an ATCSCC "POSSIBLE" outlook lands under Monitoring with a muted badge, never a red
  *    CRITICAL ground stop, while /api/nas reports nothing active.
+ *
+ * An item's hub tags are links followed in place, so the panel is mounted in the providers a link
+ * needs (UiProvider, ScheduleProvider, FollowProvider), with the Schedule store's watch-list
+ * collaborators stubbed. The links themselves are tested in tests/weather-links.test.tsx.
  */
 
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, render as renderBare, screen } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { FollowProvider } from '../src/app/state/follow-link';
+import { ScheduleProvider } from '../src/app/state/schedule';
+import { UiProvider } from '../src/app/state/ui';
 import { NasPanel } from '../src/app/views/weather/NasPanel';
 import type { NasData } from '../src/app/data/types';
+
+vi.mock('../src/app/state/watch', () => ({ useWatch: () => ({ watched: [] }) }));
+vi.mock('../src/app/state/watch-alerts', () => ({ useWatchAlerts: () => ({ observe: () => {} }) }));
+
+const render = (node: ReactElement) =>
+  renderBare(
+    <UiProvider>
+      <ScheduleProvider>
+        <FollowProvider>{node}</FollowProvider>
+      </ScheduleProvider>
+    </UiProvider>,
+  );
 
 afterEach(cleanup);
 

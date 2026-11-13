@@ -15,6 +15,12 @@
  * They come from `CAT_COLORS`/`OPS_COLORS` in `src/lib`, which are DATA (the shipped
  * palette, pinned by tests) rather than theme decisions — and the category is always spelled
  * out in text beside the colour, never signalled by it.
+ *
+ * The hub code is the card's identity link: that hub's Schedule board, in place (links
+ * everywhere, part 2). Not this card (a `HubStatusLink kind="weather"` here would point at the card
+ * it sits on). The airport name, the weather values, the status line and the details stay text.
+ * Its 44 px touch box stays inside the card: it reaches about 10 px above and beside the code, and
+ * the card's padding is 12 px.
  */
 
 import { ChevronDown } from 'lucide-react';
@@ -23,6 +29,7 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { HubLink } from '../../features/EntityLinks';
 import { JargonTerm } from '../../features/JargonTerm';
 
 export type HubCardStatusPart = {
@@ -94,8 +101,9 @@ export function HubCard({ model, highlighted }: { model: HubCardModel; highlight
         highlighted && 'ring-2 ring-primary',
       )}
     >
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-base font-semibold">{model.hub}</span>
+      {/* A link row for the runtime guard (scripts/ui-audit.mjs): the card's code is a name. */}
+      <div data-link-row="" className="flex items-center gap-2">
+        <HubLink code={model.hub} tone="identity" className="font-mono text-base font-semibold" />
         {model.deice ? (
           <Badge
             variant="outline"

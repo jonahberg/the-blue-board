@@ -10,9 +10,20 @@
  * heatmap owes its reader; the cell tint is a second reading of the number printed in it,
  * never the only one. The single-hue ramp (magnitude, so one hue light→dark) and its 0.15
  * floor live in `src/lib/stats-chart.js`.
+ *
+ * The headers link to each hub's Schedule board, in place (links everywhere, part 2): a row
+ * header is its row's identity link, in link colour; a column header is quiet. The cells and
+ * the totals are counts with no list behind them, so they stay text. Each header link fills its
+ * cell and is itself the target: 44 px tall wherever the touch floor applies (the cell's own
+ * padding for a mouse at `md`+), as `LINK_HIT.inline` is, at its column's natural width (about
+ * 26 px for a hub column on a phone). Neighbouring targets meet at the cell edge and never
+ * overlap. With no width floor the matrix fits the card from 360 px up; narrower, it scrolls
+ * sideways in its own region, as it always has. No `after:` box, and the focus ring is drawn
+ * inside the link: the scrolling region would clip anything outside it.
  */
 
 import { matrixAlpha } from '@/lib/stats-chart.js';
+import { HubLink } from '../../features/EntityLinks';
 
 export type MatrixModel = {
   matrix: Record<string, Record<string, number>>;
@@ -27,6 +38,12 @@ export type MatrixModel = {
  */
 const CELL = 'px-1 py-1 sm:px-1.5 lg:py-2';
 
+/**
+ * A header link: it carries the cell's padding itself (its `th` has none), so it fills the cell,
+ * and it is at least 44 px tall until a mouse at `md`+. Its focus ring sits inside it.
+ */
+const HEAD_LINK = `flex min-h-11 items-center ${CELL} focus-visible:-outline-offset-2 pointer-fine:md:min-h-0`;
+
 export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel }) {
   return (
     <div className="overflow-x-auto" tabIndex={0} aria-label="Hub-to-hub flow matrix, scrollable region">
@@ -40,8 +57,8 @@ export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel 
               FROM \ TO
             </th>
             {hubs.map((hub) => (
-              <th key={hub} scope="col" className={`${CELL} text-center text-primary`}>
-                {hub}
+              <th key={hub} scope="col" className="p-0 text-center">
+                <HubLink code={hub} hit="none" className={`${HEAD_LINK} justify-center`} />
               </th>
             ))}
             <th scope="col" className={`${CELL} text-center text-[9px] font-normal text-muted-foreground`}>
@@ -52,8 +69,8 @@ export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel 
         <tbody>
           {hubs.map((origin) => (
             <tr key={origin}>
-              <th scope="row" className={`${CELL} text-left font-bold text-primary`}>
-                {origin}
+              <th scope="row" className="p-0 text-left font-bold">
+                <HubLink code={origin} tone="identity" hit="none" className={HEAD_LINK} />
               </th>
               {hubs.map((dest) => {
                 if (origin === dest) {
