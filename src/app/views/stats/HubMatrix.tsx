@@ -14,12 +14,12 @@
  * The headers link to each hub's Schedule board, in place (links everywhere, part 2): a row
  * header is its row's identity link, in link colour; a column header is quiet. The cells and
  * the totals are counts with no list behind them, so they stay text. Each header link fills its
- * cell and is itself the target, 44 px tall wherever the touch floor applies (the cell's own
- * padding for a mouse at `md`+), as `LINK_HIT.inline` is. A column header keeps its column's
- * natural width, about 27 px on a 390 px phone, so the nine columns still fit the card without a
- * sideways scroll; neighbouring targets meet at the cell edge and never overlap, and every hub is
- * also a row header 44 px both ways. No `after:` box: the matrix sits in a scrolling region, which
- * would clip one.
+ * cell and is itself the target: 44 px tall wherever the touch floor applies (the cell's own
+ * padding for a mouse at `md`+), as `LINK_HIT.inline` is, at its column's natural width (about
+ * 26 px for a hub column on a phone). Neighbouring targets meet at the cell edge and never
+ * overlap. With no width floor the matrix fits the card from 360 px up; narrower, it scrolls
+ * sideways in its own region, as it always has. No `after:` box, and the focus ring is drawn
+ * inside the link: the scrolling region would clip anything outside it.
  */
 
 import { matrixAlpha } from '@/lib/stats-chart.js';
@@ -40,11 +40,9 @@ const CELL = 'px-1 py-1 sm:px-1.5 lg:py-2';
 
 /**
  * A header link: it carries the cell's padding itself (its `th` has none), so it fills the cell,
- * and it is at least 44 px tall until a mouse at `md`+. A row header is 44 px wide too: its column
- * (with "FROM \ TO" above it) has the room.
+ * and it is at least 44 px tall until a mouse at `md`+. Its focus ring sits inside it.
  */
-const HEAD_LINK = `flex min-h-11 items-center ${CELL} pointer-fine:md:min-h-0`;
-const ROW_HEAD_LINK = `${HEAD_LINK} min-w-11 pointer-fine:md:min-w-0`;
+const HEAD_LINK = `flex min-h-11 items-center ${CELL} focus-visible:-outline-offset-2 pointer-fine:md:min-h-0`;
 
 export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel }) {
   return (
@@ -72,7 +70,7 @@ export function HubMatrix({ hubs, model }: { hubs: string[]; model: MatrixModel 
           {hubs.map((origin) => (
             <tr key={origin}>
               <th scope="row" className="p-0 text-left font-bold">
-                <HubLink code={origin} tone="identity" hit="none" className={ROW_HEAD_LINK} />
+                <HubLink code={origin} tone="identity" hit="none" className={HEAD_LINK} />
               </th>
               {hubs.map((dest) => {
                 if (origin === dest) {

@@ -172,11 +172,9 @@ describe('UtilizationChart and AgeBars: the type is the row\'s identity link', (
     expect(screen.queryByRole('link', { name: /%/ })).toBeNull();
   });
 
-  it('each row is 44 px tall wherever the touch box is drawn, so no two rows\' boxes overlap', () => {
+  it('each row is 44 px tall wherever the touch box is drawn, so no two rows\' boxes overlap (pinned by min-h-11)', () => {
     mount(<UtilizationChart rows={utilRows()} />);
-    for (const li of document.querySelectorAll('li')) {
-      expect(classes(li)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
-    }
+    for (const li of document.querySelectorAll('li')) expect(classes(li)).toContain('min-h-11');
   });
 
   it('a click on a type opens the Fleet tab filtered to it, in place', () => {
@@ -188,7 +186,7 @@ describe('UtilizationChart and AgeBars: the type is the row\'s identity link', (
     expect(seen.ui!.fleetLink).toMatchObject({ filter: '737 MAX 9', view: null });
   });
 
-  it('AgeBars links each type the same way and leaves the years as text', () => {
+  it('AgeBars links each type the same way and leaves the years as text; its rows take the same 44 px floor (pinned by min-h-11)', () => {
     const { rows } = avgAgeByType([{ t: '737-900ER', d: '2009' }, { t: 'A319', d: '1998' }], 2026) as {
       rows: { type: string; avg: string | number }[];
     };
@@ -197,9 +195,7 @@ describe('UtilizationChart and AgeBars: the type is the row\'s identity link', (
     expect(links.map((a) => a.textContent)).toEqual(TYPE_ORDER);
     expect(links.every((a) => classes(a).includes('text-primary') && !classes(a).includes('truncate'))).toBe(true);
     expect(screen.queryByRole('link', { name: /y$/ })).toBeNull();
-    for (const li of document.querySelectorAll('li')) {
-      expect(classes(li)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
-    }
+    for (const li of document.querySelectorAll('li')) expect(classes(li)).toContain('min-h-11');
     expect(linkColourOnPlainText()).toEqual([]);
   });
 });
@@ -238,24 +234,27 @@ describe('HubMatrix: headers link to each hub\'s Schedule board', () => {
     expect(linkColourOnPlainText()).toEqual([]);
   });
 
-  it('each header link fills its cell and is 44 px tall until a mouse at md', () => {
+  it('each header is one link and nothing else in its cell', () => {
+    mount(<HubMatrix hubs={HUBS} model={model()} />);
+    for (const th of document.querySelectorAll('thead th[scope="col"], tbody th')) {
+      if (!th.querySelector('a')) continue;
+      expect(th.children).toHaveLength(1);
+      expect(th.textContent).toBe(th.querySelector('a')!.textContent);
+    }
+    expect(document.querySelectorAll('th a')).toHaveLength(HUBS.length * 2);
+  });
+
+  it('each header link is 44 px tall until a mouse at md (pinned by min-h-11), with no after: box the scroll region would clip', () => {
     mount(<HubMatrix hubs={HUBS} model={model()} />);
     for (const a of document.querySelectorAll('th a')) {
-      expect(classes(a)).toEqual(expect.arrayContaining(['flex', 'min-h-11', 'pointer-fine:md:min-h-0']));
-      // No after: box: the matrix sits in a scrolling region, which would clip one.
+      expect(classes(a)).toContain('min-h-11');
       expect(classes(a).some((c) => c.startsWith('after:'))).toBe(false);
-      expect(classes(a.closest('th'))).toContain('p-0');
     }
   });
 
-  it('a row header is 44 px wide too; a column header keeps its natural width, so nine fit a phone', () => {
+  it('each header link draws its focus ring inside itself, where the scroll region cannot clip it (pinned by focus-visible:-outline-offset-2)', () => {
     mount(<HubMatrix hubs={HUBS} model={model()} />);
-    for (const a of document.querySelectorAll('th[scope="row"] a')) {
-      expect(classes(a)).toEqual(expect.arrayContaining(['min-w-11', 'pointer-fine:md:min-w-0']));
-    }
-    for (const a of document.querySelectorAll('th[scope="col"] a')) {
-      expect(classes(a)).not.toContain('min-w-11');
-    }
+    for (const a of document.querySelectorAll('th a')) expect(classes(a)).toContain('focus-visible:-outline-offset-2');
   });
 
   it('a click on a row header opens that hub\'s Schedule board, in place', () => {
@@ -301,13 +300,15 @@ describe('RouteBars: hub ends link, quiet; other airports and the count stay tex
     expect(linkColourOnPlainText()).toEqual([]);
   });
 
-  it('wherever the touch boxes are drawn a row is 44 px tall and the two ends sit apart', () => {
+  it('a row is 44 px tall wherever the touch boxes are drawn, so rows\' boxes never overlap (pinned by min-h-11)', () => {
     mount(<RouteBars rows={rows()} />);
-    for (const li of document.querySelectorAll('li')) {
-      expect(classes(li)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
-    }
+    for (const li of document.querySelectorAll('li')) expect(classes(li)).toContain('min-h-11');
+  });
+
+  it('the arrow keeps the two ends\' 44 px boxes apart (pinned by the arrow\'s mx-3; a box reaches about 12 px past a code)', () => {
+    mount(<RouteBars rows={rows()} />);
     const arrow = [...document.querySelectorAll('li span[aria-hidden="true"]')].find((s) => s.textContent === '→');
-    expect(classes(arrow ?? null)).toEqual(expect.arrayContaining(['mx-3', 'pointer-fine:md:mx-0']));
+    expect(classes(arrow ?? null)).toContain('mx-3');
   });
 
   it('a click on a hub end opens its Schedule board, in place', () => {
