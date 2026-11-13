@@ -21,6 +21,7 @@ vi.mock('../src/app/state/fleet', () => ({ useFleet: () => fleet }));
 vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 vi.mock('../src/app/data/api', () => ({ fetchFr24Flight: async () => lookup.response }));
 
+import { TailLink } from '../src/app/features/EntityLinks';
 import Fr24LookupDialog from '../src/app/features/Fr24LookupDialog';
 
 /** /api/fr24-flight's answer for UA2278 at 2026-09-27T04:33Z (normalised yesterday's leg). */
@@ -94,6 +95,30 @@ describe('Fr24LookupDialog links the names it prints (links part 2)', () => {
     // The fleet match's type links too; its label is not link-coloured.
     expect(screen.getByRole('link', { name: 'A321neo' }).getAttribute('href')).toBe('/?tab=fleet&type=A321neo');
     expect(screen.getByText('Fleet Match:').className).not.toContain('text-primary');
+  });
+
+  // The lookup's tail is written by hand (`TailAnchor`) so that it closes only the lookup; it must
+  // stay what a quiet inline TailLink renders, or a change to TailLink would leave it behind.
+  it("the tail's markup is a quiet inline TailLink's: class, href and data-tail-link", async () => {
+    lookup.response = response(false);
+    render(<Fr24LookupDialog />);
+    const tail = await screen.findByRole('link', { name: 'N24542' });
+    const reference = render(<TailLink reg="N24542" tone="quiet" hit="inline" className="font-mono" />).container.querySelector('a')!;
+    expect(tail.getAttribute('class')).toBe(reference.getAttribute('class'));
+    expect(tail.getAttribute('href')).toBe(reference.getAttribute('href'));
+    expect(tail.getAttribute('data-tail-link')).toBe(reference.getAttribute('data-tail-link'));
+    expect(tail.getAttribute('data-tail-link')).toBe('N24542');
+  });
+
+  it('a tail with no aircraft page prints as TailLink prints it: plain, in the same span', async () => {
+    const answer = response(false);
+    answer.flight.aircraft.reg = 'G-XWBA';
+    lookup.response = answer;
+    render(<Fr24LookupDialog />);
+    const tail = await screen.findByText('G-XWBA');
+    expect(screen.queryByRole('link', { name: 'G-XWBA' })).toBeNull();
+    const reference = render(<TailLink reg="G-XWBA" tone="quiet" hit="inline" className="font-mono" />).container.firstElementChild!;
+    expect(tail.outerHTML).toBe(reference.outerHTML);
   });
 
   it('without a tail the fleet knows, the ICAO code stays plain', async () => {
