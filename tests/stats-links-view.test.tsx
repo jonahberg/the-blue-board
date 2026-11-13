@@ -238,15 +238,23 @@ describe('HubMatrix: headers link to each hub\'s Schedule board', () => {
     expect(linkColourOnPlainText()).toEqual([]);
   });
 
-  it('each header link is its own 44 by 44 target until a mouse at md, and fills its cell', () => {
+  it('each header link fills its cell and is 44 px tall until a mouse at md', () => {
     mount(<HubMatrix hubs={HUBS} model={model()} />);
     for (const a of document.querySelectorAll('th a')) {
-      expect(classes(a)).toEqual(
-        expect.arrayContaining(['flex', 'min-h-11', 'min-w-11', 'pointer-fine:md:min-h-0', 'pointer-fine:md:min-w-0']),
-      );
-      // No after: box: the matrix scrolls in its own region, which would clip one.
+      expect(classes(a)).toEqual(expect.arrayContaining(['flex', 'min-h-11', 'pointer-fine:md:min-h-0']));
+      // No after: box: the matrix sits in a scrolling region, which would clip one.
       expect(classes(a).some((c) => c.startsWith('after:'))).toBe(false);
       expect(classes(a.closest('th'))).toContain('p-0');
+    }
+  });
+
+  it('a row header is 44 px wide too; a column header keeps its natural width, so nine fit a phone', () => {
+    mount(<HubMatrix hubs={HUBS} model={model()} />);
+    for (const a of document.querySelectorAll('th[scope="row"] a')) {
+      expect(classes(a)).toEqual(expect.arrayContaining(['min-w-11', 'pointer-fine:md:min-w-0']));
+    }
+    for (const a of document.querySelectorAll('th[scope="col"] a')) {
+      expect(classes(a)).not.toContain('min-w-11');
     }
   });
 
