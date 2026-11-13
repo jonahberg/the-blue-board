@@ -565,6 +565,7 @@ export default function FleetView() {
             updatedAt={updatedAt}
             loading={loading}
             onShowAirborne={showAirborne}
+            typeFilter={typeFilter}
           />
           <FleetHealth
             health={health}

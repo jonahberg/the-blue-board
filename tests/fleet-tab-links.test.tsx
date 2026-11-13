@@ -560,6 +560,16 @@ describe('Fleet Pulse', () => {
     expect(scrolls).toEqual([]);
   });
 
+  it('the type the tab is already filtered to prints plain there (ruling 1); the others still link', () => {
+    mount();
+    fireEvent.click(typeCard('737 MAX 9'));
+    const pulse = document.getElementById('fleet-airborne-count')!.closest('div.flex-col') as HTMLElement;
+    expect(within(pulse).getAllByRole('link').map((a) => a.textContent)).toEqual(['A319']);
+    const plain = within(pulse).getByText('737 MAX 9');
+    expect(plain.tagName).toBe('SPAN');
+    expect(classesOf(plain)).not.toContain('underline');
+  });
+
   it('before the fleet database can list anything, the counts are text', () => {
     ctl.fleet = fleetValue({ fleetDb: [], fleetByReg: {}, loading: true });
     mount();

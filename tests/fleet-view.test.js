@@ -10,6 +10,7 @@ import {
   fleetDeepLinkTarget,
   fleetHealthCounts,
   fleetRowTypeLink,
+  fleetTypeTextLink,
   fleetStayTarget,
   heldFleetLinkStep,
   resolveFleetDeepLinkFilter,
@@ -305,6 +306,24 @@ describe('buildAirborneRows / sortAirborneRows', () => {
     expect(buildAirborneRows(FLIGHTS, { ...deps, type: '757-200' }).map((r) => r.typeLink)).toEqual([null]);
     // A search narrows the rows but is not a type filter: the type still links.
     expect(buildAirborneRows(FLIGHTS, { ...deps, search: '757' }).map((r) => r.typeLink)).toEqual(['757-200']);
+  });
+});
+
+describe('fleetTypeTextLink: a printed fleet type with no tail (the Pulse rows)', () => {
+  it('links an exact fleet database type code', () => {
+    expect(fleetTypeTextLink('737 MAX 9', '')).toBe('737 MAX 9');
+    expect(fleetTypeTextLink('A319', 'A320')).toBe('A319');
+  });
+
+  it('is null when the tab is already filtered to it: the link would change nothing (ruling 1)', () => {
+    expect(fleetTypeTextLink('737 MAX 9', '737 MAX 9')).toBeNull();
+  });
+
+  it('is null for anything that is not exactly a fleet type code', () => {
+    expect(fleetTypeTextLink('B739', '')).toBeNull();
+    expect(fleetTypeTextLink('737 max 9', '')).toBeNull();
+    expect(fleetTypeTextLink('E175', '')).toBeNull();
+    expect(fleetTypeTextLink(undefined, '')).toBeNull();
   });
 });
 

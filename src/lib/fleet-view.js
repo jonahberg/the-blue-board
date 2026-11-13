@@ -289,6 +289,21 @@ export function fleetRowTypeLink(reg, fleetByReg, activeType) {
 }
 
 /**
+ * The type a printed fleet type with no tail links to (the Fleet Pulse's per-type rows): the
+ * printed text when it is exactly a fleet database type code (`fleetTypeCodeFor`), or null when it
+ * is not, or when the tab is already filtered to that type. There the link would change nothing,
+ * so the type prints as plain text (the links plan, ruling 1).
+ *
+ * @param {unknown} typeText  a fleet database type string as printed, e.g. '737 MAX 9'.
+ * @param {string} activeType  the Fleet tab's type filter ('' for none).
+ * @returns {string|null}
+ */
+export function fleetTypeTextLink(typeText, activeType) {
+  const typeCode = fleetTypeCodeFor({ typeText });
+  return typeCode && typeCode !== activeType ? typeCode : null;
+}
+
+/**
  * The "Airborne Now" table: every live flight the fleet database can name, with the type and
  * search filters from the shared controls applied.
  *

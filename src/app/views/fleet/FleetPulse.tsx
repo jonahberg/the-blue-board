@@ -16,14 +16,15 @@
  * `onShowAirborne`), named by its words plus "show the Airborne Now list". The utilization's
  * "m" is exactly that list; the big figure also counts regional and partner flights, which the
  * list (mainline only) does not, so its name promises the list, not a count. Each type label is
- * a quiet link to this tab filtered to that type (`fleetTypeCodeFor`: the rows are fleet
- * database types), 44 px tall on touch, so on a touch screen the rows are 44 px apart. This block
+ * a quiet link to this tab filtered to that type (`fleetTypeTextLink`: the rows are fleet
+ * database types; the type the tab is already filtered to prints plain, since its link would
+ * change nothing), 44 px tall on touch, so on a touch screen the rows are 44 px apart. This block
  * is not a live region, so its counts may be controls.
  */
 
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
+import { fleetTypeTextLink } from '@/lib/fleet-view.js';
 import { TypeLink } from '../../features/EntityLinks';
 
 /** A count that opens the Airborne Now list: its look at rest, the hero buttons' hover and focus. */
@@ -44,6 +45,7 @@ export function FleetPulse({
   loading,
   fleetFailed = false,
   onShowAirborne,
+  typeFilter = '',
 }: {
   airborne: number;
   /** Airborne flights that resolve to an airframe in the fleet database. */
@@ -63,6 +65,8 @@ export function FleetPulse({
   fleetFailed?: boolean;
   /** Opens the Airborne Now list. Without it (or before the database can list anything) the counts are text. */
   onShowAirborne?: () => void;
+  /** The Fleet tab's type filter: that type's label prints plain. */
+  typeFilter?: string;
 }) {
   const flying = utilisation.filter((row) => row.total > 0 && row.flying > 0);
   // The list can show aircraft only once the fleet database has loaded.
@@ -127,7 +131,7 @@ export function FleetPulse({
               {/* No `truncate` here: its clip would cut the link's focus ring, and the longest type
                   ("737-900ER", nine characters) fits the column. */}
               <span className="w-20 shrink-0 whitespace-nowrap font-mono text-muted-foreground">
-                <TypeLink typeCode={fleetTypeCodeFor({ typeText: row.type })} hit="inline">
+                <TypeLink typeCode={fleetTypeTextLink(row.type, typeFilter)} hit="inline">
                   {row.type}
                 </TypeLink>
               </span>
