@@ -214,7 +214,12 @@ export function UiProvider({ children }: { children: ReactNode }) {
       // back button with eight entries. A followed link that changes the tab pushes its one entry
       // itself and calls this with `hash: false` (state/follow-link.tsx).
       if (options?.hash !== false && typeof window !== 'undefined') {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${TAB_HASHES[id]}`);
+        try {
+          window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${TAB_HASHES[id]}`);
+        } catch {
+          // A browser that refuses history calls (Safari past its rate limit) keeps the old
+          // address; the tab still changes, and a caller (a followed link) carries on.
+        }
       }
     },
     [],

@@ -173,7 +173,7 @@ export function FollowProvider({ children }: { children: ReactNode }) {
     }
     if (intent.fleet) followFleetLink(intent.fleet, { arriving });
     if (to) {
-      pushHistoryEntry(from, to);
+      if (!pushHistoryEntry(from, to)) replaceWithTab(to);
       setTab(to, { hash: false, ...(intent.scrollTo ? { scrollTo: intent.scrollTo } : {}) });
     } else if (intent.tab) {
       // The tab already showing: a new board or scroll target is not a new place to go back from.
@@ -196,20 +196,37 @@ export function FollowProvider({ children }: { children: ReactNode }) {
  * be an address Back reaches with nothing for the hash listener to restore. The new entry is the
  * path, the query without the dashboard's own deep-link parameters (they would outrank the hash on
  * a reload; utm_* and the like stay) and the new tab's hash. The two entries' hashes differ, so
- * Back fires `hashchange` (and `popstate`), and `useDeepLinks` puts the old tab back.
+ * Back fires `hashchange` (and `popstate`), and `FollowProvider`'s listener puts the old tab back.
+ * True when the entry was pushed.
  */
-function pushHistoryEntry(from: TabId, to: TabId) {
-  if (typeof window === 'undefined') return;
+function pushHistoryEntry(from: TabId, to: TabId): boolean {
+  if (typeof window === 'undefined') return false;
   try {
     const { pathname, search, hash } = window.location;
     if (resolveTabParam(hash) !== from) {
       window.history.replaceState(window.history.state, '', `${pathname}${search}${TAB_HASHES[from]}`);
     }
     window.history.pushState(null, '', addressAfterFollow(window.location, TAB_HASHES[to]));
+    return true;
   } catch {
     // A browser may refuse a history call (Safari throws a SecurityError past about a hundred in
     // thirty seconds; a sandboxed frame may throw on any). The click has already been taken from
-    // the browser, so the follow still happens: the tab changes, without its Back entry.
+    // the browser, so the follow still happens: the tab changes, without its Back entry
+    // (`replaceWithTab` then tries to make the address name it).
+    return false;
+  }
+}
+
+/**
+ * The follow's fallback when its history entry was refused: make the current entry's address name
+ * the new tab, as the tab bar does, so a reload or a copied link opens what is showing. Guarded the
+ * same way; a browser that refuses this too keeps the old address, and nothing throws.
+ */
+function replaceWithTab(to: TabId) {
+  try {
+    window.history.replaceState(window.history.state, '', addressAfterFollow(window.location, TAB_HASHES[to]));
+  } catch {
+    // Refused as well: the tab still changes.
   }
 }
 

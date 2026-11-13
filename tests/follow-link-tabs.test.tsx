@@ -264,7 +264,7 @@ describe('Back after a followed link', () => {
   });
 
   it('a browser that refuses the history call still follows the link, without the entry', async () => {
-    mountAt('/#starlink');
+    mountAt('/?utm_source=email#starlink');
     const before = window.history.length;
     const refuse = () => {
       throw new DOMException('Attempt to use history.pushState() more than 100 times per 30 seconds', 'SecurityError');
@@ -282,8 +282,41 @@ describe('Back after a followed link', () => {
       expect(seen.ui!.announcement).toBe('Schedule, ORD');
       expect(document.activeElement).toBe(panel('schedule'));
       expect(window.history.length).toBe(before);
+      // The address still names the tab showing, where the browser allows a replace.
+      expect(address()).toBe('/?utm_source=email#schedule');
     } finally {
       push.mockRestore();
+    }
+  });
+
+  it('a browser that refuses every history call: the follow still lands, the tab bar too, nothing throws', async () => {
+    mountAt('/#starlink');
+    const refuse = () => {
+      throw new DOMException('history refused', 'SecurityError');
+    };
+    const push = vi.spyOn(window.history, 'pushState').mockImplementation(refuse);
+    const replace = vi.spyOn(window.history, 'replaceState').mockImplementation(refuse);
+    const errors: unknown[] = [];
+    const onError = (event: ErrorEvent) => errors.push(event.error);
+    window.addEventListener('error', onError);
+    try {
+      const ord = screen.getByRole('link', { name: 'ORD' });
+      ord.focus();
+      fireEvent.click(ord);
+      await nextFrame();
+
+      expect(seen.ui!.tab).toBe('schedule');
+      expect(seen.ui!.announcement).toBe('Schedule, ORD');
+      expect(document.activeElement).toBe(panel('schedule'));
+      expect(address()).toBe('/#starlink');
+
+      pickTab('Fleet');
+      expect(seen.ui!.tab).toBe('fleet');
+      expect(errors).toEqual([]);
+    } finally {
+      window.removeEventListener('error', onError);
+      push.mockRestore();
+      replace.mockRestore();
     }
   });
 
