@@ -117,5 +117,15 @@ describe('route ends', () => {
     const history = flightHistoryView({ origin: 'ORD', dest: 'LHR', today: '2026-11-11', rows: [] });
     expect(history.route).toEqual({ origin: { code: 'ORD', href: '/hubs/ord' }, dest: { code: 'LHR', href: null } });
     expect(history.routeLabel).toBe('ORD → LHR');
+    // A flight we have prints its route line in city words, not codes: nothing to link there.
+    expect(view.route).toBeNull();
+  });
+
+  it('a flight we do not have: the last route it flew links its hub ends', () => {
+    const view = flightPageView({ v: 1, ident: 'UA929', status: 'not-found', lastSeen: { date: '2026-11-07', origin: 'EWR', dest: 'LHR' } }, D);
+    expect(view.status).toBe('not-found');
+    expect(view.routeLine).toBe('EWR → LHR');
+    expect(view.route).toEqual({ origin: { code: 'EWR', href: '/hubs/ewr' }, dest: { code: 'LHR', href: null } });
+    expect(flightPageView({ v: 1, ident: 'UA929', status: 'not-found' }, D).route).toBeNull();
   });
 });

@@ -161,6 +161,40 @@ describe.skipIf(!hasDist)('flight page: hubs, tail, type and Starlink are links'
     expect([wifi.textContent, wifi.getAttribute('href')]).toEqual(['Starlink Wi-Fi', '/#starlink']);
   });
 
+  it('a refresh keeps keyboard focus on the link the reader was on', async () => {
+    mountWith({ aircraft: ua929Aircraft });
+    await load();
+    const before = card().querySelector<HTMLAnchorElement>('[data-f="reg"] a')!;
+    before.focus();
+    expect(document.activeElement).toBe(before);
+    // Back to a visible tab with a fresh read: the page repaints from what it has (render()).
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+    const after = card().querySelector<HTMLAnchorElement>('[data-f="reg"] a')!;
+    expect(before.isConnected).toBe(false); // repainted, a new element
+    expect(document.activeElement).toBe(after);
+    expect(after.getAttribute('href')).toBe('/?aircraft=N686UA');
+    delete (document as any).hidden;
+  });
+
+  it('a flight we do not have: the last route it flew links its hub end in the header', async () => {
+    mountShell();
+    vi.useFakeTimers({ toFake: ['Date'], now: (D - 5 * 3600) * 1000 });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).startsWith('/api/flight?')) {
+        return Response.json({ v: 1, ident: 'UA929', status: 'not-found', leg: null, aircraft: null, history: null, tail: null, lastSeen: { date: '2026-11-07', origin: 'EWR', dest: 'LHR' } });
+      }
+      return new Response('{}', { status: 404 });
+    }));
+    vi.resetModules();
+    await import('../src/scripts/flight-page.ts');
+    const root = document.querySelector<HTMLElement>('[data-flight-page]')!;
+    await vi.waitFor(() => expect(root.dataset.state).toBe('not-found'));
+    const route = root.querySelector('[data-fp-route]')!;
+    expect([...route.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')])).toEqual([['EWR', '/hubs/ewr']]);
+    expect(route.textContent).toBe('EWR →  to LHR');
+  });
+
   it('a tail only the schedule named and a model code print as text', async () => {
     const aircraft = {
       reg: 'N999ZZ', type: 'B739', typeCode: null, config: '', seats: null, total: null, wifi: null, starlink: false,

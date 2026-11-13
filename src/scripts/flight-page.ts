@@ -199,10 +199,10 @@ if (root) {
     }
     const f = (name: string) => q<HTMLElement>(trip, `[data-f="${name}"]`);
     // A hub end links to its hub page; any other airport is text.
-    f('origin')!.replaceChildren(linkOrText(t.origin.code, t.origin.href, `${QUIET} ${HIT_BOX}`));
+    replaceChildrenKeepingFocus(f('origin')!, [linkOrText(t.origin.code, t.origin.href, `${QUIET} ${HIT_BOX}`)]);
     f('origin-city')!.textContent = t.origin.city;
     f('origin-time')!.textContent = t.origin.time;
-    f('dest')!.replaceChildren(linkOrText(t.dest.code, t.dest.href, `${QUIET} ${HIT_BOX}`));
+    replaceChildrenKeepingFocus(f('dest')!, [linkOrText(t.dest.code, t.dest.href, `${QUIET} ${HIT_BOX}`)]);
     f('dest-city')!.textContent = t.dest.city;
     f('dest-time')!.textContent = t.dest.time;
     const fill = f('track-fill');
@@ -262,7 +262,7 @@ if (root) {
     }
     const f = (name: string) => q<HTMLElement>(historyCard, `[data-f="${name}"]`);
     f('title')!.textContent = h.title;
-    f('route')!.replaceChildren(...routeNodes(h.route, HIT_BOX));
+    replaceChildrenKeepingFocus(f('route')!, routeNodes(h.route, HIT_BOX_NARROW));
     const strip = f('strip') as HTMLOListElement;
     const template = q<HTMLTemplateElement>(historyCard, 'template[data-fp-day]');
     if (strip && template) {
@@ -306,11 +306,11 @@ if (root) {
     const f = (name: string) => q<HTMLElement>(aircraftCard, `[data-f="${name}"]`);
     // The tail opens the dashboard's aircraft dialog (the card's one link-coloured link); the type
     // its fleet page; Starlink the dashboard's Starlink tab. What links is the view's decision.
-    f('reg')!.replaceChildren(linkOrText(a.reg, a.regHref, `${IDENTITY} ${HIT_BOX}`));
-    f('summary')!.replaceChildren(...a.summaryParts.map((part) => linkOrText(part.text, part.href, `${QUIET} ${HIT_LINE}`)));
+    replaceChildrenKeepingFocus(f('reg')!, [linkOrText(a.reg, a.regHref, `${IDENTITY} ${HIT_BOX}`)]);
+    replaceChildrenKeepingFocus(f('summary')!, a.summaryParts.map((part) => linkOrText(part.text, part.href, `${QUIET} ${HIT_LINE}`)));
     const wifi = f('wifi')!;
     if (a.wifi) {
-      f('wifi-text')!.replaceChildren(linkOrText(a.wifi.text, a.wifi.href, `${QUIET} ${HIT_LINE}`));
+      replaceChildrenKeepingFocus(f('wifi-text')!, [linkOrText(a.wifi.text, a.wifi.href, `${QUIET} ${HIT_LINE}`)]);
       const icon = aircraftCard.querySelector<SVGElement>('[data-f="starlink-icon"]');
       if (icon) icon.style.display = a.wifi.starlink ? '' : 'none';
       wifi.hidden = false;
@@ -409,7 +409,11 @@ if (root) {
     const view = flightPageView(payload, nowSec, { live });
     currentView = view;
     if (title) title.textContent = ident;
-    if (routeEl) routeEl.textContent = view.routeLine;
+    // A flight we do not have prints the last route it flew in codes; its hub ends link.
+    if (routeEl) {
+      if (view.route) replaceChildrenKeepingFocus(routeEl, routeNodes(view.route, HIT_BOX_NARROW));
+      else routeEl.textContent = view.routeLine;
+    }
     setVerdict(view.verdict.parts);
     if (stampEl) stampEl.textContent = view.stamp;
     if (noteEl) {

@@ -375,6 +375,8 @@ export function flightPageView(payload, nowSec, { live = null, stableDays = fals
       status: status === 'unavailable' ? 'unavailable' : 'not-found',
       ident,
       routeLine: payload?.lastSeen ? `${payload.lastSeen.origin} → ${payload.lastSeen.dest}` : '',
+      // The last route flown, in codes: its hub ends link. (A flight we have prints city words.)
+      route: payload?.lastSeen ? { origin: airportEnd(payload.lastSeen.origin), dest: airportEnd(payload.lastSeen.dest) } : null,
       verdict: { ...verdict, parts: [{ text, tone: null }], text },
       stamp: '',
       note: status === 'unavailable'
@@ -413,6 +415,7 @@ export function flightPageView(payload, nowSec, { live = null, stableDays = fals
     status: 'ok',
     ident,
     routeLine: routeLine(row),
+    route: null,
     verdict,
     state: leg.state,
     stamp,
