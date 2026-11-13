@@ -205,10 +205,38 @@ function linkStyleOffenders(source, fileName = 'inline.tsx') {
   return offenders;
 }
 
+/**
+ * Link colour or an underline in the class maps of a plain `.ts` module (a view folder's
+ * `tone.ts`): which element a string lands on is not known there, so every such string counts,
+ * named by the declaration that holds it (`MY_FLIGHT_STATUS_TONE`, `riskControlClass`). Comments
+ * are not read.
+ */
+function classMapOffenders(source, fileName = 'inline.ts') {
+  const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const offenders = [];
+  (function visit(node, holder) {
+    let name = holder;
+    if ((ts.isVariableDeclaration(node) || ts.isFunctionDeclaration(node)) && node.name && ts.isIdentifier(node.name)) {
+      name = node.name.text;
+    }
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
+      const bad = node.text.split(/\s+/).filter(Boolean).filter((c) => LINK_COLOUR(utility(c)) || UNDERLINE(utility(c)));
+      if (bad.length) {
+        const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+        offenders.push({ line, tag: name ?? '(module)', classes: [...new Set(bad)] });
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, name));
+  })(sf, null);
+  return offenders;
+}
+
 describe('link colour and underline only on links and buttons (links everywhere)', () => {
-  // Every dashboard view that prints names, and the overlays and panels that do: each tab's view
-  // and its folder, the watch panel and banner, the flight sheet, the aircraft, FR24 and delay
-  // dialogs, and the brief's panel and sheet.
+  // Every dashboard view that prints names, and the overlays, panels and shell pieces that do:
+  // each tab's view and its folder, the watch panel and banner, the hub strip and the ticker, the
+  // flight sheet, the aircraft, FR24 and delay dialogs, the search palette, the brief's panel and
+  // sheet, and the shared pieces a row prints (the livery badge, jargon terms, the ask chips).
+  // Plus the class maps in the view folders' `.ts` modules (`classMapOffenders`).
   const tsxIn = (dir) =>
     readdirSync(resolve(ROOT, dir))
       .filter((name) => name.endsWith('.tsx'))
@@ -218,25 +246,63 @@ describe('link colour and underline only on links and buttons (links everywhere)
   const SCOPE = [
     ...VIEWS.map((view) => `src/app/views/${view}View.tsx`),
     ...VIEW_DIRS.flatMap((dir) => tsxIn(`src/app/views/${dir}`)),
-    'src/app/shell/WatchPanel.tsx',
-    'src/app/shell/WatchBanner.tsx',
-    ...['FlightSheet', 'AircraftDetailDialog', 'Fr24LookupDialog', 'DelayExplainDialog', 'BriefPanel', 'BriefSheet'].map(
-      (name) => `src/app/features/${name}.tsx`,
-    ),
+    ...['WatchPanel', 'WatchBanner', 'HubHealthStrip', 'Ticker'].map((name) => `src/app/shell/${name}.tsx`),
+    ...[
+      'FlightSheet',
+      'AircraftDetailDialog',
+      'Fr24LookupDialog',
+      'DelayExplainDialog',
+      'SearchPalette',
+      'BriefPanel',
+      'BriefSheet',
+      'SpecialLiveryBadge',
+      'JargonTerm',
+      'AskChips',
+    ].map((name) => `src/app/features/${name}.tsx`),
   ];
-  // `file <tag> classes` → how many such elements the file may hold and why they may carry link
-  // colour or an underline (`allowlistProblems`, below: what an element is, not its line). Empty:
-  // the state marks the views carry (sort arrows, the watched eye, the map's "on" toggles) sit in
-  // their controls, which the scan knows.
-  const ALLOW = {};
+  // The view folders' plain `.ts` modules, whose class maps a view applies (`tone.ts`).
+  const TS_SCOPE = VIEW_DIRS.flatMap((dir) =>
+    readdirSync(resolve(ROOT, `src/app/views/${dir}`))
+      .filter((name) => name.endsWith('.ts'))
+      .map((name) => `src/app/views/${dir}/${name}`),
+  );
+  // `file <tag> classes` → how many such elements (or, in a `.ts` module, strings under that
+  // declaration) the file may hold and why they may carry link colour or an underline
+  // (`allowlistProblems`, below: what it is, not its line).
+  const ALLOW = {
+    'src/app/views/myflight/tone.ts <MY_FLIGHT_STATUS_TONE> text-primary': {
+      count: 2,
+      reason:
+        'My Flights\' "En Route" and "Scheduled" status pills: primary-tinted status badges on a Badge that is not a link, older than links everywhere. Recolouring them is a visual call left to the owner',
+    },
+    'src/app/views/schedule/tone.ts <riskControlClass> hover:underline': {
+      count: 1,
+      reason: "the quiet LOW delay-risk control's hover underline: it is applied to the risk badge's button (SchedulePhoneRow, ScheduleTable)",
+    },
+  };
 
   it('finds no element in the dashboard that looks like a link and is not one', () => {
-    const found = SCOPE.flatMap((file) =>
-      linkStyleOffenders(readFileSync(resolve(ROOT, file), 'utf8'), file).map(
-        (o) => `${file}:${o.line} <${o.tag}> ${o.classes.join(' ')}${o.plainToo ? ' (className reaches its plain-text rendering)' : ''}`,
+    const found = [
+      ...SCOPE.flatMap((file) =>
+        linkStyleOffenders(readFileSync(resolve(ROOT, file), 'utf8'), file).map(
+          (o) => `${file}:${o.line} <${o.tag}> ${o.classes.join(' ')}${o.plainToo ? ' (className reaches its plain-text rendering)' : ''}`,
+        ),
       ),
-    );
+      ...TS_SCOPE.flatMap((file) =>
+        classMapOffenders(readFileSync(resolve(ROOT, file), 'utf8'), file).map((o) => `${file}:${o.line} <${o.tag}> ${o.classes.join(' ')}`),
+      ),
+    ];
     expect(allowlistProblems(found, ALLOW)).toEqual([]);
+  });
+
+  it("reads a class map in a view folder's .ts module", () => {
+    expect(TS_SCOPE).toContain('src/app/views/myflight/tone.ts');
+    expect(TS_SCOPE).toContain('src/app/views/schedule/tone.ts');
+    const found = (src) => classMapOffenders(src).map((o) => `<${o.tag}> ${o.classes.join(' ')}`);
+    expect(found("export const TONE = { airborne: 'text-primary', ground: 'text-muted-foreground' };")).toEqual(['<TONE> text-primary']);
+    expect(found("export function cls(on: boolean) { return on ? `px-1 hover:underline` : ''; }")).toEqual(['<cls> hover:underline']);
+    // A comment that names a class is not a class.
+    expect(found("// text-primary underline\nexport const A = 'underline-offset-2 no-underline text-primary-foreground';")).toEqual([]);
   });
 
   it('covers every dashboard view and the overlays that print names', () => {
@@ -260,11 +326,17 @@ describe('link colour and underline only on links and buttons (links everywhere)
       'src/app/features/Fr24LookupDialog.tsx',
       'src/app/features/DelayExplainDialog.tsx',
       'src/app/features/BriefPanel.tsx',
+      'src/app/features/SearchPalette.tsx',
+      'src/app/features/SpecialLiveryBadge.tsx',
+      'src/app/features/JargonTerm.tsx',
+      'src/app/features/AskChips.tsx',
+      'src/app/shell/HubHealthStrip.tsx',
+      'src/app/shell/Ticker.tsx',
     ]) {
       expect(SCOPE).toContain(file);
     }
     for (const file of SCOPE) expect(statSync(resolve(ROOT, file)).isFile(), file).toBe(true);
-    expect(SCOPE.length).toBeGreaterThanOrEqual(60);
+    expect(SCOPE.length).toBeGreaterThanOrEqual(72);
   });
 
   it('catches link colour or an underline on an element that is not a link or button', () => {
