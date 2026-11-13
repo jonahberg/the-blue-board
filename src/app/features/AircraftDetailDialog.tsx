@@ -142,11 +142,14 @@ function StarlinkBadgeLink() {
  */
 function ViewOnMapBlock({
   ident,
+  name = ident,
   lead,
   onViewOnMap,
   children,
 }: {
   ident: string;
+  /** What the button's name says after "View on map:", when it differs from the printed ident. */
+  name?: string;
   lead?: ReactNode;
   onViewOnMap: () => void;
   children: ReactNode;
@@ -162,7 +165,7 @@ function ViewOnMapBlock({
           onClick={onViewOnMap}
           className="shrink-0 text-[10px] text-muted-foreground after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
         >
-          View on map<span className="sr-only">: {ident}</span> <span aria-hidden="true">→</span>
+          View on map<span className="sr-only">: {name}</span> <span aria-hidden="true">→</span>
         </button>
       </div>
       {children}
@@ -523,6 +526,9 @@ export default function AircraftDetailDialog() {
                   // the flight, not the whole card concatenated.
                   <ViewOnMapBlock
                     ident={liveFlight.flightIATA || liveFlight.callsign || '?'}
+                    // A flight with neither a number nor a callsign (a ferry leg) is named by the
+                    // tail, as the block's old label was; it still prints "?".
+                    name={liveFlight.flightIATA || liveFlight.callsign || reg}
                     lead={<>{phase.icon} </>}
                     onViewOnMap={onViewOnMap}
                   >

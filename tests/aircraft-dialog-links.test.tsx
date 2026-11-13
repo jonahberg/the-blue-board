@@ -111,6 +111,17 @@ describe('AircraftDetailDialog, a mainline tail', () => {
     expect(screen.queryByRole('link', { name: 'DEN' })).toBeNull();
   });
 
+  it('a live flight with neither a flight number nor a callsign is named by the tail, never "?"', async () => {
+    feed.flights = [{
+      fr24id: '3c', icao24: 'a', lat: 40, lon: -100, hdg: 90, alt: 10000, spd: 220, vr: 0, squawk: null,
+      acType: 'B39M', reg: 'N37502', origin: 'DEN', dest: 'SEA', flightIATA: '', onGround: false,
+      callsign: '', airline: 'UAL',
+    }];
+    await renderDialog();
+    expect(screen.getByRole('button', { name: 'View on map: N37502' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /\?$/ })).toBeNull();
+  });
+
   it('a live flight under a callsign with no United number prints it plain inside the block', async () => {
     feed.flights = [{
       fr24id: '3c', icao24: 'a', lat: 40, lon: -100, hdg: 90, alt: 10000, spd: 220, vr: 0, squawk: null,
