@@ -21,8 +21,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ### Fixed
 - **"Starlink Tracker" on the fleet overview opened the Fleet tab.** It now opens the Starlink tab.
-- **Keyboard focus stays where it was when a list refreshes.** On a hub's departures board, a fleet page's "in the air right now" and a flight page's recent flights, a refresh moved keyboard focus to the first link with the same address whenever one appeared twice, as the same flight number or, now, the same hub can. It now stays on the link you were on.
-- **Codes painted like links.** The hub code in a hub page's title (ORD) and the type in a fleet page's title (737 MAX 9) were blue without being links; they are now the text's own colour. So are the family names and counts on the fleet overview, "Hub Airports" on the hubs overview, and the labels and headings on the tracker pages that were blue.
+- **Keyboard focus stays where it was when a list refreshes.** On a hub's departures board, a fleet page's "in the air right now" and a flight page's recent flights, a refresh could move keyboard focus to another row's link with the same address, such as another flight into the same hub. It now stays on the link you were on, in the same departure, aircraft or flight, however the rows around it changed. If that row itself has left the list, focus goes to a link with the same address (the same one of several, where there still are as many), otherwise to the list's first link, so it never leaves the list.
+- **Codes painted like links.** The hub code in a hub page's title (ORD) and the type in a fleet page's title (737 MAX 9) were blue without being links; they are now the text's own colour. So are the family names and each family's count on the fleet overview, "Hub Airports" on the hubs overview, and the labels and headings on the tracker pages that were blue.
+- **A news article's category** ("Fleet" beside the date) was blue without being a link; it is now the text's own colour.
+- **Newark's "Construction" jump link went nowhere.** The page has no construction section; the link is gone.
 
 ## [1.29.0] - 2026-11-12
 
