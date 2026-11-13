@@ -553,7 +553,11 @@ describe('Fleet Pulse', () => {
     const max9 = within(pulse).getByRole('link', { name: '737 MAX 9' });
     expect(max9.getAttribute('href')).toBe('/?tab=fleet&type=737%20MAX%209');
     expect(isQuiet(max9)).toBe(true);
-    expect(classesOf(max9)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
+    // Takes no taps on a coarse pointer, so the rows keep their compact height; live with a mouse.
+    // On touch the Composition variant cards just below set the type.
+    expect(classesOf(max9)).toContain('pointer-coarse:pointer-events-none');
+    expect(classesOf(max9)).not.toContain('min-h-11');
+    expect(classesOf(max9).filter((c) => c.includes('after:'))).toEqual([]);
     expect(within(pulse).getAllByRole('link').map((a) => a.textContent)).toEqual(['A319', '737 MAX 9']);
 
     fireEvent.click(max9);

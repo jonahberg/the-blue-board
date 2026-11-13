@@ -18,8 +18,10 @@
  * airframes only) does not show, so no list shows what it counts. Each type label is
  * a quiet link to this tab filtered to that type (`fleetTypeTextLink`: the rows are fleet
  * database types; the type the tab is already filtered to prints plain, since its link would
- * change nothing), 44 px tall on touch, so on a touch screen the rows are 44 px apart. This block
- * is not a live region, so its counts may be controls.
+ * change nothing). The labels take no taps on a coarse pointer (`finePointerOnly`), so the rows
+ * keep their compact height on a phone; there the Composition variant cards just below set the
+ * type, with 44 px targets. With a mouse they are live at every width, as small as the row. This
+ * block is not a live region, so its counts may be controls.
  */
 
 import { Badge } from '@/components/ui/badge';
@@ -125,7 +127,7 @@ export function FleetPulse({
               {/* No `truncate` here: its clip would cut the link's focus ring, and the longest type
                   ("737-900ER", nine characters) fits the column. */}
               <span className="w-20 shrink-0 whitespace-nowrap font-mono text-muted-foreground">
-                <TypeLink typeCode={fleetTypeTextLink(row.type, typeFilter)} hit="inline">
+                <TypeLink typeCode={fleetTypeTextLink(row.type, typeFilter)} finePointerOnly>
                   {row.type}
                 </TypeLink>
               </span>
