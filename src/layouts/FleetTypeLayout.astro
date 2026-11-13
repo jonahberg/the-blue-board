@@ -23,6 +23,7 @@ import { STARLINK_ROSTER_AS_OF, starlinkForType } from '../data/starlink-facts.j
 import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
 import { fleetSeo } from '../lib/page-seo.js';
 import { fleetLiveListHref } from '../lib/fleet-live.js';
+import { fleetTypeLink } from '../lib/fleet-type-link.js';
 import { isStarlinkWifi, registryRowLinks } from '../lib/fleet-registry-links.js';
 import { registryStarlinkNote } from '../lib/starlink-facts.js';
 
@@ -151,8 +152,10 @@ function statusClass(status: string | undefined): string {
       <SupportNote variant="inline" placement="fleet-top" />
     </header>
 
+    {/* "Aircraft" counts the type, and the dashboard's Fleet tab filtered to the type lists every
+        one of them, so that tile links there. The other three count nothing a page lists. */}
     <div class="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-      <StatTile label="Aircraft" value={data.count} />
+      <StatTile label="Aircraft" value={data.count} href={fleetTypeLink(typeCode, 'dashboard')?.href} />
       <StatTile label="Total Seats" value={data.seatConfig.total} />
       <StatTile label="Deliveries" value={data.deliveryRange} />
       <StatTile label="Body Type" value={data.bodyType === 'widebody' ? 'Wide' : 'Narrow'} />

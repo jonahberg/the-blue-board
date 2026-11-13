@@ -8,6 +8,7 @@ import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
 import { fleetOrder, fleetTypes } from '../src/data/fleet/index.js';
+import { fleetTypeLink } from '../src/lib/fleet-type-link.js';
 
 const DIST = resolve(__dirname, '..', 'dist');
 const hasDist = existsSync(join(DIST, 'fleet.html'));
@@ -64,6 +65,29 @@ describe.skipIf(!hasDist)('fleet type pages: the registry links every tail', () 
       }
     });
   }
+
+  it('the "Aircraft" tile opens the Fleet tab filtered to the type, where those aircraft are listed', () => {
+    for (const slug of fleetOrder) {
+      const doc = page(`fleet/${slug}.html`);
+      const typeCode = fleetTypes[slug].typeCode;
+      const href = fleetTypeLink(typeCode, 'dashboard')?.href;
+      expect(href, slug).toBe(`/?tab=fleet&type=${encodeURIComponent(typeCode)}`);
+      const label = [...doc.querySelectorAll('main a')].find((a) => a.textContent.trim() === 'Aircraft');
+      expect(label, slug).toBeTruthy();
+      expect(label.getAttribute('href'), slug).toBe(href);
+      // The same address as the page's "Explore … in Interactive Database" button.
+      const cta = [...doc.querySelectorAll('main a')].find((a) => /in Interactive Database/.test(a.textContent));
+      expect(label.getAttribute('href'), slug).toBe(cta.getAttribute('href'));
+      // The whole tile is the target, and the figure sits beside the link, not in it.
+      const tile = label.parentElement;
+      expect(classes(tile)).toContain('relative');
+      expect(classes(label)).toEqual(expect.arrayContaining(['after:absolute', 'after:inset-0']));
+      expect(label.nextElementSibling.textContent.trim(), slug).toBe(String(fleetTypes[slug].count));
+      // Only that tile links: the others count nothing a page lists.
+      const tiles = [...tile.parentElement.children];
+      expect(tiles.map((t) => t.querySelectorAll('a').length), slug).toEqual([1, 0, 0, 0]);
+    }
+  });
 
   it('the live strip\'s count links to the dashboard\'s Airborne list for the type', () => {
     for (const slug of fleetOrder) {
