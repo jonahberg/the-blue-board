@@ -519,6 +519,9 @@ describe('link colour and underline only on links and buttons, on the content pa
   const ASTRO_SCOPE = [
     'src/layouts/FleetTypeLayout.astro',
     'src/layouts/HubLayout.astro',
+    // A news article's header: its category label beside the date (the content inventory's
+    // painted-but-inert list).
+    'src/layouts/NewsLayout.astro',
     ...astroIn('src/pages/fleet'),
     ...astroIn('src/pages/hubs'),
     ...astroIn('src/pages/trackers'),
