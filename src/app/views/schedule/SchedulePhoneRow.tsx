@@ -21,9 +21,14 @@
  *
  * The row's other names link too (links everywhere, part 2: the other hub, the tail, the type,
  * the FAA airport codes, ⚡ Starlink), but only for a mouse or a keyboard: on a touch screen they
- * take no taps (`finePointerOnly`), so a tap anywhere but the flight number, the risk badge and
- * the eye still opens the flight sheet (the links plan, ruling 3). They come after the flight
- * number in the row, so with a mouse each paints over the number's touch box where they meet.
+ * take no taps (`finePointerOnly`), so a tap on them falls through to whatever is under it (the
+ * links plan, ruling 3). That is the flight sheet button almost everywhere, with two exceptions
+ * where a touch box from line 1 reaches into line 2: the flight number's 44 px box covers the top
+ * 12 of line 2's 16 px for the number's width (the tail sits there, so a tap on the tail's upper
+ * part opens the flight page), and the risk badge's box does the same at the right end of line 2.
+ * The number's box is part 1's and stays: 44 px is the touch floor (DESIGN.md), and a shorter box
+ * would trade this for a small target. The links come after the number in the row, so with a
+ * mouse each paints over the number's box where they meet.
  *
  * Every text field comes from the row model as built; the wording decisions live in
  * `src/lib/schedule-phone-row.js` with a test. Nothing here re-derives a status or a delay.
