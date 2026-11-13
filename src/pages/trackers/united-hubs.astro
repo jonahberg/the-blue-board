@@ -4,9 +4,12 @@ import { unitedHubsMeta, unitedHubs, unitedProjects } from '../../data/trackers/
 import { atcAirports } from '../../data/trackers/atc.js';
 import { contentModified, entryVerified, verificationSummary, verifiedNote } from '../../data/trackers/verified.js';
 import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
-import { trackerParentSeo } from '../../lib/tracker-detail.js';
+import { atcHubDetailCodes, trackerParentSeo, unitedHubDetailCodes } from '../../lib/tracker-detail.js';
 import { countLabel } from '../../lib/plural.js';
 import { fleetTypes } from '../../data/fleet/index.js';
+import { fleetTypeLink } from '../../lib/fleet-type-link.js';
+import { hubLink } from '../../lib/hub-link.js';
+import { atcEntryHref, mapPlaceLinks, projectEntryHref, unitedHubEntryHref } from '../../lib/tracker-links.js';
 import StatStrip from '../../components/trackers/StatStrip.astro';
 import TrackerMap from '../../components/trackers/TrackerMap.astro';
 import TrackerSearch from '../../components/trackers/TrackerSearch.astro';
@@ -59,12 +62,18 @@ const projectById = (id) => {
 const iahTerminalB = projectById('iah-terminal-b');
 const iadConcourseE = projectById('iad-concourse-e');
 const iadClubE = projectById('iad-club-concourse-e');
+// The clubs the stat strip and the club math name, each linked to its own card (links everywhere).
+const iahClubB = projectById('iah-club-b-north');
+const sfoClubT2 = projectById('sfo-t2-club');
 // Club math quotes the Dulles club entry's own seat figure — United's Nov 9 wording, "seating for
 // more than 600" — not a number typed here (it said 650, the pre-opening "around 650"). If the entry
 // stops saying it that way, the build stops rather than print a stale figure.
 const iadClubSeats = /seating for more than (\d+)/.exec(iadClubE.details)?.[1];
 if (!iadClubSeats) throw new Error('united-hubs club math: iad-club-concourse-e no longer says "seating for more than N"');
 const D7810_SEATS = Number(fleetTypes['787-10-dreamliner'].seatConfig.total);
+// "787-10s" names an exact fleet type, so it links to that type's page.
+const d7810Href = fleetTypeLink('787-10', 'site')?.href;
+if (!d7810Href) throw new Error('united-hubs club math: the 787-10 has no fleet page');
 const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four'];
 const iadClubIn7810s = COUNT_WORDS[Math.round(Number(iadClubSeats) / D7810_SEATS)] ?? String(Math.round(Number(iadClubSeats) / D7810_SEATS));
 const dayOf = (iso, opts) => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', opts);
@@ -113,9 +122,11 @@ for (const code of hubOrder) {
   const h = unitedHubs[code];
   const m = hubMapMeta[code];
   const p = projectPoint(h.lng, h.lat);
-  const card = { title: `${code} — ${h.name}`, badge: m.badge, line1: m.line1, line2: h.quietNote ?? '' };
+  // A hub's card and its "Beyond the map" entry (Guam) link to its page here and to its hub page.
+  const links = mapPlaceLinks(code, unitedHubEntryHref(code, unitedHubDetailCodes), `${code} projects →`);
+  const card = { title: `${code} — ${h.name}`, badge: m.badge, line1: m.line1, line2: h.quietNote ?? '', links };
   if (!p) {
-    offMap.push({ title: `${code} — ${h.city}`, badge: m.badge });
+    offMap.push({ title: `${code} — ${h.city}`, badge: m.badge, links });
     continue;
   }
   mapPoints.push({ id: `hub-${code.toLowerCase()}`, code, x: p.x, y: p.y, shape: m.shape, tone: m.tone, label: true, card });
@@ -163,12 +174,17 @@ const tableRows = sortedProjects.map((p) => {
     id: `t-${p.id}`,
     searchText: `${p.hub} ${unitedHubs[p.hub].city} ${unitedHubs[p.hub].state} ${unitedHubs[p.hub].searchAlias ?? ''} ${unitedHubs[p.hub].name} ${p.name} ${typeLabelFor(p)} ${s.label}`.toLowerCase(),
     cells: {
-      project: { primary: p.name, secondary: p.builder === 'airport-authority' ? 'airport builds' : p.builder === 'joint' ? 'joint build' : '', sortVal: p.name.toLowerCase() },
+      // Links everywhere (Nov 12 2026): the project's name is the row's own link (its card on the
+      // hub's tracker page); the hub code goes to the hub page and "IAH projects →" to that tracker
+      // page, both quiet.
+      project: { primary: p.name, href: projectEntryHref(p), secondary: p.builder === 'airport-authority' ? 'airport builds' : p.builder === 'joint' ? 'joint build' : '', sortVal: p.name.toLowerCase() },
       hub: {
         primary: p.hub,
+        href: hubLink(p.hub, 'site')?.href,
+        tone: 'quiet',
         mono: true,
         sortVal: `${hubOrder.indexOf(p.hub)}`.padStart(2, '0'),
-        link: { href: `/trackers/united-hubs/${p.hub.toLowerCase()}`, text: `${p.hub} projects →` },
+        link: { href: unitedHubEntryHref(p.hub, unitedHubDetailCodes) ?? `/trackers/united-hubs/${p.hub.toLowerCase()}`, text: `${p.hub} projects →`, tone: 'quiet' },
       },
       type: { primary: typeLabelFor(p), sortVal: typeLabelFor(p) },
       status: { badge: { label: s.label, tone: s.tone, glyph: s.glyph }, sortVal: String(s.rank) },
@@ -212,7 +228,8 @@ const stats = [
     value: String(iahTerminalB.gates + iadConcourseE.gates),
     sub: `${iahTerminalB.gates} at IAH (concourse open Oct 22) · ${iadConcourseE.gates} at IAD (open ${dayOf(iadConcourseE.openedDate, { month: 'short', day: 'numeric' })})`,
   },
-  { label: 'largest club in the network', value: '54,000', sub: 'sq ft — IAH Terminal B North, open since Oct 22' },
+  // The one tile whose subject has a single place that shows it: the Houston club's own card.
+  { label: 'largest club in the network', value: '54,000', sub: 'sq ft — IAH Terminal B North, open since Oct 22', href: projectEntryHref(iahClubB) ?? undefined },
 ];
 
 // ---- FAQ ----
@@ -290,7 +307,11 @@ const datasetSchema = {
 
 const proseClass =
   'mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground last:mb-0 [&_a]:text-primary [&_a]:underline [&_a]:decoration-primary/40 [&_a]:underline-offset-2 [&_a:hover]:decoration-primary';
-const subheadClass = 'mt-4.5 mb-2 text-sm font-semibold text-primary';
+// Labels and subheads are body colour: link colour means link (links everywhere, Nov 12 2026).
+const subheadClass = 'mt-4.5 mb-2 text-sm font-semibold text-foreground';
+// A link inside a club-math sentence: the quiet underline every secondary link has.
+const inlineLink =
+  'text-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground focus-visible:decoration-foreground';
 const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-foreground';
 const chipClass =
   'rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
@@ -313,7 +334,7 @@ const chipClass =
     <Breadcrumbs items={[{ label: 'Trackers', href: '/trackers' }, { label: 'United Hubs' }]} />
 
     <header class="mt-6">
-      <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+      <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         Tracker &middot; United Ground Buildout
       </div>
       <h1 class="mt-0.5 mb-1.5 text-2xl font-bold tracking-tight text-balance text-foreground">
@@ -389,10 +410,18 @@ const chipClass =
           return (
             <div class="mb-7" id={`hub-${code.toLowerCase()}`} data-trk-group>
               <div class="mb-3 flex flex-wrap items-baseline gap-2.5 border-b border-border pb-1.5">
-                <span class="font-mono text-base font-bold text-primary">{code}</span>
+                {/* The code was link colour and not a link; it is the hub's page now (links everywhere,
+                    Nov 12 2026), the group's one link-coloured link. The name opens the hub's page on
+                    this tracker and the FAA line its tower page, both quiet. */}
                 <a
-                  class="-my-3 inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline-offset-2 hover:underline pointer-fine:md:my-0 pointer-fine:md:min-h-0"
-                  href={`/trackers/united-hubs/${code.toLowerCase()}`}
+                  class="-my-3 inline-flex min-h-11 items-center font-mono text-base font-bold text-primary underline-offset-2 hover:underline pointer-fine:md:my-0 pointer-fine:md:min-h-0"
+                  href={hubLink(code, 'site')?.href}
+                >
+                  {code}
+                </a>
+                <a
+                  class="-my-3 inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground focus-visible:decoration-foreground pointer-fine:md:my-0 pointer-fine:md:min-h-0"
+                  href={unitedHubEntryHref(code, unitedHubDetailCodes) ?? `/trackers/united-hubs/${code.toLowerCase()}`}
                 >
                   {h.name}
                 </a>
@@ -401,8 +430,8 @@ const chipClass =
                 </span>
                 {atcCodes.has(code) && (
                   <a
-                    class="inline-flex min-h-11 basis-full items-center font-mono text-[11px] font-semibold uppercase tracking-wide text-primary underline-offset-2 hover:underline sm:ml-auto sm:basis-auto"
-                    href={`/trackers/atc/${code.toLowerCase()}`}
+                    class="inline-flex min-h-11 basis-full items-center font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground focus-visible:decoration-foreground sm:ml-auto sm:basis-auto"
+                    href={atcEntryHref(code, atcHubDetailCodes) ?? `/trackers/atc/${code.toLowerCase()}`}
                   >
                     also in the FAA paper-strips rollout &rarr;
                   </a>
@@ -431,9 +460,21 @@ const chipClass =
                           </span>
                         )}
                       </div>
-                      <div class="mb-1 text-sm font-bold text-foreground">{p.name}</div>
+                      {/* The name opens the project's card on its hub's tracker page; the figures under
+                          it are facts, in body colour (they were link colour and not a link). A name
+                          can wrap, so its 44 px touch target is an `after:` box reaching 12 px above
+                          and below the text (over the chips and the figures, which take no taps),
+                          rather than a taller line; a mouse at md gets the text alone. */}
+                      <div class="mb-1 text-sm font-bold">
+                        <a
+                          class="relative text-primary underline-offset-2 after:absolute after:inset-x-0 after:-inset-y-3 hover:underline pointer-fine:md:after:content-none"
+                          href={projectEntryHref(p)}
+                        >
+                          {p.name}
+                        </a>
+                      </div>
                       {metaLineFor(p) && (
-                        <div class="mb-1.5 font-mono text-[11px] font-semibold tracking-wide text-primary">
+                        <div class="mb-1.5 font-mono text-[11px] font-semibold tracking-wide text-foreground">
                           {metaLineFor(p)}
                         </div>
                       )}
@@ -531,23 +572,23 @@ const chipClass =
       id="club-math"
       aria-label="Club math"
     >
-      <div class="mb-1 font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+      <div class="mb-1 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         Sidebar
       </div>
       <h2 class="mb-3 text-base font-bold tracking-tight text-foreground">Club math</h2>
       <ul class="list-none">
         <li class="flex items-baseline gap-3 border-b border-border py-2 last:border-b-0">
-          <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-primary">
+          <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-foreground">
             54,000
           </span>
           <span class="text-xs leading-relaxed text-muted-foreground">
-            sq ft — the Houston club, roughly the floor area of the entire White House, and a
+            sq ft — <a class={inlineLink} href={projectEntryHref(iahClubB)}>the Houston club</a>, roughly the floor area of the entire White House, and a
             little over a football field of playing turf. Open since October 22, 2026 — the largest
             airline lounge in the country.
           </span>
         </li>
         <li class="flex items-baseline gap-3 border-b border-border py-2 last:border-b-0">
-          <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-primary">
+          <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-foreground">
             ~119,000
           </span>
           <span class="text-xs leading-relaxed text-muted-foreground">
@@ -556,21 +597,23 @@ const chipClass =
           </span>
         </li>
         <li class="flex items-baseline gap-3 border-b border-border py-2 last:border-b-0">
-          <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-primary">
+          <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-foreground">
             4,000
           </span>
           <span class="text-xs leading-relaxed text-muted-foreground">
-            sq ft of open-air terrace at the new SFO club — about a tennis court and a half,
+            sq ft of open-air terrace at <a class={inlineLink} href={projectEntryHref(sfoClubT2)}>the new SFO club</a> — about a tennis court and a half,
             outdoors, at an airport. United's largest-ever outdoor lounge space.
           </span>
         </li>
         <li class="flex items-baseline gap-3 border-b border-border py-2 last:border-b-0">
-          <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-primary">
+          <span class="shrink-0 basis-24 text-right font-mono text-sm font-bold text-foreground">
             {iadClubSeats}+
           </span>
           <span class="text-xs leading-relaxed text-muted-foreground">
-            seats in the new Dulles club — roughly {iadClubIn7810s} full 787-10s ({D7810_SEATS} seats
-            each).
+            seats in <a class={inlineLink} href={projectEntryHref(iadClubE)}>the new Dulles club</a> — roughly {iadClubIn7810s} full <a
+              class={inlineLink}
+              href={d7810Href}>787-10s</a
+            > ({D7810_SEATS} seats each).
           </span>
         </li>
       </ul>

@@ -8,8 +8,19 @@
 //
 // Shapes draw with `currentColor`, so one tone class on the wrapping `<g>` colours the marker,
 // and the legend reuses the same map.
+//
+// Links (links everywhere, Nov 12 2026): a United hub's inspector card, and its entry in "Beyond the
+// map", end in that place's links (`links`, from src/lib/tracker-links.js `mapPlaceLinks`): its
+// entry on this tracker in link colour, then its hub page, quiet. Legend rows stay text (a key, not
+// a list of things). The markers stay buttons that show a card.
 import StatusBadge from './StatusBadge.astro';
 import { TONE_TEXT, toneClass } from './tones';
+
+interface PlaceLink {
+  href: string;
+  text: string;
+  tone: 'entry' | 'quiet';
+}
 
 interface MapPoint {
   id: string;
@@ -24,6 +35,7 @@ interface MapPoint {
     badge: { label: string; tone: string; glyph: string };
     line1?: string;
     line2?: string;
+    links?: PlaceLink[];
   };
 }
 
@@ -31,12 +43,21 @@ interface Props {
   paths: { conus: string; alaska: string; hawaii: string };
   points: MapPoint[];
   legend: { label: string; shape: 'dot' | 'diamond' | 'ring'; tone: string }[];
-  offMap?: { title: string; badge: { label: string; tone: string; glyph: string } }[];
+  offMap?: { title: string; badge: { label: string; tone: string; glyph: string }; links?: PlaceLink[] }[];
   ariaLabel: string;
   hint: string;
 }
 
 const { paths, points, legend, offMap = [], ariaLabel, hint } = Astro.props;
+
+// The entry link is the place's own (link colour); the hub page is a second name for it (quiet).
+// 44 px on touch, the text's height for a mouse at md.
+const placeLinkClass = (tone: PlaceLink['tone']) => [
+  'inline-flex min-h-11 items-center font-mono text-[11px] font-semibold underline-offset-2 pointer-fine:md:min-h-6',
+  tone === 'entry'
+    ? 'text-primary hover:underline'
+    : 'text-foreground underline decoration-muted-foreground/40 hover:decoration-foreground focus-visible:decoration-foreground',
+];
 ---
 
 <div data-trk-map>
@@ -175,6 +196,15 @@ const { paths, points, legend, offMap = [], ariaLabel, hint } = Astro.props;
           {p.card.line2 && (
             <div class="mt-1 text-[11px] leading-relaxed text-muted-foreground">{p.card.line2}</div>
           )}
+          {p.card.links?.length ? (
+            <div class="mt-1 flex flex-wrap gap-x-4">
+              {p.card.links.map((l) => (
+                <a class:list={placeLinkClass(l.tone)} href={l.href}>
+                  {l.text}
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
       ))
     }
@@ -190,6 +220,11 @@ const { paths, points, legend, offMap = [], ariaLabel, hint } = Astro.props;
           <span class="inline-flex items-center gap-1.5">
             <StatusBadge label={o.badge.label} tone={o.badge.tone} glyph={o.badge.glyph} />
             <span class="text-[11px] text-muted-foreground">{o.title}</span>
+            {o.links?.map((l) => (
+              <a class:list={[placeLinkClass(l.tone), 'ml-1.5']} href={l.href}>
+                {l.text}
+              </a>
+            ))}
           </span>
         ))}
       </div>

@@ -7,8 +7,16 @@ import SourceDisclosure from './SourceDisclosure.astro';
 // Sorting and filtering are progressive enhancement via `src/scripts/trackers.ts` reading the
 // `data-sort` / `data-trk-*` attributes; with JS off this is a complete static table.
 //
-// Cell descriptor: { primary, secondary?, mono?, dim?, badge?: {label, tone, glyph}, link?,
-//                    evidence?, sortVal? }
+// Cell descriptor: { primary, href?, tone?, secondary?, mono?, dim?, badge?: {label, tone, glyph},
+//                    link?: {href, text, tone?}, evidence?, sortVal? }
+//
+// LINKS (links everywhere, Nov 12 2026). `href` makes the cell's primary text a link (a hub code to
+// its hub page, a project name to its card); `link` is the arrow link under it ("ORD status →").
+// Each takes a tone: 'entry' (the default) is the row's own link — the entry's page, in link
+// colour, one per row — and 'quiet' is every other link in the row: body colour with a muted
+// underline that takes the text colour on hover and focus. A primary link is 44 px on touch and
+// relaxes for a mouse at md (`touchRowLink`, the fleet index's pattern: it reaches into the cell's
+// padding, so the row does not grow), so an 89-row table keeps its height with a mouse.
 //
 // BELOW `md` THE SAME TABLE IS A STACK OF CARDS (the dashboard's phone schedule board solves the
 // same problem with a two-line row): six or seven columns scrolled sideways at 390 px and every
@@ -48,6 +56,16 @@ const { caption, columns, rows } = Astro.props;
 
 /** "ORD status →": the arrow never wraps onto a line of its own. */
 const linkText = (text: string) => String(text).replace(/ (→|&rarr;)$/, ' →');
+
+type Tone = 'entry' | 'quiet' | undefined;
+/** The row's own link (link colour) or any other link in the row (body colour, quiet underline). */
+const toneClass = (tone: Tone) =>
+  tone === 'quiet'
+    ? 'text-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground focus-visible:decoration-foreground'
+    : 'text-primary underline-offset-2 hover:underline';
+/** src/pages/fleet/index.astro `touchRowLink`: 44 px on touch, the text's own height for a mouse. */
+const touchRowLink =
+  'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:my-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
 
 // From md to lg the columns are tight (a 734 px table at 768): headers and link text may wrap
 // there, and keep to one line from lg.
@@ -139,7 +157,13 @@ const TH_BASE =
                         cell.dim ? 'text-muted-foreground' : 'text-foreground',
                       ]}
                     >
-                      {cell.primary}
+                      {cell.href ? (
+                        <a class:list={[touchRowLink, toneClass(cell.tone)]} href={cell.href}>
+                          {cell.primary}
+                        </a>
+                      ) : (
+                        cell.primary
+                      )}
                     </span>
                   ) : null}
                   {cell.secondary ? (
@@ -154,7 +178,10 @@ const TH_BASE =
                   ) : null}
                   {cell.link ? (
                     <a
-                      class="mt-0.5 inline-flex min-h-11 items-center font-mono text-[11px] font-semibold text-primary underline-offset-2 hover:underline max-md:mt-0 lg:whitespace-nowrap"
+                      class:list={[
+                        'mt-0.5 inline-flex min-h-11 items-center font-mono text-[11px] font-semibold max-md:mt-0 lg:whitespace-nowrap',
+                        toneClass(cell.link.tone),
+                      ]}
                       href={cell.link.href}
                     >
                       {linkText(cell.link.text)}
