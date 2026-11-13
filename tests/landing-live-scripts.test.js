@@ -159,17 +159,74 @@ describe.skipIf(!hasDist)('src/scripts/hub-board.ts keeps a keyboard reader’s 
     expect(document.activeElement).toBe(second);
 
     // A refresh after two minutes re-clones every row.
-    const calls = fetchMock.mock.calls.length;
-    vi.setSystemTime((NOW_SEC + 2 * 60) * 1000);
-    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
-    document.dispatchEvent(new Event('visibilitychange'));
-    await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(calls));
-    await vi.waitFor(() => expect(ewrLinks()[1]).not.toBe(second)); // the row was replaced
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      const calls = fetchMock.mock.calls.length;
+      vi.setSystemTime((NOW_SEC + 2 * 60) * 1000);
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(calls));
+      await vi.waitFor(() => expect(ewrLinks()[1]).not.toBe(second)); // the row was replaced
 
-    const focused = document.activeElement;
-    expect(focused.getAttribute('data-f')).toBe('dest');
-    expect(focused.getAttribute('href')).toBe('/hubs/ewr');
-    expect(focused.closest('li').querySelector('[data-f="ident"]').textContent).toBe('UA108');
+      const focused = document.activeElement;
+      expect(focused.getAttribute('data-f')).toBe('dest');
+      expect(focused.getAttribute('href')).toBe('/hubs/ewr');
+      expect(focused.closest('li').querySelector('[data-f="ident"]').textContent).toBe('UA108');
+      // Set once, straight on the right row: a screen reader hears one link, not two.
+      expect(focusSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      focusSpy.mockRestore();
+    }
+  });
+
+  // The departure stays on the board, but an earlier one to the same hub rolls off the top, so
+  // the address's occurrence count shifts: "the second /hubs/ewr link" is now a different row.
+  it('focus stays on its departure, set once, when an earlier departure to the same hub rolls off', async () => {
+    mountPage('hubs/ord.html');
+    const threeToEwr = () => {
+      const data = ordBoard();
+      for (const ident of ['UA104', 'UA106', 'UA108']) {
+        data.flights.find((f) => f.identification.number.default === ident).airport.destination = {
+          code: { iata: 'EWR' },
+          info: { gate: '', terminal: 'C' },
+          name: 'Newark',
+        };
+      }
+      return buildHubBoardPayload({
+        hub: 'ORD',
+        timeZone: 'America/Chicago',
+        nowSec: NOW_SEC,
+        today: { data, refreshedAt: NOW_SEC * 1000, dayStart: ORD_DAY_START, completeness: 1 },
+      });
+    };
+    const fetchMock = vi.fn(async () => jsonResponse(threeToEwr()));
+    vi.stubGlobal('fetch', fetchMock);
+    await import('../src/scripts/hub-board.ts');
+    await vi.waitFor(() => expect(board().dataset.state).toBe('live'));
+
+    const ewrLinks = () => [...board().querySelectorAll('[data-hb-list] a[data-f="dest"][href="/hubs/ewr"]')];
+    const identOf = (a) => a.closest('li').querySelector('[data-f="ident"]').textContent;
+    expect(ewrLinks().map(identOf)).toEqual(['UA104', 'UA106', 'UA108']);
+    const middle = ewrLinks()[1];
+    middle.focus();
+
+    // Twenty minutes on, UA104 (departed 14:43) is past the board's 30-minute grace and gone.
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      const calls = fetchMock.mock.calls.length;
+      vi.setSystemTime((NOW_SEC + 20 * 60) * 1000);
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(calls));
+      await vi.waitFor(() => expect(ewrLinks().map(identOf)).toEqual(['UA106', 'UA108']));
+
+      expect(identOf(document.activeElement)).toBe('UA106');
+      expect(document.activeElement.getAttribute('data-f')).toBe('dest');
+      expect(focusSpy).toHaveBeenCalledTimes(1);
+      expect(focusSpy.mock.contexts[0]).toBe(document.activeElement);
+    } finally {
+      focusSpy.mockRestore();
+    }
   });
 });
 

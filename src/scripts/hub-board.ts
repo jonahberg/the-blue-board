@@ -189,19 +189,24 @@ if (root) {
    * The board refreshes every two minutes and re-clones every row. A keyboard reader keeps their
    * place: focus goes back to the same link (`data-f`: the flight number or the destination) in the
    * same departure (`data-key`). The address alone cannot say which row it was, since two
-   * departures to one hub link the same hub page (/hubs/ewr). When that departure has rolled off
-   * the board, flight-link.ts's own fallback (same address, else the list's first link) stands.
+   * departures to one hub link the same hub page (/hubs/ewr), and the count of them shifts when an
+   * earlier one rolls off. Focus is set once, straight on that link, so a screen reader hears one
+   * link and not a wrong row first. When that departure has gone, flight-link.ts's own fallback
+   * (the same occurrence of the address, else the list's first link) stands.
    */
   const replaceRowsKeepingFocus = (container: HTMLElement, nodes: HTMLElement[]) => {
     const active = document.activeElement;
     const from = active instanceof HTMLElement && container.contains(active) ? active : null;
     const key = from?.closest<HTMLElement>('li[data-key]')?.dataset.key;
     const field = from?.dataset.f;
-    replaceChildrenKeepingFocus(container, nodes);
-    if (!key || !field) return;
-    const row = nodes.find((li) => li.dataset.key === key);
+    const row = key && field ? nodes.find((li) => li.dataset.key === key) : undefined;
     const same = row?.querySelector<HTMLElement>(`[data-f="${field}"][href]`);
-    if (same && document.activeElement !== same) same.focus({ preventScroll: true });
+    if (same) {
+      container.replaceChildren(...nodes);
+      same.focus({ preventScroll: true });
+      return;
+    }
+    replaceChildrenKeepingFocus(container, nodes);
   };
 
   const render = () => {
