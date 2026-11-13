@@ -89,6 +89,27 @@ describe.skipIf(!hasDist)('hub pages', () => {
     expect(classes(dest)).toEqual(expect.arrayContaining(['[&:not([href])]:no-underline', '[&:not([href])]:after:hidden']));
   });
 
+  it('on the board, the flight number\'s hit box and the destination\'s abut: no gap, no overlap, each at least 44 px', () => {
+    const row = load('hubs/ord.html').querySelector('template[data-hb-row]').content;
+    /** The `after:` box's left edge and width in px at a breakpoint ('' for a phone, 'md:'). */
+    const box = (f, at) => {
+      const toks = classes(row.querySelector(`[data-f="${f}"]`));
+      const px = (prop) => {
+        const tok = toks.find((t) => t.startsWith(`${at}after:${prop}-`));
+        const v = tok.slice(`${at}after:${prop}-`.length);
+        return v.startsWith('[') ? parseFloat(v.slice(1)) * (v.endsWith('rem]') ? 16 : 1) : Number(v) * 4;
+      };
+      return { left: px('left'), width: px('w') };
+    };
+    for (const at of ['', 'md:']) {
+      const ident = box('ident', at);
+      const dest = box('dest', at);
+      expect(ident.left + ident.width, `${at || 'phone'}: the flight box ends where the destination box starts`).toBe(dest.left);
+      expect(ident.width).toBeGreaterThanOrEqual(44);
+      expect(dest.width).toBeGreaterThanOrEqual(44);
+    }
+  });
+
   it('/hubs: "What we track" opens the dashboard views; "Seasonal delay patterns" stays text', () => {
     const doc = load('hubs.html');
     const heading = [...doc.querySelectorAll('h2')].find((h) => h.textContent.includes('What The Blue Board Tracks'));
