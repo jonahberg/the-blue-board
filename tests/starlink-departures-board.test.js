@@ -129,6 +129,19 @@ describe('buildDeparturesBoard', () => {
       expect(byNum.UAL2616.inbound).toEqual({ flight: 'UA670', icao24: 'abc123' });
     });
 
+    it("reads an Express number in the feed's flightIATA as United's, and leaves a callsign as sent", () => {
+      const flightsByTail = { N200: [flight('SFO', 'ORD', 98 * 60, 'UAL2278')] };
+      const board = (live) =>
+        buildDeparturesBoard(flightsByTail, aircraftByTail, { N200: { icao24: 'abc123', origin: 'DEN', dest: 'SFO', ...live } }, HUBS, {
+          now: NOW,
+        }).buckets[0].rows[0].inbound;
+      expect(board({ flightIATA: 'YX3568', callsign: 'RPA3568' })).toEqual({ flight: 'UA3568', icao24: 'abc123' });
+      // No flightIATA: the callsign is the operator's own call; nothing checked it is the United number.
+      expect(board({ callsign: 'RPA3568' })).toEqual({ flight: 'RPA3568', icao24: 'abc123' });
+      expect(board({ flightIATA: '', callsign: 'UAL1389' })).toEqual({ flight: 'UAL1389', icao24: 'abc123' });
+      expect(board({})).toEqual({ flight: '', icao24: 'abc123' });
+    });
+
     it('gives a tail with two future rows no airborne row at all', () => {
       const flightsByTail = { N300: [flight('ORD', 'LAX', 2 * H), flight('LAX', 'ORD', 7 * H)] };
       const air = { N300: { icao24: 'fff000' } }; // no route on the live record

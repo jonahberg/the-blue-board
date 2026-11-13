@@ -38,6 +38,7 @@ import {
   sortRoster,
   starlinkFlightLabel,
   starlinkInboundLabel,
+  starlinkInboundNumber,
   starlinkSinceLabel,
   upcomingFlights,
 } from '../src/lib/starlink-roster.js';
@@ -144,25 +145,51 @@ describe('starlinkFlightLabel (one printed form for United numbers, Nov 12 2026)
 });
 
 // The inbound leg comes from the dashboard's live feed, /api/fr24-feed?airline=UAL, which carries
-// only United flights (src/lib/united-feed.js), so it reads as a United row. On the Nov 12 preview a
-// board row read "inbound on YX3568" (FR24 printing Republic's number on a United flight), plain,
-// beside "inbound on UA4190", linked.
-describe('starlinkInboundLabel (the live feed is United-only, Nov 12 2026)', () => {
-  it("an Express operator number on the live feed reads as United's and links", () => {
-    expect(starlinkInboundLabel('YX3568')).toBe('UA3568');
-    expect(flightLink(starlinkInboundLabel('YX3568'))?.href).toBe('/flight/UA3568');
-    expect(starlinkInboundLabel('SKW5123')).toBe('UA5123');
-    expect(starlinkInboundLabel('G74612')).toBe('UA4612');
+// only United flights (src/lib/united-feed.js), so its flight number reads as a United row's. On the
+// Nov 12 preview a board row read "inbound on YX3568" (FR24 printing Republic's number as the flight
+// number of a United flight), plain, beside "inbound on UA4190", linked. A callsign is not a flight
+// number: when the feed has no `flightIATA` the callsign stays exactly as sent (links part 2).
+describe('starlinkInboundNumber (the live feed is United-only; only its flightIATA reads Express)', () => {
+  it("an Express operator number in flightIATA reads as United's and links", () => {
+    expect(starlinkInboundNumber({ flightIATA: 'YX3568' })).toBe('UA3568');
+    expect(flightLink(starlinkInboundLabel(starlinkInboundNumber({ flightIATA: 'YX3568' })))?.href).toBe('/flight/UA3568');
+    expect(starlinkInboundNumber({ flightIATA: 'SKW5123', callsign: 'SKW5123' })).toBe('UA5123');
+    expect(starlinkInboundNumber({ flightIATA: 'G74612' })).toBe('UA4612');
   });
 
+  it('a United flightIATA prints as its ident', () => {
+    expect(starlinkInboundNumber({ flightIATA: 'UA4190' })).toBe('UA4190');
+    expect(starlinkInboundNumber({ flightIATA: ' UA4190 ', callsign: 'RPA4190' })).toBe('UA4190');
+  });
+
+  it('a callsign fallback stays as sent: an Express callsign prints plain, a UAL callsign is United\'s', () => {
+    for (const callsign of ['RPA3568', 'SKW5123', 'ASH6012']) {
+      const number = starlinkInboundNumber({ callsign });
+      expect(number, callsign).toBe(callsign);
+      expect(starlinkInboundLabel(number), callsign).toBe(callsign);
+      expect(flightLink(starlinkInboundLabel(number)), callsign).toBeNull();
+    }
+    expect(starlinkInboundNumber({ flightIATA: '', callsign: 'UAL3508' })).toBe('UAL3508');
+    expect(starlinkInboundLabel('UAL3508')).toBe('UA3508');
+  });
+
+  it('a number no rule reads stays as sent and links nothing; nothing is empty', () => {
+    expect(starlinkInboundNumber({ flightIATA: 'UCA5004' })).toBe('UCA5004');
+    expect(flightLink(starlinkInboundLabel('UCA5004'))).toBeNull();
+    expect(starlinkInboundNumber({})).toBe('');
+    expect(starlinkInboundNumber(null)).toBe('');
+  });
+});
+
+describe('starlinkInboundLabel (prints inbound.flight; reads no operator prefix itself)', () => {
   it('a United number prints as its ident', () => {
     expect(starlinkInboundLabel('UA4190')).toBe('UA4190');
     expect(starlinkInboundLabel('UAL3508')).toBe('UA3508');
   });
 
-  it('a number no rule reads stays as sent and links nothing', () => {
-    expect(starlinkInboundLabel('UCA5004')).toBe('UCA5004');
-    expect(flightLink(starlinkInboundLabel('UCA5004'))).toBeNull();
+  it('an Express operator number is printed as given: the reading belongs to flightIATA', () => {
+    expect(starlinkInboundLabel('YX3568')).toBe('YX3568');
+    expect(flightLink(starlinkInboundLabel('YX3568'))).toBeNull();
     expect(starlinkInboundLabel('')).toBe('');
   });
 });

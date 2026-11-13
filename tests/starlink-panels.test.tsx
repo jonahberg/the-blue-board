@@ -392,6 +392,15 @@ describe('DeparturesBoard links (Nov 12 2026)', () => {
     expect(screen.getByRole('button', { name: /Track inbound/ }).getAttribute('title')).toContain('UA3568');
   });
 
+  // Only the feed's flight number reads that way (links part 2): a callsign is the operator's own
+  // radio call, and nothing checked that its digits are the United number.
+  it('an Express callsign with no flight number on the inbound leg prints as sent, plain', () => {
+    renderBoard(FLIGHTS, { airborne: { N75436: { icao24: 'a1b2c3', origin: 'SFO', dest: 'DEN', callsign: 'RPA3568' } } });
+    expect(screen.getByText(/^SCHED · inbound/).textContent).toBe('SCHED · inbound on RPA3568');
+    expect(screen.queryByRole('link', { name: /3568/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Track inbound/ }).getAttribute('title')).toContain('RPA3568');
+  });
+
   it('marks every row for the link audit', () => {
     renderBoard();
     const rows = document.querySelectorAll('#sl-board-body [data-link-row]');
