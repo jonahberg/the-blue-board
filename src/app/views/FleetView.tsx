@@ -430,6 +430,16 @@ export default function FleetView() {
     [typeOptions, askActive, clearAsk, subView],
   );
 
+  // The airborne figure and the utilization line (Fleet Pulse) open the Airborne Now list. They
+  // land where a cold load of `?view=airborne` lands (ruling 9): the filters are put back first,
+  // so the list shows every mainline aircraft flying, the "m" of "m/total", then the tab scrolls to
+  // it. A button, not a link: on this tab a followed link is a stay and would keep a type filter
+  // that hides most of the aircraft counted.
+  const showAirborne = useCallback(
+    () => applyFleetDeepLink({ filter: null, view: 'airborne' }, 'arrive'),
+    [applyFleetDeepLink],
+  );
+
   // The scroll a link asked for, once the filter and sub-view it set have rendered: the controls
   // row for a filter, the open sub-view's panel for a view alone, top of the tab's scroller (the
   // header and tab bar sit outside it; `scroll-mt-2` keeps a little air). A frame later, as the
@@ -551,6 +561,7 @@ export default function FleetView() {
             utilisation={utilisation}
             updatedAt={updatedAt}
             loading={loading}
+            onShowAirborne={showAirborne}
           />
           <FleetHealth
             health={health}

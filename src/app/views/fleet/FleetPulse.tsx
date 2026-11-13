@@ -10,10 +10,25 @@
  *
  * Per-type bars are drawn only for types with at least one aircraft airborne — nineteen rows
  * of "0/76 0%" at 04:00 UTC is a table of zeroes, not a pulse.
+ *
+ * Links everywhere (Nov 12 2026). The airborne figure and the utilization line summarize the
+ * aircraft flying now, so each is a button that opens the Airborne Now list below (ruling 7,
+ * `onShowAirborne`), named by its words plus "show the Airborne Now list". The utilization's
+ * "m" is exactly that list; the big figure also counts regional and partner flights, which the
+ * list (mainline only) does not, so its name promises the list, not a count. Each type label is
+ * a quiet link to this tab filtered to that type (`fleetTypeCodeFor`: the rows are fleet
+ * database types), 44 px tall on touch, so on a touch screen the rows are 44 px apart. This block
+ * is not a live region, so its counts may be controls.
  */
 
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
+import { TypeLink } from '../../features/EntityLinks';
+
+/** A count that opens the Airborne Now list: its look at rest, the hero buttons' hover and focus. */
+const PRESS =
+  'rounded-md text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
 
 export type TypeUtilisation = { type: string; flying: number; total: number; pct: number };
 
@@ -28,6 +43,7 @@ export function FleetPulse({
   updatedAt,
   loading,
   fleetFailed = false,
+  onShowAirborne,
 }: {
   airborne: number;
   /** Airborne flights that resolve to an airframe in the fleet database. */
@@ -45,24 +61,34 @@ export function FleetPulse({
   loading: boolean;
   /** True when `/data/fleet.json` failed: the airborne count still stands, the split cannot. */
   fleetFailed?: boolean;
+  /** Opens the Airborne Now list. Without it (or before the database can list anything) the counts are text. */
+  onShowAirborne?: () => void;
 }) {
   const flying = utilisation.filter((row) => row.total > 0 && row.flying > 0);
+  // The list can show aircraft only once the fleet database has loaded.
+  const canShow = Boolean(onShowAirborne) && !fleetFailed && fleetTotal > 0 && airborne > 0;
+  const figure = (
+    <>
+      <span className="font-mono text-5xl font-semibold tabular-nums" id="fleet-airborne-count">
+        {loading && !airborne ? <Skeleton className="inline-block h-10 w-24 align-middle" /> : airborne}
+      </span>{' '}
+      {/* The label style of "Total Mainline Aircraft" beside it, so the card's two headline
+          figures are labelled alike. The space keeps "3 Airborne" two words in the button's name;
+          between flex items it draws nothing. */}
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Airborne</span>
+    </>
+  );
 
   return (
     <div className="flex min-w-0 flex-col">
-      <div className="flex items-baseline gap-3">
-        <span
-          className="font-mono text-5xl font-semibold tabular-nums"
-          id="fleet-airborne-count"
-        >
-          {loading && !airborne ? <Skeleton className="inline-block h-10 w-24 align-middle" /> : airborne}
-        </span>
-        {/* The label style of "Total Mainline Aircraft" beside it, so the card's two headline
-            figures are labelled alike. */}
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          Airborne
-        </span>
-      </div>
+      {canShow ? (
+        <button type="button" onClick={onShowAirborne} className={`-mx-1 flex items-baseline gap-3 self-start px-1 ${PRESS}`}>
+          {figure}
+          <span className="sr-only">: show the Airborne Now list</span>
+        </button>
+      ) : (
+        <div className="flex items-baseline gap-3">{figure}</div>
+      )}
 
       {/* Without the fleet database every flight is UNMATCHED, not regional — calling 348
           aircraft "regional/partner" because we cannot look them up is the same class of
@@ -76,17 +102,34 @@ export function FleetPulse({
       </p>
 
       {fleetTotal > 0 && airborne > 0 && utilPct != null ? (
-        <p className="mt-0.5 text-xs font-medium text-foreground">
-          {utilPct}% fleet utilization ({matched}/{fleetTotal})
-        </p>
+        canShow ? (
+          <button
+            type="button"
+            onClick={onShowAirborne}
+            className={`-mx-1 mt-0.5 inline-flex min-h-11 items-center self-start px-1 text-xs font-medium text-foreground pointer-fine:md:min-h-0 ${PRESS}`}
+          >
+            <span>
+              {utilPct}% fleet utilization ({matched}/{fleetTotal})
+            </span>
+            <span className="sr-only">: show the Airborne Now list</span>
+          </button>
+        ) : (
+          <p className="mt-0.5 text-xs font-medium text-foreground">
+            {utilPct}% fleet utilization ({matched}/{fleetTotal})
+          </p>
+        )
       ) : null}
 
       {flying.length > 0 ? (
         <ul className="mt-3 space-y-1">
           {flying.map((row) => (
             <li key={row.type} className="flex items-center gap-2 text-[11px]">
-              <span className="w-20 shrink-0 truncate font-mono text-muted-foreground">
-                {row.type}
+              {/* No `truncate` here: its clip would cut the link's focus ring, and the longest type
+                  ("737-900ER", nine characters) fits the column. */}
+              <span className="w-20 shrink-0 whitespace-nowrap font-mono text-muted-foreground">
+                <TypeLink typeCode={fleetTypeCodeFor({ typeText: row.type })} hit="inline">
+                  {row.type}
+                </TypeLink>
               </span>
               <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
                 <span

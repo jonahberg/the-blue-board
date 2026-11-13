@@ -465,3 +465,107 @@ describe('United Express', () => {
     expect(classesOf(commutair)).not.toContain('underline');
   });
 });
+
+/** A Composition variant card: the button that IS the type filter. */
+function typeCard(type: string): HTMLElement {
+  const card = [...document.querySelectorAll<HTMLElement>('button[aria-pressed]')].find(
+    (button) => button.lastElementChild?.textContent === type,
+  );
+  if (!card) throw new Error(`no variant card for ${type}`);
+  return card;
+}
+
+describe('Fleet Pulse', () => {
+  beforeEach(() => {
+    ctl.flights = [
+      airborne('N100UA', { flightIATA: 'UA100' }),
+      airborne('N37502', { flightIATA: 'UA200' }),
+      airborne('N801SK', { callsign: 'SKW5501', acType: 'E75L' }), // regional: counted, not listed
+    ];
+  });
+
+  const figureButton = () => screen.getByRole('button', { name: /^3 Airborne: show the Airborne Now list$/ });
+  const utilButton = () => screen.getByRole('button', { name: /fleet utilization \(2\/8\): show the Airborne Now list$/ });
+
+  it('the airborne figure and the utilization line are buttons, named by their words, not links', () => {
+    mount();
+    for (const button of [figureButton(), utilButton()]) {
+      expect(button.tagName).toBe('BUTTON');
+      expect(button.hasAttribute('aria-label')).toBe(false);
+      expect(classesOf(button)).not.toContain('text-primary');
+      expect(classesOf(button)).not.toContain('underline');
+    }
+    // The utilization line is 44 px tall on touch; the figure is taller than that already.
+    expect(classesOf(utilButton())).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
+  });
+
+  /** What the Fleet tab shows after a frame, then its Express search (read by opening that list). */
+  async function fleetState() {
+    await nextFrame();
+    const result = {
+      subView: activeSubView(),
+      type: typeSelect().textContent,
+      status: screen.getByRole('combobox', { name: 'Fleet status filter' }).textContent,
+      wifi: screen.getByRole('combobox', { name: 'Fleet WiFi filter' }).textContent,
+      search: searchBox().value,
+      rows: bodyRows().map((r) => cells(r)[0].textContent),
+      scrolls: [...scrolls],
+    };
+    openSubView(/^United Express/);
+    return { ...result, expressSearch: (screen.getByRole('searchbox', { name: 'United Express search' }) as HTMLInputElement).value };
+  }
+
+  it('from a dirty tab, either one lands where a cold load of ?view=airborne lands (ruling 9)', async () => {
+    mount('/?tab=fleet&view=airborne');
+    const cold = await fleetState();
+    cleanup();
+    expect(cold.subView).toMatch(/^Airborne Now/);
+    // Airborne Now sorts by type: the 737 MAX 9 before the A319.
+    expect(cold.rows).toEqual(['N37502', 'N100UA']);
+    expect(cold.scrolls).toEqual(['panel:airborne']);
+
+    for (const press of [figureButton, utilButton]) {
+      scrolls.length = 0;
+      mount();
+      // The reader filtered the tab, searched it, and left it on United Express with a search.
+      fireEvent.click(typeCard('A319'));
+      await searchFor('N10');
+      openSubView(/^United Express/);
+      fireEvent.change(screen.getByRole('searchbox', { name: 'United Express search' }), { target: { value: 'skywest' } });
+      await nextFrame();
+      scrolls.length = 0;
+
+      fireEvent.click(press());
+
+      // Every mainline aircraft flying: the utilization's "2" of "2/8".
+      expect(await fleetState()).toEqual(cold);
+      cleanup();
+    }
+  });
+
+  it('each type label is a quiet link to this tab filtered to it; followed here it keeps the search', async () => {
+    mount();
+    await searchFor('N');
+    await nextFrame();
+    scrolls.length = 0;
+    const pulse = document.getElementById('fleet-airborne-count')!.closest('div.flex-col') as HTMLElement;
+    const max9 = within(pulse).getByRole('link', { name: '737 MAX 9' });
+    expect(max9.getAttribute('href')).toBe('/?tab=fleet&type=737%20MAX%209');
+    expect(isQuiet(max9)).toBe(true);
+    expect(classesOf(max9)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
+    expect(within(pulse).getAllByRole('link').map((a) => a.textContent)).toEqual(['A319', '737 MAX 9']);
+
+    fireEvent.click(max9);
+    await nextFrame();
+    expect(typeSelect().textContent).toContain('737 MAX 9');
+    expect(searchBox().value).toBe('N');
+    expect(scrolls).toEqual([]);
+  });
+
+  it('before the fleet database can list anything, the counts are text', () => {
+    ctl.fleet = fleetValue({ fleetDb: [], fleetByReg: {}, loading: true });
+    mount();
+    expect(screen.queryByRole('button', { name: /show the Airborne Now list/ })).toBeNull();
+    expect(document.getElementById('fleet-airborne-count')!.textContent).toBe('3');
+  });
+});
