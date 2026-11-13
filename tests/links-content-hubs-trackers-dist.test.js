@@ -7,6 +7,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { fleetOrder } from '../src/data/fleet/index.js';
 import { HUB_ORDER } from '../src/lib/hub-health.js';
 import { unitedProjects } from '../src/data/trackers/united-hubs.js';
 import { atcHubDetailCodes, unitedHubDetailCodes } from '../src/lib/tracker-detail.js';
@@ -264,7 +265,12 @@ describe.skipIf(!hasDist)('every content page links only to other pages that exi
       'newark.html',
       'flight.html',
     ];
-    expect(pages).toHaveLength(50); // 10 hub, 20 fleet, 18 tracker pages, Newark and the flight page
+    // A sweep of nothing proves nothing: every page the data makes is in it (50 on Nov 12 2026).
+    expect(htmlIn('hubs')).toHaveLength(HUBS.length);
+    expect(htmlIn('fleet')).toHaveLength(fleetOrder.length);
+    expect(htmlIn('trackers/atc')).toHaveLength(atcHubDetailCodes.length);
+    expect(htmlIn('trackers/united-hubs')).toHaveLength(unitedHubDetailCodes.length);
+    expect(htmlIn('trackers').length).toBeGreaterThanOrEqual(2);
     let links = 0;
     const found = pages.flatMap((rel) => {
       const html = readFileSync(join(DIST, rel), 'utf8');
