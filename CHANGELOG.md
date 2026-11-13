@@ -4,6 +4,14 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.1] - 2026-11-13
+
+**The brief notices when far fewer flights are flying than usual.**
+
+### Fixed
+- **The brief missed the nationwide ground stop.** On November 13 the FAA halted departures across the country at about 12:54 PM PT. None of the FAA feeds the brief reads listed it, because they list programs airport by airport, so for an hour and a half the brief led with a delay program at San Francisco while the number of United flights in the air fell to 72% below the usual. That count now sets the tone: at 30% fewer than usual for the time of day the brief reads "Watch", and at 45% fewer it reads "Disrupted", opens with "Far fewer United flights are in the air than usual right now.", gives the count against the usual first, and tells every traveler to check their flight. It says what the site sees and does not guess at the cause.
+- **The brief's writer was being cut off.** About half the briefs on November 12 and 13 were the plain fallback wording, because the model ran out of room before it finished. It now has three times the room.
+
 ## [1.31.0] - 2026-11-12
 
 **The rest of the dashboard links the names it prints.**

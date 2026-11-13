@@ -1,6 +1,6 @@
 // Vercel Cron Job: the ops brief ("Right now" at the top of the Live tab).
-// Config in vercel.json: { "path": "/api/cron/brief", "schedule": "*/10 * * * *" }, maxDuration 90
-// (worst case: /api/irops cold 25 s + two radio calls 16 s + the model 20 s + Supabase).
+// Config in vercel.json: { "path": "/api/cron/brief", "schedule": "*/10 * * * *" }, maxDuration 120
+// (worst case: /api/irops cold 25 s + two radio calls 16 s + the model 45 s + Supabase).
 //
 // One generation serves every visitor; nothing is generated per request. Each run:
 //   1. Collects the facts from what the site already has (api/_brief-collect.ts: the site's own

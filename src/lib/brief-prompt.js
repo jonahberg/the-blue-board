@@ -17,8 +17,17 @@ export const BRIEF_DEFAULT_MODEL_ID = 'anthropic/claude-haiku-5.5';
 /** Haiku 5.5 thinks by default; effort is the lever. `low` suits a short, fact-bound brief. */
 export const BRIEF_MODEL_EFFORT = 'low';
 
-/** Room for adaptive thinking plus a ~300-token brief. */
-export const BRIEF_MAX_TOKENS = 2000;
+/**
+ * Room for adaptive thinking plus a ~400-token brief. Thinking counts against this limit, and its
+ * length varies run to run: at 2,000 the answer was cut off (stop_reason "max_tokens", so the
+ * template was published instead) on 2 of 41 briefs on Nov 11 2026, 41 of 80 on Nov 12 and 20 of 43
+ * by mid-afternoon on Nov 13, while the briefs that did finish used 1,100 to 1,300 tokens on average
+ * and up to 1,996. A cut-off call ran about 12 s for its 2,000 tokens, so 6,000 is about 36 s:
+ * BRIEF_MODEL_TIMEOUT_MS (api/_brief-model.ts) and the cron's maxDuration are sized for that. How
+ * far past 2,000 the cut-off calls would have run was not measured: read ops_briefs.output_tokens
+ * after this ships before moving it again.
+ */
+export const BRIEF_MAX_TOKENS = 6000;
 
 /** Prompts up to 100K tokens, USD per million tokens (gateway catalog, Nov 2026). */
 export const BRIEF_PRICE_PER_MTOK = Object.freeze({

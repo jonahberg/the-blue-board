@@ -83,7 +83,7 @@ describe('generateBriefWithModel', () => {
     }));
     const timedOut = await generateBriefWithModel(FACTS, NOW, { timeoutMs: 5 });
     expect(timedOut.failure).toBe('model_timeout');
-    expect(timedOut.costUsd).toBeGreaterThan(0.0009); // 2000 output tokens at $0.50/M plus the input
+    expect(timedOut.costUsd).toBeGreaterThan(0.003); // 6000 output tokens at $0.50/M plus the input
     mockCreate.mockReset();
     mockCreate.mockRejectedValue(Object.assign(new Error('bad schema'), { status: 400 }));
     expect(await generateBriefWithModel(FACTS, NOW)).toEqual(expect.objectContaining({ failure: 'model_rejected', costUsd: 0 }));
