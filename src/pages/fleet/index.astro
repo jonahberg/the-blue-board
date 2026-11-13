@@ -439,7 +439,9 @@ const hubLinkClass =
                 const list = fleetTypeLink(t.typeCode, 'dashboard');
                 return (
                   <tr>
-                    <td class="font-bold"><a class={`${touchRowLink} font-bold ${identityLink}`} href={page?.href ?? `/fleet/${t.slug}`}>{t.typeCode}</a></td>
+                    <td class="font-bold">
+                      {page ? <a class={`${touchRowLink} font-bold ${identityLink}`} href={page.href}>{t.typeCode}</a> : t.typeCode}
+                    </td>
                     <td class="text-right font-mono">
                       {list ? (
                         <a class={touchRowLink} href={list.href}>{t.count}<span class="sr-only">, list them in the dashboard</span></a>
