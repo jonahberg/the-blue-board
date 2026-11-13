@@ -176,8 +176,8 @@ function initialTab(): TabId {
 
 /**
  * The Fleet tab's slice of the address the page was opened on (`coldFleetLink`). Read from the
- * lib rather than `readFleetDeepLinks` (deep-links.ts), whose imports reach the dialogs and through
- * them this store: a cycle that deadlocks a test mocking this module.
+ * lib (`src/lib/fleet-address.js`), not through deep-links.ts, whose imports reach the dialogs
+ * and through them this store: a cycle that deadlocks a test mocking this module.
  */
 function initialFleetLink(): FleetDeepLinks {
   if (typeof window === 'undefined') return { filter: null, view: null };

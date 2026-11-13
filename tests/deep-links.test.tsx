@@ -12,7 +12,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Flight } from '../src/app/data/types';
-import { readFleetDeepLinks, resolveDeepLink, useDeepLinks } from '../src/app/state/deep-links';
+import { resolveDeepLink, useDeepLinks } from '../src/app/state/deep-links';
 import { HUB_ORDER } from '../src/lib/hub-health.js';
 import { hubStatusLink } from '../src/lib/hub-link.js';
 import { resolveTabParam } from '../src/app/tabs';
@@ -248,19 +248,9 @@ describe('?flight= / ?q= (latched until the feed answers)', () => {
   });
 });
 
-describe('readFleetDeepLinks', () => {
-  it('reads ?type= (preferred) or ?filter=, and only the fleet sub-views', () => {
-    window.history.replaceState(null, '', '/?type=B39M&filter=starlink&view=special');
-    expect(readFleetDeepLinks()).toEqual({ filter: 'B39M', view: 'special' });
-    window.history.replaceState(null, '', '/?filter=starlink&view=AIRBORNE');
-    expect(readFleetDeepLinks()).toEqual({ filter: 'starlink', view: 'airborne' });
-    window.history.replaceState(null, '', '/?view=starlink');
-    expect(readFleetDeepLinks()).toEqual({ filter: null, view: null });
-  });
-
-  it('reads ?view=express — the United Express sub-view — and does not route on it', () => {
-    window.history.replaceState(null, '', '/?tab=fleet&view=Express');
-    expect(readFleetDeepLinks()).toEqual({ filter: null, view: 'express' });
+// How the Fleet tab's parameters are read is src/lib/fleet-address.js's (tests/fleet-address.test.js).
+describe('the Fleet tab\'s own parameters on a cold load', () => {
+  it('?view=express names the United Express sub-view inside the Fleet tab; the cold load does not route on it', () => {
     expect(mountAt('/?view=express').deps.setTab).not.toHaveBeenCalled();
   });
 });

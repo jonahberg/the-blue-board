@@ -64,21 +64,11 @@ export type FleetDeepLinks = {
 };
 
 /**
- * Read the Fleet tab's deep links straight off the URL.
- *
- * These three parameters name rows INSIDE the Fleet tab, and only the Fleet view knows
- * which filter values its controls actually offer and when the fleet database has arrived
- * — so the view reads them itself rather than being pushed a value it cannot yet apply.
- * Safe to call on any render: it is a pure read of `window.location.search`.
- */
-export function readFleetDeepLinks(): FleetDeepLinks {
-  if (typeof window === 'undefined') return { filter: null, view: null };
-  return fleetDeepLinksFrom(new URLSearchParams(window.location.search));
-}
-
-/**
- * The Fleet tab's slice of a query string; one reading for a cold load and an in-place link
- * (`src/lib/fleet-address.js`, which the UI store also reads at startup).
+ * The Fleet tab's slice of a query string, for an in-place link (`resolveDeepLink`). One reading
+ * with a cold load: `src/lib/fleet-address.js`, which the UI store reads at startup
+ * (`coldFleetLink`). These parameters name rows INSIDE the Fleet tab, and only the Fleet view knows
+ * which filter values its controls offer and when the fleet database has arrived, so the view
+ * applies them itself rather than being pushed a value it cannot yet use.
  */
 function fleetDeepLinksFrom(params: URLSearchParams): FleetDeepLinks {
   return readFleetParams(params) as FleetDeepLinks;
@@ -88,7 +78,7 @@ function fleetDeepLinksFrom(params: URLSearchParams): FleetDeepLinks {
  * The Live map's hub from `?hub=`, when the link is for the Live view (no `?tab`, or
  * `?tab=live`). Validated against the hubs the map knows, so `?hub=xyz` is ignored rather than
  * filtering the map to nothing. The Live view seeds its hub filter with this and centres on
- * the hub — like `readFleetDeepLinks()`, a pure read the owning view does itself.
+ * the hub: a pure read of the address that the owning view does itself.
  */
 export function readLiveHubDeepLink(knownHubs: readonly string[]): string | null {
   if (typeof window === 'undefined') return null;

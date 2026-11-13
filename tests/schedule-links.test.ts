@@ -10,14 +10,14 @@
  *    tail must not link them.
  *  - The FAA context: each airport in it carries its code and the status link's kind, so the
  *    component never parses "Ground Stop at EWR, avg 45 min" (`scheduleFaaParts`). The joined text
- *    stays exactly what `getFAADelayContext` printed.
+ *    is exactly the route summary the FAA parts print (`faaContextText`).
  *  - The Starlink mark: one link per row, to the Starlink tab (`starlinkHref`).
  *  (The tab addresses themselves: tests/tab-links.test.js.)
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { faaContextText, faaDelayContextParts, getFAADelayContext } from '../src/lib/faa-context.js';
+import { faaContextText, faaDelayContextParts } from '../src/lib/faa-context.js';
 import { buildScheduleRow as buildRow, routeCell, routeEnds, scheduleFaaParts } from '../src/lib/schedule-row-model.js';
 import { STARLINK_TAB_HREF } from '../src/lib/starlink-link.js';
 
@@ -100,16 +100,16 @@ describe('scheduleFaaParts: the code beside the words, with the status link chos
     ]);
   });
 
-  it('joins to exactly the sentence getFAADelayContext prints', () => {
+  it('joins to exactly the route summary the FAA parts print', () => {
     for (const [o, d] of [
       ['EWR', 'ORD'],
       ['EWR', 'LGA'],
       ['DEN', 'LAX'],
       [undefined, 'ORD'],
     ] as [string | undefined, string | undefined][]) {
-      expect(faaContextText(faaDelayContextParts(index, o, d))).toBe(getFAADelayContext(index, o, d));
-      expect(faaContextText(scheduleFaaParts(index, o, d))).toBe(getFAADelayContext(index, o, d));
+      expect(faaContextText(scheduleFaaParts(index, o, d))).toBe(faaContextText(faaDelayContextParts(index, o, d)));
     }
+    expect(faaContextText(scheduleFaaParts(index, 'EWR', 'LGA'))).toBe('Ground Stop at EWR, avg 45 min · GDP at LGA, avg 18 min');
     expect(scheduleFaaParts(index, 'DEN', 'LAX')).toEqual([]);
   });
 });
