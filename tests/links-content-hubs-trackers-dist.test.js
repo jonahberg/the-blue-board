@@ -67,6 +67,18 @@ describe.skipIf(!hasDist)('hub pages', () => {
     });
   }
 
+  it('every pill in a hub page\'s jump row lands on a section the page has', () => {
+    let pills = 0;
+    for (const hub of HUBS) {
+      const doc = load(`hubs/${hub}.html`);
+      const row = [...doc.querySelectorAll('[data-jump-nav] a[href^="#"]')]; // GUM and NRT have none
+      pills += row.length;
+      const missing = row.map((a) => a.getAttribute('href').slice(1)).filter((id) => !doc.getElementById(id));
+      expect(missing, hub).toEqual([]);
+    }
+    expect(pills).toBeGreaterThan(30);
+  });
+
   it('the departures board template links the destination quietly, apart from the one button', () => {
     const doc = load('hubs/ord.html');
     const row = doc.querySelector('template[data-hb-row]').content;
