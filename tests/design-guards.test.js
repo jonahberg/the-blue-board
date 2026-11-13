@@ -134,10 +134,12 @@ describe('links in running text are not colour-only (audit F43, WCAG 1.4.1)', ()
 // home, and their `className` lands on that plain rendering too, so it is checked; FlightLink's
 // `linkClassName` reaches the link only and is not. DashLink, Button, `a`, `button` and
 // ToggleGroupItem (a Radix toggle, rendered as a button) are links or buttons whatever they are
-// given, and an element written inside one of them is part of that control: the active sort
-// arrow inside a sort header's button, the watched eye inside the watch toggle (DESIGN.md
-// 2026-11-11: "↑/↓ in primary"; "an 'on' toggle takes the primary colour"). An element inside
-// any other component (a Card, a TailLink, which may print plain text) is held to the rule.
+// given. Inside one of them, an element marked `aria-hidden` (and what it wraps) is that
+// control's own state mark: the active sort arrow inside a sort header's button, the watched eye
+// inside the watch toggle (DESIGN.md 2026-11-11: "↑/↓ in primary"; "an 'on' toggle takes the
+// primary colour"). Anything else inside a control is held to the rule, so a blue flight number
+// inside a whole-block button fails, and so does an element inside any other component (a Card, a
+// TailLink, which may print plain text).
 const LINK_ELEMENTS = new Set(['a', 'button', 'DashLink', 'Button', 'ToggleGroupItem']);
 const PLAIN_TOO = new Set(['FlightLink', 'TailLink', 'HubLink', 'HubStatusLink', 'TypeLink']);
 
@@ -182,11 +184,25 @@ function linkStyleOffenders(source, fileName = 'inline.tsx') {
   const named = indexNames(sf);
   const strings = (node) => stringPieces(node, named);
 
+  /** `aria-hidden`, `aria-hidden="true"` or `aria-hidden={true}` on an opening tag. */
+  const ariaHidden = (opening) =>
+    opening.attributes.properties.some((attr) => {
+      if (!ts.isJsxAttribute(attr) || attr.name.getText(sf) !== 'aria-hidden') return false;
+      const init = attr.initializer;
+      if (!init) return true;
+      if (ts.isStringLiteral(init)) return init.text === 'true';
+      return ts.isJsxExpression(init) && init.expression?.kind === ts.SyntaxKind.TrueKeyword;
+    });
+
   const offenders = [];
-  (function visit(node, insideControl = false) {
+  // `insideControl`: within a link or button. `markOfControl`: within an `aria-hidden` element
+  // that is itself within one, which is the control's own state mark.
+  (function visit(node, insideControl = false, markOfControl = false) {
+    const opening = ts.isJsxElement(node) ? node.openingElement : ts.isJsxSelfClosingElement(node) ? node : null;
+    const mark = markOfControl || (insideControl && opening !== null && ariaHidden(opening));
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = node.tagName.getText(sf);
-      if (!LINK_ELEMENTS.has(tag) && !insideControl) {
+      if (!LINK_ELEMENTS.has(tag) && !markOfControl && !(insideControl && ariaHidden(node))) {
         for (const attr of node.attributes.properties) {
           if (!ts.isJsxAttribute(attr) || attr.name.getText(sf) !== 'className' || !attr.initializer) continue;
           const classes = strings(attr.initializer).flatMap((s) => s.split(/\s+/)).filter(Boolean);
@@ -198,9 +214,8 @@ function linkStyleOffenders(source, fileName = 'inline.tsx') {
         }
       }
     }
-    // What a link or button wraps is part of it.
     const opensControl = ts.isJsxElement(node) && LINK_ELEMENTS.has(node.openingElement.tagName.getText(sf));
-    ts.forEachChild(node, (child) => visit(child, insideControl || (opensControl && child !== node.openingElement)));
+    ts.forEachChild(node, (child) => visit(child, insideControl || (opensControl && child !== node.openingElement), mark));
   })(sf);
   return offenders;
 }
@@ -361,6 +376,11 @@ describe('link colour and underline only on links and buttons (links everywhere)
     expect(tags('const x = <TailLink reg={r}><span className="underline">{r}</span></TailLink>;')).toEqual(['span']);
     // After a button closes, the next element is outside it.
     expect(tags('const x = <p><button><i /></button><b className="underline">x</b></p>;')).toEqual(['b']);
+    // Inside a control, only a mark hidden from assistive tech is part of it. A name inside a
+    // whole-block button (a blue flight number that sends the map somewhere) is still held.
+    expect(tags('const x = <button onClick={onViewOnMap}><span className="text-primary">UA360</span> DEN → SEA</button>;')).toEqual(['span']);
+    expect(tags('const x = <Button><span aria-hidden="false" className="text-primary">UA360</span></Button>;')).toEqual(['span']);
+    expect(tags('const x = <a href="/"><span><i className="underline">x</i></span></a>;')).toEqual(['i']);
   });
 
   it('lets links, buttons and the near-misses through', () => {
@@ -375,11 +395,11 @@ describe('link colour and underline only on links and buttons (links everywhere)
       "const PRESS = 'underline';\nconst x = <button className={PRESS}>x</button>;",
       // A string that is not a className is not read.
       'const x = <span title="text-primary underline">x</span>;',
-      // A control's own state marks: an element written inside a link or button is part of it,
-      // however deep, and a toggle group item is a button.
-      'const x = <button onClick={f}>Time<span className={on ? "text-primary" : "text-muted-foreground"}>↑</span></button>;',
-      'const x = <Button aria-pressed={w}><Eye className={w ? "text-primary" : ""} /></Button>;',
-      'const x = <a href="/"><span><i className="underline">x</i></span></a>;',
+      // A control's own state marks: an `aria-hidden` element inside a link or button (and what
+      // it wraps) is part of it, and a toggle group item is a button.
+      'const x = <button onClick={f}>Time<span aria-hidden="true" className={on ? "text-primary" : "text-muted-foreground"}>↑</span></button>;',
+      'const x = <Button aria-pressed={w}><Eye aria-hidden="true" className={w ? "text-primary" : ""} /></Button>;',
+      'const x = <a href="/"><span aria-hidden><i className="underline">x</i></span></a>;',
       'const x = <ToggleGroupItem value="hubs" className="data-[state=on]:text-primary">Hubs</ToggleGroupItem>;',
     ];
     for (const src of ok) expect(linkStyleOffenders(src), src).toEqual([]);
