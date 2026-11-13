@@ -23,7 +23,7 @@
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useCallback, useEffect, useState } from 'react';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Each case mounts the whole view and waits out real debounces (about 2 s alone); under a loaded
 // machine that has measured three times as long, past the 5 s default.
@@ -82,15 +82,17 @@ const FLEET = vi.hoisted(() => ({
 }));
 
 /**
- * One board per hub and direction: three flights late in the hub's day (so none has left), one of
- * them canceled and one international, on two aircraft types. The numbers say which board they
- * are on (UA1 ORD, UA2 DEN…; the second digit 1 departures, 2 arrivals).
+ * One board per hub and direction: one flight that left early in the hub's day, then three late
+ * in it (so none of those has left), one of them canceled and one international, on two aircraft
+ * types. The clock is held mid-afternoon at every hub (below), so the board is today's and its
+ * NOW line falls after the first row. The numbers say which board they are on (UA1 ORD, UA2 DEN…;
+ * the second digit 1 departures, 2 arrivals).
  */
 function board({ hub, dir, timestamp }: { hub: string; dir: string; timestamp: number }) {
   const n = { ORD: 1, DEN: 2, SFO: 3 }[hub] ?? 9;
   const d = dir === 'arrivals' ? 2 : 1;
   const at = timestamp + 22 * 3600;
-  const row = (i: number, other: string, code: string, status: string) => ({
+  const row = (i: number, other: string, code: string, status: string, departure = at + i * 600) => ({
     identification: { number: { default: `UA${n}${d}${i}` } },
     status: { text: status },
     aircraft: { model: { code, text: code } },
@@ -98,10 +100,15 @@ function board({ hub, dir, timestamp }: { hub: string; dir: string; timestamp: n
       dir === 'arrivals'
         ? { origin: { code: { iata: other } }, destination: { code: { iata: hub } } }
         : { origin: { code: { iata: hub } }, destination: { code: { iata: other } } },
-    time: { scheduled: { departure: at + i * 600, arrival: at + i * 600 + 3 * 3600 } },
+    time: { scheduled: { departure, arrival: departure + 3 * 3600 } },
   });
   return {
-    flights: [row(1, 'LAX', 'B738', 'Scheduled'), row(2, 'LHR', 'B789', 'Canceled'), row(3, 'BOS', 'B738', 'Scheduled')],
+    flights: [
+      row(0, 'MSP', 'B738', 'Departed', timestamp + 3600),
+      row(1, 'LAX', 'B738', 'Scheduled'),
+      row(2, 'LHR', 'B789', 'Canceled'),
+      row(3, 'BOS', 'B738', 'Scheduled'),
+    ],
     meta: { generatedAt: new Date().toISOString() },
   };
 }
@@ -243,7 +250,46 @@ async function follow() {
   await settle();
 }
 
+/**
+ * Every scroll of the board's table, as the row it was sent to. jsdom has no layout, so each row
+ * is given an `offsetTop` from its index (100 + 40 per row) and `scrollTo` records which row the
+ * table aimed at (ScheduleTable scrolls to a row's `offsetTop` less 60).
+ */
+const scrolls: number[] = [];
+const ROW_TOP = (index: number) => 100 + 40 * index;
+const offsetTopDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop');
+const scrollToBefore = Element.prototype.scrollTo;
+
+/** The row the NOW divider sits above, the one a cold load of today's board scrolls to. */
+function nowRow(): number {
+  const divider = document.querySelector('[data-testid="schedule-panel"] tr[aria-label="Current time marker"]');
+  return Number(divider?.nextElementSibling?.getAttribute('data-row-index'));
+}
+
+/** A frame, then the scroll the table asked for in it. */
+async function frames() {
+  await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+}
+
 beforeAll(() => {
+  // Mid-afternoon at every hub the tests use (ORD 14:00, DEN 13:00, SFO 12:00): the default day
+  // is today, the one board with a NOW line.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-12T20:00:00Z'));
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) =>
+    setTimeout(() => cb(0), 0) as unknown as number) as typeof requestAnimationFrame;
+  Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+    configurable: true,
+    get(this: HTMLElement) {
+      const index = this.getAttribute('data-row-index');
+      return index === null ? 0 : ROW_TOP(Number(index));
+    },
+  });
+  Element.prototype.scrollTo = function (this: Element, options?: ScrollToOptions | number) {
+    if (this.getAttribute('aria-label') !== 'Schedule table, scrollable region' || typeof options !== 'object') return;
+    scrolls.push(((options.top ?? 0) + 60 - 100) / 40);
+    (this as HTMLElement).scrollTop = options.top ?? 0;
+  } as typeof Element.prototype.scrollTo;
   globalThis.ResizeObserver ??= class {
     observe() {}
     unobserve() {}
@@ -276,6 +322,13 @@ afterEach(() => {
   seen.ui = null;
   seen.schedule = null;
   seen.remount = null;
+  scrolls.length = 0;
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+  if (offsetTopDescriptor) Object.defineProperty(HTMLElement.prototype, 'offsetTop', offsetTopDescriptor);
+  Element.prototype.scrollTo = scrollToBefore;
 });
 
 describe('a hub link arriving at Schedule ends where a cold load of its address ends', () => {
@@ -293,7 +346,7 @@ describe('a hub link arriving at Schedule ends where a cold load of its address 
       sort: 'Time ascending',
       ask: null,
     });
-    expect(coldState.rows).toEqual(['UA211', 'UA212', 'UA213']);
+    expect(coldState.rows).toEqual(['UA210', 'UA211', 'UA212', 'UA213']);
   });
 
   it('from Stats, after the reader left the ORD board on Arrivals with filters set', async () => {
@@ -374,6 +427,90 @@ describe('a hub link arriving at Schedule ends where a cold load of its address 
     await follow();
 
     expect(state()).toEqual(coldState);
+  });
+});
+
+describe('an arrival scrolls the board to NOW, as a cold load does, and only an arrival', () => {
+  /** The table's scroll container, where the reader scrolls by hand. */
+  const scroller = () =>
+    document.querySelector<HTMLElement>('[data-testid="schedule-panel"] [aria-label="Schedule table, scrollable region"]')!;
+
+  /** Mount on ORD's board, then look at DEN's once, so both are loaded this session; back on ORD. */
+  async function loadDenThenOrd() {
+    mountAt('/#schedule', '/?tab=schedule&hub=DEN');
+    await settle();
+    act(() => seen.schedule!.setCurrent({ hub: 'DEN' }));
+    await settle();
+    act(() => seen.schedule!.setCurrent({ hub: 'ORD' }));
+    await settle();
+  }
+
+  it('a cold load scrolls to the row under the NOW line once (what an arrival must match)', async () => {
+    mountAt('/?tab=schedule&hub=DEN', '/#stats');
+    await settle();
+    await frames();
+    expect(nowRow()).toBe(1);
+    expect(scrolls).toEqual([1]);
+  });
+
+  it('(a) the board was already loaded this session: the arrival scrolls to NOW once', async () => {
+    await loadDenThenOrd();
+    act(() => seen.ui!.setTab('stats'));
+    scroller().scrollTop = 0;
+    scrolls.length = 0;
+
+    await follow();
+    await frames();
+
+    expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(scrolls).toEqual([nowRow()]);
+    expect(nowRow()).toBe(1);
+  });
+
+  it('(b) the board loads fresh: the store’s own fresh-load scroll runs, and the arrival adds none', async () => {
+    mountAt('/#schedule', '/?tab=schedule&hub=DEN');
+    await settle();
+    act(() => seen.ui!.setTab('stats'));
+    scrolls.length = 0;
+
+    await follow();
+    await frames();
+
+    expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(scrolls).toEqual([nowRow()]);
+  });
+
+  it('(c) a hub link followed while Schedule is showing does not scroll', async () => {
+    await loadDenThenOrd();
+    scroller().scrollTop = 0;
+    scrolls.length = 0;
+
+    await follow();
+    await frames();
+
+    expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(seen.ui!.scheduleLink).toBeNull();
+    expect(scrolls).toEqual([]);
+  });
+
+  it('(d) once arrived, the reader scrolls by hand: the board refreshing under them scrolls nothing', async () => {
+    await loadDenThenOrd();
+    act(() => seen.ui!.setTab('stats'));
+    scrolls.length = 0;
+    await follow();
+    await frames();
+    expect(scrolls).toEqual([nowRow()]);
+
+    scroller().scrollTop = 777;
+    scrolls.length = 0;
+    // What a poll does to the view: the model rebuilt (the feed stub hands a new list each render)
+    // on a render the view did not ask for.
+    act(() => seen.ui!.announce('a poll landed'));
+    await settle();
+    await frames();
+
+    expect(scrolls).toEqual([]);
+    expect(scroller().scrollTop).toBe(777);
   });
 });
 

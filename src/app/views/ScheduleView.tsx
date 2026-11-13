@@ -133,6 +133,12 @@ export default function ScheduleView() {
   // the store holds one answer for whichever view asked, and a Live answer must survive a link
   // followed out of Live (as Fleet guards its own, `askActive`).
   //
+  // A cold load of today's board scrolls to NOW, and so does an arrival. The store raises that
+  // scroll itself only when a board loads fresh (`autoScroll`, the effect below), so an arrival at a
+  // board already loaded this session asks for it here (`arrivalScroll`): once, on the commit after
+  // this reset, when the default sort and the empty filters are the ones on screen. A board that is
+  // not loaded yet loads fresh and the store's own scroll runs, so the arrival adds none.
+  //
   // The effect's first run only notes the `seq`. The view is new then: the first arrival mounts
   // it in the same commit, or the error boundary's "Try again" remounts it. Its filters are empty
   // by construction, and an answer re-applying itself in that same commit (`useAskSchedule`) must
@@ -140,6 +146,7 @@ export default function ScheduleView() {
   const { scheduleLink } = ui;
   const seenLinkSeq = useRef(0);
   const linkEffectRan = useRef(false);
+  const [arrivalScroll, setArrivalScroll] = useState<{ key: string } | null>(null);
   const { active: askActive, clear: clearAsk } = ask;
   useEffect(() => {
     const fresh = !linkEffectRan.current;
@@ -151,6 +158,7 @@ export default function ScheduleView() {
     setDebouncedFilters(EMPTY_FILTERS);
     setSort(DEFAULT_SORT);
     if (askActive) clearAsk();
+    if (boards[key]) setArrivalScroll({ key });
   }, [scheduleLink, askActive, clearAsk]);
 
   const dayStartSec = useMemo(() => {
@@ -240,6 +248,16 @@ export default function ScheduleView() {
     lastAnchored.current = schedule.autoScroll!.n;
     tableRef.current?.scrollToNow(false);
   }, [schedule.autoScroll, key, ui.tab, model.firstFutureIndex]);
+
+  // An arrival at a board already loaded this session (set by the `scheduleLink` effect above):
+  // scroll to NOW once, on the commit where the arrival's reset is on screen, then never again for
+  // it, whatever lands later. Nothing to scroll to on a board with no NOW line (not today's).
+  useEffect(() => {
+    if (!arrivalScroll) return;
+    setArrivalScroll(null);
+    if (arrivalScroll.key !== key || ui.tab !== 'schedule' || model.firstFutureIndex < 0) return;
+    tableRef.current?.scrollToNow(false);
+  }, [arrivalScroll, key, ui.tab, model.firstFutureIndex]);
 
   // The search palette asked for a row. The board may still be loading, so this retries on
   // each render until the row exists (or the viewer navigates away and clears it).
