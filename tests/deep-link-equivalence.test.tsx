@@ -365,25 +365,16 @@ describe('a cold load and an in-place click of the same address end in the same 
   it.each([
     ['/?tab=weather&hub=EWR', 'hub-card-EWR'],
     ['/?tab=weather&section=nas', 'nas-section'],
-  ])("%s (hubStatusLink): the Weather tab, headed for %s; the Schedule board is the one stated difference", async (address, target) => {
+  ])('%s (hubStatusLink): the Weather tab, headed for %s, the Schedule board left alone', async (address, target) => {
     const coldState = await cold(address);
-    expect(coldState).toMatchObject({ tab: 'weather', weatherScroll: target, aircraft: null, fleetScrolls: [] });
-    // Cold, `?hub=` also picks the (hidden) Schedule board, on any tab (`useDeepLinks`); in place,
-    // a Weather link leaves the board the reader chose alone (`resolveDeepLink` selects a board
-    // only on the Schedule tab, part 1). Everything the link is for lands the same.
-    const sameBut = (state: typeof coldState, board: typeof coldState) => ({
-      ...state,
-      scheduleHub: board.scheduleHub,
-      scheduleDir: board.scheduleDir,
-      scheduleDay: board.scheduleDay,
-    });
-    const clicked = await inPlace(address);
-    expect(clicked.scheduleHub).toBe('ORD');
-    expect(sameBut(clicked, coldState)).toEqual(coldState);
-    // Left on the Schedule board on Arrivals for tomorrow: the board stays as the reader left it.
+    // Neither picks the hidden Schedule board: the hub names a Weather card, not a board.
+    expect(coldState).toMatchObject({ tab: 'weather', weatherScroll: target, aircraft: null, fleetScrolls: [], scheduleHub: 'ORD' });
+    expect(await inPlace(address)).toEqual(coldState);
+    // Left on the Schedule board on Arrivals for tomorrow: the board is not this link's
+    // destination and stays as the reader left it; everything the link is for lands as cold.
     const fromSchedule = await inPlaceFromDirtySchedule(address);
     expect(fromSchedule).toMatchObject({ scheduleHub: 'ORD', scheduleDir: 'arrivals', scheduleDay: 1 });
-    expect(sameBut(fromSchedule, coldState)).toEqual(coldState);
+    expect({ ...fromSchedule, scheduleDir: coldState.scheduleDir, scheduleDay: coldState.scheduleDay }).toEqual(coldState);
   });
 
   it('a hubStatusLink followed on the Weather tab itself, headed elsewhere: it heads for its own target', async () => {
@@ -397,7 +388,7 @@ describe('a cold load and an in-place click of the same address end in the same 
     const result = await finalState();
     cleanup();
 
-    expect({ ...result, scheduleHub: coldState.scheduleHub }).toEqual(coldState);
+    expect(result).toEqual(coldState);
     expect(window.history.length).toBe(before);
   });
 

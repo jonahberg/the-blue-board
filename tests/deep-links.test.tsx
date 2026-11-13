@@ -87,6 +87,16 @@ describe('?tab= and #hash', () => {
     expect(mountAt('/?tab=weather').deps.setTab).toHaveBeenCalledWith('weather', undefined);
   });
 
+  it('?tab=weather&hub= picks no Schedule board (the hub names a Weather card); ?tab=irops&hub= and ?hub= alone still do', () => {
+    expect(mountAt('/?tab=weather&hub=ewr').deps.setScheduleHub).not.toHaveBeenCalled();
+    cleanup();
+    expect(mountAt('/?tab=Weather&hub=den').deps.setScheduleHub).not.toHaveBeenCalled();
+    cleanup();
+    expect(mountAt('/?tab=irops&hub=iah').deps.setScheduleHub).toHaveBeenCalledWith('IAH');
+    cleanup();
+    expect(mountAt('/?hub=ord').deps.setScheduleHub).toHaveBeenCalledWith('ORD');
+  });
+
   it('?tab=weather&section=nas lands on the NAS status panel', () => {
     const { deps } = mountAt('/?tab=weather&section=nas');
     expect(deps.setTab).toHaveBeenCalledWith('weather', { scrollTo: 'nas-section' });

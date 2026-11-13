@@ -10,7 +10,8 @@
  *   ?tab=weather&hub= Weather, scrolled to that hub's card (the brief's FAA/weather chips)
  *   ?tab=weather&section=nas   Weather, scrolled to the NAS status panel (FAA plan chips)
  *   ?flight= / ?q=    open the flight sheet, or offer a schedule lookup when not airborne
- *   ?hub=             selects that schedule board; with no ?tab (or ?tab=live) it is ALSO the
+ *   ?hub=             selects that schedule board (not with ?tab=weather, where it names a Weather
+ *                     card); with no ?tab (or ?tab=live) it is ALSO the
  *                     Live map's hub filter — `readLiveHubDeepLink()`, read by the Live view
  *                     (the hub pages' "Live <HUB> Map" CTA, F13/F45)
  *   ?view=starlink    the Starlink tab (its airborne/special/express siblings are Fleet-tab sub-views)
@@ -218,8 +219,13 @@ export function useDeepLinks(deps: DeepLinkDeps) {
       depsRef.current.setTab(resolved, scrollTo ? { scrollTo } : undefined);
     }
 
+    // `?hub=` picks the Schedule board: with `?tab=schedule`, alone, with `?tab=irops` (the hub
+    // pages' "IROPS Monitor" link). Not with `?tab=weather`, where the hub names a Weather card
+    // (`hubStatusLink`, the brief's chips): a click on that link leaves the board the reader chose
+    // (`resolveDeepLink`), so the same address opened cold does too (Nov 12 2026 review).
     const hub = params.get('hub');
-    if (hub) {
+    const weatherCard = String(params.get('tab') ?? '').trim().toLowerCase() === 'weather';
+    if (hub && !weatherCard) {
       depsRef.current.setScheduleHub(hub.toUpperCase());
       if (resolved === 'schedule') depsRef.current.setTab('schedule');
     }
