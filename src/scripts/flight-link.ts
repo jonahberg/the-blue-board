@@ -55,13 +55,20 @@ export function setFlightLink(a: Element, raw: string, here = ''): void {
  * keyboard reader's focus back to the top of the page: when focus was on a link inside the old
  * list, it moves to the link with the same address in the new one (or to the list's first link,
  * so it stays inside the board when that flight has rolled off).
+ *
+ * Addresses can repeat in one list (a hub at the end of one leg and the start of the next, four
+ * strip rows into SFO), so "the same link" is the same occurrence: the n-th link with that address,
+ * as it was the n-th before; the first one when the new list has fewer.
  */
 export function replaceChildrenKeepingFocus(container: Element, nodes: Node[]): void {
   const active = document.activeElement;
   const hadFocus = active instanceof HTMLAnchorElement && container.contains(active) ? active.getAttribute('href') : null;
+  const sameHref = (a: Element) => a.getAttribute('href') === hadFocus;
+  const occurrence = hadFocus === null ? 0 : [...container.querySelectorAll('a[href]')].filter(sameHref).indexOf(active as Element);
   container.replaceChildren(...nodes);
   if (hadFocus === null) return;
   const links = [...container.querySelectorAll<HTMLAnchorElement>('a[href]')];
-  const next = links.find((a) => a.getAttribute('href') === hadFocus) ?? links[0];
+  const matches = links.filter(sameHref);
+  const next = matches[occurrence] ?? matches[0] ?? links[0];
   next?.focus({ preventScroll: true });
 }

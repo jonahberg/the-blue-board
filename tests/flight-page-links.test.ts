@@ -177,6 +177,27 @@ describe.skipIf(!hasDist)('flight page: hubs, tail, type and Starlink are links'
     delete (document as any).hidden;
   });
 
+  it('a refresh keeps focus on the same one of two links to the same hub ("Its recent flights")', async () => {
+    // The legs chain: ORD is the origin of the newer leg and the destination of the older one.
+    const tail = {
+      reg: 'N686UA',
+      rows: [leg('UA1234', 'ORD', 'LAX', DEP - 600, 240), leg('UA930', 'LHR', 'ORD', DEP - 1440, 480)],
+    };
+    mountWith({ tail, aircraft: ua929Aircraft });
+    await load();
+    const ordLinks = () => [...card().querySelectorAll<HTMLAnchorElement>('[data-f="legs"] a[href="/hubs/ord"]')];
+    expect(ordLinks()).toHaveLength(2);
+    const before = ordLinks()[1]; // row 1's ORD
+    expect(before.closest('li')!.querySelector('[data-f="flight"]')!.textContent).toBe('UA930');
+    before.focus();
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(before.isConnected).toBe(false); // repainted
+    expect(document.activeElement).toBe(ordLinks()[1]);
+    expect((document.activeElement as Element).closest('li')!.querySelector('[data-f="flight"]')!.textContent).toBe('UA930');
+    delete (document as any).hidden;
+  });
+
   it('a flight we do not have: the last route it flew links its hub end in the header', async () => {
     mountShell();
     vi.useFakeTimers({ toFake: ['Date'], now: (D - 5 * 3600) * 1000 });
