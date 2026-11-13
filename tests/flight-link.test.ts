@@ -226,6 +226,21 @@ describe('replaceChildrenKeepingFocus in a list whose rows carry data-key', () =
     expect(document.activeElement).toBe(list.querySelector('a'));
   });
 
+  it('a repaint with nothing new replaces nothing and leaves focus alone', () => {
+    const list = mount(strip.ua1(), strip.ua9());
+    const before = list.querySelector('[data-key="N9"] a[href="/hubs/sfo"]') as HTMLAnchorElement;
+    before.focus();
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      replaceChildrenKeepingFocus(list, [strip.ua1(), strip.ua9()]);
+      expect(before.isConnected).toBe(true);
+      expect(document.activeElement).toBe(before);
+      expect(focus).not.toHaveBeenCalled();
+    } finally {
+      focus.mockRestore();
+    }
+  });
+
   it('a row still on the list that lost the link the reader was on falls back the same way', () => {
     const list = mount(keyed('UA108', ['/flight/UA108', 'ident'], ['/hubs/ewr', 'dest']), keyed('UA109', ['/flight/UA109', 'ident'], ['/hubs/ewr', 'dest']));
     (list.querySelector('[data-key="UA108"] [data-f="dest"]') as HTMLAnchorElement).focus();

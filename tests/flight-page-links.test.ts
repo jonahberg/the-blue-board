@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { D, historyRows, payloadFor, scheduledCase, ua929Aircraft } from './fixtures/flight-page-fixtures.js';
+import { D, historyRows, inAirCase, payloadFor, scheduledCase, ua929Aircraft } from './fixtures/flight-page-fixtures.js';
 
 const SHELL = join(resolve(__dirname, '..'), 'dist', 'flight.html');
 const hasDist = existsSync(SHELL);
@@ -169,28 +169,31 @@ describe.skipIf(!hasDist)('flight page: hubs, tail, type and Starlink are links'
     expect([wifi.textContent, wifi.getAttribute('href')]).toEqual(['Starlink Wi-Fi', '/#starlink']);
   });
 
-  it('a refresh keeps keyboard focus on the link the reader was on', async () => {
+  it('a refresh that changes nothing leaves keyboard focus on the very link the reader was on', async () => {
     mountWith({ aircraft: ua929Aircraft });
     await load();
     const before = card().querySelector<HTMLAnchorElement>('[data-f="reg"] a')!;
     before.focus();
     expect(document.activeElement).toBe(before);
-    // Back to a visible tab with a fresh read: the page repaints from what it has (render()).
-    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
-    document.dispatchEvent(new Event('visibilitychange'));
-    const after = card().querySelector<HTMLAnchorElement>('[data-f="reg"] a')!;
-    expect(before.isConnected).toBe(false); // repainted, a new element
-    expect(document.activeElement).toBe(after);
-    expect(after.getAttribute('href')).toBe('/?aircraft=N686UA');
-    delete (document as any).hidden;
+    // Back to a visible tab: the page repaints from what it has (render()). Nothing in the card
+    // changed, so nothing is replaced and focus is not touched.
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(before.isConnected).toBe(true);
+      expect(document.activeElement).toBe(before);
+      expect(focusSpy).not.toHaveBeenCalled();
+    } finally {
+      focusSpy.mockRestore();
+      delete (document as any).hidden;
+    }
   });
 
   it('a refresh keeps focus on the same one of two links to the same hub ("Its recent flights")', async () => {
     // The legs chain: ORD is the origin of the newer leg and the destination of the older one.
-    const tail = {
-      reg: 'N686UA',
-      rows: [leg('UA1234', 'ORD', 'LAX', DEP - 600, 240), leg('UA930', 'LHR', 'ORD', DEP - 1440, 480)],
-    };
+    const newer = leg('UA1234', 'ORD', 'LAX', DEP - 600, 240);
+    const tail = { reg: 'N686UA', rows: [newer, leg('UA930', 'LHR', 'ORD', DEP - 1440, 480)] };
     mountWith({ tail, aircraft: ua929Aircraft });
     await load();
     const ordLinks = () => [...card().querySelectorAll<HTMLAnchorElement>('[data-f="legs"] a[href="/hubs/ord"]')];
@@ -198,9 +201,18 @@ describe.skipIf(!hasDist)('flight page: hubs, tail, type and Starlink are links'
     const before = ordLinks()[1]; // row 1's ORD
     expect(before.closest('li')!.querySelector('[data-f="flight"]')!.textContent).toBe('UA930');
     before.focus();
+    // A fresh read in which the newer leg's result changed (it left 40 min late): the list repaints.
+    const { row } = scheduledCase();
+    row.aircraft.registration = 'N686UA';
+    const late = { ...newer, dep_at: newer.sched_dep + 40 };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).startsWith('/api/flight?')) return Response.json(payloadFor(row, { tail: { reg: 'N686UA', rows: [late, tail.rows[1]] }, aircraft: ua929Aircraft } as any));
+      return new Response('{}', { status: 404 });
+    }));
+    vi.setSystemTime((D - 5 * 3600 + 120) * 1000);
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
     document.dispatchEvent(new Event('visibilitychange'));
-    expect(before.isConnected).toBe(false); // repainted
+    await vi.waitFor(() => expect(before.isConnected).toBe(false)); // repainted
     expect(document.activeElement).toBe(ordLinks()[1]);
     expect((document.activeElement as Element).closest('li')!.querySelector('[data-f="flight"]')!.textContent).toBe('UA930');
     delete (document as any).hidden;
@@ -237,6 +249,49 @@ describe.skipIf(!hasDist)('flight page: hubs, tail, type and Starlink are links'
       expect(flightOf(document.activeElement!)).toBe('UA300');
       expect(document.activeElement!.getAttribute('href')).toBe('/hubs/ord');
       expect(focusSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      focusSpy.mockRestore();
+      delete (document as any).hidden;
+    }
+  });
+
+  // In the air, a refresh paints twice: once from the stored flight, once more when the live feed
+  // has the aircraft. A list whose content did not change must not take focus again.
+  it('in the air, a refresh moves focus once at most, though the page paints twice', async () => {
+    mountShell();
+    const { row, nowSec } = inAirCase();
+    const tail = { reg: 'N686UA', rows: [leg('UA200', 'ORD', 'LAX', DEP - 1000, 240), leg('UA300', 'LHR', 'ORD', DEP - 1440, 480)] };
+    const feedRow = ['A00000', 50.1, -40.2, 70, 37000, 480, '', 'T-X', 'B763', 'N686UA', nowSec, 'ORD', 'LHR', 'UA929', 0, 0, 'UAL929', 0, 'UAL'];
+    let feedReads = 0;
+    vi.useFakeTimers({ toFake: ['Date'], now: nowSec * 1000 });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).startsWith('/api/flight?')) return Response.json(payloadFor(row, { tail, aircraft: ua929Aircraft } as any));
+      if (String(url).startsWith('/api/fr24-feed')) {
+        feedReads++;
+        return Response.json({ full_count: 1, version: 4, a: feedRow });
+      }
+      return new Response('{}', { status: 404 });
+    }));
+    await load();
+    await vi.waitFor(() => expect(feedReads).toBeGreaterThanOrEqual(1));
+    const ordLinks = () => [...card().querySelectorAll<HTMLAnchorElement>('[data-f="legs"] a[href="/hubs/ord"]')];
+    const flightOf = (a: Element) => a.closest('li')!.querySelector('[data-f="flight"]')!.textContent;
+    expect(ordLinks().map(flightOf)).toEqual(['UA200', 'UA300']);
+    ordLinks()[1].focus();
+
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      // (Earlier cases' page modules also listen on this document; count this refresh's reads.)
+      const reads = feedReads;
+      vi.setSystemTime((nowSec + 120) * 1000);
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.waitFor(() => expect(feedReads).toBeGreaterThan(reads)); // the stored read, then the live one
+      await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[data-flight-page]')!.dataset.state).toBe('live'));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(flightOf(document.activeElement!)).toBe('UA300');
+      expect(document.activeElement!.getAttribute('href')).toBe('/hubs/ord');
+      expect(focusSpy.mock.calls.length).toBeLessThanOrEqual(1);
     } finally {
       focusSpy.mockRestore();
       delete (document as any).hidden;

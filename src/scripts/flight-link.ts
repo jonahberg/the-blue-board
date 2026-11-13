@@ -75,8 +75,9 @@ function sameLinkInSameRow(active: HTMLAnchorElement, container: Element, nodes:
 
 /**
  * `container.replaceChildren(...nodes)` for a list that refreshes on a timer, without throwing a
- * keyboard reader's focus off their place. Focus is set at most once, straight on its target, so a
- * screen reader hears one link.
+ * keyboard reader's focus off their place. Nothing is replaced when the new nodes are the same as
+ * the old; otherwise focus is set at most once, straight on its target, so a screen reader hears
+ * one link.
  *
  * Rows that carry `data-key` (a departure on the hub board, an aircraft in the fleet strip, a leg on
  * the flight page; each key the same on every refresh) are found again by key: focus goes to the
@@ -87,6 +88,11 @@ function sameLinkInSameRow(active: HTMLAnchorElement, container: Element, nodes:
  * focus stays in the list.
  */
 export function replaceChildrenKeepingFocus(container: Element, nodes: Node[]): void {
+  // A repaint that brings nothing new (an airborne flight page paints twice per refresh, once more
+  // when the live feed answers; a board can come back unchanged) leaves the list as it is, and
+  // focus is not touched at all.
+  const children = container.childNodes;
+  if (nodes.length === children.length && nodes.every((node, i) => node.isEqualNode(children[i]))) return;
   const active = document.activeElement;
   if (!(active instanceof HTMLAnchorElement) || !container.contains(active)) {
     container.replaceChildren(...nodes);

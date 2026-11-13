@@ -144,13 +144,18 @@ describe.skipIf(!hasDist)('src/scripts/hub-board.ts keeps a keyboard reader’s 
   // by its address: the board finds the same link in the same departure, by the row's key.
   it('focus on the second of two links to the same hub stays on that row after a refresh', async () => {
     mountPage('hubs/ord.html');
-    const twoToEwr = () => {
+    // `later`: the refresh brings news on another row (UA107 now leaves 30 min late), so the list repaints.
+    const twoToEwr = (later = false) => {
       const data = ordBoard();
       data.flights.find((f) => f.identification.number.default === 'UA108').airport.destination = {
         code: { iata: 'EWR' },
         info: { gate: '', terminal: 'C' },
         name: 'Newark',
       };
+      if (later) {
+        const ua107 = data.flights.find((f) => f.identification.number.default === 'UA107');
+        ua107.time.estimated = { departure: ua107.time.scheduled.departure + 30 * 60, arrival: null };
+      }
       return buildHubBoardPayload({
         hub: 'ORD',
         timeZone: 'America/Chicago',
@@ -171,9 +176,10 @@ describe.skipIf(!hasDist)('src/scripts/hub-board.ts keeps a keyboard reader’s 
     second.focus();
     expect(document.activeElement).toBe(second);
 
-    // A refresh after two minutes re-clones every row.
+    // A refresh after two minutes, with news on another row, re-clones every row.
     const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
     try {
+      fetchMock.mockImplementation(async () => jsonResponse(twoToEwr(true)));
       const calls = fetchMock.mock.calls.length;
       vi.setSystemTime((NOW_SEC + 2 * 60) * 1000);
       Object.defineProperty(document, 'hidden', { configurable: true, value: false });
