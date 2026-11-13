@@ -304,6 +304,8 @@ describe.skipIf(!hasDist)('src/scripts/fleet-live.ts on /fleet/787-9-dreamliner'
     expect(hub.className).toContain('decoration-muted-foreground/40');
     expect(hub.className).toContain('pointer-coarse:pointer-events-none');
     expect(hub.className).not.toContain('text-primary');
+    // The route cell clips (truncate), so the focus ring is drawn inside the link, as on the hub board.
+    expect(hub.className.split(/\s+/)).toContain('focus-visible:-outline-offset-2');
   });
 
   // Rows re-cut on every refresh, and hubs repeat across them: "the third link to /hubs/sfo" is a
