@@ -22,6 +22,7 @@ import fleetDb from '../../public/data/fleet.json';
 import { STARLINK_ROSTER_AS_OF, starlinkForType } from '../data/starlink-facts.js';
 import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
 import { fleetSeo } from '../lib/page-seo.js';
+import { isStarlinkWifi, registryRowLinks } from '../lib/fleet-registry-links.js';
 import { registryStarlinkNote } from '../lib/starlink-facts.js';
 
 const { data } = Astro.props;
@@ -37,7 +38,6 @@ const typeAircraft = (fleetDb as any[])
 // The registry's WiFi column is the fleet database; the page's Starlink figure ("48 of the 79 had
 // it as of 11 Nov") is the Starlink roster joined to it. Where the two disagree, the table says
 // both, with their days (src/lib/starlink-facts.js registryStarlinkNote) — on every type page.
-const isStarlinkWifi = (w: unknown) => String(w ?? '').toLowerCase().includes('starlink');
 const registryNote = registryStarlinkNote({
   marked: typeAircraft.filter((a: any) => isStarlinkWifi(a.w)).length,
   roster: starlinkForType(typeCode).equipped,
@@ -102,6 +102,14 @@ const fleetNavItems = fleetOrder.map((t: string) => ({
   current: t === slug,
 }));
 
+// Registry links (src/lib/fleet-registry-links.js) are 44 px tall on touch and relax only for a
+// mouse at md+ (DESIGN.md touch rule), reaching into the cell's padding (-my-1.5) so a row is 44 px
+// rather than 56, and a mouse keeps the table exactly as dense as before: the /fleet index's
+// `touchRowLink`. The tail is the row's one link-coloured link (the row is about it); "Starlink"
+// keeps the content pages' quiet underlined look from `.bb-content a`, in Starlink violet.
+const touchRowLink = 'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:my-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:pt-0';
+const tailLinkClass = `${touchRowLink} font-bold text-primary no-underline underline-offset-2 hover:underline hover:decoration-current`;
+
 /** Registry status tone. Always rendered next to the status text, never alone. */
 function statusClass(status: string | undefined): string {
   const value = (status || '').toLowerCase();
@@ -129,7 +137,10 @@ function statusClass(status: string | undefined): string {
     <Breadcrumbs items={[{ label: 'Fleet', href: '/fleet' }, { label: data.breadcrumbName }]} />
 
     <header class="mt-6 border-b border-border pb-5">
-      <h1 class="bb-content text-2xl font-bold tracking-tight text-balance text-foreground">
+      {/* The type code in the h1 (`.type-badge`, mono) names this page, so it is not a link
+          (ruling 1, self-links are plain) and takes body colour: link colour on it was decoration
+          (DESIGN.md "colour that is not a status signal is decoration"). */}
+      <h1 class="bb-content text-2xl font-bold tracking-tight text-balance text-foreground [&_.type-badge]:text-foreground">
         <Fragment set:html={data.headerTitle.replace(/ — /g, "&nbsp;— ")} />
       </h1>
       <p class="mt-1.5 text-xs text-muted-foreground">{data.subtitle}</p>
@@ -213,14 +224,29 @@ function statusClass(status: string | undefined): string {
             {
               typeAircraft.map((ac: any) => {
                 const isStarlink = isStarlinkWifi(ac.w);
+                const links = registryRowLinks(ac);
                 return (
                   <tr>
-                    <td class="font-mono font-bold text-foreground">{ac.r}</td>
+                    <td class="font-mono font-bold text-foreground">
+                      {links.reg ? <a class={tailLinkClass} href={links.reg}>{ac.r}</a> : ac.r}
+                    </td>
                     <td class="font-mono">{ac.a || '—'}</td>
                     <td class="font-mono whitespace-nowrap">{ac.c || '—'}</td>
                     {/* The database's raw codes are inconsistent ('Satl Ku' / 'Satl KU'); the
                         dashboard's display names are not (F78). */}
-                    <td>{isStarlink ? <span class="starlink-on">{ac.w}</span> : ac.w ? normalizeWifi(ac.w) : '—'}</td>
+                    <td>
+                      {isStarlink ? (
+                        links.wifi ? (
+                          <a class={touchRowLink} href={links.wifi}><span class="starlink-on">{ac.w}</span></a>
+                        ) : (
+                          <span class="starlink-on">{ac.w}</span>
+                        )
+                      ) : ac.w ? (
+                        normalizeWifi(ac.w)
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>{ac.i || '—'}</td>
                     <td>{ac.p || '—'}</td>
                     <td class="font-mono">{ac.d || '—'}</td>
