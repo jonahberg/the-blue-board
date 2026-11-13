@@ -267,10 +267,11 @@ export function FlightCard({
               {isStarlink ? (
                 // A quiet link to the Starlink tab: the badge is not a control of its own, so the
                 // badge itself is the link. `overflow-visible` keeps its touch box from being clipped.
+                // Its own hover replaces the outline variant's, which would turn it grey.
                 <Badge
                   asChild
                   variant="outline"
-                  className="ml-1 overflow-visible border-bb-starlink/40 bg-bb-starlink/15 text-[9px] font-normal text-bb-starlink"
+                  className="ml-1 overflow-visible border-bb-starlink/40 bg-bb-starlink/15 text-[9px] font-normal text-bb-starlink [a]:hover:bg-bb-starlink/25 [a]:hover:text-bb-starlink"
                 >
                   <DashLink href={STARLINK_TAB_HREF}>
                     <Zap aria-hidden="true" /> Starlink Confirmed

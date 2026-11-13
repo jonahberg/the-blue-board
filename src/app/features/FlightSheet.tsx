@@ -154,10 +154,17 @@ const TIMES_SOURCE_LABEL: Record<string, string> = {
   fr24: 'Flightradar24 live tracking (no schedule times)',
 };
 
-/** The violet Starlink fact, as a quiet link to the Starlink tab (the badge is not a control). */
+/**
+ * The violet Starlink fact, as a quiet link to the Starlink tab (the badge is not a control). As a
+ * link the badge would take the default variant's `[a]:hover:` fill, United blue under violet
+ * text; its own hover replaces it (tailwind-merge in `Badge` keeps the later class).
+ */
 function StarlinkBadgeLink() {
   return (
-    <Badge asChild className="overflow-visible border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
+    <Badge
+      asChild
+      className="overflow-visible border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink [a]:hover:bg-bb-starlink/20"
+    >
       <DashLink href={STARLINK_TAB_HREF} fromOverlay>
         <Zap aria-hidden="true" /> Starlink confirmed
       </DashLink>

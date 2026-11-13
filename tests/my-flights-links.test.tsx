@@ -78,6 +78,15 @@ function card(overrides: Partial<MyFlightCardModel> = {}) {
   );
 }
 
+/** A Starlink badge rendered as a link keeps its own colour on hover, never a Badge variant's. */
+function expectStarlinkHover(badge: HTMLElement) {
+  const classes = badge.className.split(/\s+/);
+  expect(classes.filter((c) => c.startsWith('[a]:hover:'))).toEqual(
+    expect.arrayContaining([expect.stringMatching(/^\[a\]:hover:bg-bb-starlink\//)]),
+  );
+  expect(classes.some((c) => /primary-fill|muted/.test(c) && c.includes('hover'))).toBe(false);
+}
+
 const href = (name: string | RegExp) => screen.getByRole('link', { name }).getAttribute('href');
 const isQuiet = (el: HTMLElement) => el.className.includes('text-inherit') && !el.className.includes('text-primary');
 
@@ -106,6 +115,9 @@ describe('a watched flight card', () => {
     expect(badge.getAttribute('href')).toBe('/#starlink');
     expect(badge.className).not.toContain('text-primary');
     expect(badge.className).toContain('overflow-visible');
+    // The outline variant would grey it on hover (`[a]:hover:text-muted-foreground`).
+    expectStarlinkHover(badge);
+    expect(badge.className.split(/\s+/)).toContain('[a]:hover:text-bb-starlink');
   });
 
   it("Where's My Plane?: the inbound number and its hub ends link; the heading is body colour", () => {

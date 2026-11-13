@@ -48,6 +48,15 @@ afterEach(() => {
   feed.flights = [];
 });
 
+/** A Starlink badge rendered as a link keeps its own colour on hover, never a Badge variant's. */
+function expectStarlinkHover(badge: HTMLElement) {
+  const classes = badge.className.split(/\s+/);
+  expect(classes.filter((c) => c.startsWith('[a]:hover:'))).toEqual(
+    expect.arrayContaining([expect.stringMatching(/^\[a\]:hover:bg-bb-starlink\//)]),
+  );
+  expect(classes.some((c) => /primary-fill|muted/.test(c) && c.includes('hover'))).toBe(false);
+}
+
 async function renderDialog() {
   await act(async () => {
     render(
@@ -78,6 +87,7 @@ describe('AircraftDetailDialog, a mainline tail', () => {
   it('the Starlink badge is a quiet link to the Starlink tab; the ★ name stays a plain badge', async () => {
     await renderDialog();
     expect(screen.getByRole('link', { name: 'STARLINK' }).getAttribute('href')).toBe('/#starlink');
+    expectStarlinkHover(screen.getByRole('link', { name: 'STARLINK' }));
     expect(screen.queryByRole('link', { name: 'Star of the Show' })).toBeNull();
     expect(screen.getByText('Star of the Show').tagName).toBe('SPAN');
   });

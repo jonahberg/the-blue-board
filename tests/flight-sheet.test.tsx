@@ -339,6 +339,15 @@ describe('FlightSheet links to the flight page', () => {
   });
 });
 
+/** A Starlink badge rendered as a link keeps its own colour on hover, never a Badge variant's. */
+function expectStarlinkHover(badge: HTMLElement) {
+  const classes = badge.className.split(/\s+/);
+  expect(classes.filter((c) => c.startsWith('[a]:hover:'))).toEqual(
+    expect.arrayContaining([expect.stringMatching(/^\[a\]:hover:bg-bb-starlink\//)]),
+  );
+  expect(classes.some((c) => /primary-fill|muted/.test(c) && c.includes('hover'))).toBe(false);
+}
+
 describe('FlightSheet links the names it prints (links part 2)', () => {
   const mainline = {
     r: 'N37502', t: '737 MAX 9', c: '20F/48E+/111Y', w: 'Satl Ku', i: 'PDE', seats: {}, tot: 179,
@@ -365,7 +374,9 @@ describe('FlightSheet links the names it prints (links part 2)', () => {
     expect(tail.getAttribute('href')).toBe('/?aircraft=N37502');
     expect(tail.className).toContain('text-primary');
     expect(screen.queryByRole('button', { name: 'N37502' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Starlink confirmed' }).getAttribute('href')).toBe('/#starlink');
+    const badge = screen.getByRole('link', { name: 'Starlink confirmed' });
+    expect(badge.getAttribute('href')).toBe('/#starlink');
+    expectStarlinkHover(badge);
   });
 
   it("a named aircraft's ★ badge stays a plain badge, as it is on every other dashboard row", async () => {
