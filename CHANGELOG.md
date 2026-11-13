@@ -4,6 +4,37 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.0] - 2026-11-12
+
+**The rest of the dashboard links the names it prints.**
+
+### Added
+- **Schedule board.** On each flight, the other end of the route opens that hub's schedule board when it is a United hub, the registration opens the aircraft, the aircraft type opens the Fleet tab showing that type (the type comes from the fleet database for that aircraft, not from the code printed), each airport in an FAA delay note opens that hub's weather card (or, for any other airport, the FAA status list), and ⚡ Starlink opens the Starlink tab. "ORD under FAA delay program" above the board opens O'Hare's weather card. On a phone, tapping a flight still opens its flight panel, and the names in it link with a mouse.
+- **Live.** In the search results, a United hub at either end of a route opens its schedule board and the registration opens the aircraft. "Check the Schedule tab" is a real link.
+- **Watched flights.** In the watched flights panel, each flight number opens its flight page, and "N of 20 slots used" opens My Flights.
+- **Stats.** Each aircraft type in Live Fleet Utilization and Average Fleet Age by Type opens the Fleet tab showing that type. Each hub in the Hub-to-Hub Flow Matrix, and a United hub at either end of a route in Top Routes Right Now, opens that hub's schedule board. "Flights Airborne" opens the Live tab, and "Fleet Utilization" opens the Fleet tab's Airborne Now list.
+- **Delays · Weather · Hubs.** A hub code beside an FAA program in the NAS status list takes you to that hub's weather card, and each weather card's code opens that hub's schedule board.
+- **Sources.** Each source's name opens the part of the dashboard that shows its data: Flightradar24 the Live map, AeroDataBox the Schedule tab, the fleet database the Fleet tab, the Starlink tracker the Starlink tab, the weather and radar sources the Weather tab, and the FAA's NAS status its list there.
+- **Fleet tab.** In All Aircraft, Airborne Now, the special aircraft and the United Express list, the registration opens the aircraft, the type shows that type in the tab, a United hub at either end of a route opens its schedule board, a United flight number opens its flight page, and the SL mark opens the Starlink tab. In the United Express list, each operator, each type and the Starlink count show just those aircraft, and pressed again show them all. In the Fleet Pulse, "fleet utilization" opens the Airborne Now list, and each type shows that type (with a mouse). The newest and oldest aircraft under the delivery timeline open the aircraft, and "Total" among the Starlink figures opens the Starlink tab.
+- **My Flights.** On each flight card, a United hub in the route, the aircraft's type and registration, "Starlink Confirmed", and the inbound flight and hubs under "Where's My Plane?" link to their homes, and so do the earlier flights in the aircraft's journey and the flights and hubs in a connection.
+- **Flight panel.** A United hub at either end of the route opens its schedule board, the type opens the Fleet tab, the registration opens the aircraft over the panel, and "Starlink confirmed" opens the Starlink tab.
+- **Aircraft details.** A new "All 737 MAX 9 in the fleet" link (for mainline aircraft) opens the Fleet tab showing every aircraft of that type. STARLINK opens the Starlink tab, a United Express aircraft's last United flight opens its flight page, and the flight number of an aircraft in the air is its own link beside "View on map".
+- **Flight lookup and delay explanation.** In the lookup (⌘K, "Look up … times and gates") and in "Explain Delay Risk", a United hub in the route opens its schedule board; in the lookup the type opens the Fleet tab and the registration opens the aircraft.
+
+### Changed
+- **A link inside a panel or dialog takes you there.** From the flight panel, the aircraft details, the flight lookup, the delay explanation, the brief, the watched flights panel or the live map's filters on a phone or tablet, a link to another part of the dashboard closes what it was in and lands where opening its address would, with keyboard focus there and a screen reader told where it went. A registration in the flight panel opens the aircraft over the panel instead, and closing the aircraft brings you back to it.
+- **A hub link from another tab opens the schedule board fresh.** Its filters, its "Ask the board" answer and its sort are cleared, and today's board scrolls to now, as when the address is opened directly. A hub link followed while the Schedule tab is showing keeps your filters and sort.
+
+### Fixed
+- **Back and Forward say where they went.** After a link that changed the tab, Back and Forward now announce the tab they return to and move keyboard focus to it, as the link did, and the tab's area shows a focus ring when it has keyboard focus. A place announced twice in a row is now said both times.
+- **Airborne Now matches its own count.** An aircraft taxiing with the feed's ground flag unset was listed as airborne without being counted. The list, the special aircraft and the aircraft details now use the rule the count uses, so that aircraft no longer reads "Airborne — View on map".
+- **The live map's filters on a phone or tablet stayed open** over the Schedule tab after "Check the Schedule tab", with keyboard focus trapped inside them. A link there now closes them.
+- **The brief's chips, in the brief sheet,** now move keyboard focus to the part of the dashboard they open.
+- **A Fleet tab reloaded after an error** no longer jumps back to a link's filter you had since changed.
+- **A link to a hub's weather card** also switched the Schedule tab to that hub's board when opened directly; it no longer does.
+- **Inbound flights on the Starlink departures board.** An Express flight known only by its callsign, such as RPA3568, was printed and linked as a United number; it is shown as sent now, without a link.
+- **Text painted like a link that was not one** is now the text's own colour: the NOW line and the "Flight Schedule" heading on the Schedule board, the counts in Top Routes Right Now, the headings on the Sources tab, "Where's My Plane?", "Check a Connection" and "Fleet Match:", the Fleet tab's route notes and average fleet age, and its Mainline and New (7d) Starlink figures. The hubs in the Hub-to-Hub Flow Matrix and the hub codes in the NAS status list were blue without doing anything; they are links now.
+
 ## [1.30.0] - 2026-11-12
 
 **The hub, tracker, Newark, fleet and flight pages link the names they print.**
