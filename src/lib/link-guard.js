@@ -65,11 +65,10 @@ const NAME_RE = /(?<![A-Za-z0-9])(?:UAL?[ -]\d{1,4}[A-Za-z]?|N-[1-9][0-9A-Z]{1,4
 /** @typedef {{ hubs: string[], tails: Set<string> }} KnownNames */
 /** @typedef {{ where: RegExp, reason: string }} AllowEntry */
 /**
- * What the view being checked is itself about: the hub of a Schedule board, the type of a Fleet
- * table filtered to one. A name equal to it prints plain by rule (a self-link), so it is not a
- * violation. Only `hub` is read today: the guard reads no type names yet, and `type` is accepted
- * so a caller can pass the view's whole identity once it does.
- * @typedef {{ hub?: string | null, type?: string | null }} SelfNames
+ * What the view being checked is itself about: the hub of a Schedule board. A hub code equal to it
+ * prints plain by rule (a self-link), so it is not a violation. No `type` yet: the guard reads no
+ * type names, and a field it ignored would excuse nothing when it starts to.
+ * @typedef {{ hub?: string | null }} SelfNames
  */
 
 /**
@@ -111,7 +110,7 @@ export function findNames(rows, known) {
  * @param {TextRun[]} rows
  * @param {KnownNames} known
  * @param {AllowEntry[]} allow
- * @param {SelfNames} [self]  the view's own hub (and type), when it has one.
+ * @param {SelfNames} [self]  the view's own hub, when it has one.
  * @returns {Array<{ text: string, kind: NameKind, where: string }>}
  */
 export function findUnlinkedNames(rows, known, allow, self = {}) {

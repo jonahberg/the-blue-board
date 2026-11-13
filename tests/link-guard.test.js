@@ -142,8 +142,8 @@ describe('findUnlinkedNames with self: the view\'s own name prints plain by rule
     expect(findUnlinkedNames([at('UA576 ORD N78501')], known, [], { hub: 'ORD' }).map((n) => n.text)).toEqual(['UA576', 'N78501']);
   });
 
-  it('no self, an empty or missing hub, or a type: the behaviour without it', () => {
-    for (const self of [undefined, {}, { hub: null }, { hub: '' }, { type: 'A319' }]) {
+  it('no self, or an empty or missing hub: the behaviour without it', () => {
+    for (const self of [undefined, {}, { hub: null }, { hub: '' }]) {
       expect(findUnlinkedNames([at('ORD')], known, [], self), JSON.stringify(self)).toEqual([{ text: 'ORD', kind: 'hub', where: board }]);
     }
   });
