@@ -15,8 +15,8 @@ import SourceDisclosure from './SourceDisclosure.astro';
 // Each takes a tone: 'entry' (the default) is the row's own link — the entry's page, in link
 // colour, one per row — and 'quiet' is every other link in the row: body colour with a muted
 // underline that takes the text colour on hover and focus. A primary link is 44 px on touch and
-// relaxes for a mouse at md (`touchRowLink`, the fleet index's pattern: it reaches into the cell's
-// padding, so the row does not grow), so an 89-row table keeps its height with a mouse.
+// relaxes for a mouse at md (`touchRowLink`, after the fleet index's pattern), so an 89-row table
+// keeps its height with a mouse.
 //
 // BELOW `md` THE SAME TABLE IS A STACK OF CARDS (the dashboard's phone schedule board solves the
 // same problem with a two-line row): six or seven columns scrolled sideways at 390 px and every
@@ -64,11 +64,15 @@ const toneClass = (tone: Tone) =>
     ? 'text-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground focus-visible:decoration-foreground'
     : 'text-primary underline-offset-2 hover:underline';
 /**
- * src/pages/fleet/index.astro `touchRowLink`: 44 px on touch, the text's own height for a mouse;
- * plus a 44 px minimum width on touch, because a three-letter code ("ORD") is 20 px wide.
+ * After src/pages/fleet/index.astro `touchRowLink`: 44 px on touch, the text's own height for a
+ * mouse at md, the text level with the row's other cells (it reaches up into the cell's padding).
+ * Two changes for these tables: a 44 px minimum width, because a three-letter code ("ORD") is 20 px
+ * wide; and it reaches UP only (`-mt-1.5`, not `-my-1.5`), because a project name wraps to three or
+ * four lines in a narrow column, and a box pulled down as well ran 5 px into the "airport builds"
+ * line under it (measured at 820 px with the touch classes). A touch row is a few pixels taller.
  */
 const touchRowLink =
-  'inline-flex min-h-11 min-w-11 items-start -my-1.5 pt-1.5 pointer-fine:md:my-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:min-w-0 pointer-fine:md:pt-0';
+  'inline-flex min-h-11 min-w-11 items-start -mt-1.5 pt-1.5 pointer-fine:md:mt-0 pointer-fine:md:inline pointer-fine:md:min-h-0 pointer-fine:md:min-w-0 pointer-fine:md:pt-0';
 
 // From md to lg the columns are tight (a 734 px table at 768): headers and link text may wrap
 // there, and keep to one line from lg.

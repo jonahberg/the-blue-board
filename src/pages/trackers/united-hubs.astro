@@ -210,7 +210,9 @@ const tableRows = sortedProjects.map((p) => {
 // its status badge, then its hub and type, then the date and scale, then the evidence.
 const columns = [
   { key: 'project', label: 'Project', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-1' },
-  { key: 'hub', label: 'Hub', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-2 max-md:flex max-md:items-center max-md:gap-x-2' },
+  // Baseline, not centre: the hub code's 44 px touch box holds its text at the top, the "IAH
+  // projects →" link's holds it in the middle, and the two words must sit on one line.
+  { key: 'hub', label: 'Hub', sortable: true, phone: 'max-md:col-start-1 max-md:row-start-2 max-md:flex max-md:items-baseline max-md:gap-x-2' },
   { key: 'type', label: 'Type', sortable: true, phone: 'max-md:col-start-2 max-md:row-start-2 max-md:self-center max-md:text-right' },
   { key: 'status', label: 'Status', sortable: true, phone: 'max-md:col-start-2 max-md:row-start-1 max-md:justify-self-end' },
   { key: 'date', label: 'Opened / target', sortable: true, phoneLabel: 'Opened / target' },
