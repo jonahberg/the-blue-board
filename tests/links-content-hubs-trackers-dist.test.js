@@ -245,7 +245,9 @@ describe.skipIf(!hasDist)('tracker pages', () => {
  * is no page (a download, a dashboard address), whose fragments are not checked.
  */
 function linkFaults(html, pagePath, isBuilt, idsAt = () => null) {
-  const markup = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
+  // Comments, scripts and styles are not markup: a tag that starts inside one is passed over.
+  const notMarkup = [...html.matchAll(/<!--[\s\S]*?-->|<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi)].map((m) => [m.index, m.index + m[0].length]);
+  const inMarkup = (at) => !notMarkup.some(([from, to]) => at >= from && at < to);
   const attr = (attrs, name) => {
     const m = attrs.match(new RegExp(`(?:^|\\s)${name}(?:\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+)))?(?=\\s|/|$)`, 'i'));
     return m ? (m[1] ?? m[2] ?? m[3] ?? '') : null;
@@ -255,7 +257,9 @@ function linkFaults(html, pagePath, isBuilt, idsAt = () => null) {
   const ORIGIN = 'https://theblueboard.co';
   const depth = { a: 0, button: 0 };
   const out = [];
-  for (const [, close, rawName, attrs] of markup.matchAll(/<(\/?)([a-zA-Z][\w-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g)) {
+  for (const tagMatch of html.matchAll(/<(\/?)([a-zA-Z][\w-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g)) {
+    if (!inMarkup(tagMatch.index)) continue;
+    const [, close, rawName, attrs] = tagMatch;
     const name = rawName.toLowerCase();
     if (name !== 'a' && name !== 'button') continue;
     if (close) {
