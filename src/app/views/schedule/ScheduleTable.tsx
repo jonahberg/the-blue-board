@@ -624,37 +624,51 @@ export const ScheduleTable = forwardRef<
                       ? (() => {
                           // Starlink once, with the phone row's Zap mark (schedule-reg-line.js).
                           const parts = regDetailParts(row.fleet.enrich);
-                          // The row's one Starlink link (`starlinkHref`, the first mention; the
-                          // Fleet cell's repeat stays plain). `-m-1 p-1`: the line truncates, and
-                          // its clip would otherwise cut the link's focus ring.
+                          const at = row.starlinkHref ? parts.findIndex((part) => part.starlink) : -1;
+                          if (at < 0) {
+                            return (
+                              <span
+                                className="block truncate text-[9px] text-muted-foreground"
+                                title={regDetailText(parts)}
+                              >
+                                {parts.map((part, i) => (
+                                  <span key={part.text}>
+                                    {i > 0 ? ' · ' : null}
+                                    {part.starlink ? (
+                                      <span className="text-bb-starlink">
+                                        <Zap aria-hidden="true" className="mr-0.5 inline size-2.5 align-[-1px]" />
+                                        {part.text}
+                                      </span>
+                                    ) : (
+                                      part.text
+                                    )}
+                                  </span>
+                                ))}
+                              </span>
+                            );
+                          }
+                          // The row's one Starlink link (`starlinkHref`, its first mention; the
+                          // Fleet cell's repeat stays plain). It never truncates: the words either
+                          // side of it do, so a narrow cell clips the seats or the operator, not
+                          // the link (an Express line ends in Starlink).
+                          const before = parts.slice(0, at).map((part) => part.text).join(' · ');
+                          const after = parts.slice(at + 1).map((part) => part.text).join(' · ');
                           return (
                             <span
-                              className="-m-1 block truncate p-1 text-[9px] text-muted-foreground"
+                              className="flex min-w-0 items-center whitespace-pre text-[9px] text-muted-foreground"
                               title={regDetailText(parts)}
                             >
-                              {parts.map((part, i) => (
-                                <span key={part.text}>
-                                  {i > 0 ? ' · ' : null}
-                                  {part.starlink ? (
-                                    <span className="text-bb-starlink">
-                                      {row.starlinkHref ? (
-                                        <StarlinkLink
-                                          href={row.starlinkHref}
-                                          label={part.text}
-                                          iconClassName="mr-0.5 inline size-2.5 align-[-1px]"
-                                        />
-                                      ) : (
-                                        <>
-                                          <Zap aria-hidden="true" className="mr-0.5 inline size-2.5 align-[-1px]" />
-                                          {part.text}
-                                        </>
-                                      )}
-                                    </span>
-                                  ) : (
-                                    part.text
-                                  )}
-                                </span>
-                              ))}
+                              {before ? <span className="min-w-0 truncate">{before}</span> : null}
+                              <span className="shrink-0 text-bb-starlink">
+                                {before ? <span className="text-muted-foreground"> · </span> : null}
+                                <StarlinkLink
+                                  href={row.starlinkHref!}
+                                  label={parts[at].text}
+                                  iconClassName="mr-0.5 inline size-2.5 align-[-1px]"
+                                />
+                                {after ? <span className="text-muted-foreground"> · </span> : null}
+                              </span>
+                              {after ? <span className="min-w-0 shrink-[100] truncate">{after}</span> : null}
                             </span>
                           );
                         })()

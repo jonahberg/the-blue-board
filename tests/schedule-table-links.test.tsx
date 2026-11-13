@@ -177,6 +177,17 @@ describe('the desktop Schedule row links what it names', () => {
     expect(row.querySelector('a[href="/#starlink"]')!.closest('td')).toBe(linkNamed(row, 'N37502')!.closest('td'));
   });
 
+  it('the Starlink link never sits in a truncating line: an Express line ends in it, and a clip would hide it', () => {
+    renderTable([
+      linkedRow({ fleet: { badge: 'E175', starlink: true, enrich: 'E175 · SkyWest Airlines · ⚡ Starlink', source: 'express' } }),
+    ]);
+    const link = document.querySelector<HTMLElement>('a[href="/#starlink"]')!;
+    expect(link.textContent).toBe('Starlink');
+    expect(link.closest('.truncate')).toBeNull();
+    // The words before it still print, and they are what truncates.
+    expect(link.closest('[title]')!.textContent).toBe('E175 · SkyWest Airlines · Starlink');
+  });
+
   it('a type the tail does not decide, a non-hub end and a row with no Starlink stay plain', () => {
     renderTable([
       linkedRow({
