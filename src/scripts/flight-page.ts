@@ -337,6 +337,8 @@ if (root) {
         legs,
         a.legs.map((leg) => {
           const li = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
+          // How a refresh finds this leg again for a keyboard reader (flight-link.ts).
+          li.dataset.key = leg.key;
           // The aircraft's other flights link to their pages; this page's own number stays text.
           setFlightLink(q<HTMLElement>(li, '[data-f="flight"]')!, leg.flight, ident);
           q<HTMLElement>(li, '[data-f="route"]')!.replaceChildren(...routeNodes(leg.route, HIT_BOX_NARROW));

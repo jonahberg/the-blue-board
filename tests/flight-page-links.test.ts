@@ -206,6 +206,43 @@ describe.skipIf(!hasDist)('flight page: hubs, tail, type and Starlink are links'
     delete (document as any).hidden;
   });
 
+  // A newer leg joining the top of "Its recent flights" shifts the count of ORD links above the
+  // reader's; each leg carries a key (flight, day, origin), so focus stays on that leg's ORD.
+  it('a refresh keeps focus on the same leg\'s hub when a newer leg to that hub joins the list', async () => {
+    const legs = (...rows: ReturnType<typeof leg>[]) => ({ reg: 'N686UA', rows });
+    const ua200 = leg('UA200', 'ORD', 'LAX', DEP - 1000, 240);
+    const ua300 = leg('UA300', 'LHR', 'ORD', DEP - 1440, 480);
+    const ua400 = leg('UA400', 'DEN', 'ORD', DEP - 400, 180);
+    mountWith({ tail: legs(ua200, ua300), aircraft: ua929Aircraft });
+    await load();
+    const flightOf = (a: Element) => a.closest('li')!.querySelector('[data-f="flight"]')!.textContent;
+    const ordLinks = () => [...card().querySelectorAll<HTMLAnchorElement>('[data-f="legs"] a[href="/hubs/ord"]')];
+    expect(ordLinks().map(flightOf)).toEqual(['UA200', 'UA300']);
+    const before = ordLinks()[1];
+    before.focus();
+
+    const { row } = scheduledCase();
+    row.aircraft.registration = 'N686UA';
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).startsWith('/api/flight?')) return Response.json(payloadFor(row, { tail: legs(ua400, ua200, ua300), aircraft: ua929Aircraft } as any));
+      return new Response('{}', { status: 404 });
+    }));
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      vi.setSystemTime((D - 5 * 3600 + 120) * 1000); // past half the refresh interval: a fresh read
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.waitFor(() => expect(ordLinks().map(flightOf)).toEqual(['UA400', 'UA200', 'UA300']));
+      expect(before.isConnected).toBe(false);
+      expect(flightOf(document.activeElement!)).toBe('UA300');
+      expect(document.activeElement!.getAttribute('href')).toBe('/hubs/ord');
+      expect(focusSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      focusSpy.mockRestore();
+      delete (document as any).hidden;
+    }
+  });
+
   it('a flight we do not have: the last route it flew links its hub end in the header', async () => {
     mountShell();
     vi.useFakeTimers({ toFake: ['Date'], now: (D - 5 * 3600) * 1000 });

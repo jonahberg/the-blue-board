@@ -50,25 +50,55 @@ export function setFlightLink(a: Element, raw: string, here = ''): void {
   else a.removeAttribute('href');
 }
 
+const linksIn = (root: Element) => [...root.querySelectorAll<HTMLAnchorElement>('a[href]')];
+
+/**
+ * The link in the refreshed row with the same `data-key` that stands where `active` stood in its
+ * row: the same `data-f` field when the link has one, otherwise the same occurrence of its address
+ * in the row. Null when `active` sits in no keyed row of `container`, when that row has gone, or
+ * when the row no longer has that link.
+ */
+function sameLinkInSameRow(active: HTMLAnchorElement, container: Element, nodes: Node[]): HTMLAnchorElement | null {
+  const row = active.closest<HTMLElement>('[data-key]');
+  if (!row || row === container || !container.contains(row)) return null;
+  const key = row.dataset.key;
+  const fresh = nodes
+    .flatMap((n) => (n instanceof HTMLElement ? [n, ...n.querySelectorAll<HTMLElement>('[data-key]')] : []))
+    .find((el) => el.dataset.key === key);
+  if (!fresh) return null;
+  const field = active.dataset.f;
+  if (field) return linksIn(fresh).find((a) => a.dataset.f === field) ?? null;
+  const href = active.getAttribute('href');
+  const n = linksIn(row).filter((a) => a.getAttribute('href') === href).indexOf(active);
+  return linksIn(fresh).filter((a) => a.getAttribute('href') === href)[n] ?? null;
+}
+
 /**
  * `container.replaceChildren(...nodes)` for a list that refreshes on a timer, without throwing a
- * keyboard reader's focus back to the top of the page: when focus was on a link inside the old
- * list, it moves to the link with the same address in the new one (or to the list's first link,
- * so it stays inside the board when that flight has rolled off).
+ * keyboard reader's focus off their place. Focus is set at most once, straight on its target, so a
+ * screen reader hears one link.
  *
- * Addresses can repeat in one list (a hub at the end of one leg and the start of the next, four
- * strip rows into SFO), so "the same link" is the same occurrence: the n-th link with that address,
- * as it was the n-th before; the first one when the new list has fewer.
+ * Rows that carry `data-key` (a departure on the hub board, an aircraft in the fleet strip, a leg on
+ * the flight page; each key the same on every refresh) are found again by key: focus goes to the
+ * same link in the same row, however the rows around it moved. When that row has left the list,
+ * or no longer has that link, or the list has no keys, the address decides: the n-th link with
+ * that address, as it was the n-th before (addresses repeat: a hub ends one leg and starts the
+ * next, four strip rows fly into SFO); else the first link with it; else the list's first link, so
+ * focus stays in the list.
  */
 export function replaceChildrenKeepingFocus(container: Element, nodes: Node[]): void {
   const active = document.activeElement;
-  const hadFocus = active instanceof HTMLAnchorElement && container.contains(active) ? active.getAttribute('href') : null;
-  const sameHref = (a: Element) => a.getAttribute('href') === hadFocus;
-  const occurrence = hadFocus === null ? 0 : [...container.querySelectorAll('a[href]')].filter(sameHref).indexOf(active as Element);
+  if (!(active instanceof HTMLAnchorElement) || !container.contains(active)) {
+    container.replaceChildren(...nodes);
+    return;
+  }
+  const href = active.getAttribute('href');
+  const sameHref = (a: Element) => a.getAttribute('href') === href;
+  const occurrence = linksIn(container).filter(sameHref).indexOf(active);
+  const inRow = sameLinkInSameRow(active, container, nodes);
   container.replaceChildren(...nodes);
-  if (hadFocus === null) return;
-  const links = [...container.querySelectorAll<HTMLAnchorElement>('a[href]')];
+  const links = linksIn(container);
   const matches = links.filter(sameHref);
-  const next = matches[occurrence] ?? matches[0] ?? links[0];
+  const next = inRow ?? matches[occurrence] ?? matches[0] ?? links[0];
   next?.focus({ preventScroll: true });
 }

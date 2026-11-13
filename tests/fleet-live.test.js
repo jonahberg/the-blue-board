@@ -56,6 +56,9 @@ describe('airborneOfType', () => {
     expect(result.airborne).toBe(3);
     expect(result.flights.map((f) => f.ident)).toEqual(['UA2', 'UA857', 'UA14']);
     expect(result.flights[0]).toMatchObject({ origin: 'EWR', dest: 'TLV', reg: t3 });
+    // Each row's key is its tail (counted once, so unique in the strip): how a refresh finds the
+    // reader's row again whatever its flight number or place in the list.
+    expect(result.flights.map((f) => f.key)).toEqual([t3, t1, t2]);
   });
 
   it('a parked aircraft is on the ground, not airborne', () => {

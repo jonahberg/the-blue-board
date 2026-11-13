@@ -92,11 +92,11 @@ export function fleetLiveRowLinks({ ident, origin, dest, reg }) {
  * @param {Iterable<string>} tails  the type's registrations (the page's registry rows).
  * @param {number} [limit]
  * @returns {{airborne: number, onGround: number,
- *   flights: Array<{ident: string, origin: string, dest: string, reg: string, href: string,
+ *   flights: Array<{ident: string, origin: string, dest: string, reg: string, key: string, href: string,
  *     links: ReturnType<typeof fleetLiveRowLinks>}>}|null}
  *   null when the feed parsed to nothing — a failed read (feed-health.js), never "none airborne".
  *   `flights` lists airborne ones with a known route first, then by flight number. `href` is the
- *   row's live-map link (`links.map`).
+ *   row's live-map link (`links.map`); `key` the row's tail, unique in the strip.
  */
 export function airborneOfType(payload, tails, limit = FLEET_LIVE_ROWS) {
   const parsed = parseFr24Feed(payload);
@@ -126,7 +126,9 @@ export function airborneOfType(payload, tails, limit = FLEET_LIVE_ROWS) {
         reg: normalizeTail(f.reg),
       };
       const links = fleetLiveRowLinks(row);
-      return { ...row, href: links.map, links };
+      // `key`: the tail, counted once above, so unique in the strip. A refresh finds the reader's
+      // row again by it (src/scripts/flight-link.ts replaceChildrenKeepingFocus).
+      return { ...row, key: row.reg, href: links.map, links };
     });
 
   return { airborne: airborne.length, onGround, flights: listed };

@@ -71,6 +71,8 @@ if (root) {
       const li = template?.content.firstElementChild?.cloneNode(true) as HTMLElement | undefined;
       if (!li) return null;
       const { links } = flight;
+      // The tail: how a refresh finds this row again for a keyboard reader (flight-link.ts).
+      li.dataset.key = flight.key;
       const field = (name: string) => li.querySelector<HTMLElement>(`[data-f="${name}"]`);
       // The number links to its flight page; '—' (no number in the feed) stays text (no href).
       const ident = field('ident');

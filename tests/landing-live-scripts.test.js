@@ -306,6 +306,44 @@ describe.skipIf(!hasDist)('src/scripts/fleet-live.ts on /fleet/787-9-dreamliner'
     expect(hub.className).not.toContain('text-primary');
   });
 
+  // Rows re-cut on every refresh, and hubs repeat across them: "the third link to /hubs/sfo" is a
+  // different row once an earlier SFO row has landed. Each row carries its tail as its key.
+  it('a refresh keeps keyboard focus on the same row\'s hub when an earlier row to that hub has landed', async () => {
+    mountPage('fleet/787-9-dreamliner.html');
+    const tails = document.querySelector('[data-fleet-live]').dataset.tails.split(',');
+    const row = (reg, flight, from, to) => ['A00000', 41.9, -87.9, 90, 35000, 450, '', 'T-KORD1', 'B789', reg, 1791000000, from, to, flight, 0, 0, `UAL${flight.slice(2)}`, 0, 'UAL'];
+    const before = { a: row(tails[0], 'UA1', 'SFO', 'NRT'), b: row(tails[1], 'UA5', 'SFO', 'LHR'), c: row(tails[2], 'UA9', 'EWR', 'SFO') };
+    const after = { b: row(tails[1], 'UA5', 'SFO', 'LHR'), c: row(tails[2], 'UA9', 'EWR', 'SFO'), d: row(tails[3], 'UA20', 'DEN', 'SFO') };
+    const fetchMock = vi.fn(async () => jsonResponse(before));
+    vi.stubGlobal('fetch', fetchMock);
+    await import('../src/scripts/fleet-live.ts');
+    await vi.waitFor(() => expect(strip().dataset.state).toBe('live'));
+
+    const identOf = (a) => a.closest('li').querySelector('[data-f="ident"]').textContent;
+    const sfo = () => [...strip().querySelectorAll('[data-fl-list] a[href="/hubs/sfo"]')];
+    expect(sfo().map(identOf)).toEqual(['UA1', 'UA5', 'UA9']);
+    const ua9 = sfo()[2];
+    ua9.focus();
+
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      fetchMock.mockImplementation(async () => jsonResponse(after));
+      const calls = fetchMock.mock.calls.length;
+      vi.setSystemTime((NOW_SEC + 2 * 60) * 1000);
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(calls));
+      await vi.waitFor(() => expect(sfo().map(identOf)).toEqual(['UA5', 'UA9', 'UA20']));
+
+      expect(ua9.isConnected).toBe(false);
+      expect(document.activeElement.getAttribute('href')).toBe('/hubs/sfo');
+      expect(identOf(document.activeElement)).toBe('UA9');
+      expect(focusSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      focusSpy.mockRestore();
+    }
+  });
+
   it('an empty feed is a failed read: static line, no "0 airborne"', async () => {
     mountPage('fleet/787-9-dreamliner.html');
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ full_count: 0, version: 4 })));

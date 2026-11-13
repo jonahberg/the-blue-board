@@ -117,7 +117,7 @@ if (root) {
     const li = template?.content.firstElementChild?.cloneNode(true) as HTMLElement | undefined;
     if (!li) return null;
     // The departure's own key (ident + scheduled time + route + tail), stable across refreshes:
-    // how a refresh finds the reader's place again (replaceRowsKeepingFocus).
+    // how a refresh finds the reader's place again (flight-link.ts replaceChildrenKeepingFocus).
     li.dataset.key = row.key;
     const f = (name: string) => li.querySelector<HTMLElement>(`[data-f="${name}"]`);
 
@@ -185,30 +185,6 @@ if (root) {
     return li;
   };
 
-  /**
-   * The board refreshes every two minutes and re-clones every row. A keyboard reader keeps their
-   * place: focus goes back to the same link (`data-f`: the flight number or the destination) in the
-   * same departure (`data-key`). The address alone cannot say which row it was, since two
-   * departures to one hub link the same hub page (/hubs/ewr), and the count of them shifts when an
-   * earlier one rolls off. Focus is set once, straight on that link, so a screen reader hears one
-   * link and not a wrong row first. When that departure has gone, flight-link.ts's own fallback
-   * (the same occurrence of the address, else the list's first link) stands.
-   */
-  const replaceRowsKeepingFocus = (container: HTMLElement, nodes: HTMLElement[]) => {
-    const active = document.activeElement;
-    const from = active instanceof HTMLElement && container.contains(active) ? active : null;
-    const key = from?.closest<HTMLElement>('li[data-key]')?.dataset.key;
-    const field = from?.dataset.f;
-    const row = key && field ? nodes.find((li) => li.dataset.key === key) : undefined;
-    const same = row?.querySelector<HTMLElement>(`[data-f="${field}"][href]`);
-    if (same) {
-      container.replaceChildren(...nodes);
-      same.focus({ preventScroll: true });
-      return;
-    }
-    replaceChildrenKeepingFocus(container, nodes);
-  };
-
   const render = () => {
     if (!payload || payload.status !== 'ok') {
       showUnavailable();
@@ -221,8 +197,9 @@ if (root) {
       return;
     }
     const items = rows.map(fillRow).filter((li): li is HTMLElement => li !== null);
-    // The board refreshes every two minutes; a reader tabbing through its links keeps their place.
-    if (list) replaceRowsKeepingFocus(list, items);
+    // The board refreshes every two minutes; a reader tabbing through its links keeps their place:
+    // the same link (`data-f`) in the same departure (`data-key`), focused once.
+    if (list) replaceChildrenKeepingFocus(list, items);
     renderStamp(payload, nowSec);
     renderTruth(payload);
     if (fallback) fallback.hidden = true;
