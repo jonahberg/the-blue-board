@@ -28,7 +28,10 @@ import {
   myFlightTimes,
   seatConfigString,
 } from '@/lib/my-flights.js';
+import { STARLINK_TAB_HREF, routeEndLabel } from '@/lib/name-links.js';
 import type { FleetAircraft, Flight, FlightTimes, WatchedFlight } from '../../data/types';
+import { DashLink } from '../../features/DashLink';
+import { HubLink, TailLink, TypeLink } from '../../features/EntityLinks';
 import { FlightLink } from '../../features/FlightLink';
 import { JargonTerm } from '../../features/JargonTerm';
 import { JourneyChain } from './JourneyChain';
@@ -52,6 +55,11 @@ export type MyFlightCardModel = {
   reg: string;
   liveFlight: Flight | null;
   aircraft: FleetAircraft | undefined;
+  /**
+   * The fleet type the card's aircraft type links to (`fleetTypeCodeFor`): by the tail when there
+   * is one, otherwise only a provider string that is exactly a fleet type (`providerTypeText`).
+   */
+  typeCode: string | null;
   isStarlink: boolean;
   /** The same tail, inbound to our origin, while we are still on the ground. */
   inbound: Flight | null;
@@ -61,6 +69,22 @@ export type MyFlightCardModel = {
   riskNA: boolean;
   explainContext: Record<string, unknown> | null;
 };
+
+/**
+ * One end of the card's route: "Chicago (ORD)", or the code alone. A hub code links to its
+ * Schedule board; it is 44 px tall on touch (`hit="inline"`) rather than carrying a box that would
+ * reach up over the flight number's.
+ */
+function RouteEnd({ code, city }: { code: string; city: string }) {
+  const label = routeEndLabel(code, city);
+  return label.city ? (
+    <>
+      {label.city} (<HubLink code={label.code} hit="inline" />)
+    </>
+  ) : (
+    <HubLink code={label.code} hit="inline" />
+  );
+}
 
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -98,6 +122,7 @@ export function FlightCard({
     reg,
     liveFlight,
     aircraft,
+    typeCode,
     isStarlink,
     inbound,
     journeySegments,
@@ -138,10 +163,10 @@ export function FlightCard({
               the line printed "() → ()"; it waits as a skeleton instead, and says nothing once
               the lookup has given up. */}
           {origCode || destCode ? (
-            <div className="truncate text-[11px] text-muted-foreground">
-              {/* A city we have no name for falls back to its code: "EUG", not "EUG (EUG)". */}
-              {origCity && origCity !== origCode ? `${origCity} (${origCode || '?'})` : origCode || '?'} →{' '}
-              {destCity && destCity !== destCode ? `${destCity} (${destCode || '?'})` : destCode || '?'}
+            // A city we have no name for falls back to its code: "EUG", not "EUG (EUG)". Not
+            // `truncate`: its clip would cut the hub links' focus rings; a long route wraps.
+            <div className="text-[11px] text-muted-foreground">
+              <RouteEnd code={origCode} city={origCity} /> → <RouteEnd code={destCode} city={destCity} />
             </div>
           ) : !hasPayload && !terminalFailure ? (
             <Skeleton className="mt-1 h-3 w-36" />
@@ -229,26 +254,27 @@ export function FlightCard({
         {aircraft ? (
           <dl className="grid grid-cols-2 gap-3">
             <Cell label="Aircraft">
-              {aircraft.t}{' '}
-              {/* `inline-flex min-h-11` below `md:`: an inline 14 px link is a real
-                  target on a phone, not decoration, even though the full-size
-                  "Aircraft Details" button below does the same thing. */}
-              <button
-                type="button"
-                className="inline-flex min-h-11 items-center text-[10px] underline decoration-dotted underline-offset-2 hover:text-primary pointer-fine:md:min-h-0"
-                onClick={() => onAircraftDetail(reg)}
-              >
-                {reg}
-              </button>
+              {/* The type links to the Fleet tab filtered to it, by this tail's fleet type; the tail
+                  to its aircraft dialog. Both quiet (the card is about the flight) and 44 px tall on
+                  touch (`hit="inline"`), side by side without boxes that could overlap. */}
+              <TypeLink typeCode={typeCode} hit="inline">
+                {aircraft.t}
+              </TypeLink>{' '}
+              <TailLink reg={reg} tone="quiet" hit="inline" className="text-[10px]" />
             </Cell>
             <Cell label="Config">
               <span className="text-xs">{seatConfigString(aircraft)}</span>
               {isStarlink ? (
+                // A quiet link to the Starlink tab: the badge is not a control of its own, so the
+                // badge itself is the link. `overflow-visible` keeps its touch box from being clipped.
                 <Badge
+                  asChild
                   variant="outline"
-                  className="ml-1 border-bb-starlink/40 bg-bb-starlink/15 text-[9px] font-normal text-bb-starlink"
+                  className="ml-1 overflow-visible border-bb-starlink/40 bg-bb-starlink/15 text-[9px] font-normal text-bb-starlink"
                 >
-                  <Zap aria-hidden="true" /> Starlink Confirmed
+                  <DashLink href={STARLINK_TAB_HREF}>
+                    <Zap aria-hidden="true" /> Starlink Confirmed
+                  </DashLink>
                 </Badge>
               ) : (
                 <StarlinkBadge flight={entry.flight} forecast={false} />
@@ -259,7 +285,11 @@ export function FlightCard({
           <div>
             <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Aircraft</dt>
             <dd className="mt-0.5 font-mono text-sm">
-              {td.aircraft}
+              {/* The provider's own type text: it links only by a tail the fleet database knows, or
+                  when it is exactly a fleet type (never an ICAO code such as A320 or B739). */}
+              <TypeLink typeCode={typeCode} hit="inline">
+                {td.aircraft}
+              </TypeLink>
               <StarlinkBadge flight={entry.flight} forecast />
             </dd>
             {/* Say honestly that we do not know the metal, rather than implying a lookup. */}
@@ -294,11 +324,19 @@ export function FlightCard({
             />
           ) : inbound ? (
             <div className="rounded-md border border-primary/40 bg-primary/5 p-2.5 text-[11px] leading-relaxed">
-              <h3 className="mb-1 text-[10px] font-medium uppercase tracking-wide text-primary">
+              {/* Body colour: a heading, not a link. */}
+              <h3 className="mb-1 text-[10px] font-medium uppercase tracking-wide text-foreground">
                 Where&rsquo;s My Plane?
               </h3>
-              Your aircraft is currently operating <strong>{inbound.flightIATA}</strong> from{' '}
-              {inbound.origin} → {origCode} at{' '}
+              {/* The inbound number links to its flight page when it is a United number (an
+                  operating callsign stays plain), and its hub ends to their boards. Quiet, a second
+                  name in a card about your flight; 44 px tall on touch, since a sentence that wraps
+                  would stack touch boxes over each other. */}
+              Your aircraft is currently operating{' '}
+              <strong>
+                <FlightLink ident={inbound.flightIATA} tone="quiet" hit="inline" />
+              </strong>{' '}
+              from <HubLink code={inbound.origin} hit="inline" /> → <HubLink code={origCode} hit="inline" /> at{' '}
               {Math.round(inbound.alt * 3.28084).toLocaleString()} ft
             </div>
           ) : (
