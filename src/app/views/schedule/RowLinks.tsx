@@ -14,16 +14,9 @@ import { Fragment } from 'react';
 
 import { cn } from '@/lib/utils';
 import { DashLink } from '../../features/DashLink';
-import { HubLink, HubStatusLink } from '../../features/EntityLinks';
+import { FINE_POINTER_ONLY, HubLink, HubStatusLink } from '../../features/EntityLinks';
 import type { LinkHit } from '../../features/link-style';
 import type { FaaPart, RouteEnd } from './useBoardModel';
-
-/**
- * `finePointerOnly` for a link built on `DashLink`, which has no such prop: the classes the
- * per-kind links in features/EntityLinks.tsx apply (not exported there), so a Starlink link in a
- * phone row behaves exactly like the hub, tail and type links beside it. Used with `hit="none"`.
- */
-export const FINE_POINTER_ONLY = 'relative pointer-coarse:pointer-events-none pointer-coarse:no-underline pointer-coarse:text-inherit';
 
 /** Above a row's stretched button, for a mouse (the row's own tap target on touch). */
 const ABOVE_ROW = 'z-10';

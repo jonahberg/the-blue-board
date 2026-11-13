@@ -37,7 +37,12 @@ import { cn } from '@/lib/utils';
 import { DashLink } from './DashLink';
 import type { LinkHit, LinkTone } from './link-style';
 
-const FINE_POINTER_ONLY = 'relative pointer-coarse:pointer-events-none pointer-coarse:no-underline pointer-coarse:text-inherit';
+/**
+ * The classes `finePointerOnly` applies. Exported for a link built on `DashLink`, which has no such
+ * prop (a Schedule phone row's Starlink link), so it behaves exactly like the per-kind links beside
+ * it; use it with `hit="none"`.
+ */
+export const FINE_POINTER_ONLY = 'relative pointer-coarse:pointer-events-none pointer-coarse:no-underline pointer-coarse:text-inherit';
 
 type EntityLinkProps = {
   tone?: LinkTone;
