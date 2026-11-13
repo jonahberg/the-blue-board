@@ -289,6 +289,14 @@ export default function FleetView() {
     express: expressDb.length,
   };
 
+  // Stable, so the memoised All Aircraft table (about 1,150 rows of links) skips the re-render
+  // every feed poll and UI store change gives this view.
+  const sortFleetTable = useCallback(
+    (col: FleetSortCol) =>
+      setFleetSort((current) => (current.col === col ? { col, asc: !current.asc } : { col, asc: true })),
+    [],
+  );
+
   // ── Cross-zone: a variant card IS the type filter ───────────────────────────────────
   const selectTypeFromCard = useCallback((type: string) => {
     setTypeFilter((current) => {
@@ -676,18 +684,15 @@ export default function FleetView() {
             <FleetTable
               rows={tableRows}
               sort={fleetSort}
-              onSort={(col) =>
-                setFleetSort((current) =>
-                  current.col === col ? { col, asc: !current.asc } : { col, asc: true },
-                )
-              }
+              onSort={sortFleetTable}
               starlinkTails={starlink.tails}
               special={special}
               filtersActive={filtersActive}
               onClearFilters={clearFilters}
               hiddenHint={hiddenHint}
               onShowHidden={showHidden}
-              onOpenAircraft={openAircraft}
+              fleetByReg={fleetByReg}
+              typeFilter={typeFilter}
             />
           </TabsContent>
 

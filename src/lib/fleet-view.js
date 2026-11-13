@@ -10,6 +10,7 @@
 
 import { getPhase } from './flight-phase.js';
 import { matchAircraft } from './fleet-match.js';
+import { fleetTypeCodeFor } from './fleet-type-link.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from './fleet-utils.js';
 import { CABIN_COLORS, SEAT_BAR_COLORS } from './special-aircraft.js';
 
@@ -271,15 +272,36 @@ export function buildSeatBar(seats, tot) {
 }
 
 /**
+ * The type a Fleet-tab row links to (the Fleet tab filtered to it, `TypeLink`): the fleet
+ * database's type for the row's tail (`fleetTypeCodeFor`), or null when the row has none or when
+ * the list it sits in is already filtered to that type. There the link would lead where the reader
+ * already is, so the type prints as plain text (the links plan, ruling 1).
+ *
+ * @param {unknown} reg  the row's registration.
+ * @param {Record<string, {t?: string}>|null|undefined} fleetByReg
+ * @param {string} activeType  the type filter of the list the row is in ('' for none, or for a
+ *   list the type filter does not narrow).
+ * @returns {string|null}  a fleet database type code, e.g. '737 MAX 9'.
+ */
+export function fleetRowTypeLink(reg, fleetByReg, activeType) {
+  const typeCode = fleetTypeCodeFor({ reg, fleetByReg });
+  return typeCode && typeCode !== activeType ? typeCode : null;
+}
+
+/**
  * The "Airborne Now" table: every live flight the fleet database can name, with the type and
  * search filters from the shared controls applied.
  *
  * Flights that do not resolve to a mainline airframe are dropped, not shown as blanks — this
  * table is the fleet's view of the sky, and a United Express regional is not in the fleet.
  *
+ * Each row carries its route ends as printed (`origin`, `dest`; '???' when the feed has none), so
+ * the view links the hub ends without parsing `route`, and the type it links to (`typeLink`,
+ * `fleetRowTypeLink` under the shared type filter).
+ *
  * @param {Array<Object>} flights
  * @param {{fleetByReg: Record<string, Object>, starlinkTails: Set<string>, special: Map<string, {name: string, type: string}>, type?: string, search?: string}} deps
- * @returns {Array<{reg: string, type: string, flight: string, route: string, alt: string, altRaw: number, phase: string, starlink: boolean, special: {name: string}|null, icao24: string}>}
+ * @returns {Array<{reg: string, type: string, typeLink: string|null, flight: string, route: string, origin: string, dest: string, alt: string, altRaw: number, phase: string, starlink: boolean, special: {name: string}|null, icao24: string}>}
  */
 export function buildAirborneRows(flights, { fleetByReg, starlinkTails, special, type = '', search = '' }) {
   const searchUpper = (search || '').toUpperCase();
@@ -295,11 +317,16 @@ export function buildAirborneRows(flights, { fleetByReg, starlinkTails, special,
       !(ac.t || '').toUpperCase().includes(searchUpper)
     ) return;
     const phase = getPhase(f.alt, f.vr, f.spd);
+    const origin = f.origin || '???';
+    const dest = f.dest || '???';
     rows.push({
       reg: ac.r,
       type: ac.t,
+      typeLink: fleetRowTypeLink(ac.r, fleetByReg, type),
       flight: f.flightIATA || f.callsign || '',
-      route: `${f.origin || '???'} > ${f.dest || '???'}`,
+      route: `${origin} > ${dest}`,
+      origin,
+      dest,
       alt: f.alt ? `${Math.round(f.alt * 3.28084).toLocaleString()}ft` : '--',
       altRaw: f.alt || 0,
       phase: phase.phase,
@@ -433,23 +460,30 @@ export function heldFleetLinkStep({ loaded, loadFailed, now, deadline }) {
  * can legitimately appear twice — N76021 is the named "Larry Kellner" and wears Star Alliance
  * colours — so each row carries a `key` of reg + kind for React.
  *
+ * Each row carries the type it links to (`typeLink`, by its tail; the panel is not filtered by
+ * type, so no card's type is the list's own) and an airborne entry's route ends as printed.
+ *
  * @param {Map<string, {name: string, type: string}>} special
  * @param {Record<string, Object>} fleetByReg
  * @param {Array<Object>} flights
  * @param {Array<{tail: string, name: string, description: string}>} [liveries]  in display order.
- * @returns {Array<{key: string, reg: string, name: string, kind: string, type: string, delivered: string, description?: string, airborne: {flight: string, route: string}|null}>}
+ * @returns {Array<{key: string, reg: string, name: string, kind: string, type: string, typeLink: string|null, delivered: string, description?: string, airborne: {flight: string, route: string, origin: string, dest: string}|null}>}
  */
 export function buildSpecialRows(special, fleetByReg, flights, liveries = []) {
   const liveryTails = new Set((liveries || []).map((l) => l.tail));
-  /** @type {Record<string, {flight: string, route: string}>} */
+  /** @type {Record<string, {flight: string, route: string, origin: string, dest: string}>} */
   const airborne = {};
   (flights || []).forEach((f) => {
     if (!f || f.onGround) return;
     const reg = f.reg ? f.reg.replace('-', '') : null;
     if (reg && ((special && special.has(reg)) || liveryTails.has(reg))) {
+      const origin = f.origin || '???';
+      const dest = f.dest || '???';
       airborne[reg] = {
         flight: f.flightIATA || f.callsign || '',
-        route: `${f.origin || '???'} > ${f.dest || '???'}`,
+        route: `${origin} > ${dest}`,
+        origin,
+        dest,
       };
     }
   });
@@ -466,6 +500,7 @@ export function buildSpecialRows(special, fleetByReg, flights, liveries = []) {
       name: livery.name,
       kind: 'paint',
       type: ac ? ac.t : '',
+      typeLink: fleetRowTypeLink(reg, fleetByReg, ''),
       delivered: (ac && ac.d) || '?',
       description: livery.description,
       airborne: airborne[reg] || null,
@@ -481,6 +516,7 @@ export function buildSpecialRows(special, fleetByReg, flights, liveries = []) {
       name: entry.name,
       kind: entry.type,
       type: ac.t,
+      typeLink: fleetRowTypeLink(reg, fleetByReg, ''),
       delivered: ac.d || '?',
       airborne: airborne[reg] || null,
     });

@@ -7,11 +7,20 @@
  * A named aircraft is never dimmed: `*Sam E. Ashmore` is a NAME in the status column, not a
  * maintenance note, and the shipped table made exactly that distinction.
  *
- * Every registration is a button into the aircraft dialog; the zero-results state offers the
- * one control that helps, which is clearing the filters.
+ * Names with a home link to it (links everywhere, Nov 12 2026). The registration is the row's
+ * link-coloured link, to the aircraft dialog in place (`TailLink`); the type is a quiet link to
+ * this tab filtered to that type (`fleetRowTypeLink`: by the tail, and plain text once the table
+ * is filtered to it, ruling 1); the "SL" mark a quiet link to the Starlink tab. A type followed
+ * from here sets the type filter and keeps the search, Wi-Fi and status (ruling 2, FleetView's
+ * 'stay'). Every link is 44 px tall on touch inside the cell (`hit="inline"`, as the registration
+ * button was), so no touch box reaches into a neighbour's. The named-aircraft chip, livery badge,
+ * fleet number, cabin, seats, Wi-Fi, IFE, year and status have no home and stay plain.
+ *
+ * The zero-results state offers the one control that helps, which is clearing the filters.
  */
 
 import { Star } from 'lucide-react';
+import { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -23,12 +32,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
+import { fleetRowTypeLink } from '@/lib/fleet-view.js';
 import { liveryForTail } from '@/lib/special-livery.js';
+import { TailLink, TypeLink } from '../../features/EntityLinks';
 import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
 import type { FleetAircraft } from '../../data/types';
 import type { SpecialIndex } from '../../state/fleet';
 import { SortableHeader } from './SortableHeader';
 import type { SortState } from './SortableHeader';
+import { StarlinkRowChip } from './StarlinkRowChip';
 
 export type FleetSortCol = 'r' | 't' | 'a' | 'c' | 'tot' | 'w' | 'i' | 'd' | 's';
 
@@ -44,7 +56,11 @@ const COLUMNS: { col: FleetSortCol; label: string }[] = [
   { col: 's', label: 'Status' },
 ];
 
-export function FleetTable({
+/**
+ * Memoised: the table is about 1,150 rows of links, and FleetView re-renders on every feed poll and
+ * every UI store change, none of which changes these props (FleetView keeps them stable).
+ */
+export const FleetTable = memo(function FleetTable({
   rows,
   sort,
   onSort,
@@ -54,7 +70,8 @@ export function FleetTable({
   onClearFilters,
   hiddenHint = null,
   onShowHidden,
-  onOpenAircraft,
+  fleetByReg,
+  typeFilter,
 }: {
   rows: FleetAircraft[];
   sort: SortState<FleetSortCol>;
@@ -66,7 +83,10 @@ export function FleetTable({
   /** The search matches aircraft the other filters hide (searchHiddenByFilters). */
   hiddenHint?: { message: string; plural: boolean } | null;
   onShowHidden?: () => void;
-  onOpenAircraft: (reg: string) => void;
+  /** The fleet database by registration: a row's type links by its tail. */
+  fleetByReg: Record<string, FleetAircraft>;
+  /** The type filter ('' for none): a type cell equal to it is plain text. */
+  typeFilter: string;
 }) {
   if (rows.length === 0 && filtersActive) {
     return (
@@ -115,13 +135,7 @@ export function FleetTable({
                 className={stored ? 'opacity-55' : dim ? 'opacity-75' : undefined}
               >
                 <TableCell className="font-mono">
-                  <button
-                    type="button"
-                    onClick={() => onOpenAircraft(aircraft.r)}
-                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
-                  >
-                    {aircraft.r}
-                  </button>
+                  <TailLink reg={aircraft.r} hit="inline" />
                   {specialEntry ? (
                     <span className="ml-1 inline-flex items-center gap-0.5 rounded border px-1 py-0.5 text-[9px] text-foreground">
                       <Star aria-hidden="true" className="size-2.5" /> {specialEntry.name}
@@ -129,7 +143,11 @@ export function FleetTable({
                   ) : null}
                   <SpecialLiveryBadge livery={liveryForTail(aircraft.r)} variant="compact" className="ml-1" />
                 </TableCell>
-                <TableCell>{aircraft.t}</TableCell>
+                <TableCell>
+                  <TypeLink typeCode={fleetRowTypeLink(aircraft.r, fleetByReg, typeFilter)} hit="inline">
+                    {aircraft.t}
+                  </TypeLink>
+                </TableCell>
                 <TableCell className="font-mono tabular-nums">{aircraft.a ?? ''}</TableCell>
                 <TableCell className="font-mono text-xs">{aircraft.c ?? ''}</TableCell>
                 <TableCell className="font-mono tabular-nums">{aircraft.tot ?? ''}</TableCell>
@@ -137,13 +155,7 @@ export function FleetTable({
                 <TableCell className="text-xs">{aircraft.i ?? ''}</TableCell>
                 <TableCell className="font-mono tabular-nums">{aircraft.d ?? ''}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{status}</TableCell>
-                <TableCell>
-                  {starlinkTails.has(aircraft.r) ? (
-                    <span className="rounded border border-bb-starlink/30 bg-bb-starlink/10 px-1 py-0.5 text-[9px] font-medium text-bb-starlink">
-                      SL
-                    </span>
-                  ) : null}
-                </TableCell>
+                <TableCell>{starlinkTails.has(aircraft.r) ? <StarlinkRowChip /> : null}</TableCell>
               </TableRow>
             );
           })}
@@ -151,6 +163,6 @@ export function FleetTable({
       </Table>
     </div>
   );
-}
+});
 
 export default FleetTable;

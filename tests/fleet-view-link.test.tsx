@@ -37,6 +37,10 @@ vi.mock('../src/app/state/feed', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/feed')>()),
   useFeed: () => ({ flights: [], lastGoodTs: null }) as unknown as FeedValue,
 }));
+// The tab's names are in-place links (DashLink → useFollowDeepLink), which need the Schedule store
+// and FollowProvider; these tests drive the Fleet link through the UI store, so no link is followed.
+// The links themselves are tested with the real providers in tests/fleet-tab-links.test.tsx.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 
 // 6 A319s and 2 737 MAX 9s, the MAX 9s on Starlink.
 const FLEET_DB = [
