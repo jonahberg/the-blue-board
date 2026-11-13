@@ -256,20 +256,33 @@ describe('the flight sheet', () => {
     expect(document.activeElement).toBe(panel('schedule'));
   });
 
-  it('a tail link replaces the sheet with the aircraft dialog, on the tab already showing', async () => {
+  it('a tail link opens the aircraft dialog over the sheet, which stays; Escape returns to the tail', async () => {
+    // The controller's exception to "fromOverlay on every overlay link": the sheet's tail opens
+    // the dialog over the still-open sheet, as its button did, so the reader keeps their flight.
     mountAt('/#live');
+    const before = window.history.length;
     act(() => seen.ui!.select({ kind: 'flight', flight: airborne() }));
     await settle();
 
-    activate(screen.getByRole('link', { name: 'N37502' }));
+    const tail = screen.getByRole('link', { name: 'N37502' });
+    activate(tail);
     await settle();
 
-    expect(seen.ui!.selection).toBeNull();
     expect(seen.ui!.aircraftReg).toBe('N37502');
+    expect(seen.ui!.selection).not.toBeNull();
+    expect(document.querySelector('[data-slot="sheet-content"]')).not.toBeNull();
     expect(seen.ui!.tab).toBe('live');
     expect(seen.ui!.announcement).toBe('');
+    expect(window.history.length).toBe(before);
     const dialog = screen.getByRole('dialog', { name: 'N37502' });
     expect(dialog.contains(document.activeElement)).toBe(true);
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    await settle();
+
+    expect(seen.ui!.aircraftReg).toBeNull();
+    expect(seen.ui!.selection).not.toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'N37502' }));
   });
 });
 

@@ -17,9 +17,11 @@
  * The names it prints link to their homes in the dashboard (links part 2): a hub end of the big
  * route to its Schedule board, the type to the Fleet tab filtered to it, the tail to its aircraft
  * dialog, the Starlink badge to the Starlink tab and a ★ name to the Fleet tab's special view.
- * Every one of them is `fromOverlay`: following it closes this sheet (and any other overlay) and
- * lands as an arrival. A tail link replaces the sheet with the aircraft dialog. The title stays
- * plain; "Open flight page" under it is the flight's link.
+ * The ones that go to a tab are `fromOverlay`: following one closes this sheet (and any other
+ * overlay) and lands as an arrival. The tail links are not (the controller's exception to "every
+ * link in an overlay"): a tail opens the aircraft dialog OVER this sheet, as its button did, so the
+ * reader keeps their flight and the map's selection, and Escape returns focus to the tail. The
+ * title stays plain; "Open flight page" under it is the flight's link.
  */
 
 import { Eye, Star, Zap } from 'lucide-react';
@@ -518,7 +520,8 @@ export function FlightSheet() {
                   <TypeLink typeCode={typeCode} hit="inline" fromOverlay className="font-medium">
                     {String(aircraft.t ?? '')}
                   </TypeLink>
-                  <TailLink reg={reg} hit="inline" fromOverlay className="font-mono text-sm" />
+                  {/* Not `fromOverlay`: the dialog opens over this sheet, which stays. */}
+                  <TailLink reg={reg} hit="inline" className="font-mono text-sm" />
                   {isStarlink ? <StarlinkBadgeLink /> : null}
                   {specialEntry ? (
                     // The Fleet tab's special view lists the named aircraft.
@@ -561,7 +564,7 @@ export function FlightSheet() {
                       the feed's own designator, which is a reading, not a guess. */}
                   {/* A regional type has no fleet page: plain. */}
                   <span className="font-medium">{expressAircraft.t || flight.acType || 'Type unknown'}</span>
-                  <TailLink reg={reg} hit="inline" fromOverlay className="font-mono text-sm" />
+                  <TailLink reg={reg} hit="inline" className="font-mono text-sm" />
                   {expressStarlink ? <StarlinkBadgeLink /> : null}
                 </div>
                 <p className="text-xs text-muted-foreground">{expressOperatorLine(expressAircraft)}</p>
