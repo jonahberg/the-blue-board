@@ -24,9 +24,15 @@ interface Props {
   iata: string;
   /** Copy carried over from a compact page's old LIVE bar (ICAO · time zone · terminal), as HTML. */
   metaHtml?: string;
+  /**
+   * A compact page's link to the dashboard's live map (`/?hub=gum`), carried over from its old
+   * LIVE bar. The full pages have theirs in "More on the dashboard". A quiet text link, so the
+   * board keeps its one button.
+   */
+  liveHref?: string;
 }
 
-const { iata, metaHtml = '' } = Astro.props;
+const { iata, metaHtml = '', liveHref = '' } = Astro.props;
 const hubLower = iata.toLowerCase();
 const boardHref = `/?tab=schedule&hub=${hubLower}`;
 const titleId = `hub-board-title-${hubLower}`;
@@ -74,13 +80,25 @@ const titleId = `hub-board-title-${hubLower}`;
     <p class="text-[11px] leading-relaxed text-muted-foreground">
       {metaHtml ? <Fragment set:html={metaHtml} /> : <>Times are local to {iata}.</>}
     </p>
-    <a
-      class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-primary-fill px-5 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90"
-      href={boardHref}
-    >
-      Open the full {iata} board
-      <ArrowRight aria-hidden="true" className="size-4" />
-    </a>
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {
+        liveHref && (
+          <a
+            class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground focus-visible:decoration-foreground"
+            href={liveHref}
+          >
+            Live {iata} map
+          </a>
+        )
+      }
+      <a
+        class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-primary-fill px-5 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90"
+        href={boardHref}
+      >
+        Open the full {iata} board
+        <ArrowRight aria-hidden="true" className="size-4" />
+      </a>
+    </div>
   </div>
 
   <!-- The flight number links to its flight page (src/scripts/flight-link.ts). Its hit box is the
