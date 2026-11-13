@@ -26,6 +26,18 @@ const okPayload = () =>
     nowSec: NOW_SEC,
     today: { data: ordBoard(), refreshedAt: NOW_SEC * 1000, dayStart: ORD_DAY_START, completeness: 1 },
   });
+/**
+ * What a script painted that wears link colour or an underline at rest without being, or sitting
+ * in, a link or button (DESIGN.md 2026-11-12). The source guard (tests/design-guards.test.js)
+ * cannot read a class held in an import (`LINK_TONE`), so the painted DOM is checked here.
+ */
+const paintedOffLink = (root) =>
+  [...root.querySelectorAll('[class]')]
+    .filter((el) => {
+      const toks = (el.getAttribute('class') || '').split(/\s+/);
+      return (toks.includes('text-primary') || toks.includes('underline')) && !el.closest('a, button');
+    })
+    .map((el) => el.outerHTML.slice(0, 100));
 const jsonResponse = (body, init = {}) =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' }, ...init });
 
@@ -83,6 +95,7 @@ describe.skipIf(!hasDist)('src/scripts/hub-board.ts on /hubs/ord', () => {
     expect(truth.textContent).toBe('Today: 16 scheduled · 3 departed · 67% on time · 1 canceled · 1 likely canceled (unconfirmed)');
     expect(board().querySelector('[data-hb-fallback]').hidden).toBe(true);
     expect(board().querySelector('[aria-live]')).toBeNull();
+    expect(paintedOffLink(board())).toEqual([]);
   });
 
   it('keeps the static line and releases the reserved height when the board is unavailable', async () => {
@@ -261,6 +274,7 @@ describe.skipIf(!hasDist)('src/scripts/fleet-live.ts on /fleet/787-9-dreamliner'
       }
     }
     expect(strip().querySelector('[data-fl-fallback]').hidden).toBe(true);
+    expect(paintedOffLink(strip())).toEqual([]);
   });
 
   it('links each hub end to its hub page and the tail to the aircraft dialog, none nested in another link', async () => {

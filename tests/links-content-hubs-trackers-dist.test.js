@@ -3,7 +3,7 @@
 // names these pages print in tables and lists link to their homes, nothing else is painted like a
 // link, and the GUM and NRT pages have their live-map link back. Needs `bun run build` first; skips
 // without dist/ (and fails in CI, where the build runs first), like tracker-table-phone.test.js.
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -195,6 +195,120 @@ describe.skipIf(!hasDist)('tracker pages', () => {
       }
     });
   }
+});
+
+// ── Every content page's links, from the built HTML ──────────────────────────────────────────
+// The static-page guard for links everywhere: no page links to itself (a self-link does nothing
+// when clicked; the current nav pill, marked aria-current, is navigation chrome), no link sits in
+// a button or in another link, and no internal link to a hub, fleet or tracker page points at a
+// page the build did not make. Read from the raw HTML, because the parser silently closes an <a>
+// that a second <a> opens inside, and <template> rows (the hub board's, the strip's) are not in
+// the DOM tree a selector walks.
+
+/**
+ * The link faults in one built page's raw HTML, in document order, each as "<kind>: <a …>".
+ * `isBuilt(path)` says whether the build made a page or file at that path ('/hubs/ord',
+ * '/trackers/atc.csv').
+ */
+function linkFaults(html, pagePath, isBuilt) {
+  const markup = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
+  const attr = (attrs, name) => {
+    const m = attrs.match(new RegExp(`(?:^|\\s)${name}(?:\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+)))?(?=\\s|/|$)`, 'i'));
+    return m ? (m[1] ?? m[2] ?? m[3] ?? '') : null;
+  };
+  const decode = (s) => s.replace(/&amp;|&#38;/g, '&');
+  const norm = (p) => p.replace(/\.html$/, '').replace(/\/+$/, '') || '/';
+  const ORIGIN = 'https://theblueboard.co';
+  const depth = { a: 0, button: 0 };
+  const out = [];
+  for (const [, close, rawName, attrs] of markup.matchAll(/<(\/?)([a-zA-Z][\w-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g)) {
+    const name = rawName.toLowerCase();
+    if (name !== 'a' && name !== 'button') continue;
+    if (close) {
+      depth[name] = Math.max(0, depth[name] - 1);
+      continue;
+    }
+    if (name === 'button') {
+      depth.button++;
+      continue;
+    }
+    const href = attr(attrs, 'href');
+    const dataF = attr(attrs, 'data-f');
+    const tag = href !== null ? `<a href="${href}">` : dataF !== null ? `<a data-f="${dataF}">` : '<a>';
+    if (depth.a > 0) out.push(`link inside a link: ${tag}`);
+    if (depth.button > 0) out.push(`link inside a button: ${tag}`);
+    depth.a++;
+    if (href === null || attr(attrs, 'aria-current') !== null) continue;
+    const url = new URL(decode(href), `${ORIGIN}${pagePath}`);
+    if (url.origin !== ORIGIN) continue;
+    const path = norm(url.pathname);
+    // Any fragment, even a bare "#" (a placeholder a page script fills), is an in-page jump.
+    const jump = href.includes('#');
+    if (path === norm(pagePath) && !jump && !url.search) out.push(`self-link: ${tag}`);
+    else if (/^\/(hubs|fleet|trackers)(\/|$)/.test(path) && !isBuilt(path)) out.push(`no built page: ${tag}`);
+  }
+  return out;
+}
+
+/** The build made a page (`<path>.html`, `<path>/index.html`) or a file (a CSV or JSON download) at `path`. */
+const builtInDist = (path) =>
+  [`${path}.html`, `${path}/index.html`, path].some((p) => existsSync(join(DIST, p)) && statSync(join(DIST, p)).isFile());
+
+describe.skipIf(!hasDist)('every content page links only to other pages that exist, and never inside another control', () => {
+  it('hubs, fleet, trackers, Newark and the flight page: no self-link, no link in a link or button, no link to an unbuilt page', () => {
+    const htmlIn = (dir) => readdirSync(join(DIST, dir)).filter((f) => f.endsWith('.html')).map((f) => `${dir}/${f}`);
+    const pages = [
+      'hubs.html', ...htmlIn('hubs'),
+      'fleet.html', ...htmlIn('fleet'),
+      'trackers.html', ...htmlIn('trackers'), ...htmlIn('trackers/atc'), ...htmlIn('trackers/united-hubs'),
+      'newark.html',
+      'flight.html',
+    ];
+    expect(pages).toHaveLength(50); // 10 hub, 20 fleet, 18 tracker pages, Newark and the flight page
+    let links = 0;
+    const found = pages.flatMap((rel) => {
+      const html = readFileSync(join(DIST, rel), 'utf8');
+      links += html.match(/<a\b/g)?.length ?? 0;
+      return linkFaults(html, `/${rel.replace(/\.html$/, '')}`, builtInDist).map((fault) => `${rel}: ${fault}`);
+    });
+    expect(links).toBeGreaterThan(4500); // 4,931 on Nov 12 2026
+    expect(found).toEqual([]);
+  });
+});
+
+describe('the content-page link sweep catches what it is for', () => {
+  const BUILT = new Set(['/hubs/ord', '/hubs/den', '/hubs/sfo', '/fleet', '/trackers/atc', '/trackers/atc.csv']);
+  const faults = (html) => linkFaults(html, '/hubs/ord', (path) => BUILT.has(path));
+
+  it('a self-link, a link in a link (in a template too), a link in a button, and a link to a page that was not built', () => {
+    expect(faults('<a href="/hubs/ord">ORD</a>')).toEqual(['self-link: <a href="/hubs/ord">']);
+    expect(faults('<a href="/hubs/ord/">ORD</a><a href="">x</a>')).toEqual(['self-link: <a href="/hubs/ord/">', 'self-link: <a href="">']);
+    expect(faults('<a href="/hubs/den"><a href="/hubs/sfo">SFO</a></a>')).toEqual(['link inside a link: <a href="/hubs/sfo">']);
+    expect(faults('<template data-row><li><a href="/hubs/den">DEN<a data-f="dest">x</a></a></li></template>')).toEqual([
+      'link inside a link: <a data-f="dest">',
+    ]);
+    expect(faults('<button type="button"><span><a href="/hubs/den">DEN</a></span></button>')).toEqual(['link inside a button: <a href="/hubs/den">']);
+    expect(faults('<a href="/hubs/xyz">XYZ</a><a href="/fleet/nope">n</a><a href="/trackers/united-hubs/zzz#p">p</a>')).toEqual([
+      'no built page: <a href="/hubs/xyz">',
+      'no built page: <a href="/fleet/nope">',
+      'no built page: <a href="/trackers/united-hubs/zzz#p">',
+    ]);
+  });
+
+  it('lets the current nav pill, in-page jumps, built pages, downloads and other addresses through', () => {
+    for (const ok of [
+      '<a href="/hubs/ord" aria-current="page">ORD</a>',
+      '<a href="#main">Skip to content</a><a href="/hubs/ord#faq">FAQ</a><a href="#" hidden>Open entry</a>',
+      '<a href="/hubs/den">DEN</a></a><a href="/hubs/sfo">SFO</a>',
+      '<a href="/fleet/">Fleet</a><a href="/trackers/atc.csv">CSV</a><a href="/trackers/atc?x=1">ATC</a>',
+      '<a href="/?tab=fleet&amp;type=A319">x</a><a href="/news/x">n</a><a href="https://example.com/hubs/zzz">e</a>',
+      '<button type="button">x</button><a href="/hubs/den">DEN</a>',
+      // Comments and scripts are not markup.
+      '<!-- <a href="/hubs/ord">old</a> --><script>const s = \'<a href="/hubs/zzz"><a>\';</script>',
+    ]) {
+      expect(faults(ok), ok).toEqual([]);
+    }
+  });
 });
 
 /** Inside a card made clickable whole by a stretched link (DESIGN.md 2026-11-11): a click on it follows that link. */

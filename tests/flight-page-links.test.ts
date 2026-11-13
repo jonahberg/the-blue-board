@@ -145,6 +145,14 @@ describe.skipIf(!hasDist)('flight page: hubs, tail, type and Starlink are links'
     // The page's own number stays text, and no link sits inside another.
     expect(document.querySelector('[data-fp-title]')!.querySelector('a')).toBeNull();
     for (const a of document.querySelectorAll('[data-flight-page] a')) expect(a.querySelector('a')).toBeNull();
+
+    // Once painted, nothing wears link colour or an underline unless it is, or sits in, a link or
+    // button. The plane marker on the track is an aria-hidden icon (tests/design-guards.test.js).
+    const painted = [...document.querySelectorAll('[data-flight-page] [class]')].filter((el) => {
+      const toks = (el.getAttribute('class') || '').split(/\s+/);
+      return (toks.includes('text-primary') || toks.includes('underline')) && !el.closest('a, button') && el.getAttribute('data-f') !== 'track-dot';
+    });
+    expect(painted.map((el) => el.outerHTML.slice(0, 100))).toEqual([]);
   });
 
   it('a Starlink roster Express tail: the tail and Starlink link; the type and operator are text', async () => {
