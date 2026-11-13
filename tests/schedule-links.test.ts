@@ -67,12 +67,11 @@ describe('routeEnds: the board side is plain, the other end links only when it i
   });
 
   it('a hub code recovered from the airport name links like a code', () => {
-    // routeCell recovers a missing code from an unambiguous name; the link follows what prints.
-    const ends = routeEnds(flight(at('ORD'), { code: { iata: '' }, name: 'Newark Liberty International Airport' }), 'ORD', 'departures');
-    const line = routeCell(flight(at('ORD'), { code: { iata: '' }, name: 'Newark Liberty International Airport' }), 'ORD', 'departures').routeLine;
-    expect(line).toBe(`ORD → ${ends.to.text}`);
-    if (ends.to.text === 'EWR') expect(ends.to.hub).toBe('EWR');
-    else expect(ends.to.hub).toBeNull();
+    // routeCell recovers a missing code from an unambiguous name ("Denver International Airport"
+    // is DEN); the link follows what prints.
+    const denver = flight(at('ORD'), { code: { iata: '' }, name: 'Denver International Airport' });
+    expect(routeCell(denver, 'ORD', 'departures').routeLine).toBe('ORD → DEN');
+    expect(routeEnds(denver, 'ORD', 'departures').to).toEqual({ text: 'DEN', hub: 'DEN' });
   });
 
   it('prints exactly what routeLine prints, end for end', () => {
