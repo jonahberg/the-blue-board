@@ -134,7 +134,8 @@ export default function StatsView() {
         sub: `${starlinkAirborne} of ${airborne.length} airborne`,
       },
     ];
-    // A card links only where the destination lists exactly what it counts (stats-links.js).
+    // A card links to the view that shows what it counts: exactly so for Fleet Utilization
+    // (Airborne Now), and the Live map for Flights Airborne (stats-links.js says how they differ).
     return cards.map((card) => ({ ...card, link: metricLink(card.label, card.value) }));
   }, [airborne, fleetDb.length, fleetByReg, starlink.tails, ages.fleetAvg]);
 

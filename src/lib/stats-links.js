@@ -1,13 +1,15 @@
 // ═══ STATS TAB: WHICH HEADLINE CARD LINKS WHERE ═══
-// A headline card links only when the destination lists exactly what the card counts (links
-// everywhere, part 2):
-//   - "Flights Airborne" counts the feed's airborne flights, which the Live tab shows;
+// A headline card links to the view that shows what it counts (links everywhere, part 2):
 //   - "Fleet Utilization · N of M mainline aircraft" counts the airborne flights matched to the
-//     fleet database (`fleetUtilization`). The Fleet tab's Airborne view is where those aircraft are
-//     listed: its sub-tab count is this card's N, and its rows are the feed's flights in the air
-//     matched to the fleet database (`buildAirborneRows`, src/lib/fleet-view.js).
-// "Avg Fleet Age" and "Starlink Coverage · N of M airborne" have no list of exactly that set, so
-// they stay text. Both addresses are the dashboard's own and are followed in place
+//     fleet database (`fleetUtilization`). The Fleet tab's Airborne view lists exactly those: its
+//     sub-tab count is this card's N, and its rows are the feed's flights in the air matched to the
+//     fleet database (`buildAirborneRows`, src/lib/fleet-view.js), under the same on-the-ground
+//     rule, with the tab's type and search filters cleared by the link.
+//   - "Flights Airborne" counts the feed's airborne flights. It opens the Live tab, the view those
+//     flights are on: its map plots them, but beside aircraft on the ground and under whatever hub
+//     or phase filter the reader left there, so it is not a list of exactly that set.
+// "Avg Fleet Age" and "Starlink Coverage · N of M airborne" have no view of their own, so they
+// stay text. Both addresses are the dashboard's own and are followed in place
 // (`resolveDeepLink`, src/app/state/deep-links.ts).
 //
 // DOM-free; tested in tests/stats-links.test.ts.
