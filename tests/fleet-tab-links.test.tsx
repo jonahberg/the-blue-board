@@ -482,19 +482,25 @@ describe('Fleet Pulse', () => {
     ];
   });
 
-  const figureButton = () => screen.getByRole('button', { name: /^3 Airborne: show the Airborne Now list$/ });
   const utilButton = () => screen.getByRole('button', { name: /fleet utilization \(2\/8\): show the Airborne Now list$/ });
 
-  it('the airborne figure and the utilization line are buttons, named by their words, not links', () => {
+  it('the utilization line is a button named by its words, 44 px tall on touch, not a link', () => {
     mount();
-    for (const button of [figureButton(), utilButton()]) {
-      expect(button.tagName).toBe('BUTTON');
-      expect(button.hasAttribute('aria-label')).toBe(false);
-      expect(classesOf(button)).not.toContain('text-primary');
-      expect(classesOf(button)).not.toContain('underline');
-    }
-    // The utilization line is 44 px tall on touch; the figure is taller than that already.
-    expect(classesOf(utilButton())).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
+    const button = utilButton();
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.hasAttribute('aria-label')).toBe(false);
+    expect(classesOf(button)).not.toContain('text-primary');
+    expect(classesOf(button)).not.toContain('underline');
+    expect(classesOf(button)).toEqual(expect.arrayContaining(['min-h-11', 'pointer-fine:md:min-h-0']));
+  });
+
+  it('the big airborne figure is text: it also counts the regional flight the list does not show', () => {
+    mount();
+    const figure = document.getElementById('fleet-airborne-count')!;
+    expect(figure.textContent).toBe('3');
+    expect(figure.closest('button, a')).toBeNull();
+    // The one button is the utilization line, whose "2" is the list.
+    expect(screen.getAllByRole('button', { name: /show the Airborne Now list/ })).toEqual([utilButton()]);
   });
 
   /** What the Fleet tab shows after a frame, then its Express search (read by opening that list). */
@@ -513,7 +519,7 @@ describe('Fleet Pulse', () => {
     return { ...result, expressSearch: (screen.getByRole('searchbox', { name: 'United Express search' }) as HTMLInputElement).value };
   }
 
-  it('from a dirty tab, either one lands where a cold load of ?view=airborne lands (ruling 9)', async () => {
+  it('from a dirty tab, the utilization line lands where a cold load of ?view=airborne lands (ruling 9)', async () => {
     mount('/?tab=fleet&view=airborne');
     const cold = await fleetState();
     cleanup();
@@ -522,23 +528,20 @@ describe('Fleet Pulse', () => {
     expect(cold.rows).toEqual(['N37502', 'N100UA']);
     expect(cold.scrolls).toEqual(['panel:airborne']);
 
-    for (const press of [figureButton, utilButton]) {
-      scrolls.length = 0;
-      mount();
-      // The reader filtered the tab, searched it, and left it on United Express with a search.
-      fireEvent.click(typeCard('A319'));
-      await searchFor('N10');
-      openSubView(/^United Express/);
-      fireEvent.change(screen.getByRole('searchbox', { name: 'United Express search' }), { target: { value: 'skywest' } });
-      await nextFrame();
-      scrolls.length = 0;
+    scrolls.length = 0;
+    mount();
+    // The reader filtered the tab, searched it, and left it on United Express with a search.
+    fireEvent.click(typeCard('A319'));
+    await searchFor('N10');
+    openSubView(/^United Express/);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'United Express search' }), { target: { value: 'skywest' } });
+    await nextFrame();
+    scrolls.length = 0;
 
-      fireEvent.click(press());
+    fireEvent.click(utilButton());
 
-      // Every mainline aircraft flying: the utilization's "2" of "2/8".
-      expect(await fleetState()).toEqual(cold);
-      cleanup();
-    }
+    // Every mainline aircraft flying: the utilization's "2" of "2/8".
+    expect(await fleetState()).toEqual(cold);
   });
 
   it('each type label is a quiet link to this tab filtered to it; followed here it keeps the search', async () => {

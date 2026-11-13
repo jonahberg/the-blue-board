@@ -11,11 +11,11 @@
  * Per-type bars are drawn only for types with at least one aircraft airborne — nineteen rows
  * of "0/76 0%" at 04:00 UTC is a table of zeroes, not a pulse.
  *
- * Links everywhere (Nov 12 2026). The airborne figure and the utilization line summarize the
- * aircraft flying now, so each is a button that opens the Airborne Now list below (ruling 7,
- * `onShowAirborne`), named by its words plus "show the Airborne Now list". The utilization's
- * "m" is exactly that list; the big figure also counts regional and partner flights, which the
- * list (mainline only) does not, so its name promises the list, not a count. Each type label is
+ * Links everywhere (Nov 12 2026). The utilization line is a button that opens the Airborne Now
+ * list below (ruling 7, `onShowAirborne`), named by its words plus "show the Airborne Now list":
+ * its "m" is exactly that list (the same `isOnGround` rule and fleet match). The big figure stays
+ * text: it also counts the not-in-database and regional/partner flights the list (mainline
+ * airframes only) does not show, so no list shows what it counts. Each type label is
  * a quiet link to this tab filtered to that type (`fleetTypeTextLink`: the rows are fleet
  * database types; the type the tab is already filtered to prints plain, since its link would
  * change nothing), 44 px tall on touch, so on a touch screen the rows are 44 px apart. This block
@@ -27,7 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fleetTypeTextLink } from '@/lib/fleet-view.js';
 import { TypeLink } from '../../features/EntityLinks';
 
-/** A count that opens the Airborne Now list: its look at rest, the hero buttons' hover and focus. */
+/** The count that opens the Airborne Now list: its look at rest, the hero buttons' hover and focus. */
 const PRESS =
   'rounded-md text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
 
@@ -63,7 +63,7 @@ export function FleetPulse({
   loading: boolean;
   /** True when `/data/fleet.json` failed: the airborne count still stands, the split cannot. */
   fleetFailed?: boolean;
-  /** Opens the Airborne Now list. Without it (or before the database can list anything) the counts are text. */
+  /** Opens the Airborne Now list. Without it (or before the database can list anything) the utilization line is text. */
   onShowAirborne?: () => void;
   /** The Fleet tab's type filter: that type's label prints plain. */
   typeFilter?: string;
@@ -71,28 +71,22 @@ export function FleetPulse({
   const flying = utilisation.filter((row) => row.total > 0 && row.flying > 0);
   // The list can show aircraft only once the fleet database has loaded.
   const canShow = Boolean(onShowAirborne) && !fleetFailed && fleetTotal > 0 && airborne > 0;
-  const figure = (
-    <>
-      <span className="font-mono text-5xl font-semibold tabular-nums" id="fleet-airborne-count">
-        {loading && !airborne ? <Skeleton className="inline-block h-10 w-24 align-middle" /> : airborne}
-      </span>{' '}
-      {/* The label style of "Total Mainline Aircraft" beside it, so the card's two headline
-          figures are labelled alike. The space keeps "3 Airborne" two words in the button's name;
-          between flex items it draws nothing. */}
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Airborne</span>
-    </>
-  );
 
   return (
     <div className="flex min-w-0 flex-col">
-      {canShow ? (
-        <button type="button" onClick={onShowAirborne} className={`-mx-1 flex items-baseline gap-3 self-start px-1 ${PRESS}`}>
-          {figure}
-          <span className="sr-only">: show the Airborne Now list</span>
-        </button>
-      ) : (
-        <div className="flex items-baseline gap-3">{figure}</div>
-      )}
+      <div className="flex items-baseline gap-3">
+        <span
+          className="font-mono text-5xl font-semibold tabular-nums"
+          id="fleet-airborne-count"
+        >
+          {loading && !airborne ? <Skeleton className="inline-block h-10 w-24 align-middle" /> : airborne}
+        </span>
+        {/* The label style of "Total Mainline Aircraft" beside it, so the card's two headline
+            figures are labelled alike. */}
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          Airborne
+        </span>
+      </div>
 
       {/* Without the fleet database every flight is UNMATCHED, not regional — calling 348
           aircraft "regional/partner" because we cannot look them up is the same class of
