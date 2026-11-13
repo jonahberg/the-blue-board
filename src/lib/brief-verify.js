@@ -675,6 +675,22 @@ export function verifyBrief(candidate, facts) {
     }
   }
 
+  // Far fewer flights flying than usual touches every traveler, so the template's note for that
+  // day stands in for one that names only the airports with a program, or for none (Nov 13 2026:
+  // all three Haiku samples led with the shortfall and then addressed four airports).
+  if (shortfall) {
+    const template = buildTemplateBrief(factList).traveler_note;
+    if (template && template.text !== traveler_note?.text) {
+      const s = finalizeSentence(template.text, template.fact_ids, factIndex);
+      if (s.reasons.length) report.rewritesRejected += 1;
+      else {
+        if (traveler_note) report.trimmed.push({ item: 'traveler_note', from: traveler_note.text, to: s.text, reason: 'note_for_every_traveler' });
+        traveler_note = { text: s.text, fact_ids: template.fact_ids };
+        report.travelerNote = { status: 'kept', reasons: [] };
+      }
+    }
+  }
+
   return {
     ok: true,
     brief: { headline, headline_fact_ids: headlineFactIds, tone, items: kept, traveler_note },

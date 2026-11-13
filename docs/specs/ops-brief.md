@@ -215,7 +215,8 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    `disrupted` the fact is first in the list, an item citing it is moved to the front (or its
    statement is put there, `shortfallLed`; at the item limit the last item is dropped as
    `displaced_by_network_shortfall`), and a headline that is not about how many flights are flying
-   is replaced (`headline:misses_network_shortfall`). The brief says what is seen, never why.
+   is replaced (`headline:misses_network_shortfall`), and the traveler note becomes the template's
+   note for every traveler (`note_for_every_traveler`). The brief says what is seen, never why.
    `tests/brief-facts.test.js` checks, for every fixture, that the floor from
    the FAA facts equals the header's FAA level from the same `/api/faa` input. One known divergence:
    arrival delays at a hub are `watch` here and nothing in the header (`hubProgramMarker` has no
