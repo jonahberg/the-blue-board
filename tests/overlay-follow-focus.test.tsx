@@ -360,6 +360,24 @@ describe('the FR24 lookup', () => {
     expect(seen.ui!.aircraftReg).toBe('N37502');
     expect(screen.getByRole('dialog', { name: 'N37502' }).contains(document.activeElement)).toBe(true);
   });
+  it('the tail closes only the lookup: a flight sheet open under it stays open, as with the old button', async () => {
+    mountAt('/#live');
+    act(() => seen.ui!.select({ kind: 'flight', flight: airborne() }));
+    await settle();
+    act(() => seen.ui!.openFr24('UA2278'));
+    await settle();
+
+    const tails = await screen.findAllByRole('link', { name: 'N37502' });
+    // The sheet's own tail is first in the page; the lookup's is inside its dialog.
+    const lookupTail = tails.find((a) => a.closest('[data-slot="dialog-content"]'))!;
+    activate(lookupTail);
+    await settle();
+
+    expect(seen.ui!.fr24Query).toBeNull();
+    expect(seen.ui!.aircraftReg).toBe('N37502');
+    expect(seen.ui!.selection).not.toBeNull();
+    expect(document.querySelector('[data-slot="sheet-content"]')).not.toBeNull();
+  });
 });
 
 describe('the delay explanation', () => {

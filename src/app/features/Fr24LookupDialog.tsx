@@ -17,10 +17,12 @@
  * are shown whenever that tier answered, so the card is never silently authoritative
  * about somebody else's departure.
  *
- * The names it prints link to their homes (links part 2), all `fromOverlay`, so following one
- * closes this dialog and lands as an arrival: a hub end to its Schedule board, the type to the
- * Fleet tab filtered to it (by the tail's fleet type: FR24 sends an ICAO code, which never decides
- * a link on its own), the tail to its aircraft dialog in place of this one.
+ * The names it prints link to their homes (links part 2). The hub ends and the type are
+ * `fromOverlay`, so following one closes this dialog (and any other overlay) and lands as an
+ * arrival: a hub end on its Schedule board, the type on the Fleet tab filtered to it (by the tail's
+ * fleet type: FR24 sends an ICAO code, which never decides a link on its own). The tail opens its
+ * aircraft dialog in place of this one and closes nothing else, as its button did (`TailAnchor`):
+ * a flight sheet open under the lookup stays open.
  */
 
 import { Plane } from 'lucide-react';
@@ -39,6 +41,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
+import { tailLink } from '@/lib/tail-link.js';
+import { cn } from '@/lib/utils';
 import {
   formatFr24Time,
   fr24Attribution,
@@ -51,9 +55,12 @@ import {
 import { fetchFr24Flight } from '../data/api';
 import { shareUrl } from '../data/share';
 import { useFleet } from '../state/fleet';
+import { useFollowDeepLink } from '../state/follow-link';
 import { useUi } from '../state/ui';
-import { HubLink, TailLink, TypeLink } from './EntityLinks';
+import { dashLinkClick } from './DashLink';
+import { HubLink, TypeLink } from './EntityLinks';
 import { FlightLink } from './FlightLink';
+import { LINK_HIT, LINK_TONE } from './link-style';
 
 /**
  * Whether the lookup can actually answer.
@@ -96,6 +103,31 @@ function fr24PreviousLegDate(iso: string | undefined): string {
   return date && !Number.isNaN(date.getTime())
     ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     : '';
+}
+
+/**
+ * The lookup's tail: a link to its aircraft dialog that closes this dialog and nothing else, as
+ * the button it replaced did (`openFr24(null)`, then the dialog). A `TailLink` with `fromOverlay`
+ * would also close a flight sheet open under the lookup; one without it would leave this dialog
+ * open under the aircraft dialog. So it is the contract's anchor recipe: followed in place
+ * (`dashLinkClick`), then this dialog closes. A modified click is the browser's and closes nothing.
+ */
+function TailAnchor({ reg, onFollowed }: { reg: string; onFollowed: () => void }) {
+  const follow = useFollowDeepLink();
+  const link = tailLink(reg);
+  if (!link) return <span className="font-mono">{reg}</span>;
+  return (
+    <a
+      href={link.href}
+      data-tail-link={link.reg}
+      className={cn(LINK_TONE.quiet, LINK_HIT.inline, 'font-mono')}
+      onClick={(event) => {
+        if (dashLinkClick(follow, link.href)(event)) onFollowed();
+      }}
+    >
+      {reg}
+    </a>
+  );
 }
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -295,7 +327,7 @@ export default function Fr24LookupDialog() {
                   {flight.aircraft?.reg ? (
                     <>
                       {' · '}
-                      <TailLink reg={flight.aircraft.reg} tone="quiet" hit="inline" fromOverlay className="font-mono" />
+                      <TailAnchor reg={flight.aircraft.reg} onFollowed={() => openFr24(null)} />
                     </>
                   ) : null}
                 </p>
