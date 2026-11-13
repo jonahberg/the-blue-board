@@ -139,10 +139,13 @@ export default function ScheduleView() {
   // this reset, when the default sort and the empty filters are the ones on screen. A board that is
   // not loaded yet loads fresh and the store's own scroll runs, so the arrival adds none.
   //
-  // The effect's first run only notes the `seq`. The view is new then: the first arrival mounts
-  // it in the same commit, or the error boundary's "Try again" remounts it. Its filters are empty
-  // by construction, and an answer re-applying itself in that same commit (`useAskSchedule`) must
-  // not be reset over.
+  // The effect's first run skips the reset. The view is new then: the first arrival mounts it in
+  // the same commit, or the error boundary's "Try again" remounts it. Its filters are empty by
+  // construction, and an answer re-applying itself in that same commit (`useAskSchedule`) must not
+  // be reset over. It still asks for the scroll: a first visit through a hub link to a board the
+  // idle preload already loaded (it raises no scroll) must land on NOW as a cold load does. A
+  // remount replays the last `seq`, so "Try again" on today's board may also scroll to NOW once;
+  // that is accepted (it is where a fresh view of that board starts).
   const { scheduleLink } = ui;
   const seenLinkSeq = useRef(0);
   const linkEffectRan = useRef(false);
@@ -153,12 +156,12 @@ export default function ScheduleView() {
     linkEffectRan.current = true;
     if (!scheduleLink || scheduleLink.seq === seenLinkSeq.current) return;
     seenLinkSeq.current = scheduleLink.seq;
+    if (boards[key]) setArrivalScroll({ key });
     if (fresh) return;
     setFilters(EMPTY_FILTERS);
     setDebouncedFilters(EMPTY_FILTERS);
     setSort(DEFAULT_SORT);
     if (askActive) clearAsk();
-    if (boards[key]) setArrivalScroll({ key });
   }, [scheduleLink, askActive, clearAsk]);
 
   const dayStartSec = useMemo(() => {

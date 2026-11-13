@@ -34,7 +34,7 @@ import { DashLink } from '../src/app/features/DashLink';
 import { __peekAskStateForTests, __resetAskStateForTests, setAskResult } from '../src/app/state/ask';
 import { useDeepLinks } from '../src/app/state/deep-links';
 import { FollowProvider } from '../src/app/state/follow-link';
-import { ScheduleProvider, useSchedule } from '../src/app/state/schedule';
+import { ScheduleProvider, boardKey, useSchedule } from '../src/app/state/schedule';
 import type { ScheduleValue } from '../src/app/state/schedule';
 import { UiProvider, useUi } from '../src/app/state/ui';
 import type { UiValue } from '../src/app/state/ui';
@@ -491,6 +491,43 @@ describe('an arrival scrolls the board to NOW, as a cold load does, and only an 
     expect(seen.schedule!.current.hub).toBe('DEN');
     expect(seen.ui!.scheduleLink).toBeNull();
     expect(scrolls).toEqual([]);
+  });
+
+  it('(e) a first visit to Schedule, to a board the idle preload loaded: one scroll, to the row under NOW', async () => {
+    // The store's idle warm-up (ORD, DEN, EWR departures) runs on `requestIdleCallback`, which
+    // jsdom lacks; give it one for this mount. The preload commits boards and raises no scroll.
+    const idle = (window as unknown as { requestIdleCallback?: unknown }).requestIdleCallback;
+    (window as unknown as { requestIdleCallback: (cb: () => void) => number }).requestIdleCallback = (cb) =>
+      setTimeout(cb, 0) as unknown as number;
+    try {
+      mountAt('/#stats', '/?tab=schedule&hub=DEN');
+      await settle();
+    } finally {
+      (window as unknown as { requestIdleCallback?: unknown }).requestIdleCallback = idle;
+    }
+    expect(seen.schedule!.boards[boardKey('DEN', 'departures', 0)]).toBeTruthy();
+    expect(document.querySelector('[data-testid="schedule-panel"]')).toBeNull();
+    scrolls.length = 0;
+
+    await follow();
+    await frames();
+
+    expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(scrolls).toEqual([nowRow()]);
+    expect(nowRow()).toBe(1);
+  });
+
+  it('(f) a first visit to Schedule, to a board that loads fresh: one scroll, the store’s', async () => {
+    mountAt('/#stats', '/?tab=schedule&hub=DEN');
+    await settle();
+    expect(seen.schedule!.boards[boardKey('DEN', 'departures', 0)]).toBeUndefined();
+    scrolls.length = 0;
+
+    await follow();
+    await frames();
+
+    expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(scrolls).toEqual([nowRow()]);
   });
 
   it('(d) once arrived, the reader scrolls by hand: the board refreshing under them scrolls nothing', async () => {
