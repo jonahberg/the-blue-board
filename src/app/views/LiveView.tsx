@@ -58,7 +58,7 @@ export default function LiveView() {
   const feed = useFeed();
   const { fleetDb, fleetByReg, starlink } = useFleet();
   const { homeAirport } = usePrefs();
-  const { selection, select, focus, focusOn, setTab, starlinkFilter, setStarlinkFilter } = useUi();
+  const { selection, select, focus, focusOn, starlinkFilter, setStarlinkFilter } = useUi();
   const watch = useWatch();
 
   // Every layer except Starlink is local. Starlink's toggle is shared state because the
@@ -176,6 +176,8 @@ export default function LiveView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
   }, []);
 
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
   const clearFilters = useCallback(() => {
     setHubFilter('');
     setPhaseFilter('');
@@ -195,10 +197,12 @@ export default function LiveView() {
       onPhaseFilter={setPhaseFilter}
       onClearFilters={clearFilters}
       onSelect={onSelect}
-      onGoToSchedule={() => setTab('schedule')}
       // The brief sits open in the desktop sidebar only; below `lg` the header row opens it
       // as a sheet, and the phone Filters sheet stays filters.
       lead={desktop ? <BriefSidebarPanel /> : null}
+      // Below `lg` the sidebar is the Filters sheet: a link followed in place from it (a hub, a
+      // tail, "Check the Schedule tab") closes it, or it would stay open over where it went.
+      onFollowInPlace={desktop ? undefined : closeSidebar}
     />
   );
 
