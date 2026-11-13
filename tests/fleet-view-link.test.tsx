@@ -794,6 +794,61 @@ describe('the cold load\'s Fleet address is the one the page was opened on', () 
     expect(typeSelect().textContent).toContain('All Types');
   });
 
+  it('a followed link applies once too: a remount does not snap the filters back, or scroll', async () => {
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    // Followed from another tab (the Starlink tab's "A319"), applied, then taken off by hand.
+    follow({ filter: 'A319', view: null });
+    expect(rows()).toHaveLength(6);
+    await nextFrame();
+    fireEvent.click(typeCard('A319'));
+    expect(rows()).toHaveLength(8);
+    scrolls.length = 0;
+
+    // The tab throws and the reader presses "Try again": the view mounts afresh, the link still
+    // in the store.
+    view.rerender(tree('again'));
+    await nextFrame();
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+    expect(scrolls).toEqual([]);
+  });
+
+  it('a followed link dropped for arriving late stays dropped after a remount', async () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    ctl.fleet = fleetValue([], true);
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    follow({ filter: 'A319', view: null });
+    // The database lands past the link's 10 s: dropped.
+    clock.mockReturnValue(start + 10_001);
+    ctl.fleet = fleetValue(FLEET_DB);
+    view.rerender(tree('first'));
+    expect(rows()).toHaveLength(8);
+    scrolls.length = 0;
+
+    // A remount must not give it a fresh 10 s from the new mount.
+    view.rerender(tree('again'));
+    await nextFrame();
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+    expect(scrolls).toEqual([]);
+    clock.mockRestore();
+  });
+
   it('still applies when a followed link has since taken it out of the address bar', () => {
     window.history.replaceState(null, '', '/?tab=fleet&type=A319');
     ctl.fleet = fleetValue([], true);

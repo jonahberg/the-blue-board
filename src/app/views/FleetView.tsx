@@ -60,6 +60,7 @@ import { expressStarlinkScope } from '@/lib/starlink-roster.js';
 import { isRecentlyFound } from '@/lib/starlink-view.js';
 import type { ExpressAircraft, FleetAircraft } from '../data/types';
 import type { FleetDeepLinks } from '../state/deep-links';
+import type { FleetLink } from '../state/ui';
 import { AskChips } from '../features/AskChips';
 import { useAskFleet } from './fleet/useAskFleet';
 import { useFeed } from '../state/feed';
@@ -95,6 +96,13 @@ const DEEP_LINK_TIMEOUT_MS = 10000;
  * the page was opened on a second time, long after the reader changed the filters.
  */
 const SPENT_COLD_FLEET_LINKS = new WeakSet<FleetDeepLinks>();
+
+/**
+ * The followed links (`useUi().fleetLink`, a new object per follow) this view has applied or
+ * dropped. Held outside the component for the same reason: a remount must not apply the last
+ * followed link again, or give a dropped one a fresh budget from the new mount.
+ */
+const SPENT_FLEET_LINKS = new WeakSet<FleetLink>();
 
 export default function FleetView() {
   const {
@@ -448,18 +456,18 @@ export default function FleetView() {
   }, [fleetDb.length, loadFailed, applyFleetDeepLink, coldFleetLink]);
 
   // A link followed in place (`useUi().followFleetLink`, from a DashLink anywhere in the
-  // dashboard). Each follow has a new `seq`, so the same link clicked again after the visitor
-  // cleared the filter applies again. The ref starts at 0, not at the current `seq`: this view
-  // mounts on the first visit to the tab, which is often the follow itself, so the link is
-  // already in the store. A link followed before the database arrives is held until it does, on
-  // the cold load's budget: 10 s from the follow (`fleetLink.at`), or from this view's mount when
-  // that is later (a first visit spends part of the wait loading the tab's own code). Later than
-  // that it is dropped.
+  // dashboard). Each follow is a new object, so the same link clicked again after the visitor
+  // cleared the filter applies again. A link already in the store when this view mounts is
+  // applied: the view mounts on the first visit to the tab, which is often the follow itself. A
+  // link followed before the database arrives is held until it does, on the cold load's budget:
+  // 10 s from the follow (`fleetLink.at`), or from this view's mount when that is later (a first
+  // visit spends part of the wait loading the tab's own code). Later than that it is dropped.
+  // Applied or dropped, it is spent (`SPENT_FLEET_LINKS`), so a remount (the error boundary's
+  // "Try again") neither applies it again nor restarts its budget.
   // Declared after the cold load's effect so that, when both apply in one commit, the link the
   // visitor just clicked wins over an address the page was opened on.
-  const appliedFleetLinkSeq = useRef(0);
   useEffect(() => {
-    if (!fleetLink || fleetLink.seq === appliedFleetLinkSeq.current) return;
+    if (!fleetLink || SPENT_FLEET_LINKS.has(fleetLink)) return;
     const step = heldFleetLinkStep({
       loaded: fleetDb.length > 0,
       loadFailed,
@@ -467,7 +475,7 @@ export default function FleetView() {
       deadline: Math.max(fleetLink.at + DEEP_LINK_TIMEOUT_MS, deepLinkDeadline.current),
     });
     if (step === 'wait') return;
-    appliedFleetLinkSeq.current = fleetLink.seq;
+    SPENT_FLEET_LINKS.add(fleetLink);
     if (step === 'apply') applyFleetDeepLink(fleetLink, fleetLink.arriving ? 'arrive' : 'stay');
   }, [fleetLink, fleetDb.length, loadFailed, applyFleetDeepLink]);
 
