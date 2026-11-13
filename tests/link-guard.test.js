@@ -128,3 +128,31 @@ describe('the guard configuration', () => {
     }
   });
 });
+
+describe('findUnlinkedNames with self: the view\'s own name prints plain by rule (ruling 1)', () => {
+  const board = 'schedule desktop-1440 #schedule-board tr';
+  const at = (text) => row(text, false, board);
+
+  it("a plain hub code equal to the view's own hub is not a violation", () => {
+    expect(findUnlinkedNames([at('ORD → DEN')], known, [], { hub: 'ORD' })).toEqual([{ text: 'DEN', kind: 'hub', where: board }]);
+    expect(findUnlinkedNames([at('ORD')], known, [], { hub: 'ord ' })).toEqual([]);
+  });
+
+  it('every other name in the same rows is still checked', () => {
+    expect(findUnlinkedNames([at('UA576 ORD N78501')], known, [], { hub: 'ORD' }).map((n) => n.text)).toEqual(['UA576', 'N78501']);
+  });
+
+  it('no self, an empty or missing hub, or a type: the behaviour without it', () => {
+    for (const self of [undefined, {}, { hub: null }, { hub: '' }, { type: 'A319' }]) {
+      expect(findUnlinkedNames([at('ORD')], known, [], self), JSON.stringify(self)).toEqual([{ text: 'ORD', kind: 'hub', where: board }]);
+    }
+  });
+
+  it('only a hub is excused: a flight number or tail that happens to match is still reported', () => {
+    expect(findUnlinkedNames([at('N78501')], known, [], { hub: 'N78501' })).toEqual([{ text: 'N78501', kind: 'tail', where: board }]);
+  });
+
+  it('the allowlist is still checked for reasons when self is given', () => {
+    expect(() => findUnlinkedNames([], known, [{ where: /x/ }], { hub: 'ORD' })).toThrow(/a reason is required/);
+  });
+});

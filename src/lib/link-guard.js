@@ -15,6 +15,10 @@
 //     home and stays plain by rule.
 // Operators, regional types and fleet families have no home either and are never names here.
 //
+// A self-link is plain text by rule (the links plan, ruling 1): ORD in the rows of ORD's own
+// Schedule board does nothing when clicked, so it is not a link. The caller passes the view's own
+// hub as `self`, and a plain hub code equal to it is not a violation.
+//
 // DOM-free; tested in tests/link-guard.test.js.
 
 import { flightLink } from './flight-link.js';
@@ -60,6 +64,13 @@ const NAME_RE = /(?<![A-Za-z0-9])(?:UAL?[ -]\d{1,4}[A-Za-z]?|N-[1-9][0-9A-Z]{1,4
 /** @typedef {{ text: string, linked: boolean, where: string }} TextRun */
 /** @typedef {{ hubs: string[], tails: Set<string> }} KnownNames */
 /** @typedef {{ where: RegExp, reason: string }} AllowEntry */
+/**
+ * What the view being checked is itself about: the hub of a Schedule board, the type of a Fleet
+ * table filtered to one. A name equal to it prints plain by rule (a self-link), so it is not a
+ * violation. Only `hub` is read today: the guard reads no type names yet, and `type` is accepted
+ * so a caller can pass the view's whole identity once it does.
+ * @typedef {{ hub?: string | null, type?: string | null }} SelfNames
+ */
 
 /**
  * @param {string} word
@@ -93,15 +104,17 @@ export function findNames(rows, known) {
 }
 
 /**
- * The names printed with no link or button around them, less the rows the allowlist covers.
+ * The names printed with no link or button around them, less the rows the allowlist covers and
+ * less a plain hub code that is the view's own (`self.hub`, a self-link by rule).
  * An allowlist entry without a RegExp or without a reason throws, whether or not it matches.
  *
  * @param {TextRun[]} rows
  * @param {KnownNames} known
  * @param {AllowEntry[]} allow
+ * @param {SelfNames} [self]  the view's own hub (and type), when it has one.
  * @returns {Array<{ text: string, kind: NameKind, where: string }>}
  */
-export function findUnlinkedNames(rows, known, allow) {
+export function findUnlinkedNames(rows, known, allow, self = {}) {
   allow.forEach((entry, index) => {
     if (!(entry?.where instanceof RegExp)) {
       throw new Error(`link-guard allowlist entry ${index}: \`where\` must be a RegExp`);
@@ -112,8 +125,10 @@ export function findUnlinkedNames(rows, known, allow) {
   });
   // A `g` or `y` pattern keeps `lastIndex` between `test` calls; a fresh copy without them does not.
   const patterns = allow.map(({ where }) => new RegExp(where.source, where.flags.replace(/[gy]/g, '')));
+  const selfHub = typeof self?.hub === 'string' ? self.hub.trim().toUpperCase() : '';
   return findNames(rows, known)
     .filter((name) => !name.linked && !patterns.some((re) => re.test(name.where)))
+    .filter((name) => !(selfHub && name.kind === 'hub' && name.text === selfHub))
     .map(({ text, kind, where }) => ({ text, kind, where }));
 }
 
