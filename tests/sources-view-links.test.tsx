@@ -73,7 +73,7 @@ describe('SourcesView: a card names the view that shows its data', () => {
       Object.fromEntries(Object.entries(SOURCE_VIEW_LINKS).map(([name, link]) => [name, link.href])),
     );
     for (const name of ['Basemap — CARTO / OpenStreetMap', 'Route Estimation — Algorithmic', 'r/UnitedAirlines']) {
-      const heading = screen.getByRole('heading', { level: 3, name: new RegExp(`^${name.replace(/[/.]/g, '\\$&')}`) });
+      const heading = screen.getByRole('heading', { level: 3, name: (accessibleName) => accessibleName.startsWith(name) });
       expect(heading.querySelector('a'), name).toBeNull();
     }
   });
