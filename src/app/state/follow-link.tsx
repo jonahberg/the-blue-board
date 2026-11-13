@@ -10,8 +10,9 @@
  * same.
  *
  * A link that changes the tab leaves ONE history entry (`pushHistoryEntry`), so Back returns to the
- * tab the reader was on: the hash listener in `useDeepLinks` restores it. A link to the tab already
- * showing and an aircraft link (an overlay) leave none; the tab bar keeps replacing (`setTab`).
+ * tab the reader was on: the hash listener in `useDeepLinks` restores it, and `FollowProvider`
+ * announces the tab and moves focus as a follow does. A link to the tab already showing and an
+ * aircraft link (an overlay) leave none; the tab bar keeps replacing (`setTab`).
  *
  * A link that changes the tab also says where it went ("Schedule, ORD") through the page's one
  * polite region, and when the focused element was in the panel being hidden (a hub or type link
@@ -29,7 +30,7 @@
  * call `useFollowDeepLink()`.
  */
 
-import { createContext, useCallback, useContext, useLayoutEffect, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 
 import { addressAfterFollow, followAnnouncement } from '@/lib/followed-link.js';
@@ -59,10 +60,38 @@ export function FollowProvider({ children }: { children: ReactNode }) {
   const { tab, setTab, openAircraft, followFleetLink, announce } = useUi();
   const { setCurrent } = useSchedule();
   const latest = useRef<Latest>({ tab, setTab, openAircraft, followFleetLink, announce, setCurrent });
+  // The tab a history move has already been announced for, until the tab change commits: Back
+  // fires `popstate` and then `hashchange`, and the second must not speak again.
+  const historyMoveTo = useRef<TabId | null>(null);
   // After commit, so a render React throws away never reaches a click.
   useLayoutEffect(() => {
     latest.current = { tab, setTab, openAircraft, followFleetLink, announce, setCurrent };
+    historyMoveTo.current = null;
   });
+
+  // Back and Forward across a followed link's entry, and an in-page `#tab` anchor. The hash
+  // listener in `useDeepLinks` puts the tab back; this does what a follow does once the tab
+  // changes: it says which tab is showing ("Starlink") and, when focus was in the panel being
+  // hidden or already lost, moves it to the panel shown. Read before the tab change commits, so
+  // `latest.current.tab` is still the tab being left. The tab bar uses `replaceState`, which fires
+  // neither event, so it stays silent as before.
+  useEffect(() => {
+    function onHistoryMove() {
+      const to = resolveTabParam(window.location.hash);
+      const { tab: from, announce } = latest.current;
+      if (!to || to === from || to === historyMoveTo.current) return;
+      historyMoveTo.current = to;
+      const refocus = focusLeavesWith(from);
+      announce(followAnnouncement(tabById(to)?.label ?? to, {}));
+      if (refocus) moveFocusToPanel(to, from);
+    }
+    window.addEventListener('popstate', onHistoryMove);
+    window.addEventListener('hashchange', onHistoryMove);
+    return () => {
+      window.removeEventListener('popstate', onHistoryMove);
+      window.removeEventListener('hashchange', onHistoryMove);
+    };
+  }, []);
 
   const follow = useCallback<FollowDeepLink>((intent) => {
     const { tab: from, setTab, openAircraft, followFleetLink, announce, setCurrent } = latest.current;

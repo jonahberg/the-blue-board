@@ -320,6 +320,63 @@ describe('focus and the announcement after a followed link', () => {
     expect(seen.ui!.announcement).toBe('');
   });
 
+  it('Back says the tab it returns to, once, and moves focus to its panel; Forward does the same', async () => {
+    mountAt('/#starlink');
+    const ord = screen.getByRole('link', { name: 'ORD' });
+    ord.focus();
+    fireEvent.click(ord);
+    await nextFrame();
+    expect(document.activeElement).toBe(panel('schedule'));
+
+    await back();
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('starlink');
+    // Exactly the tab's name: popstate and hashchange both fired, and it was said once (a second
+    // announcement of the same words would carry the repeat mark).
+    expect(seen.ui!.announcement).toBe('Starlink');
+    expect(document.activeElement).toBe(panel('starlink'));
+
+    await act(async () => {
+      window.history.forward();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(seen.ui!.announcement).toBe('Schedule');
+    expect(document.activeElement).toBe(panel('schedule'));
+  });
+
+  it('Back with focus outside the panels says the tab and leaves focus where it is', async () => {
+    mountAt('/#starlink');
+    const chip = screen.getByRole('link', { name: 'DEN chip' });
+    chip.focus();
+    fireEvent.click(chip, { detail: 0 });
+    await nextFrame();
+    expect(document.activeElement).toBe(chip);
+
+    await back();
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('starlink');
+    expect(seen.ui!.announcement).toBe('Starlink');
+    expect(document.activeElement).toBe(chip);
+  });
+
+  it('the tab bar says nothing and leaves focus on the tab', async () => {
+    mountAt('/#starlink');
+    const trigger = screen.getByRole('tab', { name: 'Schedule' });
+    trigger.focus();
+
+    pickTab('Schedule');
+    await nextFrame();
+
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(seen.ui!.announcement).toBe('');
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it('a link to the tab already showing moves nothing and says nothing', async () => {
     mountAt('/#schedule');
     const chip = screen.getByRole('link', { name: 'DEN chip' });

@@ -251,7 +251,8 @@ export function useDeepLinks(deps: DeepLinkDeps) {
   // The hash is the one deep link that can change under us: an in-page anchor, and Back or Forward
   // across the entry a followed link leaves (follow-link.tsx). Back between two entries of this page
   // fires `popstate`, and `hashchange` as well when their hashes differ, which a followed link's
-  // always do; both are heard, and the second finds the tab already set.
+  // always do; both are heard, and the second finds the tab already set. When the tab changes,
+  // `FollowProvider` (follow-link.tsx) hears the same events and announces it and moves focus.
   useEffect(() => {
     function onHashChange() {
       const resolved = resolveTabParam(window.location.hash);
