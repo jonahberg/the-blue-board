@@ -16,7 +16,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DashLink } from '../src/app/features/DashLink';
+import { DashLink, dashLinkClick } from '../src/app/features/DashLink';
 import { FollowProvider } from '../src/app/state/follow-link';
 import { ScheduleProvider, useSchedule } from '../src/app/state/schedule';
 import type { ScheduleValue } from '../src/app/state/schedule';
@@ -59,6 +59,25 @@ let reachedDocumentPrevented: boolean | null = null;
 function recordClick(event: Event) {
   reachedDocumentPrevented = event.defaultPrevented;
   event.preventDefault();
+}
+
+/**
+ * Everything a link can change, read back after a click: the stores, the address and the history.
+ * A click left to the browser must leave all of it as it was.
+ */
+function everything() {
+  const ui = seen.ui!;
+  return {
+    tab: ui.tab,
+    pendingScroll: ui.pendingScroll,
+    aircraft: ui.aircraftReg,
+    fleetLink: ui.fleetLink,
+    scheduleLink: ui.scheduleLink,
+    announcement: ui.announcement,
+    board: seen.schedule!.current,
+    address: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    historyLength: window.history.length,
+  };
 }
 
 beforeEach(() => {
@@ -163,14 +182,14 @@ describe('DashLink, everything else is the browser\'s', () => {
     'leaves a modified click to the browser (%o)',
     (init) => {
       const link = mount('/?tab=schedule&hub=ORD');
+      const before = everything();
 
       fireEvent.click(link, init);
 
       expect(reachedDocumentPrevented).toBe(false);
       expect(seen.ui!.tab).toBe('live');
       expect(seen.schedule!.current.hub).toBe('DEN');
-      expect(seen.ui!.aircraftReg).toBeNull();
-      expect(seen.ui!.fleetLink).toBeNull();
+      expect(everything()).toEqual(before);
     },
   );
 
@@ -183,11 +202,67 @@ describe('DashLink, everything else is the browser\'s', () => {
     '/?tab=schedule&hub=ORD&flight=UA576',
   ])('does not intercept an address it cannot follow in place (%s)', (href) => {
     const link = mount(href);
+    const before = everything();
 
     fireEvent.click(link);
 
     expect(reachedDocumentPrevented).toBe(false);
     expect(seen.ui!.tab).toBe('live');
     expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(everything()).toEqual(before);
+  });
+
+  it('leaves alone a click something earlier already cancelled, and changes nothing', () => {
+    const link = mount('/?tab=schedule&hub=ORD');
+    const before = everything();
+    // A capture listener above the dashboard (a dialog's outside-click guard, say) has handled it.
+    const cancelFirst = (event: Event) => event.preventDefault();
+    document.addEventListener('click', cancelFirst, { capture: true });
+    try {
+      fireEvent.click(link);
+    } finally {
+      document.removeEventListener('click', cancelFirst, { capture: true });
+    }
+
+    expect(everything()).toEqual(before);
+  });
+});
+
+describe('dashLinkClick returns whether it followed the link', () => {
+  /** A React click event as the handler reads it. */
+  function click(init: Partial<{ defaultPrevented: boolean; button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }> = {}) {
+    const event = { defaultPrevented: false, button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...init, preventDefault: vi.fn() };
+    return event as typeof event & Parameters<ReturnType<typeof dashLinkClick>>[0];
+  }
+
+  it('true, with the default prevented and the intent followed, for a plain click it can follow', () => {
+    const follow = vi.fn();
+    const event = click();
+    expect(dashLinkClick(follow, '/?tab=schedule&hub=ORD')(event)).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(follow).toHaveBeenCalledWith(expect.objectContaining({ tab: 'schedule', scheduleHub: 'ORD' }));
+  });
+
+  it.each([
+    ['already cancelled', { defaultPrevented: true }],
+    ['a middle click', { button: 1 }],
+    ['Cmd', { metaKey: true }],
+    ['Ctrl', { ctrlKey: true }],
+    ['Shift', { shiftKey: true }],
+    ['Alt', { altKey: true }],
+  ])('false, touching nothing, for a click %s', (_, init) => {
+    const follow = vi.fn();
+    const event = click(init);
+    expect(dashLinkClick(follow, '/?tab=schedule&hub=ORD')(event)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(follow).not.toHaveBeenCalled();
+  });
+
+  it('false, touching nothing, for an address the resolver turns down', () => {
+    const follow = vi.fn();
+    const event = click();
+    expect(dashLinkClick(follow, '/hubs/ord')(event)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(follow).not.toHaveBeenCalled();
   });
 });
