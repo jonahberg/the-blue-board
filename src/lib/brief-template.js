@@ -6,7 +6,9 @@
 // this is what every visitor sees whenever the model is not available.
 
 import { airportDisplayName, airportOwnNames } from './brief-claims.js';
-import { computeTone, isHubProgramFact, isNonHubProgramFact, programAirport, travelerNoteAllowed } from './brief-facts.js';
+import {
+  computeTone, isAirborneShortfallFact, isHubProgramFact, isNonHubProgramFact, programAirport, travelerNoteAllowed,
+} from './brief-facts.js';
 
 /**
  * @typedef {import('./brief-facts.js').BriefFact} BriefFact
@@ -28,6 +30,17 @@ const SUMMARY_IDS = new Set([
   'otp.floor', 'otp.soft', 'otp.min', 'cxl.confirmed', 'cxl.unconfirmed', 'air.total',
   'air.starlink', 'air.normal',
 ]);
+/**
+ * Background, except the in-the-air comparison on a day it sets the tone: far fewer flights flying
+ * than usual is the story then, not filler (Nov 13 2026, the nationwide ground stop).
+ */
+const isSummary = (f) => SUMMARY_IDS.has(f.id) && !isAirborneShortfallFact(f);
+
+/** The headline when far fewer United flights are in the air than usual. It says what is seen, not why. */
+const SHORTFALL_HEADLINE = Object.freeze({
+  disrupted: 'Far fewer United flights are in the air than usual right now.',
+  watch: 'Fewer United flights than usual are in the air right now.',
+});
 
 /** The cause values an FAA program fact carries when its cause is weather (faaCausePhrase). */
 const WEATHER_CAUSE_VALUES = new Set(['weather', 'thunderstorms', 'snow', 'ice', 'wind', 'low clouds', 'low visibility', 'rain']);
@@ -56,6 +69,10 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
   const find = (re) => sorted.find((f) => re.test(f.id));
   const gdps = sorted.filter((f) => f.hub && /^faa\.active\.[A-Z]{3}\.gdp$/.test(f.id));
 
+  // Far fewer flights flying than usual is the whole network, so it leads over any one airport.
+  const shortfall = sorted.find(isAirborneShortfallFact);
+  if (shortfall?.toneFloor === 'disrupted') return { headline: SHORTFALL_HEADLINE.disrupted, fact_ids: [shortfall.id] };
+
   // A ground stop or delay program holds flights INTO the airport, so the headline says "into".
   if (tone === 'disrupted') {
     const gs = find(/^faa\.active\.[A-Z]{3}\.gs$/);
@@ -72,6 +89,7 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
     // Delay programs at hubs are a watch however many there are, and the most concrete news.
     if (gdps.length) return delayProgramHeadline(gdps, name);
     const lead = sorted.find((f) => f.toneFloor === 'watch');
+    if (lead && isAirborneShortfallFact(lead)) return { headline: SHORTFALL_HEADLINE.watch, fact_ids: [lead.id] };
     // Only a possible hub program later today; tomorrow's never leads (brief-verify.js).
     const planned = sorted.find((f) => f.kind === 'faa_planned' && f.hub && !f.later);
     // No "calm", "smooth" or "running normally" in a watch headline: the verifier replaces those
@@ -177,7 +195,7 @@ function pickItems(facts, limit, tone) {
     .map((f) => `wx.${f.hub}`));
   let freed = 0;
   for (const f of sorted) {
-    if (f.severity < LEAD_SEVERITY || SUMMARY_IDS.has(f.id)) continue;
+    if (f.severity < LEAD_SEVERITY || isSummary(f)) continue;
     if (weatherInProgram.has(f.id)) freed++;
     else add(f);
   }
@@ -186,7 +204,7 @@ function pickItems(facts, limit, tone) {
   // background below fills it.
   for (const f of sorted) {
     if (freed === 0) break;
-    if (f.severity < FREED_SLOT_SEVERITY || SUMMARY_IDS.has(f.id) || weatherInProgram.has(f.id) || picked.includes(f)) continue;
+    if (f.severity < FREED_SLOT_SEVERITY || isSummary(f) || weatherInProgram.has(f.id) || picked.includes(f)) continue;
     add(f);
     freed--;
   }
@@ -277,7 +295,15 @@ export function buildTemplateBrief(facts) {
     }
     const fallback = bySeverity.find((f) => f.hub && f.toneFloor === 'disrupted');
     const anchors = programs.length ? programs.slice(0, 8) : fallback ? [fallback] : [];
-    if (anchors.length) {
+    // Far fewer flights flying than usual touches every traveler, not only those bound for the
+    // airports with a program: the note speaks to all of them.
+    const networkWide = list.find((f) => isAirborneShortfallFact(f) && f.toneFloor === 'disrupted');
+    if (networkWide) {
+      traveler_note = {
+        text: "Whichever airport you are flying to, check your flight's status before you leave for the airport.",
+        fact_ids: [networkWide.id],
+      };
+    } else if (anchors.length) {
       traveler_note = {
         text: `If you are ${travelerWho(anchors)}, check your flight's status before you leave for the airport.`,
         fact_ids: anchors.map((f) => f.id),

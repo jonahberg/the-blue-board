@@ -23,7 +23,7 @@
 import { getSupabaseAdmin } from './_schedule-snapshots.js';
 import { AIRBORNE_SAMPLES_TABLE } from './_airborne-samples.js';
 import { parseFr24Feed } from '../src/lib/feed-health.js';
-import { airborneNormal, countAirborneAndStarlink } from '../src/lib/brief-facts.js';
+import { airborneNormal, countAirborneAndStarlink, sameClockDaysBefore } from '../src/lib/brief-facts.js';
 
 /** The warm cron's exact METAR query (api/cron/refresh-metar.ts HUB_ICAOS). */
 export const BRIEF_METAR_IDS = 'KEWR,KIAH,KORD,KDEN,KSFO,KLAX,KIAD,RJAA,PGUM';
@@ -93,13 +93,14 @@ async function fleetByReg(fetchImpl: Fetch, base: string, nowMs: number): Promis
 
 /**
  * The airborne median at this clock time on each of the previous `days` days: one narrow primary-key
- * range scan per day (±10 minutes, two or three rows each), not a week of rows.
+ * range scan per day (±10 minutes, two or three rows each), not a week of rows. "This clock time" is
+ * the US wall clock (sameClockDaysBefore), so the week after a clock change compares like with like.
  */
 export async function loadAirborneNormal(nowMs: number, days = 7): Promise<{ median: number; days: number } | null> {
   try {
     const supabase = await getSupabaseAdmin();
     if (!supabase || typeof supabase.from !== 'function') return null;
-    const windows = Array.from({ length: days }, (_, i) => nowMs - (i + 1) * 86_400_000);
+    const windows = Array.from({ length: days }, (_, i) => sameClockDaysBefore(nowMs, i + 1));
     const reads = await Promise.all(windows.map(async (targetMs) => {
       const { data, error } = await supabase
         .from(AIRBORNE_SAMPLES_TABLE)

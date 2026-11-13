@@ -115,6 +115,71 @@ export function healthyOutlier(readings) {
 /** "About the usual" band for the airborne comparison, in percent either side of the median. */
 export const BRIEF_AIRBORNE_USUAL_BAND_PCT = 10;
 /**
+ * A shortfall of flights in the air against the usual for this time of day sets the tone: at this
+ * many percent fewer the brief is at least "watch", ...
+ *
+ * Nov 13 2026: the FAA ordered a nationwide ground stop at about 12:54 PM PT. None of the FAA feeds
+ * the brief reads carried it (they list programs by airport), so the brief stayed on a San Francisco
+ * delay program at "watch" while this fact read 31% fewer at 1:10 PM, 47% at 1:30 PM and 72% at
+ * 2:20 PM with a calm floor.
+ *
+ * Checked against every airborne_samples row before that afternoon (Oct 4 to Nov 13 2026, 10,651
+ * five-minute samples with a 7-day median): the largest ordinary shortfall was 30% (Tue Oct 20,
+ * 10:25 PM PT; Saturdays reach 22 to 25%), so the watch line sits at 35 and neither line was ever
+ * crossed. Compared at the same UTC time instead, 63 samples read 30 to 42% fewer at 2 to 5 AM PT on
+ * the four nights after the clocks changed on Nov 1, when "the same time yesterday" was an hour off
+ * the schedule: sameClockDaysBefore removes those (that week's largest is then 22%). On the
+ * afternoon of the stop the lines were crossed at 1:20 PM PT (43%) and 1:30 PM PT (48%).
+ */
+export const BRIEF_AIRBORNE_WATCH_PCT = 35;
+/** ... and at this many percent fewer it is "disrupted" and leads the brief, above any one airport's program. */
+export const BRIEF_AIRBORNE_DISRUPTED_PCT = 45;
+/**
+ * The shortfall sets no tone when the usual count is below this: overnight a few dozen flights
+ * either way is a large percentage (the lowest hourly median stored is 152).
+ */
+export const BRIEF_AIRBORNE_MIN_USUAL = 100;
+
+/**
+ * The tone a count of flights in the air sets against the usual for this time of day. Only a
+ * shortfall sets one: more flights than usual is never a problem in itself.
+ * @param {number} airborne
+ * @param {number} median  the usual at this clock time (airborneNormal)
+ * @returns {'calm'|'watch'|'disrupted'}
+ */
+export function airborneShortfallTone(airborne, median) {
+  if (!(Number.isFinite(airborne) && Number.isFinite(median)) || median < BRIEF_AIRBORNE_MIN_USUAL) return 'calm';
+  const pct = Math.round(((airborne - median) / median) * 100);
+  if (pct <= -BRIEF_AIRBORNE_DISRUPTED_PCT) return 'disrupted';
+  if (pct <= -BRIEF_AIRBORNE_WATCH_PCT) return 'watch';
+  return 'calm';
+}
+/** How far `tz`'s wall clock is ahead of UTC at `ms`, in milliseconds (negative in the Americas). */
+function tzOffsetMs(ms, tz) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(ms));
+  const part = (type) => Number(parts.find((p) => p.type === type)?.value);
+  return Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second')) - Math.floor(ms / 1000) * 1000;
+}
+/**
+ * The instant `daysBack` days earlier that shows the same wall-clock time in the US: what "the usual
+ * for this time of day" is compared with. Exactly 24 hours a day except across a clock change,
+ * where the schedule moves an hour against UTC (the US zones change together, so one stands for all).
+ * @param {number} nowMs
+ * @param {number} daysBack
+ * @param {string} [tz]
+ * @returns {number}
+ */
+export function sameClockDaysBefore(nowMs, daysBack, tz = 'America/Chicago') {
+  const naive = nowMs - daysBack * 86_400_000;
+  return naive + tzOffsetMs(nowMs, tz) - tzOffsetMs(naive, tz);
+}
+/** A fact saying far fewer United flights are in the air than usual (air.normal above a calm floor). */
+export function isAirborneShortfallFact(fact) {
+  return fact?.id === 'air.normal' && (fact.toneFloor === 'watch' || fact.toneFloor === 'disrupted');
+}
+/**
  * Fewer confirmed cancellations than this across the hubs is not news (one among ~2,700
  * departures, Nov 11 2026): the `cxl.confirmed` fact is not built, and `collection.skipped` says so.
  */
@@ -960,6 +1025,9 @@ export function buildBriefFacts(sources, { nowMs }) {
       const pct = Math.round(((airborne - median) / median) * 100);
       const usual = Math.abs(pct) <= BRIEF_AIRBORNE_USUAL_BAND_PCT;
       const comparison = usual ? 'about the usual number' : `${Math.abs(pct)}% ${pct < 0 ? 'fewer' : 'more'} than usual`;
+      // A large shortfall is the one sign of a network-wide halt that needs no FAA feed to carry it
+      // (BRIEF_AIRBORNE_WATCH_PCT). It says what is seen, never why: no fact here gives a cause.
+      const shortfall = airborneShortfallTone(airborne, median);
       facts.push({
         id: 'air.normal',
         kind: 'airborne',
@@ -967,9 +1035,13 @@ export function buildBriefFacts(sources, { nowMs }) {
         values: uniq([String(median), String(days), numberWord(days), usual ? null : `${Math.abs(pct)}%`, String(airborne)]),
         at: iso(atMs),
         link: { tab: 'live' },
-        severity: !usual && Math.abs(pct) >= 25 ? 20 : 2,
-        toneFloor: 'calm',
-        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}`,
+        // Disrupted: above a hub ground stop (100), because it is the whole network. Watch: above
+        // FAA departure delays (40) and the index (30), below a hub's stop or delay program.
+        severity: shortfall === 'disrupted' ? 110 : shortfall === 'watch' ? 50 : !usual && Math.abs(pct) >= 25 ? 20 : 2,
+        toneFloor: shortfall,
+        // While the shortfall sets the tone the brief quotes its figure first, so the key moves every
+        // ten points and a brief saying "73% fewer" is rewritten before the count is far from it.
+        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}${shortfall === 'calm' ? '' : `:${shortfall}:${Math.floor(Math.abs(pct) / 10) * 10}`}`,
       });
     }
   }

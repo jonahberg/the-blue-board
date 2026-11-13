@@ -81,7 +81,7 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `wx.summary` | weather | same | Weather is not affecting operations at any of the 9 United hubs with a current report. | calm |
 | `air.total` | airborne | live feed, `isOnGround()` complement (the Live stat bar) | 630 United flights, including United Express, are in the air right now. | calm |
 | `air.starlink` | airborne | live feed × Starlink roster × fleet match (`makeIsStarlinkFlight`'s rule) | 280 of the 630 United flights in the air have Starlink Wi-Fi. | calm |
-| `air.normal` | airborne | `airborne_samples`, median of the same clock time on the previous 7 days (≥ 3 days needed) | The 702 United flights in the air are 11% fewer than usual for this time of day: … the median at this hour was 790. | calm |
+| `air.normal` | airborne | `airborne_samples`, median of the same clock time on the previous 7 days (≥ 3 days needed) | The 702 United flights in the air are 11% fewer than usual for this time of day: … the median at this hour was 790. | calm; **watch at 35% fewer than usual, disrupted at 45% fewer** when the usual is 100 or more (v1.31.1) |
 | `flow.<HUB>.arrivals` / `.departures` | flow | Enhanced Radar `operations.flow` (from FAA data); [radio](#air-traffic-control-radio-enhanced-radar), off by default | Enhanced Radar, from FAA data, reports Newark (EWR) arrivals: a planned rate of 36 an hour, 26 landed in the last hour and 39 scheduled in the next hour, more than the planned rate allows. | calm |
 | `flow.<HUB>.runways` | flow | Enhanced Radar `operations.runways` | Enhanced Radar reports Newark (EWR) landing on runway 22L and taking off from runway 22R. | calm |
 | `radio.<HUB>.<id>` | radio | each Enhanced Radar `critical` / `notable` observation under 2 h old (max 3 per hub): time, the API's tags and runways as values; the **sanitized** title as `quote` only | Heard on Newark (EWR) air traffic control frequencies at 5:29 PM ET, in Enhanced Radar's model-written summary, which can contain mistakes: "GLS approach out of service". | calm (never sets the tone) |
@@ -206,6 +206,17 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    however many hubs, are `watch` ("Some Delays"); a ground stop or closure at a hub is `disrupted`,
    as is the network status at its worst level ("Disrupted"); **a program away from the hubs is
    `calm`** (Nov 2026), and so is a possible hub program whose window opens tomorrow or later.
+   **Far fewer United flights in the air than usual** sets the tone with no FAA program at all
+   (v1.31.1, after the Nov 13 2026 nationwide ground stop, which none of the FAA feeds listed):
+   `watch` at 35% fewer than the 7-day median for this time of day, `disrupted` at 45% fewer
+   (neither was crossed in the 10,651 samples of Oct 4 to Nov 13 before the stop; the largest was
+   30%). "This time of day" is the US wall clock (`sameClockDaysBefore`), so the week after a clock
+   change compares like with like. At
+   `disrupted` the fact is first in the list, an item citing it is moved to the front (or its
+   statement is put there, `shortfallLed`; at the item limit the last item is dropped as
+   `displaced_by_network_shortfall`), and a headline that is not about how many flights are flying
+   is replaced (`headline:misses_network_shortfall`), and the traveler note becomes the template's
+   note for every traveler (`note_for_every_traveler`). The brief says what is seen, never why.
    `tests/brief-facts.test.js` checks, for every fixture, that the floor from
    the FAA facts equals the header's FAA level from the same `/api/faa` input. One known divergence:
    arrival delays at a hub are `watch` here and nothing in the header (`hubProgramMarker` has no
@@ -240,6 +251,10 @@ A hub's own weather item is left out while a ground stop or delay program for a 
 effect there (the program's item already says "because of low clouds"); its slot goes to the next
 specific fact by severity worth a line (severity ≥ 10, such as that hub's cancellations), else to the
 background.
+When far fewer flights are in the air than usual at the `disrupted` level, that fact is the first item,
+the headline is "Far fewer United flights are in the air than usual right now.", and the traveler note
+speaks to every traveler ("Whichever airport you are flying to, …"); at the `watch` level it is an item,
+and the headline only when no hub delay program is in effect.
 Items are fact statements verbatim; headlines are fixed per tone and lead fact ("A ground stop is
 holding flights into Newark.", "Ground delay programs are holding flights into Newark and San
 Francisco.", "FAA action is possible at Newark; none is in effect.", "United is running smoothly right
@@ -263,7 +278,7 @@ out of the key entirely, id included, so it appearing or disappearing is not a c
 | fact | material |
 |---|---|
 | `air.total`, `air.starlink` | none (`null`): the count moves all day |
-| `air.normal` | usual / above / below (±10% of the 7-day median) |
+| `air.normal` | usual / above / below (±10% of the 7-day median), and below:watch:NN / below:disrupted:NN at 35% / 45% fewer, NN the shortfall in ten-point steps (the brief quotes the figure) |
 | `net.index` | its band (normal / minor / significant), not the score |
 | `otp.<HUB>` | none while at or above 80% (`BRIEF_HEALTHY_HUB_OTP`), so a healthy hub's reading moving, appearing or aging out is not a change; below 80%, rounded to 5 points. Not sending healthy hubs' facts on a healthy day (Nov 2026) therefore changes no key |
 | `cxl.confirmed` | none under 10, sent (5–9) or not (0–4): the send threshold sits inside that band, so 4 ↔ 5 never rewrites; from 10, the existing count steps (10–12, 13–17, …) |
@@ -327,9 +342,12 @@ dropped after it may have been billed; 4xx refusals book nothing. An unreadable 
 ## Costs
 
 Claude Haiku 5.5 on the gateway: $0.10 / $0.50 per million input / output tokens (prompts ≤ 100K).
-A request is ~1.9–3.4K input tokens at four characters a token (the fixtures: 17–33 facts, v1.25.1); `max_tokens` is 2,000 at `effort:
-low`. Worst case per call ≈ $0.0013; a typical call (~2.5K in, ~400 out) ≈ $0.0005.
-At most 144 runs a day, so the hard worst case is ≈ $0.19/day, under the $0.50 cap and well under the
+A request is ~1.9–3.4K input tokens at four characters a token (the fixtures: 17–33 facts, v1.25.1); `max_tokens` is 6,000 at `effort:
+low` (2,000 until v1.31.1: thinking counts against the limit, and on Nov 12–13 2026 about half the calls were cut off there and
+replaced by the template; production requests had grown to ~4.4–6.8K input tokens by then). Worst case per call ≈ $0.0037; a
+typical call (~5.5K in, ~1.2K out with thinking) ≈ $0.0012.
+At most 144 runs a day, so the hard worst case is ≈ $0.53/day, which the $0.50 cap stops (the template is published, reason
+`spend_cap`); at the ~70–80 briefs a busy day writes it is ≈ $0.29, and it stays well under the
 project's $3/day gateway ceiling; realistic volume (a new brief when a band moves, at least hourly) is
 close to the 24-a-day hourly floor plus one per real change since v1.25.1 (above), about $0.01–0.04/day. Collection costs nothing upstream (above). Supabase: one insert
 per new brief (~20–40 KB of facts JSONB), one tiny update per unchanged run, 7 small reads.

@@ -4,7 +4,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { buildBriefFacts, travelerNoteAllowed } from '../src/lib/brief-facts.js';
+import { buildBriefFacts, isAirborneShortfallFact, travelerNoteAllowed } from '../src/lib/brief-facts.js';
 import { buildTemplateBrief, templateHeadline } from '../src/lib/brief-template.js';
 import { verifyBrief } from '../src/lib/brief-verify.js';
 import { radioFactsFromStatus } from '../src/lib/brief-radio.js';
@@ -53,7 +53,9 @@ describe('no padding when something is wrong', () => {
     it(`${name}: a watch or disrupted template has no airborne, Starlink or weather-tally line`, () => {
       const t = buildTemplateBrief(factsFor(name));
       if (t.tone === 'calm') return;
-      for (const id of ['air.total', 'air.starlink', 'air.normal', 'wx.summary']) expect(t.items.map((i) => i.fact_ids[0])).not.toContain(id);
+      // The in-the-air comparison is the one exception: when it sets the tone it is the story.
+      const shortfall = factsFor(name).some(isAirborneShortfallFact);
+      for (const id of ['air.total', 'air.starlink', ...(shortfall ? [] : ['air.normal']), 'wx.summary']) expect(t.items.map((i) => i.fact_ids[0])).not.toContain(id);
       expect(t.items.length).toBeGreaterThanOrEqual(1);
     });
   }
@@ -237,5 +239,57 @@ describe('buildTemplateBrief', () => {
     expect(ids.filter((id) => /^faa\.active\.[A-Z]{3}\./.test(id)).length).toBeLessThanOrEqual(2);
     // The note names only the airports the items print.
     expect(t.traveler_note?.fact_ids.every((id) => ids.includes(id))).toBe(true);
+  });
+});
+
+describe('far fewer flights in the air than usual (Nov 13 2026, the nationwide ground stop)', () => {
+  const NAME = 'nationwide-stop-2026-11-13';
+  const withAir = (airborne, median = 651) => {
+    const fx = JSON.parse(readFileSync(new URL(`${NAME}.json`, FIXTURE_DIR), 'utf8'));
+    return buildBriefFacts({ ...fx.sources, air: { airborne, starlink: null }, airNormal: { median, days: 7 } }, { nowMs: Date.parse(fx.nowIso) }).facts;
+  };
+
+  it('the captured afternoon: disrupted, led by the count against the usual, with a note for every traveler', () => {
+    const t = buildTemplateBrief(factsFor(NAME));
+    expect(t.tone).toBe('disrupted');
+    expect(t.headline).toBe('Far fewer United flights are in the air than usual right now.');
+    expect(t.headline_fact_ids).toEqual(['air.normal']);
+    expect(t.items[0]).toEqual({
+      text: 'The 174 United flights in the air are 73% fewer than usual for this time of day: over the past 7 days, the median at this hour was 651.',
+      fact_ids: ['air.normal'],
+    });
+    // The San Francisco delay program that led the published brief is still there, second.
+    expect(t.items[1].fact_ids).toEqual(['faa.active.SFO.gdp']);
+    expect(t.traveler_note).toEqual({
+      text: "Whichever airport you are flying to, check your flight's status before you leave for the airport.",
+      fact_ids: ['air.normal'],
+    });
+  });
+
+  it('never says why: no word of a nationwide stop, which no fact supports', () => {
+    const t = buildTemplateBrief(factsFor(NAME));
+    const text = [t.headline, ...t.items.map((i) => i.text), t.traveler_note.text].join(' ');
+    expect(text).not.toMatch(/nationwide|national|all airports|every airport is/i);
+  });
+
+  it('at 35% to 44% fewer it is a watch: a hub delay program keeps the headline, the shortfall is an item', () => {
+    const t = buildTemplateBrief(withAir(420)); // 35% fewer
+    expect(t.tone).toBe('watch');
+    expect(t.headline).toBe('A ground delay program is holding flights into San Francisco.');
+    expect(t.items.map((i) => i.fact_ids[0])).toContain('air.normal');
+    expect(t.traveler_note.fact_ids).not.toContain('air.normal');
+  });
+
+  it('at 35% to 44% fewer with no hub delay program, the shortfall is the watch headline', () => {
+    // Without the San Francisco program, and the hub-program count that goes with it.
+    const facts = withAir(420).filter((f) => f.id !== 'faa.active.SFO.gdp' && f.id !== 'faa.active.count');
+    const t = templateHeadline(facts);
+    expect(t).toEqual({ headline: 'Fewer United flights than usual are in the air right now.', fact_ids: ['air.normal'] });
+  });
+
+  it('at 20% fewer nothing changes: the comparison stays background', () => {
+    const t = buildTemplateBrief(withAir(521));
+    expect(t.tone).toBe('watch');
+    expect(t.items.map((i) => i.fact_ids[0])).not.toContain('air.normal');
   });
 });

@@ -29,7 +29,9 @@
 // If no item survives, the result is not ok and the caller publishes the template brief.
 
 import { BRIEF_HUBS, airportForms, allowanceFromValues, claimFailure, emptyAllowance, extractClaims, normalizeText } from './brief-claims.js';
-import { allHubsHealthy, computeTone, isNonHubProgramFact, programAirport, travelerNoteAllowed } from './brief-facts.js';
+import {
+  allHubsHealthy, computeTone, isAirborneShortfallFact, isNonHubProgramFact, programAirport, travelerNoteAllowed,
+} from './brief-facts.js';
 import { ON_TIME_GRACE_MIN } from './hub-health.js';
 import { buildTemplateBrief, templateHeadline } from './brief-template.js';
 import { readBriefResponse } from './brief-prompt.js';
@@ -402,6 +404,8 @@ const wordCount = (s) => normalizeText(s).trim().split(/\s+/).filter(Boolean).le
  * @property {number} healthyHubOnTime  items that gave a single hub's on-time percentage on a day
  *   every hub is healthy (dropped, reason hub_on_time_on_healthy_day)
  * @property {boolean} summaryInserted  the on-time summary took the first such item's place
+ * @property {boolean} [shortfallLed]  far fewer flights were in the air than usual and the model did
+ *   not open with it: the fact's own statement was put first, or the item citing it moved there
  * @property {Array<{item: number|string, from: string, to: string, reason: string}>} trimmed  every
  *   rewrite the published text went through (finalizeSentence): a cut "is not a United hub" clause,
  *   "after tomorrow 1:00 PM" word order, the on-time definition repeated, a note naming three or
@@ -452,6 +456,9 @@ export function finalizeSentence(original, ids, factIndex, { rewrites = [], extr
   if (MARKUP_RE.test(normalizeText(original)) && !reasons.includes('markup_or_url')) reasons.push('markup_or_url');
   return { text, reasons, rewrites: done };
 }
+
+/** A headline about how many flights are flying: required when far fewer are in the air than usual. */
+const NETWORK_SHORTFALL_HEADLINE_RE = /\b(?:in the air|airborne|aloft|flying|fewer|grounded)\b/i;
 
 /** Headlines that claim nothing, for when even the template's headline fails its checks. */
 const FALLBACK_HEADLINE = Object.freeze({
@@ -548,6 +555,30 @@ export function verifyBrief(candidate, facts) {
       report.summaryInserted = true;
     }
   }
+  // Far fewer United flights in the air than usual (a "disrupted" shortfall) opens the brief
+  // whatever the model chose: it is the whole network, and on Nov 13 2026 a model-written brief
+  // at 47% fewer led with one airport's ground stop and never said it. An item already citing the
+  // fact moves to the front; otherwise the fact's statement goes there, taking the last item's
+  // place at the limit.
+  const shortfall = factList.find((f) => isAirborneShortfallFact(f) && f.toneFloor === 'disrupted');
+  if (shortfall) {
+    const at = kept.findIndex((i) => i.fact_ids.includes(shortfall.id));
+    if (at > 0) {
+      kept.unshift(...kept.splice(at, 1));
+      report.shortfallLed = true;
+    } else if (at < 0) {
+      const s = finalizeSentence(shortfall.statement, [shortfall.id], factIndex);
+      if (s.reasons.length) report.rewritesRejected += 1;
+      else {
+        if (kept.length >= BRIEF_MAX_ITEMS) {
+          const cut = kept.pop();
+          report.dropped.push({ index: kept.length, text: cut.text, fact_ids: cut.fact_ids, reasons: ['displaced_by_network_shortfall'] });
+        }
+        kept.unshift({ text: s.text, fact_ids: [shortfall.id] });
+        report.shortfallLed = true;
+      }
+    }
+  }
   report.itemsKept = kept.length;
 
   if (kept.length === 0) return { ok: false, brief: null, report };
@@ -572,6 +603,8 @@ export function verifyBrief(candidate, facts) {
     // Nor, on a calm night, something only possible tomorrow (Nov 12 2026).
     const laterLead = tomorrowLeadReason(text, tone, factList);
     if (laterLead) reasons.push(laterLead);
+    // With far fewer flights in the air than usual, the headline is about that, not one airport.
+    if (shortfall && !NETWORK_SHORTFALL_HEADLINE_RE.test(text)) reasons.push('headline:misses_network_shortfall');
     if (MARKUP_RE.test(text)) reasons.push('markup_or_url');
     return reasons;
   };
@@ -639,6 +672,22 @@ export function verifyBrief(candidate, facts) {
       report.travelerNote = { status: 'kept', reasons: [] };
       for (const r of note.rewrites) report.trimmed.push({ item: 'traveler_note', ...r });
       traveler_note = { text: note.text, fact_ids: noteIds };
+    }
+  }
+
+  // Far fewer flights flying than usual touches every traveler, so the template's note for that
+  // day stands in for one that names only the airports with a program, or for none (Nov 13 2026:
+  // all three Haiku samples led with the shortfall and then addressed four airports).
+  if (shortfall) {
+    const template = buildTemplateBrief(factList).traveler_note;
+    if (template && template.text !== traveler_note?.text) {
+      const s = finalizeSentence(template.text, template.fact_ids, factIndex);
+      if (s.reasons.length) report.rewritesRejected += 1;
+      else {
+        if (traveler_note) report.trimmed.push({ item: 'traveler_note', from: traveler_note.text, to: s.text, reason: 'note_for_every_traveler' });
+        traveler_note = { text: s.text, fact_ids: template.fact_ids };
+        report.travelerNote = { status: 'kept', reasons: [] };
+      }
     }
   }
 

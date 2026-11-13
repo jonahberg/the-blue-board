@@ -1,0 +1,26 @@
+{
+  "headline": "Far fewer United flights are in the air than usual right now.",
+  "tone": "disrupted",
+  "items": [
+    {
+      "text": "174 United flights are in the air right now, 73% fewer than usual for this time of day; the median at this hour over the past 7 days was 651.",
+      "fact_ids": ["air.normal"]
+    },
+    {
+      "text": "The FAA has a ground delay program for flights into San Francisco until 11:59 PM PT because of wind, with delays averaging 138 minutes and up to 690 minutes. San Francisco also has 3 confirmed cancellations among its 323 departures today.",
+      "fact_ids": ["faa.active.SFO.gdp", "cxl.SFO"]
+    },
+    {
+      "text": "Los Angeles is the lowest of the seven United hubs reporting, with 73% of departures so far today leaving within 30 minutes of schedule (52 departed). Newark has rain and somewhat low clouds or visibility, which can cause minor delays.",
+      "fact_ids": ["otp.LAX", "otp.min", "wx.EWR"]
+    },
+    {
+      "text": "A ground stop holds flights into Toronto until 6:15 PM ET, and the FAA rates the chance of an extension as high. Ground delay programs also hold flights into Boston until 9:59 PM ET and into New York LaGuardia until 10:59 PM ET.",
+      "fact_ids": ["faa.active.YYZ.gs", "faa.active.BOS.gdp", "faa.active.LGA.gdp"]
+    }
+  ],
+  "traveler_note": {
+    "text": "If you are flying to San Francisco, check your flight status before leaving for the airport, and do the same if you are flying to Toronto, Boston or LaGuardia.",
+    "fact_ids": ["faa.active.SFO.gdp", "faa.active.YYZ.gs", "faa.active.BOS.gdp", "faa.active.LGA.gdp"]
+  }
+}

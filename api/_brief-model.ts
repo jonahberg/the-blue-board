@@ -13,7 +13,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { BRIEF_DEFAULT_MODEL_ID, briefCostUsd, briefWorstCaseCostUsd, buildBriefRequest, readBriefResponse } from '../src/lib/brief-prompt.js';
 
-export const BRIEF_MODEL_TIMEOUT_MS = 20_000;
+/** Long enough for BRIEF_MAX_TOKENS at the speed measured in production (about 165 tokens a second). */
+export const BRIEF_MODEL_TIMEOUT_MS = 45_000;
 
 /** The model id actually sent: BRIEF_MODEL_ID, else the gateway catalog id. */
 export function briefModelId(): string {

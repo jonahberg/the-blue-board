@@ -650,3 +650,98 @@ describe('verifyBrief: one validation path for every rewrite', () => {
     });
   }
 });
+
+// Nov 13 2026, the nationwide ground stop: the 1:30 PM PT brief was model-written with the fact
+// "47% fewer than usual" in front of it, led with the O'Hare ground stop and never mentioned it.
+describe('verifyBrief: far fewer flights in the air than usual leads the brief', () => {
+  const fx = JSON.parse(readFileSync(new URL('./fixtures/brief/nationwide-stop-2026-11-13.json', import.meta.url), 'utf8'));
+  const factsWith = (airborne) => buildBriefFacts({ ...fx.sources, air: { airborne, starlink: null }, airNormal: { median: 651, days: 7 } }, { nowMs: Date.parse(fx.nowIso) }).facts;
+  const facts = factsWith(174);
+  const statement = (id) => facts.find((f) => f.id === id).statement;
+  const sfo = item(statement('faa.active.SFO.gdp'), ['faa.active.SFO.gdp']);
+  const ewr = item(statement('faa.planned.EWR'), ['faa.planned.EWR']);
+  const lax = item(statement('otp.LAX'), ['otp.LAX']);
+  const wx = item(statement('wx.EWR'), ['wx.EWR']);
+  const shortfall = item('Only 174 United flights are in the air, 73% fewer than usual for this time of day.', ['air.normal']);
+  const SHORTFALL_STATEMENT = 'The 174 United flights in the air are 73% fewer than usual for this time of day: over the past 7 days, the median at this hour was 651.';
+
+  it('a brief that ignores the shortfall gets the fact as its first item and the template headline', () => {
+    const out = verifyBrief(brief([sfo, ewr, lax], { tone: 'watch', headline: 'A ground delay program is holding flights into San Francisco.' }), facts);
+    expect(out.ok).toBe(true);
+    expect(out.brief.tone).toBe('disrupted');
+    expect(out.brief.items[0]).toEqual({ text: SHORTFALL_STATEMENT, fact_ids: ['air.normal'] });
+    expect(out.brief.items.slice(1).map((i) => i.fact_ids[0])).toEqual(['faa.active.SFO.gdp', 'faa.planned.EWR', 'otp.LAX']);
+    expect(out.report.shortfallLed).toBe(true);
+    expect(out.report.headline).toMatchObject({ status: 'replaced', reasons: ['headline:misses_network_shortfall'] });
+    expect(out.brief.headline).toBe('Far fewer United flights are in the air than usual right now.');
+    expect(out.brief.headline_fact_ids).toEqual(['air.normal']);
+  });
+
+  it('the traveler note speaks to every traveler, whatever the model wrote or left out', () => {
+    const NOTE = "Whichever airport you are flying to, check your flight's status before you leave for the airport.";
+    const named = { text: 'If you are flying to San Francisco, check your flight status before leaving for the airport.', fact_ids: ['faa.active.SFO.gdp'] };
+    const head = { tone: 'disrupted', headline: 'Far fewer United flights are in the air than usual.' };
+    const withNote = verifyBrief(brief([shortfall, sfo], { ...head, traveler_note: named }), facts);
+    expect(withNote.brief.traveler_note).toEqual({ text: NOTE, fact_ids: ['air.normal'] });
+    expect(withNote.report.trimmed).toEqual([expect.objectContaining({ item: 'traveler_note', reason: 'note_for_every_traveler', from: named.text, to: NOTE })]);
+    const without = verifyBrief(brief([shortfall, sfo], head), facts);
+    expect(without.brief.traveler_note).toEqual({ text: NOTE, fact_ids: ['air.normal'] });
+    expect(without.report.trimmed).toEqual([]);
+    // At the watch level the model's own note stands.
+    const watch = verifyBrief(brief([sfo], { tone: 'watch', headline: 'A ground delay program is holding flights into San Francisco.', traveler_note: named }), factsWith(420));
+    expect(watch.brief.traveler_note.text).toBe(named.text);
+  });
+
+  it('three Haiku samples on these facts: each leads with the count, gives no cause, and gets the note for every traveler', () => {
+    for (const n of [1, 2, 3]) {
+      const out = briefFromSavedResponse(readFileSync(new URL(`./fixtures/brief-samples/nationwide-stop-2026-11-13.${n}.json`, import.meta.url), 'utf8'), facts);
+      expect(out.source).toBe('model');
+      expect(out.brief.tone).toBe('disrupted');
+      expect(out.brief.headline).toBe('Far fewer United flights are in the air than usual right now.');
+      expect(out.brief.items[0].fact_ids).toEqual(['air.normal']);
+      expect(out.brief.items).toHaveLength(4);
+      expect(out.brief.traveler_note.fact_ids).toEqual(['air.normal']);
+      const text = [out.brief.headline, ...out.brief.items.map((i) => i.text), out.brief.traveler_note.text].join(' ');
+      expect(text).not.toMatch(/nationwide|national|outage|all airports/i);
+    }
+  });
+
+  it('at the item limit the last item makes room, and the report says so', () => {
+    const out = verifyBrief(brief([sfo, ewr, lax, wx], { tone: 'watch', headline: 'A ground delay program is holding flights into San Francisco.' }), facts);
+    expect(out.brief.items.map((i) => i.fact_ids[0])).toEqual(['air.normal', 'faa.active.SFO.gdp', 'faa.planned.EWR', 'otp.LAX']);
+    expect(out.report.dropped).toEqual([expect.objectContaining({ fact_ids: ['wx.EWR'], reasons: ['displaced_by_network_shortfall'] })]);
+    expect(out.report.itemsKept).toBe(4);
+  });
+
+  it('an item that cites the shortfall further down moves to the front, in the model’s own words', () => {
+    const out = verifyBrief(brief([sfo, shortfall, ewr], { tone: 'disrupted', headline: 'Far fewer United flights are flying than usual.' }), facts);
+    expect(out.brief.items.map((i) => i.fact_ids[0])).toEqual(['air.normal', 'faa.active.SFO.gdp', 'faa.planned.EWR']);
+    expect(out.brief.items[0].text).toBe(shortfall.text);
+    expect(out.report.shortfallLed).toBe(true);
+    expect(out.report.headline.status).toBe('kept');
+    expect(out.report.dropped).toEqual([]);
+  });
+
+  it('a brief that already leads with it is left alone', () => {
+    const out = verifyBrief(brief([shortfall, sfo], { tone: 'disrupted', headline: 'Far fewer United flights are in the air than usual.' }), facts);
+    expect(out.brief.items.map((i) => i.fact_ids[0])).toEqual(['air.normal', 'faa.active.SFO.gdp']);
+    expect(out.report.shortfallLed).toBeUndefined();
+    expect(out.report.headline.status).toBe('kept');
+  });
+
+  it('a number the fact does not carry is still refused', () => {
+    const wrong = item('Only 174 United flights are in the air, 80% fewer than usual.', ['air.normal']);
+    const out = verifyBrief(brief([wrong, sfo], { tone: 'disrupted', headline: 'Far fewer United flights are in the air than usual.' }), facts);
+    expect(out.report.dropped[0].index).toBe(0);
+    expect(out.brief.items[0]).toEqual({ text: SHORTFALL_STATEMENT, fact_ids: ['air.normal'] });
+  });
+
+  it('a watch-level shortfall (35% fewer) changes nothing here: the model’s order and headline stand', () => {
+    const watchFacts = factsWith(420);
+    const out = verifyBrief(brief([sfo, ewr], { tone: 'watch', headline: 'A ground delay program is holding flights into San Francisco.' }), watchFacts);
+    expect(out.brief.tone).toBe('watch');
+    expect(out.brief.items.map((i) => i.fact_ids[0])).toEqual(['faa.active.SFO.gdp', 'faa.planned.EWR']);
+    expect(out.report.headline.status).toBe('kept');
+    expect(out.report.shortfallLed).toBeUndefined();
+  });
+});
