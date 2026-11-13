@@ -5,6 +5,8 @@ import ContentSection from '../components/site/ContentSection.astro';
 import HighlightBox from '../components/site/HighlightBox.astro';
 import JumpNav from '../components/site/JumpNav.astro';
 import StatTile from '../components/site/StatTile.astro';
+import { HUB_ORDER } from '../lib/hub-health.js';
+import { hubLink } from '../lib/hub-link.js';
 
 const faqEntries = [
   {
@@ -101,6 +103,10 @@ const jumpNav = [
   { href: '#faq', label: 'FAQ' },
 ];
 
+// The nine hubs named in the "More" list, each a link to its hub page (links everywhere, Nov 12
+// 2026). This page is about Newark but is not EWR's hub page, so EWR links too.
+const hubLinks = HUB_ORDER.map((code) => hubLink(code, 'site')).filter((link) => link !== null);
+
 const ctaClass =
   'inline-flex min-h-11 items-center rounded-md bg-primary-fill px-5 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90';
 ---
@@ -153,13 +159,22 @@ const ctaClass =
         </p>
       </div>
       <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
-        <StatTile label="Active United Flights (EWR)" value="—" id="newark-active" />
-        <p
-          id="newark-program-status"
-          class="flex items-center rounded-lg border border-border bg-background px-3.5 py-2.5 text-xs leading-relaxed text-foreground"
+        {/* The count is United flights to or from EWR in the live feed, so the tile links to the
+            Live map filtered to Newark, which shows those flights (StatTile `href`). */}
+        <StatTile label="Active United Flights (EWR)" value="—" id="newark-active" href="/?hub=ewr" />
+        {/* The FAA program line links to the dashboard's NAS status panel, which lists every FAA
+            program in force. src/scripts/newark-live.ts rewrites the text of #newark-program-status
+            on each poll, so the id sits on an inner span and the link around it survives. */}
+        <a
+          href="/?tab=weather&section=nas"
+          class="group flex flex-col justify-center gap-1 rounded-lg border border-border bg-background px-3.5 py-2.5 text-xs leading-relaxed text-foreground transition-colors hover:border-primary"
         >
-          Checking FAA program status for EWR…
-        </p>
+          <span id="newark-program-status">Checking FAA program status for EWR…</span>
+          <span
+            class="text-[11px] text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 group-hover:decoration-foreground group-focus-visible:decoration-foreground"
+            >FAA status on the dashboard →</span
+          >
+        </a>
       </div>
       <div class="mt-4 flex flex-wrap gap-2">
         <a class={ctaClass} href="/?hub=ewr">Open EWR on The Blue Board →</a>
@@ -233,8 +248,9 @@ const ctaClass =
         </li>
         <li>
           <strong>Some weekends run even tighter.</strong> Construction and maintenance windows have
-          occasionally dropped the rate below the standard 72/hour cap — check the live board before
-          you head to the airport.
+          occasionally dropped the rate below the standard 72/hour cap — <a
+            href="/?tab=schedule&hub=ewr">check the live board</a
+          > before you head to the airport.
         </li>
       </ul>
       <p>
@@ -267,8 +283,19 @@ const ctaClass =
           arrival, updated every 30 seconds.
         </li>
         <li>
-          <a href="/hubs">All United Hubs</a> — status across ORD, DEN, IAH, EWR, SFO, IAD, LAX,
-          NRT, and GUM.
+          <a href="/trackers/united-hubs/ewr">EWR Projects</a> — every tracked United and airport
+          construction project at Newark, with its sources.
+        </li>
+        <li>
+          <a href="/trackers/atc/ewr">EWR Paper Strips Status</a> — whether Newark's tower still runs
+          on paper flight strips.
+        </li>
+        <li>
+          <a href="/hubs">All United Hubs</a> — status across {
+            hubLinks.map((link, i) => (
+              <>{i === 0 ? '' : i === hubLinks.length - 1 ? ', and ' : ', '}<a href={link.href}>{link.code}</a></>
+            ))
+          }.
         </li>
       </ul>
     </ContentSection>
