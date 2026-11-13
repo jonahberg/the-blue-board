@@ -105,6 +105,44 @@ async function back() {
   });
 }
 
+/** The page's `popstate` / `hashchange` listeners, in the order they were registered. */
+type HistoryListener = { type: 'popstate' | 'hashchange'; listener: EventListenerOrEventListenerObject };
+
+/** Record every history listener the dashboard registers from now on (call before mounting). */
+function recordHistoryListeners() {
+  const listeners: HistoryListener[] = [];
+  const add = window.addEventListener.bind(window);
+  const spy = vi.spyOn(window, 'addEventListener').mockImplementation(((
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ) => {
+    if (type === 'popstate' || type === 'hashchange') listeners.push({ type, listener });
+    add(type, listener, options);
+  }) as typeof window.addEventListener);
+  return { listeners, restore: () => spy.mockRestore() };
+}
+
+/**
+ * Back or Forward the way a browser delivers it: the entry's address is restored, then `popstate`
+ * and `hashchange` fire, and between one listener and the next the browser runs a microtask
+ * checkpoint, where React commits a tab change a listener asked for (popstate and hashchange are
+ * discrete events). jsdom calls every listener in one stack, with no checkpoint, so its own
+ * `history.back()` cannot show an order bug; here each listener runs in its own `act`.
+ */
+async function browserHistoryMove(address: string, listeners: HistoryListener[]) {
+  window.history.replaceState(null, '', address);
+  for (const type of ['popstate', 'hashchange'] as const) {
+    for (const entry of listeners.filter((l) => l.type === type)) {
+      const event = type === 'popstate' ? new PopStateEvent('popstate') : new HashChangeEvent('hashchange');
+      await act(async () => {
+        if (typeof entry.listener === 'function') entry.listener.call(window, event);
+        else entry.listener.handleEvent(event);
+      });
+    }
+  }
+}
+
 /** After the frame a follow waits for before it moves focus. */
 async function nextFrame() {
   await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
@@ -348,6 +386,35 @@ describe('focus and the announcement after a followed link', () => {
     expect(document.activeElement).toBe(panel('schedule'));
   });
 
+  it("Back and Forward in a browser's order (the tab change commits between listeners) say the tab and move focus", async () => {
+    const { listeners, restore } = recordHistoryListeners();
+    try {
+      mountAt('/#starlink');
+      expect(listeners.length).toBeGreaterThan(0);
+      const ord = screen.getByRole('link', { name: 'ORD' });
+      ord.focus();
+      fireEvent.click(ord);
+      await nextFrame();
+      expect(document.activeElement).toBe(panel('schedule'));
+
+      await browserHistoryMove('/#starlink', listeners);
+      await nextFrame();
+
+      expect(seen.ui!.tab).toBe('starlink');
+      expect(seen.ui!.announcement).toBe('Starlink');
+      expect(document.activeElement).toBe(panel('starlink'));
+
+      await browserHistoryMove('/#schedule', listeners);
+      await nextFrame();
+
+      expect(seen.ui!.tab).toBe('schedule');
+      expect(seen.ui!.announcement).toBe('Schedule');
+      expect(document.activeElement).toBe(panel('schedule'));
+    } finally {
+      restore();
+    }
+  });
+
   it('Back with focus outside the panels says the tab and leaves focus where it is', async () => {
     mountAt('/#starlink');
     const chip = screen.getByRole('link', { name: 'DEN chip' });
@@ -362,6 +429,23 @@ describe('focus and the announcement after a followed link', () => {
     expect(seen.ui!.tab).toBe('starlink');
     expect(seen.ui!.announcement).toBe('Starlink');
     expect(document.activeElement).toBe(chip);
+  });
+
+  it('a later hash change (an in-page #tab anchor) shows the tab without rewriting the address', async () => {
+    mountAt('/#starlink');
+    const replace = vi.spyOn(window.history, 'replaceState');
+    try {
+      await act(async () => {
+        window.location.hash = '#fleet';
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expect(seen.ui!.tab).toBe('fleet');
+      expect(seen.ui!.announcement).toBe('Fleet');
+      expect(address()).toBe('/#fleet');
+      expect(replace).not.toHaveBeenCalled();
+    } finally {
+      replace.mockRestore();
+    }
   });
 
   it('the tab bar says nothing and leaves focus on the tab', async () => {

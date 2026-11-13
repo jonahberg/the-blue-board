@@ -106,13 +106,14 @@ describe('?tab= and #hash', () => {
     expect(resolveTabParam('')).toBeNull();
   });
 
-  it('a later hashchange switches tab without rewriting the hash', () => {
+  it('a later hash change is not read here (FollowProvider owns it: tests/follow-link-tabs.test.tsx)', () => {
     const { deps } = mountAt('/');
     act(() => {
       window.location.hash = '#fleet';
       window.dispatchEvent(new HashChangeEvent('hashchange'));
+      window.dispatchEvent(new PopStateEvent('popstate'));
     });
-    expect(deps.setTab).toHaveBeenCalledWith('fleet', { hash: false });
+    expect(deps.setTab).not.toHaveBeenCalled();
   });
 });
 

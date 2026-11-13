@@ -1,5 +1,7 @@
 /**
- * URL → dashboard state, on first load and on every hash change.
+ * URL → dashboard state, on first load. A later hash change (Back, Forward, an in-page `#tab`
+ * anchor) is `FollowProvider`'s (follow-link.tsx): one listener shows the tab, announces it and
+ * moves focus.
  *
  * The whole published deep-link surface (inventory §16) lands here so no view has to parse
  * the query string for itself:
@@ -248,23 +250,10 @@ export function useDeepLinks(deps: DeepLinkDeps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The hash is the one deep link that can change under us: an in-page anchor, and Back or Forward
-  // across the entry a followed link leaves (follow-link.tsx). Back between two entries of this page
-  // fires `popstate`, and `hashchange` as well when their hashes differ, which a followed link's
-  // always do; both are heard, and the second finds the tab already set. When the tab changes,
-  // `FollowProvider` (follow-link.tsx) hears the same events and announces it and moves focus.
-  useEffect(() => {
-    function onHashChange() {
-      const resolved = resolveTabParam(window.location.hash);
-      if (resolved) depsRef.current.setTab(resolved, { hash: false });
-    }
-    window.addEventListener('hashchange', onHashChange);
-    window.addEventListener('popstate', onHashChange);
-    return () => {
-      window.removeEventListener('hashchange', onHashChange);
-      window.removeEventListener('popstate', onHashChange);
-    };
-  }, []);
+  // The hash is the one deep link that can change under us (an in-page anchor, Back or Forward
+  // across the entry a followed link leaves). It is not heard here: `FollowProvider` owns that move
+  // with a single listener, because a second listener would run after the tab change had already
+  // committed (follow-link.tsx).
 
   // ?flight= / ?q= — latched until the feed has actually answered.
   useEffect(() => {
