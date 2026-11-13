@@ -18,6 +18,10 @@
  *
  * The explanation is written through `textContent` semantics — React text children — so
  * a model that returns markup renders as the characters it sent, never as HTML.
+ *
+ * The route's hub ends link to their Schedule boards (links part 2), `fromOverlay`, so following
+ * one closes this dialog and lands as an arrival. Both callers hand the route as one string,
+ * "ORD→DEN"; `routeEnds` splits it, and anything else prints as it came.
  */
 
 import { TriangleAlert } from 'lucide-react';
@@ -40,8 +44,10 @@ import {
   riskLabelColor,
 } from '@/lib/delay-explain-request.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
+import { routeEnds } from '@/lib/name-links.js';
 import { postDelayExplain } from '../data/api';
 import { useUi } from '../state/ui';
+import { HubLink } from './EntityLinks';
 import { FlightLink } from './FlightLink';
 
 type ExplainState =
@@ -62,6 +68,7 @@ export default function DelayExplainDialog() {
   const flight = String(context?.flight ?? '');
   const riskLabel = String(context?.riskLabel ?? 'LOW');
   const route = String(context?.route ?? '');
+  const ends = routeEnds(route);
   const riskScore = Number(context?.riskScore);
   const factors = useMemo(
     () => asFactors((context?.factors ?? context?.riskFactors) as string[] | string | null) as string[],
@@ -124,8 +131,21 @@ export default function DelayExplainDialog() {
               {riskLabel} RISK
             </Badge>
           </DialogTitle>
-          <DialogDescription className="font-mono text-[11px]">
-            {route} · Score {Number.isFinite(riskScore) ? riskScore : 0}/100
+          {/* On touch each hub link is 44 px tall itself (`hit="inline"`) rather than a centred
+              44 px box, which reached up over the title's flight number (a tap on the lower half of
+              "UA1234" opened ORD's board), and the line sits 4 px lower; an inline link reaches no
+              further sideways than its letters, so the arrow needs no margin. */}
+          <DialogDescription className="mt-1 font-mono text-[11px] pointer-fine:md:mt-0">
+            {ends ? (
+              <>
+                <HubLink code={ends.origin} hit="inline" fromOverlay />
+                <span className="mx-0.5">→</span>
+                <HubLink code={ends.destination} hit="inline" fromOverlay />
+              </>
+            ) : (
+              route
+            )}{' '}
+            · Score {Number.isFinite(riskScore) ? riskScore : 0}/100
           </DialogDescription>
         </DialogHeader>
 

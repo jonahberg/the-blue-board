@@ -13,6 +13,16 @@
  *    scheduled, every time labelled with its airport's timezone.
  *  - Share falls back from the async clipboard to `execCommand` to `window.prompt`, because
  *    the first two are unavailable in exactly the mobile contexts that share most.
+ *
+ * The names it prints link to their homes in the dashboard (links part 2): a hub end of the big
+ * route to its Schedule board, the type to the Fleet tab filtered to it, the tail to its aircraft
+ * dialog and the Starlink badge to the Starlink tab; a ★ name stays a plain badge, as it is on
+ * every other dashboard row. The ones that go to a tab are `fromOverlay`: following one closes this sheet (and any other
+ * overlay) and lands as an arrival. The tail links are not (the controller's exception to "every
+ * link in an overlay"): a tail opens the aircraft dialog OVER this sheet, as its button did, so the
+ * reader keeps their flight and the map's selection, and Escape returns focus to the tail. A tail
+ * neither fleet knows links only when the Starlink roster knows it (`unmatchedTailLinks`). The
+ * title stays plain; "Open flight page" under it is the flight's link.
  */
 
 import { Eye, Star, Zap } from 'lucide-react';
@@ -36,9 +46,11 @@ import { matchExpress } from '@/lib/express-fleet.js';
 import { expressDateLabel, expressOperatorLine, expressWifiLabel } from '@/lib/express-fleet-view.js';
 import { decodeSquawk, getPhase } from '@/lib/flight-phase.js';
 import { matchAircraft, unmatchedAircraftNote } from '@/lib/fleet-match.js';
+import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
 import { modalityOf, openFocusOptions } from '@/lib/input-modality.js';
 import { flightPagePath, parseFlightIdent } from '@/lib/flight-page.js';
+import { STARLINK_TAB_HREF, unmatchedTailLinks } from '@/lib/name-links.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { resolveFlightRoute } from '../data/route';
 import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
@@ -50,6 +62,8 @@ import { useFleet } from '../state/fleet';
 import { useMediaQuery } from '../state/hooks';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
+import { DashLink } from './DashLink';
+import { HubLink, TailLink, TypeLink } from './EntityLinks';
 import { SpecialLiveryBadge } from './SpecialLiveryBadge';
 
 /** Write or clear `?flight=` without adding a history entry. */
@@ -140,6 +154,24 @@ const TIMES_SOURCE_LABEL: Record<string, string> = {
   fr24: 'Flightradar24 live tracking (no schedule times)',
 };
 
+/**
+ * The violet Starlink fact, as a quiet link to the Starlink tab (the badge is not a control). As a
+ * link the badge would take the default variant's `[a]:hover:` fill, United blue under violet
+ * text; its own hover replaces it (tailwind-merge in `Badge` keeps the later class).
+ */
+function StarlinkBadgeLink() {
+  return (
+    <Badge
+      asChild
+      className="overflow-visible border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink [a]:hover:bg-bb-starlink/20"
+    >
+      <DashLink href={STARLINK_TAB_HREF} fromOverlay>
+        <Zap aria-hidden="true" /> Starlink confirmed
+      </DashLink>
+    </Badge>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -150,7 +182,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 export function FlightSheet() {
-  const { selection, select, focusOn, openAircraft, announce } = useUi();
+  const { selection, select, focusOn, announce } = useUi();
   const { flights } = useFeed();
   const { fleetByReg, expressByReg, starlink, special, loading: fleetLoading } = useFleet();
   const watch = useWatch();
@@ -308,6 +340,8 @@ export function FlightSheet() {
     ? Object.entries(expressAircraft.seats ?? {}).filter(([, count]) => Number(count) > 0)
     : [];
   const specialEntry = reg ? special.get(reg) : undefined;
+  // The mainline type links by this tail's fleet type, never by the printed string.
+  const typeCode = aircraft ? fleetTypeCodeFor({ reg, fleetByReg }) : null;
   const livery = liveryForTail(reg);
   const watched = ident ? watch.isWatched(ident) : false;
   // F11: label times in the AIRPORT's clock. Most tiers send no zone; the airport table knows it.
@@ -400,12 +434,17 @@ export function FlightSheet() {
           ) : null}
 
           <div className="rounded-lg border bg-card p-4">
+            {/* A hub end links to its Schedule board (quiet); any other airport is plain. */}
             <div className="flex items-center justify-between">
-              <div className="font-mono text-3xl font-semibold">{route.originIata || '—'}</div>
+              <div className="font-mono text-3xl font-semibold">
+                {route.originIata ? <HubLink code={route.originIata} fromOverlay /> : '—'}
+              </div>
               <span aria-hidden="true" className="text-muted-foreground">
                 →
               </span>
-              <div className="font-mono text-3xl font-semibold">{route.destIata || '—'}</div>
+              <div className="font-mono text-3xl font-semibold">
+                {route.destIata ? <HubLink code={route.destIata} fromOverlay /> : '—'}
+              </div>
             </div>
             {route.estimated ? (
               <p className="mt-2 text-[11px] text-muted-foreground">
@@ -482,21 +521,18 @@ export function FlightSheet() {
             </h3>
             {aircraft ? (
               <div className="space-y-1.5 text-sm">
+                {/* The tail is this line's identity (link colour), the type and the badges quiet.
+                    The two names are 44 px tall on touch (`hit="inline"`) rather than carrying
+                    boxes that could overlap side by side. */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{String(aircraft.t ?? '')}</span>
-                  <Button
-                    variant="link"
-                    className="h-auto p-0 font-mono text-sm"
-                    onClick={() => openAircraft(reg)}
-                  >
-                    {reg}
-                  </Button>
-                  {isStarlink ? (
-                    <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
-                      <Zap aria-hidden="true" /> Starlink confirmed
-                    </Badge>
-                  ) : null}
+                  <TypeLink typeCode={typeCode} hit="inline" fromOverlay className="font-medium">
+                    {String(aircraft.t ?? '')}
+                  </TypeLink>
+                  {/* Not `fromOverlay`: the dialog opens over this sheet, which stays. */}
+                  <TailLink reg={reg} hit="inline" className="font-mono text-sm" />
+                  {isStarlink ? <StarlinkBadgeLink /> : null}
                   {specialEntry ? (
+                    // Plain, as a ★ name is on every other dashboard row.
                     <Badge variant="outline">
                       <Star aria-hidden="true" /> {specialEntry.name}
                     </Badge>
@@ -532,19 +568,10 @@ export function FlightSheet() {
                 <div className="flex flex-wrap items-center gap-2">
                   {/* The Express fleet's type when a board or the roster has named it; otherwise
                       the feed's own designator, which is a reading, not a guess. */}
+                  {/* A regional type has no fleet page: plain. */}
                   <span className="font-medium">{expressAircraft.t || flight.acType || 'Type unknown'}</span>
-                  <Button
-                    variant="link"
-                    className="h-auto p-0 font-mono text-sm"
-                    onClick={() => openAircraft(reg)}
-                  >
-                    {reg}
-                  </Button>
-                  {expressStarlink ? (
-                    <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
-                      <Zap aria-hidden="true" /> Starlink confirmed
-                    </Badge>
-                  ) : null}
+                  <TailLink reg={reg} hit="inline" className="font-mono text-sm" />
+                  {expressStarlink ? <StarlinkBadgeLink /> : null}
                 </div>
                 <p className="text-xs text-muted-foreground">{expressOperatorLine(expressAircraft)}</p>
                 {/* Wi-Fi is stated when it is Starlink, or "No Wi-Fi" for a type verified to have
@@ -579,14 +606,28 @@ export function FlightSheet() {
               <p className="text-sm text-muted-foreground">
                 {/* "Loading" and "not in the database" are different facts. Asserting the
                     second while the fleet is still downloading tells a mainline passenger
-                    their aircraft is a United Express jet. */}
-                {flight
-                  ? `${flight.acType || 'Unknown type'}${flight.reg ? ` · ${flight.reg}` : ''} (${
-                      fleetLoading
-                        ? 'Loading aircraft data…'
-                        : unmatchedAircraftNote(flight.acType)
-                    })`
-                  : 'No aircraft reported.'}
+                    their aircraft is a United Express jet. The feed's ICAO code stays plain (it
+                    names no one fleet type). The tail links only when the Starlink roster knows
+                    it: otherwise the dialog has nothing this line does not already say
+                    (`unmatchedTailLinks`). Not `fromOverlay`, as the other tails. */}
+                {flight ? (
+                  <>
+                    {flight.acType || 'Unknown type'}
+                    {flight.reg ? (
+                      <>
+                        {' · '}
+                        {unmatchedTailLinks(flight.reg, starlink.aircraft) ? (
+                          <TailLink reg={flight.reg} hit="inline" />
+                        ) : (
+                          flight.reg
+                        )}
+                      </>
+                    ) : null}{' '}
+                    ({fleetLoading ? 'Loading aircraft data…' : unmatchedAircraftNote(flight.acType)})
+                  </>
+                ) : (
+                  'No aircraft reported.'
+                )}
               </p>
             )}
             {livery ? <SpecialLiveryBadge livery={livery} className="mt-2" /> : null}

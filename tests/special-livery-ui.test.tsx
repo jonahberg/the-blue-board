@@ -26,6 +26,7 @@ const fleet = vi.hoisted(() => ({
 vi.mock('../src/app/state/fleet', () => ({ useFleet: () => fleet }));
 const watch = vi.hoisted(() => ({ isWatched: () => false, toggle: () => true }));
 vi.mock('../src/app/state/watch', () => ({ useWatch: () => watch }));
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 vi.mock('../src/app/data/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/data/api')>()),
   fetchFlightTimes: async () => ({ success: false, error: 'No schedule data for this flight today.' }),

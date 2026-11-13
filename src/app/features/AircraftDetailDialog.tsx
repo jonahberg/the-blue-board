@@ -21,10 +21,19 @@
  *
  * Escape and the backdrop close it: both come from Radix, which also restores focus to
  * whatever opened it — the row in the table you were reading, not the top of the page.
+ *
+ * The names it prints link to their homes (links part 2), all `fromOverlay`, so following one
+ * closes this dialog and lands as an arrival: the Starlink badge opens the Starlink tab, and the
+ * link row's "All 737 MAX 9 in the fleet" the Fleet tab filtered to this type (mainline only: the
+ * type in the title is a tooltip term, a button, and a link cannot sit inside it). A ★ name stays
+ * a plain badge, as on every other dashboard row. A flight number (the live flight, an Express tail's last United
+ * flight) links to its flight page; in the blocks that send the map to the aircraft it is split
+ * out of the button (`ViewOnMapBlock`).
  */
 
 import { Eye, RotateCw, Share2, Star, Zap } from 'lucide-react';
 import { useCallback, useMemo, useRef } from 'react';
+import type { ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,9 +55,11 @@ import {
   expressOperatorLine,
   expressWifiLabel,
 } from '@/lib/express-fleet-view.js';
+import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from '@/lib/fleet-utils.js';
 import { buildSeatBar, nonMainlineAircraftSummary } from '@/lib/fleet-view.js';
 import { getPhase } from '@/lib/flight-phase.js';
+import { STARLINK_TAB_HREF } from '@/lib/name-links.js';
 import { ENGINE_BY_TYPE } from '@/lib/special-aircraft.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { shareUrl } from '../data/share';
@@ -57,6 +68,9 @@ import { useFeed } from '../state/feed';
 import { useFleet } from '../state/fleet';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
+import { DashLink } from './DashLink';
+import { TypeLink } from './EntityLinks';
+import { FlightLink } from './FlightLink';
 import { JargonTerm } from './JargonTerm';
 import { SpecialLiveryBadge } from './SpecialLiveryBadge';
 
@@ -82,7 +96,7 @@ function Fact({
   mono = false,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   tone?: string;
   className?: string;
   /** A figure or code read character by character (DESIGN.md: mono is semantic). */
@@ -96,6 +110,65 @@ function Fact({
       >
         {value}
       </dd>
+    </div>
+  );
+}
+
+/**
+ * The violet Starlink fact, as a quiet link to the Starlink tab (the badge is not a control). As a
+ * link the badge would take the default variant's `[a]:hover:` fill, United blue under violet
+ * text; its own hover replaces it (tailwind-merge in `Badge` keeps the later class).
+ */
+function StarlinkBadgeLink() {
+  return (
+    <Badge
+      asChild
+      className="overflow-visible border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink [a]:hover:bg-bb-starlink/20"
+    >
+      <DashLink href={STARLINK_TAB_HREF} fromOverlay>
+        <Zap aria-hidden="true" /> STARLINK
+      </DashLink>
+    </Badge>
+  );
+}
+
+/**
+ * A block that sends the map to the aircraft's live flight. Its flight number links to the
+ * flight's page, and a link cannot sit inside a button, so the button is the block's "View on map"
+ * stretched over the whole block (`after:absolute after:inset-0`, which also carries the block's
+ * focus ring), and the number sits above it (`z-10`), as on the Starlink departures board. The
+ * number is quiet, in the line's own green: nothing in the block is in link colour. A callsign
+ * with no United number prints plain and the block's button takes its clicks.
+ */
+function ViewOnMapBlock({
+  ident,
+  name = ident,
+  lead,
+  onViewOnMap,
+  children,
+}: {
+  ident: string;
+  /** What the button's name says after "View on map:", when it differs from the printed ident. */
+  name?: string;
+  lead?: ReactNode;
+  onViewOnMap: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative rounded-lg border bg-card p-3 transition-colors has-[button:hover]:bg-muted/50">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-bb-ok">
+          {lead}Airborne — <FlightLink ident={ident} tone="quiet" linkClassName="z-10" />
+        </span>
+        <button
+          type="button"
+          onClick={onViewOnMap}
+          className="shrink-0 text-[10px] text-muted-foreground after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
+        >
+          View on map<span className="sr-only">: {name}</span> <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      {children}
     </div>
   );
 }
@@ -164,6 +237,8 @@ export default function AircraftDetailDialog() {
   const expressStarlink = Boolean(express) && (express?.w === 'Starlink' || Boolean(fallback?.starlink));
   const specialEntry = reg ? special.get(reg) : undefined;
   const livery = liveryForTail(reg);
+  // The link row's door into the Fleet tab, filtered to this tail's fleet type (mainline only).
+  const typeCode = aircraft ? fleetTypeCodeFor({ reg, fleetByReg }) : null;
 
   const age = aircraft?.d ? new Date().getFullYear() - parseInt(String(aircraft.d), 10) : null;
   const category = categorizeFleetStatus(aircraft?.s) as string;
@@ -221,16 +296,13 @@ export default function AircraftDetailDialog() {
               {specialEntry || isStarlink || livery ? (
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {specialEntry ? (
+                    // Plain, as a ★ name is on every other dashboard row.
                     <Badge variant="outline">
                       <Star aria-hidden="true" /> {specialEntry.name}
                     </Badge>
                   ) : null}
                   <SpecialLiveryBadge livery={livery} />
-                  {isStarlink ? (
-                    <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
-                      <Zap aria-hidden="true" /> STARLINK
-                    </Badge>
-                  ) : null}
+                  {isStarlink ? <StarlinkBadgeLink /> : null}
                 </div>
               ) : null}
             </>
@@ -242,9 +314,7 @@ export default function AircraftDetailDialog() {
               </DialogDescription>
               {expressStarlink ? (
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
-                    <Zap aria-hidden="true" /> STARLINK
-                  </Badge>
+                  <StarlinkBadgeLink />
                 </div>
               ) : null}
             </>
@@ -258,9 +328,7 @@ export default function AircraftDetailDialog() {
               </DialogDescription>
               {fallback.starlink ? (
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  <Badge className="border-bb-starlink/30 bg-bb-starlink/10 text-bb-starlink">
-                    <Zap aria-hidden="true" /> STARLINK
-                  </Badge>
+                  <StarlinkBadgeLink />
                 </div>
               ) : null}
             </>
@@ -322,27 +390,20 @@ export default function AircraftDetailDialog() {
                   {/* A cabin only when one is verified for this type and operator. */}
                   {express.c ? <Fact label="Config" value={express.c} className="col-span-2" mono /> : null}
                   {express.c && express.tot ? <Fact label="Total Seats" value={String(express.tot)} mono /> : null}
-                  <Fact label="Last United flight" value={express.lf || '—'} mono />
+                  <Fact
+                    label="Last United flight"
+                    value={express.lf ? <FlightLink ident={express.lf} tone="quiet" /> : '—'}
+                    mono
+                  />
                   <Fact label="First seen" value={expressDateLabel(express.fs) || '—'} />
                   <Fact label="Last seen" value={expressLastSeenLabel(express.ls) || '—'} />
                 </dl>
                 {fallback?.flight ? (
-                  <button
-                    type="button"
-                    onClick={onViewOnMap}
-                    aria-label={`View ${fallback.flight.ident} on the map`}
-                    className="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-bb-ok">
-                        Airborne — {fallback.flight.ident}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">View on map →</span>
-                    </div>
+                  <ViewOnMapBlock ident={fallback.flight.ident} onViewOnMap={onViewOnMap}>
                     <div className="mt-1 text-[10px] text-muted-foreground">
                       {fallback.flight.origin || '?'} → {fallback.flight.dest || '?'}
                     </div>
-                  </button>
+                  </ViewOnMapBlock>
                 ) : (
                   <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                     On ground / Not currently tracked
@@ -367,22 +428,11 @@ export default function AircraftDetailDialog() {
                   />
                 </dl>
                 {fallback.flight ? (
-                  <button
-                    type="button"
-                    onClick={onViewOnMap}
-                    aria-label={`View ${fallback.flight.ident} on the map`}
-                    className="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-bb-ok">
-                        Airborne — {fallback.flight.ident}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">View on map →</span>
-                    </div>
+                  <ViewOnMapBlock ident={fallback.flight.ident} onViewOnMap={onViewOnMap}>
                     <div className="mt-1 text-[10px] text-muted-foreground">
                       {fallback.flight.origin || '?'} → {fallback.flight.dest || '?'}
                     </div>
-                  </button>
+                  </ViewOnMapBlock>
                 ) : (
                   <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                     On ground / Not currently tracked
@@ -472,20 +522,16 @@ export default function AircraftDetailDialog() {
                   Live Status
                 </h3>
                 {liveFlight && phase ? (
-                  <button
-                    type="button"
-                    onClick={onViewOnMap}
-                    // Without this the accessible name is the whole card concatenated —
-                    // "Airborne UA360 View on map Denver Seattle 33,950 ft 413 kts …".
-                    aria-label={`View ${liveFlight.flightIATA || liveFlight.callsign || reg} on the map`}
-                    className="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  // The button is the block's "View on map" alone, so its name is those words and
+                  // the flight, not the whole card concatenated.
+                  <ViewOnMapBlock
+                    ident={liveFlight.flightIATA || liveFlight.callsign || '?'}
+                    // A flight with neither a number nor a callsign (a ferry leg) is named by the
+                    // tail, as the block's old label was; it still prints "?".
+                    name={liveFlight.flightIATA || liveFlight.callsign || reg}
+                    lead={<>{phase.icon} </>}
+                    onViewOnMap={onViewOnMap}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-bb-ok">
-                        {phase.icon} Airborne — {liveFlight.flightIATA || liveFlight.callsign || '?'}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">View on map →</span>
-                    </div>
                     <div className="mt-1 text-xs font-medium">
                       {cityFor(liveFlight.origin) && cityFor(liveFlight.dest)
                         ? `${cityFor(liveFlight.origin)} → ${cityFor(liveFlight.dest)} `
@@ -516,7 +562,7 @@ export default function AircraftDetailDialog() {
                       />
                       <Fact label="Phase" value={phase.phase} />
                     </dl>
-                  </button>
+                  </ViewOnMapBlock>
                 ) : (
                   <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                     On ground / Not currently tracked
@@ -600,6 +646,14 @@ export default function AircraftDetailDialog() {
                   FlightAware ↗
                 </a>
               </Button>
+              {/* The one door from this aircraft to every aircraft of its type: the type in the
+                  title is a tooltip term (a button), so the link lives here, quiet, beside the
+                  other links. Mainline only: a regional type has no fleet page. */}
+              {typeCode ? (
+                <TypeLink typeCode={typeCode} hit="inline" fromOverlay className="self-center text-xs whitespace-nowrap">
+                  All {typeCode} in the fleet
+                </TypeLink>
+              ) : null}
               <Button
                 variant="outline"
                 size="lg"

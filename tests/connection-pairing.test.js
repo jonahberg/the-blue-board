@@ -5,6 +5,7 @@ import {
   buildConnectionIndex,
   computeConnectionRisk,
   connectionContextStr,
+  connectionCardNames,
   connectionDetailLine,
   findWatchedConnections,
   manualConnectionOutcome,
@@ -307,5 +308,37 @@ describe('manualConnectionOutcome', () => {
 
   it('reports an outage before a not-found when both are true', () => {
     expect(manualConnectionOutcome(null, { success: false }, 'UA1', 'UA2').kind).toBe('outage');
+  });
+});
+
+describe('connectionCardNames: what a connection card prints, and which of it links', () => {
+  const conn = (origin, hub, destination) => ({
+    hub,
+    inbound: { w: { flight: 'UA1' }, td: td({ origin: { iata: origin }, destination: { iata: hub } }) },
+    outbound: { w: { flight: 'UA2' }, td: td({ origin: { iata: hub }, destination: { iata: destination } }) },
+  });
+
+  it('links the connecting airport once, in the title, and each other end where it first prints', () => {
+    expect(connectionCardNames(conn('SFO', 'ORD', 'DEN'))).toEqual({
+      hub: 'ORD',
+      inbound: { flight: 'UA1', origin: 'SFO', originLinks: true },
+      outbound: { flight: 'UA2', destination: 'DEN', destinationLinks: true },
+    });
+  });
+
+  it('a round trip prints its far end twice and links it once (the inbound origin)', () => {
+    const names = connectionCardNames(conn('SFO', 'ORD', 'SFO'));
+    expect(names.inbound).toMatchObject({ origin: 'SFO', originLinks: true });
+    expect(names.outbound).toMatchObject({ destination: 'SFO', destinationLinks: false });
+  });
+
+  it('an end with no code prints "?" and links nothing', () => {
+    const names = connectionCardNames(conn('', 'ORD', ''));
+    expect(names.inbound).toMatchObject({ origin: '?', originLinks: false });
+    expect(names.outbound).toMatchObject({ destination: '?', destinationLinks: false });
+  });
+
+  it('the manual check can meet at any airport; the card still names it (HubLink decides the link)', () => {
+    expect(connectionCardNames(conn('SFO', 'MSP', 'DEN')).hub).toBe('MSP');
   });
 });

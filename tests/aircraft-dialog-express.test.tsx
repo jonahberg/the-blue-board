@@ -35,6 +35,8 @@ vi.mock('../src/app/state/fleet', () => ({
   }),
 }));
 vi.mock('../src/app/state/watch', () => ({ useWatch: () => ({ isWatched: () => false, toggle: () => true }) }));
+// The dialog's names are dashboard links; where a click lands is tests/overlay-follow-focus.test.tsx.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import AircraftDetailDialog from '../src/app/features/AircraftDetailDialog';
@@ -75,7 +77,14 @@ describe('AircraftDetailDialog — United Express Starlink tail (D6)', () => {
         </TooltipProvider>,
       );
     });
-    expect(screen.getByRole('button', { name: 'View UA5712 on the map' })).toBeTruthy();
+    // The block's button is its "View on map", named with the flight; the number is a link to its
+    // page beside the button, never inside it.
+    const button = screen.getByRole('button', { name: 'View on map: UA5712' });
+    const number = screen.getByRole('link', { name: 'UA5712' });
+    expect(number.getAttribute('href')).toBe('/flight/UA5712');
+    expect(button.contains(number)).toBe(false);
+    expect(number.className).toContain('z-10');
+    expect(number.className).not.toContain('text-primary');
   });
 });
 
@@ -104,6 +113,8 @@ describe('AircraftDetailDialog — a tail from the United Express fleet', () => 
     expect(text).toContain('E175');
     expect(text).toContain('SkyWest Airlines · United Express');
     expect(text).toContain('UA5928');
+    // The last United flight links to its flight page.
+    expect(screen.getByRole('link', { name: 'UA5928' }).getAttribute('href')).toBe('/flight/UA5928');
     expect(text).toMatch(/First seen\s*Oct 1, 2026/);
     expect(text).toContain('Last seen');
     expect(text).toContain('Not on the roster');
@@ -134,7 +145,10 @@ describe('AircraftDetailDialog — a tail from the United Express fleet', () => 
     }];
     const dialog = await renderDialog();
     expect(dialog.textContent).toContain('STARLINK');
+    expect(screen.getByRole('link', { name: 'STARLINK' }).getAttribute('href')).toBe('/#starlink');
     expect(dialog.textContent).toContain('Yes ⚡');
-    expect(screen.getByRole('button', { name: 'View UA5712 on the map' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'View on map: UA5712' })).toBeTruthy();
+    // A regional type has no fleet page: no door into the Fleet tab.
+    expect(screen.queryByRole('link', { name: /in the fleet$/ })).toBeNull();
   });
 });
