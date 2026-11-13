@@ -8,7 +8,8 @@
  *
  * Every word in a row comes from src/lib/hub-board-view.js, which runs the dashboard's own row
  * model; this file only clones the `<template>` and sets `textContent` (never innerHTML). Each
- * flight number links to its flight page (/flight/UA5789) through ./flight-link.ts.
+ * flight number links to its flight page (/flight/UA5789) through ./flight-link.ts, and a
+ * destination that is one of the nine hubs to its hub page (/hubs/den).
  *
  * Failure is quiet by design: a failed or empty first load leaves the static line and releases the
  * reserved height; a failed refresh keeps the board it already has, re-cut to this clock.
@@ -115,6 +116,9 @@ if (root) {
   const fillRow = (row: ViewRow): HTMLElement | null => {
     const li = template?.content.firstElementChild?.cloneNode(true) as HTMLElement | undefined;
     if (!li) return null;
+    // The departure's own key (ident + scheduled time + route + tail), stable across refreshes:
+    // how a refresh finds the reader's place again (replaceRowsKeepingFocus).
+    li.dataset.key = row.key;
     const f = (name: string) => li.querySelector<HTMLElement>(`[data-f="${name}"]`);
 
     const time = f('time');
@@ -133,8 +137,14 @@ if (root) {
     // which is plain text to every reader (src/scripts/flight-link.ts).
     const ident = f('ident');
     if (ident) setFlightLink(ident, row.ident);
+    // The far end links to its hub page when it is another of the nine hubs; any other airport
+    // (and a name sent in place of a code) is an href-less `<a>`, plain text to every reader.
     const dest = f('dest');
-    if (dest) dest.textContent = row.dest;
+    if (dest) {
+      dest.textContent = row.dest;
+      if (row.destHref) dest.setAttribute('href', row.destHref);
+      else dest.removeAttribute('href');
+    }
     const city = f('city');
     if (city) city.textContent = row.destName;
     const gate = f('gate');
@@ -175,6 +185,25 @@ if (root) {
     return li;
   };
 
+  /**
+   * The board refreshes every two minutes and re-clones every row. A keyboard reader keeps their
+   * place: focus goes back to the same link (`data-f`: the flight number or the destination) in the
+   * same departure (`data-key`). The address alone cannot say which row it was, since two
+   * departures to one hub link the same hub page (/hubs/ewr). When that departure has rolled off
+   * the board, flight-link.ts's own fallback (same address, else the list's first link) stands.
+   */
+  const replaceRowsKeepingFocus = (container: HTMLElement, nodes: HTMLElement[]) => {
+    const active = document.activeElement;
+    const from = active instanceof HTMLElement && container.contains(active) ? active : null;
+    const key = from?.closest<HTMLElement>('li[data-key]')?.dataset.key;
+    const field = from?.dataset.f;
+    replaceChildrenKeepingFocus(container, nodes);
+    if (!key || !field) return;
+    const row = nodes.find((li) => li.dataset.key === key);
+    const same = row?.querySelector<HTMLElement>(`[data-f="${field}"][href]`);
+    if (same && document.activeElement !== same) same.focus({ preventScroll: true });
+  };
+
   const render = () => {
     if (!payload || payload.status !== 'ok') {
       showUnavailable();
@@ -188,7 +217,7 @@ if (root) {
     }
     const items = rows.map(fillRow).filter((li): li is HTMLElement => li !== null);
     // The board refreshes every two minutes; a reader tabbing through its links keeps their place.
-    if (list) replaceChildrenKeepingFocus(list, items);
+    if (list) replaceRowsKeepingFocus(list, items);
     renderStamp(payload, nowSec);
     renderTruth(payload);
     if (fallback) fallback.hidden = true;

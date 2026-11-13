@@ -184,7 +184,11 @@ describe('united-hubs "Club math" quotes the Dulles club entry', () => {
     const html = readFileSync(dist, 'utf8');
     const box = html.slice(html.indexOf('id="club-math"'), html.indexOf('</section>', html.indexOf('id="club-math"'))).replace(/\s+/g, ' ');
     expect(box).toMatch(new RegExp(`>\\s*${stated}\\+\\s*<`));
-    expect(box).toContain(`roughly two full 787-10s (${d7810} seats each)`);
+    // "787-10s" is a link to the 787-10's fleet page and the club names to their cards (links
+    // everywhere, Nov 12 2026), so the sentence is read with its tags taken out.
+    const text = box.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+    expect(text).toContain(`roughly two full 787-10s (${d7810} seats each)`);
+    expect(box).toMatch(/<a\b[^>]*href="\/fleet\/787-10-dreamliner"[^>]*>787-10s<\/a>/);
     expect(box).not.toMatch(/\b650\b/);
   });
 });

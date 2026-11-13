@@ -61,6 +61,13 @@ describe.skipIf(!hasDist)('src/scripts/hub-board.ts on /hubs/ord', () => {
       expect(a.getAttribute('href')).toBe(`/flight/${a.textContent}`);
     }
     expect(first.querySelector('[data-f="dest"]').textContent).toBe('BOS');
+    // Links everywhere (Nov 12 2026): a destination that is one of the nine hubs links to its hub
+    // page; any other airport is an href-less <a>, plain text to every reader.
+    expect(first.querySelector('[data-f="dest"]').hasAttribute('href')).toBe(false);
+    expect(rows[1].querySelector('[data-f="dest"]').textContent).toBe('LAX');
+    expect(rows[1].querySelector('[data-f="dest"]').getAttribute('href')).toBe('/hubs/lax');
+    expect(rows[2].querySelector('[data-f="dest"]').textContent).toBe('EWR');
+    expect(rows[2].querySelector('[data-f="dest"]').getAttribute('href')).toBe('/hubs/ewr');
     expect(first.querySelector('[data-f="gate"]').textContent).toBe('T1 · C18');
     expect(first.querySelector('[data-f="pill"]').textContent).toBe('Departed');
     expect(first.querySelector('[data-f="live"]')).toBeNull(); // only on a feed-confirmed row
@@ -114,6 +121,55 @@ describe.skipIf(!hasDist)('src/scripts/hub-board.ts on /hubs/ord', () => {
       expect(board().querySelector('[data-hb-list] > li [data-f="ident"]').textContent).toBe('UA105'),
     );
     expect(board().dataset.state).toBe('live');
+  });
+});
+
+describe.skipIf(!hasDist)('src/scripts/hub-board.ts keeps a keyboard reader’s place on refresh', () => {
+  const board = () => document.querySelector('[data-hub-board]');
+
+  // Two departures to the same hub link the same page (/hubs/ewr), so focus cannot be found again
+  // by its address: the board finds the same link in the same departure, by the row's key.
+  it('focus on the second of two links to the same hub stays on that row after a refresh', async () => {
+    mountPage('hubs/ord.html');
+    const twoToEwr = () => {
+      const data = ordBoard();
+      data.flights.find((f) => f.identification.number.default === 'UA108').airport.destination = {
+        code: { iata: 'EWR' },
+        info: { gate: '', terminal: 'C' },
+        name: 'Newark',
+      };
+      return buildHubBoardPayload({
+        hub: 'ORD',
+        timeZone: 'America/Chicago',
+        nowSec: NOW_SEC,
+        today: { data, refreshedAt: NOW_SEC * 1000, dayStart: ORD_DAY_START, completeness: 1 },
+      });
+    };
+    const fetchMock = vi.fn(async () => jsonResponse(twoToEwr()));
+    vi.stubGlobal('fetch', fetchMock);
+    await import('../src/scripts/hub-board.ts');
+    await vi.waitFor(() => expect(board().dataset.state).toBe('live'));
+
+    const ewrLinks = () => [...board().querySelectorAll('[data-hb-list] a[data-f="dest"][href="/hubs/ewr"]')];
+    expect(ewrLinks()).toHaveLength(2);
+    const second = ewrLinks()[1];
+    const ident = second.closest('li').querySelector('[data-f="ident"]').textContent;
+    expect(ident).toBe('UA108');
+    second.focus();
+    expect(document.activeElement).toBe(second);
+
+    // A refresh after two minutes re-clones every row.
+    const calls = fetchMock.mock.calls.length;
+    vi.setSystemTime((NOW_SEC + 2 * 60) * 1000);
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(calls));
+    await vi.waitFor(() => expect(ewrLinks()[1]).not.toBe(second)); // the row was replaced
+
+    const focused = document.activeElement;
+    expect(focused.getAttribute('data-f')).toBe('dest');
+    expect(focused.getAttribute('href')).toBe('/hubs/ewr');
+    expect(focused.closest('li').querySelector('[data-f="ident"]').textContent).toBe('UA108');
   });
 });
 

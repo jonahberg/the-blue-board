@@ -18,6 +18,7 @@ import Breadcrumbs from '../site/Breadcrumbs.astro';
 import LastUpdated from './LastUpdated.astro';
 import TrackerDataActions from './TrackerDataActions.astro';
 import { SECTION, SECTION_H2 } from './detail';
+import { hubLink } from '../../lib/hub-link.js';
 
 interface Props {
   title: string;
@@ -41,6 +42,12 @@ interface Props {
   pageLabel: string;
   peerLabel: string;
   peerLinks: { href: string; label: string; active?: boolean }[];
+  /**
+   * The hub this page is about ('ORD'). Every tracker detail page is about a United hub, and a
+   * hub named as a hub links to its hub page (links everywhere, Nov 12 2026): the header carries
+   * one quiet "ORD hub guide" door beside the way back to the full tracker.
+   */
+  hubCode?: string;
 }
 
 const {
@@ -64,7 +71,10 @@ const {
   pageLabel,
   peerLabel,
   peerLinks,
+  hubCode,
 } = Astro.props;
+
+const hubGuide = hubCode ? hubLink(hubCode, 'site') : null;
 
 const peerLinkClass =
   'inline-flex min-h-11 items-center rounded-md border border-border px-3 font-mono text-[11px] font-semibold text-muted-foreground hover:border-primary hover:bg-accent hover:text-primary aria-[current=page]:border-primary aria-[current=page]:bg-primary/15 aria-[current=page]:text-foreground';
@@ -91,7 +101,8 @@ const peerLinkClass =
     />
 
     <header class="mt-6 mb-8">
-      <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+      {/* A label, not a link: body colours only (link colour means link). */}
+      <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         {kicker}
       </div>
       <h1 class="mt-0.5 mb-1.5 text-2xl font-bold tracking-tight text-balance text-foreground">
@@ -102,10 +113,22 @@ const peerLinkClass =
         <LastUpdated iso={lastUpdated} />
         <LastUpdated iso={lastVerified} prefix="Verified" note={verifiedNote} />
       </div>
-      <a
-        class="inline-flex min-h-11 items-center font-mono text-[11px] font-semibold uppercase tracking-wide text-primary underline underline-offset-2"
-        href={parentHref}>&larr; Open the complete {parentLabel}</a
-      >
+      <div class="flex flex-wrap items-center gap-x-5">
+        <a
+          class="inline-flex min-h-11 items-center font-mono text-[11px] font-semibold uppercase tracking-wide text-primary underline underline-offset-2"
+          href={parentHref}>&larr; Open the complete {parentLabel}</a
+        >
+        {
+          hubGuide && (
+            <a
+              class="inline-flex min-h-11 items-center font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground focus-visible:decoration-foreground"
+              href={hubGuide.href}
+            >
+              {hubGuide.code} hub guide &rarr;
+            </a>
+          )
+        }
+      </div>
     </header>
 
     <slot />

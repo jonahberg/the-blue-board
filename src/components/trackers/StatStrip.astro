@@ -4,14 +4,24 @@
 // when it IS a status the page encodes the same way elsewhere (the ATC page's live towers are the
 // legend's green); otherwise it stays body colour. No "featured" tile: a highlighted border was
 // decoration. This is the strip people screenshot; keep it clean.
+//
+// A stat's optional `href` (links everywhere, Nov 12 2026) is the place that lists what the figure
+// counts; the whole tile then links there, as StatTile's does: the label is the `<a>`, stretched
+// over the tile, with the quiet underline, and the border takes the primary colour on hover and
+// keyboard focus. Give it only when the destination shows those things.
 import { STAT_CARD, STAT_LABEL, STAT_SUB, STAT_VALUE } from '../site/stat-tile';
 import { STAT_TONE, toneClass } from './tones';
 
 interface Props {
-  stats: { label: string; value: string; tone?: string; sub?: string }[];
+  stats: { label: string; value: string; tone?: string; sub?: string; href?: string }[];
 }
 
 const { stats } = Astro.props;
+
+// The same two literals as StatTile.astro.
+const LINKED_TILE = 'relative transition-colors hover:border-primary has-[a:focus-visible]:border-primary';
+const LINKED_LABEL =
+  'underline decoration-muted-foreground/40 underline-offset-2 after:absolute after:inset-0 after:rounded-lg hover:decoration-foreground focus-visible:decoration-foreground';
 ---
 
 <!-- Each tile spans three rows of the strip's grid and lays its label, figure and sub-line on
@@ -20,8 +30,14 @@ const { stats } = Astro.props;
 <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
   {
     stats.map((s) => (
-      <div class:list={[STAT_CARD, 'row-span-3 grid grid-rows-subgrid gap-y-0']}>
-        <div class:list={[STAT_LABEL, 'self-end']}>{s.label}</div>
+      <div class:list={[STAT_CARD, s.href && LINKED_TILE, 'row-span-3 grid grid-rows-subgrid gap-y-0']}>
+        {s.href ? (
+          <a href={s.href} class:list={[STAT_LABEL, LINKED_LABEL, 'self-end']}>
+            {s.label}
+          </a>
+        ) : (
+          <div class:list={[STAT_LABEL, 'self-end']}>{s.label}</div>
+        )}
         <div class:list={[STAT_VALUE, toneClass(STAT_TONE, s.tone ?? 'default')]}>{s.value}</div>
         {s.sub && <div class={STAT_SUB}>{s.sub}</div>}
       </div>

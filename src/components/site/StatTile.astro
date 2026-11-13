@@ -11,6 +11,15 @@
  * "Mainline with Starlink" takes two lines at 375 px beside a one-line neighbour), the tile
  * spans two rows of the parent grid and lays its label and figure on them, as StatStrip does,
  * so the figures sit level. The parent must be a grid of tiles only.
+ *
+ * `href` (links everywhere, Nov 12 2026): the place that LISTS what the figure counts — the
+ * dashboard's Live map filtered to Newark for "Active United Flights (EWR)", the Fleet tab
+ * filtered to a type for a fleet page's "Aircraft". Give it only when the destination shows those
+ * things; a figure with no such list stays a plain tile. The whole tile is the link, as cards are
+ * (DESIGN.md 2026-11-11): the label is the `<a>` (so the link's name is the label, and a script
+ * may still rewrite the figure by `id`), stretched over the tile by an `after:` box, which makes
+ * the tile itself the touch target. The label takes the quiet underline every secondary link has;
+ * the tile's border takes the primary colour on hover and keyboard focus, as a card's does.
  */
 import { STAT_CARD, STAT_LABEL, STAT_VALUE } from './stat-tile';
 
@@ -21,12 +30,27 @@ interface Props {
   id?: string;
   /** Align the figures across a grid row of tiles (see above). */
   subgrid?: boolean;
+  /** Where the counted things are listed; the whole tile becomes a link there (see above). */
+  href?: string;
   class?: string;
 }
 
-const { label, value, id, subgrid = false, class: className = '' } = Astro.props;
+const { label, value, id, subgrid = false, href, class: className = '' } = Astro.props;
+
+// Kept as whole literals for Tailwind; StatStrip (src/components/trackers/) carries the same two.
+const LINKED_TILE = 'relative transition-colors hover:border-primary has-[a:focus-visible]:border-primary';
+const LINKED_LABEL =
+  'underline decoration-muted-foreground/40 underline-offset-2 after:absolute after:inset-0 after:rounded-lg hover:decoration-foreground focus-visible:decoration-foreground';
 ---
-<div class:list={[STAT_CARD, subgrid && 'row-span-2 grid grid-rows-subgrid gap-y-0', className]}>
-  <div class:list={[STAT_LABEL, subgrid && 'self-end']}>{label}</div>
+<div class:list={[STAT_CARD, href && LINKED_TILE, subgrid && 'row-span-2 grid grid-rows-subgrid gap-y-0', className]}>
+  {
+    href ? (
+      <a href={href} class:list={[STAT_LABEL, LINKED_LABEL, subgrid && 'self-end']}>
+        {label}
+      </a>
+    ) : (
+      <div class:list={[STAT_LABEL, subgrid && 'self-end']}>{label}</div>
+    )
+  }
   <div id={id} class:list={[STAT_VALUE, 'text-foreground']}>{value}</div>
 </div>

@@ -24,9 +24,15 @@ interface Props {
   iata: string;
   /** Copy carried over from a compact page's old LIVE bar (ICAO · time zone · terminal), as HTML. */
   metaHtml?: string;
+  /**
+   * A compact page's link to the dashboard's live map (`/?hub=gum`), carried over from its old
+   * LIVE bar. The full pages have theirs in "More on the dashboard". A quiet text link, so the
+   * board keeps its one button.
+   */
+  liveHref?: string;
 }
 
-const { iata, metaHtml = '' } = Astro.props;
+const { iata, metaHtml = '', liveHref = '' } = Astro.props;
 const hubLower = iata.toLowerCase();
 const boardHref = `/?tab=schedule&hub=${hubLower}`;
 const titleId = `hub-board-title-${hubLower}`;
@@ -74,23 +80,43 @@ const titleId = `hub-board-title-${hubLower}`;
     <p class="text-[11px] leading-relaxed text-muted-foreground">
       {metaHtml ? <Fragment set:html={metaHtml} /> : <>Times are local to {iata}.</>}
     </p>
-    <a
-      class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-primary-fill px-5 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90"
-      href={boardHref}
-    >
-      Open the full {iata} board
-      <ArrowRight aria-hidden="true" className="size-4" />
-    </a>
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {
+        liveHref && (
+          <a
+            class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground focus-visible:decoration-foreground"
+            href={liveHref}
+          >
+            Live {iata} map
+          </a>
+        )
+      }
+      <a
+        class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-primary-fill px-5 text-xs font-semibold text-primary-foreground hover:bg-primary-fill/90"
+        href={boardHref}
+      >
+        Open the full {iata} board
+        <ArrowRight aria-hidden="true" className="size-4" />
+      </a>
+    </div>
   </div>
 
   <!-- The flight number links to its flight page (src/scripts/flight-link.ts). Its hit box is the
        whole row height over the flight column (the `after:` box is placed on the `relative` row,
        at the column's offset in each grid below, and takes in the row's 1 px rule), so a tap
        anywhere in that column lands — 48 px on a phone row, 44 px from md — while the status pill and the delay keep their own titles.
-       A number the site has no page for stays text: the script leaves the `<a>` without an href. -->
+       A number the site has no page for stays text: the script leaves the `<a>` without an href.
+       The far end links to its hub page when it is another of the nine hubs (links everywhere,
+       Nov 12 2026; `destHref`, src/lib/hub-board-view.js), any other airport stays text. It is a
+       quiet link (body colour, muted underline) so the board's one button stays the way in. Its hit
+       box is hung off the row the same way, over the "To" column (48 px wide and the row's height
+       on a phone, the column's 56 px from md), clear of the flight column's box and the status. On a
+       phone that column is `minmax(3rem,1fr)`, never narrower than the box, so a wide status group
+       truncates its pill instead of sliding under the box. The link's focus ring is drawn inside it
+       (`-outline-offset-2`): the truncating cell around it would clip a ring drawn outside. -->
   <template data-hb-row>
     <li
-      class="relative grid h-12 grid-cols-[2.75rem_3.25rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1rem] content-center gap-x-2 border-b border-border last:border-b-0 md:h-11 md:grid-cols-[3rem_4.5rem_3.5rem_minmax(0,1fr)_6rem_10rem] md:grid-rows-1 md:gap-x-3"
+      class="relative grid h-12 grid-cols-[2.75rem_3.25rem_minmax(3rem,1fr)_auto] grid-rows-[1.25rem_1rem] content-center gap-x-2 border-b border-border last:border-b-0 md:h-11 md:grid-cols-[3rem_4.5rem_3.5rem_minmax(0,1fr)_6rem_10rem] md:grid-rows-1 md:gap-x-3"
     >
       <span class="col-start-1 row-span-2 flex flex-col font-mono tabular-nums md:row-span-1 md:justify-center">
         <span class="text-xs leading-5 text-foreground" data-f="time"></span>
@@ -101,7 +127,10 @@ const titleId = `hub-board-title-${hubLower}`;
         data-f="ident"></a
       >
       <span class="col-start-3 row-start-1 min-w-0 self-center truncate font-mono text-xs text-foreground">
-        <span class="sr-only">to </span><span data-f="dest"></span>
+        <span class="sr-only">to </span><a
+          class="underline decoration-muted-foreground/40 underline-offset-2 after:absolute after:top-0 after:-bottom-px after:left-28 after:w-12 hover:decoration-foreground focus-visible:decoration-foreground focus-visible:-outline-offset-2 md:after:left-36 md:after:w-14 [&:not([href])]:no-underline [&:not([href])]:after:hidden"
+          data-f="dest"></a
+        >
       </span>
       <span
         class="col-span-2 col-start-2 row-start-2 min-w-0 truncate text-[11px] leading-4 text-muted-foreground md:col-span-1 md:col-start-4 md:row-start-1 md:self-center md:text-xs"

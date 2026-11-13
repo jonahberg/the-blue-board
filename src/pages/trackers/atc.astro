@@ -3,7 +3,9 @@ import outline from '../../data/trackers/us-outline.json';
 import { atcMeta, atcAirports } from '../../data/trackers/atc.js';
 import { unitedHubs } from '../../data/trackers/united-hubs.js';
 import { projectPoint, outlinePaths } from '../../lib/tracker-map.js';
-import { trackerParentSeo } from '../../lib/tracker-detail.js';
+import { atcHubDetailCodes, trackerParentSeo } from '../../lib/tracker-detail.js';
+import { hubLink } from '../../lib/hub-link.js';
+import { atcEntryHref, unitedHubEntryHref } from '../../lib/tracker-links.js';
 import { countIs, countLabel, plural } from '../../lib/plural.js';
 import StatStrip from '../../components/trackers/StatStrip.astro';
 import TrackerMap from '../../components/trackers/TrackerMap.astro';
@@ -131,8 +133,11 @@ const tableRows = sortedAirports.map((a) => {
         mono: true,
         secondary: a.name,
         sortVal: a.code,
+        // Links everywhere (Nov 12 2026): a United hub's code goes to its hub page, quietly; the
+        // row's own link, in link colour, is its tower page ("ORD status →").
+        ...(hubLink(a.code, 'site') ? { href: hubLink(a.code, 'site')?.href, tone: 'quiet' } : {}),
         ...(hubCodes.has(a.code)
-          ? { link: { href: `/trackers/atc/${a.code.toLowerCase()}`, text: `${a.code} status →` } }
+          ? { link: { href: atcEntryHref(a.code, atcHubDetailCodes) ?? `/trackers/atc/${a.code.toLowerCase()}`, text: `${a.code} status →` } }
           : {}),
       },
       location: { primary: `${a.city}, ${a.state}`, sortVal: `${a.state} ${a.city}` },
@@ -140,8 +145,10 @@ const tableRows = sortedAirports.map((a) => {
       date: dateCell,
       notes: {
         secondary: a.note ?? '',
+        // The hub's construction page. It said "United hub →", which reads as the hub page; the
+        // code above is that link now, so this one says what it opens.
         ...(hubCodes.has(a.code)
-          ? { link: { href: `/trackers/united-hubs/${a.code.toLowerCase()}`, text: 'United hub →' } }
+          ? { link: { href: unitedHubEntryHref(a.code, hubCodes) ?? `/trackers/united-hubs/${a.code.toLowerCase()}`, text: `${a.code} projects →`, tone: 'quiet' } }
           : {}),
       },
       sources: {
@@ -250,7 +257,8 @@ const datasetSchema = {
 
 const proseClass =
   'mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground last:mb-0 [&_a]:text-primary [&_a]:underline [&_a]:decoration-primary/40 [&_a]:underline-offset-2 [&_a:hover]:decoration-primary';
-const subheadClass = 'mt-4.5 mb-2 text-sm font-semibold text-primary';
+// Labels and subheads are body colour: link colour means link (links everywhere, Nov 12 2026).
+const subheadClass = 'mt-4.5 mb-2 text-sm font-semibold text-foreground';
 const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-foreground';
 ---
 
@@ -270,7 +278,7 @@ const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-for
     <Breadcrumbs items={[{ label: 'Trackers', href: '/trackers' }, { label: 'Modern Skies' }]} />
 
     <header class="mt-6">
-      <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+      <div class="font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         Tracker &middot; FAA Modernization
       </div>
       <h1 class="mt-0.5 mb-1.5 text-2xl font-bold tracking-tight text-balance text-foreground">
@@ -423,7 +431,7 @@ const methodClass = 'mt-3.5 max-w-2xl text-[11px] leading-relaxed text-muted-for
       id="paper-strips"
       aria-label="Why paper strips existed"
     >
-      <div class="mb-1 font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+      <div class="mb-1 font-mono text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         Sidebar
       </div>
       <h2 class="mb-3 text-base font-bold tracking-tight text-foreground">
