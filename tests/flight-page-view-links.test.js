@@ -98,8 +98,9 @@ describe('aircraftView: the card prints the same words, in linkable parts', () =
       ['UA930', { code: 'LHR', href: null }, { code: 'ORD', href: '/hubs/ord' }],
       ['UA9999', { code: 'EWR', href: '/hubs/ewr' }, { code: 'SFO', href: '/hubs/sfo' }],
     ]);
-    // A leg's key (flight, day, origin) stays the same across refreshes, even when its times arrive.
-    expect(view.legs.map((l) => l.key)).toEqual(['UA930|2026-11-10|LHR', 'UA9999|2026-11-09|EWR']);
+    // A leg's key (flight, day, origin, destination) stays the same across refreshes, even when
+    // its times arrive; the destination keeps two same-day legs from one airport apart.
+    expect(view.legs.map((l) => l.key)).toEqual(['UA930|2026-11-10|LHR|ORD', 'UA9999|2026-11-09|EWR|SFO']);
   });
 });
 

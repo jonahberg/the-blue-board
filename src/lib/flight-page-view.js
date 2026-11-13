@@ -333,9 +333,9 @@ export function aircraftView(aircraft, tail, current) {
     .map(([code, n]) => ({ code, count: Number(n), label: CABIN_LABELS[code] || code, color: SEAT_BAR_COLORS[code] || 'rgba(100,116,139,.5)' }));
   const legs = (tail?.rows?.length ? tailLegsView(tail.rows, current) : []).map((leg) => ({
     ...leg,
-    // Flight, day and origin: the same on every refresh (times arrive later; one number can fly
-    // two legs in a day). A refresh finds the reader's leg again by it.
-    key: `${leg.flight}|${leg.date}|${leg.origin}`,
+    // Flight, day, origin and destination: the same on every refresh (times arrive later; one
+    // number can fly two legs in a day). A refresh finds the reader's leg again by it.
+    key: `${leg.flight}|${leg.date}|${leg.origin}|${leg.dest}`,
     route: { origin: airportEnd(leg.origin), dest: airportEnd(leg.dest) },
   }));
   const notes = [];
