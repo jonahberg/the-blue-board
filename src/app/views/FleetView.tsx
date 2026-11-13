@@ -706,7 +706,6 @@ export default function FleetView() {
                 )
               }
               feedLoading={flights.length === 0}
-              onOpenAircraft={openAircraft}
             />
           </TabsContent>
 

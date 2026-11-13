@@ -234,3 +234,89 @@ describe('All Aircraft', () => {
     }
   });
 });
+
+/** A live-feed row, airborne. */
+const airborne = (reg: string, extra: Record<string, unknown>) => ({
+  fr24id: `${reg}-fr24`, icao24: `${reg}-icao`, lat: 0, lon: 0, hdg: 0, alt: 10000, spd: 230, vr: 0,
+  squawk: null, acType: '', reg, origin: 'ORD', dest: 'DEN', flightIATA: '', callsign: '',
+  onGround: false, airline: 'UAL', ...extra,
+});
+
+describe('Airborne Now', () => {
+  beforeEach(() => {
+    ctl.flights = [
+      airborne('N100UA', { flightIATA: 'UA100', origin: 'ORD', dest: 'HNL' }),
+      airborne('N37502', { callsign: 'UAL200', origin: 'SFO', dest: 'DEN' }),
+      airborne('N801SK', { callsign: 'SKW5501', acType: 'E75L' }), // regional: no row
+    ];
+  });
+
+  it('links the tail (link colour), the type, a United flight number and the hub ends (quiet)', () => {
+    mount();
+    openSubView(/^Airborne Now/);
+    expect(bodyRows()).toHaveLength(2);
+    const [reg, type, flight, route] = cells(rowOf('N100UA'));
+
+    const tail = within(reg).getByRole('link', { name: 'N100UA' });
+    expect(tail.getAttribute('href')).toBe('/?aircraft=N100UA');
+    expect(isIdentity(tail)).toBe(true);
+    expect(reg.querySelector('button')).toBeNull();
+
+    const typeLink = within(type).getByRole('link', { name: 'A319' });
+    expect(typeLink.getAttribute('href')).toBe('/?tab=fleet&type=A319');
+    expect(isQuiet(typeLink)).toBe(true);
+
+    const number = within(flight).getByRole('link', { name: 'UA100' });
+    expect(number.getAttribute('href')).toBe('/flight/UA100');
+    expect(isQuiet(number)).toBe(true);
+
+    // ORD is a hub: its Schedule board. HNL is not: plain text.
+    const ord = within(route).getByRole('link', { name: 'ORD' });
+    expect(ord.getAttribute('href')).toBe('/?tab=schedule&hub=ORD');
+    expect(isQuiet(ord)).toBe(true);
+    expect(within(route).queryByRole('link', { name: 'HNL' })).toBeNull();
+    expect(within(route).getByText('HNL').tagName).toBe('SPAN');
+
+    expect(rowOf('N100UA').querySelectorAll('a').length).toBe(4);
+    expect([...rowOf('N100UA').querySelectorAll('a')].filter(isIdentity)).toHaveLength(1);
+  });
+
+  it('a mainline callsign links to its United number; the SL mark to the Starlink tab', () => {
+    mount();
+    openSubView(/^Airborne Now/);
+    const row = rowOf('N37502');
+    expect(within(cells(row)[2]).getByRole('link', { name: 'UAL200' }).getAttribute('href')).toBe('/flight/UA200');
+    expect(within(row).getByRole('link', { name: /^SL/ }).getAttribute('href')).toBe('/#starlink');
+    // Both route ends are hubs, and both link.
+    expect(within(cells(row)[3]).getAllByRole('link').map((a) => a.textContent)).toEqual(['SFO', 'DEN']);
+  });
+
+  it('a hub end opens that hub\'s Schedule board in place', () => {
+    mount();
+    openSubView(/^Airborne Now/);
+    expect(fireEvent.click(within(cells(rowOf('N37502'))[3]).getByRole('link', { name: 'DEN' }))).toBe(false);
+    expect(seen.ui!.tab).toBe('schedule');
+  });
+
+  it('a type followed here keeps Airborne Now, and its cells are then plain (ruling 1)', () => {
+    mount();
+    openSubView(/^Airborne Now/);
+    fireEvent.click(within(cells(rowOf('N100UA'))[1]).getByRole('link', { name: 'A319' }));
+    expect(activeSubView()).toMatch(/^Airborne Now/);
+    expect(typeSelect().textContent).toContain('A319');
+    expect(bodyRows()).toHaveLength(1);
+    const typeCell = cells(rowOf('N100UA'))[1];
+    expect(typeCell.querySelector('a')).toBeNull();
+    expect(typeCell.textContent).toBe('A319');
+  });
+
+  it('the hub ends\' touch boxes are spaced apart, tight only for a mouse at md+', () => {
+    mount();
+    openSubView(/^Airborne Now/);
+    const route = cells(rowOf('N37502'))[3];
+    const arrow = route.querySelector('[aria-hidden="true"]')!;
+    expect(classesOf(arrow)).toEqual(expect.arrayContaining(['mx-3', 'pointer-fine:md:mx-1']));
+    // The screen reader hears "SFO to DEN", not a bare "SFO DEN".
+    expect(route.textContent).toBe('SFO> to DEN');
+  });
+});

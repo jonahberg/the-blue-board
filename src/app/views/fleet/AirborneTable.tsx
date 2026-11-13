@@ -7,6 +7,16 @@
  *
  * Only mainline airframes appear. A United Express regional in the feed has no row here —
  * not a blank one — because this table's subject is the fleet, and a regional is not in it.
+ *
+ * Names with a home link to it (links everywhere, Nov 12 2026). The registration is the row's
+ * link-coloured link, to the aircraft dialog in place; the type a quiet link to this tab filtered
+ * to it (the row model's `typeLink`: by the tail, plain once the table is filtered to that type);
+ * the flight number a quiet link to its flight page when it is a United number (`FlightLink`); each
+ * hub end of the route a quiet link to that hub's Schedule board, any other airport plain; the "SL"
+ * mark a quiet link to the Starlink tab. The route ends come from the row model, not from parsing
+ * the printed route. The registration, type and flight number are 44 px tall on touch inside their
+ * cells (`hit="inline"`); the hub ends take 44 px touch boxes, so the arrow between them is spaced
+ * (`mx-3`, tight only for a mouse at `md`+) for the two boxes not to overlap.
  */
 
 import { Star } from 'lucide-react';
@@ -20,18 +30,25 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { liveryForTail } from '@/lib/special-livery.js';
+import { HubLink, TailLink, TypeLink } from '../../features/EntityLinks';
+import { FlightLink } from '../../features/FlightLink';
 import { SpecialLiveryBadge } from '../../features/SpecialLiveryBadge';
 import { SortableHeader } from './SortableHeader';
 import type { SortState } from './SortableHeader';
-import { FlightLink } from '../../features/FlightLink';
+import { StarlinkRowChip } from './StarlinkRowChip';
 
 export type AirborneSortCol = 'reg' | 'type' | 'flight' | 'alt' | 'phase';
 
 export type AirborneRow = {
   reg: string;
   type: string;
+  /** The type this row links to (`fleetRowTypeLink`), or null to print it plain. */
+  typeLink: string | null;
   flight: string;
   route: string;
+  /** The route's ends as printed ('???' when the feed has none). */
+  origin: string;
+  dest: string;
   alt: string;
   altRaw: number;
   phase: string;
@@ -45,14 +62,12 @@ export function AirborneTable({
   sort,
   onSort,
   feedLoading,
-  onOpenAircraft,
 }: {
   rows: AirborneRow[];
   sort: SortState<AirborneSortCol>;
   onSort: (col: AirborneSortCol) => void;
   /** True before the first feed poll answers — distinct from "nothing is flying". */
   feedLoading: boolean;
-  onOpenAircraft: (reg: string) => void;
 }) {
   return (
     <div
@@ -88,28 +103,27 @@ export function AirborneTable({
             rows.map((row) => (
               <TableRow key={`${row.reg}-${row.icao24}`}>
                 <TableCell className="font-mono">
-                  <button
-                    type="button"
-                    onClick={() => onOpenAircraft(row.reg)}
-                    className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
-                  >
-                    {row.reg}
-                  </button>
+                  <TailLink reg={row.reg} hit="inline" />
                 </TableCell>
-                <TableCell>{row.type}</TableCell>
+                <TableCell>
+                  <TypeLink typeCode={row.typeLink} hit="inline">
+                    {row.type}
+                  </TypeLink>
+                </TableCell>
                 <TableCell className="font-mono">
-                  <FlightLink ident={row.flight} hit="inline" />
+                  <FlightLink ident={row.flight} tone="quiet" hit="inline" />
                 </TableCell>
-                <TableCell className="font-mono text-xs">{row.route}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  <HubLink code={row.origin} />
+                  <span aria-hidden="true" className="mx-3 text-muted-foreground pointer-fine:md:mx-1">
+                    &gt;
+                  </span>
+                  <span className="sr-only"> to </span>
+                  <HubLink code={row.dest} />
+                </TableCell>
                 <TableCell className="font-mono tabular-nums">{row.alt}</TableCell>
                 <TableCell className="text-xs">{row.phase}</TableCell>
-                <TableCell>
-                  {row.starlink ? (
-                    <span className="rounded border border-bb-starlink/30 bg-bb-starlink/10 px-1 py-0.5 text-[9px] font-medium text-bb-starlink">
-                      SL
-                    </span>
-                  ) : null}
-                </TableCell>
+                <TableCell>{row.starlink ? <StarlinkRowChip /> : null}</TableCell>
                 <TableCell>
                   {row.special ? (
                     <span className="inline-flex items-center gap-0.5 rounded border px-1 py-0.5 text-[9px] text-foreground">
