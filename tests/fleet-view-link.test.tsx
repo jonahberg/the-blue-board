@@ -824,6 +824,34 @@ describe('the cold load\'s Fleet address is the one the page was opened on', () 
     expect(scrolls).toEqual([]);
   });
 
+  it.each([
+    { landsAt: 12_000, rows: 6, type: 'A319', result: 'applied: the remount at 5 s waits until 15 s' },
+    { landsAt: 16_000, rows: 8, type: 'All Types', result: 'dropped: past the remount\'s 10 s too' },
+  ])('a link still waiting when the view remounts waits on the new mount\'s budget; data at $landsAt ms is $result', ({ landsAt, rows: expected, type }) => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    ctl.fleet = fleetValue([], true);
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    follow({ filter: 'A319', view: null });
+    // The tab throws before the database lands; "Try again" at 5 s mounts it afresh.
+    clock.mockReturnValue(start + 5_000);
+    view.rerender(tree('again'));
+
+    clock.mockReturnValue(start + landsAt);
+    ctl.fleet = fleetValue(FLEET_DB);
+    view.rerender(tree('again'));
+
+    expect(rows()).toHaveLength(expected);
+    expect(typeSelect().textContent).toContain(type);
+    clock.mockRestore();
+  });
+
   it('a followed link dropped for arriving late stays dropped after a remount', async () => {
     const start = Date.now();
     const clock = vi.spyOn(Date, 'now').mockReturnValue(start);

@@ -499,8 +499,11 @@ export default function FleetView() {
   // link followed before the database arrives is held until it does, on the cold load's budget:
   // 10 s from the follow (`fleetLink.at`), or from this view's mount when that is later (a first
   // visit spends part of the wait loading the tab's own code). Later than that it is dropped.
-  // Applied or dropped, it is spent (`SPENT_FLEET_LINKS`), so a remount (the error boundary's
-  // "Try again") neither applies it again nor restarts its budget.
+  // Once applied or dropped it is spent (`SPENT_FLEET_LINKS`): a remount (the error boundary's
+  // "Try again") neither applies it again nor gives a dropped link another wait. A link still
+  // waiting for the database when the view remounts is not spent, and waits on the same formula
+  // read with the new mount: until the later of 10 s from the follow and 10 s from the remount
+  // (the tab that would have shown it never did, so applying it is what the reader asked for).
   // Declared after the cold load's effect so that, when both apply in one commit, the link the
   // visitor just clicked wins over an address the page was opened on.
   useEffect(() => {
