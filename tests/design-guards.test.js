@@ -488,6 +488,31 @@ function scriptLinkStyleOffenders(source, fileName = 'inline.ts') {
   return offenders;
 }
 
+/**
+ * What is wrong with `found` (offenders as "file:line <tag> classes") against `allow`, keyed by
+ * "file <tag> classes" (what the element is, not its line, so a copy edit above it changes
+ * nothing) with the number of such elements the file may hold and why. A key found more often than
+ * allowed reports every one of its elements; an entry found less often, or with no reason, fails.
+ */
+function allowlistProblems(found, allow) {
+  const byKey = new Map();
+  for (const entry of found) {
+    const key = entry.replace(/:\d+ </, ' <');
+    byKey.set(key, [...(byKey.get(key) ?? []), entry]);
+  }
+  const problems = [];
+  for (const [key, entries] of byKey) {
+    const allowed = allow[key]?.count ?? 0;
+    if (entries.length > allowed) problems.push(...entries.map((e) => `${e} (${entries.length} found, ${allowed} allowed)`));
+  }
+  for (const [key, { count, reason }] of Object.entries(allow)) {
+    if (!String(reason ?? '').trim()) problems.push(`${key} needs a reason`);
+    const n = byKey.get(key)?.length ?? 0;
+    if (n < count) problems.push(`${key} is allowlisted ${count} time(s) but found ${n}`);
+  }
+  return problems;
+}
+
 describe('link colour and underline only on links and buttons, on the content pages (links everywhere, part 3)', () => {
   // The content files part 3 linked: fleet and flight pages, hubs, trackers and Newark.
   const astroIn = (dir) => [...walk(resolve(ROOT, dir))].filter((p) => p.endsWith('.astro')).map((p) => relative(ROOT, p));
@@ -504,15 +529,22 @@ describe('link colour and underline only on links and buttons, on the content pa
       .map((name) => `src/components/site/${name}`),
   ];
   const SCRIPT_SCOPE = ['src/scripts/fleet-live.ts', 'src/scripts/flight-page.ts', 'src/scripts/hub-board.ts'];
-  // `file:line` → why that element may carry link colour or an underline. A new entry needs a
-  // reason, and an entry that no longer matches anything fails.
+  // `file <tag> classes` → how many such elements the file may hold (in its source: one element in
+  // a .map() is one) and why they may carry link colour or an underline. Keyed by what the element
+  // is, not its line, so an edit above it changes nothing; a second one, or one that has gone, fails.
   const ALLOW = {
-    'src/pages/fleet/index.astro:390':
-      "a type card's count, in a card that is clickable whole through its stretched type link (DESIGN.md 2026-11-11): a click on the figure follows the link",
-    'src/pages/hubs/index.astro:137':
-      "a hub card's code, in a card that is clickable whole through its stretched link (DESIGN.md 2026-11-11): a click on the code follows the link",
-    'src/components/site/FlightTrip.astro:38':
-      'the plane marker on the flight page\'s progress track: an aria-hidden icon drawn in link colour, not text',
+    'src/pages/fleet/index.astro <p> text-primary': {
+      count: 1,
+      reason: "the count on each type card (19 cards), clickable whole through its stretched type link (DESIGN.md 2026-11-11): a click on the figure follows the link",
+    },
+    'src/pages/hubs/index.astro <p> text-primary': {
+      count: 1,
+      reason: "the code on each hub card (9 cards), clickable whole through its stretched link (DESIGN.md 2026-11-11): a click on the code follows the link",
+    },
+    'src/components/site/FlightTrip.astro <div> text-primary': {
+      count: 1,
+      reason: "the plane marker on the flight page's progress track: an aria-hidden icon drawn in link colour, not text",
+    },
   };
 
   it('finds no element on these pages that looks like a link and is not one', () => {
@@ -527,12 +559,33 @@ describe('link colour and underline only on links and buttons, on the content pa
       ),
     ];
     expect(seen.styled).toBeGreaterThan(40); // 47 on Nov 12 2026, nearly all of them links
-    const at = (entry) => entry.split(' ')[0];
-    expect(found.filter((entry) => !(at(entry) in ALLOW))).toEqual([]);
-    for (const [where, reason] of Object.entries(ALLOW)) {
-      expect(reason.trim(), `${where} needs a reason`).not.toBe('');
-      expect(found.map(at), `${where} is allowlisted but no longer matches`).toContain(where);
-    }
+    expect(allowlistProblems(found, ALLOW)).toEqual([]);
+  });
+
+  it('the allowlist names what an element is, not its line: a copy edit above it passes, a new one fails', () => {
+    const offenders = (file, source) => astroLinkStyleOffenders(source).map((o) => `${file}:${o.line} <${o.tag}> ${o.classes.join(' ')}`);
+    const allow = { 'x.astro <p> text-primary': { count: 1, reason: 'a whole-card figure' } };
+    const card = '<li class="relative"><p class="text-primary">19</p><a href="/x" class="after:inset-0">X</a></li>';
+    expect(allowlistProblems(offenders('x.astro', `---\nconst a = 1;\n---\n<ul>${card}</ul>`), allow)).toEqual([]);
+    // Lines added above the element: still the same element, still allowed.
+    expect(allowlistProblems(offenders('x.astro', `---\nconst a = 1;\nconst b = 2;\n---\n<h2>What's new</h2>\n<p>One more line.</p>\n<ul>${card}</ul>`), allow)).toEqual([]);
+    // A second link-coloured <p> in the same file fails, naming both.
+    expect(allowlistProblems(offenders('x.astro', `<ul>${card}</ul>\n<p class="text-primary">New label</p>`), allow)).toEqual([
+      'x.astro:1 <p> text-primary (2 found, 1 allowed)',
+      'x.astro:2 <p> text-primary (2 found, 1 allowed)',
+    ]);
+    // A different element, or the same classes in another file, is not covered by the entry.
+    expect(allowlistProblems(offenders('x.astro', `<ul>${card}</ul><span class="underline">x</span>`), allow)).toEqual([
+      'x.astro:1 <span> underline (1 found, 0 allowed)',
+    ]);
+    expect(allowlistProblems([...offenders('x.astro', card), ...offenders('y.astro', card)], allow)).toEqual([
+      'y.astro:1 <p> text-primary (1 found, 0 allowed)',
+    ]);
+    // An entry whose element has gone fails, and so does one with no reason.
+    expect(allowlistProblems([], allow)).toEqual(['x.astro <p> text-primary is allowlisted 1 time(s) but found 0']);
+    expect(allowlistProblems(offenders('x.astro', card), { 'x.astro <p> text-primary': { count: 1, reason: ' ' } })).toEqual([
+      'x.astro <p> text-primary needs a reason',
+    ]);
   });
 
   it('covers the files the content pages link from', () => {
