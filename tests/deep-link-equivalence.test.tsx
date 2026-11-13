@@ -13,8 +13,9 @@
  * The Fleet cases also start from a Fleet tab the visitor has already filtered (type, Wi-Fi, search,
  * the Express search, left on United Express): a followed link first puts the tab back where a cold
  * load starts, so that history does not show.
- * What is stubbed: the fleet database and the live feed (a small fixed database), the watch list
- * and watched-flight alerts (the Schedule store's collaborators; the real ones poll), and fetch.
+ * What is stubbed: the fleet database and the live feed (a small fixed database, and two flights in
+ * the air on its tails, so Airborne Now has rows a missed reset would change), the watch list and
+ * watched-flight alerts (the Schedule store's collaborators; the real ones poll), and fetch.
  *
  * A link followed on the tab already showing is not an arrival and is not compared with a cold
  * load: it changes what it names and keeps the rest (the links plan, ruling 2), pinned at the end.
@@ -53,8 +54,15 @@ vi.mock('../src/app/state/fleet', async (importOriginal) => ({
 }));
 vi.mock('../src/app/state/feed', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/feed')>()),
-  useFeed: () => ({ flights: [], lastGoodTs: null }) as unknown as FeedValue,
+  useFeed: () => ({ flights: FLIGHTS, lastGoodTs: null }) as unknown as FeedValue,
 }));
+
+// In the air on an A319 and the 737 MAX 9 (`isAirborne`), so Airborne Now lists two rows, and one
+// under a type filter of A319 or a search for "N10": a link that did not reset them shows it.
+const FLIGHTS = vi.hoisted(() => [
+  { reg: 'N100UA', icao24: 'a00001', flightIATA: 'UA100', callsign: 'UAL100', origin: 'ORD', dest: 'DEN', alt: 10000, spd: 400, vr: 0, onGround: false },
+  { reg: 'N37502', icao24: 'a00002', flightIATA: 'UA375', callsign: 'UAL375', origin: 'SFO', dest: 'EWR', alt: 10000, spd: 400, vr: 0, onGround: false },
+]);
 
 const FLEET_DB = [
   ...Array.from({ length: 6 }, (_, i) => ({ r: `N10${i}UA`, t: 'A319', w: 'Satl Ku', s: '', d: '2000' })),
@@ -341,15 +349,32 @@ describe('a cold load and an in-place click of the same address end in the same 
     expect(await inPlace('/?tab=fleet&view=special', { fleetVisited: true })).toEqual(coldState);
   });
 
-  it.each(['/?tab=fleet&type=737%20MAX%209', '/?tab=fleet&view=special', '/?tab=fleet&filter=starlink'])(
-    '%s followed from a Fleet tab with every filter set lands where the cold load does',
-    async (address) => {
-      const coldState = await cold(address);
-      expect(coldState).toMatchObject({ fleetWifi: 'All WiFi', fleetSearch: '', fleetExpressSearch: '' });
-      expect(coldState.fleetScrolls).toEqual([address.includes('view=') ? 'panel:special' : 'controls']);
-      expect(await inPlaceFromDirtyFleet(address)).toEqual(coldState);
-    },
-  );
+  it('/?tab=fleet&view=airborne: the Fleet tab on Airborne Now, unfiltered, scrolled to that panel', async () => {
+    // The Stats tab's "Fleet Utilization" card links here.
+    const coldState = await cold('/?tab=fleet&view=airborne');
+    expect(coldState).toMatchObject({
+      tab: 'fleet',
+      fleetType: expect.stringContaining('All Types'),
+      fleetSubView: expect.stringMatching(/^Airborne Now/),
+      fleetRows: 2,
+      fleetScrolls: ['panel:airborne'],
+    });
+    expect(await inPlace('/?tab=fleet&view=airborne')).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&view=airborne', { fleetVisited: true })).toEqual(coldState);
+    expect(await inPlace('/?tab=fleet&view=airborne', { fleetLeftOn: /^Special/ })).toEqual(coldState);
+  });
+
+  it.each([
+    ['/?tab=fleet&type=737%20MAX%209', 'controls'],
+    ['/?tab=fleet&view=special', 'panel:special'],
+    ['/?tab=fleet&view=airborne', 'panel:airborne'],
+    ['/?tab=fleet&filter=starlink', 'controls'],
+  ])('%s followed from a Fleet tab with every filter set lands where the cold load does', async (address, scroll) => {
+    const coldState = await cold(address);
+    expect(coldState).toMatchObject({ fleetWifi: 'All WiFi', fleetSearch: '', fleetExpressSearch: '' });
+    expect(coldState.fleetScrolls).toEqual([scroll]);
+    expect(await inPlaceFromDirtyFleet(address)).toEqual(coldState);
+  });
 
   it('/?tab=fleet&type=B789: a type the controls do not offer is ignored either way, and scrolls nowhere', async () => {
     const coldState = await cold('/?tab=fleet&type=B789');
