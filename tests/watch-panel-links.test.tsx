@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Links everywhere, part 2: the watch panel (the links plan, slice 2a).
+ * Links everywhere, part 2: the watch panel.
  *
  *  - A watched flight's number is split out of the row's button as its flight page link (the
  *    row's one blue link), per DESIGN.md 2026-11-11 "A number inside a control that does

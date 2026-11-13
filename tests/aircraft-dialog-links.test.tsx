@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The aircraft dialog for a mainline tail links the names it prints (links part 2, slice 2d): the
+ * The aircraft dialog for a mainline tail links the names it prints (links everywhere, part 2): the
  * link row's "All <type> in the fleet" door (the type in the title is a tooltip term, a button, so
  * the type's link lives in the link row), the Starlink badge, a ★ name, and the live flight's
  * number, split out of the block that sends the map to the aircraft.

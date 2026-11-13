@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The Fleet tab links the names it prints (links everywhere, part 2, slice 2c).
+ * The Fleet tab links the names it prints (links everywhere, part 2).
  *
  *  - Tails go to the aircraft dialog in place (`TailLink`): the row's link-coloured link in the All
  *    Aircraft, Airborne Now and United Express tables and on a Special card.

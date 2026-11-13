@@ -69,7 +69,7 @@ export type FollowOptions = {
    * when the tab changes. A tail link opens the aircraft dialog in place of the overlays, as the
    * overlays' own tail buttons do. Without it, a link on the tab already showing is a stay (the
    * links plan, ruling 2), which from a dialog over a searched Fleet tab could land on "No
-   * aircraft match" behind the dialog (Nov 12 2026 review, finding 8).
+   * aircraft match" behind the dialog.
    */
   fromOverlay?: boolean;
 };
@@ -128,8 +128,8 @@ export function FollowProvider({ children }: { children: ReactNode }) {
   // ONE listener does all of it, in that order. A browser runs a microtask checkpoint between two
   // listeners of an event it fires, and React commits the tab change there (popstate and hashchange
   // are discrete events), so a second listener would find the tab already changed and say nothing.
-  // That is what happened while `useDeepLinks` set the tab in a listener of its own (Nov 12 2026
-  // review, seen in Chrome; jsdom runs all listeners in one stack and hid it).
+  // That is what happened while `useDeepLinks` set the tab in a listener of its own (seen in
+  // Chrome; jsdom runs all listeners in one stack and hid it).
   //
   // Back fires `popstate` and then `hashchange`; the second finds the tab already shown (after a
   // commit) or already handled (`historyMoveTo`, before one). The tab bar uses `replaceState`,
@@ -176,10 +176,11 @@ export function FollowProvider({ children }: { children: ReactNode }) {
       // The board the address names, as a cold load of it opens it, whether the link arrives or
       // Schedule is already showing: Departures (the hub chip's figure is operated departures)
       // and, with no day given, the hub's useful day (`setCurrent` re-derives it). DESIGN.md
-      // 2026-11-12; the controller's ruling on the foundation review, Nov 12 2026.
+      // 2026-11-12.
       setCurrent({ hub: intent.scheduleHub, dir: 'departures' });
-      // Only a link that arrives clears the Schedule view's own status, type and search filters
-      // (the view does it on a new `scheduleLink` seq); one followed on Schedule leaves them.
+      // Only a link that arrives puts the Schedule view where a cold load does (on a new
+      // `scheduleLink` seq it clears its filters, its own ask answer and the sort, and scrolls to
+      // NOW); one followed on Schedule leaves them.
       if (arriving) followScheduleLink(intent.scheduleHub);
     }
     if (intent.fleet) followFleetLink(intent.fleet, { arriving });

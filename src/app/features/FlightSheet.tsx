@@ -18,8 +18,8 @@
  * route to its Schedule board, the type to the Fleet tab filtered to it, the tail to its aircraft
  * dialog and the Starlink badge to the Starlink tab; a ★ name stays a plain badge, as it is on
  * every other dashboard row. The ones that go to a tab are `fromOverlay`: following one closes this sheet (and any other
- * overlay) and lands as an arrival. The tail links are not (the controller's exception to "every
- * link in an overlay"): a tail opens the aircraft dialog OVER this sheet, as its button did, so the
+ * overlay) and lands as an arrival. The tail links are not, the one exception among the overlays'
+ * links: a tail opens the aircraft dialog OVER this sheet, as its button did, so the
  * reader keeps their flight and the map's selection, and Escape returns focus to the tail. A tail
  * neither fleet knows links only when the Starlink roster knows it (`unmatchedTailLinks`). The
  * title stays plain; "Open flight page" under it is the flight's link.

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A link followed from inside an overlay, with the real overlay (links part 2, slice 2d): the
+ * A link followed from inside an overlay, with the real overlay (links everywhere, part 2): the
  * flight sheet, the aircraft dialog, the FR24 lookup, the delay explanation and the brief sheet,
  * each mounted in the real UiProvider, ScheduleProvider and FollowProvider over a shell of tab
  * panels built the way Dashboard.tsx builds them (Radix `TabsContent`, `forceMount`,
@@ -14,8 +14,8 @@
  *
  * jsdom runs no exit animation, so the content unmounts in the same commit as the close and the
  * wrapper's hand-back runs before the follow's frame; in a browser the frame comes first and the
- * hand-back (after the 100 to 200 ms exit animation) finds focus already on the panel. Both orders
- * are checked here only in the first; the second was checked in Chrome (the slice report).
+ * hand-back (after the 100 to 200 ms exit animation) finds focus already on the panel. Only the
+ * first order runs here; the second was seen in Chrome, not in a test.
  *
  * The feed, fleet and watch stores are stubbed (the real ones poll), as are the APIs the overlays
  * call when they open.
@@ -257,8 +257,8 @@ describe('the flight sheet', () => {
   });
 
   it('a tail link opens the aircraft dialog over the sheet, which stays; Escape returns to the tail', async () => {
-    // The controller's exception to "fromOverlay on every overlay link": the sheet's tail opens
-    // the dialog over the still-open sheet, as its button did, so the reader keeps their flight.
+    // The one exception to "fromOverlay on every overlay link": the sheet's tail opens the
+    // dialog over the still-open sheet, as its button did, so the reader keeps their flight.
     mountAt('/#live');
     const before = window.history.length;
     act(() => seen.ui!.select({ kind: 'flight', flight: airborne() }));

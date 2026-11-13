@@ -50,16 +50,17 @@ export type FleetLink = {
 };
 
 /**
- * A hub link that ARRIVED at the Schedule tab from another tab (`useFollowDeepLink`), for the
- * Schedule view: on a new `seq` it clears its own status, type and search filters, so the board
- * the link opened lands as a cold load of `/?tab=schedule&hub=ORD` does (the links plan, ruling 9).
- * The board itself (hub, Departures, the hub's default day) is already set through the Schedule
- * store by the follow. A hub link followed while Schedule is showing opens the same board
- * (Departures, the hub's default day) and does not bump this: the reader's filters stay (ruling
- * 2). Not consumed yet: the Schedule view reads it from `useUi().scheduleLink` (links part 2,
- * slice 2a). Consumer rule: keep the last `seq` seen in a ref that starts at 0 (the view mounts in
- * the same commit as the first arrival, with `seq` 1 already set), act on a new `seq` only, clear
- * only the view's own state, and be harmless on a freshly mounted view.
+ * A hub link that ARRIVED at the Schedule tab (`useFollowDeepLink`): from another tab, or from an
+ * overlay on any tab. The Schedule view reads it (`useUi().scheduleLink`, ScheduleView.tsx): on a
+ * new `seq` it clears all eight board filters (the controls and their debounced copies), its own
+ * "Ask the board" answer and the sort, and scrolls today's board to NOW, so the board the link
+ * opened lands as a cold load of `/?tab=schedule&hub=ORD` does (the links plan, ruling 9). The
+ * board itself (hub, Departures, the hub's default day) is already set through the Schedule store
+ * by the follow. A hub link followed while Schedule is showing, outside an overlay, opens the same
+ * board and does not bump this: the reader's filters stay (ruling 2). The view keeps the last `seq`
+ * seen in a ref that starts at 0 (it mounts in the same commit as the first arrival, with `seq` 1
+ * already set), acts on a new `seq` only, and on its first run only scrolls: a fresh view has
+ * nothing to clear.
  */
 export type ScheduleLink = { hub: string; seq: number };
 

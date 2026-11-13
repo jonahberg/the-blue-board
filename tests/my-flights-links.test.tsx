@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The names a My Flights card, its Aircraft Journey and its connection cards print, linked to
- * their homes (links part 2, slice 2d): a hub end to its Schedule board, the type to the Fleet tab
+ * their homes (links everywhere, part 2): a hub end to its Schedule board, the type to the Fleet tab
  * filtered to it, the tail to the aircraft dialog, a United flight number to its flight page, and
  * the Starlink badge to the Starlink tab. Everything else stays plain, and nothing that is not a
  * link is painted in link colour.

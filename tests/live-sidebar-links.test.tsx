@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Links everywhere, part 2: the Live sidebar links what its search rows name (the links plan,
- * slice 2a).
+ * Links everywhere, part 2: the Live sidebar links what its search rows name.
  *
  *  - A search row stays one stretched button (it shows the flight on the map) with the flight
  *    number's link above it, as before. Its hub ends and its tail are now links too, siblings of

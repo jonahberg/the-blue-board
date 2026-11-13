@@ -222,7 +222,7 @@ export function useDeepLinks(deps: DeepLinkDeps) {
     // `?hub=` picks the Schedule board: with `?tab=schedule`, alone, with `?tab=irops` (the hub
     // pages' "IROPS Monitor" link). Not with `?tab=weather`, where the hub names a Weather card
     // (`hubStatusLink`, the brief's chips): a click on that link leaves the board the reader chose
-    // (`resolveDeepLink`), so the same address opened cold does too (Nov 12 2026 review).
+    // (`resolveDeepLink`), so the same address opened cold does too: one address, one end state.
     const hub = params.get('hub');
     const weatherCard = String(params.get('tab') ?? '').trim().toLowerCase() === 'weather';
     if (hub && !weatherCard) {
@@ -231,8 +231,8 @@ export function useDeepLinks(deps: DeepLinkDeps) {
     }
 
     // ?view=starlink is tab routing and belongs here. ?view=airborne|special|express and
-    // ?type=/?filter= select rows INSIDE the Fleet tab: the Fleet view reads those itself
-    // through `readFleetDeepLinks()`, once its database has actually loaded.
+    // ?type=/?filter= select rows INSIDE the Fleet tab: the UI store reads them once at startup
+    // (`coldFleetLink`) and the Fleet view applies them once its database has actually loaded.
     if (params.get('view')?.toLowerCase() === 'starlink') depsRef.current.setTab('starlink');
 
     const aircraft = params.get('aircraft');

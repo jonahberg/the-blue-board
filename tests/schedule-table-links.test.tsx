@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Links everywhere, part 2: every name a Schedule row prints that has a home links to it, on the
- * desktop table and on the phone row (the links plan, slice 2a).
+ * desktop table and on the phone row.
  *
  *  - the other end of the route, when it is another hub → its Schedule board (quiet); the board's
  *    own hub is plain (ruling 1);
