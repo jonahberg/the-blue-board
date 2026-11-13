@@ -7,9 +7,12 @@
 //   - where the row has a tail, the type comes from the fleet database's `t` for that tail
 //     (`fleetTypeCodeForTail`), never the printed string: the Starlink tracker lists N75436 as
 //     "737-900" and the fleet database says 737-900ER;
-//   - otherwise the printed string must equal one of the 19 fleet database type codes exactly.
-// ICAO codes (B739 is both the 737-900 and the 737-900ER), clipped provider text ("Boeing 737")
-// and regional types print plain.
+//   - otherwise (a row with no tail) the printed string must equal one of the 19 fleet database
+//     type codes exactly.
+// Clipped provider text ("Boeing 737") and regional types print plain, and so do most ICAO codes
+// (B739 is both the 737-900 and the 737-900ER). Not all: A319 and A320 are ICAO designators AND
+// fleet database type codes. So the rule for callers is that a printed type passed in comes only
+// from a fleet database string, never from a feed's `acType`.
 //
 // The map is written out here rather than read from the fleet pages' data module, which carries
 // every fleet page's HTML and would land in the dashboard bundle. tests/fleet-type-link.test.js
@@ -60,20 +63,23 @@ export function fleetTypeCodeForTail(reg, fleetByReg) {
 }
 
 /**
- * The type a row links to, by the rule above in one call: the tail's type in the fleet database
- * when the row has a tail the database knows (`fleetTypeCodeForTail`); otherwise the printed type
- * text, only when it is exactly one of the fleet database's type codes; otherwise null. A row
- * whose tail the database knows never falls back to its printed text, so N75436's "737-900" links
- * as the 737-900ER. ICAO codes (B739 is the 737-900 and the 737-900ER), clipped provider text
- * ("Boeing 737") and regional types are null on their own.
+ * The type a row links to, by the rule above in one call.
+ *
+ *  - A row with a tail (`reg` a US registration): the tail decides, and only the tail
+ *    (`fleetTypeCodeForTail`). Null while the fleet database is loading or after it failed, for a
+ *    tail it does not know, and for a type with no fleet page; the printed text is never read, so
+ *    N75436's "737-900" never links as the 737-900 while the database that says 737-900ER loads.
+ *  - A row with no tail: the printed type text, only when it is exactly one of the fleet
+ *    database's type codes.
+ *
+ * `typeText` must come from a fleet database string, never a feed's `acType`: A319 and A320 are
+ * ICAO codes and fleet type codes at once, so an `acType` would link those two rows and not the
+ * B739 beside them. Clipped provider text ("Boeing 737") and regional types are null.
  *
  * @param {{reg?: unknown, typeText?: unknown, fleetByReg?: Record<string, {t?: string}> | null}} row
  * @returns {string | null}  a key of FLEET_TYPE_SLUGS, e.g. '737-900ER'.
  */
 export function fleetTypeCodeFor({ reg, typeText, fleetByReg } = {}) {
-  const byTail = fleetTypeCodeForTail(reg, fleetByReg);
-  if (byTail) return byTail;
-  const tail = tailLink(reg)?.reg;
-  if (tail && fleetByReg && Object.hasOwn(fleetByReg, tail)) return null;
+  if (tailLink(reg)) return fleetTypeCodeForTail(reg, fleetByReg);
   return typeof typeText === 'string' && Object.hasOwn(FLEET_TYPE_SLUGS, typeText) ? typeText : null;
 }

@@ -82,7 +82,7 @@ describe('fleetTypeCodeForTail: the type a tail links to comes from the fleet da
   });
 });
 
-describe('fleetTypeCodeFor: a row\'s type link, by tail first, else an exact type string', () => {
+describe('fleetTypeCodeFor: a row with a tail by the tail only; a row without one by an exact type string', () => {
   const fleetByReg = { N75436: { t: '737-900ER' }, N37502: { t: '737 MAX 9' }, N999XX: { t: '737-600' } };
 
   it('a tail the database knows decides, whatever the row prints', () => {
@@ -91,26 +91,31 @@ describe('fleetTypeCodeFor: a row\'s type link, by tail first, else an exact typ
     expect(fleetTypeCodeFor({ reg: 'N37502', fleetByReg })).toBe('737 MAX 9');
   });
 
-  it('a known tail whose type has no fleet page is null: the printed text never overrides the database', () => {
-    expect(fleetTypeCodeFor({ reg: 'N999XX', typeText: '737-700', fleetByReg })).toBeNull();
-  });
-
-  it('with no tail, or one the database does not know, an exact fleet database type string links', () => {
-    expect(fleetTypeCodeFor({ typeText: '737 MAX 9', fleetByReg })).toBe('737 MAX 9');
-    expect(fleetTypeCodeFor({ reg: 'N613UX', typeText: 'A321neo', fleetByReg })).toBe('A321neo');
-    expect(fleetTypeCodeFor({ reg: null, typeText: '787-10', fleetByReg: null })).toBe('787-10');
-  });
-
-  it('ICAO codes, clipped or differently written text and regional types are null without a tail', () => {
-    for (const text of ['B739', 'B772', 'B38M', 'Boeing 737', '737 max 9', '737-900 ', 'E175', 'CRJ-550', '', null, 42]) {
-      expect(fleetTypeCodeFor({ typeText: text, fleetByReg }), String(text)).toBeNull();
-      expect(fleetTypeCodeFor({ reg: 'N613UX', typeText: text, fleetByReg }), String(text)).toBeNull();
+  it('a row with a tail never reads its printed text: null while the database loads or after it failed', () => {
+    for (const db of [null, undefined, {}]) {
+      expect(fleetTypeCodeFor({ reg: 'N75436', typeText: '737-900', fleetByReg: db }), JSON.stringify(db)).toBeNull();
     }
   });
 
-  it('a value that is not a registration counts as no tail; no arguments is null', () => {
+  it('a row with a tail the database does not know, or whose type has no fleet page, is null', () => {
+    expect(fleetTypeCodeFor({ reg: 'N613UX', typeText: 'A321neo', fleetByReg })).toBeNull();
+    expect(fleetTypeCodeFor({ reg: 'N999XX', typeText: '737-700', fleetByReg })).toBeNull();
+  });
+
+  it('a row with no tail links an exact fleet database type string', () => {
+    expect(fleetTypeCodeFor({ typeText: '737 MAX 9', fleetByReg })).toBe('737 MAX 9');
+    expect(fleetTypeCodeFor({ reg: null, typeText: '787-10', fleetByReg: null })).toBe('787-10');
+    // A value that is not a registration is no tail.
     expect(fleetTypeCodeFor({ reg: 'UA576', typeText: 'A319', fleetByReg })).toBe('A319');
-    expect(fleetTypeCodeFor({ reg: 'UA576', typeText: 'A320neo', fleetByReg })).toBeNull();
+  });
+
+  it('without a tail, clipped or differently written text, regional types and most ICAO codes are null', () => {
+    for (const text of ['B739', 'B772', 'B38M', 'Boeing 737', '737 max 9', '737-900 ', 'E175', 'CRJ-550', 'A320neo', '', null, 42]) {
+      expect(fleetTypeCodeFor({ typeText: text, fleetByReg }), String(text)).toBeNull();
+    }
+    // A319 and A320 are ICAO codes and fleet type codes at once: why typeText must never be an acType.
+    expect(fleetTypeCodeFor({ typeText: 'A319' })).toBe('A319');
+    expect(fleetTypeCodeFor({ typeText: 'A320' })).toBe('A320');
     expect(fleetTypeCodeFor()).toBeNull();
   });
 
