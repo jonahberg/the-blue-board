@@ -18,6 +18,10 @@
  *
  * The explanation is written through `textContent` semantics — React text children — so
  * a model that returns markup renders as the characters it sent, never as HTML.
+ *
+ * The route's hub ends link to their Schedule boards (links part 2), `fromOverlay`, so following
+ * one closes this dialog and lands as an arrival. Both callers hand the route as one string,
+ * "ORD→DEN"; `routeEnds` splits it, and anything else prints as it came.
  */
 
 import { TriangleAlert } from 'lucide-react';
@@ -40,8 +44,10 @@ import {
   riskLabelColor,
 } from '@/lib/delay-explain-request.js';
 import { HUB_TZ } from '@/lib/hubTz.js';
+import { routeEnds } from '@/lib/name-links.js';
 import { postDelayExplain } from '../data/api';
 import { useUi } from '../state/ui';
+import { HubLink } from './EntityLinks';
 import { FlightLink } from './FlightLink';
 
 type ExplainState =
@@ -62,6 +68,7 @@ export default function DelayExplainDialog() {
   const flight = String(context?.flight ?? '');
   const riskLabel = String(context?.riskLabel ?? 'LOW');
   const route = String(context?.route ?? '');
+  const ends = routeEnds(route);
   const riskScore = Number(context?.riskScore);
   const factors = useMemo(
     () => asFactors((context?.factors ?? context?.riskFactors) as string[] | string | null) as string[],
@@ -125,7 +132,17 @@ export default function DelayExplainDialog() {
             </Badge>
           </DialogTitle>
           <DialogDescription className="font-mono text-[11px]">
-            {route} · Score {Number.isFinite(riskScore) ? riskScore : 0}/100
+            {/* The arrow's margin keeps the two hub links' touch boxes apart. */}
+            {ends ? (
+              <>
+                <HubLink code={ends.origin} fromOverlay />
+                <span className="mx-3 pointer-fine:md:mx-0.5">→</span>
+                <HubLink code={ends.destination} fromOverlay />
+              </>
+            ) : (
+              route
+            )}{' '}
+            · Score {Number.isFinite(riskScore) ? riskScore : 0}/100
           </DialogDescription>
         </DialogHeader>
 
