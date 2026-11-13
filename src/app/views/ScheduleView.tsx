@@ -16,10 +16,11 @@
  *  - A hub link that ARRIVES here from another tab or an overlay (`scheduleLink`, a new `seq`)
  *    clears every filter, both copies, and Schedule's own "Ask the board" answer (never another
  *    view's), so the board lands where a cold load of `/?tab=schedule&hub=DEN` lands (the links
- *    plan, ruling 9). The follow has already
- *    set the board itself. A hub link followed while Schedule is showing does not bump `seq`: the
- *    status, type and search filters stay (ruling 2), and a new board resets its four contextual
- *    filters as any board change does. The sort stays, as the Fleet tab's arrival keeps its own.
+ *    plan, ruling 9). It also puts the sort back to Time ascending, where a cold load starts: the
+ *    one sort with the NOW line and the scroll to it (Fleet keeps its sort, which anchors
+ *    nothing). The follow has already set the board itself. A hub link followed while Schedule is
+ *    showing does not bump `seq`: the status, type and search filters and the sort stay (ruling
+ *    2), and a new board resets its four contextual filters as any board change does.
  *  - AeroDataBox is credited before any other provider in the footer — the schedules are
  *    theirs, and crediting Flightradar24 here was a ToS violation. FR24 credit belongs to
  *    live aircraft positions only.
@@ -65,6 +66,9 @@ import type { BoardFilters, RowModel, SortColumn } from './schedule/useBoardMode
 /** How long a filter change waits before the board is recomputed. */
 const RENDER_DEBOUNCE_MS = 120;
 
+/** The board's opening sort: the only one with the NOW divider and the scroll to it. */
+const DEFAULT_SORT: { column: SortColumn; asc: boolean } = { column: 'time', asc: true };
+
 /** Contextual filters describe a BOARD, so they reset when the board changes. */
 const CONTEXTUAL_FILTERS = {
   routeType: '',
@@ -89,10 +93,7 @@ export default function ScheduleView() {
 
   const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
   const [debouncedFilters, setDebouncedFilters] = useState<BoardFilters>(EMPTY_FILTERS);
-  const [sort, setSort] = useState<{ column: SortColumn; asc: boolean }>({
-    column: 'time',
-    asc: true,
-  });
+  const [sort, setSort] = useState<{ column: SortColumn; asc: boolean }>(DEFAULT_SORT);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const tableRef = useRef<ScheduleTableHandle>(null);
 
@@ -127,7 +128,8 @@ export default function ScheduleView() {
   // A hub link arrived from another tab (`scheduleLink`; contract: act on a new `seq` only, keyed
   // on `seq`, never `hub`). Every filter goes, both copies, not only status, type and search: on
   // a board already showing that hub, Departures and its default day, nothing else resets the four
-  // contextual filters. Schedule's own answer to "Ask the board" goes too, and only Schedule's:
+  // contextual filters. The sort goes back to Time ascending, where a cold load starts and the only
+  // sort with the NOW line. Schedule's own answer to "Ask the board" goes too, and only Schedule's:
   // the store holds one answer for whichever view asked, and a Live answer must survive a link
   // followed out of Live (as Fleet guards its own, `askActive`).
   //
@@ -147,6 +149,7 @@ export default function ScheduleView() {
     if (fresh) return;
     setFilters(EMPTY_FILTERS);
     setDebouncedFilters(EMPTY_FILTERS);
+    setSort(DEFAULT_SORT);
     if (askActive) clearAsk();
   }, [scheduleLink, askActive, clearAsk]);
 

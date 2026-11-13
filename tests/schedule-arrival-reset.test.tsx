@@ -7,7 +7,8 @@
  * Both arms run the real ScheduleView on the real UiProvider, ScheduleProvider and FollowProvider,
  * with `useDeepLinks` wired as Dashboard.tsx wires it (the cold load's reader) and the view kept
  * mounted once visited, as Dashboard.tsx keeps it. The state compared is what the view itself
- * shows: the board (hub, direction, day), every filter control, the search box, the rows it paints
+ * shows: the board (hub, direction, day), every filter control, the search box, the sort (a cold
+ * load is Time ascending, the one sort with the NOW line and the scroll to it), the rows it paints
  * and the ask answer.
  *
  * What is stubbed: the schedule API (a small fixed board per hub and direction), the live feed,
@@ -189,9 +190,22 @@ function state() {
     wifi: control('sched-starlink'),
     timeRange: control('sched-timerange'),
     risk: control('sched-risk'),
+    sort: sortedBy(panel),
     rows: panel ? [...panel.querySelectorAll('[data-flight-row]')].map((row) => row.getAttribute('data-flight-row')) : null,
     ask: __peekAskStateForTests().result,
   };
+}
+
+/** The column the table is sorted by and which way, from its header ("Time ascending"). */
+function sortedBy(panel: HTMLElement | null) {
+  const th = panel?.querySelector('th[aria-sort="ascending"], th[aria-sort="descending"]');
+  return th ? `${th.textContent?.replace(/[↑↓↕]/g, '').trim()} ${th.getAttribute('aria-sort')}` : null;
+}
+
+/** Sort the table by a column, as a click on its header does. */
+function sortBy(label: string) {
+  const th = [...document.querySelectorAll('th[aria-sort]')].find((el) => el.textContent?.replace(/[↑↓↕]/g, '').trim() === label)!;
+  fireEvent.click(th.querySelector('button')!);
 }
 
 /** Pick an option from one of the board's advanced-filter selects, as a mouse does. */
@@ -276,6 +290,7 @@ describe('a hub link arriving at Schedule ends where a cold load of its address 
       status: 'All Status',
       routeType: 'All Routes',
       wifi: 'All WiFi',
+      sort: 'Time ascending',
       ask: null,
     });
     expect(coldState.rows).toEqual(['UA211', 'UA212', 'UA213']);
@@ -289,7 +304,9 @@ describe('a hub link arriving at Schedule ends where a cold load of its address 
     act(() => seen.schedule!.setCurrent({ dir: 'arrivals' }));
     await settle();
     await dirtyFilters();
-    expect(state()).toMatchObject({ dir: 'arrivals', status: 'Canceled', routeType: 'International Only', find: 'UA' });
+    sortBy('Flight');
+    await settle();
+    expect(state()).toMatchObject({ dir: 'arrivals', status: 'Canceled', routeType: 'International Only', find: 'UA', sort: 'Flight ascending' });
     expect(state().rows).toEqual(['UA122']);
 
     act(() => seen.ui!.setTab('stats'));
@@ -361,10 +378,12 @@ describe('a hub link arriving at Schedule ends where a cold load of its address 
 });
 
 describe('what the arrival reset leaves alone', () => {
-  it('a hub link followed while Schedule is showing keeps status, type and search (ruling 2)', async () => {
+  it('a hub link followed while Schedule is showing keeps status, type, search and the sort (ruling 2)', async () => {
     mountAt('/#schedule', '/?tab=schedule&hub=DEN');
     await settle();
     await dirtyFilters();
+    sortBy('Flight');
+    await settle();
 
     await follow();
 
@@ -376,6 +395,7 @@ describe('what the arrival reset leaves alone', () => {
       // What the reader is looking for stays.
       status: 'Canceled',
       find: 'UA',
+      sort: 'Flight ascending',
       // The board changed (ORD to DEN), so its four board filters reset, as any board change
       // resets them (ScheduleView's [hub, dir, day] effect). Not the arrival reset: no seq.
       routeType: 'All Routes',
