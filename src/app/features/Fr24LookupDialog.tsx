@@ -16,6 +16,11 @@
  * recent, which is very often not the visitor's. The leg date and a one-line disclaimer
  * are shown whenever that tier answered, so the card is never silently authoritative
  * about somebody else's departure.
+ *
+ * The names it prints link to their homes (links part 2), all `fromOverlay`, so following one
+ * closes this dialog and lands as an arrival: a hub end to its Schedule board, the type to the
+ * Fleet tab filtered to it (by the tail's fleet type: FR24 sends an ICAO code, which never decides
+ * a link on its own), the tail to its aircraft dialog in place of this one.
  */
 
 import { Plane } from 'lucide-react';
@@ -32,6 +37,7 @@ import {
   focusContentOnOpen,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { normalizeWifi } from '@/lib/fleet-utils.js';
 import {
   formatFr24Time,
@@ -46,6 +52,7 @@ import { fetchFr24Flight } from '../data/api';
 import { shareUrl } from '../data/share';
 import { useFleet } from '../state/fleet';
 import { useUi } from '../state/ui';
+import { HubLink, TailLink, TypeLink } from './EntityLinks';
 import { FlightLink } from './FlightLink';
 
 /**
@@ -102,8 +109,8 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 export default function Fr24LookupDialog() {
-  const { fr24Query, openFr24, openAircraft, announce } = useUi();
-  const { fleetDb } = useFleet();
+  const { fr24Query, openFr24, announce } = useUi();
+  const { fleetDb, fleetByReg } = useFleet();
   const [state, setState] = useState<LookupState>({ phase: 'loading' });
   const [failure, setFailure] = useState<string | null>(null);
   const [shareLabel, setShareLabel] = useState('Share');
@@ -168,6 +175,8 @@ export default function Fr24LookupDialog() {
   const fleetMatch = flight?.aircraft?.reg
     ? fleetDb.find((row) => row.r === flight.aircraft?.reg)
     : undefined;
+  // Both type mentions link by the tail's fleet type; with no tail the feed's ICAO code is plain.
+  const typeCode = fleetTypeCodeFor({ reg: flight?.aircraft?.reg, fleetByReg });
 
   async function onShare() {
     if (!flight?.flightNumber) return;
@@ -228,8 +237,11 @@ export default function Fr24LookupDialog() {
           {flight ? (
             <div className="space-y-3 text-xs">
               <div className="flex items-center justify-between gap-2">
+                {/* A hub end links to its Schedule board (quiet); any other airport is plain. */}
                 <div className="min-w-0 text-center">
-                  <div className="font-mono text-lg font-bold">{flight.origin?.iata || '?'}</div>
+                  <div className="font-mono text-lg font-bold">
+                    {flight.origin?.iata ? <HubLink code={flight.origin.iata} fromOverlay /> : '?'}
+                  </div>
                   <div className="truncate text-[9px] text-muted-foreground">
                     {flight.origin?.name || ''}
                   </div>
@@ -239,7 +251,7 @@ export default function Fr24LookupDialog() {
                 </div>
                 <div className="min-w-0 text-center">
                   <div className="font-mono text-lg font-bold">
-                    {flight.destination?.iata || '?'}
+                    {flight.destination?.iata ? <HubLink code={flight.destination.iata} fromOverlay /> : '?'}
                   </div>
                   <div className="truncate text-[9px] text-muted-foreground">
                     {flight.destination?.name || ''}
@@ -273,22 +285,17 @@ export default function Fr24LookupDialog() {
               ) : null}
 
               {flight.aircraft?.type || flight.aircraft?.reg ? (
+                // Both names quiet and 44 px tall on touch (`hit="inline"`), side by side without boxes
+                // that could overlap. The tail replaces this dialog with its aircraft dialog.
                 <p className="text-[10px]">
                   <span className="text-muted-foreground">Aircraft: </span>
-                  {flight.aircraft?.type || '?'}
+                  <TypeLink typeCode={typeCode} hit="inline" fromOverlay>
+                    {flight.aircraft?.type || '?'}
+                  </TypeLink>
                   {flight.aircraft?.reg ? (
                     <>
                       {' · '}
-                      <button
-                        type="button"
-                        className="inline-flex min-h-11 items-center font-mono underline decoration-dotted underline-offset-2 hover:text-primary pointer-fine:md:min-h-0"
-                        onClick={() => {
-                          openFr24(null);
-                          openAircraft(flight.aircraft?.reg ?? null);
-                        }}
-                      >
-                        {flight.aircraft.reg}
-                      </button>
+                      <TailLink reg={flight.aircraft.reg} tone="quiet" hit="inline" fromOverlay className="font-mono" />
                     </>
                   ) : null}
                 </p>
@@ -306,8 +313,13 @@ export default function Fr24LookupDialog() {
               </dl>
 
               {fleetMatch ? (
+                // A label in the muted colour of this dialog's other labels ("Aircraft:", "Position:"),
+                // not link colour. The type links to the Fleet tab.
                 <p className="rounded bg-primary/10 p-2 text-[10px]">
-                  <span className="text-primary">Fleet Match:</span> {fleetMatch.t}
+                  <span className="text-muted-foreground">Fleet Match:</span>{' '}
+                  <TypeLink typeCode={typeCode} fromOverlay>
+                    {fleetMatch.t}
+                  </TypeLink>
                   {fleetMatch.c ? ` · ${fleetMatch.c}` : ''}
                   {fleetMatch.w ? ` · WiFi: ${normalizeWifi(fleetMatch.w)}` : ''}
                 </p>
