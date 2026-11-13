@@ -7,6 +7,7 @@ import JumpNav from '../components/site/JumpNav.astro';
 import StatTile from '../components/site/StatTile.astro';
 import { HUB_ORDER } from '../lib/hub-health.js';
 import { hubLink } from '../lib/hub-link.js';
+import { NAS_STATUS_HREF } from '../lib/nas-status-link.js';
 
 const faqEntries = [
   {
@@ -166,7 +167,7 @@ const ctaClass =
             program in force. src/scripts/newark-live.ts rewrites the text of #newark-program-status
             on each poll, so the id sits on an inner span and the link around it survives. */}
         <a
-          href="/?tab=weather&section=nas"
+          href={NAS_STATUS_HREF}
           class="group flex flex-col justify-center gap-1 rounded-lg border border-border bg-background px-3.5 py-2.5 text-xs leading-relaxed text-foreground transition-colors hover:border-primary"
         >
           <span id="newark-program-status">Checking FAA program status for EWR…</span>

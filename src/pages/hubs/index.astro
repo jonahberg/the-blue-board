@@ -2,6 +2,7 @@
 import { hubOrder, hubs } from '../../data/hubs/index.js';
 import { HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../../data/facts.js';
 import BaseLayout from '../../components/site/BaseLayout.astro';
+import { NAS_STATUS_HREF } from '../../lib/nas-status-link.js';
 import { withBrand } from '../../lib/page-seo.js';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
@@ -215,7 +216,7 @@ const itemListSchema = {
           cancellations, and on-time percentage
         </li>
         <li>
-          <strong><a href="/?tab=weather&section=nas">Ground stops &amp; FAA alerts</a></strong> —
+          <strong><a href={NAS_STATUS_HREF}>Ground stops &amp; FAA alerts</a></strong> —
           NAS status affecting hub operations
         </li>
         <li>
