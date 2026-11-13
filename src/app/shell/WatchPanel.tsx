@@ -20,13 +20,29 @@
  * on, available (with the button), blocked (and how to undo it), iPhone/iPad Safari (needs the
  * Home Screen), unsupported — from `notificationControlState()` in watch-utils.js. The button
  * runs the same `push.enable()` the prompt does: permission, then the push subscription.
+ *
+ * Links (links everywhere, part 2). A watched flight's number is its flight page link, split out
+ * of the row's button (DESIGN.md 2026-11-11: a number inside a control that does something else
+ * is split out of it); the button, stretched under it, still opens the flight sheet. The panel
+ * prints the raw watched ident, so a number `flightLink` refuses (a provider suffix, "UA526H")
+ * stays inside the button, as before. "N of 20 slots used" links to My Flights: this panel is a
+ * modal sheet whose open state Dashboard.tsx holds, which the follow's `fromOverlay` does not
+ * close, so the link closes it in the same click (contract sheet §2) or the sheet would stay open
+ * over My Flights with focus trapped in it.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { flightLink } from '@/lib/flight-link.js';
+import { MY_FLIGHTS_HREF } from '@/lib/tab-links.js';
+import { cn } from '@/lib/utils';
 import { notificationControlState } from '@/lib/watch-utils.js';
+import { dashLinkClick } from '../features/DashLink';
+import { FlightLink } from '../features/FlightLink';
+import { LINK_HIT, LINK_TONE } from '../features/link-style';
+import { useFollowDeepLink } from '../state/follow-link';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 
@@ -57,6 +73,7 @@ function notificationEnv() {
 export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const watch = useWatch();
   const { select, announce } = useUi();
+  const follow = useFollowDeepLink();
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [enabling, setEnabling] = useState(false);
   const env = useMemo(notificationEnv, []);
@@ -104,9 +121,24 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
           <SheetHeader>
             <SheetTitle>Watched flights</SheetTitle>
             <SheetDescription>
-              {watch.watched.length === 0
-                ? 'Watch a flight from its detail panel to track status changes here.'
-                : `${watch.watched.length} of 20 slots used.`}
+              {watch.watched.length === 0 ? (
+                'Watch a flight from its detail panel to track status changes here.'
+              ) : (
+                <>
+                  {/* Followed in place as from an overlay (focus goes to My Flights), and the
+                      panel closes in the same click; a modified click is left to the browser. */}
+                  <a
+                    href={MY_FLIGHTS_HREF}
+                    className={cn(LINK_TONE.quiet, LINK_HIT.box)}
+                    onClick={(event) => {
+                      if (dashLinkClick(follow, MY_FLIGHTS_HREF, { fromOverlay: true })(event)) onOpenChange(false);
+                    }}
+                  >
+                    {watch.watched.length} of 20 slots used
+                  </a>
+                  .
+                </>
+              )}
             </SheetDescription>
           </SheetHeader>
 
@@ -114,42 +146,55 @@ export function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange
             {watch.watched.length > 0 ? (
               <>
                 <ul className="divide-y rounded-md border">
-                  {watch.watched.map((entry) => (
-                    <li key={entry.flight} className="flex items-center gap-2 px-3 py-2 text-sm">
-                      <button
-                        type="button"
-                        className="flex min-h-11 items-center text-left pointer-fine:md:min-h-0"
-                        onClick={() => {
-                          select({ kind: 'ident', ident: entry.flight });
-                          onOpenChange(false);
-                        }}
-                      >
-                        <span className="font-mono font-medium">{entry.flight}</span>
-                        {entry.route ? (
-                          <span className="ml-2 font-mono text-xs text-muted-foreground">
-                            {entry.route}
+                  {watch.watched.map((entry) => {
+                    const linked = flightLink(entry.flight) !== null;
+                    return (
+                      <li key={entry.flight} className="relative flex items-center gap-2 px-3 py-2 text-sm">
+                        {/* The number links to its flight page, above the row's button. */}
+                        {linked ? (
+                          <FlightLink ident={entry.flight} className="font-mono font-medium" linkClassName="z-10" />
+                        ) : null}
+                        {/* The flight sheet: stretched over the row (its ring drawn on that box), so
+                            the row stays one target around the number, with Remove above it. */}
+                        <button
+                          type="button"
+                          className="flex min-h-11 items-center text-left after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:rounded-sm focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring pointer-fine:md:min-h-0"
+                          onClick={() => {
+                            select({ kind: 'ident', ident: entry.flight });
+                            onOpenChange(false);
+                          }}
+                        >
+                          {linked ? (
+                            <span className="sr-only">{entry.flight} flight details</span>
+                          ) : (
+                            <span className="font-mono font-medium">{entry.flight}</span>
+                          )}
+                          {entry.route ? (
+                            <span className={cn('font-mono text-xs text-muted-foreground', !linked && 'ml-2')}>
+                              {entry.route}
+                            </span>
+                          ) : null}
+                        </button>
+                        {entry.status ? (
+                          <span className="ml-auto text-[10px] text-muted-foreground">
+                            {entry.status}
                           </span>
                         ) : null}
-                      </button>
-                      {entry.status ? (
-                        <span className="ml-auto text-[10px] text-muted-foreground">
-                          {entry.status}
-                        </span>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className={`min-h-11 pointer-fine:md:h-8 pointer-fine:md:min-h-0 ${entry.status ? '' : 'ml-auto'}`}
-                        onClick={() => {
-                          watch.toggle(entry.flight);
-                          announce(`Stopped watching ${entry.flight}`);
-                        }}
-                        aria-label={`Stop watching ${entry.flight}`}
-                      >
-                        Remove
-                      </Button>
-                    </li>
-                  ))}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className={`relative z-10 min-h-11 pointer-fine:md:h-8 pointer-fine:md:min-h-0 ${entry.status ? '' : 'ml-auto'}`}
+                          onClick={() => {
+                            watch.toggle(entry.flight);
+                            announce(`Stopped watching ${entry.flight}`);
+                          }}
+                          aria-label={`Stop watching ${entry.flight}`}
+                        >
+                          Remove
+                        </Button>
+                      </li>
+                    );
+                  })}
                 </ul>
                 <Button
                   size="sm"
