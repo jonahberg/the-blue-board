@@ -126,10 +126,14 @@ describe.skipIf(!hasDist)('/fleet', () => {
       expect(classes(typeLink)).toContain('text-primary');
       const count = tr.cells[1].querySelector('a');
       expect(count.getAttribute('href')).toBe(`/?tab=fleet&type=${encodeURIComponent(t.typeCode)}`);
-      expect(count.textContent).toBe(`${t.count}, list them in the dashboard`);
+      // The hidden words name the type: three pairs of types share a count (21, 12, 40).
+      expect(count.textContent).toBe(`${t.count}, list the ${t.typeCode} aircraft in the dashboard`);
       expect(classes(count)).not.toContain('text-primary');
       expect(classes(count)).toEqual(expect.arrayContaining(TOUCH_ROW));
     }
+    // No two links in the table share a name with different destinations.
+    const names = rows.map((tr) => tr.cells[1].querySelector('a').textContent);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it('"Starlink Tracker" opens the Starlink tab; the hubs and Express named in What\'s New link', () => {

@@ -437,7 +437,8 @@ const hubLinkClass =
               seatConfigOrder.map((key) => {
                 const t = fleetTypes[key];
                 // The type → its page (the row's one link-coloured link); its count → the
-                // dashboard's Fleet tab filtered to the type, which lists those aircraft.
+                // dashboard's Fleet tab filtered to the type, which lists those aircraft. The
+                // count's hidden words name the type: several types share a count.
                 const page = fleetTypeLink(t.typeCode, 'site');
                 const list = fleetTypeLink(t.typeCode, 'dashboard');
                 return (
@@ -447,7 +448,7 @@ const hubLinkClass =
                     </td>
                     <td class="text-right font-mono">
                       {list ? (
-                        <a class={touchRowLink} href={list.href}>{t.count}<span class="sr-only">, list them in the dashboard</span></a>
+                        <a class={touchRowLink} href={list.href}>{t.count}<span class="sr-only">, list the {t.typeCode} aircraft in the dashboard</span></a>
                       ) : (
                         t.count
                       )}
