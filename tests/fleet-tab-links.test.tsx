@@ -315,8 +315,18 @@ describe('Airborne Now', () => {
     const route = cells(rowOf('N37502'))[3];
     const arrow = route.querySelector('[aria-hidden="true"]')!;
     expect(classesOf(arrow)).toEqual(expect.arrayContaining(['mx-3', 'pointer-fine:md:mx-1']));
-    // The screen reader hears "SFO to DEN", not a bare "SFO DEN".
-    expect(route.textContent).toBe('SFO> to DEN');
+    // Origin link, the arrow hidden from screen readers, an sr-only "to" in its place, destination
+    // link: a screen reader hears "SFO to DEN", not a bare "SFO DEN".
+    const parts = [...route.children].map((el) =>
+      el.tagName === 'A'
+        ? `link ${el.textContent}`
+        : el.getAttribute('aria-hidden') === 'true'
+          ? 'hidden'
+          : classesOf(el).includes('sr-only')
+            ? `sr-only ${el.textContent!.trim()}`
+            : `other ${el.textContent}`,
+    );
+    expect(parts).toEqual(['link SFO', 'hidden', 'sr-only to', 'link DEN']);
   });
 });
 
@@ -553,7 +563,7 @@ describe('Fleet Pulse', () => {
     await searchFor('N');
     await nextFrame();
     scrolls.length = 0;
-    const pulse = document.getElementById('fleet-airborne-count')!.closest('div.flex-col') as HTMLElement;
+    const pulse = document.getElementById('fleet-airborne-count')!.closest('[data-fleet-pulse]') as HTMLElement;
     const max9 = within(pulse).getByRole('link', { name: '737 MAX 9' });
     expect(max9.getAttribute('href')).toBe('/?tab=fleet&type=737%20MAX%209');
     expect(isQuiet(max9)).toBe(true);
@@ -577,7 +587,7 @@ describe('Fleet Pulse', () => {
     mount();
     await nextFrame();
     scrolls.length = 0;
-    const pulse = document.getElementById('fleet-airborne-count')!.closest('div.flex-col') as HTMLElement;
+    const pulse = document.getElementById('fleet-airborne-count')!.closest('[data-fleet-pulse]') as HTMLElement;
     // fireEvent.click returns true when nothing prevented the default (the browser opens the address).
     expect(fireEvent.click(within(pulse).getByRole('link', { name: '737 MAX 9' }), { ctrlKey: true })).toBe(true);
     await nextFrame();
@@ -588,7 +598,7 @@ describe('Fleet Pulse', () => {
   it('the type the tab is already filtered to prints plain there (ruling 1); the others still link', () => {
     mount();
     fireEvent.click(typeCard('737 MAX 9'));
-    const pulse = document.getElementById('fleet-airborne-count')!.closest('div.flex-col') as HTMLElement;
+    const pulse = document.getElementById('fleet-airborne-count')!.closest('[data-fleet-pulse]') as HTMLElement;
     expect(within(pulse).getAllByRole('link').map((a) => a.textContent)).toEqual(['A319']);
     const plain = within(pulse).getByText('737 MAX 9');
     expect(plain.tagName).toBe('SPAN');
@@ -646,10 +656,11 @@ describe('Fleet Health', () => {
 
   it('the health counts and bars stay text: no Status option lists exactly what they count', () => {
     mount();
-    const health = screen.getByText('Total Mainline Aircraft').closest('div.flex-col') as HTMLElement;
-    expect(health.textContent).toContain('8 active (100.0%) · 0 out of service');
+    // The counts and the category bars (not the Starlink chips below them).
+    const healthCounts = screen.getByText('Total Mainline Aircraft').closest('[data-health-counts]') as HTMLElement;
+    expect(healthCounts.textContent).toContain('8 active (100.0%) · 0 out of service');
+    expect(healthCounts.querySelectorAll('li').length).toBeGreaterThan(0);
     // Status "Active" lists the 7 aircraft with no note, not the 8 counted active.
-    const healthCounts = screen.getByText('Total Mainline Aircraft').parentElement!.parentElement!.parentElement as HTMLElement;
     expect(healthCounts.querySelectorAll('button, a')).toHaveLength(0);
   });
 });

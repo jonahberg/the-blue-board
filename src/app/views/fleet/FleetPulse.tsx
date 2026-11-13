@@ -80,7 +80,7 @@ export function FleetPulse({
   const canShow = Boolean(onShowAirborne) && !fleetFailed && fleetTotal > 0 && airborne > 0;
 
   return (
-    <div className="flex min-w-0 flex-col">
+    <div data-fleet-pulse="" className="flex min-w-0 flex-col">
       <div className="flex items-baseline gap-3">
         <span
           className="font-mono text-5xl font-semibold tabular-nums"

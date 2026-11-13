@@ -98,7 +98,7 @@ export function FleetHealth({
           ))}
         </div>
       ) : (
-        <div>
+        <div data-health-counts="">
           <div className="flex items-baseline gap-3">
             <span className="font-mono text-4xl font-semibold tabular-nums">{health.total}</span>
             <div>
