@@ -3,6 +3,7 @@ import { hubOrder, hubs } from '../../data/hubs/index.js';
 import { HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../../data/facts.js';
 import BaseLayout from '../../components/site/BaseLayout.astro';
 import { NAS_STATUS_HREF } from '../../lib/nas-status-link.js';
+import { STARLINK_TAB_HREF } from '../../lib/starlink-link.js';
 import { withBrand } from '../../lib/page-seo.js';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
@@ -224,7 +225,7 @@ const itemListSchema = {
           stats and equipment swap detection
         </li>
         <li>
-          <strong><a href="/#starlink">Starlink WiFi fleet</a></strong> — which aircraft at each hub
+          <strong><a href={STARLINK_TAB_HREF}>Starlink WiFi fleet</a></strong> — which aircraft at each hub
           have Starlink satellite internet
         </li>
         <li>
