@@ -530,7 +530,7 @@ export const ScheduleTable = forwardRef<
                       {row.acCode !== '—' ? (
                         <TypeLink typeCode={row.typeCode}>
                           {row.acCode}
-                          <FleetTypeWords typeCode={row.typeCode} />
+                          <FleetTypeWords typeCode={row.typeCode} printed={row.acCode} />
                         </TypeLink>
                       ) : (
                         row.acCode

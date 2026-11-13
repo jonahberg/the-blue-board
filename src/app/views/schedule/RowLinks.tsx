@@ -12,6 +12,7 @@
 import { Zap } from 'lucide-react';
 import { Fragment } from 'react';
 
+import { fleetTypeWords } from '@/lib/fleet-type-link.js';
 import { cn } from '@/lib/utils';
 import { DashLink } from '../../features/DashLink';
 import { FINE_POINTER_ONLY, HubLink, HubStatusLink } from '../../features/EntityLinks';
@@ -48,17 +49,20 @@ export function RouteEnds({
 /**
  * The type link's destination, for a screen reader: " (737-900ER in the fleet)" after the printed
  * text. The row prints the feed's words (B739, "A321 NEO") and the TAIL decides the link, so the
- * link's name says which fleet type it opens. sr-only words, never an `aria-label` over different
- * text (DESIGN.md 2026-11-11). Nothing when the type does not link.
+ * link's name says which fleet type it opens; when the row prints that very type ("737 MAX 9",
+ * A320) the words are " (in the fleet)", so it is not said twice (`fleetTypeWords`). sr-only
+ * words, never an `aria-label` over different text (DESIGN.md 2026-11-11). Nothing when the type
+ * does not link.
  */
-export function FleetTypeWords({ typeCode }: { typeCode: string | null }) {
-  if (!typeCode) return null;
+export function FleetTypeWords({ typeCode, printed }: { typeCode: string | null; printed: string }) {
+  const words = fleetTypeWords(printed, typeCode);
+  if (!words) return null;
   // The space outside the hidden span, as the hub strip's "(schedule board)" words have it.
   return (
     <>
       {' '}
       <span className="sr-only" data-type-destination="">
-        ({typeCode} in the fleet)
+        {words}
       </span>
     </>
   );

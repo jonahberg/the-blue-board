@@ -218,7 +218,7 @@ export const SchedulePhoneRow = memo(function SchedulePhoneRow({
               // Linked by the tail's fleet type only (`typeCode`), never by these words.
               <TypeLink typeCode={row.typeCode} finePointerOnly className="z-10 shrink-0">
                 {aircraft.type}
-                <FleetTypeWords typeCode={row.typeCode} />
+                <FleetTypeWords typeCode={row.typeCode} printed={aircraft.type} />
               </TypeLink>
             ) : null}
             {aircraft.seats ? (

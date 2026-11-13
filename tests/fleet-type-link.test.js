@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { fleetTypes } from '../src/data/fleet/index.js'; // the TEST may import it; the lib may not
-import { FLEET_TYPE_SLUGS, fleetTypeCodeFor, fleetTypeCodeForTail, fleetTypeLink } from '../src/lib/fleet-type-link.js';
+import { FLEET_TYPE_SLUGS, fleetTypeCodeFor, fleetTypeCodeForTail, fleetTypeLink, fleetTypeWords } from '../src/lib/fleet-type-link.js';
 
 describe('FLEET_TYPE_SLUGS: the fleet database type code behind each fleet page', () => {
   it('is exactly the inversion of the fleet pages', () => {
@@ -125,5 +125,25 @@ describe('fleetTypeCodeFor: a row with a tail by the tail only; a row without on
       expect(code, typeText).toBe(typeText);
       expect(fleetTypeLink(code, 'dashboard')?.href, typeText).toBe(`/?tab=fleet&type=${encodeURIComponent(typeText)}`);
     }
+  });
+});
+
+describe('fleetTypeWords: what a type link says after its printed text', () => {
+  it('names the fleet type it opens when the row prints something else', () => {
+    expect(fleetTypeWords('B739', '737-900ER')).toBe('(737-900ER in the fleet)');
+    expect(fleetTypeWords('A321 NEO', 'A321neo')).toBe('(A321neo in the fleet)');
+  });
+
+  it('says only "(in the fleet)" when the row prints that type, so it is not said twice', () => {
+    expect(fleetTypeWords('737 MAX 9', '737 MAX 9')).toBe('(in the fleet)');
+    // A319 and A320 are ICAO codes and fleet types at once: the desktop row prints the code.
+    expect(fleetTypeWords('A320', 'A320')).toBe('(in the fleet)');
+    expect(fleetTypeWords(' 737  max 9 ', '737 MAX 9')).toBe('(in the fleet)');
+  });
+
+  it('nothing when the type does not link', () => {
+    expect(fleetTypeWords('CRJ7', null)).toBeNull();
+    expect(fleetTypeWords('B739', 'B739')).toBeNull();
+    expect(fleetTypeWords('737 MAX 9', '')).toBeNull();
   });
 });

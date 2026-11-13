@@ -232,6 +232,12 @@ describe('the desktop Schedule row links what it names', () => {
     expect(link.querySelector('[data-type-destination]')?.textContent).toBe('(737-900ER in the fleet)');
   });
 
+  it('an ICAO code that is also the fleet type (A320) is not said twice', () => {
+    renderTable([linkedRow({ acCode: 'A320', typeCode: 'A320' })]);
+    const link = screen.getByRole('link', { name: /^A320 ?\(in the fleet\)$/ });
+    expect(link.querySelector('[data-type-destination]')?.textContent).toBe('(in the fleet)');
+  });
+
   it('a tail from live tracking is a quiet link like any other, its explanation still there', () => {
     renderTable([linkedRow({ regFromLive: true })]);
     const tail = linkNamed(document.body, 'N37502')!;
@@ -337,9 +343,10 @@ describe('the phone Schedule row: the same links, inert on a coarse pointer', ()
     }
   });
 
-  it('the type link says where it goes', () => {
+  it('the type link says where it goes, without saying the type twice when it prints the fleet type', () => {
     renderPhone(linkedRow());
-    expect(screen.getByRole('link', { name: /^737 MAX 9 ?\(737 MAX 9 in the fleet\)$/ })).toBeTruthy();
+    const link = screen.getByRole('link', { name: /^737 MAX 9 ?\(in the fleet\)$/ });
+    expect(link.querySelector('[data-type-destination]')?.textContent).toBe('(in the fleet)');
   });
 
   it('the tail has lost its dotted underline; a live-tracking tail still says so', () => {

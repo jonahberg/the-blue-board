@@ -83,3 +83,20 @@ export function fleetTypeCodeFor({ reg, typeText, fleetByReg } = {}) {
   if (tailLink(reg)) return fleetTypeCodeForTail(reg, fleetByReg);
   return typeof typeText === 'string' && Object.hasOwn(FLEET_TYPE_SLUGS, typeText) ? typeText : null;
 }
+
+/**
+ * The words a type link adds after its printed text, for a screen reader, so the link's name says
+ * which fleet type it opens: "(737-900ER in the fleet)" after B739 or "A321 NEO". When the row
+ * already prints that type ("737 MAX 9" on a phone row, A320 on a desktop row: A319 and A320 are
+ * ICAO codes and fleet type codes at once), the words are "(in the fleet)", so the type is not said
+ * twice. Null when the type does not link. Compared without case or extra spaces.
+ *
+ * @param {unknown} printed  the row's own words for the type.
+ * @param {unknown} typeCode  the fleet type the link opens (`fleetTypeCodeFor`).
+ * @returns {string | null}
+ */
+export function fleetTypeWords(printed, typeCode) {
+  if (!fleetTypeLink(typeCode, 'dashboard')) return null;
+  const same = (text) => String(text ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+  return same(printed) === same(typeCode) ? '(in the fleet)' : `(${typeCode} in the fleet)`;
+}
