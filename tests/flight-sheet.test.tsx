@@ -368,12 +368,13 @@ describe('FlightSheet links the names it prints (links part 2)', () => {
     expect(screen.getByRole('link', { name: 'Starlink confirmed' }).getAttribute('href')).toBe('/#starlink');
   });
 
-  it("a named aircraft's ★ badge opens the Fleet tab's special view", async () => {
+  it("a named aircraft's ★ badge stays a plain badge, as it is on every other dashboard row", async () => {
     viewport(1280);
     fleet.fleetByReg = { N37502: mainline };
     fleet.special = new Map([['N37502', { name: 'Star of the Show', type: 'named' }]]);
     await open(flight({ reg: 'N37502' }));
-    expect(screen.getByRole('link', { name: 'Star of the Show' }).getAttribute('href')).toBe('/?tab=fleet&view=special');
+    expect(screen.queryByRole('link', { name: 'Star of the Show' })).toBeNull();
+    expect(screen.getByText('Star of the Show').tagName).toBe('SPAN');
     fleet.special = new Map();
   });
 

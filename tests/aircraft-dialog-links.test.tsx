@@ -75,10 +75,11 @@ describe('AircraftDetailDialog, a mainline tail', () => {
     expect(description.querySelector('a')).toBeNull();
   });
 
-  it('the Starlink badge and the ★ name are quiet links to the Starlink tab and the special view', async () => {
+  it('the Starlink badge is a quiet link to the Starlink tab; the ★ name stays a plain badge', async () => {
     await renderDialog();
     expect(screen.getByRole('link', { name: 'STARLINK' }).getAttribute('href')).toBe('/#starlink');
-    expect(screen.getByRole('link', { name: 'Star of the Show' }).getAttribute('href')).toBe('/?tab=fleet&view=special');
+    expect(screen.queryByRole('link', { name: 'Star of the Show' })).toBeNull();
+    expect(screen.getByText('Star of the Show').tagName).toBe('SPAN');
   });
 
   it('the live block: its number links to the flight page beside the map button, which keeps the rest', async () => {

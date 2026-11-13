@@ -16,8 +16,8 @@
  *
  * The names it prints link to their homes in the dashboard (links part 2): a hub end of the big
  * route to its Schedule board, the type to the Fleet tab filtered to it, the tail to its aircraft
- * dialog, the Starlink badge to the Starlink tab and a ★ name to the Fleet tab's special view.
- * The ones that go to a tab are `fromOverlay`: following one closes this sheet (and any other
+ * dialog and the Starlink badge to the Starlink tab; a ★ name stays a plain badge, as it is on
+ * every other dashboard row. The ones that go to a tab are `fromOverlay`: following one closes this sheet (and any other
  * overlay) and lands as an arrival. The tail links are not (the controller's exception to "every
  * link in an overlay"): a tail opens the aircraft dialog OVER this sheet, as its button did, so the
  * reader keeps their flight and the map's selection, and Escape returns focus to the tail. A tail
@@ -50,7 +50,7 @@ import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { getFlightPopupMetrics } from '@/lib/flight-popup.js';
 import { modalityOf, openFocusOptions } from '@/lib/input-modality.js';
 import { flightPagePath, parseFlightIdent } from '@/lib/flight-page.js';
-import { SPECIAL_VIEW_HREF, STARLINK_TAB_HREF, unmatchedTailLinks } from '@/lib/name-links.js';
+import { STARLINK_TAB_HREF, unmatchedTailLinks } from '@/lib/name-links.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { resolveFlightRoute } from '../data/route';
 import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
@@ -525,11 +525,9 @@ export function FlightSheet() {
                   <TailLink reg={reg} hit="inline" className="font-mono text-sm" />
                   {isStarlink ? <StarlinkBadgeLink /> : null}
                   {specialEntry ? (
-                    // The Fleet tab's special view lists the named aircraft.
-                    <Badge asChild variant="outline" className="overflow-visible">
-                      <DashLink href={SPECIAL_VIEW_HREF} fromOverlay>
-                        <Star aria-hidden="true" /> {specialEntry.name}
-                      </DashLink>
+                    // Plain, as a ★ name is on every other dashboard row.
+                    <Badge variant="outline">
+                      <Star aria-hidden="true" /> {specialEntry.name}
                     </Badge>
                   ) : null}
                 </div>

@@ -23,10 +23,10 @@
  * whatever opened it — the row in the table you were reading, not the top of the page.
  *
  * The names it prints link to their homes (links part 2), all `fromOverlay`, so following one
- * closes this dialog and lands as an arrival: the Starlink badge opens the Starlink tab, a ★ name
- * the Fleet tab's special view, and the link row's "All 737 MAX 9 in the fleet" the Fleet tab
- * filtered to this type (mainline only: the type in the title is a tooltip term, a button, and a
- * link cannot sit inside it). A flight number (the live flight, an Express tail's last United
+ * closes this dialog and lands as an arrival: the Starlink badge opens the Starlink tab, and the
+ * link row's "All 737 MAX 9 in the fleet" the Fleet tab filtered to this type (mainline only: the
+ * type in the title is a tooltip term, a button, and a link cannot sit inside it). A ★ name stays
+ * a plain badge, as on every other dashboard row. A flight number (the live flight, an Express tail's last United
  * flight) links to its flight page; in the blocks that send the map to the aircraft it is split
  * out of the button (`ViewOnMapBlock`).
  */
@@ -59,7 +59,7 @@ import { fleetTypeCodeFor } from '@/lib/fleet-type-link.js';
 import { categorizeFleetStatus, FLEET_HEALTH_CATEGORIES, normalizeWifi } from '@/lib/fleet-utils.js';
 import { buildSeatBar, nonMainlineAircraftSummary } from '@/lib/fleet-view.js';
 import { getPhase } from '@/lib/flight-phase.js';
-import { SPECIAL_VIEW_HREF, STARLINK_TAB_HREF } from '@/lib/name-links.js';
+import { STARLINK_TAB_HREF } from '@/lib/name-links.js';
 import { ENGINE_BY_TYPE } from '@/lib/special-aircraft.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { shareUrl } from '../data/share';
@@ -286,11 +286,9 @@ export default function AircraftDetailDialog() {
               {specialEntry || isStarlink || livery ? (
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {specialEntry ? (
-                    // The Fleet tab's special view lists the named aircraft.
-                    <Badge asChild variant="outline" className="overflow-visible">
-                      <DashLink href={SPECIAL_VIEW_HREF} fromOverlay>
-                        <Star aria-hidden="true" /> {specialEntry.name}
-                      </DashLink>
+                    // Plain, as a ★ name is on every other dashboard row.
+                    <Badge variant="outline">
+                      <Star aria-hidden="true" /> {specialEntry.name}
                     </Badge>
                   ) : null}
                   <SpecialLiveryBadge livery={livery} />

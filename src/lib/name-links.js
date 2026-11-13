@@ -13,9 +13,6 @@ import { nonMainlineAircraftSummary } from './fleet-view.js';
 /** The Starlink tab: where a Starlink badge on a flight or an aircraft goes. */
 export const STARLINK_TAB_HREF = '/#starlink';
 
-/** The Fleet tab's special view, which lists the named aircraft and the special liveries. */
-export const SPECIAL_VIEW_HREF = '/?tab=fleet&view=special';
-
 /** Two airport codes (or none) joined by the arrow, as `${orig}→${dest}` builds them. */
 const ROUTE_RE = /^([A-Z0-9]{3,4})?→([A-Z0-9]{3,4})?$/;
 
