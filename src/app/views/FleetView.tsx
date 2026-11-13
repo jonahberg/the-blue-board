@@ -440,7 +440,9 @@ export default function FleetView() {
   // cleared the filter applies again. The ref starts at 0, not at the current `seq`: this view
   // mounts on the first visit to the tab, which is often the follow itself, so the link is
   // already in the store. A link followed before the database arrives is held until it does, on
-  // the cold load's budget counted from the follow (`fleetLink.at`): later than that it is dropped.
+  // the cold load's budget: 10 s from the follow (`fleetLink.at`), or from this view's mount when
+  // that is later (a first visit spends part of the wait loading the tab's own code). Later than
+  // that it is dropped.
   // Declared after the cold load's effect so that, when both apply in one commit, the link the
   // visitor just clicked wins over an address the page was opened on.
   const appliedFleetLinkSeq = useRef(0);
@@ -450,7 +452,7 @@ export default function FleetView() {
       loaded: fleetDb.length > 0,
       loadFailed,
       now: Date.now(),
-      deadline: fleetLink.at + DEEP_LINK_TIMEOUT_MS,
+      deadline: Math.max(fleetLink.at + DEEP_LINK_TIMEOUT_MS, deepLinkDeadline.current),
     });
     if (step === 'wait') return;
     appliedFleetLinkSeq.current = fleetLink.seq;

@@ -730,6 +730,37 @@ describe('a link held for the fleet database has the cold load\'s budget', () =>
     expect(rows()).toHaveLength(6);
   });
 
+  it('on a first visit the budget runs from the mount too: a view that mounts 11 s late still applies it', () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    function Follower() {
+      const ui = useUi();
+      return (
+        <button type="button" onClick={() => ui.followFleetLink({ filter: 'A319', view: null })}>
+          follow first
+        </button>
+      );
+    }
+    function Lazy({ show }: { show: boolean }) {
+      return show ? <FleetView /> : null;
+    }
+    const tree = (show: boolean) => (
+      <UiProvider>
+        <Follower />
+        <Lazy show={show} />
+      </UiProvider>
+    );
+    const view = render(tree(false));
+    fireEvent.click(screen.getByRole('button', { name: 'follow first' }));
+
+    // The tab's code took 11 s to arrive; the database is already there when it mounts.
+    clock.mockReturnValue(start + 11_000);
+    view.rerender(tree(true));
+
+    expect(rows()).toHaveLength(6);
+    expect(typeSelect().textContent).toContain('A319');
+  });
+
   it('a failed load drops it: a later retry that succeeds does not apply it', () => {
     ctl.fleet = { ...fleetValue([]), loadFailed: true } as FleetValue;
     const view = mount();
