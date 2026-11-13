@@ -371,6 +371,12 @@ describe('the delay explanation', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog.textContent).toContain('ORD→EUG · Score 42/100');
     expect(screen.queryByRole('link', { name: 'EUG' })).toBeNull();
+    // On touch the hub link is 44 px tall itself (`hit="inline"`), not a centred 44 px box that
+    // would reach up over the title's flight number, and the line sits a little lower.
+    const ord = screen.getByRole('link', { name: 'ORD' });
+    expect(ord.className).toContain('min-h-11');
+    expect(ord.className).not.toContain('after:h-11');
+    expect(ord.closest('p')!.className.split(/\s+/)).toEqual(expect.arrayContaining(['mt-1', 'pointer-fine:md:mt-0']));
 
     activate(screen.getByRole('link', { name: 'ORD' }));
     await settle();

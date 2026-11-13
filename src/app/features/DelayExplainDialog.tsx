@@ -131,13 +131,16 @@ export default function DelayExplainDialog() {
               {riskLabel} RISK
             </Badge>
           </DialogTitle>
-          <DialogDescription className="font-mono text-[11px]">
-            {/* The arrow's margin keeps the two hub links' touch boxes apart. */}
+          {/* On touch each hub link is 44 px tall itself (`hit="inline"`) rather than a centred
+              44 px box, which reached up over the title's flight number (a tap on the lower half of
+              "UA1234" opened ORD's board), and the line sits 4 px lower; an inline link reaches no
+              further sideways than its letters, so the arrow needs no margin. */}
+          <DialogDescription className="mt-1 font-mono text-[11px] pointer-fine:md:mt-0">
             {ends ? (
               <>
-                <HubLink code={ends.origin} fromOverlay />
-                <span className="mx-3 pointer-fine:md:mx-0.5">→</span>
-                <HubLink code={ends.destination} fromOverlay />
+                <HubLink code={ends.origin} hit="inline" fromOverlay />
+                <span className="mx-0.5">→</span>
+                <HubLink code={ends.destination} hit="inline" fromOverlay />
               </>
             ) : (
               route
