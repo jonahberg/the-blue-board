@@ -80,7 +80,7 @@ Object.assign(FLEET, {
 const seen: { ui: UiValue | null; schedule: ScheduleValue | null } = { ui: null, schedule: null };
 
 /** Dashboard.tsx's deep-link wiring and its keep-mounted-once-visited Fleet view, and nothing else. */
-function Shell({ href }: { href: string }) {
+function Shell({ href, fromOverlay = false }: { href: string; fromOverlay?: boolean }) {
   const ui = useUi();
   const schedule = useSchedule();
   seen.ui = ui;
@@ -105,7 +105,9 @@ function Shell({ href }: { href: string }) {
 
   return (
     <>
-      <DashLink href={href}>follow</DashLink>
+      <DashLink href={href} fromOverlay={fromOverlay}>
+        follow
+      </DashLink>
       {visited.has('fleet') ? (
         <div data-testid="fleet-panel" data-active={ui.tab === 'fleet'}>
           <FleetView />
@@ -115,13 +117,13 @@ function Shell({ href }: { href: string }) {
   );
 }
 
-function mountAt(url: string, href: string) {
+function mountAt(url: string, href: string, { fromOverlay = false } = {}) {
   window.history.replaceState(null, '', url);
   render(
     <UiProvider>
       <ScheduleProvider defaultHub="ORD">
         <FollowProvider>
-          <Shell href={href} />
+          <Shell href={href} fromOverlay={fromOverlay} />
         </FollowProvider>
       </ScheduleProvider>
     </UiProvider>,
@@ -493,5 +495,26 @@ describe("a cold load's Fleet address survives a link followed before the fleet 
     } finally {
       Object.assign(FLEET, loaded);
     }
+  });
+});
+
+describe('a link followed from an overlay lands as an arrival, even on the tab already showing', () => {
+  it('a type link in the aircraft dialog over a searched Fleet tab: the dialog closes, the search clears, the type applies', async () => {
+    const coldState = await cold('/?tab=fleet&type=737%20MAX%209');
+    mountAt('/#fleet', '/?tab=fleet&type=737%20MAX%209', { fromOverlay: true });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Fleet search' }), { target: { value: 'N10' } });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+    act(() => seen.ui!.openAircraft('N37502'));
+    expect(state()).toMatchObject({ fleetSearch: 'N10', aircraft: 'N37502' });
+    scrolls.length = 0;
+
+    fireEvent.click(screen.getByRole('link', { name: 'follow' }));
+    expect(reachedDocumentPrevented).toBe(true);
+    const result = await finalState();
+    cleanup();
+
+    // Not "No aircraft match" behind the dialog: where the address opened cold lands.
+    expect(result).toEqual(coldState);
+    expect(result).toMatchObject({ aircraft: null, fleetSearch: '', fleetRows: 1 });
   });
 });

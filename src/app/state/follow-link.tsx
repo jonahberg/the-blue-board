@@ -50,7 +50,24 @@ import type { ScheduleValue } from './schedule';
 import { useUi } from './ui';
 import type { UiValue } from './ui';
 
-export type FollowDeepLink = (intent: DeepLinkIntent) => void;
+/** How a link is followed (`useFollowDeepLink()(intent, options)`, DashLink's `fromOverlay`). */
+export type FollowOptions = {
+  /**
+   * The link sits inside an overlay drawn over the tabs: the flight sheet, the aircraft dialog,
+   * the FR24 lookup, the delay explanation or the search palette. The follow first closes all five
+   * (through the UI store's own setters), so the reader lands on the page, not behind a dialog.
+   * A link that names a tab then lands as an ARRIVAL even on the tab already showing: the
+   * destination resets and applies (Fleet), clears its filters (Schedule, `scheduleLink`),
+   * scrolls, is announced, and focus moves to its panel. A history entry is still pushed only
+   * when the tab changes. A tail link opens the aircraft dialog in place of the overlays, as the
+   * overlays' own tail buttons do. Without it, a link on the tab already showing is a stay (the
+   * links plan, ruling 2), which from a dialog over a searched Fleet tab could land on "No
+   * aircraft match" behind the dialog (Nov 12 2026 review, finding 8).
+   */
+  fromOverlay?: boolean;
+};
+
+export type FollowDeepLink = (intent: DeepLinkIntent, options?: FollowOptions) => void;
 
 const FollowContext = createContext<FollowDeepLink | null>(null);
 
@@ -59,6 +76,10 @@ type Latest = {
   tab: TabId;
   setTab: UiValue['setTab'];
   openAircraft: UiValue['openAircraft'];
+  select: UiValue['select'];
+  openFr24: UiValue['openFr24'];
+  openDelayExplain: UiValue['openDelayExplain'];
+  setSearchOpen: UiValue['setSearchOpen'];
   followFleetLink: UiValue['followFleetLink'];
   followScheduleLink: UiValue['followScheduleLink'];
   announce: UiValue['announce'];
@@ -66,9 +87,22 @@ type Latest = {
 };
 
 export function FollowProvider({ children }: { children: ReactNode }) {
-  const { tab, setTab, openAircraft, followFleetLink, followScheduleLink, announce } = useUi();
+  const { tab, setTab, openAircraft, select, openFr24, openDelayExplain, setSearchOpen, followFleetLink, followScheduleLink, announce } =
+    useUi();
   const { setCurrent } = useSchedule();
-  const now = { tab, setTab, openAircraft, followFleetLink, followScheduleLink, announce, setCurrent };
+  const now: Latest = {
+    tab,
+    setTab,
+    openAircraft,
+    select,
+    openFr24,
+    openDelayExplain,
+    setSearchOpen,
+    followFleetLink,
+    followScheduleLink,
+    announce,
+    setCurrent,
+  };
   const latest = useRef<Latest>(now);
   // The tab a history move has already been announced for, until the tab change commits: Back
   // fires `popstate` and then `hashchange`, and the second must not speak again.
@@ -112,15 +146,21 @@ export function FollowProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const follow = useCallback<FollowDeepLink>((intent) => {
+  const follow = useCallback<FollowDeepLink>((intent, options) => {
     const { tab: from, setTab, openAircraft, followFleetLink, followScheduleLink, announce, setCurrent } = latest.current;
+    const fromOverlay = options?.fromOverlay === true;
+    // The tab change, which is what leaves a history entry.
     const to = intent.tab && intent.tab !== from ? intent.tab : null;
     // Arriving from another tab, or already there (the links plan, ruling 2): only a link that
     // arrives puts its destination where a cold load of its address starts; one followed on the
-    // tab already showing changes what it names and resets nothing.
-    const arriving = to !== null;
+    // tab already showing changes what it names and resets nothing. A link inside an overlay that
+    // names a tab always arrives: the reader was not working in that tab, but in the overlay.
+    const lands = to ?? (fromOverlay ? intent.tab : null);
+    const arriving = lands !== null;
     // Read before anything moves: a caller may blur the link after this returns (the hub chip).
-    const refocus = arriving && focusLeavesWith(from);
+    // From an overlay focus is in the overlay, which closes, so it always moves.
+    const refocus = arriving && (fromOverlay || focusLeavesWith(from));
+    if (fromOverlay) closeOverlays(latest.current, { keepAircraft: Boolean(intent.aircraft) });
     if (intent.scheduleHub) {
       // The board the address names, as a cold load of it opens it, whether the link arrives or
       // Schedule is already showing: Departures (the hub chip's figure is operated departures)
@@ -140,9 +180,9 @@ export function FollowProvider({ children }: { children: ReactNode }) {
       setTab(intent.tab, intent.scrollTo ? { scrollTo: intent.scrollTo } : undefined);
     }
     if (intent.aircraft) openAircraft(intent.aircraft);
-    if (to) {
-      announce(followAnnouncement(tabById(to)?.label ?? to, intent));
-      if (refocus) moveFocusToPanel(to, from);
+    if (lands) {
+      announce(followAnnouncement(tabById(lands)?.label ?? lands, intent));
+      if (refocus) moveFocusToPanel(lands, from, { force: fromOverlay });
     }
   }, []);
 
@@ -173,6 +213,21 @@ function pushHistoryEntry(from: TabId, to: TabId) {
   }
 }
 
+/**
+ * Close every overlay the UI store holds that can carry a dashboard link: the flight sheet
+ * (`select(null)`), the FR24 lookup, the delay explanation, the search palette and, unless the
+ * link opens it again (a tail), the aircraft dialog. Overlays held elsewhere are the caller's to
+ * close: the brief sheet (`useBrief().setSheetOpen`, which its chips already do) and the watch
+ * panel (Dashboard.tsx's own state).
+ */
+function closeOverlays(stores: Latest, { keepAircraft }: { keepAircraft: boolean }) {
+  stores.select(null);
+  stores.openFr24(null);
+  stores.openDelayExplain(null);
+  stores.setSearchOpen(false);
+  if (!keepAircraft) stores.openAircraft(null);
+}
+
 /** The panel that holds a tab's view: Dashboard.tsx marks each `TabsContent` with its tab id. */
 function tabPanel(id: TabId): HTMLElement | null {
   if (typeof document === 'undefined') return null;
@@ -193,17 +248,19 @@ function focusLeavesWith(from: TabId): boolean {
  * commits, and on a first visit it is only mounted after that (`visited` in Dashboard.tsx), so a
  * missing or inactive panel is tried for two more frames. `preventScroll`: the view decides where
  * the tab scrolls (the Fleet link's scroll to its controls, a Weather link's to its hub card).
+ * `force`: a link from an overlay, whose focus is still in the overlay as it closes; it moves
+ * whatever holds focus.
  */
-function moveFocusToPanel(to: TabId, from: TabId, framesLeft = 3) {
+function moveFocusToPanel(to: TabId, from: TabId, { force = false, framesLeft = 3 } = {}) {
   if (typeof requestAnimationFrame !== 'function') return;
   requestAnimationFrame(() => {
     const panel = tabPanel(to);
     if (!panel || panel.getAttribute('data-state') !== 'active') {
-      if (framesLeft > 1) moveFocusToPanel(to, from, framesLeft - 1);
+      if (framesLeft > 1) moveFocusToPanel(to, from, { force, framesLeft: framesLeft - 1 });
       return;
     }
     const active = document.activeElement;
-    if (active && active !== document.body && !tabPanel(from)?.contains(active)) return;
+    if (!force && active && active !== document.body && !tabPanel(from)?.contains(active)) return;
     panel.focus({ preventScroll: true });
   });
 }

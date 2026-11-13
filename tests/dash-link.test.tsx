@@ -262,6 +262,14 @@ describe('dashLinkClick returns whether it followed the link', () => {
     expect(follow).not.toHaveBeenCalled();
   });
 
+  it('passes fromOverlay on to the follow, and nothing when it is not given', () => {
+    const follow = vi.fn();
+    dashLinkClick(follow, '/?tab=fleet&type=A319', { fromOverlay: true })(click());
+    expect(follow).toHaveBeenLastCalledWith(expect.objectContaining({ tab: 'fleet' }), { fromOverlay: true });
+    dashLinkClick(follow, '/?tab=fleet&type=A319')(click());
+    expect(follow.mock.calls.at(-1)).toHaveLength(1);
+  });
+
   it('false, touching nothing, for an address the resolver turns down', () => {
     const follow = vi.fn();
     const event = click();

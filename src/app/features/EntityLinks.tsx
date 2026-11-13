@@ -45,6 +45,8 @@ type EntityLinkProps = {
   /** Classes for both renderings (font, size, weight, `z-10` over a stretched row control). */
   className?: string;
   finePointerOnly?: boolean;
+  /** The link sits in an overlay: following it closes the overlays and lands as an arrival (DashLink). */
+  fromOverlay?: boolean;
 };
 
 function linkClasses(finePointerOnly: boolean | undefined, className: string | undefined) {
@@ -62,22 +64,23 @@ export function TailLink({
   hit,
   className,
   finePointerOnly,
+  fromOverlay,
   children,
 }: EntityLinkProps & { reg: string; children?: ReactNode }) {
   const link = tailLink(reg);
   if (!link) return <span className={className}>{children ?? reg}</span>;
   return (
-    <DashLink href={link.href} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-tail-link={link.reg}>
+    <DashLink href={link.href} fromOverlay={fromOverlay} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-tail-link={link.reg}>
       {children ?? reg}
     </DashLink>
   );
 }
 
-export function HubLink({ code, tone = 'quiet', hit, className, finePointerOnly }: EntityLinkProps & { code: string }) {
+export function HubLink({ code, tone = 'quiet', hit, className, finePointerOnly, fromOverlay }: EntityLinkProps & { code: string }) {
   const link = hubLink(code, 'dashboard');
   if (!link) return <span className={className}>{code}</span>;
   return (
-    <DashLink href={link.href} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-hub-link={link.code}>
+    <DashLink href={link.href} fromOverlay={fromOverlay} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-hub-link={link.code}>
       {link.code}
     </DashLink>
   );
@@ -90,12 +93,14 @@ export function HubStatusLink({
   hit,
   className,
   finePointerOnly,
+  fromOverlay,
 }: EntityLinkProps & { code: string; kind: 'weather' | 'nas' }) {
   const link = hubStatusLink(code, kind);
   if (!link) return <span className={className}>{code}</span>;
   return (
     <DashLink
       href={link.href}
+      fromOverlay={fromOverlay}
       tone={tone}
       hit={hitFor(finePointerOnly, hit)}
       className={linkClasses(finePointerOnly, className)}
@@ -113,12 +118,13 @@ export function TypeLink({
   hit,
   className,
   finePointerOnly,
+  fromOverlay,
   children,
 }: EntityLinkProps & { typeCode: string | null | undefined; children?: ReactNode }) {
   const link = fleetTypeLink(typeCode, 'dashboard');
   if (!link) return <span className={className}>{children ?? typeCode}</span>;
   return (
-    <DashLink href={link.href} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-type-link={link.typeCode}>
+    <DashLink href={link.href} fromOverlay={fromOverlay} tone={tone} hit={hitFor(finePointerOnly, hit)} className={linkClasses(finePointerOnly, className)} data-type-link={link.typeCode}>
       {children ?? typeCode}
     </DashLink>
   );

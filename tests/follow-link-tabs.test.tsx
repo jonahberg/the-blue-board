@@ -23,6 +23,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { DashLink } from '../src/app/features/DashLink';
+import { TailLink, TypeLink } from '../src/app/features/EntityLinks';
 import { TabBar } from '../src/app/shell/TabBar';
 import { useDeepLinks } from '../src/app/state/deep-links';
 import { FollowProvider } from '../src/app/state/follow-link';
@@ -64,6 +65,18 @@ function Shell() {
       <header>
         <DashLink href="/?tab=schedule&hub=DEN">DEN chip</DashLink>
       </header>
+      {/* An overlay's links (the flight sheet, the aircraft dialog), outside every panel. */}
+      <div role="dialog" aria-label="overlay">
+        <DashLink href="/?tab=schedule&hub=ORD" fromOverlay>
+          ORD in the sheet
+        </DashLink>
+        <TypeLink typeCode="737 MAX 9" fromOverlay>
+          737 MAX 9 in the dialog
+        </TypeLink>
+        <TailLink reg="N78501" fromOverlay>
+          N78501 in the sheet
+        </TailLink>
+      </div>
       <Tabs value={ui.tab} onValueChange={(value) => ui.setTab(value as TabId)}>
         <TabBar />
         {TABS.map(({ id }) => (
@@ -291,6 +304,92 @@ describe('Back after a followed link', () => {
     expect(seen.schedule!.current.hub).toBe('DEN');
     expect(window.history.length).toBe(before);
     expect(address()).toBe('/#schedule');
+  });
+});
+
+describe('a link followed from inside an overlay (fromOverlay)', () => {
+  it('a hub link in the flight sheet over Live: the sheet closes, Schedule shows that hub, focus goes to its panel', async () => {
+    mountAt('/#live');
+    act(() => seen.ui!.select({ kind: 'ident', ident: 'UA1' }));
+    const before = window.history.length;
+    const link = screen.getByRole('link', { name: 'ORD in the sheet' });
+    link.focus();
+
+    fireEvent.click(link);
+    await nextFrame();
+
+    expect(seen.ui!.selection).toBeNull();
+    expect(seen.ui!.tab).toBe('schedule');
+    expect(seen.schedule!.current).toMatchObject({ hub: 'ORD', dir: 'departures' });
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+    expect(seen.ui!.announcement).toBe('Schedule, ORD');
+    // Focus was in the overlay, outside every panel: it still moves, to the panel shown.
+    expect(document.activeElement).toBe(panel('schedule'));
+    expect(window.history.length).toBe(before + 1);
+  });
+
+  it('a type link in the aircraft dialog over Fleet: the dialog closes and it lands as an arrival, with no history entry', async () => {
+    mountAt('/#fleet');
+    act(() => seen.ui!.openAircraft('N37502'));
+    const before = window.history.length;
+    const link = screen.getByRole('link', { name: '737 MAX 9 in the dialog' });
+    link.focus();
+
+    fireEvent.click(link);
+    await nextFrame();
+
+    expect(seen.ui!.aircraftReg).toBeNull();
+    expect(seen.ui!.tab).toBe('fleet');
+    expect(seen.ui!.fleetLink).toMatchObject({ filter: '737 MAX 9', arriving: true });
+    expect(seen.ui!.announcement).toBe('Fleet, 737 MAX 9');
+    expect(document.activeElement).toBe(panel('fleet'));
+    expect(window.history.length).toBe(before);
+    expect(address()).toBe('/#fleet');
+  });
+
+  it('a hub link in an overlay over Schedule bumps scheduleLink (an arrival); the same link outside one does not', async () => {
+    mountAt('/#schedule');
+    act(() => seen.ui!.select({ kind: 'ident', ident: 'UA1' }));
+    fireEvent.click(screen.getByRole('link', { name: 'ORD in the sheet' }));
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+    expect(seen.ui!.announcement).toBe('Schedule, ORD');
+
+    fireEvent.click(screen.getByRole('link', { name: 'DEN chip' }));
+    expect(seen.schedule!.current.hub).toBe('DEN');
+    expect(seen.ui!.scheduleLink).toEqual({ hub: 'ORD', seq: 1 });
+  });
+
+  it('a tail link replaces every overlay with its aircraft dialog, on the tab already showing', async () => {
+    mountAt('/#live');
+    act(() => {
+      seen.ui!.select({ kind: 'ident', ident: 'UA1' });
+      seen.ui!.openFr24('UA9');
+      seen.ui!.openDelayExplain({ flight: 'UA1' });
+      seen.ui!.setSearchOpen(true);
+    });
+    const before = window.history.length;
+
+    fireEvent.click(screen.getByRole('link', { name: 'N78501 in the sheet' }));
+    await nextFrame();
+
+    expect(seen.ui!).toMatchObject({
+      selection: null,
+      fr24Query: null,
+      delayExplain: null,
+      searchOpen: false,
+      aircraftReg: 'N78501',
+      tab: 'live',
+      announcement: '',
+    });
+    expect(window.history.length).toBe(before);
+  });
+
+  it('a modified click on an overlay link is still the browser\'s, and closes nothing', () => {
+    mountAt('/#live');
+    act(() => seen.ui!.select({ kind: 'ident', ident: 'UA1' }));
+    fireEvent.click(screen.getByRole('link', { name: 'ORD in the sheet' }), { metaKey: true });
+    expect(seen.ui!.selection).toEqual({ kind: 'ident', ident: 'UA1' });
+    expect(seen.ui!.tab).toBe('live');
   });
 });
 

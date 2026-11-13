@@ -15,8 +15,8 @@ import type { MouseEvent, ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 import { resolveDeepLink } from '../state/deep-links';
-import type { DeepLinkIntent } from '../state/deep-links';
 import { useFollowDeepLink } from '../state/follow-link';
+import type { FollowDeepLink, FollowOptions } from '../state/follow-link';
 import { LINK_HIT, LINK_TONE } from './link-style';
 import type { LinkHit, LinkTone } from './link-style';
 
@@ -27,15 +27,17 @@ import type { LinkHit, LinkTone } from './link-style';
  * browser.
  */
 export function dashLinkClick(
-  follow: (intent: DeepLinkIntent) => void,
+  follow: FollowDeepLink,
   href: string,
+  options?: FollowOptions,
 ): (event: MouseEvent<HTMLAnchorElement>) => boolean {
   return (event) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
     const intent = resolveDeepLink(href);
     if (!intent) return false;
     event.preventDefault();
-    follow(intent);
+    if (options) follow(intent, options);
+    else follow(intent);
     return true;
   };
 }
@@ -49,17 +51,23 @@ export type DashLinkProps = DataAttributes & {
   hit?: LinkHit;
   className?: string;
   title?: string;
+  /**
+   * The link is inside an overlay (the flight sheet, the aircraft dialog, the FR24 or delay
+   * dialog, the search palette): following it closes those first and lands as an arrival, even
+   * on the tab already showing (`FollowOptions` in state/follow-link.tsx).
+   */
+  fromOverlay?: boolean;
   children: ReactNode;
 };
 
-export function DashLink({ href, tone = 'quiet', hit = 'box', className, title, children, ...data }: DashLinkProps) {
+export function DashLink({ href, tone = 'quiet', hit = 'box', className, title, fromOverlay, children, ...data }: DashLinkProps) {
   const follow = useFollowDeepLink();
   return (
     <a
       {...data}
       href={href}
       title={title}
-      onClick={dashLinkClick(follow, href)}
+      onClick={dashLinkClick(follow, href, fromOverlay ? { fromOverlay: true } : undefined)}
       className={cn(LINK_TONE[tone], LINK_HIT[hit], className)}
     >
       {children}
