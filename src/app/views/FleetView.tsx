@@ -710,7 +710,7 @@ export default function FleetView() {
           </TabsContent>
 
           <TabsContent value="special" className="scroll-mt-2">
-            <SpecialPanel rows={specialRows} loading={loading} onOpenAircraft={openAircraft} />
+            <SpecialPanel rows={specialRows} loading={loading} />
           </TabsContent>
 
           <TabsContent value="express" className="scroll-mt-2">

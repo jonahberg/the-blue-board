@@ -320,3 +320,62 @@ describe('Airborne Now', () => {
     expect(route.textContent).toBe('SFO> to DEN');
   });
 });
+
+describe('Special', () => {
+  beforeEach(() => {
+    ctl.fleet = fleetValue({ special: new Map([['N100UA', { name: 'Sam E. Ashmore', type: 'named' }]]) });
+    ctl.flights = [airborne('N100UA', { flightIATA: 'UA576', origin: 'EWR', dest: 'LHR' })];
+  });
+
+  /** The card for `reg` (its first one). */
+  const cardOf = (reg: string) => {
+    const card = [...panel().querySelectorAll('li')].find((li) => li.querySelector(`a[data-tail-link="${reg}"]`));
+    if (!card) throw new Error(`no card for ${reg}`);
+    return card as HTMLElement;
+  };
+
+  it('the tail is the card\'s link-coloured link; the type a quiet link by the tail', () => {
+    mount();
+    openSubView(/^Special/);
+    const card = cardOf('N100UA');
+    expect(card.querySelector('button')).toBeNull();
+    const tail = within(card).getByRole('link', { name: 'N100UA' });
+    expect(tail.getAttribute('href')).toBe('/?aircraft=N100UA');
+    expect(isIdentity(tail)).toBe(true);
+    const type = within(card).getByRole('link', { name: 'A319' });
+    expect(type.getAttribute('href')).toBe('/?tab=fleet&type=A319');
+    expect(isQuiet(type)).toBe(true);
+    // The delivery year stays plain beside it.
+    expect(card.textContent).toContain('A319 · Del 2000');
+  });
+
+  it('an airborne card links its United flight number and hub ends, quiet; other airports plain', () => {
+    mount();
+    openSubView(/^Special/);
+    const card = cardOf('N100UA');
+    const number = within(card).getByRole('link', { name: 'UA576' });
+    expect(number.getAttribute('href')).toBe('/flight/UA576');
+    expect(isQuiet(number)).toBe(true);
+    expect(within(card).getByRole('link', { name: 'EWR' }).getAttribute('href')).toBe('/?tab=schedule&hub=EWR');
+    expect(within(card).queryByRole('link', { name: 'LHR' })).toBeNull();
+    expect([...card.querySelectorAll('a')].filter(isIdentity)).toHaveLength(1);
+  });
+
+  it('a curated livery off the mainline database: its tail links, its "not in the database" line is plain', () => {
+    mount();
+    openSubView(/^Special/);
+    // N91007 is a curated livery the fixture database does not list.
+    const card = cardOf('N91007');
+    expect(within(card).getAllByRole('link').map((a) => a.textContent)).toEqual(['N91007']);
+    expect(card.textContent).toContain('Not in the mainline fleet database');
+  });
+
+  it('a type followed from a card opens All Aircraft filtered to it (ruling 2: Special does not list a type)', () => {
+    mount();
+    openSubView(/^Special/);
+    fireEvent.click(within(cardOf('N100UA')).getByRole('link', { name: 'A319' }));
+    expect(activeSubView()).toMatch(/^All Aircraft/);
+    expect(typeSelect().textContent).toContain('A319');
+    expect(bodyRows()).toHaveLength(6);
+  });
+});
