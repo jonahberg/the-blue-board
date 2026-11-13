@@ -135,19 +135,48 @@ describe.skipIf(!hasDist)('src/scripts/fleet-live.ts on /fleet/787-9-dreamliner'
     expect(links.length).toBeGreaterThan(0);
     expect(links.length).toBeLessThanOrEqual(4);
     for (const a of links) expect(a.getAttribute('href')).toMatch(/^\/\?flight=/);
-    expect(links[0].textContent).toMatch(/open (UA\d+ )?on the live map/);
+    expect(links[0].textContent).toMatch(/^Open (UA\d+|N\w+) on the live map$/);
     // The flight number is its own link (never nested in the map link) to the flight page.
     for (const li of strip().querySelectorAll('[data-fl-list] > li')) {
       const ident = li.querySelector('[data-f="ident"]');
       expect(ident.closest('[data-f="link"]')).toBeNull();
       if (/^UA\d{1,4}$/.test(ident.textContent)) {
         expect(ident.getAttribute('href')).toBe(`/flight/${ident.textContent}`);
-        expect(li.querySelector('[data-f="link"]').textContent).toContain(`open ${ident.textContent} on the live map`);
+        expect(li.querySelector('[data-f="link"]').textContent).toBe(`Open ${ident.textContent} on the live map`);
       } else {
         expect(ident.hasAttribute('href')).toBe(false);
       }
     }
     expect(strip().querySelector('[data-fl-fallback]').hidden).toBe(true);
+  });
+
+  it('links each hub end to its hub page and the tail to the aircraft dialog, none nested in another link', async () => {
+    mountPage('fleet/787-9-dreamliner.html');
+    const tails = document.querySelector('[data-fleet-live]').dataset.tails.split(',');
+    const row = (reg, flight, from, to) => ['A00000', 41.9, -87.9, 90, 35000, 450, '', 'T-KORD1', 'B789', reg, 1791000000, from, to, flight, 0, 0, `UAL${flight.slice(2)}`, 0, 'UAL'];
+    const feed = { a: row(tails[0], 'UA857', 'SFO', 'PVG'), b: row(tails[1], 'UA2', 'EWR', 'NRT') };
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(feed)));
+    await import('../src/scripts/fleet-live.ts');
+    await vi.waitFor(() => expect(strip().dataset.state).toBe('live'));
+
+    const [first, second] = strip().querySelectorAll('[data-fl-list] > li');
+    const hrefs = (li) => [...li.querySelectorAll('a[href]')].map((a) => [a.dataset.f || a.textContent, a.getAttribute('href')]);
+    expect(hrefs(second)).toEqual([
+      ['ident', '/flight/UA857'],
+      ['SFO', '/hubs/sfo'],
+      [tails[0], `/?aircraft=${tails[0]}`],
+      ['link', '/?flight=UA857'],
+    ]);
+    expect(first.querySelector('[data-f="route"]').textContent).toBe('EWR →  to NRT');
+    expect(hrefs(first).slice(1, 3)).toEqual([['EWR', '/hubs/ewr'], ['NRT', '/hubs/nrt']]);
+    // PVG is not a hub: text. No link holds another.
+    expect([...second.querySelectorAll('a')].some((a) => a.textContent === 'PVG')).toBe(false);
+    for (const a of strip().querySelectorAll('[data-fl-list] a')) expect(a.querySelector('a')).toBeNull();
+    // Hub and tail links are second names: quiet, and inert on a touch screen where the row is one tap target.
+    const hub = second.querySelector('a[href="/hubs/sfo"]');
+    expect(hub.className).toContain('decoration-muted-foreground/40');
+    expect(hub.className).toContain('pointer-coarse:pointer-events-none');
+    expect(hub.className).not.toContain('text-primary');
   });
 
   it('an empty feed is a failed read: static line, no "0 airborne"', async () => {

@@ -12,9 +12,20 @@
 //
 // "Airborne" is the dashboard's own rule (flight-phase.js `isOnGround`: the feed's flag, or under
 // 100 ft and 50 kt), the one the Live tab's count uses (airborne-count.js).
+//
+// What each row links to (links everywhere, Nov 2026) is decided here, by the site's per-kind
+// rules, so src/scripts/fleet-live.ts only paints it:
+//   - the flight number → its flight page (`flightLink`: a United prefix is required);
+//   - each route end that is a hub → its hub page (`hubLink(code, 'site')`); any other airport is text;
+//   - the tail → the dashboard's aircraft dialog (`tailLink`): every tail here is a registry row;
+//   - the row itself → that flight on the dashboard's live map (`/?flight=`), as before.
+// The four are siblings, never nested.
 
 import { parseFr24Feed } from './feed-health.js';
+import { flightLink } from './flight-link.js';
 import { isOnGround } from './flight-phase.js';
+import { hubLink } from './hub-link.js';
+import { tailLink } from './tail-link.js';
 
 /** Flights listed under the count. */
 export const FLEET_LIVE_ROWS = 4;
@@ -41,15 +52,36 @@ const identNumber = (ident) => {
 };
 
 /**
+ * Where each name in one strip row links, or null where it prints as text.
+ *
+ * @param {{ident: string, origin: string, dest: string, reg: string}} row
+ * @returns {{ident: string|null, origin: string|null, dest: string|null, reg: string|null, map: string}}
+ */
+export function fleetLiveRowLinks({ ident, origin, dest, reg }) {
+  const href = (link) => link?.href ?? null;
+  return {
+    ident: href(flightLink(ident)),
+    origin: href(hubLink(origin, 'site')),
+    dest: href(hubLink(dest, 'site')),
+    reg: href(tailLink(reg)),
+    // The dashboard's `?flight=` deep link opens the flight panel for an airborne flight; it
+    // matches a tail as well as a flight number (src/app/state/deep-links.ts).
+    map: `/?flight=${encodeURIComponent(ident || reg)}`,
+  };
+}
+
+/**
  * This type's aircraft in one feed read.
  *
  * @param {any} payload  the raw `/api/fr24-feed` body.
  * @param {Iterable<string>} tails  the type's registrations (the page's registry rows).
  * @param {number} [limit]
  * @returns {{airborne: number, onGround: number,
- *   flights: Array<{ident: string, origin: string, dest: string, reg: string, href: string}>}|null}
+ *   flights: Array<{ident: string, origin: string, dest: string, reg: string, href: string,
+ *     links: ReturnType<typeof fleetLiveRowLinks>}>}|null}
  *   null when the feed parsed to nothing — a failed read (feed-health.js), never "none airborne".
- *   `flights` lists airborne ones with a known route first, then by flight number.
+ *   `flights` lists airborne ones with a known route first, then by flight number. `href` is the
+ *   row's live-map link (`links.map`).
  */
 export function airborneOfType(payload, tails, limit = FLEET_LIVE_ROWS) {
   const parsed = parseFr24Feed(payload);
@@ -72,16 +104,14 @@ export function airborneOfType(payload, tails, limit = FLEET_LIVE_ROWS) {
     .sort((a, b) => routed(a.f) - routed(b.f) || identNumber(a.ident) - identNumber(b.ident))
     .slice(0, limit)
     .map(({ f, ident }) => {
-      const reg = normalizeTail(f.reg);
-      return {
+      const row = {
         ident,
         origin: String(f.origin || '').toUpperCase(),
         dest: String(f.dest || '').toUpperCase(),
-        reg,
-        // The dashboard's `?flight=` deep link opens the flight panel for an airborne flight; it
-        // matches a tail as well as a flight number (src/app/state/deep-links.ts).
-        href: `/?flight=${encodeURIComponent(ident || reg)}`,
+        reg: normalizeTail(f.reg),
       };
+      const links = fleetLiveRowLinks(row);
+      return { ...row, href: links.map, links };
     });
 
   return { airborne: airborne.length, onGround, flights: listed };

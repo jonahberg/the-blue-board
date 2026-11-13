@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { airborneOfType, feedFlightIdent, normalizeTail } from '../src/lib/fleet-live.js';
+import { airborneOfType, feedFlightIdent, fleetLiveRowLinks, normalizeTail } from '../src/lib/fleet-live.js';
 import { isOnGround } from '../src/lib/flight-phase.js';
 import { parseFr24Feed } from '../src/lib/feed-health.js';
 
@@ -82,5 +82,36 @@ describe('helpers', () => {
     const [t1] = tailsOf('787-9');
     const result = airborneOfType({ a: feedRow({ reg: t1, flight: '', callsign: '' }) }, [t1]);
     expect(result.flights[0].href).toBe(`/?flight=${t1}`);
+    // feedRow's default route is ORD → LGA: one hub end.
+    expect(result.flights[0].links).toEqual({ ident: null, origin: '/hubs/ord', dest: null, reg: `/?aircraft=${t1}`, map: `/?flight=${t1}` });
+  });
+});
+
+describe('fleetLiveRowLinks: what each name in a strip row links to', () => {
+  it('number → flight page, hub ends → hub pages, tail → aircraft dialog, row → live map', () => {
+    expect(fleetLiveRowLinks({ ident: 'UA857', origin: 'SFO', dest: 'PVG', reg: 'N2331U' })).toEqual({
+      ident: '/flight/UA857',
+      origin: '/hubs/sfo',
+      dest: null, // Shanghai is not a United hub: text
+      reg: '/?aircraft=N2331U',
+      map: '/?flight=UA857',
+    });
+    expect(fleetLiveRowLinks({ ident: 'UA2', origin: 'EWR', dest: 'NRT', reg: 'N12345' })).toMatchObject({ origin: '/hubs/ewr', dest: '/hubs/nrt' });
+  });
+
+  it('a number the site has no page for, a missing route and a missing tail print as text', () => {
+    expect(fleetLiveRowLinks({ ident: '', origin: '', dest: '', reg: 'N2331U' })).toEqual({
+      ident: null, origin: null, dest: null, reg: '/?aircraft=N2331U', map: '/?flight=N2331U',
+    });
+    expect(fleetLiveRowLinks({ ident: 'UA857H', origin: 'LHR', dest: 'CDG', reg: '' })).toMatchObject({ ident: null, origin: null, dest: null, reg: null });
+    // An operating callsign is not widened to a United number here (ruling 4).
+    expect(fleetLiveRowLinks({ ident: 'SKW5415', origin: 'DEN', dest: 'ASE', reg: 'N612UX' }).ident).toBeNull();
+  });
+
+  it('airborneOfType carries each row its links, and `href` stays the live-map link', () => {
+    const [t1] = tailsOf('787-9');
+    const result = airborneOfType({ x: feedRow({ reg: t1, flight: 'UA857', from: 'SFO', to: 'PVG' }) }, [t1]);
+    expect(result.flights[0].links).toEqual(fleetLiveRowLinks(result.flights[0]));
+    expect(result.flights[0].href).toBe(result.flights[0].links.map);
   });
 });
