@@ -221,9 +221,12 @@
 
   /* ── Inline accents inside `headerTitle` ──────────────────────────────── */
 
+  /* The page's own hub code (ORD) and type code (737 MAX 9) in its h1: set apart by the mono
+     face, in body colour. They name the page itself, so they are not links, and link colour on
+     them read as one (tests/design-guards.test.js). */
   .bb-content .iata,
   .bb-content .type-badge {
-    @apply font-mono font-bold text-primary;
+    @apply font-mono font-bold text-foreground;
   }
 
   /* ── Tables in the data strings ───────────────────────────────────────── */

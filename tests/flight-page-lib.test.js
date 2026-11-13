@@ -276,7 +276,7 @@ describe('the page view (flight-page-view.js)', () => {
   it('the aircraft card names cabins, Wi-Fi in words, and says when the tail is not known yet', () => {
     const view = aircraftView(ua929Aircraft, null, { ident: 'UA929', schedDepMin: D / 60, origin: 'ORD', dest: 'LHR' });
     expect(view.summary).toBe('Boeing 767-300ER · 167 seats');
-    expect(view.wifi).toEqual({ text: 'Satellite Ku Wi-Fi, not Starlink', starlink: false });
+    expect(view.wifi).toEqual({ text: 'Satellite Ku Wi-Fi, not Starlink', starlink: false, href: null });
     expect(view.cabinLine).toBe('46 Polaris · 22 Premium Plus · 43 Economy Plus · 56 Economy');
     expect(aircraftView(null, null, {}).summary).toMatch(/not named the aircraft/);
   });

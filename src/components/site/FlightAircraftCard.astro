@@ -2,6 +2,11 @@
 /**
  * "The aircraft": type, tail, seats and the cabin bar, Wi-Fi, and the tail's recent legs.
  *
+ * Links (src/lib/flight-page-view.js decides, src/scripts/flight-page.ts paints): the tail opens
+ * the dashboard's aircraft dialog when the fleet database or the Starlink roster knows it, the type
+ * its fleet page by the fleet database's type for the tail, Starlink Wi-Fi the Starlink tab, and the
+ * recent legs' numbers and hub ends their pages. The operator and an Express type stay text.
+ *
  * The facts come from the fleet data the dashboard already uses (public/data/fleet.json and the
  * Starlink roster) and the tail's legs from flight_history, all joined server-side by /api/flight.
  * The cabin bar is decoration beside the cabin list printed under it (same order, same counts), so
@@ -32,14 +37,16 @@ import { Zap } from 'lucide-react';
   <!-- Each flight number links to its own flight page (src/scripts/flight-link.ts). The number's
        hit box fills the row's height over the flight column: 44 px rows on touch; a mouse at md+
        gets a compact 24 px row, WCAG 2.5.8's minimum. A number the site has no page for stays text
-       (no href). -->
+       (no href). A hub at either end of the route links to its hub page, quietly, with its own
+       `after:` box (src/scripts/flight-page.ts); the route never truncates, since a clipped box
+       would lose its touch target ("ORD → LAX" is nine characters). -->
   <template data-fp-leg>
     <li class="relative grid min-h-11 grid-cols-[3.75rem_minmax(0,1fr)_auto] items-center gap-x-2 border-b border-border font-mono text-xs tabular-nums last:border-b-0 pointer-fine:md:min-h-6 pointer-fine:md:border-b-0">
       <a
         class="justify-self-start font-medium text-primary underline-offset-2 after:absolute after:inset-y-0 after:left-0 after:w-16 hover:underline [&:not([href])]:text-foreground [&:not([href])]:no-underline [&:not([href])]:after:hidden"
         data-f="flight"></a
       >
-      <span class="truncate text-muted-foreground" data-f="route"></span>
+      <span class="whitespace-nowrap text-muted-foreground" data-f="route"></span>
       <span class="text-right" data-f="result"></span>
     </li>
   </template>

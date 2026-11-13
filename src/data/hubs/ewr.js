@@ -64,10 +64,6 @@ export const ewr = {
       "label": "Starlink WiFi"
     },
     {
-      "href": "#construction",
-      "label": "Construction"
-    },
-    {
       "href": "#faq",
       "label": "FAQ"
     },

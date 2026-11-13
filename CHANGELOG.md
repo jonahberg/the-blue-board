@@ -4,6 +4,28 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.30.0] - 2026-11-12
+
+**The hub, tracker, Newark, fleet and flight pages link the names they print.**
+
+### Added
+- **Hub pages.** The other United hubs named in "Key Routes" open their hub pages; the page's own hub and every other airport stay plain. On the departures board, a destination that is another United hub opens its hub page. The Guam and Tokyo Narita pages link to the live map again, "Live GUM map" and "Live NRT map", beside the button into the full board. On the hubs overview, each line of "What The Blue Board Tracks at Each Hub" opens that part of the dashboard: live flights, delays, FAA ground stops, schedules, Starlink and weather ("Seasonal delay patterns" has no single place, so it stays plain).
+- **Newark.** "Active United Flights (EWR)" opens the live map showing Newark's flights, the FAA program line opens the dashboard's FAA status panel, and "check the live board" opens Newark's schedule board. "More on Newark & United" adds Newark's construction projects and its paper-strips status, and each hub code in its list of United hubs opens that hub's page.
+- **Tracker pages.** On the paper-strips tracker, each United hub's code opens its hub page. On the hubs tracker, each project's name opens its card on that hub's tracker page and the hub code opens the hub page; under "Hub by hub", the code opens the hub page and the hub's name its tracker page. "Club math" links the clubs it describes and the 787-10, and "largest club in the network" opens the Houston club's card. Guam, which sits off the map, links its projects and its hub page. Each hub's page on either tracker has an "ORD hub guide →" link, and a tower's "Airport" tile opens its hub page.
+- **Fleet pages.** Every registration in a type's registry opens that aircraft in the dashboard, and "Starlink" in its Wi-Fi column opens the Starlink tab. The "Aircraft" tile opens the dashboard's Fleet tab showing that type. In "in the air right now", a United hub at either end of a route opens its hub page and the tail opens the aircraft, while the rest of the row still opens the live map; on a phone, tapping the row still opens the map, and the hubs and the tail in it link with a mouse. The airborne count opens the dashboard's list of that type in the air. On the fleet overview, each count in the seat table opens the Fleet tab showing that type, and What's New links San Francisco, Houston and Washington Dulles to their hub pages and "United Express regional jets" to the Fleet tab's Express list.
+- **Flight pages.** A United hub at either end of the trip, of the 30-day history and of the aircraft's recent flights opens its hub page. The aircraft's registration opens it in the dashboard when the fleet database or the Starlink roster knows that aircraft, a mainline type opens its fleet page (the type comes from the fleet database for that aircraft, not from the words printed), and "Starlink Wi-Fi" opens the Starlink tab. When a flight page has nothing current for a number and shows the route it last flew instead, that route's hub ends link.
+- **One blue link per row here too.** As on the Starlink tab, a row has at most one blue link, the thing the row is about: a registration, a flight number, a project's name, a tower's status. The row's other links are underlined and not blue.
+
+### Changed
+- **"United hub →" on the paper-strips tracker now reads "ORD projects →"**, with each hub's own code, and still opens that hub's construction projects.
+
+### Fixed
+- **"Starlink Tracker" on the fleet overview opened the Fleet tab.** It now opens the Starlink tab.
+- **Keyboard focus stays where it was when a list refreshes.** On a hub's departures board, a fleet page's "in the air right now" and a flight page's recent flights, a refresh could move keyboard focus to another row's link with the same address, such as the same flight number on another day. It now stays on the link you were on, in the same departure, aircraft or flight, however the rows around it changed, and a refresh that changes nothing in the list leaves focus untouched. If that row itself has left the list, focus goes to a link with the same address (the same one of several, where there still are as many), otherwise to the list's first link, so it never leaves the list.
+- **Codes painted like links.** The hub code in a hub page's title (ORD) and the type in a fleet page's title (737 MAX 9) were blue without being links; they are now the text's own colour. So are the family names and each family's count on the fleet overview, "Hub Airports" on the hubs overview, and the labels and headings on the tracker pages that were blue.
+- **A news article's category** ("Fleet" beside the date) was blue without being a link; it is now the text's own colour.
+- **The "Construction" jump link on the Newark hub page (/hubs/ewr) went nowhere.** That page has no construction section; the link is gone.
+
 ## [1.29.0] - 2026-11-12
 
 **Names in the Starlink tab are links, Express flights show their United number, and the hub chips open the schedule board.**

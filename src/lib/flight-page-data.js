@@ -19,6 +19,7 @@
 import { boardRowFromHistory } from './delay-prediction.js';
 import { expressCabinFor, normalizeExpressType } from './express-fleet.js';
 import { UNITED_OPERATORS } from './express-operators.js';
+import { fleetTypeCodeForTail } from './fleet-type-link.js';
 import { localDate } from './flight-history.js';
 import { normalizeWifi } from './fleet-utils.js';
 import { HUB_TZ, getStartOfHubDay } from './hubTz.js';
@@ -233,6 +234,11 @@ export function legRegistration(row, historyRow, sighting) {
  * the tail, else the board's model code; a cabin only where express-fleet.js has a verified layout.
  * Nothing is invented: unknown fields stay null.
  *
+ * `typeCode` is the fleet database's own type for the tail when that type has a fleet page
+ * (`fleetTypeCodeForTail`), and null for every tail the database does not know: the page links the
+ * type by it, never by `type`, which can be a schedule model code (B739 is both the 737-900 and the
+ * 737-900ER) or the Starlink roster's words.
+ *
  * @param {string} reg
  * @param {{fleet: any[], starlink: Map<string, {type?: string, operator?: string, fleet?: string}>,
  *   modelCode?: string, modelText?: string, operator?: string}} ctx
@@ -246,6 +252,7 @@ export function aircraftFacts(reg, { fleet = [], starlink = new Map(), modelCode
     return {
       reg,
       type: String(row.t || modelText || modelCode || ''),
+      typeCode: fleetTypeCodeForTail(reg, { [reg]: row }),
       config: row.c || '',
       seats,
       total: Number(row.tot) || (seats ? Object.values(seats).reduce((a, b) => a + Number(b || 0), 0) : null) || null,
@@ -267,6 +274,7 @@ export function aircraftFacts(reg, { fleet = [], starlink = new Map(), modelCode
   return {
     reg: reg || null,
     type: type || null,
+    typeCode: null,
     config: cabin?.config || '',
     seats: cabin?.seats || null,
     total: cabin?.tot || null,

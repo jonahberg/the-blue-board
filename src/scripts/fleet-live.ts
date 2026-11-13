@@ -6,18 +6,40 @@
  * 15 s — never a metered provider. When no dashboard tab keeps that edge warm, a visible fleet tab
  * causes at most one free-feed origin read per refresh, so the refresh is a slow two minutes (the
  * hub pages, meanwhile, dropped their own 30 s poll of the same feed). Every decision about what
- * counts lives in src/lib/fleet-live.js; this file only paints, with `textContent`.
+ * counts, and what each name in a row links to (`fleetLiveRowLinks`), lives in
+ * src/lib/fleet-live.js; this file only paints, with `textContent`.
  *
  * An empty feed is a failed read (feed-health.js), not "none airborne": a failed first read leaves
  * the static line and releases the reserved height; a failed refresh keeps the last good strip.
  */
 
+import { LINK_TONE } from '../app/features/link-style';
 import { airborneOfType } from '../lib/fleet-live.js';
 import { parseStaleHeader } from '../lib/feed-health.js';
-import { replaceChildrenKeepingFocus, setFlightLink } from './flight-link';
+import { replaceChildrenKeepingFocus } from './flight-link';
 
 const REFRESH_MS = 120_000;
 const FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * A hub end or the tail in a row: body colour with a quiet underline (the site's second-name look,
+ * LINK_TONE.quiet), above the row's stretched live-map link (`z-10`), at least 24 px tall for a
+ * mouse (`min-h-6`: the tail's 11 px text alone makes 22.7 px), inside the 44 px row. On a
+ * touch screen the row is one tap target (the map, with the number split out), so these take no
+ * taps and drop the underline there; they stay in the tab order. The route cell truncates (clips),
+ * so the focus ring is drawn inside the link (`-outline-offset-2`), as on the hub board.
+ */
+const ROW_NAME_LINK = `relative z-10 inline-block min-h-6 py-1 ${LINK_TONE.quiet} focus-visible:-outline-offset-2 pointer-coarse:pointer-events-none pointer-coarse:no-underline`;
+
+/** `text` as a quiet link to `href`, or as plain text when it has none. */
+function nameOrText(text: string, href: string | null): Node {
+  if (!href) return document.createTextNode(text);
+  const a = document.createElement('a');
+  a.className = ROW_NAME_LINK;
+  a.href = href;
+  a.textContent = text;
+  return a;
+}
 
 const root = document.querySelector<HTMLElement>('[data-fleet-live]');
 
@@ -50,12 +72,17 @@ if (root) {
     const rows = result.flights.map((flight) => {
       const li = template?.content.firstElementChild?.cloneNode(true) as HTMLElement | undefined;
       if (!li) return null;
-      const link = li.querySelector<HTMLAnchorElement>('[data-f="link"]');
-      if (link) link.href = flight.href;
+      const { links } = flight;
+      // The tail: how a refresh finds this row again for a keyboard reader (flight-link.ts).
+      li.dataset.key = flight.key;
       const field = (name: string) => li.querySelector<HTMLElement>(`[data-f="${name}"]`);
-      // The number links to its flight page; '—' (no number in the feed) stays text.
+      // The number links to its flight page; '—' (no number in the feed) stays text (no href).
       const ident = field('ident');
-      if (ident) setFlightLink(ident, flight.ident || '—');
+      if (ident) {
+        ident.textContent = flight.ident || '—';
+        if (links.ident) ident.setAttribute('href', links.ident);
+        else ident.removeAttribute('href');
+      }
       const route = field('route');
       if (route) {
         if (flight.origin && flight.dest) {
@@ -66,18 +93,17 @@ if (root) {
           const to = document.createElement('span');
           to.className = 'sr-only';
           to.textContent = ' to ';
-          route.append(flight.origin, arrow, to, flight.dest);
+          route.append(nameOrText(flight.origin, links.origin), arrow, to, nameOrText(flight.dest, links.dest));
         } else {
           route.textContent = 'Route not in feed';
         }
       }
-      const reg = field('reg');
-      if (reg) reg.textContent = flight.reg;
-      // The map link's name carries the flight number too: "SFO to PVG N2331U, open UA857 on the live map".
-      const hint = document.createElement('span');
-      hint.className = 'sr-only';
-      hint.textContent = flight.ident ? `, open ${flight.ident} on the live map` : ', open on the live map';
-      link?.append(hint);
+      field('reg')?.append(nameOrText(flight.reg, links.reg));
+      // The row's own link: that flight on the live map ("Open UA857 on the live map").
+      const link = li.querySelector<HTMLAnchorElement>('[data-f="link"]');
+      if (link) link.href = links.map;
+      const linkName = field('link-name');
+      if (linkName) linkName.textContent = `Open ${flight.ident || flight.reg} on the live map`;
       return li;
     });
     // Refreshes every two minutes; a reader tabbing through the rows keeps their place.

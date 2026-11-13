@@ -1,8 +1,9 @@
 ---
 /**
  * The fleet type pages' "in the air right now" strip: how many of this type are airborne, and a
- * few of them (flight, route, tail): the flight number opens its flight page, the rest of the row
- * opens that flight on the dashboard's live map.
+ * few of them (flight, route, tail): the flight number opens its flight page, a hub at either end
+ * its hub page, the tail the dashboard's aircraft dialog, and the rest of the row that flight on
+ * the dashboard's live map.
  *
  * Filled by src/scripts/fleet-live.ts from `/api/fr24-feed?airline=UAL` — the free feed URL the
  * dashboard already keeps warm at the edge (15-second CDN cache), never a metered provider. The
@@ -18,9 +19,14 @@ interface Props {
   displayName: string;
   /** Registrations of every aircraft of this type in the registry. */
   tails: string[];
+  /**
+   * Where the count links: the dashboard's Airborne list filtered to this type
+   * (src/lib/fleet-live.js fleetLiveListHref). Without one the count is text.
+   */
+  listHref?: string | null;
 }
 
-const { displayName, tails } = Astro.props;
+const { displayName, tails, listHref = null } = Astro.props;
 const total = tails.length;
 ---
 
@@ -42,8 +48,10 @@ const total = tails.length;
     </p>
   </div>
 
+  <!-- Reserved height: the 44 px count line, 8 px, the list's 1 px rule and four 44 px rows on a
+       phone (two rows from md), 12 px under them. -->
   <div
-    class="px-4 pb-3 [@media(scripting:enabled)]:min-h-[14.8125rem] md:[@media(scripting:enabled)]:min-h-[9.3125rem]"
+    class="px-4 pb-3 [@media(scripting:enabled)]:min-h-[15.0625rem] md:[@media(scripting:enabled)]:min-h-[9.5625rem]"
     data-fl-body
   >
     <p class="pt-1.5 text-xs leading-relaxed text-muted-foreground" data-fl-fallback>
@@ -52,9 +60,27 @@ const total = tails.length;
     </p>
 
     <div data-fl-live hidden>
-      <p class="flex h-10 items-baseline gap-2 overflow-hidden pt-1.5 text-xs whitespace-nowrap text-muted-foreground">
-        <span class="font-mono text-2xl leading-none font-bold text-foreground tabular-nums" data-fl-count></span>
-        <span data-fl-count-label></span>
+      <!-- The count summarizes the dashboard's Airborne list for this type, so it links there
+           (quiet, the whole 44 px line). The words are filled in by the script. -->
+      <p class="flex h-11 text-xs whitespace-nowrap text-muted-foreground">
+        {
+          listHref ? (
+            <a
+              class="inline-flex h-full items-baseline gap-2 pt-1.5 underline decoration-muted-foreground/40 underline-offset-4 hover:decoration-current focus-visible:decoration-current"
+              href={listHref}
+              data-fl-count-link
+            >
+              <span class="font-mono text-2xl leading-none font-bold text-foreground tabular-nums" data-fl-count></span>
+              <span data-fl-count-label></span>
+              <span class="sr-only">, list them in the dashboard</span>
+            </a>
+          ) : (
+            <span class="inline-flex items-baseline gap-2 pt-1.5">
+              <span class="font-mono text-2xl leading-none font-bold text-foreground tabular-nums" data-fl-count></span>
+              <span data-fl-count-label></span>
+            </span>
+          )
+        }
       </p>
       <ul
         class="mt-2 grid grid-cols-1 border-t border-border md:grid-cols-2 md:gap-x-6"
@@ -65,24 +91,26 @@ const total = tails.length;
     </div>
   </div>
 
-  <!-- Two links per row, side by side, never nested: the flight number opens its flight page
-       (/flight/UA857, src/scripts/flight-link.ts) and the rest of the row (route and tail, stretched
-       over the row by its `after:` box) opens it on the dashboard's live map. The number sits
-       above the stretched box (`z-10`); both take in the row's 1 px rule, so each is 44 px. A
-       number the site has no page for stays text (an `<a>` with no href). -->
+  <!-- Every link in a row is a sibling; none is nested in another (src/lib/fleet-live.js
+       fleetLiveRowLinks decides them, src/scripts/fleet-live.ts paints them):
+         - the flight number → its flight page (/flight/UA857), link colour: the row is about it;
+         - each route end that is a hub → its hub page, and the tail → the dashboard's aircraft
+           dialog: body colour with a quiet underline, filled in by the script;
+         - the row itself (`data-f="link"`, stretched over the row and under everything else) →
+           that flight on the dashboard's live map.
+       On a touch screen the row is one tap target (the map) with the number split out above it,
+       so the hub and tail links take no taps there and show no underline (they stay in the tab
+       order); with a mouse every name links. The number and the row take in the row's 1 px rule,
+       so each is 44 px. A number the site has no page for stays text (an `<a>` with no href). -->
   <template data-fl-row>
-    <li class="relative grid h-11 grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 border-b border-border font-mono text-xs hover:bg-accent/40">
+    <li class="relative grid h-11 grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border font-mono text-xs hover:bg-accent/40">
       <a
         class="relative z-10 flex h-[calc(100%+1px)] items-center self-start justify-self-start font-semibold text-primary underline-offset-2 hover:underline [&:not([href])]:text-foreground [&:not([href])]:no-underline"
         data-f="ident"></a
       >
-      <a
-        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 no-underline after:absolute after:inset-x-0 after:top-0 after:-bottom-px"
-        data-f="link"
-      >
-        <span class="min-w-0 truncate text-foreground" data-f="route"></span>
-        <span class="text-[11px] text-muted-foreground" data-f="reg"></span>
-      </a>
+      <span class="min-w-0 truncate text-foreground" data-f="route"></span>
+      <span class="text-[11px] text-muted-foreground" data-f="reg"></span>
+      <a class="absolute inset-x-0 top-0 -bottom-px no-underline" data-f="link"><span class="sr-only" data-f="link-name"></span></a>
     </li>
   </template>
 </section>

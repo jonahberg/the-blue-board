@@ -3,6 +3,7 @@ import { atcMeta } from '../../../data/trackers/atc.js';
 import { unitedHubs } from '../../../data/trackers/united-hubs.js';
 import { atcHubDetailCodes, formatTrackerDate, getAtcAirport, getHubProjects, countLabel, atcAirportSeo } from '../../../lib/tracker-detail.js';
 import TrackerDetailLayout from '../../../components/trackers/TrackerDetailLayout.astro';
+import { hubLink } from '../../../lib/hub-link.js';
 import StatusBadge from '../../../components/trackers/StatusBadge.astro';
 import SourceDisclosure from '../../../components/trackers/SourceDisclosure.astro';
 import { CARD, CARD_HEAD, CARD_META, CARD_P, SECTION, SECTION_H2, SECTION_H3, SECTION_P, STAT, STAT_LABEL, STAT_VALUE, SUMMARY_GRID } from '../../../components/trackers/detail';
@@ -103,6 +104,11 @@ const schemas = [
   },
 ];
 
+// The "Airport" tile names the hub, so the whole tile links to its hub page, the way a StatTile
+// with an `href` does (links everywhere, Nov 12 2026). Every page here is a United hub's.
+const hubHref = hubLink(code, 'site')?.href;
+if (!hubHref) throw new Error(`/trackers/atc/${code}: not a United hub`);
+
 const peerLinks = atcHubDetailCodes.map((peer) => ({
   href: `/trackers/atc/${peer.toLowerCase()}`,
   label: peer,
@@ -130,10 +136,19 @@ const peerLinks = atcHubDetailCodes.map((peer) => ({
   pageLabel={`${code} electronic flight strips status`}
   peerLabel="Check another United hub tower"
   peerLinks={peerLinks}
+  hubCode={code}
 >
   <section class={SECTION} aria-label={`${code} TFDM status summary`}>
     <div class={SUMMARY_GRID}>
-      <div class={STAT}><span class={STAT_LABEL}>Airport</span><strong class={STAT_VALUE}>{code}</strong></div>
+      <div class:list={[STAT, 'relative transition-colors hover:border-primary has-[a:focus-visible]:border-primary']}>
+        <span class={STAT_LABEL}>Airport</span>
+        <strong class={STAT_VALUE}>
+          <a
+            class="underline decoration-muted-foreground/40 underline-offset-2 after:absolute after:inset-0 after:rounded-lg hover:decoration-foreground focus-visible:decoration-foreground"
+            href={hubHref}>{code}</a
+          >
+        </strong>
+      </div>
       <div class={STAT}><span class={STAT_LABEL}>Current status</span><strong class={STAT_VALUE}>{status.label}</strong></div>
       <div class={STAT}><span class={STAT_LABEL}>{dateLabel}</span><strong class={STAT_VALUE}>{publishedDate ? formatTrackerDate(publishedDate) : 'Not published'}</strong></div>
     </div>

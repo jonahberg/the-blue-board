@@ -2,6 +2,8 @@
 import { hubOrder, hubs } from '../../data/hubs/index.js';
 import { HUB_LINE_LONG, HUB_LINE_SHORT, TRACKED_BOARDS } from '../../data/facts.js';
 import BaseLayout from '../../components/site/BaseLayout.astro';
+import { NAS_STATUS_HREF } from '../../lib/nas-status-link.js';
+import { STARLINK_TAB_HREF } from '../../lib/starlink-link.js';
 import { withBrand } from '../../lib/page-seo.js';
 import Breadcrumbs from '../../components/site/Breadcrumbs.astro';
 import ContentSection from '../../components/site/ContentSection.astro';
@@ -100,7 +102,7 @@ const itemListSchema = {
 
     <header class="mt-6 border-b border-border pb-5">
       <h1 class="text-2xl font-bold tracking-tight text-balance text-foreground">
-        United Airlines <span class="text-primary">Hub Airports</span>&nbsp;— Live Status &amp;
+        United Airlines Hub Airports&nbsp;— Live Status &amp;
         Delays
       </h1>
       <p class="mt-1.5 text-xs text-muted-foreground">
@@ -202,26 +204,34 @@ const itemListSchema = {
       </ul>
     </ContentSection>
 
+    {/* Each line names a dashboard view and links to it (links everywhere, Nov 12 2026); the
+        last has no one home (each hub page has its own #delay-patterns section) and stays text. */}
     <ContentSection heading="What The Blue Board Tracks at Each Hub">
       <ul>
         <li>
-          <strong>Live flight counts</strong> — active United flights at each hub, updated every 30
-          seconds
+          <strong><a href="/#live">Live flight counts</a></strong> — active United flights at each
+          hub, updated every 30 seconds
         </li>
         <li>
-          <strong>Delay monitoring</strong> — real-time delay counts, cancellations, and on-time
-          percentage
-        </li>
-        <li><strong>Ground stops &amp; FAA alerts</strong> — NAS status affecting hub operations</li>
-        <li>
-          <strong>Departure &amp; arrival schedules</strong> — with on-time stats and equipment swap
-          detection
+          <strong><a href="/?tab=irops">Delay monitoring</a></strong> — real-time delay counts,
+          cancellations, and on-time percentage
         </li>
         <li>
-          <strong>Starlink WiFi fleet</strong> — which aircraft at each hub have Starlink satellite
-          internet
+          <strong><a href={NAS_STATUS_HREF}>Ground stops &amp; FAA alerts</a></strong> —
+          NAS status affecting hub operations
         </li>
-        <li><strong>Weather conditions</strong> — METAR observations and NEXRAD radar overlay</li>
+        <li>
+          <strong><a href="/#schedule">Departure &amp; arrival schedules</a></strong> — with on-time
+          stats and equipment swap detection
+        </li>
+        <li>
+          <strong><a href={STARLINK_TAB_HREF}>Starlink WiFi fleet</a></strong> — which aircraft at each hub
+          have Starlink satellite internet
+        </li>
+        <li>
+          <strong><a href="/#weather">Weather conditions</a></strong> — METAR observations and NEXRAD
+          radar overlay
+        </li>
         <li>
           <strong>Seasonal delay patterns</strong> — historical context for weather-driven
           disruptions
