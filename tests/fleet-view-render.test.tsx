@@ -17,7 +17,12 @@ import type { FleetValue } from '../src/app/state/fleet';
 import type { UiValue } from '../src/app/state/ui';
 import FleetView from '../src/app/views/FleetView';
 
-const ctl = vi.hoisted(() => ({ fleet: null as unknown, flights: [] as unknown[], opened: [] as string[] }));
+const ctl = vi.hoisted(() => ({
+  fleet: null as unknown,
+  flights: [] as unknown[],
+  opened: [] as string[],
+  followed: [] as unknown[],
+}));
 
 vi.mock('../src/app/state/fleet', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/fleet')>()),
@@ -26,6 +31,12 @@ vi.mock('../src/app/state/fleet', async (importOriginal) => ({
 vi.mock('../src/app/state/feed', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/feed')>()),
   useFeed: () => ({ flights: ctl.flights, lastGoodTs: null }) as unknown as FeedValue,
+}));
+// The tab's names are in-place links (DashLink → useFollowDeepLink). Each follow is recorded as the
+// intent it resolved to; the links themselves are tested with the real providers in
+// tests/fleet-tab-links.test.tsx.
+vi.mock('../src/app/state/follow-link', () => ({
+  useFollowDeepLink: () => (intent: unknown) => ctl.followed.push(intent),
 }));
 // `coldFleetLink` is the address the page opened on, which the real store reads once at startup;
 // each test here sets the address before it mounts, so reading it on render is the same thing.
@@ -92,6 +103,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   ctl.opened = [];
+  ctl.followed = [];
   ctl.fleet = fleetValue();
   ctl.flights = [
     flight('N100UA', 'UAL1', 'A319'), // mainline, matched
@@ -200,8 +212,11 @@ describe('FleetView — the United Express sub-tab', () => {
     const rows = expressPanel().querySelectorAll('tbody tr');
     expect(rows).toHaveLength(1);
     expect(rows[0].textContent).toContain('N14148');
-    fireEvent.click(screen.getByRole('button', { name: 'N14148' }));
-    expect(ctl.opened).toEqual(['N14148']);
+    // The registration is a link to the aircraft dialog, followed in place (TailLink).
+    const tail = screen.getByRole('link', { name: 'N14148' });
+    expect(tail.getAttribute('href')).toBe('/?aircraft=N14148');
+    expect(fireEvent.click(tail)).toBe(false);
+    expect(ctl.followed).toEqual([expect.objectContaining({ tab: null, aircraft: 'N14148' })]);
 
     fireEvent.change(box, { target: { value: 'zzz' } });
     expect(expressPanel().textContent).toContain('No United Express aircraft match');
@@ -237,7 +252,7 @@ describe('FleetView — the United Express sub-tab', () => {
     fireEvent.click(lastSeen);
     fireEvent.click(lastSeen);
     expect(lastSeen.closest('th')?.getAttribute('aria-sort')).toBe('descending');
-    const regs = [...expressPanel().querySelectorAll('tbody tr')].map((r) => r.querySelector('button')?.textContent);
+    const regs = [...expressPanel().querySelectorAll('tbody tr')].map((r) => r.querySelector('td')?.textContent);
     expect(regs).toEqual(['N140SY', 'N14148', 'N85377']);
   });
 });

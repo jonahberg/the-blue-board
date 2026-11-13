@@ -8,7 +8,9 @@
  * callouts ("EWR & IAD to Europe") say what each family is actually for.
  *
  * Every variant card is a toggle, not a link: `aria-pressed` and a second click clears it,
- * because the card IS the type filter for the table three zones down.
+ * because the card IS the type filter for the table three zones down. The route callouts are
+ * free text that names airports, not a list of them, so they are body text: they were link
+ * colour with nothing to click (links everywhere, Nov 12 2026).
  */
 
 import { FLEET_FAMILIES, familyTotal as sumFamily } from '@/lib/fleet-utils.js';
@@ -67,7 +69,7 @@ export function FleetComposition({
               </header>
 
               {family.routeCallout ? (
-                <p className="mt-0.5 font-mono text-[10px] text-primary">{family.routeCallout}</p>
+                <p className="mt-0.5 font-mono text-[10px] text-foreground">{family.routeCallout}</p>
               ) : null}
 
               <div className="mt-2 space-y-2">

@@ -14,6 +14,15 @@
  *
  * Its own search box rather than the mainline controls: the type, Wi-Fi and status filters
  * there are the mainline database's values and would do nothing here.
+ *
+ * Names with a home link to it (links everywhere, Nov 12 2026). The registration is the row's
+ * link-coloured link, to the aircraft dialog in place (each operator's dialog was checked to have
+ * content, roster-only tails included); the last United flight a quiet link to its flight page
+ * when it is a United number (GoJet's `G7…` stays plain, ruling 4). The regional type, operator,
+ * Wi-Fi, cabin and dates have no home and stay plain. The summary's counts are buttons that set
+ * this list's search (ruling 7, `express-fleet-chips.js`): an operator or type chip, or the
+ * Starlink count, puts its word in the search and, pressed again, clears it; a chip whose word
+ * would list a different number of rows, and the "Unknown …" buckets, stay text.
  */
 
 import { Zap } from 'lucide-react';
@@ -29,13 +38,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  expressCountRows,
-  expressCoverageNote,
-  expressDateLabel,
-  expressLastSeenLabel,
-} from '@/lib/express-fleet-view.js';
+import { isExpressChipPressed, nextExpressSearch } from '@/lib/express-fleet-chips.js';
+import { expressCoverageNote, expressDateLabel, expressLastSeenLabel } from '@/lib/express-fleet-view.js';
 import type { ExpressAircraft } from '../../data/types';
+import { TailLink } from '../../features/EntityLinks';
+import { FlightLink } from '../../features/FlightLink';
 import { SortableHeader } from './SortableHeader';
 import type { SortState } from './SortableHeader';
 
@@ -48,6 +55,14 @@ export type ExpressSummary = {
   byType: Record<string, number>;
 };
 
+/** A summary count as a search chip (`expressSearchChip`): `search` null when it stays text. */
+export type ExpressChip = { label: string; count: number; search: string | null };
+export type ExpressChips = { operators: ExpressChip[]; types: ExpressChip[]; starlink: ExpressChip };
+
+/** A chip that is a button: the summary chip's look, 44 px tall on touch, the hub pills' pressed state. */
+const CHIP_BUTTON =
+  'inline-flex min-h-11 items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] hover:bg-accent aria-pressed:bg-accent aria-pressed:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0';
+
 /** A value the Express fleet does not know: a muted dash, with the words for a screen reader. */
 function Unknown({ label }: { label: string }) {
   return (
@@ -58,17 +73,44 @@ function Unknown({ label }: { label: string }) {
   );
 }
 
-function CountChips({ label, counts }: { label: string; counts: Record<string, number> }) {
-  const rows = expressCountRows(counts) as { label: string; count: number }[];
-  if (!rows.length) return null;
+function CountChips({
+  id,
+  label,
+  chips,
+  search,
+  onSearchChange,
+}: {
+  id: string;
+  label: string;
+  chips: ExpressChip[];
+  search: string;
+  onSearchChange: (value: string) => void;
+}) {
+  if (!chips.length) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <span className="mr-1 text-[11px] text-muted-foreground">{label}</span>
-      {rows.map((row) => (
-        <span key={row.label} className="rounded border px-1.5 py-0.5 text-[11px]">
-          {row.label} <span className="font-mono tabular-nums text-muted-foreground">{row.count}</span>
-        </span>
-      ))}
+    <div role="group" aria-labelledby={id} className="flex flex-wrap items-center gap-1">
+      <span id={id} className="mr-1 text-[11px] text-muted-foreground">
+        {label}
+      </span>
+      {chips.map((chip) =>
+        chip.search !== null ? (
+          <button
+            key={chip.label}
+            type="button"
+            aria-pressed={isExpressChipPressed(chip, search)}
+            onClick={() => onSearchChange(nextExpressSearch(chip, search))}
+            className={CHIP_BUTTON}
+          >
+            <span className="sr-only">Show</span> {chip.label}{' '}
+            <span className="font-mono tabular-nums text-muted-foreground">{chip.count}</span>{' '}
+            <span className="sr-only">aircraft in the list below</span>
+          </button>
+        ) : (
+          <span key={chip.label} className="rounded border px-1.5 py-0.5 text-[11px]">
+            {chip.label} <span className="font-mono tabular-nums text-muted-foreground">{chip.count}</span>
+          </span>
+        ),
+      )}
     </div>
   );
 }
@@ -77,6 +119,7 @@ export function ExpressFleetPanel({
   rows,
   showCabin,
   summary,
+  chips,
   staleDays,
   status,
   search,
@@ -84,7 +127,6 @@ export function ExpressFleetPanel({
   sort,
   onSort,
   nowMs,
-  onOpenAircraft,
 }: {
   /** Already searched and sorted. */
   rows: ExpressAircraft[];
@@ -96,6 +138,8 @@ export function ExpressFleetPanel({
   showCabin: boolean;
   /** Of the whole Express fleet, not the searched rows. */
   summary: ExpressSummary;
+  /** The summary's counts as search chips, decided over the whole fleet (`expressSearchChips`). */
+  chips: ExpressChips;
   staleDays: number;
   status: 'loading' | 'ready' | 'failed';
   search: string;
@@ -103,7 +147,6 @@ export function ExpressFleetPanel({
   sort: SortState<ExpressSortCol>;
   onSort: (col: ExpressSortCol) => void;
   nowMs: number;
-  onOpenAircraft: (reg: string) => void;
 }) {
   const columns = 6 + (showCabin ? 1 : 0);
 
@@ -117,14 +160,34 @@ export function ExpressFleetPanel({
             <span>
               <span className="font-mono font-semibold tabular-nums">{summary.total}</span> aircraft
             </span>
-            <span className="inline-flex items-center gap-1 text-bb-starlink">
-              <Zap aria-hidden="true" className="size-3.5" />
-              <span className="font-mono font-semibold tabular-nums">{summary.starlink}</span> Starlink
-            </span>
+            {chips.starlink.search !== null ? (
+              <button
+                type="button"
+                aria-pressed={isExpressChipPressed(chips.starlink, search)}
+                onClick={() => onSearchChange(nextExpressSearch(chips.starlink, search))}
+                className="-mx-1 inline-flex min-h-11 items-center gap-1 rounded-md px-1 text-bb-starlink hover:bg-accent aria-pressed:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
+              >
+                <Zap aria-hidden="true" className="size-3.5" />
+                <span className="sr-only">Show</span>{' '}
+                <span className="font-mono font-semibold tabular-nums">{summary.starlink}</span> Starlink{' '}
+                <span className="sr-only">aircraft in the list below</span>
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-bb-starlink">
+                <Zap aria-hidden="true" className="size-3.5" />
+                <span className="font-mono font-semibold tabular-nums">{summary.starlink}</span> Starlink
+              </span>
+            )}
           </p>
         )}
-        <CountChips label="Operator" counts={summary.byOperator} />
-        <CountChips label="Type" counts={summary.byType} />
+        <CountChips
+          id="express-chips-operator"
+          label="Operator"
+          chips={chips.operators}
+          search={search}
+          onSearchChange={onSearchChange}
+        />
+        <CountChips id="express-chips-type" label="Type" chips={chips.types} search={search} onSearchChange={onSearchChange} />
         <p className="text-[11px] text-muted-foreground">
           {status === 'failed'
             ? 'The United Express list could not be loaded — showing only the Express aircraft on the Starlink roster.'
@@ -184,13 +247,7 @@ export function ExpressFleetPanel({
                 rows.map((row) => (
                   <TableRow key={row.r}>
                     <TableCell className="sticky left-0 z-[1] bg-background font-mono">
-                      <button
-                        type="button"
-                        onClick={() => onOpenAircraft(row.r)}
-                        className="min-h-11 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-fine:md:min-h-0"
-                      >
-                        {row.r}
-                      </button>
+                      <TailLink reg={row.r} hit="inline" />
                     </TableCell>
                     <TableCell>{row.t || <Unknown label="Type not known" />}</TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
@@ -214,7 +271,13 @@ export function ExpressFleetPanel({
                         {row.c || <Unknown label="Cabin not verified for this type and operator" />}
                       </TableCell>
                     ) : null}
-                    <TableCell className="font-mono text-xs">{row.lf || <Unknown label="Not seen on a United flight yet" />}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {row.lf ? (
+                        <FlightLink ident={row.lf} tone="quiet" hit="inline" />
+                      ) : (
+                        <Unknown label="Not seen on a United flight yet" />
+                      )}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums">
                       {row.ls ? (
                         <time dateTime={row.ls} title={expressDateLabel(row.ls)}>

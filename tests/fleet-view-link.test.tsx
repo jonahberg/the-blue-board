@@ -37,6 +37,10 @@ vi.mock('../src/app/state/feed', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/app/state/feed')>()),
   useFeed: () => ({ flights: [], lastGoodTs: null }) as unknown as FeedValue,
 }));
+// The tab's names are in-place links (DashLink → useFollowDeepLink), which need the Schedule store
+// and FollowProvider; these tests drive the Fleet link through the UI store, so no link is followed.
+// The links themselves are tested with the real providers in tests/fleet-tab-links.test.tsx.
+vi.mock('../src/app/state/follow-link', () => ({ useFollowDeepLink: () => () => {} }));
 
 // 6 A319s and 2 737 MAX 9s, the MAX 9s on Starlink.
 const FLEET_DB = [
@@ -792,6 +796,89 @@ describe('the cold load\'s Fleet address is the one the page was opened on', () 
 
     expect(rows()).toHaveLength(8);
     expect(typeSelect().textContent).toContain('All Types');
+  });
+
+  it('a followed link applies once too: a remount does not snap the filters back, or scroll', async () => {
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    // Followed from another tab (the Starlink tab's "A319"), applied, then taken off by hand.
+    follow({ filter: 'A319', view: null });
+    expect(rows()).toHaveLength(6);
+    await nextFrame();
+    fireEvent.click(typeCard('A319'));
+    expect(rows()).toHaveLength(8);
+    scrolls.length = 0;
+
+    // The tab throws and the reader presses "Try again": the view mounts afresh, the link still
+    // in the store.
+    view.rerender(tree('again'));
+    await nextFrame();
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+    expect(scrolls).toEqual([]);
+  });
+
+  it.each([
+    { landsAt: 12_000, rows: 6, type: 'A319', result: 'applied: the remount at 5 s waits until 15 s' },
+    { landsAt: 16_000, rows: 8, type: 'All Types', result: 'dropped: past the remount\'s 10 s too' },
+  ])('a link still waiting when the view remounts waits on the new mount\'s budget; data at $landsAt ms is $result', ({ landsAt, rows: expected, type }) => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    ctl.fleet = fleetValue([], true);
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    follow({ filter: 'A319', view: null });
+    // The tab throws before the database lands; "Try again" at 5 s mounts it afresh.
+    clock.mockReturnValue(start + 5_000);
+    view.rerender(tree('again'));
+
+    clock.mockReturnValue(start + landsAt);
+    ctl.fleet = fleetValue(FLEET_DB);
+    view.rerender(tree('again'));
+
+    expect(rows()).toHaveLength(expected);
+    expect(typeSelect().textContent).toContain(type);
+    clock.mockRestore();
+  });
+
+  it('a followed link dropped for arriving late stays dropped after a remount', async () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    ctl.fleet = fleetValue([], true);
+    const tree = (key: string) => (
+      <UiProvider>
+        <FleetView key={key} />
+        <Probe />
+      </UiProvider>
+    );
+    const view = render(tree('first'));
+    follow({ filter: 'A319', view: null });
+    // The database lands past the link's 10 s: dropped.
+    clock.mockReturnValue(start + 10_001);
+    ctl.fleet = fleetValue(FLEET_DB);
+    view.rerender(tree('first'));
+    expect(rows()).toHaveLength(8);
+    scrolls.length = 0;
+
+    // A remount must not give it a fresh 10 s from the new mount.
+    view.rerender(tree('again'));
+    await nextFrame();
+
+    expect(rows()).toHaveLength(8);
+    expect(typeSelect().textContent).toContain('All Types');
+    expect(scrolls).toEqual([]);
+    clock.mockRestore();
   });
 
   it('still applies when a followed link has since taken it out of the address bar', () => {

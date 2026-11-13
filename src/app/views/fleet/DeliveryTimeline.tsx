@@ -11,9 +11,16 @@
  * What the chart is FOR: the shape says the fleet's age at a glance. The 1997-2002 hump is
  * the 737NG and A320 order book; the flat 2009-2012 stretch is the recession; the wall on the
  * right is the MAX and the A321neo arriving at once.
+ *
+ * Links everywhere (Nov 12 2026): the newest and oldest tails link to their aircraft dialog,
+ * quiet (the stats line is about the fleet, not either tail) and 44 px tall on touch inside the
+ * line, so when the line wraps on a phone the two targets cannot overlap. The average is body
+ * colour; it was link colour with nothing to click. The chart is one `role="img"` and its printed
+ * counts stay as drawn; the legend and the decade buckets have no home.
  */
 
 import { Skeleton } from '@/components/ui/skeleton';
+import { TailLink } from '../../features/EntityLinks';
 
 export type TimelineYear = {
   year: number;
@@ -137,12 +144,12 @@ export function DeliveryTimeline({
       </ul>
 
       <p className="mt-3 text-[11px] text-muted-foreground">
-        Average: <strong className="font-medium text-primary">{stats.avgAge}y</strong>
+        Average: <strong className="font-medium text-foreground">{stats.avgAge}y</strong>
         {stats.newest ? (
           <>
             {' · '}Newest:{' '}
             <strong className="font-medium text-foreground">
-              {stats.newest.r} ({stats.newest.d})
+              <TailLink reg={stats.newest.r ?? ''} tone="quiet" hit="inline" /> ({stats.newest.d})
             </strong>
           </>
         ) : null}
@@ -150,7 +157,7 @@ export function DeliveryTimeline({
           <>
             {' · '}Oldest:{' '}
             <strong className="font-medium text-foreground">
-              {stats.oldest.r} ({stats.oldest.d})
+              <TailLink reg={stats.oldest.r ?? ''} tone="quiet" hit="inline" /> ({stats.oldest.d})
             </strong>
           </>
         ) : null}
