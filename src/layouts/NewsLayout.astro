@@ -82,8 +82,10 @@ const newsArticleSchema = {
         narrower reading column inside it. */}
     <article class="max-w-3xl">
       <header class="mt-6 border-b border-border pb-5">
+        {/* The category is a label, not a link (news categories have no page): body colour,
+            set apart from the muted date by weight, since link colour means "link". */}
         <p class="font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
-          <span class="font-semibold text-primary">{article.category}</span> &middot;
+          <span class="font-semibold text-foreground">{article.category}</span> &middot;
           <time datetime={article.date}>{displayDate}</time>
           {
             displayUpdated && (

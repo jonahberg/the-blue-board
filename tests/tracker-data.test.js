@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
+import { JSDOM } from 'jsdom';
 import { describe, it, expect } from 'vitest';
 
 import { fleetTypes } from '../src/data/fleet/index.js';
@@ -184,7 +185,11 @@ describe('united-hubs "Club math" quotes the Dulles club entry', () => {
     const html = readFileSync(dist, 'utf8');
     const box = html.slice(html.indexOf('id="club-math"'), html.indexOf('</section>', html.indexOf('id="club-math"'))).replace(/\s+/g, ' ');
     expect(box).toMatch(new RegExp(`>\\s*${stated}\\+\\s*<`));
-    expect(box).toContain(`roughly two full 787-10s (${d7810} seats each)`);
+    // "787-10s" is a link to the 787-10's fleet page and the club names to their cards (links
+    // everywhere, Nov 12 2026), so the sentence is read as the page's text.
+    const text = new JSDOM(`<div>${box}</div>`).window.document.body.textContent.replace(/\s+/g, ' ');
+    expect(text).toContain(`roughly two full 787-10s (${d7810} seats each)`);
+    expect(box).toMatch(/<a\b[^>]*href="\/fleet\/787-10-dreamliner"[^>]*>787-10s<\/a>/);
     expect(box).not.toMatch(/\b650\b/);
   });
 });

@@ -4,7 +4,8 @@
  * the flight is in the air, and a timeline of only the steps the data supports.
  *
  * Filled by src/scripts/flight-page.ts from `flightPageView()` (src/lib/flight-page-view.js);
- * hidden until then. The track's position is either the live feed's (distance flown) or, without a
+ * hidden until then. An airport code that is one of the nine hubs is a quiet link to its hub page
+ * (44 px on touch through an `after:` box); any other airport is text. The track's position is either the live feed's (distance flown) or, without a
  * live position, the clock's (time elapsed of the expected block) — and the note under it says
  * which, so an estimate never reads as a measurement.
  *

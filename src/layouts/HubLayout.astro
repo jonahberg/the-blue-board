@@ -11,8 +11,10 @@
  *
  * The board is `HubBoard` (src/components/site/), filled by
  * `src/scripts/hub-board.ts` from the stored schedule snapshot. The prose's
- * emoji button row becomes plain links at render time (`demoteHubCtaRow`); the
- * data files are not edited.
+ * emoji button row becomes plain links at render time (`demoteHubCtaRow`), the
+ * hub codes in "Key Routes" link to their hub pages (`linkKeyRoutesHubs`), and a
+ * compact page's live-map link comes back beside the board (`liveHref`); the data
+ * files are not edited.
  */
 import { hubOrder, hubNavLabels } from '../data/hubs/index.js';
 import { hubSeo } from '../lib/page-seo.js';
@@ -23,7 +25,7 @@ import HubBoard from '../components/site/HubBoard.astro';
 import JumpNav from '../components/site/JumpNav.astro';
 import PillNav from '../components/site/PillNav.astro';
 import SupportNote from '../components/site/SupportNote.astro';
-import { demoteHubCtaRow, splitCompactLiveBar } from '../lib/hub-content.js';
+import { demoteHubCtaRow, linkKeyRoutesHubs, splitCompactLiveBar } from '../lib/hub-content.js';
 
 const { data } = Astro.props;
 const iata: string = data.iata;
@@ -33,7 +35,9 @@ const variant: string = data.variant;
 const airport = data.airportSchema;
 // P2-B item 5: per-hub OG image (scripts/generate-og.py) instead of the shared og-image.png
 const ogImage = `https://theblueboard.co/og/og-hub-${iataLower}.jpg`;
-const contentHtml: string = demoteHubCtaRow(data.contentHtml);
+// The Dive Deep buttons become plain links, and the hub codes in "Key Routes" link to their hub
+// pages (this page's own code stays text): src/lib/hub-content.js.
+const contentHtml: string = linkKeyRoutesHubs(demoteHubCtaRow(data.contentHtml), iata);
 const compactSplit = variant === 'compact' ? splitCompactLiveBar(contentHtml) : null;
 
 // Build Airport schema with optional icaoCode
@@ -125,7 +129,7 @@ const hubNavItems = hubOrder.map((h) => ({
           <div class="bb-content mt-6">
             <Fragment set:html={compactSplit.before} />
           </div>
-          <HubBoard iata={iata} metaHtml={compactSplit.metaHtml} />
+          <HubBoard iata={iata} metaHtml={compactSplit.metaHtml} liveHref={compactSplit.liveHref} />
           <div class="bb-content mt-6">
             <Fragment set:html={compactSplit.after} />
           </div>

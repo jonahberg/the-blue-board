@@ -8,9 +8,24 @@
 //   - a step, a time or a number is shown only when the data has it (no invented timeline);
 //   - an estimate is labelled as one, and a position from the clock says it is from the clock.
 //
+// Links (links everywhere, Nov 2026) are decided here too, by the site's per-kind rules, and the
+// script only paints them:
+//   - a route end that is one of the nine hubs → its hub page (`hubLink(code, 'site')`), in the
+//     trip block, the 30-day card's route and the aircraft's recent legs; any other airport is text;
+//   - the tail → the dashboard's aircraft dialog (`tailLink`), when the fleet database or the
+//     Starlink roster knows it (`LINKED_TAIL_SOURCES`); a tail only the schedule named is text;
+//   - the type → its fleet page, by the fleet database's type for the tail (`aircraft.typeCode`),
+//     never by the printed words or a model code (B739 is two types); Express types are text;
+//   - Starlink Wi-Fi → the dashboard's Starlink tab.
+// This page's own flight number is never a link to itself (the script, through flight-link.ts).
+//
 // No DOM, no clock (nowSec is a parameter), so the page and the tests see the same thing.
 
 import { AIRPORT_COORDS, cityFor } from './airports.js';
+import { fleetTypeLink } from './fleet-type-link.js';
+import { STARLINK_TAB_HREF } from './starlink-link.js';
+import { hubLink } from './hub-link.js';
+import { tailLink } from './tail-link.js';
 import { CABIN_LABELS, HISTORY_DAY_KINDS, historyWords, inboundLeg, shortDate, summarizeHistory, tailLegsView } from './flight-page.js';
 import { dayPhrase, flightLegState, flightVerdict, formatLocalTime, minutesPhrase, placeName } from './flight-verdict.js';
 import { haversineNm } from './geo.js';
@@ -48,6 +63,34 @@ export const STEP_CLASSES = Object.freeze({
 const PREDICTABLE_STATES = new Set(['scheduled', 'delayed', 'boarding']);
 
 const REAL = new Set(['gate', 'actual', 'runway']);
+
+/**
+ * Where the aircraft card's tail links come from: `aircraftFacts`' `source`. The spec links a tail
+ * the fleet database ('fleet') or the Starlink roster ('roster') knows; one the schedule alone
+ * named ('schedule') is text.
+ */
+export const LINKED_TAIL_SOURCES = Object.freeze(['fleet', 'roster']);
+
+/** A route end: its code, and its hub page when it is a hub (else null, printed as text). */
+export function airportEnd(code) {
+  const c = String(code || '').toUpperCase();
+  return { code: c, href: hubLink(c, 'site')?.href ?? null };
+}
+
+/**
+ * Where the aircraft card's names link, or null where they print as text.
+ *
+ * @param {any} aircraft  the payload's `aircraft` (src/lib/flight-page-data.js aircraftFacts).
+ * @returns {{reg: string|null, type: string|null, wifi: string|null}}
+ */
+export function aircraftLinks(aircraft) {
+  if (!aircraft) return { reg: null, type: null, wifi: null };
+  return {
+    reg: LINKED_TAIL_SOURCES.includes(aircraft.source) ? tailLink(aircraft.reg)?.href ?? null : null,
+    type: fleetTypeLink(aircraft.typeCode, 'site')?.href ?? null,
+    wifi: aircraft.starlink ? STARLINK_TAB_HREF : null,
+  };
+}
 
 /** "Boeing 767-300ER" / "Airbus A321neo" / the type as given. */
 export function aircraftTypeName(type) {
@@ -251,6 +294,7 @@ export function flightHistoryView(history) {
   return {
     title: span >= 30 ? 'This flight, last 30 days' : span > 0 ? `This flight, last ${span} day${span === 1 ? '' : 's'}` : 'This flight, last 30 days',
     routeLabel: `${history.origin} → ${history.dest}`,
+    route: { origin: airportEnd(history.origin), dest: airportEnd(history.dest) },
     stripLabel: span ? `${shortDate(summary.start)} to ${shortDate(summary.end)}, one square per day, oldest first` : '',
     days,
     key,
@@ -267,27 +311,41 @@ export function flightHistoryView(history) {
  */
 export function aircraftView(aircraft, tail, current) {
   if (!aircraft) {
-    return { reg: '', summary: 'Our schedule source has not named the aircraft for this flight yet.', wifi: null, cabins: [], cabinLine: '', legs: [], note: 'Tails are usually assigned a day or two out; the live feed adds one once the aircraft is seen.' };
+    const summary = 'Our schedule source has not named the aircraft for this flight yet.';
+    return { reg: '', regHref: null, summary, summaryParts: [{ text: summary, href: null }], wifi: null, cabins: [], cabinLine: '', legs: [], note: 'Tails are usually assigned a day or two out; the live feed adds one once the aircraft is seen.' };
   }
+  const links = aircraftLinks(aircraft);
   const type = aircraftTypeName(aircraft.type);
-  const summary = [type, aircraft.total ? `${aircraft.total} seats` : '', aircraft.express && aircraft.operator ? `United Express, flown by ${aircraft.operator}` : '']
-    .filter(Boolean)
-    .join(' · ') || 'Type not known';
+  const rest = [aircraft.total ? `${aircraft.total} seats` : '', aircraft.express && aircraft.operator ? `United Express, flown by ${aircraft.operator}` : '']
+    .filter(Boolean);
+  const summary = [type, ...rest].join(' · ') || 'Type not known';
+  // The type is its own part so it can link to its fleet page; the seats and operator are text.
+  const summaryParts = type
+    ? [{ text: type, href: links.type }, ...(rest.length ? [{ text: ` · ${rest.join(' · ')}`, href: null }] : [])]
+    : [{ text: summary, href: null }];
   let wifi = null;
-  if (aircraft.starlink) wifi = { text: 'Starlink Wi-Fi', starlink: true };
-  else if (aircraft.wifi === 'NO' || aircraft.wifi === 'No') wifi = { text: 'No Wi-Fi', starlink: false };
-  else if (aircraft.wifi) wifi = { text: `${aircraft.wifi} Wi-Fi, not Starlink`, starlink: false };
+  if (aircraft.starlink) wifi = { text: 'Starlink Wi-Fi', starlink: true, href: links.wifi };
+  else if (aircraft.wifi === 'NO' || aircraft.wifi === 'No') wifi = { text: 'No Wi-Fi', starlink: false, href: null };
+  else if (aircraft.wifi) wifi = { text: `${aircraft.wifi} Wi-Fi, not Starlink`, starlink: false, href: null };
   const seats = aircraft.seats && typeof aircraft.seats === 'object' ? aircraft.seats : {};
   const cabins = Object.entries(seats)
     .filter(([, n]) => Number(n) > 0)
     .map(([code, n]) => ({ code, count: Number(n), label: CABIN_LABELS[code] || code, color: SEAT_BAR_COLORS[code] || 'rgba(100,116,139,.5)' }));
-  const legs = tail?.rows?.length ? tailLegsView(tail.rows, current) : [];
+  const legs = (tail?.rows?.length ? tailLegsView(tail.rows, current) : []).map((leg) => ({
+    ...leg,
+    // Flight, day, origin and destination: the same on every refresh (times arrive later; one
+    // number can fly two legs in a day). A refresh finds the reader's leg again by it.
+    key: `${leg.flight}|${leg.date}|${leg.origin}|${leg.dest}`,
+    route: { origin: airportEnd(leg.origin), dest: airportEnd(leg.dest) },
+  }));
   const notes = [];
   if (aircraft.delivered) notes.push(`Delivered ${aircraft.delivered}`);
   if (aircraft.ife) notes.push(`seatback: ${aircraft.ife}`);
   return {
     reg: aircraft.reg || '',
+    regHref: links.reg,
     summary,
+    summaryParts,
     wifi,
     cabins,
     cabinLine: cabins.map((c) => `${c.count} ${c.label}`).join(' · '),
@@ -320,6 +378,8 @@ export function flightPageView(payload, nowSec, { live = null, stableDays = fals
       status: status === 'unavailable' ? 'unavailable' : 'not-found',
       ident,
       routeLine: payload?.lastSeen ? `${payload.lastSeen.origin} → ${payload.lastSeen.dest}` : '',
+      // The last route flown, in codes: its hub ends link. (A flight we have prints city words.)
+      route: payload?.lastSeen ? { origin: airportEnd(payload.lastSeen.origin), dest: airportEnd(payload.lastSeen.dest) } : null,
       verdict: { ...verdict, parts: [{ text, tone: null }], text },
       stamp: '',
       note: status === 'unavailable'
@@ -358,13 +418,14 @@ export function flightPageView(payload, nowSec, { live = null, stableDays = fals
     status: 'ok',
     ident,
     routeLine: routeLine(row),
+    route: null,
     verdict,
     state: leg.state,
     stamp,
     note: '',
     trip: {
-      origin: { code: oCode, city: placeName(row.airport?.origin), time: sideTime(leg.depEv, Number(sched.departure) || 0, oTz, true) },
-      dest: { code: dCode, city: placeName(row.airport?.destination), time: sideTime(leg.arrEv, Number(sched.arrival) || 0, dTz, false) },
+      origin: { code: oCode, href: airportEnd(oCode).href, city: placeName(row.airport?.origin), time: sideTime(leg.depEv, Number(sched.departure) || 0, oTz, true) },
+      dest: { code: dCode, href: airportEnd(dCode).href, city: placeName(row.airport?.destination), time: sideTime(leg.arrEv, Number(sched.arrival) || 0, dTz, false) },
       progress: progressView(leg, row, nowSec, live),
       steps: timelineSteps(leg, row, nowSec, { inbound, live }),
     },

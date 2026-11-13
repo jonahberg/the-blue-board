@@ -22,6 +22,9 @@ import fleetDb from '../../public/data/fleet.json';
 import { STARLINK_ROSTER_AS_OF, starlinkForType } from '../data/starlink-facts.js';
 import { FLEET_DB_AS_OF, formatFleetAsOf, normalizeWifi } from '../lib/fleet-utils.js';
 import { fleetSeo } from '../lib/page-seo.js';
+import { fleetLiveListHref } from '../lib/fleet-live.js';
+import { fleetTypeLink } from '../lib/fleet-type-link.js';
+import { isStarlinkWifi, registryRowLinks } from '../lib/fleet-registry-links.js';
 import { registryStarlinkNote } from '../lib/starlink-facts.js';
 
 const { data } = Astro.props;
@@ -37,7 +40,6 @@ const typeAircraft = (fleetDb as any[])
 // The registry's WiFi column is the fleet database; the page's Starlink figure ("48 of the 79 had
 // it as of 11 Nov") is the Starlink roster joined to it. Where the two disagree, the table says
 // both, with their days (src/lib/starlink-facts.js registryStarlinkNote) — on every type page.
-const isStarlinkWifi = (w: unknown) => String(w ?? '').toLowerCase().includes('starlink');
 const registryNote = registryStarlinkNote({
   marked: typeAircraft.filter((a: any) => isStarlinkWifi(a.w)).length,
   roster: starlinkForType(typeCode).equipped,
@@ -102,6 +104,17 @@ const fleetNavItems = fleetOrder.map((t: string) => ({
   current: t === slug,
 }));
 
+// Registry links (src/lib/fleet-registry-links.js) are 44 px tall on touch and relax only for a
+// mouse at md+ (DESIGN.md touch rule), reaching into the cell's padding (-my-1.5) so a row is 44 px
+// rather than 56, and a mouse keeps the table exactly as dense as before: the /fleet index's
+// `touchRowLink`. For a mouse at md+ the link is an inline block with 4 px above and below
+// cancelled by a −4 px margin: a 27.5 px target (DESIGN.md: a link in a compact list a mouse uses
+// is at least 24 px) in an unchanged 32.5 px row. The tail is the row's one link-coloured link
+// (the row is about it); "Starlink" keeps the content pages' quiet underlined look from
+// `.bb-content a`, in Starlink violet.
+const touchRowLink = 'inline-flex min-h-11 items-start -my-1.5 pt-1.5 pointer-fine:md:inline-block pointer-fine:md:-my-1 pointer-fine:md:min-h-0 pointer-fine:md:pt-1 pointer-fine:md:pb-1';
+const tailLinkClass = `${touchRowLink} font-bold text-primary no-underline underline-offset-2 hover:underline hover:decoration-current`;
+
 /** Registry status tone. Always rendered next to the status text, never alone. */
 function statusClass(status: string | undefined): string {
   const value = (status || '').toLowerCase();
@@ -129,6 +142,8 @@ function statusClass(status: string | undefined): string {
     <Breadcrumbs items={[{ label: 'Fleet', href: '/fleet' }, { label: data.breadcrumbName }]} />
 
     <header class="mt-6 border-b border-border pb-5">
+      {/* The type code in the h1 (`.type-badge`, mono) names this page, so it is not a link
+          (self-links are plain text) and content.css gives it body colour. */}
       <h1 class="bb-content text-2xl font-bold tracking-tight text-balance text-foreground">
         <Fragment set:html={data.headerTitle.replace(/ — /g, "&nbsp;— ")} />
       </h1>
@@ -136,14 +151,20 @@ function statusClass(status: string | undefined): string {
       <SupportNote variant="inline" placement="fleet-top" />
     </header>
 
+    {/* "Aircraft" counts the type, and the dashboard's Fleet tab filtered to the type lists every
+        one of them, so that tile links there. The other three count nothing a page lists. */}
     <div class="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-      <StatTile label="Aircraft" value={data.count} />
+      <StatTile label="Aircraft" value={data.count} href={fleetTypeLink(typeCode, 'dashboard')?.href} />
       <StatTile label="Total Seats" value={data.seatConfig.total} />
       <StatTile label="Deliveries" value={data.deliveryRange} />
       <StatTile label="Body Type" value={data.bodyType === 'widebody' ? 'Wide' : 'Narrow'} />
     </div>
 
-    <FleetLive displayName={data.displayName} tails={typeAircraft.map((a: any) => String(a.r || '')).filter(Boolean)} />
+    <FleetLive
+      displayName={data.displayName}
+      tails={typeAircraft.map((a: any) => String(a.r || '')).filter(Boolean)}
+      listHref={fleetLiveListHref(typeCode)}
+    />
 
     <div class="mt-6 text-center">
       <a
@@ -213,14 +234,29 @@ function statusClass(status: string | undefined): string {
             {
               typeAircraft.map((ac: any) => {
                 const isStarlink = isStarlinkWifi(ac.w);
+                const links = registryRowLinks(ac);
                 return (
                   <tr>
-                    <td class="font-mono font-bold text-foreground">{ac.r}</td>
+                    <td class="font-mono font-bold text-foreground">
+                      {links.reg ? <a class={tailLinkClass} href={links.reg}>{ac.r}</a> : ac.r}
+                    </td>
                     <td class="font-mono">{ac.a || '—'}</td>
                     <td class="font-mono whitespace-nowrap">{ac.c || '—'}</td>
                     {/* The database's raw codes are inconsistent ('Satl Ku' / 'Satl KU'); the
                         dashboard's display names are not (F78). */}
-                    <td>{isStarlink ? <span class="starlink-on">{ac.w}</span> : ac.w ? normalizeWifi(ac.w) : '—'}</td>
+                    <td>
+                      {isStarlink ? (
+                        links.wifi ? (
+                          <a class={touchRowLink} href={links.wifi}><span class="starlink-on">{ac.w}</span></a>
+                        ) : (
+                          <span class="starlink-on">{ac.w}</span>
+                        )
+                      ) : ac.w ? (
+                        normalizeWifi(ac.w)
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>{ac.i || '—'}</td>
                     <td>{ac.p || '—'}</td>
                     <td class="font-mono">{ac.d || '—'}</td>

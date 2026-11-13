@@ -12,6 +12,7 @@
 import { firstFutureIndex } from './board-now.js';
 import { dataAgeSeverity, formatDataAge } from './data-age.js';
 import { delayColorVar } from './delay-format.js';
+import { hubLink } from './hub-link.js';
 import { departureEffectiveTime, HUB_BOARD_DIR, HUB_BOARD_VISIBLE_ROWS } from './hub-board.js';
 import { phoneStatusLabel, phoneTimeChange } from './schedule-phone-row.js';
 import { hubTzAbbrev } from './schedule-load.js';
@@ -121,6 +122,8 @@ export function hubBoardTruth(payload) {
  * @property {string} ident  as printed (provider letter suffix stripped).
  * @property {string} dest   the far end: an IATA code, or the airport's name when there is none.
  * @property {string} destName  the airport's short name, '' when `dest` already is the name.
+ * @property {string|null} destHref  the far end's hub page (`/hubs/den`) when it is one of the nine
+ *   hubs and not this board's own hub; null for any other airport (no page) and for a name.
  * @property {string} gate   "T1 · C18" / "T1" / "Gate C18", '' when unknown.
  * @property {{label: string, note: string, cls: string, pillClass: string, live: boolean, asOf: boolean}} status
  * @property {{glyph: string, sr: string, value: string, title: string, toneClass: string, runwayNote: string}|null} delay
@@ -160,6 +163,9 @@ export function hubBoardRows(payload, nowSec, limit = HUB_BOARD_VISIBLE_ROWS) {
     // routeLine is "ORD → LGA"; the far end is a code, or the airport's name when the provider
     // sent no code (routeCell), in which case routeSub is empty rather than a repeat of the name.
     const dest = row.routeLine.split(' → ').pop() || '—';
+    // Links everywhere (Nov 12 2026): on a content page a hub code goes to its hub page
+    // (`hubLink(code, 'site')`); every other airport, and the board's own hub, stay text.
+    const destLink = dest.trim().toUpperCase() === hub.trim().toUpperCase() ? null : hubLink(dest, 'site');
 
     // The one line under the scheduled time: a row from tomorrow's board says which day first (its
     // "06:10" is not today's), else the changed time, else a carried-over date.
@@ -191,6 +197,7 @@ export function hubBoardRows(payload, nowSec, limit = HUB_BOARD_VISIBLE_ROWS) {
       ident: row.identDisplay,
       dest,
       destName: row.routeSub || '',
+      destHref: destLink ? destLink.href : null,
       gate: row.gate === '—' ? '' : row.gate,
       status: {
         label: label.label,
