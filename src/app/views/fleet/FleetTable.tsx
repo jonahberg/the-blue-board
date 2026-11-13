@@ -154,7 +154,11 @@ export const FleetTable = memo(function FleetTable({
                 <TableCell className="text-xs">{normalizeWifi(aircraft.w) as string}</TableCell>
                 <TableCell className="text-xs">{aircraft.i ?? ''}</TableCell>
                 <TableCell className="font-mono tabular-nums">{aircraft.d ?? ''}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{status}</TableCell>
+                {/* Free text from the fleet site ("SFO Stored 10/30/26"): its own row for the link
+                    audit, which excuses this cell and still checks the tail and type. */}
+                <TableCell data-link-row="status-note" className="text-xs text-muted-foreground">
+                  {status}
+                </TableCell>
                 <TableCell>{starlinkTails.has(aircraft.r) ? <StarlinkRowChip /> : null}</TableCell>
               </TableRow>
             );

@@ -342,7 +342,9 @@ export default function ScheduleView() {
     // column IS height-locked and the flight list takes exactly the space that is left — one
     // scroller, nothing hidden under the bottom chrome (the list keeps a 12rem floor, and the
     // tab area scrolls on a screen too short for even that).
-    <div className="flex min-h-0 flex-col gap-2 p-2 max-md:h-full md:p-3">
+    // `data-link-self`: the board's own hub prints plain in its rows (ruling 1), and the link audit
+    // reads it here (src/lib/link-guard.js).
+    <div data-link-self={hub || undefined} className="flex min-h-0 flex-col gap-2 p-2 max-md:h-full md:p-3">
       <ScheduleControls
         hub={hub}
         dir={dir}

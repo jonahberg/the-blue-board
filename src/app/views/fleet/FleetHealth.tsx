@@ -119,7 +119,8 @@ export function FleetHealth({
                 className="flex items-center gap-2 text-[11px]"
                 aria-label={`${bar.label}: ${bar.count} of ${health.total}, ${bar.pct}%`}
               >
-                <span className="flex w-32 shrink-0 items-center gap-1.5 truncate">
+                {/* A category, not a place ("Future GUM"): its own row for the link audit. */}
+                <span data-link-row="health-category" className="flex w-32 shrink-0 items-center gap-1.5 truncate">
                   <span
                     aria-hidden="true"
                     className="inline-block size-2 shrink-0 rounded-full"
