@@ -109,6 +109,30 @@ export function resolveTag(tag) {
 
 export const articles = [
   {
+    slug: 'ground-stop-radio-live-air-traffic-control',
+    title: 'Hear the Ground Stop: The Air Traffic Control Radio Tape',
+    seoTitle: 'FAA Ground Stop: Hear What Air Traffic Control Said',
+    date: '2026-11-13',
+    category: 'Operations',
+    sources: [
+      { name: 'Ground Stop Radio', url: 'https://radio.theblueboard.co/' },
+      { name: 'Enhanced Radar API', url: 'https://enhancedradar.com/api' },
+      { name: 'CNBC', url: 'https://www.cnbc.com/2026/11/13/faa-ground-stop.html' },
+      { name: 'CNN live updates', url: 'https://www.cnn.com/2026/11/13/us/live-news/flights-ground-stop-faa' },
+    ],
+    summary: 'Ground Stop Radio, a companion page we built, holds the tape of what pilots and controllers said on air traffic control radio during the FAA\'s nationwide ground stop of November 13, 2026, with audio.',
+    seoDescription: 'Read and hear what pilots and controllers said on air traffic control radio during the FAA\'s nationwide ground stop of November 13, 2026.',
+    body: `<p>The FAA stopped departures nationwide on the afternoon of Friday, November 13, 2026. According to CNN and CNBC, the FAA attributed the stop to a "temporary telecommunications outage," and CNBC reported the agency said the problem was affecting multiple air route traffic control centers. CNN reported that the FAA lifted the stop Friday evening, more than four hours after departures were halted.</p>
+
+<p><a href="https://radio.theblueboard.co/">Ground Stop Radio</a> is a companion page we built to follow the stop on the radio. While it was in effect, the page listened to air traffic control frequencies and posted what pilots and controllers said about it, minutes after they said it. That tape is still there to read, with audio of selected transmissions to listen to.</p>
+
+<p>United flights are on the tape too, in exchanges between crews and controllers on frequencies logged at hubs including San Francisco, Denver and Chicago O'Hare.</p>
+
+<p>Ground Stop Radio uses the <a href="https://enhancedradar.com/api">Enhanced Radar API</a>, which provides transcripts and audio of air traffic control radio. The transcripts are machine-generated and can contain mistakes, and the page is not an official source. For the FAA's own airport status, see <a href="https://nasstatus.faa.gov">nasstatus.faa.gov</a>.</p>`,
+    tags: ['ord', 'den', 'sfo', 'ewr'],
+    ogImage: null,
+  },
+  {
     slug: 'united-restricts-third-party-ai-agents',
     title: 'Leave the Bot at Home: United Restricts Third-Party AI Agents',
     seoTitle: 'United Restricts Third-Party AI Agents',
