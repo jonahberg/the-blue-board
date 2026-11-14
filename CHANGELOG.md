@@ -4,6 +4,13 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.2] - 2026-11-13
+
+**News: hear the ground stop on air traffic control radio.**
+
+### Added
+- **"Hear the Ground Stop: The Air Traffic Control Radio Tape"** (`/news/ground-stop-radio-live-air-traffic-control`) links to Ground Stop Radio at radio.theblueboard.co, a companion page with the tape of what pilots and controllers said on the radio during the FAA's nationwide ground stop of November 13, with audio. It is the newest story, so it leads the dashboard's news strip.
+
 ## [1.31.1] - 2026-11-13
 
 **The brief notices when far fewer flights are flying than usual.**
