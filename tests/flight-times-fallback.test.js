@@ -8,17 +8,31 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const snapshotMocks = vi.hoisted(() => ({
-  loadScheduleSnapshot: vi.fn(async () => null),
-  saveScheduleSnapshot: vi.fn(async () => {}),
-  getSupabaseAdmin: vi.fn(async () => null),
-}));
+const snapshotMocks = vi.hoisted(() => {
+  const mocks = {
+    loadScheduleSnapshot: vi.fn(async () => null),
+    saveScheduleSnapshot: vi.fn(async () => {}),
+    getSupabaseAdmin: vi.fn(async () => null),
+  };
+  // flight-times reads a day's boards in one batch (loadBoardsListingFlight); answer the batch
+  // board by board from the per-key mock each test sets up.
+  mocks.loadBoardsListingFlight = vi.fn(async (keys) => {
+    const boards = new Map();
+    for (const key of keys) {
+      const snapshot = await mocks.loadScheduleSnapshot(key);
+      if (snapshot) boards.set(key, snapshot);
+    }
+    return { boards, failed: false };
+  });
+  return mocks;
+});
 
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => snapshotMocks);
 
 import handler, { __resetFlightTimesCache } from '../api/flight-times.js';
 import { getStartOfHubDay, getHubLocalDate } from '../src/lib/hubTz.js';
 import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
+import { isHost } from './helpers/url-host.js';
 
 function createRes() {
   return {
@@ -102,7 +116,7 @@ describe('flight-times fallback chain (#1)', () => {
     const calls = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       calls.push(String(url));
-      if (String(url).includes('fr24api.flightradar24.com')) {
+      if (isHost(url, 'fr24api.flightradar24.com')) {
         return { ok: true, status: 200, json: async () => FR24_SUMMARY };
       }
       throw new Error(`unexpected fetch: ${url}`);
@@ -113,7 +127,7 @@ describe('flight-times fallback chain (#1)', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.source).toBe('fr24');
     expect(res.body.origin.iata).toBe('ORD');
-    expect(calls.some((u) => u.includes('fr24api.flightradar24.com'))).toBe(true);
+    expect(calls.some((u) => isHost(u, 'fr24api.flightradar24.com'))).toBe(true);
   });
 
   it('kill switch on (SCHEDULE_OFFICIAL_FALLBACK_ENABLED=false) → FR24 is NEVER called', async () => {
@@ -127,7 +141,7 @@ describe('flight-times fallback chain (#1)', () => {
     const res = createRes();
     await handler(createReq('UA9003'), res);
     // No snapshots either → honest all-sources-failed, but the paid API was never touched.
-    expect(calls.some((u) => u.includes('fr24api.flightradar24.com'))).toBe(false);
+    expect(calls.some((u) => isHost(u, 'fr24api.flightradar24.com'))).toBe(false);
     expect(res.statusCode).toBe(404);
     expect(res.body.success).toBe(false);
   });
@@ -202,7 +216,7 @@ describe('flight-times fallback chain (#1)', () => {
   it('FR24 tier returns registration (tail) distinct from the aircraft type', async () => {
     process.env.FR24_API_TOKEN = 'test-token';
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('fr24api.flightradar24.com')) {
+      if (isHost(url, 'fr24api.flightradar24.com')) {
         return { ok: true, status: 200, json: async () => FR24_SUMMARY };
       }
       throw new Error(`unexpected fetch: ${url}`);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_WATCHED, readWatched, writeWatched, isSignificantStatusChange, flightTimesCacheTtl, applyWatchChanges, watchedFlightLanded } from '../src/lib/watch-utils.js';
+import { MAX_WATCHED, readWatched, writeWatched, isSignificantStatusChange, flightTimesCacheTtl, flightTimesErrorText, applyWatchChanges, watchedFlightLanded } from '../src/lib/watch-utils.js';
 import { classifySchedStatus } from '../src/lib/schedule-status.js';
 
 function fakeStorage(initial = {}) {
@@ -294,5 +294,22 @@ describe('applyWatchChanges', () => {
     const before = list();
     expect(applyWatchChanges(before, null, 999)).toBe(before);
     expect(applyWatchChanges(before, [null, undefined, {}], 999)).toBe(before);
+  });
+});
+
+describe('flightTimesErrorText (Nov 2026)', () => {
+  it('says "no schedule data" only when the boards have no such flight', () => {
+    expect(flightTimesErrorText(404)).toBe('No schedule data for this flight today.');
+  });
+
+  it('says the boards were slow, not that the flight is missing, on a 503', () => {
+    expect(flightTimesErrorText(503)).toBe('Flight times are taking too long to load. Try again in a minute.');
+  });
+
+  it('never shows a status code or a URL', () => {
+    for (const status of [500, 502, 429, null, undefined]) {
+      const text = flightTimesErrorText(status);
+      expect(text).not.toMatch(/HTTP|\/api\/|\d{3}/);
+    }
   });
 });
