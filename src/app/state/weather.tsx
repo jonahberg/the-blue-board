@@ -24,7 +24,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 
 import { getMetarStationForIata } from '@/lib/airport-metadata.js';
-import { currentFaaPicture, FAA_STALE_AFTER_MS, faaUnknownSince } from '@/lib/faa-freshness.js';
+import { currentFaaPicture, FAA_STALE_AFTER_MS, faaUnknownSince, faaUnknownSinceWithoutAnswer } from '@/lib/faa-freshness.js';
 import { hasRenderableMetarData } from '@/lib/metar-explain.js';
 import {
   collectMetarStations,
@@ -266,7 +266,10 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
             faaAirports,
             faaAsOf,
             faaStale: picture.stale,
-            faaUnknownSince: faaUnknownSince(prev.faaUnknownSince, picture.stale, faaAsOf),
+            faaUnknownSince:
+              faaAsOf === null
+                ? faaUnknownSinceWithoutAnswer(prev.faaUnknownSince, faaResult.status === 'rejected', now)
+                : faaUnknownSince(prev.faaUnknownSince, picture.stale, faaAsOf),
             faaKey: picture.key,
             nas: nasResult.status === 'fulfilled' ? nasResult.value : prev.nas,
             nasAsOf,
