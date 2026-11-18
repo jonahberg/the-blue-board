@@ -763,6 +763,21 @@ describe('verifyBrief: a lighter schedule', () => {
     }
   });
 
+  it('at watch with a lighter schedule, "Far fewer" overstates it: the headline is replaced', () => {
+    // 48% fewer than usual on a day 30% lighter: 35% short of the expected count, a watch.
+    const stop = JSON.parse(readFileSync(new URL('./fixtures/brief/nationwide-stop-2026-11-13.json', import.meta.url), 'utf8'));
+    const watchFacts = buildBriefFacts({ ...stop.sources, air: { airborne: 338, starlink: null }, airSchedule: { today: 490, prior: Array(7).fill(700) } }, { nowMs: Date.parse(stop.nowIso) }).facts;
+    const f = watchFacts.find((x) => x.id === 'air.normal');
+    expect(f).toMatchObject({ toneFloor: 'watch', lighterSchedule: true });
+    const headline = 'Far fewer United flights are in the air than usual right now.';
+    const out = verifyBrief(brief([item(f.statement, ['air.normal'])], { tone: 'watch', headline }), watchFacts);
+    expect(out.report.headline).toMatchObject({ status: 'replaced', reasons: ['headline:far_fewer_with_lighter_schedule'] });
+    expect(out.brief.headline).not.toMatch(/far fewer/i);
+    // "Fewer" without "far" stands.
+    const plain = verifyBrief(brief([item(f.statement, ['air.normal'])], { tone: 'watch', headline: 'Fewer United flights than usual are in the air right now.' }), watchFacts);
+    expect(plain.report.headline.status).toBe('kept');
+  });
+
   it('the schedule as the reason needs the fact that measured it', () => {
     const own = item('Fewer flights are flying than usual, in line with a lighter schedule today.', ['air.normal']);
     const borrowed = item('The 405 flights in the air reflect a lighter schedule today.', ['air.total']);

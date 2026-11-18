@@ -12,7 +12,7 @@
 -- window, today and at the same clock time on each of the previous seven days (v1.31.3). It runs
 -- only when far fewer flights are in the air than usual (25% or more fewer), eight count-only
 -- requests in parallel under a 4 s limit. Each count today is a lossy BRIN scan of three or four
--- service days: about 0.55 to 0.6 s and ~41k rows read (EXPLAIN ANALYZE, Nov 18 2026, ~70k rows in
+-- service days: about 0.55 to 0.6 s and ~41k rows read (EXPLAIN ANALYZE, Nov 18 2026, 64,190 rows in
 -- the table). The table grows about 2,800 departure rows a day, and the BRIN ranges are loose
 -- (rows for a day are written a day ahead and updated in place), so each count will slow as it
 -- grows. With this index a count reads only the ~700 rows in its window. A count that runs past the

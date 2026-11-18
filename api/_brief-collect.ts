@@ -129,8 +129,9 @@ export async function loadAirborneNormal(nowMs: number, days = 7): Promise<{ med
 const FLIGHT_HISTORY_TABLE = 'flight_history';
 /**
  * The whole schedule read's time limit: all eight counts run in parallel under it. One count takes
- * about 0.6 s on the Nov 2026 table (~70k rows, a lossy BRIN scan of three or four days); a count
- * that runs out of time is a failed count, and a failed today count is "unavailable" (unscaled).
+ * about 0.6 s on the Nov 2026 table (64,190 rows on Nov 18; a lossy BRIN scan of three or four
+ * days). A count that runs out of time is a failed count, and a failed today count is
+ * "unavailable" (unscaled). sql/024 (not applied) is the index that would make each count cheap.
  */
 export const BRIEF_SCHEDULE_READ_TIMEOUT_MS = 4_000;
 

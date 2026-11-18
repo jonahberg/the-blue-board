@@ -231,7 +231,8 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    today too: …" when it is not), with N and the hours in `values` and the `schedule` cause
    (`src/lib/brief-claims.js`), so only this fact can give a lighter schedule as a reason. A calm
    fact that says so is never the headline (`headline:fewer_in_line_with_schedule`) and is the calm
-   template's in-the-air line. Every read is stored in `ops_briefs.collection.airSchedule`: today's
+   template's in-the-air line; at `watch` a "Far fewer" headline is replaced
+   (`headline:far_fewer_with_lighter_schedule`), since the raw figure can pass 45% there. Every read is stored in `ops_briefs.collection.airSchedule`: today's
    count, the usual, the raw ratio, the factor applied, the expected count, or `unavailable` and its
    reason. Backtest: `scripts/backtest-airborne-schedule.sql`. At
    `disrupted` the fact is first in the list, an item citing it is moved to the front (or its
