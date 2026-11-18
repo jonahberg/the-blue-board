@@ -1,6 +1,7 @@
 // ═══ OPS BRIEF: FACTS ═══
 // Turns what the site already has (the /api/irops, /api/faa, /api/nas and /api/metar payloads, the
-// live-feed airborne and Starlink counts, and the airborne_samples history) into the list of facts
+// live-feed airborne and Starlink counts, the airborne_samples history and, when far fewer flights
+// are flying than usual, the day's scheduled departures from flight_history) into the list of facts
 // the brief is written from. Pure: payloads in, facts out. No fetches, no clock reads — `nowMs` is
 // passed in, so a fixture rebuilds the same facts forever.
 //
@@ -38,8 +39,11 @@ import { defaultSchedDayOffset } from './hubTz.js';
 import { isOnGround } from './flight-phase.js';
 import { isExpressCallsign } from './airborne-count.js';
 import { matchAircraft } from './fleet-match.js';
+import { lighterSchedulePct, lightScheduleHoliday, sameClockDaysBefore, scheduleComparison } from './brief-schedule.js';
 
 export { BRIEF_HUBS };
+// The wall-clock helper lives with the schedule comparison, which needs it too.
+export { sameClockDaysBefore };
 // The routine-closure screen is shared with the hub strip; it lives in ops-health.js.
 export { isWholeAirportClosure };
 
@@ -130,6 +134,11 @@ export const BRIEF_AIRBORNE_USUAL_BAND_PCT = 10;
  * the four nights after the clocks changed on Nov 1, when "the same time yesterday" was an hour off
  * the schedule: sameClockDaysBefore removes those (that week's largest is then 22%). On the
  * afternoon of the stop the lines were crossed at 1:20 PM PT (43%) and 1:30 PM PT (48%).
+ *
+ * Since v1.31.3 the line is measured against what the day's schedule leads one to expect: the usual
+ * × min(1, scheduled ratio + 0.10) (src/lib/brief-schedule.js), so a light holiday schedule is not
+ * a shortfall. The largest ordinary shortfall since, Tue Nov 17 2026 near 10:30 PM PT, read 31%
+ * against the usual and 28% against the expected count.
  */
 export const BRIEF_AIRBORNE_WATCH_PCT = 35;
 /** ... and at this many percent fewer it is "disrupted" and leads the brief, above any one airport's program. */
@@ -154,26 +163,21 @@ export function airborneShortfallTone(airborne, median) {
   if (pct <= -BRIEF_AIRBORNE_WATCH_PCT) return 'watch';
   return 'calm';
 }
-/** How far `tz`'s wall clock is ahead of UTC at `ms`, in milliseconds (negative in the Americas). */
-function tzOffsetMs(ms, tz) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(new Date(ms));
-  const part = (type) => Number(parts.find((p) => p.type === type)?.value);
-  return Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second')) - Math.floor(ms / 1000) * 1000;
-}
 /**
- * The instant `daysBack` days earlier that shows the same wall-clock time in the US: what "the usual
- * for this time of day" is compared with. Exactly 24 hours a day except across a clock change,
- * where the schedule moves an hour against UTC (the US zones change together, so one stands for all).
- * @param {number} nowMs
- * @param {number} daysBack
- * @param {string} [tz]
- * @returns {number}
+ * A shortfall of at least this many percent is worth a line of its own (severity 20), and is when
+ * the day's schedule is read (src/lib/brief-schedule.js): the schedule can only lower a shortfall,
+ * and below this it sets no tone either way, so on almost every run nothing is read.
  */
-export function sameClockDaysBefore(nowMs, daysBack, tz = 'America/Chicago') {
-  const naive = nowMs - daysBack * 86_400_000;
-  return naive + tzOffsetMs(nowMs, tz) - tzOffsetMs(naive, tz);
+export const BRIEF_AIRBORNE_NOTABLE_PCT = 25;
+/**
+ * Whether the day's schedule is worth reading for this count: it is BRIEF_AIRBORNE_NOTABLE_PCT or
+ * more below the usual for this time of day.
+ * @param {number} airborne
+ * @param {number} median
+ */
+export function scheduleReadNeeded(airborne, median) {
+  if (!(Number.isFinite(airborne) && Number.isFinite(median)) || median <= 0) return false;
+  return Math.round(((airborne - median) / median) * 100) <= -BRIEF_AIRBORNE_NOTABLE_PCT;
 }
 /** A fact saying far fewer United flights are in the air than usual (air.normal above a calm floor). */
 export function isAirborneShortfallFact(fact) {
@@ -507,6 +511,7 @@ function hubsReporting(n, day) {
  * @property {string|null} material
  * @property {boolean} [later]  a possible program whose window opens on a later local day (plannedFact)
  * @property {boolean} [outlier]  a healthy hub's on-time fact sent because it trails the others
+ * @property {boolean} [lighterSchedule]  air.normal says the schedule is lighter than usual today
  */
 
 /**
@@ -517,6 +522,8 @@ function hubsReporting(n, day) {
  * @property {any} [metar]    /api/metar body (array) for the nine hub stations
  * @property {{airborne: number, starlink?: number|null}|null} [air]  live-feed counts
  * @property {{median: number, days: number}|null} [airNormal]  airborne_samples comparison
+ * @property {import('./brief-schedule.js').ScheduleCounts|null} [airSchedule]  flight_history
+ *   scheduled-departure counts, read only when the count is BRIEF_AIRBORNE_NOTABLE_PCT below usual
  * @property {Array<BriefFact>|null} [extraFacts]  facts built elsewhere (radio), merged as-is
  * @property {Record<string, number|null>} [asOf]  epoch ms each source's reading is from
  */
@@ -525,12 +532,14 @@ function hubsReporting(n, day) {
  * Build the brief's facts.
  * @param {BriefSources} sources
  * @param {{nowMs: number}} options
- * @returns {{facts: BriefFact[], collection: {sources: Record<string, string>, skipped: string[], hubReadings: number}}}
+ * @returns {{facts: BriefFact[], collection: {sources: Record<string, string>, skipped: string[], hubReadings: number, airSchedule?: Record<string, unknown>}}}
  */
 export function buildBriefFacts(sources, { nowMs }) {
   /** @type {BriefFact[]} */
   const facts = [];
   const skipped = [];
+  /** @type {Record<string, unknown>|null} what the schedule read gave and what it did (ops_briefs.collection) */
+  let airScheduleAudit = null;
   const asOf = sources?.asOf || {};
   const status = {
     irops: sources?.irops && typeof sources.irops === 'object' && sources.irops.hubMetrics ? 'ok' : 'missing',
@@ -1025,30 +1034,63 @@ export function buildBriefFacts(sources, { nowMs }) {
       const pct = Math.round(((airborne - median) / median) * 100);
       const usual = Math.abs(pct) <= BRIEF_AIRBORNE_USUAL_BAND_PCT;
       const comparison = usual ? 'about the usual number' : `${Math.abs(pct)}% ${pct < 0 ? 'fewer' : 'more'} than usual`;
+      // The day's schedule (src/lib/brief-schedule.js), only when the count is well below the usual.
+      // The usual is scaled by min(1, scheduled ratio + 0.10): only a schedule lighter than the
+      // ordinary spread moves it, a heavier one never does, and an unread or untrusted one is 1.
+      const schedule = scheduleReadNeeded(airborne, median) ? scheduleComparison(sources?.airSchedule) : null;
+      const factor = schedule?.status === 'ok' ? schedule.factor : 1;
+      const expected = Math.round(median * factor);
       // A large shortfall is the one sign of a network-wide halt that needs no FAA feed to carry it
-      // (BRIEF_AIRBORNE_WATCH_PCT). It says what is seen, never why: no fact here gives a cause.
-      const shortfall = airborneShortfallTone(airborne, median);
+      // (BRIEF_AIRBORNE_WATCH_PCT), measured against what the day's schedule leads one to expect. It
+      // says what is seen, never why: no fact here gives a cause beyond the schedule itself.
+      let shortfall = airborneShortfallTone(airborne, expected);
+      // On the few days United schedules far fewer flights, a schedule that cannot be read or
+      // trusted sets no tone rather than risk a false "Disrupted" (lightScheduleHoliday). On every
+      // other day it is read exactly as before.
+      const holiday = schedule && schedule.status !== 'ok' ? lightScheduleHoliday(nowMs) : null;
+      const holidayCapped = Boolean(holiday) && shortfall !== 'calm';
+      if (holidayCapped) shortfall = 'calm';
+      const lighter = lighterSchedulePct(schedule);
+      const hours = Math.round((schedule?.windowMin ?? 0) / 60);
+      const scheduleSentence = lighter === null ? '' : ` ${shortfall === 'calm' ? 'That is in line with a lighter schedule today' : 'The schedule is lighter today too'}: about ${lighter}% fewer departures were scheduled from United's hubs over the past ${numberWord(hours)} hours than usual.`;
+      if (schedule) {
+        const rawRatio = schedule.today !== null && schedule.usual ? Math.round((schedule.today / schedule.usual) * 1000) / 1000 : null;
+        airScheduleAudit = {
+          ...schedule, ratio: rawRatio, factor, airborne, usualAirborne: median, expectedAirborne: expected,
+          vsExpectedPct: expected > 0 ? Math.round(((airborne - expected) / expected) * 100) : null,
+          ...(sources?.airSchedule?.error ? { error: sources.airSchedule.error } : {}),
+          ...(holiday ? { holiday, holidayCapped } : {}),
+        };
+      }
       facts.push({
         id: 'air.normal',
         kind: 'airborne',
-        statement: `The ${airborne} United flights in the air are ${comparison} for this time of day: over the past ${days} days, the median at this hour was ${median}.`,
-        values: uniq([String(median), String(days), numberWord(days), usual ? null : `${Math.abs(pct)}%`, String(airborne)]),
+        statement: `The ${airborne} United flights in the air are ${comparison} for this time of day: over the past ${days} days, the median at this hour was ${median}.${scheduleSentence}`,
+        values: uniq([
+          String(median), String(days), numberWord(days), usual ? null : `${Math.abs(pct)}%`, String(airborne),
+          ...(lighter === null ? [] : [`${lighter}%`, String(hours), numberWord(hours), 'lighter schedule']),
+        ]),
         at: iso(atMs),
         link: { tab: 'live' },
         // Disrupted: above a hub ground stop (100), because it is the whole network. Watch: above
         // FAA departure delays (40) and the index (30), below a hub's stop or delay program.
-        severity: shortfall === 'disrupted' ? 110 : shortfall === 'watch' ? 50 : !usual && Math.abs(pct) >= 25 ? 20 : 2,
+        severity: shortfall === 'disrupted' ? 110 : shortfall === 'watch' ? 50 : !usual && Math.abs(pct) >= BRIEF_AIRBORNE_NOTABLE_PCT ? 20 : 2,
         toneFloor: shortfall,
         // While the shortfall sets the tone the brief quotes its figure first, so the key moves every
         // ten points and a brief saying "73% fewer" is rewritten before the count is far from it.
-        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}${shortfall === 'calm' ? '' : `:${shortfall}:${Math.floor(Math.abs(pct) / 10) * 10}`}`,
+        // The lighter-schedule sentence appearing or going is a change too: it says why it is calm.
+        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}${lighter === null ? '' : ':lighter'}${shortfall === 'calm' ? '' : `:${shortfall}:${Math.floor(Math.abs(pct) / 10) * 10}`}`,
+        ...(lighter === null ? {} : { lighterSchedule: true }),
       });
     }
   }
 
   for (const fact of sources?.extraFacts || []) facts.push(fact);
 
-  return { facts: orderFacts(facts), collection: { sources: status, skipped, hubReadings: Object.keys(readings).length } };
+  return {
+    facts: orderFacts(facts),
+    collection: { sources: status, skipped, hubReadings: Object.keys(readings).length, ...(airScheduleAudit ? { airSchedule: airScheduleAudit } : {}) },
+  };
 }
 
 /**

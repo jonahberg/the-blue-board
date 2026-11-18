@@ -4,6 +4,13 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.3] - 2026-11-18
+
+**A lighter holiday schedule no longer reads as far fewer flights.**
+
+### Fixed
+- **On a day United schedules fewer flights, the brief could have called it a disruption.** Since November 13 the brief reads "Watch" at 35% fewer United flights in the air than usual for the time of day and "Disrupted" at 45% fewer. Thanksgiving Day, Christmas Eve and Day, New Year's Eve and Day are scheduled light, so that count alone could have opened a holiday with "Far fewer United flights are in the air than usual right now." When far fewer flights are flying, the brief now also counts the departures scheduled from United's hubs over the past four hours against the usual for that time of day, and allows for any part of a lighter schedule beyond the ordinary day-to-day spread. A day that is simply lighter stays calm and says so: "That is in line with a lighter schedule today: about 30% fewer departures were scheduled from United's hubs over the past four hours than usual." A halt still reads as one, because a held or canceled flight is still a scheduled one: the November 13 ground stop and the morning after it read exactly as they did. If the schedule cannot be read, or the count looks incomplete, the brief works as it did before, except on those five dates, when the count in the air then sets no alarm.
+
 ## [1.31.2] - 2026-11-13
 
 **News: hear the ground stop on air traffic control radio.**

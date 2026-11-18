@@ -160,6 +160,9 @@ const CAUSES = [
   ['staffing', /\b(?:staffing|short-?staffed|understaffed)\b/gi],
   ['equipment', /\b(?:equipment|outages?|out\s+of\s+service)\b/gi],
   ['emergency', /\b(?:emergency|emergencies)\b/gi],
+  // A lighter schedule as the reason fewer flights are flying: only the in-the-air fact that
+  // measured it (air.normal, src/lib/brief-schedule.js) can carry this one.
+  ['schedule', /\b(?:(?:lighter|light|reduced|thinner|smaller)\s+schedules?|fewer\s+(?:flights|departures)\s+(?:were\s+|are\s+)?scheduled)\b/gi],
   ['weather', /\bweather\b/gi],
 ];
 /** Causes that "weather" (the umbrella word) may stand for. */

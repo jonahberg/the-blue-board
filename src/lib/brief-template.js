@@ -239,7 +239,10 @@ function pickItems(facts, limit, tone) {
   // What is in the air, and the hub-weather tally, are a calm day's background; when something is
   // wrong they are padding (the tally would repeat a program's weather), and a shorter brief is better.
   if (tone === 'calm') {
-    add(index.get('air.starlink') || index.get('air.total'));
+    // On a light-schedule day the in-the-air line is the comparison that says so: fewer flights are
+    // flying, in line with the schedule (src/lib/brief-schedule.js).
+    const lighter = index.get('air.normal');
+    add(lighter?.lighterSchedule ? lighter : index.get('air.starlink') || index.get('air.total'));
     add(index.get('wx.summary'));
   }
   return picked;

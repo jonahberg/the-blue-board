@@ -20,7 +20,7 @@ Written from 21 live facts and checked against them.
 | step | where | what |
 |---|---|---|
 | timer | `api/cron/brief.ts` (`*/10 * * * *`, maxDuration 90) | One generation serves every visitor. Nothing is generated per request. |
-| collect | `api/_brief-collect.ts` | The site's own CDN-cached endpoints and one `airborne_samples` read. See [Zero new upstream spend](#zero-new-upstream-spend). |
+| collect | `api/_brief-collect.ts` | The site's own CDN-cached endpoints and one `airborne_samples` read, plus, only when the count in the air is 25% or more below usual, eight `flight_history` counts of the day's schedule. See [Zero new upstream spend](#zero-new-upstream-spend). |
 | facts | `src/lib/brief-facts.js` | Payloads in, facts out. Pure; `nowMs` is passed in. |
 | gate | cron | Nothing is published unless **both** `/api/irops` and `/api/faa` answered **and** at least 3 hubs have an on-time figure (`BRIEF_MIN_HUB_READINGS`, counted from `collection.hubReadings`, not from the facts: on a healthy day most hubs' own facts are not sent). A calm brief written without the FAA picture, or without on-time evidence, would be a lie. |
 | skip | cron | sha256 of the jitter-rounded material facts. Same hash as the latest brief **and** that brief is under 60 min old → no new brief; the run stamps `checked_at` and stops. |
@@ -45,6 +45,7 @@ same CDN cache entries:
 | `/api/starlink-data?fields=roster` | the dashboard's boot fetch; kept 1 h per warm instance | Supabase snapshot / `unitedstarlinktracker.com` (free) | no |
 | `/data/fleet.json` | static asset; kept 6 h per warm instance | none | no |
 | Supabase `airborne_samples` | — | 7 primary-key range scans of ±10 min, ~2 rows each | no |
+| Supabase `flight_history` (v1.31.3) | — | only when the count in the air is 25% or more below usual: 8 count-only requests in parallel (today's four hours and the same clock time on each of the previous 7 days), `on_dep_board`, `service_date` bounded a day either side (BRIN), `sched_dep` ranged; 4 s for all eight; ~0.6 s each on the Nov 2026 table (`sql/024`, not applied, is the index that would make them cheap) | no |
 
 Every request sends `Accept: application/json`: every response varies on `Accept` (`vercel.json`), so
 a different header is a different cache entry. No code path in the brief imports
@@ -81,7 +82,7 @@ zone (`"9:00 PM ET"`), airport codes and every name that stands for them (`"ORD"
 | `wx.summary` | weather | same | Weather is not affecting operations at any of the 9 United hubs with a current report. | calm |
 | `air.total` | airborne | live feed, `isOnGround()` complement (the Live stat bar) | 630 United flights, including United Express, are in the air right now. | calm |
 | `air.starlink` | airborne | live feed × Starlink roster × fleet match (`makeIsStarlinkFlight`'s rule) | 280 of the 630 United flights in the air have Starlink Wi-Fi. | calm |
-| `air.normal` | airborne | `airborne_samples`, median of the same clock time on the previous 7 days (≥ 3 days needed) | The 702 United flights in the air are 11% fewer than usual for this time of day: … the median at this hour was 790. | calm; **watch at 35% fewer than usual, disrupted at 45% fewer** when the usual is 100 or more (v1.31.1) |
+| `air.normal` | airborne | `airborne_samples`, median of the same clock time on the previous 7 days (≥ 3 days needed); at 25% or more fewer, also the day's schedule (`flight_history`, `src/lib/brief-schedule.js`) | The 702 United flights in the air are 11% fewer than usual for this time of day: … the median at this hour was 790. On a light-schedule day: … That is in line with a lighter schedule today: about 30% fewer departures were scheduled from United's hubs over the past four hours than usual. | calm; **watch at 35% fewer than expected, disrupted at 45% fewer** when the expected count is 100 or more (v1.31.1; expected = the usual × min(1, scheduled ratio + 0.10) since v1.31.3) |
 | `flow.<HUB>.arrivals` / `.departures` | flow | Enhanced Radar `operations.flow` (from FAA data); [radio](#air-traffic-control-radio-enhanced-radar), off by default | Enhanced Radar, from FAA data, reports Newark (EWR) arrivals: a planned rate of 36 an hour, 26 landed in the last hour and 39 scheduled in the next hour, more than the planned rate allows. | calm |
 | `flow.<HUB>.runways` | flow | Enhanced Radar `operations.runways` | Enhanced Radar reports Newark (EWR) landing on runway 22L and taking off from runway 22R. | calm |
 | `radio.<HUB>.<id>` | radio | each Enhanced Radar `critical` / `notable` observation under 2 h old (max 3 per hub): time, the API's tags and runways as values; the **sanitized** title as `quote` only | Heard on Newark (EWR) air traffic control frequencies at 5:29 PM ET, in Enhanced Radar's model-written summary, which can contain mistakes: "GLS approach out of service". | calm (never sets the tone) |
@@ -211,7 +212,28 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    `watch` at 35% fewer than the 7-day median for this time of day, `disrupted` at 45% fewer
    (neither was crossed in the 10,651 samples of Oct 4 to Nov 13 before the stop; the largest was
    30%). "This time of day" is the US wall clock (`sameClockDaysBefore`), so the week after a clock
-   change compares like with like. At
+   change compares like with like.
+   **A lighter schedule** (v1.31.3): when the count is 25% or more below the usual, the brief reads
+   the day's schedule, the hub departures scheduled over the last four hours against the median of
+   the same count at the same wall-clock time on the previous 7 days (`flight_history`,
+   `on_dep_board`, canceled flights included: a halt leaves the count alone). The shortfall that sets
+   the tone is measured against the usual × min(1, ratio + 0.10): only the part of a lighter schedule
+   beyond the 10-point "about the usual" band counts, and a heavier schedule never raises the bar.
+   The thresholds are unchanged. The ratio is not used (the comparison is as before) when the read
+   fails or times out, fewer than 3 earlier days have rows, the usual four-hour count is under 150
+   (about 11:30 PM to 5:15 AM PT), or today's count is under 40% of the usual (missing rows, which
+   would otherwise hide a halt). On five dates, by US Central date (Thanksgiving Day, Dec 24, Dec 25,
+   Dec 31, Jan 1; `lightScheduleHoliday`), an unused ratio caps the shortfall's tone at `calm`
+   instead, rather than risk a false "Disrupted" on a day the schedule is known to be light; that list
+   is only this fallback. When the factor is below 1 the fact adds what the schedule shows ("That is
+   in line with a lighter schedule today: about N% fewer departures were scheduled from United's
+   hubs over the past four hours than usual." when the result is calm, "The schedule is lighter
+   today too: …" when it is not), with N and the hours in `values` and the `schedule` cause
+   (`src/lib/brief-claims.js`), so only this fact can give a lighter schedule as a reason. A calm
+   fact that says so is never the headline (`headline:fewer_in_line_with_schedule`) and is the calm
+   template's in-the-air line. Every read is stored in `ops_briefs.collection.airSchedule`: today's
+   count, the usual, the raw ratio, the factor applied, the expected count, or `unavailable` and its
+   reason. Backtest: `scripts/backtest-airborne-schedule.sql`. At
    `disrupted` the fact is first in the list, an item citing it is moved to the front (or its
    statement is put there, `shortfallLed`; at the item limit the last item is dropped as
    `displaced_by_network_shortfall`), and a headline that is not about how many flights are flying
@@ -278,7 +300,7 @@ out of the key entirely, id included, so it appearing or disappearing is not a c
 | fact | material |
 |---|---|
 | `air.total`, `air.starlink` | none (`null`): the count moves all day |
-| `air.normal` | usual / above / below (±10% of the 7-day median), and below:watch:NN / below:disrupted:NN at 35% / 45% fewer, NN the shortfall in ten-point steps (the brief quotes the figure) |
+| `air.normal` | usual / above / below (±10% of the 7-day median), `:lighter` while it says the schedule is lighter, and below:watch:NN / below:disrupted:NN at 35% / 45% fewer than expected, NN the shortfall against the usual in ten-point steps (the brief quotes that figure) |
 | `net.index` | its band (normal / minor / significant), not the score |
 | `otp.<HUB>` | none while at or above 80% (`BRIEF_HEALTHY_HUB_OTP`), so a healthy hub's reading moving, appearing or aging out is not a change; below 80%, rounded to 5 points. Not sending healthy hubs' facts on a healthy day (Nov 2026) therefore changes no key |
 | `cxl.confirmed` | none under 10, sent (5–9) or not (0–4): the send threshold sits inside that band, so 4 ↔ 5 never rewrites; from 10, the existing count steps (10–12, 13–17, …) |
@@ -350,7 +372,8 @@ At most 144 runs a day, so the hard worst case is ≈ $0.53/day, which the $0.50
 `spend_cap`); at the ~70–80 briefs a busy day writes it is ≈ $0.29, and it stays well under the
 project's $3/day gateway ceiling; realistic volume (a new brief when a band moves, at least hourly) is
 close to the 24-a-day hourly floor plus one per real change since v1.25.1 (above), about $0.01–0.04/day. Collection costs nothing upstream (above). Supabase: one insert
-per new brief (~20–40 KB of facts JSONB), one tiny update per unchanged run, 7 small reads.
+per new brief (~20–40 KB of facts JSONB), one tiny update per unchanged run, 7 small reads, and 8
+count-only `flight_history` reads on the rare run when far fewer flights are flying than usual.
 
 ## Switches and env
 

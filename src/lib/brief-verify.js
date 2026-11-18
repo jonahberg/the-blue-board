@@ -459,6 +459,8 @@ export function finalizeSentence(original, ids, factIndex, { rewrites = [], extr
 
 /** A headline about how many flights are flying: required when far fewer are in the air than usual. */
 const NETWORK_SHORTFALL_HEADLINE_RE = /\b(?:in the air|airborne|aloft|flying|fewer|grounded)\b/i;
+/** A headline saying fewer flights are flying: not allowed when the count is in line with a lighter schedule. */
+const FEWER_FLYING_HEADLINE_RE = /\bfewer\b.*\b(?:flights?|in the air|airborne|aloft|flying)\b|\bgrounded\b/i;
 
 /** Headlines that claim nothing, for when even the template's headline fails its checks. */
 const FALLBACK_HEADLINE = Object.freeze({
@@ -580,6 +582,9 @@ export function verifyBrief(candidate, facts) {
     }
   }
   report.itemsKept = kept.length;
+  // Fewer flights flying than usual, in line with a lighter schedule today (brief-facts.js air.normal,
+  // src/lib/brief-schedule.js): not a problem, so not the headline (prompt rule 2).
+  const lighterSchedule = factList.find((f) => f.id === 'air.normal' && f.lighterSchedule === true && f.toneFloor === 'calm');
 
   if (kept.length === 0) return { ok: false, brief: null, report };
 
@@ -605,6 +610,7 @@ export function verifyBrief(candidate, facts) {
     if (laterLead) reasons.push(laterLead);
     // With far fewer flights in the air than usual, the headline is about that, not one airport.
     if (shortfall && !NETWORK_SHORTFALL_HEADLINE_RE.test(text)) reasons.push('headline:misses_network_shortfall');
+    if (lighterSchedule && FEWER_FLYING_HEADLINE_RE.test(text)) reasons.push('headline:fewer_in_line_with_schedule');
     if (MARKUP_RE.test(text)) reasons.push('markup_or_url');
     return reasons;
   };

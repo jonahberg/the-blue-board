@@ -13,10 +13,10 @@ const supabaseMocks = vi.hoisted(() => ({ getSupabaseAdmin: vi.fn(async () => nu
 vi.mock('../api/_schedule-snapshots.js', () => supabaseMocks);
 
 import handler, { __resetBriefEndpointForTests, briefResponseBody, nextCronRunMs } from '../api/brief.js';
-import { BRIEF_METAR_IDS, __resetBriefCollectForTests, collectBriefSources } from '../api/_brief-collect.js';
+import { BRIEF_METAR_IDS, BRIEF_SCHEDULE_READ_TIMEOUT_MS, __resetBriefCollectForTests, collectBriefSources, loadScheduleCounts } from '../api/_brief-collect.js';
 import { __resetBriefStoreForTests } from '../api/_brief-store.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
-import { buildBriefFacts } from '../src/lib/brief-facts.js';
+import { buildBriefFacts, sameClockDaysBefore } from '../src/lib/brief-facts.js';
 import { buildTemplateBrief } from '../src/lib/brief-template.js';
 
 const CALM = JSON.parse(readFileSync(new URL('./fixtures/brief/calm-afternoon.json', import.meta.url), 'utf8'));
@@ -214,5 +214,86 @@ describe('collectBriefSources', () => {
     const out = await collectBriefSources({ fetchImpl: routedFetch(), nowMs: NOW, baseUrl: 'https://site.test' });
     expect(out.airNormal).toEqual({ median: 640, days: 7 });
     expect(db.calls.filter((c) => c.table === 'airborne_samples')).toHaveLength(7);
+  });
+
+  // The day's schedule (src/lib/brief-schedule.js): eight count-only flight_history reads, only
+  // when the count is 25% or more below the usual.
+  const samples = (airborne) => Array.from({ length: 7 }, (_, i) => ({ sampled_at: new Date(sameClockDaysBefore(NOW, i + 1)).toISOString(), airborne }));
+  const departures = () => {
+    const rows = [];
+    const add = (daysBack, n, extra = {}) => {
+      const end = Math.floor((daysBack === 0 ? NOW : sameClockDaysBefore(NOW, daysBack)) / 60_000);
+      for (let k = 0; k < n; k++) {
+        const schedDep = end - 1 - k * 10; // inside [end - 240, end)
+        rows.push({ flight_no: `UA${daysBack}${k}`, service_date: new Date(schedDep * 60_000).toISOString().slice(0, 10), sched_dep: schedDep, on_dep_board: true, ...extra });
+      }
+    };
+    add(0, 5);
+    for (let d = 1; d <= 7; d++) add(d, 7);
+    add(0, 3, { on_dep_board: false }); // arrivals-board-only rows are not departures
+    rows.push({ flight_no: 'UA9', service_date: DAY_OF(NOW), sched_dep: Math.floor(NOW / 60_000), on_dep_board: true }); // scheduled now, not yet in the window
+    return rows;
+  };
+  const DAY_OF = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+  it('far fewer flights than usual: counts the departures scheduled in the four hours to now and on each earlier day', async () => {
+    const db = fakeSupabase({ tables: { airborne_samples: samples(640), flight_history: departures() } });
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue(db.client);
+    const out = await collectBriefSources({ fetchImpl: routedFetch(), nowMs: NOW, baseUrl: 'https://site.test' }); // 3 in the air
+    expect(out.airSchedule).toEqual({ today: 5, prior: [7, 7, 7, 7, 7, 7, 7] });
+    expect(out.errors.airSchedule).toBeUndefined();
+    const reads = db.calls.filter((c) => c.table === 'flight_history');
+    expect(reads).toHaveLength(8);
+    for (const r of reads) {
+      // Count-only, departure boards only, service_date bounded (the BRIN index), sched_dep ranged.
+      expect(r).toMatchObject({ op: 'select', head: true });
+      expect(r.filters.map(([op, col]) => `${op}:${col}`)).toEqual(['eq:on_dep_board', 'gte:service_date', 'lte:service_date', 'gte:sched_dep', 'lt:sched_dep']);
+    }
+    const [today] = reads;
+    expect(today.filters[4][2] - today.filters[3][2]).toBe(240);
+  });
+
+  it('a count near the usual: no schedule read at all', async () => {
+    const db = fakeSupabase({ tables: { airborne_samples: samples(3), flight_history: departures() } });
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue(db.client);
+    const out = await collectBriefSources({ fetchImpl: routedFetch(), nowMs: NOW, baseUrl: 'https://site.test' });
+    expect(out.airNormal).toEqual({ median: 3, days: 7 });
+    expect(out.airSchedule).toBeNull();
+    expect(db.calls.filter((c) => c.table === 'flight_history')).toHaveLength(0);
+  });
+
+  it('every count past its limit: "timeout", all eight in parallel under one 4 s limit', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const hanging = () => {
+      const builder = { select: () => builder, eq: () => builder, gte: () => builder, lte: () => builder, lt: () => builder, abortSignal: () => new Promise(() => {}) };
+      return builder;
+    };
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue({ from: hanging });
+    const pending = loadScheduleCounts(NOW);
+    let settled = null;
+    pending.then((v) => { settled = v; });
+    await vi.advanceTimersByTimeAsync(BRIEF_SCHEDULE_READ_TIMEOUT_MS - 1);
+    expect(settled).toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toEqual({ today: null, prior: [null, null, null, null, null, null, null], error: 'timeout' });
+    expect(BRIEF_SCHEDULE_READ_TIMEOUT_MS).toBe(4000);
+  });
+
+  it('a failed count, a throw or no database: a failed read, never a throw', async () => {
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue(fakeSupabase({ failures: { 'flight_history.select': { code: '57014', message: 'canceling statement due to statement timeout' } } }).client);
+    expect(await loadScheduleCounts(NOW)).toEqual({ today: null, prior: [null, null, null, null, null, null, null], error: 'read_failed' });
+    supabaseMocks.getSupabaseAdmin.mockRejectedValue(new Error('pool exhausted'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await loadScheduleCounts(NOW)).toEqual({ today: null, prior: [], error: 'read_failed' });
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue(null);
+    expect(await loadScheduleCounts(NOW)).toEqual({ today: null, prior: [], error: 'unconfigured' });
+  });
+
+  it('the failure is named in errors and the counts still reach the facts', async () => {
+    const db = fakeSupabase({ tables: { airborne_samples: samples(640) }, failures: { 'flight_history.select': { code: '57014', message: 'timeout' } } });
+    supabaseMocks.getSupabaseAdmin.mockResolvedValue(db.client);
+    const out = await collectBriefSources({ fetchImpl: routedFetch(), nowMs: NOW, baseUrl: 'https://site.test' });
+    expect(out.errors.airSchedule).toBe('read_failed');
+    expect(out.airSchedule).toMatchObject({ today: null, error: 'read_failed' });
   });
 });
