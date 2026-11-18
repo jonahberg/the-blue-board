@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { escapeHtml, sanitizeHeaderValue } from '../src/lib/escape.js';
+import { escapeHtml, sanitizeHeaderValue, decodeHtmlEntities } from '../src/lib/escape.js';
 
 describe('escapeHtml', () => {
   it('escapes the core five HTML-dangerous characters', () => {
@@ -71,5 +71,27 @@ describe('sanitizeHeaderValue', () => {
   it('returns empty for non-strings', () => {
     expect(sanitizeHeaderValue(null)).toBe('');
     expect(sanitizeHeaderValue(undefined)).toBe('');
+  });
+});
+
+describe('decodeHtmlEntities (one pass: CodeQL js/double-escaping, Oct 28 2026)', () => {
+  it('decodes the references a <pre>-wrapped JSON body carries', () => {
+    expect(decodeHtmlEntities('{&quot;a&quot;:&#34;b&#x22;,&#X22;c&#x22;:&quot;x &amp; y &lt;z&gt;&quot;}'))
+      .toBe('{"a":"b","c":"x & y <z>"}');
+  });
+
+  it('decodes each reference once: "&amp;lt;" is the text "&lt;", not "<"', () => {
+    expect(decodeHtmlEntities('&amp;lt;script&amp;gt;')).toBe('&lt;script&gt;');
+    expect(decodeHtmlEntities('&amp;quot;')).toBe('&quot;');
+  });
+
+  it('leaves unknown or out-of-range references as they are', () => {
+    expect(decodeHtmlEntities('&nbsp; &bogus; &#0; &#x110000; & alone')).toBe('&nbsp; &bogus; &#0; &#x110000; & alone');
+    expect(decodeHtmlEntities('&constructor; &toString;')).toBe('&constructor; &toString;');
+  });
+
+  it('answers "" for anything that is not a string', () => {
+    expect(decodeHtmlEntities(null)).toBe('');
+    expect(decodeHtmlEntities(42)).toBe('');
   });
 });

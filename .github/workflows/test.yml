@@ -5,6 +5,10 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: the job only checks out and runs the suite.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

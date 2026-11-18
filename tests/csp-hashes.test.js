@@ -51,6 +51,22 @@ describe('inlineScripts', () => {
   it('returns the exact bytes between the tags (no trimming — CSP hashes them verbatim)', () => {
     expect(inlineScripts('<script>\n  x()\n</script>')).toEqual(['\n  x()\n']);
   });
+
+  // Nov 2026: the extractor is an HTML parser now (CodeQL js/bad-tag-filter and
+  // js/incomplete-multi-character-sanitization on the old regular expressions).
+  it('finds a script however its end tag is written, as a browser does', () => {
+    expect(inlineScripts('<script>a()</script ><SCRIPT>b()</SCRIPT>')).toEqual(['a()', 'b()']);
+    expect(inlineScripts('<script>c()</script\n  foo="bar">')).toEqual(['c()']);
+  });
+
+  it('does not decode entities in a script body: the hash is over the source text', () => {
+    expect(inlineScripts('<script>if (a &amp;&amp; b) go()</script>')).toEqual(['if (a &amp;&amp; b) go()']);
+  });
+
+  it('is not fooled by a comment that ends oddly or holds a script tag', () => {
+    expect(inlineScripts('<!--<script>bad()</script>--!><script>real()</script>')).toEqual(['real()']);
+    expect(inlineScripts('<!-- <!-- nested? <script>bad()</script> --><script>real()</script>')).toEqual(['real()']);
+  });
 });
 
 describe('sha256', () => {

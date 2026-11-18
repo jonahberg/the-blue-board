@@ -23,6 +23,7 @@ import handler, { resetFallbackBreaker, __resetScheduleCachesForTests } from '..
 import { __resetFaaDisruptionCacheForTests } from '../api/faa.js';
 import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
+import { isHost } from './helpers/url-host.js';
 
 function createRes() {
   return {
@@ -119,7 +120,7 @@ describe('schedule board meta.hubDisruptionMinutes', () => {
     const iso = (offsetS) => new Date((nowSec + offsetS) * 1000).toISOString();
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const u = String(url);
-      if (u.includes('nasstatus.faa.gov')) throw new Error('FAA down');
+      if (isHost(u, 'nasstatus.faa.gov')) throw new Error('FAA down');
       if (u.includes('aedbx/aerodatabox')) {
         return {
           ok: true, status: 200,
@@ -169,7 +170,7 @@ describe('schedule board meta.hubDisruptionMinutes', () => {
     __resetFaaDisruptionCacheForTests();
     const faaCalls = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
-      if (String(url).includes('nasstatus.faa.gov')) {
+      if (isHost(url, 'nasstatus.faa.gov')) {
         faaCalls.push(String(url));
         return new Promise(() => {}); // hangs — never resolves
       }

@@ -20,6 +20,7 @@ import handler from '../api/cron/watch-alerts.js';
 import { getSupabase } from '../api/_supabase.js';
 import { sendPush } from '../api/_web-push.js';
 import { __resetRegSightingsForTests } from '../api/_reg-sightings.js';
+import { isHost } from './helpers/url-host.js';
 
 const TODAY_DEP = '2026-10-03T18:00:00.000Z'; // ORD 13:00 CDT
 const TOMORROW_DEP = '2026-10-04T18:00:00.000Z';
@@ -78,7 +79,7 @@ function serve(answer, feed = { full_count: 0, version: 4 }) {
   const urls = [];
   globalThis.fetch = vi.fn(async (url) => {
     urls.push(String(url));
-    if (String(url).includes('data-cloud.flightradar24.com')) return { ok: true, json: async () => feed };
+    if (isHost(url, 'data-cloud.flightradar24.com')) return { ok: true, json: async () => feed };
     const params = new URL(String(url)).searchParams;
     const body = answer(params);
     return body ? { ok: true, json: async () => body } : { ok: false, status: 404, json: async () => ({ success: false }) };
@@ -235,7 +236,7 @@ describe('one live-feed harvest per run feeds reg_sightings', () => {
     const feed = { full_count: 1, version: 4, abc123: ['A1B2C3', 41.9, -88.5, 270, 23000, 420, '1234', '', 'B739', 'N11111', 0, 'ORD', 'SFO', 'UA1', 0, 1500, 'UAL1'] };
     const urls = serve(() => leg(), feed);
     const { res, calls } = await run([{ flight: 'UA1' }]);
-    expect(urls.filter((u) => u.includes('data-cloud.flightradar24.com'))).toHaveLength(1);
+    expect(urls.filter((u) => isHost(u, 'data-cloud.flightradar24.com'))).toHaveLength(1);
     expect(res._json.liveFeed).toEqual({ ok: true, recorded: 1 });
     expect(calls.sightings).toEqual([expect.objectContaining({ flight_key: 'UA1', origin: 'ORD', dest: 'SFO', reg: 'N11111', airborne_at: expect.any(String) })]);
   });
