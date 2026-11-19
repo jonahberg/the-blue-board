@@ -40,17 +40,6 @@ const middlewareSource = readFileSync(new URL('../middleware.ts', import.meta.ur
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const robotsTxt = readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
 
-/** Visible text of an HTML document, the way a crawler's extractor counts it. */
-function textContent(html) {
-  return html
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 /** The homepage's structured data, as the page renders it through <JsonLd />. */
 function jsonLdBlocks() {
   return homeJsonLd({ lastmod: '2026-01-01' });

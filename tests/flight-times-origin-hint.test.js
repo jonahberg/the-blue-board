@@ -10,17 +10,31 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const snapshotMocks = vi.hoisted(() => ({
-  loadScheduleSnapshot: vi.fn(async () => null),
-  saveScheduleSnapshot: vi.fn(async () => {}),
-  getSupabaseAdmin: vi.fn(async () => null),
-}));
+const snapshotMocks = vi.hoisted(() => {
+  const mocks = {
+    loadScheduleSnapshot: vi.fn(async () => null),
+    saveScheduleSnapshot: vi.fn(async () => {}),
+    getSupabaseAdmin: vi.fn(async () => null),
+  };
+  // flight-times reads a day's boards in one batch (loadBoardsListingFlight); answer the batch
+  // board by board from the per-key mock each test sets up.
+  mocks.loadBoardsListingFlight = vi.fn(async (keys) => {
+    const boards = new Map();
+    for (const key of keys) {
+      const snapshot = await mocks.loadScheduleSnapshot(key);
+      if (snapshot) boards.set(key, snapshot);
+    }
+    return { boards, failed: false };
+  });
+  return mocks;
+});
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => snapshotMocks);
 
 import handler, { __resetFlightTimesCache, normalizeLegStatus } from '../api/flight-times.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
 import { manualConnectionOutcome, outboundNeedsOriginHint } from '../src/lib/connection-pairing.js';
+import { isHost } from './helpers/url-host.js';
 
 const ROWS = JSON.parse(readFileSync(new URL('./fixtures/schedule-board-rows.json', import.meta.url), 'utf8'));
 const NOW = Date.parse('2026-09-28T16:05:00Z');
@@ -129,7 +143,7 @@ describe('/api/flight-times ?from= origin hint (D2)', () => {
       }],
     };
     globalThis.fetch.mockImplementation(async (url) => {
-      if (String(url).includes('fr24api.flightradar24.com')) return { ok: true, status: 200, json: async () => ICT_LEG };
+      if (isHost(url, 'fr24api.flightradar24.com')) return { ok: true, status: 200, json: async () => ICT_LEG };
       throw new Error(`unexpected fetch: ${url}`);
     });
     try {

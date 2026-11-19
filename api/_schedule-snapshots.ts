@@ -1,4 +1,5 @@
 import { boundedQuery, budgetWithin, isDbTimeout } from './_bounded.js';
+import { boardBatchFailureLine, boardListsFlightFilter, boardsFromRows } from '../src/lib/snapshot-read.js';
 
 const SNAPSHOT_TABLE = 'schedule_snapshots';
 const SNAPSHOT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -34,7 +35,8 @@ interface SaveScheduleSnapshotArgs {
 
 // Every query here carries a time limit (api/_bounded.ts). Without one a slow Supabase held
 // /api/schedule open until its 60-second maxDuration (Nov 7 2026). The defaults fit every caller:
-// /api/hub-board (10 s limit) reads at most two snapshots, /api/flight-times (15 s) one per leg, and
+// /api/hub-board (10 s limit) reads at most two snapshots, /api/flight-times (15 s) one batch per
+// day it looks at (loadBoardsListingFlight), and
 // /api/schedule passes its own budgets cut to its request deadline. A query that runs out of time is
 // answered like any failed query: no snapshot, or no write, logged once. A caller that must tell "ran
 // out of time" from "there is no snapshot" (/api/schedule, before a metered fetch) passes onTimeout.
@@ -190,6 +192,51 @@ export async function loadScheduleSnapshot(
   } catch (error: any) {
     console.error(`Schedule snapshot read threw for ${cacheKey}:`, error?.message || error);
     return null;
+  }
+}
+
+export interface BoardsListingFlight {
+  /** cache_key → the board's rows for the flight, only for boards that list it. */
+  boards: Map<string, PersistedScheduleSnapshot>;
+  /**
+   * The read did not finish (it timed out or failed). Then a key missing from `boards` means "not
+   * known", not "the flight is not on that board", and the caller must not act on the absence.
+   */
+  failed: boolean;
+}
+
+/**
+ * The stored boards among `cacheKeys` that list `flightNumber`, in ONE bounded query, each cut to
+ * that flight's rows (src/lib/snapshot-read.js says why). Never throws.
+ */
+export async function loadBoardsListingFlight(
+  cacheKeys: string[],
+  flightNumber: string,
+  { timeoutMs = SNAPSHOT_READ_TIMEOUT_MS }: { timeoutMs?: number } = {},
+): Promise<BoardsListingFlight> {
+  const keys = [...new Set(cacheKeys.filter(Boolean))];
+  if (!keys.length) return { boards: new Map(), failed: false };
+  const supabase = await getSupabaseAdmin();
+  if (!supabase) return { boards: new Map(), failed: false };
+
+  try {
+    const { data, error } = await boundedQuery<any>(
+      supabase
+        .from(SNAPSHOT_TABLE)
+        .select('cache_key, payload, refreshed_at')
+        .in('cache_key', keys)
+        .gt('expires_at', new Date().toISOString())
+        .contains('payload', boardListsFlightFilter(flightNumber)),
+      timeoutMs,
+    );
+    if (error) {
+      console.error(boardBatchFailureLine(keys, flightNumber, error.message));
+      return { boards: new Map(), failed: true };
+    }
+    return { boards: boardsFromRows(data, flightNumber), failed: false };
+  } catch (error: any) {
+    console.error(boardBatchFailureLine(keys, flightNumber, `threw ${error?.message || error}`));
+    return { boards: new Map(), failed: true };
   }
 }
 

@@ -20,6 +20,7 @@ import { __resetRateLimitersForTests } from '../api/_rate-limit.js';
 import { recordAdbUnits, isAdbOrganicRefreshGated, getAdbPacedAllowance, __resetAdbSpendForTests } from '../api/_cost-state.js';
 import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { classifySchedStatus } from '../src/lib/schedule-status.js';
+import { isHost } from './helpers/url-host.js';
 
 function formatForFR24Test(date) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -144,7 +145,7 @@ describe('schedule API', () => {
     // flagged partial so the empty-board guards apply: a 30s CDN TTL.
     process.env.FR24_API_TOKEN = 'test-token-12345678';
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes(OFFICIAL_HOST)) return { ok: true, headers: { get: () => null }, json: async () => ({ data: [] }) };
+      if (isHost(url, OFFICIAL_HOST)) return { ok: true, headers: { get: () => null }, json: async () => ({ data: [] }) };
       return { ok: true, headers: { get: () => null }, json: async () => ({ result: { response: { airport: { pluginData: {} } } } }) };
     });
 
@@ -262,7 +263,7 @@ describe('schedule API', () => {
       callCount++;
       const urlStr = String(url);
       // First call: official API returns sparse data
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({ data: sparseFlights }),
@@ -373,7 +374,7 @@ describe('schedule API', () => {
     // Provider first (no key) → official rescue (no token) → live feed (not today) → the web scrape.
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         return { ok: false, status: 500, text: async () => 'unexpected', headers: { get: () => null } };
       }
       return {
@@ -430,7 +431,7 @@ describe('schedule API', () => {
     let officialUrl = '';
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         officialUrl = urlStr;
         return {
           ok: true,
@@ -476,7 +477,7 @@ describe('schedule API', () => {
     let officialCalled = false;
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         officialCalled = true;
         return {
           ok: true,
@@ -524,7 +525,7 @@ describe('schedule API', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         throw new Error('Official API should not be called when fallback is disabled');
       }
       return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
@@ -557,7 +558,7 @@ describe('schedule API', () => {
     const landed = takeoff + (94 * 60);
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({
@@ -619,7 +620,7 @@ describe('schedule API', () => {
     let scrapeCalls = 0;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         officialCalls++;
         return {
           ok: false,
@@ -685,7 +686,7 @@ describe('schedule API', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         throw new Error('Official API should not be called when officialFallback=0');
       }
       return { ok: false, status: 403, text: async () => 'Forbidden', headers: { get: () => null } };
@@ -721,7 +722,7 @@ describe('schedule API', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         throw new Error('Official API should not be called after provider success');
       }
       if (urlStr.includes('prod.api.market/api/v1/aedbx/aerodatabox')) {
@@ -773,7 +774,7 @@ describe('schedule API', () => {
     expect(res.body.meta.source).toBe('aerodatabox');
     expect(aeroCalls).toBe(2);
     expect(called(fetchSpy, SCRAPE_URL)).toBe(false);
-    expect(fetchSpy.mock.calls.some(call => String(call[0]).includes('fr24api.flightradar24.com'))).toBe(false);
+    expect(fetchSpy.mock.calls.some(call => isHost(call[0], 'fr24api.flightradar24.com'))).toBe(false);
 
     const flight = res.body.flights[0];
     expect(flight.identification.number.default).toBe('UA150');
@@ -839,7 +840,7 @@ describe('schedule API', () => {
       if (urlStr.includes('prod.api.market/api/v1/aedbx/aerodatabox')) {
         throw new Error('AeroDataBox should not be called after scraper transport success');
       }
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         throw new Error('Official API should not be called after scraper transport success');
       }
       return {
@@ -868,7 +869,7 @@ describe('schedule API', () => {
     expect(res.body.meta.fallbackFrom).toBeUndefined();
     expect(proxyCalls).toBe(1);
     expect(fetchSpy.mock.calls.some(call => String(call[0]).includes('prod.api.market/api/v1/aedbx/aerodatabox'))).toBe(false);
-    expect(fetchSpy.mock.calls.some(call => String(call[0]).includes('fr24api.flightradar24.com'))).toBe(false);
+    expect(fetchSpy.mock.calls.some(call => isHost(call[0], 'fr24api.flightradar24.com'))).toBe(false);
   });
 
   it('honors scraperFallback=0 when direct FR24 scraping is blocked', async () => {
@@ -972,7 +973,7 @@ describe('schedule API', () => {
       if (urlStr.includes('api.flightradar24.com/common/v1/airport.json')) {
         throw new Error('Dead FR24 scrape must not be called in provider mode');
       }
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         throw new Error('Official API must not be called when the provider returns a full board');
       }
       return { ok: false, status: 403, text: async () => 'blocked', headers: { get: () => null } };
@@ -996,7 +997,7 @@ describe('schedule API', () => {
     expect(upcoming.status.text).toBe('scheduled');
     expect(upcoming.airport.destination.code.iata).toBe('SFO');
     expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes('common/v1/airport.json'))).toBe(false);
-    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes('fr24api.flightradar24.com'))).toBe(false);
+    expect(fetchSpy.mock.calls.some((c) => isHost(c[0], 'fr24api.flightradar24.com'))).toBe(false);
   });
 
   it('provider mode without a key: falls through to FR24 official + live feed, never touching the dead scrape', async () => {
@@ -1010,7 +1011,7 @@ describe('schedule API', () => {
       if (urlStr.includes('api.flightradar24.com/common/v1/airport.json')) {
         throw new Error('Dead FR24 scrape must not be called in provider mode');
       }
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({
@@ -1023,7 +1024,7 @@ describe('schedule API', () => {
           }),
         };
       }
-      if (urlStr.includes('data-cloud.flightradar24.com')) {
+      if (isHost(urlStr, 'data-cloud.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({
@@ -1057,7 +1058,7 @@ describe('schedule API', () => {
     const ts = getStartOfDayForHub('IAH');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('data-cloud.flightradar24.com')) {
+      if (isHost(urlStr, 'data-cloud.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({
@@ -1132,7 +1133,7 @@ describe('schedule API', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
       // Official API: one COMPLETED ORD departure (actual times only, no scheduled) -> actual-only board.
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({
@@ -1148,7 +1149,7 @@ describe('schedule API', () => {
         };
       }
       // Live feed: a DIFFERENT active flight departing ORD -> added in the merge.
-      if (urlStr.includes('data-cloud.flightradar24.com')) {
+      if (isHost(urlStr, 'data-cloud.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({
@@ -1633,7 +1634,7 @@ describe('schedule API', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         return { ok: false, status: 500, text: async () => 'unexpected', headers: { get: () => null } };
       }
       // Scraping returns valid response but no UA flights (partial scenario)
@@ -1698,7 +1699,7 @@ describe('schedule API', () => {
     const takeoff = ts + 9 * 3600;
     const landed = takeoff + 2 * 3600;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('fr24api.flightradar24.com')) {
+      if (isHost(url, 'fr24api.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({
@@ -1807,7 +1808,7 @@ describe('schedule API', () => {
     const ts = getStartOfDayForHub('IAH');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('data-cloud.flightradar24.com')) {
+      if (isHost(urlStr, 'data-cloud.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({
@@ -2133,7 +2134,7 @@ describe('paced provider gate must not spill onto the paid official API', () => 
     const ts = getStartOfHubDay('IAH', 0);
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('fr24api.flightradar24.com')) {
+      if (isHost(urlStr, 'fr24api.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({
@@ -2146,7 +2147,7 @@ describe('paced provider gate must not spill onto the paid official API', () => 
           }),
         };
       }
-      if (urlStr.includes('data-cloud.flightradar24.com')) {
+      if (isHost(urlStr, 'data-cloud.flightradar24.com')) {
         return {
           ok: true,
           json: async () => ({

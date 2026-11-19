@@ -11,6 +11,7 @@ import {
   faaStatusAsOfLine,
   faaUnknownLine,
   faaUnknownSince,
+  faaUnknownSinceWithoutAnswer,
   isProgramPastEnd,
   networkUnknownText,
   programEndMs,
@@ -178,5 +179,16 @@ describe('currentFaaAirports (the flight page\'s read takes the same rule)', () 
     const live = ewrGroundStop(new Date(NOW + 3600_000).toISOString());
     expect(currentFaaAirports([live], NOW - FAA_STALE_AFTER_MS - MIN, NOW)).toEqual([]);
     expect(currentFaaAirports(null, NOW, NOW)).toEqual([]);
+  });
+});
+
+describe('faaUnknownSinceWithoutAnswer (Nov 2026: a first failed fetch is not a quiet day)', () => {
+  const NOW = Date.parse('2026-11-14T19:05:00Z');
+  it('starts at the first failed fetch and holds', () => {
+    expect(faaUnknownSinceWithoutAnswer(null, true, NOW)).toBe(NOW);
+    expect(faaUnknownSinceWithoutAnswer(NOW, true, NOW + 300_000)).toBe(NOW);
+  });
+  it('is not unknown before anything has failed (still loading)', () => {
+    expect(faaUnknownSinceWithoutAnswer(null, false, NOW)).toBeNull();
   });
 });

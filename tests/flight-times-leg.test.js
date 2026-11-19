@@ -14,11 +14,24 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const snapshotMocks = vi.hoisted(() => ({
-  loadScheduleSnapshot: vi.fn(async () => null),
-  saveScheduleSnapshot: vi.fn(async () => {}),
-  getSupabaseAdmin: vi.fn(async () => null),
-}));
+const snapshotMocks = vi.hoisted(() => {
+  const mocks = {
+    loadScheduleSnapshot: vi.fn(async () => null),
+    saveScheduleSnapshot: vi.fn(async () => {}),
+    getSupabaseAdmin: vi.fn(async () => null),
+  };
+  // flight-times reads a day's boards in one batch (loadBoardsListingFlight); answer the batch
+  // board by board from the per-key mock each test sets up.
+  mocks.loadBoardsListingFlight = vi.fn(async (keys) => {
+    const boards = new Map();
+    for (const key of keys) {
+      const snapshot = await mocks.loadScheduleSnapshot(key);
+      if (snapshot) boards.set(key, snapshot);
+    }
+    return { boards, failed: false };
+  });
+  return mocks;
+});
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => snapshotMocks);
 
 import handler, { __resetFlightTimesCache } from '../api/flight-times.js';
@@ -26,6 +39,7 @@ import { getStartOfHubDay } from '../src/lib/hubTz.js';
 import { resetMirroredQuotaBlock } from '../api/_cost-state.js';
 import { computeConnectionRisk } from '../src/lib/connection-pairing.js';
 import { pickFr24SummaryLeg } from '../api/_official-fr24.js';
+import { isHost } from './helpers/url-host.js';
 
 const ROWS = JSON.parse(readFileSync(new URL('./fixtures/schedule-board-rows.json', import.meta.url), 'utf8'));
 const FR24_LIGHT = JSON.parse(readFileSync(new URL('./fixtures/fr24-summary-light.json', import.meta.url), 'utf8'));
@@ -78,14 +92,14 @@ function mockUpstream(fr24Body) {
   const calls = [];
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
     calls.push(String(url));
-    if (String(url).includes('fr24api.flightradar24.com')) {
+    if (isHost(url, 'fr24api.flightradar24.com')) {
       return { ok: true, status: 200, json: async () => fr24Body };
     }
     throw new Error(`unexpected fetch: ${url}`);
   });
   return calls;
 }
-const fr24Called = (calls) => calls.some((u) => u.includes('fr24api.flightradar24.com'));
+const fr24Called = (calls) => calls.some((u) => isHost(u, 'fr24api.flightradar24.com'));
 
 /** FR24's answer once tonight's leg is airborne: takeoff 05:52Z, the tail the board did not know. */
 const TONIGHT_AIRBORNE = {

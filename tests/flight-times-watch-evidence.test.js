@@ -10,11 +10,24 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const snapshotMocks = vi.hoisted(() => ({
-  loadScheduleSnapshot: vi.fn(async () => null),
-  saveScheduleSnapshot: vi.fn(async () => {}),
-  getSupabaseAdmin: vi.fn(async () => null),
-}));
+const snapshotMocks = vi.hoisted(() => {
+  const mocks = {
+    loadScheduleSnapshot: vi.fn(async () => null),
+    saveScheduleSnapshot: vi.fn(async () => {}),
+    getSupabaseAdmin: vi.fn(async () => null),
+  };
+  // flight-times reads a day's boards in one batch (loadBoardsListingFlight); answer the batch
+  // board by board from the per-key mock each test sets up.
+  mocks.loadBoardsListingFlight = vi.fn(async (keys) => {
+    const boards = new Map();
+    for (const key of keys) {
+      const snapshot = await mocks.loadScheduleSnapshot(key);
+      if (snapshot) boards.set(key, snapshot);
+    }
+    return { boards, failed: false };
+  });
+  return mocks;
+});
 vi.mock(process.cwd() + '/api/_schedule-snapshots.ts', () => snapshotMocks);
 const sightingsMock = vi.hoisted(() => ({ map: new Map() }));
 vi.mock(process.cwd() + '/api/_reg-sightings.ts', () => ({

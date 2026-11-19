@@ -203,6 +203,23 @@ export function faaUnknownSince(prevSince, faaStale, faaAsOf) {
 }
 
 /**
+ * "Unknown since" when this page has never had an FAA answer at all. faaUnknownSince needs an answer
+ * to age, so before Nov 2026 a first /api/faa fetch that failed left the picture "none", which reads
+ * exactly like a quiet day: on Nov 14 2026 (19:00–19:22 UTC, FAA refusing both sources) a new visitor
+ * got "All systems normal" in the ticker and "Smooth Ops" on the hub strip. The first failed fetch
+ * now starts the unknown, and it holds until an answer arrives (faaUnknownSince takes over then).
+ *
+ * @param {number|null} prevSince  what the provider held.
+ * @param {boolean} fetchFailed    this refresh's /api/faa fetch failed.
+ * @param {number} nowMs
+ * @returns {number|null}
+ */
+export function faaUnknownSinceWithoutAnswer(prevSince, fetchFailed, nowMs) {
+  if (Number.isFinite(prevSince)) return prevSince;
+  return fetchFailed ? nowMs : null;
+}
+
+/**
  * "FAA status unknown since 14:05", on the viewer's own clock (24-hour, like the "Z" clock the
  * Weather tab prints, but local). `timeZone` is for tests.
  * @param {number} sinceMs

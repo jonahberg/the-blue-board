@@ -2,25 +2,37 @@
 
 import { createHash } from 'node:crypto';
 
-/** Every inline, executable <script> body in an HTML document. */
+import { JSDOM } from 'jsdom';
+
+/**
+ * Every inline, executable <script> body in an HTML document.
+ *
+ * Read with a real HTML parser (jsdom, already the test suite's DOM), not a regular expression:
+ * CodeQL flagged the old `<script…>…</script>` pattern (js/bad-tag-filter: it misses `</script >`)
+ * and its comment stripping (js/incomplete-multi-character-sanitization). The parser finds
+ * scripts exactly where a browser does — never inside a comment — and `textContent` of a script
+ * is its source text verbatim (script content is raw text: no entity decoding, no trimming), which
+ * is what CSP hashes.
+ */
 export function inlineScripts(html) {
-  const bodies = [];
-  // Comments first: a source comment that says the words "<script>" is not a script, and
-  // matching one swallows everything up to the next real closing tag.
-  const source = html.replace(/<!--[\s\S]*?-->/g, '');
-  const re = /<script([^>]*)>([\s\S]*?)<\/script>/gi;
-  let match;
-  while ((match = re.exec(source)) !== null) {
-    const attrs = match[1] ?? '';
-    // Whole attribute names only: `\bsrc=` also matched `data-src=` and skipped a live script.
-    if (/(?:^|\s)src\s*=/i.test(attrs)) continue;
-    const type = attrs.match(/(?:^|\s)type\s*=\s*["']?([^"'\s>]+)/i)?.[1]?.trim().toLowerCase();
-    const executable = !type || type === 'module' || /(java|ecma)script/.test(type);
-    if (!executable) continue;
-    if (match[2].trim() === '') continue;
-    bodies.push(match[2]);
+  const dom = new JSDOM(html);
+  try {
+    const bodies = [];
+    for (const script of dom.window.document.querySelectorAll('script')) {
+      // External scripts are covered by 'self'.
+      if (script.hasAttribute('src')) continue;
+      // A non-JavaScript type is a data block (JSON-LD, the trackers' config): never executed.
+      const type = (script.getAttribute('type') ?? '').trim().toLowerCase();
+      const executable = !type || type === 'module' || /(java|ecma)script/.test(type);
+      if (!executable) continue;
+      const body = script.textContent ?? '';
+      if (body.trim() === '') continue;
+      bodies.push(body);
+    }
+    return bodies;
+  } finally {
+    dom.window.close();
   }
-  return bodies;
 }
 
 /** CSP hashes the bytes BETWEEN the tags, exactly — no trimming. */

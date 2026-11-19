@@ -1,3 +1,5 @@
+import { decodeHtmlEntities } from '../src/lib/escape.js';
+
 export const FR24_SCHEDULE_HEADERS: Record<string, string> = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   'Accept': 'application/json,text/plain,*/*',
@@ -44,13 +46,8 @@ function parseJsonCandidate(value: any): any | null {
   } catch {
     const preMatch = trimmed.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
     if (preMatch) {
-      const preBody = preMatch[1]
-        .replace(/&quot;/g, '"')
-        .replace(/&#34;/g, '"')
-        .replace(/&#x22;/gi, '"')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>');
+      // One pass (src/lib/escape.js): "&amp;lt;" inside the JSON stays the text "&lt;".
+      const preBody = decodeHtmlEntities(preMatch[1]);
       try {
         return JSON.parse(preBody);
       } catch {
