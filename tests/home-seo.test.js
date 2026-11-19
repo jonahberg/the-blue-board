@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { JSDOM } from 'jsdom';
 
 import { FLEET_DB_COUNT } from '../src/data/facts.js';
 import { fleetOrder, fleetTypes } from '../src/data/fleet/index.js';
@@ -36,7 +37,9 @@ function crawlableText() {
     HOME_BRIEF.checksHeading,
     ...HOME_BRIEF.checks.map((c) => `${c.term} ${c.text}`),
     HOME_BRIEF.howToUseHeading,
-    HOME_BRIEF.howToUseHtml.replace(/<[^>]+>/g, ''),
+    // The text a reader gets from the markup: parsed, not regex-stripped (CodeQL
+    // js/incomplete-multi-character-sanitization).
+    JSDOM.fragment(HOME_BRIEF.howToUseHtml).textContent,
     NOSCRIPT_LINKS.heading,
     NOSCRIPT_LINKS.intro,
     ...NOSCRIPT_LINKS.hubs.map((l) => l.label),

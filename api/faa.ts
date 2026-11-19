@@ -1,6 +1,9 @@
 import { XMLParser } from 'fast-xml-parser';
+import { waitUntil } from '@vercel/functions';
 import type { VercelRequest, VercelResponse } from './_types.js';
 import { createRateLimiter } from './_rate-limit.js';
+import { __resetFaaLastGoodForTests, loadStoredFaaAnswer, storeFaaAnswer } from './_faa-last-good.js';
+import { FAA_LAST_GOOD_MAX_AGE_MS, pickFaaLastGood } from '../src/lib/faa-last-good.js';
 
 const isRateLimited = createRateLimiter('faa', 60);
 
@@ -480,12 +483,15 @@ const FAA_UPSTREAM_TIMEOUT_MS = 8000;
 // (05:59–06:04 UTC) nasstatus.faa.gov answered HTTP 403 on both endpoints for about four minutes
 // and this handler returned the site's only 502s that week; the last successful /api/faa answer
 // in the logs was 23 minutes earlier. A recent real answer, marked stale, beats an error the
-// dashboard can only meet by holding what it already has. It lives in memory, so it helps only a
-// warm process that has answered before. Thirty minutes covers a gap like Nov 7's: FAA programs
-// run for hours, and past this age the honest answer is the error. The body stays the bare array
-// the client reads (an array has nowhere to carry a flag), so staleness travels in the
-// X-BB-FAA-Stale header, the age in seconds, as X-BB-Feed-Stale does for /api/fr24-feed.
-const FAA_LAST_GOOD_MAX_AGE_MS = 30 * 60 * 1000;
+// dashboard can only meet by holding what it already has. Thirty minutes covers a gap like Nov 7's:
+// FAA programs run for hours, and past this age the honest answer is the error
+// (FAA_LAST_GOOD_MAX_AGE_MS, src/lib/faa-last-good.js). The body stays the bare array the client
+// reads (an array has nowhere to carry a flag), so staleness travels in the X-BB-FAA-Stale header,
+// the age in seconds, as X-BB-Feed-Stale does for /api/fr24-feed.
+//
+// Kept in memory AND in the database (api/_faa-last-good.ts). Memory alone helped only a warm
+// server that had answered before, and with the edge caching /api/faa for five minutes most servers
+// that meet an FAA outage are new: on Nov 14 2026 (19:00–19:22 UTC) 25 requests found nothing.
 let lastGoodFaa: { airports: FAAAirport[]; at: number } | null = null;
 
 /**
@@ -497,6 +503,7 @@ export function __resetFaaHandlerForTests(): void {
   jsonFailCount = 0;
   lastJsonFailTime = 0;
   lastGoodFaa = null;
+  __resetFaaLastGoodForTests();
 }
 
 /** GET one nasstatus endpoint. The timeout covers the body read as well as the headers. */
@@ -583,19 +590,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (airports) {
-    lastGoodFaa = { airports, at: Date.now() };
+    const at = Date.now();
+    lastGoodFaa = { airports, at };
+    // After the answer, never in front of it; at most once a minute per server.
+    const stored = storeFaaAnswer(airports, at);
+    if (stored) waitUntil(stored);
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
     res.setHeader('Content-Type', 'application/json');
     return res.status(200).json(airports);
   }
 
   const detail = failure?.detail || 'no answer';
-  const lastGood = lastGoodFaa;
-  const ageMs = lastGood ? Math.max(0, Date.now() - lastGood.at) : Infinity;
-  if (lastGood && ageMs <= FAA_LAST_GOOD_MAX_AGE_MS) {
+  // This server's own last good answer first; only when it has none young enough, the stored one.
+  let lastGood = pickFaaLastGood([lastGoodFaa], Date.now());
+  let from = 'this server';
+  if (!lastGood) {
+    lastGood = pickFaaLastGood([await loadStoredFaaAnswer()], Date.now());
+    if (lastGood) {
+      from = 'stored copy';
+      // Keep it, so the rest of the outage on this server does not read it again.
+      lastGoodFaa = { airports: lastGood.airports as FAAAirport[], at: lastGood.at };
+    }
+  }
+  if (lastGood) {
+    const ageMs = lastGood.ageMs;
     const ageSec = Math.round(ageMs / 1000);
     // warn, not error: the caller got a real (flagged) answer.
-    console.warn(`FAA upstream unavailable (${detail}); served last-known-good (${ageSec}s old)`);
+    console.warn(`FAA upstream unavailable (${detail}); served last-known-good (${ageSec}s old, ${from})`);
     // Short CDN life so the next request tries FAA again, and never past the age limit.
     const shareable = Math.max(0, Math.min(60, Math.floor((FAA_LAST_GOOD_MAX_AGE_MS - ageMs) / 1000)));
     res.setHeader('Cache-Control', shareable > 0 ? `s-maxage=${shareable}` : 'no-store');

@@ -15,6 +15,7 @@ import {
   isCompleteSnapshotAcceptable,
   saveScheduleSnapshot,
   cleanupExpiredSnapshots,
+  loadBoardsListingFlight,
 } from '../api/_schedule-snapshots.js';
 
 describe('getSnapshotCompleteness', () => {
@@ -286,6 +287,74 @@ describe('saveScheduleSnapshot — complete-board betterness gate (Supabase-back
     const m = mockSupabase({ existingPayload: { partial: true, total: 900, meta: { completeness: 0.5 } } });
     await save({ partial: false, total: 300, meta: { source: 'aerodatabox' } });
     expect(m.upsert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('loadBoardsListingFlight — one bounded query per batch (Nov 2026)', () => {
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test';
+  });
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    supa.from = null;
+    vi.restoreAllMocks();
+  });
+
+  /** from().select().in().gt().contains() → `result` (a promise, or one that never settles). */
+  function mockBatch(result) {
+    const calls = {};
+    const chain = {
+      select: vi.fn((cols) => { calls.select = cols; return chain; }),
+      in: vi.fn((col, keys) => { calls.in = [col, keys]; return chain; }),
+      gt: vi.fn((col, value) => { calls.gt = [col, value]; return chain; }),
+      contains: vi.fn((col, value) => { calls.contains = [col, value]; return result; }),
+    };
+    supa.from = vi.fn(() => chain);
+    return { calls, chain };
+  }
+
+  const rowFor = (num) => ({ identification: { number: { default: num } } });
+
+  it('asks once for every key, filtered to the boards that list the flight, and keeps only its rows', async () => {
+    const m = mockBatch(Promise.resolve({
+      data: [{ cache_key: 'agg:ORD:departures:1', payload: { flights: [rowFor('UA1'), rowFor('UA2')] }, refreshed_at: '2026-11-18T12:00:00Z' }],
+      error: null,
+    }));
+    const keys = ['agg:ORD:departures:1', 'agg:SFO:arrivals:1', 'agg:ORD:departures:1'];
+    const result = await loadBoardsListingFlight(keys, 'UA1');
+    expect(supa.from).toHaveBeenCalledTimes(1);
+    expect(m.calls.select).toBe('cache_key, payload, refreshed_at');
+    expect(m.calls.in).toEqual(['cache_key', ['agg:ORD:departures:1', 'agg:SFO:arrivals:1']]);
+    expect(m.calls.gt[0]).toBe('expires_at');
+    expect(m.calls.contains).toEqual(['payload', { flights: [{ identification: { number: { default: 'UA1' } } }] }]);
+    expect(result.failed).toBe(false);
+    expect([...result.boards.keys()]).toEqual(['agg:ORD:departures:1']);
+    expect(result.boards.get('agg:ORD:departures:1').data.flights).toEqual([rowFor('UA1')]);
+  });
+
+  it('a failed query is reported as failed, with ONE log line for the whole batch', async () => {
+    mockBatch(Promise.resolve({ data: null, error: { message: 'upstream hiccup' } }));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await loadBoardsListingFlight(['a', 'b', 'c'], 'UA1');
+    expect(result).toEqual({ boards: new Map(), failed: true });
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(errors.mock.calls[0][0]).toBe('Schedule snapshot read failed for UA1 across 3 board(s) (a and 2 more): upstream hiccup');
+  });
+
+  it('a query that runs out of time is failed, not "no boards"', async () => {
+    mockBatch(new Promise(() => {}));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await loadBoardsListingFlight(['a'], 'UA1', { timeoutMs: 5 });
+    expect(result.failed).toBe(true);
+  });
+
+  it('sends nothing for an empty batch', async () => {
+    mockBatch(Promise.resolve({ data: [], error: null }));
+    const result = await loadBoardsListingFlight([], 'UA1');
+    expect(result).toEqual({ boards: new Map(), failed: false });
+    expect(supa.from).not.toHaveBeenCalled();
   });
 });
 

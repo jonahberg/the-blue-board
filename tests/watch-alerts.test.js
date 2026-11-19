@@ -27,6 +27,7 @@ import { isAuthorizedCronRequest } from '../api/_cron-auth.js';
 import { getSupabase } from '../api/_supabase.js';
 import { isPushConfigured, ensureVapidConfigured, sendPush } from '../api/_web-push.js';
 import { recordAirborneSample } from '../api/_airborne-samples.js';
+import { isHost } from './helpers/url-host.js';
 
 // Build a chainable Supabase mock covering the two shapes the handler uses:
 //   loadAllSubscriptions: from().select().order().range()  → { data, error }
@@ -74,7 +75,7 @@ function flightResponse({ ok = true, status = 'Departed', gate = 'C1', registrat
 }
 /** A watch already pinned to flightResponse()'s leg, before it left. */
 const PINNED = (flight = 'UA1') => ({ flight, legDep: LEG_DEP, legOrigin: 'ORD', legDest: 'SFO', legDate: '2026-10-03', phase: 'scheduled', lastStatus: 'Scheduled', delayBucket: 0 });
-const isFeed = (url) => String(url).includes('data-cloud.flightradar24.com');
+const isFeed = (url) => isHost(url, 'data-cloud.flightradar24.com');
 const flightTimesCalls = (fetchMock) => fetchMock.mock.calls.filter(([url]) => !isFeed(url));
 const feedCalls = (fetchMock) => fetchMock.mock.calls.filter(([url]) => isFeed(url));
 // [icao24, lat, lon, hdg, alt ft, spd kt, squawk, radar, type, reg, ts, origin, dest, flight, onGround, vr fpm, callsign]

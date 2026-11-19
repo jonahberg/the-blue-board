@@ -83,6 +83,30 @@ describe('WeatherProvider: faaIndex is the CURRENT FAA picture', () => {
     expect(hubProgramMarker(seen!.faaIndex, 'EWR')).toBe(null);
   });
 
+  it('a first FAA fetch that fails reads "unknown", not a quiet day, until an answer arrives (Nov 14 2026)', async () => {
+    api.fetchFaa.mockRejectedValueOnce(new Error('/api/faa → HTTP 502'));
+    render(<WeatherProvider><Probe /></WeatherProvider>);
+    await flush();
+    expect(seen!.faaAsOf).toBeNull();
+    expect(seen!.faaUnknownSince).toBe(NOW);
+
+    // Still failing five minutes later: the moment it became unknown does not move.
+    api.fetchFaa.mockRejectedValueOnce(new Error('/api/faa → HTTP 502'));
+    await act(async () => {
+      vi.advanceTimersByTime(5 * MIN);
+    });
+    await flush();
+    expect(seen!.faaUnknownSince).toBe(NOW);
+
+    // The FAA answers: known again.
+    api.fetchFaa.mockResolvedValueOnce({ airports: [], asOfMs: Date.now() });
+    await act(async () => {
+      vi.advanceTimersByTime(5 * MIN);
+    });
+    await flush();
+    expect(seen!.faaUnknownSince).toBeNull();
+  });
+
   it('holds "unknown since" steady while the server keeps re-serving the same old snapshot, and clears it when current', async () => {
     const takenAt = NOW - FAA_STALE_AFTER_MS - MIN;
     api.fetchFaa.mockResolvedValueOnce({ airports: [], asOfMs: takenAt });

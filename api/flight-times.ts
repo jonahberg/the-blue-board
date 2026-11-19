@@ -29,7 +29,7 @@ import { getQuery } from './_query.js';
 import { icaoToIata } from '../src/lib/airport-metadata.js';
 import { isOfficialFr24Enabled, isOfficialApiQuotaBlocked, recordOfficialApi402, fr24Datetime, pickFr24SummaryLeg, FR24_LEG_EARLY_MS } from './_official-fr24.js';
 import { airportTz } from '../src/lib/time-format.js';
-import { loadScheduleSnapshot } from './_schedule-snapshots.js';
+import { loadBoardsListingFlight, type BoardsListingFlight } from './_schedule-snapshots.js';
 import { UNITED_HUBS } from './_hubs.js';
 import { getStartOfHubDay, getHubLocalDate } from '../src/lib/hubTz.js';
 import { sanitizeBoardFlights } from '../src/lib/schedule-actuals.js';
@@ -200,21 +200,39 @@ async function fetchFr24Summary(flight: string, schedDepMs: number | null = null
 // Schedule snapshot tier: the hub boards already carry scheduled/estimated/real times server-side
 // (api/schedule.ts caches + api/_schedule-snapshots.ts persistence). Reads only the durable
 // snapshot layer (shared across lambdas); no upstream calls.
-// A board row is ~1KB but a board is ~260KB, and a My Flights poll asks for several flights
-// back to back. Memoise snapshot reads per instance for a minute so a poll of N flights reads
-// each board once, not N times.
+//
+// A board row is ~1 KB but a board is ~300 KB, and there are 18 boards a day. Until Nov 2026 each
+// lookup read every board it might need, whole, one request per board (src/lib/snapshot-read.js has
+// the Nov 16 burst that caused). Now each day's boards are ONE query that returns only the boards
+// listing the flight, cut to its rows. The answer is memoised per instance for a minute, and an
+// in-flight read is shared, so a burst of polls for one flight costs one read. A read that failed
+// is not memoised: the next lookup asks again rather than treating "no answer" as "no flight".
 const SNAPSHOT_MEMO_TTL_MS = 60_000;
-const snapshotMemo = new Map<string, { p: Promise<any>; ts: number }>();
-function loadSnapshotMemo(key: string): Promise<any> {
-  const hit = snapshotMemo.get(key);
+const SNAPSHOT_MEMO_MAX = 200;
+const snapshotMemo = new Map<string, { p: Promise<BoardsListingFlight>; ts: number }>();
+function loadBoardsMemo(keys: string[], flightNum: string): Promise<BoardsListingFlight> {
+  const memoKey = `${flightNum}|${keys.join(',')}`;
+  const hit = snapshotMemo.get(memoKey);
   if (hit && Date.now() - hit.ts <= SNAPSHOT_MEMO_TTL_MS) return hit.p;
-  if (snapshotMemo.size > 60) {
+  if (snapshotMemo.size >= SNAPSHOT_MEMO_MAX) {
     const oldest = snapshotMemo.keys().next().value;
     if (oldest !== undefined) snapshotMemo.delete(oldest);
   }
-  const p = loadScheduleSnapshot(key).catch(() => null);
-  snapshotMemo.set(key, { p, ts: Date.now() });
+  const p = loadBoardsListingFlight(keys, flightNum).catch(() => ({ boards: new Map(), failed: true }));
+  const entry = { p, ts: Date.now() };
+  snapshotMemo.set(memoKey, entry);
+  void p.then((result) => {
+    if (result.failed && snapshotMemo.get(memoKey) === entry) snapshotMemo.delete(memoKey);
+  });
   return p;
+}
+
+/** A batch of boards could not be read: the schedule tier cannot say which leg this is. */
+class BoardsUnavailableError extends Error {
+  constructor() {
+    super('schedule boards could not be read');
+    this.name = 'BoardsUnavailableError';
+  }
 }
 
 export type ScheduleLegPhase = 'active' | 'recent' | 'upcoming' | 'landed';
@@ -323,9 +341,14 @@ async function collectScheduleLegs(
   nowSec = Math.floor(Date.now() / 1000),
   sightings: Map<string, SightingRecord> = new Map(),
 ): Promise<ScheduleLeg[]> {
-  const reads: Promise<{ rows: any[]; dir: 'departures' | 'arrivals'; off: number }>[] = [];
-  for (const { hub, dir, off } of plan) {
-    reads.push(loadSnapshotMemo(`agg:${hub}:${dir}:${getStartOfHubDay(hub, off)}`).then((snapshot) => ({
+  const keyed = plan.map((read) => ({ ...read, key: `agg:${read.hub}:${read.dir}:${getStartOfHubDay(read.hub, read.off)}` }));
+  const { boards, failed } = await loadBoardsMemo(keyed.map((read) => read.key), flightNum);
+  // A board the read never reached may be the one with the leg in the air. Answering from the
+  // others (or walking on to tomorrow's boards, as an empty answer does) could name the wrong leg.
+  if (failed) throw new BoardsUnavailableError();
+  const reads = keyed.map(({ key, dir, off }) => {
+    const snapshot = boards.get(key) ?? null;
+    return {
       dir,
       off,
       // v1.11.3: these rows come straight from the persisted snapshot — /api/schedule's serve
@@ -351,14 +374,14 @@ async function collectScheduleLegs(
         nowSec * 1000,
         { dir },
       ).flights as any[],
-    })));
-  }
+    };
+  });
   // One leg per scheduled departure. The origin hub's departures row is the base (it has the
   // departure gate); the same leg's arrivals row — the only one that ever advances to landed —
   // lends its arrival times, its further-along status and its destination gate (mergeLegRows).
   // Before Oct 4 2026 it lent only the gate, so a hub-to-hub watch never saw "landed".
   const byDep = new Map<number, ScheduleLeg>();
-  for (const { rows, dir, off } of (await Promise.all(reads)).sort((a, b) => (a.dir === b.dir ? 0 : a.dir === 'departures' ? -1 : 1))) {
+  for (const { rows, dir, off } of reads.sort((a, b) => (a.dir === b.dir ? 0 : a.dir === 'departures' ? -1 : 1))) {
     for (const row of rows) {
       const schedDep = row?.time?.scheduled?.departure || 0;
       const existing = byDep.get(schedDep);
@@ -423,10 +446,11 @@ async function fetchScheduleCacheTimes(
   origin = '',
   depSec = 0,
   sightings: Map<string, SightingRecord> = new Map(),
-): Promise<any | null> {
+): Promise<{ sched: any | null; unavailable: boolean }> {
   const flightNum = flight.replace('UAL', 'UA');
   const nowSec = Math.floor(Date.now() / 1000);
   const sighting = sightings.get(normalizeFlightNum(flightNum) || flightNum) || null;
+  const answer = (sched: any | null) => ({ sched, unavailable: false });
   try {
     let legs: ScheduleLeg[];
     if (depSec) {
@@ -434,7 +458,7 @@ async function fetchScheduleCacheTimes(
       legs = (await collectScheduleLegs(flightNum, pinnedLegReads(depSec), origin, nowSec, sightings))
         .filter((leg) => Math.abs(leg.schedDep - depSec) <= PINNED_LEG_TOLERANCE_SEC)
         .sort((a, b) => Math.abs(a.schedDep - depSec) - Math.abs(b.schedDep - depSec));
-      return legs.length ? scheduleLegPayload(flightNum, legs[0].row) : null;
+      return answer(legs.length ? scheduleLegPayload(flightNum, legs[0].row) : null);
     }
     if (dateParam) {
       // F005/F013: each hub reads only the offset whose hub-local date is the one asked for.
@@ -460,11 +484,13 @@ async function fetchScheduleCacheTimes(
       }
     }
     const best = pickScheduleLeg(legs, nowSec, sighting);
-    return best ? scheduleLegPayload(flightNum, best.row) : null;
+    return answer(best ? scheduleLegPayload(flightNum, best.row) : null);
   } catch (e: any) {
+    // The failed read already logged its one line (loadBoardsListingFlight).
+    if (e instanceof BoardsUnavailableError) return { sched: null, unavailable: true };
     console.warn('flight-times schedule-cache lookup failed:', e?.message || e);
   }
-  return null;
+  return answer(null);
 }
 
 const PRE_DEPARTURE_STATUS = /^(|expected|scheduled|estimated|unknown|on ?time|delayed)$/i;
@@ -518,7 +544,7 @@ async function respondFromChain(res: VercelResponse, flight: string, cacheKey: s
   // Waited for (bounded): a cold lambda must not resolve a seen-flying flight as Likely Canceled,
   // nor miss the airborne / on-the-ground evidence a watch alert is built from.
   const sightings = await awaitRegSightings(2000);
-  const sched = await fetchScheduleCacheTimes(flight, dateParam, origin, depSec, sightings);
+  const { sched, unavailable } = await fetchScheduleCacheTimes(flight, dateParam, origin, depSec, sightings);
   let result: any = sched;
   if (allowOfficial) {
     const schedDepMs = sched ? Date.parse(sched.departure.gate.scheduled) : NaN;
@@ -539,10 +565,27 @@ async function respondFromChain(res: VercelResponse, flight: string, cacheKey: s
   // landed. Only ever an upgrade (src/lib/watch-leg.js applyLegEvidence).
   const flightKey = normalizeFlightNum(flight) || flight.replace('UAL', 'UA');
   result = applyLegEvidence(result, sightings.get(flightKey), Date.now());
+  if (result && unavailable) {
+    // The boards could not be read, so this is FR24's word alone (no gate times): fine for this
+    // visitor, but not worth keeping for the next one — the boards may answer a second from now.
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json(result);
+  }
   if (result) {
     setCache(cacheKey, result);
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json(result);
+  }
+  if (unavailable) {
+    // Not a 404: the flight may well be on the boards. Every caller already keeps what it last
+    // had on a failed lookup (My Flights, the watch cron) and asks again.
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Retry-After', '30');
+    return res.status(503).json({
+      success: false,
+      error: 'Flight times are taking too long to load. Try again in a minute.',
+      reason: 'schedule boards did not answer in time',
+    });
   }
   return res.status(404).json({
     success: false,

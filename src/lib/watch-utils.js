@@ -365,6 +365,20 @@ export function flightTimesCacheTtl(timeData, flightNumber, now = Date.now()) {
 }
 
 /**
+ * What the flight sheet says when /api/flight-times fails. Only a 404 means the boards have no such
+ * flight; a 503 means they did not answer in time (Nov 2026: that used to come back as a 404, so the
+ * sheet said "No schedule data" for a flight that was on the boards). Anything else, or no status at
+ * all (the request never got an answer), is said plainly rather than as "HTTP 500".
+ * @param {number|null|undefined} status
+ * @returns {string}
+ */
+export function flightTimesErrorText(status) {
+  if (status === 404) return 'No schedule data for this flight today.';
+  if (status === 503) return 'Flight times are taking too long to load. Try again in a minute.';
+  return "Couldn't load flight times just now. Try again in a minute.";
+}
+
+/**
  * What the watch panel can honestly say — and offer — about notifications (phone QA Oct 4 2026:
  * the panel said "Enable notifications for background alerts" with no control anywhere near it).
  *

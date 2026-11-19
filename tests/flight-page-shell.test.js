@@ -231,14 +231,17 @@ describe('vercel.json routing for flight pages', () => {
     expect(rewriteIndex).toBeGreaterThan(fsIndex);
   });
 
-  it('bundles the built shell, the fleet files, the card fonts and the resvg wasm into their functions', () => {
+  it('bundles the built shell, the fleet files, the card fonts and the resvg and HarfBuzz wasm into their functions', () => {
     expect(vercelJson.functions['api/flight-page.ts'].includeFiles).toBe('dist/flight.html');
     expect(vercelJson.functions['api/flight.ts'].includeFiles).toBe('public/data/{fleet,starlink}.json');
     // The card imports api/flight.ts (loadFlightPayload), so it needs the fleet files too.
     expect(vercelJson.functions['api/flight-card.ts'].includeFiles).toBe(
-      '{api/_flight-card/*.ttf,node_modules/@resvg/resvg-wasm/index_bg.wasm,public/data/{fleet,starlink}.json}',
+      '{api/_flight-card/*.ttf,node_modules/@resvg/resvg-wasm/index_bg.wasm,node_modules/harfbuzzjs/hb.wasm,public/data/{fleet,starlink}.json}',
     );
-    for (const file of ['public/data/fleet.json', 'public/data/starlink.json', 'node_modules/@resvg/resvg-wasm/index_bg.wasm']) {
+    // satori 0.33 shapes text with HarfBuzz, whose Node build reads hb.wasm beside itself
+    // (fs.readFileSync(__dirname + '/hb.wasm')) on every first render — a path the function
+    // bundler cannot see. Without it each card would fall back to the site's generic image.
+    for (const file of ['public/data/fleet.json', 'public/data/starlink.json', 'node_modules/@resvg/resvg-wasm/index_bg.wasm', 'node_modules/harfbuzzjs/hb.wasm']) {
       expect(existsSync(join(ROOT, file)), file).toBe(true);
     }
     expect(existsSync(join(ROOT, 'api/_flight-card/GeistMono-SemiBold.ttf'))).toBe(true);

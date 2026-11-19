@@ -25,3 +25,18 @@ export function sanitizeHeaderValue(str) {
   // eslint-disable-next-line no-control-regex
   return str.replace(/[\x00-\x1F\x7F]/g, '').trim();
 }
+
+// Decode the HTML character references a JSON body picks up when a proxy wraps it in <pre>…</pre>
+// (api/_fr24-scraper-transport.ts). ONE pass over the string, so a reference is decoded once:
+// "&amp;lt;" is the text "&lt;", never "<". The chained .replace() it replaced decoded &amp; before
+// &lt;, which turned "&amp;lt;" into "<" (CodeQL js/double-escaping, Oct 28 2026).
+const NAMED_REFERENCES = { quot: '"', amp: '&', lt: '<', gt: '>', apos: "'" };
+
+export function decodeHtmlEntities(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-z]+));/g, (match, dec, hex, name) => {
+    if (name !== undefined) return Object.prototype.hasOwnProperty.call(NAMED_REFERENCES, name) ? NAMED_REFERENCES[name] : match;
+    const code = dec !== undefined ? Number.parseInt(dec, 10) : Number.parseInt(hex, 16);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+  });
+}

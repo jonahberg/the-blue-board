@@ -55,6 +55,7 @@ import { STARLINK_TAB_HREF } from '@/lib/starlink-link.js';
 import { liveryForTail } from '@/lib/special-livery.js';
 import { resolveFlightRoute } from '../data/route';
 import { airportTz, formatTimeWithTz } from '@/lib/time-format.js';
+import { flightTimesErrorText } from '@/lib/watch-utils.js';
 import { ApiError, fetchFlightTimes } from '../data/api';
 import { shareUrl } from '../data/share';
 import type { ExpressAircraft, Flight, FlightTimes, TimeTriple } from '../data/types';
@@ -281,12 +282,7 @@ export function FlightSheet() {
         if (controller.signal.aborted) return;
         setTimes({
           data: null,
-          error:
-            err instanceof ApiError && err.status === 404
-              ? 'No schedule data for this flight today.'
-              : err instanceof Error
-                ? err.message
-                : String(err),
+          error: flightTimesErrorText(err instanceof ApiError ? err.status : null),
           loading: false,
         });
       },
