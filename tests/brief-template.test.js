@@ -293,3 +293,33 @@ describe('far fewer flights in the air than usual (Nov 13 2026, the nationwide g
     expect(t.items.map((i) => i.fact_ids[0])).not.toContain('air.normal');
   });
 });
+
+// Nov 18 2026: on a light-schedule day the calm template's in-the-air line says the schedule is lighter.
+describe('a light-schedule day', () => {
+  it('calm, with the comparison as the in-the-air line and the calm headline', () => {
+    const facts = factsFor('light-schedule-calm');
+    const t = buildTemplateBrief(facts);
+    expect(t.tone).toBe('calm');
+    expect(t.headline).toBe('United is running smoothly right now.');
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['otp.floor', 'faa.active.count', 'air.normal']);
+    expect(t.items[2].text).toMatch(/in line with a lighter schedule today/);
+    expect(t.traveler_note).toBeNull();
+  });
+
+  it('a calm day whose schedule does not account for the count keeps the Starlink line', () => {
+    const fx = JSON.parse(readFileSync(new URL('light-schedule-calm.json', FIXTURE_DIR), 'utf8'));
+    // 34% fewer flying on a schedule 12% lighter.
+    const facts = buildBriefFacts({ ...fx.sources, air: { airborne: 423, starlink: 180 }, airSchedule: { today: 620, prior: Array(7).fill(705) } }, { nowMs: Date.parse(fx.nowIso) }).facts;
+    const t = buildTemplateBrief(facts);
+    expect(t.tone).toBe('calm');
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['otp.floor', 'faa.active.count', 'air.starlink']);
+  });
+
+  it('a halt on a light-schedule day leads with the shortfall and speaks to every traveler', () => {
+    const t = buildTemplateBrief(factsFor('light-schedule-halt'));
+    expect(t.tone).toBe('disrupted');
+    expect(t.headline).toBe('Far fewer United flights are in the air than usual right now.');
+    expect(t.items[0].fact_ids).toEqual(['air.normal']);
+    expect(t.traveler_note?.fact_ids).toEqual(['air.normal']);
+  });
+});

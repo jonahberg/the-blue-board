@@ -4,6 +4,20 @@ All notable changes to The Blue Board are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.3] - 2026-11-18
+
+**A lighter holiday schedule no longer reads as far fewer flights; flight lookups stop flooding the database.**
+
+### Fixed
+- **On a day United schedules fewer flights, the brief could have called it a disruption.** Since November 13 the brief reads "Watch" at 35% fewer United flights in the air than usual for the time of day and "Disrupted" at 45% fewer. Thanksgiving Day, Christmas Eve and Day, New Year's Eve and Day are scheduled light, so that count alone could have opened a holiday with "Far fewer United flights are in the air than usual right now." When far fewer flights are flying, the brief now also counts the departures scheduled from United's hubs over the past four hours against the usual for that time of day, and allows for any part of a lighter schedule beyond the ordinary day-to-day spread. A day that is simply lighter stays calm and, when the schedule accounts for the count, says so: "That is in line with a lighter schedule today: about 30% fewer departures were scheduled from United's hubs over the past four hours than usual." Otherwise it says only that the schedule is lighter today too. A halt still reads as one, because a held or canceled flight is still a scheduled one: the November 13 ground stop and the morning after it read exactly as they did. If the schedule cannot be read, or the count looks incomplete, the brief works as it did before, except on those five dates and the morning after each, until 6 AM Central, when the count in the air then sets no alarm.
+
+- **Flight lookups no longer read every hub board to find one flight.** Each day's boards are now one small query that returns only the boards listing the flight. When the boards are slow, a lookup says so ("Flight times are taking too long to load. Try again in a minute.") instead of answering with another day's flight or "no schedule data". This was the cause of the bursts of database timeouts since November 11: a My Flights page with a dozen watched flights sent 489 board reads in seven seconds.
+- **When the FAA feed is down, a fresh server has something to show.** The last FAA answer (up to 30 minutes old, marked with its age) is kept in the database, and a page that never got an FAA answer says "FAA status unknown" instead of "All systems normal".
+
+### Security
+- **satori 0.33.5** for the flight share card (SVG escaping advisory GHSA-wx4j-mvgx-mqwp).
+- **Code-scanning findings cleared at their source:** inline-script hashing reads HTML with a parser, one-pass entity decoding in the scraper transport, least-privilege permissions on the test workflow.
+
 ## [1.31.2] - 2026-11-13
 
 **News: hear the ground stop on air traffic control radio.**

@@ -26,7 +26,8 @@
 //
 // A fixture is { name, description, nowIso, sources | facts, expect? }: `sources` are the raw
 // payloads the cron collects (/api/irops, /api/faa, /api/nas, /api/metar, live-feed counts, the
-// airborne median) and go through the real fact builder; `facts` skips it. An optional
+// airborne median, and `airSchedule`, the flight_history schedule counts when they were read) and go
+// through the real fact builder; `facts` skips it. An optional
 // `radio: { EWR: <GET /api/v0/airports/status body> }` adds the Enhanced Radar facts exactly as the
 // cron would (no Enhanced Radar call is ever made from here).
 

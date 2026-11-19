@@ -1,7 +1,8 @@
 // A small in-memory stand-in for the supabase-js query builder, for the ops-brief tests. It supports
-// exactly the chains api/_brief-store.ts, api/_feature-spend.ts and api/_radio-*.ts use: select with
-// eq/gte/lte/lt/in/order/limit, insert(...).select().limit(), update(...).eq(), delete().in(), and
-// rpc('increment_feature_spend'). Every call is recorded in `calls`. `failures` makes a table/op
+// exactly the chains api/_brief-store.ts, api/_feature-spend.ts, api/_radio-*.ts and
+// api/_brief-collect.ts use: select with eq/gte/lte/lt/in/order/limit (and a count-only
+// select(cols, { count: 'exact', head: true }), answered as { data: null, count }),
+// insert(...).select().limit(), update(...).eq(), delete().in(), and rpc('increment_feature_spend'). Every call is recorded in `calls`. `failures` makes a table/op
 // answer with an error: { 'ops_briefs.select': { code: '42P01', message: '...' } }.
 
 export function fakeSupabase({ tables = {}, failures = {} } = {}) {
@@ -10,18 +11,20 @@ export function fakeSupabase({ tables = {}, failures = {} } = {}) {
   const calls = [];
   let nextId = 1000;
 
+  // Numbers compare as numbers (sched_dep minutes), everything else as strings (ISO times, dates).
+  const cmp = (v, val) => (typeof v === 'number' && typeof val === 'number' ? v - val : String(v) < String(val) ? -1 : String(v) > String(val) ? 1 : 0);
   const matches = (row, filters) => filters.every(([op, col, val]) => {
     const v = row[col];
     if (op === 'eq') return v === val;
-    if (op === 'gte') return String(v) >= String(val);
-    if (op === 'lte') return String(v) <= String(val);
-    if (op === 'lt') return String(v) < String(val);
+    if (op === 'gte') return cmp(v, val) >= 0;
+    if (op === 'lte') return cmp(v, val) <= 0;
+    if (op === 'lt') return cmp(v, val) < 0;
     if (op === 'in') return val.includes(v);
     return true;
   });
 
   function execute(q) {
-    calls.push({ table: q.table, op: q.op, filters: q.filters, payload: q.payload, columns: q.columns, order: q.order, limit: q.limit });
+    calls.push({ table: q.table, op: q.op, filters: q.filters, payload: q.payload, columns: q.columns, order: q.order, limit: q.limit, head: q.head });
     const failure = failures[`${q.table}.${q.op}`];
     if (failure) return { data: null, error: failure };
     const rows = (state[q.table] ||= []);
@@ -53,13 +56,14 @@ export function fakeSupabase({ tables = {}, failures = {} } = {}) {
       out = [...out].sort((a, b) => (String(a[col]) < String(b[col]) ? -1 : String(a[col]) > String(b[col]) ? 1 : 0) * (ascending ? 1 : -1));
     }
     if (q.limit != null) out = out.slice(0, q.limit);
+    if (q.head) return { data: null, count: out.length, error: null };
     return { data: out.map((r) => ({ ...r })), error: null };
   }
 
   function from(table) {
-    const q = { table, op: 'select', filters: [], order: null, limit: null, payload: null, columns: '*', returning: false };
+    const q = { table, op: 'select', filters: [], order: null, limit: null, payload: null, columns: '*', returning: false, head: false };
     const api = {
-      select(cols) { if (q.op === 'insert' || q.op === 'update') q.returning = true; else q.op = 'select'; q.columns = cols; return api; },
+      select(cols, opts) { if (q.op === 'insert' || q.op === 'update') q.returning = true; else q.op = 'select'; q.columns = cols; q.head = Boolean(opts?.head); return api; },
       insert(payload) { q.op = 'insert'; q.payload = payload; return api; },
       upsert(payload) { q.op = 'upsert'; q.payload = payload; return api; },
       update(payload) { q.op = 'update'; q.payload = payload; return api; },

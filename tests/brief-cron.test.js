@@ -278,6 +278,28 @@ describe('honest degradation', () => {
     expect(collect).not.toHaveBeenCalled();
   });
 
+  it('the schedule read is stored with the brief (ops_briefs.collection), so production can be audited', async () => {
+    useDb();
+    await runBriefCron({ nowMs: NOW, collect: collected(fixture('light-schedule-calm')), generate: modelFail('model_timeout') });
+    const [row] = briefRows();
+    expect(row.tone).toBe('calm');
+    expect(row.collection.airSchedule).toMatchObject({ status: 'ok', today: 490, usual: 705, ratio: 0.695, factor: 0.795, expectedAirborne: 510 });
+    // A failed read is stored as "unavailable" with its reason, and named in errors.
+    useDb();
+    await runBriefCron({
+      nowMs: NOW,
+      collect: collected(fixture('schedule-read-failed'), { errors: { airSchedule: 'timeout' } }),
+      generate: modelFail('model_timeout'),
+    });
+    const [failed] = briefRows();
+    expect(failed.collection.airSchedule).toMatchObject({ status: 'unavailable', reason: 'timeout', factor: 1 });
+    expect(failed.collection.errors).toEqual({ airSchedule: 'timeout' });
+    // Near the usual nothing is read, and nothing is stored about it.
+    useDb();
+    await runBriefCron({ nowMs: NOW, collect: collected(), generate: modelFail('model_timeout') });
+    expect(briefRows()[0].collection.airSchedule).toBeUndefined();
+  });
+
   it('ops_briefs missing (sql/022 not applied): a 200-shaped "unconfigured", never a throw', async () => {
     useDb({ failures: { 'ops_briefs.select': { code: '42P01', message: 'relation "ops_briefs" does not exist' } } });
     const generate = modelOk();

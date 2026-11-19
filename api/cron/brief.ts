@@ -4,7 +4,8 @@
 //
 // One generation serves every visitor; nothing is generated per request. Each run:
 //   1. Collects the facts from what the site already has (api/_brief-collect.ts: the site's own
-//      CDN-cached endpoints plus one airborne_samples read — zero new upstream spend).
+//      CDN-cached endpoints plus one airborne_samples read, and the flight_history schedule counts
+//      when far fewer flights are flying than usual — zero new upstream spend).
 //   2. Publishes nothing unless BOTH /api/irops and /api/faa answered and at least three hubs carry
 //      an on-time reading: a calm brief written without the FAA picture, or without on-time
 //      evidence, would be a lie.

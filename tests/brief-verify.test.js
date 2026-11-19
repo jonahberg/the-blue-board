@@ -745,3 +745,59 @@ describe('verifyBrief: far fewer flights in the air than usual leads the brief',
     expect(out.report.shortfallLed).toBeUndefined();
   });
 });
+
+// Nov 18 2026: fewer flights in the air, in line with a lighter schedule today (src/lib/brief-schedule.js).
+describe('verifyBrief: a lighter schedule', () => {
+  const fx = JSON.parse(readFileSync(new URL('./fixtures/brief/light-schedule-calm.json', import.meta.url), 'utf8'));
+  const facts = buildBriefFacts(fx.sources, { nowMs: Date.parse(fx.nowIso) }).facts;
+  const floor = facts.find((f) => f.id === 'otp.floor');
+  const normal = facts.find((f) => f.id === 'air.normal');
+
+  it('is not the headline: one saying fewer flights are flying is replaced', () => {
+    for (const headline of ['Fewer United flights than usual are in the air right now.', 'Far fewer flights are flying today.']) {
+      const out = verifyBrief(brief([item(floor.statement, ['otp.floor']), item(normal.statement, ['air.normal'])], { headline }), facts);
+      expect(out.report.headline, headline).toEqual({ status: 'replaced', reasons: ['headline:fewer_in_line_with_schedule'], original: headline });
+      expect(out.brief.headline).toBe('United is running smoothly right now.');
+      expect(out.brief.tone).toBe('calm');
+      expect(out.report.dropped).toEqual([]);
+    }
+  });
+
+  it('the headline rule follows the fact\'s own words: a calm fact that does not say "in line" is not under it', () => {
+    // 34% fewer flying on a schedule 12% lighter: calm, but the schedule does not account for it.
+    const neutral = buildBriefFacts({ ...fx.sources, air: { airborne: 423, starlink: null }, airSchedule: { today: 620, prior: Array(7).fill(705) } }, { nowMs: Date.parse(fx.nowIso) }).facts;
+    const f = neutral.find((x) => x.id === 'air.normal');
+    expect(f).toMatchObject({ toneFloor: 'calm', lighterSchedule: true });
+    expect(f.inLineWithSchedule).toBeUndefined();
+    const headline = 'Fewer United flights than usual are in the air right now.';
+    const out = verifyBrief(brief([item(f.statement, ['air.normal'])], { headline }), neutral);
+    expect(out.report.headline.reasons ?? []).not.toContain('headline:fewer_in_line_with_schedule');
+  });
+
+  it('at watch with a lighter schedule, "Far fewer" overstates it: the headline is replaced', () => {
+    // 48% fewer than usual on a day 30% lighter: 35% short of the expected count, a watch.
+    const stop = JSON.parse(readFileSync(new URL('./fixtures/brief/nationwide-stop-2026-11-13.json', import.meta.url), 'utf8'));
+    const watchFacts = buildBriefFacts({ ...stop.sources, air: { airborne: 338, starlink: null }, airSchedule: { today: 490, prior: Array(7).fill(700) } }, { nowMs: Date.parse(stop.nowIso) }).facts;
+    const f = watchFacts.find((x) => x.id === 'air.normal');
+    expect(f).toMatchObject({ toneFloor: 'watch', lighterSchedule: true });
+    const headline = 'Far fewer United flights are in the air than usual right now.';
+    const out = verifyBrief(brief([item(f.statement, ['air.normal'])], { tone: 'watch', headline }), watchFacts);
+    expect(out.report.headline).toMatchObject({ status: 'replaced', reasons: ['headline:far_fewer_with_lighter_schedule'] });
+    expect(out.brief.headline).not.toMatch(/far fewer/i);
+    // "Fewer" without "far" stands.
+    const plain = verifyBrief(brief([item(f.statement, ['air.normal'])], { tone: 'watch', headline: 'Fewer United flights than usual are in the air right now.' }), watchFacts);
+    expect(plain.report.headline.status).toBe('kept');
+  });
+
+  it('the schedule as the reason needs the fact that measured it', () => {
+    const own = item('Fewer flights are flying than usual, in line with a lighter schedule today.', ['air.normal']);
+    const borrowed = item('The 405 flights in the air reflect a lighter schedule today.', ['air.total']);
+    const out = verifyBrief(brief([own, borrowed]), facts);
+    expect(out.report.dropped).toEqual([expect.objectContaining({ index: 1, reasons: ['cause_not_in_facts:lighter schedule'] })]);
+    expect(out.brief.items).toEqual([own]);
+    // On a day the fact says nothing about the schedule, the claim is refused there too.
+    const plain = buildBriefFacts(JSON.parse(readFileSync(new URL('./fixtures/brief/calm-afternoon.json', import.meta.url), 'utf8')).sources, { nowMs: Date.parse(fx.nowIso) }).facts;
+    const claim = item('630 United flights are in the air; fewer flights were scheduled today.', ['air.normal']);
+    expect(verifyBrief(brief([claim]), plain).report.dropped).toEqual([expect.objectContaining({ reasons: ['cause_not_in_facts:fewer flights were scheduled'] })]);
+  });
+});

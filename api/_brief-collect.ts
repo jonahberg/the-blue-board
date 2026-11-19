@@ -15,15 +15,19 @@
 //   /data/fleet.json                  static, for matchAircraft (same file the dashboard loads)
 //
 // plus one Supabase read of airborne_samples (sql/017, written every 5 min by watch-alerts) for the
-// "usual for this time of day" comparison. Every request sends `Accept: application/json`, because
+// "usual for this time of day" comparison, and, only when the count is 25% or more below that
+// usual, eight count-only reads of flight_history (sql/021) for the day's schedule
+// (loadScheduleCounts, src/lib/brief-schedule.js). Every request sends `Accept: application/json`, because
 // every response varies on Accept (vercel.json) and a different Accept is a different cache entry.
 //
 // Nothing here throws. A source that fails comes back null and is named in `errors`.
 
 import { getSupabaseAdmin } from './_schedule-snapshots.js';
 import { AIRBORNE_SAMPLES_TABLE } from './_airborne-samples.js';
+import { boundedQuery, isDbTimeout } from './_bounded.js';
 import { parseFr24Feed } from '../src/lib/feed-health.js';
-import { airborneNormal, countAirborneAndStarlink, sameClockDaysBefore } from '../src/lib/brief-facts.js';
+import { airborneNormal, countAirborneAndStarlink, sameClockDaysBefore, scheduleReadNeeded } from '../src/lib/brief-facts.js';
+import { scheduleWindows, type ScheduleCounts } from '../src/lib/brief-schedule.js';
 
 /** The warm cron's exact METAR query (api/cron/refresh-metar.ts HUB_ICAOS). */
 export const BRIEF_METAR_IDS = 'KEWR,KIAH,KORD,KDEN,KSFO,KLAX,KIAD,RJAA,PGUM';
@@ -121,6 +125,50 @@ export async function loadAirborneNormal(nowMs: number, days = 7): Promise<{ med
   }
 }
 
+/** sql/021; the same name as api/_flight-history.ts FLIGHT_HISTORY_TABLE (not imported: that module pulls in the writer). */
+const FLIGHT_HISTORY_TABLE = 'flight_history';
+/**
+ * The whole schedule read's time limit: all eight counts run in parallel under it. One count takes
+ * about 0.6 s on the Nov 2026 table (64,190 rows on Nov 18; a lossy BRIN scan of three or four
+ * days). A count that runs out of time is a failed count, and a failed today count is
+ * "unavailable" (unscaled). sql/024 (not applied) is the index that would make each count cheap.
+ */
+export const BRIEF_SCHEDULE_READ_TIMEOUT_MS = 4_000;
+
+/**
+ * Hub departures scheduled in the last four hours, and at the same US wall-clock time on each of
+ * the previous seven days (src/lib/brief-schedule.js scheduleWindows): eight count-only requests in
+ * parallel, each bounded to a few board days of service_date so the BRIN index narrows the scan.
+ * Canceled and held flights keep their rows, so a halt leaves this count alone. Never throws.
+ */
+export async function loadScheduleCounts(nowMs: number, timeoutMs = BRIEF_SCHEDULE_READ_TIMEOUT_MS): Promise<ScheduleCounts> {
+  try {
+    const supabase = await getSupabaseAdmin();
+    if (!supabase || typeof supabase.from !== 'function') return { today: null, prior: [], error: 'unconfigured' };
+    let timedOut = false;
+    const counts = await Promise.all(scheduleWindows(nowMs).map(async (w) => {
+      const read: any = await boundedQuery(
+        supabase
+          .from(FLIGHT_HISTORY_TABLE)
+          .select('flight_no', { count: 'exact', head: true })
+          .eq('on_dep_board', true)
+          .gte('service_date', w.fromDate)
+          .lte('service_date', w.toDate)
+          .gte('sched_dep', w.startMin)
+          .lt('sched_dep', w.endMin),
+        timeoutMs,
+      );
+      if (read?.error) { if (isDbTimeout(read.error)) timedOut = true; return null; }
+      return typeof read?.count === 'number' ? read.count : null;
+    }));
+    const [today, ...prior] = counts;
+    return { today, prior, ...(today === null ? { error: timedOut ? 'timeout' : 'read_failed' } : {}) };
+  } catch (e: any) {
+    console.warn('brief schedule read threw:', e?.message || e);
+    return { today: null, prior: [], error: 'read_failed' };
+  }
+}
+
 export type CollectedSources = {
   irops: any | null;
   faa: any[] | null;
@@ -128,6 +176,8 @@ export type CollectedSources = {
   metar: any[] | null;
   air: { airborne: number; express: number; starlink: number | null } | null;
   airNormal: { median: number; days: number } | null;
+  /** Scheduled departures (loadScheduleCounts), read only when the count is 25% or more below usual; else null. */
+  airSchedule: ScheduleCounts | null;
   asOf: Record<string, number | null>;
   errors: Record<string, string>;
 };
@@ -165,6 +215,7 @@ export async function collectBriefSources(options: { fetchImpl?: Fetch; nowMs?: 
     metar: take('metar', metar, (j) => Array.isArray(j) && j.length > 0),
     air: null,
     airNormal: normal,
+    airSchedule: null,
     asOf,
     errors,
   };
@@ -185,6 +236,12 @@ export async function collectBriefSources(options: { fetchImpl?: Fetch; nowMs?: 
         errors.air = 'no airborne flights';
       }
     }
+  }
+  // The day's schedule, only when it can matter: it can only lower a shortfall, and below 25% fewer
+  // than usual a shortfall sets no tone. So on almost every run nothing is read here.
+  if (out.air && normal && scheduleReadNeeded(out.air.airborne, normal.median)) {
+    out.airSchedule = await loadScheduleCounts(nowMs);
+    if (out.airSchedule.error) errors.airSchedule = out.airSchedule.error;
   }
   return out;
 }
