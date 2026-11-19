@@ -39,7 +39,7 @@ import { defaultSchedDayOffset } from './hubTz.js';
 import { isOnGround } from './flight-phase.js';
 import { isExpressCallsign } from './airborne-count.js';
 import { matchAircraft } from './fleet-match.js';
-import { lighterSchedulePct, lightScheduleHoliday, sameClockDaysBefore, scheduleComparison } from './brief-schedule.js';
+import { lighterSchedulePct, lightScheduleDayOrMorningAfter, sameClockDaysBefore, scheduleComparison } from './brief-schedule.js';
 
 export { BRIEF_HUBS };
 // The wall-clock helper lives with the schedule comparison, which needs it too.
@@ -512,6 +512,7 @@ function hubsReporting(n, day) {
  * @property {boolean} [later]  a possible program whose window opens on a later local day (plannedFact)
  * @property {boolean} [outlier]  a healthy hub's on-time fact sent because it trails the others
  * @property {boolean} [lighterSchedule]  air.normal says the schedule is lighter than usual today
+ * @property {boolean} [inLineWithSchedule]  ... and that the count in the air is in line with it (calm)
  */
 
 /**
@@ -1044,15 +1045,20 @@ export function buildBriefFacts(sources, { nowMs }) {
       // (BRIEF_AIRBORNE_WATCH_PCT), measured against what the day's schedule leads one to expect. It
       // says what is seen, never why: no fact here gives a cause beyond the schedule itself.
       let shortfall = airborneShortfallTone(airborne, expected);
-      // On the few days United schedules far fewer flights, a schedule that cannot be read or
-      // trusted sets no tone rather than risk a false "Disrupted" (lightScheduleHoliday). On every
-      // other day it is read exactly as before.
-      const holiday = schedule && schedule.status !== 'ok' ? lightScheduleHoliday(nowMs) : null;
+      // On the few days United schedules far fewer flights, and the morning after until 6 AM Central,
+      // a schedule that cannot be read or trusted sets no tone rather than risk a false "Disrupted"
+      // (lightScheduleDayOrMorningAfter). On every other day it is read exactly as before.
+      const holiday = schedule && schedule.status !== 'ok' ? lightScheduleDayOrMorningAfter(nowMs) : null;
       const holidayCapped = Boolean(holiday) && shortfall !== 'calm';
       if (holidayCapped) shortfall = 'calm';
       const lighter = lighterSchedulePct(schedule);
       const hours = Math.round((schedule?.windowMin ?? 0) / 60);
-      const scheduleSentence = lighter === null ? '' : ` ${shortfall === 'calm' ? 'That is in line with a lighter schedule today' : 'The schedule is lighter today too'}: about ${lighter}% fewer departures were scheduled from United's hubs over the past ${numberWord(hours)} hours than usual.`;
+      // "In line with" only when the schedule accounts for the shortfall: the percent fewer in the air
+      // is within the "about the usual" band of the percent fewer scheduled (34% fewer flying on a
+      // schedule 12% lighter is not in line with it). Calm too, so a fact saying "in line" never sets
+      // a tone. Every other lighter schedule gets the neutral sentence, at any tone.
+      const inLine = lighter !== null && -pct - lighter <= BRIEF_AIRBORNE_USUAL_BAND_PCT && shortfall === 'calm';
+      const scheduleSentence = lighter === null ? '' : ` ${inLine ? 'That is in line with a lighter schedule today' : 'The schedule is lighter today too'}: about ${lighter}% fewer departures were scheduled from United's hubs over the past ${numberWord(hours)} hours than usual.`;
       if (schedule) {
         const rawRatio = schedule.today !== null && schedule.usual ? Math.round((schedule.today / schedule.usual) * 1000) / 1000 : null;
         airScheduleAudit = {
@@ -1078,9 +1084,11 @@ export function buildBriefFacts(sources, { nowMs }) {
         toneFloor: shortfall,
         // While the shortfall sets the tone the brief quotes its figure first, so the key moves every
         // ten points and a brief saying "73% fewer" is rewritten before the count is far from it.
-        // The lighter-schedule sentence appearing or going is a change too: it says why it is calm.
-        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}${lighter === null ? '' : ':lighter'}${shortfall === 'calm' ? '' : `:${shortfall}:${Math.floor(Math.abs(pct) / 10) * 10}`}`,
+        // The lighter-schedule sentence appearing, going or changing wording is a change too: "in
+        // line" says why it is calm.
+        material: `airnorm:${usual ? 'usual' : pct < 0 ? 'below' : 'above'}${inLine ? ':inline' : lighter === null ? '' : ':lighter'}${shortfall === 'calm' ? '' : `:${shortfall}:${Math.floor(Math.abs(pct) / 10) * 10}`}`,
         ...(lighter === null ? {} : { lighterSchedule: true }),
+        ...(inLine ? { inLineWithSchedule: true } : {}),
       });
     }
   }

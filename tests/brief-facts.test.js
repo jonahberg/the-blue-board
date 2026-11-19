@@ -881,8 +881,9 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
       statement: "The 405 United flights in the air are 37% fewer than usual for this time of day: over the past 7 days, the median at this hour was 641. That is in line with a lighter schedule today: about 30% fewer departures were scheduled from United's hubs over the past four hours than usual.",
       toneFloor: 'calm',
       severity: 20,
-      material: 'airnorm:below:lighter',
+      material: 'airnorm:below:inline',
       lighterSchedule: true,
+      inLineWithSchedule: true,
     });
     // Every number in the statement is in the values (the verifier checks them), and so is the cause.
     expect(f.values).toEqual(expect.arrayContaining(['405', '37%', '641', '7', '30%', 'four', 'lighter schedule']));
@@ -900,8 +901,30 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
   it('a day 30% lighter with flights tracking the schedule reads about 12% short', () => {
     const out = air(490, 700, { today: 490, prior: week(700) });
     expect(out.collection.airSchedule).toMatchObject({ ratio: 0.7, factor: 0.8, expectedAirborne: 560, vsExpectedPct: -12 });
-    expect(normal(out)).toMatchObject({ toneFloor: 'calm', material: 'airnorm:below:lighter' });
+    expect(normal(out)).toMatchObject({ toneFloor: 'calm', material: 'airnorm:below:inline', inLineWithSchedule: true });
     expect(normal(out).statement).toMatch(/30% fewer than usual for this time of day.*in line with a lighter schedule today: about 30% fewer departures/);
+  });
+
+  it('"in line with" only when the schedule accounts for the shortfall, within 10 points', () => {
+    const IN_LINE = 'That is in line with a lighter schedule today';
+    const NEUTRAL = 'The schedule is lighter today too: about';
+    // 34% fewer flying on a schedule 12% lighter: calm (33% short of expected), but not "in line".
+    const notInLine = normal(air(462, 700, { today: 616, prior: week(700) }));
+    expect(notInLine).toMatchObject({ toneFloor: 'calm', lighterSchedule: true, material: 'airnorm:below:lighter' });
+    expect(notInLine.inLineWithSchedule).toBeUndefined();
+    expect(notInLine.statement).toContain(`${NEUTRAL} 12% fewer departures`);
+    expect(notInLine.statement).not.toContain(IN_LINE);
+    // A schedule 30% lighter: 40% fewer flying is in line (10 points), 41% is not.
+    expect(normal(air(420, 700, { today: 490, prior: week(700) }))).toMatchObject({ inLineWithSchedule: true, material: 'airnorm:below:inline' });
+    const past = normal(air(413, 700, { today: 490, prior: week(700) }));
+    expect(past).toMatchObject({ toneFloor: 'calm', material: 'airnorm:below:lighter' });
+    expect(past.statement).toContain(NEUTRAL);
+    // Never on a fact that sets a tone: 65% fewer on a schedule 55% lighter is within 10 points but
+    // 36% short of the expected count, a watch, so the sentence is the neutral one.
+    const deep = normal(air(245, 700, { today: 315, prior: week(700) }));
+    expect(deep).toMatchObject({ toneFloor: 'watch', lighterSchedule: true });
+    expect(deep.inLineWithSchedule).toBeUndefined();
+    expect(deep.statement).not.toContain(IN_LINE);
   });
 
   it('a halt on a light-schedule day still reads disrupted, and does not call the schedule the reason', () => {
@@ -956,6 +979,12 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
       const overnight = air(80, 160, { today: 50, prior: week(120) }, '2026-11-26T09:00:00Z'); // 50% fewer, 3 AM CT
       expect(normal(overnight).toneFloor).toBe('calm');
       expect(overnight.collection.airSchedule).toMatchObject({ reason: 'usual_too_small', holidayCapped: true });
+      // The holiday evening's light red-eyes, after Central midnight: still covered until 6 AM Central.
+      const friday = air(80, 160, { today: 50, prior: week(120) }, '2026-11-27T11:30:00Z'); // 3:30 AM PT Fri
+      expect(normal(friday).toneFloor).toBe('calm');
+      expect(friday.collection.airSchedule).toMatchObject({ holiday: 'the morning after Thanksgiving Day', holidayCapped: true });
+      const fridayMorning = air(80, 160, { today: 50, prior: week(120) }, '2026-11-27T12:30:00Z'); // 6:30 AM CT Fri
+      expect(normal(fridayMorning).toneFloor).toBe('disrupted');
       // Even a halt, while the schedule cannot be read: that is the trade this fallback makes.
       expect(normal(air(174, 651, { today: null, prior: [], error: 'timeout' }, THANKSGIVING)).toneFloor).toBe('calm');
     });
@@ -972,7 +1001,7 @@ describe('Nov 18 2026: a lighter schedule is not a shortfall', () => {
       expect(halt.collection.airSchedule.holiday).toBeUndefined();
       // And a light Thanksgiving with flights near the schedule is calm by the schedule, not the list.
       const light = air(404, 651, { today: 480, prior: week(700) }, THANKSGIVING);
-      expect(normal(light)).toMatchObject({ toneFloor: 'calm', lighterSchedule: true });
+      expect(normal(light)).toMatchObject({ toneFloor: 'calm', lighterSchedule: true, inLineWithSchedule: true });
     });
   });
 });

@@ -586,7 +586,7 @@ export function verifyBrief(candidate, facts) {
   report.itemsKept = kept.length;
   // Fewer flights flying than usual, in line with a lighter schedule today (brief-facts.js air.normal,
   // src/lib/brief-schedule.js): not a problem, so not the headline (prompt rule 2).
-  const lighterSchedule = factList.find((f) => f.id === 'air.normal' && f.lighterSchedule === true && f.toneFloor === 'calm');
+  const inLineWithSchedule = factList.find((f) => f.id === 'air.normal' && f.inLineWithSchedule === true);
   // At watch, a lighter schedule explains part of the shortfall: the raw figure can pass the 45% the
   // prompt names for "Far fewer" while the count against the schedule does not.
   const lighterAtWatch = factList.find((f) => f.id === 'air.normal' && f.lighterSchedule === true && f.toneFloor === 'watch');
@@ -615,7 +615,7 @@ export function verifyBrief(candidate, facts) {
     if (laterLead) reasons.push(laterLead);
     // With far fewer flights in the air than usual, the headline is about that, not one airport.
     if (shortfall && !NETWORK_SHORTFALL_HEADLINE_RE.test(text)) reasons.push('headline:misses_network_shortfall');
-    if (lighterSchedule && FEWER_FLYING_HEADLINE_RE.test(text)) reasons.push('headline:fewer_in_line_with_schedule');
+    if (inLineWithSchedule && FEWER_FLYING_HEADLINE_RE.test(text)) reasons.push('headline:fewer_in_line_with_schedule');
     if (lighterAtWatch && FAR_FEWER_HEADLINE_RE.test(text)) reasons.push('headline:far_fewer_with_lighter_schedule');
     if (MARKUP_RE.test(text)) reasons.push('markup_or_url');
     return reasons;

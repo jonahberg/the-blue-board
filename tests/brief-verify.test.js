@@ -763,6 +763,17 @@ describe('verifyBrief: a lighter schedule', () => {
     }
   });
 
+  it('the headline rule follows the fact\'s own words: a calm fact that does not say "in line" is not under it', () => {
+    // 34% fewer flying on a schedule 12% lighter: calm, but the schedule does not account for it.
+    const neutral = buildBriefFacts({ ...fx.sources, air: { airborne: 423, starlink: null }, airSchedule: { today: 620, prior: Array(7).fill(705) } }, { nowMs: Date.parse(fx.nowIso) }).facts;
+    const f = neutral.find((x) => x.id === 'air.normal');
+    expect(f).toMatchObject({ toneFloor: 'calm', lighterSchedule: true });
+    expect(f.inLineWithSchedule).toBeUndefined();
+    const headline = 'Fewer United flights than usual are in the air right now.';
+    const out = verifyBrief(brief([item(f.statement, ['air.normal'])], { headline }), neutral);
+    expect(out.report.headline.reasons ?? []).not.toContain('headline:fewer_in_line_with_schedule');
+  });
+
   it('at watch with a lighter schedule, "Far fewer" overstates it: the headline is replaced', () => {
     // 48% fewer than usual on a day 30% lighter: 35% short of the expected count, a watch.
     const stop = JSON.parse(readFileSync(new URL('./fixtures/brief/nationwide-stop-2026-11-13.json', import.meta.url), 'utf8'));

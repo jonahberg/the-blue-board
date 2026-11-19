@@ -151,9 +151,10 @@ export function thanksgivingDate(year) {
 
 /**
  * The days United schedules far fewer flights, by US Central date. This list is ONLY the fallback
- * for a day the schedule cannot be read or trusted: on these dates a shortfall in the air then sets
- * no tone, rather than risk a false "Disrupted". It is not how the brief normally allows for a light
- * day; the schedule count is.
+ * for a day the schedule cannot be read or trusted: on these dates, and the morning after until 6 AM
+ * Central (lightScheduleDayOrMorningAfter), a shortfall in the air then sets no tone, rather than
+ * risk a false "Disrupted". It is not how the brief normally allows for a light day; the schedule
+ * count is.
  * @param {number} ms
  * @returns {string|null} the day's name, or null on any other day
  */
@@ -166,4 +167,23 @@ export function lightScheduleHoliday(ms) {
   if (monthDay === '12-31') return "New Year's Eve";
   if (monthDay === '01-01') return "New Year's Day";
   return null;
+}
+
+/** The morning after a light-schedule date still counts as it, until this Central hour. */
+const MORNING_AFTER_UNTIL_HOUR_CT = 6;
+
+/**
+ * One of the five light-schedule dates, or the morning after one until 6:00 AM Central: from the
+ * late evening until about 5:15 AM PT the four-hour schedule count is too small to use, while the
+ * flights in the air are still the holiday evening's light red-eyes. The fallback (a calm tone when
+ * the schedule cannot be used) has to cover those hours too, or the small hours of the Friday after
+ * Thanksgiving, Dec 26 and Jan 2 could read a false "watch" or "disrupted".
+ * @param {number} ms
+ * @returns {string|null} "Thanksgiving Day", "the morning after Thanksgiving Day", …, or null
+ */
+export function lightScheduleDayOrMorningAfter(ms) {
+  const today = lightScheduleHoliday(ms);
+  if (today) return today;
+  const earlier = lightScheduleHoliday(ms - MORNING_AFTER_UNTIL_HOUR_CT * 3_600_000);
+  return earlier ? `the morning after ${earlier}` : null;
 }

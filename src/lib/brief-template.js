@@ -241,8 +241,8 @@ function pickItems(facts, limit, tone) {
   if (tone === 'calm') {
     // On a light-schedule day the in-the-air line is the comparison that says so: fewer flights are
     // flying, in line with the schedule (src/lib/brief-schedule.js).
-    const lighter = index.get('air.normal');
-    add(lighter?.lighterSchedule ? lighter : index.get('air.starlink') || index.get('air.total'));
+    const normal = index.get('air.normal');
+    add(normal?.inLineWithSchedule ? normal : index.get('air.starlink') || index.get('air.total'));
     add(index.get('wx.summary'));
   }
   return picked;

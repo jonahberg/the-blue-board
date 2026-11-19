@@ -223,15 +223,17 @@ so "what a fact allows" and "what a sentence claims" are measured with one ruler
    fails or times out, fewer than 3 earlier days have rows, the usual four-hour count is under 150
    (about 11:30 PM to 5:15 AM PT), or today's count is under 40% of the usual (missing rows, which
    would otherwise hide a halt). On five dates, by US Central date (Thanksgiving Day, Dec 24, Dec 25,
-   Dec 31, Jan 1; `lightScheduleHoliday`), an unused ratio caps the shortfall's tone at `calm`
-   instead, rather than risk a false "Disrupted" on a day the schedule is known to be light; that list
-   is only this fallback. When the factor is below 1 the fact adds what the schedule shows ("That is
-   in line with a lighter schedule today: about N% fewer departures were scheduled from United's
-   hubs over the past four hours than usual." when the result is calm, "The schedule is lighter
-   today too: …" when it is not), with N and the hours in `values` and the `schedule` cause
-   (`src/lib/brief-claims.js`), so only this fact can give a lighter schedule as a reason. A calm
-   fact that says so is never the headline (`headline:fewer_in_line_with_schedule`) and is the calm
-   template's in-the-air line; at `watch` a "Far fewer" headline is replaced
+   Dec 31, Jan 1), and the morning after each until 6 AM Central (`lightScheduleDayOrMorningAfter`:
+   the holiday evening's red-eyes are still flying when the four-hour count gets too small), an
+   unused ratio caps the shortfall's tone at `calm` instead, rather than risk a false "Disrupted" on
+   a day the schedule is known to be light; that list is only this fallback. When the factor is
+   below 1 the fact adds what the schedule shows: "That is in line with a lighter schedule today:
+   about N% fewer departures were scheduled from United's hubs over the past four hours than usual."
+   only when the result is calm and the percent fewer in the air is within 10 points of N
+   (`inLineWithSchedule`), else "The schedule is lighter today too: …" (`lighterSchedule`), with N
+   and the hours in `values` and the `schedule` cause (`src/lib/brief-claims.js`), so only this fact
+   can give a lighter schedule as a reason. A fact saying "in line" is never the headline
+   (`headline:fewer_in_line_with_schedule`) and is the calm template's in-the-air line; at `watch` a "Far fewer" headline is replaced
    (`headline:far_fewer_with_lighter_schedule`), since the raw figure can pass 45% there. Every read is stored in `ops_briefs.collection.airSchedule`: today's
    count, the usual, the raw ratio, the factor applied, the expected count, or `unavailable` and its
    reason. Backtest: `scripts/backtest-airborne-schedule.sql`. At
@@ -301,7 +303,7 @@ out of the key entirely, id included, so it appearing or disappearing is not a c
 | fact | material |
 |---|---|
 | `air.total`, `air.starlink` | none (`null`): the count moves all day |
-| `air.normal` | usual / above / below (±10% of the 7-day median), `:lighter` while it says the schedule is lighter, and below:watch:NN / below:disrupted:NN at 35% / 45% fewer than expected, NN the shortfall against the usual in ten-point steps (the brief quotes that figure) |
+| `air.normal` | usual / above / below (±10% of the 7-day median), `:inline` / `:lighter` while it says the count is in line with a lighter schedule / that the schedule is lighter, and below:watch:NN / below:disrupted:NN at 35% / 45% fewer than expected, NN the shortfall against the usual in ten-point steps (the brief quotes that figure) |
 | `net.index` | its band (normal / minor / significant), not the score |
 | `otp.<HUB>` | none while at or above 80% (`BRIEF_HEALTHY_HUB_OTP`), so a healthy hub's reading moving, appearing or aging out is not a change; below 80%, rounded to 5 points. Not sending healthy hubs' facts on a healthy day (Nov 2026) therefore changes no key |
 | `cxl.confirmed` | none under 10, sent (5–9) or not (0–4): the send threshold sits inside that band, so 4 ↔ 5 never rewrites; from 10, the existing count steps (10–12, 13–17, …) |

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BRIEF_SCHEDULE_DAYS, BRIEF_SCHEDULE_FLOOR_SHARE, BRIEF_SCHEDULE_MIN_DAYS, BRIEF_SCHEDULE_MIN_USUAL,
-  BRIEF_SCHEDULE_USUAL_BAND_PCT, BRIEF_SCHEDULE_WINDOW_MIN, centralDate, lighterSchedulePct, lightScheduleHoliday,
+  BRIEF_SCHEDULE_USUAL_BAND_PCT, BRIEF_SCHEDULE_WINDOW_MIN, centralDate, lighterSchedulePct, lightScheduleDayOrMorningAfter, lightScheduleHoliday,
   sameClockDaysBefore, scheduleComparison, scheduleWindows, thanksgivingDate,
 } from '../src/lib/brief-schedule.js';
 import { BRIEF_AIRBORNE_USUAL_BAND_PCT } from '../src/lib/brief-facts.js';
@@ -105,5 +105,21 @@ describe('the five light-schedule dates (the fallback only)', () => {
     expect(lightScheduleHoliday(t('2027-01-01T18:00:00Z'))).toBe("New Year's Day");
     expect(lightScheduleHoliday(t('2027-01-02T18:00:00Z'))).toBeNull();
     expect(lightScheduleHoliday(t('2026-11-13T21:25:00Z'))).toBeNull();
+  });
+
+  it('the fallback covers each date and the morning after, until 6:00 AM Central', () => {
+    // 11:30 PM PT on Thanksgiving is 1:30 AM Central on Friday: the date has ended, the red-eyes have not.
+    expect(lightScheduleDayOrMorningAfter(t('2026-11-27T07:30:00Z'))).toBe('the morning after Thanksgiving Day');
+    expect(lightScheduleDayOrMorningAfter(t('2026-11-27T11:30:00Z'))).toBe('the morning after Thanksgiving Day'); // 3:30 AM PT
+    expect(lightScheduleDayOrMorningAfter(t('2026-11-27T11:59:00Z'))).toBe('the morning after Thanksgiving Day'); // 5:59 AM CT
+    expect(lightScheduleDayOrMorningAfter(t('2026-11-27T12:30:00Z'))).toBeNull(); // 6:30 AM CT
+    expect(lightScheduleDayOrMorningAfter(t('2026-11-26T20:00:00Z'))).toBe('Thanksgiving Day');
+    expect(lightScheduleDayOrMorningAfter(t('2026-12-26T09:00:00Z'))).toBe('the morning after Christmas Day');
+    expect(lightScheduleDayOrMorningAfter(t('2027-01-02T09:00:00Z'))).toBe("the morning after New Year's Day");
+    // Dec 25 and Jan 1 are on the list themselves, so their small hours read as the day.
+    expect(lightScheduleDayOrMorningAfter(t('2026-12-25T09:00:00Z'))).toBe('Christmas Day');
+    // An ordinary date, and the morning after one, are unchanged.
+    expect(lightScheduleDayOrMorningAfter(t('2026-11-13T21:25:00Z'))).toBeNull();
+    expect(lightScheduleDayOrMorningAfter(t('2026-11-14T09:00:00Z'))).toBeNull();
   });
 });

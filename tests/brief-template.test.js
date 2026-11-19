@@ -306,6 +306,15 @@ describe('a light-schedule day', () => {
     expect(t.traveler_note).toBeNull();
   });
 
+  it('a calm day whose schedule does not account for the count keeps the Starlink line', () => {
+    const fx = JSON.parse(readFileSync(new URL('light-schedule-calm.json', FIXTURE_DIR), 'utf8'));
+    // 34% fewer flying on a schedule 12% lighter.
+    const facts = buildBriefFacts({ ...fx.sources, air: { airborne: 423, starlink: 180 }, airSchedule: { today: 620, prior: Array(7).fill(705) } }, { nowMs: Date.parse(fx.nowIso) }).facts;
+    const t = buildTemplateBrief(facts);
+    expect(t.tone).toBe('calm');
+    expect(t.items.map((i) => i.fact_ids[0])).toEqual(['otp.floor', 'faa.active.count', 'air.starlink']);
+  });
+
   it('a halt on a light-schedule day leads with the shortfall and speaks to every traveler', () => {
     const t = buildTemplateBrief(factsFor('light-schedule-halt'));
     expect(t.tone).toBe('disrupted');
