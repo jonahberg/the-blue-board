@@ -4,7 +4,8 @@
 //     and its cost is booked against the brief's own daily counter;
 //   - invalid JSON, a bad shape, a failed call, no surviving item, the spend cap, an unreadable
 //     counter and both kill switches all publish the TEMPLATE (or nothing, for the cron switch);
-//   - unchanged facts under 60 minutes write nothing but `checked_at`;
+//   - unchanged facts under 60 minutes write nothing but `checked_at` (unless the stored tone is no
+//     longer the tone the facts compute: a tone-rule deploy);
 //   - nothing is published without both /api/irops and /api/faa;
 //   - cleanup deletes in bounded batches.
 import { readFileSync } from 'node:fs';
@@ -239,6 +240,18 @@ describe('change detection', () => {
     const generate = modelOk();
     expect((await runBriefCron({ nowMs: NOW, collect: collected(), generate })).status).toBe('published');
     expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('a stored tone the facts no longer compute is rewritten at once, even on the same hash (a tone-rule deploy)', async () => {
+    // Nov 22 2026: one hub at 67% was a watch; the change key is the same under the new rule, so
+    // without this the old amber brief would be reused for up to an hour.
+    useDb({ tables: { ops_briefs: [prevRow(5, { tone: 'watch' })] } });
+    const generate = modelOk();
+    expect((await runBriefCron({ nowMs: NOW, collect: collected(), generate })).status).toBe('published');
+    expect(generate).toHaveBeenCalledTimes(1);
+    // The same hash with the tone these facts compute is reused as before.
+    useDb({ tables: { ops_briefs: [prevRow(5, { tone: 'calm' })] } });
+    expect((await runBriefCron({ nowMs: NOW, collect: collected(), generate: modelOk() })).status).toBe('unchanged');
   });
 
   it('does not retry a deterministic failure (no item survived) until the facts change', async () => {

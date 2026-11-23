@@ -1,6 +1,6 @@
 {
  "name": "live-2026-11-10-evening",
- "description": "The real site payloads captured from theblueboard.co at 23:10Z on Tue Nov 10 2026 (/api/irops, /api/faa, /api/nas, /api/metar, and the latest airborne_samples count): an FAA ground stop in effect at Boston (not a hub) for runway construction, a possible ground stop or delay program at Newark until 9:00 PM ET, every hub with a reading at 85% or better, light rain at Houston. Starlink and the 7-day airborne median were not captured. Expected tone: watch.",
+ "description": "The real site payloads captured from theblueboard.co at 23:10Z on Tue Nov 10 2026 (/api/irops, /api/faa, /api/nas, /api/metar, and the latest airborne_samples count): an FAA ground stop in effect at Boston (not a hub) for runway construction, a possible ground stop or delay program at Newark until 9:00 PM ET, every hub with a reading at 85% or better, light rain at Houston. Starlink and the 7-day airborne median were not captured. Expected tone: calm since Nov 22 2026 (it was watch, from the possible program at Newark; a possible program never sets the tone now).",
  "nowIso": "2026-11-10T23:11:00Z",
  "sources": {
   "irops": {
@@ -595,6 +595,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }

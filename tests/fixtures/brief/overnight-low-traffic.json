@@ -1,6 +1,6 @@
 {
  "name": "overnight-low-traffic",
- "description": "Overnight, 4:30 AM ET: the US hub boards still show yesterday until their 6 AM local rollover, 142 United flights in the air (the usual for the hour), Tokyo Narita and Guam too thin to read, no FAA programs, and dense fog at San Francisco (the overnight marine layer). Expected tone: watch, for the fog alone.",
+ "description": "Overnight, 4:30 AM ET: the US hub boards still show yesterday until their 6 AM local rollover, 142 United flights in the air (the usual for the hour), Tokyo Narita and Guam too thin to read, no FAA programs, and dense fog at San Francisco (the overnight marine layer). Expected tone: calm since Nov 22 2026 (it was watch, for the fog alone; weather never sets the tone alone now).",
  "nowIso": "2026-11-11T09:30:00Z",
  "sources": {
   "irops": {
@@ -388,6 +388,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }

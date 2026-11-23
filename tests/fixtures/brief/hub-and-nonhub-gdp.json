@@ -1,6 +1,6 @@
 {
  "name": "hub-and-nonhub-gdp",
- "description": "A ground delay program for flights into San Francisco (a hub) until 8:59 PM PT for low clouds (average 45, up to 110 minutes) and the Seattle ground delay program (not a hub) until 9:59 PM PT; hubs otherwise healthy; the plan lists possible programs only away from the hubs. Expected tone: watch, from San Francisco; San Francisco leads and Seattle follows the hubs.",
+ "description": "A ground delay program for flights into San Francisco (a hub) until 8:59 PM PT for low clouds (average 45, up to 110 minutes) and the Seattle ground delay program (not a hub) until 9:59 PM PT; hubs otherwise healthy; the plan lists possible programs only away from the hubs. Expected tone: calm since Nov 22 2026 (it was watch, from San Francisco): one hub's delay program is named, not a tone; San Francisco leads and Seattle follows the hubs.",
  "nowIso": "2026-11-12T01:00:00Z",
  "sources": {
   "irops": {
@@ -763,6 +763,6 @@
   }
  },
  "expect": {
-  "tone": "watch"
+  "tone": "calm"
  }
 }

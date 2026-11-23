@@ -8,7 +8,8 @@
 // :6077-6094 the server derivation, :5685-5734 the severity/label bands). The bar's
 // markup, the FAA-program blend and the 🏠 marker stay in renderHubHealthBar().
 
-import { networkStatus } from './ops-health.js';
+import { defaultSchedDayOffset } from './hubTz.js';
+import { HUB_CANCEL_MIN_CONFIRMED, networkStatus } from './ops-health.js';
 import { isPlausibleDelta } from './schedule-plausibility.js';
 
 /** Fixed left-to-right order of the hub-health bar. */
@@ -490,24 +491,163 @@ export function hubHealthSeverity(pct) {
 
 /**
  * The trailing network-wide chip. Its level comes from `networkStatus()` (ops-health.js),
- * the one definition the ticker and the IROPS badge also follow — pass the IROPS score and
- * the FAA index so the chip can never read "Smooth Ops" beside a disruption. Without them
- * it bands the on-time readings alone.
+ * the one definition the ticker and the brief's tone also follow — pass the IROPS score, the FAA
+ * index, which readings are yesterday's and the hubs' cancellation rates (networkInputs builds them
+ * all) so the chip and the brief read the same level. Without them it bands the on-time readings
+ * alone.
  *
- * @param {number[]} pcts  per-hub on-time readings.
- * @param {{iropsScore?: number|string|null, faaIndex?: object, hubCodes?: string[]}} [signals]
- * @returns {{avg: number, label: string, color: string, severity: 'green'|'amber'|'red',
- *   level: 'normal'|'minor'|'significant'}|null} null when no hub has a reading.
+ * Readings are keyed by hub (Nov 22 2026): the network level counts impaired HUBS, so a hub's
+ * reading and its FAA program must be recognised as the same hub.
+ *
+ * @param {Record<string, number>} hubOtps  on-time reading per hub code.
+ * @param {{iropsScore?: number|string|null, faaIndex?: object, hubCodes?: string[],
+ *   hubDayOffsets?: Record<string, number>, hubCancelRates?: Record<string, number>}} [signals]
+ * @returns {{avg: number|null, label: string, color: string, severity: 'green'|'amber'|'red',
+ *   level: 'normal'|'minor'|'significant'}|null} null when no hub has a reading and nothing else
+ *   says the network is anything but normal: "Smooth Ops" needs readings, a ground stop does not
+ *   (Nov 23 2026: with the readings gated to the server's, a hub ground stop during an /api/irops
+ *   outage left the chip blank; `avg` is null then).
  */
-export function networkLabel(pcts, { iropsScore = null, faaIndex = {}, hubCodes = HUB_ORDER } = {}) {
-  if (!pcts || !pcts.length) return null;
-  const hubOtps = Object.fromEntries(pcts.map((pct, i) => [String(i), pct]));
-  const status = networkStatus({ hubOtps, faaIndex, hubCodes, iropsScore });
+export function networkLabel(hubOtps, { iropsScore = null, faaIndex = {}, hubCodes = HUB_ORDER, hubDayOffsets = {}, hubCancelRates = {} } = {}) {
+  const keyed = hubOtps && typeof hubOtps === 'object' && !Array.isArray(hubOtps) ? hubOtps : {};
+  const status = networkStatus({ hubOtps: keyed, faaIndex, hubCodes, iropsScore, hubDayOffsets, hubCancelRates });
+  if (Object.keys(keyed).length === 0 && status.level === 'normal') return null;
   return {
-    avg: /** @type {number} */ (status.avg),
+    avg: status.avg,
     label: status.label,
     color: status.color,
     severity: status.severity,
     level: status.level,
+  };
+}
+
+/**
+ * A hub reading needs this many operated departures before the network level counts it, on the
+ * brief and on the strip alike (Nov 22 2026: the brief's own floor, BRIEF_MIN_OPERATED). Each hub's
+ * own chip keeps showing its figure from HUB_OTP_MIN_OPERATED (5); only the network level waits for
+ * 25, so Tokyo Narita's dozen departures, or Newark's first 18 of the morning, are never a whole
+ * impaired hub.
+ */
+export const NETWORK_MIN_OPERATED = 25;
+
+/**
+ * Which day one /api/irops hub board is, at `nowMs`: -1 when the board's own day is over
+ * (yesterday's board, which /api/irops reads until 06:00 hub-local and its CDN copy can serve for a
+ * while after; or a board built before midnight read after it), 0 while its day is still running.
+ * Read from the board's own day end (`boardDayEndSec`); else its own day as built (`boardDayOffset`);
+ * the hub's clock (defaultSchedDayOffset) only for a payload that says neither (Nov 22 2026: at 06:10
+ * ET the clock called yesterday's final Newark board "so far today").
+ * @param {any} m  one hubMetrics entry (or undefined)
+ * @param {string} hub
+ * @param {number} nowMs
+ * @returns {-1|0}
+ */
+export function boardDayOffsetAt(m, hub, nowMs) {
+  const end = m?.boardDayEndSec === null || m?.boardDayEndSec === undefined ? NaN : Number(m.boardDayEndSec);
+  if (Number.isFinite(end) && end > 0) return nowMs / 1000 >= end ? -1 : 0;
+  if (m?.boardDayOffset === -1 || m?.boardDayOffset === 0) return m.boardDayOffset;
+  return defaultSchedDayOffset(hub, new Date(nowMs)) === 0 ? 0 : -1;
+}
+
+/**
+ * Why a hub board is too far behind for the network level or the brief, or null when it is current:
+ * its coverage gap (age for today's board; the unseen part of its day for yesterday's) over
+ * HUB_BOARD_CURRENT_MAX_SEC. A payload without `boardDayEndSec` is judged by age.
+ * @param {any} m  one /api/irops hubMetrics entry
+ * @param {number} nowMs
+ * @returns {string|null}
+ */
+export function boardBehindReason(m, nowMs) {
+  const gapSec = boardCoverageGapSec({ generatedAtSec: m?.generatedAt, dayEndSec: m?.boardDayEndSec ?? null, nowSec: nowMs / 1000 });
+  if (gapSec === null || gapSec <= HUB_BOARD_CURRENT_MAX_SEC) return null;
+  const min = Math.round(gapSec / 60);
+  return Number(m?.boardDayOffset) === -1 ? `board missing the last ${min} min of yesterday` : `board ${min} min old`;
+}
+
+/**
+ * The hub on-time readings the NETWORK LEVEL counts, one set for the brief and the strip (Nov 22
+ * 2026): from the server's /api/irops hubMetrics only, never a visitor's own loaded boards; at least
+ * NETWORK_MIN_OPERATED departed; a board no more than HUB_BOARD_CURRENT_MAX_SEC behind; each dated by
+ * its board's own day (boardDayOffsetAt). The brief's on-time facts are built from exactly these.
+ * @param {Record<string, any>|null|undefined} hubMetrics
+ * @param {{nowMs: number, hubCodes?: string[]}} opts
+ * @returns {{readings: Record<string, {otp: number, operated: number, at: number|null, dayOffset: -1|0}>,
+ *   skipped: Array<{hub: string, reason: string}>}}
+ */
+export function networkReadings(hubMetrics, { nowMs, hubCodes = HUB_ORDER }) {
+  /** @type {Record<string, {otp: number, operated: number, at: number|null, dayOffset: -1|0}>} */
+  const readings = {};
+  const skipped = [];
+  for (const hub of hubCodes) {
+    const m = hubMetrics?.[hub];
+    if (!m) continue;
+    const otp = serverOtpFromMetrics(m);
+    if (otp === null) { skipped.push({ hub, reason: 'no reading' }); continue; }
+    const behind = boardBehindReason(m, nowMs);
+    if (behind) { skipped.push({ hub, reason: behind }); continue; }
+    const operated = Number(m.operated || 0);
+    if (operated < NETWORK_MIN_OPERATED) { skipped.push({ hub, reason: `${operated} operated (under ${NETWORK_MIN_OPERATED})` }); continue; }
+    const at = Number.isFinite(Number(m.generatedAt)) && Number(m.generatedAt) > 0 ? Number(m.generatedAt) * 1000 : null;
+    readings[hub] = { otp, operated, at, dayOffset: boardDayOffsetAt(m, hub, nowMs) };
+  }
+  return { readings, skipped };
+}
+
+/**
+ * Confirmed cancellations on one hub's /api/irops board: canceled minus "likely canceled", against
+ * the board's departures. Null below HUB_CANCEL_MIN_CONFIRMED confirmed, or with no departures.
+ * The brief's `cxl.<HUB>` facts and the network status both read this.
+ * @param {any} m  one hubMetrics entry
+ * @returns {{confirmed: number, total: number, rate: number}|null}
+ */
+export function hubConfirmedCancellations(m) {
+  const confirmed = Math.max(0, Number(m?.cancellations || 0) - Number(m?.cancellationsLikely || 0));
+  const total = Number(m?.total || 0);
+  if (!(confirmed >= HUB_CANCEL_MIN_CONFIRMED) || !(total > 0)) return null;
+  return { confirmed, total, rate: confirmed / total };
+}
+
+/**
+ * The confirmed-canceled share of each hub's departures, for the network status: only hubs with a
+ * rate to read (hubConfirmedCancellations), whose board is current (no more than
+ * HUB_BOARD_CURRENT_MAX_SEC of its day unseen, the brief's 3-hour rule) and is TODAY's by the board's
+ * own day (boardDayOffsetAt: a yesterday board never impairs a hub). The brief builds its network
+ * status from this same map.
+ * @param {Record<string, any>|null|undefined} hubMetrics  /api/irops `hubMetrics`
+ * @param {{nowMs: number, hubCodes?: string[]}} opts
+ * @returns {Record<string, number>}
+ */
+export function hubCancelRates(hubMetrics, { nowMs, hubCodes = HUB_ORDER }) {
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const hub of hubCodes) {
+    const m = hubMetrics?.[hub];
+    const c = hubConfirmedCancellations(m);
+    if (!c) continue;
+    if (boardBehindReason(m, nowMs)) continue;
+    if (boardDayOffsetAt(m, hub, nowMs) !== 0) continue;
+    out[hub] = c.rate;
+  }
+  return out;
+}
+
+/**
+ * Everything `networkStatus()` reads, from what the dashboard holds: the /api/irops hubMetrics (the
+ * gated on-time readings, networkReadings, and the cancellation rates), the FAA index and the IROPS
+ * score, dated at `nowMs`. The hub strip's chip and the fallback ticker both pass exactly this, and
+ * the brief builds its own from the same functions, so the three read one level. A visitor's own
+ * loaded boards never feed it (they still feed each hub's own chip).
+ * @param {{hubMetrics?: Record<string, any>|null, faaIndex?: object, iropsScore?: number|string|null,
+ *   nowMs: number, hubCodes?: string[]}} input
+ */
+export function networkInputs({ hubMetrics = null, faaIndex = {}, iropsScore = null, nowMs, hubCodes = HUB_ORDER }) {
+  const { readings } = networkReadings(hubMetrics, { nowMs, hubCodes });
+  return {
+    hubOtps: Object.fromEntries(Object.entries(readings).map(([hub, r]) => [hub, r.otp])),
+    faaIndex: faaIndex || {},
+    hubCodes,
+    iropsScore,
+    hubDayOffsets: Object.fromEntries(Object.entries(readings).map(([hub, r]) => [hub, r.dayOffset])),
+    hubCancelRates: hubCancelRates(hubMetrics, { nowMs, hubCodes }),
   };
 }
