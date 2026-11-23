@@ -13,11 +13,13 @@ import { CircleHelp, Eye, HandHeart, House, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { HELP_COVER_LABEL } from '@/lib/cover-a-day.js';
 import { supportUrl } from '@/lib/support-link.js';
 import { cn } from '@/lib/utils';
 import { useFeed } from '../state/feed';
-import { useNow } from '../state/hooks';
+import { useMediaQuery, useNow } from '../state/hooks';
 import { usePrefs } from '../state/prefs';
+import { openSupportSheet } from '../state/support-sheet';
 import { useUi } from '../state/ui';
 import { useWatch } from '../state/watch';
 import { TOUCH_CONTROL } from './touch-target';
@@ -35,6 +37,9 @@ function utcClock(now: number): string {
  */
 const CONTROL = cn(TOUCH_CONTROL, 'z-10');
 
+/** Where the desktop support link's words show: the `min-[1081px]:` classes on it, as a query. */
+const LABEL_SHOWN = '(min-width: 1081px)';
+
 export function Header({
   onOpenWatch,
   watchOpen,
@@ -49,6 +54,7 @@ export function Header({
   const { setSearchOpen } = useUi();
   const watch = useWatch();
   const now = useNow(1000);
+  const labelShown = useMediaQuery(LABEL_SHOWN);
 
   // The chip counts EVERY row in the feed, the way the shipped header did — the stat bar
   // below the map is where "airborne" (which excludes aircraft on the ground) is reported.
@@ -176,26 +182,58 @@ export function Header({
           </TooltipContent>
         </Tooltip>
 
-        {/* Phones only. The ⓘ menu that carries Donate sits in the attribution strip, hidden
-            below `md:`, and the phone header has no room for a fifth control (13 px spare at
-            360 px) — so below `md:` this slot is the support link and "What is this
-            dashboard?" moves into the More sheet. Counted as `mobile-header` by the delegated
-            support_click listener (src/lib/support-tracking.js). */}
+        {/* From `md:` up (Nov 2026). Desktop had no visible way to give on first load: the strip
+            waits for five minutes of use and ⓘ → About is a menu. So this is a plain link to the
+            any-amount Stripe link, as quiet as its ghost neighbours, with its words showing from
+            1081 px. Below that the words are `sr-only` (still the link's name, never `hidden`)
+            and the tooltip says them. Measured in the widest state (stale feed, four-digit count,
+            a watch count, "Paused"), the words ran 43 px into the wordmark at 1024 px and cleared
+            it by 14 px at 1081 (the width where the stat strip under the map comes back). The
+            tooltip stays shut while the words show (LABEL_SHOWN mirrors the classes), so they
+            are not read twice. Counted as `desktop-header` by the delegated support_click
+            listener (src/lib/support-tracking.js). */}
+        <Tooltip open={labelShown ? false : undefined}>
+          <TooltipTrigger asChild>
+            <Button
+              asChild
+              variant="ghost"
+              className={cn(
+                CONTROL,
+                'hidden px-0 text-xs text-muted-foreground md:inline-flex min-[1081px]:gap-1.5 min-[1081px]:px-2',
+              )}
+            >
+              <a
+                href={supportUrl('desktop-header')}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-support="desktop-header"
+              >
+                <HandHeart aria-hidden="true" />
+                <span className="max-[1081px]:sr-only">{HELP_COVER_LABEL}</span>
+              </a>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{HELP_COVER_LABEL}</TooltipContent>
+        </Tooltip>
+
+        {/* Phones only (below `md:`; the labelled link above takes over from `md:`). The ⓘ menu
+            sits in the attribution strip, hidden below `md:`, and the phone header has no room
+            for a fifth control (13 px spare at 360 px) — so below `md:` this slot is the support
+            icon and "What is this dashboard?" moves into the More sheet. Since Nov 22 2026 the
+            icon is a button that opens the "Cover a day" sheet, the amounts first
+            (features/SupportSheet.tsx), not a link to Stripe: a tap on it is counted as
+            `support_open` with `from: 'mobile-header'` (state/support-sheet.ts), not as a
+            `support_click`; the sheet's links are the `support_click`s, labelled
+            `mobile-header-<amount>` and `mobile-header-other` (src/lib/support-tracking.js). */}
         <Button
-          asChild
           variant="ghost"
           className={cn(CONTROL, 'p-0 text-muted-foreground md:hidden')}
+          onClick={(event) => openSupportSheet('mobile-header', event.currentTarget)}
+          aria-haspopup="dialog"
+          aria-label="Cover a day of The Blue Board"
+          title="Cover a day of The Blue Board"
         >
-          <a
-            href={supportUrl('mobile-header')}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-support="mobile-header"
-            aria-label="Cover a day of The Blue Board"
-            title="Cover a day of The Blue Board"
-          >
-            <HandHeart aria-hidden="true" />
-          </a>
+          <HandHeart aria-hidden="true" />
         </Button>
 
         <Button

@@ -6,8 +6,9 @@
  * old bar hard-coded its overflow list and silently desynced when My Flights was promoted,
  * lighting up two buttons at once and none for Fleet or Starlink.
  *
- * Below the tabs the sheet carries About and a Support link (v1.11.3). The ⓘ menu that holds
- * them on desktop sits in the attribution strip, which is hidden below `md:`, so on a phone the
+ * Below the tabs the sheet carries About and a Support row (v1.11.3; since Nov 22 2026 the row
+ * opens the "Cover a day" sheet, `features/SupportSheet.tsx`, instead of a link). The ⓘ menu
+ * that holds them on desktop sits in the attribution strip, hidden below `md:`, so on a phone the
  * About dialog — the independence statement, the "not for operational or safety-critical
  * decisions" line and the Supporters Wall — and every donate link were unreachable. Both rows
  * are plain list items: nothing here opens by itself or asks for anything. The last row is the
@@ -22,7 +23,7 @@
  */
 
 import { BadgeInfo, CircleHelp, Ellipsis, HandHeart, House, Newspaper, UserRound } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   Select,
@@ -33,9 +34,9 @@ import {
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { HOME_HUB_OPTIONS } from '@/lib/home-hub-options.js';
-import { supportUrl } from '@/lib/support-link.js';
 import { cn } from '@/lib/utils';
 import { usePrefs } from '../state/prefs';
+import { openSupportSheet } from '../state/support-sheet';
 import { useUi } from '../state/ui';
 import { TABS } from '../tabs';
 import type { TabId } from '../tabs';
@@ -87,6 +88,7 @@ export function MobileNav({
   onOpenHelp?: () => void;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreTrigger = useRef<HTMLButtonElement>(null);
   const { setDisclaimerOpen } = useUi();
   const primary = TABS.filter((entry) => entry.mobilePrimary);
   const overflow = TABS.filter((entry) => !entry.mobilePrimary);
@@ -115,6 +117,7 @@ export function MobileNav({
 
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
         <SheetTrigger
+          ref={moreTrigger}
           className={cn(
             'flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px]',
             overflowActive ? 'text-primary' : 'text-muted-foreground',
@@ -184,16 +187,19 @@ export function MobileNav({
               </button>
             </li>
             <li>
-              <a
-                href={supportUrl('mobile-more')}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-support="mobile-more"
+              {/* Since Nov 22 2026 it opens the "Cover a day" sheet (features/SupportSheet.tsx),
+                  amounts first; focus comes back to More when it closes. */}
+              <button
+                type="button"
                 className={cn(ROW, 'text-muted-foreground')}
+                onClick={() => {
+                  setMoreOpen(false);
+                  openSupportSheet('mobile-more', moreTrigger.current);
+                }}
               >
                 <HandHeart aria-hidden="true" className="size-4" />
                 Help cover a day
-              </a>
+              </button>
             </li>
             {/* The author credit the attribution strip carries on md: and up. */}
             <li>
