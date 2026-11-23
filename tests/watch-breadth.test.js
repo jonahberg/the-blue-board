@@ -321,3 +321,109 @@ describe('every brief fixture: the brief and the network status agree', () => {
     });
   }
 });
+
+// Review round, Nov 22 2026: states where the strip's chip and the brief disagreed, or where the
+// brief's words contradicted its items. Every one runs on BOTH sides through the real builders
+// (buildBriefFacts; networkInputs over the same hubMetrics) and must give one level and one set of
+// impaired hubs, and a template whose every word passes the verifier.
+describe('review scenarios: one level on both sides, words that match the items', () => {
+  const gdp = () => [program('ground_delay', { avgDelay: 62, maxDelay: 140, endTime: '2026-11-11T04:59:00Z' })];
+  /** The payload, with `edit(hubMetrics)` applied after the scenario builder. */
+  const at = (input, edit = () => {}) => { const p = scenario(input); edit(p.sources.irops.hubMetrics, p); return p; };
+  const both = (p) => {
+    const facts = factsOf(p);
+    const template = buildTemplateBrief(facts);
+    const check = verifyBrief({ headline: template.headline, tone: template.tone, items: template.items, traveler_note: template.traveler_note }, facts);
+    return { facts, tone: computeTone(facts), impaired: [...impairedHubs(facts)].sort(), template, check, side: strip(p) };
+  };
+  const agree = (r, tone, impaired) => {
+    expect(r.tone).toBe(tone);
+    expect(r.impaired).toEqual([...impaired].sort());
+    expect(r.side.chip.level).toBe(LEVEL_FOR_TONE[tone]);
+    expect(Object.keys(r.side.status.impaired).sort()).toEqual([...impaired].sort());
+    expect(networkChipRepeatsBrief({ briefTone: r.tone, networkLevel: r.side.chip.level })).toBe(true);
+    expect(r.check.report.dropped).toEqual([]);
+    expect(r.check.report.headline.status).toBe('kept');
+  };
+
+  it('Tokyo Narita 8 of 12 on time beside the index at 31: too thin to impair, so calm on both sides', () => {
+    // 21:00 JST: Narita's board is today's, with its whole day's dozen departures.
+    const r = both(at({ nowIso: '2026-11-11T12:00:00Z', score: 31 }, (m) => Object.assign(m.NRT, { total: 12, operated: 12, onTime: 8 })));
+    agree(r, 'calm', []);
+    expect(r.side.inputs.hubOtps.NRT).toBeUndefined();
+  });
+
+  it('a Newark delay program beside Narita 7 of 12: one impaired hub, calm on both sides', () => {
+    agree(both(at({ score: 15, faa: { EWR: gdp() } }, (m) => Object.assign(m.NRT, { total: 12, operated: 12, onTime: 7 }))), 'calm', ['EWR']);
+  });
+
+  it('Newark 11 of 18 and Dulles 13 of 20 at 6:40 AM ET: the first departures of the day decide nothing', () => {
+    const r = both(at({ nowIso: '2026-11-11T11:40:00Z' }, (m) => { Object.assign(m.EWR, { operated: 18, onTime: 11 }); Object.assign(m.IAD, { operated: 20, onTime: 13 }); }));
+    agree(r, 'calm', []);
+  });
+
+  it('a 4-hour-old O’Hare board at 62% beside a Newark program: the stale board does not count', () => {
+    const r = both(at({ score: 15, otp: { ORD: 62 }, faa: { EWR: gdp() } }, (m, p) => { m.ORD.generatedAt = Date.parse(p.nowIso) / 1000 - 4 * 3600; }));
+    agree(r, 'calm', ['EWR']);
+    expect(r.template.headline).toBe('Newark has a ground delay program; the other hubs are running normally.');
+  });
+
+  it('6:10 AM ET, yesterday’s final Newark and Dulles boards still served: yesterday by the board’s own day, calm', () => {
+    const nowIso = '2026-11-11T11:10:00Z';
+    const r = both(at({ nowIso, otp: { EWR: 62, IAD: 65 } }, (m) => {
+      for (const hub of ['EWR', 'IAD']) Object.assign(m[hub], { generatedAt: Date.parse(nowIso) / 1000 - 1200, boardDayOffset: -1, boardDayEndSec: Date.parse('2026-11-11T05:00:00Z') / 1000 });
+    }));
+    agree(r, 'calm', []);
+    const ewr = r.facts.find((f) => f.id === 'otp.EWR');
+    expect(ewr.statement).toBe("Newark (EWR): 62% of departures yesterday left within 30 minutes of schedule (250 departed); today's figures are not in yet.");
+    expect(ewr.impairs).toBeUndefined();
+    // Before this review: "Delays are building at Newark and Washington Dulles." at WATCH.
+    expect(r.template.headline).not.toMatch(/Delays are building/);
+  });
+
+  it('a Newark program beside Houston at 40 of 450 canceled (8.9%): Houston is not called normal', () => {
+    const r = both(at({ score: 15, faa: { EWR: gdp() }, cxl: { IAH: { confirmed: 40, total: 450 } } }));
+    agree(r, 'calm', ['EWR']);
+    expect(r.template.headline).toBe('A ground delay program is holding flights into Newark.');
+    expect(r.template.items.map((i) => i.fact_ids[0])).toContain('cxl.IAH');
+    // A model headline saying the other hubs are normal is replaced.
+    const statement = r.facts.find((f) => f.id === 'faa.active.EWR.gdp').statement;
+    const out = verifyBrief({ headline: 'Newark has a ground delay program; the other hubs are running normally.', tone: 'calm', items: [{ text: statement, fact_ids: ['faa.active.EWR.gdp'] }], traveler_note: null }, r.facts);
+    expect(out.report.headline.reasons).toEqual(['headline:other_hubs_not_normal']);
+    expect(out.brief.headline).toBe('A ground delay program is holding flights into Newark.');
+  });
+
+  it('four soft readings from yesterday’s boards beside Newark’s FAA delays from 46 minutes: the headline’s hub is in the items', () => {
+    const r = both(at({ nowIso: '2026-11-11T11:10:00Z', score: 20, otp: { DEN: 66, SFO: 62, LAX: 63, ORD: 64 }, faa: { EWR: [program('departure_delay', { minDelay: 46, maxDelay: 60 })] } }));
+    agree(r, 'calm', ['EWR']);
+    expect(r.template.headline).toBe('FAA delays are slowing Newark.');
+    expect(r.template.items[0].fact_ids).toEqual(['faa.active.EWR.dep']);
+    // The same morning with the index at 35.7 is a watch, and the index item is there to say why.
+    const w = both(at({ nowIso: '2026-11-11T11:10:00Z', score: 35.7, otp: { DEN: 66, SFO: 62, LAX: 63 }, faa: { EWR: [program('departure_delay', { minDelay: 46, maxDelay: 60 })] } }));
+    agree(w, 'watch', ['EWR']);
+    expect(w.template.items.slice(0, 2).map((i) => i.fact_ids[0])).toEqual(['faa.active.EWR.dep', 'net.index']);
+  });
+
+  it('a whole bad yesterday does not make tonight "Some Delays" through the average (review item 3); under 50% still disrupts', () => {
+    const night = '2026-11-11T08:00:00Z'; // 3 AM ET: every US board is yesterday's
+    const bad = { ORD: 60, DEN: 66, IAH: 68, EWR: 62, SFO: 65, IAD: 70, LAX: 69 };
+    const r = both(at({ nowIso: night, otp: bad }));
+    agree(r, 'calm', []);
+    expect(r.side.status.todayAvg).toBeNull();
+    expect(r.side.status.avg).toBe(66);
+    const worse = both(at({ nowIso: night, otp: { ...bad, ORD: 48 } }));
+    expect(worse.tone).toBe('disrupted');
+    expect(worse.side.chip.level).toBe('significant');
+  });
+
+  it('a thin hub under 50% no longer reads "Disrupted" on the chip: the brief never counted it either', () => {
+    const r = both(at({ score: 15 }, (m) => Object.assign(m.NRT, { total: 12, operated: 6, onTime: 2 })));
+    agree(r, 'calm', []);
+  });
+
+  it('which hub is impaired is in the change key (review item 6): 68% ↔ 72% inside one 5-point bucket', () => {
+    const key = (otp) => factsOf(scenario({ otp: { EWR: otp } })).find((f) => f.id === 'net.status').material;
+    expect(key(68)).toBe('status:normal:EWR');
+    expect(key(72)).toBe('status:normal');
+  });
+});
