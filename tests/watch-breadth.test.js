@@ -54,7 +54,8 @@ const HEADLINES = {
   '5a': 'United is running smoothly right now.',
   '5b': "United's operation is disrupted right now.",
   6: 'United is running smoothly right now.',
-  7: 'United is running smoothly right now.',
+  // Calm; the two hubs are named as yesterday's, never "running smoothly" above their items (review).
+  7: 'Newark and Washington Dulles ran behind yesterday.',
   8: 'Newark has a ground delay program; the other hubs are running normally.',
   9: 'A ground stop is holding flights into Newark.',
   10: 'Fewer United flights than usual are in the air right now.',
@@ -378,7 +379,7 @@ describe('review scenarios: one level on both sides, words that match the items'
     expect(ewr.statement).toBe("Newark (EWR): 62% of departures yesterday left within 30 minutes of schedule (250 departed); today's figures are not in yet.");
     expect(ewr.impairs).toBeUndefined();
     // Before this review: "Delays are building at Newark and Washington Dulles." at WATCH.
-    expect(r.template.headline).not.toMatch(/Delays are building/);
+    expect(r.template.headline).toBe('Newark and Washington Dulles ran behind yesterday.');
   });
 
   it('a Newark program beside Houston at 40 of 450 canceled (8.9%): Houston is not called normal', () => {

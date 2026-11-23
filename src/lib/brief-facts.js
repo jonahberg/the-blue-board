@@ -568,6 +568,7 @@ function hubsReporting(n, day) {
  * @property {number} [score]  net.index only: the disruption index
  * @property {boolean} [later]  a possible program whose window opens on a later local day (plannedFact)
  * @property {boolean} [outlier]  a healthy hub's on-time fact sent because it trails the others
+ * @property {boolean} [yesterday]  a hub's on-time fact read from yesterday's board
  * @property {boolean} [lighterSchedule]  air.normal says the schedule is lighter than usual today
  * @property {boolean} [inLineWithSchedule]  ... and that the count in the air is in line with it (calm)
  */
@@ -772,6 +773,9 @@ export function buildBriefFacts(sources, { nowMs }) {
         // such hub is named, not a tone (computeTone, Nov 22 2026); yesterday's reading never is.
         toneFloor: r.otp < 50 ? 'disrupted' : 'calm',
         ...(r.otp < BRIEF_SOFT_HUB_OTP && !yesterday ? { impairs: hub } : {}),
+        // A reading from yesterday's board (by the board's own day): the calm template names a soft one
+        // as yesterday's, never as now (brief-template.js).
+        ...(yesterday ? { yesterday: true } : {}),
         // A healthy hub is not news: its reading moving, appearing or aging out is not a change.
         material: r.otp >= BRIEF_HEALTHY_HUB_OTP ? null : `otp:${round(r.otp, 5)}`,
       });

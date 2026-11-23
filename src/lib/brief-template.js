@@ -142,6 +142,15 @@ export function templateHeadline(facts, tone = computeTone(facts)) {
   if (hubDelays.length) return namedHubsHeadline('FAA delays are slowing', hubDelays, sorted, name);
   const hubWeather = firstPerHub(sorted.filter((f) => f.hub && /^wx\.[A-Z]{3}$/.test(f.id) && f.material !== null));
   if (hubWeather.length) return namedHubsHeadline('Weather is slowing', hubWeather, sorted, name);
+  // Calm, with hubs under 70% on yesterday's boards (before today's figures are in): said as
+  // yesterday's, never "running smoothly" above them (Nov 22 2026, review).
+  const softYesterday = sorted.filter((f) => f.yesterday === true && f.hub && /^otp\.[A-Z]{3}$/.test(f.id) && parseFloat(String(f.values?.[0])) < 70);
+  if (softYesterday.length > MAX_NAMED_HUBS_CALM) return { headline: 'Several United hubs ran behind yesterday.', fact_ids: [] };
+  if (softYesterday.length) {
+    const clause = `${joinNames(softYesterday.map(name))} ran behind yesterday`;
+    const long = `${clause}; today's figures are not in yet.`;
+    return { headline: wordCount(long) <= HEADLINE_WORDS ? long : `${clause}.`, fact_ids: softYesterday.map((f) => f.id) };
+  }
   // Calm, with a stop or delay program away from the hubs: the hubs first, then the program
   // (Nov 2026), never the program alone (brief-verify.js headline:leads_with_non_hub_program).
   const away = sorted.filter(isNonHubProgramFact);
